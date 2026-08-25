@@ -11,7 +11,7 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import (
     CanonicalLimits,
     format_canonical_integer,
@@ -267,6 +267,8 @@ class PeriodicCongruenceUnionRequest(StrictModel):
     @classmethod
     def bound_raw_source_rows(cls, data: object) -> object:
         """Reject oversized raw families before constructing every row model."""
+
+        data = canonicalize_json_containers(data)
 
         if not isinstance(data, Mapping):
             return data

@@ -13,7 +13,7 @@ from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
@@ -110,6 +110,7 @@ class AllTerminalReliabilityWireResult(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_coefficients(cls, value: Any) -> Any:
+        value = canonicalize_json_containers(value)
         if not isinstance(value, Mapping):
             return value
         raw_counts = value.get("connected_spanning_subgraph_counts")

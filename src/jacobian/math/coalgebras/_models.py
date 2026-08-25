@@ -7,7 +7,7 @@ from typing import Any, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
 #: Decimal digit budget for an admitted field characteristic. The digit
@@ -271,6 +271,8 @@ class ComultiplicationResult(StrictModel):
         The digit budget and the equality with the already-validated
         coalgebra prime are therefore enforced on the raw nested input.
         """
+        data = canonicalize_json_containers(data)
+
         if not isinstance(data, dict):
             return data
         matrix_input = data.get("matrix")

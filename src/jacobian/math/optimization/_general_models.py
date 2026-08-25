@@ -14,7 +14,7 @@ from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.optimization._arithmetic import rational_dot
 from jacobian.math.optimization._models import (
     MAX_LINEAR_PROGRAM_RESULT_BYTES,
@@ -236,6 +236,7 @@ class GeneralFormRationalLinearProgram(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_program(cls, value: object) -> object:
+        value = canonicalize_json_containers(value)
         try:
             return _prepare_raw_general_program(value)
         except ValueError as error:
@@ -342,6 +343,7 @@ class GeneralRationalLinearProgramResult(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_result(cls, value: object) -> object:
+        value = canonicalize_json_containers(value)
         if not isinstance(value, Mapping):
             return value
         try:

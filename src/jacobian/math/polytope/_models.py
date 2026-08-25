@@ -19,7 +19,7 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.polytope.values import (
     MAX_RATIONAL_POLYTOPE_DIMENSION,
@@ -269,7 +269,7 @@ def _preflight_raw_support_components(data: object) -> object:
 
     if not isinstance(data, dict):
         return data
-    canonical: Any = _tuple_canonical_containers(data)
+    canonical: Any = canonicalize_json_containers(data)
     _require_raw_support_covector_admissible(canonical)
     for vertex in _iter_raw_entries(canonical.get("polytope"), "vertices"):
         for component in _iter_raw_entries(vertex, "coordinates"):
@@ -1177,6 +1177,8 @@ class FacetIncidenceRequest(StrictModel):
         runs.
         """
 
+        data = canonicalize_json_containers(data)
+
         if not isinstance(data, dict):
             return data
         value = data.get("vertices")
@@ -1205,7 +1207,7 @@ class FacetIncidenceRequest(StrictModel):
             _require_raw_v_polytope_coordinates_within_facet_envelope(value)
             canonical = RationalVPolytope.model_validate(value)
             return {**data, "vertices": _canonical_v_polytope_vertices(canonical)}
-        return _tuple_canonical_containers(data)
+        return data
 
     @model_validator(mode="after")
     def require_admissible_full_dimensional_profile(self) -> Self:
@@ -1461,6 +1463,8 @@ class RationalExposedFace(StrictModel):
         ``require_canonical_face_vertices``.
         """
 
+        data = canonicalize_json_containers(data)
+
         estimated = _estimate_face_wire_bytes(data)
         if estimated > CanonicalLimits().max_output_bytes:
             raise _validation_error(
@@ -1584,6 +1588,8 @@ class PolytopeSupportRequest(StrictModel):
         after every declared field has been parsed.
         """
 
+        data = canonicalize_json_containers(data)
+
         canonical = _preflight_raw_support_components(data)
         _require_raw_support_request_shape(canonical)
         return canonical
@@ -1631,6 +1637,8 @@ class PolytopeSupportResult(StrictModel):
         outer shape and conclusion fields are preflighted the same way:
         an already-invalid payload must fail before any hull replay runs.
         """
+
+        data = canonicalize_json_containers(data)
 
         canonical = _preflight_raw_support_components(data)
         _require_raw_support_conclusions_admissible(canonical)
@@ -1737,24 +1745,6 @@ VertexTuple = Annotated[
 ]
 
 
-def _tuple_canonical_containers(value: Any) -> Any:
-    """Return raw JSON payloads with every sequence materialized as a tuple.
-
-    Dispatch parses each request through strict JSON validation, so a
-    preflight validator that hands back raw JSON arrays would make the
-    strict parser reject list-to-tuple coercion on canonical tuple fields.
-    Recursively converting containers keeps the preflight semantics while
-    preserving the declared canonical shapes; the payload size is already
-    bounded by the request's own container limits.
-    """
-
-    if isinstance(value, list):
-        return tuple(_tuple_canonical_containers(item) for item in value)
-    if isinstance(value, dict):
-        return {key: _tuple_canonical_containers(item) for key, item in value.items()}
-    return value
-
-
 class PolytopeVolumeRequest(StrictModel):
     """A bounded rational polytope in exactly one of the two representations.
 
@@ -1841,6 +1831,8 @@ class PolytopeVolumeRequest(StrictModel):
         already-invalid request must fail before any hull replay runs.
         """
 
+        data = canonicalize_json_containers(data)
+
         if not isinstance(data, dict):
             return data
         value = data.get("vertices")
@@ -1873,7 +1865,7 @@ class PolytopeVolumeRequest(StrictModel):
         if isinstance(value, dict) and set(value) == {"space", "vertices"}:
             canonical = RationalVPolytope.model_validate(value)
             return {**data, "vertices": _canonical_v_polytope_vertices(canonical)}
-        return _tuple_canonical_containers(data)
+        return data
 
     @model_validator(mode="after")
     def validate_representation(self) -> Self:

@@ -15,7 +15,7 @@ from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.optimization._arithmetic import rational_dot
 
 MAX_RATIONAL_DIGITS = 128
@@ -406,6 +406,7 @@ class StandardFormRationalLinearProgram(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_program(cls, value: object, info: ValidationInfo) -> object:
+        value = canonicalize_json_containers(value)
         try:
             return _prepare_raw_program(value, maximum_digits=_scalar_digit_cap(info))
         except ValueError as error:
@@ -536,6 +537,7 @@ class RationalLinearProgramResult(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_result(cls, value: object) -> object:
+        value = canonicalize_json_containers(value)
         if not isinstance(value, Mapping):
             return value
         try:

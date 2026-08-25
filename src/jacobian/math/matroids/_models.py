@@ -7,7 +7,7 @@ from typing import Any, Self
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
 MAX_GROUND_SIZE = 32
@@ -50,21 +50,13 @@ class LinearMatroid(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_bounded_declared_prime(cls, data: Any) -> Any:
-        # Running a before validator moves field validation into Python
-        # mode, where decoded JSON arrays no longer coerce to the declared
-        # tuple shapes; normalize entry rows to tuples on a copied path so
-        # JSON invocation keeps working while stored values stay canonical.
+        data = canonicalize_json_containers(data)
+        # Shared strict-JSON container canonicalization above keeps the
+        # nested matrix entry rows in their declared tuple shape.
         if isinstance(data, dict):
             raw = data.get("matrix")
             if isinstance(raw, dict):
                 prime = raw.get("prime")
-                entries = raw.get("entries")
-                if isinstance(entries, list):
-                    matrix = dict(raw)
-                    matrix["entries"] = tuple(
-                        tuple(row) if isinstance(row, list) else row for row in entries
-                    )
-                    data = {**data, "matrix": matrix}
             else:
                 prime = getattr(raw, "prime", None)
             if isinstance(prime, int) and not 2 <= prime <= MAX_PRIME:

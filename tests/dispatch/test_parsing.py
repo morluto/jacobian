@@ -5,10 +5,10 @@ from enum import StrEnum
 from typing import Annotated
 
 import pytest
-from pydantic import StrictInt, StringConstraints, ValidationError
+from pydantic import StrictInt, StringConstraints, ValidationError, model_validator
 from tests.dispatch._support import dispatch_validation_error
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.catalog.models import OperationDiscoveryRequest
 from jacobian.dispatch import parse_operation_input
 from jacobian.math.logic._cnf import SatAssignmentCheckRequest
@@ -22,6 +22,15 @@ class _Label(StrEnum):
 class _TupleRequest(StrictModel):
     labels: tuple[Annotated[str, StringConstraints(strict=True)], ...]
     limit: StrictInt
+
+
+class _PreflightTupleRequest(StrictModel):
+    entries: tuple[tuple[StrictInt, ...], ...]
+
+    @model_validator(mode="before")
+    @classmethod
+    def retain_canonical_containers(cls, value: object) -> object:
+        return canonicalize_json_containers(value)
 
 
 class _EnumRequest(StrictModel):
@@ -52,6 +61,15 @@ def test_parse_operation_input_accepts_json_arrays_for_constrained_tuples() -> N
 
     assert parsed.labels == ("left", "right")
     assert isinstance(parsed.labels, tuple)
+
+
+def test_parse_operation_input_preserves_tuples_through_before_validation() -> None:
+    parsed = parse_operation_input(
+        _PreflightTupleRequest,
+        {"entries": [[1, 2], [3, 4]]},
+    )
+
+    assert parsed.entries == ((1, 2), (3, 4))
 
 
 def test_parse_operation_input_rejects_numeric_strings_for_integers() -> None:

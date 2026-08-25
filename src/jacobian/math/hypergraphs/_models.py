@@ -15,7 +15,7 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import CanonicalLimits, encode_strict_json, sha256_digest
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -611,6 +611,8 @@ class EdgeIntersectionsResult(StrictModel):
     @classmethod
     def require_aggregate_intersection_bound(cls, data: object) -> object:
         """Reject an oversized authored ledger before nested model parsing."""
+
+        data = canonicalize_json_containers(data)
 
         if not isinstance(data, dict):
             return data

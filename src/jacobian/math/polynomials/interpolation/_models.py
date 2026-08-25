@@ -14,7 +14,7 @@ from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import encode_strict_json
 from jacobian.math.polynomials.interpolation._kernel import (
     divided_difference_coefficients,
@@ -153,6 +153,7 @@ class OrdinaryDerivativeJetTable(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_aggregate_bound(cls, data: object) -> object:
+        data = canonicalize_json_containers(data)
         if not isinstance(data, dict):
             return data
         jets = data.get("jets")

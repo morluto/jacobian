@@ -9,7 +9,7 @@ from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.math.geometry.exact._line_arithmetic import (
     canonical_line_coefficients,
@@ -731,6 +731,8 @@ class PinnedLineDistanceResult(StrictModel):
         declared aggregate work and intermediate-memory bound through the
         typed Python boundary.
         """
+
+        data = canonicalize_json_containers(data)
 
         if not isinstance(data, dict):
             return data

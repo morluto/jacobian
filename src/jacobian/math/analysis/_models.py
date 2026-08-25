@@ -19,7 +19,7 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.geometry.boxes.values import RationalClosedInterval
 
 
@@ -243,6 +243,7 @@ class IntervalExpressionEnclosureRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_tree(cls, value: object) -> object:
+        value = canonicalize_json_containers(value)
         if isinstance(value, Mapping):
             _bound_raw_expression(value.get("expression"))
             _bound_raw_rational(value.get("argument"), "interval-enclosure argument")
@@ -622,6 +623,7 @@ class IntervalExpressionBoxEnclosureRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_tree(cls, value: object) -> object:
+        value = canonicalize_json_containers(value)
         if isinstance(value, Mapping):
             _bound_raw_expression(value.get("expression"))
             _bound_raw_box(value.get("box"))
@@ -966,6 +968,7 @@ class PointEnclosureCheckRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def preflight_raw_source(cls, data: object) -> object:
+        data = canonicalize_json_containers(data)
         return _preflight_point_check_source(data)
 
     @model_validator(mode="after")
@@ -1160,6 +1163,7 @@ class PointEnclosureCheckResult(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def preflight_raw_source(cls, data: object) -> object:
+        data = canonicalize_json_containers(data)
         return _preflight_point_check_source(data)
 
     @model_validator(mode="after")

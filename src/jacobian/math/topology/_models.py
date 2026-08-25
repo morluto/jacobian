@@ -21,7 +21,8 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
-from jacobian._models import StrictModel
+from jacobian._exact import CanonicalInteger
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import canonicalize_json
 from jacobian.math.chain_complexes.values import ChainComplexValue
 from jacobian.math.topology._barycentric import barycentric_subdivision
@@ -345,6 +346,7 @@ class SimplicialComplexRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def accept_canonical_complex_value(cls, data: object) -> object:
+        data = canonicalize_json_containers(data)
         # A before-validator switches the remaining validation to python
         # semantics, where strict tuples reject JSON arrays; normalize the
         # accepted array shapes to tuples so strict JSON dispatch (the only
@@ -357,14 +359,6 @@ class SimplicialComplexRequest(StrictModel):
         if not isinstance(data, dict):
             return data
         normalized = dict(data)
-        vertices = normalized.get("vertices")
-        if isinstance(vertices, list):
-            normalized["vertices"] = tuple(vertices)
-        facets = normalized.get("facets")
-        if isinstance(facets, list):
-            normalized["facets"] = tuple(
-                tuple(facet) if isinstance(facet, list) else facet for facet in facets
-            )
         data = normalized
         if "facets" in data and "maximal_simplices" in data:
             raise _validation_error(

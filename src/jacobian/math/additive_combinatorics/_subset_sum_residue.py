@@ -9,7 +9,7 @@ from pydantic import Field, StrictBool, StringConstraints, model_validator
 from pydantic.json_schema import WithJsonSchema
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.additive_combinatorics.values import (
     IndexedIntegerSequence,
@@ -264,6 +264,8 @@ class SubsetSumResidueProfileRequest(StrictModel):
         sequence stays canonical.
         """
 
+        value = canonicalize_json_containers(value)
+
         if not isinstance(value, Mapping):
             return value
         prepared: dict[str, object] = dict(value)
@@ -360,6 +362,8 @@ class SubsetSumResidueProfileResult(StrictModel):
     @classmethod
     def bound_raw_result(cls, value: object) -> object:
         """Reject oversized forged result containers before nested parsing."""
+
+        value = canonicalize_json_containers(value)
 
         if not isinstance(value, Mapping):
             return value

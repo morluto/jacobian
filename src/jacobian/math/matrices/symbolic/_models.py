@@ -10,7 +10,7 @@ from typing import Any, Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
     RationalFunction,
@@ -1350,6 +1350,7 @@ class SymbolicLinearSystemResult(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_bounded_payload_shapes(cls, data: Any) -> Any:
+        data = canonicalize_json_containers(data)
         # Cap relayed solution payloads against the retained source's column
         # count BEFORE nested RationalFunction parsing; an unbounded tuple of
         # individually valid values would otherwise be fully parsed before

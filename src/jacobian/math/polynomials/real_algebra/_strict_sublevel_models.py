@@ -10,7 +10,7 @@ from pydantic import Field, StrictBool, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -214,6 +214,7 @@ class StrictSublevelMeasureRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_request(cls, value: object) -> object:
+        value = canonicalize_json_containers(value)
         if not isinstance(value, Mapping):
             return value
         prepared: dict[str, object] = dict(value)
@@ -429,6 +430,7 @@ class StrictSublevelMeasureResult(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_result(cls, value: object) -> object:
+        value = canonicalize_json_containers(value)
         if not isinstance(value, Mapping):
             return value
         prepared: dict[str, object] = dict(value)

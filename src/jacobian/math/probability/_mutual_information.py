@@ -14,7 +14,7 @@ from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
@@ -228,6 +228,8 @@ class FiniteJointTableMutualInformationRequest(StrictModel):
     @classmethod
     def bound_raw_probability_matrix(cls, value: Any) -> Any:
         """Reject oversized collections before parsing any rational cell model."""
+
+        value = canonicalize_json_containers(value)
         return _bound_raw_probability_matrix(value)
 
     @model_validator(mode="after")
@@ -331,6 +333,8 @@ class FiniteJointTableMutualInformationResult(StrictModel):
     @classmethod
     def bound_raw_result_collections(cls, value: Any) -> Any:
         """Reject impossible candidates before parsing their nested item models."""
+
+        value = canonicalize_json_containers(value)
 
         if not isinstance(value, Mapping):
             return value

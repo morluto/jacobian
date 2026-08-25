@@ -7,7 +7,7 @@ from typing import Annotated, Any, Self
 from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 
 # A materialized code carries exactly ``length * cardinality`` binary entries.
 # Keeping that quantity below 2**19 bounds source parsing, canonical sorting,
@@ -108,16 +108,7 @@ class ExplicitBinaryCode(StrictModel):
                         f"{total_bits} bits, exceeding the "
                         f"{MAX_EXPLICIT_CODE_BITS}-bit source bound",
                     )
-        # Running a before validator moves field validation into Python
-        # mode, where decoded JSON arrays no longer coerce to the declared
-        # tuple shapes; normalize the raw containers on a copied path so
-        # JSON invocation keeps working while stored values stay canonical.
-        return {
-            **data,
-            "codewords": tuple(
-                tuple(word) if isinstance(word, list) else word for word in words
-            ),
-        }
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_canonical_code(self) -> Self:

@@ -8,7 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 
 MAX_GROUP_DEGREE = 64
 
@@ -609,6 +609,7 @@ class GroupSubgroupLatticeResult(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_bounded_subgroup_entries(cls, data: Any) -> Any:
+        data = canonicalize_json_containers(data)
         # Cap the entry count BEFORE nested SubgroupEntry construction: each
         # nested entry builds a backend permutation group, so a forged relayed
         # payload must not drive that work past the operation-derived bound.

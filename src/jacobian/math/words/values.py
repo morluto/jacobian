@@ -8,7 +8,7 @@ from typing import Annotated, Any, Self
 from pydantic import AfterValidator, Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 
 MAX_WORD_LENGTH = 500
 MAX_ALPHABET_SIZE = 50
@@ -134,6 +134,7 @@ class ProlongableSubstitution(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_bounded_source_before_mortality_analysis(cls, value: Any) -> Any:
+        value = canonicalize_json_containers(value)
         _require_prolongable_source_occurrence_bound(value)
         return _prepare_prolongable_substitution_input(value)
 

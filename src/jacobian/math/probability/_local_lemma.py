@@ -16,7 +16,7 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
 from jacobian.math.probability.local_lemma import (
@@ -191,6 +191,8 @@ class AsymmetricLocalLemmaWitnessRequest(StrictModel):
     def bound_raw_source(cls, value: Any) -> Any:
         """Reject oversized materialized input before nested rational parsing."""
 
+        value = canonicalize_json_containers(value)
+
         return _bound_raw_source(value)
 
     @model_validator(mode="after")
@@ -346,6 +348,8 @@ class AsymmetricLocalLemmaWitnessCheckResult(StrictModel):
     @classmethod
     def bound_raw_result(cls, value: Any) -> Any:
         """Bound forged result collections and rationals before replay."""
+
+        value = canonicalize_json_containers(value)
 
         return _bound_raw_result(value)
 

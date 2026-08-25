@@ -11,7 +11,7 @@ from pydantic.json_schema import WithJsonSchema
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.additive_combinatorics import _multiset_sum
 from jacobian.math.additive_combinatorics.operations import (
@@ -634,6 +634,8 @@ class SubsetSumProfileRequest(StrictModel):
         copied path so JSON invocation keeps working while the stored
         sequence stays canonical.
         """
+
+        value = canonicalize_json_containers(value)
 
         if not isinstance(value, Mapping):
             return value

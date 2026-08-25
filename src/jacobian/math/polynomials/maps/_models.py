@@ -10,7 +10,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.polynomials.maps.values import (
     MAX_MAP_INPUTS,
     MAX_MAP_OUTPUTS,
@@ -408,6 +408,8 @@ class GenericFiberCertificate(StrictModel):
     @classmethod
     def require_serialized_certificate_bounds(cls, value: Any) -> Any:
         """Reject oversized nested payloads before constructing coefficient values."""
+
+        value = canonicalize_json_containers(value)
 
         polynomials = _serialized_certificate_polynomials(value)
         if polynomials is None:

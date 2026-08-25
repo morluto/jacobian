@@ -9,10 +9,11 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     CanonicalInteger,
-    CanonicalRational,
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
+from jacobian.math.polytope.values import Halfspace as RationalHalfspace
+from jacobian.math.polytope.values import Vertex as RationalVertex
 
 if TYPE_CHECKING:
     from jacobian.math.lattice_polytopes._operations import AdmittedGeometry
@@ -84,45 +85,12 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"lattice_polytope.{reason}", message)
 
 
-class Vertex(StrictModel):
-    """One rational vertex of a V-representation."""
-
-    coordinates: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_DIMENSION
-    )
-
-
-class Halfspace(StrictModel):
-    """One rational half-space ``<a, x> <= b`` of an H-representation."""
-
-    coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
-        max_length=MAX_DIMENSION,
-        description=(
-            "The normal vector ``a`` of ``<a, x> <= b``.  At least one "
-            "coefficient must be nonzero: constant rows ``0 <= b`` are "
-            "rejected, including the contradiction ``0 <= -1``."
-        ),
-    )
-    offset: CanonicalRational = Field(
-        description="The right-hand side ``b`` of ``<a, x> <= b``.",
-    )
-
-    @model_validator(mode="after")
-    def require_nonzero_normal(self) -> Self:
-        if all(c.as_fraction() == 0 for c in self.coefficients):
-            raise _validation_error(
-                "halfspace_normal_zero", "half-space coefficients must not all be zero"
-            )
-        return self
-
-
 class LatticePolytopeRequest(StrictModel):
     """A bounded rational polytope in exactly one representation."""
 
     _geometry: AdmittedGeometry | None = PrivateAttr(default=None)
 
-    vertices: tuple[Vertex, ...] | None = Field(
+    vertices: tuple[RationalVertex, ...] | None = Field(
         default=None,
         min_length=1,
         max_length=MAX_VERTICES,
@@ -136,7 +104,7 @@ class LatticePolytopeRequest(StrictModel):
             "exclusive with ``halfspaces``."
         ),
     )
-    halfspaces: tuple[Halfspace, ...] | None = Field(
+    halfspaces: tuple[RationalHalfspace, ...] | None = Field(
         default=None,
         min_length=1,
         max_length=MAX_HALFSPACES,
@@ -422,9 +390,7 @@ __all__ = [
     "CountLatticePointsResult",
     "EnumerateLatticePointsRequest",
     "EnumerateLatticePointsResult",
-    "Halfspace",
     "LatticePoint",
     "LatticePolytopeRequest",
     "RepresentationName",
-    "Vertex",
 ]

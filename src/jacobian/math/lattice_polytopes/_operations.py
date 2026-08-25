@@ -34,11 +34,10 @@ from __future__ import annotations
 
 import math
 from fractions import Fraction
-from itertools import combinations, product
+from itertools import product
 from typing import Literal
 
 from sympy import Matrix, Rational
-from sympy.matrices.exceptions import NonInvertibleMatrixError
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.lattice_polytopes._models import (
@@ -48,8 +47,13 @@ from jacobian.math.lattice_polytopes._models import (
     EnumerateLatticePointsResult,
     LatticePoint,
     LatticePolytopeRequest,
-    Vertex,
 )
+from jacobian.math.polytope import _rational_geometry
+from jacobian.math.polytope._rational_geometry import (
+    recession_cone_is_trivial,
+    vertices_from_halfspaces,
+)
+from jacobian.math.polytope.values import Vertex
 
 __all__ = ["count_lattice_points", "enumerate_lattice_points"]
 
@@ -66,58 +70,6 @@ class LatticePointBudgetError(ValueError):
     """Raised when the enumeration would exceed a fail-closed budget bound."""
 
 
-def _hyperplane_normal(points: list[list[Rational]]) -> Matrix | None:
-    """Return a normal vector to the hyperplane through ``points``.
-
-    ``points`` holds exactly ``d`` points in ``d``-dimensional space.
-    The normal is any non-zero vector in the null space of the matrix
-    whose rows are ``points[i] - points[0]`` for ``i >= 1``.  Returns
-    ``None`` when the points are affinely dependent (no unique
-    hyperplane).
-    """
-    d = len(points)
-    if d == 1:
-        return Matrix([Rational(1)])
-    diffs = Matrix(
-        [[points[i][k] - points[0][k] for k in range(d)] for i in range(1, d)]
-    )
-    basis = diffs.nullspace()
-    if not basis:
-        return None
-    return basis[0]
-
-
-def _facets_from_points(
-    verts: list[list[Rational]], d: int
-) -> list[tuple[Matrix, Rational]]:
-    """Enumerate the facet half-spaces of the convex hull of ``verts``.
-
-    Each facet is returned as ``(normal, offset)`` with the orientation
-    ``normal . x <= offset`` satisfied by every vertex.  Facets are
-    deduplicated by their (normal, offset) signature.
-    """
-    facets: list[tuple[Matrix, Rational]] = []
-    for combo in combinations(range(len(verts)), d):
-        pts = [verts[i] for i in combo]
-        normal = _hyperplane_normal(pts)
-        if normal is None:
-            continue
-        offset = sum(normal[k] * pts[0][k] for k in range(d))
-        residuals = [sum(normal[k] * v[k] for k in range(d)) - offset for v in verts]
-        if all(v <= 0 for v in residuals):
-            facets.append((normal, offset))
-        elif all(v >= 0 for v in residuals):
-            facets.append((Matrix([-x for x in normal]), -offset))
-    seen: set[tuple[tuple[Rational, ...], Rational]] = set()
-    out: list[tuple[Matrix, Rational]] = []
-    for normal, offset in facets:
-        key = (tuple(Rational(x) for x in normal), offset)
-        if key not in seen:
-            seen.add(key)
-            out.append((normal, offset))
-    return out
-
-
 def _is_bounded_h(halfspaces: list[tuple[list[Rational], Rational]], d: int) -> bool:
     """Decide whether ``{x : A x <= b}`` is bounded.
 
@@ -131,30 +83,9 @@ def _is_bounded_h(halfspaces: list[tuple[list[Rational], Rational]], d: int) -> 
     polyhedron is unbounded even though the hull's single facet has
     positive offset.
     """
-    normals = [coeffs for coeffs, _ in halfspaces]
-    if d == 1:
-        positive = any(n[0] > 0 for n in normals)
-        negative = any(n[0] < 0 for n in normals)
-        return positive and negative
-    rows = [list(n) for n in normals]
-    # Positive spanning requires the normals' convex hull to be full-
-    # dimensional.  Check affine rank of the point set.
-    if len(rows) < d + 1:
-        return False
-    # Affine rank via differences from first point
-    diff_rows = [
-        [rows[i][k] - rows[0][k] for k in range(d)] for i in range(1, len(rows))
-    ]
-    # Use Rational matrix rank for exactness
-    try:
-        if Matrix(diff_rows).rank() < d:
-            return False
-    except Exception:
-        return False
-    hull_facets = _facets_from_points([Matrix(r) for r in rows], d)
-    if not hull_facets:
-        return False
-    return all(Rational(0) < offset for _, offset in hull_facets)
+    return recession_cone_is_trivial(
+        [coefficients for coefficients, _offset in halfspaces], d
+    )
 
 
 def _vertices_from_h_representation(
@@ -169,42 +100,8 @@ def _vertices_from_h_representation(
     dimensions this operation admits.
     """
     dim = len(halfspaces[0][0])
-    n = len(halfspaces)
 
-    found: list[list[Rational]] = []
-    for indices in combinations(range(n), dim):
-        rows = [halfspaces[i] for i in indices]
-        mat = Matrix([rows[i][0] for i in range(dim)])
-        rhs = Matrix([[rows[i][1]] for i in range(dim)])
-        try:
-            det = mat.det()
-        except Exception:
-            continue
-        if det == 0:
-            continue
-        try:
-            solution = mat.solve(rhs)
-        except (NonInvertibleMatrixError, ValueError):
-            continue
-        point = [Rational(solution[i, 0]) for i in range(dim)]
-        feasible = True
-        for coeffs, offset in halfspaces:
-            lhs = sum(c * p for c, p in zip(coeffs, point, strict=True))
-            if lhs > offset:
-                feasible = False
-                break
-        if not feasible:
-            continue
-        found.append(point)
-
-    unique: list[list[Rational]] = []
-    seen: set[tuple[Rational, ...]] = set()
-    for point in found:
-        key = tuple(point)
-        if key not in seen:
-            seen.add(key)
-            unique.append(point)
-    return unique, dim
+    return [list(point) for point in vertices_from_halfspaces(halfspaces, dim)], dim
 
 
 def _rational_vertices(
@@ -444,7 +341,7 @@ def _facets_and_box(  # noqa: C901
                 (Matrix([Rational(-1)]), -low),
             ]
         else:
-            rational_facets = _facets_from_points(verts, d)
+            rational_facets = _rational_geometry.facets_from_points(verts, d)
         facets = [
             _to_integer_facet(normal, offset, d) for normal, offset in rational_facets
         ]

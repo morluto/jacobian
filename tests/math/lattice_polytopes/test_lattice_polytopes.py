@@ -12,15 +12,14 @@ from jacobian.math.lattice_polytopes._models import (
     MAX_BOUND_SPAN,
     MAX_DIMENSION,
     EnumerateLatticePointsRequest,
-    Halfspace,
     LatticePolytopeRequest,
-    Vertex,
 )
 from jacobian.math.lattice_polytopes._operations import (
     LatticePointBudgetError,
     count_lattice_points,
     enumerate_lattice_points,
 )
+from jacobian.math.polytope import Halfspace, Vertex
 
 
 def _cr(num: str, den: str = "1") -> dict[str, str]:
@@ -58,6 +57,18 @@ UNIT_SQUARE_H = (
     _hs((("0", "1"), ("1", "1")), ("1", "1")),  #  y <= 1
     _hs((("0", "1"), ("-1", "1")), ("0", "1")),  # -y <= 0
 )
+
+
+def test_canonical_polytope_values_feed_lattice_requests_directly() -> None:
+    vertex = Vertex(coordinates=(_cr("0"),))
+    upper = Halfspace(coefficients=(_cr("1"),), offset=_cr("0"))
+    lower = Halfspace(coefficients=(_cr("-1"),), offset=_cr("0"))
+
+    vertex_request = LatticePolytopeRequest(vertices=(vertex,))
+    halfspace_request = LatticePolytopeRequest(halfspaces=(upper, lower))
+
+    assert vertex_request.vertices == (vertex,)
+    assert halfspace_request.halfspaces == (upper, lower)
 
 
 class TestEnumerate:
@@ -249,11 +260,12 @@ class TestRejection:
             LatticePolytopeRequest()
 
     def test_all_zero_halfspace_normal_rejected(self) -> None:
-        with raises_code("halfspace_normal_zero"):
+        with pytest.raises(ValidationError) as error:
             Halfspace(
                 coefficients=(_cr("0"), _cr("0")),
                 offset=_cr("1"),
             )
+        assert error.value.errors()[0]["type"] == "polytope.halfspace_normal_zero"
 
 
 class TestBudgets:
@@ -663,17 +675,17 @@ class TestFacetGeometryComputedOnce:
     )
 
     def _count_facet_passes(self, monkeypatch: pytest.MonkeyPatch) -> list[int]:
-        from jacobian.math.lattice_polytopes import _operations
+        from jacobian.math.polytope import _rational_geometry
 
         passes = []
 
-        original = _operations._facets_from_points
+        original = _rational_geometry.facets_from_points
 
         def counting(verts, d):
             passes.append(d)
             return original(verts, d)
 
-        monkeypatch.setattr(_operations, "_facets_from_points", counting)
+        monkeypatch.setattr(_rational_geometry, "facets_from_points", counting)
         return passes
 
     def test_enumerate_request_and_execution_share_one_facet_pass(

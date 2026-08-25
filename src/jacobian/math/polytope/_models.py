@@ -21,6 +21,11 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.math.polytope.values import (
+    MAX_RATIONAL_POLYTOPE_DIMENSION,
+    Halfspace,
+    Vertex,
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -48,7 +53,7 @@ whose own envelopes are narrower reject over-dimensional values through
 their published dimension bounds.
 """
 
-MAX_FACET_DIMENSION = 7
+MAX_FACET_DIMENSION = MAX_RATIONAL_POLYTOPE_DIMENSION
 """Ambient-dimension bound for complete V-representation facet profiles.
 
 This is deliberately one dimension wider than exact volume: the 14-vertex
@@ -973,14 +978,6 @@ def require_volume_components_within_result_bound(
     _require_triangulated_volume_within_result_bound(table, triangulation, dim)
 
 
-class Vertex(StrictModel):
-    """One rational vertex of a V-representation."""
-
-    coordinates: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_FACET_DIMENSION
-    )
-
-
 class PrimitiveFacet(StrictModel):
     """One canonically scaled supporting inequality and its source incidences.
 
@@ -1501,26 +1498,6 @@ class RationalExposedFace(StrictModel):
                 "exposed face exceeds the canonical JSON output bound",
             ) from exc
         return self
-
-
-class Halfspace(StrictModel):
-    """One rational half-space ``<a, x> <= b`` of an H-representation.
-
-    The normal ``a`` must be nonzero: at least one coefficient entry must
-    differ from zero.  A row with all-zero coefficients is a tautology or
-    contradiction, not a half-space, and is rejected as a typed request
-    error rather than silently changing the polytope.
-    """
-
-    coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
-        max_length=MAX_FACET_DIMENSION,
-        description=(
-            "Normal vector a of the half-space <a, x> <= b; at least one "
-            "entry must be nonzero (all-zero rows are rejected)."
-        ),
-    )
-    offset: CanonicalRational
 
 
 def require_support_components_within_envelope(

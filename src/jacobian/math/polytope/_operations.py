@@ -29,7 +29,6 @@ from itertools import combinations
 from typing import Literal
 
 from sympy import Matrix, Rational
-from sympy.matrices.exceptions import NonInvertibleMatrixError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
@@ -55,6 +54,13 @@ from jacobian.math.polytope._models import (
     RationalVPolytope,
     Vertex,
 )
+from jacobian.math.polytope._rational_geometry import (
+    facets_from_points as _facets_from_points,
+)
+from jacobian.math.polytope._rational_geometry import (
+    recession_cone_is_trivial,
+    vertices_from_halfspaces,
+)
 
 # Absolute combinatorial ceiling: reject vertex enumeration that would
 # attempt to solve more subsystems than this. With ``MAX_FACETS = 64``
@@ -65,60 +71,6 @@ MAX_SUBSYSTEM_SOLVES = 5_000_000
 # ``MAX_HULL_SUBFACETS`` (the C(n, d) hull-enumeration ceiling) is owned
 # by ``_models`` beside the other published request bounds, which quote it
 # in their schema-visible descriptions.
-
-
-def _hyperplane_normal(points: list[list[Rational]]) -> Matrix | None:
-    """Return a normal vector to the hyperplane through ``points``.
-
-    ``points`` holds exactly ``d`` points in ``d``-dimensional space.
-    The normal is any non-zero vector in the null space of the matrix
-    whose rows are ``points[i] - points[0]`` for ``i >= 1``. Returns
-    ``None`` when the points are affinely dependent (no unique
-    hyperplane).
-    """
-
-    d = len(points)
-    if d == 1:
-        return Matrix([Rational(1)])
-    diffs = Matrix(
-        [[points[i][k] - points[0][k] for k in range(d)] for i in range(1, d)]
-    )
-    basis = diffs.nullspace()
-    if len(basis) != 1:
-        return None
-    return basis[0]
-
-
-def _facets_from_points(
-    verts: list[list[Rational]], dim: int
-) -> list[tuple[Matrix, Rational]]:
-    """Enumerate the facet half-spaces of the convex hull of ``verts``.
-
-    Each facet is returned as ``(normal, offset)`` with the orientation
-    ``normal . x <= offset`` satisfied by every vertex. Facets are
-    deduplicated by their (normal, offset) signature.
-    """
-
-    facets: list[tuple[Matrix, Rational]] = []
-    for combo in combinations(range(len(verts)), dim):
-        pts = [verts[i] for i in combo]
-        normal = _hyperplane_normal(pts)
-        if normal is None:
-            continue
-        offset = sum(normal[k] * pts[0][k] for k in range(dim))
-        residuals = [sum(normal[k] * v[k] for k in range(dim)) - offset for v in verts]
-        if all(v <= 0 for v in residuals):
-            facets.append((normal, offset))
-        elif all(v >= 0 for v in residuals):
-            facets.append((Matrix([-x for x in normal]), -offset))
-    seen: set[tuple[tuple[Rational, ...], Rational]] = set()
-    out: list[tuple[Matrix, Rational]] = []
-    for normal, offset in facets:
-        key = (tuple(Rational(x) for x in normal), offset)
-        if key not in seen:
-            seen.add(key)
-            out.append((normal, offset))
-    return out
 
 
 def _deduplicate_source_rows(points: list[list[Rational]]) -> list[list[Rational]]:
@@ -348,15 +300,6 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
     # dimensional; otherwise the polyhedron is unbounded.
     if len(normals) < dim + 1:
         return False
-    diff_rows = [
-        [normals[i][k] - normals[0][k] for k in range(dim)]
-        for i in range(1, len(normals))
-    ]
-    try:
-        if Matrix(diff_rows).rank() < dim:
-            return False
-    except Exception:
-        return False
     # Guard the exact facet enumeration of the row normals: the budget
     # applies to the distinct rows after duplicate removal, exactly as the
     # enumeration below counts its own work.
@@ -370,10 +313,7 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
             f"{MAX_BOUNDEDNESS_COMBINATIONS}-combination budget "
             f"({combo_count} > {MAX_BOUNDEDNESS_COMBINATIONS})"
         )
-    hull_facets = _facets_from_points(normals, dim)
-    if not hull_facets:
-        return False
-    return all(Rational(0) < offset for _, offset in hull_facets)
+    return recession_cone_is_trivial(normals, dim)
 
 
 def _format_rational(value: Rational) -> str:
@@ -818,39 +758,6 @@ def _halfspace_rows(
     ]
 
 
-def _solve_subsystem_vertex(
-    rows: list[tuple[list[Rational], Rational]],
-    indices: tuple[int, ...],
-    dim: int,
-) -> tuple[Rational, ...] | None:
-    """Solve the dim-subsystem of hyperplanes, or None if singular."""
-    mat = Matrix([rows[i][0] for i in indices])
-    rhs = Matrix([[rows[i][1]] for i in indices])
-    try:
-        det = mat.det()
-    except Exception:
-        return None
-    if det == 0:
-        return None
-    try:
-        solution = mat.solve(rhs)
-    except (NonInvertibleMatrixError, ValueError):
-        return None
-    return tuple(Rational(solution[i, 0]) for i in range(dim))
-
-
-def _is_feasible(
-    point: tuple[Rational, ...],
-    rows: list[tuple[list[Rational], Rational]],
-) -> bool:
-    """Return True if ``point`` satisfies every half-space ``<a, x> <= b``."""
-    for coeffs, offset in rows:
-        lhs = sum(c * p for c, p in zip(coeffs, point, strict=True))
-        if lhs > offset:
-            return False
-    return True
-
-
 def _vertices_from_h_representation(
     halfspaces: tuple[Halfspace, ...],
 ) -> tuple[list[tuple[Rational, ...]], int]:
@@ -879,21 +786,10 @@ def _vertices_from_h_representation(
             f"({subsystem_count} > {MAX_SUBSYSTEM_SOLVES} subsystems)"
         )
 
-    found: list[tuple[Rational, ...]] = []
-    for indices in combinations(range(n), dim):
-        point = _solve_subsystem_vertex(rows, indices, dim)
-        if point is None or not _is_feasible(point, rows):
-            continue
-        found.append(point)
-
-    # Deduplicate coincident vertices found from different subsystems.
-    unique: list[tuple[Rational, ...]] = []
-    unique_seen: set[tuple[Rational, ...]] = set()
-    for point in found:
-        if point not in unique_seen:
-            unique_seen.add(point)
-            unique.append(point)
-    result: tuple[list[tuple[Rational, ...]], int] = (unique, dim)
+    result: tuple[list[tuple[Rational, ...]], int] = (
+        vertices_from_halfspaces(rows, dim),
+        dim,
+    )
     return result
 
 

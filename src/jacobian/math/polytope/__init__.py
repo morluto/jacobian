@@ -15,6 +15,7 @@ from jacobian.math.polytope._models import (
     RationalVPolytope,
     require_support_components_within_envelope,
 )
+from jacobian.math.polytope.values import Halfspace, Vertex
 
 
 def polytope_support(
@@ -109,12 +110,14 @@ def convex_hull_volume(
 
 
 __all__ = [
+    "Halfspace",
     "PolytopeSupportResult",
     "RationalCoordinateSpace",
     "RationalCovector",
     "RationalExposedFace",
     "RationalPolytopeVertex",
     "RationalVPolytope",
+    "Vertex",
     "convex_hull_volume",
     "polytope_support",
 ]

@@ -38,6 +38,18 @@ def _product_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"finite_category.{reason}", message)
 
 
+class CategoryProductAdmissionError(ValueError):
+    """Native admission failure for category products."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+def _product_admission_error(reason: str, message: str) -> CategoryProductAdmissionError:
+    return CategoryProductAdmissionError(reason, message)
+
+
 @dataclass(frozen=True, slots=True)
 class _CategoryProductPlan:
     object_count: int
@@ -101,17 +113,17 @@ def _require_pair_identifier_budget(
         + max(identifier_sizes[item] for item in right)
     )
     if depth > MAX_CATEGORY_IDENTIFIER_DEPTH:
-        raise _product_error(
+        raise _product_admission_error(
             "product_identifier_depth_budget",
             f"{label} exceed the structural identifier-depth budget",
         )
     if leaves > MAX_CATEGORY_IDENTIFIER_LEAVES:
-        raise _product_error(
+        raise _product_admission_error(
             "product_identifier_leaf_budget",
             f"{label} exceed the structural identifier-leaf budget",
         )
     if wire_size > MAX_CATEGORY_IDENTIFIER_BYTES:
-        raise _product_error(
+        raise _product_admission_error(
             "product_identifier_wire_budget",
             f"{label} exceed the structural identifier wire budget",
         )
@@ -228,25 +240,25 @@ def _product_plan(left: FiniteCategory, right: FiniteCategory) -> _CategoryProdu
     composable_triple_count = left_triples * right_triples
 
     if object_count > MAX_CATEGORY_OBJECTS:
-        raise _product_error(
+        raise _product_admission_error(
             "product_object_count_budget",
             "product category exceeds the bounded structural object count of "
             f"{MAX_CATEGORY_OBJECTS}",
         )
     if morphism_count > MAX_CATEGORY_MORPHISMS:
-        raise _product_error(
+        raise _product_admission_error(
             "product_morphism_count_budget",
             "product category exceeds the bounded structural morphism count of "
             f"{MAX_CATEGORY_MORPHISMS}",
         )
     if composable_pair_count > MAX_CATEGORY_COMPOSABLE_PAIRS:
-        raise _product_error(
+        raise _product_admission_error(
             "product_composable_pair_budget",
             "product category exceeds the bounded composable-pair count of "
             f"{MAX_CATEGORY_COMPOSABLE_PAIRS}",
         )
     if composable_triple_count > MAX_CATEGORY_COMPOSABLE_TRIPLES:
-        raise _product_error(
+        raise _product_admission_error(
             "product_composable_triple_budget",
             "product category exceeds the bounded composable-triple count of "
             f"{MAX_CATEGORY_COMPOSABLE_TRIPLES}",
@@ -273,7 +285,7 @@ def _product_plan(left: FiniteCategory, right: FiniteCategory) -> _CategoryProdu
         + composable_triple_count
     )
     if replay_steps > MAX_CATEGORY_PRODUCT_REPLAY_STEPS:
-        raise _product_error(
+        raise _product_admission_error(
             "product_replay_work_budget",
             "product construction exceeds the bounded construction-and-replay work "
             f"budget of {MAX_CATEGORY_PRODUCT_REPLAY_STEPS} steps",
@@ -281,7 +293,7 @@ def _product_plan(left: FiniteCategory, right: FiniteCategory) -> _CategoryProdu
 
     product_category_size = _product_category_wire_size(left, right, identifier_sizes)
     if product_category_size > MAX_CATEGORY_VALUE_BYTES:
-        raise _product_error(
+        raise _product_admission_error(
             "product_wire_size_budget",
             "product category exceeds the bounded canonical category wire size of "
             f"{MAX_CATEGORY_VALUE_BYTES} bytes",

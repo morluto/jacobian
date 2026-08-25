@@ -29,6 +29,14 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"polytope.{reason}", message)
 
 
+class PolytopeAdmissionError(ValueError):
+    """Native admission failure for polytope volume operations."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 MAX_DIMENSION = 6
 """Ambient-dimension bound shared by the volume and support operations.
 
@@ -839,7 +847,7 @@ def _require_interval_volume_within_result_bound(
         numerator_digits > MAX_RESULT_COMPONENT_DIGITS
         or top_two + 2 > MAX_RESULT_COMPONENT_DIGITS
     ):
-        raise _validation_error(
+        raise PolytopeAdmissionError(
             "volume_result_bound",
             "coordinate magnitudes can grow the exact volume beyond the "
             f"{MAX_RESULT_COMPONENT_DIGITS}-digit canonical rational "
@@ -881,7 +889,7 @@ def _require_triangulated_volume_within_result_bound(
         numerator_total + carry > MAX_RESULT_COMPONENT_DIGITS
         or denominator_total + carry > MAX_RESULT_COMPONENT_DIGITS
     ):
-        raise _validation_error(
+        raise PolytopeAdmissionError(
             "volume_result_bound",
             "coordinate magnitudes can grow the exact volume beyond the "
             f"{MAX_RESULT_COMPONENT_DIGITS}-digit canonical rational "
@@ -950,7 +958,7 @@ def require_volume_components_within_result_bound(
     except ValueError:
         subfacets = 10**18
     if subfacets > MAX_HULL_SUBFACETS:
-        raise _validation_error(
+        raise PolytopeAdmissionError(
             "subfacet_bound",
             "polytope hull enumeration exceeds the combinatorial bound "
             f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)",
@@ -1899,13 +1907,16 @@ class PolytopeVolumeRequest(StrictModel):
                 "halfspaces",
                 "exactly one of `vertices` or `halfspaces` must be provided",
             )
-        if has_v:
-            vertices = self.vertices
-            assert isinstance(vertices, tuple)  # the before-validator projects it
-            _validate_vertices(vertices, self.dimension_bound)
-        else:
-            assert self.halfspaces is not None  # for type checkers
-            _validate_halfspaces(self.halfspaces, self.dimension_bound)
+        try:
+            if has_v:
+                vertices = self.vertices
+                assert isinstance(vertices, tuple)  # the before-validator projects it
+                _validate_vertices(vertices, self.dimension_bound)
+            else:
+                assert self.halfspaces is not None  # for type checkers
+                _validate_halfspaces(self.halfspaces, self.dimension_bound)
+        except PolytopeAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 

@@ -21,6 +21,7 @@ from jacobian.math.universal_algebra.values import (
     FiniteAlgebraCarrierMap,
     FiniteAlgebraHomomorphism,
     FlatTerm,
+    UniversalAlgebraAdmissionError,
     _first_homomorphism_failure,
     _homomorphism_kernel_and_image,
     require_term_for_algebra,
@@ -82,7 +83,10 @@ class EvaluateRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_total_assignment(self) -> Self:
-        require_term_for_algebra(self.term, self.algebra)
+        try:
+            require_term_for_algebra(self.term, self.algebra)
+        except UniversalAlgebraAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         if len(self.assignment) != self.term.variable_count:
             raise _validation_error(
                 "assignment_length_mismatch",
@@ -108,8 +112,14 @@ class EquationProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_complete_profile(self) -> Self:
-        require_term_for_algebra(self.left, self.algebra)
-        require_term_for_algebra(self.right, self.algebra)
+        try:
+            require_term_for_algebra(self.left, self.algebra)
+        except UniversalAlgebraAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
+        try:
+            require_term_for_algebra(self.right, self.algebra)
+        except UniversalAlgebraAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         if (
             max(self.left.variable_count, self.right.variable_count)
             > self.variable_count

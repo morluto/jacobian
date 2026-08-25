@@ -6,6 +6,14 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.numerical_semigroups._factorizations import (
+    FactorizationComputeRequest,
+    FactorizationComputeResult,
+    FactorizationGraphComputeRequest,
+    FactorizationGraphComputeResult,
+    compute_factorization_graph,
+    compute_factorizations,
+)
 from jacobian.math.numerical_semigroups._models import (
     MAX_GENERATOR,
     BettiElementsRequest,
@@ -18,10 +26,6 @@ from jacobian.math.numerical_semigroups._models import (
     ElasticityResult,
     ElementElasticityRequest,
     ElementElasticityResult,
-    FactorizationComputeRequest,
-    FactorizationComputeResult,
-    FactorizationGraphComputeRequest,
-    FactorizationGraphComputeResult,
     MinimalPresentationRequest,
     MinimalPresentationResult,
     PresentationBinomialsRequest,
@@ -33,8 +37,6 @@ from jacobian.math.numerical_semigroups._operations import (
     compute_delta_set,
     compute_elasticity,
     compute_element_elasticity,
-    compute_factorization_graph,
-    compute_factorizations,
     compute_minimal_presentation,
     compute_presentation_binomials,
 )

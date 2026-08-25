@@ -5,8 +5,6 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import pairwise
 
-import networkx as _nx
-
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.numerical_semigroups._algorithms import (
     betti_data,
@@ -35,14 +33,6 @@ from jacobian.math.numerical_semigroups._models import (
     ElementDeltaSetResult,
     ElementElasticityRequest,
     ElementElasticityResult,
-    FactorizationComputeRequest,
-    FactorizationComputeResult,
-    FactorizationDistanceRequest,
-    FactorizationDistanceResult,
-    FactorizationGraphComputeRequest,
-    FactorizationGraphComputeResult,
-    FactorizationLengthsComputeRequest,
-    FactorizationLengthsComputeResult,
     MinimalPresentationRelation,
     MinimalPresentationRequest,
     MinimalPresentationResult,
@@ -68,52 +58,6 @@ def _factorizations(atoms: list[int], target: int) -> list[tuple[int, ...]]:
     return _enumerate_factorizations(atoms, target)
 
 
-def _length(fact: tuple[int, ...]) -> int:
-    """Length (norm) of a factorization = sum of coordinates."""
-    return sum(fact)
-
-
-def _gcd_factor(f1: tuple[int, ...], f2: tuple[int, ...]) -> tuple[int, ...]:
-    """Coordinate-wise minimum of two factorizations."""
-    return tuple(min(a, b) for a, b in zip(f1, f2, strict=True))
-
-
-def _distance(f1: tuple[int, ...], f2: tuple[int, ...]) -> int:
-    """Distance d(z, z') = max(|z - gcd|, |z' - gcd|) where gcd is coordinatewise min."""
-    if not f1 or not f2:
-        return 0
-    g = _gcd_factor(f1, f2)
-    l1 = sum(f1)
-    l2 = sum(f2)
-    lg = sum(g)
-    return max(abs(l1 - lg), abs(l2 - lg))
-
-
-def _build_factorization_graph(
-    factorizations: list[tuple[int, ...]],
-) -> tuple[list[tuple[int, int]], list[list[int]], bool]:
-    """Build the standard factorization graph.
-
-    Two factorizations are connected if their coordinatewise gcd is nonzero
-    (they share a common atom).  Returns ``(edges, connected_components, is_connected)``.
-    """
-    n = len(factorizations)
-    if n == 0:
-        return [], [], True
-    graph: _nx.Graph[int] = _nx.Graph()
-    for i in range(n):
-        graph.add_node(i)
-    edges = []
-    for i in range(n):
-        for j in range(i + 1, n):
-            if sum(_gcd_factor(factorizations[i], factorizations[j])) > 0:
-                graph.add_edge(i, j)
-                edges.append((i, j))
-    components = [list(comp) for comp in _nx.connected_components(graph)]
-    is_connected = len(components) <= 1
-    return edges, components, is_connected
-
-
 def _catenary_degree_of(atoms: list[int], target: int) -> int:
     """Catenary degree of one element.
 
@@ -128,90 +72,6 @@ def _catenary_degree_of(atoms: list[int], target: int) -> int:
 # ---------------------------------------------------------------------------
 # Public operation functions
 # ---------------------------------------------------------------------------
-
-
-def compute_factorizations(
-    request: FactorizationComputeRequest,
-) -> FactorizationComputeResult:
-    atoms = _minimal_generators_list(request.generators)
-    value = parse_canonical_integer(request.value)
-    if value < 0:
-        return FactorizationComputeResult(
-            value=request.value,
-            minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
-            in_semigroup=False,
-            factorizations=(),
-        )
-    facts = _factorizations(atoms, value)
-    return FactorizationComputeResult(
-        value=request.value,
-        minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
-        in_semigroup=bool(facts),
-        factorizations=tuple(facts),
-    )
-
-
-def compute_factorization_lengths(
-    request: FactorizationLengthsComputeRequest,
-) -> FactorizationLengthsComputeResult:
-    atoms = _minimal_generators_list(request.generators)
-    value = parse_canonical_integer(request.value)
-    if value < 0:
-        return FactorizationLengthsComputeResult(
-            value=request.value,
-            minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
-            in_semigroup=False,
-            lengths=(),
-        )
-    lengths = factorization_lengths(tuple(atoms), value)
-    return FactorizationLengthsComputeResult(
-        value=request.value,
-        minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
-        in_semigroup=bool(lengths),
-        lengths=tuple(lengths),
-    )
-
-
-def compute_factorization_distance(
-    request: FactorizationDistanceRequest,
-) -> FactorizationDistanceResult:
-    f1 = tuple(request.first)
-    f2 = tuple(request.second)
-    d = _distance(f1, f2)
-    return FactorizationDistanceResult(
-        value=request.value,
-        distance=d,
-        first_length=sum(f1),
-        second_length=sum(f2),
-    )
-
-
-def compute_factorization_graph(
-    request: FactorizationGraphComputeRequest,
-) -> FactorizationGraphComputeResult:
-    atoms = _minimal_generators_list(request.generators)
-    value = parse_canonical_integer(request.value)
-    if value < 0:
-        return FactorizationGraphComputeResult(
-            value=request.value,
-            minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
-            in_semigroup=False,
-            factorizations=(),
-            edges=(),
-            connected_components=(),
-            is_connected=True,
-        )
-    facts = _factorizations(atoms, value)
-    edges, components, connected = _build_factorization_graph(facts)
-    return FactorizationGraphComputeResult(
-        value=request.value,
-        minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
-        in_semigroup=bool(facts),
-        factorizations=tuple(facts),
-        edges=tuple((i, j) for i, j in edges),
-        connected_components=tuple(tuple(sorted(comp)) for comp in components),
-        is_connected=connected,
-    )
 
 
 def compute_element_delta_set(
@@ -398,10 +258,6 @@ __all__ = [
     "compute_element_catenary_degree",
     "compute_element_delta_set",
     "compute_element_elasticity",
-    "compute_factorization_distance",
-    "compute_factorization_graph",
-    "compute_factorization_lengths",
-    "compute_factorizations",
     "compute_minimal_presentation",
     "compute_presentation_binomials",
 ]

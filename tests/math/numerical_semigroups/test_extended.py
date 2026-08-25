@@ -4,6 +4,19 @@ import pytest
 from pydantic import ValidationError
 from tests.math.numerical_semigroups._support import numerical_semigroup_error
 
+from jacobian.math.numerical_semigroups._factorizations import (
+    FactorizationComputeRequest,
+    FactorizationComputeResult,
+    FactorizationDistanceRequest,
+    FactorizationGraphComputeRequest,
+    FactorizationGraphComputeResult,
+    FactorizationLengthsComputeRequest,
+    FactorizationLengthsComputeResult,
+    compute_factorization_distance,
+    compute_factorization_graph,
+    compute_factorization_lengths,
+    compute_factorizations,
+)
 from jacobian.math.numerical_semigroups._models import (
     MAX_GENERATOR,
     BettiElementsRequest,
@@ -19,13 +32,6 @@ from jacobian.math.numerical_semigroups._models import (
     ElementDeltaSetResult,
     ElementElasticityRequest,
     ElementElasticityResult,
-    FactorizationComputeRequest,
-    FactorizationComputeResult,
-    FactorizationDistanceRequest,
-    FactorizationGraphComputeRequest,
-    FactorizationGraphComputeResult,
-    FactorizationLengthsComputeRequest,
-    FactorizationLengthsComputeResult,
     MinimalPresentationRequest,
     MinimalPresentationResult,
     PresentationBinomialsRequest,
@@ -39,10 +45,6 @@ from jacobian.math.numerical_semigroups._operations import (
     compute_element_catenary_degree,
     compute_element_delta_set,
     compute_element_elasticity,
-    compute_factorization_distance,
-    compute_factorization_graph,
-    compute_factorization_lengths,
-    compute_factorizations,
     compute_minimal_presentation,
     compute_presentation_binomials,
 )

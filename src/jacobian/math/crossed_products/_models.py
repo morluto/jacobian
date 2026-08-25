@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.crossed_products.operations import (
@@ -12,6 +13,10 @@ from jacobian.math.crossed_products.operations import (
     multiply,
 )
 from jacobian.math.crossed_products.values import FiniteCosetCrossedProductElement
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"crossed_product.{reason}", message)
 
 
 class CrossedProductMultiplyRequest(StrictModel):
@@ -22,7 +27,10 @@ class CrossedProductMultiplyRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_product(self) -> Self:
-        _require_multiplication_budget(self.left, self.right)
+        try:
+            _require_multiplication_budget(self.left, self.right)
+        except ValueError as exc:
+            raise _validation_error("product_budget_exceeded", str(exc)) from exc
         return self
 
 
@@ -36,11 +44,14 @@ class CrossedProductMultiplyResult(StrictModel):
     @model_validator(mode="after")
     def bind_product_to_sources(self) -> Self:
         if self.product.presentation != self.left.presentation:
-            raise ValueError("product must retain the operand presentation")
+            raise _validation_error(
+                "presentation_mismatch", "product must retain the operand presentation"
+            )
         expected = multiply(self.left, self.right)
         if self.product != expected:
-            raise ValueError(
-                "product must equal exact replay from the retained operands"
+            raise _validation_error(
+                "product_invariant",
+                "product must equal exact replay from the retained operands",
             )
         return self
 

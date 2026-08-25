@@ -100,8 +100,9 @@ def test_forged_valid_result_cannot_disconnect_value_from_source() -> None:
     assert forged["delta_matroid"] is not None
     forged["delta_matroid"]["ground"][0] = "changed"
 
-    with pytest.raises(ValidationError, match="canonical replay"):
+    with pytest.raises(ValidationError) as error:
         DeltaMatroidRecognitionResult.model_validate(forged)
+    assert error.value.errors()[0]["type"] == "delta_matroid.canonical_replay_mismatch"
 
 
 def test_result_round_trips_and_replays_its_retained_source() -> None:
@@ -113,17 +114,19 @@ def test_result_round_trips_and_replays_its_retained_source() -> None:
 
     forged = result.model_dump(mode="json")
     forged["source"]["ground"][0] = "changed"
-    with pytest.raises(ValidationError, match="canonical replay"):
+    with pytest.raises(ValidationError) as error:
         DeltaMatroidRecognitionResult.model_validate(forged)
+    assert error.value.errors()[0]["type"] == "delta_matroid.canonical_replay_mismatch"
 
 
 def test_invalid_delta_matroid_value_is_rejected_at_its_value_boundary() -> None:
     feasible = ((), (0, 1), (2,))
-    with pytest.raises(ValidationError, match="symmetric exchange"):
+    with pytest.raises(ValidationError) as error:
         FiniteDeltaMatroid(
             ground=("a", "b", "c"),
             feasible=feasible,
         )
+    assert error.value.errors()[0]["type"] == "delta_matroid.exchange_axiom_failed"
 
 
 def test_sparse_family_beyond_any_fixed_ground_cap_is_recognized() -> None:
@@ -167,10 +170,11 @@ def test_label_byte_budget_bounds_ground_count_without_a_fixed_cap() -> None:
     assert result.delta_matroid is not None
     assert len(result.delta_matroid.ground) == 1_024
 
-    with pytest.raises(ValidationError, match="byte envelope"):
+    with pytest.raises(ValidationError) as error:
         DeltaMatroidFromFeasibleSetsRequest(
             system=FiniteFeasibleSetSystem(ground=_labels(1_025), feasible=((),))
         )
+    assert error.value.errors()[0]["type"] == "delta_matroid.label_bytes_exceeded"
 
 
 def test_non_utf8_representable_ground_labels_are_rejected_not_host_errors() -> None:
@@ -182,11 +186,13 @@ def test_non_utf8_representable_ground_labels_are_rejected_not_host_errors() -> 
     with pytest.raises(ValueError, match="UTF-8-representable"):
         delta_matroids.from_feasible_sets(system)
 
-    with pytest.raises(ValidationError, match="UTF-8-representable"):
+    with pytest.raises(ValidationError) as error:
         DeltaMatroidFromFeasibleSetsRequest(system=system)
+    assert error.value.errors()[0]["type"] == "delta_matroid.labels_not_utf8"
 
-    with pytest.raises(ValidationError, match="UTF-8-representable"):
+    with pytest.raises(ValidationError) as error:
         FiniteDeltaMatroid(ground=("\ud800",), feasible=((),))
+    assert error.value.errors()[0]["type"] == "delta_matroid.labels_not_utf8"
 
 
 def test_request_schema_exposes_every_delta_specific_admission_limit() -> None:
@@ -234,13 +240,14 @@ def test_membership_envelope_rejects_wide_families_without_a_row_cap() -> None:
     for index in range(25):
         for offset in range(1, 25):
             feasible.append((index, index + offset))
-    with pytest.raises(ValidationError, match="memberships"):
+    with pytest.raises(ValidationError) as error:
         DeltaMatroidFromFeasibleSetsRequest(
             system=FiniteFeasibleSetSystem(
                 ground=tuple(f"e{index}" for index in range(50)),
                 feasible=tuple(feasible),
             )
         )
+    assert error.value.errors()[0]["type"] == "delta_matroid.memberships_exceeded"
 
 
 def test_request_rejects_exchange_candidate_space_before_axiom_replay() -> None:
@@ -254,13 +261,14 @@ def test_request_rejects_exchange_candidate_space_before_axiom_replay() -> None:
             tuple(bit for bit in range(7) if (index >> bit) & 1) for index in range(128)
         )
     )
-    with pytest.raises(ValidationError, match="candidate checks"):
+    with pytest.raises(ValidationError) as error:
         DeltaMatroidFromFeasibleSetsRequest(
             system=FiniteFeasibleSetSystem(
                 ground=tuple(f"e{index}" for index in range(8)),
                 feasible=feasible,
             )
         )
+    assert error.value.errors()[0]["type"] == "delta_matroid.candidate_work_exceeded"
 
 
 def test_successful_request_stays_within_the_documented_replay_budget(

@@ -47,9 +47,11 @@ class TestFVector:
 
 class TestValidation:
     def test_invalid_interval_non_unit(self) -> None:
-        with pytest.raises(ValidationError, match="length 0 or 1"):
+        with pytest.raises(ValidationError) as error:
             CubicalCell(intervals=((0, 2),))
+        assert error.value.errors()[0]["type"] == "cubical_complex.interval_length"
 
     def test_invalid_interval_order(self) -> None:
-        with pytest.raises(ValidationError, match="a <= b"):
+        with pytest.raises(ValidationError) as error:
             CubicalCell(intervals=((1, 0),))
+        assert error.value.errors()[0]["type"] == "cubical_complex.interval_order"

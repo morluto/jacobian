@@ -16,9 +16,17 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+
+
+def _validation_error(message: str) -> PydanticCustomError:
+    """Project analysis-model invariants through a stable owner code."""
+
+    return PydanticCustomError("analysis.invariant", message)
+
 
 MAX_RATIONAL_DIGITS = 128
 MAX_EXPRESSION_DEPTH = 16
@@ -106,7 +114,9 @@ def _bound_raw_rational(value: object, label: str) -> None:
         and len(component) - component.startswith("-") > MAX_RATIONAL_DIGITS
         for component in components
     ):
-        raise ValueError(f"{label} exceeds the {MAX_RATIONAL_DIGITS}-digit bound")
+        raise _validation_error(
+            f"{label} exceeds the {MAX_RATIONAL_DIGITS}-digit bound"
+        )
 
 
 class IntervalExpressionNode(StrictModel):
@@ -130,7 +140,7 @@ class IntervalExpressionNode(StrictModel):
     @classmethod
     def preserve_json_array_composition(cls, value: object) -> object:
         if isinstance(value, (list, tuple)) and len(value) > 2:
-            raise ValueError("expression nodes may have at most two children")
+            raise _validation_error("expression nodes may have at most two children")
         return tuple(value) if isinstance(value, list) else value
 
     @model_validator(mode="after")
@@ -151,24 +161,26 @@ class IntervalExpressionNode(StrictModel):
             "div": 2,
         }[self.op]
         if len(self.children) != arity:
-            raise ValueError(f"{self.op} node requires exactly {arity} children")
+            raise _validation_error(f"{self.op} node requires exactly {arity} children")
         if self.op == "const":
             if self.value is None:
-                raise ValueError("const node requires a value")
+                raise _validation_error("const node requires a value")
             require_bounded_rational(
                 self.value,
                 max_digits=MAX_RATIONAL_DIGITS,
                 label="interval-expression rational",
             )
         elif self.value is not None:
-            raise ValueError("only a const node may carry a value")
+            raise _validation_error("only a const node may carry a value")
         if self.op != "var" and self.variable is not None:
-            raise ValueError("only a var node may carry a variable name")
+            raise _validation_error("only a var node may carry a variable name")
         if self.op == "pow":
             if self.exponent is None or self.exponent == 0:
-                raise ValueError("pow node requires a nonzero bounded integer exponent")
+                raise _validation_error(
+                    "pow node requires a nonzero bounded integer exponent"
+                )
         elif self.exponent is not None:
-            raise ValueError("only a pow node may carry an exponent")
+            raise _validation_error("only a pow node may carry an exponent")
         return self
 
 
@@ -181,9 +193,11 @@ def _bounded_expression_nodes(
         node, depth = stack.pop()
         nodes.append(node)
         if depth > MAX_EXPRESSION_DEPTH:
-            raise ValueError(f"expression depth exceeds {MAX_EXPRESSION_DEPTH}")
+            raise _validation_error(f"expression depth exceeds {MAX_EXPRESSION_DEPTH}")
         if len(nodes) > MAX_EXPRESSION_NODES:
-            raise ValueError(f"expression node count exceeds {MAX_EXPRESSION_NODES}")
+            raise _validation_error(
+                f"expression node count exceeds {MAX_EXPRESSION_NODES}"
+            )
         stack.extend((child, depth + 1) for child in node.children)
     return tuple(nodes)
 
@@ -197,9 +211,11 @@ def _bound_raw_expression(expression: object) -> None:
         node, depth = stack.pop()
         count += 1
         if depth > MAX_EXPRESSION_DEPTH:
-            raise ValueError(f"expression depth exceeds {MAX_EXPRESSION_DEPTH}")
+            raise _validation_error(f"expression depth exceeds {MAX_EXPRESSION_DEPTH}")
         if count > MAX_EXPRESSION_NODES:
-            raise ValueError(f"expression node count exceeds {MAX_EXPRESSION_NODES}")
+            raise _validation_error(
+                f"expression node count exceeds {MAX_EXPRESSION_NODES}"
+            )
 
         if isinstance(node, IntervalExpressionNode):
             children: list[object] | tuple[object, ...] = node.children
@@ -212,7 +228,7 @@ def _bound_raw_expression(expression: object) -> None:
         else:
             continue
         if len(children) > 2:
-            raise ValueError("expression nodes may have at most two children")
+            raise _validation_error("expression nodes may have at most two children")
         stack.extend((child, depth + 1) for child in children)
 
 
@@ -240,7 +256,9 @@ class IntervalExpressionEnclosureRequest(StrictModel):
         )
         nodes = _bounded_expression_nodes(self.expression)
         if any(node.op == "var" and node.variable is not None for node in nodes):
-            raise ValueError("point-enclosure variable nodes must remain anonymous")
+            raise _validation_error(
+                "point-enclosure variable nodes must remain anonymous"
+            )
         return self
 
 
@@ -259,7 +277,9 @@ class RationalClosedInterval(StrictModel):
                 label="expression-box endpoint",
             )
         if self.lower.as_fraction() > self.upper.as_fraction():
-            raise ValueError("box interval lower endpoint exceeds upper endpoint")
+            raise _validation_error(
+                "box interval lower endpoint exceeds upper endpoint"
+            )
         return self
 
 
@@ -282,7 +302,7 @@ class RationalIntervalBox(StrictModel):
     @classmethod
     def preserve_json_array_composition(cls, value: object) -> object:
         if isinstance(value, (list, tuple)) and len(value) > MAX_BOX_VARIABLES:
-            raise ValueError(
+            raise _validation_error(
                 f"rational interval boxes admit at most {MAX_BOX_VARIABLES} coordinates"
             )
         return tuple(value) if isinstance(value, list) else value
@@ -290,9 +310,11 @@ class RationalIntervalBox(StrictModel):
     @model_validator(mode="after")
     def require_complete_unique_axis(self) -> Self:
         if len(self.variables) != len(self.intervals):
-            raise ValueError("box variables and intervals must have the same length")
+            raise _validation_error(
+                "box variables and intervals must have the same length"
+            )
         if len(set(self.variables)) != len(self.variables):
-            raise ValueError("box variable names must be unique")
+            raise _validation_error("box variable names must be unique")
         return self
 
 
@@ -309,7 +331,7 @@ def _bound_raw_box(box: object) -> None:
         return
     for values in (variables, intervals):
         if isinstance(values, (list, tuple)) and len(values) > MAX_BOX_VARIABLES:
-            raise ValueError(
+            raise _validation_error(
                 f"rational interval boxes admit at most {MAX_BOX_VARIABLES} coordinates"
             )
     if not isinstance(intervals, (list, tuple)):
@@ -349,13 +371,15 @@ class IntervalExpressionDomainFailure(StrictModel):
     @classmethod
     def preserve_json_array_composition(cls, value: object) -> object:
         if isinstance(value, (list, tuple)) and len(value) >= MAX_EXPRESSION_DEPTH:
-            raise ValueError("domain-failure path exceeds the expression-depth bound")
+            raise _validation_error(
+                "domain-failure path exceeds the expression-depth bound"
+            )
         return tuple(value) if isinstance(value, list) else value
 
     @model_validator(mode="after")
     def require_operation_reason_pair(self) -> Self:
         if any(index not in (0, 1) for index in self.node_path):
-            raise ValueError(
+            raise _validation_error(
                 "domain-failure paths may contain only child indices 0 or 1"
             )
         expected = {
@@ -373,7 +397,9 @@ class IntervalExpressionDomainFailure(StrictModel):
             else self.reason == expected
         )
         if not valid:
-            raise ValueError("domain-failure reason does not match its operation")
+            raise _validation_error(
+                "domain-failure reason does not match its operation"
+            )
         return self
 
 
@@ -403,7 +429,7 @@ def _require_bounded_rational_components(*values: Fraction) -> None:
         > MAX_BOX_INTERMEDIATE_BITS
         for value in values
     ):
-        raise ValueError(
+        raise _validation_error(
             "expression interval intermediate exceeds the "
             f"{MAX_BOX_INTERMEDIATE_BITS}-bit rational work bound"
         )
@@ -429,7 +455,7 @@ def _power_bounds(bounds: _RationalBounds, exponent: int) -> _RationalBounds:
             component.bit_length() * exponent > MAX_BOX_INTERMEDIATE_BITS
             for component in (abs(value.numerator), value.denominator)
         ):
-            raise ValueError(
+            raise _validation_error(
                 "expression interval intermediate exceeds the "
                 f"{MAX_BOX_INTERMEDIATE_BITS}-bit rational work bound"
             )
@@ -448,7 +474,7 @@ def _power_bounds(bounds: _RationalBounds, exponent: int) -> _RationalBounds:
 
 def _bounded_power_of_four(exponent: int) -> Fraction:
     if exponent > (MAX_BOX_INTERMEDIATE_BITS - 1) // 2:
-        raise ValueError(
+        raise _validation_error(
             "expression interval intermediate exceeds the "
             f"{MAX_BOX_INTERMEDIATE_BITS}-bit rational work bound"
         )
@@ -629,18 +655,18 @@ class IntervalExpressionBoxEnclosureRequest(StrictModel):
             if node.op != "var":
                 continue
             if node.variable is None:
-                raise ValueError("box-enclosure variable nodes must be named")
+                raise _validation_error("box-enclosure variable nodes must be named")
             used_variables.add(node.variable)
         box_variables = set(self.box.variables)
         missing = used_variables - box_variables
         if missing:
-            raise ValueError(
+            raise _validation_error(
                 "expression variables are missing from the box: "
                 + ", ".join(sorted(missing))
             )
         unused = box_variables - used_variables
         if unused:
-            raise ValueError(
+            raise _validation_error(
                 "box variables are unused by the expression: "
                 + ", ".join(sorted(unused))
             )
@@ -703,7 +729,7 @@ class IntervalExpressionSecondJetEnclosureRequest(
             _bounded_expression_nodes(self.expression)
         ) * _second_jet_node_arithmetic_units(dimension)
         if work_units > MAX_SECOND_JET_WORK_UNITS:
-            raise ValueError(
+            raise _validation_error(
                 f"second-jet forward arithmetic work of {work_units} scalar "
                 f"units exceeds its {MAX_SECOND_JET_WORK_UNITS}-unit bound at "
                 "this dimension"
@@ -733,15 +759,21 @@ class IntervalExpressionEnclosureResult(StrictModel):
     def bind_enclosure_to_status(self) -> Self:
         enclosed = self.status == "ENCLOSED"
         if enclosed != (self.lower is not None and self.upper is not None):
-            raise ValueError("only an enclosed result may carry dyadic endpoints")
+            raise _validation_error(
+                "only an enclosed result may carry dyadic endpoints"
+            )
         if not enclosed and (self.relative_accuracy_bits is not None or self.exact):
-            raise ValueError("a non-enclosure cannot claim accuracy or exactness")
+            raise _validation_error(
+                "a non-enclosure cannot claim accuracy or exactness"
+            )
         if enclosed:
             assert self.lower is not None and self.upper is not None
             if self.lower.compare(self.upper) > 0:
-                raise ValueError("enclosure lower endpoint exceeds upper endpoint")
+                raise _validation_error(
+                    "enclosure lower endpoint exceeds upper endpoint"
+                )
             if self.exact != (self.relative_accuracy_bits is None):
-                raise ValueError(
+                raise _validation_error(
                     "exact enclosures omit relative accuracy; inexact ones report it"
                 )
         return self
@@ -782,9 +814,9 @@ class ExactDyadic(StrictModel):
     def require_canonical_binary_form(self) -> Self:
         mantissa = int(self.mantissa)
         if mantissa == 0 and self.exponent != 0:
-            raise ValueError("canonical dyadic zero must have exponent 0")
+            raise _validation_error("canonical dyadic zero must have exponent 0")
         if mantissa != 0 and mantissa % 2 == 0:
-            raise ValueError("canonical nonzero dyadic mantissa must be odd")
+            raise _validation_error("canonical nonzero dyadic mantissa must be odd")
         return self
 
     def as_fraction(self) -> Fraction:
@@ -885,7 +917,7 @@ def _preflight_point_check_source(data: object) -> object:
         isinstance(component, str) and len(component.lstrip("-")) > MAX_RATIONAL_DIGITS
         for component in raw_components
     ):
-        raise ValueError(
+        raise _validation_error(
             "point-enclosure checker raw rational component exceeds the "
             f"{MAX_RATIONAL_DIGITS}-digit bound"
         )
@@ -962,12 +994,14 @@ class PointEnclosureCheckRequest(StrictModel):
             RealUnaryFunction.LOG,
             RealUnaryFunction.SQRT,
         ):
-            raise ValueError("point-enclosure checker replays only LOG and SQRT claims")
+            raise _validation_error(
+                "point-enclosure checker replays only LOG and SQRT claims"
+            )
         if any(
             abs(endpoint.exponent) > MAX_POINT_CHECK_DYADIC_EXPONENT
             for endpoint in (self.enclosure.lower, self.enclosure.upper)
         ):
-            raise ValueError(
+            raise _validation_error(
                 "point-enclosure checker dyadic exponent exceeds the "
                 f"+/-{MAX_POINT_CHECK_DYADIC_EXPONENT} bound"
             )
@@ -975,7 +1009,7 @@ class PointEnclosureCheckRequest(StrictModel):
             _point_check_fraction_bound_bits(self.enclosure.argument)
             > MAX_POINT_CHECK_FRACTION_BITS
         ):
-            raise ValueError(
+            raise _validation_error(
                 "point-enclosure checker exact rational work exceeds the "
                 f"{MAX_POINT_CHECK_FRACTION_BITS}-bit intermediate bound"
             )
@@ -991,7 +1025,9 @@ class DyadicClosedInterval(StrictModel):
     @model_validator(mode="after")
     def require_ordered_endpoints(self) -> Self:
         if self.lower.compare(self.upper) > 0:
-            raise ValueError("dyadic interval lower endpoint exceeds upper endpoint")
+            raise _validation_error(
+                "dyadic interval lower endpoint exceeds upper endpoint"
+            )
         return self
 
 
@@ -1040,7 +1076,9 @@ class IntervalExpressionSecondJetEnclosureResult(
     @classmethod
     def preserve_gradient_json_array_composition(cls, value: object) -> object:
         if isinstance(value, (list, tuple)) and len(value) > MAX_SECOND_JET_VARIABLES:
-            raise ValueError("second-jet result exceeds its declared interval bound")
+            raise _validation_error(
+                "second-jet result exceeds its declared interval bound"
+            )
         if isinstance(value, list):
             return tuple(value)
         return value
@@ -1050,7 +1088,9 @@ class IntervalExpressionSecondJetEnclosureResult(
     def preserve_hessian_json_array_composition(cls, value: object) -> object:
         maximum = MAX_SECOND_JET_VARIABLES * (MAX_SECOND_JET_VARIABLES + 1) // 2
         if isinstance(value, (list, tuple)) and len(value) > maximum:
-            raise ValueError("second-jet result exceeds its declared interval bound")
+            raise _validation_error(
+                "second-jet result exceeds its declared interval bound"
+            )
         if isinstance(value, list):
             return tuple(value)
         return value
@@ -1064,10 +1104,14 @@ class IntervalExpressionSecondJetEnclosureResult(
             for second in self.box.variables[first_index:]
         )
         if enclosed != (self.value is not None):
-            raise ValueError("only an enclosed second jet may carry a value enclosure")
+            raise _validation_error(
+                "only an enclosed second jet may carry a value enclosure"
+            )
         if enclosed:
             if tuple(entry.variable for entry in self.gradient) != self.box.variables:
-                raise ValueError("gradient entries must match the ordered source axis")
+                raise _validation_error(
+                    "gradient entries must match the ordered source axis"
+                )
             if (
                 tuple(
                     (entry.first_variable, entry.second_variable)
@@ -1075,19 +1119,21 @@ class IntervalExpressionSecondJetEnclosureResult(
                 )
                 != expected_pairs
             ):
-                raise ValueError(
+                raise _validation_error(
                     "Hessian entries must be the canonical upper triangle of the source axis"
                 )
             if self.domain_failure is not None:
-                raise ValueError("an enclosed second jet cannot carry a domain failure")
+                raise _validation_error(
+                    "an enclosed second jet cannot carry a domain failure"
+                )
         else:
             if self.value is not None or self.gradient or self.hessian:
-                raise ValueError(
+                raise _validation_error(
                     "a non-enclosed second jet cannot carry partial enclosures"
                 )
             domain_unproven = self.status == "DOMAIN_UNPROVEN"
             if domain_unproven != (self.domain_failure is not None):
-                raise ValueError(
+                raise _validation_error(
                     "domain-failure evidence must agree with DOMAIN_UNPROVEN status"
                 )
             if self.status == "BACKEND_ERROR":
@@ -1101,7 +1147,7 @@ class IntervalExpressionSecondJetEnclosureResult(
             precision_bits=self.precision_bits,
         )
         if self != _second_jet_enclosure(request):
-            raise ValueError(
+            raise _validation_error(
                 "second-jet enclosure does not replay from its expression, axis, and source box"
             )
         return self
@@ -1144,7 +1190,7 @@ class PointEnclosureCheckResult(StrictModel):
 
         request = PointEnclosureCheckRequest(enclosure=self.enclosure)
         if self.outcome != point_enclosure_check_outcome(request):
-            raise ValueError(
+            raise _validation_error(
                 "outcome must equal the deterministic enclosure check for the retained source"
             )
         return self
@@ -1172,17 +1218,23 @@ class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest
     def bind_enclosure_to_source(self) -> Self:
         enclosed = self.status == "ENCLOSED"
         if enclosed != (self.lower is not None and self.upper is not None):
-            raise ValueError("only an enclosed result may carry dyadic endpoints")
+            raise _validation_error(
+                "only an enclosed result may carry dyadic endpoints"
+            )
         if enclosed:
             assert self.lower is not None and self.upper is not None
             if self.lower.compare(self.upper) > 0:
-                raise ValueError("enclosure lower endpoint exceeds upper endpoint")
+                raise _validation_error(
+                    "enclosure lower endpoint exceeds upper endpoint"
+                )
             if self.domain_failure is not None:
-                raise ValueError("an enclosed result cannot carry a domain failure")
+                raise _validation_error(
+                    "an enclosed result cannot carry a domain failure"
+                )
         else:
             domain_unproven = self.status == "DOMAIN_UNPROVEN"
             if domain_unproven != (self.domain_failure is not None):
-                raise ValueError(
+                raise _validation_error(
                     "domain-failure evidence must agree with DOMAIN_UNPROVEN status"
                 )
             if self.status == "BACKEND_ERROR":
@@ -1196,7 +1248,7 @@ class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest
             precision_bits=self.precision_bits,
         )
         if self != _box_expression_enclosure(request):
-            raise ValueError(
+            raise _validation_error(
                 "box enclosure does not replay from its expression, axis, and source box"
             )
         return self
@@ -1222,9 +1274,13 @@ class ArbPointEnclosureResult(ArbPointEnclosureRequest):
     def bind_enclosure_to_status(self) -> Self:
         enclosed = self.status == "ENCLOSED"
         if enclosed != (self.enclosure is not None):
-            raise ValueError("only an enclosed result may carry the point enclosure")
+            raise _validation_error(
+                "only an enclosed result may carry the point enclosure"
+            )
         if not enclosed and (self.relative_accuracy_bits is not None or self.exact):
-            raise ValueError("a non-enclosure cannot claim accuracy or exactness")
+            raise _validation_error(
+                "a non-enclosure cannot claim accuracy or exactness"
+            )
         if enclosed:
             enclosure = self.enclosure
             assert enclosure is not None
@@ -1233,11 +1289,15 @@ class ArbPointEnclosureResult(ArbPointEnclosureRequest):
                 enclosure.argument,
                 enclosure.precision_bits,
             ) != (self.function, self.argument, self.precision_bits):
-                raise ValueError("the enclosure must restate the retained request")
+                raise _validation_error(
+                    "the enclosure must restate the retained request"
+                )
             if enclosure.lower.compare(enclosure.upper) > 0:
-                raise ValueError("enclosure lower endpoint exceeds upper endpoint")
+                raise _validation_error(
+                    "enclosure lower endpoint exceeds upper endpoint"
+                )
             if self.exact != (self.relative_accuracy_bits is None):
-                raise ValueError(
+                raise _validation_error(
                     "exact enclosures omit relative accuracy; inexact ones report it"
                 )
         return self

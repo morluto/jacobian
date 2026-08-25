@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.coherent_configurations.values import (
@@ -108,24 +109,43 @@ class CoherentConfigurationAnalyzeResult(StrictModel):
 
         expected = analysis_models_from_source(self.configuration)
         if self.status != expected.status:
-            raise ValueError("status does not match the exact coherence analysis")
+            raise PydanticCustomError(
+                "coherent_configuration.result_status",
+                "status does not match the exact coherence analysis",
+            )
         if self.coherent_configuration != expected.coherent_configuration:
-            raise ValueError("coherent_configuration is not bound to the source")
+            raise PydanticCustomError(
+                "coherent_configuration.result_value",
+                "coherent_configuration is not bound to the source",
+            )
         if self.fibers != expected.fibers:
-            raise ValueError("fibers are not bound to the source configuration")
+            raise PydanticCustomError(
+                "coherent_configuration.result_fibers",
+                "fibers are not bound to the source configuration",
+            )
         if self.transpose_map != expected.transpose_map:
-            raise ValueError("transpose_map is not bound to the source configuration")
+            raise PydanticCustomError(
+                "coherent_configuration.result_transpose_map",
+                "transpose_map is not bound to the source configuration",
+            )
         if self.intersection_numbers != expected.intersection_numbers:
-            raise ValueError(
-                "intersection_numbers are not bound to the source configuration"
+            raise PydanticCustomError(
+                "coherent_configuration.result_intersection_numbers",
+                "intersection_numbers are not bound to the source configuration",
             )
         if self.obstruction != expected.obstruction:
-            raise ValueError("obstruction does not match the first failed axiom")
+            raise PydanticCustomError(
+                "coherent_configuration.result_obstruction",
+                "obstruction does not match the first failed axiom",
+            )
         if (
             len(self.model_dump_json().encode("utf-8"))
             > MAX_COHERENT_CONFIGURATION_RESULT_BYTES
         ):
-            raise ValueError("coherent-configuration result exceeds the byte budget")
+            raise PydanticCustomError(
+                "coherent_configuration.result_bytes",
+                "coherent-configuration result exceeds the byte budget",
+            )
         return self
 
 

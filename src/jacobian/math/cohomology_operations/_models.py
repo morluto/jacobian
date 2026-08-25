@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.topology._models import FiniteSimplicialComplex
@@ -75,6 +76,10 @@ hashing and sorting can run on it.
 """
 
 
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"cohomology_operation.{code}", message)
+
+
 def _require_bounded_vertex_labels(
     entries: tuple[tuple[int, ...], ...],
     label: str,
@@ -82,9 +87,10 @@ def _require_bounded_vertex_labels(
     for simplex in entries:
         for vertex in simplex:
             if len(str(abs(vertex))) > MAX_VERTEX_LABEL_DIGITS:
-                raise ValueError(
+                raise _validation_error(
+                    "vertex_label_bound",
                     f"{label} vertex label {vertex} exceeds the "
-                    f"{MAX_VERTEX_LABEL_DIGITS}-digit bound"
+                    f"{MAX_VERTEX_LABEL_DIGITS}-digit bound",
                 )
 
 
@@ -94,9 +100,10 @@ def _require_bounded_coefficients(
 ) -> None:
     for coefficient in coefficients:
         if len(str(abs(coefficient))) > MAX_COEFFICIENT_DIGITS:
-            raise ValueError(
+            raise _validation_error(
+                "coefficient_bound",
                 f"{label} coefficient {coefficient} exceeds the "
-                f"{MAX_COEFFICIENT_DIGITS}-digit bound"
+                f"{MAX_COEFFICIENT_DIGITS}-digit bound",
             )
 
 
@@ -107,11 +114,18 @@ def _validate_simplex_entries(
     _require_bounded_vertex_labels(entries, label)
     for simplex in entries:
         if not simplex:
-            raise ValueError(f"{label} must have at least one vertex")
+            raise _validation_error(
+                "simplex_empty", f"{label} must have at least one vertex"
+            )
         if len(set(simplex)) != len(simplex):
-            raise ValueError(f"{label} vertices must be distinct")
+            raise _validation_error(
+                "simplex_vertices_not_distinct", f"{label} vertices must be distinct"
+            )
         if tuple(sorted(simplex)) != simplex:
-            raise ValueError(f"{label} vertices must be sorted canonical")
+            raise _validation_error(
+                "simplex_vertices_not_canonical",
+                f"{label} vertices must be sorted canonical",
+            )
 
 
 def _require_downward_closed(simplices: tuple[tuple[int, ...], ...]) -> None:
@@ -127,9 +141,10 @@ def _require_downward_closed(simplices: tuple[tuple[int, ...], ...]) -> None:
         for index in range(len(simplex)):
             face = simplex[:index] + simplex[index + 1 :]
             if face and face not in known:
-                raise ValueError(
+                raise _validation_error(
+                    "ambient_not_downward_closed",
                     "ambient_simplices must be downward closed: the face "
-                    f"{face} of {simplex} is absent"
+                    f"{face} of {simplex} is absent",
                 )
 
 
@@ -158,9 +173,10 @@ def _require_cocycle(
             face = sigma[:index] + sigma[index + 1 :]
             coboundary = (coboundary + values_by_face.get(face, 0)) % 2
         if coboundary:
-            raise ValueError(
+            raise _validation_error(
+                "not_cocycle",
                 "the supplied cochain is not a cocycle: its "
-                "coboundary does not vanish on the ambient complex"
+                "coboundary does not vanish on the ambient complex",
             )
 
 
@@ -225,14 +241,18 @@ def _validate_ambient_complex(
     """
     _validate_simplex_entries(ambient, "ambient simplex")
     if any(len(simplex) > MAX_AMBIENT_SIMPLEX_VERTICES for simplex in ambient):
-        raise ValueError(
+        raise _validation_error(
+            "ambient_simplex_bound",
             "each ambient simplex may carry at most "
-            f"{MAX_AMBIENT_SIMPLEX_VERTICES} vertices"
+            f"{MAX_AMBIENT_SIMPLEX_VERTICES} vertices",
         )
     known = set(ambient)
     for simplex in support:
         if simplex not in known:
-            raise ValueError("cochain support must lie inside the ambient complex")
+            raise _validation_error(
+                "support_outside_ambient",
+                "cochain support must lie inside the ambient complex",
+            )
     _require_downward_closed(ambient)
     _require_cocycle(cochain_degree, support, coefficients, ambient)
 
@@ -321,15 +341,17 @@ class SteenrodSquareRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_lengths(self) -> Self:
         if len(self.simplex_values) != len(self.simplex_coefficients):
-            raise ValueError(
-                "simplex_values and simplex_coefficients must have the same length"
+            raise _validation_error(
+                "length_mismatch",
+                "simplex_values and simplex_coefficients must have the same length",
             )
         # Validate simplex dimensions: each simplex must have exactly cochain_degree+1 distinct vertices.
         expected_dim = self.cochain_degree + 1
         for simplex in self.simplex_values:
             if len(simplex) != expected_dim:
-                raise ValueError(
-                    f"each simplex must have exactly cochain_degree+1={expected_dim} vertices"
+                raise _validation_error(
+                    "simplex_dimension",
+                    f"each simplex must have exactly cochain_degree+1={expected_dim} vertices",
                 )
             _validate_simplex_entries((simplex,), "simplex")
         _require_bounded_coefficients(self.simplex_coefficients, "simplex_coefficient")
@@ -339,15 +361,17 @@ class SteenrodSquareRequest(StrictModel):
         # budget instead of under a fixed ceiling on square_degree.
         result_degree = self.cochain_degree + self.square_degree
         if result_degree > MAX_RESULT_COCHAIN_DEGREE:
-            raise ValueError(
+            raise _validation_error(
+                "result_degree_bound",
                 f"Sq^{self.square_degree} of a degree-{self.cochain_degree} "
                 f"cochain returns degree {result_degree}, above the "
-                f"{MAX_RESULT_COCHAIN_DEGREE}-degree exact-result budget"
+                f"{MAX_RESULT_COCHAIN_DEGREE}-degree exact-result budget",
             )
         # Intermediate squares 0<k<deg are not implemented; reject to avoid false zero.
         if 0 < self.square_degree < self.cochain_degree:
-            raise ValueError(
-                "intermediate Steenrod squares 0<k<deg require cup-i products and are not supported"
+            raise _validation_error(
+                "intermediate_square_unsupported",
+                "intermediate Steenrod squares 0<k<deg require cup-i products and are not supported",
             )
         # Effective ambient from either integer tuples or the canonical complex.
         effective_ambient = _effective_ambient(
@@ -357,10 +381,11 @@ class SteenrodSquareRequest(StrictModel):
             self.simplex_values, self.simplex_coefficients
         )
         if has_nonzero and not effective_ambient:
-            raise ValueError(
+            raise _validation_error(
+                "ambient_required_for_nonzero",
                 "Steenrod squares are cohomology operations: the supplied "
                 "cochain must be verified as a cocycle against an ambient "
-                "simplicial complex; supply ambient_simplices or ambient_complex"
+                "simplicial complex; supply ambient_simplices or ambient_complex",
             )
         # Top squares need the ambient to locate (2*deg)-simplex targets.
         if (
@@ -368,9 +393,10 @@ class SteenrodSquareRequest(StrictModel):
             and self.cochain_degree >= 1
             and not effective_ambient
         ):
-            raise ValueError(
+            raise _validation_error(
+                "ambient_required_for_top_square",
                 "the top Steenrod square requires the ambient simplicial "
-                "complex; supply ambient_simplices or ambient_complex"
+                "complex; supply ambient_simplices or ambient_complex",
             )
         if effective_ambient:
             _validate_ambient_complex(
@@ -411,9 +437,10 @@ class SteenrodSquareResult(SteenrodSquareRequest):
             self.is_zero,
         )
         if actual != expected:
-            raise ValueError(
+            raise _validation_error(
+                "steenrod_replay_mismatch",
                 "result must equal the exact Steenrod-square replay of the "
-                "retained source cochain"
+                "retained source cochain",
             )
         return self
 
@@ -457,18 +484,20 @@ class BocksteinRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_lengths(self) -> Self:
         if len(self.simplex_values) != len(self.simplex_coefficients):
-            raise ValueError(
-                "simplex_values and simplex_coefficients must have the same length"
+            raise _validation_error(
+                "length_mismatch",
+                "simplex_values and simplex_coefficients must have the same length",
             )
         from sympy import isprime
 
         if not isprime(self.prime):
-            raise ValueError("prime must be a prime integer")
+            raise _validation_error("prime_not_prime", "prime must be a prime integer")
         expected_dim = self.cochain_degree + 1
         for simplex in self.simplex_values:
             if len(simplex) != expected_dim:
-                raise ValueError(
-                    f"each simplex must have exactly cochain_degree+1={expected_dim} vertices"
+                raise _validation_error(
+                    "simplex_dimension",
+                    f"each simplex must have exactly cochain_degree+1={expected_dim} vertices",
                 )
             _validate_simplex_entries((simplex,), "simplex")
         _require_bounded_coefficients(self.simplex_coefficients, "simplex_coefficient")
@@ -480,8 +509,9 @@ class BocksteinRequest(StrictModel):
         # the simplicial coboundary and hence the full complex. Reject as unsupported
         # to avoid returning a false exact zero.
         if has_nonzero:
-            raise ValueError(
-                "non-zero Bockstein requires the ambient simplicial complex; unsupported in this bounded operation"
+            raise _validation_error(
+                "nonzero_bockstein_unsupported",
+                "non-zero Bockstein requires the ambient simplicial complex; unsupported in this bounded operation",
             )
         # When an ambient complex is supplied, validate its shape and that the
         # (possibly duplicate) support lies inside it.  Merged zero cochains
@@ -493,15 +523,17 @@ class BocksteinRequest(StrictModel):
         if effective_ambient:
             _validate_simplex_entries(effective_ambient, "ambient simplex")
             if any(len(s) > MAX_AMBIENT_SIMPLEX_VERTICES for s in effective_ambient):
-                raise ValueError(
+                raise _validation_error(
+                    "ambient_simplex_bound",
                     "each ambient simplex may carry at most "
-                    f"{MAX_AMBIENT_SIMPLEX_VERTICES} vertices"
+                    f"{MAX_AMBIENT_SIMPLEX_VERTICES} vertices",
                 )
             known = set(effective_ambient)
             for simplex in self.simplex_values:
                 if simplex not in known:
-                    raise ValueError(
-                        "cochain support must lie inside the ambient complex"
+                    raise _validation_error(
+                        "support_outside_ambient",
+                        "cochain support must lie inside the ambient complex",
                     )
             _require_downward_closed(effective_ambient)
         return self
@@ -534,9 +566,10 @@ class BocksteinResult(BocksteinRequest):
             self.is_zero,
         )
         if actual != expected:
-            raise ValueError(
+            raise _validation_error(
+                "bockstein_replay_mismatch",
                 "result must equal the exact Bockstein replay of the "
-                "retained source cochain"
+                "retained source cochain",
             )
         return self
 

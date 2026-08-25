@@ -158,17 +158,30 @@ class TestSylvester:
 
 class TestValidation:
     def test_non_sign_entry_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="sign matrix entries"):
+        with pytest.raises(ValidationError) as exc_info:
             SignMatrix(rows=((1, 0), (0, 1)))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_matrix.sign_entry_invalid"
+        )
 
     def test_non_hadamard_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="orthogonality"):
+        with pytest.raises(ValidationError) as exc_info:
             HadamardMatrix(rows=((1, 1), (1, 1)))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_matrix.orthogonality_violation"
+        )
 
     def test_non_square_hadamard_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="square"):
+        with pytest.raises(ValidationError) as exc_info:
             HadamardMatrix(rows=((1, 1, 1), (1, -1, 1)))
+        assert exc_info.value.errors()[0]["type"] == "combinatorial_matrix.not_square"
 
     def test_unequal_row_lengths_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="equal length"):
+        with pytest.raises(ValidationError) as exc_info:
             SignMatrix(rows=((1, 1, 1), (1, -1)))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_matrix.row_length_mismatch"
+        )

@@ -25,7 +25,7 @@ from jacobian.math.combinatorial_maps._operations import (
     compute_vertex_face_incidence,
 )
 from jacobian.math.combinatorial_maps._tools import TOOLS
-from jacobian.math.combinatorial_maps.operations_module import (
+from jacobian.math.combinatorial_maps.operations import (
     face_orbits,
     rotation_successor,
 )
@@ -449,36 +449,49 @@ class TestVertexFaceIncidence:
 class TestValidation:
     def test_wrong_rotation_length_rejected(self) -> None:
         # Vertex 0 has one outgoing dart (dart 0) but its rotation lists two.
-        with pytest.raises(ValidationError, match="rotation length"):
+        with pytest.raises(ValidationError) as exc_info:
             FiniteCombinatorialMap(
                 vertex_count=2,
                 darts=((0, 1, 1), (1, 0, 0)),
                 rotations=((0, 1), (1,)),
             )
+        assert exc_info.value.errors()[0]["type"] == "combinatorial_map.rotation_length"
 
     def test_reverse_not_involution_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="involution"):
+        with pytest.raises(ValidationError) as exc_info:
             FiniteCombinatorialMap(
                 vertex_count=2,
                 darts=((0, 1, 1), (1, 0, 1)),
                 rotations=((0,), (1,)),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_map.reverse_not_involution"
+        )
 
     def test_fixed_point_reverse_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="fixed-point-free"):
+        with pytest.raises(ValidationError) as exc_info:
             FiniteCombinatorialMap(
                 vertex_count=1,
                 darts=((0, 0, 0),),
                 rotations=((0,),),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_map.reverse_fixed_point"
+        )
 
     def test_foreign_dart_in_rotation_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="outgoing darts"):
+        with pytest.raises(ValidationError) as exc_info:
             FiniteCombinatorialMap(
                 vertex_count=2,
                 darts=((0, 1, 1), (1, 0, 0)),
                 rotations=((1,), (0,)),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_map.foreign_rotation_dart"
+        )
 
     def test_vertex_count_too_large_rejected(self) -> None:
         with pytest.raises(ValidationError):
@@ -491,28 +504,40 @@ class TestValidation:
     def test_negative_dart_index_in_rotation_rejected(self) -> None:
         # Dart -1 aliases the last dart through Python negative indexing; it
         # must be rejected instead of silently accepted.
-        with pytest.raises(ValidationError, match="out of range"):
+        with pytest.raises(ValidationError) as exc_info:
             FiniteCombinatorialMap(
                 vertex_count=1,
                 darts=((0, 0, 1), (0, 0, 0)),
                 rotations=((-1, 0),),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_map.rotation_dart_out_of_range"
+        )
 
     def test_out_of_range_dart_index_rejected_without_index_error(self) -> None:
-        with pytest.raises(ValidationError, match="out of range"):
+        with pytest.raises(ValidationError) as exc_info:
             FiniteCombinatorialMap(
                 vertex_count=1,
                 darts=((0, 0, 1), (0, 0, 0)),
                 rotations=((0, 5),),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_map.rotation_dart_out_of_range"
+        )
 
     def test_isolated_vertex_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="incident to at least one dart"):
+        with pytest.raises(ValidationError) as exc_info:
             FiniteCombinatorialMap(
                 vertex_count=2,
                 darts=((0, 0, 1), (0, 0, 0)),
                 rotations=((0, 1), ()),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_map.vertex_without_dart"
+        )
 
     def test_long_facial_walk_rejected_to_keep_dual_bounded(self) -> None:
         # A 65-vertex cycle has two facial walks of length 65, which would
@@ -525,12 +550,16 @@ class TestValidation:
             darts.append((i, j, 2 * i + 1))
             darts.append((j, i, 2 * i))
             rotations.append((2 * i, 2 * ((i - 1) % size) + 1))
-        with pytest.raises(ValidationError, match="facial walk"):
+        with pytest.raises(ValidationError) as exc_info:
             FiniteCombinatorialMap(
                 vertex_count=size,
                 darts=tuple(darts),
                 rotations=tuple(rotations),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_map.facial_walk_too_long"
+        )
 
 
 # ---------------------------------------------------------------------------

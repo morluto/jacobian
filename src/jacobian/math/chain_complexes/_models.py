@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.chain_complexes.values import (
@@ -13,6 +14,10 @@ from jacobian.math.chain_complexes.values import (
     ChainComplexValue,
     CoefficientField,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"chain_complex.{reason}", message)
 
 
 class ConstructChainComplexRequest(StrictModel):
@@ -52,7 +57,10 @@ class ConstructChainComplexRequest(StrictModel):
     @model_validator(mode="after")
     def require_consistent_dimensions(self) -> Self:
         if len(self.basis_sizes) != len(self.differential_matrices) + 1:
-            raise ValueError("need one more basis size than differential matrices")
+            raise _validation_error(
+                "basis_differential_count_mismatch",
+                "need one more basis size than differential matrices",
+            )
         # Full canonical admission: the constructed value must satisfy the
         # chain-complex value contract here rather than failing inside
         # execution.
@@ -96,10 +104,11 @@ class ConstructChainComplexRequest(StrictModel):
                 result_columns=self.basis_sizes[index + 2],
             )
             if any(any(entry != 0 for entry in row) for row in composite):
-                raise ValueError(
+                raise _validation_error(
+                    "differential_not_square_zero",
                     "differential matrices must satisfy d^2 = 0: the "
                     f"composite of degrees {index + 1} and {index} is "
-                    "nonzero"
+                    "nonzero",
                 )
         return self
 
@@ -148,29 +157,33 @@ def _require_chain_map_components(
     chain degrees.
     """
     if source.coefficient_field != target.coefficient_field:
-        raise ValueError(
+        raise _validation_error(
+            "chain_map_field_mismatch",
             f"{label} requires equal coefficient fields "
-            f"({source.coefficient_field} vs {target.coefficient_field})"
+            f"({source.coefficient_field} vs {target.coefficient_field})",
         )
     if source.prime != target.prime:
-        raise ValueError(
-            f"{label} requires equal prime moduli ({source.prime} vs {target.prime})"
+        raise _validation_error(
+            "chain_map_prime_mismatch",
+            f"{label} requires equal prime moduli ({source.prime} vs {target.prime})",
         )
     if (source.degree_min, source.degree_max) != (
         target.degree_min,
         target.degree_max,
     ):
-        raise ValueError(
+        raise _validation_error(
+            "chain_map_degree_interval_mismatch",
             f"{label} requires source and target complexes concentrated on "
             "the same degree interval "
             f"({source.degree_min}..{source.degree_max} vs "
-            f"{target.degree_min}..{target.degree_max})"
+            f"{target.degree_min}..{target.degree_max})",
         )
     expected_count = len(source.basis_sizes)
     if len(map_matrices) != expected_count:
-        raise ValueError(
+        raise _validation_error(
+            "chain_map_component_count_mismatch",
             f"{label} requires one map component per chain degree "
-            f"({expected_count}), got {len(map_matrices)}"
+            f"({expected_count}), got {len(map_matrices)}",
         )
     from jacobian.math.chain_complexes.values import (
         MAX_CHAIN_MAP_CELLS,
@@ -183,9 +196,10 @@ def _require_chain_map_components(
         rows = target.basis_sizes[index]
         cols = source.basis_sizes[index]
         if len(matrix) != rows or any(len(row) != cols for row in matrix):
-            raise ValueError(
+            raise _validation_error(
+                "chain_map_component_shape_mismatch",
                 f"{label} map component {index} must have shape "
-                f"{rows}x{cols} (target rows x source columns)"
+                f"{rows}x{cols} (target rows x source columns)",
             )
         cells, chars = _require_component_entry_grammar(
             source.coefficient_field, matrix, prime=source.prime
@@ -193,14 +207,16 @@ def _require_chain_map_components(
         total_map_cells += cells
         total_entry_chars += chars
     if total_map_cells > MAX_CHAIN_MAP_CELLS:
-        raise ValueError(
+        raise _validation_error(
+            "chain_map_cell_budget_exceeded",
             f"{label} map components total {total_map_cells} cells, "
-            f"exceeding the {MAX_CHAIN_MAP_CELLS}-cell aggregate budget"
+            f"exceeding the {MAX_CHAIN_MAP_CELLS}-cell aggregate budget",
         )
     if total_entry_chars > MAX_CHAIN_MAP_ENTRY_CHARS:
-        raise ValueError(
+        raise _validation_error(
+            "chain_map_entry_budget_exceeded",
             f"{label} map components total {total_entry_chars} entry "
-            f"characters, exceeding the {MAX_CHAIN_MAP_ENTRY_CHARS}-character aggregate budget"
+            f"characters, exceeding the {MAX_CHAIN_MAP_ENTRY_CHARS}-character aggregate budget",
         )
 
 
@@ -317,10 +333,11 @@ def _require_admissible_cone_value(
         + cone_cells
     )
     if worst_case_chars > MAX_MATRIX_ENTRY_CHARS:
-        raise ValueError(
+        raise _validation_error(
+            "mapping_cone_output_budget_exceeded",
             "mapping cone serialization exceeds the canonical output "
             f"ceiling ({worst_case_chars} characters against "
-            f"{MAX_MATRIX_ENTRY_CHARS}); supply smaller coefficients"
+            f"{MAX_MATRIX_ENTRY_CHARS}); supply smaller coefficients",
         )
 
 
@@ -413,9 +430,10 @@ def _require_serializable_entries(*complex_values: ChainComplexValue) -> None:
                         len(numerator.lstrip("-")) > 512
                         or len(denominator.lstrip("-")) > 512
                     ):
-                        raise ValueError(
+                        raise _validation_error(
+                            "tensor_coefficient_digit_budget_exceeded",
                             "tensor product inputs are limited to "
-                            "512-digit coefficients"
+                            "512-digit coefficients",
                         )
 
 
@@ -431,7 +449,10 @@ def _require_admissible_tensor_work(
     input bounds.
     """
     if left.coefficient_field != right.coefficient_field or left.prime != right.prime:
-        raise ValueError("tensor product requires same coefficient field and prime")
+        raise _validation_error(
+            "tensor_context_mismatch",
+            "tensor product requires same coefficient field and prime",
+        )
     group_count = len(left.basis_sizes) + len(right.basis_sizes) - 1
     group_sizes: list[int] = []
     for degree in range(group_count):
@@ -441,9 +462,10 @@ def _require_admissible_tensor_work(
             if j < len(right.basis_sizes):
                 size += left.basis_sizes[i] * right.basis_sizes[j]
         if size > MAX_TENSOR_GROUP_DIMENSION:
-            raise ValueError(
+            raise _validation_error(
+                "tensor_group_dimension_budget_exceeded",
                 f"tensor product group dimension {size} exceeds the "
-                f"{MAX_TENSOR_GROUP_DIMENSION}-dimension work bound"
+                f"{MAX_TENSOR_GROUP_DIMENSION}-dimension work bound",
             )
         group_sizes.append(size)
     total = sum(group_sizes)
@@ -452,9 +474,10 @@ def _require_admissible_tensor_work(
         for degree in range(1, group_count)
     )
     if total > MAX_TENSOR_TOTAL_CELLS or allocated_cells > MAX_TENSOR_TOTAL_CELLS:
-        raise ValueError(
+        raise _validation_error(
+            "tensor_cell_budget_exceeded",
             f"tensor product allocates {max(total, allocated_cells)} "
-            f"cells, exceeding the {MAX_TENSOR_TOTAL_CELLS}-cell work bound"
+            f"cells, exceeding the {MAX_TENSOR_TOTAL_CELLS}-cell work bound",
         )
     _require_serializable_entries(left, right)
     _require_square_zero_at_admission(left, label="tensor product left")
@@ -502,11 +525,12 @@ def _require_admissible_tensor_work(
     worst_entry_chars = max(_max_entry_length(left), _max_entry_length(right)) + 1
     expanded_entry_chars = allocated_cells * worst_entry_chars
     if expanded_entry_chars > MAX_MATRIX_ENTRY_CHARS:
-        raise ValueError(
+        raise _validation_error(
+            "tensor_output_budget_exceeded",
             "tensor product serialization exceeds the canonical "
             f"{MAX_MATRIX_ENTRY_CHARS}-character budget: {allocated_cells} "
             f"expanded cells x ~{worst_entry_chars} characters per copied "
-            "coefficient; supply smaller coefficients"
+            "coefficient; supply smaller coefficients",
         )
 
 

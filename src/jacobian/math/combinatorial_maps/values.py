@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -20,30 +21,44 @@ MAX_FACES = MAX_MAP_VERTICES
 MAX_FACIAL_WALK_LENGTH = MAX_ROTATION_LENGTH
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"combinatorial_map.{reason}", message)
+
+
 def _validate_dart(
     dart: tuple[int, int, int], vertex_count: int, dart_count: int
 ) -> None:
     if len(dart) != 3:
-        raise ValueError("each dart must carry (tail, head, reverse)")
+        raise _validation_error(
+            "dart_shape", "each dart must carry (tail, head, reverse)"
+        )
     tail, head, reverse = dart
     if not 0 <= tail < vertex_count:
-        raise ValueError("dart tail out of range")
+        raise _validation_error("dart_tail_out_of_range", "dart tail out of range")
     if not 0 <= head < vertex_count:
-        raise ValueError("dart head out of range")
+        raise _validation_error("dart_head_out_of_range", "dart head out of range")
     if not 0 <= reverse < dart_count:
-        raise ValueError("dart reverse out of range")
+        raise _validation_error(
+            "dart_reverse_out_of_range", "dart reverse out of range"
+        )
 
 
 def _validate_involution(darts: tuple[tuple[int, int, int], ...]) -> None:
     for dart_index, dart in enumerate(darts):
         tail, head, reverse = dart
         if reverse == dart_index:
-            raise ValueError("dart reversal must be fixed-point-free")
+            raise _validation_error(
+                "reverse_fixed_point", "dart reversal must be fixed-point-free"
+            )
         r_tail, r_head, r_reverse = darts[reverse]
         if r_reverse != dart_index:
-            raise ValueError("reverse must be an involution")
+            raise _validation_error(
+                "reverse_not_involution", "reverse must be an involution"
+            )
         if r_tail != head or r_head != tail:
-            raise ValueError("reverse must exchange the endpoints of its dart")
+            raise _validation_error(
+                "reverse_endpoints", "reverse must exchange the endpoints of its dart"
+            )
 
 
 def _build_outgoing(
@@ -62,24 +77,40 @@ def _validate_rotation(
 ) -> None:
     for vertex, row in enumerate(rotations):
         if not outgoing[vertex]:
-            raise ValueError("every vertex must be incident to at least one dart")
+            raise _validation_error(
+                "vertex_without_dart",
+                "every vertex must be incident to at least one dart",
+            )
         if not row:
-            raise ValueError("an outgoing-dart vertex must declare a nonempty rotation")
+            raise _validation_error(
+                "empty_rotation",
+                "an outgoing-dart vertex must declare a nonempty rotation",
+            )
         if len(row) > MAX_ROTATION_LENGTH:
-            raise ValueError(
-                "a local rotation exceeds the bounded rotation-length budget"
+            raise _validation_error(
+                "rotation_too_long",
+                "a local rotation exceeds the bounded rotation-length budget",
             )
         if len(row) != len(outgoing[vertex]):
-            raise ValueError("rotation length must equal the outgoing dart count")
+            raise _validation_error(
+                "rotation_length", "rotation length must equal the outgoing dart count"
+            )
         seen: set[int] = set()
         for dart_index in row:
             if not 0 <= dart_index < len(darts):
-                raise ValueError("rotation dart index out of range")
+                raise _validation_error(
+                    "rotation_dart_out_of_range", "rotation dart index out of range"
+                )
             dart = darts[dart_index]
             if dart[0] != vertex:
-                raise ValueError("rotation must list only outgoing darts of its vertex")
+                raise _validation_error(
+                    "foreign_rotation_dart",
+                    "rotation must list only outgoing darts of its vertex",
+                )
             if dart_index in seen:
-                raise ValueError("rotation must not repeat a dart")
+                raise _validation_error(
+                    "duplicate_rotation_dart", "rotation must not repeat a dart"
+                )
             seen.add(dart_index)
 
 
@@ -92,14 +123,19 @@ def _validate_facial_budgets(map_: FiniteCombinatorialMap) -> None:
     here.  The constraint set is closed under duality (dual faces correspond
     to primal vertices and dual facial walks to primal rotation rows).
     """
-    from jacobian.math.combinatorial_maps.operations_module import face_orbits
+    from jacobian.math.combinatorial_maps.operations import face_orbits
 
     walks, _, _, _ = face_orbits(map_)
     if len(walks) > MAX_FACES:
-        raise ValueError("face count exceeds the bounded dual-vertex budget")
+        raise _validation_error(
+            "face_count_too_large", "face count exceeds the bounded dual-vertex budget"
+        )
     for walk in walks:
         if len(walk) > MAX_FACIAL_WALK_LENGTH:
-            raise ValueError("a facial walk exceeds the bounded dual-rotation budget")
+            raise _validation_error(
+                "facial_walk_too_long",
+                "a facial walk exceeds the bounded dual-rotation budget",
+            )
 
 
 class FiniteCombinatorialMap(StrictModel):
@@ -118,11 +154,17 @@ class FiniteCombinatorialMap(StrictModel):
     @model_validator(mode="after")
     def require_well_formed(self) -> Self:
         if len(self.rotations) != self.vertex_count:
-            raise ValueError("rotations must have vertex_count rows")
+            raise _validation_error(
+                "rotation_row_count", "rotations must have vertex_count rows"
+            )
         if not self.darts:
-            raise ValueError("a combinatorial map needs at least one dart")
+            raise _validation_error(
+                "empty_darts", "a combinatorial map needs at least one dart"
+            )
         if len(self.darts) > MAX_MAP_DARTS:
-            raise ValueError("dart count exceeds the bounded map budget")
+            raise _validation_error(
+                "dart_count_too_large", "dart count exceeds the bounded map budget"
+            )
         for dart in self.darts:
             _validate_dart(dart, self.vertex_count, len(self.darts))
         _validate_involution(self.darts)

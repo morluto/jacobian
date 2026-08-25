@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -22,6 +23,12 @@ MAX_NETWORK_EDGES = 512
 MAX_CONDUCTANCE_DIGITS = 50
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by electrical-network contracts."""
+
+    return PydanticCustomError(f"electrical_network.{reason}", message)
+
+
 class ConductanceEdge(StrictModel):
     """One undirected edge with a positive rational conductance (1/resistance)."""
 
@@ -32,14 +39,23 @@ class ConductanceEdge(StrictModel):
     @model_validator(mode="after")
     def require_distinct_positive(self) -> Self:
         if self.source == self.target:
-            raise ValueError("edge endpoint must be distinct")
+            raise _validation_error(
+                "edge_endpoints_not_distinct", "edge endpoint must be distinct"
+            )
         if self.conductance.as_fraction() <= 0:
-            raise ValueError("conductance must be strictly positive")
-        require_bounded_rational(
-            self.conductance,
-            max_digits=MAX_CONDUCTANCE_DIGITS,
-            label="conductance",
-        )
+            raise _validation_error(
+                "conductance_not_positive", "conductance must be strictly positive"
+            )
+        try:
+            require_bounded_rational(
+                self.conductance,
+                max_digits=MAX_CONDUCTANCE_DIGITS,
+                label="conductance",
+            )
+        except ValueError as exc:
+            raise _validation_error(
+                "conductance_exceeds_digit_bound", str(exc)
+            ) from exc
         return self
 
 
@@ -59,14 +75,20 @@ class ConductanceNetwork(StrictModel):
                 0 <= edge.source < self.vertex_count
                 and 0 <= edge.target < self.vertex_count
             ):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
+                raise _validation_error(
+                    "edge_vertex_out_of_range",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
             key = (
                 (edge.source, edge.target)
                 if edge.source < edge.target
                 else (edge.target, edge.source)
             )
             if key in seen:
-                raise ValueError("edges must be unique (ignoring direction)")
+                raise _validation_error(
+                    "duplicate_edges",
+                    "edges must be unique (ignoring direction)",
+                )
             seen.add(key)
         return self
 
@@ -90,7 +112,7 @@ def _require_connected(network: ConductanceNetwork) -> None:
                 stack.append(neighbor)
 
     if not all(seen):
-        raise ValueError("network must be connected")
+        raise _validation_error("network_not_connected", "network must be connected")
 
 
 class EffectiveResistanceRequest(StrictModel):
@@ -103,11 +125,17 @@ class EffectiveResistanceRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_distinct_terminals(self) -> Self:
         if not (0 <= self.terminal_a < self.network.vertex_count):
-            raise ValueError("terminal_a must be in 0..vertex_count-1")
+            raise _validation_error(
+                "terminal_a_out_of_range", "terminal_a must be in 0..vertex_count-1"
+            )
         if not (0 <= self.terminal_b < self.network.vertex_count):
-            raise ValueError("terminal_b must be in 0..vertex_count-1")
+            raise _validation_error(
+                "terminal_b_out_of_range", "terminal_b must be in 0..vertex_count-1"
+            )
         if self.terminal_a == self.terminal_b:
-            raise ValueError("terminals must be distinct")
+            raise _validation_error(
+                "terminals_not_distinct", "terminals must be distinct"
+            )
         return self
 
     @model_validator(mode="after")
@@ -135,11 +163,17 @@ class NodePotentialRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_distinct_terminals(self) -> Self:
         if not (0 <= self.source < self.network.vertex_count):
-            raise ValueError("source must be in 0..vertex_count-1")
+            raise _validation_error(
+                "source_out_of_range", "source must be in 0..vertex_count-1"
+            )
         if not (0 <= self.sink < self.network.vertex_count):
-            raise ValueError("sink must be in 0..vertex_count-1")
+            raise _validation_error(
+                "sink_out_of_range", "sink must be in 0..vertex_count-1"
+            )
         if self.source == self.sink:
-            raise ValueError("source and sink must be distinct")
+            raise _validation_error(
+                "source_sink_not_distinct", "source and sink must be distinct"
+            )
         return self
 
     @model_validator(mode="after")

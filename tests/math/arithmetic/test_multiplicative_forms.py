@@ -239,8 +239,11 @@ class TestNormalizedQuadraticRadical:
         assert int(result.coefficient) ** 2 == int(n)
 
     def test_negative_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="nonnegative"):
+        with pytest.raises(ValidationError) as exc_info:
             NonnegativeIntegerRequest(value="-1")
+        assert (
+            exc_info.value.errors()[0]["type"] == "arithmetic.value_must_be_nonnegative"
+        )
 
     def test_reconstruction(self) -> None:
         for n in ["0", "1", "12", "72", "144"]:

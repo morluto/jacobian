@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import itertools
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from fractions import Fraction
 
 import pytest
@@ -30,6 +32,13 @@ from jacobian.math.discrepancy_theory._operations import (
     compute_hard_constraint_rounding,
     compute_optimal_discrepancy,
 )
+
+
+@contextmanager
+def _validation_code(code: str) -> Iterator[None]:
+    with pytest.raises(ValidationError) as caught:
+        yield
+    assert caught.value.errors()[0]["type"] == code
 
 
 def _rational(value: Fraction | int) -> dict[str, str]:
@@ -177,16 +186,20 @@ class TestHardConstraintRounding:
     @pytest.mark.parametrize(
         ("field", "replacement", "message"),
         [
-            ("values", (_rational(Fraction(-1, 2)),) * 4, r"lie in \[0, 1\]"),
+            (
+                "values",
+                (_rational(Fraction(-1, 2)),) * 4,
+                "discrepancy_theory.source_values_out_of_range",
+            ),
             (
                 "values",
                 (_rational(Fraction(1, 3)),) + (_rational(Fraction(1, 2)),) * 3,
-                "integral source sum",
+                "discrepancy_theory.row_sum_not_integral",
             ),
             (
                 "rows",
                 ({"label": "only", "coordinates": (0, 1)},),
-                "partition every coordinate",
+                "discrepancy_theory.rows_not_a_partition",
             ),
             (
                 "rows",
@@ -194,17 +207,17 @@ class TestHardConstraintRounding:
                     {"label": "left", "coordinates": (0, 1)},
                     {"label": "right", "coordinates": (0, 1, 2, 3)},
                 ),
-                "partition every coordinate",
+                "discrepancy_theory.rows_not_a_partition",
             ),
             (
                 "columns",
                 ({"label": "bad", "coordinates": (2, 0)},),
-                "strictly increasing",
+                "discrepancy_theory.coordinate_indices_not_strictly_increasing",
             ),
             (
                 "columns",
                 ({"label": "bad", "coordinates": (4,)},),
-                "coordinate_count",
+                "discrepancy_theory.coordinate_indices_out_of_range",
             ),
         ],
     )
@@ -213,16 +226,16 @@ class TestHardConstraintRounding:
     ) -> None:
         payload = _rounding_request().model_dump()
         payload["source"][field] = replacement
-        with pytest.raises(ValidationError, match=message):
+        with _validation_code(message):
             HardConstraintRoundingRequest.model_validate(payload)
 
     @pytest.mark.parametrize(
         ("mutation", "message"),
         [
-            ("bit", "preserve every hard row"),
-            ("row", "row ledger"),
-            ("column", "column ledger"),
-            ("source", "column ledger"),
+            ("bit", "discrepancy_theory.rounded_values_break_row_sum"),
+            ("row", "discrepancy_theory.row_ledger_replay_mismatch"),
+            ("column", "discrepancy_theory.column_ledger_replay_mismatch"),
+            ("source", "discrepancy_theory.column_ledger_replay_mismatch"),
         ],
     )
     def test_source_bound_result_rejects_authored_mutations(
@@ -241,7 +254,7 @@ class TestHardConstraintRounding:
                 _rational(Fraction(2, 3)),
                 *payload["source"]["values"][2:],
             )
-        with pytest.raises(ValidationError, match=message):
+        with _validation_code(message):
             HardConstraintRoundingResult.model_validate(payload)
 
     def test_exhaustive_small_half_integral_sources_satisfy_defining_invariants(
@@ -293,7 +306,7 @@ class TestHardConstraintRounding:
             ),
             columns=(),
         )
-        with pytest.raises(ValidationError, match="at most 512 items"):
+        with _validation_code("too_long"):
             _rounding_request(
                 values=(*coordinate_values, 0),
                 rows=(
@@ -314,7 +327,7 @@ class TestHardConstraintRounding:
             rows=({"label": "r", "coordinates": (0,)},),
             columns=empty_columns,
         )
-        with pytest.raises(ValidationError, match="at most 512 items"):
+        with _validation_code("too_long"):
             _rounding_request(
                 values=(0,),
                 rows=({"label": "r", "coordinates": (0,)},),
@@ -331,7 +344,7 @@ class TestHardConstraintRounding:
         _rounding_request(values=values, rows=rows, columns=incidence_columns)
         above = list(incidence_columns)
         above[-1] = {"label": "i511", "coordinates": (*support, len(support))}
-        with pytest.raises(ValidationError, match="incidences exceed"):
+        with _validation_code("discrepancy_theory.column_incidences_over_budget"):
             _rounding_request(values=values, rows=rows, columns=tuple(above))
 
     def test_over_incidence_rejects_before_exact_aggregation(
@@ -356,7 +369,7 @@ class TestHardConstraintRounding:
             for index in range(column_count)
         )
 
-        with pytest.raises(ValidationError, match="incidences exceed"):
+        with _validation_code("discrepancy_theory.column_incidences_over_budget"):
             _rounding_request(
                 values=(
                     Fraction(1, denominator),
@@ -375,7 +388,7 @@ class TestHardConstraintRounding:
             columns=(),
         )
         above_denominator = 10**MAX_ROUNDING_RATIONAL_DIGITS + 1
-        with pytest.raises(ValidationError, match="256-digit bound"):
+        with _validation_code("value_error"):
             _rounding_request(
                 values=(
                     Fraction(1, above_denominator),
@@ -396,7 +409,7 @@ class TestHardConstraintRounding:
             columns=(),
         )
         rejected_fractional = accepted_fractional + 2
-        with pytest.raises(ValidationError, match="work bound exceeded"):
+        with _validation_code("discrepancy_theory.rounding_work_over_budget"):
             _rounding_request(
                 values=(Fraction(1, 2),) * rejected_fractional,
                 rows=(
@@ -444,7 +457,9 @@ class TestHardConstraintRounding:
         _rounding_request(values=values, rows=rows, columns=())
         denominator_lengths[-1] += 1
         values, rows = source(denominator_lengths)
-        with pytest.raises(ValidationError, match="intermediate rational-height"):
+        with _validation_code(
+            "discrepancy_theory.intermediate_rational_height_over_budget"
+        ):
             _rounding_request(values=values, rows=rows, columns=())
 
     def test_exact_result_size_boundary(self) -> None:
@@ -474,7 +489,7 @@ class TestHardConstraintRounding:
             rows=({"label": "r", "coordinates": (0, 1)},),
             columns=columns(accepted_columns),
         )
-        with pytest.raises(ValidationError, match="result-size bound"):
+        with _validation_code("discrepancy_theory.result_rational_height_over_budget"):
             _rounding_request(
                 values=values,
                 rows=({"label": "r", "coordinates": (0, 1)},),
@@ -713,10 +728,8 @@ class TestDiscrepancyOptimum:
         assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
 
     def test_execution_failed_result_carries_no_claim(self):
-        from pydantic import ValidationError
-
         system = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
-        with pytest.raises(ValidationError, match="EXECUTION_FAILED"):
+        with _validation_code("discrepancy_theory.incomplete_result_carries_claim"):
             DiscrepancyOptimumResult(
                 set_system=system,
                 status="EXECUTION_FAILED",
@@ -725,10 +738,8 @@ class TestDiscrepancyOptimum:
             )
 
     def test_budget_exceeded_result_carries_no_claim(self):
-        from pydantic import ValidationError
-
         system = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
-        with pytest.raises(ValidationError, match="BUDGET_EXCEEDED"):
+        with _validation_code("discrepancy_theory.incomplete_result_carries_claim"):
             DiscrepancyOptimumResult(
                 set_system=system,
                 status="BUDGET_EXCEEDED",
@@ -748,10 +759,8 @@ class TestDiscrepancyOptimum:
         assert result.optimal_discrepancy is None
 
     def test_optimal_result_replay_binds_coloring_to_system(self):
-        from pydantic import ValidationError
-
         system = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
-        with pytest.raises(ValidationError, match="maximum imbalance"):
+        with _validation_code("discrepancy_theory.optimal_discrepancy_mismatch"):
             DiscrepancyOptimumResult(
                 set_system=system,
                 status="OPTIMAL",
@@ -769,7 +778,7 @@ class TestDiscrepancyOptimum:
             "optimal_coloring": [1, 1],
             "optimal_discrepancy": 2,
         }
-        with pytest.raises(ValidationError, match="not minimal"):
+        with _validation_code("discrepancy_theory.optimality_disproved"):
             DiscrepancyOptimumResult.model_validate(payload)
 
     def test_zero_optimum_validates_without_a_lower_bound_solve(
@@ -801,7 +810,7 @@ class TestDiscrepancyOptimum:
             "optimal_coloring": [1, 1, 1],
             "optimal_discrepancy": 2,
         }
-        with pytest.raises(ValidationError, match="replay budget"):
+        with _validation_code("discrepancy_theory.optimality_unproven"):
             DiscrepancyOptimumResult.model_validate(payload)
 
     @pytest.mark.parametrize(

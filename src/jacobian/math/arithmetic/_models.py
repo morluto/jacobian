@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -24,6 +25,13 @@ _MAX_BASE = 10_000
 _MAX_NONNEGATIVE = 1_000
 _MAX_NTH_ROOT_DEGREE = 100_000
 MAX_BASE_DIGITS = 1_024
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by arithmetic contracts."""
+
+    return PydanticCustomError(f"arithmetic.{reason}", message)
+
 
 # A positional digit is a small non-negative canonical integer string.  The
 # max length of 4 comfortably covers every base up to ``_MAX_BASE`` (10_000).
@@ -71,8 +79,9 @@ class IntegerBaseDigitsRequest(StrictModel):
         if len(magnitude) > len(maximum_value) or (
             len(magnitude) == len(maximum_value) and magnitude >= maximum_value
         ):
-            raise ValueError(
-                f"base expansion exceeds the {MAX_BASE_DIGITS}-digit result bound"
+            raise _validation_error(
+                "base_expansion_exceeds_bound",
+                f"base expansion exceeds the {MAX_BASE_DIGITS}-digit result bound",
             )
         return self
 
@@ -95,7 +104,10 @@ class IntegerNthRootRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_root_domain(self) -> Self:
         if parse_canonical_integer(self.value) < 0 and self.degree % 2 == 0:
-            raise ValueError("even root of a negative integer is not integral-real")
+            raise _validation_error(
+                "even_root_of_negative",
+                "even root of a negative integer is not integral-real",
+            )
         return self
 
 
@@ -133,9 +145,17 @@ class IntegerBaseDigitsResult(StrictModel):
     @model_validator(mode="after")
     def require_canonical_digits(self) -> Self:
         if any(int(digit) >= self.base for digit in self.digits):
-            raise ValueError("every positional digit must be smaller than the base")
+            raise _validation_error(
+                "digit_out_of_base",
+                "every positional digit must be smaller than the base",
+            )
         if self.sign == 0 and self.digits != ("0",):
-            raise ValueError("zero sign requires the canonical zero digit")
+            raise _validation_error(
+                "zero_sign_requires_zero_digit",
+                "zero sign requires the canonical zero digit",
+            )
         if self.sign != 0 and self.digits[0] == "0":
-            raise ValueError("nonzero positional digits cannot have a leading zero")
+            raise _validation_error(
+                "leading_zero", "nonzero positional digits cannot have a leading zero"
+            )
         return self

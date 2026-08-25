@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -14,6 +15,12 @@ MAX_DIMENSION = 100
 MAX_PIECES = 10_000
 _MAX_CONVEX_WORK_CELLS = 1_000_000
 _MAX_CONVEX_WIRE_BYTES = CanonicalLimits().max_output_bytes
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by convex-analysis contracts."""
+
+    return PydanticCustomError(f"convex_analysis.{reason}", message)
 
 
 class AffinePiece(StrictModel):
@@ -36,23 +43,28 @@ class MaxAffineFunction(StrictModel):
         dim = len(self.pieces[0].coefficients)
         for p in self.pieces[1:]:
             if len(p.coefficients) != dim:
-                raise ValueError("all pieces must have the same dimension")
+                raise _validation_error(
+                    "piece_dimension_mismatch",
+                    "all pieces must have the same dimension",
+                )
         ids = [p.piece_id for p in self.pieces]
         if len(ids) != len(set(ids)):
-            raise ValueError("piece IDs must be unique")
+            raise _validation_error("duplicate_piece_id", "piece IDs must be unique")
         work_cells = len(self.pieces) * dim
         if work_cells > _MAX_CONVEX_WORK_CELLS:
-            raise ValueError(
+            raise _validation_error(
+                "work_bound_exceeded",
                 f"max-affine work p·d={work_cells} exceeds the "
                 f"{_MAX_CONVEX_WORK_CELLS}-cell result-sensitive bound; "
-                "partition the function and compose"
+                "partition the function and compose",
             )
         # Transport-sensitive: p·d small but digits huge could still exceed 10MiB
         estimated = work_cells * 16 + len(self.pieces) * 64
         if estimated > _MAX_CONVEX_WIRE_BYTES:
-            raise ValueError(
+            raise _validation_error(
+                "wire_bound_exceeded",
                 "max-affine function exceeds the "
-                f"{_MAX_CONVEX_WIRE_BYTES}-byte transport envelope"
+                f"{_MAX_CONVEX_WIRE_BYTES}-byte transport envelope",
             )
         return self
 
@@ -75,7 +87,10 @@ class MaxAffineEvalRequest(StrictModel):
     def require_matching_dimension(self) -> Self:
         dim = len(self.function.pieces[0].coefficients)
         if len(self.point.coordinates) != dim:
-            raise ValueError("point dimension must match function dimension")
+            raise _validation_error(
+                "point_dimension_mismatch",
+                "point dimension must match function dimension",
+            )
         return self
 
 
@@ -97,7 +112,10 @@ class MaxAffineSubdifferentialRequest(StrictModel):
     def require_matching_dimension(self) -> Self:
         dim = len(self.function.pieces[0].coefficients)
         if len(self.point.coordinates) != dim:
-            raise ValueError("point dimension must match function dimension")
+            raise _validation_error(
+                "point_dimension_mismatch",
+                "point dimension must match function dimension",
+            )
         return self
 
 

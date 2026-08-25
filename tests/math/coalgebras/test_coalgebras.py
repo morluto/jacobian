@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import pytest
 from pydantic import ValidationError
 
@@ -23,6 +25,13 @@ from jacobian.math.coalgebras._operations import (
     compute_counit,
     find_group_like_elements,
 )
+
+
+@contextmanager
+def _raises_code(code: str):
+    with pytest.raises(ValidationError) as exc_info:
+        yield
+    assert exc_info.value.errors()[0]["type"] == code
 
 
 class TestComultiplication:
@@ -146,7 +155,7 @@ class TestGroupLikeElements:
 
     def test_composite_prime_rejected(self):
         """A composite modulus is not a field and must be rejected."""
-        with pytest.raises(ValueError, match="prime must be a prime integer"):
+        with _raises_code("coalgebra.prime_not_prime"):
             Coalgebra(
                 prime=4,
                 dimension=1,
@@ -158,7 +167,7 @@ class TestGroupLikeElements:
         """Requests whose derived scan work exceeds the budget are rejected."""
         oversized = _direct_sum_group_like_coalgebra(12)
         assert group_like_scan_work(2, 12) > GROUP_LIKE_SCAN_WORK_BUDGET
-        with pytest.raises(ValidationError, match="scan work exceeds"):
+        with _raises_code("coalgebra.scan_work_budget_exceeded"):
             GroupLikeElementsRequest(coalgebra=oversized)
 
         large_prime_squared = Coalgebra(
@@ -171,7 +180,7 @@ class TestGroupLikeElements:
             counit=(1, 1),
         )
         assert group_like_scan_work(9973, 2) > GROUP_LIKE_SCAN_WORK_BUDGET
-        with pytest.raises(ValidationError, match="scan work exceeds"):
+        with _raises_code("coalgebra.scan_work_budget_exceeded"):
             GroupLikeElementsRequest(coalgebra=large_prime_squared)
 
     def test_within_scan_work_budget_admitted(self):
@@ -230,7 +239,7 @@ class TestSourceBoundResults:
     def test_forged_group_like_set_is_rejected(self):
         """A nonempty coalgebra cannot validate an empty enumeration."""
         ca = self._two_dim_coalgebra()
-        with pytest.raises(ValueError, match="exact group-like set"):
+        with _raises_code("coalgebra.group_like_set_mismatch"):
             GroupLikeElementsResult(coalgebra=ca, elements=(), count=0)
 
     def test_detached_result_reapplies_scan_work_budget(self):
@@ -248,14 +257,14 @@ class TestSourceBoundResults:
         assert (
             group_like_scan_work(ca.prime, ca.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
         )
-        with pytest.raises(ValidationError, match="scan work exceeds"):
+        with _raises_code("coalgebra.scan_work_budget_exceeded"):
             GroupLikeElementsResult(coalgebra=ca, elements=(), count=0)
 
     def test_forged_comultiplication_coefficients_are_rejected(self):
         from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
         ca = self._two_dim_coalgebra()
-        with pytest.raises(ValueError, match="exact comultiplication"):
+        with _raises_code("coalgebra.comultiplication_mismatch"):
             ComultiplicationResult(
                 coalgebra=ca,
                 element_index=0,
@@ -269,7 +278,7 @@ class TestSourceBoundResults:
 
     def test_forged_counit_value_is_rejected(self):
         ca = self._two_dim_coalgebra()
-        with pytest.raises(ValueError, match="exact counit"):
+        with _raises_code("coalgebra.counit_mismatch"):
             CounitResult(coalgebra=ca, element_index=0, value=3)
 
     def test_result_from_other_coalgebra_is_rejected(self):
@@ -284,7 +293,7 @@ class TestSourceBoundResults:
             counit=(1, 0),
         )
         result = compute_counit(CounitRequest(coalgebra=ca, element_index=1))
-        with pytest.raises(ValueError, match="exact counit"):
+        with _raises_code("coalgebra.counit_mismatch"):
             CounitResult(
                 coalgebra=other,
                 element_index=result.element_index,
@@ -310,14 +319,14 @@ class TestScanWorkBeforeReplay:
             group_like_scan_work(big.prime, big.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
         )
         started = time.monotonic()
-        with pytest.raises(ValidationError, match="scan work exceeds"):
+        with _raises_code("coalgebra.scan_work_budget_exceeded"):
             GroupLikeElementsResult(coalgebra=big, elements=(), count=0)
         assert time.monotonic() - started < 5
 
 
 class TestCanonicalResidues:
     def test_noncanonical_structure_constant_rejected(self):
-        with pytest.raises(ValidationError, match="canonical residues"):
+        with _raises_code("coalgebra.noncanonical_structure_constants"):
             Coalgebra(
                 prime=2,
                 dimension=1,
@@ -326,7 +335,7 @@ class TestCanonicalResidues:
             )
 
     def test_noncanonical_counit_rejected(self):
-        with pytest.raises(ValidationError, match="canonical residues"):
+        with _raises_code("coalgebra.noncanonical_counit"):
             Coalgebra(
                 prime=3,
                 dimension=1,
@@ -389,7 +398,7 @@ class TestDerivedDimensionAdmission:
 
     def test_above_tensor_budget_rejected(self):
         """A 17-dim tensor would carry 4913 structure constants and is rejected."""
-        with pytest.raises(ValidationError, match="structure constants"):
+        with _raises_code("coalgebra.tensor_budget_exceeded"):
             _direct_sum_group_like_coalgebra(17)
 
     def test_large_prime_nine_dim_rejected_by_scan_work_budget(self):
@@ -397,7 +406,7 @@ class TestDerivedDimensionAdmission:
         its surviving candidates exceeds the scan-work budget."""
         ca = _direct_sum_group_like_coalgebra(9, prime=13)
         assert ca.dimension**3 == 729 <= MAX_TENSOR_ENTRIES
-        with pytest.raises(ValidationError, match="scan work exceeds"):
+        with _raises_code("coalgebra.scan_work_budget_exceeded"):
             GroupLikeElementsRequest(coalgebra=ca)
 
 
@@ -453,7 +462,7 @@ class TestScanWorkBoundary:
         assert (
             group_like_scan_work(ca.prime, ca.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
         )
-        with pytest.raises(ValidationError, match="scan work exceeds"):
+        with _raises_code("coalgebra.scan_work_budget_exceeded"):
             GroupLikeElementsRequest(coalgebra=ca)
 
     def test_reported_sixteen_dim_request_typed_rejected(self, monkeypatch):
@@ -480,7 +489,7 @@ class TestScanWorkBoundary:
         assert (
             group_like_scan_work(ca.prime, ca.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
         )
-        with pytest.raises(ValidationError, match="scan work exceeds"):
+        with _raises_code("coalgebra.scan_work_budget_exceeded"):
             GroupLikeElementsRequest(coalgebra=ca)
 
 
@@ -510,7 +519,7 @@ class TestNestedModulusPrevalidation:
 
         payload = self._payload(10**6000 + 4567)
         started = time.monotonic()
-        with pytest.raises(ValidationError, match="digit admission bound"):
+        with _raises_code("coalgebra.prime_digits_exceeded"):
             ComultiplicationResult.model_validate(payload)
         assert time.monotonic() - started < 5
 
@@ -519,9 +528,7 @@ class TestNestedModulusPrevalidation:
         shared type's primality test; the field-mismatch message proves the
         raw-modulus check ran first."""
         composite = 2 * 10**62
-        with pytest.raises(
-            ValidationError, match="matrix prime must match the retained"
-        ):
+        with _raises_code("coalgebra.matrix_prime_mismatch"):
             ComultiplicationResult.model_validate(self._payload(composite))
 
     def test_matching_nested_modulus_still_round_trips(self):
@@ -565,7 +572,7 @@ class TestPrimeDigitAdmission:
         import time
 
         started = time.monotonic()
-        with pytest.raises(ValidationError, match="digit admission bound"):
+        with _raises_code("coalgebra.prime_digits_exceeded"):
             Coalgebra(
                 prime=10**6000 + 4567,
                 dimension=1,
@@ -577,7 +584,7 @@ class TestPrimeDigitAdmission:
     def test_digit_boundary(self):
         """A 65-digit characteristic is rejected while a full-budget
         64-digit prime is admitted."""
-        with pytest.raises(ValidationError, match="digit admission bound"):
+        with _raises_code("coalgebra.prime_digits_exceeded"):
             Coalgebra(
                 prime=10**MAX_PRIME_DIGITS,
                 dimension=1,

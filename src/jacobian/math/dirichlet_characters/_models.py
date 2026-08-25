@@ -12,6 +12,7 @@ from pydantic import (
     StrictInt,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -23,9 +24,18 @@ from jacobian.math.dirichlet_characters.values import (
 MAX_INTEGER_DIGITS = 256
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by Dirichlet-character contracts."""
+
+    return PydanticCustomError(f"dirichlet_character.{reason}", message)
+
+
 def _require_bounded_digits(value: str) -> str:
     if len(value.lstrip("-")) > MAX_INTEGER_DIGITS:
-        raise ValueError(f"integer exceeds the {MAX_INTEGER_DIGITS}-digit bound")
+        raise _validation_error(
+            "integer_digit_bound",
+            f"integer exceeds the {MAX_INTEGER_DIGITS}-digit bound",
+        )
     return value
 
 
@@ -73,14 +83,21 @@ class PrincipalDirichletCharacterValueResult(StrictModel):
     def require_exact_source_bound_value(self) -> Self:
         residue = int(self.integer) % self.character.modulus
         if self.canonical_residue != residue:
-            raise ValueError("canonical residue does not match the source integer")
+            raise _validation_error(
+                "canonical_residue_mismatch",
+                "canonical residue does not match the source integer",
+            )
         expected_is_unit = math.gcd(residue, self.character.modulus) == 1
         if self.is_unit != expected_is_unit:
-            raise ValueError("unit status does not match the source character modulus")
+            raise _validation_error(
+                "unit_status_mismatch",
+                "unit status does not match the source character modulus",
+            )
         expected_value = self.character.values[residue]
         if self.value != expected_value:
-            raise ValueError(
-                "value does not match the source principal-character table"
+            raise _validation_error(
+                "value_mismatch",
+                "value does not match the source principal-character table",
             )
         return self
 

@@ -6,8 +6,13 @@ from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    CanonicalRational,
+    canonical_rational_component_digits,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -19,8 +24,10 @@ MAX_NODE_COMPONENT_DIGITS_TOTAL = 512
 MAX_INTERPOLATION_VALUE_DIGITS = 256
 
 
-def _component_digits(value: CanonicalRational) -> int:
-    return max(len(value.num.lstrip("-")), len(value.den))
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by approximation contracts."""
+
+    return PydanticCustomError(f"approximation_theory.{reason}", message)
 
 
 class RationalNodeSet(StrictModel):
@@ -32,17 +39,23 @@ class RationalNodeSet(StrictModel):
     def require_distinct_sorted(self) -> Self:
         fracs = [n.as_fraction() for n in self.nodes]
         if len(fracs) != len(set(fracs)):
-            raise ValueError("interpolation nodes must be distinct")
+            raise _validation_error(
+                "nodes_not_distinct", "interpolation nodes must be distinct"
+            )
         if fracs != sorted(fracs):
-            raise ValueError("interpolation nodes must be in increasing order")
+            raise _validation_error(
+                "nodes_not_increasing",
+                "interpolation nodes must be in increasing order",
+            )
         if (
-            sum(_component_digits(node) for node in self.nodes)
+            sum(canonical_rational_component_digits(node) for node in self.nodes)
             > MAX_NODE_COMPONENT_DIGITS_TOTAL
         ):
-            raise ValueError(
+            raise _validation_error(
+                "node_component_budget_exceeded",
                 "nodes exceed the "
                 f"{MAX_NODE_COMPONENT_DIGITS_TOTAL}-digit component budget; "
-                "derived barycentric weights would leave the canonical range"
+                "derived barycentric weights would leave the canonical range",
             )
         return self
 
@@ -63,23 +76,11 @@ class LagrangeBasisPolynomial(StrictModel):
     @model_validator(mode="after")
     def require_polynomial_variable(self) -> Self:
         if self.polynomial.variables != ("x",):
-            raise ValueError("Lagrange basis polynomial must use variable 'x'")
+            raise _validation_error(
+                "basis_variable_mismatch",
+                "Lagrange basis polynomial must use variable 'x'",
+            )
         return self
-
-    @property
-    def coefficients(self) -> tuple[CanonicalRational, ...]:
-        from fractions import Fraction
-
-        terms = {
-            term.exponents[0]: term.coefficient.as_fraction()
-            for term in self.polynomial.polynomial.terms
-        }
-        max_exp = max(terms.keys()) if terms else 0
-        coeffs = []
-        for exp in range(max_exp + 1):
-            frac = terms.get(exp, Fraction(0))
-            coeffs.append(CanonicalRational.from_fraction(frac))
-        return tuple(coeffs)
 
 
 def _evaluate_single_variable(
@@ -106,23 +107,27 @@ def _require_cardinal_entry(
     # together with the delta property pins it uniquely.
     terms = entry.polynomial.polynomial.terms
     if any(term.exponents[0] >= node_count for term in terms):
-        raise ValueError("basis polynomial degree must be below node_count")
+        raise _validation_error(
+            "basis_degree_exceeded", "basis polynomial degree must be below node_count"
+        )
     expected_weight = Fraction(1)
     for i, x_i in enumerate(nodes):
         if i != k:
             expected_weight /= nodes[k] - x_i
     if entry.barycentric_weight.as_fraction() != expected_weight:
-        raise ValueError(
+        raise _validation_error(
+            "barycentric_weight_mismatch",
             "barycentric weight must equal "
-            "1/prod_{i!=k}(x_k - x_i) on the retained nodes"
+            "1/prod_{i!=k}(x_k - x_i) on the retained nodes",
         )
     for j, x_j in enumerate(nodes):
         evaluated = _evaluate_single_variable(entry.polynomial, x_j)
         expected_value = Fraction(1) if j == k else Fraction(0)
         if evaluated != expected_value:
-            raise ValueError(
+            raise _validation_error(
+                "cardinal_property_violation",
                 "basis polynomial must satisfy l_k(x_j) = delta_kj "
-                "on the retained nodes"
+                "on the retained nodes",
             )
 
 
@@ -144,13 +149,18 @@ class LagrangeBasisResult(StrictModel):
 
         nodes = [n.as_fraction() for n in self.nodes.nodes]
         if self.node_count != len(nodes):
-            raise ValueError("node_count must match the retained node set")
+            raise _validation_error(
+                "node_count_mismatch", "node_count must match the retained node set"
+            )
         if len(self.basis) != self.node_count:
-            raise ValueError("node_count must match basis length")
+            raise _validation_error(
+                "basis_length_mismatch", "node_count must match basis length"
+            )
         indices = sorted(entry.index for entry in self.basis)
         if indices != list(range(self.node_count)):
-            raise ValueError(
-                "basis indices must be exactly 0..node_count-1 with no repeats"
+            raise _validation_error(
+                "basis_indices_invalid",
+                "basis indices must be exactly 0..node_count-1 with no repeats",
             )
         for entry in self.basis:
             _require_cardinal_entry(entry, nodes, entry.index, self.node_count)
@@ -166,13 +176,21 @@ class LagrangeInterpolationRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_lengths(self) -> Self:
         if len(self.values) != len(self.nodes.nodes):
-            raise ValueError("values must have the same length as nodes")
-        for value in self.values:
-            require_bounded_rational(
-                value,
-                max_digits=MAX_INTERPOLATION_VALUE_DIGITS,
-                label="interpolation value",
+            raise _validation_error(
+                "interpolation_length_mismatch",
+                "values must have the same length as nodes",
             )
+        for value in self.values:
+            try:
+                require_bounded_rational(
+                    value,
+                    max_digits=MAX_INTERPOLATION_VALUE_DIGITS,
+                    label="interpolation value",
+                )
+            except ValueError as exc:
+                raise _validation_error(
+                    "interpolation_value_too_large", str(exc)
+                ) from exc
         return self
 
 
@@ -184,8 +202,9 @@ class LagrangeInterpolationResult(StrictModel):
     @model_validator(mode="after")
     def require_interpolation_variable(self) -> Self:
         if self.polynomial.variables != ("x",):
-            raise ValueError(
-                "interpolation polynomial must use the single variable 'x'"
+            raise _validation_error(
+                "interpolation_variable_mismatch",
+                "interpolation polynomial must use the single variable 'x'",
             )
         return self
 
@@ -194,22 +213,6 @@ class LagrangeInterpolationResult(StrictModel):
         if not self.polynomial.polynomial.terms:
             return 0
         return max(term.exponents[0] for term in self.polynomial.polynomial.terms)
-
-    @property
-    def coefficients(self) -> tuple[CanonicalRational, ...]:
-        # Provide backwards-compatible dense coefficients for tests, derived from polynomial
-        from fractions import Fraction
-
-        terms = {
-            term.exponents[0]: term.coefficient.as_fraction()
-            for term in self.polynomial.polynomial.terms
-        }
-        max_exp = max(terms.keys()) if terms else 0
-        coeffs = []
-        for exp in range(max_exp + 1):
-            frac = terms.get(exp, Fraction(0))
-            coeffs.append(CanonicalRational.from_fraction(frac))
-        return tuple(coeffs)
 
 
 __all__ = [

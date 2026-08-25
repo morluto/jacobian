@@ -12,6 +12,7 @@ from typing import Annotated, Self
 from unicodedata import is_normalized
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -48,46 +49,71 @@ class CoherentConfigurationInput(StrictModel):
         if any(
             len(point.encode("utf-8")) > MAX_POINT_LABEL_BYTES for point in self.points
         ):
-            raise ValueError(
-                f"point labels must not exceed {MAX_POINT_LABEL_BYTES} UTF-8 bytes"
+            raise PydanticCustomError(
+                "coherent_configuration.point_label_bytes",
+                f"point labels must not exceed {MAX_POINT_LABEL_BYTES} UTF-8 bytes",
             )
         if tuple(sorted(self.points)) != self.points or len(set(self.points)) != len(
             self.points
         ):
-            raise ValueError("points must be unique and sorted")
+            raise PydanticCustomError(
+                "coherent_configuration.points_canonical",
+                "points must be unique and sorted",
+            )
         if any(not is_normalized("NFC", point) for point in self.points):
-            raise ValueError("points must use Unicode NFC")
+            raise PydanticCustomError(
+                "coherent_configuration.points_nfc", "points must use Unicode NFC"
+            )
         if tuple(sorted(self.relation_ids)) != self.relation_ids or len(
             set(self.relation_ids)
         ) != len(self.relation_ids):
-            raise ValueError("relation_ids must be unique and sorted")
+            raise PydanticCustomError(
+                "coherent_configuration.relation_ids_canonical",
+                "relation_ids must be unique and sorted",
+            )
         if any(
             not is_normalized("NFC", relation_id) for relation_id in self.relation_ids
         ):
-            raise ValueError("relation_ids must use Unicode NFC")
+            raise PydanticCustomError(
+                "coherent_configuration.relation_ids_nfc",
+                "relation_ids must use Unicode NFC",
+            )
         if any(
             len(relation_id.encode("utf-8")) > MAX_RELATION_ID_BYTES
             for relation_id in self.relation_ids
         ):
-            raise ValueError(
-                f"relation_ids must not exceed {MAX_RELATION_ID_BYTES} UTF-8 bytes"
+            raise PydanticCustomError(
+                "coherent_configuration.relation_id_bytes",
+                f"relation_ids must not exceed {MAX_RELATION_ID_BYTES} UTF-8 bytes",
             )
         if len(self.relation_ids) > len(self.points) ** 2:
-            raise ValueError("relation count cannot exceed ordered-pair cells")
+            raise PydanticCustomError(
+                "coherent_configuration.relation_count",
+                "relation count cannot exceed ordered-pair cells",
+            )
         if len(self.relation_matrix) != len(self.points) or any(
             len(row) != len(self.points) for row in self.relation_matrix
         ):
-            raise ValueError("relation_matrix must be square on points")
+            raise PydanticCustomError(
+                "coherent_configuration.matrix_square",
+                "relation_matrix must be square on points",
+            )
         declared = set(self.relation_ids)
         if any(
             relation_id not in declared
             for row in self.relation_matrix
             for relation_id in row
         ):
-            raise ValueError("relation_matrix must use only declared relation_ids")
+            raise PydanticCustomError(
+                "coherent_configuration.matrix_relation_ids",
+                "relation_matrix must use only declared relation_ids",
+            )
         used = {relation_id for row in self.relation_matrix for relation_id in row}
         if used != declared:
-            raise ValueError("every declared relation_id must occur in relation_matrix")
+            raise PydanticCustomError(
+                "coherent_configuration.relation_ids_used",
+                "every declared relation_id must occur in relation_matrix",
+            )
 
         from jacobian.math.coherent_configurations.operations import (
             _require_analysis_admission,
@@ -105,7 +131,10 @@ class FiniteCoherentConfiguration(CoherentConfigurationInput):
         from jacobian.math.coherent_configurations.operations import _analyze
 
         if _analyze(self).obstruction is not None:
-            raise ValueError("relation matrix does not define a coherent configuration")
+            raise PydanticCustomError(
+                "coherent_configuration.not_coherent",
+                "relation matrix does not define a coherent configuration",
+            )
         return self
 
 

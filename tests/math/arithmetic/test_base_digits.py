@@ -49,11 +49,13 @@ def test_base_digits_separates_sign_base_and_digits(
 def test_base_digits_result_rejects_noncanonical_separated_fields(
     invalid: dict[str, object],
 ) -> None:
-    with pytest.raises(
-        ValidationError,
-        match=r"leading zero|smaller than the base|zero sign|zero digit",
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         IntegerBaseDigitsResult.model_validate(invalid)
+    assert exc_info.value.errors()[0]["type"] in {
+        "arithmetic.zero_sign_requires_zero_digit",
+        "arithmetic.leading_zero",
+        "arithmetic.digit_out_of_base",
+    }
 
 
 def test_base_digits_rejects_an_oversized_result_before_integer_conversion(

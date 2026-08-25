@@ -6,6 +6,7 @@ from math import comb
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
@@ -19,6 +20,10 @@ MAX_CODEWORDS = 16384  # binary k=14 (2^14), ternary k=8 (3^8=6561); mainly for 
 MAX_LENGTH = MAX_LINEAR_CODE_LENGTH  # rowspace operations are O(k^2 n) and remain cheap; raised from 32
 MAX_RECEIVED_PROFILE_REPLAY_WORK = 3_000_000
 MAX_RECEIVED_PROFILE_WITNESS_CELLS = 65_536
+
+
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"code_linear.{code}", message)
 
 
 def _max_codewords_within_replay_work(replay_work_bound: int) -> int:
@@ -105,30 +110,47 @@ class ReceivedWordProfileRequest(StrictModel):
     @model_validator(mode="after")
     def require_aligned_bounded_profile(self) -> Self:
         if len(self.received_word) != len(self.encoder.coordinate_axis):
-            raise ValueError("received word must match the encoder coordinate axis")
+            raise _validation_error(
+                "received_word_must_match_the_encoder_coordinate_axis",
+                "received word must match the encoder coordinate axis",
+            )
         if any(value >= self.encoder.field_order for value in self.received_word):
-            raise ValueError("received-word entries must be canonical field residues")
+            raise _validation_error(
+                "received_word_entries_must_be_canonical_field_residues",
+                "received-word entries must be canonical field residues",
+            )
         if self.profile_replay_work > MAX_RECEIVED_PROFILE_REPLAY_WORK:
-            raise ValueError(
+            raise _validation_error(
+                "profile_replay_work_exceeded",
                 "received-word profile replay work exceeds the bound of "
-                f"{MAX_RECEIVED_PROFILE_REPLAY_WORK}"
+                f"{MAX_RECEIVED_PROFILE_REPLAY_WORK}",
             )
 
         if self.threshold is None and self.witness_mode != "NONE":
-            raise ValueError("a witness mode requires an exact threshold")
+            raise _validation_error(
+                "a_witness_mode_requires_an_exact_threshold",
+                "a witness mode requires an exact threshold",
+            )
         if self.threshold is not None:
             if self.witness_mode == "NONE":
-                raise ValueError("a threshold requires COUNT, FIRST, or ALL mode")
+                raise _validation_error(
+                    "a_threshold_requires_count_first_or_all_mode",
+                    "a threshold requires COUNT, FIRST, or ALL mode",
+                )
             if self.threshold.value > len(self.encoder.coordinate_axis):
-                raise ValueError("threshold value cannot exceed the code length")
+                raise _validation_error(
+                    "threshold_value_cannot_exceed_the_code_length",
+                    "threshold value cannot exceed the code length",
+                )
 
         if (
             self.witness_mode == "ALL"
             and self.maximum_witness_cells > MAX_RECEIVED_PROFILE_WITNESS_CELLS
         ):
-            raise ValueError(
+            raise _validation_error(
+                "witness_cells_exceeded",
                 "all-witness result exceeds the aggregate witness-cell bound of "
-                f"{MAX_RECEIVED_PROFILE_WITNESS_CELLS}"
+                f"{MAX_RECEIVED_PROFILE_WITNESS_CELLS}",
             )
         return self
 
@@ -214,17 +236,35 @@ class ReceivedWordProfileResult(StrictModel):
 
         expected = _received_word_profile_data(self.source)
         if self.distance_histogram != expected.distance_histogram:
-            raise ValueError("distance histogram does not match the source relation")
+            raise _validation_error(
+                "distance_histogram_does_not_match_the_source_relation",
+                "distance histogram does not match the source relation",
+            )
         if self.codeword_count != expected.codeword_count:
-            raise ValueError("codeword count does not match the source encoder")
+            raise _validation_error(
+                "codeword_count_does_not_match_the_source_encoder",
+                "codeword count does not match the source encoder",
+            )
         if self.minimum_distance != expected.minimum_distance:
-            raise ValueError("minimum distance does not match the source relation")
+            raise _validation_error(
+                "minimum_distance_does_not_match_the_source_relation",
+                "minimum distance does not match the source relation",
+            )
         if self.maximum_agreement != expected.maximum_agreement:
-            raise ValueError("maximum agreement does not match the source relation")
+            raise _validation_error(
+                "maximum_agreement_does_not_match_the_source_relation",
+                "maximum agreement does not match the source relation",
+            )
         if self.threshold_match_count != expected.threshold_match_count:
-            raise ValueError("threshold count does not match the source threshold")
+            raise _validation_error(
+                "threshold_count_does_not_match_the_source_threshold",
+                "threshold count does not match the source threshold",
+            )
         if self.witnesses != expected.witnesses:
-            raise ValueError("threshold witnesses do not replay against the source")
+            raise _validation_error(
+                "threshold_witnesses_do_not_replay_against_the_source",
+                "threshold witnesses do not replay against the source",
+            )
         return self
 
 
@@ -235,14 +275,25 @@ def _validate_prime_matrix(
     from sympy import isprime
 
     if not isprime(field_order):
-        raise ValueError("field_order must be prime")
+        raise _validation_error(
+            "field_order_must_be_prime", "field_order must be prime"
+        )
     width = len(generator_matrix[0])
     if width == 0 or width > MAX_LENGTH:
-        raise ValueError(f"generator rows must have between 1 and {MAX_LENGTH} entries")
+        raise _validation_error(
+            "generator_rows_length",
+            f"generator rows must have between 1 and {MAX_LENGTH} entries",
+        )
     if any(len(row) != width for row in generator_matrix):
-        raise ValueError("generator matrix rows must have equal length")
+        raise _validation_error(
+            "generator_matrix_rows_must_have_equal_length",
+            "generator matrix rows must have equal length",
+        )
     if any(not 0 <= entry < field_order for row in generator_matrix for entry in row):
-        raise ValueError("generator entries must be canonical field residues")
+        raise _validation_error(
+            "generator_entries_must_be_canonical_field_residues",
+            "generator entries must be canonical field residues",
+        )
     return width
 
 
@@ -252,9 +303,15 @@ def _validate_coordinate_axis(
     width: int,
 ) -> None:
     if len(coordinate_axis) != width:
-        raise ValueError("coordinate axis must match the generator-matrix columns")
+        raise _validation_error(
+            "coordinate_axis_must_match_the_generator_matrix_columns",
+            "coordinate axis must match the generator-matrix columns",
+        )
     if len(set(coordinate_axis)) != len(coordinate_axis):
-        raise ValueError("coordinate-axis labels must be unique")
+        raise _validation_error(
+            "coordinate_axis_labels_must_be_unique",
+            "coordinate-axis labels must be unique",
+        )
 
 
 class GeneratorMatrixRequest(StrictModel):
@@ -276,9 +333,14 @@ class GeneratorMatrixRequest(StrictModel):
         width = _validate_prime_matrix(self.field_order, self.generator_matrix)
         _validate_coordinate_axis(self.coordinate_axis, width=width)
         if self.field_order ** len(self.generator_matrix) > MAX_CODEWORDS:
-            raise ValueError("generator matrix exceeds exact enumeration bound")
+            raise _validation_error(
+                "generator_matrix_exceeds_exact_enumeration_bound",
+                "generator matrix exceeds exact enumeration bound",
+            )
         if width > MAX_LENGTH:
-            raise ValueError("code length exceeds bound")
+            raise _validation_error(
+                "code_length_exceeds_bound", "code length exceeds bound"
+            )
         return self
 
 
@@ -309,9 +371,15 @@ class CodewordCheckRequest(StrictModel):
     @model_validator(mode="after")
     def require_aligned_canonical_word(self) -> Self:
         if len(self.word) != len(self.encoder.coordinate_axis):
-            raise ValueError("word length must match the encoder coordinate axis")
+            raise _validation_error(
+                "word_length_must_match_the_encoder_coordinate_axis",
+                "word length must match the encoder coordinate axis",
+            )
         if any(value >= self.encoder.field_order for value in self.word):
-            raise ValueError("word entries must be canonical field residues")
+            raise _validation_error(
+                "word_entries_must_be_canonical_field_residues",
+                "word entries must be canonical field residues",
+            )
         return self
 
 
@@ -333,13 +401,24 @@ class ParityCheckMatrix(StrictModel):
         from sympy import isprime
 
         if not isprime(self.field_order):
-            raise ValueError("field_order must be prime")
+            raise _validation_error(
+                "field_order_must_be_prime", "field_order must be prime"
+            )
         if len(set(self.coordinate_axis)) != len(self.coordinate_axis):
-            raise ValueError("coordinate-axis labels must be unique")
+            raise _validation_error(
+                "coordinate_axis_labels_must_be_unique",
+                "coordinate-axis labels must be unique",
+            )
         if any(len(row) != len(self.coordinate_axis) for row in self.rows):
-            raise ValueError("parity-check rows must match the column axis")
+            raise _validation_error(
+                "parity_check_rows_must_match_the_column_axis",
+                "parity-check rows must match the column axis",
+            )
         if any(not 0 <= value < self.field_order for row in self.rows for value in row):
-            raise ValueError("parity-check entries must be canonical field residues")
+            raise _validation_error(
+                "parity_check_entries_must_be_canonical_field_residues",
+                "parity-check entries must be canonical field residues",
+            )
         return self
 
 
@@ -360,11 +439,20 @@ class SyndromeRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         if self.coordinate_axis != self.parity_check.coordinate_axis:
-            raise ValueError("word axis must match the parity-check column axis")
+            raise _validation_error(
+                "word_axis_must_match_the_parity_check_column_axis",
+                "word axis must match the parity-check column axis",
+            )
         if len(self.word) != len(self.coordinate_axis):
-            raise ValueError("word length must match code length")
+            raise _validation_error(
+                "word_length_must_match_code_length",
+                "word length must match code length",
+            )
         if any(not 0 <= v < self.parity_check.field_order for v in self.word):
-            raise ValueError("word entries must be canonical field residues")
+            raise _validation_error(
+                "word_entries_must_be_canonical_field_residues",
+                "word entries must be canonical field residues",
+            )
         return self
 
 
@@ -377,14 +465,23 @@ class CodeEqualRequest(StrictModel):
     @model_validator(mode="after")
     def require_comparable_encoders(self) -> Self:
         if self.encoder_a.field_order != self.encoder_b.field_order:
-            raise ValueError("encoders must share one prime field order")
+            raise _validation_error(
+                "encoders_must_share_one_prime_field_order",
+                "encoders must share one prime field order",
+            )
         if self.encoder_a.coordinate_axis != self.encoder_b.coordinate_axis:
-            raise ValueError("encoders must share one ordered coordinate axis")
+            raise _validation_error(
+                "encoders_must_share_one_ordered_coordinate_axis",
+                "encoders must share one ordered coordinate axis",
+            )
         if (
             self.encoder_a.codeword_count > MAX_CODEWORDS
             or self.encoder_b.codeword_count > MAX_CODEWORDS
         ):
-            raise ValueError("code cardinality exceeds exact enumeration bound")
+            raise _validation_error(
+                "code_cardinality_exceeds_exact_enumeration_bound",
+                "code cardinality exceeds exact enumeration bound",
+            )
         return self
 
 
@@ -399,13 +496,25 @@ class MacWilliamsRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_distribution(self) -> Self:
         if len(self.weights) != self.length + 1:
-            raise ValueError("weights must have length + 1 entries")
+            raise _validation_error(
+                "weights_must_have_length_1_entries",
+                "weights must have length + 1 entries",
+            )
         if any(w < 0 for w in self.weights):
-            raise ValueError("weight counts must be non-negative")
+            raise _validation_error(
+                "weight_counts_must_be_non_negative",
+                "weight counts must be non-negative",
+            )
         if self.weights[0] != 1:
-            raise ValueError("first weight count must be 1 (zero codeword)")
+            raise _validation_error(
+                "first_weight_count_must_be_1_zero_codeword",
+                "first weight count must be 1 (zero codeword)",
+            )
         if sum(self.weights) != self.code_cardinality:
-            raise ValueError("weight counts must sum to code cardinality")
+            raise _validation_error(
+                "weight_counts_must_sum_to_code_cardinality",
+                "weight counts must sum to code cardinality",
+            )
         return self
 
 
@@ -414,9 +523,14 @@ def _require_selected_coordinate(
     coordinate: int,
 ) -> None:
     if not encoder.coordinate_axis:
-        raise ValueError("encoder must have at least one coordinate to select")
+        raise _validation_error(
+            "encoder_must_have_at_least_one_coordinate_to_select",
+            "encoder must have at least one coordinate to select",
+        )
     if coordinate >= len(encoder.coordinate_axis):
-        raise ValueError("coordinate index out of range")
+        raise _validation_error(
+            "coordinate_index_out_of_range", "coordinate index out of range"
+        )
 
 
 class PunctureRequest(StrictModel):
@@ -470,11 +584,20 @@ class FromGeneratorResult(StrictModel):
     @model_validator(mode="after")
     def require_consistent_summaries(self) -> Self:
         if self.dimension != len(self.encoder.message_axis):
-            raise ValueError("dimension must match the encoder message axis")
+            raise _validation_error(
+                "dimension_must_match_the_encoder_message_axis",
+                "dimension must match the encoder message axis",
+            )
         if self.length != len(self.encoder.coordinate_axis):
-            raise ValueError("length must match the encoder coordinate axis")
+            raise _validation_error(
+                "length_must_match_the_encoder_coordinate_axis",
+                "length must match the encoder coordinate axis",
+            )
         if self.cardinality != self.encoder.codeword_count:
-            raise ValueError("cardinality must match the encoder image")
+            raise _validation_error(
+                "cardinality_must_match_the_encoder_image",
+                "cardinality must match the encoder image",
+            )
         return self
 
 
@@ -491,17 +614,35 @@ class DualCodeResult(StrictModel):
     @model_validator(mode="after")
     def require_consistent_dual(self) -> Self:
         if self.dual_dimension != len(self.encoder.message_axis):
-            raise ValueError("dual dimension must match the encoder message axis")
+            raise _validation_error(
+                "dual_dimension_must_match_the_encoder_message_axis",
+                "dual dimension must match the encoder message axis",
+            )
         if self.length != len(self.encoder.coordinate_axis):
-            raise ValueError("length must match the encoder coordinate axis")
+            raise _validation_error(
+                "length_must_match_the_encoder_coordinate_axis",
+                "length must match the encoder coordinate axis",
+            )
         if self.dimension + self.dual_dimension != self.length:
-            raise ValueError("primal and dual dimensions must sum to the code length")
+            raise _validation_error(
+                "primal_and_dual_dimensions_must_sum_to_the_code_length",
+                "primal and dual dimensions must sum to the code length",
+            )
         if self.parity_check.field_order != self.encoder.field_order:
-            raise ValueError("parity-check field must match the dual encoder")
+            raise _validation_error(
+                "parity_check_field_must_match_the_dual_encoder",
+                "parity-check field must match the dual encoder",
+            )
         if self.parity_check.coordinate_axis != self.encoder.coordinate_axis:
-            raise ValueError("parity-check must preserve the dual coordinate axis")
+            raise _validation_error(
+                "parity_check_must_preserve_the_dual_coordinate_axis",
+                "parity-check must preserve the dual coordinate axis",
+            )
         if self.parity_check.rows != self.encoder.generator_matrix:
-            raise ValueError("parity-check rows must match the dual encoder")
+            raise _validation_error(
+                "parity_check_rows_must_match_the_dual_encoder",
+                "parity-check rows must match the dual encoder",
+            )
         return self
 
 
@@ -551,9 +692,15 @@ class PunctureResult(StrictModel):
     @model_validator(mode="after")
     def require_consistent_summaries(self) -> Self:
         if self.dimension != len(self.encoder.message_axis):
-            raise ValueError("dimension must match the encoder message axis")
+            raise _validation_error(
+                "dimension_must_match_the_encoder_message_axis",
+                "dimension must match the encoder message axis",
+            )
         if self.length != len(self.encoder.coordinate_axis):
-            raise ValueError("length must match the encoder coordinate axis")
+            raise _validation_error(
+                "length_must_match_the_encoder_coordinate_axis",
+                "length must match the encoder coordinate axis",
+            )
         return self
 
 
@@ -568,7 +715,13 @@ class ShortenResult(StrictModel):
     @model_validator(mode="after")
     def require_consistent_summaries(self) -> Self:
         if self.dimension != len(self.encoder.message_axis):
-            raise ValueError("dimension must match the encoder message axis")
+            raise _validation_error(
+                "dimension_must_match_the_encoder_message_axis",
+                "dimension must match the encoder message axis",
+            )
         if self.length != len(self.encoder.coordinate_axis):
-            raise ValueError("length must match the encoder coordinate axis")
+            raise _validation_error(
+                "length_must_match_the_encoder_coordinate_axis",
+                "length must match the encoder coordinate axis",
+            )
         return self

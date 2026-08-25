@@ -7,6 +7,7 @@ from typing import Annotated, Any, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 from pydantic.json_schema import WithJsonSchema
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
@@ -19,6 +20,11 @@ MAX_SUBSET_SUM_MULTIPLICITY_DIGITS = len(str(1 << MAX_SUBSET_SUM_ITEMS))
 MAX_SUBSET_SUM_PROFILE_ENTRIES = 50_000
 
 _CANONICAL_INTEGER_PATTERN = r"^(?:0|-?[1-9][0-9]*)$"
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"additive_combinatorics.{reason}", message)
+
 
 IndexedInteger = Annotated[
     str,
@@ -72,9 +78,10 @@ class IndexedIntegerSequence(StrictModel):
     def require_bounded_items(self) -> Self:
         for item in self.items:
             if len(item.lstrip("-")) > MAX_SUBSET_SUM_ITEM_DIGITS:
-                raise ValueError(
+                raise _validation_error(
+                    "require_bounded_items",
                     f"indexed integer exceeds the "
-                    f"{MAX_SUBSET_SUM_ITEM_DIGITS:,}-digit source-item bound"
+                    f"{MAX_SUBSET_SUM_ITEM_DIGITS:,}-digit source-item bound",
                 )
         return self
 
@@ -137,9 +144,15 @@ class SubsetSumProfileEntry(StrictModel):
     @model_validator(mode="after")
     def require_positive_multiplicity(self) -> Self:
         if len(self.sum.lstrip("-")) > MAX_SUBSET_SUM_SUM_DIGITS:
-            raise ValueError("subset sum exceeds the derived source-sum digit bound")
+            raise _validation_error(
+                "require_positive_multiplicity",
+                "subset sum exceeds the derived source-sum digit bound",
+            )
         if parse_canonical_integer(self.multiplicity) <= 0:
-            raise ValueError("subset-sum multiplicity must be positive")
+            raise _validation_error(
+                "require_positive_multiplicity",
+                "subset-sum multiplicity must be positive",
+            )
         return self
 
 
@@ -165,13 +178,21 @@ class SubsetSumProfile(StrictModel):
     def bind_complete_profile(self) -> Self:
         sums = tuple(parse_canonical_integer(entry.sum) for entry in self.entries)
         if sums != tuple(sorted(sums)) or len(sums) != len(set(sums)):
-            raise ValueError("subset-sum profile entries must have unique sorted sums")
+            raise _validation_error(
+                "bind_complete_profile",
+                "subset-sum profile entries must have unique sorted sums",
+            )
         if self.support_size != len(self.entries):
-            raise ValueError("support_size must equal the number of profile entries")
+            raise _validation_error(
+                "bind_complete_profile",
+                "support_size must equal the number of profile entries",
+            )
 
         expected_total = 1 << len(self.source.items)
         if parse_canonical_integer(self.total_subsets) != expected_total:
-            raise ValueError("total_subsets must equal 2^len(source.items)")
+            raise _validation_error(
+                "bind_complete_profile", "total_subsets must equal 2^len(source.items)"
+            )
 
         from jacobian.math.additive_combinatorics.operations import (
             _subset_sum_profile_counts,
@@ -188,11 +209,15 @@ class SubsetSumProfile(StrictModel):
             for entry in self.entries
         )
         if actual != expected:
-            raise ValueError(
-                "entries must be the complete exact subset-sum profile of source"
+            raise _validation_error(
+                "bind_complete_profile",
+                "entries must be the complete exact subset-sum profile of source",
             )
         if sum(multiplicity for _, multiplicity in actual) != expected_total:
-            raise ValueError("profile multiplicities must sum to total_subsets")
+            raise _validation_error(
+                "bind_complete_profile",
+                "profile multiplicities must sum to total_subsets",
+            )
         return self
 
     @classmethod
@@ -229,7 +254,10 @@ class IndexSubset(StrictModel):
     @model_validator(mode="after")
     def require_strictly_increasing_indices(self) -> Self:
         if any(left >= right for left, right in pairwise(self.indices)):
-            raise ValueError("subset indices must be strictly increasing")
+            raise _validation_error(
+                "require_strictly_increasing_indices",
+                "subset indices must be strictly increasing",
+            )
         return self
 
 

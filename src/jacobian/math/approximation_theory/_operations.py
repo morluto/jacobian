@@ -19,14 +19,6 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def _frac_from_rational(value: CanonicalRational) -> Fraction:
-    return value.as_fraction()
-
-
-def _rational_from_frac(value: Fraction) -> CanonicalRational:
-    return CanonicalRational.from_integer_ratio(value.numerator, value.denominator)
-
-
 def _polynomial_from_coeffs(coeffs: list[Fraction]) -> RationalPolynomial:
     """Convert dense coefficient list [a0, a1, ...] to RationalPolynomial on 'x'."""
     terms = []
@@ -35,7 +27,7 @@ def _polynomial_from_coeffs(coeffs: list[Fraction]) -> RationalPolynomial:
             continue
         terms.append(
             RationalPolynomialTerm(
-                coefficient=_rational_from_frac(coeff),
+                coefficient=CanonicalRational.from_fraction(coeff),
                 exponents=(exp,),
             )
         )
@@ -87,7 +79,7 @@ def compute_lagrange_basis(request: LagrangeBasisRequest) -> LagrangeBasisResult
     The barycentric weight is:
     w_k = 1 / product_{i != k} (x_k - x_i)
     """
-    nodes = [_frac_from_rational(n) for n in request.nodes.nodes]
+    nodes = [n.as_fraction() for n in request.nodes.nodes]
     n = len(nodes)
 
     basis_polys = []
@@ -113,7 +105,7 @@ def compute_lagrange_basis(request: LagrangeBasisRequest) -> LagrangeBasisResult
             LagrangeBasisPolynomial(
                 index=k,
                 polynomial=_polynomial_from_coeffs(poly),
-                barycentric_weight=_rational_from_frac(bary_weight),
+                barycentric_weight=CanonicalRational.from_fraction(bary_weight),
             )
         )
 
@@ -132,8 +124,8 @@ def compute_lagrange_interpolation(
     Uses the Lagrange formula: p(x) = sum_k y_k * l_k(x)
     where l_k(x) is the k-th Lagrange basis polynomial.
     """
-    nodes = [_frac_from_rational(n) for n in request.nodes.nodes]
-    values = [_frac_from_rational(v) for v in request.values]
+    nodes = [n.as_fraction() for n in request.nodes.nodes]
+    values = [v.as_fraction() for v in request.values]
     n = len(nodes)
 
     result_poly = [Fraction(0)]

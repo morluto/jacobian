@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -20,6 +21,12 @@ _MAX_FLOOR_SUM_RESULT_DIGITS = 32_768
 _MAX_BOX_COORD = 10_000
 _MAX_BOX_AREA = 250_000
 _MAX_BOX_MODULUS = 10_000
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by arithmetic-counting contracts."""
+
+    return PydanticCustomError(f"arithmetic_counting.{reason}", message)
 
 
 class FloorSumRequest(StrictModel):
@@ -47,9 +54,10 @@ class FloorSumRequest(StrictModel):
         # execution so the exact result always fits the canonical contract.
         magnitude_digits = len(str((self.n + 1) * (self.a + self.b) + 1))
         if magnitude_digits > _MAX_FLOOR_SUM_RESULT_DIGITS:
-            raise ValueError(
+            raise _validation_error(
+                "floor_sum_result_exceeds_bound",
                 "floor-sum result can exceed the "
-                f"{_MAX_FLOOR_SUM_RESULT_DIGITS}-digit canonical integer bound"
+                f"{_MAX_FLOOR_SUM_RESULT_DIGITS}-digit canonical integer bound",
             )
         return self
 
@@ -75,12 +83,14 @@ class CongruenceBoxCountRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_box(self) -> Self:
         if self.x_lo > self.x_hi:
-            raise ValueError("x_lo must be <= x_hi")
+            raise _validation_error("x_interval_invalid", "x_lo must be <= x_hi")
         if self.y_lo > self.y_hi:
-            raise ValueError("y_lo must be <= y_hi")
+            raise _validation_error("y_interval_invalid", "y_lo must be <= y_hi")
         area = (self.x_hi - self.x_lo + 1) * (self.y_hi - self.y_lo + 1)
         if area > _MAX_BOX_AREA:
-            raise ValueError("box area exceeds the computational budget")
+            raise _validation_error(
+                "box_area_exceeds_budget", "box area exceeds the computational budget"
+            )
         return self
 
 

@@ -5,9 +5,16 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorial_matrices.values import HadamardMatrix, SignMatrix
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable error owned by combinatorial-matrix contracts."""
+
+    return PydanticCustomError(f"combinatorial_matrix.{reason}", message)
 
 
 class SignProfileRequest(StrictModel):
@@ -62,7 +69,10 @@ class NormalizeResult(StrictModel):
         for row in self.normalized.rows:
             for entry in row:
                 if entry not in (-1, 1):
-                    raise ValueError("normalized entries must be -1 or +1")
+                    raise _validation_error(
+                        "normalized_entry_invalid",
+                        "normalized entries must be -1 or +1",
+                    )
         return self
 
 

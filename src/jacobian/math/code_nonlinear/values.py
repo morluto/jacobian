@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Self
 
 from pydantic import ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -18,6 +19,12 @@ MAX_EXPLICIT_CODE_BITS = 1 << 19
 MAX_EXPLICIT_CODE_LENGTH = MAX_EXPLICIT_CODE_BITS
 
 BinaryBit = Annotated[int, Field(strict=True, ge=0, le=1)]
+
+
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(code, message)
+
+
 type BinaryWord = Annotated[
     tuple[BinaryBit, ...],
     Field(max_length=MAX_EXPLICIT_CODE_LENGTH),
@@ -84,20 +91,22 @@ class ExplicitBinaryCode(StrictModel):
         if not isinstance(words, (list, tuple)):
             return data
         if len(words) > MAX_EXPLICIT_CODE_BITS:
-            raise ValueError(
+            raise _validation_error(
+                "nonlinear_code.container_bound",
                 "explicit binary code declares "
                 f"{len(words)} codewords, exceeding the "
-                f"{MAX_EXPLICIT_CODE_BITS}-word container bound"
+                f"{MAX_EXPLICIT_CODE_BITS}-word container bound",
             )
         total_bits = 0
         for word in words:
             if isinstance(word, (list, tuple)):
                 total_bits += len(word)
                 if total_bits > MAX_EXPLICIT_CODE_BITS:
-                    raise ValueError(
+                    raise _validation_error(
+                        "nonlinear_code.source_bound",
                         "explicit binary code materializes "
                         f"{total_bits} bits, exceeding the "
-                        f"{MAX_EXPLICIT_CODE_BITS}-bit source bound"
+                        f"{MAX_EXPLICIT_CODE_BITS}-bit source bound",
                     )
         # Running a before validator moves field validation into Python
         # mode, where decoded JSON arrays no longer coerce to the declared
@@ -114,20 +123,27 @@ class ExplicitBinaryCode(StrictModel):
     def require_canonical_code(self) -> Self:
         cardinality = len(self.codewords)
         if self.length == 0 and cardinality > 1:
-            raise ValueError(
-                "a zero-coordinate code can contain only the sole empty word"
+            raise _validation_error(
+                "nonlinear_code.empty_codeword_constraint",
+                "a zero-coordinate code can contain only the sole empty word",
             )
         total_bits = self.length * cardinality
         if total_bits > MAX_EXPLICIT_CODE_BITS:
-            raise ValueError(
+            raise _validation_error(
+                "nonlinear_code.source_bound",
                 "explicit binary code materializes "
                 f"{total_bits} bits, exceeding the "
-                f"{MAX_EXPLICIT_CODE_BITS}-bit source bound"
+                f"{MAX_EXPLICIT_CODE_BITS}-bit source bound",
             )
         if any(len(word) != self.length for word in self.codewords):
-            raise ValueError("every codeword must have exactly the declared length")
+            raise _validation_error(
+                "nonlinear_code.length_mismatch",
+                "every codeword must have exactly the declared length",
+            )
         if len(set(self.codewords)) != cardinality:
-            raise ValueError("codewords must be distinct")
+            raise _validation_error(
+                "nonlinear_code.duplicate_codewords", "codewords must be distinct"
+            )
         object.__setattr__(self, "codewords", tuple(sorted(self.codewords)))
         return self
 

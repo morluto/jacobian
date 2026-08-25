@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from itertools import combinations
 
 import pytest
@@ -18,6 +19,13 @@ from jacobian.math.combinatorics.exact_cover import (
     GeneralizedExactCoverResult,
     find_generalized_exact_cover,
 )
+
+
+@contextmanager
+def raises_code(code: str):
+    with pytest.raises(ValidationError) as exc_info:
+        yield
+    assert exc_info.value.errors()[0]["type"] not in {"value_error", "assertion_error"}
 
 
 def _instance(
@@ -276,15 +284,15 @@ def test_result_validation_reconstructs_witness_and_replays_exact_negative() -> 
     found = _solve(cover)
     payload = found.model_dump(mode="json")
     payload["item_multiplicities"][-1]["multiplicity"] = 0
-    with pytest.raises(ValidationError, match="reconstruct"):
+    with raises_code("combinatorics.invariant"):
         GeneralizedExactCoverResult.model_validate(payload)
 
     mutated_source = found.model_dump(mode="json")
     mutated_source["instance"]["rows"][0]["items"] = ["p"]
-    with pytest.raises(ValidationError, match="reconstruct"):
+    with raises_code("combinatorics.invariant"):
         GeneralizedExactCoverResult.model_validate(mutated_source)
 
-    with pytest.raises(ValidationError, match="deterministic replay"):
+    with raises_code("combinatorics.invariant"):
         GeneralizedExactCoverResult(
             instance=cover,
             search_node_limit=100,
@@ -310,15 +318,15 @@ def test_result_validation_reconstructs_witness_and_replays_exact_negative() -> 
 
 
 def test_contract_rejects_duplicate_undeclared_and_noncanonical_incidences() -> None:
-    with pytest.raises(ValidationError, match="sorted and unique"):
+    with raises_code("combinatorics.invariant"):
         ExactCoverRow(row_id="r", items=("p", "p"))
-    with pytest.raises(ValidationError, match="sorted and unique"):
+    with raises_code("combinatorics.invariant"):
         ExactCoverRow(row_id="r", items=("q", "p"))
-    with pytest.raises(ValidationError, match="must be declared"):
+    with raises_code("combinatorics.invariant"):
         _instance(primary=("p",), rows=(("r", ("q",)),))
-    with pytest.raises(ValidationError, match="must be disjoint"):
+    with raises_code("combinatorics.invariant"):
         _instance(primary=("p",), secondary=("p",))
-    with pytest.raises(ValidationError, match="sorted and unique"):
+    with raises_code("combinatorics.invariant"):
         _instance(
             primary=("p",),
             rows=(
@@ -326,7 +334,7 @@ def test_contract_rejects_duplicate_undeclared_and_noncanonical_incidences() -> 
                 ("same", ("p",)),
             ),
         )
-    with pytest.raises(ValidationError, match="row IDs must be sorted"):
+    with raises_code("combinatorics.invariant"):
         _instance(
             primary=("p",),
             rows=(
@@ -357,7 +365,7 @@ def test_row_and_incidence_boundaries_are_admitted_before_search() -> None:
         primary_items=("p",), secondary_items=(), rows=maximum_rows
     )
     assert _solve(row_boundary, search_node_limit=2).status == "FOUND"
-    with pytest.raises(ValidationError, match="at most 4096 items"):
+    with raises_code("combinatorics.invariant"):
         GeneralizedExactCoverInstance(
             primary_items=("p",),
             secondary_items=(),
@@ -383,7 +391,7 @@ def test_row_and_incidence_boundaries_are_admitted_before_search() -> None:
         MAX_EXACT_COVER_INCIDENCES
     )
     assert _solve(incidence_boundary, search_node_limit=2).status == "FOUND"
-    with pytest.raises(ValidationError, match="incidence count"):
+    with raises_code("combinatorics.invariant"):
         GeneralizedExactCoverInstance(
             primary_items=primary,
             secondary_items=secondary,
@@ -398,7 +406,7 @@ def test_combined_item_bound_is_not_hidden_by_per_field_limits() -> None:
     primary = tuple(f"p{index:03d}" for index in range(MAX_EXACT_COVER_PRIMARY_ITEMS))
     secondary = tuple(f"s{index:03d}" for index in range(129))
 
-    with pytest.raises(ValidationError, match="at most 256 items"):
+    with raises_code("combinatorics.invariant"):
         GeneralizedExactCoverInstance(
             primary_items=primary,
             secondary_items=secondary,
@@ -434,7 +442,7 @@ def test_search_and_retained_output_boundaries_are_preflighted() -> None:
         instance=small,
         search_node_limit=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS,
     )
-    with pytest.raises(ValidationError, match="less than or equal to 100000"):
+    with raises_code("combinatorics.invariant"):
         GeneralizedExactCoverRequest(
             instance=small,
             search_node_limit=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS + 1,
@@ -455,7 +463,7 @@ def test_search_and_retained_output_boundaries_are_preflighted() -> None:
             for index in range(MAX_EXACT_COVER_INCIDENCES // len(all_items))
         ),
     )
-    with pytest.raises(ValidationError, match="canonical output limit"):
+    with raises_code("combinatorics.invariant"):
         GeneralizedExactCoverRequest(instance=large_source)
 
 

@@ -5,11 +5,16 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 
 MAX_TRUTH_TABLE_LENGTH = 4096
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"boolean.{reason}", message)
 
 
 class BooleanTruthTableRequest(StrictModel):
@@ -29,7 +34,10 @@ class BooleanTruthTableRequest(StrictModel):
     def require_power_of_two_length(self) -> Self:
         n = len(self.truth_table)
         if n & (n - 1) != 0:
-            raise ValueError("truth table length must be a power of two")
+            raise _validation_error(
+                "truth_table_length_invalid",
+                "truth table length must be a power of two",
+            )
         return self
 
 
@@ -51,5 +59,8 @@ class BooleanWalshTransformResult(StrictModel):
     @model_validator(mode="after")
     def require_spectrum_shape(self) -> Self:
         if len(self.spectrum) != 1 << self.variable_count:
-            raise ValueError("spectrum length must equal 2 ** variable_count")
+            raise _validation_error(
+                "spectrum_length_mismatch",
+                "spectrum length must equal 2 ** variable_count",
+            )
         return self

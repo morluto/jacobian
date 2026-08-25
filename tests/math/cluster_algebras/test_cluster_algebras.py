@@ -161,8 +161,9 @@ class TestCoefficientBounds:
             ),
             (str(1), str(1), str(1)),
         )
-        with pytest.raises(ValidationError, match="mutation result exceeds"):
+        with pytest.raises(ValidationError) as exc_info:
             SeedMutationRequest(exchange_matrix=b, mutation_index=1)
+        assert exc_info.value.errors()[0]["type"] == "cluster_algebra.mutation_bounded"
 
     def test_request_accepts_large_entries_under_negation_only_mutation(self):
         edge = 10**129 - 1
@@ -191,8 +192,11 @@ class TestCoefficientBounds:
     def test_rejects_symmetrizer_beyond_bound(self):
         # A zero row-pair keeps the matrix skew-symmetrizable so the
         # symmetrizer bound is what rejects the seed.
-        with pytest.raises(ValidationError, match="symmetrizer coefficients"):
+        with pytest.raises(ValidationError) as exc_info:
             em(2, ((str(0), str(0)), (str(0), str(0))), (str(1), str(10**64)))
+        assert (
+            exc_info.value.errors()[0]["type"] == "cluster_algebra.symmetrizer_bounded"
+        )
 
     def test_result_ceiling_rejects_oversized_entries(self):
         # Even skew-symmetrizable matrices cannot carry unbounded integers.
@@ -203,8 +207,12 @@ class TestCoefficientBounds:
         with pytest.raises(ValidationError):
             em(2, ((str(0), beyond_schema), (str(-1), str(0))), (str(1), str(1)))
         at_schema_cap = "1" + "0" * 129
-        with pytest.raises(ValidationError, match="129-digit bound"):
+        with pytest.raises(ValidationError) as exc_info:
             em(2, ((str(0), at_schema_cap), (str(-1), str(0))), (str(1), str(1)))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "cluster_algebra.exchange_entries_bounded"
+        )
 
     def test_seventeen_by_seventeen_zero_matrix_is_admitted(self):
         # Work and output derive from cells times coefficient heights, not a
@@ -251,21 +259,23 @@ class TestGVectorBinding:
 
     def test_result_rejects_non_identity_matrix(self):
         b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
-        with pytest.raises(ValidationError, match="identity"):
+        with pytest.raises(ValidationError) as exc_info:
             GVectorResult(
                 exchange_matrix=b,
                 g_matrix=((1, 1), (0, 1)),
                 convention="FOMIN_ZELEVINSKY",
             )
+        assert exc_info.value.errors()[0]["type"] == "cluster_algebra.g_matrix_identity"
 
     def test_result_rejects_dimension_mismatch(self):
         b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
-        with pytest.raises(ValidationError, match="identity"):
+        with pytest.raises(ValidationError) as exc_info:
             GVectorResult(
                 exchange_matrix=b,
                 g_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
                 convention="FOMIN_ZELEVINSKY",
             )
+        assert exc_info.value.errors()[0]["type"] == "cluster_algebra.g_matrix_identity"
 
     def test_result_rejects_arbitrary_convention(self):
         b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))

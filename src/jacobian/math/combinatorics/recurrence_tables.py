@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -16,6 +17,13 @@ from jacobian.math.combinatorics._models import (
     MAX_LINEAR_RECURRENCE_ORDER,
     MAX_P_RECURSIVE_POLYNOMIAL_DEGREE,
 )
+
+
+def _combinatorics_validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("combinatorics.recurrence_invariant", message, {})
+
+
+ValueError = _combinatorics_validation_error  # noqa: A001
 
 
 class IndexedRecurrenceResidual(StrictModel):

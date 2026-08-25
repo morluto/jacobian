@@ -6,11 +6,18 @@ from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel
 
 _MAX_CONTINUED_FRACTION_TERMS = 1_024
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by rational arithmetic contracts."""
+
+    return PydanticCustomError(f"arithmetic.{reason}", message)
 
 
 # ---------------------------------------------------------------------------
@@ -32,7 +39,9 @@ class NonzeroRationalValueRequest(StrictModel):
     @model_validator(mode="after")
     def require_nonzero(self) -> Self:
         if self.value.as_fraction() == 0:
-            raise ValueError("reciprocal requires a nonzero rational")
+            raise _validation_error(
+                "reciprocal_requires_nonzero", "reciprocal requires a nonzero rational"
+            )
         return self
 
 
@@ -52,7 +61,10 @@ class RationalDivisionRequest(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_divisor(self) -> Self:
         if self.right.as_fraction() == 0:
-            raise ValueError("quotient requires a nonzero divisor")
+            raise _validation_error(
+                "division_requires_nonzero_divisor",
+                "quotient requires a nonzero divisor",
+            )
         return self
 
 
@@ -104,9 +116,15 @@ class RationalContinuedFractionResult(StrictModel):
 
         quotients = [parse_canonical_integer(term) for term in self.terms]
         if any(quotient < 1 for quotient in quotients[1:]):
-            raise ValueError("every partial quotient after the first must be positive")
+            raise _validation_error(
+                "continued_fraction_nonpositive_term",
+                "every partial quotient after the first must be positive",
+            )
         if len(quotients) > 1 and quotients[-1] == 1:
-            raise ValueError("a multi-term simple continued fraction must not end in 1")
+            raise _validation_error(
+                "continued_fraction_trailing_one",
+                "a multi-term simple continued fraction must not end in 1",
+            )
         numerator_minus_2, numerator_minus_1 = 1, quotients[0]
         denominator_minus_2, denominator_minus_1 = 0, 1
         for quotient in quotients[1:]:
@@ -119,8 +137,9 @@ class RationalContinuedFractionResult(StrictModel):
                 quotient * denominator_minus_1 + denominator_minus_2,
             )
         if Fraction(numerator_minus_1, denominator_minus_1) != self.value.as_fraction():
-            raise ValueError(
+            raise _validation_error(
+                "continued_fraction_reconstruction",
                 "terms must reconstruct the retained rational through the "
-                "continuant recurrence"
+                "continuant recurrence",
             )
         return self

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
@@ -52,6 +53,10 @@ GROUP_LIKE_SCAN_WORK_BUDGET = 2_000_000
 MAX_TENSOR_ENTRIES = 4096
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"coalgebra.{reason}", message)
+
+
 def group_like_scan_work(prime: int, dimension: int) -> int:
     """Worst-case Python-level work units for one exhaustive group-like scan.
 
@@ -70,8 +75,9 @@ def _require_admitted_prime_digits(prime: int) -> None:
     """Reject characteristics beyond the documented digit budget before any
     primality test or modular arithmetic runs."""
     if prime >= 10**MAX_PRIME_DIGITS:
-        raise ValueError(
-            f"field prime exceeds the {MAX_PRIME_DIGITS}-digit admission bound"
+        raise _validation_error(
+            "prime_digits_exceeded",
+            f"field prime exceeds the {MAX_PRIME_DIGITS}-digit admission bound",
         )
 
 
@@ -132,26 +138,36 @@ class Coalgebra(StrictModel):
         # Fail fast on the derived size budget before any O(n^3) scan: it
         # bounds every later validation pass.
         if self.dimension**3 > MAX_TENSOR_ENTRIES:
-            raise ValueError(
+            raise _validation_error(
+                "tensor_budget_exceeded",
                 f"coalgebra admission allows at most {MAX_TENSOR_ENTRIES} "
                 f"structure constants; dimension {self.dimension} would "
-                f"carry {self.dimension**3}"
+                f"carry {self.dimension**3}",
             )
         if len(self.comultiplication) != self.dimension:
-            raise ValueError("comultiplication must have dimension entries")
+            raise _validation_error(
+                "comultiplication_shape", "comultiplication must have dimension entries"
+            )
         for row in self.comultiplication:
             if len(row) != self.dimension:
-                raise ValueError("comultiplication entry must be dimension x dimension")
+                raise _validation_error(
+                    "comultiplication_shape",
+                    "comultiplication entry must be dimension x dimension",
+                )
             for v in row:
                 if len(v) != self.dimension:
-                    raise ValueError("comultiplication tensor must be 3D")
+                    raise _validation_error(
+                        "comultiplication_shape", "comultiplication tensor must be 3D"
+                    )
         if len(self.counit) != self.dimension:
-            raise ValueError("counit must have dimension entries")
+            raise _validation_error(
+                "counit_shape", "counit must have dimension entries"
+            )
         _require_admitted_prime_digits(self.prime)
         from sympy import isprime
 
         if not isprime(self.prime):
-            raise ValueError("prime must be a prime integer")
+            raise _validation_error("prime_not_prime", "prime must be a prime integer")
         self._require_canonical_residues()
         self._require_coalgebra_axioms()
         return self
@@ -163,14 +179,16 @@ class Coalgebra(StrictModel):
             for v in row:
                 for value in v:
                     if not 0 <= value < self.prime:
-                        raise ValueError(
+                        raise _validation_error(
+                            "noncanonical_structure_constants",
                             "structure constants must be canonical residues "
-                            f"in 0..{self.prime - 1}"
+                            f"in 0..{self.prime - 1}",
                         )
         for value in self.counit:
             if not 0 <= value < self.prime:
-                raise ValueError(
-                    f"counit entries must be canonical residues in 0..{self.prime - 1}"
+                raise _validation_error(
+                    "noncanonical_counit",
+                    f"counit entries must be canonical residues in 0..{self.prime - 1}",
                 )
 
     def _require_coalgebra_axioms(self) -> None:
@@ -197,7 +215,10 @@ class Coalgebra(StrictModel):
                         left = sum(d[i][t][ell] * d[t][j][k] for t in range(n)) % p
                         right = sum(d[i][j][t] * d[t][k][ell] for t in range(n)) % p
                         if left != right:
-                            raise ValueError("comultiplication must be coassociative")
+                            raise _validation_error(
+                                "not_coassociative",
+                                "comultiplication must be coassociative",
+                            )
 
         # Counit identities: both (epsilon tensor id)Delta = id and
         # (id tensor epsilon)Delta = id must hold.
@@ -209,9 +230,10 @@ class Coalgebra(StrictModel):
                 right_counit = sum(e[t] * d[i][j][t] for t in range(n)) % p
                 expected = 1 if i == j else 0
                 if left_counit != expected or right_counit != expected:
-                    raise ValueError(
+                    raise _validation_error(
+                        "counit_axioms",
                         "counit identities (epsilon x id)Delta = id and "
-                        "(id x epsilon)Delta = id must hold modulo p"
+                        "(id x epsilon)Delta = id must hold modulo p",
                     )
 
 
@@ -224,7 +246,9 @@ class ComultiplicationRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_index(self) -> Self:
         if self.element_index >= self.coalgebra.dimension:
-            raise ValueError("element_index must be in 0..dimension-1")
+            raise _validation_error(
+                "element_index_out_of_range", "element_index must be in 0..dimension-1"
+            )
         return self
 
 
@@ -263,7 +287,10 @@ class ComultiplicationResult(StrictModel):
             else getattr(coalgebra_input, "prime", None)
         )
         if type(coalgebra_prime) is int and nested_prime != coalgebra_prime:
-            raise ValueError("matrix prime must match the retained coalgebra's field")
+            raise _validation_error(
+                "matrix_prime_mismatch",
+                "matrix prime must match the retained coalgebra's field",
+            )
         return data
 
     @model_validator(mode="after")
@@ -273,23 +300,33 @@ class ComultiplicationResult(StrictModel):
         n = ca.dimension
         p = ca.prime
         if self.element_index >= n:
-            raise ValueError("element_index must be in 0..dimension-1")
+            raise _validation_error(
+                "element_index_out_of_range", "element_index must be in 0..dimension-1"
+            )
         if self.dimension != n:
-            raise ValueError("dimension must match the retained coalgebra")
+            raise _validation_error(
+                "dimension_mismatch", "dimension must match the retained coalgebra"
+            )
         if self.dimension != self.matrix.columns or len(self.matrix.entries) != n:
-            raise ValueError("dimension must match the retained coalgebra")
+            raise _validation_error(
+                "dimension_mismatch", "dimension must match the retained coalgebra"
+            )
         # The canonical value carries its own field: a GF(p) coalgebra cannot
         # describe a matrix over a different modulus.
         if self.matrix.prime != p:
-            raise ValueError("matrix prime must match the retained coalgebra's field")
+            raise _validation_error(
+                "matrix_prime_mismatch",
+                "matrix prime must match the retained coalgebra's field",
+            )
         expected = tuple(
             tuple(ca.comultiplication[self.element_index][j][k] % p for k in range(n))
             for j in range(n)
         )
         if self.matrix.entries != expected:
-            raise ValueError(
+            raise _validation_error(
+                "comultiplication_mismatch",
                 "coefficients must be the exact comultiplication of the "
-                "retained coalgebra basis element"
+                "retained coalgebra basis element",
             )
         return self
 
@@ -303,7 +340,9 @@ class CounitRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_index(self) -> Self:
         if self.element_index >= self.coalgebra.dimension:
-            raise ValueError("element_index must be in 0..dimension-1")
+            raise _validation_error(
+                "element_index_out_of_range", "element_index must be in 0..dimension-1"
+            )
         return self
 
 
@@ -319,10 +358,13 @@ class CounitResult(StrictModel):
         """Replay epsilon(c_i) against the retained canonical coalgebra."""
         ca = self.coalgebra
         if self.element_index >= ca.dimension:
-            raise ValueError("element_index must be in 0..dimension-1")
+            raise _validation_error(
+                "element_index_out_of_range", "element_index must be in 0..dimension-1"
+            )
         if self.value != ca.counit[self.element_index] % ca.prime:
-            raise ValueError(
-                "value must be the exact counit of the retained coalgebra basis element"
+            raise _validation_error(
+                "counit_mismatch",
+                "value must be the exact counit of the retained coalgebra basis element",
             )
         return self
 
@@ -344,11 +386,12 @@ class GroupLikeElementsRequest(StrictModel):
     def require_enumerable(self) -> Self:
         work = group_like_scan_work(self.coalgebra.prime, self.coalgebra.dimension)
         if work > GROUP_LIKE_SCAN_WORK_BUDGET:
-            raise ValueError(
+            raise _validation_error(
+                "scan_work_budget_exceeded",
                 "group-like enumeration scan work exceeds the documented "
                 f"budget: {work} units for prime {self.coalgebra.prime}, "
                 f"dimension {self.coalgebra.dimension} exceeds "
-                f"{GROUP_LIKE_SCAN_WORK_BUDGET}"
+                f"{GROUP_LIKE_SCAN_WORK_BUDGET}",
             )
         return self
 
@@ -381,34 +424,39 @@ class GroupLikeElementsResult(StrictModel):
         from jacobian.math.coalgebras._operations import _group_like_coefficients
 
         if self.count != len(self.elements):
-            raise ValueError("count must match element count")
+            raise _validation_error("count_mismatch", "count must match element count")
         # Reapply the scan-work admission bound before replaying: when a
         # serialized result is validated directly, its coalgebra is parsed as
         # a Coalgebra, not as a GroupLikeElementsRequest, so the request
         # guard alone never runs.
         work = group_like_scan_work(self.coalgebra.prime, self.coalgebra.dimension)
         if work > GROUP_LIKE_SCAN_WORK_BUDGET:
-            raise ValueError(
+            raise _validation_error(
+                "scan_work_budget_exceeded",
                 "group-like enumeration scan work exceeds the documented "
                 f"budget: {work} units for prime {self.coalgebra.prime}, "
                 f"dimension {self.coalgebra.dimension} exceeds "
-                f"{GROUP_LIKE_SCAN_WORK_BUDGET}"
+                f"{GROUP_LIKE_SCAN_WORK_BUDGET}",
             )
         n = self.coalgebra.dimension
         seen = set()
         for element in self.elements:
             if len(element.coefficients) != n:
-                raise ValueError(
-                    "element coefficients must match the coalgebra dimension"
+                raise _validation_error(
+                    "element_dimension_mismatch",
+                    "element coefficients must match the coalgebra dimension",
                 )
             key = tuple(element.coefficients)
             if key in seen:
-                raise ValueError("group-like elements must be distinct")
+                raise _validation_error(
+                    "duplicate_group_like", "group-like elements must be distinct"
+                )
             seen.add(key)
         expected = _group_like_coefficients(self.coalgebra)
         if tuple(element.coefficients for element in self.elements) != expected:
-            raise ValueError(
-                "elements must be the exact group-like set of the retained coalgebra"
+            raise _validation_error(
+                "group_like_set_mismatch",
+                "elements must be the exact group-like set of the retained coalgebra",
             )
         return self
 

@@ -6,16 +6,18 @@ from math import isqrt
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.math.arithmetic._integer_predicates import is_square_free
 
 _MAX_DISCRIMINANT = 1_000_000
 _MAX_TERMS = 5_000
 
 
-def _is_square_free(value: int) -> bool:
-    return all(value % (divisor * divisor) for divisor in range(2, isqrt(value) + 1))
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(code, message)
 
 
 def _convergent_component_digit_cap(count: int) -> int:
@@ -41,8 +43,11 @@ class SquarefreeRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_squarefree(self) -> Self:
-        if not _is_square_free(self.discriminant):
-            raise ValueError("discriminant must be squarefree")
+        if not is_square_free(self.discriminant):
+            raise _validation_error(
+                "diophantine_approximation.discriminant_not_squarefree",
+                "discriminant must be squarefree",
+            )
         return self
 
 
@@ -54,8 +59,11 @@ class ContinuedFractionRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_squarefree(self) -> Self:
-        if not _is_square_free(self.discriminant):
-            raise ValueError("discriminant must be squarefree")
+        if not is_square_free(self.discriminant):
+            raise _validation_error(
+                "diophantine_approximation.discriminant_not_squarefree",
+                "discriminant must be squarefree",
+            )
         return self
 
 
@@ -79,8 +87,11 @@ class ContinuedFractionResult(StrictModel):
 
     @model_validator(mode="after")
     def require_squarefree(self) -> Self:
-        if not _is_square_free(self.discriminant):
-            raise ValueError("discriminant must be squarefree")
+        if not is_square_free(self.discriminant):
+            raise _validation_error(
+                "diophantine_approximation.discriminant_not_squarefree",
+                "discriminant must be squarefree",
+            )
         return self
 
     @model_validator(mode="after")
@@ -92,17 +103,22 @@ class ContinuedFractionResult(StrictModel):
 
         preperiod, period = _cf_coefficients(self.discriminant)
         if self.preperiod_length != len(preperiod) or self.period_length != len(period):
-            raise ValueError(
+            raise _validation_error(
+                "diophantine_approximation.period_metadata_mismatch",
                 "preperiod/period metadata must match the canonical expansion "
-                "of sqrt(discriminant)"
+                "of sqrt(discriminant)",
             )
         if self.term_count != len(self.coefficients):
-            raise ValueError("coefficient count must equal the requested term_count")
+            raise _validation_error(
+                "diophantine_approximation.coefficient_count_mismatch",
+                "coefficient count must equal the requested term_count",
+            )
         expected = tuple(_coefficients(preperiod, period, self.term_count))
         if tuple(self.coefficients) != expected:
-            raise ValueError(
+            raise _validation_error(
+                "diophantine_approximation.coefficients_not_canonical",
                 "coefficients must be the canonical continued fraction of "
-                "sqrt(discriminant)"
+                "sqrt(discriminant)",
             )
         return self
 
@@ -115,8 +131,11 @@ class ConvergentRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_squarefree(self) -> Self:
-        if not _is_square_free(self.discriminant):
-            raise ValueError("discriminant must be squarefree")
+        if not is_square_free(self.discriminant):
+            raise _validation_error(
+                "diophantine_approximation.discriminant_not_squarefree",
+                "discriminant must be squarefree",
+            )
         return self
 
 
@@ -149,8 +168,11 @@ class ConvergentResult(StrictModel):
 
     @model_validator(mode="after")
     def require_squarefree(self) -> Self:
-        if not _is_square_free(self.discriminant):
-            raise ValueError("discriminant must be squarefree")
+        if not is_square_free(self.discriminant):
+            raise _validation_error(
+                "diophantine_approximation.discriminant_not_squarefree",
+                "discriminant must be squarefree",
+            )
         return self
 
     @model_validator(mode="after")
@@ -164,28 +186,39 @@ class ConvergentResult(StrictModel):
         )
 
         if len(self.convergents) != self.convergent_count:
-            raise ValueError("convergent count must equal the requested count")
+            raise _validation_error(
+                "diophantine_approximation.convergent_count_mismatch",
+                "convergent count must equal the requested count",
+            )
         if tuple(value.index for value in self.convergents) != tuple(
             range(len(self.convergents))
         ):
-            raise ValueError("convergent indices must be contiguous starting at zero")
+            raise _validation_error(
+                "diophantine_approximation.indices_not_contiguous",
+                "convergent indices must be contiguous starting at zero",
+            )
         digit_cap = _convergent_component_digit_cap(self.convergent_count)
         for value in self.convergents:
             if (
                 len(value.numerator.lstrip("-")) > digit_cap
                 or len(value.denominator.lstrip("-")) > digit_cap
             ):
-                raise ValueError(
+                raise _validation_error(
+                    "diophantine_approximation.component_digit_bound_exceeded",
                     "convergent numerators/denominators exceed the "
-                    f"{digit_cap}-digit bound implied by the admitted request"
+                    f"{digit_cap}-digit bound implied by the admitted request",
                 )
             numerator = parse_canonical_integer(value.numerator)
             denominator = parse_canonical_integer(value.denominator)
             if denominator <= 0:
-                raise ValueError("convergent denominators must be positive")
+                raise _validation_error(
+                    "diophantine_approximation.denominator_not_positive",
+                    "convergent denominators must be positive",
+                )
             if gcd(numerator, denominator) != 1:
-                raise ValueError(
-                    "convergent numerator/denominator pairs must be reduced"
+                raise _validation_error(
+                    "diophantine_approximation.pair_not_reduced",
+                    "convergent numerator/denominator pairs must be reduced",
                 )
 
         preperiod, period = _cf_coefficients(self.discriminant)
@@ -201,9 +234,10 @@ class ConvergentResult(StrictModel):
                 parse_canonical_integer(claimed.numerator) != p_prev1
                 or parse_canonical_integer(claimed.denominator) != q_prev1
             ):
-                raise ValueError(
+                raise _validation_error(
+                    "diophantine_approximation.recurrence_mismatch",
                     "convergents must replay the continuant recurrence of the "
-                    "canonical coefficient stream"
+                    "canonical coefficient stream",
                 )
         return self
 
@@ -215,8 +249,11 @@ class PellEquationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_squarefree(self) -> Self:
-        if not _is_square_free(self.discriminant):
-            raise ValueError("discriminant must be squarefree")
+        if not is_square_free(self.discriminant):
+            raise _validation_error(
+                "diophantine_approximation.discriminant_not_squarefree",
+                "discriminant must be squarefree",
+            )
         return self
 
 
@@ -230,8 +267,11 @@ class PellEquationResult(StrictModel):
 
     @model_validator(mode="after")
     def require_squarefree(self) -> Self:
-        if not _is_square_free(self.discriminant):
-            raise ValueError("discriminant must be squarefree")
+        if not is_square_free(self.discriminant):
+            raise _validation_error(
+                "diophantine_approximation.discriminant_not_squarefree",
+                "discriminant must be squarefree",
+            )
         return self
 
 

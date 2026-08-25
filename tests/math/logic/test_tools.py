@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -1020,6 +1021,47 @@ def test_solver_wraps_unrecognized_z3_exceptions_without_typed_exhaustion(
             "the Z3 backend failed during the bounded solve: backend exploded"
             in result.detail
         )
+
+
+@pytest.mark.parametrize(
+    ("operation", "accepted_request"),
+    (
+        (
+            solve_sat,
+            SatSolveRequest(
+                cnf=CanonicalCnf(variables=("x",), clauses=((1,),)),
+            ),
+        ),
+        (
+            solve_smt,
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib=(
+                    "(set-logic QF_LIA)\n"
+                    "(declare-const x Int)\n"
+                    "(assert (> x 0))\n"
+                    "(check-sat)"
+                ),
+            ),
+        ),
+    ),
+)
+def test_z3_initialization_failure_is_a_typed_unknown(
+    operation,
+    accepted_request,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed Z3 module initialization cannot escape an accepted request."""
+
+    monkeypatch.setitem(sys.modules, "z3", None)
+
+    result = operation(accepted_request)
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted is None
+    assert result.detail is not None
+    assert "could not initialize" in result.detail
+    assert type(result).model_validate(result.model_dump()) == result
 
 
 def test_unknown_projection_maps_every_exhausted_resource() -> None:

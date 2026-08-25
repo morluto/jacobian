@@ -887,12 +887,18 @@ def _solver_settings(timeout_ms: int) -> dict[str, int]:
 def solve_sat(request: SatSolveRequest) -> SatSolveResult:
     """Solve one bounded canonical CNF through the maintained Z3 Python binding."""
 
-    import z3  # type: ignore[import-untyped]
-
-    variables = tuple(z3.Bool(name) for name in request.cnf.variables)
-    solver = z3.Solver()
-    solver.set(**_solver_settings(request.timeout_ms))
     try:
+        import z3  # type: ignore[import-untyped]
+    except (ImportError, OSError) as exc:
+        return SatSolveResult(
+            outcome="UNKNOWN",
+            detail=f"the Z3 backend could not initialize: {exc}"[:1_024],
+        )
+
+    try:
+        variables = tuple(z3.Bool(name) for name in request.cnf.variables)
+        solver = z3.Solver()
+        solver.set(**_solver_settings(request.timeout_ms))
         for clause in request.cnf.clauses:
             terms = tuple(
                 variables[abs(literal) - 1]
@@ -911,7 +917,7 @@ def solve_sat(request: SatSolveRequest) -> SatSolveResult:
             return SatSolveResult(outcome="SAT", assignment=assignment)
         if outcome == z3.unsat:
             return SatSolveResult(outcome="UNSAT")
-    except z3.Z3Exception as exc:
+    except (OSError, z3.Z3Exception) as exc:
         exhausted = _classify_exhaustion(str(exc))
         if exhausted is not None:
             return SatSolveResult(
@@ -1070,17 +1076,24 @@ def check_sat_refutation(
 def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
     """Solve one bounded SMT-LIB query through the maintained Z3 Python binding."""
 
-    import z3
+    try:
+        import z3
+    except (ImportError, OSError) as exc:
+        return SmtSolveResult(
+            outcome="UNKNOWN",
+            detail=f"the Z3 backend could not initialize: {exc}"[:1_024],
+        )
 
     try:
         assertions = z3.parse_smt2_string(request.smtlib)
     except z3.Z3Exception as exc:
-        raise ValueError(
-            "SMT-LIB input could not be parsed by the declared logic"
-        ) from exc
-    solver = z3.SolverFor(request.logic.value)
-    solver.set(**_solver_settings(request.timeout_ms))
+        return SmtSolveResult(
+            outcome="UNKNOWN",
+            detail=f"the Z3 backend could not initialize: {exc}"[:1_024],
+        )
     try:
+        solver = z3.SolverFor(request.logic.value)
+        solver.set(**_solver_settings(request.timeout_ms))
         solver.add(assertions)
         outcome = solver.check()
         if outcome == z3.sat:
@@ -1093,7 +1106,7 @@ def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
             return SmtSolveResult(outcome="SAT", model_smtlib=model)
         if outcome == z3.unsat:
             return SmtSolveResult(outcome="UNSAT")
-    except z3.Z3Exception as exc:
+    except (OSError, z3.Z3Exception) as exc:
         exhausted = _classify_exhaustion(str(exc))
         if exhausted is not None:
             return SmtSolveResult(

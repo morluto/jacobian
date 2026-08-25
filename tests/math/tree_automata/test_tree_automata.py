@@ -28,6 +28,9 @@ from jacobian.math.tree_automata.operations import (
     run_tree_automaton,
 )
 from jacobian.math.tree_automata.values import (
+    MAX_REACHABILITY_WITNESS_NODES,
+    MAX_TA_TRANSITIONS,
+    MAX_TREE_AUTOMATON_REACHABILITY_WORK,
     BottomUpTreeAutomaton,
     RankedTree,
     TreeAutomatonTransition,
@@ -868,7 +871,11 @@ class TestValidation:
         assert "summed" in request_description
 
         automaton_description = request_schema["properties"]["automaton"]["description"]
-        assert "30,000,000 units" in automaton_description
+        assert f"{MAX_TA_TRANSITIONS} unique transitions" in automaton_description
+        assert "{MAX_REACHABILITY_WITNESS_NODES}" not in automaton_description
+        assert (
+            f"{MAX_TREE_AUTOMATON_REACHABILITY_WORK:,} units" in automaton_description
+        )
         assert "summed" in automaton_description
 
         witnesses_description = result_schema["properties"]["witnesses"]["description"]

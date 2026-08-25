@@ -10,6 +10,8 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.math.tree_automata.values import (
+    MAX_REACHABILITY_WITNESS_NODES,
+    MAX_TA_TRANSITIONS,
     MAX_TREE_AUTOMATON_REACHABILITY_WORK,
     BottomUpTreeAutomaton,
     RankedTree,
@@ -137,8 +139,8 @@ class TreeAutomatonReachabilityRequest(StrictModel):
 
     automaton: BottomUpTreeAutomaton = Field(
         description=(
-            "nondeterministic bottom-up tree automaton with at most 64 "
-            "states, 32 ranked symbols, and 4096 unique transitions. "
+            f"nondeterministic bottom-up tree automaton with at most 64 "
+            f"states, 32 ranked symbols, and {MAX_TA_TRANSITIONS} unique transitions. "
             "Requests are additionally rejected when the coupled "
             "reachability work envelope (MAX_TREE_AUTOMATON_REACHABILITY_"
             "WORK = 30,000,000 units, priced across the four passes behind "

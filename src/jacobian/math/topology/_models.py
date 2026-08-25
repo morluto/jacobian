@@ -181,68 +181,6 @@ def _collapse_remaining_facets(
     return _maximal_faces(remaining)
 
 
-def _shelling_restriction_failure(
-    facet_i: set[str],
-    prev_facets: list[set[str]],
-) -> str | None:
-    """Check the standard shelling restriction for one new facet.
-
-    ``R(F_i)`` — the faces of ``F_i`` contained in no earlier facet — must be
-    a nonempty interval of the face lattice, i.e. have exactly one minimal
-    face. Returns the failure description or ``None`` when the restriction is
-    admissible.
-    """
-
-    faces_not_in_prev: set[tuple[str, ...]] = set()
-    n = len(facet_i)
-    for r in range(1, n + 1):
-        for subset in combinations(sorted(facet_i), r):
-            face_set = set(subset)
-            if not any(face_set.issubset(pf) for pf in prev_facets):
-                faces_not_in_prev.add(subset)
-    if not faces_not_in_prev:
-        return "has no new faces"
-    face_sets = {frozenset(face) for face in faces_not_in_prev}
-    min_faces = [
-        face
-        for face in face_sets
-        if not any(other < face for other in face_sets if other != face)
-    ]
-    if len(min_faces) != 1:
-        return "restriction is not an interval"
-    return None
-
-
-def _evaluate_shelling(
-    facets: tuple[Simplex, ...],
-    facet_order: tuple[int, ...],
-) -> tuple[bool, int | None, str | None]:
-    """Recompute the shelling decision for a submitted facet order."""
-
-    dim = len(facets[0])
-    if not all(len(facet) == dim for facet in facets):
-        return False, 0, "complex is not pure"
-
-    for i, idx in enumerate(order := facet_order):
-        facet_i = set(facets[idx])
-        if i == 0:
-            continue
-        prev_facets = [set(facets[order[j]]) for j in range(i)]
-        for j in range(i):
-            intersection = facet_i & set(facets[order[j]])
-            if intersection == facet_i:
-                return (
-                    False,
-                    i,
-                    f"facet {idx} is contained in earlier facet",
-                )
-        failure = _shelling_restriction_failure(facet_i, prev_facets)
-        if failure is not None:
-            return False, i, f"facet {idx} {failure}"
-
-    return True, None, None
-
-
 class _PseudomanifoldExpectation(NamedTuple):
     """Recomputed pseudomanifold decision for one facet family."""
 
@@ -993,11 +931,11 @@ class ChainComplexResult(TopologyExactResult):
         # The canonical value is part of the public result boundary: an
         # unreduced GF(p) producer result must carry it exactly, and no
         # other ring or convention admits one.
-        from jacobian.math.topology._operations import (
-            _canonical_value_from_parts,
+        from jacobian.math.topology._chain_conversion import (
+            canonical_chain_complex_value_from_parts,
         )
 
-        expected_value = _canonical_value_from_parts(
+        expected_value = canonical_chain_complex_value_from_parts(
             self.coefficient_ring,
             self.convention,
             self.prime,
@@ -2108,7 +2046,9 @@ class ShellingCheckResult(TopologyExactResult):
             )
         # Replay the shelling condition over the retained complex and order so
         # an authored decision cannot validate independently of its source.
-        expected_is_shelling, expected_failed_at, expected_reason = _evaluate_shelling(
+        from jacobian.math.topology._shelling import evaluate_shelling
+
+        expected_is_shelling, expected_failed_at, expected_reason = evaluate_shelling(
             self.complex.facets, self.facet_order
         )
         if self.is_shelling != expected_is_shelling:

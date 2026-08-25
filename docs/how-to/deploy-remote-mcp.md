@@ -61,7 +61,9 @@ uv run jacobian-remote-mcp \
 Put a TLS-terminating reverse proxy in front of the bound address. The public
 URL must route `/mcp` without stripping the path. For a disposable local
 transport test, use `--allow-anonymous`; never expose that mode as an
-authenticated service.
+authenticated service. Streamable HTTP is stateless by default. Use
+`--stateful-http` only when the deployment deliberately provides stateful
+session handling.
 
 ## Install the example service files
 

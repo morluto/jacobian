@@ -15,7 +15,6 @@ ExecStart=/usr/bin/env /opt/jacobian/current/.venv/bin/jacobian-remote-mcp \
   --host 127.0.0.1 \
   --port 8765 \
   --path /mcp \
-  --stateless-http \
   --auth-tokens-file %d/tokens.json \
   --public-base-url https://math-tools.example.org
 Restart=on-failure

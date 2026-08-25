@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from itertools import pairwise
 from typing import Literal, Self
 
 from pydantic import Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -36,15 +38,15 @@ def require_matrix_scalar_digits(
         for value in row:
             components = (value,) if isinstance(value, str) else (value.num, value.den)
             if any(len(component.lstrip("-")) > maximum for component in components):
-                raise ValueError(
-                    f"{label} scalars are limited to {maximum} decimal digits"
+                raise _validation_error(
+                    "budget_exceeded",
+                    f"{label} scalars are limited to {maximum} decimal digits",
                 )
 
 
 class RationalMatrix(StrictModel):
     """One nonempty rectangular matrix over canonical rationals."""
 
-    matrix_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     entries: tuple[tuple[CanonicalRational, ...], ...] = Field(
         min_length=1,
@@ -55,12 +57,15 @@ class RationalMatrix(StrictModel):
     def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
         if column_count == 0 or column_count > MAX_RATIONAL_MATRIX_ORDER:
-            raise ValueError(
+            raise _validation_error(
+                "budget_exceeded",
                 "matrix rows must contain between 1 and "
-                f"{MAX_RATIONAL_MATRIX_ORDER} entries"
+                f"{MAX_RATIONAL_MATRIX_ORDER} entries",
             )
         if any(len(row) != column_count for row in self.entries):
-            raise ValueError("matrix rows must all have the same length")
+            raise _validation_error(
+                "budget_exceeded", "matrix rows must all have the same length"
+            )
         require_matrix_scalar_digits(
             self.entries,
             maximum=MAX_MATRIX_SCALAR_DIGITS,
@@ -69,10 +74,22 @@ class RationalMatrix(StrictModel):
         return self
 
 
+def rational_matrix_from_fractions(
+    entries: tuple[tuple[Fraction, ...], ...] | list[list[Fraction]],
+) -> RationalMatrix:
+    """Construct the canonical dense rational matrix from exact fractions."""
+
+    return RationalMatrix(
+        entries=tuple(
+            tuple(CanonicalRational.from_fraction(value) for value in row)
+            for row in entries
+        )
+    )
+
+
 class RealQuadraticMatrix(StrictModel):
     """One nonempty rectangular matrix over a shared real quadratic field."""
 
-    matrix_schema_version: Literal["1"] = "1"
     domain: Literal["QQ_SQRT_D"] = "QQ_SQRT_D"
     entries: tuple[tuple[RealQuadraticValue, ...], ...] = Field(
         min_length=1,
@@ -87,13 +104,18 @@ class RealQuadraticMatrix(StrictModel):
     def require_rectangular_shared_field(self) -> Self:
         column_count = len(self.entries[0])
         if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
-            raise ValueError("matrix rows must contain between 1 and 32 entries")
+            raise _validation_error(
+                "shape_mismatch", "matrix rows must contain between 1 and 32 entries"
+            )
         if any(len(row) != column_count for row in self.entries):
-            raise ValueError("matrix rows must all have the same length")
+            raise _validation_error(
+                "shape_mismatch", "matrix rows must all have the same length"
+            )
         radicand = self.entries[0][0].radicand
         if any(entry.radicand != radicand for row in self.entries for entry in row):
-            raise ValueError(
-                "every matrix entry must belong to one shared real quadratic field"
+            raise _validation_error(
+                "shape_mismatch",
+                "every matrix entry must belong to one shared real quadratic field",
             )
         return self
 
@@ -101,7 +123,6 @@ class RealQuadraticMatrix(StrictModel):
 class IntegerMatrix(StrictModel):
     """One nonempty rectangular matrix over exact canonical integers."""
 
-    matrix_schema_version: Literal["1"] = "1"
     domain: Literal["ZZ"] = "ZZ"
     entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
         min_length=1,
@@ -112,9 +133,13 @@ class IntegerMatrix(StrictModel):
     def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
         if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
-            raise ValueError("matrix rows must contain between 1 and 32 entries")
+            raise _validation_error(
+                "budget_exceeded", "matrix rows must contain between 1 and 32 entries"
+            )
         if any(len(row) != column_count for row in self.entries):
-            raise ValueError("matrix rows must all have the same length")
+            raise _validation_error(
+                "budget_exceeded", "matrix rows must all have the same length"
+            )
         require_matrix_scalar_digits(
             self.entries,
             maximum=MAX_MATRIX_SCALAR_DIGITS,
@@ -141,23 +166,32 @@ class SmithNormalForm(StrictModel):
         rows = len(self.normal_form.entries)
         columns = len(self.normal_form.entries[0])
         if len(self.invariant_factors) != self.rank:
-            raise ValueError("nonzero invariant factor count must equal rank")
+            raise _validation_error(
+                "shape_mismatch", "nonzero invariant factor count must equal rank"
+            )
         if self.rank > min(rows, columns):
-            raise ValueError("Smith rank cannot exceed the matrix dimensions")
+            raise _validation_error(
+                "shape_mismatch", "Smith rank cannot exceed the matrix dimensions"
+            )
         factors = tuple(
             parse_canonical_integer(value) for value in self.invariant_factors
         )
         if any(value <= 0 for value in factors):
-            raise ValueError("Smith invariant factors must be positive")
+            raise _validation_error(
+                "shape_mismatch", "Smith invariant factors must be positive"
+            )
         if any(right % left != 0 for left, right in pairwise(factors)):
-            raise ValueError("each Smith invariant factor must divide the next")
+            raise _validation_error(
+                "shape_mismatch", "each Smith invariant factor must divide the next"
+            )
         for row, entries in enumerate(self.normal_form.entries):
             for column, value in enumerate(entries):
                 expected = factors[row] if row == column and row < self.rank else 0
                 if parse_canonical_integer(value) != expected:
-                    raise ValueError(
+                    raise _validation_error(
+                        "budget_exceeded",
                         "Smith normal form must contain its positive invariant "
-                        "factors on the leading diagonal and zero elsewhere"
+                        "factors on the leading diagonal and zero elsewhere",
                     )
         return self
 
@@ -168,8 +202,9 @@ class SmithNormalForm(StrictModel):
     ) -> tuple[CanonicalInteger, ...]:
         for value in values:
             if len(value.lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS:
-                raise ValueError(
-                    f"matrix scalars are limited to {MAX_MATRIX_SCALAR_DIGITS} decimal digits"
+                raise _validation_error(
+                    "budget_exceeded",
+                    f"matrix scalars are limited to {MAX_MATRIX_SCALAR_DIGITS} decimal digits",
                 )
         return values
 
@@ -182,5 +217,10 @@ __all__ = [
     "RationalMatrix",
     "RealQuadraticMatrix",
     "SmithNormalForm",
+    "rational_matrix_from_fractions",
     "require_matrix_scalar_digits",
 ]
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"matrix.{reason}", message)

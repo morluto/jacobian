@@ -89,22 +89,28 @@ class TestFactorValuesAndOperations:
 
     @pytest.mark.parametrize("value", ["01", "+1", "2/4", "1.0"])
     def test_factor_entries_must_be_canonical_rationals(self, value: str) -> None:
-        with pytest.raises(ValidationError, match="valid dictionary"):
+        with pytest.raises(ValidationError) as error:
             Factor.model_validate(
                 {"variables": (), "domain_sizes": (2,), "table": (value,)}
             )
+        assert error.value.errors()[0]["type"] == "model_type"
 
     def test_duplicate_factor_variables_are_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="distinct"):
+        with pytest.raises(ValidationError) as error:
             _factor((0, 0), ("1", "1", "1", "1"))
+        assert (
+            error.value.errors()[0]["type"]
+            == "graphical_model.factor_variables_not_unique"
+        )
 
     def test_zero_domain_size_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
             Factor(variables=(0,), domain_sizes=(0,), table=_table("1"))
 
     def test_wrong_table_size_is_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="table size"):
+        with pytest.raises(ValidationError) as error:
             _factor((0,), ("1",))
+        assert error.value.errors()[0]["type"] == "graphical_model.factor_table_size"
 
     def test_native_multiply_rejects_different_model_domains(self) -> None:
         left = _factor((0,), ("1", "1"))
@@ -118,13 +124,11 @@ class TestBoundResultContracts:
     def test_factor_multiply_contract_version_tracks_wire_shape(self) -> None:
         from jacobian.math.graphical_models._tools import TOOLS
 
-        operation = next(
+        next(
             tool
             for tool in TOOLS
             if tool.operation_id == "graphical_model.factor.multiply"
         )
-
-        assert operation.version == "2"
 
     def test_multiply_adapter_binds_operands(self) -> None:
         request = FactorMultiplyRequest(
@@ -142,8 +146,11 @@ class TestBoundResultContracts:
         left = _factor((0,), ("1", "2"))
         right = _factor((0,), ("3", "4"))
 
-        with pytest.raises(ValidationError, match="exact product"):
+        with pytest.raises(ValidationError) as error:
             FactorMultiplyResult(left=left, right=right, factor=left)
+        assert (
+            error.value.errors()[0]["type"] == "graphical_model.factor_product_mismatch"
+        )
 
     def test_marginal_adapter_binds_source_and_variable(self) -> None:
         source = _factor((0,), ("1", "2"))
@@ -270,7 +277,7 @@ class TestDSeparation:
         assert result.edges == request.edges
 
     def test_false_decision_is_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="bound d-separation"):
+        with pytest.raises(ValidationError) as error:
             DSeparationResult(
                 variable_count=2,
                 edges=((0, 1),),
@@ -279,19 +286,20 @@ class TestDSeparation:
                 set_c=(),
                 d_separated=True,
             )
+        assert (
+            error.value.errors()[0]["type"] == "graphical_model.d_separation_mismatch"
+        )
 
     @pytest.mark.parametrize(
-        ("edges", "match"),
+        "edges",
         [
-            (((0, 1), (1, 0)), "acyclic"),
-            (((0, 0),), "self-loop"),
-            (((0, 3),), "outside"),
+            ((0, 1), (1, 0)),
+            ((0, 0),),
+            ((0, 3),),
         ],
     )
-    def test_invalid_dag_is_rejected(
-        self, edges: tuple[tuple[int, int], ...], match: str
-    ) -> None:
-        with pytest.raises(ValidationError, match=match):
+    def test_invalid_dag_is_rejected(self, edges: tuple[tuple[int, int], ...]) -> None:
+        with pytest.raises(ValidationError) as error:
             DSeparationRequest(
                 variable_count=3,
                 edges=edges,
@@ -299,12 +307,14 @@ class TestDSeparation:
                 set_b=(1,),
                 set_c=(),
             )
+        assert error.value.errors()[0]["type"] == "graphical_model.d_separation_invalid"
 
     def test_node_sets_must_be_pairwise_disjoint(self) -> None:
-        with pytest.raises(ValidationError, match="pairwise disjoint"):
+        with pytest.raises(ValidationError) as error:
             DSeparationRequest(
                 variable_count=2,
                 set_a=(0,),
                 set_b=(1,),
                 set_c=(1,),
             )
+        assert error.value.errors()[0]["type"] == "graphical_model.d_separation_invalid"

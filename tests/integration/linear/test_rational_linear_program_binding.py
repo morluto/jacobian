@@ -7,6 +7,7 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
+from tests.integration.linear._support import linear_validation_error
 from tests.support.rationals import rational_payload as q
 
 from jacobian.math.optimization._models import (
@@ -163,12 +164,6 @@ def test_empty_row_program_is_the_admitted_unconstrained_orthant() -> None:
     assert program.rhs == ()
 
 
-def test_operation_version_tracks_the_source_bound_wire_shape() -> None:
-    versions = {tool.operation_id: tool.version for tool in OPTIMIZATION_TOOLS}
-
-    assert versions["optimization.linear.rational_optimum.compute"] == "2"
-
-
 def test_fully_authored_optimal_payload_is_rejected() -> None:
     program = StandardFormRationalLinearProgram.model_validate(BOUND_PROGRAM)
     with pytest.raises(ValidationError):
@@ -182,7 +177,7 @@ def test_fully_authored_optimal_payload_is_rejected() -> None:
             dual_objective=q(-123),
             dual_slacks=(q(-88), q(88)),
         )
-    with pytest.raises(ValidationError, match="program"):
+    with linear_validation_error():
         RationalLinearProgramResult.model_validate(
             {
                 "status": "OPTIMAL",
@@ -244,14 +239,14 @@ def test_mutated_dual_candidate_rejects_despite_matching_objective() -> None:
 def test_nonzero_submitted_residuals_cannot_validate_as_optimal() -> None:
     _, dumped = _bound_result()
     dumped["primal_residuals"] = [q(0), q(7)]
-    with pytest.raises(ValidationError, match="residuals"):
+    with linear_validation_error():
         RationalLinearProgramResult.model_validate(dumped)
 
 
 def test_negative_submitted_slacks_cannot_validate_as_optimal() -> None:
     _, dumped = _bound_result()
     dumped["dual_slacks"] = [q(-1), q(0)]
-    with pytest.raises(ValidationError, match="slacks"):
+    with linear_validation_error():
         RationalLinearProgramResult.model_validate(dumped)
 
 
@@ -267,7 +262,7 @@ def test_feasible_point_without_dual_remains_only_primal_feasible() -> None:
     assert feasible.status == "PRIMAL_FEASIBLE"
     assert feasible.dual_candidate is None
     assert feasible.dual_objective is None
-    with pytest.raises(ValidationError, match="only an optimal"):
+    with linear_validation_error():
         RationalLinearProgramResult(
             status="PRIMAL_FEASIBLE",
             program=program,
@@ -284,7 +279,7 @@ def test_corrupted_farkas_certificates_are_rejected() -> None:
     program = StandardFormRationalLinearProgram.model_validate(INFEASIBLE_PROGRAM)
 
     # Flipping every sign breaks A^T y >= 0 for this program.
-    with pytest.raises(ValidationError, match="Farkas"):
+    with linear_validation_error():
         RationalLinearProgramResult(
             status="INFEASIBLE",
             program=program,
@@ -292,7 +287,7 @@ def test_corrupted_farkas_certificates_are_rejected() -> None:
                 q(-value.numerator, value.denominator) for value in witness
             ),
         )
-    with pytest.raises(ValidationError, match="Farkas"):
+    with linear_validation_error():
         RationalLinearProgramResult(
             status="INFEASIBLE",
             program=program,
@@ -328,16 +323,16 @@ def test_corrupted_unboundedness_pairs_are_rejected() -> None:
         )
 
     # The zero ray satisfies Ad=0 but does not strictly improve c^T d.
-    with pytest.raises(ValidationError, match="recession direction"):
+    with linear_validation_error():
         unbounded_with((q(0), q(0)))
     # (2,1) is nonnegative but violates A d = 0.
-    with pytest.raises(ValidationError, match="Ad=0"):
+    with linear_validation_error():
         unbounded_with((q(2), q(1)))
     negated_ray = [q(-value.numerator, value.denominator) for value in _fractions(ray)]
-    with pytest.raises(ValidationError, match="nonnegative"):
+    with linear_validation_error():
         unbounded_with(tuple(negated_ray))
     # An infeasible retained point cannot anchor an unbounded outcome.
-    with pytest.raises(ValidationError, match="equalities"):
+    with linear_validation_error():
         RationalLinearProgramResult(
             status="UNBOUNDED",
             program=program,
@@ -354,9 +349,9 @@ def test_dimension_mismatches_are_rejected_against_the_retained_source() -> None
 
     long_dump = copy.deepcopy(dumped)
     long_dump["primal_candidate"] = [q(1), q(1), q(1)]
-    with pytest.raises(ValidationError, match="length must match the source"):
+    with linear_validation_error():
         RationalLinearProgramResult.model_validate(long_dump)
-    with pytest.raises(ValidationError, match="length must match the source"):
+    with linear_validation_error():
         RationalLinearProgramResult(
             status="PRIMAL_FEASIBLE",
             program=program,
@@ -364,7 +359,7 @@ def test_dimension_mismatches_are_rejected_against_the_retained_source() -> None
             primal_objective=q(1),
             primal_residuals=(q(0), q(0)),
         )
-    with pytest.raises(ValidationError, match="length must match the source"):
+    with linear_validation_error():
         RationalLinearProgramResult(
             status="OPTIMAL",
             program=program,
@@ -383,15 +378,13 @@ def test_unknown_outcome_carries_no_mathematical_claim() -> None:
 
     assert unknown.status == "UNKNOWN"
     assert unknown.primal_candidate is None
-    with pytest.raises(ValidationError, match="cannot carry primal data"):
+    with linear_validation_error():
         RationalLinearProgramResult(
             status="UNKNOWN",
             program=program,
             primal_candidate=(q(1), q(1)),
         )
-    with pytest.raises(
-        ValidationError, match="require exactly one feasible primal point"
-    ):
+    with linear_validation_error():
         RationalLinearProgramResult(status="UNBOUNDED", program=program)
 
 

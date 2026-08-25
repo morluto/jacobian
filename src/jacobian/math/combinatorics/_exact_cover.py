@@ -10,7 +10,6 @@ from jacobian.math.combinatorics.exact_cover import (
 
 GENERALIZED_EXACT_COVER_OPERATION = MathTool(
     operation_id="combinatorics.generalized_exact_cover.find",
-    version="1",
     title="Find a generalized exact cover",
     description=(
         "Find one row family that covers every primary item exactly once and "

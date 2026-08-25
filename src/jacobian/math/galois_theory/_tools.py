@@ -33,11 +33,9 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -68,7 +66,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"field_order": 5, "coefficients": [1, 0, 1]},
             ),
         ),
-        version="2",
     ),
     _op(
         "polynomial.galois.frobenius_cycle.compute",
@@ -92,7 +89,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "polynomial.galois_group.compute",
@@ -113,7 +109,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"coefficients": [-2, 0, 1]},
             ),
         ),
-        version="2",
     ),
     _op(
         "polynomial.solvable_by_radicals.decide",
@@ -133,7 +128,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"coefficients": [-2, 0, 0, 1]},
             ),
         ),
-        version="2",
     ),
 )
 

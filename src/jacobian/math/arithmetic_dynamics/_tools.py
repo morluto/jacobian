@@ -39,11 +39,9 @@ def _op[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -80,7 +78,6 @@ ARITHMETIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "arithmetic_dynamics.point.orbit.compute",
@@ -111,7 +108,6 @@ ARITHMETIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "arithmetic_dynamics.dynatomic_polynomial.compute",
@@ -139,7 +135,6 @@ ARITHMETIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "arithmetic_dynamics.cycle.multiplier.compute",
@@ -169,7 +164,6 @@ ARITHMETIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "arithmetic_dynamics.finite_field.functional_graph.compute",

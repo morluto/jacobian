@@ -5,8 +5,12 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs.optimization._graph_validation import (
+    require_simple_undirected_graph,
+)
 
 GraphVertex = Annotated[
     str,
@@ -17,25 +21,12 @@ GraphVertex = Annotated[
 class ChromaticGraph(StrictModel):
     """A bounded simple undirected graph, accepting either edge orientation."""
 
-    graph_schema_version: Literal["1"] = "1"
     vertices: tuple[GraphVertex, ...] = Field(max_length=32)
     edges: tuple[tuple[GraphVertex, GraphVertex], ...] = Field(max_length=496)
 
     @model_validator(mode="after")
     def require_simple_graph(self) -> Self:
-        vertex_set = set(self.vertices)
-        if len(vertex_set) != len(self.vertices):
-            raise ValueError("graph vertices must be unique")
-        normalized_edges = {tuple(sorted((left, right))) for left, right in self.edges}
-        if any(left == right for left, right in self.edges):
-            raise ValueError("graph edges must not contain self-loops")
-        if any(
-            left not in vertex_set or right not in vertex_set
-            for left, right in self.edges
-        ):
-            raise ValueError("graph edges must reference declared vertices")
-        if len(normalized_edges) != len(self.edges):
-            raise ValueError("graph edges must be unique ignoring orientation")
+        require_simple_undirected_graph(self.vertices, self.edges)
         return self
 
 
@@ -50,25 +41,12 @@ class PolynomialTimeGraph(StrictModel):
     :class:`ChromaticGraph` (32 vertices) or their own tighter budgets.
     """
 
-    graph_schema_version: Literal["1"] = "1"
     vertices: tuple[GraphVertex, ...] = Field(max_length=256)
     edges: tuple[tuple[GraphVertex, GraphVertex], ...] = Field(max_length=32640)
 
     @model_validator(mode="after")
     def require_simple_graph(self) -> Self:
-        vertex_set = set(self.vertices)
-        if len(vertex_set) != len(self.vertices):
-            raise ValueError("graph vertices must be unique")
-        normalized_edges = {tuple(sorted((left, right))) for left, right in self.edges}
-        if any(left == right for left, right in self.edges):
-            raise ValueError("graph edges must not contain self-loops")
-        if any(
-            left not in vertex_set or right not in vertex_set
-            for left, right in self.edges
-        ):
-            raise ValueError("graph edges must reference declared vertices")
-        if len(normalized_edges) != len(self.edges):
-            raise ValueError("graph edges must be unique ignoring orientation")
+        require_simple_undirected_graph(self.vertices, self.edges)
         return self
 
 
@@ -111,17 +89,31 @@ class GraphChromaticNumberOutput(StrictModel):
     @model_validator(mode="after")
     def bind_result_status(self) -> Self:
         if len(set(self.vertices)) != len(self.vertices):
-            raise ValueError("result vertices must be unique")
+            raise PydanticCustomError(
+                "graph.result_vertices_must_be_unique", "result vertices must be unique"
+            )
         if self.order != len(self.vertices):
-            raise ValueError("result order must match the vertex list")
+            raise PydanticCustomError(
+                "graph.result_order_must_match_the_vertex_list",
+                "result order must match the vertex list",
+            )
         if self.lower_bound > self.upper_bound:
-            raise ValueError("chromatic bounds must be ordered")
+            raise PydanticCustomError(
+                "graph.chromatic_bounds_must_be_ordered",
+                "chromatic bounds must be ordered",
+            )
         if self.coloring is not None and set(self.coloring) != set(self.vertices):
-            raise ValueError("coloring must assign every result vertex")
+            raise PydanticCustomError(
+                "graph.coloring_must_assign_every_result_vertex",
+                "coloring must assign every result vertex",
+            )
         if self.coloring is not None and any(
             color < 0 or color >= self.upper_bound for color in self.coloring.values()
         ):
-            raise ValueError("coloring values must lie below the upper bound")
+            raise PydanticCustomError(
+                "graph.coloring_values_must_lie_below_the_upper_bound",
+                "coloring values must lie below the upper bound",
+            )
         if self.status == "EXACT":
             if (
                 self.chromatic_number is None
@@ -130,7 +122,13 @@ class GraphChromaticNumberOutput(StrictModel):
                 or self.coloring is None
                 or self.solver_status not in {"SATISFIABLE", "SPECIAL_CASE"}
             ):
-                raise ValueError("exact result evidence is incomplete")
+                raise PydanticCustomError(
+                    "graph.exact_result_evidence_is_incomplete",
+                    "exact result evidence is incomplete",
+                )
         elif self.chromatic_number is not None:
-            raise ValueError("unknown result cannot carry a chromatic number")
+            raise PydanticCustomError(
+                "graph.unknown_result_cannot_carry_a_chromatic_number",
+                "unknown result cannot carry a chromatic number",
+            )
         return self

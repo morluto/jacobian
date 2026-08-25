@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
+from tests.dispatch._support import dispatch_validation_error
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import (
@@ -76,7 +76,7 @@ def test_variable_label_bound_is_the_interoperable_integer_maximum():
     result = compute_critical_pairs(request)
     assert result.profile.candidates == ()
     assert result.profile.pairs == ()
-    with pytest.raises(ValidationError, match=str(widest)):
+    with dispatch_validation_error():
         CriticalPairsRequest.model_validate(
             {
                 "signature": {"arities": [1]},

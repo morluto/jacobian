@@ -2,7 +2,7 @@
 
 import pytest
 import z3  # type: ignore[import-untyped]
-from pydantic import ValidationError
+from tests.dispatch._support import dispatch_validation_error
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
@@ -33,7 +33,7 @@ def test_math_run_rejects_infeasible_backend_candidate(
         return z3.sat, ("a", "b", "c"), ""
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
-    with pytest.raises(ValidationError, match="no complete hyperedge"):
+    with dispatch_validation_error():
         invoke_operation(
             "hypergraph.independence_number.compute", _TRIPLE, Catalog.open()
         )

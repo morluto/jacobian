@@ -20,7 +20,6 @@ from jacobian.math.logic._operations import CanonicalCnf
                 "characteristic",
                 "modulus_coefficients",
                 "generator",
-                "element_encoding_version",
             ),
         ),
     ),

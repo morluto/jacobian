@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
@@ -24,7 +25,7 @@ def require_map_polynomial(polynomial: RationalPolynomial, *, label: str) -> Non
     """Apply the shared polynomial-map representation budget."""
 
     if len(polynomial.variables) > MAX_MAP_INPUTS:
-        raise ValueError(f"{label} exceeds the {MAX_MAP_INPUTS}-variable budget")
+        raise _validation_error(f"{label} exceeds the {MAX_MAP_INPUTS}-variable budget")
     require_polynomial_budget(
         polynomial,
         maximum_terms=MAX_MAP_POLYNOMIAL_TERMS,
@@ -36,7 +37,13 @@ def require_map_polynomial(polynomial: RationalPolynomial, *, label: str) -> Non
         sum(term.exponents) > MAX_MAP_POLYNOMIAL_EXPONENT
         for term in polynomial.polynomial.terms
     ):
-        raise ValueError(f"{label} exceeds total degree {MAX_MAP_POLYNOMIAL_EXPONENT}")
+        raise _validation_error(
+            f"{label} exceeds total degree {MAX_MAP_POLYNOMIAL_EXPONENT}"
+        )
+
+
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("polynomial.map_value_invariant", message)
 
 
 class RationalPolynomialMap(StrictModel):
@@ -46,7 +53,6 @@ class RationalPolynomialMap(StrictModel):
     same explicitly ordered source polynomial ring.
     """
 
-    polynomial_map_schema_version: Literal["1"] = "1"
     input_variables: tuple[PolynomialVariable, ...] = Field(
         min_length=1,
         max_length=MAX_MAP_INPUTS,
@@ -64,11 +70,11 @@ class RationalPolynomialMap(StrictModel):
     @model_validator(mode="after")
     def require_one_map_ring(self) -> Self:
         if len(set(self.input_variables)) != len(self.input_variables):
-            raise ValueError("input variables must be unique")
+            raise _validation_error("input variables must be unique")
         for polynomial in self.output_polynomials:
             require_map_polynomial(polynomial, label="map output polynomial")
             if polynomial.variables != self.input_variables:
-                raise ValueError(
+                raise _validation_error(
                     "every map output must use the complete ordered input axis"
                 )
         return self

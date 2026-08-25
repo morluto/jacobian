@@ -38,7 +38,6 @@ _FIELD: dict[str, object] = {
     "characteristic": 2,
     "modulus_coefficients": [1, 1, 1],
     "generator": "a",
-    "element_encoding_version": "power-basis-v1",
 }
 _ROWS: dict[str, object] = {"name": "b", "labels": ["b1", "b2"]}
 _IMAGE: dict[str, object] = {"name": "image", "labels": ["y1"]}
@@ -162,7 +161,6 @@ def _analyze_permutation(request: PermutationRequest) -> PermutationResult:
 def finite_field_operations() -> MathTools:
     projective_line_operation = MathTool(
         operation_id="finite_field.projective_line.enumerate",
-        version="2",
         request_type=ProjectiveLineRequest,
         result_type=ProjectiveLine,
         run=_enumerate_projective_line,
@@ -179,7 +177,6 @@ def finite_field_operations() -> MathTools:
     )
     restrict_operation = MathTool(
         operation_id="finite_field.restrict_scalars.compute",
-        version="2",
         request_type=RestrictScalarsRequest,
         result_type=FiniteLinearMap,
         run=_restrict,
@@ -196,7 +193,6 @@ def finite_field_operations() -> MathTools:
     )
     rank_operation = MathTool(
         operation_id="finite_field.linear_map.rank.compute",
-        version="2",
         request_type=LinearMapRankRequest,
         result_type=RankResult,
         run=_rank,
@@ -213,7 +209,6 @@ def finite_field_operations() -> MathTools:
     )
     ledger_operation = MathTool(
         operation_id="finite_field.direction_rank_ledger.compute",
-        version="2",
         request_type=DirectionRankLedgerRequest,
         result_type=DirectionRankLedger,
         run=_ledger,
@@ -230,7 +225,6 @@ def finite_field_operations() -> MathTools:
     )
     orbit_operation = MathTool(
         operation_id="finite_field.orbit_distribution.compute",
-        version="2",
         request_type=OrbitDistributionRequest,
         result_type=OrbitDistribution,
         run=_orbit_distribution,
@@ -247,7 +241,6 @@ def finite_field_operations() -> MathTools:
     )
     table_operation = MathTool(
         operation_id="finite_field.polynomial_map.table.compute",
-        version="2",
         request_type=FiniteMapTableRequest,
         result_type=FiniteMapTable,
         run=_finite_map_table,
@@ -264,7 +257,6 @@ def finite_field_operations() -> MathTools:
     )
     fiber_operation = MathTool(
         operation_id="finite_field.polynomial_map.fibers.compute",
-        version="2",
         request_type=FiberPartitionRequest,
         result_type=FiberPartition,
         run=_fiber_partition,
@@ -281,7 +273,6 @@ def finite_field_operations() -> MathTools:
     )
     collision_operation = MathTool(
         operation_id="finite_field.polynomial_map.collision.analyze",
-        version="2",
         request_type=CollisionRequest,
         result_type=CollisionResult,
         run=_analyze_collisions,
@@ -298,7 +289,6 @@ def finite_field_operations() -> MathTools:
     )
     permutation_operation = MathTool(
         operation_id="finite_field.polynomial_map.permutation.analyze",
-        version="2",
         request_type=PermutationRequest,
         result_type=PermutationResult,
         run=_analyze_permutation,

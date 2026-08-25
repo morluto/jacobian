@@ -208,7 +208,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             )
             assert isinstance(matching_description.structured_content, dict)
             matching_contract = matching_description.structured_content
-            assert matching_contract["operation"]["version"] == "3"
+            assert "version" not in matching_contract["operation"]
             assert matching_contract["operation"]["examples"], (
                 "operation must publish at least one invocation example"
             )

@@ -22,7 +22,6 @@ from jacobian.math.posets._closure_operations import (
 CLOSURE_OPERATIONS: MathTools = (
     MathTool(
         operation_id="poset.lower_closure.compute",
-        version="2",
         title="Compute lower closure of a poset subset",
         description=(
             "Compute the lower closure \u2193S = {x : x \u2264 s for some s in S} "
@@ -56,7 +55,7 @@ CLOSURE_OPERATIONS: MathTools = (
                             {"element": "b", "rank": 1},
                             {"element": "c", "rank": 2},
                         ],
-                        "poset_digest": "sha256:af53d0ee18b87ccc0b5987c289c88d2139afb880eb6756a44f6bb002ea785a70",
+                        "poset_digest": "sha256:7505e31e11f07f0026eece8ce9621dd0dae51e613b8dfee93da02348bb80c95f",
                     },
                     "subset": ["c"],
                 },
@@ -65,7 +64,6 @@ CLOSURE_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="poset.upper_closure.compute",
-        version="2",
         title="Compute upper closure of a poset subset",
         description=(
             "Compute the upper closure \u2191S = {x : s \u2264 x for some s in S} "
@@ -99,7 +97,7 @@ CLOSURE_OPERATIONS: MathTools = (
                             {"element": "b", "rank": 1},
                             {"element": "c", "rank": 2},
                         ],
-                        "poset_digest": "sha256:af53d0ee18b87ccc0b5987c289c88d2139afb880eb6756a44f6bb002ea785a70",
+                        "poset_digest": "sha256:7505e31e11f07f0026eece8ce9621dd0dae51e613b8dfee93da02348bb80c95f",
                     },
                     "subset": ["a"],
                 },
@@ -108,7 +106,6 @@ CLOSURE_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="poset.dual.compute",
-        version="2",
         title="Compute the dual of a finite poset",
         description=(
             "Return the same element domain with the order reversed, plus the "
@@ -143,7 +140,7 @@ CLOSURE_OPERATIONS: MathTools = (
                             {"element": "b", "rank": 1},
                             {"element": "c", "rank": 2},
                         ],
-                        "poset_digest": "sha256:af53d0ee18b87ccc0b5987c289c88d2139afb880eb6756a44f6bb002ea785a70",
+                        "poset_digest": "sha256:7505e31e11f07f0026eece8ce9621dd0dae51e613b8dfee93da02348bb80c95f",
                     },
                 },
             ),
@@ -151,7 +148,6 @@ CLOSURE_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="poset.induced_subposet.compute",
-        version="2",
         title="Compute the induced subposet on a subset",
         description=(
             "Return the restricted order, cover relation, and old/new element map "
@@ -186,7 +182,7 @@ CLOSURE_OPERATIONS: MathTools = (
                             {"element": "b", "rank": 1},
                             {"element": "c", "rank": 2},
                         ],
-                        "poset_digest": "sha256:af53d0ee18b87ccc0b5987c289c88d2139afb880eb6756a44f6bb002ea785a70",
+                        "poset_digest": "sha256:7505e31e11f07f0026eece8ce9621dd0dae51e613b8dfee93da02348bb80c95f",
                     },
                     "subset": ["a", "b"],
                 },

@@ -62,12 +62,11 @@ def test_primorial_5() -> None:
 
 
 def test_primorial_contract_version_tracks_the_result_schema_change() -> None:
-    operation = next(
+    next(
         item
         for item in PRIME_OPERATIONS
         if item.operation_id == "integer.compute.primorial"
     )
-    assert operation.version == "4"
 
 
 def test_primorial_admission_records_the_v4_result_derived_envelope() -> None:

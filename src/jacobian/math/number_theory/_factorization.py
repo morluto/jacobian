@@ -82,11 +82,9 @@ def _operation[RequestT: StrictModel, ResultT: StrictModel](
     implementation: Callable[[RequestT], ResultT],
     tags: tuple[str, ...],
     examples: tuple[OperationExample, ...] = (),
-    version: str = "2",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -115,7 +113,6 @@ FACTORIZATION_OPERATIONS = (
                 {"value": "10403"},
             ),
         ),
-        version="4",
     ),
     _operation(
         operation_id="integer.primality.certificate.compute",
@@ -133,7 +130,6 @@ FACTORIZATION_OPERATIONS = (
                 {"value": "101"},
             ),
         ),
-        version="2",
     ),
     _operation(
         operation_id="integer.compute.divisors",
@@ -148,7 +144,6 @@ FACTORIZATION_OPERATIONS = (
                 "divisors_12", "Enumerate the positive divisors of 12.", {"value": "12"}
             ),
         ),
-        version="4",
     ),
     _operation(
         operation_id="integer.compute.proper_divisors",
@@ -165,7 +160,6 @@ FACTORIZATION_OPERATIONS = (
                 {"value": "12"},
             ),
         ),
-        version="4",
     ),
     _operation(
         operation_id="integer.compute.prime_factorization",
@@ -185,7 +179,6 @@ FACTORIZATION_OPERATIONS = (
                 {"value": "360"},
             ),
         ),
-        version="3",
     ),
     _operation(
         operation_id="integer.decide.squarefree",

@@ -47,7 +47,6 @@ _CIRCLE = {
 
 _f_vector_tool = MathTool(
     operation_id="topology.simplicial_complex.f_vector.compute",
-    version="1",
     title="Compute the f-vector and h-vector of a simplicial complex",
     description=(
         "Compute the f-vector (face counts by dimension) and h-vector "
@@ -74,7 +73,6 @@ _f_vector_tool = MathTool(
 
 _link_tool = MathTool(
     operation_id="topology.simplicial_complex.link.compute",
-    version="1",
     title="Compute the link of a simplex",
     description=(
         "Compute the link of a simplex in a finite simplicial complex and return "
@@ -101,7 +99,6 @@ _link_tool = MathTool(
 
 _star_tool = MathTool(
     operation_id="topology.simplicial_complex.star.compute",
-    version="1",
     title="Compute the closed star of a simplex",
     description=(
         "Compute the closed star of a simplex sigma in a finite simplicial "
@@ -128,7 +125,6 @@ _star_tool = MathTool(
 
 _vertex_deletion_tool = MathTool(
     operation_id="topology.simplicial_complex.deletion.compute",
-    version="1",
     title="Compute the deletion of a vertex subset",
     description=(
         "Delete a vertex subset from a finite simplicial complex and return "
@@ -159,7 +155,6 @@ _vertex_deletion_tool = MathTool(
 
 _skeleton_tool = MathTool(
     operation_id="topology.simplicial_complex.skeleton.compute",
-    version="1",
     title="Compute the k-skeleton of a simplicial complex",
     description=(
         "Compute the k-skeleton of a finite simplicial complex: the subcomplex "
@@ -186,7 +181,6 @@ _skeleton_tool = MathTool(
 
 _join_tool = MathTool(
     operation_id="topology.simplicial_complex.join.compute",
-    version="1",
     title="Compute the join of two simplicial complexes",
     description=(
         "Compute the join of two simplicial complexes on disjoint vertex sets: "
@@ -216,7 +210,6 @@ _join_tool = MathTool(
 
 _barycentric_subdivision_tool = MathTool(
     operation_id="topology.simplicial_complex.barycentric_subdivision.compute",
-    version="1",
     title="Compute the barycentric subdivision of a simplicial complex",
     description=(
         "Compute the barycentric subdivision (order complex) of a finite "
@@ -243,7 +236,6 @@ _barycentric_subdivision_tool = MathTool(
 
 _pseudomanifold_tool = MathTool(
     operation_id="topology.simplicial_complex.pseudomanifold.decide",
-    version="1",
     title="Decide whether a complex is a pseudomanifold",
     description=(
         "Decide whether a finite simplicial complex is a pseudomanifold: "
@@ -265,7 +257,6 @@ _pseudomanifold_tool = MathTool(
 
 _shelling_check_tool = MathTool(
     operation_id="topology.simplicial_complex.shelling.check",
-    version="1",
     title="Check a submitted shelling order",
     description=(
         "Check whether a submitted facet order is a valid shelling order "
@@ -292,7 +283,6 @@ _shelling_check_tool = MathTool(
 
 _elementary_collapse_tool = MathTool(
     operation_id="topology.simplicial_complex.elementary_collapse.check",
-    version="1",
     title="Check and perform an elementary collapse",
     description=(
         "Verify that a free face is contained in exactly one coface facet, "

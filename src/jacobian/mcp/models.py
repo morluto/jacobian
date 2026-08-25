@@ -68,7 +68,6 @@ class OperationDiscoveryErrorDetail(StrictModel):
 
 class OperationSearchResult(StrictModel):
     kind: Literal["discovery"]
-    discovery_version: Literal["1"]
     query: str
     domain: str | None = None
     matches: tuple[OperationDiscoveryMatch, ...]
@@ -83,7 +82,6 @@ class OperationSearchResult(StrictModel):
 
 class OperationBrowseResult(StrictModel):
     kind: Literal["browse"]
-    discovery_version: Literal["1"]
     domain: str | None = None
     operations: tuple[OperationBrowseCard, ...]
     total_operations: StrictInt

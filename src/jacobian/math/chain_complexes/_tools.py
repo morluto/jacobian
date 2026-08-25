@@ -40,7 +40,6 @@ _CIRCLE_COMPLEX = {
 TOOLS: MathTools = (
     MathTool(
         operation_id="chain_complex.construct.compute",
-        version="1",
         title="Construct a finite based chain complex",
         description=(
             "Construct a bounded homological chain complex from differential "
@@ -70,7 +69,6 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="chain_complex.verify_differential.compute",
-        version="1",
         title="Verify d^2 = 0",
         description="Verify that the differential of a chain complex squares to zero.",
         request_type=VerifyDifferentialRequest,
@@ -87,7 +85,6 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="chain_complex.verify_chain_map.compute",
-        version="1",
         title="Verify a chain map commutes",
         description="Verify that a chain map f: C -> D commutes with differentials.",
         request_type=VerifyChainMapRequest,
@@ -111,7 +108,6 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="chain_complex.homology.compute",
-        version="1",
         title="Compute homology of a chain complex",
         description=(
             "Compute the homology groups (Betti numbers) of a bounded chain "
@@ -131,7 +127,6 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="chain_complex.mapping_cone.compute",
-        version="1",
         title="Compute the mapping cone",
         description="Compute the mapping cone of a chain map f: C -> D.",
         request_type=MappingConeRequest,
@@ -155,7 +150,6 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="chain_complex.tensor_product.compute",
-        version="1",
         title="Compute the tensor product of two chain complexes",
         description="Compute the tensor product (C ⊗ D)_n = ⊕_{i+j=n} C_i ⊗ D_j.",
         request_type=TensorProductRequest,

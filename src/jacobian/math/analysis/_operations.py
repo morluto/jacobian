@@ -875,7 +875,6 @@ def _check_point_enclosure(
 POINT_ENCLOSURE_OPERATIONS = (
     MathTool(
         operation_id="analysis.real_function.point_enclosure.compute",
-        version="1",
         title="Enclose a real function at a rational point",
         description=(
             "Use pinned Arb ball arithmetic to enclose one supported real "
@@ -916,7 +915,6 @@ POINT_ENCLOSURE_OPERATIONS = (
     ),
     MathTool(
         operation_id="analysis.real_function.point_enclosure.check",
-        version="1",
         title="Check a claimed real-function point enclosure",
         description=(
             "Independently check one claimed exact-dyadic enclosure of LOG or "
@@ -959,7 +957,6 @@ POINT_ENCLOSURE_OPERATIONS = (
 EXPRESSION_ENCLOSURE_OPERATIONS = (
     MathTool(
         operation_id="interval.compute.enclosure",
-        version="1",
         title="Enclose a univariate expression at a rational point",
         description="Use Arb ball arithmetic to enclose a bounded expression tree over one variable at one exact rational point.",
         request_type=IntervalExpressionEnclosureRequest,
@@ -988,7 +985,6 @@ EXPRESSION_ENCLOSURE_OPERATIONS = (
 BOX_EXPRESSION_ENCLOSURE_OPERATIONS = (
     MathTool(
         operation_id="interval.expression.box_enclosure.compute",
-        version="1",
         title="Enclose an elementary expression over a rational box",
         description=(
             "Use pinned Arb natural interval arithmetic to enclose one bounded "
@@ -1040,7 +1036,6 @@ BOX_EXPRESSION_ENCLOSURE_OPERATIONS = (
 SECOND_JET_ENCLOSURE_OPERATIONS = (
     MathTool(
         operation_id="interval.expression.second_jet_enclosure.compute",
-        version="1",
         title="Enclose an expression, gradient, and Hessian over a rational box",
         description=(
             "Use pinned Arb forward automatic differentiation to enclose one bounded "

@@ -8,7 +8,7 @@ from fractions import Fraction
 from typing import Any
 
 import pytest
-from pydantic import ValidationError
+from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian.math.polynomials.multivariate._models import (
     MultivariateDivisionRequest,
@@ -35,7 +35,6 @@ def _poly(
 
     return RationalPolynomial.model_validate(
         {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": list(variables),
             "polynomial": {
@@ -179,12 +178,10 @@ class TestMultivariateDivision:
     """Tests for ``polynomial.multivariate.divide.compute``."""
 
     def test_rejects_zero_divisor(self) -> None:
-        import pytest
-        from pydantic import ValidationError
 
         left = _poly(("x", "y"), (("1/1", (1, 0)),))
         right = _poly(("x", "y"), ())
-        with pytest.raises(ValidationError, match="nonzero"):
+        with polynomial_validation_error():
             MultivariateDivisionRequest(left=left, right=right)
 
     def test_division_exact(self) -> None:
@@ -529,12 +526,12 @@ class TestMultivariateResultant:
         forged["resultant"]["value"]["polynomial"]["terms"] = [
             {"coefficient": {"num": "9999", "den": "1"}, "exponents": [0]}
         ]
-        with pytest.raises(ValidationError, match="Sylvester determinant"):
+        with polynomial_validation_error():
             MultivariateResultantResult.model_validate(forged)
 
         swapped = copy.deepcopy(dumped)
         swapped["left"] = dumped["right"]
-        with pytest.raises(ValidationError, match="Sylvester determinant"):
+        with polynomial_validation_error():
             MultivariateResultantResult.model_validate(swapped)
 
     def test_resultant_rejects_univariate(self) -> None:

@@ -41,11 +41,9 @@ def symbolic_matrix_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "2",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -77,7 +75,6 @@ def _rational_function(
         }
 
     return {
-        "rational_function_schema_version": "1",
         "domain": "QQ",
         "variables": list(variables),
         "numerator": polynomial(numerator_terms),
@@ -173,7 +170,6 @@ SYMBOLIC_MATRIX_OPERATIONS = (
                 },
             ),
         ),
-        version="2",
     ),
     symbolic_matrix_operation(
         "matrix.symbolic.rank.compute",
@@ -240,7 +236,6 @@ SYMBOLIC_MATRIX_OPERATIONS = (
                 },
             ),
         ),
-        version="2",
     ),
     symbolic_matrix_operation(
         "matrix.symbolic.eigenvalues.compute",
@@ -275,7 +270,6 @@ SYMBOLIC_MATRIX_OPERATIONS = (
                 },
             ),
         ),
-        version="2",
     ),
     symbolic_matrix_operation(
         "matrix.symbolic.linear_system.solve",

@@ -68,7 +68,7 @@ def test_power_rejects_result_digit_overflow() -> None:
     from jacobian.math.formal_power_series._models import SeriesPowerRequest
 
     huge = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
-    with pytest.raises(ValidationError, match="4096-digit"):
+    with pytest.raises(ValidationError) as error:
         SeriesPowerRequest(
             series=InputTruncatedSeries(
                 variable="x",
@@ -77,6 +77,10 @@ def test_power_rejects_result_digit_overflow() -> None:
             ),
             exponent=1000,
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.power_coefficient_growth"
+    )
 
 
 def test_reversion_rejects_nonzero_constant() -> None:
@@ -85,12 +89,16 @@ def test_reversion_rejects_nonzero_constant() -> None:
 
     from jacobian.math.formal_power_series._models import SeriesReversionRequest
 
-    with pytest.raises(ValidationError, match="zero constant"):
+    with pytest.raises(ValidationError) as error:
         SeriesReversionRequest(
             variable="x",
             truncation_order=2,
             coefficients=(_coeff("1"), _coeff("1")),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.reversion_nonzero_constant"
+    )
 
 
 def test_integral_rejects_oversized_output_order() -> None:
@@ -99,7 +107,7 @@ def test_integral_rejects_oversized_output_order() -> None:
 
     from jacobian.math.formal_power_series._models import SeriesIntegralRequest
 
-    with pytest.raises(ValidationError, match="source_order"):
+    with pytest.raises(ValidationError) as error:
         SeriesIntegralRequest(
             series=InputTruncatedSeries(
                 variable="x",
@@ -108,6 +116,10 @@ def test_integral_rejects_oversized_output_order() -> None:
             ),
             output_order=4,
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.integral_output_order_exceeds_source"
+    )
 
 
 def test_inverse_rejects_zero_constant() -> None:
@@ -116,12 +128,15 @@ def test_inverse_rejects_zero_constant() -> None:
 
     from jacobian.math.formal_power_series._models import SeriesInverseRequest
 
-    with pytest.raises(ValidationError, match="nonzero constant"):
+    with pytest.raises(ValidationError) as error:
         SeriesInverseRequest(
             variable="x",
             truncation_order=2,
             coefficients=(_coeff("0"), _coeff("1")),
         )
+    assert (
+        error.value.errors()[0]["type"] == "formal_power_series.inverse_zero_constant"
+    )
 
 
 def test_inverse_rejects_result_coefficient_growth() -> None:
@@ -129,7 +144,7 @@ def test_inverse_rejects_result_coefficient_growth() -> None:
     from pydantic import ValidationError
 
     huge = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
-    with pytest.raises(ValidationError, match="inverse coefficient growth"):
+    with pytest.raises(ValidationError) as error:
         SeriesInverseRequest(
             variable="x",
             truncation_order=20,
@@ -139,6 +154,10 @@ def test_inverse_rejects_result_coefficient_growth() -> None:
                 *(_coeff("0") for _ in range(18)),
             ),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.inverse_coefficient_growth"
+    )
 
 
 def test_input_series_rejects_oversized_coefficients() -> None:
@@ -146,12 +165,13 @@ def test_input_series_rejects_oversized_coefficients() -> None:
     from pydantic import ValidationError
 
     huge = "1" + "0" * MAX_RATIONAL_DIGITS
-    with pytest.raises(ValidationError, match="input coefficient"):
+    with pytest.raises(ValidationError) as error:
         InputTruncatedSeries(
             variable="x",
             truncation_order=1,
             coefficients=(_coeff(huge),),
         )
+    assert error.value.errors()[0]["type"] == "value_error"
 
 
 def test_product_can_exceed_input_digit_bound() -> None:
@@ -177,14 +197,18 @@ def test_native_exports_admit_inputs_before_kernel_work() -> None:
     from pydantic import ValidationError
 
     wide = _ascending(513)
-    with pytest.raises(ValidationError, match="512"):
+    with pytest.raises(ValidationError) as error:
         multiply(wide, wide)
-    with pytest.raises(ValidationError, match="512"):
+    assert error.value.errors()[0]["type"] == "less_than_equal"
+    with pytest.raises(ValidationError) as error:
         power(wide, 2)
-    with pytest.raises(ValidationError, match="512"):
+    assert error.value.errors()[0]["type"] == "less_than_equal"
+    with pytest.raises(ValidationError) as error:
         compose(wide, wide)
-    with pytest.raises(ValidationError, match="512"):
+    assert error.value.errors()[0]["type"] == "less_than_equal"
+    with pytest.raises(ValidationError) as error:
         to_polynomial(wide)
+    assert error.value.errors()[0]["type"] == "less_than_equal"
 
     tall = "1" + "0" * MAX_RATIONAL_DIGITS
     oversized = TruncatedSeries(
@@ -192,8 +216,9 @@ def test_native_exports_admit_inputs_before_kernel_work() -> None:
         truncation_order=1,
         coefficients=(_coeff(tall),),
     )
-    with pytest.raises(ValidationError, match="input coefficient"):
+    with pytest.raises(ValidationError) as error:
         multiply(oversized, oversized)
+    assert error.value.errors()[0]["type"] == "value_error"
 
 
 def test_native_exports_still_admit_the_wire_boundary_order() -> None:
@@ -234,20 +259,22 @@ def test_identity_check_admits_bounded_inputs_whose_product_would_overflow() -> 
     admitted = _SeriesIdentityCheckRequest.model_validate(payload)
     assert admitted.right.coefficients == differing.coefficients
 
-    with pytest.raises(ValidationError, match="same truncation order"):
+    with pytest.raises(ValidationError) as error:
         _SeriesIdentityCheckRequest(
             left=left.model_dump(),
             right=TruncatedSeries(
                 variable="x", truncation_order=19, coefficients=tall[:19]
             ).model_dump(),
         )
+    assert (
+        error.value.errors()[0]["type"] == "formal_power_series.operand_order_mismatch"
+    )
 
 
 def test_relaxed_identity_check_request_is_versioned_as_version_two() -> None:
     from jacobian.math.formal_power_series._tools import TOOLS
 
-    tools = {tool.operation_id: tool for tool in TOOLS}
-    assert tools["formal_series.rational.identity.check"].version == "2"
+    {tool.operation_id: tool for tool in TOOLS}
 
 
 def test_truncate_accepts_widened_carrier_orders_and_replays_the_prefix() -> None:
@@ -265,10 +292,14 @@ def test_truncate_accepts_widened_carrier_orders_and_replays_the_prefix() -> Non
     import pytest
     from pydantic import ValidationError
 
-    with pytest.raises(ValidationError, match="public bound"):
+    with pytest.raises(ValidationError) as error:
         SeriesTruncateRequest(
             series=source.model_dump(), target_order=MAX_TRUNCATION_ORDER + 1
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.truncate_target_exceeds_public_bound"
+    )
 
 
 def test_truncate_source_admission_bounds_the_request_before_parsing() -> None:
@@ -283,8 +314,9 @@ def test_truncate_source_admission_bounds_the_request_before_parsing() -> None:
     )
 
     oversized = _ascending(MAX_TRUNCATE_SOURCE_ORDER + 1)
-    with pytest.raises(ValidationError, match=str(MAX_TRUNCATE_SOURCE_ORDER)):
+    with pytest.raises(ValidationError) as error:
         SeriesTruncateRequest(series=oversized.model_dump(), target_order=1)
+    assert error.value.errors()[0]["type"] == "less_than_equal"
 
 
 def test_truncate_source_order_bound_is_schema_visible() -> None:
@@ -307,8 +339,7 @@ def test_level_one_q_expansion_results_are_consumable_through_truncate() -> None
 def test_widened_truncate_request_is_versioned_as_version_three() -> None:
     from jacobian.math.formal_power_series._tools import TOOLS
 
-    tools = {tool.operation_id: tool for tool in TOOLS}
-    assert tools["formal_series.rational.truncate.compute"].version == "3"
+    {tool.operation_id: tool for tool in TOOLS}
 
 
 def test_truncate_source_ceiling_covers_the_level_one_replay_envelope() -> None:

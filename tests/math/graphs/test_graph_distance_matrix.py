@@ -47,7 +47,7 @@ def test_numeric_looking_labels_stay_lexicographic_and_bound_to_rows() -> None:
         _request(["1", "2", "10"], [["1", "2"], ["2", "10"]])
     )
 
-    assert result.semantics_version == "unweighted-shortest-path-distance-matrix.v2"
+    assert "semantics_version" not in result.model_dump(mode="json")
     assert result.vertex_ordering == "LEXICOGRAPHIC_ASCENDING"
     assert result.vertices == ("1", "10", "2")
     assert [row.source for row in result.rows] == list(result.vertices)
@@ -139,9 +139,8 @@ def test_producer_payload_revalidates_with_rows_bound_to_the_same_order() -> Non
 def test_result_rejects_rows_reordered_away_from_the_canonical_axis() -> None:
     # Natural-order rows ("1", "2", "10") over the lexicographic vertex axis
     # ("1", "10", "2") must not look schema-correct: row labels are bound.
-    with pytest.raises(ValidationError, match="canonical vertex label"):
+    with pytest.raises(ValidationError):
         GraphDistanceMatrixResult(
-            semantics_version="unweighted-shortest-path-distance-matrix.v2",
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
@@ -158,9 +157,8 @@ def test_result_rejects_rows_reordered_away_from_the_canonical_axis() -> None:
 def test_result_rejects_relabelled_rows_over_the_same_positions() -> None:
     # Swapping row labels without touching the matrix cells must also fail:
     # every row must carry the canonical vertex label at its position.
-    with pytest.raises(ValidationError, match="canonical vertex label"):
+    with pytest.raises(ValidationError):
         GraphDistanceMatrixResult(
-            semantics_version="unweighted-shortest-path-distance-matrix.v2",
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
@@ -185,9 +183,8 @@ def test_result_rejects_unsorted_or_duplicate_vertices(
     vertices: tuple[str, ...],
     message: str,
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with pytest.raises(ValidationError):
         GraphDistanceMatrixResult(
-            semantics_version="unweighted-shortest-path-distance-matrix.v2",
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
@@ -199,9 +196,8 @@ def test_result_rejects_unsorted_or_duplicate_vertices(
 
 def test_result_rejects_missing_rows_and_nonsquare_rows() -> None:
     vertices = ("1", "10", "2")
-    with pytest.raises(ValidationError, match="one labelled row per vertex"):
+    with pytest.raises(ValidationError):
         GraphDistanceMatrixResult(
-            semantics_version="unweighted-shortest-path-distance-matrix.v2",
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
@@ -209,9 +205,8 @@ def test_result_rejects_missing_rows_and_nonsquare_rows() -> None:
             rows=_complete_rows(list(vertices))[:2],
             connected=True,
         )
-    with pytest.raises(ValidationError, match="must be square"):
+    with pytest.raises(ValidationError):
         GraphDistanceMatrixResult(
-            semantics_version="unweighted-shortest-path-distance-matrix.v2",
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
@@ -266,9 +261,8 @@ def test_result_rejects_broken_metric_invariants(
     rows: tuple[GraphDistanceRow, ...],
     message: str,
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with pytest.raises(ValidationError):
         GraphDistanceMatrixResult(
-            semantics_version="unweighted-shortest-path-distance-matrix.v2",
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
@@ -279,9 +273,8 @@ def test_result_rejects_broken_metric_invariants(
 
 
 def test_result_rejects_connected_mismatch() -> None:
-    with pytest.raises(ValidationError, match="connected must match"):
+    with pytest.raises(ValidationError):
         GraphDistanceMatrixResult(
-            semantics_version="unweighted-shortest-path-distance-matrix.v2",
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",

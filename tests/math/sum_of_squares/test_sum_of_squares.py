@@ -22,7 +22,6 @@ from jacobian.math.sum_of_squares._operations import (
 def _poly(variables, *terms):
     return RationalPolynomial.model_validate(
         {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": list(variables),
             "polynomial": {
@@ -148,8 +147,9 @@ class TestSOSTermBudgets:
         though its predicted square stays inside the product cap."""
         wide = _poly(("x",), *[(1, 1, (k,)) for k in range(64, -1, -1)])
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
-        with pytest.raises(ValidationError, match=r"summand\[0\] exceeds the 64"):
+        with pytest.raises(ValidationError) as exc_info:
             SOSDecompositionCheckRequest(polynomial=p, summands=(wide,))
+        assert exc_info.value.errors()[0]["type"] == "sum_of_squares.term_bound"
 
     def test_target_above_256_terms_rejected(self):
         """The target budget is 256: a 257-term polynomial is rejected."""
@@ -161,8 +161,9 @@ class TestSOSTermBudgets:
         ]
         p = _poly(("x", "y", "z"), *[(1, 1, t) for t in triples[:257]])
         q = _poly(("x", "y", "z"), (1, 1, (0, 0, 0)))
-        with pytest.raises(ValidationError, match="polynomial exceeds the 256"):
+        with pytest.raises(ValidationError) as exc_info:
             SOSDecompositionCheckRequest(polynomial=p, summands=(q,))
+        assert exc_info.value.errors()[0]["type"] == "sum_of_squares.term_bound"
 
 
 class TestGramCertificateAdmission:
@@ -175,7 +176,6 @@ class TestGramCertificateAdmission:
             polynomial=p,
             monomial_basis=basis,
             gram_matrix={
-                "matrix_schema_version": "1",
                 "domain": "QQ",
                 "entries": gram_entries,
             },
@@ -200,13 +200,12 @@ class TestGramCertificateAdmission:
         assert result.is_psd
 
     def test_produced_rational_matrix_is_accepted_unchanged(self):
-        """A serialized producer {matrix_schema_version, domain, entries}
+        """A serialized producer {domain, entries}
         value validates directly and its returned form enters a matrices
         rank consumer unchanged."""
         from jacobian.math.matrices._operation_models import MatrixRankRequest
 
         payload = {
-            "matrix_schema_version": "1",
             "domain": "QQ",
             "entries": (
                 (self._entry("1"), self._entry("0")),
@@ -238,15 +237,14 @@ class TestGramCertificateAdmission:
 
     def test_oversized_matrix_coefficient_rejected_before_eigenvalues(self):
         huge = "9" * 129
-        with pytest.raises(
-            ValidationError, match="gram_matrix scalars are limited to 128"
-        ):
+        with pytest.raises(ValidationError) as exc_info:
             self._request(
                 (
                     (self._entry(huge), self._entry("0")),
                     (self._entry("0"), self._entry("1")),
                 )
             )
+        assert exc_info.value.errors()[0]["type"] == "sum_of_squares.coefficient_bound"
 
     def test_boundary_coefficient_admitted(self):
         edge = "9" * 128
@@ -270,7 +268,6 @@ class TestGramCertificateResultAdmission:
                 polynomial=p,
                 monomial_basis=basis,
                 gram_matrix={
-                    "matrix_schema_version": "1",
                     "domain": "QQ",
                     "entries": (
                         ({"num": "1", "den": "1"}, {"num": "0", "den": "1"}),
@@ -285,10 +282,9 @@ class TestGramCertificateResultAdmission:
         payload = self._valid_result()
         huge = "9" * 129
         payload["gram_matrix"]["entries"][0][0] = {"num": huge, "den": "1"}
-        with pytest.raises(
-            ValidationError, match="gram_matrix scalars are limited to 128"
-        ):
+        with pytest.raises(ValidationError) as exc_info:
             GramCertificateResult.model_validate(payload)
+        assert exc_info.value.errors()[0]["type"] == "sum_of_squares.coefficient_bound"
 
     def test_oversized_result_dimension_is_rejected_at_field_validation(self):
         """A 40x40 result matrix fails the parse-time dimension bound before
@@ -302,12 +298,12 @@ class TestGramCertificateResultAdmission:
         ).model_dump(mode="json")
         zero_row = tuple({"num": "0", "den": "1"} for _ in range(40))
         payload["gram_matrix"] = {
-            "matrix_schema_version": "1",
             "domain": "QQ",
             "entries": [zero_row for _ in range(40)],
         }
-        with pytest.raises(ValidationError, match="at most 32"):
+        with pytest.raises(ValidationError) as exc_info:
             GramCertificateResult.model_validate(payload)
+        assert exc_info.value.errors()[0]["type"] == "too_long"
 
     def test_oversized_result_basis_is_rejected_at_field_validation(self):
         """A basis longer than the Gram dimension bound is rejected at the
@@ -316,14 +312,14 @@ class TestGramCertificateResultAdmission:
         payload["monomial_basis"] = [
             _poly(("x",), (1, 1, (k,))).model_dump(mode="json") for k in range(33)
         ]
-        with pytest.raises(ValidationError, match="at most 32"):
+        with pytest.raises(ValidationError) as exc_info:
             GramCertificateResult.model_validate(payload)
+        assert exc_info.value.errors()[0]["type"] == "too_long"
 
     def test_non_monomial_basis_entry_is_rejected(self):
         payload = self._valid_result()
         shifted = RationalPolynomial.model_validate(
             {
-                "polynomial_schema_version": "1",
                 "domain": "QQ",
                 "variables": ["x"],
                 "polynomial": {
@@ -338,14 +334,15 @@ class TestGramCertificateResultAdmission:
             shifted.model_dump(mode="json"),
             payload["monomial_basis"][1],
         ]
-        with pytest.raises(ValidationError, match="single-term monomial"):
+        with pytest.raises(ValidationError) as exc_info:
             GramCertificateResult.model_validate(payload)
+        assert exc_info.value.errors()[0]["type"] == "sum_of_squares.basis_monomial"
 
 
 class TestGramMonomialBasisAdmission:
     def test_request_with_polynomial_basis_entry_is_rejected(self):
         p = _poly(("x",), (1, 1, (2,)), (2, 1, (1,)), (1, 1, (0,)))
-        with pytest.raises(ValidationError, match="single-term monomial"):
+        with pytest.raises(ValidationError) as exc_info:
             check_gram_certificate(
                 GramCertificateRequest(
                     polynomial=p,
@@ -353,10 +350,11 @@ class TestGramMonomialBasisAdmission:
                     gram_matrix={"entries": (({"num": "1", "den": "1"},),)},
                 )
             )
+        assert exc_info.value.errors()[0]["type"] == "sum_of_squares.basis_monomial"
 
     def test_duplicate_monomials_are_rejected(self):
         p = _poly(("x",), (2, 1, (2,)), (1, 1, (0,)))
-        with pytest.raises(ValidationError, match="distinct"):
+        with pytest.raises(ValidationError) as exc_info:
             check_gram_certificate(
                 GramCertificateRequest(
                     polynomial=p,
@@ -372,6 +370,7 @@ class TestGramMonomialBasisAdmission:
                     },
                 )
             )
+        assert exc_info.value.errors()[0]["type"] == "sum_of_squares.basis_distinct"
 
 
 class TestSOSResultAdmission:
@@ -386,10 +385,9 @@ class TestSOSResultAdmission:
         payload = result.model_dump(mode="json")
         payload["summands"] = [wide.model_dump(mode="json")] * 64
         payload["is_valid"] = False
-        with pytest.raises(
-            ValidationError, match="predicted SOS expansion exceeds term bound"
-        ):
+        with pytest.raises(ValidationError) as exc_info:
             SOSDecompositionCheckResult.model_validate(payload)
+        assert exc_info.value.errors()[0]["type"] == "sum_of_squares.sos_work_bound"
 
 
 class TestSOSResultRingAdmission:
@@ -407,8 +405,9 @@ class TestSOSResultRingAdmission:
         payload["computed_sum"] = _poly(("x",), (1, 1, (2,)), (1, 1, (0,))).model_dump(
             mode="json"
         )
-        with pytest.raises(ValidationError, match="same ring as the polynomial"):
+        with pytest.raises(ValidationError) as exc_info:
             SOSDecompositionCheckResult.model_validate(payload)
+        assert exc_info.value.errors()[0]["type"] == "sum_of_squares.ring_mismatch"
 
 
 class TestExactPsdCriterion:
@@ -492,7 +491,6 @@ class TestSOSCoefficientGrowthAdmission:
             ]
             return RationalPolynomial.model_validate(
                 {
-                    "polynomial_schema_version": "1",
                     "domain": "QQ",
                     "variables": ["x"],
                     "polynomial": {"terms": terms},

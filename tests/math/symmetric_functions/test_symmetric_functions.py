@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.symmetric_functions._models import (
     IntegerPartition,
@@ -20,7 +21,6 @@ def test_operations_in_catalog() -> None:
     tools = {tool.operation_id: tool for tool in TOOLS}
     assert "symmetric_function.schur.evaluate.compute" in tools
     # The narrowed request envelope (50 parts) is a versioned contract change.
-    assert tools["symmetric_function.schur.evaluate.compute"].version == "2"
     # conjugate is NATIVE_ONLY via algebraic_combinatorics; not a distinct public operation
     assert "symmetric_function.partition.conjugate.compute" not in tools
 
@@ -112,22 +112,34 @@ def test_schur_at_origin() -> None:
 
 
 def test_partition_rejects_non_decreasing() -> None:
-    with pytest.raises(ValueError, match="weakly decreasing"):
+    with pytest.raises(ValidationError) as error:
         IntegerPartition(parts=(1, 2, 3))
+    assert (
+        error.value.errors()[0]["type"]
+        == "symmetric_function.partition_not_weakly_decreasing"
+    )
 
 
 def test_partition_rejects_non_positive() -> None:
-    with pytest.raises(ValueError, match="positive"):
+    with pytest.raises(ValidationError) as error:
         IntegerPartition(parts=(3, 0, 1))
+    assert (
+        error.value.errors()[0]["type"]
+        == "symmetric_function.partition_parts_not_positive"
+    )
 
 
 def test_schur_rejects_mismatched_dimensions() -> None:
-    with pytest.raises(ValueError, match="same length"):
+    with pytest.raises(ValidationError) as error:
         SchurExpansionRequest(
             partition=IntegerPartition(parts=(1,)),
             variables=("x1", "x2"),
             point=(1,),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "symmetric_function.schur_dimensions_mismatch"
+    )
 
 
 def test_request_schema_publishes_schur_invariants() -> None:
@@ -171,17 +183,24 @@ def test_schur_accepts_boundary_coordinate() -> None:
 
 
 def test_partition_schema_rejects_size_above_cap() -> None:
-    with pytest.raises(ValueError, match="bound"):
+    with pytest.raises(ValidationError) as error:
         IntegerPartition(parts=(251, 250))
+    assert (
+        error.value.errors()[0]["type"] == "symmetric_function.partition_size_exceeded"
+    )
 
 
 def test_schur_request_retains_its_operation_specific_length_bound() -> None:
-    with pytest.raises(ValueError, match="length must not exceed 50"):
+    with pytest.raises(ValidationError) as error:
         SchurExpansionRequest(
             partition=IntegerPartition(parts=(1,) * 51),
             variables=("x",),
             point=(1,),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "symmetric_function.schur_partition_length_exceeded"
+    )
 
 
 def test_schur_accepts_boundary_partition_length() -> None:

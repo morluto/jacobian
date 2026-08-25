@@ -17,6 +17,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import canonicalize_json
@@ -78,6 +79,10 @@ _SUPPORTED_SMTLIB_COMMANDS = frozenset(
 _UnknownResource = Literal["time", "work", "memory"]
 
 
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(code, message)
+
+
 class CanonicalCnf(StrictModel):
     """A bounded canonical propositional formula value."""
 
@@ -105,26 +110,38 @@ class CanonicalCnf(StrictModel):
     @classmethod
     def require_canonical_variables(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         if any(not name or len(name) > 128 for name in value):
-            raise ValueError(
-                "CNF variables must be nonempty names of at most 128 characters"
+            raise _validation_error(
+                "logic.cnf_variable_name",
+                "CNF variables must be nonempty names of at most 128 characters",
             )
         if len(set(value)) != len(value) or value != tuple(sorted(value)):
-            raise ValueError("CNF variables must be distinct and sorted")
+            raise _validation_error(
+                "logic.cnf_variables_not_canonical",
+                "CNF variables must be distinct and sorted",
+            )
         return value
 
     @model_validator(mode="after")
     def require_canonical_clauses(self) -> Self:
         if sum(len(clause) for clause in self.clauses) > _MAX_LITERALS:
-            raise ValueError(f"CNF may contain at most {_MAX_LITERALS} literals")
+            raise _validation_error(
+                "logic.cnf_literal_budget",
+                f"CNF may contain at most {_MAX_LITERALS} literals",
+            )
         try:
             normalized = tuple(
                 _canonical_clause(clause, len(self.variables))
                 for clause in self.clauses
             )
         except _TautologicalClauseError as exc:
-            raise ValueError("CNF clauses must be non-tautological") from exc
+            raise _validation_error(
+                "logic.cnf_tautological_clause", "CNF clauses must be non-tautological"
+            ) from exc
         if self.clauses != tuple(sorted(set(normalized), key=_clause_sort_key)):
-            raise ValueError("CNF clauses must be unique, non-tautological, and sorted")
+            raise _validation_error(
+                "logic.cnf_clauses_not_canonical",
+                "CNF clauses must be unique, non-tautological, and sorted",
+            )
         return self
 
 
@@ -137,17 +154,27 @@ class CnfCanonicalizeRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_input(self) -> Self:
         if any(not name or len(name) > 128 for name in self.variable_names):
-            raise ValueError(
-                "CNF variable names must be nonempty and at most 128 characters"
+            raise _validation_error(
+                "logic.cnf_variable_name",
+                "CNF variable names must be nonempty and at most 128 characters",
             )
         if len(set(self.variable_names)) != len(self.variable_names):
-            raise ValueError("CNF variable names must be unique")
+            raise _validation_error(
+                "logic.cnf_variable_names_not_unique",
+                "CNF variable names must be unique",
+            )
         if sum(len(clause) for clause in self.clauses) > _MAX_LITERALS:
-            raise ValueError(f"CNF may contain at most {_MAX_LITERALS} literals")
+            raise _validation_error(
+                "logic.cnf_literal_budget",
+                f"CNF may contain at most {_MAX_LITERALS} literals",
+            )
         for clause in self.clauses:
             for literal in clause:
                 if literal == 0 or abs(literal) > len(self.variable_names):
-                    raise ValueError("CNF literal references an undeclared variable")
+                    raise _validation_error(
+                        "logic.cnf_literal_out_of_range",
+                        "CNF literal references an undeclared variable",
+                    )
         return self
 
 
@@ -162,7 +189,10 @@ class SatAssignmentCheckRequest(StrictModel):
     @model_validator(mode="after")
     def require_total_assignment(self) -> Self:
         if len(self.assignment) != len(self.cnf.variables):
-            raise ValueError("assignment must contain one Boolean per CNF variable")
+            raise _validation_error(
+                "logic.assignment_length",
+                "assignment must contain one Boolean per CNF variable",
+            )
         return self
 
 
@@ -173,8 +203,9 @@ class SatAssignmentCheckResult(StrictModel):
     @model_validator(mode="after")
     def bind_failure_index(self) -> Self:
         if self.satisfies != (self.first_unsatisfied_clause is None):
-            raise ValueError(
-                "an assignment result must carry an index exactly when it fails"
+            raise _validation_error(
+                "logic.assignment_failure_index",
+                "an assignment result must carry an index exactly when it fails",
             )
         return self
 
@@ -195,9 +226,15 @@ class SatSolveResult(StrictModel):
     @model_validator(mode="after")
     def bind_assignment_to_outcome(self) -> Self:
         if (self.outcome == "SAT") != (self.assignment is not None):
-            raise ValueError("only a SAT result may carry an assignment")
+            raise _validation_error(
+                "logic.sat_assignment_outcome",
+                "only a SAT result may carry an assignment",
+            )
         if self.exhausted is not None and self.outcome != "UNKNOWN":
-            raise ValueError("only an UNKNOWN result may name an exhausted budget")
+            raise _validation_error(
+                "logic.unknown_exhaustion",
+                "only an UNKNOWN result may name an exhausted budget",
+            )
         return self
 
 
@@ -225,7 +262,9 @@ class LprPropagationHint(StrictModel):
         cls, value: tuple[StrictInt, ...]
     ) -> tuple[StrictInt, ...]:
         if any(clause_id <= 0 for clause_id in value):
-            raise ValueError("LPR hint clause IDs must be positive")
+            raise _validation_error(
+                "logic.lpr_hint_id", "LPR hint clause IDs must be positive"
+            )
         return value
 
 
@@ -274,17 +313,23 @@ class LprAddition(StrictModel):
         cls, value: tuple[StrictInt, ...]
     ) -> tuple[StrictInt, ...]:
         if any(clause_id <= 0 for clause_id in value):
-            raise ValueError("LPR hint clause IDs must be positive")
+            raise _validation_error(
+                "logic.lpr_hint_id", "LPR hint clause IDs must be positive"
+            )
         return value
 
     @model_validator(mode="after")
     def bind_witness_to_the_clause_pivot(self) -> Self:
         if self.witness is not None:
             if not self.clause:
-                raise ValueError("an empty LPR clause may not carry a witness")
+                raise _validation_error(
+                    "logic.lpr_witness_clause",
+                    "an empty LPR clause may not carry a witness",
+                )
             if not self.witness or self.witness[0] != self.clause[0]:
-                raise ValueError(
-                    "an LPR witness must start with the added clause's pivot literal"
+                raise _validation_error(
+                    "logic.lpr_witness_pivot",
+                    "an LPR witness must start with the added clause's pivot literal",
                 )
         return self
 
@@ -305,9 +350,14 @@ class LprDeletion(StrictModel):
         cls, value: tuple[StrictInt, ...]
     ) -> tuple[StrictInt, ...]:
         if any(clause_id <= 0 for clause_id in value):
-            raise ValueError("deleted LPR clause IDs must be positive")
+            raise _validation_error(
+                "logic.lpr_deletion_id", "deleted LPR clause IDs must be positive"
+            )
         if len(set(value)) != len(value):
-            raise ValueError("one LPR deletion may not name a clause more than once")
+            raise _validation_error(
+                "logic.lpr_duplicate_deletion",
+                "one LPR deletion may not name a clause more than once",
+            )
         return value
 
 
@@ -356,7 +406,10 @@ class SatRefutationCheckResult(StrictModel):
     @model_validator(mode="after")
     def bind_execution_detail(self) -> Self:
         if (self.outcome == "VALID_REFUTATION") != (self.detail is None):
-            raise ValueError("only a valid refutation may omit its outcome detail")
+            raise _validation_error(
+                "logic.refutation_detail",
+                "only a valid refutation may omit its outcome detail",
+            )
         return self
 
 
@@ -370,14 +423,19 @@ def _require_live_lpr_ids(
         None,
     )
     if missing is not None:
-        raise ValueError(f"{label} references non-live clause ID {missing}")
+        raise _validation_error(
+            "logic.lpr_live_clause", f"{label} references non-live clause ID {missing}"
+        )
 
 
 def _require_lpr_literal_axis(
     literals: tuple[int, ...], variable_count: int, label: str
 ) -> None:
     if any(literal == 0 or abs(literal) > variable_count for literal in literals):
-        raise ValueError(f"{label} literal is outside the CNF variable axis")
+        raise _validation_error(
+            "logic.lpr_literal_axis",
+            f"{label} literal is outside the CNF variable axis",
+        )
 
 
 def _lpr_addition_work(
@@ -409,11 +467,15 @@ def _validate_lpr_addition(
     live_clause_widths: dict[int, int],
 ) -> None:
     if step.clause_id <= source_clause_count:
-        raise ValueError(
-            "LPR additions must use IDs after the canonical source clauses"
+        raise _validation_error(
+            "logic.lpr_clause_id",
+            "LPR additions must use IDs after the canonical source clauses",
         )
     if step.clause_id in live_clause_widths:
-        raise ValueError("LPR additions may not overwrite a live clause ID")
+        raise _validation_error(
+            "logic.lpr_duplicate_clause_id",
+            "LPR additions may not overwrite a live clause ID",
+        )
     _require_lpr_literal_axis(step.clause, variable_count, "LPR clause")
     if step.witness is not None:
         _require_lpr_literal_axis(step.witness, variable_count, "LPR witness")
@@ -423,7 +485,10 @@ def _validate_lpr_addition(
     if len({hint.clause_id for hint in step.propagation_hints}) != len(
         step.propagation_hints
     ):
-        raise ValueError("LPR propagation hint clause IDs must be unique")
+        raise _validation_error(
+            "logic.lpr_duplicate_hint_id",
+            "LPR propagation hint clause IDs must be unique",
+        )
     for hint in step.propagation_hints:
         _require_live_lpr_ids(
             (hint.clause_id,), live_clause_widths, "LPR propagation hint"
@@ -455,8 +520,9 @@ def _validate_lpr_refutation(cnf: CanonicalCnf, refutation: SatLprRefutation) ->
         )
         total_work += _lpr_addition_work(step, live_clause_widths)
         if total_work > _MAX_LPR_REPLAY_WORK:
-            raise ValueError(
-                "LPR replay exceeds the declared literal-inspection work bound"
+            raise _validation_error(
+                "logic.lpr_work_budget",
+                "LPR replay exceeds the declared literal-inspection work bound",
             )
         live_clause_widths[step.clause_id] = len(step.clause)
     echoed_result = {
@@ -466,7 +532,10 @@ def _validate_lpr_refutation(cnf: CanonicalCnf, refutation: SatLprRefutation) ->
         "detail": "x" * 1_024,
     }
     if len(canonicalize_json(echoed_result)) > _MAX_LPR_RESULT_BYTES:
-        raise ValueError("LPR refutation exceeds the source-bound result limit")
+        raise _validation_error(
+            "logic.lpr_result_budget",
+            "LPR refutation exceeds the source-bound result limit",
+        )
 
 
 class SmtLogic(StrEnum):
@@ -652,22 +721,29 @@ class SmtSolveRequest(StrictModel):
         try:
             encoded = self.smtlib.encode("ascii")
         except UnicodeEncodeError as exc:
-            raise ValueError("SMT-LIB input must be ASCII") from exc
+            raise _validation_error(
+                "logic.smtlib_ascii", "SMT-LIB input must be ASCII"
+            ) from exc
         if len(encoded) > _MAX_SMTLIB_BYTES:
-            raise ValueError("SMT-LIB input exceeds the byte limit")
+            raise _validation_error(
+                "logic.smtlib_byte_budget", "SMT-LIB input exceeds the byte limit"
+            )
         structure = _smtlib_structure(self.smtlib)
         if structure.max_depth > _MAX_SMTLIB_DEPTH:
-            raise ValueError(
-                f"SMT-LIB nesting exceeds the maximum term depth of {_MAX_SMTLIB_DEPTH}"
+            raise _validation_error(
+                "logic.smtlib_depth_budget",
+                f"SMT-LIB nesting exceeds the maximum term depth of {_MAX_SMTLIB_DEPTH}",
             )
         if structure.compound_terms > _MAX_SMTLIB_TERMS:
-            raise ValueError(
-                f"SMT-LIB exceeds the maximum of {_MAX_SMTLIB_TERMS} compound terms"
+            raise _validation_error(
+                "logic.smtlib_term_budget",
+                f"SMT-LIB exceeds the maximum of {_MAX_SMTLIB_TERMS} compound terms",
             )
         if structure.numeral_digits > _MAX_SMTLIB_NUMERAL_DIGITS:
-            raise ValueError(
+            raise _validation_error(
+                "logic.smtlib_numeral_budget",
                 "SMT-LIB contains a numeral wider than "
-                f"{_MAX_SMTLIB_NUMERAL_DIGITS} digits"
+                f"{_MAX_SMTLIB_NUMERAL_DIGITS} digits",
             )
         commands = _top_level_smtlib_commands(self.smtlib)
         declarations = sum(
@@ -676,21 +752,33 @@ class SmtSolveRequest(StrictModel):
             if command[:1] in (("declare-const",), ("declare-fun",))
         )
         if declarations > _MAX_SMTLIB_DECLARATIONS:
-            raise ValueError(
-                f"SMT-LIB declares more than {_MAX_SMTLIB_DECLARATIONS} symbols"
+            raise _validation_error(
+                "logic.smtlib_declaration_budget",
+                f"SMT-LIB declares more than {_MAX_SMTLIB_DECLARATIONS} symbols",
             )
         logic_commands = tuple(
             command for command in commands if command[:1] == ("set-logic",)
         )
         if logic_commands != (("set-logic", self.logic.value),):
-            raise ValueError("SMT-LIB input must declare the requested logic")
+            raise _validation_error(
+                "logic.smtlib_logic_declaration",
+                "SMT-LIB input must declare the requested logic",
+            )
         if commands.count(("check-sat",)) != 1:
-            raise ValueError("SMT-LIB input must contain exactly one check-sat command")
+            raise _validation_error(
+                "logic.smtlib_check_sat_count",
+                "SMT-LIB input must contain exactly one check-sat command",
+            )
         if commands[-1:] != (("check-sat",),):
-            raise ValueError("SMT-LIB input must end with its check-sat command")
+            raise _validation_error(
+                "logic.smtlib_check_sat_position",
+                "SMT-LIB input must end with its check-sat command",
+            )
         for command in commands:
             if command and command[0] not in _SUPPORTED_SMTLIB_COMMANDS:
-                raise ValueError(f"unsupported SMT-LIB command: {command[0]}")
+                raise _validation_error(
+                    "logic.smtlib_command", f"unsupported SMT-LIB command: {command[0]}"
+                )
         return self
 
 
@@ -703,9 +791,14 @@ class SmtSolveResult(StrictModel):
     @model_validator(mode="after")
     def bind_model_to_outcome(self) -> Self:
         if (self.outcome == "SAT") != (self.model_smtlib is not None):
-            raise ValueError("only a SAT result may carry a model")
+            raise _validation_error(
+                "logic.sat_model_outcome", "only a SAT result may carry a model"
+            )
         if self.exhausted is not None and self.outcome != "UNKNOWN":
-            raise ValueError("only an UNKNOWN result may name an exhausted budget")
+            raise _validation_error(
+                "logic.unknown_exhaustion",
+                "only an UNKNOWN result may name an exhausted budget",
+            )
         return self
 
 
@@ -736,7 +829,10 @@ class LeanCheckResult(StrictModel):
         if self.outcome == "ELABORATED" and any(
             diagnostic.severity == "ERROR" for diagnostic in self.diagnostics
         ):
-            raise ValueError("an elaborated source result cannot contain an error")
+            raise _validation_error(
+                "logic.elaborated_diagnostic",
+                "an elaborated source result cannot contain an error",
+            )
         return self
 
 
@@ -1148,7 +1244,6 @@ def _clause_sort_key(clause: tuple[int, ...]) -> tuple[tuple[int, bool], ...]:
 LOGIC_OPERATIONS = (
     MathTool(
         operation_id="sat.cnf.canonicalize",
-        version="1",
         title="Canonicalize a bounded named CNF",
         description="Return one canonical CNF; no source, identifier, or artifact is retained.",
         request_type=CnfCanonicalizeRequest,
@@ -1165,7 +1260,6 @@ LOGIC_OPERATIONS = (
     ),
     MathTool(
         operation_id="sat.assignment.check",
-        version="1",
         title="Check a total SAT assignment",
         description="Evaluate one complete Boolean assignment against one canonical CNF.",
         request_type=SatAssignmentCheckRequest,
@@ -1185,7 +1279,6 @@ LOGIC_OPERATIONS = (
     ),
     MathTool(
         operation_id="sat.solve",
-        version="2",
         title="Solve a bounded CNF",
         description="Run the maintained Z3 Python binding on one canonical CNF.",
         request_type=SatSolveRequest,
@@ -1202,7 +1295,6 @@ LOGIC_OPERATIONS = (
     ),
     MathTool(
         operation_id="sat.refutation.check",
-        version="1",
         title="Check a bounded LPR SAT refutation",
         description=(
             "Replay one typed LPR/ASCII-v1 refutation against its exact canonical "
@@ -1237,7 +1329,6 @@ LOGIC_OPERATIONS = (
     ),
     MathTool(
         operation_id="smt.solve",
-        version="3",
         title="Solve a bounded SMT-LIB query",
         description="Run the maintained Z3 Python binding on one QF SMT-LIB query.",
         request_type=SmtSolveRequest,
@@ -1257,7 +1348,6 @@ LOGIC_OPERATIONS = (
     ),
     MathTool(
         operation_id="lean.check",
-        version="1",
         title="Check a bounded Lean source snippet",
         description="Elaborate one source snippet in the fixed Lean service environment and return typed diagnostics.",
         request_type=LeanCheckRequest,

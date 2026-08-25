@@ -72,7 +72,6 @@ def invoke_operation(
 
     return OperationResult(
         operation_id=operation.operation_id,
-        operation_version=operation.version,
         runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
         output=result.model_dump(mode="json"),
     )

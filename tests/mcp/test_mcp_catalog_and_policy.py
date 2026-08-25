@@ -21,6 +21,11 @@ def test_mcp_catalog_is_the_complete_static_operation_library() -> None:
             assert catalog["operations"]
             assert "policy_profile" not in catalog
             assert "policy_digest" not in catalog
+            assert "catalog_version" not in catalog
+            assert all(
+                "descriptor_version" not in operation and "version" not in operation
+                for operation in catalog["operations"]
+            )
 
     asyncio.run(scenario())
 
@@ -48,6 +53,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
             assert len(listed.content[0].text.encode("utf-8")) <= 16 * 1024
             assert json.loads(listed.content[0].text) == index
             assert index["response_byte_limit"] == 16 * 1024
+            assert "discovery_version" not in index
             assert len(index["matches"]) <= 20
             indexed_ids = {
                 descriptor["operation_id"] for descriptor in index["matches"]
@@ -144,6 +150,7 @@ def test_mcp_operation_browse_pages_the_complete_immutable_library() -> None:
                 assert len(page_result.content[0].text.encode("utf-8")) <= 16 * 1024
                 assert json.loads(page_result.content[0].text) == page
                 assert page["response_byte_limit"] == 16 * 1024
+                assert "discovery_version" not in page
                 assert len(page["operations"]) <= 20
                 assert all(
                     "input_schema" not in operation

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -29,6 +30,13 @@ from jacobian.math.logic._operations import (
     solve_smt,
 )
 from jacobian.math.logic._tools import TOOLS
+
+
+@contextmanager
+def raises_logic_validation():
+    with pytest.raises(ValidationError) as error:
+        yield error
+    assert error.value.errors()[0]["type"].startswith("logic.")
 
 
 def test_logic_bundle_exposes_only_atomic_inline_operations() -> None:
@@ -73,7 +81,7 @@ def test_canonical_cnf_can_be_passed_directly_to_assignment_and_solver() -> None
 
 
 def test_tautological_cnf_is_a_typed_invalid_request() -> None:
-    with pytest.raises(ValidationError, match="non-tautological"):
+    with raises_logic_validation():
         CanonicalCnf(variables=("x",), clauses=((1, -1),))
 
 
@@ -694,16 +702,6 @@ def test_smt_request_admits_a_bv_named_symbol_outside_index_context_and_solves()
 
     assert result.outcome == "SAT"
     assert result.model_smtlib is not None
-
-
-def test_solver_declarations_advertise_version_three_for_the_widened_envelope() -> None:
-    versions = {
-        tool.operation_id: tool.version
-        for tool in TOOLS
-        if tool.operation_id in ("sat.solve", "smt.solve")
-    }
-
-    assert versions == {"sat.solve": "2", "smt.solve": "3"}
 
 
 def test_smt_request_schema_publishes_the_structural_limits() -> None:

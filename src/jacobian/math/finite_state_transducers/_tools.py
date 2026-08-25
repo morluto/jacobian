@@ -36,7 +36,6 @@ def _op[
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version="1",
         title=title,
         description=description,
         request_type=request_model,

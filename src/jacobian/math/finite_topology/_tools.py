@@ -29,7 +29,6 @@ _SIERPINSKI = {
 FINITE_TOPOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="topology.specialization_preorder.compute",
-        version="1",
         title="Compute a specialization preorder",
         description=(
             "Compute the complete specialization relation, explicitly oriented so "
@@ -49,7 +48,6 @@ FINITE_TOPOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="topology.connected_components.compute",
-        version="1",
         title="Compute finite-space connected components",
         description=(
             "Compute the complete component partition of a finite space through "
@@ -69,7 +67,6 @@ FINITE_TOPOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="topology.is_continuous.compute",
-        version="1",
         title="Decide continuity of a finite-space map",
         description=(
             "Check every codomain open-set preimage and return the first exact "
@@ -97,7 +94,6 @@ FINITE_TOPOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="topology.beat_points.compute",
-        version="1",
         title="Compute beat points of a finite T0 space",
         description=(
             "Compute every up and down beat point in the strict specialization "

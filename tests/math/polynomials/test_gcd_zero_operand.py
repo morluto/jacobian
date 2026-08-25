@@ -8,14 +8,12 @@ from jacobian.math.polynomials._models import PolynomialGcdRequest
 from jacobian.math.polynomials._operations import polynomial_gcd
 
 ZERO = {
-    "polynomial_schema_version": "1",
     "domain": "QQ",
     "variables": ["x"],
     "polynomial": {"terms": []},
 }
 
 F = {
-    "polynomial_schema_version": "1",
     "domain": "QQ",
     "variables": ["x"],
     "polynomial": {
@@ -27,7 +25,6 @@ F = {
 }
 
 G = {
-    "polynomial_schema_version": "1",
     "domain": "QQ",
     "variables": ["x"],
     "polynomial": {
@@ -108,7 +105,6 @@ def test_gcd_with_nonzero_coprime() -> None:
 def test_gcd_negative_leading_coefficient() -> None:
     """GCD works with negative leading coefficient."""
     f = {
-        "polynomial_schema_version": "1",
         "domain": "QQ",
         "variables": ["x"],
         "polynomial": {
@@ -130,7 +126,6 @@ def test_gcd_negative_leading_coefficient() -> None:
 def test_rational_leading_coefficient() -> None:
     """GCD works with rational leading coefficient."""
     f = {
-        "polynomial_schema_version": "1",
         "domain": "QQ",
         "variables": ["x"],
         "polynomial": {

@@ -11,7 +11,6 @@ from jacobian.math.coherent_configurations._operations import compute_analyze
 TOOLS: MathTools = (
     MathTool(
         operation_id="coherent_configuration.analyze.compute",
-        version="1",
         title="Analyze a complete finite coherent configuration",
         description=(
             "Check a complete labelled partition of ordered point pairs for the "

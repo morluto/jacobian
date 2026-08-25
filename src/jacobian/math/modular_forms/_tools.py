@@ -9,7 +9,6 @@ from jacobian.math.modular_forms.values import LevelOneModularQExpansion
 TOOLS: MathTools = (
     MathTool(
         operation_id="modular_form.level_one.named_q_expansion.compute",
-        version="1",
         title="Compute an exact named level-one modular-form q-expansion",
         description=(
             "Construct the normalized exact q-prefix of E4, E6, or Ramanujan "

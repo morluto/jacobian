@@ -11,8 +11,10 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StrictStr, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs.multigraph._orientation import oriented_endpoints
 
 __all__ = [
     "CycleMulticoverRequest",
@@ -75,7 +77,10 @@ class MultigraphEdge(StrictModel):
     @model_validator(mode="after")
     def require_loopless(self) -> Self:
         if self.left == self.right:
-            raise ValueError("multigraph edges must be loopless (distinct endpoints)")
+            raise PydanticCustomError(
+                "graph.multigraph_edges_must_be_loopless_distinct_endpo",
+                "multigraph edges must be loopless (distinct endpoints)",
+            )
         return self
 
 
@@ -95,13 +100,19 @@ class LooplessMultigraph(StrictModel):
         seen_ids: set[str] = set()
         for edge in self.edges:
             if edge.edge_id in seen_ids:
-                raise ValueError("multigraph edge IDs must be unique")
+                raise PydanticCustomError(
+                    "graph.multigraph_edge_ids_must_be_unique",
+                    "multigraph edge IDs must be unique",
+                )
             seen_ids.add(edge.edge_id)
             if not (
                 0 <= edge.left < self.vertex_count
                 and 0 <= edge.right < self.vertex_count
             ):
-                raise ValueError("edge endpoints must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.edge_endpoints_must_be_in_0_vertex_count_1",
+                    "edge endpoints must be in 0..vertex_count-1",
+                )
         return self
 
     @property
@@ -155,12 +166,21 @@ class FiniteAbelianGroup(StrictModel):
         product = 1
         for modulus in self.moduli:
             if modulus < 2:
-                raise ValueError("group moduli must be at least 2")
+                raise PydanticCustomError(
+                    "graph.group_moduli_must_be_at_least_2",
+                    "group moduli must be at least 2",
+                )
             if modulus > MAX_GROUP_MODULUS:
-                raise ValueError(f"group modulus exceeds {MAX_GROUP_MODULUS}")
+                raise PydanticCustomError(
+                    "graph.group_modulus_exceeds_max_group_modulus_product",
+                    f"group modulus exceeds {MAX_GROUP_MODULUS}",
+                )
             product *= modulus
             if product > MAX_GROUP_CARDINALITY:
-                raise ValueError(f"group cardinality exceeds {MAX_GROUP_CARDINALITY}")
+                raise PydanticCustomError(
+                    "graph.group_cardinality_exceeds_max_group_cardinality_return",
+                    f"group cardinality exceeds {MAX_GROUP_CARDINALITY}",
+                )
         return self
 
     @property
@@ -180,14 +200,20 @@ class FiniteAbelianGroup(StrictModel):
 
     def add(self, left: tuple[int, ...], right: tuple[int, ...]) -> tuple[int, ...]:
         if len(left) != self.rank or len(right) != self.rank:
-            raise ValueError("element rank must match group rank")
+            raise PydanticCustomError(
+                "graph.element_rank_must_match_group_rank",
+                "element rank must match group rank",
+            )
         return tuple(
             (a + b) % m for a, b, m in zip(left, right, self.moduli, strict=True)
         )
 
     def negate(self, value: tuple[int, ...]) -> tuple[int, ...]:
         if len(value) != self.rank:
-            raise ValueError("element rank must match group rank")
+            raise PydanticCustomError(
+                "graph.element_rank_must_match_group_rank",
+                "element rank must match group rank",
+            )
         return tuple((-a) % m for a, m in zip(value, self.moduli, strict=True))
 
     def sum(self, values: tuple[tuple[int, ...], ...]) -> tuple[int, ...]:
@@ -200,7 +226,10 @@ class FiniteAbelianGroup(StrictModel):
     def normalize(self, value: tuple[int, ...]) -> tuple[int, ...]:
         """Reduce each coordinate into the canonical range ``0 <= x_i < n_i``."""
         if len(value) != self.rank:
-            raise ValueError("element rank must match group rank")
+            raise PydanticCustomError(
+                "graph.element_rank_must_match_group_rank",
+                "element rank must match group rank",
+            )
         return tuple(a % m for a, m in zip(value, self.moduli, strict=True))
 
     def is_zero(self, value: tuple[int, ...]) -> bool:
@@ -217,7 +246,10 @@ class GroupElement(StrictModel):
     def require_non_negative(self) -> Self:
         for coordinate in self.coordinates:
             if coordinate < 0:
-                raise ValueError("group element coordinates must be non-negative")
+                raise PydanticCustomError(
+                    "graph.group_element_coordinates_must_be_non_negative",
+                    "group element coordinates must be non-negative",
+                )
         return self
 
 
@@ -253,7 +285,10 @@ class FlowEdgeAssignment(StrictModel):
     def require_non_negative_value(self) -> Self:
         for coordinate in self.value:
             if coordinate < 0:
-                raise ValueError("flow values must be non-negative residues")
+                raise PydanticCustomError(
+                    "graph.flow_values_must_be_non_negative_residues",
+                    "flow values must be non-negative residues",
+                )
         return self
 
 
@@ -298,19 +333,29 @@ class MultigraphFlowCheckRequest(StrictModel):
         if graph_ids != assigned_ids:
             missing = sorted(graph_ids - assigned_ids)
             extra = sorted(assigned_ids - graph_ids)
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.edge_values_assign_every_edge_exactly_once",
                 f"edge_values must assign every edge exactly once; "
-                f"missing={missing}, extra={extra}"
+                f"missing={missing}, extra={extra}",
             )
         if len(assigned_ids) != len(self.edge_values):
-            raise ValueError("edge_values must not repeat edge IDs")
+            raise PydanticCustomError(
+                "graph.edge_values_must_not_repeat_edge_ids",
+                "edge_values must not repeat edge IDs",
+            )
         for assign in self.edge_values:
             if len(assign.value) != self.group.rank:
-                raise ValueError("flow value rank must match group rank")
+                raise PydanticCustomError(
+                    "graph.flow_value_rank_must_match_group_rank",
+                    "flow value rank must match group rank",
+                )
             if any(
                 c >= m for c, m in zip(assign.value, self.group.moduli, strict=True)
             ):
-                raise ValueError("flow value coordinates must be below their moduli")
+                raise PydanticCustomError(
+                    "graph.flow_value_coordinates_must_be_below_their_modul",
+                    "flow value coordinates must be below their moduli",
+                )
         return self
 
 
@@ -321,7 +366,6 @@ class MultigraphFlowCheckResult(StrictModel):
     ledger, zero-edge set, and booleans remain reconstructible.
     """
 
-    result_schema_version: Literal["1"] = "1"
     graph: LooplessMultigraph
     group: FiniteAbelianGroup
     edge_flow_records: tuple[FlowEdgeAssignment, ...] = Field(max_length=MAX_EDGES)
@@ -336,17 +380,29 @@ class MultigraphFlowCheckResult(StrictModel):
         graph_ids = self.graph.edge_id_set
         record_ids = {r.edge_id for r in self.edge_flow_records}
         if graph_ids != record_ids:
-            raise ValueError("edge_flow_records must cover exactly graph edges")
+            raise PydanticCustomError(
+                "graph.edge_flow_records_must_cover_exactly_graph_edges",
+                "edge_flow_records must cover exactly graph edges",
+            )
         if len(record_ids) != len(self.edge_flow_records):
-            raise ValueError("edge_flow_records must not repeat edge IDs")
+            raise PydanticCustomError(
+                "graph.edge_flow_records_must_not_repeat_edge_ids",
+                "edge_flow_records must not repeat edge IDs",
+            )
         _require_values_within_group(self.edge_flow_records, self.group)
         expected_ledger, expected_conservation = _recompute_divergence_ledger(
             self.graph, self.group, self.edge_flow_records
         )
         if tuple(expected_ledger) != self.divergence_ledger:
-            raise ValueError("divergence_ledger does not match recomputed ledger")
+            raise PydanticCustomError(
+                "graph.divergence_ledger_does_not_match_recomputed_ledg",
+                "divergence_ledger does not match recomputed ledger",
+            )
         if self.conservation_holds != expected_conservation:
-            raise ValueError("conservation_holds does not match recomputed value")
+            raise PydanticCustomError(
+                "graph.conservation_holds_does_not_match_recomputed_val",
+                "conservation_holds does not match recomputed value",
+            )
         expected_zero = tuple(
             sorted(
                 rec.edge_id
@@ -355,9 +411,15 @@ class MultigraphFlowCheckResult(StrictModel):
             )
         )
         if self.zero_edge_ids != expected_zero:
-            raise ValueError("zero_edge_ids does not match recomputed zero set")
+            raise PydanticCustomError(
+                "graph.zero_edge_ids_does_not_match_recomputed_zero_set",
+                "zero_edge_ids does not match recomputed zero set",
+            )
         if self.nowhere_zero != (len(expected_zero) == 0):
-            raise ValueError("nowhere_zero does not match zero_edge set")
+            raise PydanticCustomError(
+                "graph.nowhere_zero_does_not_match_zero_edge_set",
+                "nowhere_zero does not match zero_edge set",
+            )
         return self
 
 
@@ -367,17 +429,20 @@ def _require_values_within_group(
 ) -> None:
     for rec in records:
         if len(rec.value) != group.rank:
-            raise ValueError("flow value rank must match group rank")
+            raise PydanticCustomError(
+                "graph.flow_value_rank_must_match_group_rank",
+                "flow value rank must match group rank",
+            )
         if any(c >= m for c, m in zip(rec.value, group.moduli, strict=True)):
-            raise ValueError("flow value coordinates must be below moduli")
+            raise PydanticCustomError(
+                "graph.flow_value_coordinates_must_be_below_moduli",
+                "flow value coordinates must be below moduli",
+            )
         if any(c < 0 for c in rec.value):
-            raise ValueError("flow values must be non-negative")
-
-
-def _oriented_endpoints(edge: MultigraphEdge, orientation: str) -> tuple[int, int]:
-    if orientation == "left_to_right":
-        return edge.left, edge.right
-    return edge.right, edge.left
+            raise PydanticCustomError(
+                "graph.flow_values_must_be_non_negative",
+                "flow values must be non-negative",
+            )
 
 
 def _recompute_divergence_ledger(
@@ -394,7 +459,7 @@ def _recompute_divergence_ledger(
     vertex_incident: dict[int, set[str]] = {v: set() for v in range(graph.vertex_count)}
     for rec in records:
         edge = graph.edge_by_id(rec.edge_id)
-        tail, head = _oriented_endpoints(edge, rec.orientation)
+        tail, head = oriented_endpoints(edge, rec.orientation)
         val = group.normalize(rec.value)
         vertex_out[tail].append(val)
         vertex_in[head].append(val)
@@ -466,7 +531,6 @@ class _FlowSearchOutcome(StrictModel):
     recursion.
     """
 
-    result_schema_version: Literal["1"] = "1"
     status: Literal["FOUND", "EXHAUSTED", "UNKNOWN"]
     flow: tuple[FlowEdgeAssignment, ...] | None = Field(
         default=None, max_length=MAX_EDGES
@@ -483,7 +547,6 @@ class _FlowSearchOutcome(StrictModel):
 class MultigraphFlowFindResult(StrictModel):
     """Outcome of a bounded finite-Abelian flow search, bound to its source request."""
 
-    result_schema_version: Literal["1"] = "1"
     graph: LooplessMultigraph
     group: FiniteAbelianGroup
     resource_budget: MultigraphFlowSearchBudget
@@ -510,20 +573,25 @@ class MultigraphFlowFindResult(StrictModel):
         # the kernel's termination modes can produce.
         _require_status_shape(self.status, self.flow, self.termination_reason)
         if self.states_explored > self.resource_budget.max_states:
-            raise ValueError("states_explored exceeds resource budget")
+            raise PydanticCustomError(
+                "graph.states_explored_exceeds_resource_budget",
+                "states_explored exceeds resource budget",
+            )
         if self.status == "FOUND":
             if self.termination_reason == "SPECIAL_CASE":
                 # SPECIAL_CASE is reserved for the edgeless empty-flow
                 # shortcut; the DFS itself never emits it.
                 if self.graph.edges or self.flow != ():
-                    raise ValueError(
+                    raise PydanticCustomError(
+                        "graph.special_case_termination_requires_edgeless_with_empty",
                         "SPECIAL_CASE termination requires an edgeless "
-                        "graph with the empty flow"
+                        "graph with the empty flow",
                     )
             elif not self.graph.edges:
-                raise ValueError(
+                raise PydanticCustomError(
+                    "graph.edgeless_terminates_as_special_case_termination_reason",
                     "an edgeless graph terminates as SPECIAL_CASE, not "
-                    f"{self.termination_reason}"
+                    f"{self.termination_reason}",
                 )
             assert self.flow is not None  # guaranteed by _require_status_shape
             _verify_found_witness(
@@ -531,26 +599,31 @@ class MultigraphFlowFindResult(StrictModel):
             )
         elif self.status == "EXHAUSTED":
             if not self.graph.edges:
-                raise ValueError("EXHAUSTED status requires a nonempty search domain")
+                raise PydanticCustomError(
+                    "graph.exhausted_status_requires_a_nonempty_search_doma",
+                    "EXHAUSTED status requires a nonempty search domain",
+                )
             expected = _complete_enumeration_state_count(
                 self.graph,
                 self.group,
                 self.resource_budget.require_nowhere_zero,
             )
             if self.states_explored != expected:
-                raise ValueError(
+                raise PydanticCustomError(
+                    "graph.exhausted_outcome_reports_states_explored_explored_states",
                     f"EXHAUSTED outcome reports {self.states_explored} "
                     f"explored states; a completed enumeration of the "
-                    f"retained domain charges exactly {expected}"
+                    f"retained domain charges exactly {expected}",
                 )
         else:
             # UNKNOWN is emitted only at the moment the budget is exceeded,
             # reporting exactly max_states charged states.
             if self.states_explored != self.resource_budget.max_states:
-                raise ValueError(
+                raise PydanticCustomError(
+                    "graph.unknown_outcome_reports_states_explored_explored_states",
                     f"UNKNOWN outcome reports {self.states_explored} "
                     "explored states; a budget-exceeded search reports "
-                    f"exactly {self.resource_budget.max_states}"
+                    f"exactly {self.resource_budget.max_states}",
                 )
         return self
 
@@ -586,21 +659,37 @@ def _require_status_shape(
 
     if status == "FOUND":
         if flow is None:
-            raise ValueError("FOUND status requires a flow witness")
+            raise PydanticCustomError(
+                "graph.found_status_requires_a_flow_witness",
+                "FOUND status requires a flow witness",
+            )
         if termination_reason not in ("WITNESS_FOUND", "SPECIAL_CASE"):
-            raise ValueError(
-                "FOUND status requires WITNESS_FOUND or SPECIAL_CASE reason"
+            raise PydanticCustomError(
+                "graph.found_status_requires_witness_found_special_case",
+                "FOUND status requires WITNESS_FOUND or SPECIAL_CASE reason",
             )
     elif status == "EXHAUSTED":
         if flow is not None:
-            raise ValueError("EXHAUSTED status must not include a flow")
+            raise PydanticCustomError(
+                "graph.exhausted_status_must_not_include_a_flow",
+                "EXHAUSTED status must not include a flow",
+            )
         if termination_reason != "SEARCH_EXHAUSTED":
-            raise ValueError("EXHAUSTED status requires SEARCH_EXHAUSTED reason")
+            raise PydanticCustomError(
+                "graph.exhausted_status_requires_search_exhausted_reaso",
+                "EXHAUSTED status requires SEARCH_EXHAUSTED reason",
+            )
     elif status == "UNKNOWN":
         if flow is not None:
-            raise ValueError("UNKNOWN status must not include a flow")
+            raise PydanticCustomError(
+                "graph.unknown_status_must_not_include_a_flow",
+                "UNKNOWN status must not include a flow",
+            )
         if termination_reason != "STATE_BUDGET_EXCEEDED":
-            raise ValueError("UNKNOWN status requires STATE_BUDGET_EXCEEDED")
+            raise PydanticCustomError(
+                "graph.unknown_status_requires_state_budget_exceeded",
+                "UNKNOWN status requires STATE_BUDGET_EXCEEDED",
+            )
 
 
 def _require_single_assignment_per_edge(
@@ -610,14 +699,23 @@ def _require_single_assignment_per_edge(
     """Require exactly one assignment record per graph edge."""
 
     if len(flow) != len(graph_ids):
-        raise ValueError("FOUND flow must assign exactly one value to every graph edge")
+        raise PydanticCustomError(
+            "graph.found_flow_must_assign_exactly_one_value_to_ever",
+            "FOUND flow must assign exactly one value to every graph edge",
+        )
     assigned: set[str] = set()
     for a in flow:
         if a.edge_id in assigned:
-            raise ValueError(f"FOUND flow assigns edge {a.edge_id} more than once")
+            raise PydanticCustomError(
+                "graph.found_flow_assigns_edge_edge_id_more",
+                f"FOUND flow assigns edge {a.edge_id} more than once",
+            )
         assigned.add(a.edge_id)
     if graph_ids != assigned:
-        raise ValueError("FOUND flow must assign every graph edge")
+        raise PydanticCustomError(
+            "graph.found_flow_must_assign_every_graph_edge",
+            "FOUND flow must assign every graph edge",
+        )
 
 
 def _verify_found_witness(
@@ -633,7 +731,10 @@ def _verify_found_witness(
     if resource_budget.require_nowhere_zero:
         for a in flow:
             if group.is_zero(a.value):
-                raise ValueError("FOUND flow violates nowhere_zero requirement")
+                raise PydanticCustomError(
+                    "graph.found_flow_violates_nowhere_zero_requirement",
+                    "FOUND flow violates nowhere_zero requirement",
+                )
     vertex_out: dict[int, list[tuple[int, ...]]] = {
         v: [] for v in range(graph.vertex_count)
     }
@@ -642,7 +743,7 @@ def _verify_found_witness(
     }
     for a in flow:
         edge = graph.edge_by_id(a.edge_id)
-        tail, head = _oriented_endpoints(edge, a.orientation)
+        tail, head = oriented_endpoints(edge, a.orientation)
         val = group.normalize(a.value)
         vertex_out[tail].append(val)
         vertex_in[head].append(val)
@@ -650,7 +751,10 @@ def _verify_found_witness(
         out_sum = group.sum(tuple(vertex_out[v]))
         in_sum = group.sum(tuple(vertex_in[v]))
         if not group.is_zero(group.add(out_sum, group.negate(in_sum))):
-            raise ValueError("FOUND flow does not satisfy conservation")
+            raise PydanticCustomError(
+                "graph.found_flow_does_not_satisfy_conservation",
+                "FOUND flow does not satisfy conservation",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -688,9 +792,15 @@ class EulerianCyclesRequest(StrictModel):
             subset_set = set(self.edge_subset)
             if not subset_set.issubset(graph_ids):
                 missing = sorted(subset_set - graph_ids)
-                raise ValueError(f"edge_subset references unknown edge IDs: {missing}")
+                raise PydanticCustomError(
+                    "graph.edge_subset_references_unknown_edge_ids_missing",
+                    f"edge_subset references unknown edge IDs: {missing}",
+                )
             if len(subset_set) != len(self.edge_subset):
-                raise ValueError("edge_subset must not repeat edge IDs")
+                raise PydanticCustomError(
+                    "graph.edge_subset_must_not_repeat_edge_ids",
+                    "edge_subset must not repeat edge IDs",
+                )
         return self
 
 
@@ -727,17 +837,30 @@ class CycleRecord(StrictModel):
     @model_validator(mode="after")
     def require_closed_cycle(self) -> Self:
         if len(self.vertices) != len(self.edge_ids) + 1:
-            raise ValueError("a cycle must have len(vertices) == len(edge_ids) + 1")
+            raise PydanticCustomError(
+                "graph.a_cycle_must_have_len_vertices_len_edge_ids_1",
+                "a cycle must have len(vertices) == len(edge_ids) + 1",
+            )
         if self.vertices[0] != self.vertices[-1]:
-            raise ValueError("a cycle must be closed (first vertex == last)")
+            raise PydanticCustomError(
+                "graph.a_cycle_must_be_closed_first_vertex_last",
+                "a cycle must be closed (first vertex == last)",
+            )
         if len(set(self.edge_ids)) != len(self.edge_ids):
-            raise ValueError("a cycle must not repeat edge IDs")
+            raise PydanticCustomError(
+                "graph.a_cycle_must_not_repeat_edge_ids",
+                "a cycle must not repeat edge IDs",
+            )
         if any(v < 0 or v >= MAX_VERTICES for v in self.vertices):
-            raise ValueError(f"cycle vertices must be in 0..{MAX_VERTICES - 1}")
+            raise PydanticCustomError(
+                "graph.cycle_vertices_max_vertices_if_len_set",
+                f"cycle vertices must be in 0..{MAX_VERTICES - 1}",
+            )
         if len(set(self.vertices[:-1])) != len(self.vertices) - 1:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.cycle_repeat_interior_vertices_all_vertices_except",
                 "a cycle must not repeat interior vertices "
-                "(all vertices except the closing duplicate must be distinct)"
+                "(all vertices except the closing duplicate must be distinct)",
             )
         return self
 
@@ -752,7 +875,6 @@ class EulerianCyclesResult(StrictModel):
     reserved for a non-Eulerian requested multiset.
     """
 
-    result_schema_version: Literal["1"] = "1"
     graph: LooplessMultigraph
     edge_subset: tuple[StrictStr, ...] | None = Field(
         default=None, max_length=MAX_EDGES
@@ -768,37 +890,47 @@ class EulerianCyclesResult(StrictModel):
         # purported multiset's multiplicity.
         if self.edge_subset is not None:
             if len(set(self.edge_subset)) != len(self.edge_subset):
-                raise ValueError("edge_subset must not repeat edge IDs")
+                raise PydanticCustomError(
+                    "graph.edge_subset_must_not_repeat_edge_ids",
+                    "edge_subset must not repeat edge IDs",
+                )
             requested = set(self.edge_subset)
             if not requested.issubset(self.graph.edge_id_set):
-                raise ValueError("edge_subset contains unknown edge IDs")
+                raise PydanticCustomError(
+                    "graph.edge_subset_contains_unknown_edge_ids",
+                    "edge_subset contains unknown edge IDs",
+                )
         else:
             requested = set(self.graph.edge_id_set)
         used = _verify_cycle_incidence(self.graph, self.cycles, requested)
         # Validate edge_usage matches
         expected_usage = tuple(sorted((eid, used[eid]) for eid in sorted(requested)))
         if self.edge_usage != expected_usage:
-            raise ValueError(
-                f"edge_usage {self.edge_usage} does not match recomputed {expected_usage}"
+            raise PydanticCustomError(
+                "graph.edge_usage_edge_usage_does_match_recomputed",
+                f"edge_usage {self.edge_usage} does not match recomputed {expected_usage}",
             )
         expected_covers = _expected_covers_all(used, requested, len(self.cycles))
         if self.covers_all != expected_covers:
-            raise ValueError(
-                f"covers_all {self.covers_all} does not match expected {expected_covers}"
+            raise PydanticCustomError(
+                "graph.covers_all_covers_all_does_match_expected",
+                f"covers_all {self.covers_all} does not match expected {expected_covers}",
             )
         if requested and _subset_is_eulerian(self.graph, requested):
             # An Eulerian source must be fully decomposed; the empty
             # covers_all=False outcome is reserved for non-Eulerian sources.
             if not self.covers_all:
-                raise ValueError(
+                raise PydanticCustomError(
+                    "graph.eulerian_source_fully_decomposed_covers_all_empty",
                     "an Eulerian source must be fully decomposed "
                     "(covers_all=True); an empty covers_all=False outcome "
-                    "is only valid for a non-Eulerian source"
+                    "is only valid for a non-Eulerian source",
                 )
         elif requested and self.cycles != ():
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.non_eulerian_source_yield_empty_decomposition_cycles",
                 "a non-Eulerian source must yield an empty decomposition "
-                "(cycles=()) with covers_all=False"
+                "(cycles=()) with covers_all=False",
             )
         return self
 
@@ -815,10 +947,14 @@ def _verify_cycle_incidence(
     for cycle in cycles:
         for eid in cycle.edge_ids:
             if eid not in requested:
-                raise ValueError(f"cycle uses edge {eid} not in requested set")
+                raise PydanticCustomError(
+                    "graph.cycle_uses_edge_eid_requested_set_if",
+                    f"cycle uses edge {eid} not in requested set",
+                )
             if eid in seen_cycle_ids:
-                raise ValueError(
-                    f"edge {eid} appears in multiple cycles (must be disjoint)"
+                raise PydanticCustomError(
+                    "graph.edge_eid_appears_multiple_cycles_disjoint",
+                    f"edge {eid} appears in multiple cycles (must be disjoint)",
                 )
             seen_cycle_ids.add(eid)
             pos = list(cycle.edge_ids).index(eid)
@@ -829,7 +965,10 @@ def _verify_cycle_incidence(
                 (edge.left == v_from and edge.right == v_to)
                 or (edge.right == v_from and edge.left == v_to)
             ):
-                raise ValueError(f"cycle edge {eid} incidence does not match graph")
+                raise PydanticCustomError(
+                    "graph.cycle_edge_eid_incidence_does_match_used",
+                    f"cycle edge {eid} incidence does not match graph",
+                )
             used[eid] += 1
     return used
 
@@ -882,8 +1021,9 @@ class CycleMulticoverRequest(StrictModel):
     def require_bounded_incidence(self) -> Self:
         total = sum(len(cycle.edge_ids) for cycle in self.cycles)
         if total > MAX_CYCLE_EDGE_INCIDENCES:
-            raise ValueError(
-                f"total cycle-edge incidences exceed {MAX_CYCLE_EDGE_INCIDENCES}"
+            raise PydanticCustomError(
+                "graph.total_cycle_edge_incidences_exceed_max_cycle",
+                f"total cycle-edge incidences exceed {MAX_CYCLE_EDGE_INCIDENCES}",
             )
         return self
 
@@ -904,7 +1044,6 @@ class CycleMulticoverResult(StrictModel):
     request.
     """
 
-    result_schema_version: Literal["1"] = "1"
     graph: LooplessMultigraph
     cycles: tuple[CycleRecord, ...] = Field(max_length=MAX_CYCLE_COUNT)
     target_multiplicity: StrictInt = Field(ge=0, le=MAX_PARALLEL_MULTIPLICITY)
@@ -919,7 +1058,10 @@ class CycleMulticoverResult(StrictModel):
     @model_validator(mode="after")
     def require_consistent_cover(self) -> Self:
         if len(self.cycle_validity) != len(self.cycles):
-            raise ValueError("cycle_validity length must match cycles length")
+            raise PydanticCustomError(
+                "graph.cycle_validity_length_must_match_cycles_length",
+                "cycle_validity length must match cycles length",
+            )
         # Recompute validity and multiplicity from the retained source.
         recomputed_multiplicity: dict[str, int] = {
             edge.edge_id: 0 for edge in self.graph.edges
@@ -953,18 +1095,20 @@ class CycleMulticoverResult(StrictModel):
                     recomputed_multiplicity[eid] += 1
             recomputed_validity.append(cycle_valid)
         if tuple(recomputed_validity) != self.cycle_validity:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.cycle_validity_cycle_validity_does_match_recomputed",
                 f"cycle_validity {self.cycle_validity} does not match "
-                f"recomputed {tuple(recomputed_validity)} from source"
+                f"recomputed {tuple(recomputed_validity)} from source",
             )
         recomputed_tuple = tuple(
             (eid, recomputed_multiplicity[eid])
             for eid in sorted(recomputed_multiplicity)
         )
         if recomputed_tuple != self.edge_multiplicity:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.edge_multiplicity_edge_multiplicity_does_match_recomputed",
                 f"edge_multiplicity {self.edge_multiplicity} does not match "
-                f"recomputed {recomputed_tuple} from source"
+                f"recomputed {recomputed_tuple} from source",
             )
         k = self.target_multiplicity
         recomputed_missing = tuple(
@@ -974,14 +1118,16 @@ class CycleMulticoverResult(StrictModel):
             sorted(eid for eid, cnt in recomputed_multiplicity.items() if cnt > k)
         )
         if recomputed_missing != self.missing_edge_ids:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.missing_edge_ids_missing_edge_ids_does",
                 f"missing_edge_ids {self.missing_edge_ids} does not match "
-                f"recomputed {recomputed_missing} for k={k}"
+                f"recomputed {recomputed_missing} for k={k}",
             )
         if recomputed_over != self.overcovered_edge_ids:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.overcovered_edge_ids_overcovered_edge_ids_does",
                 f"overcovered_edge_ids {self.overcovered_edge_ids} does not match "
-                f"recomputed {recomputed_over} for k={k}"
+                f"recomputed {recomputed_over} for k={k}",
             )
         expected_exact = (
             all(recomputed_validity)
@@ -989,8 +1135,9 @@ class CycleMulticoverResult(StrictModel):
             and len(recomputed_over) == 0
         )
         if self.is_exact_k_cover != expected_exact:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.exact_cover_exact_cover_does_match_expected",
                 f"is_exact_k_cover {self.is_exact_k_cover} does not match "
-                f"expected {expected_exact} from source"
+                f"expected {expected_exact} from source",
             )
         return self

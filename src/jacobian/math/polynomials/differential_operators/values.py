@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -20,6 +21,10 @@ DifferentialOrder = Annotated[
     StrictInt,
     Field(ge=0, le=MAX_DIFFERENTIAL_ORDER),
 ]
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"polynomial.differential_operator_{reason}", message)
 
 
 class DifferentialOperatorTerm(StrictModel):
@@ -40,7 +45,9 @@ class DifferentialOperatorTerm(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_term(self) -> Self:
         if self.coefficient.as_fraction() == 0:
-            raise ValueError("zero differential-operator terms must be omitted")
+            raise _validation_error(
+                "zero_term", "zero differential-operator terms must be omitted"
+            )
         return self
 
 
@@ -52,7 +59,6 @@ class ConstantCoefficientDifferentialOperator(StrictModel):
     multi-indices. The empty term tuple is the zero operator on that axis.
     """
 
-    differential_operator_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     variables: tuple[PolynomialVariable, ...] = Field(
         min_length=1,
@@ -75,17 +81,23 @@ class ConstantCoefficientDifferentialOperator(StrictModel):
     @model_validator(mode="after")
     def require_canonical_operator(self) -> Self:
         if len(set(self.variables)) != len(self.variables):
-            raise ValueError("differential-operator variables must be unique")
+            raise _validation_error(
+                "duplicate_variables", "differential-operator variables must be unique"
+            )
         if any(len(term.orders) != len(self.variables) for term in self.terms):
-            raise ValueError(
-                "every derivative multi-index must match the declared variable order"
+            raise _validation_error(
+                "variable_shape",
+                "every derivative multi-index must match the declared variable order",
             )
         orders = tuple(term.orders for term in self.terms)
         if len(set(orders)) != len(orders):
-            raise ValueError("derivative multi-indices must be unique")
+            raise _validation_error(
+                "duplicate_multi_indices", "derivative multi-indices must be unique"
+            )
         if orders != tuple(sorted(orders, reverse=True)):
-            raise ValueError(
-                "differential-operator terms must use descending lexicographic order"
+            raise _validation_error(
+                "multi_index_shape",
+                "differential-operator terms must use descending lexicographic order",
             )
         return self
 

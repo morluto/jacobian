@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 
@@ -99,7 +99,6 @@ class FiniteCosetCrossedProductPresentation(StrictModel):
     presentation.
     """
 
-    crossed_product_schema_version: Literal["1"] = "1"
     characteristic: StrictInt = Field(
         ge=2,
         le=MAX_CHARACTERISTIC,

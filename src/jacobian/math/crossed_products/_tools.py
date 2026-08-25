@@ -11,7 +11,6 @@ from jacobian.math.crossed_products._models import (
 from jacobian.math.crossed_products._operations import compute_product
 
 _INFINITE_DIHEDRAL_PRESENTATION = {
-    "crossed_product_schema_version": "1",
     "characteristic": 5,
     "lattice_basis": ["t"],
     "cosets": ["e", "a"],
@@ -25,7 +24,6 @@ _INFINITE_DIHEDRAL_PRESENTATION = {
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="crossed_product.multiply.compute",
-        version="1",
         title="Multiply finite-coset crossed-product elements",
         description=(
             "Multiply two canonical sparse elements of F_p[Z^d x_c Q] from a "

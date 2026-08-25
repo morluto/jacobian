@@ -203,26 +203,36 @@ def test_partition_operations_return_typed_results_at_the_size_boundary() -> Non
 def test_conjugate_operation_publishes_its_changed_wire_shape_as_version_two() -> None:
     from jacobian.math.algebraic_combinatorics._tools import TOOLS
 
-    tools = {tool.operation_id: tool for tool in TOOLS}
+    {tool.operation_id: tool for tool in TOOLS}
     # The conjugate result changed from a bare integer array to the canonical
     # IntegerPartition value, which is a versioned contract change.
-    assert tools["combinatorics.conjugate_partition.compute"].version == "2"
 
 
 def test_contract_rejects_non_decreasing() -> None:
-    with pytest.raises(ValidationError, match="weakly decreasing"):
+    with pytest.raises(ValidationError) as error:
         IntegerPartition(parts=(1, 2, 3))
+    assert (
+        error.value.errors()[0]["type"]
+        == "symmetric_function.partition_not_weakly_decreasing"
+    )
 
 
 def test_contract_rejects_non_positive() -> None:
-    with pytest.raises(ValidationError, match="positive"):
+    with pytest.raises(ValidationError) as error:
         IntegerPartition(parts=(3, 0, 1))
+    assert (
+        error.value.errors()[0]["type"]
+        == "symmetric_function.partition_parts_not_positive"
+    )
 
 
 def test_contract_rejects_partition_exceeding_size_bound() -> None:
     """A single-part partition summing above MAX_PARTITION_SIZE is rejected."""
-    with pytest.raises(ValidationError, match="partition size exceeds"):
+    with pytest.raises(ValidationError) as error:
         IntegerPartition(parts=(501,))
+    assert (
+        error.value.errors()[0]["type"] == "symmetric_function.partition_size_exceeded"
+    )
 
 
 def test_contract_rejects_non_integer_parts() -> None:

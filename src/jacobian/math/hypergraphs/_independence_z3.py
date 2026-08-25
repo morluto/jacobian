@@ -100,7 +100,6 @@ def _result(
     # still execute the bounded replay validator.
     return HypergraphIndependenceResult.model_validate(
         {
-            "result_schema_version": "1",
             "hypergraph": request.hypergraph,
             "hypergraph_digest": _hypergraph_digest(request.hypergraph),
             "resource_budget": request.resource_budget,

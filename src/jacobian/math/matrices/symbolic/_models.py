@@ -8,6 +8,7 @@ from itertools import combinations, permutations, product
 from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
@@ -74,13 +75,17 @@ def _require_determinant_family_result_budget(
         return
     values = tuple(value for row in matrix.entries for value in row)
     if any(not _is_polynomial_entry(value) for value in values):
-        raise ValueError(
-            "multi-dimensional determinant-family requests require polynomial entries"
+        raise _validation_error(
+            "budget_exceeded",
+            "multi-dimensional determinant-family requests require polynomial entries",
         )
     term_bounds = _principal_minor_term_bounds(matrix.entries)
     relevant_bounds = term_bounds[1:] if characteristic_polynomial else term_bounds[-1:]
     if any(bound > MAX_SYMBOLIC_RESULT_TERMS for bound in relevant_bounds):
-        raise ValueError("determinant-family expansion exceeds the result term budget")
+        raise _validation_error(
+            "budget_exceeded",
+            "determinant-family expansion exceeds the result term budget",
+        )
     maximum_exponent = max(
         (
             exponent
@@ -91,8 +96,9 @@ def _require_determinant_family_result_budget(
         default=0,
     )
     if dimension * maximum_exponent > MAX_SYMBOLIC_RESULT_EXPONENT:
-        raise ValueError(
-            "determinant-family expansion exceeds the result exponent budget"
+        raise _validation_error(
+            "budget_exceeded",
+            "determinant-family expansion exceeds the result exponent budget",
         )
     coefficient_digits = max(
         (
@@ -108,8 +114,9 @@ def _require_determinant_family_result_budget(
         > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS
         for bound in relevant_bounds
     ):
-        raise ValueError(
-            "determinant-family expansion exceeds the result coefficient budget"
+        raise _validation_error(
+            "budget_exceeded",
+            "determinant-family expansion exceeds the result coefficient budget",
         )
 
 
@@ -124,7 +131,6 @@ class SymbolicMatrix(StrictModel):
     caller text with SymPy.
     """
 
-    matrix_schema_version: Literal["1"] = "1"
     variables: tuple[PolynomialVariable, ...] = Field(
         min_length=0,
         max_length=MAX_SYMBOLIC_VARIABLES,
@@ -138,25 +144,34 @@ class SymbolicMatrix(StrictModel):
     def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
         if column_count == 0 or column_count > MAX_SYMBOLIC_MATRIX_DIMENSION:
-            raise ValueError(
+            raise _validation_error(
+                "shape_mismatch",
                 "matrix rows must contain between 1 and "
-                f"{MAX_SYMBOLIC_MATRIX_DIMENSION} entries"
+                f"{MAX_SYMBOLIC_MATRIX_DIMENSION} entries",
             )
         if any(len(row) != column_count for row in self.entries):
-            raise ValueError("matrix rows must all have the same length")
+            raise _validation_error(
+                "budget_exceeded", "matrix rows must all have the same length"
+            )
         if len(set(self.variables)) != len(self.variables):
-            raise ValueError("symbolic matrix variables must be unique")
+            raise _validation_error(
+                "budget_exceeded", "symbolic matrix variables must be unique"
+            )
         values = tuple(value for row in self.entries for value in row)
         if any(value.variables != self.variables for value in values):
-            raise ValueError(
-                "every symbolic matrix entry must use the declared ordered field"
+            raise _validation_error(
+                "budget_exceeded",
+                "every symbolic matrix entry must use the declared ordered field",
             )
         term_count = sum(
             len(value.numerator.terms) + len(value.denominator.terms)
             for value in values
         )
         if term_count > MAX_SYMBOLIC_MATRIX_TERMS:
-            raise ValueError("symbolic matrix exceeds the 512-term operation budget")
+            raise _validation_error(
+                "budget_exceeded",
+                "symbolic matrix exceeds the 512-term operation budget",
+            )
         return self
 
 
@@ -717,19 +732,22 @@ def _require_symbolic_product_admission(
     """
 
     if left.variables != right.variables:
-        raise ValueError(
-            "symbolic matrix multiplication requires identical ordered field variables"
+        raise _validation_error(
+            "budget_exceeded",
+            "symbolic matrix multiplication requires identical ordered field variables",
         )
     if len(left.entries[0]) != len(right.entries):
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "symbolic matrix multiplication requires the left column count to equal "
-            "the right row count"
+            "the right row count",
         )
 
     projected_expansion_terms = _projected_expansion_terms(left, right)
     if projected_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
-        raise ValueError(
-            "symbolic matrix product exceeds the 512-term aggregate expansion budget"
+        raise _validation_error(
+            "budget_exceeded",
+            "symbolic matrix product exceeds the 512-term aggregate expansion budget",
         )
 
     aggregate_expansion_terms = 0
@@ -750,8 +768,9 @@ def _require_symbolic_product_admission(
                 # Raw scalar products are governed by the aggregate expansion
                 # budget below; this per-entry limit binds the already
                 # computed collected support of the canonical cell value.
-                raise ValueError(
-                    "symbolic matrix product exceeds the 256-term exact result budget"
+                raise _validation_error(
+                    "budget_exceeded",
+                    "symbolic matrix product exceeds the 256-term exact result budget",
                 )
             if not (
                 unit_denominator_factors
@@ -771,20 +790,23 @@ def _require_symbolic_product_admission(
                 # only loses monomial factors during cancellation (every
                 # divisor of a monomial is a monomial), so support and
                 # coefficient size stay within the raw expansion bounds.
-                raise ValueError(
+                raise _validation_error(
+                    "budget_exceeded",
                     "symbolic matrix product cannot bound coefficient growth "
-                    "under cancellation by a multi-term denominator"
+                    "under cancellation by a multi-term denominator",
                 )
             maximum_exponent = max(
                 (*numerator_exponents, *denominator_exponents), default=0
             )
             if maximum_exponent > MAX_SYMBOLIC_RESULT_EXPONENT:
-                raise ValueError(
-                    "symbolic matrix product exceeds the result exponent budget"
+                raise _validation_error(
+                    "budget_exceeded",
+                    "symbolic matrix product exceeds the result exponent budget",
                 )
             if maximum_coefficient_digits > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS:
-                raise ValueError(
-                    "symbolic matrix product exceeds the result coefficient budget"
+                raise _validation_error(
+                    "budget_exceeded",
+                    "symbolic matrix product exceeds the result coefficient budget",
                 )
             # Unit denominators produce no denominator work at all, so the
             # expansion charge counts only the scalar products that run.
@@ -799,12 +821,14 @@ def _require_symbolic_product_admission(
             # SymbolicMatrix will validate.
             aggregate_result_terms += result_term_count
     if aggregate_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
-        raise ValueError(
-            "symbolic matrix product exceeds the 512-term aggregate expansion budget"
+        raise _validation_error(
+            "budget_exceeded",
+            "symbolic matrix product exceeds the 512-term aggregate expansion budget",
         )
     if aggregate_result_terms > MAX_SYMBOLIC_MATRIX_TERMS:
-        raise ValueError(
-            "symbolic matrix product exceeds the 512-term aggregate result budget"
+        raise _validation_error(
+            "budget_exceeded",
+            "symbolic matrix product exceeds the 512-term aggregate result budget",
         )
 
 
@@ -854,7 +878,9 @@ class SquareSymbolicMatrixRequest(SymbolicMatrixRequest):
         rows = len(self.matrix.entries)
         cols = len(self.matrix.entries[0])
         if rows != cols:
-            raise ValueError("operation requires a square symbolic matrix")
+            raise _validation_error(
+                "budget_exceeded", "operation requires a square symbolic matrix"
+            )
         return self
 
 
@@ -961,29 +987,35 @@ class SymbolicEigenvaluesResult(StrictModel):
     def require_representation_consistency(self) -> Self:
         if self.representation == "EXPLICIT_ROOTS":
             if self.eigenvalues is None or self.multiplicities is None:
-                raise ValueError(
-                    "EXPLICIT_ROOTS must populate eigenvalues and multiplicities"
+                raise _validation_error(
+                    "shape_mismatch",
+                    "EXPLICIT_ROOTS must populate eigenvalues and multiplicities",
                 )
             if len(self.eigenvalues) != len(self.multiplicities):
-                raise ValueError(
-                    "eigenvalues and multiplicities must have the same length"
+                raise _validation_error(
+                    "shape_mismatch",
+                    "eigenvalues and multiplicities must have the same length",
                 )
             if self.characteristic_polynomial is not None or self.degree is not None:
-                raise ValueError(
-                    "EXPLICIT_ROOTS must not populate characteristic_polynomial or degree"
+                raise _validation_error(
+                    "field_mismatch",
+                    "EXPLICIT_ROOTS must not populate characteristic_polynomial or degree",
                 )
         else:  # ROOTS_BY_POLYNOMIAL
             if self.eigenvalues is not None or self.multiplicities is not None:
-                raise ValueError(
-                    "ROOTS_BY_POLYNOMIAL must not populate eigenvalues or multiplicities"
+                raise _validation_error(
+                    "field_mismatch",
+                    "ROOTS_BY_POLYNOMIAL must not populate eigenvalues or multiplicities",
                 )
             if self.characteristic_polynomial is None or self.degree is None:
-                raise ValueError(
-                    "ROOTS_BY_POLYNOMIAL must populate characteristic_polynomial and degree"
+                raise _validation_error(
+                    "invariant_mismatch",
+                    "ROOTS_BY_POLYNOMIAL must populate characteristic_polynomial and degree",
                 )
             if len(self.characteristic_polynomial) != self.degree + 1:
-                raise ValueError(
-                    "characteristic polynomial coefficients must equal degree plus one"
+                raise _validation_error(
+                    "budget_exceeded",
+                    "characteristic polynomial coefficients must equal degree plus one",
                 )
         return self
 
@@ -1219,19 +1251,22 @@ def _require_linear_system_growth_admission(
     """
     growth = _solution_component_growth_bound(entries, rhs)
     if growth[0] > MAX_SYMBOLIC_RESULT_TERMS:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "linear-system solution exceeds the derived result term budget; "
-            "reduce entry term counts or dimension"
+            "reduce entry term counts or dimension",
         )
     if growth[1] > MAX_SYMBOLIC_RESULT_EXPONENT:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "linear-system solution exceeds the derived result exponent "
-            "budget; reduce entry exponents or dimension"
+            "budget; reduce entry exponents or dimension",
         )
     if growth[2] > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "linear-system solution exceeds the derived result coefficient "
-            "budget; reduce coefficient sizes or dimension"
+            "budget; reduce coefficient sizes or dimension",
         )
 
 
@@ -1254,13 +1289,15 @@ class SymbolicLinearSystemRequest(StrictModel):
     def require_consistent_system(self) -> Self:
         rows = len(self.matrix.entries)
         if len(self.rhs) != rows:
-            raise ValueError(
-                "the right-hand side length must equal the coefficient row count"
+            raise _validation_error(
+                "budget_exceeded",
+                "the right-hand side length must equal the coefficient row count",
             )
         for value in self.rhs:
             if value.variables != self.matrix.variables:
-                raise ValueError(
-                    "the right-hand side must use the declared ordered field"
+                raise _validation_error(
+                    "budget_exceeded",
+                    "the right-hand side must use the declared ordered field",
                 )
         # Derived-solution admission: bound exponent, term, and coefficient
         # growth before the backend runs so every accepted system returns
@@ -1323,22 +1360,25 @@ class SymbolicLinearSystemResult(StrictModel):
         for key in ("solution", "particular_solution"):
             value = data.get(key)
             if isinstance(value, (list, tuple)) and len(value) > limit:
-                raise ValueError(
+                raise _validation_error(
+                    "shape_mismatch",
                     f"{key} length {len(value)} exceeds the retained system's "
-                    f"column count {limit}"
+                    f"column count {limit}",
                 )
         basis = data.get("nullspace_basis")
         if isinstance(basis, (list, tuple)):
             if len(basis) > limit:
-                raise ValueError(
+                raise _validation_error(
+                    "shape_mismatch",
                     f"nullspace_basis length {len(basis)} exceeds the "
-                    f"retained system's column count {limit}"
+                    f"retained system's column count {limit}",
                 )
             for vector in basis:
                 if isinstance(vector, (list, tuple)) and len(vector) > limit:
-                    raise ValueError(
+                    raise _validation_error(
+                        "shape_mismatch",
                         "a nullspace basis vector exceeds the retained "
-                        f"system's column count {limit}"
+                        f"system's column count {limit}",
                     )
         return data
 
@@ -1367,28 +1407,32 @@ class SymbolicLinearSystemResult(StrictModel):
         # any SymPy arithmetic so a malformed relayed payload fails as a
         # contract violation instead of a backend host exception.
         if len(particular) != n_cols:
-            raise ValueError(
+            raise _validation_error(
+                "shape_mismatch",
                 "particular_solution must have exactly the retained "
-                "system's column count"
+                "system's column count",
             )
         for value in particular:
             if value.variables != declared_variables:
-                raise ValueError(
+                raise _validation_error(
+                    "shape_mismatch",
                     "witness vectors must use the retained system's "
-                    "declared ordered field"
+                    "declared ordered field",
                 )
         basis = self.nullspace_basis or ()
         for vector in basis:
             if len(vector) != n_cols:
-                raise ValueError(
+                raise _validation_error(
+                    "shape_mismatch",
                     "every nullspace basis vector must have exactly the "
-                    "retained system's column count"
+                    "retained system's column count",
                 )
             for value in vector:
                 if value.variables != declared_variables:
-                    raise ValueError(
+                    raise _validation_error(
+                        "shape_mismatch",
                         "witness vectors must use the retained system's "
-                        "declared ordered field"
+                        "declared ordered field",
                     )
         coefficient = sympy.Matrix(
             [[rational_function_to_sympy(e) for e in row] for row in entries]
@@ -1399,45 +1443,62 @@ class SymbolicLinearSystemResult(StrictModel):
         p_vec = sympy.Matrix([[rational_function_to_sympy(v)] for v in particular])
         residual = coefficient * p_vec - rhs_vec
         if any(sympy.cancel(entry) != 0 for entry in residual):
-            raise ValueError(
-                "particular_solution must satisfy the retained system exactly"
+            raise _validation_error(
+                "shape_mismatch",
+                "particular_solution must satisfy the retained system exactly",
             )
         kernel_columns = []
         for vector in basis:
             v_vec = sympy.Matrix([[rational_function_to_sympy(v)] for v in vector])
             image = coefficient * v_vec
             if any(sympy.cancel(entry) != 0 for entry in image):
-                raise ValueError("every nullspace basis vector must satisfy A v = 0")
+                raise _validation_error(
+                    "shape_mismatch",
+                    "every nullspace basis vector must satisfy A v = 0",
+                )
             kernel_columns.append(v_vec)
         rank_coefficient = coefficient.rank()
         nullity = n_cols - rank_coefficient
         if len(kernel_columns) != nullity:
-            raise ValueError(
+            raise _validation_error(
+                "shape_mismatch",
                 "nullspace_basis must carry exactly n - rank(A) independent "
-                "vectors to span the kernel completely"
+                "vectors to span the kernel completely",
             )
         if nullity and (sympy.Matrix.hstack(*kernel_columns).rank() != nullity):
-            raise ValueError("nullspace basis vectors must be linearly independent")
+            raise _validation_error(
+                "shape_mismatch", "nullspace basis vectors must be linearly independent"
+            )
 
     def _require_classification_payload_shape(self) -> None:
         if self.classification == "UNIQUE":
             if self.solution is None:
-                raise ValueError("UNIQUE must carry a solution vector")
+                raise _validation_error(
+                    "status_mismatch", "UNIQUE must carry a solution vector"
+                )
             if self.particular_solution is not None or self.nullspace_basis is not None:
-                raise ValueError(
-                    "UNIQUE must not populate particular_solution or nullspace_basis"
+                raise _validation_error(
+                    "status_mismatch",
+                    "UNIQUE must not populate particular_solution or nullspace_basis",
                 )
         elif self.classification == "NON_UNIQUE":
             if self.particular_solution is None:
-                raise ValueError("NON_UNIQUE must carry a particular_solution")
+                raise _validation_error(
+                    "status_mismatch", "NON_UNIQUE must carry a particular_solution"
+                )
             if self.solution is not None:
-                raise ValueError("NON_UNIQUE must not populate the unique solution")
+                raise _validation_error(
+                    "budget_exceeded",
+                    "NON_UNIQUE must not populate the unique solution",
+                )
         elif (
             self.solution is not None
             or self.particular_solution is not None
             or self.nullspace_basis is not None
         ):
-            raise ValueError("INCONSISTENT must not carry solution data")
+            raise _validation_error(
+                "budget_exceeded", "INCONSISTENT must not carry solution data"
+            )
 
     @model_validator(mode="after")
     def require_consistent_result(self) -> Self:
@@ -1461,15 +1522,21 @@ class SymbolicLinearSystemResult(StrictModel):
             _expected_nullspace,
         ) = self._replayed_solution()
         if self.classification != expected_classification:
-            raise ValueError(
+            raise _validation_error(
+                "invariant_mismatch",
                 "linear-system conclusion must be the exact solve of the "
-                "retained source system"
+                "retained source system",
             )
         if self.classification == "UNIQUE" and self.solution != expected_solution:
-            raise ValueError(
+            raise _validation_error(
+                "invariant_mismatch",
                 "the unique solution must be the exact solve of the "
-                "retained source system"
+                "retained source system",
             )
         if self.classification == "NON_UNIQUE":
             self._require_mathematical_witnesses()
         return self
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"matrix.{reason}", message)

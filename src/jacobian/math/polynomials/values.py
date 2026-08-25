@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -18,6 +19,10 @@ MAX_POLYNOMIAL_TERMS = 4_096
 MAX_POLYNOMIAL_EXPONENT = 32_768
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"polynomial.{reason}", message)
+
+
 class RationalPolynomialTerm(StrictModel):
     coefficient: CanonicalRational
     exponents: tuple[int, ...] = Field(
@@ -27,13 +32,16 @@ class RationalPolynomialTerm(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_coefficient_and_bounded_exponents(self) -> Self:
         if self.coefficient.as_fraction() == 0:
-            raise ValueError("zero polynomial terms must be omitted")
+            raise _validation_error(
+                "zero_term", "zero polynomial terms must be omitted"
+            )
         if any(
             exponent < 0 or exponent > MAX_POLYNOMIAL_EXPONENT
             for exponent in self.exponents
         ):
-            raise ValueError(
-                "polynomial exponents exceed the shared representation limit"
+            raise _validation_error(
+                "exponent_bound",
+                "polynomial exponents exceed the shared representation limit",
             )
         return self
 
@@ -65,16 +73,19 @@ class SparseRationalPolynomial(StrictModel):
     def require_unique_canonical_term_order(self) -> Self:
         exponents = tuple(term.exponents for term in self.terms)
         if len(set(exponents)) != len(exponents):
-            raise ValueError("polynomial exponent tuples must be unique")
+            raise _validation_error(
+                "duplicate_exponents", "polynomial exponent tuples must be unique"
+            )
         if exponents != tuple(sorted(exponents, reverse=True)):
-            raise ValueError("polynomial terms must use descending lexicographic order")
+            raise _validation_error(
+                "term_order", "polynomial terms must use descending lexicographic order"
+            )
         return self
 
 
 class RationalPolynomial(StrictModel):
     """One sparse polynomial together with its exact coefficient ring."""
 
-    polynomial_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     variables: tuple[PolynomialVariable, ...] = Field(
         min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
@@ -84,11 +95,16 @@ class RationalPolynomial(StrictModel):
     @model_validator(mode="after")
     def require_matching_ring(self) -> Self:
         if len(set(self.variables)) != len(self.variables):
-            raise ValueError("polynomial variables must be unique")
+            raise _validation_error(
+                "duplicate_variables", "polynomial variables must be unique"
+            )
         if any(
             len(term.exponents) != len(self.variables) for term in self.polynomial.terms
         ):
-            raise ValueError("every monomial must match the declared variable order")
+            raise _validation_error(
+                "monomial_shape",
+                "every monomial must match the declared variable order",
+            )
         return self
 
 
@@ -112,9 +128,11 @@ class RationalPolynomialIdeal(StrictModel):
     @model_validator(mode="after")
     def require_one_ordered_ring(self) -> Self:
         if len(set(self.variables)) != len(self.variables):
-            raise ValueError("ideal variables must be unique")
+            raise _validation_error("ideal_variables", "ideal variables must be unique")
         if any(generator.variables != self.variables for generator in self.generators):
-            raise ValueError("every ideal generator must use the declared ordered ring")
+            raise _validation_error(
+                "ideal_ring", "every ideal generator must use the declared ordered ring"
+            )
         return self
 
 
@@ -127,7 +145,6 @@ class RationalFunction(StrictModel):
     by one constant numerator over the constant denominator one.
     """
 
-    rational_function_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     variables: tuple[PolynomialVariable, ...] = Field(
         min_length=0,
@@ -156,7 +173,9 @@ def _rational_function_one(variable_count: int) -> SparseRationalPolynomial:
 
 def _require_rational_function_shapes(value: RationalFunction) -> None:
     if len(set(value.variables)) != len(value.variables):
-        raise ValueError("rational-function variables must be unique")
+        raise _validation_error(
+            "rational_function_variables", "rational-function variables must be unique"
+        )
     for label, polynomial in (
         ("numerator", value.numerator),
         ("denominator", value.denominator),
@@ -164,8 +183,9 @@ def _require_rational_function_shapes(value: RationalFunction) -> None:
         if any(
             len(term.exponents) != len(value.variables) for term in polynomial.terms
         ):
-            raise ValueError(
-                f"every {label} monomial must match the declared variable order"
+            raise _validation_error(
+                "rational_function_shape",
+                f"every {label} monomial must match the declared variable order",
             )
         require_sparse_polynomial_budget(
             polynomial,
@@ -178,16 +198,21 @@ def _require_rational_function_shapes(value: RationalFunction) -> None:
 
 def _require_rational_function_normal_form(value: RationalFunction) -> None:
     if not value.denominator.terms:
-        raise ValueError("rational-function denominator cannot be zero")
+        raise _validation_error(
+            "zero_denominator", "rational-function denominator cannot be zero"
+        )
     one = _rational_function_one(len(value.variables))
     if not value.numerator.terms:
         if value.denominator != one:
-            raise ValueError("canonical zero must have denominator one")
+            raise _validation_error(
+                "zero_normal_form", "canonical zero must have denominator one"
+            )
         return
     if not value.variables:
         if value.denominator != one or len(value.numerator.terms) != 1:
-            raise ValueError(
-                "a rational function without variables must be a canonical rational"
+            raise _validation_error(
+                "constant_normal_form",
+                "a rational function without variables must be a canonical rational",
             )
         return
 
@@ -202,9 +227,13 @@ def _require_rational_function_normal_form(value: RationalFunction) -> None:
         value.denominator, value.variables
     )
     if denominator.LC() != 1:
-        raise ValueError("rational-function denominator must be monic")
+        raise _validation_error(
+            "denominator_not_monic", "rational-function denominator must be monic"
+        )
     if not numerator.gcd(denominator).is_one:
-        raise ValueError("rational-function numerator and denominator must be coprime")
+        raise _validation_error(
+            "not_coprime", "rational-function numerator and denominator must be coprime"
+        )
 
 
 def require_sparse_polynomial_budget(

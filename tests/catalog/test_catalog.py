@@ -36,7 +36,6 @@ def test_invoke_operation_runs_determinant_without_state() -> None:
         "matrix.determinant.compute",
         {
             "matrix": {
-                "matrix_schema_version": "1",
                 "domain": "QQ",
                 "entries": [
                     [{"num": "1", "den": "1"}, {"num": "2", "den": "1"}],
@@ -165,7 +164,6 @@ def test_catalog_runs_source_bound_powerful_decision() -> None:
     catalog = Catalog.open()
     operation = catalog.operation("integer.decide.powerful")
     assert operation is not None
-    assert operation.version == "3"
 
     result = invoke_operation(
         "integer.decide.powerful",

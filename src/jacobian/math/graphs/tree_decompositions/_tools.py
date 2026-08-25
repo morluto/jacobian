@@ -42,11 +42,9 @@ def _op[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -60,7 +58,6 @@ def _op[
 # A path graph a-b-c (two edges) with two bags: {a,b} and {b,c}.
 _TN = ["t0", "t1"]
 _GRAPH = {
-    "graph_schema_version": "1",
     "vertices": ["a", "b", "c"],
     "edges": [["a", "b"], ["b", "c"]],
 }
@@ -177,7 +174,6 @@ TREE_DECOMPOSITION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"decomposition": _DECOMPOSITION, "subset": ["a", "b"]},
             ),
         ),
-        version="2",
     ),
     _op(
         "graph.tree_decomposition.bag_intersection_graph.compute",

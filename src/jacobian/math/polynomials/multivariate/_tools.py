@@ -39,11 +39,9 @@ def multivariate_polynomial_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -59,7 +57,6 @@ _GCD_EXAMPLE = example(
     "Compute the GCD of two coprime multivariate polynomials.",
     {
         "left": {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x", "y"],
             "polynomial": {
@@ -76,7 +73,6 @@ _GCD_EXAMPLE = example(
             },
         },
         "right": {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x", "y"],
             "polynomial": {
@@ -100,7 +96,6 @@ _DIVISION_EXAMPLE = example(
     "Divide x^2*y + x by x*y - 1 under lex order.",
     {
         "left": {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x", "y"],
             "polynomial": {
@@ -117,7 +112,6 @@ _DIVISION_EXAMPLE = example(
             },
         },
         "right": {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x", "y"],
             "polynomial": {
@@ -142,7 +136,6 @@ _RESULTANT_EXAMPLE = example(
     "Compute the resultant of x*y-1 and x^2-1 w.r.t. x.",
     {
         "left": {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x", "y"],
             "polynomial": {
@@ -159,7 +152,6 @@ _RESULTANT_EXAMPLE = example(
             },
         },
         "right": {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x", "y"],
             "polynomial": {
@@ -188,7 +180,6 @@ _SUBRESULTANT_EXAMPLE = example(
     ),
     {
         "left": {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x", "y"],
             "polynomial": {
@@ -205,7 +196,6 @@ _SUBRESULTANT_EXAMPLE = example(
             },
         },
         "right": {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x", "y"],
             "polynomial": {
@@ -335,7 +325,6 @@ MULTIVARIATE_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "contain at least two variables.",
                 {
                     "polynomial": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x", "y"],
                         "polynomial": {

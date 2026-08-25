@@ -39,7 +39,6 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
                 "Compute the GCD of x²-1 and x-1.",
                 {
                     "left": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -56,7 +55,6 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
                         },
                     },
                     "right": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -94,7 +92,6 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
                 "Compute the resultant of x²-1 and x-2.",
                 {
                     "left": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -111,7 +108,6 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
                         },
                     },
                     "right": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -147,7 +143,6 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
                 "Compute the discriminant of x²-1.",
                 {
                     "polynomial": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -178,14 +173,12 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
         "polynomial",
         "square-free",
         "multiplicity",
-        version="3",
         examples=(
             example(
                 "square_free_x2_minus_one",
                 "Compute the square-free decomposition of x²-1.",
                 {
                     "polynomial": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -219,14 +212,12 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
         "polynomial",
         "factorization",
         "exact-computation",
-        version="3",
         examples=(
             example(
                 "factor_x_squared_minus_one",
                 "Factor x²-1 over QQ.",
                 {
                     "polynomial": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {

@@ -41,7 +41,6 @@ def solve_independence_number(
     order = len(vertices)
     if not vertices:
         return IndependenceNumberResult.model_construct(
-            result_schema_version="2",
             graph=request.graph,
             status="EXACT",
             order=0,
@@ -61,7 +60,6 @@ def solve_independence_number(
     )
     if remaining_ms <= 0:
         return IndependenceNumberResult.model_construct(
-            result_schema_version="2",
             graph=request.graph,
             status="UNKNOWN",
             order=order,
@@ -110,7 +108,6 @@ def solve_independence_number(
                 )
             except ValueError:
                 return IndependenceNumberResult.model_construct(
-                    result_schema_version="2",
                     graph=request.graph,
                     status="UNKNOWN",
                     order=order,
@@ -126,7 +123,6 @@ def solve_independence_number(
                     ),
                 )
             return IndependenceNumberResult.model_construct(
-                result_schema_version="2",
                 graph=request.graph,
                 status="EXACT",
                 order=order,
@@ -140,7 +136,6 @@ def solve_independence_number(
             )
     elif status == z3.unsat:
         return IndependenceNumberResult.model_construct(
-            result_schema_version="2",
             graph=request.graph,
             status="UNKNOWN",
             order=order,
@@ -159,7 +154,6 @@ def solve_independence_number(
         else "SOLVER_UNKNOWN"
     )
     return IndependenceNumberResult.model_construct(
-        result_schema_version="2",
         graph=request.graph,
         status="UNKNOWN",
         order=order,

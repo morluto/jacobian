@@ -33,11 +33,9 @@ def _op[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -92,7 +90,6 @@ SUBMODULAR_OPT_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "set-function",
         "monotonicity",
         "exact",
-        version="2",
         examples=(
             example(
                 "monotone_check",
@@ -126,7 +123,6 @@ SUBMODULAR_OPT_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "set-function",
         "submodularity",
         "exact",
-        version="2",
         examples=(
             example(
                 "submodular_check",

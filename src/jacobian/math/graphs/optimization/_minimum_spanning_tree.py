@@ -139,7 +139,6 @@ MINIMUM_SPANNING_TREE_OPERATION: MathTool[
     GraphMinimumSpanningTreeResult,
 ] = MathTool(
     operation_id="graph.spanning_tree.minimum.compute",
-    version="4",
     title="Exact weighted minimum spanning tree",
     description=(
         "Compute one deterministic minimum-total-weight spanning tree of a bounded "

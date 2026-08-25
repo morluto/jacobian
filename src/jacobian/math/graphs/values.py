@@ -6,8 +6,10 @@ import unicodedata
 from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import encode_strict_json
 
 GraphCompositionOperation = Literal[
     "DISJOINT_UNION",
@@ -31,17 +33,24 @@ GraphColor = Annotated[
 
 def _require_canonical_text(value: str, *, kind: str, max_bytes: int) -> None:
     if not value:
-        raise ValueError(f"{kind} must not be empty")
+        raise PydanticCustomError(
+            "graph.kind_empty_if_unicodedata_normalized_nfc_value",
+            f"{kind} must not be empty",
+        )
     if not unicodedata.is_normalized("NFC", value):
-        raise ValueError(f"{kind} must use Unicode NFC")
+        raise PydanticCustomError(
+            "graph.kind_use_unicode_nfc_if_len_value", f"{kind} must use Unicode NFC"
+        )
     if len(value.encode("utf-8")) > max_bytes:
-        raise ValueError(f"{kind} must use at most {max_bytes} UTF-8 bytes")
+        raise PydanticCustomError(
+            "graph.kind_use_at_most_max_bytes_utf",
+            f"{kind} must use at most {max_bytes} UTF-8 bytes",
+        )
 
 
 class SimpleUndirectedGraph(StrictModel):
     """Immutable canonical value for a finite simple undirected graph."""
 
-    graph_schema_version: Literal["1"] = "1"
     vertices: tuple[str, ...] = Field(max_length=256)
     edges: tuple[tuple[str, str], ...] = Field(max_length=32640)
 
@@ -50,17 +59,33 @@ class SimpleUndirectedGraph(StrictModel):
         if any(
             not unicodedata.is_normalized("NFC", vertex) for vertex in self.vertices
         ):
-            raise ValueError("graph vertices must use Unicode NFC")
+            raise PydanticCustomError(
+                "graph.graph_vertices_must_use_unicode_nfc",
+                "graph vertices must use Unicode NFC",
+            )
         if len(set(self.vertices)) != len(self.vertices):
-            raise ValueError("graph vertices must be unique")
+            raise PydanticCustomError(
+                "graph.graph_vertices_must_be_unique", "graph vertices must be unique"
+            )
         if any(
             left >= right or left not in self.vertices or right not in self.vertices
             for left, right in self.edges
         ):
-            raise ValueError("edges must contain two declared vertices in order")
+            raise PydanticCustomError(
+                "graph.edges_must_contain_two_declared_vertices_in_orde",
+                "edges must contain two declared vertices in order",
+            )
         if len(set(self.edges)) != len(self.edges):
-            raise ValueError("graph edges must be unique")
+            raise PydanticCustomError(
+                "graph.graph_edges_must_be_unique", "graph edges must be unique"
+            )
         return self
+
+
+def simple_undirected_graph_wire_bytes(graph: SimpleUndirectedGraph) -> int:
+    """Return the exact canonical JSON size of a simple graph value."""
+
+    return len(encode_strict_json(graph.model_dump(mode="json")))
 
 
 class ColoredUndirectedGraph(StrictModel):
@@ -83,7 +108,6 @@ class ColoredUndirectedGraph(StrictModel):
         }
     )
 
-    colored_graph_schema_version: Literal["1"] = "1"
     graph: SimpleUndirectedGraph = Field(
         description=(
             "The domain-owned canonical simple undirected graph. Each vertex "
@@ -120,12 +144,14 @@ class ColoredUndirectedGraph(StrictModel):
             )
 
         if self.vertex_colors and len(self.vertex_colors) != len(self.graph.vertices):
-            raise ValueError(
-                "vertex_colors must be empty or align one color with every vertex"
+            raise PydanticCustomError(
+                "graph.vertex_colors_empty_align_one_color_with",
+                "vertex_colors must be empty or align one color with every vertex",
             )
         if self.edge_colors and len(self.edge_colors) != len(self.graph.edges):
-            raise ValueError(
-                "edge_colors must be empty or align one color with every edge"
+            raise PydanticCustomError(
+                "graph.edge_colors_empty_align_one_color_with",
+                "edge_colors must be empty or align one color with every edge",
             )
         for color in (*self.vertex_colors, *self.edge_colors):
             _require_canonical_text(
@@ -147,9 +173,15 @@ class GraphCompositionInput(StrictModel):
     def require_operands(self) -> Self:
         if self.operation == "COMPLEMENT":
             if self.right is not None:
-                raise ValueError("complement does not accept a right graph")
+                raise PydanticCustomError(
+                    "graph.complement_does_not_accept_a_right_graph",
+                    "complement does not accept a right graph",
+                )
         elif self.right is None:
-            raise ValueError(f"{self.operation} requires a right graph")
+            raise PydanticCustomError(
+                "graph.operation_requires_right_return",
+                f"{self.operation} requires a right graph",
+            )
         return self
 
 
@@ -162,4 +194,5 @@ __all__ = [
     "GraphCompositionOperation",
     "GraphVertexLabel",
     "SimpleUndirectedGraph",
+    "simple_undirected_graph_wire_bytes",
 ]

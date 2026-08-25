@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -18,6 +19,19 @@ MAX_QUADRATIC_EVALUATION_TERM_DIGITS = (
 )
 MAX_QUADRATIC_EVALUATION_DIGITS = 8_192
 MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS = 4_096
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"quadratic_form.{reason}", message)
+
+
+def _require_bounded(
+    value: CanonicalRational, *, max_digits: int, label: str, reason: str
+) -> None:
+    try:
+        require_bounded_rational(value, max_digits=max_digits, label=label)
+    except ValueError as error:
+        raise _validation_error(reason, str(error)) from error
 
 
 class QuadraticCrossTerm(StrictModel):
@@ -36,13 +50,18 @@ class QuadraticCrossTerm(StrictModel):
     @model_validator(mode="after")
     def require_upper_triangular_nonzero_term(self) -> Self:
         if self.left >= self.right:
-            raise ValueError("cross terms must use left < right")
+            raise _validation_error(
+                "cross_term_order", "cross terms must use left < right"
+            )
         if self.coefficient.as_fraction() == 0:
-            raise ValueError("zero cross terms must be omitted")
-        require_bounded_rational(
+            raise _validation_error(
+                "zero_cross_term", "zero cross terms must be omitted"
+            )
+        _require_bounded(
             self.coefficient,
             max_digits=MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
             label="quadratic-form cross coefficient",
+            reason="coefficient_bound",
         )
         return self
 
@@ -64,7 +83,6 @@ class RationalQuadraticForm(StrictModel):
     these coupled rules.
     """
 
-    quadratic_form_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     axis: tuple[OpaqueLabel, ...] = Field(
         description=(
@@ -93,24 +111,34 @@ class RationalQuadraticForm(StrictModel):
     @model_validator(mode="after")
     def require_canonical_polynomial_presentation(self) -> Self:
         if len(set(self.axis)) != len(self.axis):
-            raise ValueError("quadratic-form axis labels must be unique")
+            raise _validation_error(
+                "axis_labels_not_unique", "quadratic-form axis labels must be unique"
+            )
         if len(self.diagonal_coefficients) != len(self.axis):
-            raise ValueError("diagonal coefficients must match the quadratic-form axis")
+            raise _validation_error(
+                "diagonal_length_mismatch",
+                "diagonal coefficients must match the quadratic-form axis",
+            )
         for coefficient in self.diagonal_coefficients:
-            require_bounded_rational(
+            _require_bounded(
                 coefficient,
                 max_digits=MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
                 label="quadratic-form diagonal coefficient",
+                reason="coefficient_bound",
             )
         positions = tuple((term.left, term.right) for term in self.cross_terms)
         if any(right >= len(self.axis) for _, right in positions):
-            raise ValueError(
-                "cross-term indices must lie within the quadratic-form axis"
+            raise _validation_error(
+                "cross_term_out_of_range",
+                "cross-term indices must lie within the quadratic-form axis",
             )
         if positions != tuple(sorted(positions)) or len(set(positions)) != len(
             positions
         ):
-            raise ValueError("cross terms must be unique and ordered by (left, right)")
+            raise _validation_error(
+                "cross_terms_not_canonical",
+                "cross terms must be unique and ordered by (left, right)",
+            )
         return self
 
 
@@ -123,7 +151,6 @@ class RationalCoordinateVector(StrictModel):
     ``require_axis_bound_coordinates`` enforces these coupled rules.
     """
 
-    vector_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     axis: tuple[OpaqueLabel, ...] = Field(
         description=(
@@ -142,14 +169,20 @@ class RationalCoordinateVector(StrictModel):
     @model_validator(mode="after")
     def require_axis_bound_coordinates(self) -> Self:
         if len(set(self.axis)) != len(self.axis):
-            raise ValueError("coordinate-vector axis labels must be unique")
+            raise _validation_error(
+                "axis_labels_not_unique", "coordinate-vector axis labels must be unique"
+            )
         if len(self.coordinates) != len(self.axis):
-            raise ValueError("coordinates must match the coordinate-vector axis")
+            raise _validation_error(
+                "coordinate_length_mismatch",
+                "coordinates must match the coordinate-vector axis",
+            )
         for coordinate in self.coordinates:
-            require_bounded_rational(
+            _require_bounded(
                 coordinate,
                 max_digits=MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS,
                 label="quadratic-form vector coordinate",
+                reason="coordinate_bound",
             )
         return self
 

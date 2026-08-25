@@ -13,6 +13,7 @@ from pydantic import (
     StringConstraints,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -32,6 +33,11 @@ from jacobian.math.probability.local_lemma import (
 from jacobian.math.probability.local_lemma import (
     AsymmetricLocalLemmaWitnessCheckResult as NativeWitnessCheckResult,
 )
+
+
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("probability.local_lemma_invariant", message)
+
 
 LocalLemmaEventLabel = Annotated[
     str,
@@ -62,7 +68,7 @@ def _bound_raw_rational(
             sign_characters = int(raw_component.startswith("-"))
             digits = len(raw_component) - sign_characters
             if digits > max_digits:
-                raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
+                raise _validation_error(f"{label} exceeds the {max_digits}-digit bound")
             total += digits
     return total
 
@@ -79,7 +85,7 @@ def _bound_raw_source(value: Any) -> Any:
     for field_name, maximum in sequence_bounds.items():
         raw = value.get(field_name)
         if isinstance(raw, (list, tuple)) and len(raw) > maximum:
-            raise ValueError(
+            raise _validation_error(
                 f"{field_name} exceeds the {MAX_LOCAL_LEMMA_EVENTS}-event bound"
             )
     for field_name in ("probability_upper_bounds", "witness_parameters"):
@@ -98,10 +104,12 @@ def _bound_raw_source(value: Any) -> Any:
             if not isinstance(raw_neighborhood, (list, tuple)):
                 continue
             if len(raw_neighborhood) > MAX_LOCAL_LEMMA_EVENTS:
-                raise ValueError(f"neighborhoods[{index}] exceeds the event-axis bound")
+                raise _validation_error(
+                    f"neighborhoods[{index}] exceeds the event-axis bound"
+                )
             incidence_count += len(raw_neighborhood)
             if incidence_count > MAX_LOCAL_LEMMA_INCIDENCES:
-                raise ValueError(
+                raise _validation_error(
                     "neighborhoods exceed the "
                     f"{MAX_LOCAL_LEMMA_INCIDENCES}-incidence work bound"
                 )
@@ -187,7 +195,10 @@ class AsymmetricLocalLemmaWitnessRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admitted_source(self) -> Self:
-        self.as_native()
+        try:
+            self.as_native()
+        except ValueError as exc:
+            raise _validation_error(str(exc)) from exc
         return self
 
     def as_native(self) -> AsymmetricLocalLemmaWitness:
@@ -260,13 +271,13 @@ def _bound_raw_result(value: Any) -> Any:
         return value
     raw_rows = value.get("inequalities")
     if isinstance(raw_rows, (list, tuple)) and len(raw_rows) > MAX_LOCAL_LEMMA_EVENTS:
-        raise ValueError("inequality ledger exceeds the event-count bound")
+        raise _validation_error("inequality ledger exceeds the event-count bound")
     raw_failures = value.get("failed_event_indices")
     if (
         isinstance(raw_failures, (list, tuple))
         and len(raw_failures) > MAX_LOCAL_LEMMA_EVENTS
     ):
-        raise ValueError("failed event indices exceed the event-count bound")
+        raise _validation_error("failed event indices exceed the event-count bound")
     total_digits = _bound_raw_rational(
         value.get("witness_product"),
         max_digits=MAX_LOCAL_LEMMA_RESULT_RATIONAL_DIGITS,
@@ -287,7 +298,7 @@ def _bound_raw_result(value: Any) -> Any:
                     label=f"inequalities[{index}].{field_name}",
                 )
                 if total_digits > MAX_LOCAL_LEMMA_TOTAL_RESULT_DIGITS:
-                    raise ValueError(
+                    raise _validation_error(
                         "inequality ledger exceeds the aggregate exact-result "
                         "digit bound"
                     )
@@ -340,7 +351,10 @@ class AsymmetricLocalLemmaWitnessCheckResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_result_to_source(self) -> Self:
-        self.as_native()
+        try:
+            self.as_native()
+        except ValueError as exc:
+            raise _validation_error(str(exc)) from exc
         return self
 
     def as_native(self) -> NativeWitnessCheckResult:
@@ -379,7 +393,6 @@ def compute_asymmetric_local_lemma_witness_check(
 
 ASYMMETRIC_LOCAL_LEMMA_OPERATION = MathTool(
     operation_id="probability.local_lemma.asymmetric_witness.check",
-    version="1",
     title="Check an exact asymmetric local-lemma numerical witness",
     description=(
         "Check every exact inequality p_i <= x_i * product over directed "

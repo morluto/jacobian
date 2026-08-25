@@ -45,7 +45,6 @@ def _op[
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version="1",
         title=title,
         description=description,
         request_type=request_model,
@@ -181,12 +180,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-)
-
-__all__ = ["TOOLS"]
-
-_TOOLS_LIST = list(TOOLS)
-_TOOLS_LIST.append(
     _op(
         "semigroup.green_relations.compute",
         "Compute Green relations of a finite semigroup",
@@ -209,8 +202,7 @@ _TOOLS_LIST.append(
                 },
             ),
         ),
-    )
+    ),
 )
-TOOLS = tuple(_TOOLS_LIST)
 
 __all__ = ["TOOLS"]

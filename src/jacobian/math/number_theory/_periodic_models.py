@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from fractions import Fraction
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import ConfigDict, Field, StrictBool, StringConstraints, model_validator
 from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -16,6 +17,13 @@ from jacobian.canonical import (
     format_canonical_integer,
     parse_canonical_integer,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable semantic error owned by the number-theory domain."""
+
+    return PydanticCustomError(f"number_theory.{reason}", message)
+
 
 MAX_PERIODIC_FAMILY_SIZE = 64
 MAX_PERIODIC_SOURCE_ROWS = 4_096
@@ -182,9 +190,15 @@ class PeriodicCongruenceSubset(StrictModel):
         modulus = parse_canonical_integer(self.modulus)
         residues = tuple(map(parse_canonical_integer, self.residues))
         if residues != tuple(sorted(set(residues))):
-            raise ValueError("canonical residues must be strictly increasing")
+            raise _validation_error(
+                "canonical_residues_must_be_strictly_increasing",
+                "canonical residues must be strictly increasing",
+            )
         if any(residue < 0 or residue >= modulus for residue in residues):
-            raise ValueError("canonical residues must lie in [0, modulus)")
+            raise _validation_error(
+                "canonical_residues_must_lie_in_0_modulus",
+                "canonical residues must lie in [0, modulus)",
+            )
         return self
 
 
@@ -202,13 +216,17 @@ class PeriodicCongruenceUnionSource(StrictModel):
             parse_canonical_integer(subset.modulus) for subset in self.subsets
         )
         if moduli != tuple(sorted(set(moduli))):
-            raise ValueError("canonical source moduli must be strictly increasing")
+            raise _validation_error(
+                "canonical_source_moduli_must_be_strictly_increasing",
+                "canonical source moduli must be strictly increasing",
+            )
         if (
             sum(len(subset.residues) for subset in self.subsets)
             > MAX_PERIODIC_SOURCE_ROWS
         ):
-            raise ValueError(
-                f"normalized source exceeds the {MAX_PERIODIC_SOURCE_ROWS}-residue-row bound"
+            raise _validation_error(
+                "f_normalized_source_exceeds_the_max_periodic_source",
+                f"normalized source exceeds the {MAX_PERIODIC_SOURCE_ROWS}-residue-row bound",
             )
         return self
 
@@ -254,8 +272,9 @@ class PeriodicCongruenceUnionRequest(StrictModel):
         if not isinstance(subsets, (list, tuple)):
             return data
         if len(subsets) > MAX_PERIODIC_FAMILY_SIZE:
-            raise ValueError(
-                f"the family exceeds the {MAX_PERIODIC_FAMILY_SIZE}-subset bound"
+            raise _validation_error(
+                "f_the_family_exceeds_the_max_periodic_family",
+                f"the family exceeds the {MAX_PERIODIC_FAMILY_SIZE}-subset bound",
             )
         total = 0
         normalized_subsets: list[object] = []
@@ -263,9 +282,10 @@ class PeriodicCongruenceUnionRequest(StrictModel):
             if isinstance(subset, PeriodicCongruenceSubsetInput):
                 total += len(subset.residues)
                 if total > MAX_PERIODIC_SOURCE_ROWS:
-                    raise ValueError(
+                    raise _validation_error(
+                        "f_source_exceeds_the_max_periodic_source_rows",
                         f"source exceeds the {MAX_PERIODIC_SOURCE_ROWS}-residue-row "
-                        "bound"
+                        "bound",
                     )
                 normalized_subsets.append(subset)
             elif isinstance(subset, Mapping):
@@ -275,9 +295,10 @@ class PeriodicCongruenceUnionRequest(StrictModel):
                     continue
                 total += len(residues)
                 if total > MAX_PERIODIC_SOURCE_ROWS:
-                    raise ValueError(
+                    raise _validation_error(
+                        "f_source_exceeds_the_max_periodic_source_rows",
                         f"source exceeds the {MAX_PERIODIC_SOURCE_ROWS}-residue-row "
-                        "bound"
+                        "bound",
                     )
                 normalized_subset = dict(subset)
                 normalized_subset["residues"] = tuple(residues)
@@ -292,14 +313,18 @@ class PeriodicCongruenceUnionRequest(StrictModel):
     def require_bounded_exact_execution(self) -> Self:
         raw_rows = sum(len(subset.residues) for subset in self.subsets)
         if raw_rows > MAX_PERIODIC_SOURCE_ROWS:
-            raise ValueError(
-                f"source exceeds the {MAX_PERIODIC_SOURCE_ROWS}-residue-row bound"
+            raise _validation_error(
+                "f_source_exceeds_the_max_periodic_source_rows",
+                f"source exceeds the {MAX_PERIODIC_SOURCE_ROWS}-residue-row bound",
             )
         from jacobian.math.number_theory._periodic_kernel import (
             require_admitted_periodic_source,
         )
 
-        require_admitted_periodic_source(self.normalized_source())
+        try:
+            require_admitted_periodic_source(self.normalized_source())
+        except ValueError as error:
+            raise _validation_error("backend_admission", str(error)) from error
         return self
 
     def normalized_source(self) -> PeriodicCongruenceUnionSource:
@@ -341,7 +366,10 @@ class PeriodicCongruenceUnionProfileRequest(PeriodicCongruenceUnionRequest):
             require_materializable_periodic_source,
         )
 
-        require_materializable_periodic_source(self.normalized_source())
+        try:
+            require_materializable_periodic_source(self.normalized_source())
+        except ValueError as error:
+            raise _validation_error("backend_admission", str(error)) from error
         return self
 
 
@@ -354,18 +382,26 @@ def _require_measure_binding(
     occupied_count: int,
 ) -> None:
     if common_period != format_canonical_integer(period):
-        raise ValueError("common period must be the lcm of the source moduli")
+        raise _validation_error(
+            "common_period_must_be_the_lcm_of_the_source_moduli",
+            "common period must be the lcm of the source moduli",
+        )
     if occupied_count_text != format_canonical_integer(occupied_count):
-        raise ValueError("occupied count does not match the normalized source")
+        raise _validation_error(
+            "occupied_count_does_not_match_the_normalized_source",
+            "occupied count does not match the normalized source",
+        )
     expected_density = CanonicalRational.from_fraction(Fraction(occupied_count, period))
     if density != expected_density:
-        raise ValueError("density must equal occupied_count/common_period")
+        raise _validation_error(
+            "density_must_equal_occupied_count_common_period",
+            "density must equal occupied_count/common_period",
+        )
 
 
 class PeriodicCongruenceUnionMeasureResult(StrictModel):
     """Exact occupied count and density, bound to the normalized union source."""
 
-    semantics_version: Literal["periodic-congruence-union.v1"]
     source: PeriodicCongruenceUnionSource
     common_period: PeriodicPositiveInteger = Field(
         description="Least common multiple of every normalized source modulus."
@@ -426,8 +462,9 @@ class PeriodicCongruenceUnionProfileResult(PeriodicCongruenceUnionMeasureResult)
             occupied_count=len(expected),
         )
         if actual != expected:
-            raise ValueError(
-                "occupied residues must be every satisfying residue in canonical order"
+            raise _validation_error(
+                "occupied_residues_must_be_every_satisfying_residue_in_canonical_order",
+                "occupied residues must be every satisfying residue in canonical order",
             )
         return self
 

@@ -42,37 +42,53 @@ def test_multiplication_bound_does_not_reject_coefficientwise_addition() -> None
     }
 
     assert _SeriesAddSubtractRequest.model_validate(payload)
-    with pytest.raises(ValidationError, match="multiplication coefficient growth"):
+    with pytest.raises(ValidationError) as error:
         _SeriesMultiplyRequest.model_validate(payload)
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.multiplication_coefficient_growth"
+    )
 
 
 def test_power_propagates_binary_convolution_growth() -> None:
     order = 8
     coefficients = [_coefficient(den=str(3**500)) for _ in range(order)]
-    with pytest.raises(ValidationError, match="power coefficient growth"):
+    with pytest.raises(ValidationError) as error:
         SeriesPowerRequest.model_validate(
             {"series": _series(order, coefficients), "exponent": 16}
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.power_coefficient_growth"
+    )
 
 
 def test_division_propagates_inverse_and_residual_growth() -> None:
     order = 8
     numerator = [_coefficient() for _ in range(order)]
     denominator = [_coefficient(den=str(2**700)), *[_coefficient()] * (order - 1)]
-    with pytest.raises(ValidationError, match="inverse coefficient growth"):
+    with pytest.raises(ValidationError) as error:
         SeriesDivideRequest.model_validate(
             {"left": _series(order, numerator), "right": _series(order, denominator)}
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.inverse_coefficient_growth"
+    )
 
 
 def test_composition_propagates_inner_power_growth() -> None:
     order = 8
     outer = [_coefficient() for _ in range(order)]
     inner = [_coefficient("0"), *[_coefficient(den=str(5**300))] * (order - 1)]
-    with pytest.raises(ValidationError, match="composition coefficient growth"):
+    with pytest.raises(ValidationError) as error:
         SeriesComposeRequest.model_validate(
             {"outer": _series(order, outer), "inner": _series(order, inner)}
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.composition_coefficient_growth"
+    )
 
 
 def test_reversion_propagates_linear_coefficient_division() -> None:
@@ -82,8 +98,12 @@ def test_reversion_propagates_linear_coefficient_division() -> None:
         _coefficient(den=str(7**250)),
         *[_coefficient()] * (order - 2),
     ]
-    with pytest.raises(ValidationError, match="reversion coefficient growth"):
+    with pytest.raises(ValidationError) as error:
         SeriesReversionRequest.model_validate(_series(order, coefficients))
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.reversion_coefficient_growth"
+    )
 
 
 def test_sparse_linear_reversion_remains_admitted() -> None:
@@ -140,7 +160,7 @@ def test_reversion_result_rejects_fabricated_conclusion_with_zero_residuals() ->
     source = _series(2, [zero, one])
     fabricated = _series(2, [zero, zero])
 
-    with pytest.raises(ValidationError, match="source composed with result"):
+    with pytest.raises(ValidationError) as error:
         SeriesReversionResult.model_validate(
             {
                 "source": source,
@@ -149,6 +169,10 @@ def test_reversion_result_rejects_fabricated_conclusion_with_zero_residuals() ->
                 "right_residual": [zero, zero],
             }
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.reversion_left_residual_mismatch"
+    )
 
 
 def test_multiplication_result_rejects_fabricated_conclusion_and_ledger() -> None:
@@ -160,8 +184,12 @@ def test_multiplication_result_rejects_fabricated_conclusion_and_ledger() -> Non
     payload["result"]["coefficients"] = fabricated
     payload["convolution_ledger"] = fabricated
 
-    with pytest.raises(ValidationError, match="source convolution"):
+    with pytest.raises(ValidationError) as error:
         SeriesMultiplyResult.model_validate(payload)
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.convolution_result_mismatch"
+    )
 
 
 def test_inverse_result_rejects_fabricated_conclusion_with_zero_residual() -> None:
@@ -171,8 +199,12 @@ def test_inverse_result_rejects_fabricated_conclusion_with_zero_residual() -> No
     payload = compute_inverse(series).model_dump(mode="json")
     payload["result"]["coefficients"] = [_coefficient("1"), _coefficient("0")]
 
-    with pytest.raises(ValidationError, match="source times result"):
+    with pytest.raises(ValidationError) as error:
         SeriesInverseResult.model_validate(payload)
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.inverse_residual_mismatch"
+    )
 
 
 def test_division_result_rejects_fabricated_conclusion_with_zero_residual() -> None:
@@ -185,8 +217,12 @@ def test_division_result_rejects_fabricated_conclusion_with_zero_residual() -> N
     payload = compute_divide(numerator, denominator).model_dump(mode="json")
     payload["quotient"]["coefficients"] = [_coefficient("1"), _coefficient("0")]
 
-    with pytest.raises(ValidationError, match="denominator times quotient"):
+    with pytest.raises(ValidationError) as error:
         SeriesDivideResult.model_validate(payload)
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.division_residual_mismatch"
+    )
 
 
 def _zero_series_payload(order: int) -> dict[str, object]:
@@ -202,11 +238,15 @@ def test_replaying_results_reject_orders_above_the_producer_envelope() -> None:
         "result": _zero_series_payload(order),
         "convolution_ledger": zeros,
     }
-    with pytest.raises(ValidationError, match="multiplication result replay"):
+    with pytest.raises(ValidationError) as error:
         SeriesMultiplyResult.model_validate(multiply_payload)
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.multiplication_replay_order"
+    )
 
     reversion_residuals = tuple(_coefficient("0") for _ in range(order))
-    with pytest.raises(ValidationError, match="reversion result replay"):
+    with pytest.raises(ValidationError) as error:
         SeriesReversionResult.model_validate(
             {
                 "source": _zero_series_payload(order),
@@ -215,6 +255,9 @@ def test_replaying_results_reject_orders_above_the_producer_envelope() -> None:
                 "right_residual": reversion_residuals,
             }
         )
+    assert (
+        error.value.errors()[0]["type"] == "formal_power_series.reversion_replay_order"
+    )
 
 
 def test_all_zero_multiply_results_remain_representable_at_the_envelope_order() -> None:

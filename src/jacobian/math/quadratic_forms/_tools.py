@@ -15,7 +15,6 @@ from jacobian.math.quadratic_forms.values import (
 TOOLS = (
     MathTool(
         operation_id="quadratic_form.evaluate.compute",
-        version="2",
         title="Evaluate an exact rational quadratic form",
         description=(
             "Evaluate Q(x)=sum a_i*x_i^2+sum c_ij*x_i*x_j exactly over QQ. "

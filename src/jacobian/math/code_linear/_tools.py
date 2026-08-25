@@ -51,11 +51,9 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -84,7 +82,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "coset-weight-distribution",
         "hamming-distance",
         "exact",
-        version="2",
         examples=(
             example(
                 "outside_binary_repetition_code",
@@ -137,7 +134,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "linear",
         "exact",
-        version="2",
         examples=(
             example(
                 "binary_repetition",
@@ -164,7 +160,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "dual",
         "exact",
-        version="3",
         examples=(
             example(
                 "binary_repetition",
@@ -196,7 +191,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "parity-check",
         "exact",
-        version="3",
         examples=(
             example(
                 "binary_repetition",
@@ -226,7 +220,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "codeword",
         "exact",
-        version="2",
         examples=(
             example(
                 "member_word",
@@ -256,7 +249,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "syndrome",
         "exact",
-        version="2",
         examples=(
             example(
                 "binary_repetition_syndrome",
@@ -286,7 +278,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "equality",
         "exact",
-        version="2",
         examples=(
             example(
                 "equal_row_equivalent",
@@ -347,7 +338,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "puncture",
         "exact",
-        version="2",
         examples=(
             example(
                 "binary_repetition",
@@ -381,7 +371,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "shorten",
         "exact",
-        version="2",
         examples=(
             example(
                 "binary_repetition",

@@ -39,7 +39,6 @@ _TOY_VARS = ("x", "y")
 TOOLS: MathTools = (
     MathTool(
         operation_id="polynomial.support.compute",
-        version="1",
         title="Compute polynomial exponent support",
         description=(
             "Extract the exponent support of an exact sparse polynomial: "
@@ -63,7 +62,6 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="polynomial.newton_polytope.compute",
-        version="1",
         title="Compute Newton polytope",
         description=(
             "Compute the Newton polytope (convex hull of support exponents) of "
@@ -88,7 +86,6 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="polynomial.weight_profile.compute",
-        version="1",
         title="Compute weight profile",
         description=(
             "Compute the weight profile of a polynomial's support under an integer "
@@ -116,7 +113,6 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="polynomial.initial_form.compute",
-        version="1",
         title="Compute initial form",
         description=(
             "Compute the initial form of a polynomial under a weight vector: "

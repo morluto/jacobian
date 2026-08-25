@@ -31,7 +31,6 @@ def _term(
 TOOLS: MathTools = (
     MathTool(
         operation_id="polynomial.box.enclosure.compute",
-        version="1",
         title="Enclose a rational polynomial on a rational box",
         description=(
             "Deterministic exact rational enclosure of one sparse scalar QQ polynomial "
@@ -65,7 +64,6 @@ TOOLS: MathTools = (
                 "the polynomial's complete ordered (x, y) axis.",
                 {
                     "polynomial": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x", "y"],
                         "polynomial": {
@@ -77,7 +75,6 @@ TOOLS: MathTools = (
                         },
                     },
                     "box": {
-                        "rational_box_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x", "y"],
                         "intervals": [

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import itertools
 import math
 from collections import Counter
@@ -11,6 +12,7 @@ from itertools import pairwise
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     CanonicalInteger,
@@ -24,6 +26,47 @@ from jacobian.canonical import (
     format_canonical_integer,
     parse_canonical_integer,
 )
+
+
+def _combinatorics_validation_error(message: str) -> PydanticCustomError:
+    """Return the stable structured reason used by owner-local validators."""
+    lowered = message.lower()
+    code = "combinatorics.invariant"
+    for marker, candidate in (
+        ("sidon", "combinatorics.sidon_invariant"),
+        ("ordered difference", "combinatorics.sidon_invariant"),
+        ("pds", "combinatorics.difference_set_invariant"),
+        ("difference", "combinatorics.difference_set_invariant"),
+        ("extension", "combinatorics.extension_invariant"),
+        ("candidate", "combinatorics.extension_invariant"),
+        ("partition", "combinatorics.partition_invariant"),
+        ("recurrence", "combinatorics.recurrence_invariant"),
+        ("residual", "combinatorics.recurrence_invariant"),
+        ("polynomial", "combinatorics.polynomial_invariant"),
+        ("requested index", "combinatorics.result_bound"),
+        ("rational", "combinatorics.rational_bound"),
+        ("result", "combinatorics.result_bound"),
+    ):
+        if marker in lowered:
+            code = candidate
+            break
+    return PydanticCustomError(code, message, {})
+
+
+def _require_bounded_rational(
+    value: CanonicalRational,
+    *,
+    max_digits: int,
+    label: str,
+) -> None:
+    """Adapt shared exact-value bounds into this owner's error contract."""
+    try:
+        require_bounded_rational(value, max_digits=max_digits, label=label)
+    except builtins.ValueError as exc:
+        raise _combinatorics_validation_error(
+            f"{label} exceeds the {max_digits}-digit bound"
+        ) from exc
+
 
 _MAX_N = 10_000
 MAX_BINOMIAL_N = 10_000
@@ -90,7 +133,9 @@ def _require_bounded_fraction(
         len(format_canonical_integer(abs(value.numerator))) > max_digits
         or len(format_canonical_integer(value.denominator)) > max_digits
     ):
-        raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
+        raise _combinatorics_validation_error(
+            f"{label} exceeds the {max_digits}-digit bound"
+        )
 
 
 def _lower_decimal_digits(value: int) -> int:
@@ -116,8 +161,8 @@ def _validate_result_inline_size(payload: dict[str, object]) -> None:
                 max_integer_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
             ),
         )
-    except ValueError as exc:
-        raise ValueError(
+    except PydanticCustomError as exc:
+        raise _combinatorics_validation_error(
             "the exact combinatorics result exceeds the bounded result limit"
         ) from exc
 
@@ -159,7 +204,7 @@ def _validate_recurrence_result_budget(
         _minimum_fraction_wire_bytes(replay[index]) for index in requested_indices
     )
     if minimum_size + 1_024 > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
-        raise ValueError(
+        raise _combinatorics_validation_error(
             "the exact combinatorics result exceeds the bounded result limit"
         )
     for value in replay:
@@ -167,7 +212,7 @@ def _validate_recurrence_result_budget(
             _lower_decimal_digits(component) > MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS
             for component in (value.numerator, value.denominator)
         ):
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "recurrence result exceeds the "
                 f"{MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS}-digit bound"
             )
@@ -230,7 +275,7 @@ def _validate_p_recursive_result_budget(
             polynomial_value(polynomial, index) for polynomial in polynomials
         )
         if coefficients[0] == 0:
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 f"leading coefficient polynomial vanishes at index {index}"
             )
         next_value = (
@@ -247,7 +292,7 @@ def _validate_p_recursive_result_budget(
             _lower_decimal_digits(component) > MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS
             for component in (next_value.numerator, next_value.denominator)
         ):
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "polynomial-coefficient recurrence result exceeds the "
                 f"{MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS}-digit bound"
             )
@@ -261,7 +306,7 @@ def _validate_p_recursive_result_budget(
         )
         minimum_size += 32
         if minimum_size > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "the exact combinatorics result exceeds the bounded result limit"
             )
         replay.append(next_value)
@@ -329,7 +374,7 @@ def _validate_series_result_budget(
             _lower_decimal_digits(component) > MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS
             for component in (coefficient.numerator, coefficient.denominator)
         ):
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "series coefficient exceeds the "
                 f"{MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS}-digit bound"
             )
@@ -342,7 +387,7 @@ def _validate_series_result_budget(
     minimum_size = sum(_minimum_fraction_wire_bytes(value) for value in coefficients)
     minimum_size += truncation_order * _minimum_fraction_wire_bytes(Fraction())
     if minimum_size + 1_024 > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
-        raise ValueError(
+        raise _combinatorics_validation_error(
             "the exact combinatorics result exceeds the bounded result limit"
         )
     _validate_result_inline_size(
@@ -367,13 +412,15 @@ def _require_canonical_polynomial(
     label: str,
 ) -> None:
     for coefficient in coefficients:
-        require_bounded_rational(
+        _require_bounded_rational(
             coefficient,
             max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
             label=label,
         )
     if len(coefficients) > 1 and coefficients[-1].as_fraction() == 0:
-        raise ValueError(f"{label} must omit trailing zero coefficients")
+        raise _combinatorics_validation_error(
+            f"{label} must omit trailing zero coefficients"
+        )
 
 
 class NonnegativeIntegerRequest(StrictModel):
@@ -400,7 +447,7 @@ class IntegerSidonRequest(StrictModel):
     @model_validator(mode="after")
     def require_unique_elements(self) -> Self:
         if len(set(self.elements)) != len(self.elements):
-            raise ValueError("Sidon input elements must be unique")
+            raise _combinatorics_validation_error("Sidon input elements must be unique")
         return self
 
 
@@ -413,7 +460,6 @@ class OrderedIntegerDifference(StrictModel):
 class IntegerSidonResult(StrictModel):
     """Complete ordered-difference profile and exact Sidon decision."""
 
-    semantics_version: Literal["integer-sidon.ordered-differences.v1"]
     normalized_elements: tuple[AdditiveInteger, ...] = Field(
         max_length=MAX_SIDON_SET_SIZE
     )
@@ -428,7 +474,9 @@ class IntegerSidonResult(StrictModel):
     def bind_complete_ordered_difference_profile(self) -> Self:
         values = tuple(int(value) for value in self.normalized_elements)
         if values != tuple(sorted(set(values))):
-            raise ValueError("normalized Sidon elements must be sorted and unique")
+            raise _combinatorics_validation_error(
+                "normalized Sidon elements must be sorted and unique"
+            )
         expected = tuple(
             (left, right, left - right)
             for left in values
@@ -444,11 +492,13 @@ class IntegerSidonResult(StrictModel):
             for record in self.ordered_differences
         )
         if actual != expected:
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "ordered differences must cover every distinct ordered pair canonically"
             )
         if self.is_sidon != (len({item[2] for item in expected}) == len(expected)):
-            raise ValueError("Sidon decision must match the ordered differences")
+            raise _combinatorics_validation_error(
+                "Sidon decision must match the ordered differences"
+            )
         return self
 
 
@@ -461,9 +511,11 @@ class CyclicPerfectDifferenceSetRequest(StrictModel):
     @model_validator(mode="after")
     def require_canonical_residue_set(self) -> Self:
         if len(set(self.residues)) != len(self.residues):
-            raise ValueError("PDS residues must be unique")
+            raise _combinatorics_validation_error("PDS residues must be unique")
         if any(residue < 0 or residue >= self.modulus for residue in self.residues):
-            raise ValueError("PDS residues must be canonical modulo the modulus")
+            raise _combinatorics_validation_error(
+                "PDS residues must be canonical modulo the modulus"
+            )
         return self
 
 
@@ -512,7 +564,6 @@ class CyclicDifferenceMultiplicity(StrictModel):
 class CyclicPerfectDifferenceSetResult(StrictModel):
     """Complete nonzero cyclic difference profile and exact PDS decision."""
 
-    semantics_version: Literal["cyclic-perfect-difference-set.v1"]
     modulus: StrictInt = Field(ge=2, le=MAX_CYCLIC_DIFFERENCE_SET_MODULUS)
     normalized_residues: tuple[StrictInt, ...] = Field(min_length=1, max_length=64)
     order: StrictInt = Field(ge=1, le=64)
@@ -535,32 +586,44 @@ class CyclicPerfectDifferenceSetResult(StrictModel):
     def bind_complete_cyclic_profile(self) -> Self:
         residues = self.normalized_residues
         if residues != tuple(sorted(set(residues))):
-            raise ValueError("normalized PDS residues must be sorted and unique")
+            raise _combinatorics_validation_error(
+                "normalized PDS residues must be sorted and unique"
+            )
         if any(residue < 0 or residue >= self.modulus for residue in residues):
-            raise ValueError("normalized PDS residues must lie in the modulus")
+            raise _combinatorics_validation_error(
+                "normalized PDS residues must lie in the modulus"
+            )
         if self.order != len(residues):
-            raise ValueError("PDS order must equal the residue-set cardinality")
+            raise _combinatorics_validation_error(
+                "PDS order must equal the residue-set cardinality"
+            )
         if self.expected_modulus != self.order * (self.order - 1) + 1:
-            raise ValueError("expected_modulus must equal k(k-1)+1")
+            raise _combinatorics_validation_error(
+                "expected_modulus must equal k(k-1)+1"
+            )
         profile = self.difference_multiplicities
         if tuple(item.residue for item in profile) != tuple(range(1, self.modulus)):
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "cyclic difference profile must cover every nonzero residue"
             )
         recomputed = _cyclic_difference_multiplicities(residues, self.modulus)
         if any(item.multiplicity != recomputed[item.residue] for item in profile):
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "cyclic difference multiplicities must be derived from the residues"
             )
         missing = tuple(item.residue for item in profile if item.multiplicity == 0)
         repeated = tuple(item.residue for item in profile if item.multiplicity > 1)
         if self.missing_residues != missing or self.repeated_residues != repeated:
-            raise ValueError("missing and repeated residues must match the profile")
+            raise _combinatorics_validation_error(
+                "missing and repeated residues must match the profile"
+            )
         expected_perfect = (
             self.modulus == self.expected_modulus and not missing and not repeated
         )
         if self.is_perfect != expected_perfect:
-            raise ValueError("PDS decision must match the complete residue profile")
+            raise _combinatorics_validation_error(
+                "PDS decision must match the complete residue profile"
+            )
         return self
 
 
@@ -573,19 +636,27 @@ class CyclicDifferenceSetExtensionRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_complete_candidate_space(self) -> Self:
         if len(set(self.base_elements)) != len(self.base_elements):
-            raise ValueError("extension base elements must be unique")
+            raise _combinatorics_validation_error(
+                "extension base elements must be unique"
+            )
         modulus = self.target_order * (self.target_order - 1) + 1
         if modulus > MAX_CYCLIC_DIFFERENCE_SET_MODULUS:
-            raise ValueError("derived extension modulus exceeds the supported bound")
+            raise _combinatorics_validation_error(
+                "derived extension modulus exceeds the supported bound"
+            )
         base_residues = {int(value) % modulus for value in self.base_elements}
         additional = self.target_order - len(base_residues)
         if additional < 0:
-            raise ValueError("target_order is smaller than the reduced base set")
+            raise _combinatorics_validation_error(
+                "target_order is smaller than the reduced base set"
+            )
         if additional > MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS:
-            raise ValueError("extension request requires too many added elements")
+            raise _combinatorics_validation_error(
+                "extension request requires too many added elements"
+            )
         candidates = math.comb(modulus - len(base_residues), additional)
         if candidates > MAX_DIFFERENCE_SET_EXTENSION_CANDIDATES:
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "extension candidate space exceeds the complete-search bound"
             )
         return self
@@ -599,14 +670,16 @@ def _extension_result_candidate_count(
 ) -> int:
     expected_modulus = target_order * (target_order - 1) + 1
     if modulus != expected_modulus:
-        raise ValueError("extension modulus must equal k(k-1)+1")
+        raise _combinatorics_validation_error("extension modulus must equal k(k-1)+1")
     if base_residues != tuple(sorted(set(base_residues))):
-        raise ValueError("base residues must be sorted and unique")
+        raise _combinatorics_validation_error("base residues must be sorted and unique")
     if any(residue < 0 or residue >= modulus for residue in base_residues):
-        raise ValueError("base residues must lie in the derived modulus")
+        raise _combinatorics_validation_error(
+            "base residues must lie in the derived modulus"
+        )
     additional = target_order - len(base_residues)
     if additional < 0 or additional > MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS:
-        raise ValueError(
+        raise _combinatorics_validation_error(
             "extension result lies outside the supported added-element bound"
         )
     return math.comb(modulus - len(base_residues), additional)
@@ -621,17 +694,27 @@ def _require_positive_extension_shape(
     coverage: str,
 ) -> None:
     if coverage != "WITNESS":
-        raise ValueError("positive extension decisions require witness coverage")
+        raise _combinatorics_validation_error(
+            "positive extension decisions require witness coverage"
+        )
     if extension != tuple(sorted(set(extension))):
-        raise ValueError("extension witness must be sorted and unique")
+        raise _combinatorics_validation_error(
+            "extension witness must be sorted and unique"
+        )
     if len(extension) != target_order:
-        raise ValueError("extension witness must have target_order residues")
+        raise _combinatorics_validation_error(
+            "extension witness must have target_order residues"
+        )
     if any(residue < 0 or residue >= modulus for residue in extension):
-        raise ValueError("extension witness residues must lie in the derived modulus")
+        raise _combinatorics_validation_error(
+            "extension witness residues must lie in the derived modulus"
+        )
     if not set(base_residues) <= set(extension):
-        raise ValueError("extension witness must contain the reduced base set")
+        raise _combinatorics_validation_error(
+            "extension witness must contain the reduced base set"
+        )
     if not _is_perfect_difference_set(extension, modulus):
-        raise ValueError(
+        raise _combinatorics_validation_error(
             "extension witness must be a perfect difference set of the derived modulus"
         )
 
@@ -668,7 +751,6 @@ def _find_extension_witness(
 class CyclicDifferenceSetExtensionResult(StrictModel):
     """A witness or complete negative decision for one fixed PDS order."""
 
-    semantics_version: Literal["cyclic-pds-extension.fixed-order.v1"]
     target_order: StrictInt = Field(ge=2, le=64)
     modulus: StrictInt = Field(ge=2, le=MAX_CYCLIC_DIFFERENCE_SET_MODULUS)
     base_residues: tuple[StrictInt, ...] = Field(min_length=1, max_length=64)
@@ -689,7 +771,7 @@ class CyclicDifferenceSetExtensionResult(StrictModel):
             base_residues=self.base_residues,
         )
         if self.candidate_space_size != expected_candidates:
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "candidate_space_size must cover the exact combination space"
             )
         if self.decision == "EXTENDS":
@@ -701,7 +783,7 @@ class CyclicDifferenceSetExtensionResult(StrictModel):
                 coverage=self.coverage,
             )
         elif self.extension or self.coverage != "ALL_CANDIDATES":
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "negative extension decisions require empty witness and full coverage"
             )
         else:
@@ -711,7 +793,7 @@ class CyclicDifferenceSetExtensionResult(StrictModel):
                 )
                 is not None
             ):
-                raise ValueError(
+                raise _combinatorics_validation_error(
                     "negative extension decision must match the exhaustive search"
                 )
         return self
@@ -723,7 +805,9 @@ class IntegerListRequest(StrictModel):
     @model_validator(mode="after")
     def require_nonnegative_parts(self) -> Self:
         if any(parse_canonical_integer(value) < 0 for value in self.values):
-            raise ValueError("integer list values must be nonnegative")
+            raise _combinatorics_validation_error(
+                "integer list values must be nonnegative"
+            )
         return self
 
 
@@ -768,20 +852,26 @@ class IntegerPartitionEnumerationResult(StrictModel):
         previous: tuple[int, ...] | None = None
         for partition in self.partitions:
             if len(partition) > self.max_parts:
-                raise ValueError("partition exceeds max_parts")
+                raise _combinatorics_validation_error("partition exceeds max_parts")
             if any(part <= 0 for part in partition):
-                raise ValueError("partition parts must be positive")
+                raise _combinatorics_validation_error(
+                    "partition parts must be positive"
+                )
             if tuple(sorted(partition, reverse=True)) != partition:
-                raise ValueError("partition parts must be nonincreasing")
+                raise _combinatorics_validation_error(
+                    "partition parts must be nonincreasing"
+                )
             if sum(partition) != self.n:
-                raise ValueError("partition parts must sum to n")
+                raise _combinatorics_validation_error("partition parts must sum to n")
             if previous is not None and previous <= partition:
-                raise ValueError(
+                raise _combinatorics_validation_error(
                     "partitions must be unique in descending lexicographic order"
                 )
             previous = tuple(partition)
         if self.n == 0 and self.partitions != ((),):
-            raise ValueError("zero has exactly one empty partition")
+            raise _combinatorics_validation_error(
+                "zero has exactly one empty partition"
+            )
         return self
 
 
@@ -815,34 +905,40 @@ class LinearRecurrenceEvaluationRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_explicit_scope(self) -> Self:
         if len(self.initial_values) != len(self.coefficients):
-            raise ValueError("initial_values length must equal the recurrence order")
+            raise _combinatorics_validation_error(
+                "initial_values length must equal the recurrence order"
+            )
         for label, values in (
             ("recurrence coefficient", self.coefficients),
             ("recurrence initial value", self.initial_values),
         ):
             for value in values:
-                require_bounded_rational(
+                _require_bounded_rational(
                     value,
                     max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
                     label=label,
                 )
         if self.scope == "PREFIX":
             if self.term_count is None or self.indices:
-                raise ValueError("PREFIX scope requires term_count and forbids indices")
+                raise _combinatorics_validation_error(
+                    "PREFIX scope requires term_count and forbids indices"
+                )
         else:
             if self.term_count is not None or not self.indices:
-                raise ValueError(
+                raise _combinatorics_validation_error(
                     "INDICES scope requires indices and forbids term_count"
                 )
             if any(
                 index < 0 or index > MAX_LINEAR_RECURRENCE_INDEX
                 for index in self.indices
             ):
-                raise ValueError(
+                raise _combinatorics_validation_error(
                     f"indices must lie between 0 and {MAX_LINEAR_RECURRENCE_INDEX}"
                 )
             if any(left >= right for left, right in pairwise(self.indices)):
-                raise ValueError("indices must be strictly increasing")
+                raise _combinatorics_validation_error(
+                    "indices must be strictly increasing"
+                )
         requested_indices = (
             tuple(range(self.term_count))
             if self.scope == "PREFIX" and self.term_count is not None
@@ -864,7 +960,7 @@ class IndexedRationalValue(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_value(self) -> Self:
-        require_bounded_rational(
+        _require_bounded_rational(
             self.value,
             max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
             label="recurrence result",
@@ -890,26 +986,32 @@ class LinearRecurrenceEvaluationResult(StrictModel):
     @model_validator(mode="after")
     def require_complete_replay_prefix(self) -> Self:
         if len(self.replay_prefix) != self.replay_scope_end + 1:
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "replay_prefix must cover indices 0 through replay_scope_end"
             )
         for value in self.replay_prefix:
-            require_bounded_rational(
+            _require_bounded_rational(
                 value,
                 max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
                 label="recurrence replay value",
             )
         indices = tuple(item.index for item in self.values)
         if any(left >= right for left, right in pairwise(indices)):
-            raise ValueError("result indices must be strictly increasing")
+            raise _combinatorics_validation_error(
+                "result indices must be strictly increasing"
+            )
         if indices[-1] != self.replay_scope_end:
-            raise ValueError("the greatest requested index must bind replay_scope_end")
+            raise _combinatorics_validation_error(
+                "the greatest requested index must bind replay_scope_end"
+            )
         if any(item.value != self.replay_prefix[item.index] for item in self.values):
-            raise ValueError("indexed values must match the recurrence replay prefix")
+            raise _combinatorics_validation_error(
+                "indexed values must match the recurrence replay prefix"
+            )
         if self.scope == "PREFIX" and indices != tuple(
             range(self.replay_scope_end + 1)
         ):
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "PREFIX results must contain consecutive indices from zero"
             )
         return self
@@ -945,38 +1047,48 @@ class PolynomialCoefficientRecurrenceEvaluationRequest(StrictModel):
     def require_bounded_regular_scope(self) -> Self:
         order = len(self.coefficient_polynomials) - 1
         if len(self.initial_values) != order:
-            raise ValueError("initial_values length must equal the recurrence order")
+            raise _combinatorics_validation_error(
+                "initial_values length must equal the recurrence order"
+            )
         for polynomial in self.coefficient_polynomials:
             if (
                 not polynomial
                 or len(polynomial) > MAX_P_RECURSIVE_POLYNOMIAL_DEGREE + 1
             ):
-                raise ValueError("coefficient polynomial degree is outside the bound")
+                raise _combinatorics_validation_error(
+                    "coefficient polynomial degree is outside the bound"
+                )
             _require_canonical_polynomial(
                 polynomial, label="recurrence polynomial coefficient"
             )
         for value in self.initial_values:
-            require_bounded_rational(
+            _require_bounded_rational(
                 value,
                 max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
                 label="recurrence initial value",
             )
         if self.scope == "PREFIX":
             if self.term_count is None or self.indices:
-                raise ValueError("PREFIX scope requires term_count and forbids indices")
+                raise _combinatorics_validation_error(
+                    "PREFIX scope requires term_count and forbids indices"
+                )
             requested = tuple(range(self.term_count))
         else:
             if self.term_count is not None or not self.indices:
-                raise ValueError(
+                raise _combinatorics_validation_error(
                     "INDICES scope requires indices and forbids term_count"
                 )
             if any(
                 index < 0 or index > MAX_LINEAR_RECURRENCE_INDEX
                 for index in self.indices
             ):
-                raise ValueError("indices are outside the recurrence bound")
+                raise _combinatorics_validation_error(
+                    "indices are outside the recurrence bound"
+                )
             if any(left >= right for left, right in pairwise(self.indices)):
-                raise ValueError("indices must be strictly increasing")
+                raise _combinatorics_validation_error(
+                    "indices must be strictly increasing"
+                )
             requested = self.indices
         _validate_p_recursive_result_budget(
             coefficient_polynomials=self.coefficient_polynomials,
@@ -1012,20 +1124,28 @@ class PolynomialCoefficientRecurrenceEvaluationResult(StrictModel):
     @model_validator(mode="after")
     def require_complete_replay(self) -> Self:
         if len(self.replay_prefix) != self.replay_scope_end + 1:
-            raise ValueError("replay_prefix must cover the complete bounded scope")
+            raise _combinatorics_validation_error(
+                "replay_prefix must cover the complete bounded scope"
+            )
         indices = tuple(item.index for item in self.values)
         if any(left >= right for left, right in pairwise(indices)):
-            raise ValueError("result indices must be strictly increasing")
+            raise _combinatorics_validation_error(
+                "result indices must be strictly increasing"
+            )
         if indices[-1] != self.replay_scope_end:
-            raise ValueError("the greatest requested index must bind replay_scope_end")
+            raise _combinatorics_validation_error(
+                "the greatest requested index must bind replay_scope_end"
+            )
         if any(item.value != self.replay_prefix[item.index] for item in self.values):
-            raise ValueError("indexed values must match the recurrence replay prefix")
+            raise _combinatorics_validation_error(
+                "indexed values must match the recurrence replay prefix"
+            )
         if self.scope == "PREFIX" and indices != tuple(range(len(indices))):
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "PREFIX results must contain consecutive indices from zero"
             )
         for value in self.replay_prefix:
-            require_bounded_rational(
+            _require_bounded_rational(
                 value,
                 max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
                 label="polynomial-coefficient recurrence replay value",
@@ -1034,11 +1154,13 @@ class PolynomialCoefficientRecurrenceEvaluationResult(StrictModel):
         if residual_indices != tuple(
             range(self.recurrence_order, self.replay_scope_end + 1)
         ):
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "residuals must cover every recurrence step through replay_scope_end"
             )
         if any(item.value.as_fraction() != 0 for item in self.residuals):
-            raise ValueError("every recurrence residual must be exactly zero")
+            raise _combinatorics_validation_error(
+                "every recurrence residual must be exactly zero"
+            )
         return self
 
 
@@ -1068,7 +1190,9 @@ class RationalGeneratingFunctionCoefficientsRequest(StrictModel):
             label="denominator coefficient",
         )
         if self.denominator[0].as_fraction() == 0:
-            raise ValueError("denominator constant coefficient must be nonzero")
+            raise _combinatorics_validation_error(
+                "denominator constant coefficient must be nonzero"
+            )
         _validate_series_result_budget(
             numerator=self.numerator,
             denominator=self.denominator,
@@ -1106,7 +1230,7 @@ class RationalGeneratingFunctionCoefficientsResult(StrictModel):
             len(self.coefficients) != self.truncation_order
             or len(self.residual_coefficients) != self.truncation_order
         ):
-            raise ValueError(
+            raise _combinatorics_validation_error(
                 "coefficient and residual vectors must equal truncation_order"
             )
         for label, values in (
@@ -1114,11 +1238,13 @@ class RationalGeneratingFunctionCoefficientsResult(StrictModel):
             ("series residual", self.residual_coefficients),
         ):
             for value in values:
-                require_bounded_rational(
+                _require_bounded_rational(
                     value,
                     max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
                     label=label,
                 )
         if any(value.as_fraction() != 0 for value in self.residual_coefficients):
-            raise ValueError("residual coefficients must vanish through the truncation")
+            raise _combinatorics_validation_error(
+                "residual coefficients must vanish through the truncation"
+            )
         return self

@@ -78,7 +78,6 @@ HAMILTONIAN_PATH_OPERATION: MathTool[
     GraphHamiltonianPathResult,
 ] = MathTool(
     operation_id="graph.hamiltonian_path.decide",
-    version="5",
     title="Decide bounded Hamiltonian-path existence",
     description=(
         "Completely decide whether a supplied simple graph of order at most 18 "

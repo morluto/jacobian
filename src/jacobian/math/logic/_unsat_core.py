@@ -8,6 +8,7 @@ from math import lcm
 from typing import Any, Literal, NamedTuple, Self
 
 from pydantic import ConfigDict, Field, StrictInt, ValidationError, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
@@ -28,6 +29,10 @@ _MAX_CORE_RLIMIT = 10_000_000
 _NUMERAL = re.compile(r"(?:-?[0-9]+(?:\.[0-9]+)?|#x[0-9a-fA-F]+|#b[01]+)")
 _AffineTerms = tuple[tuple[Fraction, Any], ...]
 _AffineForm = tuple[_AffineTerms, Fraction]
+
+
+def _logic_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("logic.unsat_core_contract", message)
 
 
 class _CoefficientEnvelope(NamedTuple):
@@ -184,13 +189,13 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
     def require_bounded_indexed_assertions(self) -> Self:
         tokens = _tokenize_smtlib(self.smtlib)
         if len(tokens) > _MAX_CORE_TOKENS:
-            raise ValueError(
+            raise _logic_error(
                 f"SMT core source may contain at most {_MAX_CORE_TOKENS} tokens"
             )
         _validate_nesting(tokens)
         _validate_numerals(tokens)
         if self.assertion_count > _MAX_CORE_ASSERTIONS:
-            raise ValueError(
+            raise _logic_error(
                 f"SMT core source may contain at most {_MAX_CORE_ASSERTIONS} source assertions"
             )
         parsed_error = _parsed_request_error(
@@ -199,7 +204,7 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
             logic=self.logic,
         )
         if parsed_error is not None:
-            raise ValueError(parsed_error)
+            raise _logic_error(parsed_error)
         return self
 
 
@@ -222,39 +227,39 @@ class SmtUnsatCoreResult(StrictModel):
     @model_validator(mode="after")
     def bind_outcome_to_source(self) -> Self:
         if self.core_indices != tuple(sorted(set(self.core_indices))):
-            raise ValueError("core indices must be distinct and strictly increasing")
+            raise _logic_error("core indices must be distinct and strictly increasing")
         if any(
             index < 0 or index >= self.source.assertion_count
             for index in self.core_indices
         ):
-            raise ValueError("core index does not refer to a source assertion")
+            raise _logic_error("core index does not refer to a source assertion")
 
         if self.outcome == "UNSAT":
             if not self.core_indices:
-                raise ValueError(
+                raise _logic_error(
                     "UNSAT requires a nonempty core because the source has no untracked assertions"
                 )
             replay, _detail = _replay_source(self.source, self.core_indices)
             if replay != "UNSAT":
-                raise ValueError(
+                raise _logic_error(
                     "selected source assertions must independently replay as UNSAT"
                 )
         elif self.outcome == "SAT":
             if self.core_indices:
-                raise ValueError("SAT cannot carry core indices")
+                raise _logic_error("SAT cannot carry core indices")
             replay, _detail = _replay_source(self.source, None)
             if replay != "SAT":
-                raise ValueError(
+                raise _logic_error(
                     "complete source assertions must independently replay as SAT"
                 )
         else:
             if self.core_indices:
-                raise ValueError("UNKNOWN cannot carry core indices")
+                raise _logic_error("UNKNOWN cannot carry core indices")
             if not self.detail:
-                raise ValueError("UNKNOWN must explain the bounded execution outcome")
+                raise _logic_error("UNKNOWN must explain the bounded execution outcome")
 
         if self.outcome != "UNKNOWN" and self.detail is not None:
-            raise ValueError("only UNKNOWN may carry execution detail")
+            raise _logic_error("only UNKNOWN may carry execution detail")
         return self
 
 
@@ -264,15 +269,15 @@ def _validate_nesting(tokens: tuple[str, ...]) -> None:
         if token == "(":
             depth += 1
             if depth > _MAX_CORE_NESTING_DEPTH:
-                raise ValueError(
+                raise _logic_error(
                     f"SMT core source nesting may not exceed {_MAX_CORE_NESTING_DEPTH}"
                 )
         elif token == ")":
             depth -= 1
             if depth < 0:
-                raise ValueError("SMT core source parentheses must be balanced")
+                raise _logic_error("SMT core source parentheses must be balanced")
     if depth:
-        raise ValueError("SMT core source parentheses must be balanced")
+        raise _logic_error("SMT core source parentheses must be balanced")
 
 
 def _validate_numerals(tokens: tuple[str, ...]) -> None:
@@ -285,7 +290,7 @@ def _validate_numerals(tokens: tuple[str, ...]) -> None:
             else sum(character.isdigit() for character in token)
         )
         if digits > _MAX_CORE_NUMERAL_DIGITS:
-            raise ValueError(
+            raise _logic_error(
                 f"SMT numeral may contain at most {_MAX_CORE_NUMERAL_DIGITS} digits"
             )
 
@@ -297,7 +302,7 @@ def _parse_assertions(smtlib: str, *, context: Any | None = None) -> tuple[Any, 
         ctx = context if context is not None else z3.Context()
         return tuple(z3.parse_smt2_string(smtlib, ctx=ctx))
     except z3.Z3Exception as exc:
-        raise ValueError("SMT core source could not be parsed as SMT-LIB") from exc
+        raise _logic_error("SMT core source could not be parsed as SMT-LIB") from exc
 
 
 def _parsed_request_error(
@@ -353,7 +358,7 @@ def _require_declared_logic(
     try:
         if logic is SmtLogic.QF_UF:
             if not _is_boolean_uninterpreted_fragment(assertions):
-                raise ValueError(
+                raise _logic_error(
                     "SMT core terms must belong to the declared QF_UF fragment"
                 )
             return
@@ -367,11 +372,11 @@ def _require_declared_logic(
         )
         belongs_to_fragment = float(z3.Probe(probe_name, ctx=assertions[0].ctx)(goal))
         if has_quantifiers != 0.0 or belongs_to_fragment != 1.0:
-            raise ValueError(
+            raise _logic_error(
                 f"SMT core terms must belong to the declared {logic.value} fragment"
             )
     except z3.Z3Exception as exc:
-        raise ValueError(
+        raise _logic_error(
             f"SMT core terms could not be classified as {logic.value}"
         ) from exc
 
@@ -1088,14 +1093,14 @@ def _exact_arithmetic_value(value: Fraction, *, template: Any) -> Any:
     _require_bounded_normalized_coefficient(value)
     if template.sort().kind() == z3.Z3_INT_SORT:
         if value.denominator != 1:
-            raise ValueError("normalized integer coefficient must remain integral")
+            raise _logic_error("normalized integer coefficient must remain integral")
         return z3.IntVal(value.numerator, ctx=template.ctx)
     if template.sort().kind() == z3.Z3_REAL_SORT:
         return z3.RealVal(
             f"{value.numerator}/{value.denominator}",
             ctx=template.ctx,
         )
-    raise ValueError("normalized coefficient must have an arithmetic sort")
+    raise _logic_error("normalized coefficient must have an arithmetic sort")
 
 
 def _require_bounded_coefficient_digit_budget(
@@ -1106,7 +1111,7 @@ def _require_bounded_coefficient_digit_budget(
         numerator_digits > _MAX_CORE_NUMERAL_DIGITS
         or denominator_digits > _MAX_CORE_NUMERAL_DIGITS
     ):
-        raise ValueError(
+        raise _logic_error(
             "normalized SMT coefficient numerator and denominator may contain at "
             f"most {_MAX_CORE_NUMERAL_DIGITS} digits"
         )
@@ -1117,7 +1122,7 @@ def _require_bounded_normalized_coefficient(value: Fraction) -> None:
         len(str(abs(component))) > _MAX_CORE_NUMERAL_DIGITS
         for component in (value.numerator, value.denominator)
     ):
-        raise ValueError(
+        raise _logic_error(
             "normalized SMT coefficient numerator and denominator may contain at "
             f"most {_MAX_CORE_NUMERAL_DIGITS} digits"
         )
@@ -1267,7 +1272,6 @@ def compute_smt_unsat_core(request: SmtUnsatCoreRequest) -> SmtUnsatCoreResult:
 
 SMT_UNSAT_CORE_OPERATION = MathTool(
     operation_id="smt.unsat_core",
-    version="1",
     title="Extract a bounded indexed SMT UNSAT core",
     description=(
         "Return SAT, UNKNOWN, or a deterministic backend-selected set of source-order "

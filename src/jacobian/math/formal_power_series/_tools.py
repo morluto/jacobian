@@ -54,7 +54,6 @@ from jacobian.math.formal_power_series._operations import (
 FORMAL_POWER_SERIES_OPERATIONS = (
     MathTool(
         operation_id="formal_series.rational.add.compute",
-        version="1",
         title="Add two truncated formal power series",
         description=(
             "Compute the exact rational sum of two truncated series in QQ[[x]]/(x^N) "
@@ -100,7 +99,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.subtract.compute",
-        version="1",
         title="Subtract two truncated formal power series",
         description=(
             "Compute the exact rational difference of two truncated series in "
@@ -146,7 +144,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.multiply.compute",
-        version="1",
         title="Multiply two truncated formal power series",
         description=(
             "Compute the exact Cauchy convolution of two truncated series in "
@@ -194,7 +191,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.scalar_multiply.compute",
-        version="1",
         title="Multiply a series by a rational scalar",
         description=(
             "Multiply a truncated formal power series by an exact rational scalar. "
@@ -231,7 +227,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.power.compute",
-        version="1",
         title="Raise a truncated formal power series to a nonnegative integer power",
         description=(
             "Compute the exact power of a truncated series in QQ[[x]]/(x^N) via "
@@ -272,7 +267,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.inverse.compute",
-        version="1",
         title="Invert a truncated formal power series",
         description=(
             "Compute the multiplicative inverse B(x) of A(x) modulo x^N, requiring "
@@ -309,7 +303,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.divide.compute",
-        version="1",
         title="Divide two truncated formal power series",
         description=(
             "Compute the exact quotient Q = A/B modulo x^N, requiring b_0 != 0. "
@@ -357,7 +350,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.compose.compute",
-        version="1",
         title="Compose two truncated formal power series",
         description=(
             "Compute the composition F(G(x)) mod x^N.  The inner series G must "
@@ -405,7 +397,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.reversion.compute",
-        version="1",
         title="Compositional inverse of a truncated formal power series",
         description=(
             "Compute the compositional inverse G(x) of F(x) mod x^N, requiring "
@@ -443,7 +434,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.derivative.compute",
-        version="1",
         title="Formal derivative of a truncated power series",
         description=(
             "Compute the formal derivative of a truncated series in QQ[[x]]/(x^N). "
@@ -478,7 +468,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.integral_zero_constant.compute",
-        version="1",
         title="Zero-constant formal integral of a truncated power series",
         description=(
             "Compute the unique formal antiderivative B'(x)=A(x), B(0)=0 of a "
@@ -515,7 +504,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.truncate.compute",
-        version="3",
         title="Truncate a formal power series to a smaller order",
         description=(
             "Return the same coefficients through M-1 at order M, where M <= N."
@@ -552,7 +540,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.identity.check",
-        version="2",
         title="Check whether two truncated formal power series are identical",
         description=(
             "Check if two series are equal mod x^N, returning either EQUAL_MOD_X_TO_N "
@@ -597,7 +584,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.from_polynomial.compute",
-        version="1",
         title="Convert a dense rational polynomial into a truncated series",
         description=(
             "Project a dense rational coefficient tuple onto a series value with "
@@ -634,7 +620,6 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.to_polynomial.compute",
-        version="1",
         title="Return the canonical truncated polynomial representative",
         description=(
             "Return the canonical truncated polynomial containing exactly the "

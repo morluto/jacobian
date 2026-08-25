@@ -6,9 +6,9 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.real_algebraic import RealAlgebraicOrderValue
 from jacobian.math.root_isolation._models import (
     AlgebraicCompareRequest,
-    AlgebraicCompareResult,
     RootIsolationResult,
     UnivariatePolynomialRequest,
 )
@@ -27,11 +27,9 @@ def ri_operation[RequestT: StrictModel, ResultT: StrictModel](
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -88,7 +86,7 @@ ROOT_ISOLATION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "polynomial and increasing real-root index; the source-bound result "
         "returns exact rational root-isolation evidence.",
         AlgebraicCompareRequest,
-        AlgebraicCompareResult,
+        RealAlgebraicOrderValue,
         compute_algebraic_compare,
         "algebraic",
         "comparison",
@@ -112,7 +110,6 @@ ROOT_ISOLATION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
 )
 

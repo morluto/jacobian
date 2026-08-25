@@ -5,11 +5,17 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 MAX_RATIONAL_BOX_VARIABLES = 8
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"interval.{reason}", message)
+
 
 IntervalVariable = Annotated[
     str,
@@ -26,8 +32,9 @@ class ClosedRationalInterval(StrictModel):
     @model_validator(mode="after")
     def require_ordered_endpoints(self) -> Self:
         if self.lower.as_fraction() > self.upper.as_fraction():
-            raise ValueError(
-                "interval lower endpoint must not exceed its upper endpoint"
+            raise _validation_error(
+                "endpoint_order",
+                "interval lower endpoint must not exceed its upper endpoint",
             )
         return self
 
@@ -35,7 +42,6 @@ class ClosedRationalInterval(StrictModel):
 class RationalBox(StrictModel):
     """A closed rational box with one interval on each distinct ordered axis."""
 
-    rational_box_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     variables: tuple[IntervalVariable, ...] = Field(
         max_length=MAX_RATIONAL_BOX_VARIABLES,
@@ -55,10 +61,13 @@ class RationalBox(StrictModel):
     @model_validator(mode="after")
     def require_complete_unique_axis(self) -> Self:
         if len(set(self.variables)) != len(self.variables):
-            raise ValueError("rational-box variables must be unique")
+            raise _validation_error(
+                "duplicate_variable", "rational-box variables must be unique"
+            )
         if len(self.variables) != len(self.intervals):
-            raise ValueError(
-                "rational-box variables and intervals must have the same length"
+            raise _validation_error(
+                "axis_length",
+                "rational-box variables and intervals must have the same length",
             )
         return self
 

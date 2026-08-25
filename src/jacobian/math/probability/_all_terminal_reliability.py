@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     CanonicalInteger,
@@ -26,6 +27,10 @@ from jacobian.math.probability.all_terminal_reliability import (
     _require_bounded_problem,
     _require_source_bound_result,
 )
+
+
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("probability.reliability_invariant", message)
 
 
 class AllTerminalReliabilityRequest(StrictModel):
@@ -110,7 +115,7 @@ class AllTerminalReliabilityWireResult(StrictModel):
         raw_counts = value.get("connected_spanning_subgraph_counts")
         if isinstance(raw_counts, (list, tuple)):
             if len(raw_counts) > MAX_ALL_TERMINAL_RELIABILITY_EDGES + 1:
-                raise ValueError(
+                raise _validation_error(
                     "connected-spanning-subgraph profile exceeds the edge bound"
                 )
             max_digits = len(str(MAX_ALL_TERMINAL_RELIABILITY_STATES))
@@ -118,7 +123,7 @@ class AllTerminalReliabilityWireResult(StrictModel):
                 isinstance(item, str) and len(item.lstrip("-")) > max_digits
                 for item in raw_counts
             ):
-                raise ValueError(
+                raise _validation_error(
                     "connected-spanning-subgraph count exceeds the state bound"
                 )
         return value
@@ -172,7 +177,6 @@ def compute_all_terminal_reliability(
 
 ALL_TERMINAL_RELIABILITY_OPERATION = MathTool(
     operation_id="probability.graph_reliability.all_terminal.compute",
-    version="1",
     title="Exact bounded all-terminal graph reliability",
     description=(
         "Compute the exact probability that the spanning subgraph on every "

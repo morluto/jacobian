@@ -38,7 +38,6 @@ _CLOSURE_EXAMPLE: dict[str, Any] = {
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="matroid.closure.compute",
-        version="1",
         title="Compute the closure of a subset in a linear matroid",
         description=(
             "Compute the closure (smallest flat) of a subset S in a matroid "

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from itertools import combinations
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
@@ -52,8 +51,6 @@ from jacobian.math.topology._models import (
     JoinResult,
     LinkRequest,
     LinkResult,
-    PseudomanifoldRequest,
-    PseudomanifoldResult,
     ShellingCheckRequest,
     ShellingCheckResult,
     SimplexBasis,
@@ -70,6 +67,11 @@ from jacobian.math.topology._models import (
     _all_faces,
     face_closure,
     simplicial_complex_digest,
+)
+from jacobian.math.topology._pseudomanifold import (
+    PseudomanifoldRequest,
+    PseudomanifoldResult,
+    pseudomanifold_decision,
 )
 from jacobian.math.topology._shelling import evaluate_shelling
 
@@ -951,48 +953,14 @@ def compute_pseudomanifold_decision(
     request: PseudomanifoldRequest,
 ) -> PseudomanifoldResult:
     """Decide whether a complex is a pseudomanifold."""
-    facets = [frozenset(f) for f in request.complex.facets]
-    dim = max(len(f) - 1 for f in facets) if facets else 0
-
-    # Purity: all facets must have the same dimension
-    if not all(len(f) - 1 == dim for f in facets):
-        return PseudomanifoldResult(
-            complex=request.complex,
-            is_pseudomanifold=False,
-            is_closed=False,
-            dimension=dim,
-            num_facets=len(facets),
-            obstruction="not pure: facets have different dimensions",
-        )
-
-    # Each codimension-1 face must be in exactly 1 or 2 facets; for a
-    # dimension-zero complex that face is the empty face, contained once per
-    # vertex facet.
-    codim1_count: dict[frozenset[str], int] = {}
-    for facet in facets:
-        for face in combinations(sorted(facet), len(facet) - 1):
-            key = frozenset(face)
-            codim1_count[key] = codim1_count.get(key, 0) + 1
-
-    for codim_face, count in codim1_count.items():
-        if count > 2:
-            return PseudomanifoldResult(
-                complex=request.complex,
-                is_pseudomanifold=False,
-                is_closed=False,
-                dimension=dim,
-                num_facets=len(facets),
-                obstruction=f"codim-1 face {sorted(codim_face)} is in {count} facets",
-            )
-
-    is_closed = all(count == 2 for count in codim1_count.values())
+    decision = pseudomanifold_decision(request.complex.facets)
     return PseudomanifoldResult(
         complex=request.complex,
-        is_pseudomanifold=True,
-        is_closed=is_closed,
-        dimension=dim,
-        num_facets=len(facets),
-        obstruction=None if is_closed else "pseudomanifold with boundary",
+        is_pseudomanifold=decision.is_pseudomanifold,
+        is_closed=decision.is_closed,
+        dimension=decision.dimension,
+        num_facets=decision.num_facets,
+        obstruction=decision.obstruction,
     )
 
 

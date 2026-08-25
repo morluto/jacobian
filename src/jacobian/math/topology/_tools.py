@@ -13,8 +13,6 @@ from jacobian.math.topology._models import (
     JoinResult,
     LinkRequest,
     LinkResult,
-    PseudomanifoldRequest,
-    PseudomanifoldResult,
     ShellingCheckRequest,
     ShellingCheckResult,
     SkeletonRequest,
@@ -36,6 +34,10 @@ from jacobian.math.topology._operations import (
     compute_skeleton,
     compute_star,
     compute_vertex_deletion,
+)
+from jacobian.math.topology._pseudomanifold import (
+    PseudomanifoldRequest,
+    PseudomanifoldResult,
 )
 
 __all__ = ["TOOLS"]

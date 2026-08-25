@@ -10,8 +10,6 @@ from jacobian.math.topology._models import (
     ElementaryCollapseResult,
     JoinRequest,
     JoinResult,
-    PseudomanifoldRequest,
-    PseudomanifoldResult,
     ShellingCheckRequest,
     ShellingCheckResult,
     SimplicialComplexRequest,
@@ -33,6 +31,10 @@ from jacobian.math.topology._operations import (
     compute_skeleton,
     compute_star,
     compute_vertex_deletion,
+)
+from jacobian.math.topology._pseudomanifold import (
+    PseudomanifoldRequest,
+    PseudomanifoldResult,
 )
 from jacobian.math.topology._tools import TOOLS
 

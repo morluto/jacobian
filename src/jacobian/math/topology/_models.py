@@ -6,7 +6,7 @@ import hashlib
 from collections.abc import Iterable
 from enum import StrEnum
 from itertools import combinations, pairwise
-from typing import Annotated, Any, Literal, NamedTuple, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
     Field,
@@ -163,14 +163,6 @@ def _collapse_remaining_facets(
     return _maximal_faces(remaining)
 
 
-class _PseudomanifoldExpectation(NamedTuple):
-    """Recomputed pseudomanifold decision for one facet family."""
-
-    is_pseudomanifold: bool
-    is_closed: bool
-    obstruction: str | None
-
-
 def _all_faces(facets: tuple[Simplex, ...]) -> set[tuple[str, ...]]:
     """Return the complete set of nonempty faces for a facet list."""
     faces: set[tuple[str, ...]] = set()
@@ -219,46 +211,6 @@ def _require_subdivision_replay(
             "topology.require_subdivision_replay_2",
             "subdivision facets do not match the retained source complex",
         )
-
-
-def _codim1_incidence(
-    facets: list[frozenset[str]],
-) -> dict[frozenset[str], int]:
-    counts: dict[frozenset[str], int] = {}
-    for facet in facets:
-        for face in combinations(sorted(facet), len(facet) - 1):
-            key = frozenset(face)
-            counts[key] = counts.get(key, 0) + 1
-    return counts
-
-
-def _expected_pseudomanifold_decision(
-    facets: list[frozenset[str]],
-    dim: int,
-) -> _PseudomanifoldExpectation:
-    """Recompute the bounded pseudomanifold decision from incidence."""
-
-    is_pure = all(len(facet) - 1 == dim for facet in facets) if facets else False
-    if not is_pure:
-        return _PseudomanifoldExpectation(
-            False, False, "not pure: facets have different dimensions"
-        )
-    # Dimension-zero complexes participate in the same incidence definition:
-    # each vertex facet contains exactly one codimension-one face, the empty
-    # face, so one point has it once (boundary) and two points twice (closed).
-    counts = _codim1_incidence(facets)
-    if any(count > 2 for count in counts.values()):
-        for face, count in counts.items():
-            if count > 2:
-                return _PseudomanifoldExpectation(
-                    False,
-                    False,
-                    f"codim-1 face {sorted(face)} is in {count} facets",
-                )
-    is_closed = all(count == 2 for count in counts.values()) if counts else False
-    return _PseudomanifoldExpectation(
-        True, is_closed, None if is_closed else "pseudomanifold with boundary"
-    )
 
 
 def _require_request_complex(
@@ -1476,65 +1428,6 @@ class BarycentricSubdivisionResult(TopologyExactResult):
         return self
 
 
-class PseudomanifoldRequest(StrictModel):
-    """Decide whether a complex is a pseudomanifold."""
-
-    complex: SimplicialComplexRequest
-
-
-class PseudomanifoldResult(TopologyExactResult):
-    """Pseudomanifold decision result bound to its source complex."""
-
-    complex: SimplicialComplexRequest
-    is_pseudomanifold: bool
-    is_closed: bool
-    dimension: int
-    num_facets: int
-    obstruction: str | None = None
-
-    @model_validator(mode="after")
-    def require_pseudomanifold_binding(self) -> Self:
-        facets = [frozenset(f) for f in self.complex.facets]
-        dim = max(len(f) - 1 for f in facets) if facets else 0
-        if self.dimension != dim or self.num_facets != len(facets):
-            raise _validation_error(
-                "topology.require_pseudomanifold_binding_1",
-                "dimension/num_facets must match source complex",
-            )
-        expected = _expected_pseudomanifold_decision(facets, dim)
-        if self.is_pseudomanifold != expected.is_pseudomanifold:
-            raise _validation_error(
-                "topology.require_pseudomanifold_binding_2",
-                f"is_pseudomanifold {self.is_pseudomanifold} does not match "
-                f"expected {expected.is_pseudomanifold}",
-            )
-        if not expected.is_pseudomanifold:
-            if self.is_closed:
-                raise _validation_error(
-                    "topology.require_pseudomanifold_binding_3",
-                    "non-pseudomanifold cannot be closed",
-                )
-            if self.obstruction != expected.obstruction:
-                raise _validation_error(
-                    "topology.require_pseudomanifold_binding_4",
-                    f"obstruction {self.obstruction!r} does not match replayed "
-                    f"{expected.obstruction!r}",
-                )
-            return self
-        if self.is_closed != expected.is_closed:
-            raise _validation_error(
-                "topology.require_pseudomanifold_binding_5",
-                "is_closed must match codim-1 incidence",
-            )
-        if self.obstruction != expected.obstruction:
-            raise _validation_error(
-                "topology.require_pseudomanifold_binding_6",
-                f"obstruction {self.obstruction!r} does not match expected "
-                f"{expected.obstruction!r}",
-            )
-        return self
-
-
 class ShellingCheckRequest(StrictModel):
     """Check a submitted shelling order of a pure complex."""
 
@@ -1801,8 +1694,6 @@ __all__.extend(
         "ElementaryCollapseResult",
         "JoinRequest",
         "JoinResult",
-        "PseudomanifoldRequest",
-        "PseudomanifoldResult",
         "ShellingCheckRequest",
         "ShellingCheckResult",
         "SkeletonRequest",

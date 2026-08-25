@@ -25,6 +25,14 @@ PUBLIC_COMMANDS: tuple[CommandContract, ...] = (
         cost_class="once",
     ),
     CommandContract(
+        name="test-focused",
+        help="Run TESTS through its explicit semantic LANE (for example, LANE=math).",
+        mutates_checkout=False,
+        scope="one explicit test path through its declared semantic owner lane",
+        ci_relationship="uses the same owner-lane command and limits as CI",
+        cost_class="fast",
+    ),
+    CommandContract(
         name="quick",
         help="Cheap iteration: lint and Lean-free owner tests.",
         mutates_checkout=False,

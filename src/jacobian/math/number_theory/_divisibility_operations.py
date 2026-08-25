@@ -5,14 +5,16 @@ from __future__ import annotations
 import math
 
 from jacobian.math.arithmetic.values import IntegerValue
-from jacobian.math.number_theory._models import (
-    BooleanResult,
+from jacobian.math.number_theory._divisibility_models import (
     DivisibilityRequest,
     ExtendedGcdResult,
     IntegerPairRequest,
+    ValuationRequest,
+)
+from jacobian.math.number_theory._models import (
+    BooleanResult,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
-    ValuationRequest,
 )
 
 

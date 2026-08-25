@@ -2,6 +2,12 @@
 
 from jacobian.catalog._examples import example
 from jacobian.math.arithmetic.values import IntegerValue
+from jacobian.math.number_theory._divisibility_models import (
+    DivisibilityRequest,
+    ExtendedGcdResult,
+    IntegerPairRequest,
+    ValuationRequest,
+)
 from jacobian.math.number_theory._divisibility_operations import (
     compute_aliquot_sum,
     compute_divisor_count,
@@ -22,12 +28,8 @@ from jacobian.math.number_theory._divisibility_operations import (
 from jacobian.math.number_theory._factorization import FACTORIZATION_OPERATIONS
 from jacobian.math.number_theory._models import (
     BooleanResult,
-    DivisibilityRequest,
-    ExtendedGcdResult,
-    IntegerPairRequest,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
-    ValuationRequest,
 )
 from jacobian.math.number_theory._support import (
     number_theory_operation,

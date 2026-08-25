@@ -19,11 +19,7 @@ from jacobian.math.probability._gaussian_inputs import (
     CanonicalGaussianPolynomialMomentRequest,
 )
 from jacobian.math.probability._gaussian_moments import gaussian_univariate_moment
-from jacobian.math.probability._models import (
-    DirectedBondConnectionProbabilityRequest,
-    DirectedBondConnectionProbabilityResult,
-    DirectedBondConnectionProbabilitySource,
-    DirectedBondReliabilityState,
+from jacobian.math.probability._distribution import (
     FiniteConditionalContribution,
     FiniteConditionRequest,
     FiniteConditionResult,
@@ -40,6 +36,12 @@ from jacobian.math.probability._models import (
     FiniteRawMomentContribution,
     FiniteRawMomentRequest,
     FiniteRawMomentResult,
+)
+from jacobian.math.probability._models import (
+    DirectedBondConnectionProbabilityRequest,
+    DirectedBondConnectionProbabilityResult,
+    DirectedBondConnectionProbabilitySource,
+    DirectedBondReliabilityState,
     GraphConnectionProbabilityRequest,
     GraphConnectionProbabilityResult,
     GraphReliabilityState,

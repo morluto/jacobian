@@ -442,11 +442,11 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     description = schema["properties"]["word"]["description"]
     assert "unique strings" in description
     assert "every positioned letter" in description
-    assert "at most 500 letters" in description
-    assert "140800 UTF-8 bytes" in description
+    assert f"at most {MAX_RSK_WORD_LENGTH} letters" in description
+    assert f"{MAX_RSK_WORD_BYTES} UTF-8 bytes" in description
     class_description = schema["description"]
     assert "2N" in class_description
-    assert "124750" in class_description
+    assert str(MAX_RSK_WORD_LENGTH * (MAX_RSK_WORD_LENGTH - 1) // 2) in class_description
     assert "nine integer" in class_description
     assert "comparisons per search" in class_description
     assert (
@@ -456,9 +456,9 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
 
     inverse_schema = RSKInverseWordRequest.model_json_schema()
     pair_schema = inverse_schema["$defs"]["RSKTableauPair"]
-    assert "at most 500 cells" in pair_schema["description"]
-    assert "500 cells" in inverse_schema["description"]
-    assert "at most 500 cells" in pair_schema["properties"]["shape"]["description"]
+    assert f"at most {MAX_RSK_WORD_LENGTH} cells" in pair_schema["description"]
+    assert f"{MAX_RSK_WORD_LENGTH} cells" in inverse_schema["description"]
+    assert f"at most {MAX_RSK_WORD_LENGTH} cells" in pair_schema["properties"]["shape"]["description"]
 
 
 def test_public_operations_are_admitted_and_examples_execute() -> None:

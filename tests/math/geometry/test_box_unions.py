@@ -421,7 +421,10 @@ def test_schema_explains_empty_boxes_and_coupled_bounds() -> None:
 
     assert "intervals=null" in box_schema["description"]
     assert "same dimension" in request_schema["description"]
-    assert f"canonical {MAX_CANONICAL_RATIONAL_DIGITS:,}-digit" in request_schema["description"]
+    assert (
+        f"canonical {MAX_CANONICAL_RATIONAL_DIGITS:,}-digit"
+        in request_schema["description"]
+    )
     assert "256 digits" not in request_schema["description"]
     boxes_property = request_schema["properties"]["boxes"]
     assert "maxItems" not in boxes_property

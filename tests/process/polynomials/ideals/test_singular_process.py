@@ -470,7 +470,9 @@ def test_exhausted_replay_allowance_times_out_without_launching_singular(
 
 
 def test_caller_cannot_narrow_the_exact_result_contract() -> None:
-    with pytest.raises(ValueError, match=rf"greater than or equal to {MAX_OUTPUT_TERMS}"):
+    with pytest.raises(
+        ValueError, match=rf"greater than or equal to {MAX_OUTPUT_TERMS}"
+    ):
         IdealComputationBudget(maximum_output_terms=1)
 
 

@@ -365,8 +365,13 @@ def test_numeric_admission_caps_are_visible_in_schema_and_tool_description() -> 
     assert "C(|V(host)|, |V(pattern)|)" in schema
     assert "C(|V(pattern)|, 2) direct host-edge probes" in schema
     assert "partial-injection state bound" in schema
-    assert f"{MAX_INDUCED_PATTERN_SUBSETS_PER_PASS:,} subsets per pass" in TOOLS[0].description
-    assert f"{MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:,} work units" in TOOLS[0].description
+    assert (
+        f"{MAX_INDUCED_PATTERN_SUBSETS_PER_PASS:,} subsets per pass"
+        in TOOLS[0].description
+    )
+    assert (
+        f"{MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:,} work units" in TOOLS[0].description
+    )
     assert "direct host-edge probes" in TOOLS[0].description
     assert "one local graph per subset" in TOOLS[0].examples[0].description
     assert "per-subset VF2++ work" in TOOLS[0].examples[0].description

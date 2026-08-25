@@ -387,7 +387,9 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
             *(_poly(variables, (-1, 1, (0,) * 8)) for _ in range(33)),
         ),
     )
-    with pytest.raises(ValueError, match=rf"{MAX_OUTPUT_GENERATORS}-generator exact-result envelope"):
+    with pytest.raises(
+        ValueError, match=rf"{MAX_OUTPUT_GENERATORS}-generator exact-result envelope"
+    ):
         computed_minimal_primes_result(request, over_generators, "4.4.0")
 
     heavy_terms = tuple(
@@ -401,7 +403,9 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
         )
     )
     oversized = (_ideal(variables, _poly(variables, *heavy_terms)),)
-    with pytest.raises(ValueError, match=rf"{MAX_OUTPUT_TERMS}-term exact-result envelope"):
+    with pytest.raises(
+        ValueError, match=rf"{MAX_OUTPUT_TERMS}-term exact-result envelope"
+    ):
         computed_minimal_primes_result(request, oversized, "4.4.0")
 
 

@@ -977,9 +977,14 @@ class TestMultivariateSubresultantSequence:
 
         beyond = _poly(
             ("x", "y"),
-            ((f"{'9' * (_MAX_MULTIVARIATE_COEFFICIENT_DIGITS + 1)}/1", (1, 0)), ("1/1", (0, 1))),
+            (
+                (f"{'9' * (_MAX_MULTIVARIATE_COEFFICIENT_DIGITS + 1)}/1", (1, 0)),
+                ("1/1", (0, 1)),
+            ),
         )
-        with pytest.raises(ValueError, match=rf"{_MAX_MULTIVARIATE_COEFFICIENT_DIGITS}-digit bound"):
+        with pytest.raises(
+            ValueError, match=rf"{_MAX_MULTIVARIATE_COEFFICIENT_DIGITS}-digit bound"
+        ):
             MultivariateSubresultantSequenceRequest(
                 left=beyond,
                 right=right,

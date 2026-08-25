@@ -382,8 +382,14 @@ def test_input_rational_digit_boundary_is_documented_and_enforced() -> None:
     schema = OrdinaryDerivativeJetTable.model_json_schema()
     jet_properties = schema["$defs"]["OrdinaryDerivativeJet"]["properties"]
     value_properties = schema["$defs"]["OrdinaryDerivativeValue"]["properties"]
-    assert f"at most {_MAX_RATIONAL_DIGITS} digits" in jet_properties["node"]["description"]
-    assert f"at most {_MAX_RATIONAL_DIGITS} digits" in value_properties["value"]["description"]
+    assert (
+        f"at most {_MAX_RATIONAL_DIGITS} digits"
+        in jet_properties["node"]["description"]
+    )
+    assert (
+        f"at most {_MAX_RATIONAL_DIGITS} digits"
+        in value_properties["value"]["description"]
+    )
 
 
 def test_intermediate_growth_boundary_rejects_before_matrix_construction() -> None:

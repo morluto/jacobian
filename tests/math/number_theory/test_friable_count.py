@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Iterator
 
 import pytest
@@ -13,6 +12,7 @@ from jacobian.math.number_theory import FriableCountResult, count_friable
 from jacobian.math.number_theory._friable_operations import compute_friable_count
 from jacobian.math.number_theory._models import (
     _MAX_FRIABLE_SOURCE_ABS,
+    _MAX_FRIABLE_SOURCE_DIGITS,
     MAX_FRIABLE_GENERATED_CUTOFF,
     MAX_FRIABLE_MATERIALIZED_X,
     FriableCountRequest,
@@ -121,7 +121,7 @@ def test_large_direct_cases_do_not_inherit_the_materialized_cap() -> None:
 def test_native_api_enforces_the_source_digit_bound_before_work() -> None:
     with pytest.raises(
         ValueError,
-        match=rf"{round(math.log10(_MAX_FRIABLE_SOURCE_ABS))} decimal digits",
+        match=rf"{_MAX_FRIABLE_SOURCE_DIGITS} decimal digits",
     ):
         count_friable(_MAX_FRIABLE_SOURCE_ABS, 1)
 

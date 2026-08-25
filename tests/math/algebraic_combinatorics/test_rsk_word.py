@@ -465,7 +465,7 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     assert (
         str(MAX_RSK_WORD_LENGTH * (MAX_RSK_WORD_LENGTH - 1) // 2) in class_description
     )
-    assert "nine integer" in class_description
+    assert f"{MAX_RSK_ROW_SEARCH_COMPARISONS} integer comparisons" in class_description
     assert "comparisons per search" in class_description
     assert MAX_RSK_WORD_LENGTH.bit_length() == MAX_RSK_ROW_SEARCH_COMPARISONS
 

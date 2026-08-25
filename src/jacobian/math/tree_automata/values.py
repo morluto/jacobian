@@ -171,15 +171,15 @@ class ReachableStateProfile(StrictModel):
     witnesses: tuple[tuple[int, RankedTree], ...] = Field(
         max_length=MAX_TA_STATES,
         description=(
-            "one canonical minimum-node (state, tree) witness per reachable "
-            "state; when several derivations tie at the minimum node count, "
-            "the witness is the unique one whose root transition "
-            "(symbol, child_states, target_state) is lexicographically "
-            "smallest, comparing child_states element-wise as integers, with "
-            "each child's witness chosen by the same rule recursively; their "
-            "node counts are bounded in aggregate by "
-            "MAX_REACHABILITY_WITNESS_NODES (4096 nodes summed over all "
-            "reachable states)"
+            f"one canonical minimum-node (state, tree) witness per reachable "
+            f"state; when several derivations tie at the minimum node count, "
+            f"the witness is the unique one whose root transition "
+            f"(symbol, child_states, target_state) is lexicographically "
+            f"smallest, comparing child_states element-wise as integers, with "
+            f"each child's witness chosen by the same rule recursively; their "
+            f"node counts are bounded in aggregate by "
+            f"MAX_REACHABILITY_WITNESS_NODES ({MAX_REACHABILITY_WITNESS_NODES} nodes summed over all "
+            f"reachable states)"
         ),
     )
 

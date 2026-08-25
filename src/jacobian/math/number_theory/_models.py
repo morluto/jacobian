@@ -99,7 +99,10 @@ MAX_FRIABLE_GENERATED_CUTOFF = 10_000
 _MAX_FRIABLE_MATERIALIZED_TOTAL_STEPS = 82_000_000
 _MAX_FRIABLE_MATERIALIZED_BYTES = 3_000_000
 _MAX_FRIABLE_GENERATED_TOTAL_NODES = 1_000_000
-_MAX_FRIABLE_SOURCE_ABS = 10**256
+# Sources are nonnegative and rejected at ``10**_MAX_FRIABLE_SOURCE_DIGITS`` or
+# above, so every admitted value carries at most this many decimal digits.
+_MAX_FRIABLE_SOURCE_DIGITS = 256
+_MAX_FRIABLE_SOURCE_ABS = 10**_MAX_FRIABLE_SOURCE_DIGITS
 
 BoundedInteger = Annotated[
     str,
@@ -194,8 +197,8 @@ def _plan_friable_count(x: int, y: int) -> tuple[_FriableRegime, tuple[int, ...]
         )
     if x >= _MAX_FRIABLE_SOURCE_ABS or y >= _MAX_FRIABLE_SOURCE_ABS:
         raise _validation_error(
-            "friable_count_sources_must_have_at_most_256_decimal_digits",
-            "friable-count sources must have at most 256 decimal digits",
+            f"friable_count_sources_must_have_at_most_{_MAX_FRIABLE_SOURCE_DIGITS}_decimal_digits",
+            f"friable-count sources must have at most {_MAX_FRIABLE_SOURCE_DIGITS} decimal digits",
         )
     if x == 0 or y <= 1 or y >= x:
         return "DIRECT", ()
@@ -411,8 +414,8 @@ class FriableCountRequest(StrictModel):
 
     x: BoundedInteger = Field(
         description=(
-            "Canonical nonnegative inclusive source bound. Easy boundary cases may "
-            "use up to 256 decimal digits; other cases must fit an exact counting "
+            f"Canonical nonnegative inclusive source bound. Easy boundary cases may "
+            f"use up to {_MAX_FRIABLE_SOURCE_DIGITS} decimal digits; other cases must fit an exact counting "
             "regime selected from the source-sensitive work bounds."
         ),
         examples=["100"],

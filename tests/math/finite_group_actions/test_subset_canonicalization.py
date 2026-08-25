@@ -1,5 +1,6 @@
 """Contract tests for finite-action subset canonicalization."""
 
+import math
 from itertools import combinations
 
 import pytest
@@ -53,6 +54,13 @@ def _request(
     return SubsetCanonicalizationRequest(
         subset=ActionBoundSubset(action=action, positions=positions)
     )
+
+
+def _oversized_symmetric_group_degree() -> int:
+    degree = 1
+    while math.factorial(degree) <= MAX_GROUP_ORDER:
+        degree += 1
+    return degree
 
 
 def _mathematical_payload(result: SubsetCanonicalizationResult) -> dict:
@@ -211,16 +219,20 @@ def test_request_rejects_duplicate_and_out_of_domain_positions() -> None:
 
 
 def test_request_rejects_group_immediately_above_enumeration_bound() -> None:
-    symmetric_s8 = FinitePermutationAction(
-        domain=tuple(f"p{position}" for position in range(8)),
-        generators=((1, 2, 3, 4, 5, 6, 7, 0), (1, 0, 2, 3, 4, 5, 6, 7)),
+    degree = _oversized_symmetric_group_degree()
+    symmetric_sn = FinitePermutationAction(
+        domain=tuple(f"p{position}" for position in range(degree)),
+        generators=(
+            (*range(1, degree), 0),
+            (1, 0, *range(2, degree)),
+        ),
     )
 
     with pytest.raises(ValidationError) as exc_info:
-        _request(symmetric_s8, (0,))
+        _request(symmetric_sn, (0,))
     _assert_error_type(exc_info.value, "finite_group_action.group_order_exceeds_bound")
     with pytest.raises(ValueError, match=rf"group order exceeds.*{MAX_GROUP_ORDER}"):
-        _enumerate_group(symmetric_s8)
+        _enumerate_group(symmetric_sn)
 
 
 def test_domain_and_subset_boundary_of_fifty_positions_is_accepted() -> None:

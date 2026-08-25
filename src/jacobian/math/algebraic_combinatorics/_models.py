@@ -11,6 +11,7 @@ from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.math.algebraic_combinatorics._rsk import require_rsk_word_budget
 from jacobian.math.algebraic_combinatorics.values import (
+    MAX_RSK_ROW_SEARCH_COMPARISONS,
     MAX_RSK_WORD_BYTES,
     MAX_RSK_WORD_LENGTH,
     RSKConvention,
@@ -88,11 +89,14 @@ class ConjugatePartitionResult(StrictModel):
 
 
 class RSKPermutationRequest(StrictModel):
-    """One strict bounded permutation for ordinary row-insertion RSK.
+    __doc__ = f"""One strict bounded permutation for ordinary row-insertion RSK.
 
     Forward and replayed reverse insertion each perform at most
-    ``N(N-1)/2 <= 124750`` binary row searches, with at most nine integer
-    comparisons per search for ``N <= 500``.
+    ``N(N-1)/2 <= {
+        MAX_RSK_PERMUTATION_LENGTH * (MAX_RSK_PERMUTATION_LENGTH - 1) // 2
+    }`` binary row searches, with at most
+    {MAX_RSK_ROW_SEARCH_COMPARISONS} integer comparisons per search for
+    ``N <= {MAX_RSK_PERMUTATION_LENGTH}``.
     """
 
     permutation: tuple[StrictInt, ...] = Field(
@@ -107,11 +111,14 @@ class RSKPermutationRequest(StrictModel):
 
 
 class RSKResult(StrictModel):
-    """Source-bound canonical tableaux from permutation RSK.
+    __doc__ = f"""Source-bound canonical tableaux from permutation RSK.
 
     Construction and result replay each perform at most
-    ``N(N-1)/2 <= 124750`` binary row searches, with at most nine integer
-    comparisons per search for ``N <= 500``.
+    ``N(N-1)/2 <= {
+        MAX_RSK_PERMUTATION_LENGTH * (MAX_RSK_PERMUTATION_LENGTH - 1) // 2
+    }`` binary row searches, with at most
+    {MAX_RSK_ROW_SEARCH_COMPARISONS} integer comparisons per search for
+    ``N <= {MAX_RSK_PERMUTATION_LENGTH}``.
     """
 
     permutation: tuple[StrictInt, ...] = Field(
@@ -156,12 +163,14 @@ class RSKResult(StrictModel):
 
 
 class RSKWordRequest(StrictModel):
-    """One bounded word under the ordinary row-insertion convention.
+    __doc__ = f"""One bounded word under the ordinary row-insertion convention.
 
     Forward and replayed reverse insertion each perform at most
-    ``N(N-1)/2 <= 124750`` binary row searches, with at most nine integer
-    comparisons per search for ``N <= 500``.  The compact result contains
-    exactly ``2N`` tableau cells; no insertion ledger is materialized.
+    ``N(N-1)/2 <= {MAX_RSK_WORD_LENGTH * (MAX_RSK_WORD_LENGTH - 1) // 2}``
+    binary row searches, with at most
+    {MAX_RSK_ROW_SEARCH_COMPARISONS} integer comparisons per search for
+    ``N <= {MAX_RSK_WORD_LENGTH}``.  The compact result contains exactly
+    ``2N`` tableau cells; no insertion ledger is materialized.
     """
 
     word: FiniteWord = Field(
@@ -188,11 +197,13 @@ class RSKWordRequest(StrictModel):
 
 
 class RSKInverseWordRequest(StrictModel):
-    """One compatible compact word-RSK pair of at most 500 cells to invert.
+    __doc__ = f"""One compatible compact word-RSK pair of at most
+    {MAX_RSK_WORD_LENGTH} cells to invert.
 
     Reverse insertion and its forward replay each perform at most
-    ``N(N-1)/2 <= 124750`` binary row searches, with at most nine integer
-    comparisons per search.
+    ``N(N-1)/2 <= {MAX_RSK_WORD_LENGTH * (MAX_RSK_WORD_LENGTH - 1) // 2}``
+    binary row searches, with at most
+    {MAX_RSK_ROW_SEARCH_COMPARISONS} integer comparisons per search.
     """
 
     pair: RSKTableauPair

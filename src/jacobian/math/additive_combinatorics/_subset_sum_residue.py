@@ -7,6 +7,7 @@ from typing import Annotated, Self
 
 from pydantic import Field, StrictBool, StringConstraints, model_validator
 from pydantic.json_schema import WithJsonSchema
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
@@ -95,8 +96,9 @@ def _raw_source_shape(source: object) -> tuple[int, int] | None:
 
     item_count = len(values)
     if item_count + 1 > MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS:
-        raise ValueError(
-            "subset multiplicities exceed the 4,096-bit intermediate bound"
+        raise _validation_error(
+            "_raw_source_shape",
+            "subset multiplicities exceed the 4,096-bit intermediate bound",
         )
 
     source_bytes = 1_024
@@ -105,13 +107,15 @@ def _raw_source_shape(source: object) -> tuple[int, int] | None:
             continue
         digit_count = len(value) - value.startswith("-")
         if digit_count > MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS:
-            raise ValueError(
-                f"source value at index {index} exceeds the 32,768-digit input bound"
+            raise _validation_error(
+                "_raw_source_shape",
+                f"source value at index {index} exceeds the 32,768-digit input bound",
             )
         source_bytes += len(value) + 3
         if source_bytes > MAX_RESIDUE_PROFILE_RESULT_BYTES:
-            raise ValueError(
-                "subset-sum residue profile exceeds the 4 MiB result bound"
+            raise _validation_error(
+                "_raw_source_shape",
+                "subset-sum residue profile exceeds the 4 MiB result bound",
             )
     return item_count, source_bytes
 
@@ -126,22 +130,28 @@ def _bound_raw_counts(
     if not isinstance(counts, (list, tuple)):
         return result_bytes
     if len(counts) > MAX_RESIDUE_PROFILE_MODULUS:
-        raise ValueError("residue_counts exceeds the bounded result cardinality")
+        raise _validation_error(
+            "_bound_raw_counts", "residue_counts exceeds the bounded result cardinality"
+        )
     if expected_rows is not None and len(counts) != expected_rows:
-        raise ValueError("residue_counts must contain exactly modulus rows")
+        raise _validation_error(
+            "_bound_raw_counts", "residue_counts must contain exactly modulus rows"
+        )
 
     maximum_count_digits = _maximum_count_digits(item_count)
     for count in counts:
         if not isinstance(count, str):
             continue
         if len(count) > maximum_count_digits:
-            raise ValueError(
-                "residue count exceeds the source-derived multiplicity bound"
+            raise _validation_error(
+                "_bound_raw_counts",
+                "residue count exceeds the source-derived multiplicity bound",
             )
         result_bytes += len(count) + 3
         if result_bytes > MAX_RESIDUE_PROFILE_RESULT_BYTES:
-            raise ValueError(
-                "subset-sum residue profile exceeds the 4 MiB result bound"
+            raise _validation_error(
+                "_bound_raw_counts",
+                "subset-sum residue profile exceeds the 4 MiB result bound",
             )
     return result_bytes
 
@@ -156,9 +166,15 @@ def _bound_raw_witnesses(
     if not isinstance(witnesses, (list, tuple)):
         return
     if len(witnesses) > MAX_RESIDUE_PROFILE_MODULUS:
-        raise ValueError("residue_witnesses exceeds the bounded result cardinality")
+        raise _validation_error(
+            "_bound_raw_witnesses",
+            "residue_witnesses exceeds the bounded result cardinality",
+        )
     if expected_rows is not None and len(witnesses) != expected_rows:
-        raise ValueError("residue_witnesses must contain exactly modulus rows")
+        raise _validation_error(
+            "_bound_raw_witnesses",
+            "residue_witnesses must contain exactly modulus rows",
+        )
 
     index_slots = 0
     index_digits = len(str(max(item_count - 1, 0)))
@@ -174,20 +190,28 @@ def _bound_raw_witnesses(
         else:
             continue
         if len(indices) > item_count:
-            raise ValueError("one residue witness exceeds the retained source length")
+            raise _validation_error(
+                "_bound_raw_witnesses",
+                "one residue witness exceeds the retained source length",
+            )
         for index in indices:
             if type(index) is int and not 0 <= index < item_count:
-                raise ValueError(
-                    "residue witness index lies outside the retained source"
+                raise _validation_error(
+                    "_bound_raw_witnesses",
+                    "residue witness index lies outside the retained source",
                 )
         index_slots += len(indices)
         if index_slots > MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS:
-            raise ValueError(
-                "residue witnesses exceed the 250,000 index-slot storage bound"
+            raise _validation_error(
+                "_bound_raw_witnesses",
+                "residue witnesses exceed the 250,000 index-slot storage bound",
             )
     result_bytes += index_slots * (index_digits + 1)
     if result_bytes > MAX_RESIDUE_PROFILE_RESULT_BYTES:
-        raise ValueError("subset-sum residue profile exceeds the 4 MiB result bound")
+        raise _validation_error(
+            "_bound_raw_witnesses",
+            "subset-sum residue profile exceeds the 4 MiB result bound",
+        )
 
 
 class SubsetSumResidueProfileRequest(StrictModel):
@@ -257,8 +281,9 @@ class SubsetSumResidueProfileRequest(StrictModel):
     def require_bounded_complete_profile(self) -> Self:
         item_count = len(self.source.items)
         if item_count + 1 > MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS:
-            raise ValueError(
-                "subset multiplicities exceed the 4,096-bit intermediate bound"
+            raise _validation_error(
+                "require_bounded_complete_profile",
+                "subset multiplicities exceed the 4,096-bit intermediate bound",
             )
 
         oversized = next(
@@ -270,23 +295,26 @@ class SubsetSumResidueProfileRequest(StrictModel):
             None,
         )
         if oversized is not None:
-            raise ValueError(
+            raise _validation_error(
+                "require_bounded_complete_profile",
                 f"source value at index {oversized} exceeds the 32,768-digit "
-                "input bound"
+                "input bound",
             )
 
         dp_cells = item_count * self.modulus
         if dp_cells > MAX_RESIDUE_PROFILE_DP_CELLS:
-            raise ValueError(
-                "subset-sum residue DP exceeds the 1,000,000-cell work bound"
+            raise _validation_error(
+                "require_bounded_complete_profile",
+                "subset-sum residue DP exceeds the 1,000,000-cell work bound",
             )
 
         if (
             self.include_witnesses
             and dp_cells > MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS
         ):
-            raise ValueError(
-                "residue witnesses exceed the 250,000 index-slot storage bound"
+            raise _validation_error(
+                "require_bounded_complete_profile",
+                "residue witnesses exceed the 250,000 index-slot storage bound",
             )
 
         result_bytes = _estimated_result_bytes(
@@ -295,8 +323,9 @@ class SubsetSumResidueProfileRequest(StrictModel):
             include_witnesses=self.include_witnesses,
         )
         if result_bytes > MAX_RESIDUE_PROFILE_RESULT_BYTES:
-            raise ValueError(
-                "subset-sum residue profile exceeds the 4 MiB result bound"
+            raise _validation_error(
+                "require_bounded_complete_profile",
+                "subset-sum residue profile exceeds the 4 MiB result bound",
             )
         return self
 
@@ -392,7 +421,10 @@ class SubsetSumResidueProfileResult(StrictModel):
     @model_validator(mode="after")
     def bind_profile_to_source(self) -> Self:
         if self.include_witnesses != (self.residue_witnesses is not None):
-            raise ValueError("residue_witnesses presence must match include_witnesses")
+            raise _validation_error(
+                "bind_profile_to_source",
+                "residue_witnesses presence must match include_witnesses",
+            )
         request = SubsetSumResidueProfileRequest(
             source=self.source,
             modulus=self.modulus,
@@ -401,9 +433,15 @@ class SubsetSumResidueProfileResult(StrictModel):
         )
         expected_counts, expected_witnesses = _compute_residue_profile(request)
         if self.residue_counts != expected_counts:
-            raise ValueError("residue counts do not match the retained source")
+            raise _validation_error(
+                "bind_profile_to_source",
+                "residue counts do not match the retained source",
+            )
         if self.residue_witnesses != expected_witnesses:
-            raise ValueError("residue witnesses do not match the retained source")
+            raise _validation_error(
+                "bind_profile_to_source",
+                "residue witnesses do not match the retained source",
+            )
         return self
 
 
@@ -502,3 +540,7 @@ __all__ = [
     "SubsetSumResidueProfileResult",
     "compute_subset_sum_residue_profile",
 ]
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"additive_combinatorics.{reason}", message)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -14,6 +15,10 @@ MAX_COEFFICIENT_DIGITS = 1_000
 MAX_STABILIZATION_CHIPS = 1_000_000
 
 
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(code, message)
+
+
 def _validate_divisor(
     vertices: tuple[str, ...],
     divisor: tuple[int, ...],
@@ -21,14 +26,21 @@ def _validate_divisor(
     label: str = "divisor",
 ) -> None:
     if len(divisor) != len(vertices):
-        raise ValueError(f"{label} length must match vertex count")
+        raise _validation_error(
+            "chip_firing.divisor_length", f"{label} length must match vertex count"
+        )
     if any(abs(c) >= 10**MAX_COEFFICIENT_DIGITS for c in divisor):
-        raise ValueError(f"{label} coefficients exceed the digit bound")
+        raise _validation_error(
+            "chip_firing.coefficient_bound",
+            f"{label} coefficients exceed the digit bound",
+        )
 
 
 def _validate_sink(vertices: tuple[str, ...], sink: str) -> None:
     if sink not in set(vertices):
-        raise ValueError("sink vertex must be in the graph")
+        raise _validation_error(
+            "chip_firing.sink_not_in_graph", "sink vertex must be in the graph"
+        )
 
 
 class LabelledGraph(StrictModel):
@@ -41,26 +53,39 @@ class LabelledGraph(StrictModel):
     def require_valid_graph(self) -> Self:
         labels = set(self.vertices)
         if len(labels) != len(self.vertices):
-            raise ValueError("vertex labels must be distinct")
+            raise _validation_error(
+                "chip_firing.duplicate_vertices", "vertex labels must be distinct"
+            )
         seen_edges: set[tuple[str, str]] = set()
         for edge in self.edges:
             u, v = edge
             if u not in labels or v not in labels:
-                raise ValueError("every edge endpoint must be a declared vertex")
+                raise _validation_error(
+                    "chip_firing.edge_endpoint_not_in_graph",
+                    "every edge endpoint must be a declared vertex",
+                )
             if u == v:
-                raise ValueError("self-loops are not allowed")
+                raise _validation_error(
+                    "chip_firing.self_loop", "self-loops are not allowed"
+                )
             canonical = (min(u, v), max(u, v))
             if canonical in seen_edges:
-                raise ValueError("duplicate edges are not allowed in a simple graph")
+                raise _validation_error(
+                    "chip_firing.duplicate_edge",
+                    "duplicate edges are not allowed in a simple graph",
+                )
             seen_edges.add(canonical)
         degree: dict[str, int] = dict.fromkeys(self.vertices, 0)
         for u, v in self.edges:
             degree[u] += 1
             degree[v] += 1
             if degree[u] > MAX_DEGREE or degree[v] > MAX_DEGREE:
-                raise ValueError(f"vertex degree exceeds maximum {MAX_DEGREE}")
+                raise _validation_error(
+                    "chip_firing.degree_bound",
+                    f"vertex degree exceeds maximum {MAX_DEGREE}",
+                )
         if len(self.edges) > MAX_VERTICES * MAX_DEGREE // 2:
-            raise ValueError("too many edges")
+            raise _validation_error("chip_firing.edge_bound", "too many edges")
         return self
 
 
@@ -106,9 +131,14 @@ class FiringRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_request(self) -> Self:
         if len(self.divisor) != len(self.graph.vertices):
-            raise ValueError("divisor length must match vertex count")
+            raise _validation_error(
+                "chip_firing.divisor_length", "divisor length must match vertex count"
+            )
         if self.firing_vertex not in set(self.graph.vertices):
-            raise ValueError("firing vertex must be in the graph")
+            raise _validation_error(
+                "chip_firing.firing_vertex_not_in_graph",
+                "firing vertex must be in the graph",
+            )
         return self
 
 
@@ -130,11 +160,19 @@ class FireVectorRequest(StrictModel):
     def require_valid_request(self) -> Self:
         n = len(self.graph.vertices)
         if len(self.divisor) != n:
-            raise ValueError("divisor length must match vertex count")
+            raise _validation_error(
+                "chip_firing.divisor_length", "divisor length must match vertex count"
+            )
         if len(self.firing_vector) != n:
-            raise ValueError("firing vector length must match vertex count")
+            raise _validation_error(
+                "chip_firing.firing_vector_length",
+                "firing vector length must match vertex count",
+            )
         if any(abs(c) >= 10**MAX_COEFFICIENT_DIGITS for c in self.firing_vector):
-            raise ValueError("firing vector coefficients exceed the digit bound")
+            raise _validation_error(
+                "chip_firing.coefficient_bound",
+                "firing vector coefficients exceed the digit bound",
+            )
         return self
 
 
@@ -157,14 +195,21 @@ class SinkConfiguration(StrictModel):
         vertices = self.graph.vertices
         _validate_sink(vertices, self.sink)
         if len(self.configuration) != len(vertices):
-            raise ValueError("configuration length must match vertex count")
+            raise _validation_error(
+                "chip_firing.configuration_length",
+                "configuration length must match vertex count",
+            )
         nonsink = [i for i, v in enumerate(vertices) if v != self.sink]
         if any(self.configuration[i] < 0 for i in nonsink):
-            raise ValueError("nonsink configuration must be nonnegative")
+            raise _validation_error(
+                "chip_firing.nonsink_negative",
+                "nonsink configuration must be nonnegative",
+            )
         if sum(self.configuration[i] for i in nonsink) > MAX_STABILIZATION_CHIPS:
-            raise ValueError(
+            raise _validation_error(
+                "chip_firing.stabilization_bound",
                 f"nonsink configuration exceeds stabilization bound "
-                f"{MAX_STABILIZATION_CHIPS}"
+                f"{MAX_STABILIZATION_CHIPS}",
             )
         return self
 
@@ -208,7 +253,9 @@ class QReducedRequest(StrictModel):
         n = len(self.graph.vertices)
         _validate_sink(self.graph.vertices, self.sink)
         if len(self.divisor) != n:
-            raise ValueError("divisor length must match vertex count")
+            raise _validation_error(
+                "chip_firing.divisor_length", "divisor length must match vertex count"
+            )
         return self
 
 
@@ -278,9 +325,13 @@ class AbelJacobiRequest(StrictModel):
         n = len(self.graph.vertices)
         _validate_sink(self.graph.vertices, self.sink)
         if len(self.divisor) != n:
-            raise ValueError("divisor length must match vertex count")
+            raise _validation_error(
+                "chip_firing.divisor_length", "divisor length must match vertex count"
+            )
         if sum(self.divisor) != 0:
-            raise ValueError("divisor must have degree zero")
+            raise _validation_error(
+                "chip_firing.divisor_not_degree_zero", "divisor must have degree zero"
+            )
         return self
 
 

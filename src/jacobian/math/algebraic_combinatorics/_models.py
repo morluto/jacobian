@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -34,7 +35,10 @@ def _require_permutation(permutation: tuple[int, ...]) -> None:
     if not permutation:
         return
     if sorted(permutation) != list(range(1, len(permutation) + 1)):
-        raise ValueError("permutation must be a permutation of 1..n")
+        raise PydanticCustomError(
+            "algebraic_combinatorics.permutation_invalid",
+            "permutation must be a permutation of 1..n",
+        )
 
 
 class HookLengthRequest(StrictModel):
@@ -134,11 +138,20 @@ class RSKResult(StrictModel):
         expected_lis = len(insertion_rows[0]) if insertion_rows else 0
         expected_lds = len(insertion_rows)
         if self.p_tableau != expected_p or self.q_tableau != expected_q:
-            raise ValueError("permutation tableaux do not match exact row insertion")
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_tableaux_mismatch",
+                "permutation tableaux do not match exact row insertion",
+            )
         if self.shape != expected_shape or self.q_tableau.shape != expected_shape:
-            raise ValueError("permutation tableaux and shape must agree")
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_shape_mismatch",
+                "permutation tableaux and shape must agree",
+            )
         if self.lis_length != expected_lis or self.lds_length != expected_lds:
-            raise ValueError("LIS/LDS lengths do not match the exact RSK shape")
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_lengths_mismatch",
+                "LIS/LDS lengths do not match the exact RSK shape",
+            )
         return self
 
 
@@ -164,7 +177,13 @@ class RSKWordRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_budget(self) -> Self:
-        require_rsk_word_budget(self.word)
+        try:
+            require_rsk_word_budget(self.word)
+        except ValueError as error:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_word_budget",
+                str(error),
+            ) from error
         return self
 
 

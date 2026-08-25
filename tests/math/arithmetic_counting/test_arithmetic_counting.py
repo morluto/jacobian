@@ -92,7 +92,7 @@ class TestCongruenceBoxCount:
         import pytest
         from pydantic import ValidationError
 
-        with pytest.raises(ValidationError, match="box area"):
+        with pytest.raises(ValidationError) as error:
             CongruenceBoxCountRequest(
                 x_lo=-10_000,
                 x_hi=10_000,
@@ -103,3 +103,7 @@ class TestCongruenceBoxCount:
                 c=0,
                 modulus=3,
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "arithmetic_counting.box_area_exceeds_budget"
+        )

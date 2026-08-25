@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -12,6 +13,12 @@ from jacobian.canonical import parse_canonical_integer
 
 # Public bounds
 MAX_K_VALUE = 1_000
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by multiplicative arithmetic."""
+
+    return PydanticCustomError(f"arithmetic.{reason}", message)
 
 
 class IntegerRequest(StrictModel):
@@ -32,7 +39,9 @@ class NonnegativeIntegerRequest(IntegerRequest):
     @model_validator(mode="after")
     def require_nonnegative(self) -> Self:
         if parse_canonical_integer(self.value) < 0:
-            raise ValueError("value must be nonnegative")
+            raise _validation_error(
+                "value_must_be_nonnegative", "value must be nonnegative"
+            )
         return self
 
 
@@ -61,18 +70,30 @@ class PerfectPowerProfileResult(StrictModel):
                 or self.exponent is None
                 or self.reconstruction is None
             ):
-                raise ValueError("NONUNIT requires base, exponent, and reconstruction")
+                raise _validation_error(
+                    "perfect_power_missing_fields",
+                    "NONUNIT requires base, exponent, and reconstruction",
+                )
             if self.exponent < 1:
-                raise ValueError("NONUNIT exponent must be >= 1")
+                raise _validation_error(
+                    "perfect_power_exponent_invalid", "NONUNIT exponent must be >= 1"
+                )
         else:
             # ZERO, POSITIVE_UNIT, NEGATIVE_UNIT must not carry NONUNIT fields
             if self.base is not None or self.exponent is not None:
-                raise ValueError(f"{self.kind} must not carry base or exponent")
+                raise _validation_error(
+                    "perfect_power_unexpected_base_exponent",
+                    f"{self.kind} must not carry base or exponent",
+                )
             if self.factors:
-                raise ValueError(f"{self.kind} must not carry factors")
+                raise _validation_error(
+                    "perfect_power_unexpected_factors",
+                    f"{self.kind} must not carry factors",
+                )
             if self.is_nontrivial_perfect_power:
-                raise ValueError(
-                    f"{self.kind} must not claim a nontrivial perfect power"
+                raise _validation_error(
+                    "perfect_power_unexpected_claim",
+                    f"{self.kind} must not claim a nontrivial perfect power",
                 )
         return self
 
@@ -94,17 +115,30 @@ class KFreeDecompositionResult(StrictModel):
                 or self.cofactor is None
                 or self.reconstruction is None
             ):
-                raise ValueError("NONUNIT requires base, cofactor, and reconstruction")
+                raise _validation_error(
+                    "k_free_missing_fields",
+                    "NONUNIT requires base, cofactor, and reconstruction",
+                )
         elif self.kind == "UNIT":
             if self.base is not None or self.cofactor is not None:
-                raise ValueError("UNIT must not carry base or cofactor")
+                raise _validation_error(
+                    "k_free_unexpected_base_cofactor",
+                    "UNIT must not carry base or cofactor",
+                )
             if self.factors:
-                raise ValueError("UNIT must not carry factors")
+                raise _validation_error(
+                    "k_free_unexpected_factors", "UNIT must not carry factors"
+                )
         else:  # ZERO
             if self.base is not None or self.cofactor is not None:
-                raise ValueError("ZERO must not carry base or cofactor")
+                raise _validation_error(
+                    "k_free_unexpected_base_cofactor",
+                    "ZERO must not carry base or cofactor",
+                )
             if self.factors:
-                raise ValueError("ZERO must not carry factors")
+                raise _validation_error(
+                    "k_free_unexpected_factors", "ZERO must not carry factors"
+                )
         return self
 
 
@@ -125,19 +159,30 @@ class SquarefreeDecompositionResult(StrictModel):
                 or self.squarefree_part is None
                 or self.reconstruction is None
             ):
-                raise ValueError(
-                    "NONUNIT requires square_factor, squarefree_part, and reconstruction"
+                raise _validation_error(
+                    "squarefree_missing_fields",
+                    "NONUNIT requires square_factor, squarefree_part, and reconstruction",
                 )
         elif self.kind == "UNIT":
             if self.square_factor is not None or self.squarefree_part is not None:
-                raise ValueError("UNIT must not carry square_factor or squarefree_part")
+                raise _validation_error(
+                    "squarefree_unexpected_parts",
+                    "UNIT must not carry square_factor or squarefree_part",
+                )
             if self.factors:
-                raise ValueError("UNIT must not carry factors")
+                raise _validation_error(
+                    "squarefree_unexpected_factors", "UNIT must not carry factors"
+                )
         else:  # ZERO
             if self.square_factor is not None or self.squarefree_part is not None:
-                raise ValueError("ZERO must not carry square_factor or squarefree_part")
+                raise _validation_error(
+                    "squarefree_unexpected_parts",
+                    "ZERO must not carry square_factor or squarefree_part",
+                )
             if self.factors:
-                raise ValueError("ZERO must not carry factors")
+                raise _validation_error(
+                    "squarefree_unexpected_factors", "ZERO must not carry factors"
+                )
         return self
 
 

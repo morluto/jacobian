@@ -6,6 +6,7 @@ from math import isqrt
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -35,6 +36,11 @@ _MAX_EXCHANGE_SIDE = isqrt(MAX_EXCHANGE_CELLS)
 _MAX_ENTRY_STRING_LENGTH = MAX_MUTATED_ENTRY_DIGITS + 1
 _MAX_SYMMETRIZER_STRING_LENGTH = MAX_EXCHANGE_ENTRY_DIGITS + 1
 _MAX_ENTRY_MAGNITUDE = 10**MAX_MUTATED_ENTRY_DIGITS
+
+
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(code, message)
+
 
 ExchangeCoefficient = Annotated[
     CanonicalInteger,
@@ -70,16 +76,18 @@ def _require_bounded_entries(matrix: ExchangeMatrix, *, max_digits: int) -> None
     if any(
         len(value.lstrip("-")) > max_digits for row in matrix.entries for value in row
     ):
-        raise ValueError(
-            f"exchange-matrix coefficients exceed the {max_digits}-digit bound"
+        raise _validation_error(
+            "cluster_algebra.exchange_entries_bounded",
+            f"exchange-matrix coefficients exceed the {max_digits}-digit bound",
         )
 
 
 def _require_bounded_symmetrizer(matrix: ExchangeMatrix) -> None:
     if any(len(d.lstrip("-")) > MAX_EXCHANGE_ENTRY_DIGITS for d in matrix.symmetrizer):
-        raise ValueError(
+        raise _validation_error(
+            "cluster_algebra.symmetrizer_bounded",
             "symmetrizer coefficients exceed the "
-            f"{MAX_EXCHANGE_ENTRY_DIGITS}-digit bound"
+            f"{MAX_EXCHANGE_ENTRY_DIGITS}-digit bound",
         )
 
 
@@ -96,20 +104,27 @@ def _require_mutatable(matrix: ExchangeMatrix, index: int) -> None:
             b_kj = pivot_row[j]
             delta = positive_i * max(b_kj, 0) - negative_i * max(-b_kj, 0)
             if abs(b_ij + delta) >= _MAX_ENTRY_MAGNITUDE:
-                raise ValueError(
+                raise _validation_error(
+                    "cluster_algebra.mutation_bounded",
                     "mutation result exceeds the "
-                    f"{MAX_MUTATED_ENTRY_DIGITS}-digit exchange-matrix bound"
+                    f"{MAX_MUTATED_ENTRY_DIGITS}-digit exchange-matrix bound",
                 )
 
 
 def _require_shape(matrix: ExchangeMatrix) -> None:
     if len(matrix.entries) != matrix.n:
-        raise ValueError("entries must be an n x n matrix")
+        raise _validation_error(
+            "cluster_algebra.entries_shape", "entries must be an n x n matrix"
+        )
     for row in matrix.entries:
         if len(row) != matrix.n:
-            raise ValueError("entries must be a square matrix")
+            raise _validation_error(
+                "cluster_algebra.entries_square", "entries must be a square matrix"
+            )
     if len(matrix.symmetrizer) != matrix.n:
-        raise ValueError("symmetrizer must have n entries")
+        raise _validation_error(
+            "cluster_algebra.symmetrizer_shape", "symmetrizer must have n entries"
+        )
 
 
 class ExchangeMatrix(StrictModel):
@@ -147,17 +162,21 @@ class ExchangeMatrix(StrictModel):
         symmetrizer = parsed_symmetrizer(self)
         for i in range(self.n):
             if symmetrizer[i] <= 0:
-                raise ValueError(
-                    "symmetrizer entries must be strictly positive integers"
+                raise _validation_error(
+                    "cluster_algebra.symmetrizer_positive",
+                    "symmetrizer entries must be strictly positive integers",
                 )
         for i in range(self.n):
             if entries[i][i] != 0:
-                raise ValueError("diagonal entries must be zero")
+                raise _validation_error(
+                    "cluster_algebra.diagonal_zero", "diagonal entries must be zero"
+                )
         for i in range(self.n):
             for j in range(self.n):
                 if symmetrizer[i] * entries[i][j] != -symmetrizer[j] * entries[j][i]:
-                    raise ValueError(
-                        f"skew-symmetrizability condition violated at ({i}, {j})"
+                    raise _validation_error(
+                        "cluster_algebra.skew_symmetrizable",
+                        f"skew-symmetrizability condition violated at ({i}, {j})",
                     )
         return self
 
@@ -171,7 +190,9 @@ class SeedMutationRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_index(self) -> Self:
         if self.mutation_index >= self.exchange_matrix.n:
-            raise ValueError("mutation_index must be in 0..n-1")
+            raise _validation_error(
+                "cluster_algebra.mutation_index", "mutation_index must be in 0..n-1"
+            )
         _require_mutatable(self.exchange_matrix, self.mutation_index)
         return self
 
@@ -190,15 +211,20 @@ class SeedMutationResult(StrictModel):
         )
 
         if self.mutation_index >= self.exchange_matrix.n:
-            raise ValueError("mutation_index must be in 0..n-1")
+            raise _validation_error(
+                "cluster_algebra.mutation_index", "mutation_index must be in 0..n-1"
+            )
         if self.mutation_index >= self.source_exchange_matrix.n:
-            raise ValueError("mutation_index must be in 0..n-1")
+            raise _validation_error(
+                "cluster_algebra.mutation_index", "mutation_index must be in 0..n-1"
+            )
         # Replay the Fomin-Zelevinsky relation against the retained source.
         expected = _mutation_of(self.source_exchange_matrix, self.mutation_index)
         if self.exchange_matrix != expected:
-            raise ValueError(
+            raise _validation_error(
+                "cluster_algebra.mutation_replay",
                 "exchange_matrix must be the exact mutation of the retained "
-                "source matrix"
+                "source matrix",
             )
         return self
 
@@ -231,8 +257,9 @@ class GVectorResult(StrictModel):
     @model_validator(mode="after")
     def require_initial_g_vectors(self) -> Self:
         if self.g_matrix != _identity_matrix(self.exchange_matrix.n):
-            raise ValueError(
-                "g_matrix must be the n x n identity of the source exchange matrix"
+            raise _validation_error(
+                "cluster_algebra.g_matrix_identity",
+                "g_matrix must be the n x n identity of the source exchange matrix",
             )
         return self
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.cohomology_operations._models import (
     BocksteinRequest,
@@ -13,6 +14,12 @@ from jacobian.math.cohomology_operations._operations import (
     compute_bockstein,
     compute_steenrod_square,
 )
+
+
+def _assert_error_code(
+    excinfo: pytest.ExceptionInfo[ValidationError], code: str
+) -> None:
+    assert any(error["type"] == code for error in excinfo.value.errors())
 
 
 class TestSteenrodSquare:
@@ -82,15 +89,15 @@ class TestSteenrodSquare:
     def test_top_square_requires_target_in_ambient(self):
         """Edges [0,1],[1,2] of a graph emit no absent triangle [0,1,2]."""
         import pytest
-        from pydantic import ValidationError
 
-        with pytest.raises(ValidationError, match="ambient"):
+        with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareRequest(
                 cochain_degree=1,
                 simplex_values=((0, 1), (1, 2)),
                 simplex_coefficients=(1, 1),
                 square_degree=1,
             )
+        _assert_error_code(excinfo, "cohomology_operation.ambient_required_for_nonzero")
         # With the triangle absent from the complex, the square is zero.
         result = compute_steenrod_square(
             SteenrodSquareRequest(
@@ -105,9 +112,7 @@ class TestSteenrodSquare:
         assert result.result_simplex_values == ()
 
     def test_support_must_lie_in_ambient_complex(self):
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="inside the ambient"):
+        with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareRequest(
                 cochain_degree=1,
                 simplex_values=((5, 6),),
@@ -115,6 +120,7 @@ class TestSteenrodSquare:
                 square_degree=1,
                 ambient_simplices=((0,), (1,), (0, 1)),
             )
+        _assert_error_code(excinfo, "cohomology_operation.support_outside_ambient")
 
     # Cups that don't share the middle vertex should not contribute
     def test_disjoint_edges_do_not_contribute(self):
@@ -185,9 +191,6 @@ class TestSteenrodSquare:
 
     def test_forged_result_rejected(self):
         """An authored payload cannot detach from the retained cochain."""
-        import pytest
-        from pydantic import ValidationError
-
         request = SteenrodSquareRequest(
             cochain_degree=1,
             simplex_values=((0, 1), (1, 2)),
@@ -201,8 +204,9 @@ class TestSteenrodSquare:
         payload["result_simplex_values"] = [[2, 3, 4]]
         payload["result_simplex_coefficients"] = [1]
         payload["is_zero"] = False
-        with pytest.raises(ValidationError, match="replay"):
+        with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareResult.model_validate(payload)
+        _assert_error_code(excinfo, "cohomology_operation.steenrod_replay_mismatch")
 
 
 class TestBockstein:
@@ -276,37 +280,37 @@ class TestBockstein:
 
     def test_nonzero_cocycle(self):
         """Bockstein of a non-zero cocycle is unsupported without the complex."""
-        import pytest
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as excinfo:
             BocksteinRequest(
                 prime=2,
                 cochain_degree=1,
                 simplex_values=((0, 1),),
                 simplex_coefficients=(1,),
             )
+        _assert_error_code(
+            excinfo, "cohomology_operation.nonzero_bockstein_unsupported"
+        )
 
     def test_prime_5(self):
         """Bockstein with a different prime still requires zero cocycle."""
         import pytest
-        from pydantic import ValidationError
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as excinfo:
             BocksteinRequest(
                 prime=5,
                 cochain_degree=2,
                 simplex_values=((0, 1, 2),),
                 simplex_coefficients=(3,),
             )
+        _assert_error_code(
+            excinfo, "cohomology_operation.nonzero_bockstein_unsupported"
+        )
 
 
 class TestCocycleAdmission:
     def test_non_cocycle_rejected(self):
-        from pydantic import ValidationError
-
         """A degree-1 cochain on one edge of the triangle is not a cocycle."""
-        with pytest.raises(ValidationError, match="not a cocycle"):
+        with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareRequest(
                 cochain_degree=1,
                 simplex_values=((0, 1),),
@@ -314,6 +318,7 @@ class TestCocycleAdmission:
                 square_degree=1,
                 ambient_simplices=((0,), (1,), (2,), (0, 1), (1, 2), (0, 2), (0, 1, 2)),
             )
+        _assert_error_code(excinfo, "cohomology_operation.not_cocycle")
 
     def test_genuine_cocycle_admitted(self):
         result = compute_steenrod_square(
@@ -354,9 +359,7 @@ class TestAmbientComplexClosure:
 
     def test_non_closed_complex_rejected(self):
         """A tetrahedron entry implies faces that are not listed here."""
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="downward closed"):
+        with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareRequest(
                 cochain_degree=1,
                 simplex_values=((0, 1),),
@@ -364,13 +367,12 @@ class TestAmbientComplexClosure:
                 square_degree=1,
                 ambient_simplices=((0, 1), (0, 1, 2, 3)),
             )
+        _assert_error_code(excinfo, "cohomology_operation.ambient_not_downward_closed")
 
     def test_implied_triangle_enforces_cocycle(self):
         """On the closed tetrahedron the triangle (0,1,2) exists, so an edge
         (0,1)-supported cochain has nonzero coboundary and cannot pass."""
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="not a cocycle"):
+        with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareRequest(
                 cochain_degree=1,
                 simplex_values=((0, 1),),
@@ -378,6 +380,7 @@ class TestAmbientComplexClosure:
                 square_degree=1,
                 ambient_simplices=_TETRAHEDRON,
             )
+        _assert_error_code(excinfo, "cohomology_operation.not_cocycle")
 
     def test_coboundary_of_vertex_on_closed_tetrahedron_admitted(self):
         """d(vertex 0) is a genuine cocycle of the closed tetrahedron."""
@@ -395,9 +398,7 @@ class TestAmbientComplexClosure:
 
     def test_ambient_simplex_vertex_cap(self):
         """The advertised per-simplex cap fails at schema parse time."""
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="at most 64 items"):
+        with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareRequest(
                 cochain_degree=1,
                 simplex_values=((0, 1),),
@@ -405,6 +406,7 @@ class TestAmbientComplexClosure:
                 square_degree=1,
                 ambient_simplices=(tuple(range(65)),),
             )
+        _assert_error_code(excinfo, "too_long")
 
     def test_huge_single_ambient_simplex_rejected_before_traversal(self):
         """One extremely large inner array dies at the schema length bound.
@@ -413,8 +415,6 @@ class TestAmbientComplexClosure:
         constraint, not from validator-side traversal, hashing, or sorting
         of the simplex (which would report the 64-vertex value error).
         """
-        from pydantic import ValidationError
-
         with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareRequest(
                 cochain_degree=1,
@@ -423,14 +423,12 @@ class TestAmbientComplexClosure:
                 square_degree=1,
                 ambient_simplices=(tuple(range(500_000)),),
             )
-        messages = [error["msg"] for error in excinfo.value.errors()]
-        assert any("at most 64 items" in message for message in messages)
-        assert not any("64 vertices" in message for message in messages)
+        error_types = [error["type"] for error in excinfo.value.errors()]
+        assert "too_long" in error_types
+        assert "cohomology_operation.ambient_simplex_bound" not in error_types
 
     def test_bockstein_huge_single_ambient_simplex_rejected_before_traversal(self):
         """Bockstein shares the schema-bounded inner simplex type."""
-        from pydantic import ValidationError
-
         with pytest.raises(ValidationError) as excinfo:
             BocksteinRequest(
                 prime=2,
@@ -439,15 +437,13 @@ class TestAmbientComplexClosure:
                 simplex_coefficients=(),
                 ambient_simplices=(tuple(range(500_000)),),
             )
-        messages = [error["msg"] for error in excinfo.value.errors()]
-        assert any("at most 64 items" in message for message in messages)
-        assert not any("64 vertices" in message for message in messages)
+        error_types = [error["type"] for error in excinfo.value.errors()]
+        assert "too_long" in error_types
+        assert "cohomology_operation.ambient_simplex_bound" not in error_types
 
     def test_ambient_vertex_label_magnitude_is_schema_bounded(self):
         """A 7-digit label is rejected by the element constraint itself."""
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="999999"):
+        with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareRequest(
                 cochain_degree=1,
                 simplex_values=((0, 1),),
@@ -455,6 +451,7 @@ class TestAmbientComplexClosure:
                 square_degree=1,
                 ambient_simplices=((10**6, 1),),
             )
+        _assert_error_code(excinfo, "less_than_equal")
 
 
 class TestInstabilityDegreeAdmission:
@@ -488,15 +485,14 @@ class TestInstabilityDegreeAdmission:
         assert edge.is_zero
         assert edge.result_degree == 128
 
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="exact-result budget"):
+        with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareRequest(
                 cochain_degree=16,
                 simplex_values=(),
                 simplex_coefficients=(),
                 square_degree=113,
             )
+        _assert_error_code(excinfo, "cohomology_operation.result_degree_bound")
 
     def test_nonzero_cocycle_instability_square_above_old_ceiling(self):
         """A genuine cocycle admits large trivial squares too."""
@@ -531,24 +527,28 @@ class TestInstabilityDegreeAdmission:
 
     def test_top_and_intermediate_squares_keep_prior_boundaries(self):
         """k <= n envelopes are unchanged by the output-sensitive bound."""
-        from pydantic import ValidationError
-
         # Top square still requires ambient targets.
-        with pytest.raises(ValidationError, match="ambient"):
+        with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareRequest(
                 cochain_degree=16,
                 simplex_values=(),
                 simplex_coefficients=(),
                 square_degree=16,
             )
+        _assert_error_code(
+            excinfo, "cohomology_operation.ambient_required_for_top_square"
+        )
         # Intermediate squares stay unsupported.
-        with pytest.raises(ValidationError, match="intermediate"):
+        with pytest.raises(ValidationError) as excinfo:
             SteenrodSquareRequest(
                 cochain_degree=2,
                 simplex_values=((0, 1, 2),),
                 simplex_coefficients=(1,),
                 square_degree=1,
             )
+        _assert_error_code(
+            excinfo, "cohomology_operation.intermediate_square_unsupported"
+        )
 
 
 class TestCatalogAdmission:

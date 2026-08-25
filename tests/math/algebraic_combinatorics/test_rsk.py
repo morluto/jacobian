@@ -63,8 +63,12 @@ class TestRSK:
         assert result.lds_length == 2
 
     def test_invalid_not_permutation(self) -> None:
-        with pytest.raises(ValidationError, match="permutation"):
+        with pytest.raises(ValidationError) as error:
             RSKPermutationRequest(permutation=(1, 2, 2))
+        assert (
+            error.value.errors()[0]["type"]
+            == "algebraic_combinatorics.permutation_invalid"
+        )
 
     @pytest.mark.parametrize("value", [True, "1", 1.0])
     def test_permutation_entries_are_strict_integers(self, value: object) -> None:
@@ -83,20 +87,25 @@ class TestRSK:
         assert result.q_tableau.rows == ((1,),)
 
     @pytest.mark.parametrize(
-        ("field", "replacement", "message"),
+        ("field", "replacement"),
         [
-            ("permutation", [2, 1, 3], "row insertion"),
-            ("p_tableau", {"rows": [[1, 3], [2]]}, "row insertion"),
-            ("q_tableau", {"rows": [[1, 3], [2]]}, "row insertion"),
-            ("shape", {"parts": [3]}, "shape"),
-            ("lis_length", 3, "LIS/LDS"),
+            ("permutation", [2, 1, 3]),
+            ("p_tableau", {"rows": [[1, 3], [2]]}),
+            ("q_tableau", {"rows": [[1, 3], [2]]}),
+            ("shape", {"parts": [3]}),
+            ("lis_length", 3),
         ],
     )
     def test_result_rejects_independent_source_and_conclusion_mutations(
-        self, field: str, replacement: object, message: str
+        self, field: str, replacement: object
     ) -> None:
         result = compute_rsk_permutation(RSKPermutationRequest(permutation=(1, 3, 2)))
         payload = result.model_dump(mode="json")
         payload[field] = replacement
-        with pytest.raises(ValidationError, match=message):
+        with pytest.raises(ValidationError) as error:
             RSKResult.model_validate(payload)
+        assert error.value.errors()[0]["type"] in {
+            "algebraic_combinatorics.rsk_tableaux_mismatch",
+            "algebraic_combinatorics.rsk_shape_mismatch",
+            "algebraic_combinatorics.rsk_lengths_mismatch",
+        }

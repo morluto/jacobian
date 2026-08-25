@@ -5,11 +5,16 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorial_maps.values import (
     FiniteCombinatorialMap,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"combinatorial_map.{reason}", message)
 
 
 class FacesRequest(StrictModel):
@@ -32,17 +37,25 @@ class FacesResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_faces(self) -> Self:
-        from jacobian.math.combinatorial_maps.operations_module import face_orbits
+        from jacobian.math.combinatorial_maps.operations import face_orbits
 
         walks, face_of_dart, successor, _ = face_orbits(self.map)
         expected_walks = tuple(tuple(walk) for walk in walks)
         if self.face_walks != expected_walks:
-            raise ValueError("face_walks must be the exact face-orbit family")
+            raise _validation_error(
+                "face_walks_not_bound", "face_walks must be the exact face-orbit family"
+            )
         n = len(self.map.darts)
         if self.face_of_dart != tuple(face_of_dart[d] for d in range(n)):
-            raise ValueError("face_of_dart must be the exact per-dart face assignment")
+            raise _validation_error(
+                "face_assignment_not_bound",
+                "face_of_dart must be the exact per-dart face assignment",
+            )
         if self.successor != tuple(successor):
-            raise ValueError("successor must be the exact dart-successor permutation")
+            raise _validation_error(
+                "successor_not_bound",
+                "successor must be the exact dart-successor permutation",
+            )
         return self
 
 
@@ -62,10 +75,12 @@ class EulerCharacteristicResult(StrictModel):
     def bind_euler(self) -> Self:
         required = {"V", "E", "F", "chi"}
         if set(self.total.keys()) != required:
-            raise ValueError("total must carry V, E, F, chi")
+            raise _validation_error("euler_total_keys", "total must carry V, E, F, chi")
         for row in self.per_component:
             if set(row.keys()) != required:
-                raise ValueError("each component row must carry V, E, F, chi")
+                raise _validation_error(
+                    "euler_component_keys", "each component row must carry V, E, F, chi"
+                )
         return self
 
 
@@ -102,17 +117,21 @@ class OrientationReverseResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_orientation_reverse(self) -> Self:
-        from jacobian.math.combinatorial_maps.operations_module import (
+        from jacobian.math.combinatorial_maps.operations import (
             orientation_reverse,
         )
 
         expected_reversed, expected_bijection = orientation_reverse(self.map)
         if self.reversed_map != expected_reversed:
-            raise ValueError(
-                "reversed_map must be the exact orientation reversal of the input map"
+            raise _validation_error(
+                "orientation_reverse_not_bound",
+                "reversed_map must be the exact orientation reversal of the input map",
             )
         if self.face_bijection != expected_bijection:
-            raise ValueError("face_bijection must be the exact induced face bijection")
+            raise _validation_error(
+                "face_bijection_not_bound",
+                "face_bijection must be the exact induced face bijection",
+            )
         return self
 
 

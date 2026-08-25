@@ -1,5 +1,7 @@
 """Tests for linear code structural operations."""
 
+from contextlib import contextmanager
+
 import pytest
 from pydantic import ValidationError
 
@@ -27,6 +29,13 @@ from jacobian.math.code_linear._operations import (
 )
 from jacobian.math.code_linear._tools import TOOLS
 from jacobian.math.code_linear.values import PrimeFieldLinearEncoder
+
+
+@contextmanager
+def _validation_error(code: str):
+    with pytest.raises(ValidationError) as exc_info:
+        yield
+    assert code in exc_info.value.errors()[0]["type"]
 
 
 def _encoder(
@@ -371,6 +380,24 @@ def test_degenerate_dimension_zero_encoders_are_accepted() -> None:
     assert equal.dimension_b == 2
 
 
+def test_full_space_dual_parity_check_feeds_syndrome_unchanged() -> None:
+    full_space = _encoder(((1, 0), (0, 1)), coordinate_axis=("left", "right"))
+    dual = compute_dual_code(DualCodeRequest(encoder=full_space))
+
+    assert dual.parity_check.rows == ()
+    assert dual.parity_check.coordinate_axis == ("left", "right")
+
+    syndrome = compute_syndrome(
+        SyndromeRequest(
+            parity_check=dual.parity_check,
+            coordinate_axis=("left", "right"),
+            word=(1, 1),
+        )
+    )
+    assert syndrome.syndrome == ()
+    assert syndrome.is_member is True
+
+
 def test_parity_checks_satisfy_orthogonality_invariant() -> None:
     encoder = _encoder(((1, 1, 0), (1, 0, 1)), field_order=3)
     result = compute_parity_check(ParityCheckRequest(encoder=encoder))
@@ -444,7 +471,7 @@ def test_parity_check_value_preserves_the_encoder_coordinate_axis() -> None:
     result = compute_syndrome(aligned)
     assert result.is_member is True
 
-    with pytest.raises(ValidationError, match="column axis"):
+    with _validation_error("column_axis"):
         SyndromeRequest.model_validate(
             {
                 "parity_check": serialized,
@@ -458,13 +485,13 @@ def test_syndrome_request_rejects_misaligned_or_mutated_axes() -> None:
     parity = compute_parity_check(ParityCheckRequest(encoder=_encoder(((1, 1),))))
     serialized = parity.model_dump(mode="json")["parity_check"]
 
-    with pytest.raises(ValidationError, match="column axis"):
+    with _validation_error("column_axis"):
         SyndromeRequest(
             parity_check=serialized,
             coordinate_axis=["x1", "x0"],
             word=(1, 0),
         )
-    with pytest.raises(ValidationError, match="length"):
+    with _validation_error("length"):
         SyndromeRequest(
             parity_check=serialized,
             coordinate_axis=["x0", "x1"],
@@ -473,13 +500,13 @@ def test_syndrome_request_rejects_misaligned_or_mutated_axes() -> None:
 
     mutated = dict(serialized)
     mutated["coordinate_axis"] = ["y0", "y1"]
-    with pytest.raises(ValidationError, match="column axis"):
+    with _validation_error("column_axis"):
         SyndromeRequest(
             parity_check=mutated,
             coordinate_axis=["x0", "x1"],
             word=(1, 0),
         )
-    with pytest.raises(ValidationError, match="unique"):
+    with _validation_error("unique"):
         SyndromeRequest.model_validate(
             {
                 "parity_check": {
@@ -497,9 +524,9 @@ def test_equal_request_rejects_incomparable_encoders() -> None:
     binary = _encoder(((1, 1),))
     ternary = _encoder(((1, 1),), field_order=3)
     wider = _encoder(((1, 1, 1),))
-    with pytest.raises(ValidationError, match="prime field order"):
+    with _validation_error("prime_field_order"):
         CodeEqualRequest(encoder_a=binary, encoder_b=ternary)
-    with pytest.raises(ValidationError, match="coordinate axis"):
+    with _validation_error("coordinate_axis"):
         CodeEqualRequest(encoder_a=binary, encoder_b=wider)
 
     oversized = PrimeFieldLinearEncoder(
@@ -508,23 +535,23 @@ def test_equal_request_rejects_incomparable_encoders() -> None:
         coordinate_axis=("x0", "x1"),
         generator_matrix=((1, 1), (1, 0)),
     )
-    with pytest.raises(ValidationError, match="enumeration bound"):
+    with _validation_error("enumeration_bound"):
         CodeEqualRequest(encoder_a=oversized, encoder_b=oversized)
 
 
 def test_puncture_and_shorten_requests_reject_unselectable_coordinates() -> None:
     empty_encoder = _encoder(())
-    with pytest.raises(ValidationError, match="at least one coordinate"):
+    with _validation_error("at_least_one_coordinate"):
         PunctureRequest(encoder=empty_encoder, coordinate=0)
-    with pytest.raises(ValidationError, match="at least one coordinate"):
+    with _validation_error("at_least_one_coordinate"):
         ShortenRequest(encoder=empty_encoder, coordinate=0)
 
     full_rank = _encoder(((1, 1),))
-    with pytest.raises(ValidationError, match="greater than or equal"):
+    with _validation_error("greater_than_equal"):
         PunctureRequest(encoder=full_rank, coordinate=-1)
-    with pytest.raises(ValidationError, match="out of range"):
+    with _validation_error("out_of_range"):
         PunctureRequest(encoder=full_rank, coordinate=2)
-    with pytest.raises(ValidationError, match="out of range"):
+    with _validation_error("out_of_range"):
         ShortenRequest(encoder=full_rank, coordinate=5)
 
 
@@ -535,7 +562,7 @@ def test_requests_reject_rank_deficient_or_ambiguous_encoders() -> None:
         "coordinate_axis": ["x0", "x0"],
         "generator_matrix": [[1, 1]],
     }
-    with pytest.raises(ValidationError, match="unique"):
+    with _validation_error("unique"):
         PunctureRequest(encoder=ambiguous, coordinate=0)
 
     dependent = {
@@ -544,9 +571,9 @@ def test_requests_reject_rank_deficient_or_ambiguous_encoders() -> None:
         "coordinate_axis": ["x0", "x1"],
         "generator_matrix": [[1, 1], [1, 1]],
     }
-    with pytest.raises(ValidationError, match="full row rank"):
+    with _validation_error("full_row_rank"):
         PunctureRequest(encoder=dependent, coordinate=0)
-    with pytest.raises(ValidationError, match="full row rank"):
+    with _validation_error("full_row_rank"):
         ShortenRequest(encoder=dependent, coordinate=1)
 
 
@@ -565,7 +592,7 @@ def test_macwilliams_ternary() -> None:
 
 
 def test_request_rejects_nonprime_field() -> None:
-    with pytest.raises(ValidationError, match="prime"):
+    with _validation_error("prime"):
         GeneratorMatrixRequest(
             field_order=4,
             generator_matrix=((1,),),
@@ -574,7 +601,7 @@ def test_request_rejects_nonprime_field() -> None:
 
 
 def test_request_rejects_bad_entry() -> None:
-    with pytest.raises(ValidationError, match="residues"):
+    with _validation_error("residues"):
         GeneratorMatrixRequest(
             field_order=2,
             generator_matrix=((2,),),
@@ -583,7 +610,7 @@ def test_request_rejects_bad_entry() -> None:
 
 
 def test_code_producer_requests_reject_ambiguous_coordinate_axes() -> None:
-    with pytest.raises(ValidationError, match="match the generator-matrix columns"):
+    with _validation_error("match_the_generator_matrix_columns"):
         GeneratorMatrixRequest(
             field_order=2,
             generator_matrix=((1, 1),),
@@ -592,7 +619,7 @@ def test_code_producer_requests_reject_ambiguous_coordinate_axes() -> None:
 
 
 def test_syndrome_request_rejects_bad_word_length() -> None:
-    with pytest.raises(ValidationError, match="length"):
+    with _validation_error("length"):
         SyndromeRequest(
             parity_check={
                 "field_order": 2,
@@ -605,10 +632,10 @@ def test_syndrome_request_rejects_bad_word_length() -> None:
 
 
 def test_codeword_check_request_rejects_bad_word_length() -> None:
-    with pytest.raises(ValidationError, match="length"):
+    with _validation_error("length"):
         CodewordCheckRequest(encoder=_encoder(((1, 1),)), word=(1,))
 
 
 def test_codeword_check_request_rejects_noncanonical_word_entries() -> None:
-    with pytest.raises(ValidationError, match="residues"):
+    with _validation_error("residues"):
         CodewordCheckRequest(encoder=_encoder(((1, 1),)), word=(2, 0))

@@ -201,30 +201,37 @@ def test_path_partition_reports_nonconstant_intersection_numbers() -> None:
 
 
 def test_positive_value_rejects_noncoherent_pair_partition() -> None:
-    with pytest.raises(
-        ValidationError, match="does not define a coherent configuration"
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteCoherentConfiguration.model_validate(_path_four_relation_partition())
+    assert exc_info.value.errors()[0]["type"] == "coherent_configuration.not_coherent"
 
 
 def test_malformed_partition_is_request_invalid_not_a_negative_conclusion() -> None:
     payload = _complete_graph_k3()
     payload["relation_matrix"] = [["diagonal", "edge"], ["edge", "diagonal"]]
 
-    with pytest.raises(ValidationError, match="square on points"):
+    with pytest.raises(ValidationError) as exc_info:
         _request(payload)
+    assert exc_info.value.errors()[0]["type"] == "coherent_configuration.matrix_square"
 
 
 def test_relation_order_and_matrix_entries_must_be_canonical_and_complete() -> None:
     payload = _complete_graph_k3()
     payload["relation_ids"] = ["edge", "diagonal"]
-    with pytest.raises(ValidationError, match="unique and sorted"):
+    with pytest.raises(ValidationError) as exc_info:
         _request(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "coherent_configuration.relation_ids_canonical"
+    )
 
     payload = _complete_graph_k3()
     payload["relation_ids"] = ["diagonal", "edge", "unused"]
-    with pytest.raises(ValidationError, match="must occur"):
+    with pytest.raises(ValidationError) as exc_info:
         _request(payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "coherent_configuration.relation_ids_used"
+    )
 
 
 def test_utf8_label_byte_bounds_apply_to_direct_request() -> None:
@@ -241,7 +248,7 @@ def test_utf8_label_byte_bounds_apply_to_direct_request() -> None:
     assert compute_analyze(request).status == "COHERENT_CONFIGURATION"
 
     oversized_point = point + "😀"
-    with pytest.raises(ValidationError, match="point labels must not exceed"):
+    with pytest.raises(ValidationError) as exc_info:
         _request(
             {
                 "points": [oversized_point],
@@ -249,9 +256,12 @@ def test_utf8_label_byte_bounds_apply_to_direct_request() -> None:
                 "relation_matrix": [["diagonal"]],
             }
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "coherent_configuration.point_label_bytes"
+    )
 
     oversized_relation_id = relation_id + "😀"
-    with pytest.raises(ValidationError, match="relation_ids must not exceed"):
+    with pytest.raises(ValidationError) as exc_info:
         _request(
             {
                 "points": ["a"],
@@ -259,6 +269,9 @@ def test_utf8_label_byte_bounds_apply_to_direct_request() -> None:
                 "relation_matrix": [[oversized_relation_id]],
             }
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "coherent_configuration.relation_id_bytes"
+    )
 
 
 @pytest.mark.parametrize("escaped_character", ('"', "\x00"), ids=("quote", "nul"))
@@ -267,8 +280,9 @@ def test_escaped_result_over_budget_is_rejected_at_direct_request_boundary(
 ) -> None:
     payload = _escaped_thin_four_point_configuration(escaped_character)
 
-    with pytest.raises(ValidationError, match="result exceeds the byte budget"):
+    with pytest.raises(ValidationError) as exc_info:
         _request(payload)
+    assert exc_info.value.errors()[0]["type"] == "value_error"
 
 
 def test_unicode_label_tensor_stays_inside_admitted_result_envelope() -> None:
@@ -308,10 +322,18 @@ def test_result_replay_rejects_intersection_and_source_mutations() -> None:
     result = compute_analyze(_request(_complete_graph_k3()))
     payload = result.model_dump(mode="json")
     payload["intersection_numbers"][0]["value"] = 99
-    with pytest.raises(ValidationError, match="intersection_numbers"):
+    with pytest.raises(ValidationError) as exc_info:
         CoherentConfigurationAnalyzeResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "coherent_configuration.result_intersection_numbers"
+    )
 
     payload = result.model_dump(mode="json")
     payload["configuration"]["relation_matrix"][0][1] = "diagonal"
-    with pytest.raises(ValidationError, match=r"coherent_configuration|status"):
+    with pytest.raises(ValidationError) as exc_info:
         CoherentConfigurationAnalyzeResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] in {
+        "coherent_configuration.result_status",
+        "coherent_configuration.result_value",
+    }

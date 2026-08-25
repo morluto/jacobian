@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.symmetric_functions.values import (
@@ -64,17 +65,29 @@ class RSKTableauPair(StrictModel):
     @model_validator(mode="after")
     def require_compatible_word_pair(self) -> Self:
         if len(set(self.alphabet)) != len(self.alphabet):
-            raise ValueError("alphabet symbols must be distinct")
+            raise PydanticCustomError(
+                "algebraic_combinatorics.alphabet_not_unique",
+                "alphabet symbols must be distinct",
+            )
         if self.insertion_tableau.shape != self.shape:
-            raise ValueError("insertion tableau shape must equal the common shape")
+            raise PydanticCustomError(
+                "algebraic_combinatorics.insertion_shape_mismatch",
+                "insertion tableau shape must equal the common shape",
+            )
         if self.recording_tableau.shape != self.shape:
-            raise ValueError("recording tableau shape must equal the common shape")
+            raise PydanticCustomError(
+                "algebraic_combinatorics.recording_shape_mismatch",
+                "recording tableau shape must equal the common shape",
+            )
         if any(
             entry > len(self.alphabet)
             for row in self.insertion_tableau.rows
             for entry in row
         ):
-            raise ValueError("insertion tableau entry is outside the ordered alphabet")
+            raise PydanticCustomError(
+                "algebraic_combinatorics.insertion_entry_out_of_range",
+                "insertion tableau entry is outside the ordered alphabet",
+            )
         return self
 
 

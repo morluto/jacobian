@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
@@ -13,6 +14,10 @@ from jacobian.math._rational_height import RationalHeight, sum_heights
 # Bounds shared by every arithmetic-function operation.
 _MIN_LENGTH = 1
 _MAX_LENGTH = 10_000
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"arithmetic_functions.{reason}", message)
 
 
 def _heights(values: tuple[CanonicalRational, ...]) -> tuple[RationalHeight, ...]:
@@ -34,9 +39,10 @@ def _divisors(value: int) -> tuple[int, ...]:
 
 def _require_result_height(height: RationalHeight, operation: str) -> None:
     if height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
-        raise ValueError(
+        raise _validation_error(
+            "result_height_exceeded",
             f"{operation} rational height exceeds the "
-            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound"
+            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound",
         )
 
 
@@ -54,11 +60,14 @@ class DirichletConvolutionRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_lengths(self) -> Self:
         if not (_MIN_LENGTH <= len(self.f) <= _MAX_LENGTH):
-            raise ValueError(
+            raise _validation_error(
+                "invalid_length",
                 f"f must have between {_MIN_LENGTH} and {_MAX_LENGTH} values",
             )
         if len(self.f) != len(self.g):
-            raise ValueError("f and g must have the same length")
+            raise _validation_error(
+                "length_mismatch", "f and g must have the same length"
+            )
         return self
 
     @model_validator(mode="after")
@@ -86,7 +95,9 @@ class DirichletConvolutionResult(StrictModel):
     @model_validator(mode="after")
     def bind_length(self) -> Self:
         if self.length != len(self.values):
-            raise ValueError("length must match the number of values")
+            raise _validation_error(
+                "length_mismatch", "length must match the number of values"
+            )
         return self
 
 
@@ -105,7 +116,8 @@ class MobiusTransformRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_length(self) -> Self:
         if not (_MIN_LENGTH <= len(self.values) <= _MAX_LENGTH):
-            raise ValueError(
+            raise _validation_error(
+                "invalid_length",
                 f"values must have between {_MIN_LENGTH} and {_MAX_LENGTH} entries",
             )
         return self
@@ -130,7 +142,9 @@ class MobiusTransformResult(StrictModel):
     @model_validator(mode="after")
     def bind_length(self) -> Self:
         if self.length != len(self.values):
-            raise ValueError("length must match the number of values")
+            raise _validation_error(
+                "length_mismatch", "length must match the number of values"
+            )
         return self
 
 
@@ -142,7 +156,8 @@ class SummatoryFunctionRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_length(self) -> Self:
         if not (_MIN_LENGTH <= len(self.values) <= _MAX_LENGTH):
-            raise ValueError(
+            raise _validation_error(
+                "invalid_length",
                 f"values must have between {_MIN_LENGTH} and {_MAX_LENGTH} entries",
             )
         return self
@@ -163,7 +178,9 @@ class SummatoryFunctionResult(StrictModel):
     @model_validator(mode="after")
     def bind_length(self) -> Self:
         if self.length != len(self.values):
-            raise ValueError("length must match the number of values")
+            raise _validation_error(
+                "length_mismatch", "length must match the number of values"
+            )
         return self
 
 
@@ -178,11 +195,12 @@ class DirichletInverseRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_length_and_nonzero_unit(self) -> Self:
         if not (_MIN_LENGTH <= len(self.values) <= _MAX_LENGTH):
-            raise ValueError(
+            raise _validation_error(
+                "invalid_length",
                 f"values must have between {_MIN_LENGTH} and {_MAX_LENGTH} entries",
             )
         if self.values[0].as_fraction() == 0:
-            raise ValueError("f(1) must be nonzero")
+            raise _validation_error("zero_unit", "f(1) must be nonzero")
         return self
 
     @model_validator(mode="after")
@@ -212,7 +230,9 @@ class DirichletInverseResult(StrictModel):
     @model_validator(mode="after")
     def bind_length(self) -> Self:
         if self.length != len(self.values):
-            raise ValueError("length must match the number of values")
+            raise _validation_error(
+                "length_mismatch", "length must match the number of values"
+            )
         return self
 
 

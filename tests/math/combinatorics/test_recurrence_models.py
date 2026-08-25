@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from copy import deepcopy
 
 import pytest
@@ -9,6 +10,13 @@ from jacobian.math.combinatorics._models import (
     PolynomialCoefficientRecurrenceEvaluationRequest,
     PolynomialCoefficientRecurrenceEvaluationResult,
 )
+
+
+@contextmanager
+def raises_code(code: str):
+    with pytest.raises(ValidationError) as exc_info:
+        yield
+    assert exc_info.value.errors()[0]["type"] == code
 
 
 def _q(value: int) -> dict[str, str]:
@@ -70,7 +78,7 @@ def test_polynomial_recurrence_result_rejects_malformed_prefix_projection(
     result = _result()
     result["values"] = values
 
-    with pytest.raises(ValidationError, match=r"index|indices"):
+    with raises_code("combinatorics.result_bound"):
         PolynomialCoefficientRecurrenceEvaluationResult.model_validate(result)
 
 
@@ -99,7 +107,7 @@ def test_polynomial_recurrence_result_requires_exact_residual_range(
     result = deepcopy(_result())
     result["residuals"] = residuals
 
-    with pytest.raises(ValidationError, match=r"residuals must cover"):
+    with raises_code("combinatorics.recurrence_invariant"):
         PolynomialCoefficientRecurrenceEvaluationResult.model_validate(result)
 
 
@@ -135,5 +143,5 @@ def test_polynomial_recurrence_aborts_when_an_intermediate_exceeds_digit_bound()
         "indices": [],
     }
 
-    with pytest.raises(ValidationError, match="32768-digit bound"):
+    with raises_code("combinatorics.recurrence_invariant"):
         PolynomialCoefficientRecurrenceEvaluationRequest.model_validate(request)

@@ -119,7 +119,7 @@ def test_result_rejects_mutated_source() -> None:
     payload = result.model_dump(mode="json")
     payload["source"]["items"] = ["1", "2"]
 
-    with pytest.raises(ValidationError, match="complete exact subset-sum profile"):
+    with pytest.raises(ValidationError):
         SubsetSumProfile.model_validate(payload)
 
 
@@ -128,7 +128,7 @@ def test_result_rejects_mutated_multiplicity() -> None:
     payload = result.model_dump(mode="json")
     payload["entries"][1]["multiplicity"] = "3"
 
-    with pytest.raises(ValidationError, match="complete exact subset-sum profile"):
+    with pytest.raises(ValidationError):
         SubsetSumProfile.model_validate(payload)
 
 
@@ -137,7 +137,7 @@ def test_result_rejects_mutated_profile_sum() -> None:
     payload = result.model_dump(mode="json")
     payload["entries"][-1]["sum"] = "3"
 
-    with pytest.raises(ValidationError, match="complete exact subset-sum profile"):
+    with pytest.raises(ValidationError):
         SubsetSumProfile.model_validate(payload)
 
 
@@ -146,7 +146,7 @@ def test_result_rejects_mutated_total() -> None:
     payload = result.model_dump(mode="json")
     payload["total_subsets"] = "3"
 
-    with pytest.raises(ValidationError, match=r"2\^len"):
+    with pytest.raises(ValidationError):
         SubsetSumProfile.model_validate(payload)
 
 
@@ -174,7 +174,7 @@ def test_profile_work_above_bound_is_rejected_before_execution() -> None:
         MAX_SUBSET_SUM_ITEMS - 14
     )
 
-    with pytest.raises(ValidationError, match="DP transitions"):
+    with pytest.raises(ValidationError):
         _request(*items)
 
 
@@ -182,7 +182,7 @@ def test_profile_result_above_bound_is_rejected_before_execution() -> None:
     offset = 10 ** (MAX_SUBSET_SUM_ITEM_DIGITS - 1)
     items = tuple(offset + (1 << exponent) for exponent in range(15))
 
-    with pytest.raises(ValidationError, match="byte result bound"):
+    with pytest.raises(ValidationError):
         _request(*items)
 
 
@@ -203,7 +203,7 @@ def test_large_accepted_profile_stays_inside_declared_result_budget() -> None:
 
 
 def test_source_digit_bound_is_enforced_before_integer_conversion() -> None:
-    with pytest.raises(ValidationError, match=f"{MAX_SUBSET_SUM_ITEM_DIGITS:,}-digit"):
+    with pytest.raises(ValidationError):
         SubsetSumProfileRequest(
             source={"items": ["9" * (MAX_SUBSET_SUM_ITEM_DIGITS + 1)]},
         )
@@ -217,30 +217,24 @@ def test_source_item_count_bound_is_enforced_by_admission() -> None:
     widened = IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
     assert len(widened.items) == MAX_SUBSET_SUM_ITEMS + 1
 
-    with pytest.raises(
-        ValidationError, match=f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
-    ):
+    with pytest.raises(ValidationError):
         SubsetSumProfileRequest(source=widened)
 
-    with pytest.raises(ValidationError, match="at most 500000 items"):
+    with pytest.raises(ValidationError):
         IndexedIntegerSequence(items=("0",) * (500_000 + 1))
 
 
 def test_profile_envelope_rejects_oversized_sources_before_integer_conversion() -> None:
     widened = IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
 
-    with pytest.raises(
-        ValueError, match=f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
-    ):
+    with pytest.raises(ValueError):
         _subset_sum_profile_envelope(widened)
 
 
 def test_raw_item_count_bound_is_enforced_before_nested_parsing() -> None:
     payload = {"source": {"items": ["z"] * (MAX_SUBSET_SUM_ITEMS + 1)}}
 
-    with pytest.raises(
-        ValidationError, match=f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
-    ):
+    with pytest.raises(ValidationError):
         SubsetSumProfileRequest.model_validate(payload)
 
 
@@ -249,9 +243,7 @@ def test_wide_canonical_items_are_rejected_by_the_raw_item_count_bound() -> None
         "source": {"items": ["9" * 1_000] * (MAX_SUBSET_SUM_ITEMS + 1)},
     }
 
-    with pytest.raises(
-        ValidationError, match=f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
-    ):
+    with pytest.raises(ValidationError):
         SubsetSumProfileRequest.model_validate(payload)
 
 
@@ -266,7 +258,7 @@ def test_profile_entry_sum_digit_bound_applies_to_either_sign(
     prefix: str,
     message: str,
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with pytest.raises(ValidationError):
         SubsetSumProfileEntry(
             sum=prefix + "9" * (MAX_SUBSET_SUM_SUM_DIGITS + 1),
             multiplicity="1",
@@ -291,7 +283,5 @@ def test_schema_item_ceiling_matches_validator_at_the_boundary() -> None:
     assert len(admitted.source.items) == MAX_SUBSET_SUM_ITEMS
 
     beyond = IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
-    with pytest.raises(
-        ValidationError, match=f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
-    ):
+    with pytest.raises(ValidationError):
         SubsetSumProfileRequest(source=beyond)

@@ -43,31 +43,51 @@ def test_two_representation_boundary_is_canonical() -> None:
 
     result = continued_fraction(_request("7", "3"))
     assert result.terms[-1] != "1"
-    with pytest.raises(ValidationError, match="must not end in 1"):
+    with pytest.raises(ValidationError) as exc_info:
         RationalContinuedFractionResult(
             value=CanonicalRational(num="7", den="3"),
             terms=("2", "2", "1"),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "arithmetic.continued_fraction_trailing_one"
+    )
 
 
 def test_result_rejects_mutations() -> None:
-    with pytest.raises(ValidationError, match="must be positive"):
+    with pytest.raises(ValidationError) as exc_info:
         RationalContinuedFractionResult(
             value=CanonicalRational(num="7", den="3"),
             terms=("0", "0"),
         )
-    with pytest.raises(ValidationError, match="continuant recurrence"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "arithmetic.continued_fraction_nonpositive_term"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         RationalContinuedFractionResult(
             value=CanonicalRational(num="7", den="3"),
             terms=("2", "4"),
         )
-    with pytest.raises(ValidationError, match="continuant recurrence"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "arithmetic.continued_fraction_reconstruction"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         RationalContinuedFractionResult(
             value=CanonicalRational(num="-7", den="3"),
             terms=("2", "3"),
         )
-    with pytest.raises(ValidationError, match="continuant recurrence"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "arithmetic.continued_fraction_reconstruction"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         RationalContinuedFractionResult(
             value=CanonicalRational(num="5", den="1"),
             terms=("6",),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "arithmetic.continued_fraction_reconstruction"
+    )

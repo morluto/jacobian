@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StringConstraints, model_validator
 from pydantic.json_schema import WithJsonSchema
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -71,7 +72,10 @@ validation itself stays with the canonical sequence value.
 
 def _require_integer_digits(value: str, label: str, maximum_digits: int) -> None:
     if len(value.lstrip("-")) > maximum_digits:
-        raise ValueError(f"{label} exceeds the {maximum_digits}-digit bound")
+        raise _validation_error(
+            "_require_integer_digits",
+            f"{label} exceeds the {maximum_digits}-digit bound",
+        )
 
 
 def _raw_source_item_count(source: object) -> int | None:
@@ -89,11 +93,12 @@ def _raw_source_item_count(source: object) -> int | None:
 
     item_count = len(values)
     if item_count > MAX_SUBSET_SUM_TRANSITIONS_PER_PASS:
-        raise ValueError(
+        raise _validation_error(
+            "_raw_source_item_count",
             "subset-sum request exceeds the "
             f"{MAX_SUBSET_SUM_TOTAL_TRANSITIONS:,}-transition complete-call "
             "bound across admission, computation, and both source-binding "
-            "replays"
+            "replays",
         )
 
     source_wire_bound = 64
@@ -105,7 +110,10 @@ def _raw_source_item_count(source: object) -> int | None:
             _require_integer_digits(value, "source item", MAX_SUBSET_SUM_INTEGER_DIGITS)
         source_wire_bound += len(value) + 4
         if source_wire_bound > MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:
-            raise ValueError("subset-sum source exceeds the 4 MiB wire-size bound")
+            raise _validation_error(
+                "_raw_source_item_count",
+                "subset-sum source exceeds the 4 MiB wire-size bound",
+            )
     return item_count
 
 
@@ -161,11 +169,12 @@ def _require_admitted_work(
             return
         transitions += len(states) + (0 if allow_empty_subset else 1)
         if transitions > MAX_SUBSET_SUM_TRANSITIONS_PER_PASS:
-            raise ValueError(
+            raise _validation_error(
+                "_require_admitted_work",
                 "subset-sum request exceeds the "
                 f"{MAX_SUBSET_SUM_TOTAL_TRANSITIONS:,}-transition complete-call "
                 "bound across admission, computation, and both source-binding "
-                "replays"
+                "replays",
             )
         if any(subtotal + value == target for subtotal in states):
             return
@@ -175,8 +184,9 @@ def _require_admitted_work(
             grown.add(value)
         grown.update(states)
         if len(grown) > MAX_SUBSET_SUM_REACHABLE_STATES:
-            raise ValueError(
-                "subset-sum request exceeds the 65,536-reachable-state bound"
+            raise _validation_error(
+                "_require_admitted_work",
+                "subset-sum request exceeds the 65,536-reachable-state bound",
             )
         states = grown
 
@@ -244,7 +254,10 @@ class SubsetSumTargetRequest(StrictModel):
         # Jacobian's 10 MiB canonical result limit.
         source_wire_bound = 64 + sum(len(value) + 4 for value in self.source.items)
         if source_wire_bound > MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:
-            raise ValueError("subset-sum source exceeds the 4 MiB wire-size bound")
+            raise _validation_error(
+                "require_bounded_exact_search",
+                "subset-sum source exceeds the 4 MiB wire-size bound",
+            )
 
         for value in self.source.items:
             _require_integer_digits(value, "source item", MAX_SUBSET_SUM_INTEGER_DIGITS)
@@ -311,7 +324,10 @@ class SubsetSumTargetResult(StrictModel):
         if isinstance(raw_sum, str) and (
             len(raw_sum) - raw_sum.startswith("-") > MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS
         ):
-            raise ValueError("reconstructed_sum exceeds the 262-digit result bound")
+            raise _validation_error(
+                "bound_raw_result",
+                "reconstructed_sum exceeds the 262-digit result bound",
+            )
 
         raw_witness = prepared.get("witness")
         if isinstance(raw_witness, IndexSubset):
@@ -324,7 +340,10 @@ class SubsetSumTargetResult(StrictModel):
         else:
             return prepared
         if len(indices) > MAX_SUBSET_SUM_REACHABLE_STATES:
-            raise ValueError("subset-sum witness exceeds the 65,536-index result bound")
+            raise _validation_error(
+                "bound_raw_result",
+                "subset-sum witness exceeds the 65,536-index result bound",
+            )
         maximum_index = (
             item_count
             if item_count is not None
@@ -332,7 +351,10 @@ class SubsetSumTargetResult(StrictModel):
         )
         for index in indices:
             if type(index) is int and not 0 <= index < maximum_index:
-                raise ValueError("subset-sum witness index lies outside its source")
+                raise _validation_error(
+                    "bound_raw_result",
+                    "subset-sum witness index lies outside its source",
+                )
         return prepared
 
     @model_validator(mode="after")
@@ -352,22 +374,39 @@ class SubsetSumTargetResult(StrictModel):
 
         if expected_indices is None:
             if self.status != "NOT_ATTAINED":
-                raise ValueError("status must report the exhaustive target decision")
+                raise _validation_error(
+                    "bind_decision_to_source",
+                    "status must report the exhaustive target decision",
+                )
             if self.witness is not None or self.reconstructed_sum is not None:
-                raise ValueError("an unattained target cannot carry a witness or sum")
+                raise _validation_error(
+                    "bind_decision_to_source",
+                    "an unattained target cannot carry a witness or sum",
+                )
             return self
 
         if self.status != "ATTAINED":
-            raise ValueError("status must report the exhaustive target decision")
+            raise _validation_error(
+                "bind_decision_to_source",
+                "status must report the exhaustive target decision",
+            )
         expected_witness = IndexSubset(indices=expected_indices)
         if self.witness != expected_witness:
-            raise ValueError("witness must be the canonical attaining index subset")
+            raise _validation_error(
+                "bind_decision_to_source",
+                "witness must be the canonical attaining index subset",
+            )
         expected_sum = sum(values[index] for index in expected_indices)
         expected_sum_wire = format_canonical_integer(expected_sum)
         if self.reconstructed_sum != expected_sum_wire:
-            raise ValueError("reconstructed_sum must equal the witness sum")
+            raise _validation_error(
+                "bind_decision_to_source",
+                "reconstructed_sum must equal the witness sum",
+            )
         if expected_sum != target:
-            raise ValueError("witness sum must equal the requested target")
+            raise _validation_error(
+                "bind_decision_to_source", "witness sum must equal the requested target"
+            )
         return self
 
 
@@ -400,3 +439,7 @@ def solve_subset_sum_target_request(
         witness=IndexSubset(indices=indices),
         reconstructed_sum=format_canonical_integer(reconstructed_sum),
     )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"additive_combinatorics.{reason}", message)

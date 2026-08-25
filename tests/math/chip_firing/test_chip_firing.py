@@ -67,8 +67,9 @@ class TestReducedLaplacian:
         assert result.reduced_laplacian == ((2, -1), (-1, 2))
 
     def test_invalid_sink(self) -> None:
-        with pytest.raises(ValidationError, match="sink vertex"):
+        with pytest.raises(ValidationError) as exc_info:
             ReducedLaplacianRequest(graph=GRAPH, sink="x")
+        assert exc_info.value.errors()[0]["type"] == "chip_firing.sink_not_in_graph"
 
 
 class TestFiring:
@@ -85,12 +86,17 @@ class TestFiring:
         assert result.fired_divisor == (2, 1, 1)
 
     def test_invalid_vertex(self) -> None:
-        with pytest.raises(ValidationError, match="firing vertex"):
+        with pytest.raises(ValidationError) as exc_info:
             FiringRequest(graph=GRAPH, divisor=[0, 0, 0], firing_vertex="x")
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "chip_firing.firing_vertex_not_in_graph"
+        )
 
     def test_wrong_divisor_length(self) -> None:
-        with pytest.raises(ValidationError, match="divisor length"):
+        with pytest.raises(ValidationError) as exc_info:
             FiringRequest(graph=GRAPH, divisor=[0, 0], firing_vertex="a")
+        assert exc_info.value.errors()[0]["type"] == "chip_firing.divisor_length"
 
 
 class TestFireVector:
@@ -139,8 +145,9 @@ class TestFireVector:
         assert r2.fired_divisor == composed.fired_divisor
 
     def test_wrong_vector_length(self) -> None:
-        with pytest.raises(ValidationError, match="firing vector length"):
+        with pytest.raises(ValidationError) as exc_info:
             FireVectorRequest(graph=GRAPH, divisor=[0, 0, 0], firing_vector=[0, 0])
+        assert exc_info.value.errors()[0]["type"] == "chip_firing.firing_vector_length"
 
 
 class TestStabilize:
@@ -173,8 +180,9 @@ class TestStabilize:
         assert sum(result.odometer) > 0
 
     def test_negative_nonsink_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="nonsink configuration"):
+        with pytest.raises(ValidationError) as exc_info:
             SinkConfiguration(graph=GRAPH, sink="a", configuration=[0, -1, 0])
+        assert exc_info.value.errors()[0]["type"] == "chip_firing.nonsink_negative"
 
 
 class TestParallelStep:

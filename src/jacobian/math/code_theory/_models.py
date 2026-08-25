@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -21,6 +22,10 @@ MAX_COVERING_RADIUS_STATES_PER_PASS = 65_536
 MAX_COVERING_RADIUS_TRANSITIONS = 4_000_000
 
 
+def _error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(code, message)
+
+
 def _validate_prime_field_matrix(
     field_order: int,
     generator_matrix: tuple[tuple[int, ...], ...],
@@ -28,14 +33,26 @@ def _validate_prime_field_matrix(
     from sympy import isprime
 
     if not isprime(field_order):
-        raise ValueError("field_order must be prime for this prime-field operation")
+        raise _error(
+            "code_theory.field_order_not_prime",
+            "field_order must be prime for this prime-field operation",
+        )
     width = len(generator_matrix[0])
     if width == 0 or width > 256:
-        raise ValueError("generator rows must have between one and 256 entries")
+        raise _error(
+            "code_theory.generator_width_out_of_bounds",
+            "generator rows must have between one and 256 entries",
+        )
     if any(len(row) != width for row in generator_matrix):
-        raise ValueError("generator matrix rows must have equal length")
+        raise _error(
+            "code_theory.generator_rows_unequal",
+            "generator matrix rows must have equal length",
+        )
     if any(not 0 <= entry < field_order for row in generator_matrix for entry in row):
-        raise ValueError("generator entries must be canonical field residues")
+        raise _error(
+            "code_theory.generator_entry_not_canonical",
+            "generator entries must be canonical field residues",
+        )
     return width
 
 
@@ -90,7 +107,10 @@ class LinearCodeRequest(StrictModel):
             EXACT_ENUMERATION_PASSES * self.field_order ** len(self.generator_matrix)
             > MAX_EXACT_CODEWORD_EVALUATIONS
         ):
-            raise ValueError("generator matrix exceeds the exact enumeration bound")
+            raise _error(
+                "code_theory.enumeration_work_exceeded",
+                "generator matrix exceeds the exact enumeration bound",
+            )
         return self
 
 
@@ -119,16 +139,20 @@ class MinimumDistanceResult(StrictModel):
 
         width = len(self.request.generator_matrix[0])
         if self.minimum_distance > width:
-            raise ValueError("minimum distance must lie in [0, code length]")
+            raise _error(
+                "code_theory.minimum_distance_out_of_bounds",
+                "minimum distance must lie in [0, code length]",
+            )
         if (
             replay_minimum_distance(
                 self.request.generator_matrix, self.request.field_order
             )
             != self.minimum_distance
         ):
-            raise ValueError(
+            raise _error(
+                "code_theory.minimum_distance_replay_mismatch",
                 "minimum distance must be the exact enumeration of the "
-                "retained source code"
+                "retained source code",
             )
         return self
 
@@ -157,27 +181,38 @@ class WeightDistributionResult(StrictModel):
         seen_weights: list[int] = []
         for weight, count in self.weights:
             if not 0 <= weight <= width:
-                raise ValueError("weight rows must lie in [0, code length]")
+                raise _error(
+                    "code_theory.weight_out_of_bounds",
+                    "weight rows must lie in [0, code length]",
+                )
             if count < 1:
-                raise ValueError("weight counts must be positive")
+                raise _error(
+                    "code_theory.weight_count_not_positive",
+                    "weight counts must be positive",
+                )
             if seen_weights and weight <= seen_weights[-1]:
-                raise ValueError("weight rows must be strictly ascending and unique")
+                raise _error(
+                    "code_theory.weights_not_strictly_ascending",
+                    "weight rows must be strictly ascending and unique",
+                )
             seen_weights.append(weight)
         rank = _matrix_rank_mod_prime(
             self.request.generator_matrix, self.request.field_order
         )
         expected_total = self.request.field_order**rank
         if sum(count for _weight, count in self.weights) != expected_total:
-            raise ValueError(
-                "weight counts must sum to the distinct generated codeword count"
+            raise _error(
+                "code_theory.weight_count_total_mismatch",
+                "weight counts must sum to the distinct generated codeword count",
             )
         replayed = replay_weight_distribution(
             self.request.generator_matrix, self.request.field_order
         )
         if tuple((w, c) for w, c in replayed) != self.weights:
-            raise ValueError(
+            raise _error(
+                "code_theory.weight_distribution_replay_mismatch",
                 "weight distribution must be the exact enumeration of the "
-                "retained source code"
+                "retained source code",
             )
         return self
 
@@ -198,7 +233,10 @@ class CoveringRadiusRequest(StrictModel):
         syndrome_dimension = width - rank
         state_count = self.field_order**syndrome_dimension
         if state_count > MAX_COVERING_RADIUS_STATES_PER_PASS:
-            raise ValueError("syndrome space exceeds the exact state bound")
+            raise _error(
+                "code_theory.syndrome_state_bound_exceeded",
+                "syndrome space exceeds the exact state bound",
+            )
         move_count_bound = min(
             width * (self.field_order - 1),
             max(state_count - 1, 0),
@@ -207,7 +245,10 @@ class CoveringRadiusRequest(StrictModel):
             SYNDROME_BFS_PASSES * state_count * move_count_bound
             > MAX_COVERING_RADIUS_TRANSITIONS
         ):
-            raise ValueError("syndrome graph exceeds the exact transition bound")
+            raise _error(
+                "code_theory.syndrome_transition_bound_exceeded",
+                "syndrome graph exceeds the exact transition bound",
+            )
         return self
 
 
@@ -232,99 +273,19 @@ class CoveringRadiusResult(StrictModel):
 
         width = len(self.request.generator_matrix[0])
         if self.covering_radius > width:
-            raise ValueError("covering radius must lie in [0, code length]")
+            raise _error(
+                "code_theory.covering_radius_out_of_bounds",
+                "covering radius must lie in [0, code length]",
+            )
         if (
             replay_covering_radius(
                 self.request.generator_matrix, self.request.field_order
             )
             != self.covering_radius
         ):
-            raise ValueError(
+            raise _error(
+                "code_theory.covering_radius_replay_mismatch",
                 "covering radius must be the exact syndrome BFS of the "
-                "retained source code"
+                "retained source code",
             )
         return self
-
-
-# ---------------------------------------------------------------------------
-# Dual code operations
-# ---------------------------------------------------------------------------
-
-
-class DualCodeRequest(StrictModel):
-    """Compute the dual code (parity check matrix) from a generator matrix."""
-
-    field_order: int = Field(ge=2, le=251)
-    generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
-
-    @model_validator(mode="after")
-    def require_valid_prime_field(self) -> Self:
-        from sympy import isprime
-
-        if not isprime(self.field_order):
-            raise ValueError("field_order must be prime")
-        width = len(self.generator_matrix[0])
-        if width == 0 or width > 32:
-            raise ValueError("generator rows must have between 1 and 32 entries")
-        if any(len(row) != width for row in self.generator_matrix):
-            raise ValueError("generator rows must have equal length")
-        if any(
-            not 0 <= entry < self.field_order
-            for row in self.generator_matrix
-            for entry in row
-        ):
-            raise ValueError("entries must be canonical field residues")
-        return self
-
-
-class DualCodeResult(StrictModel):
-    """The dual code: parity check matrix (rows span the null space)."""
-
-    field_order: int
-    parity_check_matrix: tuple[tuple[int, ...], ...]
-    code_dimension: int
-    code_length: int
-    dual_dimension: int
-
-
-class SyndromeRequest(StrictModel):
-    """Compute the syndrome of a received word under a parity check matrix."""
-
-    field_order: int = Field(ge=2, le=251)
-    parity_check_matrix: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=16
-    )
-    received_word: tuple[int, ...] = Field(min_length=1, max_length=32)
-
-    @model_validator(mode="after")
-    def require_valid_request(self) -> Self:
-        from sympy import isprime
-
-        if not isprime(self.field_order):
-            raise ValueError("field_order must be prime")
-        cols = len(self.parity_check_matrix[0])
-        if cols == 0 or cols > 32:
-            raise ValueError("parity check rows must have between 1 and 32 entries")
-        if any(len(row) != cols for row in self.parity_check_matrix):
-            raise ValueError("parity check rows must have equal length")
-        if any(
-            not 0 <= entry < self.field_order
-            for row in self.parity_check_matrix
-            for entry in row
-        ):
-            raise ValueError("parity check entries must be canonical field residues")
-        if len(self.received_word) != cols:
-            raise ValueError("received word length must match parity check columns")
-        for entry in self.received_word:
-            if not 0 <= entry < self.field_order:
-                raise ValueError(
-                    "received word entries must be canonical field residues"
-                )
-        return self
-
-
-class SyndromeResult(StrictModel):
-    """The syndrome vector H * r^T mod p."""
-
-    field_order: int
-    syndrome: tuple[int, ...]

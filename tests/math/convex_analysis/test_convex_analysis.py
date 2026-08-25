@@ -111,7 +111,7 @@ class TestSubdifferential:
         import pytest
         from pydantic import ValidationError
 
-        with pytest.raises(ValidationError, match="point dimension"):
+        with pytest.raises(ValidationError) as exc_info:
             MaxAffineSubdifferentialRequest(
                 function=MaxAffineFunction(
                     pieces=(
@@ -127,3 +127,7 @@ class TestSubdifferential:
                 ),
                 point=RationalPoint(coordinates=({"num": "1", "den": "1"},)),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "convex_analysis.point_dimension_mismatch"
+        )

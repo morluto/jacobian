@@ -10,21 +10,21 @@ from jacobian.math.algebraic_number_arithmetic._models import (
     AlgebraicAdditionRequest,
     AlgebraicArithmeticRequest,
     AlgebraicMultiplicationRequest,
-    QuadraticElement,
 )
 from jacobian.math.algebraic_number_arithmetic._operations import (
     compute_algebraic_add,
     compute_algebraic_multiply,
 )
 from jacobian.math.algebraic_number_arithmetic._tools import TOOLS
+from jacobian.math.real_quadratic import RealQuadraticValue
 
 
 def _cr(value: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational.from_integer_ratio(value, den)
 
 
-def _element(a: int, b: int, d: int) -> QuadraticElement:
-    return QuadraticElement(
+def _element(a: int, b: int, d: int) -> RealQuadraticValue:
+    return RealQuadraticValue(
         rational_part=_cr(a),
         radical_coefficient=_cr(b),
         radicand=d,
@@ -105,12 +105,12 @@ def test_multiplication_by_rational_irrational() -> None:
 
 def test_fractional_coefficients() -> None:
     # (1/2 + sqrt(3)) * (1/2 - sqrt(3)) = 1/4 - 3 = -11/4
-    left = QuadraticElement(
+    left = RealQuadraticValue(
         rational_part=CanonicalRational.from_integer_ratio(1, 2),
         radical_coefficient=_cr(1),
         radicand=3,
     )
-    right = QuadraticElement(
+    right = RealQuadraticValue(
         rational_part=CanonicalRational.from_integer_ratio(1, 2),
         radical_coefficient=_cr(-1),
         radicand=3,
@@ -127,17 +127,20 @@ def test_fractional_coefficients() -> None:
 
 
 def test_mismatched_radicands_rejected() -> None:
-    with pytest.raises((ValueError, ValidationError), match="same quadratic field"):
+    with pytest.raises(ValidationError) as exc_info:
         AlgebraicArithmeticRequest(
             left=_element(1, 1, 2),
             right=_element(1, 1, 3),
         )
         # The shared base request still enforces one shared radicand.
+    assert exc_info.value.errors()[0]["type"] == (
+        "algebraic_number_arithmetic.radicands_must_match"
+    )
 
 
 def test_invalid_radicand_rejected() -> None:
     with pytest.raises((ValueError, ValidationError), match="radicand"):
-        QuadraticElement(
+        RealQuadraticValue(
             rational_part=_cr(1),
             radical_coefficient=_cr(1),
             radicand=1,
@@ -146,13 +149,13 @@ def test_invalid_radicand_rejected() -> None:
 
 def test_non_squarefree_radicand_rejected() -> None:
     with pytest.raises((ValueError, ValidationError), match="square-free"):
-        QuadraticElement(
+        RealQuadraticValue(
             rational_part=_cr(1),
             radical_coefficient=_cr(1),
             radicand=12,
         )
     with pytest.raises((ValueError, ValidationError), match="square-free"):
-        QuadraticElement(
+        RealQuadraticValue(
             rational_part=_cr(1),
             radical_coefficient=_cr(1),
             radicand=4,
@@ -199,11 +202,14 @@ def test_multiplication_admits_representable_products_with_overflowing_sums() ->
 def test_multiplication_still_rejects_unrepresentable_products() -> None:
     # (10**200)^2 exceeds the 256-digit result bound for multiply...
     big = 10**200
-    with pytest.raises(ValidationError, match="multiplication result"):
+    with pytest.raises(ValidationError) as exc_info:
         AlgebraicMultiplicationRequest(
             left=_element(big, 0, 2),
             right=_element(big, 0, 2),
         )
+    assert exc_info.value.errors()[0]["type"] == (
+        "algebraic_number_arithmetic.multiplication_result_exceeds_bound"
+    )
     # ...while the same operands remain valid input for addition.
     assert compute_algebraic_add(_add_req((big, 0, 2), (big, 0, 2)))
 
@@ -212,11 +218,14 @@ def test_addition_still_rejects_unrepresentable_sums() -> None:
     # Two maximal 256-digit rational parts sum to a 257-digit value
     # beyond the result bound.
     huge = 10**256 - 1
-    with pytest.raises(ValidationError, match="addition result"):
+    with pytest.raises(ValidationError) as exc_info:
         AlgebraicAdditionRequest(
             left=_element(huge, 0, 2),
             right=_element(huge, 0, 2),
         )
+    assert exc_info.value.errors()[0]["type"] == (
+        "algebraic_number_arithmetic.addition_result_exceeds_bound"
+    )
 
 
 def test_operation_declarations_expose_operand_preconditions() -> None:

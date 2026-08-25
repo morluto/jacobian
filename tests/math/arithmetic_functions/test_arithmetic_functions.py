@@ -303,10 +303,11 @@ class TestDirichletInverse:
         assert result.values[3].as_fraction() == Fraction(0)
 
     def test_zero_first_value_raises(self) -> None:
-        with pytest.raises(ValidationError, match="f\\(1\\) must be nonzero"):
+        with pytest.raises(ValidationError) as exc_info:
             DirichletInverseRequest.model_validate(
                 {"values": _vals((0, 1), (1, 1), (2, 1))}
             )
+        assert exc_info.value.errors()[0]["type"] == "arithmetic_functions.zero_unit"
 
     def test_empty_rejected(self) -> None:
         with pytest.raises(ValidationError):

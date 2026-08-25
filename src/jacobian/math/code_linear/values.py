@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
@@ -14,6 +15,10 @@ MAX_LINEAR_CODE_LENGTH = (
     64  # rowspace operations are O(k^2 n) and remain cheap; raised from 32
 )
 MAX_LINEAR_CODE_DIMENSION = MAX_LINEAR_CODE_LENGTH
+
+
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"code_linear.{code}", message)
 
 
 class PrimeFieldLinearEncoder(StrictModel):
@@ -49,12 +54,36 @@ class PrimeFieldLinearEncoder(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_full_rank_encoder(self) -> Self:
+        from sympy import isprime
+
+        if not isprime(self.field_order):
+            raise _validation_error(
+                "field_order_must_be_prime", "field_order must be prime"
+            )
         if len(set(self.message_axis)) != len(self.message_axis):
-            raise ValueError("message-axis labels must be unique")
+            raise _validation_error(
+                "message_axis_labels_must_be_unique",
+                "message-axis labels must be unique",
+            )
         if len(set(self.coordinate_axis)) != len(self.coordinate_axis):
-            raise ValueError("coordinate-axis labels must be unique")
+            raise _validation_error(
+                "coordinate_axis_labels_must_be_unique",
+                "coordinate-axis labels must be unique",
+            )
         if len(self.generator_matrix) != len(self.message_axis):
-            raise ValueError("generator rows must match the message axis")
+            raise _validation_error(
+                "generator_rows_must_match_the_message_axis",
+                "generator rows must match the message axis",
+            )
+        if any(
+            not 0 <= entry < self.field_order
+            for row in self.generator_matrix
+            for entry in row
+        ):
+            raise _validation_error(
+                "generator_entries_must_be_canonical_field_residues",
+                "generator entries must be canonical field residues",
+            )
 
         matrix = PrimeFieldMatrix(
             prime=self.field_order,
@@ -62,7 +91,10 @@ class PrimeFieldLinearEncoder(StrictModel):
             columns=len(self.coordinate_axis),
         )
         if rank(matrix) != len(self.generator_matrix):
-            raise ValueError("generator matrix must have full row rank")
+            raise _validation_error(
+                "generator_matrix_must_have_full_row_rank",
+                "generator matrix must have full row rank",
+            )
 
         return self
 

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from fractions import Fraction
+from functools import wraps
 from itertools import pairwise
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field
+from pydantic import model_validator as _pydantic_model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -23,6 +27,88 @@ MAX_POLYNOMIAL_OUTPUT_DIGITS = 32_768
 MAX_FIELD_PRIME = 10_000
 
 CoefficientHeight = RationalHeight | None
+
+
+_VALIDATION_CODES = {
+    "iterate output degree exceeds bound": "iterate_degree_exceeds_bound",
+    "iterate coefficient growth exceeds the 32768-digit output bound": "iterate_coefficient_growth_exceeds_bound",
+    "dynatomic polynomial requires map degree at least two": "dynatomic_degree_too_small",
+    "dynatomic output degree exceeds bound": "dynatomic_degree_exceeds_bound",
+    "cycle points must be distinct": "cycle_points_not_distinct",
+    "cycle points must follow the polynomial map in order": "cycle_map_mismatch",
+    "prime must be a prime number": "prime_not_prime",
+    "coefficients must omit trailing zeros modulo the prime": "trailing_zero_coefficients",
+    "degree must match the canonical coefficient tuple": "degree_mismatch",
+    "preperiod must equal first-seen index": "preperiod_mismatch",
+    "period must equal the repeat-index difference": "period_mismatch",
+    "orbit length must equal computed steps plus one": "orbit_length_mismatch",
+    "computed steps cannot exceed the request bound": "computed_steps_exceed_bound",
+    "repeat termination requires complete repeat evidence": "repeat_evidence_incomplete",
+    "repeat evidence must bind the final orbit value": "repeat_final_value_mismatch",
+    "repeat evidence must bind equal orbit values": "repeat_value_mismatch",
+    "bounded termination cannot imply eventual behavior": "bounded_termination_claims_eventual_behavior",
+    "step-bound termination must exhaust the requested prefix": "step_bound_incomplete",
+    "cycle must be a distinct ordered cycle of the bound map": "cycle_map_mismatch",
+    "period must match cycle length": "period_mismatch",
+    "functional graph must cover every field element": "functional_graph_incomplete",
+    "functional graph edges must be source ordered": "functional_graph_edges_unordered",
+    "functional graph edge target out of range": "functional_graph_target_out_of_range",
+    "tail lengths must be nonnegative": "negative_tail_length",
+    "cycles must be canonical and sorted": "cycles_not_canonical",
+    "each cycle must start at its least element": "cycle_not_canonical",
+    "functional graph cycles must be disjoint": "cycles_overlap",
+    "functional graph edges must evaluate the bound polynomial": "functional_graph_edge_mismatch",
+    "cycle must follow functional graph edges": "cycle_edge_mismatch",
+    "zero tail lengths must identify exactly the cycle nodes": "cycle_tail_mismatch",
+    "tail lengths must decrease by one along every tail edge": "tail_length_mismatch",
+    "orbit must begin at the bound start point": "orbit_start_mismatch",
+    "orbit values must follow the bound polynomial map": "orbit_map_mismatch",
+    "polynomial coefficients must omit trailing zeros": "trailing_zero_coefficients",
+}
+
+_VALIDATION_FRAGMENTS = (
+    ("coefficient exceeds the integer digit bound", "coefficient_digit_bound"),
+    ("coefficient must be a canonical integer", "coefficient_not_canonical"),
+    ("exceeds the 128-digit bound", "rational_digit_bound"),
+    ("exceeds the 2048-digit bound", "orbit_value_digit_bound"),
+    ("exceeds the 32768-digit bound", "result_digit_bound"),
+)
+
+
+def _validation_error(message: str) -> PydanticCustomError:
+    code = _VALIDATION_CODES.get(message)
+    if code is None:
+        for fragment, fragment_code in _VALIDATION_FRAGMENTS:
+            if fragment in message:
+                code = fragment_code
+                break
+    if code is None and "coefficient growth exceeds" in message:
+        code = (
+            "iterate_coefficient_growth_exceeds_bound"
+            if message.startswith("iterate")
+            else "dynatomic_coefficient_growth_exceeds_bound"
+        )
+    if code is None:
+        code = "contract_invariant"
+    return PydanticCustomError(f"arithmetic_dynamics.{code}", message)
+
+
+def model_validator(
+    *, mode: Literal["before", "after", "wrap"]
+) -> Callable[[Callable[..., Any]], Any]:
+    """Convert owner-local model invariant failures to stable error codes."""
+
+    def decorate(function: Callable[..., Any]) -> Any:
+        @wraps(function)
+        def wrapped(self: Any, *inner_args: Any, **inner_kwargs: Any) -> Any:
+            try:
+                return function(self, *inner_args, **inner_kwargs)
+            except ValueError as exc:
+                raise _validation_error(str(exc)) from exc
+
+        return _pydantic_model_validator(mode=mode)(wrapped)
+
+    return decorate
 
 
 def _fraction_height(value: Fraction) -> CoefficientHeight:
@@ -194,7 +280,7 @@ class MapIterateRequest(PolynomialCoefficientRequest):
         degree = self.polynomial_degree()
         output_degree = 1 if self.n == 0 else degree**self.n
         if output_degree > MAX_ITERATE_DEGREE:
-            raise ValueError("iterate output degree exceeds bound")
+            raise _validation_error("iterate output degree exceeds bound")
         source = tuple(_fraction_height(value) for value in self.coefficient_values())
         _iterate_heights(source, self.n)
         return self
@@ -221,9 +307,11 @@ class DynatomicPolynomialRequest(PolynomialCoefficientRequest):
     def require_bounded_dynatomic_degree(self) -> Self:
         degree = self.polynomial_degree()
         if degree < 2:
-            raise ValueError("dynatomic polynomial requires map degree at least two")
+            raise _validation_error(
+                "dynatomic polynomial requires map degree at least two"
+            )
         if degree**self.n > MAX_DYNATOMIC_DEGREE:
-            raise ValueError("dynatomic output degree exceeds bound")
+            raise _validation_error("dynatomic output degree exceeds bound")
         source = tuple(_fraction_height(value) for value in self.coefficient_values())
         numerator: tuple[CoefficientHeight, ...] = (RationalHeight(1, 1),)
         denominator: tuple[CoefficientHeight, ...] = (RationalHeight(1, 1),)
@@ -262,12 +350,14 @@ class CycleMultiplierRequest(PolynomialCoefficientRequest):
             for value in self.cycle
         )
         if len(set(points)) != len(points):
-            raise ValueError("cycle points must be distinct")
+            raise _validation_error("cycle points must be distinct")
         coefficients = self.coefficient_values()
         for index, point in enumerate(points):
             expected = points[(index + 1) % len(points)]
             if _evaluate(coefficients, point) != expected:
-                raise ValueError("cycle points must follow the polynomial map in order")
+                raise _validation_error(
+                    "cycle points must follow the polynomial map in order"
+                )
         return self
 
 
@@ -280,10 +370,12 @@ class FiniteFieldMapRequest(StrictModel):
     @model_validator(mode="after")
     def require_canonical_prime_field_map(self) -> Self:
         if not _is_prime(self.prime):
-            raise ValueError("prime must be a prime number")
+            raise _validation_error("prime must be a prime number")
         values = tuple(_parse_canonical_integer(value) for value in self.coefficients)
         if len(values) > 1 and values[-1] % self.prime == 0:
-            raise ValueError("coefficients must omit trailing zeros modulo the prime")
+            raise _validation_error(
+                "coefficients must omit trailing zeros modulo the prime"
+            )
         return self
 
 
@@ -312,7 +404,7 @@ class MapIterateResult(StrictModel):
         )
         expected_degree = 0 if values == (Fraction(0),) else len(values) - 1
         if self.degree != expected_degree:
-            raise ValueError("degree must match the canonical coefficient tuple")
+            raise _validation_error("degree must match the canonical coefficient tuple")
         return self
 
 
@@ -325,9 +417,9 @@ class OrbitRepeatEvidence(StrictModel):
     @model_validator(mode="after")
     def bind_indices(self) -> Self:
         if self.preperiod != self.first_seen_index:
-            raise ValueError("preperiod must equal first-seen index")
+            raise _validation_error("preperiod must equal first-seen index")
         if self.period != self.repeated_at_index - self.first_seen_index:
-            raise ValueError("period must equal the repeat-index difference")
+            raise _validation_error("period must equal the repeat-index difference")
         return self
 
 
@@ -350,30 +442,38 @@ class OrbitPrefixResult(StrictModel):
     def bind_termination_evidence(self) -> Self:
         _require_bound_orbit(self.source_coefficients, self.start, self.orbit)
         if len(self.orbit) != self.computed_steps + 1:
-            raise ValueError("orbit length must equal computed steps plus one")
+            raise _validation_error("orbit length must equal computed steps plus one")
         if self.computed_steps > self.requested_steps:
-            raise ValueError("computed steps cannot exceed the request bound")
+            raise _validation_error("computed steps cannot exceed the request bound")
         if self.termination == "REPEAT_FOUND":
             if (
                 self.repeat is None
                 or not self.eventual_behavior_complete
                 or self.truncated
             ):
-                raise ValueError("repeat termination requires complete repeat evidence")
+                raise _validation_error(
+                    "repeat termination requires complete repeat evidence"
+                )
             if self.repeat.repeated_at_index != self.computed_steps:
-                raise ValueError("repeat evidence must bind the final orbit value")
+                raise _validation_error(
+                    "repeat evidence must bind the final orbit value"
+                )
             if self.orbit[self.repeat.first_seen_index] != self.orbit[-1]:
-                raise ValueError("repeat evidence must bind equal orbit values")
+                raise _validation_error("repeat evidence must bind equal orbit values")
         elif (
             self.repeat is not None
             or self.eventual_behavior_complete
             or not self.truncated
         ):
-            raise ValueError("bounded termination cannot imply eventual behavior")
+            raise _validation_error(
+                "bounded termination cannot imply eventual behavior"
+            )
         if self.termination == "STEP_BOUND_REACHED" and (
             self.computed_steps != self.requested_steps
         ):
-            raise ValueError("step-bound termination must exhaust the requested prefix")
+            raise _validation_error(
+                "step-bound termination must exhaust the requested prefix"
+            )
         return self
 
 
@@ -404,7 +504,7 @@ class DynatomicPolynomialResult(StrictModel):
         )
         expected_degree = 0 if values == (Fraction(0),) else len(values) - 1
         if self.degree != expected_degree:
-            raise ValueError("degree must match the canonical coefficient tuple")
+            raise _validation_error("degree must match the canonical coefficient tuple")
         return self
 
 
@@ -428,9 +528,11 @@ class CycleMultiplierResult(StrictModel):
             _evaluate(source, point) != points[(index + 1) % len(points)]
             for index, point in enumerate(points)
         ):
-            raise ValueError("cycle must be a distinct ordered cycle of the bound map")
+            raise _validation_error(
+                "cycle must be a distinct ordered cycle of the bound map"
+            )
         if self.period != len(self.cycle):
-            raise ValueError("period must match cycle length")
+            raise _validation_error("period must match cycle length")
         require_bounded_rational(
             self.multiplier,
             max_digits=MAX_POLYNOMIAL_OUTPUT_DIGITS,
@@ -453,18 +555,20 @@ class FiniteFieldMapResult(StrictModel):
     @model_validator(mode="after")
     def bind_complete_graph(self) -> Self:
         if not _is_prime(self.prime):
-            raise ValueError("prime must be a prime number")
+            raise _validation_error("prime must be a prime number")
         coefficients = tuple(
             _parse_canonical_integer(value) for value in self.coefficients
         )
         if len(coefficients) > 1 and coefficients[-1] % self.prime == 0:
-            raise ValueError("coefficients must omit trailing zeros modulo the prime")
+            raise _validation_error(
+                "coefficients must omit trailing zeros modulo the prime"
+            )
         self._require_complete_edges()
         if any(
             target != _evaluate_mod_prime(coefficients, source, self.prime)
             for source, target in self.edges
         ):
-            raise ValueError(
+            raise _validation_error(
                 "functional graph edges must evaluate the bound polynomial"
             )
         cycle_set = self._require_canonical_cycles()

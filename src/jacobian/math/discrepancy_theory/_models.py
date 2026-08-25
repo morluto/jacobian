@@ -7,6 +7,7 @@ from fractions import Fraction
 from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -47,6 +48,12 @@ RoundingCoordinateIndex = Annotated[int, Field(ge=0, strict=True)]
 RoundedBit = Annotated[int, Field(ge=0, le=1, strict=True)]
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Return a stable structured reason for an owner-model validation failure."""
+
+    return PydanticCustomError(f"discrepancy_theory.{reason}", message)
+
+
 def _fraction_wire_size(value: Fraction) -> int:
     return len(str(abs(value.numerator))) + len(str(value.denominator))
 
@@ -67,11 +74,20 @@ def _require_canonical_subset(
     elements: tuple[int, ...], *, coordinate_count: int, owner: str
 ) -> None:
     if any(type(index) is not int for index in elements):
-        raise ValueError(f"{owner} coordinate indices must be strict integers")
+        raise _validation_error(
+            "coordinate_indices_not_strict_integers",
+            f"{owner} coordinate indices must be strict integers",
+        )
     if any(not 0 <= index < coordinate_count for index in elements):
-        raise ValueError(f"{owner} coordinate indices must be in 0..coordinate_count-1")
+        raise _validation_error(
+            "coordinate_indices_out_of_range",
+            f"{owner} coordinate indices must be in 0..coordinate_count-1",
+        )
     if any(left >= right for left, right in itertools.pairwise(elements)):
-        raise ValueError(f"{owner} coordinate indices must be strictly increasing")
+        raise _validation_error(
+            "coordinate_indices_not_strictly_increasing",
+            f"{owner} coordinate indices must be strictly increasing",
+        )
 
 
 class HardConstraintRow(StrictModel):
@@ -127,13 +143,22 @@ class HardConstraintRoundingSource(StrictModel):
     def require_admitted_source(self) -> Self:
         coordinate_count = len(self.coordinate_labels)
         if len(set(self.coordinate_labels)) != coordinate_count:
-            raise ValueError("coordinate labels must be unique")
+            raise _validation_error(
+                "coordinate_labels_not_unique", "coordinate labels must be unique"
+            )
         if len(self.values) != coordinate_count:
-            raise ValueError("values must align with the coordinate axis")
+            raise _validation_error(
+                "values_axis_length_mismatch",
+                "values must align with the coordinate axis",
+            )
         if len({row.label for row in self.rows}) != len(self.rows):
-            raise ValueError("row labels must be unique")
+            raise _validation_error(
+                "row_labels_not_unique", "row labels must be unique"
+            )
         if len({column.label for column in self.columns}) != len(self.columns):
-            raise ValueError("column labels must be unique")
+            raise _validation_error(
+                "column_labels_not_unique", "column labels must be unique"
+            )
 
         fractions: list[Fraction] = []
         for value in self.values:
@@ -144,7 +169,10 @@ class HardConstraintRoundingSource(StrictModel):
             )
             fraction = value.as_fraction()
             if not 0 <= fraction <= 1:
-                raise ValueError("rounding source values must lie in [0, 1]")
+                raise _validation_error(
+                    "source_values_out_of_range",
+                    "rounding source values must lie in [0, 1]",
+                )
             fractions.append(fraction)
 
         partition: list[int] = []
@@ -156,7 +184,10 @@ class HardConstraintRoundingSource(StrictModel):
             )
             partition.extend(row.coordinates)
         if sorted(partition) != list(range(coordinate_count)):
-            raise ValueError("hard rows must partition every coordinate exactly once")
+            raise _validation_error(
+                "rows_not_a_partition",
+                "hard rows must partition every coordinate exactly once",
+            )
 
         total_incidences = 0
         for column in self.columns:
@@ -167,16 +198,18 @@ class HardConstraintRoundingSource(StrictModel):
             )
             total_incidences += len(column.coordinates)
             if total_incidences > MAX_COLUMN_INCIDENCES:
-                raise ValueError(
-                    f"monitored column incidences exceed {MAX_COLUMN_INCIDENCES}"
+                raise _validation_error(
+                    "column_incidences_over_budget",
+                    f"monitored column incidences exceed {MAX_COLUMN_INCIDENCES}",
                 )
 
         fractional_count = sum(0 < value < 1 for value in fractions)
         scan_work = fractional_count * (coordinate_count + total_incidences)
         elimination_work = (fractional_count * (fractional_count + 1) // 2) ** 2
         if scan_work + elimination_work > MAX_ROUNDING_WORK:
-            raise ValueError(
-                "rounding work bound exceeded by fractional support and incidences"
+            raise _validation_error(
+                "rounding_work_over_budget",
+                "rounding work bound exceeded by fractional support and incidences",
             )
 
         common_denominator_digits = 1 + sum(
@@ -194,13 +227,19 @@ class HardConstraintRoundingSource(StrictModel):
             common_denominator_digits + direction_growth_digits
             > MAX_ROUNDING_INTERMEDIATE_DIGITS
         ):
-            raise ValueError("rounding intermediate rational-height bound exceeded")
+            raise _validation_error(
+                "intermediate_rational_height_over_budget",
+                "rounding intermediate rational-height bound exceeded",
+            )
 
         row_sums = [
             _sum_selected_fractions(fractions, row.coordinates) for row in self.rows
         ]
         if any(row_sum.denominator != 1 for row_sum in row_sums):
-            raise ValueError("every hard row must have an integral source sum")
+            raise _validation_error(
+                "row_sum_not_integral",
+                "every hard row must have an integral source sum",
+            )
         column_sums = [
             _sum_selected_fractions(fractions, column.coordinates)
             for column in self.columns
@@ -219,7 +258,10 @@ class HardConstraintRoundingSource(StrictModel):
             input_rational_digits + row_digits + column_digits
             > MAX_ROUNDING_RESULT_RATIONAL_DIGITS
         ):
-            raise ValueError("rounding exact result-size bound exceeded")
+            raise _validation_error(
+                "result_rational_height_over_budget",
+                "rounding exact result-size bound exceeded",
+            )
         return self
 
 
@@ -265,12 +307,18 @@ class HardConstraintRoundingResult(StrictModel):
     def replay_rounding_invariants(self) -> Self:
         coordinate_count = len(self.source.coordinate_labels)
         if len(self.rounded_values) != coordinate_count:
-            raise ValueError("rounded values must align with the coordinate axis")
+            raise _validation_error(
+                "rounded_values_axis_length_mismatch",
+                "rounded values must align with the coordinate axis",
+            )
         if any(
             type(value) is not int or value not in (0, 1)
             for value in self.rounded_values
         ):
-            raise ValueError("rounded values must be strict binary integers")
+            raise _validation_error(
+                "rounded_values_not_binary",
+                "rounded values must be strict binary integers",
+            )
 
         source_values = tuple(value.as_fraction() for value in self.source.values)
         expected_rows: list[HardConstraintRowLedger] = []
@@ -280,7 +328,10 @@ class HardConstraintRoundingResult(StrictModel):
             )
             rounded_sum = sum(self.rounded_values[index] for index in row.coordinates)
             if source_sum != rounded_sum:
-                raise ValueError("rounded values must preserve every hard row sum")
+                raise _validation_error(
+                    "rounded_values_break_row_sum",
+                    "rounded values must preserve every hard row sum",
+                )
             expected_rows.append(
                 HardConstraintRowLedger(
                     row_label=row.label,
@@ -289,7 +340,10 @@ class HardConstraintRoundingResult(StrictModel):
                 )
             )
         if tuple(expected_rows) != self.row_ledger:
-            raise ValueError("row ledger must replay exactly from source and rounding")
+            raise _validation_error(
+                "row_ledger_replay_mismatch",
+                "row ledger must replay exactly from source and rounding",
+            )
 
         incidences = [0] * coordinate_count
         for column in self.source.columns:
@@ -298,9 +352,15 @@ class HardConstraintRoundingResult(StrictModel):
         expected_incidence = max(incidences, default=0)
         expected_bound = 4 * expected_incidence
         if self.maximum_column_incidence != expected_incidence:
-            raise ValueError("maximum column incidence must be derived from the source")
+            raise _validation_error(
+                "maximum_incidence_mismatch",
+                "maximum column incidence must be derived from the source",
+            )
         if self.column_error_bound != expected_bound:
-            raise ValueError("column error bound must equal four times the incidence")
+            raise _validation_error(
+                "column_error_bound_mismatch",
+                "column error bound must equal four times the incidence",
+            )
 
         expected_columns: list[MonitoredColumnLedger] = []
         for column in self.source.columns:
@@ -313,7 +373,10 @@ class HardConstraintRoundingResult(StrictModel):
             signed_error = Fraction(rounded_sum) - source_sum
             absolute_error = abs(signed_error)
             if absolute_error > expected_bound:
-                raise ValueError("monitored column error exceeds the derived 4d bound")
+                raise _validation_error(
+                    "column_error_exceeds_bound",
+                    "monitored column error exceeds the derived 4d bound",
+                )
             expected_columns.append(
                 MonitoredColumnLedger(
                     column_label=column.label,
@@ -324,8 +387,9 @@ class HardConstraintRoundingResult(StrictModel):
                 )
             )
         if tuple(expected_columns) != self.column_ledger:
-            raise ValueError(
-                "column ledger must replay exactly from source and rounding"
+            raise _validation_error(
+                "column_ledger_replay_mismatch",
+                "column ledger must replay exactly from source and rounding",
             )
         return self
 
@@ -360,9 +424,15 @@ class FiniteSetSystem(StrictModel):
             seen: set[int] = set()
             for element in subset:
                 if not (0 <= element < self.ground_set_size):
-                    raise ValueError("subset element must be in 0..ground_set_size-1")
+                    raise _validation_error(
+                        "subset_element_out_of_range",
+                        "subset element must be in 0..ground_set_size-1",
+                    )
                 if element in seen:
-                    raise ValueError("subset elements must be distinct")
+                    raise _validation_error(
+                        "subset_elements_not_distinct",
+                        "subset elements must be distinct",
+                    )
                 seen.add(element)
         return self
 
@@ -376,12 +446,15 @@ class DiscrepancyEvalRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_coloring(self) -> Self:
         if len(self.coloring) != self.set_system.ground_set_size:
-            raise ValueError(
+            raise _validation_error(
+                "coloring_length_mismatch",
                 "coloring length must equal ground_set_size",
             )
         for value in self.coloring:
             if value not in (-1, 1):
-                raise ValueError("coloring values must be +1 or -1")
+                raise _validation_error(
+                    "coloring_not_signed_binary", "coloring values must be +1 or -1"
+                )
         return self
 
 
@@ -462,16 +535,25 @@ class DiscrepancyOptimumResult(StrictModel):
     def bind_optimal_coloring(self) -> Self:
         if self.status in ("BUDGET_EXCEEDED", "EXECUTION_FAILED"):
             if self.optimal_coloring or self.optimal_discrepancy is not None:
-                raise ValueError(
-                    f"a {self.status} result must not carry a coloring or optimum"
+                raise _validation_error(
+                    "incomplete_result_carries_claim",
+                    f"a {self.status} result must not carry a coloring or optimum",
                 )
             return self
         if self.optimal_discrepancy is None:
-            raise ValueError("an OPTIMAL result requires its discrepancy value")
+            raise _validation_error(
+                "optimal_discrepancy_missing",
+                "an OPTIMAL result requires its discrepancy value",
+            )
         if len(self.optimal_coloring) != self.set_system.ground_set_size:
-            raise ValueError("coloring length must equal the ground-set size")
+            raise _validation_error(
+                "optimal_coloring_length_mismatch",
+                "coloring length must equal the ground-set size",
+            )
         if any(value not in (-1, 1) for value in self.optimal_coloring):
-            raise ValueError("coloring values must be +1 or -1")
+            raise _validation_error(
+                "optimal_coloring_not_signed_binary", "coloring values must be +1 or -1"
+            )
         maximum = max(
             (
                 abs(sum(self.optimal_coloring[element] for element in subset))
@@ -480,9 +562,10 @@ class DiscrepancyOptimumResult(StrictModel):
             default=0,
         )
         if maximum != self.optimal_discrepancy:
-            raise ValueError(
+            raise _validation_error(
+                "optimal_discrepancy_mismatch",
                 "the reported discrepancy must be the exact maximum imbalance "
-                "of the returned coloring"
+                "of the returned coloring",
             )
         self._require_lower_bound()
         return self
@@ -497,12 +580,14 @@ class DiscrepancyOptimumResult(StrictModel):
         if outcome == "unsat":
             return
         if outcome == "sat":
-            raise ValueError(
+            raise _validation_error(
+                "optimality_disproved",
                 "a coloring with smaller imbalance exists; the claimed "
-                "optimum is not minimal"
+                "optimum is not minimal",
             )
-        raise ValueError(
-            "claimed optimality was not established within the replay budget"
+        raise _validation_error(
+            "optimality_unproven",
+            "claimed optimality was not established within the replay budget",
         )
 
 

@@ -8,12 +8,13 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Literal
 
+from jacobian.math.arithmetic_dynamics._models import MAX_FIELD_PRIME
+
 _MAX_INPUT_DEGREE = 30
 _MAX_INPUT_DIGITS = 128
 _MAX_ITERATE_DEGREE = 1_024
 _MAX_DYNATOMIC_DEGREE = 512
 _MAX_ORBIT_STEPS = 1_000
-_MAX_FIELD_PRIME = 10_000
 _MAX_OUTPUT_DIGITS = 32_768
 
 
@@ -223,7 +224,7 @@ def finite_field_functional_graph(
 
     import sympy
 
-    if not 2 <= prime <= _MAX_FIELD_PRIME or not sympy.isprime(prime):
+    if not 2 <= prime <= MAX_FIELD_PRIME or not sympy.isprime(prime):
         raise ValueError("prime must be a prime number between 2 and 10000")
     values = tuple(int(value) for value in coefficients)
     if not 1 <= len(values) <= _MAX_INPUT_DEGREE + 1:

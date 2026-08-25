@@ -18,16 +18,6 @@ from jacobian.math.elliptic_curves._models import (
 )
 
 
-def _rational_from_frac(value: Fraction) -> CanonicalRational:
-    """Convert a Python Fraction to a CanonicalRational."""
-    return CanonicalRational.from_integer_ratio(value.numerator, value.denominator)
-
-
-def _frac_from_rational(value: CanonicalRational) -> Fraction:
-    """Convert a CanonicalRational to a Python Fraction."""
-    return value.as_fraction()
-
-
 def _curve_discriminant(a: Fraction, b: Fraction) -> Fraction:
     """Compute Δ = -16(4A^3 + 27B^2)."""
     return -16 * (4 * a**3 + 27 * b**2)
@@ -35,22 +25,22 @@ def _curve_discriminant(a: Fraction, b: Fraction) -> Fraction:
 
 def compute_discriminant(request: EllipticCurveRequest) -> CurveDiscriminantResult:
     """Compute the discriminant of a short Weierstrass curve."""
-    a = _frac_from_rational(request.curve.coefficient_a)
-    b = _frac_from_rational(request.curve.coefficient_b)
+    a = request.curve.coefficient_a.as_fraction()
+    b = request.curve.coefficient_b.as_fraction()
     disc = _curve_discriminant(a, b)
     return CurveDiscriminantResult(
         request=request,
-        discriminant=_rational_from_frac(disc),
+        discriminant=CanonicalRational.from_fraction(disc),
         is_nonsingular=disc != 0,
     )
 
 
 def check_point_on_curve(request: CurvePointRequest) -> PointOnCurveResult:
     """Check whether a point lies on a short Weierstrass curve."""
-    a = _frac_from_rational(request.curve.coefficient_a)
-    b = _frac_from_rational(request.curve.coefficient_b)
-    x = _frac_from_rational(request.point.x)
-    y = _frac_from_rational(request.point.y)
+    a = request.curve.coefficient_a.as_fraction()
+    b = request.curve.coefficient_b.as_fraction()
+    x = request.point.x.as_fraction()
+    y = request.point.y.as_fraction()
     lhs = y * y
     rhs = x * x * x + a * x + b
     return PointOnCurveResult(request=request, on_curve=lhs == rhs)
@@ -89,14 +79,14 @@ def add_points(
     request: EllipticCurvePointAdditionRequest,
 ) -> EllipticCurvePointResult:
     """Add two points on a short Weierstrass elliptic curve."""
-    a = _frac_from_rational(request.curve.coefficient_a)
-    b = _frac_from_rational(request.curve.coefficient_b)
+    a = request.curve.coefficient_a.as_fraction()
+    b = request.curve.coefficient_b.as_fraction()
     first_point = request.first.point
     second_point = request.second.point
-    x1 = _frac_from_rational(first_point.x) if first_point else None
-    y1 = _frac_from_rational(first_point.y) if first_point else None
-    x2 = _frac_from_rational(second_point.x) if second_point else None
-    y2 = _frac_from_rational(second_point.y) if second_point else None
+    x1 = first_point.x.as_fraction() if first_point else None
+    y1 = first_point.y.as_fraction() if first_point else None
+    x2 = second_point.x.as_fraction() if second_point else None
+    y2 = second_point.y.as_fraction() if second_point else None
 
     # Unwrap parent-bearing operands; an identity contributes nothing.
     if x1 is None or y1 is None:
@@ -105,14 +95,16 @@ def add_points(
         return EllipticCurvePointResult(
             curve=request.curve,
             point=RationalAffinePoint(
-                x=_rational_from_frac(x2), y=_rational_from_frac(y2)
+                x=CanonicalRational.from_fraction(x2),
+                y=CanonicalRational.from_fraction(y2),
             ),
         )
     if x2 is None or y2 is None:
         return EllipticCurvePointResult(
             curve=request.curve,
             point=RationalAffinePoint(
-                x=_rational_from_frac(x1), y=_rational_from_frac(y1)
+                x=CanonicalRational.from_fraction(x1),
+                y=CanonicalRational.from_fraction(y1),
             ),
         )
     p1 = (x1, y1)
@@ -125,8 +117,8 @@ def add_points(
     return EllipticCurvePointResult(
         curve=request.curve,
         point=RationalAffinePoint(
-            x=_rational_from_frac(x3),
-            y=_rational_from_frac(y3),
+            x=CanonicalRational.from_fraction(x3),
+            y=CanonicalRational.from_fraction(y3),
         ),
     )
 
@@ -139,10 +131,10 @@ def scalar_multiply(
     if request.scalar == 0 or request.point.at_infinity or operand is None:
         return ScalarMultiplicationResult(curve=request.curve, at_infinity=True)
 
-    a = _frac_from_rational(request.curve.coefficient_a)
-    b = _frac_from_rational(request.curve.coefficient_b)
-    px = _frac_from_rational(operand.x)
-    py = _frac_from_rational(operand.y)
+    a = request.curve.coefficient_a.as_fraction()
+    b = request.curve.coefficient_b.as_fraction()
+    px = operand.x.as_fraction()
+    py = operand.y.as_fraction()
 
     result: tuple[Fraction, Fraction] | None = None
     # An infinite addend contributes nothing; doubling to the point at
@@ -168,8 +160,8 @@ def scalar_multiply(
     return ScalarMultiplicationResult(
         curve=request.curve,
         point=RationalAffinePoint(
-            x=_rational_from_frac(result[0]),
-            y=_rational_from_frac(result[1]),
+            x=CanonicalRational.from_fraction(result[0]),
+            y=CanonicalRational.from_fraction(result[1]),
         ),
     )
 

@@ -1,6 +1,6 @@
 """Supported native combinatorial-map API."""
 
-from jacobian.math.combinatorial_maps.operations_module import (
+from jacobian.math.combinatorial_maps.operations import (
     connected_components,
     connected_components_vertices,
     dual_map,

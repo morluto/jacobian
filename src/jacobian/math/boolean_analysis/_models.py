@@ -5,12 +5,17 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 MAX_VARIABLES = 10
 MIN_VARIABLES = 1
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"boolean_analysis.{reason}", message)
 
 
 class TruthTableRequest(StrictModel):
@@ -31,14 +36,20 @@ class TruthTableRequest(StrictModel):
     def require_valid_truth_table(self) -> Self:
         n = len(self.truth_table)
         if n & (n - 1) != 0:
-            raise ValueError("truth table length must be a power of two")
+            raise _validation_error(
+                "truth_table_power", "truth table length must be a power of two"
+            )
         variable_count = n.bit_length() - 1
         if not (MIN_VARIABLES <= variable_count <= MAX_VARIABLES):
-            raise ValueError("variable count must be between 1 and 10")
+            raise _validation_error(
+                "variable_count", "variable count must be between 1 and 10"
+            )
         for entry in self.truth_table:
             value = entry.as_fraction()
             if value not in (0, 1):
-                raise ValueError("truth table entry must be 0 or 1")
+                raise _validation_error(
+                    "truth_table_boolean", "truth table entry must be 0 or 1"
+                )
         return self
 
     def as_int_list(self) -> list[int]:
@@ -74,7 +85,9 @@ class FourierSpectrumResult(StrictModel):
     @model_validator(mode="after")
     def require_spectrum_shape(self) -> Self:
         if len(self.spectrum) != 1 << self.variable_count:
-            raise ValueError("spectrum length must equal 2 ** variable_count")
+            raise _validation_error(
+                "spectrum_length", "spectrum length must equal 2 ** variable_count"
+            )
         return self
 
 
@@ -114,21 +127,33 @@ class ErasureNoiseRequest(StrictModel):
     def require_valid_request(self) -> Self:
         n = len(self.truth_table)
         if n & (n - 1) != 0:
-            raise ValueError("truth table length must be a power of two")
+            raise _validation_error(
+                "truth_table_power", "truth table length must be a power of two"
+            )
         variable_count = n.bit_length() - 1
         if not (MIN_VARIABLES <= variable_count <= MAX_VARIABLES):
-            raise ValueError("variable count must be between 1 and 10")
+            raise _validation_error(
+                "variable_count", "variable count must be between 1 and 10"
+            )
         for entry in self.truth_table:
             value = entry.as_fraction()
             if value not in (0, 1):
-                raise ValueError("truth table entry must be 0 or 1")
+                raise _validation_error(
+                    "truth_table_boolean", "truth table entry must be 0 or 1"
+                )
         p = self.probability.as_fraction()
         if not (0 <= p <= 1):
-            raise ValueError("probability must be in [0, 1]")
+            raise _validation_error(
+                "probability_range", "probability must be in [0, 1]"
+            )
         if len(self.base_input) != variable_count:
-            raise ValueError("base_input must have one bit per variable")
+            raise _validation_error(
+                "base_input_length", "base_input must have one bit per variable"
+            )
         if any(bit not in (0, 1) for bit in self.base_input):
-            raise ValueError("base_input bits must be 0 or 1")
+            raise _validation_error(
+                "base_input_boolean", "base_input bits must be 0 or 1"
+            )
         return self
 
     def as_int_list(self) -> list[int]:

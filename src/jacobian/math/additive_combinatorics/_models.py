@@ -8,6 +8,7 @@ from typing import Annotated, Self
 
 from pydantic import Field, StringConstraints, model_validator
 from pydantic.json_schema import WithJsonSchema
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -54,6 +55,11 @@ _MAX_VECTOR_SET_SIZE = (
 ) // 2
 _MAX_TOTAL_ORDERED_PAIRS = _MAX_VECTOR_SET_SIZE * (_MAX_VECTOR_SET_SIZE - 1)
 
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"additive_combinatorics.{reason}", message)
+
+
 # A request coordinate carries at most six digits plus an optional sign; an
 # exact difference of two such coordinates grows by at most one digit, so any
 # vector coordinate string carries at most seven digits plus an optional sign.
@@ -90,8 +96,9 @@ def _sorted_canonical_integers(
 def _require_bounded_coordinate(value: str, label: str) -> None:
     digits = len(value.lstrip("-"))
     if digits > _MAX_COORDINATE_DIGITS:
-        raise ValueError(
-            f"{label} exceeds the {_MAX_COORDINATE_DIGITS}-digit coordinate bound"
+        raise _validation_error(
+            "_require_bounded_coordinate",
+            f"{label} exceeds the {_MAX_COORDINATE_DIGITS}-digit coordinate bound",
         )
 
 
@@ -145,13 +152,19 @@ class IntegerVectorSet(StrictModel):
                 _require_bounded_coordinate(coordinate, "vector coordinate")
             values = vec.as_int_tuple()
             if len(values) != dimension:
-                raise ValueError("all vectors must share the same dimension")
+                raise _validation_error(
+                    "require_uniform_distinct_bounded",
+                    "all vectors must share the same dimension",
+                )
             if not 1 <= dimension <= _MAX_DIMENSION:
-                raise ValueError(
-                    f"vector dimension must be between 1 and {_MAX_DIMENSION}"
+                raise _validation_error(
+                    "require_uniform_distinct_bounded",
+                    f"vector dimension must be between 1 and {_MAX_DIMENSION}",
                 )
             if values in seen:
-                raise ValueError("vectors must be unique")
+                raise _validation_error(
+                    "require_uniform_distinct_bounded", "vectors must be unique"
+                )
             seen.add(values)
         return self
 
@@ -164,11 +177,17 @@ def _check_totals(
 ) -> None:
     total = sum(entry.multiplicity for entry in entries)
     if total != total_ordered_pairs:
-        raise ValueError("total ordered pairs must match sum of multiplicities")
+        raise _validation_error(
+            "_check_totals", "total ordered pairs must match sum of multiplicities"
+        )
     if total_ordered_pairs != set_size * (set_size - 1):
-        raise ValueError("total_ordered_pairs must equal set_size*(set_size-1)")
+        raise _validation_error(
+            "_check_totals", "total_ordered_pairs must equal set_size*(set_size-1)"
+        )
     if support_size != len(entries):
-        raise ValueError("support_size must equal the number of entries")
+        raise _validation_error(
+            "_check_totals", "support_size must equal the number of entries"
+        )
 
 
 def _check_max_and_repeated(
@@ -179,26 +198,43 @@ def _check_max_and_repeated(
 ) -> None:
     if not entries:
         if max_multiplicity != 0:
-            raise ValueError("max_multiplicity must be 0 when entries is empty")
+            raise _validation_error(
+                "_check_max_and_repeated",
+                "max_multiplicity must be 0 when entries is empty",
+            )
     elif max_multiplicity != max(e.multiplicity for e in entries):
-        raise ValueError("max_multiplicity must be the maximum entry multiplicity")
+        raise _validation_error(
+            "_check_max_and_repeated",
+            "max_multiplicity must be the maximum entry multiplicity",
+        )
     expected_repeated = (max_multiplicity > 1) if entries else False
     if has_repeated_difference != expected_repeated:
-        raise ValueError("has_repeated_difference must match max_multiplicity > 1")
+        raise _validation_error(
+            "_check_max_and_repeated",
+            "has_repeated_difference must match max_multiplicity > 1",
+        )
     if has_repeated_difference and first_collision is None:
-        raise ValueError("first_collision must be present when has_repeated_difference")
+        raise _validation_error(
+            "_check_max_and_repeated",
+            "first_collision must be present when has_repeated_difference",
+        )
     if not has_repeated_difference and first_collision is not None:
-        raise ValueError(
-            "first_collision must be null when has_repeated_difference is false"
+        raise _validation_error(
+            "_check_max_and_repeated",
+            "first_collision must be null when has_repeated_difference is false",
         )
 
 
 def _check_entries_sorted(entries: tuple[OrderedDifferenceEntry, ...]) -> None:
     diffs = [entry.difference.as_int_tuple() for entry in entries]
     if diffs != sorted(diffs):
-        raise ValueError("entries must be sorted by difference")
+        raise _validation_error(
+            "_check_entries_sorted", "entries must be sorted by difference"
+        )
     if len(set(diffs)) != len(diffs):
-        raise ValueError("entries differences must be unique")
+        raise _validation_error(
+            "_check_entries_sorted", "entries differences must be unique"
+        )
 
 
 def _check_entry_pairs(
@@ -211,19 +247,27 @@ def _check_entry_pairs(
     for entry in entries:
         difference = entry.difference.as_int_tuple()
         if len(difference) != dimension:
-            raise ValueError("entry difference dimension must match result dimension")
+            raise _validation_error(
+                "_check_entry_pairs",
+                "entry difference dimension must match result dimension",
+            )
         if difference == zero:
-            raise ValueError("entry difference must be nonzero")
+            raise _validation_error(
+                "_check_entry_pairs", "entry difference must be nonzero"
+            )
         previous: tuple[int, int] | None = None
         for pair in entry.pairs:
             key = (pair.left_index, pair.right_index)
             if previous is not None and key <= previous:
-                raise ValueError(
-                    "entry pairs must be sorted and unique in lexicographic order"
+                raise _validation_error(
+                    "_check_entry_pairs",
+                    "entry pairs must be sorted and unique in lexicographic order",
                 )
             previous = key
             if pair.left_index >= set_size or pair.right_index >= set_size:
-                raise ValueError("pair indices must be less than set_size")
+                raise _validation_error(
+                    "_check_entry_pairs", "pair indices must be less than set_size"
+                )
             if vectors:
                 expected = tuple(
                     vectors[pair.left_index].as_int_tuple()[k]
@@ -231,7 +275,9 @@ def _check_entry_pairs(
                     for k in range(dimension)
                 )
                 if expected != difference:
-                    raise ValueError("pair difference must match vectors")
+                    raise _validation_error(
+                        "_check_entry_pairs", "pair difference must match vectors"
+                    )
 
 
 def _check_all_pairs_exactly_once(
@@ -243,7 +289,10 @@ def _check_all_pairs_exactly_once(
         for pair in entry.pairs:
             key = (pair.left_index, pair.right_index)
             if key in seen:
-                raise ValueError(f"ordered pair {key} appears more than once")
+                raise _validation_error(
+                    "_check_all_pairs_exactly_once",
+                    f"ordered pair {key} appears more than once",
+                )
             seen.add(key)
     expected: set[tuple[int, int]] = {
         (i, j) for i in range(set_size) for j in range(set_size) if i != j
@@ -251,9 +300,10 @@ def _check_all_pairs_exactly_once(
     if seen != expected:
         missing = expected - seen
         extra = seen - expected
-        raise ValueError(
+        raise _validation_error(
+            "_check_all_pairs_exactly_once",
             f"entries must contain every ordered pair exactly once; "
-            f"missing {sorted(missing)[:5]}, extra {sorted(extra)[:5]}"
+            f"missing {sorted(missing)[:5]}, extra {sorted(extra)[:5]}",
         )
 
 
@@ -269,16 +319,21 @@ def _check_first_collision(
         # designated pair of the first sorted repeated-difference entry.
         expected_entry = next((e for e in entries if e.multiplicity > 1), None)
         if expected_entry is None:
-            raise ValueError(
-                "has_repeated_difference requires a repeated difference entry"
+            raise _validation_error(
+                "_check_first_collision",
+                "has_repeated_difference requires a repeated difference entry",
             )
         if first_collision != expected_entry.pairs[0]:
-            raise ValueError(
+            raise _validation_error(
+                "_check_first_collision",
                 "first_collision must be the designated pair of the first "
-                "repeated-difference entry"
+                "repeated-difference entry",
             )
     elif not entries and first_collision is not None:
-        raise ValueError("first_collision must be null when entries is empty")
+        raise _validation_error(
+            "_check_first_collision",
+            "first_collision must be null when entries is empty",
+        )
 
 
 class FiniteIntegerSet(StrictModel):
@@ -289,7 +344,9 @@ class FiniteIntegerSet(StrictModel):
     @model_validator(mode="after")
     def require_unique_elements(self) -> Self:
         if len(set(self.elements)) != len(self.elements):
-            raise ValueError("finite set elements must be unique")
+            raise _validation_error(
+                "require_unique_elements", "finite set elements must be unique"
+            )
         return self
 
 
@@ -299,9 +356,10 @@ def _require_bounded_cartesian_product(
 ) -> None:
     pair_count = len(left.elements) * len(right.elements)
     if pair_count > _MAX_CARTESIAN_PAIR_COUNT:
-        raise ValueError(
+        raise _validation_error(
+            "_require_bounded_cartesian_product",
             f"Cartesian product has {pair_count} pairs, exceeding the "
-            f"{_MAX_CARTESIAN_PAIR_COUNT}-pair bound"
+            f"{_MAX_CARTESIAN_PAIR_COUNT}-pair bound",
         )
 
 
@@ -313,7 +371,9 @@ class FiniteCyclicGroup(StrictModel):
     @model_validator(mode="after")
     def require_valid_modulus(self) -> Self:
         if self.modulus < 2:
-            raise ValueError("cyclic group modulus must be at least 2")
+            raise _validation_error(
+                "require_valid_modulus", "cyclic group modulus must be at least 2"
+            )
         return self
 
 
@@ -353,11 +413,15 @@ class RepresentationProfileResult(StrictModel):
     def require_canonical_entries(self) -> Self:
         sums = tuple(entry.sum for entry in self.entries)
         if tuple(sums) != _sorted_canonical_integers(sums):
-            raise ValueError(
+            raise _validation_error(
+                "require_canonical_entries",
                 "representation profile sums must be sorted and unique",
             )
         if any(entry.multiplicity <= 0 for entry in self.entries):
-            raise ValueError("representation multiplicities must be positive")
+            raise _validation_error(
+                "require_canonical_entries",
+                "representation multiplicities must be positive",
+            )
         return self
 
 
@@ -391,13 +455,17 @@ class MultisetSumWindow(StrictModel):
             len(endpoint.lstrip("-")) > _MAX_MULTISET_SUM_RESULT_DIGITS
             for endpoint in (self.lower, self.upper)
         ):
-            raise ValueError(
+            raise _validation_error(
+                "require_nondecreasing_endpoints",
                 "sum window endpoints must carry at most "
-                f"{_MAX_MULTISET_SUM_RESULT_DIGITS} digits"
+                f"{_MAX_MULTISET_SUM_RESULT_DIGITS} digits",
             )
         lower, upper = self.as_integer_bounds()
         if lower > upper:
-            raise ValueError("sum window lower endpoint must not exceed upper")
+            raise _validation_error(
+                "require_nondecreasing_endpoints",
+                "sum window lower endpoint must not exceed upper",
+            )
         return self
 
     def as_integer_bounds(self) -> tuple[int, int]:
@@ -410,14 +478,16 @@ class MultisetSumWindow(StrictModel):
 def _multiset_sum_source_values(source: FiniteIntegerSet) -> tuple[int, ...]:
     for element in source.elements:
         if len(element.lstrip("-")) > _MAX_MULTISET_SUM_ELEMENT_DIGITS:
-            raise ValueError(
+            raise _validation_error(
+                "_multiset_sum_source_values",
                 "multiset-sum source elements must carry at most "
-                f"{_MAX_MULTISET_SUM_ELEMENT_DIGITS} digits"
+                f"{_MAX_MULTISET_SUM_ELEMENT_DIGITS} digits",
             )
     values = tuple(parse_canonical_integer(element) for element in source.elements)
     if values != tuple(sorted(values)):
-        raise ValueError(
-            "multiset-sum source elements must be in strictly increasing numeric order"
+        raise _validation_error(
+            "_multiset_sum_source_values",
+            "multiset-sum source elements must be in strictly increasing numeric order",
         )
     return values
 
@@ -474,18 +544,20 @@ class MultisetSumRepresentationProfileRequest(StrictModel):
             values, self.arity, bounds, candidate_count
         )
         if work > _MAX_MULTISET_SUM_ENUMERATION_WORK:
-            raise ValueError(
+            raise _validation_error(
+                "require_bounded_complete_enumeration",
                 f"multiset-sum enumeration requires {work} coordinate steps, "
-                f"exceeding the {_MAX_MULTISET_SUM_ENUMERATION_WORK}-step bound"
+                f"exceeding the {_MAX_MULTISET_SUM_ENUMERATION_WORK}-step bound",
             )
         support_bound = _multiset_sum.support_bound(
             values, self.arity, bounds, candidate_count
         )
         if support_bound > _MAX_MULTISET_SUM_SUPPORT_SIZE:
-            raise ValueError(
+            raise _validation_error(
+                "require_bounded_complete_enumeration",
                 f"multiset-sum profile may contain {support_bound} rows, exceeding "
                 f"the {_MAX_MULTISET_SUM_SUPPORT_SIZE}-row result bound; supply a "
-                "narrower closed sum window"
+                "narrower closed sum window",
             )
         return self
 
@@ -527,8 +599,9 @@ class MultisetSumRepresentationProfileResult(StrictModel):
             for value in sorted(expected_counts)
         )
         if self.entries != expected_entries:
-            raise ValueError(
-                "entries must equal the exact source-bound multiset-sum profile"
+            raise _validation_error(
+                "replay_complete_profile",
+                "entries must equal the exact source-bound multiset-sum profile",
             )
         return self
 
@@ -586,9 +659,10 @@ class SubsetSumProfileRequest(StrictModel):
                 source["items"] = tuple(items)
                 prepared["source"] = source
                 if len(items) > MAX_SUBSET_SUM_ITEMS:
-                    raise ValueError(
+                    raise _validation_error(
+                        "bound_raw_source",
                         "subset-sum profile source exceeds the "
-                        f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
+                        f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound",
                     )
             else:
                 prepared["source"] = source
@@ -630,11 +704,18 @@ class AdditiveEnergyResult(StrictModel):
     def require_canonical_decomposition(self) -> Self:
         sums = tuple(entry.sum for entry in self.decomposition)
         if tuple(sums) != _sorted_canonical_integers(sums):
-            raise ValueError("additive energy sums must be sorted and unique")
+            raise _validation_error(
+                "require_canonical_decomposition",
+                "additive energy sums must be sorted and unique",
+            )
         if any(entry.multiplicity <= 0 for entry in self.decomposition):
-            raise ValueError("additive energy multiplicities must be positive")
+            raise _validation_error(
+                "require_canonical_decomposition",
+                "additive energy multiplicities must be positive",
+            )
         if self.energy != sum(entry.multiplicity**2 for entry in self.decomposition):
-            raise ValueError(
+            raise _validation_error(
+                "require_canonical_decomposition",
                 "additive energy must equal the sum of squared multiplicities",
             )
         return self
@@ -670,9 +751,13 @@ class SumsetCardinalityResult(StrictModel):
     def require_canonical_support(self) -> Self:
         sums = list(self.support)
         if tuple(sums) != _sorted_canonical_integers(sums):
-            raise ValueError("sumset support must be sorted and unique")
+            raise _validation_error(
+                "require_canonical_support", "sumset support must be sorted and unique"
+            )
         if self.cardinality != len(self.support):
-            raise ValueError("cardinality must equal the support length")
+            raise _validation_error(
+                "require_canonical_support", "cardinality must equal the support length"
+            )
         return self
 
 
@@ -711,7 +796,8 @@ class DirectSumPredicateResult(StrictModel):
         for name in ("collisions", "missing"):
             values = [parse_canonical_integer(value) for value in getattr(self, name)]
             if values != sorted(set(values)):
-                raise ValueError(
+                raise _validation_error(
+                    "require_canonical_diagnostics",
                     f"direct-sum {name} values must be sorted and unique",
                 )
         return self
@@ -782,10 +868,14 @@ class OrderedDifferenceEntry(StrictModel):
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
         if self.multiplicity != len(self.pairs):
-            raise ValueError("multiplicity must equal the number of pairs")
+            raise _validation_error(
+                "require_canonical", "multiplicity must equal the number of pairs"
+            )
         for pair in self.pairs:
             if pair.left_index == pair.right_index:
-                raise ValueError("pair indices must be distinct")
+                raise _validation_error(
+                    "require_canonical", "pair indices must be distinct"
+                )
         return self
 
 
@@ -808,9 +898,11 @@ class OrderedDifferenceProfileResult(StrictModel):
         # bounded dimension, and nonemptiness; replay binds the remaining
         # derived fields to it.
         if len(self.vectors.vectors) != self.set_size:
-            raise ValueError("vectors length must equal set_size")
+            raise _validation_error(
+                "require_vectors", "vectors length must equal set_size"
+            )
         if len(self.vectors.vectors[0].coordinates) != self.dimension:
-            raise ValueError("dimension must match vectors")
+            raise _validation_error("require_vectors", "dimension must match vectors")
         return self
 
     @model_validator(mode="after")
@@ -842,5 +934,7 @@ class OrderedDifferenceProfileResult(StrictModel):
                 self.entries, self.has_repeated_difference, self.first_collision
             )
         elif self.first_collision is not None:
-            raise ValueError("first_collision must be null when entries is empty")
+            raise _validation_error(
+                "require_entries", "first_collision must be null when entries is empty"
+            )
         return self

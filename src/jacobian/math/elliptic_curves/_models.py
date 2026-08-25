@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
@@ -46,9 +47,9 @@ class EllipticCurveRequest(StrictModel):
             numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS
             or denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS
         ):
-            raise ValueError(
-                "curve coefficients would produce a discriminant exceeding the "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical result bound"
+            raise PydanticCustomError(
+                "elliptic_curve.discriminant_result_bound",
+                "curve coefficients would produce a discriminant exceeding the canonical result bound",
             )
         return self
 
@@ -63,7 +64,10 @@ class CurveDiscriminantResult(StrictModel):
     @model_validator(mode="after")
     def require_consistent_nonsingularity(self) -> Self:
         if self.is_nonsingular is (self.discriminant.as_fraction() == 0):
-            raise ValueError("nonsingularity must match a nonzero discriminant")
+            raise PydanticCustomError(
+                "elliptic_curve.nonsingularity_mismatch",
+                "nonsingularity must match a nonzero discriminant",
+            )
         # The value must be derived from the retained curve: replay the
         # exact formula so a valid-looking payload cannot detach from any
         # computation.
@@ -71,9 +75,9 @@ class CurveDiscriminantResult(StrictModel):
         b = self.request.curve.coefficient_b.as_fraction()
         expected = -16 * (4 * a**3 + 27 * b**2)
         if self.discriminant.as_fraction() != expected:
-            raise ValueError(
-                "discriminant must be the exact discriminant of the "
-                "retained source curve"
+            raise PydanticCustomError(
+                "elliptic_curve.discriminant_source_mismatch",
+                "discriminant must be the exact discriminant of the retained source curve",
             )
         return self
 
@@ -107,8 +111,9 @@ class PointOnCurveResult(StrictModel):
         a = self.request.curve.coefficient_a.as_fraction()
         b = self.request.curve.coefficient_b.as_fraction()
         if self.on_curve is not (y * y == x**3 + a * x + b):
-            raise ValueError(
-                "on_curve must match the exact curve equation of the retained source"
+            raise PydanticCustomError(
+                "elliptic_curve.point_membership_mismatch",
+                "on_curve must match the exact curve equation of the retained source",
             )
         return self
 
@@ -123,14 +128,20 @@ def _require_group_law(
     is nonsingular and every operand satisfies y² = x³ + Ax + B.
     """
     if curve.discriminant() == 0:
-        raise ValueError("curve must be nonsingular (nonzero discriminant)")
+        raise PydanticCustomError(
+            "elliptic_curve.singular_curve",
+            "curve must be nonsingular (nonzero discriminant)",
+        )
     for point in points:
         x = point.x.as_fraction()
         y = point.y.as_fraction()
         if y * y != x**3 + curve.coefficient_a.as_fraction() * x + (
             curve.coefficient_b.as_fraction()
         ):
-            raise ValueError("point must lie on the curve")
+            raise PydanticCustomError(
+                "elliptic_curve.point_off_curve",
+                "point must lie on the curve",
+            )
 
 
 def _generic_lambda_height_from_heights(
@@ -246,16 +257,25 @@ class EllipticCurvePointResult(StrictModel):
         # serialize several ways and let downstream at_infinity readers
         # misread a validated infinity as finite-with-no-point.
         if self.point is not None and self.at_infinity:
-            raise ValueError("a finite point and infinity are mutually exclusive")
+            raise PydanticCustomError(
+                "elliptic_curve.point_infinity_conflict",
+                "a finite point and infinity are mutually exclusive",
+            )
         if self.point is None and not self.at_infinity:
-            raise ValueError("must carry a finite point or indicate infinity")
+            raise PydanticCustomError(
+                "elliptic_curve.point_missing",
+                "must carry a finite point or indicate infinity",
+            )
         if self.point is not None:
             x = self.point.x.as_fraction()
             y = self.point.y.as_fraction()
             a = self.curve.coefficient_a.as_fraction()
             b = self.curve.coefficient_b.as_fraction()
             if y * y != x**3 + a * x + b:
-                raise ValueError("result point must lie on the retained curve")
+                raise PydanticCustomError(
+                    "elliptic_curve.result_point_off_curve",
+                    "result point must lie on the retained curve",
+                )
         return self
 
 
@@ -274,7 +294,10 @@ class EllipticCurvePointAdditionRequest(StrictModel):
     @model_validator(mode="after")
     def require_operands_in_the_same_group(self) -> Self:
         if self.first.curve != self.curve or self.second.curve != self.curve:
-            raise ValueError("operands must carry this request's curve as their parent")
+            raise PydanticCustomError(
+                "elliptic_curve.parent_curve_mismatch",
+                "operands must carry this request's curve as their parent",
+            )
         return self
 
     @model_validator(mode="after")
@@ -309,9 +332,9 @@ class EllipticCurvePointAdditionRequest(StrictModel):
         if result is not None and any(
             height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) for height in result
         ):
-            raise ValueError(
-                "point addition would produce coordinates exceeding the "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical result bound"
+            raise PydanticCustomError(
+                "elliptic_curve.point_addition_result_bound",
+                "point addition would produce coordinates exceeding the canonical result bound",
             )
         return self
 
@@ -326,8 +349,9 @@ class ScalarMultiplicationRequest(StrictModel):
     @model_validator(mode="after")
     def require_operand_in_the_same_group(self) -> Self:
         if self.point.curve != self.curve:
-            raise ValueError(
-                "the operand must carry this request's curve as its parent"
+            raise PydanticCustomError(
+                "elliptic_curve.parent_curve_mismatch",
+                "the operand must carry this request's curve as its parent",
             )
         return self
 
@@ -379,10 +403,9 @@ class ScalarMultiplicationRequest(StrictModel):
                 if slot is not None and any(
                     height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) for height in slot
                 ):
-                    raise ValueError(
-                        "scalar multiplication would exceed the canonical result "
-                        f"height ({MAX_CANONICAL_RATIONAL_DIGITS} digits); reduce "
-                        "the scalar or use smaller coordinates"
+                    raise PydanticCustomError(
+                        "elliptic_curve.scalar_multiplication_result_bound",
+                        "scalar multiplication would exceed the canonical result height; reduce the scalar or use smaller coordinates",
                     )
             n >>= 1
         return self

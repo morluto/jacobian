@@ -31,6 +31,12 @@ def _pt(num: str, den: str = "1") -> dict:
     return {"num": num, "den": den}
 
 
+def _assert_error_code(
+    exc_info: pytest.ExceptionInfo[ValidationError], code: str
+) -> None:
+    assert exc_info.value.errors()[0]["type"] == code
+
+
 class TestDiscriminant:
     def test_nonsingular_curve(self):
         curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))
@@ -56,8 +62,9 @@ class TestDiscriminant:
         curve = ShortWeierstrassCurve(
             coefficient_a=_pt("1" + "0" * 19999), coefficient_b=_pt("0")
         )
-        with pytest.raises(ValidationError, match="canonical result bound"):
+        with pytest.raises(ValidationError) as exc_info:
             EllipticCurveRequest(curve=curve)
+        _assert_error_code(exc_info, "elliptic_curve.discriminant_result_bound")
 
     def test_boundary_coefficients_accepted_and_returned(self):
         """The exact reduced Δ = -64A^3 for A=10^N has 3N+2 digits: N=10923
@@ -65,8 +72,9 @@ class TestDiscriminant:
         rejected = ShortWeierstrassCurve(
             coefficient_a=_pt("1" + "0" * 10923), coefficient_b=_pt("0")
         )
-        with pytest.raises(ValidationError, match="canonical result bound"):
+        with pytest.raises(ValidationError) as exc_info:
             EllipticCurveRequest(curve=rejected)
+        _assert_error_code(exc_info, "elliptic_curve.discriminant_result_bound")
         accepted = EllipticCurveRequest(
             curve=ShortWeierstrassCurve(
                 coefficient_a=_pt("1" + "0" * 10921), coefficient_b=_pt("0")
@@ -222,33 +230,38 @@ class TestGroupLawAdmission:
         """(1,1) does not lie on y^2=x^3+x; the old code returned a fake sum."""
         curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))
         p = RationalAffinePoint(x=_pt("1"), y=_pt("1"))
-        with pytest.raises(ValidationError, match="lie on the retained curve"):
+        with pytest.raises(ValidationError) as exc_info:
             add_points(
                 EllipticCurvePointAdditionRequest(
                     curve=curve, first=_operand(curve, p), second=_operand(curve, p)
                 )
             )
+        _assert_error_code(exc_info, "elliptic_curve.result_point_off_curve")
 
     def test_singular_curve_rejected(self):
         """y^2=x^3 has a cusp at the origin: discriminant zero."""
         curve = ShortWeierstrassCurve(coefficient_a=_pt("0"), coefficient_b=_pt("0"))
         p = RationalAffinePoint(x=_pt("1"), y=_pt("1"))
-        with pytest.raises(ValidationError, match="nonsingular"):
+        with pytest.raises(ValidationError) as exc_info:
             ScalarMultiplicationRequest(curve=curve, point=_operand(curve, p), scalar=2)
+        _assert_error_code(exc_info, "elliptic_curve.singular_curve")
 
     def test_singular_curve_with_identity_operands_rejected(self):
         """The identity shortcut must not bypass nonsingularity: a singular
         curve is rejected even when every operand is the point at infinity."""
         curve = ShortWeierstrassCurve(coefficient_a=_pt("0"), coefficient_b=_pt("0"))
         identity = EllipticCurvePointResult(curve=curve, at_infinity=True)
-        with pytest.raises(ValidationError, match="nonsingular"):
+        with pytest.raises(ValidationError) as exc_info:
             EllipticCurvePointAdditionRequest(
                 curve=curve, first=identity, second=identity
             )
-        with pytest.raises(ValidationError, match="nonsingular"):
+        _assert_error_code(exc_info, "elliptic_curve.singular_curve")
+        with pytest.raises(ValidationError) as exc_info:
             ScalarMultiplicationRequest(curve=curve, point=identity, scalar=7)
-        with pytest.raises(ValidationError, match="nonsingular"):
+        _assert_error_code(exc_info, "elliptic_curve.singular_curve")
+        with pytest.raises(ValidationError) as exc_info:
             ScalarMultiplicationRequest(curve=curve, point=identity, scalar=0)
+        _assert_error_code(exc_info, "elliptic_curve.singular_curve")
 
     def test_double_order_two_point_huge_denominator_admitted(self):
         """Doubling P=(1/q, 0) on y²=x³+x+B is O: admission must not
@@ -312,8 +325,9 @@ class TestResultSourceBinding:
         # The thread's forgery: discriminant=1 for a curve whose exact
         # discriminant is -64.
         forged["discriminant"] = {"num": "1", "den": "1"}
-        with pytest.raises(ValidationError, match="retained source curve"):
+        with pytest.raises(ValidationError) as exc_info:
             CurveDiscriminantResult.model_validate(forged)
+        _assert_error_code(exc_info, "elliptic_curve.discriminant_source_mismatch")
 
     def test_point_on_curve_result_replays_the_predicate(self) -> None:
         from jacobian.math.elliptic_curves._models import (
@@ -334,8 +348,9 @@ class TestResultSourceBinding:
 
         forged = dict(payload)
         forged["on_curve"] = False
-        with pytest.raises(ValidationError, match="exact curve equation"):
+        with pytest.raises(ValidationError) as exc_info:
             Result.model_validate(forged)
+        _assert_error_code(exc_info, "elliptic_curve.point_membership_mismatch")
 
     def test_point_addition_result_retains_its_parent_curve(self) -> None:
         """Doubling (0,0) on y²=x³+x and on y²=x³-x must serialize

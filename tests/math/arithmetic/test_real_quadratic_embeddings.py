@@ -74,15 +74,22 @@ def test_profile_replay_rejects_forged_source_images_and_invariants() -> None:
     profile = _profile()
     payload = profile.model_dump(mode="json")
 
-    with pytest.raises(ValidationError, match="ordered positive-root"):
+    with pytest.raises(ValidationError) as exc_info:
         RealQuadraticEmbeddingProfile.model_validate(
             {**payload, "images": list(reversed(payload["images"]))}
         )
-    with pytest.raises(ValidationError, match="trace and norm"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "real_quadratic.embedding_images_mismatch"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         RealQuadraticEmbeddingProfile.model_validate(
             {**payload, "norm": {"num": "2", "den": "1"}}
         )
-    with pytest.raises(ValidationError, match="ordered positive-root"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "real_quadratic.embedding_invariants_mismatch"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         RealQuadraticEmbeddingProfile.model_validate(
             {
                 **payload,
@@ -92,6 +99,9 @@ def test_profile_replay_rejects_forged_source_images_and_invariants() -> None:
                 },
             }
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "real_quadratic.embedding_images_mismatch"
+    )
 
 
 def test_embedding_images_compose_with_existing_field_multiplication() -> None:
@@ -113,8 +123,11 @@ def test_result_bound_is_proved_from_the_accepted_input_envelope() -> None:
 
     assert profile.trace.as_fraction() == 2 * largest_component
     assert profile.norm.as_fraction() == largest_component * largest_component
-    with pytest.raises(ValidationError, match="256-digit"):
+    with pytest.raises(ValidationError) as exc_info:
         _element(10**256, 0, 2)
+    assert (
+        exc_info.value.errors()[0]["type"] == "real_quadratic.rational_bound_exceeded"
+    )
 
 
 def test_embedding_declaration_adapter_serves_the_native_profile() -> None:

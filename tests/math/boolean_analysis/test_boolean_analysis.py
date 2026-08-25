@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.boolean_analysis._models import (
@@ -61,20 +62,23 @@ def test_truth_table_two_variables() -> None:
 
 
 def test_truth_table_rejects_non_power_of_two() -> None:
-    with pytest.raises(ValueError, match="power of two"):
+    with pytest.raises(ValidationError) as error:
         TruthTableRequest(truth_table=_truth_table([0, 1, 1]))
+    assert error.value.errors()[0]["type"] == "boolean_analysis.truth_table_power"
 
 
 def test_truth_table_rejects_empty() -> None:
-    with pytest.raises(ValueError, match="at least 2 items"):
+    with pytest.raises(ValidationError) as error:
         TruthTableRequest.model_validate({"truth_table": []})
+    assert error.value.errors()[0]["type"] == "too_short"
 
 
 def test_truth_table_rejects_non_boolean_values() -> None:
-    with pytest.raises(ValueError, match="0 or 1"):
+    with pytest.raises(ValidationError) as error:
         TruthTableRequest.model_validate(
             {"truth_table": [{"num": "2", "den": "1"}, {"num": "1", "den": "1"}]}
         )
+    assert error.value.errors()[0]["type"] == "boolean_analysis.truth_table_boolean"
 
 
 # ---------------------------------------------------------------------------
@@ -136,8 +140,9 @@ def test_fourier_spectrum_matches_definition() -> None:
 
 
 def test_fourier_spectrum_rejects_non_power_of_two() -> None:
-    with pytest.raises(ValueError, match="power of two"):
+    with pytest.raises(ValidationError) as error:
         FourierSpectrumRequest(truth_table=_truth_table([0, 1, 1]))
+    assert error.value.errors()[0]["type"] == "boolean_analysis.truth_table_power"
 
 
 # ---------------------------------------------------------------------------
@@ -252,25 +257,27 @@ def test_erasure_noise_constant_one() -> None:
 
 
 def test_erasure_noise_rejects_invalid_probability() -> None:
-    with pytest.raises(ValueError, match="probability must be in"):
+    with pytest.raises(ValidationError) as error:
         ErasureNoiseRequest(
             truth_table=_truth_table([0, 1]),
             probability=_rational(3, 2),
             base_input=(0,),
         )
+    assert error.value.errors()[0]["type"] == "boolean_analysis.probability_range"
 
 
 def test_erasure_noise_rejects_negative_probability() -> None:
-    with pytest.raises(ValueError, match="probability must be in"):
+    with pytest.raises(ValidationError) as error:
         ErasureNoiseRequest(
             truth_table=_truth_table([0, 1]),
             probability=_rational(-1, 2),
             base_input=(0,),
         )
+    assert error.value.errors()[0]["type"] == "boolean_analysis.probability_range"
 
 
 def test_erasure_noise_rejects_non_power_of_two() -> None:
-    with pytest.raises(ValueError, match="power of two"):
+    with pytest.raises(ValidationError) as error:
         ErasureNoiseRequest.model_validate(
             {
                 "truth_table": [
@@ -282,3 +289,4 @@ def test_erasure_noise_rejects_non_power_of_two() -> None:
                 "base_input": [0, 0, 0],
             }
         )
+    assert error.value.errors()[0]["type"] == "boolean_analysis.truth_table_power"

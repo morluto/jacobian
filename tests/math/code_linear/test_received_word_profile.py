@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from itertools import product
 
 import pytest
@@ -26,6 +27,13 @@ from jacobian.math.code_linear._operations import (
     compute_shorten,
 )
 from jacobian.math.code_linear.values import PrimeFieldLinearEncoder
+
+
+@contextmanager
+def _validation_error(code: str):
+    with pytest.raises(ValidationError) as exc_info:
+        yield
+    assert code in exc_info.value.errors()[0]["type"]
 
 
 def _encoder(
@@ -280,30 +288,30 @@ def test_result_rejects_source_and_witness_mutations() -> None:
 
     wrong_source = result.model_dump()
     wrong_source["source"]["received_word"] = (0, 0)
-    with pytest.raises(ValidationError, match="histogram"):
+    with _validation_error("histogram"):
         ReceivedWordProfileResult.model_validate(wrong_source)
 
     wrong_witness = result.model_dump()
     wrong_witness["witnesses"][0]["codeword"] = (1, 1)
-    with pytest.raises(ValidationError, match="witness"):
+    with _validation_error("witness"):
         ReceivedWordProfileResult.model_validate(wrong_witness)
 
 
 def test_encoder_rejects_ambiguous_or_invalid_presentations() -> None:
-    with pytest.raises(ValidationError, match="full row rank"):
+    with _validation_error("full_row_rank"):
         _encoder(((1, 1), (1, 1)))
-    with pytest.raises(ValidationError, match="prime"):
+    with _validation_error("prime"):
         _encoder(((1,),), field_order=4)
-    with pytest.raises(ValidationError, match="canonical"):
+    with _validation_error("canonical"):
         _encoder(((2,),))
-    with pytest.raises(ValidationError, match="message axis"):
+    with _validation_error("message_axis"):
         PrimeFieldLinearEncoder(
             field_order=2,
             message_axis=(),
             coordinate_axis=("x",),
             generator_matrix=((1,),),
         )
-    with pytest.raises(ValidationError, match="unique"):
+    with _validation_error("unique"):
         PrimeFieldLinearEncoder(
             field_order=2,
             message_axis=("m",),
@@ -314,17 +322,17 @@ def test_encoder_rejects_ambiguous_or_invalid_presentations() -> None:
 
 def test_profile_request_rejects_misalignment_and_mode_holes() -> None:
     encoder = _encoder(((1, 1),))
-    with pytest.raises(ValidationError, match="coordinate axis"):
+    with _validation_error("coordinate_axis"):
         ReceivedWordProfileRequest(encoder=encoder, received_word=(1,))
-    with pytest.raises(ValidationError, match="canonical"):
+    with _validation_error("canonical"):
         ReceivedWordProfileRequest(encoder=encoder, received_word=(1, 2))
-    with pytest.raises(ValidationError, match="requires an exact threshold"):
+    with _validation_error("requires_an_exact_threshold"):
         ReceivedWordProfileRequest(
             encoder=encoder,
             received_word=(1, 0),
             witness_mode="FIRST",
         )
-    with pytest.raises(ValidationError, match="requires COUNT"):
+    with _validation_error("requires_count"):
         ReceivedWordProfileRequest(
             encoder=encoder,
             received_word=(1, 0),
@@ -371,7 +379,7 @@ def test_work_bound_still_rejects_before_enumeration() -> None:
         )
 
     assert rectangular_identity(28).profile_replay_work == 2_981_888
-    with pytest.raises(ValidationError, match="replay work"):
+    with _validation_error("replay_work"):
         rectangular_identity(29)
 
 
@@ -388,7 +396,7 @@ def test_codeword_budget_is_derived_from_the_replay_work_bound() -> None:
     assert admitted.encoder.codeword_count == MAX_RECEIVED_PROFILE_CODEWORDS
     assert admitted.profile_replay_work == 2_491_752
 
-    with pytest.raises(ValidationError, match="replay work"):
+    with _validation_error("replay_work"):
         ReceivedWordProfileRequest(
             encoder=_encoder(identity, field_order=53),
             received_word=(0, 0, 0),
@@ -407,7 +415,7 @@ def test_all_witness_output_has_a_separate_preflight_bound() -> None:
         threshold={"metric": "DISTANCE", "comparison": "GE", "value": 0},
         witness_mode="FIRST",
     )
-    with pytest.raises(ValidationError, match="witness-cell"):
+    with _validation_error("witness_cells"):
         ReceivedWordProfileRequest(
             encoder=encoder,
             received_word=(0,) * 32,

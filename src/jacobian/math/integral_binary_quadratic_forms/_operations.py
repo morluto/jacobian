@@ -35,15 +35,6 @@ def _evaluate(a: int, b: int, c: int, x: int, y: int) -> int:
     return a * x * x + b * x * y + c * y * y
 
 
-def _transform(
-    a: int, b: int, c: int, p: int, q: int, r: int, s: int
-) -> tuple[int, int, int]:
-    na = a * p * p + b * p * r + c * r * r
-    nb = 2 * a * p * q + b * (p * s + q * r) + 2 * c * r * s
-    nc = a * q * q + b * q * s + c * s * s
-    return na, nb, nc
-
-
 def _check_reduced(a: int, b: int, c: int) -> bool:
     """Check Gauss reduction: |b| <= a <= c, with tie-breaking b>=0."""
     if a <= 0 or c <= 0:

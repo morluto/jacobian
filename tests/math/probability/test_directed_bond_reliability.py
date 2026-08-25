@@ -14,7 +14,7 @@ from jacobian.math.graphs.directed._models import (
     MAX_DIRECTED_GRAPH_PARSE_EDGES,
     DirectedGraph,
 )
-from jacobian.math.probability._models import (
+from jacobian.math.probability._directed_bond_reliability import (
     MAX_DIRECTED_BOND_RELIABILITY_ARCS,
     MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES,
     MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK,
@@ -24,8 +24,8 @@ from jacobian.math.probability._models import (
     DirectedBondConnectionProbabilityResult,
     DirectedBondConnectionProbabilitySource,
     DirectedBondReliabilityArcProbability,
+    _directed_bond_connection_probability,
 )
-from jacobian.math.probability._operations import _directed_bond_connection_probability
 
 
 def _rational(value: Fraction) -> dict[str, str]:

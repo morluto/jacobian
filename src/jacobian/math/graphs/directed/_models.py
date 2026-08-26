@@ -40,17 +40,29 @@ class DirectedGraph(StrictModel):
     @field_validator("edges", mode="before")
     @classmethod
     def require_edge_parse_envelope(cls, edges: object) -> object:
-        """Reject oversized edge lists before any nested row is materialized.
+        """Bound the raw edge sequence before any nested row is materialized.
 
         Pydantic coerces and validates each nested tuple only after this
         before-validator returns, so a payload beyond the parse-safety
         envelope rejects on its raw sequence length without building the
-        edge tuples or entering structural validation at all.
+        edge tuples or entering structural validation at all. Admitted
+        lists are canonicalized to tuples here because strict JSON parsing
+        treats values returned by a before-validator as runtime data, which
+        no longer coerces lists to tuples (the container-canonicalization
+        rule shared with strict-JSON preflight models).
         """
 
-        if isinstance(edges, (list, tuple)) and (
-            len(edges) > MAX_DIRECTED_GRAPH_PARSE_EDGES
-        ):
+        if isinstance(edges, list):
+            if len(edges) > MAX_DIRECTED_GRAPH_PARSE_EDGES:
+                raise PydanticCustomError(
+                    "graph.edge_list_parse_envelope_exceeded",
+                    "directed graph edge list exceeds the "
+                    f"{MAX_DIRECTED_GRAPH_PARSE_EDGES}-edge parse-safety envelope",
+                )
+            return tuple(
+                tuple(row) if isinstance(row, list) else row for row in edges
+            )
+        if isinstance(edges, tuple) and len(edges) > MAX_DIRECTED_GRAPH_PARSE_EDGES:
             raise PydanticCustomError(
                 "graph.edge_list_parse_envelope_exceeded",
                 "directed graph edge list exceeds the "

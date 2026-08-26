@@ -17,11 +17,11 @@ from jacobian.math.number_theory._models import (
     ModularValueRequest,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
-    PrimalityRequest,
 )
 from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueImageRequest,
 )
+from jacobian.math.number_theory._prime_models import PrimalityRequest
 
 
 @pytest.mark.parametrize("residue", [-1, 3])

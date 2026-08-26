@@ -7,6 +7,7 @@ from typing import Annotated
 from pydantic import Field, StrictInt, StringConstraints
 
 from jacobian._models import StrictModel
+from jacobian.math.number_theory._models import BoundedInteger
 
 # ``primorial(n)`` carries n(ln n + ln ln n)/ln 10 digits.  The declared
 # result budget is ``_MAX_PRIMORIAL_DIGITS`` (3_400), and primorial(1001)
@@ -14,6 +15,12 @@ from jacobian._models import StrictModel
 # admitted boundary is n <= 1001.
 _MAX_PRIMORIAL_N = 1001
 _MAX_PRIMORIAL_DIGITS = 3_400
+
+
+class PrimalityRequest(StrictModel):
+    """One bounded canonical integer for the maintained primality backend."""
+
+    value: BoundedInteger
 
 
 class PrimorialRequest(StrictModel):

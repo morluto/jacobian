@@ -2,6 +2,17 @@
 
 ## [0.14.0](https://github.com/morluto/jacobian/compare/jacobian-v0.13.0...jacobian-v0.14.0) (2026-08-26)
 
+### ⚠ Breaking Changes
+
+* remove public catalog, discovery, descriptor, operation, and domain schema-version fields; callers must omit the retired version fields from strict requests and update strict result decoders ([1e68dd8](https://github.com/morluto/jacobian/commit/1e68dd8))
+* retire `lean.check` and its packaged Lean runtime ([49124ab](https://github.com/morluto/jacobian/commit/49124ab))
+* replace graph-core, homomorphism-find, and retraction-check operations with the typed-map `graph.homomorphism.check` contract ([21d5a88](https://github.com/morluto/jacobian/commit/21d5a88))
+* retire the former quadratic-form operations in favor of the rational-axis `quadratic_form.evaluate.compute` contract ([e4ab701](https://github.com/morluto/jacobian/commit/e4ab701))
+* reshape nonlinear-code requests and results around canonical code values; migrate `code.nonlinear.distance_profile.compute` from flat `codewords` and update constant-weight consumers ([1103de2](https://github.com/morluto/jacobian/commit/1103de2))
+* update strict result consumers for source-bound linear-code, graph-spectrum, divisor/factorization, rational-matrix, and discrepancy results ([fff9687](https://github.com/morluto/jacobian/commit/fff9687), [f032e5d](https://github.com/morluto/jacobian/commit/f032e5d), [0f31376](https://github.com/morluto/jacobian/commit/0f31376), [9a37e8b](https://github.com/morluto/jacobian/commit/9a37e8b), [822dadd](https://github.com/morluto/jacobian/commit/822dadd))
+* rename `code.dual_code.compute` and `code.syndrome.compute` to `code.linear.dual.compute` and `code.linear.syndrome.compute` ([ddef999](https://github.com/morluto/jacobian/commit/ddef999))
+* require Node.js `>=23.5.0`, `^22.13.0`, or `^20.17.0`; Node 18 and earlier Node 20/22 releases are unsupported
+
 
 ### Features
 
@@ -69,9 +80,9 @@
 * **math:** add ordered-difference profile for integer-vector sets ([#2225](https://github.com/morluto/jacobian/issues/2225)) ([96fe589](https://github.com/morluto/jacobian/commit/96fe5893f1468f62f9b08b27b0215740c58b50d6))
 * **math:** add Petri net siphon/trap check operation ([#1908](https://github.com/morluto/jacobian/issues/1908)) ([#2143](https://github.com/morluto/jacobian/issues/2143)) ([b65e53b](https://github.com/morluto/jacobian/commit/b65e53bbb277a0a3b818b74e8f968ef6c6b88be6))
 * **math:** add polynomial support geometry operations ([#1797](https://github.com/morluto/jacobian/issues/1797)) ([#2234](https://github.com/morluto/jacobian/issues/2234)) ([e91cd45](https://github.com/morluto/jacobian/commit/e91cd45db65de4e39be9f5897601cb5c22319699))
-* **math:** add representation numbers, theta series, scaling, and direct sum to quadratic forms ([#2117](https://github.com/morluto/jacobian/issues/2117)) ([e88bbb3](https://github.com/morluto/jacobian/commit/e88bbb34b5f10823ee239cb6bd8e68f99a288c6c))
+* **math:** compute bounded exact quadratic-form evaluations over rational-axis values ([e4ab701](https://github.com/morluto/jacobian/commit/e4ab701))
 * **math:** add short Weierstrass elliptic curve operations ([#2241](https://github.com/morluto/jacobian/issues/2241)) ([ce6f38a](https://github.com/morluto/jacobian/commit/ce6f38af6a8ddf25fa2063c4eac94fe992e13cb4))
-* **math:** add simple reflection and Weyl group data operations to root systems ([#2116](https://github.com/morluto/jacobian/issues/2116)) ([ca85037](https://github.com/morluto/jacobian/commit/ca8503732b25cee2f1a6eca75d9202deca977c87))
+* **math:** add simple reflections and exact Weyl-group-order computation to root systems ([#2116](https://github.com/morluto/jacobian/issues/2116)) ([b4962b7](https://github.com/morluto/jacobian/commit/b4962b7))
 * **math:** add Steenrod square and Bockstein cohomology operations ([#2251](https://github.com/morluto/jacobian/issues/2251)) ([af4ff50](https://github.com/morluto/jacobian/commit/af4ff506172b96f4884cc713164dc22a716d68be))
 * **math:** add structural simplicial complex operations ([#1850](https://github.com/morluto/jacobian/issues/1850)) ([#2232](https://github.com/morluto/jacobian/issues/2232)) ([6b7d7ce](https://github.com/morluto/jacobian/commit/6b7d7ce13f61bc699c9260c53fffe2aea71fec77))
 * **math:** add symbolic linear system solve over QQ(t_1,...,t_n) ([#2238](https://github.com/morluto/jacobian/issues/2238)) ([4822e88](https://github.com/morluto/jacobian/commit/4822e88ebf10ae3bc73c77d1c6512335993bbbb4))
@@ -96,6 +107,22 @@
 * **probability:** compute exact all-terminal reliability ([#2376](https://github.com/morluto/jacobian/issues/2376)) ([91b3c8a](https://github.com/morluto/jacobian/commit/91b3c8a5b09f156df896337af26f4cee673be1b1))
 * **real-algebra:** measure strict polynomial sublevels ([#2371](https://github.com/morluto/jacobian/issues/2371)) ([3279ac6](https://github.com/morluto/jacobian/commit/3279ac69a9ecdd25fd7fa6ac8972af7a970925d1))
 * **skills:** add public operation contract audit ([aaff27f](https://github.com/morluto/jacobian/commit/aaff27feec27eb080d3f205fe912eba65f67bf37))
+* **algebra:** compute group cohomology, rational-function Hermite reductions, crossed-product products, finite-category products, and generalized Jacobian syzygies ([c233f51](https://github.com/morluto/jacobian/commit/c233f51), [ba9ea31](https://github.com/morluto/jacobian/commit/ba9ea31), [a630b2f](https://github.com/morluto/jacobian/commit/a630b2f), [a39eb7e](https://github.com/morluto/jacobian/commit/a39eb7e), [4bc96d6](https://github.com/morluto/jacobian/commit/4bc96d6))
+* **analysis:** add real-function point and expression-box enclosure checks ([c794506](https://github.com/morluto/jacobian/commit/c794506), [be47deb](https://github.com/morluto/jacobian/commit/be47deb), [e1f3a06](https://github.com/morluto/jacobian/commit/e1f3a06))
+* **combinatorics:** add coherent-configuration analysis, RSK word/inverse-word transforms, delta-matroid construction, and finite-abelian spectral-pair decisions ([ffb5aa3](https://github.com/morluto/jacobian/commit/ffb5aa3), [a7d6a7d](https://github.com/morluto/jacobian/commit/a7d6a7d), [440a05a](https://github.com/morluto/jacobian/commit/440a05a), [d07c8cd](https://github.com/morluto/jacobian/commit/d07c8cd))
+* **congruence:** measure periodic unions exactly ([cd2d740](https://github.com/morluto/jacobian/commit/cd2d740))
+* **geometry:** compute polygon visibility kernels and rational-polytope support functions ([ff1ddb7](https://github.com/morluto/jacobian/commit/ff1ddb7), [ab482d0](https://github.com/morluto/jacobian/commit/ab482d0))
+* **graphs:** decide fixed-length cycles and find bounded subgraph patterns ([3482454](https://github.com/morluto/jacobian/commit/3482454))
+* **lattices:** add rank/Gram, canonical basis, dual, saturation, index, discriminant group, orthogonal complement, direct sum, and orthogonal sum operations ([6721c5a](https://github.com/morluto/jacobian/commit/6721c5a))
+* **matrices:** add symbolic multiplication and matrix-polynomial evaluation ([c0ed0c6](https://github.com/morluto/jacobian/commit/c0ed0c6), [12eae07](https://github.com/morluto/jacobian/commit/12eae07))
+* **network:** compute multicommodity-flow profiles ([82a7273](https://github.com/morluto/jacobian/commit/82a7273))
+* **number-theory:** add p-adic operations, binary-quadratic-form representation profiles, principal Dirichlet characters, and named level-one modular-form q-expansions ([72232db](https://github.com/morluto/jacobian/commit/72232db), [b746ee7](https://github.com/morluto/jacobian/commit/b746ee7), [5ac090d](https://github.com/morluto/jacobian/commit/5ac090d), [df552c1](https://github.com/morluto/jacobian/commit/df552c1))
+* **polytope:** compute exact volumes ([86b1d15](https://github.com/morluto/jacobian/commit/86b1d15))
+* **probability:** compute directed bond-reliability connection probabilities ([abcadd6](https://github.com/morluto/jacobian/commit/abcadd6))
+* **rewriting:** compute critical pairs for term-rewriting systems ([d91169e](https://github.com/morluto/jacobian/commit/d91169e))
+* **tree-automata:** compute reachable states ([c0c32fb](https://github.com/morluto/jacobian/commit/c0c32fb))
+* **words:** add substitution operations ([ee27faa](https://github.com/morluto/jacobian/commit/ee27faa))
+* expose native real-quadratic embedding profiles through `jacobian.math.real_quadratic.real_quadratic_embeddings` ([ee21f05](https://github.com/morluto/jacobian/commit/ee21f05))
 
 
 ### Bug Fixes
@@ -138,6 +165,7 @@
 * **matrices:** reserve canonical output budget for retained trace sources ([b8d5b36](https://github.com/morluto/jacobian/commit/b8d5b36f80c0c99dcb76c05e59b96cd22f4bf075))
 * **mcp:** cancel bounded subprocess trees ([#2661](https://github.com/morluto/jacobian/issues/2661)) ([fa783d5](https://github.com/morluto/jacobian/commit/fa783d5ecbdd8d1b7b8b7dae47854d2ef290fbff))
 * **mcp:** default remote HTTP to stateless ([#2656](https://github.com/morluto/jacobian/issues/2656)) ([2d001d8](https://github.com/morluto/jacobian/commit/2d001d883e42e44c3df83edf0a7173305c2dfbad))
+* **numerical-semigroups:** normalize accepted gcd-one generator presentations and return the canonical minimal-generator axis ([3e2a0d5](https://github.com/morluto/jacobian/commit/3e2a0d5))
 * **optimization:** bind rational LP outcomes to source ([#2382](https://github.com/morluto/jacobian/issues/2382)) ([367efa0](https://github.com/morluto/jacobian/commit/367efa0cf0cff4eef558118aa5d826bb3db090d5))
 * **polytope:** bind built faces and guard assembly containers ([085b398](https://github.com/morluto/jacobian/commit/085b39825459cc9c628e1fa41c9b836ca9fbbbbc))
 * **tests:** enforce coalgebra scan-work rejection without enumeration ([#2356](https://github.com/morluto/jacobian/issues/2356)) ([ac29313](https://github.com/morluto/jacobian/commit/ac29313a287cc30fa424d804bd800ac5301e5130))

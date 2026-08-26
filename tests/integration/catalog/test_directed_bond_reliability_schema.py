@@ -3,6 +3,7 @@
 from jacobian.catalog.catalog import Catalog
 from jacobian.math.probability._models import (
     MAX_DIRECTED_BOND_RELIABILITY_ARCS,
+    MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES,
 )
 
 OPERATION_ID = "probability.digraph_bond_reliability.connection_probability.compute"
@@ -26,6 +27,14 @@ def test_directed_bond_reliability_schema_exposes_cross_field_contract() -> None
     assert (
         f"at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs"
         in properties["graph"]["description"]
+    )
+    assert (
+        properties["graph"]["properties"]["edges"]["maxItems"]
+        == MAX_DIRECTED_BOND_RELIABILITY_ARCS
+    )
+    assert (
+        properties["graph"]["properties"]["vertex_count"]["maximum"]
+        == MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES
     )
     assert (
         "every graph arc exactly once" in properties["arc_probabilities"]["description"]

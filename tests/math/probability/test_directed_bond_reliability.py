@@ -13,11 +13,13 @@ from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.directed._models import DirectedGraph
 from jacobian.math.probability._models import (
     MAX_DIRECTED_BOND_RELIABILITY_ARCS,
+    MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES,
     MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK,
     MAX_DIRECTED_BOND_RELIABILITY_STATES,
     MAX_DIRECTED_BOND_RELIABILITY_VERTICES,
     DirectedBondConnectionProbabilityRequest,
     DirectedBondConnectionProbabilityResult,
+    DirectedBondConnectionProbabilitySource,
     DirectedBondReliabilityArcProbability,
 )
 from jacobian.math.probability._operations import _directed_bond_connection_probability
@@ -350,3 +352,78 @@ def test_zero_and_one_probabilities_keep_complete_state_convention() -> None:
     assert _probability(result) == 0
     assert result.visited_states == 4
     assert tuple(state.state_index for state in result.states) == (0, 1, 2, 3)
+
+
+def test_edgeless_source_at_the_declared_vertex_bound_stays_exact() -> None:
+    """Sparse admission materializes terminals, not every declared vertex."""
+
+    result = _directed_bond_connection_probability(
+        _request(
+            vertex_count=MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES,
+            arcs=(),
+            probabilities=(),
+            source=0,
+            target=MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES - 1,
+        )
+    )
+
+    assert _probability(result) == 0
+    assert result.arc_count == 0
+    assert result.visited_states == 1
+    assert tuple(state.source_reaches_target for state in result.states) == (False,)
+    replay = DirectedBondConnectionProbabilityResult.model_validate(
+        result.model_dump(mode="json")
+    )
+    assert replay == result
+
+
+def test_declared_vertex_admission_rejects_one_past_the_derived_bound() -> None:
+    with pytest.raises(ValidationError):
+        _request(
+            vertex_count=MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES + 1,
+            arcs=(),
+            probabilities=(),
+            source=0,
+            target=1,
+        )
+
+
+class TestPublishedBondReliabilityEnvelope:
+    """Published schemas advertise the bond-reliability graph envelope."""
+
+    def test_request_and_source_schemas_project_the_arc_and_vertex_bounds(
+        self,
+    ) -> None:
+        for model_type in (
+            DirectedBondConnectionProbabilityRequest,
+            DirectedBondConnectionProbabilitySource,
+        ):
+            graph_schema = model_type.model_json_schema()["properties"]["graph"]
+            assert (
+                graph_schema["properties"]["edges"]["maxItems"]
+                == MAX_DIRECTED_BOND_RELIABILITY_ARCS
+            )
+            assert (
+                graph_schema["properties"]["vertex_count"]["maximum"]
+                == MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES
+            )
+            assert "at most 12 arcs" in graph_schema["description"]
+
+    def test_shared_carrier_schema_stays_free_of_the_reliability_caps(self) -> None:
+        carrier_properties = DirectedGraph.model_json_schema()["properties"]
+        assert "maxItems" not in carrier_properties["edges"]
+        assert "maximum" not in carrier_properties["vertex_count"]
+
+    def test_thirteenth_arc_is_rejected_by_runtime_and_absent_from_schema(self) -> None:
+        schema_max_items = DirectedBondConnectionProbabilityRequest.model_json_schema()[
+            "properties"
+        ]["graph"]["properties"]["edges"]["maxItems"]
+        assert schema_max_items == MAX_DIRECTED_BOND_RELIABILITY_ARCS
+        with pytest.raises(ValidationError):
+            _request(
+                vertex_count=14,
+                arcs=tuple((index, index + 1) for index in range(13)),
+                probabilities=(Fraction(1, 2),) * 13,
+                source=0,
+                target=13,
+            )

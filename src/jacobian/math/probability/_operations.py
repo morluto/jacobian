@@ -424,7 +424,6 @@ def _directed_bond_connection_probability_data(
                 probability if state_index & (1 << index) else 1 - probability
             )
         reaches_target = _directed_path_exists(
-            vertex_count=source.graph.vertex_count,
             arcs=open_arcs,
             source=source.source,
             target=source.target,
@@ -437,17 +436,24 @@ def _directed_bond_connection_probability_data(
 
 def _directed_path_exists(
     *,
-    vertex_count: int,
     arcs: tuple[tuple[int, int], ...],
     source: int,
     target: int,
 ) -> bool:
-    """Test one admitted directed percolation state without another operation's cap."""
+    """Test one admitted directed percolation state without another operation's cap.
+
+    Reachability depends only on the open arcs and the two terminals, so the
+    traversal state materializes just those relevant vertices instead of every
+    declared vertex of a possibly sparse source.
+    """
 
     import networkx as nx
 
+    relevant_vertices = {source, target}
+    relevant_vertices.update(vertex for arc in arcs for vertex in arc)
+
     graph: Any = nx.DiGraph()
-    graph.add_nodes_from(range(vertex_count))
+    graph.add_nodes_from(relevant_vertices)
     graph.add_edges_from(arcs)
     return nx.has_path(graph, source, target)
 
@@ -482,7 +488,6 @@ def _directed_bond_connection_probability(
                 probability if state_index & (1 << index) else 1 - probability
             )
         reaches_target = _directed_path_exists(
-            vertex_count=source.graph.vertex_count,
             arcs=open_arcs,
             source=source.source,
             target=source.target,

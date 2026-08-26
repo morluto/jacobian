@@ -392,6 +392,36 @@ class TestDirectOperationEnvelope:
             with pytest.raises(ValidationError):
                 AcyclicOrderRequest.model_validate(request)
 
+    def test_reachability_source_schema_matches_the_vertex_envelope(self) -> None:
+        """The published source field keeps the operation-wide vertex maximum."""
+
+        source_schema = ReachabilityRequest.model_json_schema()["properties"]["source"]
+        assert source_schema["maximum"] == MAX_DIRECTED_OPERATION_VERTICES - 1
+        assert "exclusiveMaximum" not in source_schema
+
+        full_graph = {
+            "graph": {
+                "vertex_count": MAX_DIRECTED_OPERATION_VERTICES,
+                "edges": [],
+            }
+        }
+        request = {**full_graph, "source": MAX_DIRECTED_OPERATION_VERTICES - 1}
+        accepted = ReachabilityRequest.model_validate(request)
+        assert accepted.source == MAX_DIRECTED_OPERATION_VERTICES - 1
+
+        beyond = {**full_graph, "source": MAX_DIRECTED_OPERATION_VERTICES}
+        with pytest.raises(ValidationError):
+            ReachabilityRequest.model_validate(beyond)
+
+    def test_cross_field_source_check_still_binds_below_the_field_maximum(self) -> None:
+        """source < vertex_count stays enforced inside the advertised range."""
+
+        small_graph = {"graph": {"vertex_count": 4, "edges": []}}
+        with pytest.raises(ValidationError):
+            ReachabilityRequest.model_validate({**small_graph, "source": 4})
+        with pytest.raises(ValidationError):
+            ReachabilityRequest.model_validate({**small_graph, "source": 255})
+
 
 # ---------------------------------------------------------------------------
 # Cross-consistency

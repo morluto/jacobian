@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import pairwise
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, WithJsonSchema, model_validator
+from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
@@ -74,6 +75,13 @@ MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK = (
     )
     + 8
 )
+# Loosest declared-vertex count the joint work budget admits, derived by
+# solving ``2 * (4 * vertices + 3) + 8 <= budget`` for the edgeless case that
+# spends no arc work.  Denser sources admit fewer vertices through the same
+# budget; this is the per-field ceiling the published schema can advertise.
+MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES = (
+    (MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK - 8) // 2 - 3
+) // 4
 
 
 def _require_bounded_fraction(
@@ -472,6 +480,31 @@ class GraphConnectionProbabilityResult(StrictModel):
         return self
 
 
+def _directed_bond_reliability_graph_schema() -> JsonSchemaValue:
+    """Project the bond-reliability envelope onto the shared carrier schema."""
+
+    schema = DirectedGraph.model_json_schema()
+    schema["description"] = (
+        "A structurally valid finite simple directed graph accepted by this "
+        f"complete-enumeration operation: at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} "
+        "arcs and at most "
+        f"{MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES} declared vertices. "
+        "Vertices and arcs share one derived work budget, so sparse graphs may "
+        "declare more vertices while dense graphs admit fewer."
+    )
+    schema["properties"]["vertex_count"].update(
+        maximum=MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES,
+    )
+    schema["properties"]["edges"].update(maxItems=MAX_DIRECTED_BOND_RELIABILITY_ARCS)
+    return schema
+
+
+DirectedBondReliabilityGraph = Annotated[
+    DirectedGraph,
+    WithJsonSchema(_directed_bond_reliability_graph_schema()),
+]
+
+
 class DirectedBondReliabilityArcProbability(StrictModel):
     """The independent open probability attached to one directed arc."""
 
@@ -505,7 +538,7 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
     indices and result records are assigned.
     """
 
-    graph: DirectedGraph = Field(
+    graph: DirectedBondReliabilityGraph = Field(
         description=(
             f"A directed graph with at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs for this "
             "complete-enumeration operation."
@@ -666,7 +699,7 @@ class DirectedBondConnectionProbabilityRequest(StrictModel):
     do not depend on input order.
     """
 
-    graph: DirectedGraph = Field(
+    graph: DirectedBondReliabilityGraph = Field(
         description=(
             f"A directed graph with at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs for this "
             "complete-enumeration operation."

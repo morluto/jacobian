@@ -90,7 +90,7 @@ DirectedOperationGraph = Annotated[
 
 class ReachabilityRequest(StrictModel):
     graph: DirectedOperationGraph
-    source: int = Field(ge=0)
+    source: int = Field(ge=0, le=MAX_DIRECTED_OPERATION_VERTICES - 1)
 
     @model_validator(mode="after")
     def require_valid_source(self) -> Self:

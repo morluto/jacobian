@@ -7,12 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import (
-    MAX_CANONICAL_RATIONAL_DIGITS,
-    CanonicalRational,
-)
 from jacobian._models import StrictModel
-from jacobian.math._rational_height import RationalHeight
 from jacobian.math.moments_orthogonal.values import (
     MAX_HANKEL_ORDER,
     MAX_POLYNOMIAL_DEGREE,
@@ -23,28 +18,6 @@ from jacobian.math.moments_orthogonal.values import (
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"moments_orthogonal.{reason}", message)
-
-
-def _require_determinant_representable(
-    moments: tuple[CanonicalRational, ...], order: int
-) -> None:
-    """Bound entry heights so the exact determinant stays canonical.
-
-    The determinant of an (order+1)-square rational matrix carries at most
-    roughly (order+1)^2 * H digits for H-digit entries; capping each
-    moment's height keeps it inside MAX_CANONICAL_RATIONAL_DIGITS.
-    """
-    per_entry = MAX_CANONICAL_RATIONAL_DIGITS // ((order + 1) ** 2)
-    # A determinant reads 2r+1 consecutive moments; the shifted variant
-    # consumes mu_1..mu_(2r+1). Unconsumed moments must not prevent
-    # composition.
-    for value in moments[: 2 * order + 1]:
-        if RationalHeight.from_canonical(value).exceeds(max(per_entry - 2, 8)):
-            raise _validation_error(
-                "determinant_height",
-                f"moment heights exceed the conservative {max(per_entry - 2, 8)}-digit "
-                f"bound for an exact order-{order} determinant",
-            )
 
 
 class HankelRequest(StrictModel):

@@ -9,6 +9,7 @@ from pydantic import Field, StrictInt, StringConstraints, model_validator
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.math.affine_forms.values import MAX_AFFINE_COMPONENT_DIGITS
 from jacobian.math.prime_affine_forms._kernel import (
     MAX_DETERMINISTIC_PRIME_INPUT,
     interval_match_summary,
@@ -26,8 +27,8 @@ MAX_INTERVAL_REPLAY_EVALUATIONS = 200_000
 MAX_INTERVAL_ENUMERATION_CELLS = 65_536
 
 # Endpoint syntax is neutral canonical integer grammar. Its effective size is
-# bounded by affine-value primality, interval work, and result transport; a
-# fixed endpoint-digit ceiling would reject harmless cancellation intervals.
+# bounded from the source before parsing, so cancellation intervals are not
+# rejected by a fixed syntax cap.
 IntervalEndpointInteger = CanonicalInteger
 DeterministicPrimeInteger = Annotated[
     CanonicalInteger,
@@ -43,6 +44,32 @@ def _parse_interval(lower: str, upper: str) -> tuple[int, int, int]:
             "interval lower endpoint must not exceed upper endpoint"
         )
     return lower_value, upper_value, upper_value - lower_value + 1
+
+
+def require_bounded_affine_endpoints(
+    source: PrimeAffineTuple,
+    *values: str,
+    label: str,
+) -> None:
+    """Reject endpoints that cannot yield a bounded affine value before parsing.
+
+    If ``|a*n + b|`` has at most ``C`` digits and ``a`` is nonzero, then
+    ``n`` has at most ``max(C, digits(b)) + 1`` digits.  This keeps cancelling
+    shifts admissible while rejecting oversized input before bigint conversion.
+    """
+
+    maximum_digits = (
+        max(
+            MAX_AFFINE_COMPONENT_DIGITS,
+            *(len(form.constant.lstrip("-")) for form in source.forms),
+        )
+        + 1
+    )
+    if any(len(value.lstrip("-")) > maximum_digits for value in values):
+        raise _validation_error(
+            f"{label} endpoint exceeds the {maximum_digits}-digit "
+            "source-sensitive pre-parse bound"
+        )
 
 
 def _interval_value_digit_bound(
@@ -73,6 +100,9 @@ class PrimeAffineIntervalCountRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_complete_count(self) -> Self:
+        require_bounded_affine_endpoints(
+            self.source, self.lower, self.upper, label="interval"
+        )
         lower, upper, interval_size = _parse_interval(self.lower, self.upper)
         _interval_value_digit_bound(self.source, lower, upper)
         replay_evaluations = 2 * interval_size * self.source.form_count
@@ -261,4 +291,5 @@ __all__ = [
     "PrimePatternMatch",
     "compute_interval_count",
     "compute_interval_enumerate",
+    "require_bounded_affine_endpoints",
 ]

@@ -8,6 +8,8 @@ import pytest
 from pydantic import ValidationError
 from sympy import primerange
 
+import jacobian.math.prime_affine_forms._interval as interval_contracts
+import jacobian.math.prime_affine_forms._translation as translation_contracts
 from jacobian.math.affine_forms import IntegerAffineForm
 from jacobian.math.prime_affine_forms import (
     PrimeAffineTuple,
@@ -350,6 +352,54 @@ def test_translation_admits_a_65_digit_cancelling_shift() -> None:
     )
 
     assert result.translated.forms == (_form("cancelled", 1, 0),)
+
+
+def test_interval_preflights_oversized_endpoints_before_integer_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_parse(_: str) -> int:
+        raise AssertionError("endpoint reached integer parsing")
+
+    monkeypatch.setattr(interval_contracts, "parse_canonical_integer", fail_parse)
+
+    with pytest.raises(ValidationError, match="source-sensitive pre-parse"):
+        PrimeAffineIntervalCountRequest(
+            source=TWIN_PRIMES,
+            lower="9" * 258,
+            upper="9" * 258,
+        )
+
+
+def test_residue_profile_preflights_oversized_endpoints_before_integer_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wheel = compute_residue_wheel(
+        PrimeTupleResidueWheelRequest(source=TWIN_PRIMES, primes=(2, 3))
+    )
+
+    def fail_parse(_: str) -> int:
+        raise AssertionError("endpoint reached integer parsing")
+
+    monkeypatch.setattr(interval_contracts, "parse_canonical_integer", fail_parse)
+
+    with pytest.raises(ValidationError, match="source-sensitive pre-parse"):
+        PrimeTupleIntervalResidueProfileRequest(
+            wheel=wheel,
+            lower="9" * 258,
+            upper="9" * 258,
+        )
+
+
+def test_translation_preflights_oversized_shift_before_integer_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_parse(_: str) -> int:
+        raise AssertionError("shift reached integer parsing")
+
+    monkeypatch.setattr(translation_contracts, "parse_canonical_integer", fail_parse)
+
+    with pytest.raises(ValidationError, match="source-sensitive pre-parse"):
+        PrimeAffineTranslationRequest(source=TWIN_PRIMES, shift="9" * 258)
 
 
 def test_residue_wheel_and_membership_compose_without_reconstruction() -> None:

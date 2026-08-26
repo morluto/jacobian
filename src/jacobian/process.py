@@ -354,8 +354,6 @@ def run_bounded_process(
     # cannot acquire a second, fresh cleanup clock after the admitted lifetime.
     started = time.monotonic()
     absolute_deadline = started + timeout_seconds
-    cleanup_allowance = min(_PIPE_DRAIN_GRACE_SECONDS, timeout_seconds / 4)
-    execution_deadline = absolute_deadline - cleanup_allowance
 
     start_new_session = os.name == "posix"
     creationflags = (
@@ -379,8 +377,7 @@ def run_bounded_process(
         stdin_file.write(input_bytes)
         stdin_file.seek(0)
         # Spooling is part of the admitted execution envelope.  Do not launch
-        # a worker once it has already consumed the execution portion that was
-        # reserved before teardown.
+        # a worker after it has consumed the request's complete deadline.
         if cancellation_event is not None and cancellation_event.is_set():
             return BoundedProcessResult(
                 returncode=None,
@@ -391,7 +388,7 @@ def run_bounded_process(
                 timed_out=False,
                 cancelled=True,
             )
-        if time.monotonic() >= execution_deadline:
+        if time.monotonic() >= absolute_deadline:
             return BoundedProcessResult(
                 returncode=None,
                 stdout=b"",
@@ -465,7 +462,7 @@ def run_bounded_process(
         try:
             timed_out, cancelled = _monitor_bounded_process(
                 process,
-                deadline=execution_deadline,
+                deadline=absolute_deadline,
                 cancellation_event=cancellation_event,
                 platform_tools=platform_tools,
             )

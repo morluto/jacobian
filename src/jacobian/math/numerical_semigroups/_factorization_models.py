@@ -76,7 +76,12 @@ class FactorizationComputeResult(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_family(self) -> Self:
-        _require_canonical_minimal_axis(self.minimal_generators)
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        _require_materializable_factorizations(
+            generators,
+            _require_bounded_value(generators, self.value),
+            MAX_MATERIALIZED_FACTORIZATIONS,
+        )
         if self.in_semigroup != bool(self.factorizations):
             raise _validation_error(
                 "membership must agree with the factorization family"
@@ -135,7 +140,8 @@ class FactorizationLengthsComputeResult(StrictModel):
 
     @model_validator(mode="after")
     def require_length_set(self) -> Self:
-        _require_canonical_minimal_axis(self.minimal_generators)
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        _require_bounded_value(generators, self.value)
         if self.in_semigroup != bool(self.lengths):
             raise _validation_error(
                 "membership must agree with the factorization lengths"
@@ -264,7 +270,12 @@ class FactorizationGraphComputeResult(StrictModel):
 
     @model_validator(mode="after")
     def require_graph_partition(self) -> Self:
-        _require_canonical_minimal_axis(self.minimal_generators)
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        _require_materializable_factorizations(
+            generators,
+            _require_bounded_value(generators, self.value),
+            MAX_GRAPH_FACTORIZATIONS,
+        )
         vertex_count = len(self.factorizations)
         if self.in_semigroup != bool(self.factorizations):
             raise _validation_error("membership must agree with graph vertices")

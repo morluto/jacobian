@@ -2,6 +2,8 @@
 
 from typing import Any
 
+import pytest
+
 from jacobian.math.numerical_semigroups._element_invariant_models import (
     ElementCatenaryDegreeRequest,
     ElementCatenaryDegreeResult,
@@ -73,6 +75,48 @@ def test_factorization_verifier_rejects_forged_complete_family() -> None:
     )
 
     assert not verify_factorization_compute_result(forged)
+
+
+@pytest.mark.parametrize(
+    ("result_type", "payload"),
+    (
+        (
+            FactorizationComputeResult,
+            {
+                "value": "100000000",
+                "minimal_generators": ("2", "3"),
+                "in_semigroup": False,
+                "factorizations": (),
+            },
+        ),
+        (
+            FactorizationLengthsComputeResult,
+            {
+                "value": "100000000",
+                "minimal_generators": ("2", "3"),
+                "in_semigroup": False,
+                "lengths": (),
+            },
+        ),
+        (
+            FactorizationGraphComputeResult,
+            {
+                "value": "100000000",
+                "minimal_generators": ("2", "3"),
+                "in_semigroup": False,
+                "factorizations": (),
+                "edges": (),
+                "connected_components": (),
+                "is_connected": True,
+            },
+        ),
+    ),
+)
+def test_factorization_replay_results_reapply_request_value_envelopes(
+    result_type: type[Any], payload: dict[str, Any]
+) -> None:
+    with pytest.raises(ValueError, match="value must be at most"):
+        result_type.model_validate(payload)
 
 
 def test_factorization_length_verifier_rejects_forged_length_set() -> None:

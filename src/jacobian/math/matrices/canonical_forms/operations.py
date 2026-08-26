@@ -44,8 +44,9 @@ class _HornerEvaluationMetrics:
 
     This is deliberately an optional observer on this owner-local kernel, not
     a cross-operation instrumentation protocol.  It records the published
-    dense scalar-product proxy and the widest reduced component of each
-    materialized Horner state without changing evaluation semantics.
+    dense scalar-product proxy and the widest component of every materialized
+    Horner state -- each pre-addition matrix product together with each
+    reduced accumulator -- without changing evaluation semantics.
     """
 
     maximum_component_digits: int = 0
@@ -143,9 +144,14 @@ def _evaluate_polynomial(
             metrics.record_state(result)
         for coefficient in reversed(coefficients[:-1]):
             scalar = Rational(coefficient.numerator, coefficient.denominator)
-            result = result * matrix + scalar * identity
+            product = result * matrix
             if metrics is not None:
                 metrics.scalar_product_terms += dimension**3
+                # The product is materialized before the scalar term can
+                # cancel it, so the observed bound must cover this state too.
+                metrics.record_state(product)
+            result = product + scalar * identity
+            if metrics is not None:
                 metrics.record_state(result)
     return tuple(
         tuple(_to_fraction(result[row, column]) for column in range(dimension))

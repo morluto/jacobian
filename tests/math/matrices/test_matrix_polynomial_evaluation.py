@@ -143,7 +143,7 @@ def _assert_matrix_polynomial_envelope_conformance(
     dimension = len(request.matrix.entries)
     degree = _polynomial_degree(request.polynomial)
     assert metrics.scalar_product_terms == degree * dimension**3
-    assert metrics.stored_states == degree + 1
+    assert metrics.stored_states == 2 * degree + 1
     total_scalar_products = (
         MATRIX_POLYNOMIAL_EVALUATION_PASSES * metrics.scalar_product_terms
     )
@@ -212,6 +212,40 @@ def test_matrix_polynomial_envelope_pilot_matches_measured_horner_states(
     _assert_matrix_polynomial_envelope_conformance(
         MatrixPolynomialEvaluationRequest(matrix=matrix, polynomial=polynomial)
     )
+
+
+def test_cancelled_horner_products_are_recorded_before_the_scalar_addition() -> None:
+    # Scalar matrix A = [[H]] with f = t^2 - H*t: the first Horner
+    # multiplication materializes H, yet adding c_1 = -H reduces the
+    # accumulator to zero immediately, so every addition-reduced state stays
+    # single-digit. The observer must charge the wide pre-addition product,
+    # otherwise the conformance bound passes vacuously while admission
+    # underestimates the shifted intermediate.
+    height = 10**120
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=_matrix((height,)),
+        polynomial=_polynomial((1, 2), (-height, 1)),
+    )
+
+    metrics = _HornerEvaluationMetrics()
+    measured_value = _evaluate_polynomial(
+        _fractions(request.matrix),
+        _dense_polynomial_coefficients(request),
+        metrics=metrics,
+    )
+
+    assert measured_value == ((Fraction(0),),)
+    assert metrics.maximum_component_digits == len(str(height))
+    assert metrics.stored_states == 2 * 2 + 1
+
+    estimated_work_digits = _require_matrix_polynomial_output_budget(
+        request.matrix,
+        request.polynomial,
+        _polynomial_degree(request.polynomial),
+    )
+    assert len(str(height)) <= estimated_work_digits
+    assert metrics.maximum_component_digits <= estimated_work_digits
+    _assert_matrix_polynomial_envelope_conformance(request)
 
 
 @st.composite

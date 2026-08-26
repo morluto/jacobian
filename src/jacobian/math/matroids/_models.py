@@ -99,8 +99,27 @@ def validate_subset_indices(matroid: LinearMatroid, subset: Any) -> None:
 class MatroidClosureRequest(StrictModel):
     """Compute the closure of a subset in a linear matroid."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Compute the closure of a distinct subset of the ground set of "
+                "a bounded linear matroid. Ground-set elements are the columns "
+                "of `matroid.matrix`, indexed from 0 through "
+                "`matroid.matrix.columns - 1`."
+            )
+        }
+    )
+
     matroid: LinearMatroid
-    subset: tuple[StrictInt, ...] = Field(default=(), max_length=MAX_GROUND_SIZE)
+    subset: tuple[StrictInt, ...] = Field(
+        default=(),
+        max_length=MAX_GROUND_SIZE,
+        description=(
+            "Distinct ground-set indices. Every index must lie in "
+            "0..matroid.matrix.columns-1; at most "
+            f"{MAX_GROUND_SIZE} indices are admitted."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_valid_subset(self) -> Self:
@@ -114,8 +133,18 @@ class MatroidClosureRequest(StrictModel):
 class MatroidClosureResult(MatroidClosureRequest):
     """The closure (flat) of a subset in a linear matroid."""
 
-    closure: tuple[StrictInt, ...] = Field(default=(), max_length=MAX_GROUND_SIZE)
-    rank: StrictInt = Field(ge=0)
+    closure: tuple[StrictInt, ...] = Field(
+        default=(),
+        max_length=MAX_GROUND_SIZE,
+        description=(
+            "The complete flat spanned by `subset`, as distinct ground-set "
+            "indices in increasing order."
+        ),
+    )
+    rank: StrictInt = Field(
+        ge=0,
+        description="The exact rank of `subset` in the declared linear matroid.",
+    )
 
     @model_validator(mode="after")
     def require_valid_closure(self) -> Self:

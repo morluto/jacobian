@@ -11,7 +11,7 @@ from jacobian.math.matroids import (
     compute_matroid_closure,
     matroid_rank,
 )
-from jacobian.math.matroids._models import MatroidClosureRequest
+from jacobian.math.matroids._models import MAX_GROUND_SIZE, MatroidClosureRequest
 from jacobian.math.matroids._tools import compute_closure
 
 
@@ -104,6 +104,35 @@ class TestClosure:
         m = _matroid(5, [(1, 0), (0, 1)], 2)
         with pytest.raises(ValidationError) as exc_info:
             MatroidClosureRequest(matroid=m, subset=(2,))
+        assert exc_info.value.errors()[0]["type"] == "matroid.subset.invalid"
+
+    def test_catalog_schema_publishes_and_dispatch_enforces_subset_contract(self):
+        """The discoverable rule is the same one that ``math.run`` applies."""
+        from jacobian.catalog.catalog import Catalog
+        from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+
+        catalog = Catalog.open()
+        descriptor = catalog.inspect("matroid.closure.compute")
+        assert descriptor is not None
+        schema = descriptor.input_schema
+        subset_schema = schema["properties"]["subset"]
+        assert subset_schema["maxItems"] == MAX_GROUND_SIZE
+        assert subset_schema["description"] == (
+            "Distinct ground-set indices. Every index must lie in "
+            "0..matroid.matrix.columns-1; at most "
+            f"{MAX_GROUND_SIZE} indices are admitted."
+        )
+
+        operation = catalog.operation("matroid.closure.compute")
+        assert operation is not None
+        advertised = operation.examples[0].input
+        result = invoke_operation("matroid.closure.compute", advertised, catalog)
+        assert result.output["closure"] == [0, 1, 2]
+        assert result.output["rank"] == 2
+
+        duplicate_subset = {**advertised, "subset": [0, 0]}
+        with pytest.raises(OperationRequestValidationError) as exc_info:
+            invoke_operation("matroid.closure.compute", duplicate_subset, catalog)
         assert exc_info.value.errors()[0]["type"] == "matroid.subset.invalid"
 
     def test_native_closure_validates_indices(self):

@@ -98,6 +98,17 @@ def test_all_vertices_of_empty_graph_form_a_maximal_set() -> None:
     assert result.decision == "MAXIMAL"
 
 
+def test_null_graph_makes_the_empty_candidate_maximal() -> None:
+    """The canonical value carries the null graph; the empty candidate set
+    is its unique maximal independent set."""
+
+    result = compute_maximal_independent_set_decision(
+        _request(vertex_count=0, edges=[], candidate_set=[])
+    )
+
+    assert result.decision == "MAXIMAL"
+
+
 @pytest.mark.parametrize(
     ("candidate_set", "message"),
     [
@@ -636,6 +647,28 @@ class TestVertexKColorability:
             vertex_count=4,
             edges=((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)),
         )
+
+    def test_null_graph_is_decided_colorable_with_an_empty_witness(self):
+        """The null graph is k-colorable for every palette; the produced
+        result must round-trip through full validation."""
+        from jacobian.math.graphs.coloring._models import (
+            KColorabilityRequest,
+            KColorabilityResult,
+        )
+        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+        from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+
+        result = compute_k_colorability(
+            KColorabilityRequest(
+                graph=IndexedSimpleUndirectedGraph(vertex_count=0, edges=()),
+                colors=3,
+            )
+        )
+        assert result.status == "DECIDED"
+        assert result.colorable is True
+        assert result.coloring == ()
+        assert result.vertex_count == 0
+        assert KColorabilityResult.model_validate(result.model_dump()) == result
 
     def test_triangle_decision_carries_a_proper_witness(self):
         from jacobian.math.graphs.coloring._models import KColorabilityRequest

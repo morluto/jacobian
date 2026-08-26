@@ -32,6 +32,25 @@ def test_indexed_graph_value_composes_with_coloring_and_spectral_requests() -> N
     assert GraphSpectrumRequest(graph=graph).graph is graph
 
 
+def test_null_graph_composes_and_yields_the_empty_spectrum() -> None:
+    """The shared canonical value admits the null graph end to end: both
+    spectral conventions decide it exactly with no eigenvalues."""
+    from jacobian.math.graphs.coloring._models import KColorabilityRequest
+
+    null_graph = _graph(0, ())
+    assert KColorabilityRequest(graph=null_graph, colors=2).graph is null_graph
+
+    adjacency = compute_adjacency_spectrum(GraphSpectrumRequest(graph=null_graph))
+    assert adjacency.eigenvalues == ()
+    assert adjacency.multiplicities == ()
+    assert GraphSpectrumResult.model_validate(adjacency.model_dump()) == adjacency
+
+    laplacian = compute_laplacian_spectrum(GraphSpectrumRequest(graph=null_graph))
+    assert laplacian.eigenvalues == ()
+    assert laplacian.multiplicities == ()
+    assert GraphSpectrumResult.model_validate(laplacian.model_dump()) == laplacian
+
+
 def test_spectral_request_rejects_the_shared_value_outside_its_envelope() -> None:
     graph = _graph(33, tuple((index, index + 1) for index in range(32)))
 

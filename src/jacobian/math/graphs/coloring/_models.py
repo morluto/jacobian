@@ -273,7 +273,7 @@ class KColorabilityResult(StrictModel):
     status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED"] = "DECIDED"
     colorable: bool | None = None
     coloring: tuple[int, ...] | None = None
-    vertex_count: int = Field(ge=1, le=64)
+    vertex_count: int = Field(ge=0, le=64)
 
     @model_validator(mode="after")
     def require_claim_consistency(self) -> Self:

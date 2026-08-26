@@ -87,9 +87,14 @@ class SimpleUndirectedGraph(StrictModel):
 
 
 class IndexedSimpleUndirectedGraph(StrictModel):
-    """A finite simple undirected graph on the integer axis ``0..n-1``."""
+    """A finite simple undirected graph on the integer axis ``0..n-1``.
 
-    vertex_count: int = Field(ge=1, le=MAX_INDEXED_SIMPLE_GRAPH_VERTICES)
+    The null graph (``vertex_count=0`` with no edges) is a valid canonical
+    value; operations admitting only nonempty graphs enforce that envelope
+    in their own request validators.
+    """
+
+    vertex_count: int = Field(ge=0, le=MAX_INDEXED_SIMPLE_GRAPH_VERTICES)
     edges: tuple[tuple[int, int], ...] = Field(
         max_length=MAX_INDEXED_SIMPLE_GRAPH_EDGES
     )

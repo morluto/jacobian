@@ -106,6 +106,13 @@ class TestAdjacencyCharacteristicPolynomial:
         result = compute_adjacency_characteristic_polynomial(_request([], 1))
         assert _coeffs(result.polynomial) == [Fraction(0), Fraction(1)]
 
+    def test_null_graph(self):
+        # The 0x0 matrix has det(xI - A) equal to the empty product 1.
+        result = compute_adjacency_characteristic_polynomial(_request([], 0))
+        assert _coeffs(result.polynomial) == [Fraction(1)]
+        laplacian = compute_laplacian_characteristic_polynomial(_request([], 0))
+        assert _coeffs(laplacian.polynomial) == [Fraction(1)]
+
     def test_result_is_monic(self):
         result = compute_adjacency_characteristic_polynomial(
             _request([[0, 1], [1, 2], [0, 2]], 3)

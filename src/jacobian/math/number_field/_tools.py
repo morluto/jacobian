@@ -41,7 +41,7 @@ NUMBER_FIELD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     nf_operation(
         "number_field.discriminant.compute",
         "Compute the discriminant of a number field",
-        "Compute the discriminant of a number field defined by one irreducible polynomial using SymPy.",
+        "Compute the discriminant of a number field defined by one irreducible polynomial in an isolated SymPy worker, or return UNKNOWN if its bounded execution cannot establish a result.",
         NumberFieldRequest,
         NumberFieldDiscriminantResult,
         compute_nf_discriminant,

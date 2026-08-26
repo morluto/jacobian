@@ -7,7 +7,6 @@ from collections.abc import Callable
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._certification_models import (
     CertifiedFactorizationRequest,
     CertifiedFactorizationResult,
@@ -18,6 +17,8 @@ from jacobian.math.number_theory._direct_factorization_models import (
     DivisorListResult,
     NonzeroFactorizationRequest,
     PrimeFactorizationResult,
+    RadicalResult,
+    SquarefreeResult,
 )
 from jacobian.math.number_theory._factorization_kernels import (
     compute_pratt_certificate,
@@ -30,7 +31,6 @@ from jacobian.math.number_theory._factorization_kernels import (
 )
 from jacobian.math.number_theory._integer_models import (
     ArithmeticFunctionRequest,
-    BooleanResult,
 )
 
 
@@ -66,13 +66,13 @@ def _compute_prime_factorization(
 
 def _compute_squarefree(
     request: ArithmeticFunctionRequest,
-) -> BooleanResult:
+) -> SquarefreeResult:
     return decide_squarefree(request)
 
 
 def _compute_radical(
     request: ArithmeticFunctionRequest,
-) -> IntegerValue:
+) -> RadicalResult:
     return compute_radical(request)
 
 
@@ -103,7 +103,13 @@ FACTORIZATION_OPERATIONS = (
     _operation(
         operation_id="integer.factor.certified_compute",
         title="Compute a certified integer factorization",
-        description="Factor one bounded 30-digit integer (~100 bits) using subexponential methods (Pollard rho, Pollard p-1, ECM via sympy.ntheory.factorint), returning the complete prime-power factorization with per-factor Pratt primality certificates.",
+        description=(
+            "Factor one bounded 30-digit integer (~100 bits) in an isolated "
+            "subexponential worker (Pollard rho, Pollard p-1, ECM via "
+            "sympy.ntheory.factorint), returning a complete prime-power "
+            "factorization with per-factor Pratt certificates, or UNKNOWN if "
+            "the worker cannot establish a complete result within its envelope."
+        ),
         request_model=CertifiedFactorizationRequest,
         result_model=CertifiedFactorizationResult,
         implementation=_compute_certified_factorization,
@@ -138,7 +144,10 @@ FACTORIZATION_OPERATIONS = (
     _operation(
         operation_id="integer.compute.divisors",
         title="Enumerate positive divisors",
-        description="Enumerate every positive divisor exactly.",
+        description=(
+            "Enumerate every positive divisor exactly, or return UNKNOWN when "
+            "the bounded factorization worker cannot establish the enumeration."
+        ),
         request_model=NonzeroFactorizationRequest,
         result_model=DivisorListResult,
         implementation=_compute_divisors,
@@ -152,7 +161,10 @@ FACTORIZATION_OPERATIONS = (
     _operation(
         operation_id="integer.compute.proper_divisors",
         title="Enumerate proper divisors",
-        description="Enumerate every positive proper divisor exactly.",
+        description=(
+            "Enumerate every positive proper divisor exactly, or return UNKNOWN "
+            "when the bounded factorization worker cannot establish it."
+        ),
         request_model=NonzeroFactorizationRequest,
         result_model=DivisorListResult,
         implementation=_compute_proper_divisors,
@@ -170,7 +182,8 @@ FACTORIZATION_OPERATIONS = (
         title="Factor an integer",
         description=(
             "Factor an integer into prime powers and return the complete "
-            "prime-power factorization."
+            "prime-power factorization, or UNKNOWN when the bounded worker "
+            "cannot establish it."
         ),
         request_model=NonzeroFactorizationRequest,
         result_model=PrimeFactorizationResult,
@@ -187,9 +200,12 @@ FACTORIZATION_OPERATIONS = (
     _operation(
         operation_id="integer.decide.squarefree",
         title="Decide squarefreeness",
-        description="Decide whether a bounded nonnegative integer is square-free.",
+        description=(
+            "Decide whether a bounded nonnegative integer is square-free, or "
+            "return UNKNOWN when the bounded factorization worker cannot decide."
+        ),
         request_model=ArithmeticFunctionRequest,
-        result_model=BooleanResult,
+        result_model=SquarefreeResult,
         implementation=_compute_squarefree,
         tags=("number-theory", "predicate"),
         examples=(
@@ -199,9 +215,12 @@ FACTORIZATION_OPERATIONS = (
     _operation(
         operation_id="integer.compute.radical",
         title="Compute integer radical",
-        description="Compute the product of distinct prime divisors exactly.",
+        description=(
+            "Compute the product of distinct prime divisors exactly, or return "
+            "UNKNOWN when the bounded factorization worker cannot establish it."
+        ),
         request_model=ArithmeticFunctionRequest,
-        result_model=IntegerValue,
+        result_model=RadicalResult,
         implementation=_compute_radical,
         tags=("number-theory", "arithmetic-function"),
         examples=(example("radical_360", "Compute the radical of 360.", {"n": 360}),),

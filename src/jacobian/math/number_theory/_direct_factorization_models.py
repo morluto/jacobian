@@ -1,6 +1,6 @@
 """Typed contracts and source-bound replay for direct factorization.
 
-These models own the small, synchronous factorization envelope used by the
+These models own the small isolated-worker factorization envelope used by the
 divisor-enumeration and prime-factorization operations.  Certified
 factorization and primality certificates have a distinct, larger envelope.
 """
@@ -18,9 +18,8 @@ from jacobian.math.number_theory._models import (
     _validation_error,
 )
 
-# ``factorint`` is used both by the direct kernels and source-bound result
-# replay.  Twenty decimal digits keep a hard semiprime within the synchronous
-# envelope while still admitting ordinary exact divisor and factor workflows.
+# Twenty decimal digits keep the worker's factorization and bounded replay
+# envelope useful for ordinary exact divisor and prime-factor workflows.
 MAX_DIRECT_FACTORIZATION_DIGITS = 20
 MAX_DIRECT_DIVISORS = 4_096
 MAX_DIRECT_FACTOR_ENTRIES = 256
@@ -58,15 +57,16 @@ class DivisorListResult(StrictModel):
     """An ordered list of positive divisors of one nonzero integer.
 
     Retains the canonical source integer and the operation's divisor
-    convention so validation replays the exact enumeration: the list is
-    exactly all positive divisors of ``abs(value)`` (proper ones exclude
-    ``abs(value)`` itself) in ascending order.  The list may be empty:
+    convention. Structural validation keeps the representation safe; the
+    explicit owner verifier replays the exact enumeration in a bounded worker.
+    The list may be empty:
     ``proper_divisors(±1)`` has no positive proper divisors.  Zero remains
     not-applicable (handled at the operation layer).  The source carries the
     same 20-digit factorization bound as the producing requests, so replay
     never factors outside the operation's admitted work envelope.
     """
 
+    status: Literal["COMPLETE", "UNKNOWN"] = "COMPLETE"
     value: FactorizationInteger
     divisors: tuple[BoundedInteger, ...] = Field(
         min_length=0,
@@ -75,13 +75,33 @@ class DivisorListResult(StrictModel):
     convention: Literal["ALL_POSITIVE_DIVISORS", "PROPER_DIVISORS"] = (
         "ALL_POSITIVE_DIVISORS"
     )
+    detail: str | None = None
+
+    @classmethod
+    def _unknown(
+        cls,
+        *,
+        value: str,
+        convention: Literal["ALL_POSITIVE_DIVISORS", "PROPER_DIVISORS"],
+        detail: str,
+    ) -> Self:
+        return cls(
+            status="UNKNOWN",
+            value=value,
+            divisors=(),
+            convention=convention,
+            detail=detail,
+        )
 
     @model_validator(mode="after")
     def require_source_enumeration(self) -> Self:
-        from jacobian.math.number_theory._factorization_kernels import (
-            _replayed_divisors,
-        )
-
+        if self.status == "UNKNOWN":
+            if self.divisors or not self.detail:
+                raise _validation_error(
+                    "unknown_divisor_enumeration_shape",
+                    "an unknown divisor enumeration has no divisors and includes a detail",
+                )
+            return self
         values = [int(divisor) for divisor in self.divisors]
         if any(value < 1 for value in values):
             raise _validation_error(
@@ -100,36 +120,40 @@ class DivisorListResult(StrictModel):
             raise _validation_error(
                 "zero_has_infinitely_many_divisors", "zero has infinitely many divisors"
             )
-        if self.divisors != _replayed_divisors(
-            value, proper=self.convention == "PROPER_DIVISORS"
-        ):
-            raise _validation_error(
-                "divisor_list_must_enumerate_the_divisors_of_the_source",
-                "divisor list must enumerate the divisors of the source",
-            )
         return self
 
 
 class PrimeFactorizationResult(StrictModel):
     """The complete prime-power factorization of one nonzero integer.
 
-    Retains the canonical source integer so validation replays the defining
-    invariant: prime bases are strictly increasing proven primes with
-    positive exponents whose product reconstructs ``abs(value)`` exactly.
+    Retains the canonical source integer. Structural validation checks the
+    coordinate form; the explicit owner verifier establishes primality and
+    completeness.
     The factor list may be empty: ``±1`` has no prime factors.  Zero remains
     not-applicable (handled at the operation layer).
     """
 
-    value: BoundedInteger
+    status: Literal["COMPLETE", "UNKNOWN"] = "COMPLETE"
+    value: FactorizationInteger
     factors: tuple[PrimePower, ...] = Field(
         min_length=0,
         max_length=MAX_DIRECT_FACTOR_ENTRIES,
     )
+    detail: str | None = None
+
+    @classmethod
+    def _unknown(cls, *, value: str, detail: str) -> Self:
+        return cls(status="UNKNOWN", value=value, factors=(), detail=detail)
 
     @model_validator(mode="after")
     def require_source_factorization(self) -> Self:
-        from sympy import isprime
-
+        if self.status == "UNKNOWN":
+            if self.factors or not self.detail:
+                raise _validation_error(
+                    "unknown_prime_factorization_shape",
+                    "an unknown prime factorization has no factors and includes a detail",
+                )
+            return self
         primes = [factor.prime for factor in self.factors]
         if len(set(primes)) != len(primes):
             raise _validation_error(
@@ -151,9 +175,9 @@ class PrimeFactorizationResult(StrictModel):
                     "prime_bases_must_be_strictly_ascending",
                     "prime bases must be strictly ascending",
                 )
-            if prime < 2 or not isprime(prime):
+            if prime < 2:
                 raise _validation_error(
-                    "f_factor_prime_is_not_prime", f"{factor.prime} is not prime"
+                    "factor_prime_domain", "factor primes must be at least 2"
                 )
             power_value = 1
             for _ in range(factor.power):
@@ -174,5 +198,53 @@ class PrimeFactorizationResult(StrictModel):
             raise _validation_error(
                 "prime_powers_must_multiply_to_abs_value",
                 "prime powers must multiply to abs(value)",
+            )
+        return self
+
+
+class SquarefreeResult(StrictModel):
+    """A squarefreeness decision, or an explicit non-conclusion."""
+
+    status: Literal["SQUAREFREE", "NOT_SQUAREFREE", "UNKNOWN"]
+    n: int = Field(ge=0, le=10_000)
+    detail: str | None = None
+
+    @classmethod
+    def _unknown(cls, *, n: int, detail: str) -> Self:
+        return cls(status="UNKNOWN", n=n, detail=detail)
+
+    @model_validator(mode="after")
+    def require_unknown_detail(self) -> Self:
+        if self.status == "UNKNOWN" and not self.detail:
+            raise _validation_error(
+                "unknown_squarefree_shape",
+                "an unknown squarefreeness result includes a detail",
+            )
+        return self
+
+
+class RadicalResult(StrictModel):
+    """The exact radical of one admitted integer, or an explicit non-conclusion."""
+
+    status: Literal["COMPLETE", "UNKNOWN"] = "COMPLETE"
+    n: int = Field(ge=0, le=10_000)
+    value: BoundedInteger | None = None
+    detail: str | None = None
+
+    @classmethod
+    def _unknown(cls, *, n: int, detail: str) -> Self:
+        return cls(status="UNKNOWN", n=n, detail=detail)
+
+    @model_validator(mode="after")
+    def require_complete_value(self) -> Self:
+        if self.status == "COMPLETE" and self.value is None:
+            raise _validation_error(
+                "complete_radical_requires_value",
+                "a complete radical result includes its exact value",
+            )
+        if self.status == "UNKNOWN" and (self.value is not None or not self.detail):
+            raise _validation_error(
+                "unknown_radical_shape",
+                "an unknown radical has no value and includes a detail",
             )
         return self

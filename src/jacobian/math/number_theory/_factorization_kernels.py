@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import math
+import json
+import sys
+from pathlib import Path
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._certification_models import (
     CertifiedFactor,
     CertifiedFactorizationRequest,
@@ -18,10 +19,11 @@ from jacobian.math.number_theory._direct_factorization_models import (
     DivisorListResult,
     FactorizationRequest,
     PrimeFactorizationResult,
+    RadicalResult,
+    SquarefreeResult,
 )
 from jacobian.math.number_theory._integer_models import (
     ArithmeticFunctionRequest,
-    BooleanResult,
     PrimePower,
 )
 
@@ -30,6 +32,12 @@ from jacobian.math.number_theory._integer_models import (
 # ---------------------------------------------------------------------------
 
 _PRATT_BASE_PRIME = 2
+_CERTIFIED_FACTORIZATION_WORKER = (
+    Path(__file__).resolve().with_name("_certified_factorization_worker.py")
+)
+_DIRECT_FACTORIZATION_WORKER = (
+    Path(__file__).resolve().with_name("_direct_factorization_worker.py")
+)
 
 
 def _build_pratt_certificate(prime: int) -> PrattCertificateNode:
@@ -89,7 +97,7 @@ def compute_pratt_certificate(
 # ---------------------------------------------------------------------------
 
 
-def factorize_certified(
+def _factorize_certified_in_process(
     request: CertifiedFactorizationRequest,
 ) -> CertifiedFactorizationResult:
     """Factor one bounded integer using subexponential methods.
@@ -116,24 +124,165 @@ def factorize_certified(
     )
 
 
+def factorize_certified(
+    request: CertifiedFactorizationRequest,
+) -> CertifiedFactorizationResult:
+    """Factor through a killable worker; a stop establishes no factor claim."""
+
+    from jacobian.process import (
+        ProcessResourceLimits,
+        run_bounded_process,
+        worker_environment,
+    )
+
+    completed = run_bounded_process(
+        [sys.executable, str(_CERTIFIED_FACTORIZATION_WORKER)],
+        input_bytes=json.dumps(
+            {"value": request.value}, separators=(",", ":")
+        ).encode(),
+        timeout_seconds=60.0,
+        environment=worker_environment(locale="C.UTF-8"),
+        stdout_limit=1024 * 1024,
+        stderr_limit=64 * 1024,
+        resource_limits=ProcessResourceLimits(address_space_bytes=1024 * 1024 * 1024),
+    )
+    if (
+        completed.timed_out
+        or completed.cancelled
+        or completed.stdout_exceeded
+        or completed.stderr_exceeded
+        or completed.returncode != 0
+    ):
+        return CertifiedFactorizationResult._unknown(
+            value=request.value,
+            detail="the bounded factorization worker did not establish a complete result",
+        )
+    try:
+        response = json.loads(completed.stdout.decode("utf-8"))
+        if response.get("ok") is not True:
+            raise ValueError("worker failure")
+        return CertifiedFactorizationResult.model_validate(response["result"])
+    except (KeyError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+        return CertifiedFactorizationResult._unknown(
+            value=request.value,
+            detail="the bounded factorization worker returned malformed output",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Divisor and factorization-derived operations
 # ---------------------------------------------------------------------------
 
 
-def _replayed_divisors(value: int, *, proper: bool) -> tuple[str, ...]:
-    from sympy import divisors
+def _bounded_direct_factorization(value: int) -> tuple[PrimePower, ...] | None:
+    """Factor one admitted nonzero integer in a killable worker.
 
-    return tuple(str(item) for item in divisors(abs(value), proper=proper))
+    ``None`` is an operational non-conclusion, never a factor claim.  The
+    caller owns projection into its operation-specific typed result.
+    """
+
+    from jacobian.process import (
+        ProcessResourceLimits,
+        run_bounded_process,
+        worker_environment,
+    )
+
+    completed = run_bounded_process(
+        [sys.executable, str(_DIRECT_FACTORIZATION_WORKER)],
+        input_bytes=json.dumps({"value": str(value)}, separators=(",", ":")).encode(),
+        timeout_seconds=60.0,
+        environment=worker_environment(locale="C.UTF-8"),
+        stdout_limit=64 * 1024,
+        stderr_limit=64 * 1024,
+        resource_limits=ProcessResourceLimits(address_space_bytes=1024 * 1024 * 1024),
+    )
+    if (
+        completed.timed_out
+        or completed.cancelled
+        or completed.stdout_exceeded
+        or completed.stderr_exceeded
+        or completed.returncode != 0
+    ):
+        return None
+    try:
+        response = json.loads(completed.stdout.decode("utf-8"))
+        raw_factors = response["factors"]
+        if not isinstance(raw_factors, list):
+            raise ValueError("factors must be a list")
+        factors = tuple(
+            PrimePower.model_validate({"prime": pair[0], "power": pair[1]})
+            for pair in raw_factors
+        )
+        if len(factors) > 256:
+            raise ValueError("too many factors")
+        if [factor.prime for factor in factors] != sorted(
+            factor.prime for factor in factors
+        ) or len({factor.prime for factor in factors}) != len(factors):
+            raise ValueError("noncanonical factors")
+        return factors
+    except (
+        IndexError,
+        KeyError,
+        TypeError,
+        ValueError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+    ):
+        return None
+
+
+def _divisors_from_factors(
+    factors: tuple[PrimePower, ...], *, proper: bool, value: int
+) -> tuple[str, ...]:
+    divisors = [1]
+    for factor in factors:
+        prime = int(factor.prime)
+        power_values = [1]
+        for _ in range(factor.power):
+            power_values.append(power_values[-1] * prime)
+        divisors = [base * power for base in divisors for power in power_values]
+    if len(divisors) > 4_096:
+        raise ValueError("divisor output exceeds admitted bound")
+    ordered = tuple(str(divisor) for divisor in sorted(divisors))
+    return ordered[:-1] if proper else ordered
+
+
+def verify_divisor_list_result(result: DivisorListResult) -> bool:
+    """Replay one bounded divisor claim through the owner kernel."""
+
+    if result.status != "COMPLETE":
+        return False
+    factors = _bounded_direct_factorization(int(result.value))
+    return factors is not None and result.divisors == _divisors_from_factors(
+        factors,
+        proper=result.convention == "PROPER_DIVISORS",
+        value=int(result.value),
+    )
+
+
+def verify_prime_factorization_result(result: PrimeFactorizationResult) -> bool:
+    """Replay one complete prime-factorization claim through the owner kernel."""
+
+    if result.status != "COMPLETE":
+        return False
+    factors = _bounded_direct_factorization(int(result.value))
+    return factors is not None and result.factors == factors
 
 
 def enumerate_divisors(request: FactorizationRequest) -> DivisorListResult:
     value = int(request.value)
     if value == 0:
         raise ValueError("zero has infinitely many divisors")
+    factors = _bounded_direct_factorization(value)
+    if factors is None:
+        return DivisorListResult._unknown(
+            value=request.value,
+            convention="ALL_POSITIVE_DIVISORS",
+            detail="the bounded factorization worker did not establish every divisor",
+        )
     return DivisorListResult(
         value=request.value,
-        divisors=_replayed_divisors(value, proper=False),
+        divisors=_divisors_from_factors(factors, proper=False, value=value),
         convention="ALL_POSITIVE_DIVISORS",
     )
 
@@ -142,39 +291,60 @@ def enumerate_proper_divisors(request: FactorizationRequest) -> DivisorListResul
     value = int(request.value)
     if value == 0:
         raise ValueError("zero has infinitely many divisors")
+    factors = _bounded_direct_factorization(value)
+    if factors is None:
+        return DivisorListResult._unknown(
+            value=request.value,
+            convention="PROPER_DIVISORS",
+            detail="the bounded factorization worker did not establish every proper divisor",
+        )
     return DivisorListResult(
         value=request.value,
-        divisors=_replayed_divisors(value, proper=True),
+        divisors=_divisors_from_factors(factors, proper=True, value=value),
         convention="PROPER_DIVISORS",
     )
 
 
 def factorize_primes(request: FactorizationRequest) -> PrimeFactorizationResult:
-    from sympy import factorint
-
     value = int(request.value)
     if value == 0:
         raise ValueError("zero has no finite prime factorization")
-    return PrimeFactorizationResult(
-        value=request.value,
-        factors=tuple(
-            PrimePower(prime=str(prime), power=int(power))
-            for prime, power in sorted(factorint(abs(value)).items())
-        ),
-    )
+    factors = _bounded_direct_factorization(value)
+    if factors is None:
+        return PrimeFactorizationResult._unknown(
+            value=request.value,
+            detail="the bounded factorization worker did not establish a complete result",
+        )
+    return PrimeFactorizationResult(value=request.value, factors=factors)
 
 
-def decide_squarefree(request: ArithmeticFunctionRequest) -> BooleanResult:
-    from sympy import factorint
-
+def decide_squarefree(request: ArithmeticFunctionRequest) -> SquarefreeResult:
     if request.n == 0:
-        return BooleanResult(holds=False)
-    return BooleanResult(
-        holds=all(power == 1 for power in factorint(request.n).values())
+        return SquarefreeResult(status="NOT_SQUAREFREE", n=request.n)
+    factors = _bounded_direct_factorization(request.n)
+    if factors is None:
+        return SquarefreeResult._unknown(
+            n=request.n,
+            detail="the bounded factorization worker did not establish squarefreeness",
+        )
+    return SquarefreeResult(
+        status="SQUAREFREE"
+        if all(factor.power == 1 for factor in factors)
+        else "NOT_SQUAREFREE",
+        n=request.n,
     )
 
 
-def compute_radical(request: ArithmeticFunctionRequest) -> IntegerValue:
-    from sympy import factorint
-
-    return IntegerValue(value=str(math.prod(factorint(request.n))))
+def compute_radical(request: ArithmeticFunctionRequest) -> RadicalResult:
+    if request.n == 0:
+        return RadicalResult(n=0, value="0")
+    factors = _bounded_direct_factorization(request.n)
+    if factors is None:
+        return RadicalResult._unknown(
+            n=request.n,
+            detail="the bounded factorization worker did not establish the radical",
+        )
+    radical = 1
+    for factor in factors:
+        radical *= int(factor.prime)
+    return RadicalResult(n=request.n, value=str(radical))

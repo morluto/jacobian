@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from tests.integration.algebra._support import algebra_validation_error
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_field import ring_of_integers
 from jacobian.math.number_field._models import NumberFieldRequest
 from jacobian.math.number_field._operations import compute_nf_discriminant
@@ -157,6 +158,25 @@ def test_integral_basis_is_computed_in_the_defining_power_basis() -> None:
 def test_number_field_requires_a_monic_irreducible_integer_polynomial() -> None:
     with algebra_validation_error():
         NumberFieldRequest(coefficients_descending=("2", "0", "-10"), variable="x")
+
+
+def test_number_field_reducibility_is_an_owner_declared_invalid_request() -> None:
+    request = NumberFieldRequest(coefficients_descending=("1", "0", "-1"), variable="x")
+
+    with pytest.raises(OperationDomainValidationError) as caught:
+        compute_nf_discriminant(request)
+
+    assert caught.value.errors()[0]["type"] == "number_field.not_irreducible"
+
+
+def test_number_field_rejects_oversized_coefficients_before_sympy() -> None:
+    with pytest.raises(ValidationError) as caught:
+        NumberFieldRequest(
+            coefficients_descending=("1" + "0" * 256, "0", "-2"),
+            variable="x",
+        )
+
+    assert caught.value.errors()[0]["type"] == "number_field.coefficient_digits"
 
 
 def test_recurrence_finder_solves_for_coefficients() -> None:

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-import networkx as nx
-from networkx.algorithms import isomorphism as nx_isomorphism
+import json
+import sys
+from pathlib import Path
 
 from jacobian.math.graphs.isomorphism._canonicalization import (
     canonicalize_colored_graph_data,
@@ -21,38 +20,79 @@ from jacobian.math.graphs.isomorphism._models import (
 )
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
-
-def _build_graph(graph: SimpleGraph) -> nx.Graph[int] | nx.DiGraph[int]:
-    """Build a NetworkX graph from a wire ``SimpleGraph``."""
-    g: nx.Graph[int] | nx.DiGraph[int] = nx.DiGraph() if graph.directed else nx.Graph()
-    g.add_nodes_from(range(graph.vertex_count))
-    for source, target in graph.edges:
-        g.add_edge(source, target)
-    return g
+_VF2_WORKER = Path(__file__).resolve().with_name("_vf2_worker.py")
+_VF2_WALL_SECONDS = 60.0
+_VF2_STDOUT_LIMIT = 256 * 1024
+_VF2_STDERR_LIMIT = 64 * 1024
+_VF2_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 
 
 def _vertex_mapping(
     graph_a: SimpleGraph,
     graph_b: SimpleGraph,
 ) -> list[VertexMappingPair] | None:
-    """Return an explicit isomorphism witness, or ``None`` when absent.
+    """Return a worker-derived witness, or ``None`` when absent.
 
-    Uses NetworkX's ``GraphMatcher``/``DiGraphMatcher`` so the returned
-    mapping is a concrete bijection the caller can independently verify.
+    VF2 is deliberately isolated because its search cannot be interrupted in
+    the host process.  A stopped or malformed worker has no mathematical
+    conclusion and is represented by ``None`` only through the separate
+    ``UNKNOWN`` outcome in :func:`decide_graph_isomorphism`.
     """
-    g_a = _build_graph(graph_a)
-    g_b = _build_graph(graph_b)
-    if graph_a.directed:
-        matcher: Any = nx_isomorphism.DiGraphMatcher(g_a, g_b)
-    else:
-        matcher = nx_isomorphism.GraphMatcher(g_a, g_b)
-    if not matcher.is_isomorphic():
-        return None
-    mapping = next(matcher.isomorphisms_iter())
-    return [
-        VertexMappingPair(from_vertex=src, to_vertex=dst)
-        for src, dst in sorted(mapping.items())
-    ]
+    from jacobian.process import (
+        ProcessResourceLimits,
+        run_bounded_process,
+        worker_environment,
+    )
+
+    request = {
+        "graph_a": {
+            "vertex_count": graph_a.vertex_count,
+            "directed": graph_a.directed,
+            "edges": graph_a.edges,
+        },
+        "graph_b": {
+            "vertex_count": graph_b.vertex_count,
+            "directed": graph_b.directed,
+            "edges": graph_b.edges,
+        },
+    }
+    completed = run_bounded_process(
+        [sys.executable, str(_VF2_WORKER)],
+        input_bytes=json.dumps(request, separators=(",", ":")).encode("utf-8"),
+        timeout_seconds=_VF2_WALL_SECONDS,
+        environment=worker_environment(locale="C.UTF-8"),
+        stdout_limit=_VF2_STDOUT_LIMIT,
+        stderr_limit=_VF2_STDERR_LIMIT,
+        resource_limits=ProcessResourceLimits(
+            address_space_bytes=_VF2_ADDRESS_SPACE_BYTES,
+        ),
+    )
+    if (
+        completed.timed_out
+        or completed.cancelled
+        or completed.stdout_exceeded
+        or completed.returncode != 0
+    ):
+        raise RuntimeError("bounded VF2 worker did not establish an outcome")
+    try:
+        response = json.loads(completed.stdout.decode("utf-8"))
+        mapping = response["mapping"] if response["ok"] is True else None
+        if mapping is None:
+            if response.get("ok") is True:
+                return None
+            raise ValueError("worker reported a failure")
+        if not isinstance(mapping, list):
+            raise ValueError("worker mapping is malformed")
+        pairs = [(int(source), int(target)) for source, target in mapping]
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+    ) as exc:
+        raise RuntimeError("bounded VF2 worker returned malformed output") from exc
+    return [VertexMappingPair(from_vertex=src, to_vertex=dst) for src, dst in pairs]
 
 
 def decide_graph_isomorphism(
@@ -63,7 +103,10 @@ def decide_graph_isomorphism(
     # level, but keep a defense-in-depth check at the domain boundary).
     if request.graph_a.vertex_count != request.graph_b.vertex_count:
         raise ValueError("both graphs must have the same vertex count")
-    mapping = _vertex_mapping(request.graph_a, request.graph_b)
+    try:
+        mapping = _vertex_mapping(request.graph_a, request.graph_b)
+    except RuntimeError:
+        return GraphIsomorphismResult(status="UNKNOWN", vertex_mapping=())
     if mapping is None:
         return GraphIsomorphismResult(status="NOT_ISOMORPHIC", vertex_mapping=())
     return GraphIsomorphismResult(

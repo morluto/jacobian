@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -18,7 +20,7 @@ from jacobian.math.graphs.isomorphism._operations import (
 # ---------------------------------------------------------------------------
 
 
-def _decide(graph_a: dict, graph_b: dict) -> GraphIsomorphismResult:
+def _decide(graph_a: dict[str, Any], graph_b: dict[str, Any]) -> GraphIsomorphismResult:
     return decide_graph_isomorphism(
         GraphIsomorphismRequest.model_validate({"graph_a": graph_a, "graph_b": graph_b})
     )
@@ -36,7 +38,9 @@ def _complete_edges(n: int) -> list[tuple[int, int]]:
     return [(i, j) for i in range(n) for j in range(i + 1, n)]
 
 
-def _is_mapping_valid_isomorphism(graph_a: dict, graph_b: dict, mapping: tuple) -> bool:
+def _is_mapping_valid_isomorphism(
+    graph_a: dict[str, Any], graph_b: dict[str, Any], mapping: tuple[Any, ...]
+) -> bool:
     """Independently verify that ``mapping`` is a graph isomorphism."""
     if not mapping:
         return False

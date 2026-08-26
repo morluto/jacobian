@@ -132,12 +132,30 @@ class CertifiedFactor(StrictModel):
 class CertifiedFactorizationResult(StrictModel):
     """The complete certified prime-power factorization of one integer."""
 
-    status: Literal["COMPLETE"]
+    status: Literal["COMPLETE", "UNKNOWN"]
     value: CertifiedFactorizationInteger
-    factors: tuple[CertifiedFactor, ...] = Field(min_length=1, max_length=256)
+    factors: tuple[CertifiedFactor, ...] = Field(min_length=0, max_length=256)
+    detail: str | None = Field(default=None, max_length=1_024)
 
     @model_validator(mode="after")
     def bind_decomposition(self) -> Self:
+        if self.status == "UNKNOWN":
+            if self.factors:
+                raise _validation_error(
+                    "unknown_factorization_has_no_factors",
+                    "an unknown factorization must not carry partial factors",
+                )
+            if self.detail is None:
+                raise _validation_error(
+                    "unknown_factorization_requires_detail",
+                    "an unknown factorization must state its execution condition",
+                )
+            return self
+        if not self.factors:
+            raise _validation_error(
+                "complete_factorization_requires_factors",
+                "a complete factorization must carry at least one factor",
+            )
         if math.prod(
             parse_canonical_integer(item.prime) ** item.exponent
             for item in self.factors
@@ -173,7 +191,15 @@ class CertifiedFactorizationResult(StrictModel):
         value: CertifiedFactorizationInteger,
         factors: tuple[CertifiedFactor, ...],
     ) -> Self:
-        return cls.model_construct(status="COMPLETE", value=value, factors=factors)
+        return cls.model_construct(
+            status="COMPLETE", value=value, factors=factors, detail=None
+        )
+
+    @classmethod
+    def _unknown(cls, *, value: CertifiedFactorizationInteger, detail: str) -> Self:
+        return cls.model_construct(
+            status="UNKNOWN", value=value, factors=(), detail=detail
+        )
 
 
 class PrimalityCertificateRequest(StrictModel):

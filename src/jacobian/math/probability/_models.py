@@ -44,9 +44,6 @@ MAX_GRAPH_RELIABILITY_VERTICES = 16
 MAX_GRAPH_RELIABILITY_EDGES = 12
 MAX_GRAPH_RELIABILITY_STATES = 1 << MAX_GRAPH_RELIABILITY_EDGES
 MAX_GRAPH_RELIABILITY_LEDGER_BYTES = 9 * 1024 * 1024
-# Reference vertex count used only to derive the work budget below; admission
-# is bounded by that derived budget, not by this count.
-MAX_DIRECTED_BOND_RELIABILITY_VERTICES = 16
 MAX_DIRECTED_BOND_RELIABILITY_ARCS = 12
 MAX_DIRECTED_BOND_RELIABILITY_STATES = 1 << MAX_DIRECTED_BOND_RELIABILITY_ARCS
 MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES = 9 * 1024 * 1024
@@ -57,31 +54,41 @@ MAX_DIRECTED_BOND_RELIABILITY_RATIONAL_DIGITS = (
     + MAX_DIRECTED_BOND_RELIABILITY_ARCS
 )
 # The producer enumerates every arc subset and result validation replays it.
-# Per state and pass it selects open arcs, evaluates every probability, adds
-# open arcs to the directed graph, and traverses them: at most four arc visits.
-# It also adds every graph vertex, visits vertices during descendants, and
-# materializes both the reachable and unreachable partitions: four vertex
-# visits.  The producer constructs one complete state record and validation
-# compares one; each records or compares at most every open arc and its three
-# scalar fields.  The final result also compares a fixed set of aggregate
-# fields, charged below.
+# Per state and pass it selects open arcs, evaluates every probability,
+# collects the endpoints of open arcs into the relevant vertex set (two
+# endpoint visits per open arc), adds those arcs to the directed graph, and
+# traverses them: six arc visits.  Traversal materializes only the relevant
+# vertices -- the two terminals plus both endpoints of every open arc, at most
+# ``2 * arcs + 2`` because a state's open arcs are a subset of the declared
+# arcs -- inserting each once and visiting each once during the search;
+# four relevant-vertex visits charge that with margin.  The producer
+# constructs one complete state record and validation compares one; each
+# records or compares at most every open arc and its three scalar fields.
+# Together that is ``7 * arcs + 4 * relevant + 3`` work per state and pass.
+# The final result also compares a fixed set of aggregate fields, charged
+# below.
+MAX_DIRECTED_BOND_RELIABILITY_RELEVANT_VERTICES = (
+    2 * MAX_DIRECTED_BOND_RELIABILITY_ARCS + 2
+)
 MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK = (
     2
     * MAX_DIRECTED_BOND_RELIABILITY_STATES
     * (
-        5 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
-        + 4 * MAX_DIRECTED_BOND_RELIABILITY_VERTICES
+        7 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
+        + 4 * MAX_DIRECTED_BOND_RELIABILITY_RELEVANT_VERTICES
         + 3
     )
     + 8
 )
-# Loosest declared-vertex count the joint work budget admits, derived by
-# solving ``2 * (4 * vertices + 3) + 8 <= budget`` for the edgeless case that
-# spends no arc work.  Denser sources admit fewer vertices through the same
-# budget; this is the per-field ceiling the published schema can advertise.
-MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES = (
-    (MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK - 8) // 2 - 3
-) // 4
+# Declared vertex labels stopped expanding execution when traversal began
+# materializing only the relevant vertices charged above; admission now pays
+# for them solely as scalars.  ``vertex_count``, ``source``, ``target``, and
+# every arc endpoint travel as bare JSON integers, so the interoperable
+# canonical-JSON range bounds each declared label: values above ``2**53 - 1``
+# cannot cross the transport boundary at all.  That transport maximum is the
+# per-field ceiling the published schema can advertise; label widths inside
+# state records stay charged directly by the ledger estimate below.
+MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES = (1 << 53) - 1
 
 
 def _require_bounded_fraction(
@@ -487,10 +494,10 @@ def _directed_bond_reliability_graph_schema() -> JsonSchemaValue:
     schema["description"] = (
         "A structurally valid finite simple directed graph accepted by this "
         f"complete-enumeration operation: at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} "
-        "arcs and at most "
-        f"{MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES} declared vertices. "
-        "Vertices and arcs share one derived work budget, so sparse graphs may "
-        "declare more vertices while dense graphs admit fewer."
+        f"arcs, and declared vertex labels inside the interoperable JSON "
+        f"integer range (at most {MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES}). "
+        "Traversal work scales with relevant vertices (terminals plus arc "
+        "endpoints), not with declared vertices."
     )
     schema["properties"]["vertex_count"].update(
         maximum=MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES,
@@ -530,18 +537,22 @@ class DirectedBondReliabilityArcProbability(StrictModel):
 class DirectedBondConnectionProbabilitySource(StrictModel):
     __doc__ = f"""One finite directed bond-percolation source in canonical arc order.
 
-    Sources have at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs; the derived producer-and-replay work budget
-    bounds the vertex count, so sparse sources may declare more vertices.  The
-    probability map must contain every graph arc exactly once and is empty for
-    an edgeless source, and source/target are distinct declared vertices.
-    Input arc rows are normalized to lexicographic arc order before state
-    indices and result records are assigned.
+    Sources have at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs; traversal and replay materialize
+    only relevant vertices (the terminals plus arc endpoints), so sparse
+    sources may declare very large vertex counts within the published
+    declared-vertex label bound.  The probability map must contain every
+    graph arc exactly once and is empty for an edgeless source, and
+    source/target are distinct declared vertices.  Input arc rows are
+    normalized to lexicographic arc order before state indices and result
+    records are assigned.
     """
 
     graph: DirectedBondReliabilityGraph = Field(
         description=(
             f"A directed graph with at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs for this "
-            "complete-enumeration operation."
+            "complete-enumeration operation. Traversal work scales with "
+            "relevant vertices (terminals plus arc endpoints), not with "
+            "declared vertices."
         )
     )
     arc_probabilities: tuple[DirectedBondReliabilityArcProbability, ...] = Field(
@@ -607,13 +618,23 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
 
         arc_count = len(canonical_arcs)
         state_count = 1 << arc_count
-        logical_work = (
-            2 * state_count * (5 * arc_count + 4 * self.graph.vertex_count + 3) + 8
+        # Producer and replay materialize only these relevant vertices, so
+        # executed work scales with arc count and this set -- never with the
+        # declared vertex count.
+        relevant_vertices = len(
+            {self.source, self.target}
+            | {vertex for arc in canonical_arcs for vertex in arc}
         )
+        logical_work = 2 * state_count * (7 * arc_count + 4 * relevant_vertices + 3) + 8
         if logical_work > MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK:
             raise _validation_error(
                 "directed bond reliability exceeds the complete producer and "
                 "replay work budget"
+            )
+        if self.graph.vertex_count > MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES:
+            raise _validation_error(
+                "declared vertex labels exceed the interoperable JSON integer "
+                f"range of {MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES}"
             )
         repeated_arc_bytes = (state_count // 2) * sum(
             len(encode_strict_json(list(arc))) + 1 for arc in canonical_arcs
@@ -693,16 +714,19 @@ class DirectedBondConnectionProbabilityRequest(StrictModel):
 
     The request admits at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs, requires one probability for every
     arc exactly once (empty for an edgeless graph), and requires distinct
-    declared source and target vertices.  The derived work budget bounds the
-    vertex count, so sparse graphs may declare more vertices.  It normalizes
-    arc rows lexicographically, so state indices and the source-bound result
-    do not depend on input order.
+    declared source and target vertices.  Traversal work depends only on
+    relevant vertices (terminals plus arc endpoints), so sparse graphs may
+    declare very large vertex counts.  It normalizes arc rows
+    lexicographically, so state indices and the source-bound result do not
+    depend on input order.
     """
 
     graph: DirectedBondReliabilityGraph = Field(
         description=(
             f"A directed graph with at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs for this "
-            "complete-enumeration operation."
+            "complete-enumeration operation. Traversal work scales with "
+            "relevant vertices (terminals plus arc endpoints), not with "
+            "declared vertices."
         )
     )
     arc_probabilities: tuple[DirectedBondReliabilityArcProbability, ...] = Field(
@@ -1332,8 +1356,8 @@ class FiniteConvolutionResult(StrictModel):
 
 __all__ = [
     "MAX_DIRECTED_BOND_RELIABILITY_ARCS",
+    "MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES",
     "MAX_DIRECTED_BOND_RELIABILITY_STATES",
-    "MAX_DIRECTED_BOND_RELIABILITY_VERTICES",
     "MAX_FINITE_CONVOLUTION_PAIRS",
     "MAX_FINITE_DISTRIBUTION_ATOMS",
     "MAX_GAUSSIAN_EXPANSION_PATHS",

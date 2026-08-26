@@ -15,8 +15,8 @@ from jacobian.math.probability._models import (
     MAX_DIRECTED_BOND_RELIABILITY_ARCS,
     MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES,
     MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK,
+    MAX_DIRECTED_BOND_RELIABILITY_RELEVANT_VERTICES,
     MAX_DIRECTED_BOND_RELIABILITY_STATES,
-    MAX_DIRECTED_BOND_RELIABILITY_VERTICES,
     DirectedBondConnectionProbabilityRequest,
     DirectedBondConnectionProbabilityResult,
     DirectedBondConnectionProbabilitySource,
@@ -307,10 +307,10 @@ def test_probability_bound_rejects_thirteenth_arc_before_enumeration() -> None:
 
 
 def test_logical_work_bound_covers_two_pass_reachability_and_state_records() -> None:
-    """The 12-arc, 16-vertex envelope charges both complete passes."""
+    """The 12-arc envelope charges both passes over the relevant vertices."""
     per_state_kernel_work = (
-        4 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
-        + 4 * MAX_DIRECTED_BOND_RELIABILITY_VERTICES
+        6 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
+        + 4 * MAX_DIRECTED_BOND_RELIABILITY_RELEVANT_VERTICES
     )
     per_state_record_work = MAX_DIRECTED_BOND_RELIABILITY_ARCS + 3
 
@@ -354,6 +354,46 @@ def test_zero_and_one_probabilities_keep_complete_state_convention() -> None:
     assert tuple(state.state_index for state in result.states) == (0, 1, 2, 3)
 
 
+def test_edgeless_million_vertex_request_matches_small_equivalent() -> None:
+    """Sparse admission prices executed work, not the declared index space."""
+
+    large = _directed_bond_connection_probability(
+        _request(
+            vertex_count=1_000_000,
+            arcs=(),
+            probabilities=(),
+            source=0,
+            target=999_999,
+        )
+    )
+    small = _directed_bond_connection_probability(
+        _request(vertex_count=2, arcs=(), probabilities=(), source=0, target=1)
+    )
+
+    assert _probability(large) == _probability(small) == 0
+    assert [
+        (
+            state.state_index,
+            state.open_arcs,
+            state.source_reaches_target,
+            state.state_probability.as_fraction(),
+        )
+        for state in large.states
+    ] == [
+        (
+            state.state_index,
+            state.open_arcs,
+            state.source_reaches_target,
+            state.state_probability.as_fraction(),
+        )
+        for state in small.states
+    ]
+    replay = DirectedBondConnectionProbabilityResult.model_validate(
+        large.model_dump(mode="json")
+    )
+    assert replay == large
+
+
 def test_edgeless_source_at_the_declared_vertex_bound_stays_exact() -> None:
     """Sparse admission materializes terminals, not every declared vertex."""
 
@@ -377,7 +417,34 @@ def test_edgeless_source_at_the_declared_vertex_bound_stays_exact() -> None:
     assert replay == result
 
 
-def test_declared_vertex_admission_rejects_one_past_the_derived_bound() -> None:
+def test_dense_source_at_the_relevant_vertex_bound_is_admitted() -> None:
+    """Twelve disjoint arcs plus outside terminals fill the relevant set."""
+
+    arcs = tuple((2 * index, 2 * index + 1) for index in range(12))
+    vertex_count = MAX_DIRECTED_BOND_RELIABILITY_RELEVANT_VERTICES
+    result = _directed_bond_connection_probability(
+        _request(
+            vertex_count=vertex_count,
+            arcs=arcs,
+            probabilities=(Fraction(1, 2),) * len(arcs),
+            source=vertex_count - 2,
+            target=vertex_count - 1,
+        )
+    )
+
+    assert result.arc_count == MAX_DIRECTED_BOND_RELIABILITY_ARCS
+    assert result.visited_states == MAX_DIRECTED_BOND_RELIABILITY_STATES
+    assert all(not state.source_reaches_target for state in result.states)
+    assert _probability(result) == 0
+    replay = DirectedBondConnectionProbabilityResult.model_validate(
+        result.model_dump(mode="json")
+    )
+    assert replay == result
+
+
+def test_declared_vertex_admission_rejects_one_past_the_label_bound() -> None:
+    """The scalar transport ceiling, not traversal work, caps vertex labels."""
+
     with pytest.raises(ValidationError):
         _request(
             vertex_count=MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES + 1,
@@ -408,6 +475,8 @@ class TestPublishedBondReliabilityEnvelope:
                 == MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES
             )
             assert "at most 12 arcs" in graph_schema["description"]
+            assert "relevant vertices" in graph_schema["description"]
+            assert "work budget" not in graph_schema["description"]
 
     def test_shared_carrier_schema_stays_free_of_the_reliability_caps(self) -> None:
         carrier_properties = DirectedGraph.model_json_schema()["properties"]

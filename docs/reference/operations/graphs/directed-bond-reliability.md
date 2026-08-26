@@ -13,11 +13,13 @@ retains the canonical graph, terminal pair, and arc-probability map, then uses
 an explicit bounded verifier to replay the complete enumeration. Reversing the
 terminals is therefore a different event.
 
-The current exact envelope admits at most 12 arcs; the derived
-producer-and-verifier work budget bounds the vertex count, so sparse graphs can
-declare more vertices. The arc limit bounds all 4096 states, the full ledger,
-rational-product digit growth, and both the producer and explicit verifier
-passes.
+The current exact envelope admits at most 12 arcs. Traversal and replay
+materialize only the relevant vertices (the two terminals plus the endpoints
+of open arcs), so executed work scales with arc count rather than with the
+declared vertex count; declared vertex labels are bounded instead by the
+interoperable JSON integer transport range. The arc limit bounds all 4096
+states, the full ledger, rational-product digit growth, and both the producer
+and explicit verifier passes.
 Edgeless directed graphs are admitted: with two distinct terminals the event
 has exact probability zero and the ledger holds the single empty state.
 Python-FLINT performs producer

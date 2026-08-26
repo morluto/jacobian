@@ -115,7 +115,7 @@ for the maintained operation portfolio and
 
 ## Status
 
-Jacobian 0.13.0 <!-- x-release-please-version --> is pre-stable. Its published package and operation contracts
+Jacobian 0.14.0 <!-- x-release-please-version --> is pre-stable. Its published package and operation contracts
 describe the supported surface; experimental operation contracts may change
 between releases.
 

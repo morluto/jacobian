@@ -21,7 +21,6 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
-from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import canonicalize_json
 from jacobian.math.chain_complexes.values import ChainComplexValue

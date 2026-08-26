@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -87,3 +88,30 @@ def test_registered_workflows_use_the_bounded_operator_runner(
     assert _registered_from_gh() == {"ci"}
     assert observed["command"] == "gh"
     assert observed["timeout_seconds"] == 30.0
+
+
+def test_registered_workflows_preserve_gh_authentication_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tools.inventory_github_workflows as inventory
+
+    monkeypatch.setenv("GH_TOKEN", "token")
+    monkeypatch.setenv("UNRELATED_SECRET", "not-forwarded")
+    observed: dict[str, object] = {}
+
+    def run_operator(*_args: object, **kwargs: object) -> ToolCommandResult:
+        observed.update(kwargs)
+        return ToolCommandResult(
+            status=ToolCommandStatus.EXITED,
+            exit_code=0,
+            stdout=b"[]",
+            stderr=b"",
+        )
+
+    monkeypatch.setattr(inventory, "run_operator_command", run_operator)
+
+    assert _registered_from_gh() == set()
+    environment = observed["environment"]
+    assert isinstance(environment, Mapping)
+    assert environment["GH_TOKEN"] == "token"
+    assert "UNRELATED_SECRET" not in environment

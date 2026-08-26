@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 
-from tools.command_runner import ToolCommandStatus, run_operator_command
+from tools.command_runner import (
+    ToolCommandStatus,
+    operator_environment,
+    run_operator_command,
+)
 
 HISTORICAL_PREFIXES = ("agent-port-", "agent-rebase-")
 WORKFLOW_LIST_LIMIT = 1000
@@ -90,7 +93,16 @@ def _registered_from_gh() -> set[str]:
         timeout_seconds=30.0,
         stdout_limit_bytes=4 * 1024 * 1024,
         stderr_limit_bytes=1024 * 1024,
-        environment={"PATH": os.environ.get("PATH", "")},
+        environment=operator_environment(
+            include=(
+                "PATH",
+                "GH_TOKEN",
+                "GITHUB_TOKEN",
+                "GH_CONFIG_DIR",
+                "XDG_CONFIG_HOME",
+                "HOME",
+            )
+        ),
     )
     if completed.status is not ToolCommandStatus.EXITED or completed.exit_code != 0:
         diagnostic = completed.stderr.decode("utf-8", "replace").strip()

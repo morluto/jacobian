@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -94,3 +95,17 @@ def test_omitted_environment_preserves_the_parent_environment(
 
     assert result.exit_code == 0
     assert not result.timed_out
+
+
+def test_text_only_output_stream_receives_decoded_child_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = StringIO()
+    monkeypatch.setattr("tools.process_supervisor.sys.stdout", output)
+
+    result = run_process_tree(
+        (sys.executable, "-c", "print('hello')"), timeout=5.0, cwd=tmp_path
+    )
+
+    assert result.exit_code == 0
+    assert output.getvalue() == "hello\n"

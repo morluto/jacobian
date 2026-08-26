@@ -28,14 +28,15 @@ class ProcessTreeResult:
 def _stream(stream: object) -> Callable[[bytes], None] | None:
     """Return a byte sink for an inherited text or binary stream."""
 
-    binary = getattr(stream, "buffer", stream)
-    write = getattr(binary, "write", None)
-    flush = getattr(binary, "flush", None)
+    binary = getattr(stream, "buffer", None)
+    target = binary if binary is not None else stream
+    write = getattr(target, "write", None)
+    flush = getattr(target, "flush", None)
     if not callable(write):
         return None
 
     def sink(block: bytes) -> None:
-        write(block)
+        write(block if binary is not None else block.decode("utf-8", "replace"))
         if callable(flush):
             flush()
 

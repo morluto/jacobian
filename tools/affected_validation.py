@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -14,9 +13,29 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.ci_test_plan import TestPlan, build_plan  # noqa: E402
-from tools.command_runner import ToolCommandStatus, run_operator_command  # noqa: E402
+from tools.command_runner import (  # noqa: E402
+    ToolCommandStatus,
+    operator_environment,
+    run_operator_command,
+)
 
 _STATIC_PREFIXES = ("src/", "tests/", "benchmarks/")
+_VALIDATION_ENVIRONMENT = (
+    "PATH",
+    "AFFECTED_BASE",
+    "PYTEST_ARGS",
+    "PYTEST_DIAGNOSTIC_ARGS",
+    "ALLOW_PARALLEL_VALIDATION",
+    "UV_CACHE_DIR",
+    "UV_PYTHON_INSTALL_DIR",
+    "VIRTUAL_ENV",
+)
+
+
+def _validation_environment() -> dict[str, str]:
+    """Forward documented validation controls without ambient environment leakage."""
+
+    return dict(operator_environment(include=_VALIDATION_ENVIRONMENT))
 
 
 def _git(*arguments: str, repository: Path) -> str:
@@ -29,7 +48,7 @@ def _git(*arguments: str, repository: Path) -> str:
         timeout_seconds=30.0,
         stdout_limit_bytes=4 * 1024 * 1024,
         stderr_limit_bytes=1024 * 1024,
-        environment={"PATH": os.environ.get("PATH", "")},
+        environment=_validation_environment(),
     )
     if result.status is not ToolCommandStatus.EXITED or result.exit_code != 0:
         diagnostic = result.diagnostic or result.stderr.decode("utf-8", "replace")
@@ -137,7 +156,7 @@ def _run(commands: Sequence[Sequence[str]], *, repository: Path) -> None:
             command[1:],
             cwd=repository,
             timeout_seconds=30 * 60,
-            environment={"PATH": os.environ.get("PATH", "")},
+            environment=_validation_environment(),
         )
         if result.stdout:
             sys.stdout.write(result.stdout.decode("utf-8", "replace"))

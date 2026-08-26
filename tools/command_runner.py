@@ -463,6 +463,8 @@ def _finish_tool_process(
             )
     for reader in readers:
         reader.join(timeout=max(0.0, cleanup_deadline - time.monotonic()))
+    if any(reader.is_alive() for reader in readers):
+        status = ToolCommandStatus.TIMED_OUT
     if status is ToolCommandStatus.EXITED:
         if stdout_overflow.is_set() or stderr_overflow.is_set():
             status = ToolCommandStatus.OUTPUT_LIMIT_EXCEEDED

@@ -7,10 +7,6 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.numerical_semigroups._factorization_operations import (
-    FactorizationComputeRequest,
-    FactorizationComputeResult,
-    FactorizationGraphComputeRequest,
-    FactorizationGraphComputeResult,
     compute_factorization_graph,
     compute_factorizations,
 )
@@ -26,6 +22,18 @@ from jacobian.math.numerical_semigroups._models import (
     ElasticityResult,
     ElementElasticityRequest,
     ElementElasticityResult,
+    FactorizationComputeRequest,
+    FactorizationComputeResult,
+    FactorizationGraphComputeRequest,
+    FactorizationGraphComputeResult,
+    MinimalPresentationRequest,
+    MinimalPresentationResult,
+    NumericalSemigroupSummaryRequest,
+    NumericalSemigroupSummaryResult,
+    PresentationBinomialsRequest,
+    PresentationBinomialsResult,
+    SemigroupMembershipRequest,
+    SemigroupMembershipResult,
 )
 from jacobian.math.numerical_semigroups._operations import (
     compute_betti_elements,
@@ -35,18 +43,10 @@ from jacobian.math.numerical_semigroups._operations import (
     compute_element_elasticity,
 )
 from jacobian.math.numerical_semigroups._presentation_operations import (
-    MinimalPresentationRequest,
-    MinimalPresentationResult,
-    PresentationBinomialsRequest,
-    PresentationBinomialsResult,
     compute_minimal_presentation,
     compute_presentation_binomials,
 )
 from jacobian.math.numerical_semigroups._summary_operations import (
-    NumericalSemigroupSummaryRequest,
-    NumericalSemigroupSummaryResult,
-    SemigroupMembershipRequest,
-    SemigroupMembershipResult,
     compute_membership,
     compute_summary,
 )

@@ -8,11 +8,11 @@ from jacobian.math.numerical_semigroups._models import (
     MAX_ELEMENT,
     MAX_GENERATOR,
     MAX_GENERATORS,
-)
-from jacobian.math.numerical_semigroups._summary_operations import (
     NumericalSemigroupSummaryRequest,
     NumericalSemigroupSummaryResult,
     SemigroupMembershipRequest,
+)
+from jacobian.math.numerical_semigroups._summary_operations import (
     compute_membership,
     compute_summary,
 )

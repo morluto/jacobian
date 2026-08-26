@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.graphs.directed._models import (
+    MAX_DIRECTED_GRAPH_PARSE_EDGES,
     MAX_DIRECTED_OPERATION_EDGES,
     MAX_DIRECTED_OPERATION_VERTICES,
     AcyclicOrderRequest,
@@ -421,6 +422,65 @@ class TestDirectOperationEnvelope:
             ReachabilityRequest.model_validate({**small_graph, "source": 4})
         with pytest.raises(ValidationError):
             ReachabilityRequest.model_validate({**small_graph, "source": 255})
+
+
+class TestCarrierParseEnvelope:
+    """The carrier rejects oversized edge lists before structural scanning.
+
+    A near-10 MiB payload of distinct valid arcs must fail on the carrier's
+    parse-safety envelope instead of paying the full duplicate-detecting
+    scan, and the envelope must stay far above every consumer's admission.
+    """
+
+    def test_oversized_valid_arcs_reject_before_deep_validation(self) -> None:
+        arc_count = 250_000
+        edges = [[index, index + 1] for index in range(arc_count)]
+        edges.append([0, 1])
+        edges.append([1, 1])
+
+        with pytest.raises(ValidationError) as excinfo:
+            DirectedGraph.model_validate(
+                {"vertex_count": arc_count + 2, "edges": edges}
+            )
+
+        message = str(excinfo.value)
+        assert "parse-safety envelope" in message
+        assert "unique" not in message
+        assert "self-loops" not in message
+
+    def test_oversized_rejection_covers_every_request_consumer(self) -> None:
+        edges = [
+            [index % 97, (index + 1) % 97]
+            for index in range(MAX_DIRECTED_GRAPH_PARSE_EDGES + 1)
+        ]
+        for request_type in DIRECT_OPERATION_REQUESTS:
+            payload: dict = {"graph": {"vertex_count": 97, "edges": edges}}
+            if request_type is ReachabilityRequest:
+                payload["source"] = 0
+            with pytest.raises(ValidationError) as excinfo:
+                request_type.model_validate(payload)
+            assert "parse-safety envelope" in str(excinfo.value)
+
+    def test_envelope_boundary_remains_structurally_valid(self) -> None:
+        vertex_count = MAX_DIRECTED_GRAPH_PARSE_EDGES + 1
+        edges = [[index, index + 1] for index in range(MAX_DIRECTED_GRAPH_PARSE_EDGES)]
+        accepted = DirectedGraph.model_validate(
+            {"vertex_count": vertex_count, "edges": edges}
+        )
+        assert len(accepted.edges) == MAX_DIRECTED_GRAPH_PARSE_EDGES
+
+    def test_operation_admission_still_rejects_below_the_parse_envelope(self) -> None:
+        edges = _directed_pairs(MAX_DIRECTED_OPERATION_EDGES + 1)
+        with pytest.raises(ValidationError) as excinfo:
+            StronglyConnectedComponentsRequest.model_validate(
+                {"graph": {"vertex_count": 33, "edges": edges}}
+            )
+        message = str(excinfo.value)
+        assert "directed_edge_budget_exceeded" in message
+        assert "parse-safety envelope" not in message
+
+    def test_envelope_dwarfs_the_direct_operation_admission(self) -> None:
+        assert MAX_DIRECTED_GRAPH_PARSE_EDGES > 64 * MAX_DIRECTED_OPERATION_EDGES
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.graphs.directed._models import DirectedGraph
+from jacobian.math.graphs.directed._models import (
+    MAX_DIRECTED_GRAPH_PARSE_EDGES,
+    DirectedGraph,
+)
 from jacobian.math.probability._models import (
     MAX_DIRECTED_BOND_RELIABILITY_ARCS,
     MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES,
@@ -482,6 +485,13 @@ class TestPublishedBondReliabilityEnvelope:
         carrier_properties = DirectedGraph.model_json_schema()["properties"]
         assert "maxItems" not in carrier_properties["edges"]
         assert "maximum" not in carrier_properties["vertex_count"]
+
+    def test_carrier_parse_envelope_cannot_bind_reliability_admission(self) -> None:
+        """The shared parse guard sits orders of magnitude above 12 arcs."""
+
+        assert (
+            MAX_DIRECTED_GRAPH_PARSE_EDGES > 1000 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
+        )
 
     def test_thirteenth_arc_is_rejected_by_runtime_and_absent_from_schema(self) -> None:
         schema_max_items = DirectedBondConnectionProbabilityRequest.model_json_schema()[

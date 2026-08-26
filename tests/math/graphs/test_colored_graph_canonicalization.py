@@ -12,6 +12,7 @@ from collections.abc import Iterable
 import networkx as nx
 import pytest
 from pydantic import ValidationError
+from pydantic_core import PydanticCustomError
 
 import jacobian.math.graphs.isomorphism._canonicalization as isomorphism_canonicalization
 import jacobian.math.graphs.isomorphism._canonicalization_bounds as isomorphism_bounds
@@ -367,6 +368,42 @@ def test_request_rejects_edge_key_work_before_enumeration() -> None:
                 tuple(itertools.combinations(nine_vertices, 2)),
             )
         )
+
+
+@pytest.mark.parametrize(
+    "graph",
+    [
+        _graph(tuple(f"v{index:02d}" for index in range(10)), ()),
+        _graph(
+            tuple(f"v{index:02d}" for index in range(9)),
+            tuple(
+                itertools.combinations(tuple(f"v{index:02d}" for index in range(9)), 2)
+            ),
+        ),
+    ],
+    ids=["permutation-bound", "replay-work-bound"],
+)
+def test_native_admission_failure_raises_wire_validation_error(
+    graph: ColoredUndirectedGraph,
+) -> None:
+    """Native callers see the public ValidationError the wire path raises.
+
+    A valid graph over the execution bound must not leak the core
+    ``PydanticCustomError`` from the shared admission function; the native
+    entry point translates it without rebuilding a wire request, keeping the
+    advertised native/wire typed-outcome parity.
+    """
+
+    with pytest.raises(ValidationError) as native:
+        canonicalize_colored_graph(graph)
+
+    assert isinstance(native.value.__cause__, PydanticCustomError)
+    with pytest.raises(ValidationError) as wire:
+        ColoredGraphCanonicalizationRequest(colored_graph=graph)
+
+    assert [item | {"input": None} for item in native.value.errors()] == [
+        item | {"input": None} for item in wire.value.errors()
+    ]
 
 
 def _dense_complete_colored_graph(label_bytes: int) -> ColoredUndirectedGraph:

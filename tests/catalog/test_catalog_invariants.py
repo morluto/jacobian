@@ -81,6 +81,18 @@ def test_prime_field_matrix_computations_have_one_operation_family() -> None:
     ]
 
 
+def test_linear_code_dual_and_syndrome_have_one_operation_family() -> None:
+    """Dual codes and syndromes of canonical prime-field encoders are owned
+    by ``code.linear``; duplicate IDs routing to the identical request,
+    result, and callable must not re-enter public discovery."""
+    public_ids = {tool.operation_id for tool in BUILTIN_TOOLS}
+    assert {"code.linear.dual.compute", "code.linear.syndrome.compute"} <= public_ids
+    assert not public_ids & {
+        "code.dual_code.compute",
+        "code.syndrome.compute",
+    }
+
+
 def test_search_browse_and_inspect_results_stay_within_the_public_catalog() -> None:
     catalog = Catalog.open()
     public_ids = {

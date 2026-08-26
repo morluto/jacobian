@@ -102,6 +102,25 @@ def test_dual_of_repetition_is_parity_check() -> None:
     assert result.encoder.coordinate_axis == ("left", "right")
 
 
+def test_dual_hamming_7_4() -> None:
+    result = compute_dual_code(
+        DualCodeRequest(
+            encoder=_encoder(
+                (
+                    (1, 0, 0, 0, 1, 1, 0),
+                    (0, 1, 0, 0, 1, 0, 1),
+                    (0, 0, 1, 0, 0, 1, 1),
+                    (0, 0, 0, 1, 1, 1, 1),
+                )
+            )
+        )
+    )
+    assert result.dimension == 4
+    assert result.length == 7
+    assert result.dual_dimension == 3
+    assert len(result.parity_check.rows) == 3
+
+
 def test_parity_check_matches_dual() -> None:
     request = ParityCheckRequest(encoder=_encoder(((1, 1),)))
     result = compute_parity_check(request)
@@ -152,6 +171,22 @@ def test_syndrome_nonzero_for_noncodeword() -> None:
     )
     result = compute_syndrome(request)
     assert result.syndrome == (1,)
+    assert result.is_member is False
+
+
+def test_syndrome_is_computed_modulo_the_field_order() -> None:
+    result = compute_syndrome(
+        SyndromeRequest(
+            parity_check={
+                "field_order": 3,
+                "coordinate_axis": ["x0", "x1"],
+                "rows": ((1, 1), (0, 1)),
+            },
+            coordinate_axis=["x0", "x1"],
+            word=(2, 2),
+        )
+    )
+    assert result.syndrome == (1, 2)
     assert result.is_member is False
 
 

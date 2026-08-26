@@ -58,6 +58,8 @@ def test_invoke_operation_runs_determinant_without_state() -> None:
     (
         "graph.construct.explicit",
         "code.nonlinear.distance_profile.compute",
+        "code.dual_code.compute",
+        "code.syndrome.compute",
     ),
 )
 def test_invoke_operation_reports_unknown_removed_family_id(operation_id: str) -> None:

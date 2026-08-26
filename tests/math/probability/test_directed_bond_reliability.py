@@ -477,7 +477,6 @@ class TestPublishedBondReliabilityEnvelope:
                 graph_schema["properties"]["vertex_count"]["maximum"]
                 == MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES
             )
-            assert "at most 12 arcs" in graph_schema["description"]
             assert "relevant vertices" in graph_schema["description"]
             assert "work budget" not in graph_schema["description"]
 
@@ -493,16 +492,28 @@ class TestPublishedBondReliabilityEnvelope:
             MAX_DIRECTED_GRAPH_PARSE_EDGES > 1000 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
         )
 
-    def test_thirteenth_arc_is_rejected_by_runtime_and_absent_from_schema(self) -> None:
+    def test_one_arc_over_the_admission_bound_has_a_structured_error(self) -> None:
         schema_max_items = DirectedBondConnectionProbabilityRequest.model_json_schema()[
             "properties"
         ]["graph"]["properties"]["edges"]["maxItems"]
         assert schema_max_items == MAX_DIRECTED_BOND_RELIABILITY_ARCS
-        with pytest.raises(ValidationError):
+        arcs = tuple(
+            (index, index + 1)
+            for index in range(MAX_DIRECTED_BOND_RELIABILITY_ARCS + 1)
+        )
+        with pytest.raises(ValidationError) as raised:
             _request(
-                vertex_count=14,
-                arcs=tuple((index, index + 1) for index in range(13)),
-                probabilities=(Fraction(1, 2),) * 13,
+                vertex_count=len(arcs) + 1,
+                arcs=arcs,
+                probabilities=(Fraction(1, 2),) * len(arcs),
                 source=0,
-                target=13,
+                target=len(arcs),
             )
+        (error,) = raised.value.errors()
+        assert error["type"] == "too_long"
+        assert error["loc"] == ("arc_probabilities",)
+        assert error["ctx"] == {
+            "field_type": "Tuple",
+            "max_length": MAX_DIRECTED_BOND_RELIABILITY_ARCS,
+            "actual_length": MAX_DIRECTED_BOND_RELIABILITY_ARCS + 1,
+        }

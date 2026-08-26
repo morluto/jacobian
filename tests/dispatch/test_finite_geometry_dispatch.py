@@ -75,12 +75,8 @@ def test_projective_space_schema_publishes_coupled_enumeration_bound() -> None:
     validator = Draft202012Validator(schema)
     accepted = {"space": {"field_order": 2, "axis": ["x", "y"]}}
     assert not list(validator.iter_errors(accepted))
-    assert (
-        invoke_operation(operation.operation_id, accepted, Catalog.open()).output[
-            "count"
-        ]
-        == 3
-    )
+    output = invoke_operation(operation.operation_id, accepted, Catalog.open()).output
+    assert output["sequence"]["coordinates"] == [[0, 1], [1, 0], [1, 1]]
 
     structurally_valid_but_too_large = {
         "space": {"field_order": 257, "axis": ["x", "y"]}
@@ -97,18 +93,18 @@ def test_projective_space_schema_publishes_coupled_enumeration_bound() -> None:
 def test_dispatch_returns_maximal_enumeration_within_transport_limit() -> None:
     """The admitted-envelope-maximal request returns its complete declared
     result: q=2 with 16 axis labels yields all 65,535 projective points of
-    PG(15, F_2), and the compact bare-coordinate-tuple reply serializes well
-    inside the canonical transport limit instead of failing only after
-    enumeration."""
+    PG(15, F_2), and the typed sequence reply -- the parent space once plus
+    bare coordinate tuples -- serializes well inside the canonical transport
+    limit instead of failing only after enumeration."""
     payload = {"space": {"field_order": 2, "axis": [f"x{i}" for i in range(16)]}}
 
     result = invoke_operation(
         "finite_geometry.projective_space.enumerate_points", payload, Catalog.open()
     )
 
-    assert result.output["count"] == MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS - 1
-    assert len(result.output["points"]) == result.output["count"]
-    assert result.output["points"][0] == [0] * 15 + [1]
+    coordinates = result.output["sequence"]["coordinates"]
+    assert len(coordinates) == MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS - 1
+    assert coordinates[0] == [0] * 15 + [1]
     encoded = len(canonicalize_json(result.output))
     assert encoded <= CanonicalLimits().max_output_bytes
     assert encoded < MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES

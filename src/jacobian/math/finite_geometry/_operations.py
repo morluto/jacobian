@@ -7,7 +7,6 @@ from jacobian.math.finite_geometry._models import (
     GrassmannianCountRequest,
     GrassmannianCountResult,
     LinearSubspace,
-    ProjectivePoint,
     ProjectivePointCanonicalizeRequest,
     ProjectivePointCanonicalizeResult,
     ProjectivePointEqualRequest,
@@ -22,6 +21,10 @@ from jacobian.math.finite_geometry._models import (
     SubspaceMembershipResult,
     SubspaceSpanRequest,
     SubspaceSpanResult,
+)
+from jacobian.math.finite_geometry.values import (
+    ProjectivePoint,
+    ProjectivePointSequence,
 )
 from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
@@ -241,7 +244,7 @@ def compute_projective_space_enumerate(
                 break
 
     return ProjectiveSpaceEnumerateResult(
-        space=request.space,
-        points=tuple(points),
-        count=len(points),
+        sequence=ProjectivePointSequence(
+            space=request.space, coordinates=tuple(points)
+        ),
     )

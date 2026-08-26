@@ -10,7 +10,7 @@ from jacobian.math.finite_fields import (
 from jacobian.math.finite_fields import (
     ProjectivePoint as FiniteFieldProjectivePoint,
 )
-from jacobian.math.finite_geometry._models import ProjectivePoint
+from jacobian.math.finite_geometry.values import ProjectivePoint
 
 
 def embed_projective_point_in_finite_field(

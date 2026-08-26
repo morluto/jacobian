@@ -229,8 +229,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "finite_geometry.projective_space.enumerate_points",
         "Enumerate all projective points of PG(d, q)",
         "Enumerate all canonical representatives of the projective space PG(d, "
-        "q) over a prime field, returning every point as a bare canonical "
-        "coordinate tuple relative to the declared parent space.",
+        "q) over a prime field as one typed point sequence that owns the "
+        "declared parent space and serializes each point as a bare canonical "
+        "coordinate tuple relative to it.",
         ProjectiveSpaceEnumerateRequest,
         ProjectiveSpaceEnumerateResult,
         compute_projective_space_enumerate,

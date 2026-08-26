@@ -15,7 +15,6 @@ from jacobian.math.finite_fields import (
 from jacobian.math.finite_geometry._models import (
     GrassmannianCountRequest,
     LinearSubspace,
-    PrimeFieldVectorSpace,
     ProjectivePointCanonicalizeRequest,
     ProjectivePointEqualRequest,
     ProjectiveSpaceEnumerateRequest,
@@ -36,9 +35,6 @@ from jacobian.math.finite_geometry._operations import (
     compute_subspace_span,
 )
 from jacobian.math.finite_geometry._tools import TOOLS
-from jacobian.math.finite_geometry.conversions import (
-    embed_projective_point_in_finite_field,
-)
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -104,7 +100,7 @@ def test_projective_point_embeds_into_finite_field_restrict_scalars() -> None:
     presentation = finite_field(2, (1, 1, 1))
     row_axis = Axis(name="coordinate directions", labels=("x", "y"))
 
-    direction = embed_projective_point_in_finite_field(
+    direction = finite_geometry.embed_projective_point_in_finite_field(
         geometry_point,
         presentation,
         row_axis,
@@ -145,26 +141,70 @@ def test_projective_point_embedding_requires_explicit_compatible_target() -> Non
     target = finite_field(2, (1, 1, 1))
 
     with pytest.raises(ValueError, match="axis labels"):
-        embed_projective_point_in_finite_field(
+        finite_geometry.embed_projective_point_in_finite_field(
             point,
             target,
             Axis(name="different coordinates", labels=("y", "x")),
         )
 
     with pytest.raises(ValueError, match="characteristic"):
-        embed_projective_point_in_finite_field(
+        finite_geometry.embed_projective_point_in_finite_field(
             point,
             finite_field(3, (1, 0, 1)),
             Axis(name="coordinate directions", labels=("x", "y")),
         )
 
 
-def test_finite_geometry_public_api_exposes_only_the_explicit_conversion() -> None:
-    assert finite_geometry.__all__ == ["embed_projective_point_in_finite_field"]
-    assert (
-        finite_geometry.embed_projective_point_in_finite_field
-        is embed_projective_point_in_finite_field
+def test_public_api_constructs_and_embeds_without_private_imports() -> None:
+    """The documented surface constructs the conversion's source value."""
+    assert finite_geometry.__all__ == [
+        "PrimeFieldVectorSpace",
+        "ProjectivePoint",
+        "ProjectivePointSequence",
+        "embed_projective_point_in_finite_field",
+        "projective_point",
+    ]
+
+    space = finite_geometry.PrimeFieldVectorSpace(field_order=2, axis=("x", "y"))
+    point = finite_geometry.projective_point(space, (1, 1))
+    assert isinstance(point, finite_geometry.ProjectivePoint)
+    assert point.coordinates == (1, 1)
+
+    direction = finite_geometry.embed_projective_point_in_finite_field(
+        point,
+        finite_field(2, (1, 1, 1)),
+        Axis(name="coordinate directions", labels=("x", "y")),
     )
+    assert tuple(value.coordinates for value in direction.coordinates) == (
+        (1, 0),
+        (1, 0),
+    )
+
+
+def test_enumeration_sequence_composes_into_embeddings_directly() -> None:
+    """Enumerated points compose into the consumer as typed values, without
+    manual reconstruction from coordinate tuples and a parent space."""
+    result = compute_projective_space_enumerate(
+        ProjectiveSpaceEnumerateRequest(space={"field_order": 2, "axis": ("x", "y")})
+    )
+
+    presentation = finite_field(2, (1, 1, 1))
+    row_axis = Axis(name="coordinate directions", labels=("x", "y"))
+    directions = [
+        finite_geometry.embed_projective_point_in_finite_field(
+            point, presentation, row_axis
+        )
+        for point in result.sequence.points
+    ]
+
+    assert [tuple(v.coordinates for v in d.coordinates) for d in directions] == [
+        ((0, 0), (1, 0)),
+        ((1, 0), (0, 0)),
+        ((1, 0), (1, 0)),
+    ]
+    for point in result.sequence.points:
+        assert isinstance(point, finite_geometry.ProjectivePoint)
+        assert point.space.axis == ("x", "y")
 
 
 def test_subspace_compute_basic() -> None:
@@ -289,8 +329,27 @@ def test_projective_space_enumerate_pg1_f2() -> None:
         space={"field_order": 2, "axis": ("x", "y")}
     )
     result = compute_projective_space_enumerate(request)
-    assert result.count == 3
-    assert result.points == ((0, 1), (1, 0), (1, 1))
+    assert len(result.sequence) == 3
+    assert result.sequence.coordinates == ((0, 1), (1, 0), (1, 1))
+    assert [point.coordinates for point in result.sequence.points] == [
+        (0, 1),
+        (1, 0),
+        (1, 1),
+    ]
+
+
+def test_enumeration_wire_form_stays_compact_and_typed_natively() -> None:
+    """The wire form stores the parent space once plus bare coordinate
+    tuples, while native iteration yields parent-bound typed points."""
+    result = compute_projective_space_enumerate(
+        ProjectiveSpaceEnumerateRequest(space={"field_order": 3, "axis": ("x", "y")})
+    )
+
+    wire = result.model_dump(mode="json")
+    assert set(wire) == {"sequence", "method"}
+    assert set(wire["sequence"]) == {"space", "coordinates"}
+    assert wire["sequence"]["coordinates"] == [[0, 1], [1, 0], [1, 1], [1, 2]]
+    assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
 def test_enumerate_admission_rejects_results_beyond_the_transport_budget() -> None:
@@ -308,20 +367,48 @@ def test_enumerate_admission_rejects_results_beyond_the_transport_budget() -> No
 
 
 def test_enumeration_replay_rejects_unnormalized_representatives() -> None:
-    """Bare coordinate tuples stay bound to the canonical representative
+    """Sequence coordinates stay bound to the canonical representative
     invariant of the declared parent space."""
     result = compute_projective_space_enumerate(
         ProjectiveSpaceEnumerateRequest(space={"field_order": 3, "axis": ("x", "y")})
     )
-    assert result.points == ((0, 1), (1, 0), (1, 1), (1, 2))
+    assert result.sequence.coordinates == ((0, 1), (1, 0), (1, 1), (1, 2))
 
     payload = result.model_dump()
-    payload["points"] = ((2, 1), *payload["points"][1:])
+    payload["sequence"]["coordinates"] = (
+        (2, 1),
+        *payload["sequence"]["coordinates"][1:],
+    )
     with pytest.raises(ValidationError) as error:
         ProjectiveSpaceEnumerateResult.model_validate(payload)
     assert (
         error.value.errors()[0]["type"]
         == "finite_geometry.projective_coordinates_not_normalized"
+    )
+
+
+def test_enumeration_sequence_replay_rejects_duplicates_and_wrong_counts() -> None:
+    """The sequence value itself certifies uniqueness and completeness."""
+    result = compute_projective_space_enumerate(
+        ProjectiveSpaceEnumerateRequest(space={"field_order": 2, "axis": ("x", "y")})
+    )
+
+    payload = result.model_dump()
+    payload["sequence"]["coordinates"] = ((0, 1), (0, 1), (1, 0))
+    with pytest.raises(ValidationError) as error:
+        ProjectiveSpaceEnumerateResult.model_validate(payload)
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_geometry.point_sequence_points_not_unique"
+    )
+
+    payload = result.model_dump()
+    payload["sequence"]["coordinates"] = ((0, 1), (1, 0))
+    with pytest.raises(ValidationError) as error:
+        ProjectiveSpaceEnumerateResult.model_validate(payload)
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_geometry.point_sequence_count_mismatch"
     )
 
 
@@ -334,7 +421,7 @@ def test_request_rejects_nonprime_field() -> None:
 
 
 def test_canonical_values_compose_and_reject_different_parents() -> None:
-    space = PrimeFieldVectorSpace(field_order=3, axis=("x", "y"))
+    space = finite_geometry.PrimeFieldVectorSpace(field_order=3, axis=("x", "y"))
     computed = compute_subspace_compute(
         SubspaceComputeRequest(space=space, vectors=((1, 0),))
     ).subspace

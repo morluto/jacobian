@@ -119,6 +119,7 @@ class MatroidClosureRequest(StrictModel):
             "0..matroid.matrix.columns-1; at most "
             f"{MAX_GROUND_SIZE} indices are admitted."
         ),
+        json_schema_extra={"uniqueItems": True},
     )
 
     @model_validator(mode="after")

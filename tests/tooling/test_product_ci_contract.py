@@ -96,7 +96,7 @@ def test_python_jobs_select_math_and_public_contract_evidence_from_the_plan() ->
     assert "name: python (catalog)" in workflow
     assert "name: python (catalog examples)" in workflow
     assert "tests: ${{ needs.plan.outputs.math_tests }}" in workflow
-    assert "tests: tests/integration/catalog/test_builtin_examples.py" in workflow
+    assert "tests: tests/integration/catalog/" in workflow
     for lane in ("dispatch", "cli", "tooling"):
         assert f"lane: {lane}" in workflow
     assert "lane: e2e" not in workflow

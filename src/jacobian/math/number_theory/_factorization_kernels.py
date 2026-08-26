@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -216,7 +217,7 @@ def _bounded_direct_factorization(value: int) -> tuple[PrimePower, ...] | None:
         if len(factors) > 256:
             raise ValueError("too many factors")
         if [factor.prime for factor in factors] != sorted(
-            factor.prime for factor in factors
+            (factor.prime for factor in factors), key=int
         ) or len({factor.prime for factor in factors}) != len(factors):
             raise ValueError("noncanonical factors")
         return factors
@@ -234,6 +235,9 @@ def _bounded_direct_factorization(value: int) -> tuple[PrimePower, ...] | None:
 def _divisors_from_factors(
     factors: tuple[PrimePower, ...], *, proper: bool, value: int
 ) -> tuple[str, ...]:
+    divisor_count = math.prod(factor.power + 1 for factor in factors)
+    if divisor_count > 4_096:
+        raise ValueError("divisor output exceeds admitted bound")
     divisors = [1]
     for factor in factors:
         prime = int(factor.prime)
@@ -241,8 +245,6 @@ def _divisors_from_factors(
         for _ in range(factor.power):
             power_values.append(power_values[-1] * prime)
         divisors = [base * power for base in divisors for power in power_values]
-    if len(divisors) > 4_096:
-        raise ValueError("divisor output exceeds admitted bound")
     ordered = tuple(str(divisor) for divisor in sorted(divisors))
     return ordered[:-1] if proper else ordered
 
@@ -280,11 +282,11 @@ def enumerate_divisors(request: FactorizationRequest) -> DivisorListResult:
             convention="ALL_POSITIVE_DIVISORS",
             detail="the bounded factorization worker did not establish every divisor",
         )
-    return DivisorListResult(
-        value=request.value,
-        divisors=_divisors_from_factors(factors, proper=False, value=value),
-        convention="ALL_POSITIVE_DIVISORS",
-    )
+    try:
+        divisors = _divisors_from_factors(factors, proper=False, value=value)
+    except ValueError:
+        return DivisorListResult._unknown(value=request.value, convention="ALL_POSITIVE_DIVISORS", detail="the complete divisor family exceeds the admitted output bound")
+    return DivisorListResult(value=request.value, divisors=divisors, convention="ALL_POSITIVE_DIVISORS")
 
 
 def enumerate_proper_divisors(request: FactorizationRequest) -> DivisorListResult:
@@ -298,11 +300,11 @@ def enumerate_proper_divisors(request: FactorizationRequest) -> DivisorListResul
             convention="PROPER_DIVISORS",
             detail="the bounded factorization worker did not establish every proper divisor",
         )
-    return DivisorListResult(
-        value=request.value,
-        divisors=_divisors_from_factors(factors, proper=True, value=value),
-        convention="PROPER_DIVISORS",
-    )
+    try:
+        divisors = _divisors_from_factors(factors, proper=True, value=value)
+    except ValueError:
+        return DivisorListResult._unknown(value=request.value, convention="PROPER_DIVISORS", detail="the complete divisor family exceeds the admitted output bound")
+    return DivisorListResult(value=request.value, divisors=divisors, convention="PROPER_DIVISORS")
 
 
 def factorize_primes(request: FactorizationRequest) -> PrimeFactorizationResult:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 
-from jacobian.math.petri_nets.values import Marking, PetriNet
+from jacobian.math.petri_nets.values import MAX_PETRI_MARKING, Marking, PetriNet
 
 __all__ = [
     "compute_incidence_matrix",
@@ -79,6 +79,9 @@ def reachability_graph(
         for t in enabled:
             success, new_tokens = fire_transition(net, marking, t)
             if not success:
+                continue
+            if any(token > MAX_PETRI_MARKING for token in new_tokens):
+                truncated = True
                 continue
             if new_tokens not in state_index:
                 if len(state_list) >= max_states:

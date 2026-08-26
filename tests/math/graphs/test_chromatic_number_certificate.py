@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.math.graphs.coloring import _operations
 from jacobian.math.graphs.coloring._chromatic_number_models import (
     MAX_CHROMATIC_CERTIFICATE_DERIVED_RATIONAL_DIGITS,
     MAX_CHROMATIC_CERTIFICATE_EDGES,
@@ -20,6 +21,7 @@ from jacobian.math.graphs.coloring._chromatic_number_models import (
 )
 from jacobian.math.graphs.coloring._operations import (
     compute_chromatic_number_certificate_check,
+    verify_chromatic_number_certificate_check_result,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -127,7 +129,7 @@ def test_campbell_sixteen_face_conflict_graph_certificate() -> None:
     graph = _graph(
         faces,
         tuple(
-            tuple(sorted((left, right)))
+            (left, right) if left < right else (right, left)
             for left, right in combinations(faces, 2)
             if set(left) & set(right)
         ),
@@ -313,7 +315,7 @@ def _accepted_edge_result() -> ChromaticNumberCertificateCheckResult:
 @pytest.mark.parametrize(
     "field", ["graph", "claimed_chromatic_number", "coloring", "weights"]
 )
-def test_result_replay_rejects_forged_sources(field: str) -> None:
+def test_explicit_verifier_rejects_forged_sources(field: str) -> None:
     payload = deepcopy(_accepted_edge_result().model_dump(mode="json"))
     if field == "graph":
         payload["graph"]["edges"] = []
@@ -327,11 +329,12 @@ def test_result_replay_rejects_forged_sources(field: str) -> None:
             {"num": "0", "den": "1"},
         ]
 
-    with pytest.raises(ValidationError):
+    assert not verify_chromatic_number_certificate_check_result(
         ChromaticNumberCertificateCheckResult.model_validate(payload)
+    )
 
 
-def test_result_replay_rejects_forged_witness_and_conclusion() -> None:
+def test_explicit_verifier_rejects_forged_witness_and_conclusion() -> None:
     rejected = _check(
         _graph(("a", "b"), ()),
         1,
@@ -340,14 +343,41 @@ def test_result_replay_rejects_forged_witness_and_conclusion() -> None:
     )
     payload = deepcopy(rejected.model_dump(mode="json"))
     payload["blocking_independent_set"] = ["b"]
-    with pytest.raises(ValidationError):
+    assert not verify_chromatic_number_certificate_check_result(
         ChromaticNumberCertificateCheckResult.model_validate(payload)
+    )
 
     payload = deepcopy(rejected.model_dump(mode="json"))
     payload["verdict"] = "ACCEPTED"
     payload["reason"] = "ACCEPTED"
-    with pytest.raises(ValidationError):
+    assert not verify_chromatic_number_certificate_check_result(
         ChromaticNumberCertificateCheckResult.model_validate(payload)
+    )
+
+
+def test_producer_evaluates_the_certificate_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = ChromaticNumberCertificateCheckRequest(
+        graph=_graph(("a", "b"), (("a", "b"),)),
+        claimed_chromatic_number=2,
+        coloring=(0, 1),
+        weights=(_rational(1), _rational(1)),
+    )
+    evaluator_name = "_evaluate_chromatic_number_certificate"
+    original = getattr(_operations, evaluator_name)
+    calls = 0
+
+    def counted(*args: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original(*args)
+
+    monkeypatch.setattr(_operations, "_evaluate_chromatic_number_certificate", counted)
+    result = compute_chromatic_number_certificate_check(request)
+
+    assert result.verdict == "ACCEPTED"
+    assert calls == 1
 
 
 def test_result_preflights_oversized_forged_derived_rationals() -> None:

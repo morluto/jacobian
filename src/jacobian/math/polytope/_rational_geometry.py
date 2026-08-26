@@ -15,6 +15,10 @@ from sympy.matrices.exceptions import NonInvertibleMatrixError
 RationalRow = tuple[Sequence[Rational], Rational]
 
 
+class RecessionConeComputationError(RuntimeError):
+    """Raised when exact recession-cone boundedness cannot be established."""
+
+
 def hyperplane_normal(points: Sequence[Sequence[Rational]]) -> Matrix | None:
     """Return the unique normal through ``dim`` affine points, if one exists."""
 
@@ -77,9 +81,12 @@ def recession_cone_is_trivial(
         for index in range(1, len(normals))
     ]
     try:
-        if Matrix(differences).rank() < dimension:
-            return False
-    except Exception:
+        rank = Matrix(differences).rank()
+    except Exception as exc:
+        raise RecessionConeComputationError(
+            "exact recession-cone rank computation failed"
+        ) from exc
+    if rank < dimension:
         return False
     hull_facets = facets_from_points(normals, dimension)
     return bool(hull_facets) and all(
@@ -119,6 +126,7 @@ def vertices_from_halfspaces(
 
 __all__ = [
     "RationalRow",
+    "RecessionConeComputationError",
     "facets_from_points",
     "hyperplane_normal",
     "recession_cone_is_trivial",

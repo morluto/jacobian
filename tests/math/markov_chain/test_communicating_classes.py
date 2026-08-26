@@ -4,11 +4,18 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.math.markov_chain import _operations
 from jacobian.math.markov_chain._models import (
+    CommunicatingClassesResult,
     TransitionMatrixRequest,
 )
-from jacobian.math.markov_chain._operations import compute_communicating_classes
+from jacobian.math.markov_chain._operations import (
+    compute_communicating_classes,
+    verify_communicating_classes_result,
+)
 from jacobian.math.markov_chain._tools import TOOLS
 
 _C = CanonicalRational.from_fraction
@@ -84,3 +91,32 @@ def test_two_closed_classes() -> None:
     )
     assert len(result.classes) == 2
     assert all(cls[1] for cls in result.classes)  # both closed
+
+
+def test_producer_derives_scc_partition_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    request = _matrix([[Fraction(0), Fraction(1)], [Fraction(0), Fraction(1)]])
+    original = _operations._derive_communicating_classes
+    calls = 0
+
+    def counted(matrix):  # type: ignore[no-untyped-def]
+        nonlocal calls
+        calls += 1
+        return original(matrix)
+
+    monkeypatch.setattr(_operations, "_derive_communicating_classes", counted)
+    result = compute_communicating_classes(request)
+
+    assert result.classes == (((0,), False), ((1,), True))
+    assert calls == 1
+
+
+def test_explicit_verifier_rejects_forged_scc_claim() -> None:
+    produced = compute_communicating_classes(
+        _matrix([[Fraction(0), Fraction(1)], [Fraction(0), Fraction(1)]])
+    )
+    payload = produced.model_dump(mode="json")
+    payload["classes"] = [((0,), True), ((1,), True)]
+    forged = CommunicatingClassesResult.model_validate(payload)
+
+    assert verify_communicating_classes_result(produced) is True
+    assert verify_communicating_classes_result(forged) is False

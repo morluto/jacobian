@@ -48,7 +48,7 @@ def compute_betti_elements(
 
     atoms = _minimal_generators(request.generators)
     apery, candidates, disconnected = betti_data(atoms)
-    return BettiElementsResult(
+    return BettiElementsResult._from_kernel(
         minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
         apery_set=tuple(format_canonical_integer(value) for value in apery),
         candidate_count=len(candidates),
@@ -75,7 +75,7 @@ def compute_delta_set(request: DeltaSetRequest) -> DeltaSetResult:
         ordered = sorted(lengths)
         all_deltas.update(right - left for left, right in pairwise(ordered))
         length_sets[value % atoms[-1]] = lengths
-    return DeltaSetResult(
+    return DeltaSetResult._from_kernel(
         minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
         delta_set=tuple(sorted(all_deltas)),
         periodicity_bound=periodicity_bound,
@@ -109,7 +109,7 @@ def compute_catenary_degree(
         for value in disconnected
     )
     maximum = max((record.catenary_degree for record in degrees), default=0)
-    return CatenaryDegreeResult(
+    return CatenaryDegreeResult._from_kernel(
         minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
         catenary_degree=maximum,
         betti_degrees=degrees,
@@ -121,9 +121,77 @@ def compute_catenary_degree(
     )
 
 
+def verify_betti_elements_result(result: BettiElementsResult) -> bool:
+    """Replay one bounded Betti-elements claim."""
+
+    atoms = tuple(parse_canonical_integer(atom) for atom in result.minimal_generators)
+    apery, candidates, disconnected = betti_data(atoms)
+    return (
+        tuple(result.apery_set)
+        == tuple(format_canonical_integer(value) for value in apery)
+        and result.candidate_count == len(candidates)
+        and tuple(result.betti_elements)
+        == tuple(format_canonical_integer(value) for value in disconnected)
+    )
+
+
+def verify_delta_set_result(result: DeltaSetResult) -> bool:
+    """Replay one bounded complete global delta-set claim."""
+
+    atoms = tuple(parse_canonical_integer(atom) for atom in result.minimal_generators)
+    periodicity_bound = delta_periodicity_bound(atoms)
+    checked_through = periodicity_bound + atoms[-1] - 1
+    all_deltas: set[int] = set()
+    length_sets: list[set[int]] = [set() for _ in range(atoms[-1])]
+    length_sets[0].add(0)
+    for value in range(1, checked_through + 1):
+        lengths = {
+            length + 1
+            for atom in atoms
+            if value >= atom
+            for length in length_sets[(value - atom) % atoms[-1]]
+        }
+        ordered = sorted(lengths)
+        all_deltas.update(right - left for left, right in pairwise(ordered))
+        length_sets[value % atoms[-1]] = lengths
+    return (
+        result.delta_set == tuple(sorted(all_deltas))
+        and result.periodicity_bound == periodicity_bound
+        and result.checked_through == checked_through
+    )
+
+
+def verify_catenary_degree_result(result: CatenaryDegreeResult) -> bool:
+    """Replay the bounded complete Betti catenary profile for a supplied claim."""
+
+    atoms = tuple(parse_canonical_integer(atom) for atom in result.minimal_generators)
+    _, _, disconnected = betti_data(atoms)
+    degrees = tuple(
+        BettiCatenaryDegree(
+            betti_element=format_canonical_integer(value),
+            catenary_degree=_catenary_degree(atoms, value),
+        )
+        for value in disconnected
+    )
+    maximum = max((record.catenary_degree for record in degrees), default=0)
+    witnesses = tuple(
+        record.betti_element
+        for record in degrees
+        if record.catenary_degree == maximum and maximum > 0
+    )
+    return (
+        result.betti_degrees == degrees
+        and result.catenary_degree == maximum
+        and result.witness_betti_elements == witnesses
+    )
+
+
 __all__ = [
     "compute_betti_elements",
     "compute_catenary_degree",
     "compute_delta_set",
     "compute_elasticity",
+    "verify_betti_elements_result",
+    "verify_catenary_degree_result",
+    "verify_delta_set_result",
 ]

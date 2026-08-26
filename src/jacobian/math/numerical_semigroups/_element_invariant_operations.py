@@ -40,7 +40,7 @@ def compute_element_delta_set(
     atoms = _minimal_generators(request.generators)
     value = parse_canonical_integer(request.value)
     lengths = factorization_lengths(atoms, value)
-    return ElementDeltaSetResult(
+    return ElementDeltaSetResult._from_kernel(
         value=request.value,
         minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
         factorization_lengths=lengths,
@@ -56,7 +56,7 @@ def compute_element_elasticity(
     atoms = _minimal_generators(request.generators)
     value = parse_canonical_integer(request.value)
     minimum_length, maximum_length = factorization_length_extrema(atoms, value)
-    return ElementElasticityResult(
+    return ElementElasticityResult._from_kernel(
         value=request.value,
         minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
         minimum_length=minimum_length,
@@ -73,7 +73,7 @@ def compute_element_catenary_degree(
     atoms = _minimal_generators(request.generators)
     value = parse_canonical_integer(request.value)
     family = factorizations(atoms, value)
-    return ElementCatenaryDegreeResult(
+    return ElementCatenaryDegreeResult._from_kernel(
         value=request.value,
         minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
         factorization_count=len(family),
@@ -81,8 +81,44 @@ def compute_element_catenary_degree(
     )
 
 
+def verify_element_catenary_degree_result(
+    result: ElementCatenaryDegreeResult,
+) -> bool:
+    """Replay the admitted complete factorization family for a supplied claim."""
+
+    atoms = tuple(parse_canonical_integer(atom) for atom in result.minimal_generators)
+    family = factorizations(atoms, parse_canonical_integer(result.value))
+    return result.factorization_count == len(
+        family
+    ) and result.catenary_degree == catenary_degree_from_factorizations(family)
+
+
+def verify_element_delta_set_result(result: ElementDeltaSetResult) -> bool:
+    """Replay one supplied element delta-set claim within its admitted bounds."""
+
+    atoms = tuple(parse_canonical_integer(atom) for atom in result.minimal_generators)
+    lengths = factorization_lengths(atoms, parse_canonical_integer(result.value))
+    delta_set = tuple(sorted({right - left for left, right in pairwise(lengths)}))
+    return result.factorization_lengths == lengths and result.delta_set == delta_set
+
+
+def verify_element_elasticity_result(result: ElementElasticityResult) -> bool:
+    """Replay one supplied element elasticity claim within its admitted bounds."""
+
+    atoms = tuple(parse_canonical_integer(atom) for atom in result.minimal_generators)
+    minimum, maximum = factorization_length_extrema(
+        atoms, parse_canonical_integer(result.value)
+    )
+    return (result.minimum_length, result.maximum_length) == (
+        minimum,
+        maximum,
+    ) and result.elasticity == format_canonical_rational(Fraction(maximum, minimum))
+
+
 __all__ = [
     "compute_element_catenary_degree",
     "compute_element_delta_set",
     "compute_element_elasticity",
+    "verify_element_delta_set_result",
+    "verify_element_elasticity_result",
 ]

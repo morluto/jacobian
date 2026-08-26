@@ -8,17 +8,13 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
-from jacobian.math.numerical_semigroups._algorithms import factorization_lengths
 from jacobian.math.numerical_semigroups._models import (
     _GENERAL_GENERATOR_ENVELOPE,
     MAX_GENERATORS,
     MAX_GRAPH_FACTORIZATIONS,
     MAX_MATERIALIZED_FACTORIZATIONS,
-    _factorization_graph_data,
     _require_bounded_value,
     _require_canonical_minimal_axis,
-    _require_exact_factorization_family,
     _require_materializable_factorizations,
     _require_minimal_generators,
     _validation_error,
@@ -60,16 +56,31 @@ class FactorizationComputeResult(StrictModel):
     in_semigroup: bool
     factorizations: tuple[tuple[int, ...], ...]
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        value: CanonicalInteger,
+        minimal_generators: tuple[CanonicalInteger, ...],
+        in_semigroup: bool,
+        factorizations: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        """Construct a complete family materialized by the admitted kernel."""
+
+        return cls.model_construct(
+            value=value,
+            minimal_generators=minimal_generators,
+            in_semigroup=in_semigroup,
+            factorizations=factorizations,
+        )
+
     @model_validator(mode="after")
     def require_exact_family(self) -> Self:
-        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        _require_canonical_minimal_axis(self.minimal_generators)
         if self.in_semigroup != bool(self.factorizations):
             raise _validation_error(
                 "membership must agree with the factorization family"
             )
-        _require_exact_factorization_family(
-            generators, parse_canonical_integer(self.value), self.factorizations
-        )
         return self
 
 
@@ -104,9 +115,27 @@ class FactorizationLengthsComputeResult(StrictModel):
     in_semigroup: bool
     lengths: tuple[int, ...]
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        value: CanonicalInteger,
+        minimal_generators: tuple[CanonicalInteger, ...],
+        in_semigroup: bool,
+        lengths: tuple[int, ...],
+    ) -> Self:
+        """Construct a length set derived by the admitted kernel."""
+
+        return cls.model_construct(
+            value=value,
+            minimal_generators=minimal_generators,
+            in_semigroup=in_semigroup,
+            lengths=lengths,
+        )
+
     @model_validator(mode="after")
     def require_length_set(self) -> Self:
-        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        _require_canonical_minimal_axis(self.minimal_generators)
         if self.in_semigroup != bool(self.lengths):
             raise _validation_error(
                 "membership must agree with the factorization lengths"
@@ -117,10 +146,6 @@ class FactorizationLengthsComputeResult(StrictModel):
             )
         if any(length < 0 for length in self.lengths):
             raise _validation_error("factorization lengths must be non-negative")
-        if self.lengths != factorization_lengths(
-            generators, parse_canonical_integer(self.value)
-        ):
-            raise _validation_error("lengths do not form the complete length set")
         return self
 
 
@@ -213,9 +238,33 @@ class FactorizationGraphComputeResult(StrictModel):
     connected_components: tuple[tuple[int, ...], ...]
     is_connected: bool
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        value: CanonicalInteger,
+        minimal_generators: tuple[CanonicalInteger, ...],
+        in_semigroup: bool,
+        factorizations: tuple[tuple[int, ...], ...],
+        edges: tuple[tuple[int, int], ...],
+        connected_components: tuple[tuple[int, ...], ...],
+        is_connected: bool,
+    ) -> Self:
+        """Construct a graph derived from one admitted factorization family."""
+
+        return cls.model_construct(
+            value=value,
+            minimal_generators=minimal_generators,
+            in_semigroup=in_semigroup,
+            factorizations=factorizations,
+            edges=edges,
+            connected_components=connected_components,
+            is_connected=is_connected,
+        )
+
     @model_validator(mode="after")
     def require_graph_partition(self) -> Self:
-        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        _require_canonical_minimal_axis(self.minimal_generators)
         vertex_count = len(self.factorizations)
         if self.in_semigroup != bool(self.factorizations):
             raise _validation_error("membership must agree with graph vertices")
@@ -230,16 +279,6 @@ class FactorizationGraphComputeResult(StrictModel):
             raise _validation_error("is_connected must agree with connected components")
         if any(not 0 <= left < right < vertex_count for left, right in self.edges):
             raise _validation_error("graph edge has invalid vertex indices")
-        _require_exact_factorization_family(
-            generators, parse_canonical_integer(self.value), self.factorizations
-        )
-        expected_edges, expected_components = _factorization_graph_data(
-            self.factorizations
-        )
-        if self.edges != expected_edges:
-            raise _validation_error("edges do not match shared-support adjacency")
-        if self.connected_components != expected_components:
-            raise _validation_error("connected components do not match the graph")
         return self
 
 

@@ -85,14 +85,14 @@ def compute_factorizations(
         format_canonical_integer(generator) for generator in generators
     )
     if value < 0:
-        return FactorizationComputeResult(
+        return FactorizationComputeResult._from_kernel(
             value=request.value,
             minimal_generators=minimal_generators,
             in_semigroup=False,
             factorizations=(),
         )
     family = _enumerate_factorizations(generators, value)
-    return FactorizationComputeResult(
+    return FactorizationComputeResult._from_kernel(
         value=request.value,
         minimal_generators=minimal_generators,
         in_semigroup=bool(family),
@@ -111,14 +111,14 @@ def compute_factorization_lengths(
         format_canonical_integer(generator) for generator in generators
     )
     if value < 0:
-        return FactorizationLengthsComputeResult(
+        return FactorizationLengthsComputeResult._from_kernel(
             value=request.value,
             minimal_generators=minimal_generators,
             in_semigroup=False,
             lengths=(),
         )
     lengths = factorization_lengths(tuple(generators), value)
-    return FactorizationLengthsComputeResult(
+    return FactorizationLengthsComputeResult._from_kernel(
         value=request.value,
         minimal_generators=minimal_generators,
         in_semigroup=bool(lengths),
@@ -152,7 +152,7 @@ def compute_factorization_graph(
         format_canonical_integer(generator) for generator in generators
     )
     if value < 0:
-        return FactorizationGraphComputeResult(
+        return FactorizationGraphComputeResult._from_kernel(
             value=request.value,
             minimal_generators=minimal_generators,
             in_semigroup=False,
@@ -163,7 +163,7 @@ def compute_factorization_graph(
         )
     family = _enumerate_factorizations(generators, value)
     edges, components, connected = _build_factorization_graph(family)
-    return FactorizationGraphComputeResult(
+    return FactorizationGraphComputeResult._from_kernel(
         value=request.value,
         minimal_generators=minimal_generators,
         in_semigroup=bool(family),
@@ -176,9 +176,54 @@ def compute_factorization_graph(
     )
 
 
+def verify_factorization_compute_result(result: FactorizationComputeResult) -> bool:
+    """Replay one bounded factorization-family claim."""
+
+    generators = tuple(
+        parse_canonical_integer(item) for item in result.minimal_generators
+    )
+    family = tuple(factorizations(generators, parse_canonical_integer(result.value)))
+    return result.in_semigroup == bool(family) and result.factorizations == family
+
+
+def verify_factorization_lengths_compute_result(
+    result: FactorizationLengthsComputeResult,
+) -> bool:
+    """Replay one bounded factorization-length claim."""
+
+    generators = tuple(
+        parse_canonical_integer(item) for item in result.minimal_generators
+    )
+    lengths = factorization_lengths(generators, parse_canonical_integer(result.value))
+    return result.in_semigroup == bool(lengths) and result.lengths == lengths
+
+
+def verify_factorization_graph_compute_result(
+    result: FactorizationGraphComputeResult,
+) -> bool:
+    """Replay the family and derived graph for one supplied claim."""
+
+    generators = tuple(
+        parse_canonical_integer(item) for item in result.minimal_generators
+    )
+    family = tuple(factorizations(generators, parse_canonical_integer(result.value)))
+    edges, components, connected = _build_factorization_graph(list(family))
+    return (
+        result.in_semigroup == bool(family)
+        and result.factorizations == family
+        and result.edges == tuple(edges)
+        and result.connected_components
+        == tuple(tuple(sorted(component)) for component in components)
+        and result.is_connected == connected
+    )
+
+
 __all__ = [
     "compute_factorization_distance",
     "compute_factorization_graph",
     "compute_factorization_lengths",
     "compute_factorizations",
+    "verify_factorization_compute_result",
+    "verify_factorization_graph_compute_result",
+    "verify_factorization_lengths_compute_result",
 ]

@@ -252,6 +252,22 @@ class CommunicatingClassesResult(StrictModel):
     state_class: tuple[int, ...]
     """Class index of each state (0-indexed)."""
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        transition_matrix: tuple[tuple[CanonicalRational, ...], ...],
+        classes: tuple[tuple[tuple[int, ...], bool], ...],
+        state_class: tuple[int, ...],
+    ) -> Self:
+        """Construct output whose SCC relation was established by the kernel."""
+
+        return cls.model_construct(
+            transition_matrix=transition_matrix,
+            classes=classes,
+            state_class=state_class,
+        )
+
     @model_validator(mode="after")
     def require_partition_validity(self) -> Self:
         dimension = len(self.transition_matrix)
@@ -296,47 +312,4 @@ class CommunicatingClassesResult(StrictModel):
                         "decomposition_state_class_mismatch",
                         "state_class must match classes",
                     )
-        return self
-
-    @model_validator(mode="after")
-    def bind_decomposition(self) -> Self:
-        import networkx as nx
-
-        matrix = self.transition_matrix
-        dimension = len(matrix)
-        graph: nx.DiGraph[int] = nx.DiGraph()
-        graph.add_nodes_from(range(dimension))
-        for i in range(dimension):
-            for j in range(dimension):
-                if matrix[i][j].as_fraction() > 0:
-                    graph.add_edge(i, j)
-        sccs = list(nx.strongly_connected_components(graph))
-        condensation = nx.condensation(graph, sccs)
-        scc_list = list(nx.topological_sort(condensation))
-        expected_classes: list[tuple[tuple[int, ...], bool]] = []
-        expected_state_class = [0] * dimension
-        for scc_idx, scc_node in enumerate(scc_list):
-            scc = sccs[scc_node] if isinstance(scc_node, int) else scc_node
-            states = tuple(sorted(scc))
-            is_closed = True
-            for state in states:
-                for target in range(dimension):
-                    if target not in scc and matrix[state][target].as_fraction() > 0:
-                        is_closed = False
-                        break
-                if not is_closed:
-                    break
-            expected_classes.append((states, is_closed))
-            for state in states:
-                expected_state_class[state] = scc_idx
-        if self.classes != tuple(expected_classes):
-            raise _validation_error(
-                "decomposition_scc_classes_mismatch",
-                "classes must be the exact SCC decomposition of the transition matrix",
-            )
-        if self.state_class != tuple(expected_state_class):
-            raise _validation_error(
-                "decomposition_scc_state_class_mismatch",
-                "state_class must match the SCC decomposition",
-            )
         return self

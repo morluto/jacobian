@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.coloring._chromatic_number_models import (
     ChromaticNumberCertificateCheckRequest,
     ChromaticNumberCertificateCheckResult,
@@ -83,25 +82,46 @@ def compute_chromatic_number_certificate_check(
         request.coloring,
         request.weights,
     )
-    return ChromaticNumberCertificateCheckResult(
+    return ChromaticNumberCertificateCheckResult._from_kernel(
         graph=request.graph,
         claimed_chromatic_number=request.claimed_chromatic_number,
         coloring=request.coloring,
         weights=request.weights,
-        verdict=evaluation.verdict,
-        reason=evaluation.reason,
-        weight_sum=CanonicalRational.from_fraction(evaluation.weight_sum),
-        certified_lower_bound=evaluation.certified_lower_bound,
-        blocking_vertex=evaluation.blocking_vertex,
-        blocking_edge=evaluation.blocking_edge,
-        blocking_independent_set=evaluation.blocking_independent_set,
-        blocking_independent_set_weight=(
-            None
-            if evaluation.blocking_independent_set_weight is None
-            else CanonicalRational.from_fraction(
-                evaluation.blocking_independent_set_weight
-            )
-        ),
+        evaluation=evaluation,
+    )
+
+
+def verify_chromatic_number_certificate_check_result(
+    result: ChromaticNumberCertificateCheckResult,
+) -> bool:
+    """Replay one independently supplied bounded chromatic certificate claim."""
+
+    expected = _evaluate_chromatic_number_certificate(
+        result.graph,
+        result.claimed_chromatic_number,
+        result.coloring,
+        result.weights,
+    )
+    return (
+        result.verdict,
+        result.reason,
+        result.weight_sum.as_fraction(),
+        result.certified_lower_bound,
+        result.blocking_vertex,
+        result.blocking_edge,
+        result.blocking_independent_set,
+        None
+        if result.blocking_independent_set_weight is None
+        else result.blocking_independent_set_weight.as_fraction(),
+    ) == (
+        expected.verdict,
+        expected.reason,
+        expected.weight_sum,
+        expected.certified_lower_bound,
+        expected.blocking_vertex,
+        expected.blocking_edge,
+        expected.blocking_independent_set,
+        expected.blocking_independent_set_weight,
     )
 
 

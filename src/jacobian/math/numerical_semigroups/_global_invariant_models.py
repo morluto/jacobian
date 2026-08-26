@@ -10,12 +10,6 @@ from pydantic import Field, model_validator
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
-from jacobian.math.numerical_semigroups._algorithms import (
-    betti_data,
-    catenary_degree_from_factorizations,
-    delta_periodicity_bound,
-    factorizations,
-)
 from jacobian.math.numerical_semigroups._models import (
     _GENERAL_GENERATOR_ENVELOPE,
     MAX_GENERATORS,
@@ -57,20 +51,32 @@ class BettiElementsResult(StrictModel):
     candidate_count: int = Field(ge=0)
     betti_elements: tuple[CanonicalInteger, ...]
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        minimal_generators: tuple[CanonicalInteger, ...],
+        apery_set: tuple[CanonicalInteger, ...],
+        candidate_count: int,
+        betti_elements: tuple[CanonicalInteger, ...],
+    ) -> Self:
+        """Construct output established by one admitted Betti-data kernel call."""
+
+        return cls.model_construct(
+            minimal_generators=minimal_generators,
+            apery_set=apery_set,
+            candidate_count=candidate_count,
+            betti_elements=betti_elements,
+        )
+
     @model_validator(mode="after")
     def require_complete_betti_data(self) -> Self:
-        apery, candidates, disconnected = betti_data(
-            _require_canonical_minimal_axis(self.minimal_generators)
-        )
-        if tuple(map(parse_canonical_integer, self.apery_set)) != apery:
-            raise _validation_error("apery_set does not match the minimal generators")
-        if self.candidate_count != len(candidates):
-            raise _validation_error("candidate_count does not match the complete range")
-        if tuple(map(parse_canonical_integer, self.betti_elements)) != tuple(
-            disconnected
+        _require_canonical_minimal_axis(self.minimal_generators)
+        if self.betti_elements != tuple(
+            sorted(set(self.betti_elements), key=parse_canonical_integer)
         ):
             raise _validation_error(
-                "betti_elements do not match disconnected candidates"
+                "betti_elements must be increasing and duplicate-free"
             )
         return self
 
@@ -107,21 +113,36 @@ class DeltaSetResult(StrictModel):
         "EVENTUAL_PERIODICITY_BOUND"
     )
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        minimal_generators: tuple[CanonicalInteger, ...],
+        delta_set: tuple[int, ...],
+        periodicity_bound: int,
+        checked_through: int,
+    ) -> Self:
+        """Construct output derived from one admitted periodicity computation."""
+
+        return cls.model_construct(
+            minimal_generators=minimal_generators,
+            delta_set=delta_set,
+            periodicity_bound=periodicity_bound,
+            checked_through=checked_through,
+        )
+
     @model_validator(mode="after")
     def require_set_semantics(self) -> Self:
-        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        _require_canonical_minimal_axis(self.minimal_generators)
         if self.delta_set != tuple(sorted(set(self.delta_set))):
             raise _validation_error(
                 "delta_set must be strictly increasing and duplicate-free"
             )
         if any(delta <= 0 for delta in self.delta_set):
             raise _validation_error("delta values must be positive")
-        expected_bound = delta_periodicity_bound(generators)
-        if self.periodicity_bound != expected_bound:
-            raise _validation_error("periodicity_bound does not match the generators")
-        if self.checked_through != expected_bound + generators[-1] - 1:
+        if self.checked_through < self.periodicity_bound:
             raise _validation_error(
-                "checked_through does not match the completeness theorem"
+                "checked_through must include the periodicity bound"
             )
         return self
 
@@ -199,21 +220,34 @@ class CatenaryDegreeResult(StrictModel):
     betti_degrees: tuple[BettiCatenaryDegree, ...]
     witness_betti_elements: tuple[CanonicalInteger, ...]
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        minimal_generators: tuple[CanonicalInteger, ...],
+        catenary_degree: int,
+        betti_degrees: tuple[BettiCatenaryDegree, ...],
+        witness_betti_elements: tuple[CanonicalInteger, ...],
+    ) -> Self:
+        """Construct output established from one admitted Betti pass."""
+
+        return cls.model_construct(
+            minimal_generators=minimal_generators,
+            catenary_degree=catenary_degree,
+            betti_degrees=betti_degrees,
+            witness_betti_elements=witness_betti_elements,
+        )
+
     @model_validator(mode="after")
     def require_maximizing_witnesses(self) -> Self:
-        generators = _require_canonical_minimal_axis(self.minimal_generators)
-        _, _, disconnected = betti_data(generators)
-        expected_records = tuple(
-            BettiCatenaryDegree(
-                betti_element=str(value),
-                catenary_degree=catenary_degree_from_factorizations(
-                    factorizations(generators, value)
-                ),
+        _require_canonical_minimal_axis(self.minimal_generators)
+        if tuple(record.betti_element for record in self.betti_degrees) != tuple(
+            sorted(
+                (record.betti_element for record in self.betti_degrees),
+                key=parse_canonical_integer,
             )
-            for value in disconnected
-        )
-        if self.betti_degrees != expected_records:
-            raise _validation_error("betti_degrees do not match the complete Betti set")
+        ):
+            raise _validation_error("betti_degrees must be increasing by Betti element")
         maximum = max(
             (record.catenary_degree for record in self.betti_degrees), default=0
         )

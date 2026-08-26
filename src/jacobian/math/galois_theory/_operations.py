@@ -18,6 +18,7 @@ from jacobian.math.galois_theory._models import (
     GaloisGroupResult,
     SolvableRequest,
     SolvableResult,
+    _permutation_group_properties,
 )
 
 
@@ -47,7 +48,7 @@ def compute_galois_factor(request: GaloisFactorRequest) -> GaloisFactorResult:
         and result_factors[0].multiplicity == 1
         and len(result_factors[0].coefficients) == len(request.coefficients)
     )
-    return GaloisFactorResult(
+    return GaloisFactorResult._from_kernel(
         field_order=request.field_order,
         source_coefficients=request.coefficients,
         unit=int(unit) % request.field_order,
@@ -55,6 +56,24 @@ def compute_galois_factor(request: GaloisFactorRequest) -> GaloisFactorResult:
         distinct_factor_count=len(result_factors),
         factor_count=factor_count,
         is_irreducible=is_irred,
+    )
+
+
+def verify_galois_factor_result(result: GaloisFactorResult) -> bool:
+    """Replay bounded factor irreducibility for a supplied factorization claim."""
+
+    from sympy import GF, Poly, Symbol
+
+    x = Symbol("x")
+    return result.is_irreducible == (
+        len(result.factors) == 1
+        and result.factors[0].multiplicity == 1
+        and len(result.factors[0].coefficients) == len(result.source_coefficients)
+    ) and all(
+        Poly(
+            list(reversed(factor.coefficients)), x, domain=GF(result.field_order)
+        ).is_irreducible
+        for factor in result.factors
     )
 
 
@@ -105,12 +124,23 @@ def compute_galois_group(request: GaloisGroupRequest) -> GaloisGroupResult:
     order = int(perm_group.order())
     is_solvable = bool(perm_group.is_solvable)
 
-    return GaloisGroupResult(
+    return GaloisGroupResult._from_kernel(
         group=_wire_group(perm_group, len(request.coefficients) - 1),
         group_name=group_name,
         order=order,
         degree=len(request.coefficients) - 1,
         is_solvable=is_solvable,
+    )
+
+
+def verify_galois_group_result(result: GaloisGroupResult) -> bool:
+    """Replay bounded group properties for an independently supplied claim."""
+
+    order, is_solvable = _permutation_group_properties(result.group)
+    return (
+        result.degree == len(result.group.root_axis)
+        and result.order == order
+        and result.is_solvable == is_solvable
     )
 
 
@@ -122,7 +152,14 @@ def compute_solvable(request: SolvableRequest) -> SolvableResult:
     """
     perm_group = _galois_group_from_coeffs(request.coefficients)
     is_solvable = bool(perm_group.is_solvable)
-    return SolvableResult(
+    return SolvableResult._from_kernel(
         solvable_by_radicals=is_solvable,
         group=_wire_group(perm_group, len(request.coefficients) - 1),
     )
+
+
+def verify_solvable_result(result: SolvableResult) -> bool:
+    """Replay bounded group solvability for an independently supplied claim."""
+
+    _, is_solvable = _permutation_group_properties(result.group)
+    return result.solvable_by_radicals == is_solvable

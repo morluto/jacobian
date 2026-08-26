@@ -20,6 +20,40 @@ from jacobian.math.markov_chain._models import (
 from jacobian.math.markov_chain.operations import _stationary_distribution_extremes
 
 
+def _derive_communicating_classes(
+    matrix: tuple[tuple[CanonicalRational, ...], ...],
+) -> tuple[tuple[tuple[tuple[int, ...], bool], ...], tuple[int, ...]]:
+    """Derive the canonical SCC partition in bounded quadratic graph work."""
+
+    import networkx as nx
+
+    dimension = len(matrix)
+    graph: nx.DiGraph[int] = nx.DiGraph()
+    graph.add_nodes_from(range(dimension))
+    graph.add_edges_from(
+        (source, target)
+        for source in range(dimension)
+        for target in range(dimension)
+        if matrix[source][target].as_fraction() > 0
+    )
+    sccs = list(nx.strongly_connected_components(graph))
+    condensation = nx.condensation(graph, sccs)
+    classes: list[tuple[tuple[int, ...], bool]] = []
+    state_class = [0] * dimension
+    for class_index, scc_node in enumerate(nx.topological_sort(condensation)):
+        states_set = sccs[scc_node]
+        states = tuple(sorted(states_set))
+        is_closed = not any(
+            target not in states_set and matrix[source][target].as_fraction() > 0
+            for source in states
+            for target in range(dimension)
+        )
+        classes.append((states, is_closed))
+        for state in states:
+            state_class[state] = class_index
+    return tuple(classes), tuple(state_class)
+
+
 def compute_mixing_time(request: MixingTimeRequest) -> MixingTimeResult:
     matrix = tuple(
         tuple(value.as_fraction() for value in row) for row in request.matrix
@@ -92,47 +126,17 @@ def compute_communicating_classes(
 ) -> CommunicatingClassesResult:
     """Decompose a Markov chain into communicating classes via SCC analysis."""
 
-    import networkx as nx
-
     matrix = request.matrix
-    dimension = len(matrix)
-
-    graph: nx.DiGraph[int] = nx.DiGraph()
-    graph.add_nodes_from(range(dimension))
-    for i in range(dimension):
-        for j in range(dimension):
-            if matrix[i][j].as_fraction() > 0:
-                graph.add_edge(i, j)
-
-    sccs = list(nx.strongly_connected_components(graph))
-    condensation = nx.condensation(graph, sccs)
-
-    # Get topological order of SCC nodes
-    scc_list = list(nx.topological_sort(condensation))
-
-    # Reverse for recurrent-first order (closed classes last)
-    # Actually, let's order by: transient classes first, then recurrent classes
-    # A class is closed (recurrent) if it has no outgoing edges to other classes
-    classes_info: list[tuple[tuple[int, ...], bool]] = []
-    state_class = [0] * dimension
-
-    for scc_idx, scc_node in enumerate(scc_list):
-        scc = sccs[scc_node] if isinstance(scc_node, int) else scc_node
-        states = sorted(scc)
-        is_closed = True
-        for state in states:
-            for j in range(dimension):
-                if j not in scc and matrix[state][j].as_fraction() > 0:
-                    is_closed = False
-                    break
-            if not is_closed:
-                break
-        classes_info.append((tuple(states), is_closed))
-        for state in states:
-            state_class[state] = scc_idx
-
-    return CommunicatingClassesResult(
+    classes, state_class = _derive_communicating_classes(matrix)
+    return CommunicatingClassesResult._from_kernel(
         transition_matrix=request.matrix,
-        classes=tuple(classes_info),
-        state_class=tuple(state_class),
+        classes=classes,
+        state_class=state_class,
     )
+
+
+def verify_communicating_classes_result(result: CommunicatingClassesResult) -> bool:
+    """Replay the SCC relation for an independently supplied bounded result."""
+
+    classes, state_class = _derive_communicating_classes(result.transition_matrix)
+    return result.classes == classes and result.state_class == state_class

@@ -39,6 +39,7 @@ from jacobian.math.numerical_semigroups._presentation_models import (
 from jacobian.math.numerical_semigroups._presentation_operations import (
     compute_minimal_presentation,
     compute_presentation_binomials,
+    verify_minimal_presentation_result,
 )
 
 
@@ -149,17 +150,18 @@ def test_betti_and_minimal_presentation_replay_independently() -> None:
 
 
 def test_minimal_presentation_rejects_relations_inside_one_r_class() -> None:
-    with numerical_semigroup_error():
-        MinimalPresentationResult.model_validate(
-            {
-                "minimal_generators": ["4", "10", "15"],
-                "betti_elements": ["20", "30"],
-                "relations": [
-                    {"first": [5, 0, 0], "second": [0, 2, 0]},
-                    {"first": [0, 3, 0], "second": [5, 1, 0]},
-                ],
-            }
-        )
+    result = MinimalPresentationResult.model_validate(
+        {
+            "minimal_generators": ["4", "10", "15"],
+            "betti_elements": ["20", "30"],
+            "relations": [
+                {"first": [5, 0, 0], "second": [0, 2, 0]},
+                {"first": [0, 3, 0], "second": [5, 1, 0]},
+            ],
+        }
+    )
+
+    assert not verify_minimal_presentation_result(result)
 
 
 def test_element_and_global_catenary_replay_independently() -> None:

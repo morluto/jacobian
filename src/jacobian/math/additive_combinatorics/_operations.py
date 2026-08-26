@@ -265,8 +265,11 @@ def compute_ordered_difference_profile(
 def verify_subset_sum_profile(profile: SubsetSumProfile) -> bool:
     """Check an independently supplied complete profile within its envelope."""
 
-    envelope = subset_sum_profile_envelope(profile.source)
-    expected = tuple(sorted(subset_sum_profile_counts(profile.source).items()))
+    try:
+        envelope = subset_sum_profile_envelope(profile.source)
+        expected = tuple(sorted(subset_sum_profile_counts(profile.source).items()))
+    except ValueError:
+        return False
     actual = tuple(
         (
             parse_canonical_integer(entry.sum),
@@ -287,12 +290,17 @@ def verify_multiset_sum_representation_profile(
 ) -> bool:
     """Check a supplied complete multiset-sum profile under request admission."""
 
-    request = MultisetSumRepresentationProfileRequest(
-        source=result.source, arity=result.arity, window=result.window
-    )
-    values = _multiset_sum_source_values(request.source)
-    bounds = request.window.as_integer_bounds() if request.window is not None else None
-    counts = count_sums(values, request.arity, bounds)
+    try:
+        request = MultisetSumRepresentationProfileRequest(
+            source=result.source, arity=result.arity, window=result.window
+        )
+        values = _multiset_sum_source_values(request.source)
+        bounds = (
+            request.window.as_integer_bounds() if request.window is not None else None
+        )
+        counts = count_sums(values, request.arity, bounds)
+    except ValueError:
+        return False
     expected = tuple(
         RepresentationProfileEntry(
             sum=format_canonical_integer(value), multiplicity=counts[value]

@@ -1,21 +1,29 @@
 """Contract and mathematical-property tests for Galois operations."""
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 from sympy.combinatorics import Permutation, PermutationGroup
 
 from jacobian.math.galois_theory._models import (
+    FiniteFieldFactor,
     FrobeniusCycleRequest,
     GaloisFactorRequest,
     GaloisFactorResult,
     GaloisGroupRequest,
+    GaloisGroupResult,
     SolvableRequest,
+    SolvableResult,
 )
 from jacobian.math.galois_theory._operations import (
     compute_frobenius_cycle,
     compute_galois_factor,
     compute_galois_group,
     compute_solvable,
+    verify_galois_factor_result,
+    verify_galois_group_result,
+    verify_solvable_result,
 )
 from jacobian.math.galois_theory._tools import TOOLS
 
@@ -42,7 +50,7 @@ def _multiply_mod(
 
 
 def _reconstruct(result: GaloisFactorResult) -> tuple[int, ...]:
-    polynomial = (result.unit,)
+    polynomial: tuple[int, ...] = (result.unit,)
     for factor in result.factors:
         for _ in range(factor.multiplicity):
             polynomial = _multiply_mod(
@@ -153,22 +161,36 @@ def test_factorization_result_rejects_a_forged_certificate() -> None:
         GaloisFactorResult.model_validate(payload)
     assert exc.value.errors()[0]["type"] == "galois_theory.field_order_not_prime"
 
-    with pytest.raises(ValidationError) as exc:
-        GaloisFactorResult(
-            field_order=3,
-            source_coefficients=(2, 0, 1),
-            unit=1,
-            factors=(
-                {
-                    "coefficients": (2, 0, 1),
-                    "multiplicity": 1,
-                },
-            ),
-            distinct_factor_count=1,
-            factor_count=1,
-            is_irreducible=True,
-        )
-    assert exc.value.errors()[0]["type"] == "galois_theory.factor_not_irreducible"
+    forged = GaloisFactorResult(
+        field_order=3,
+        source_coefficients=(2, 0, 1),
+        unit=1,
+        factors=(FiniteFieldFactor(coefficients=(2, 0, 1), multiplicity=1),),
+        distinct_factor_count=1,
+        factor_count=1,
+        is_irreducible=True,
+    )
+    assert not verify_galois_factor_result(forged)
+
+
+def test_factor_producer_runs_the_backend_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sympy import Poly
+
+    original = Poly.factor_list
+    calls = 0
+
+    def counted(self: Poly, *args: object, **kwargs: object) -> Any:
+        nonlocal calls
+        calls += 1
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Poly, "factor_list", counted)
+    result = compute_galois_factor(
+        GaloisFactorRequest(field_order=5, coefficients=(1, 0, 1))
+    )
+
+    assert result.is_irreducible is False
+    assert calls == 1
 
 
 def test_frobenius_cycle_is_canonical_positive_partition() -> None:
@@ -239,11 +261,21 @@ def test_galois_group_returns_composable_generators() -> None:
     assert result.group.root_axis == tuple(f"root_{index}" for index in range(5))
     assert _group_from_result(result).order() == result.order
 
+    forged = GaloisGroupResult.model_validate(
+        {**result.model_dump(), "order": result.order + 1}
+    )
+    assert not verify_galois_group_result(forged)
+
 
 def test_solvable_quintic_returns_the_group_certificate() -> None:
     result = compute_solvable(SolvableRequest(coefficients=(-2, 0, 0, 0, 0, 1)))
     assert result.solvable_by_radicals is True
     assert _group_from_result(result).order() == 20
+
+    forged = SolvableResult.model_validate(
+        {**result.model_dump(), "solvable_by_radicals": False}
+    )
+    assert not verify_solvable_result(forged)
 
 
 def test_unsolvable_quintic_uses_actual_group() -> None:

@@ -19,8 +19,11 @@ _EXTERNAL_OPERATION_OWNERS = frozenset(
     {
         _PROCESS_OWNER,
         PurePosixPath("src/jacobian/math/_singular.py"),
+        PurePosixPath("src/jacobian/math/graphs/isomorphism/_operations.py"),
         PurePosixPath("src/jacobian/math/polynomials/ideals/_singular.py"),
         PurePosixPath("src/jacobian/math/logic/_sat.py"),
+        PurePosixPath("src/jacobian/math/number_theory/_factorization_kernels.py"),
+        PurePosixPath("src/jacobian/math/number_field/_operations.py"),
         PurePosixPath("src/jacobian/math/polynomials/multivariate/_factor_backend.py"),
         PurePosixPath("src/jacobian/math/polynomials/maps/_replay.py"),
     }
@@ -460,18 +463,9 @@ def _owner_operation_reentry_violations(
     for node in _walk(tree):
         if isinstance(node, ast.ImportFrom):
             module = _resolve_import_from_module(node, relative)
-            if module is not None and _is_owner_operation_module(module, owner):
-                violations.append(
-                    _violation(
-                        relative,
-                        node,
-                        "owner-operation-reentry",
-                        "contract and value modules must not import their own operations",
-                    )
-                )
-            elif module == owner and any(
+            if (module is not None and _is_owner_operation_module(module, owner)) or (module == owner and any(
                 alias.name in {"operations", "_operations"} for alias in node.names
-            ):
+            )):
                 violations.append(
                     _violation(
                         relative,

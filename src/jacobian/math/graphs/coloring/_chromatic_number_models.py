@@ -559,47 +559,47 @@ class ChromaticNumberCertificateCheckResult(StrictModel):
         ),
     )
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: SimpleUndirectedGraph,
+        claimed_chromatic_number: int,
+        coloring: tuple[int, ...],
+        weights: tuple[CanonicalRational, ...],
+        evaluation: _CertificateEvaluation,
+    ) -> Self:
+        """Construct a result whose exact certificate relation was established."""
+
+        return cls.model_construct(
+            graph=graph,
+            claimed_chromatic_number=claimed_chromatic_number,
+            coloring=coloring,
+            weights=weights,
+            verdict=evaluation.verdict,
+            reason=evaluation.reason,
+            weight_sum=CanonicalRational.from_fraction(evaluation.weight_sum),
+            certified_lower_bound=evaluation.certified_lower_bound,
+            blocking_vertex=evaluation.blocking_vertex,
+            blocking_edge=evaluation.blocking_edge,
+            blocking_independent_set=evaluation.blocking_independent_set,
+            blocking_independent_set_weight=(
+                None
+                if evaluation.blocking_independent_set_weight is None
+                else CanonicalRational.from_fraction(
+                    evaluation.blocking_independent_set_weight
+                )
+            ),
+        )
+
     @model_validator(mode="after")
-    def require_exact_certificate_replay(self) -> Self:
+    def require_structural_result_bounds(self) -> Self:
         _require_bounded_sources(
             self.graph,
             self.claimed_chromatic_number,
             self.coloring,
             self.weights,
         )
-        expected = _evaluate_chromatic_number_certificate(
-            self.graph,
-            self.claimed_chromatic_number,
-            self.coloring,
-            self.weights,
-        )
-        actual = (
-            self.verdict,
-            self.reason,
-            self.weight_sum.as_fraction(),
-            self.certified_lower_bound,
-            self.blocking_vertex,
-            self.blocking_edge,
-            self.blocking_independent_set,
-            None
-            if self.blocking_independent_set_weight is None
-            else self.blocking_independent_set_weight.as_fraction(),
-        )
-        replayed = (
-            expected.verdict,
-            expected.reason,
-            expected.weight_sum,
-            expected.certified_lower_bound,
-            expected.blocking_vertex,
-            expected.blocking_edge,
-            expected.blocking_independent_set,
-            expected.blocking_independent_set_weight,
-        )
-        if actual != replayed:
-            raise PydanticCustomError(
-                "graph.chromatic_number_result_does_match_exact_certificate",
-                "chromatic-number result does not match exact certificate replay",
-            )
         return self
 
 

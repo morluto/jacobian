@@ -8,13 +8,9 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
-from jacobian.math.numerical_semigroups._algorithms import betti_data
 from jacobian.math.numerical_semigroups._models import (
     _GENERAL_GENERATOR_ENVELOPE,
     MAX_GENERATORS,
-    _betti_component_index,
-    _edges_span,
     _require_canonical_minimal_axis,
     _require_global_betti_bound,
     _require_minimal_generators,
@@ -67,19 +63,25 @@ class MinimalPresentationResult(StrictModel):
     betti_elements: tuple[CanonicalInteger, ...]
     relations: tuple[MinimalPresentationRelation, ...]
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        minimal_generators: tuple[CanonicalInteger, ...],
+        betti_elements: tuple[CanonicalInteger, ...],
+        relations: tuple[MinimalPresentationRelation, ...],
+    ) -> Self:
+        """Construct a minimal presentation derived by the admitted kernel."""
+
+        return cls.model_construct(
+            minimal_generators=minimal_generators,
+            betti_elements=betti_elements,
+            relations=relations,
+        )
+
     @model_validator(mode="after")
     def require_minimal_relation_counts(self) -> Self:
         generators = _require_canonical_minimal_axis(self.minimal_generators)
-        _, _, disconnected = betti_data(generators)
-        if tuple(map(parse_canonical_integer, self.betti_elements)) != tuple(
-            disconnected
-        ):
-            raise _validation_error(
-                "betti_elements do not match the minimal generators"
-            )
-        relation_components: dict[int, list[tuple[int, int]]] = {
-            betti: [] for betti in disconnected
-        }
         for relation in self.relations:
             if len(relation.first) != len(generators):
                 raise _validation_error(
@@ -97,30 +99,8 @@ class MinimalPresentationResult(StrictModel):
                     relation.second, generators, strict=True
                 )
             )
-            if first_degree != second_degree or first_degree not in relation_components:
-                raise _validation_error("relation is not bound to a Betti element")
-            components = disconnected[first_degree]
-            left = _betti_component_index(relation.first, components)
-            right = _betti_component_index(relation.second, components)
-            if left == right:
-                raise _validation_error(
-                    "relation must connect distinct Betti components"
-                )
-            relation_components[first_degree].append((left, right))
-        expected = {
-            betti: len(components) - 1 for betti, components in disconnected.items()
-        }
-        if {
-            betti: len(edges) for betti, edges in relation_components.items()
-        } != expected:
-            raise _validation_error(
-                "relations do not have minimal per-Betti cardinality"
-            )
-        if any(
-            not _edges_span(len(disconnected[betti]), edges)
-            for betti, edges in relation_components.items()
-        ):
-            raise _validation_error("relations must span all Betti components")
+            if first_degree != second_degree:
+                raise _validation_error("relation terms must have the same degree")
         return self
 
 

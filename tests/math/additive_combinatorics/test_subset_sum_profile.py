@@ -39,7 +39,9 @@ from jacobian.math.additive_combinatorics.values import (
 
 def _request(*items: int) -> SubsetSumProfileRequest:
     return SubsetSumProfileRequest(
-        source={"items": [format_canonical_integer(item) for item in items]},
+        source=IndexedIntegerSequence(
+            items=tuple(format_canonical_integer(item) for item in items)
+        ),
     )
 
 
@@ -151,6 +153,17 @@ def test_verifier_rejects_mutated_total() -> None:
     assert not verify_subset_sum_profile(SubsetSumProfile.model_validate(payload))
 
 
+def test_verifier_fails_closed_for_a_structural_profile_outside_admission() -> None:
+    profile = SubsetSumProfile(
+        source=IndexedIntegerSequence(items=tuple(str(index) for index in range(200))),
+        entries=(SubsetSumProfileEntry(sum="0", multiplicity="1"),),
+        support_size=1,
+        total_subsets=str(1 << 200),
+    )
+
+    assert not verify_subset_sum_profile(profile)
+
+
 def test_result_sensitive_admission_accepts_many_repeated_zeros() -> None:
     source = IndexedIntegerSequence(items=("0",) * MAX_SUBSET_SUM_ITEMS)
 
@@ -206,11 +219,13 @@ def test_large_accepted_profile_stays_inside_declared_result_budget() -> None:
 def test_source_digit_bound_is_enforced_before_integer_conversion() -> None:
     with pytest.raises(ValidationError):
         SubsetSumProfileRequest(
-            source={"items": ["9" * (MAX_SUBSET_SUM_ITEM_DIGITS + 1)]},
+            source=IndexedIntegerSequence(
+                items=("9" * (MAX_SUBSET_SUM_ITEM_DIGITS + 1),)
+            ),
         )
 
     with pytest.raises(ValidationError) as error:
-        SubsetSumProfileRequest(source={"items": ["9" * 100_000]})
+        SubsetSumProfileRequest(source=IndexedIntegerSequence(items=("9" * 100_000,)))
     assert error.value.errors()[0]["type"] == "string_too_long"
 
 
@@ -274,7 +289,7 @@ def test_expensive_admissible_items_are_rejected_by_the_raw_preflight_bound() ->
     payload = {"source": {"items": ("9" * 2_048,) * (MAX_SUBSET_SUM_ITEMS + 1)}}
 
     with pytest.raises(PydanticCustomError) as error:
-        SubsetSumProfileRequest.bound_raw_source(payload)
+        SubsetSumProfileRequest.bound_raw_source(payload)  # type: ignore[operator]
 
     assert error.value.type == "additive_combinatorics.bound_raw_source"
 

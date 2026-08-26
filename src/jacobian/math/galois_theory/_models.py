@@ -176,6 +176,30 @@ class GaloisFactorResult(StrictModel):
     is_irreducible: bool
     method: str = "SYMPY_FACTOR_MOD_P"
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        field_order: int,
+        source_coefficients: tuple[int, ...],
+        unit: int,
+        factors: tuple[FiniteFieldFactor, ...],
+        distinct_factor_count: int,
+        factor_count: int,
+        is_irreducible: bool,
+    ) -> Self:
+        """Construct output whose complete factorization came from the kernel."""
+
+        return cls.model_construct(
+            field_order=field_order,
+            source_coefficients=source_coefficients,
+            unit=unit,
+            factors=factors,
+            distinct_factor_count=distinct_factor_count,
+            factor_count=factor_count,
+            is_irreducible=is_irreducible,
+        )
+
     @model_validator(mode="after")
     def require_reconstruction_certificate(self) -> Self:
         _require_prime(self.field_order)
@@ -196,17 +220,10 @@ class GaloisFactorResult(StrictModel):
                 "reconstruction_mismatch",
                 "factorization must reconstruct the source modulo p",
             )
-        if self.is_irreducible != _factorization_is_irreducible(self):
-            raise _validation_error(
-                "irreducibility_mismatch",
-                "irreducibility must agree with the complete factorization",
-            )
         return self
 
 
 def _require_factor_residues(result: GaloisFactorResult) -> None:
-    from sympy import GF, Poly, Symbol
-
     prime = result.field_order
     if result.unit >= prime:
         raise _validation_error(
@@ -227,16 +244,6 @@ def _require_factor_residues(result: GaloisFactorResult) -> None:
         if factor.coefficients[-1] != 1:
             raise _validation_error(
                 "factor_not_monic", "finite-field factors must be monic"
-            )
-        polynomial = Poly(
-            list(reversed(factor.coefficients)),
-            Symbol("x"),
-            domain=GF(prime),
-        )
-        if not polynomial.is_irreducible:
-            raise _validation_error(
-                "factor_not_irreducible",
-                "every finite-field factor must be irreducible",
             )
 
 
@@ -328,18 +335,32 @@ class GaloisGroupResult(StrictModel):
     is_solvable: bool
     method: str = "SYMPY_GALOIS_GROUP"
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        group: FinitePermutationGroup,
+        group_name: str,
+        order: int,
+        degree: int,
+        is_solvable: bool,
+    ) -> Self:
+        """Construct output whose group properties came from the kernel."""
+
+        return cls.model_construct(
+            group=group,
+            group_name=group_name,
+            order=order,
+            degree=degree,
+            is_solvable=is_solvable,
+        )
+
     @model_validator(mode="after")
     def require_group_degree(self) -> Self:
         if self.degree != len(self.group.root_axis):
             raise _validation_error(
                 "group_degree_mismatch",
                 "group root axis must match the polynomial degree",
-            )
-        order, is_solvable = _permutation_group_properties(self.group)
-        if self.order != order or self.is_solvable != is_solvable:
-            raise _validation_error(
-                "group_properties_mismatch",
-                "reported group properties must agree with the permutation generators",
             )
         return self
 
@@ -349,14 +370,22 @@ class SolvableResult(StrictModel):
     group: FinitePermutationGroup
     method: str = "GALOIS_GROUP_SOLVABILITY"
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        solvable_by_radicals: bool,
+        group: FinitePermutationGroup,
+    ) -> Self:
+        """Construct output whose solvability came from the kernel."""
+
+        return cls.model_construct(
+            solvable_by_radicals=solvable_by_radicals,
+            group=group,
+        )
+
     @model_validator(mode="after")
     def require_group_certificate(self) -> Self:
-        _, is_solvable = _permutation_group_properties(self.group)
-        if self.solvable_by_radicals != is_solvable:
-            raise _validation_error(
-                "solvability_mismatch",
-                "radical solvability must agree with the permutation generators",
-            )
         return self
 
 

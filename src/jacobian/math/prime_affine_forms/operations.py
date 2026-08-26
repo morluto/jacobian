@@ -3,39 +3,45 @@
 from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.math.prime_affine_forms._models import (
+from jacobian.math.prime_affine_forms._admissibility import (
+    PrimeTupleAdmissibilityRequest,
+    PrimeTupleAdmissibilityResult,
+    compute_local_admissibility,
+)
+from jacobian.math.prime_affine_forms._local_factors import (
     FinitePrimeTupleFactorProduct,
+    PrimeTupleLocalFactorRequest,
+    PrimeTupleLocalFactorResult,
+    PrimeTupleLocalFactorsRequest,
+    compute_local_factor,
+    compute_local_factors,
+)
+from jacobian.math.prime_affine_forms._models import (
     PrimeAffineIntervalCountRequest,
     PrimeAffineIntervalEnumerateRequest,
     PrimeAffineTranslationRequest,
     PrimeAffineTranslationResult,
     PrimePatternIntervalCountResult,
     PrimePatternIntervalEnumerateResult,
-    PrimeTupleAdmissibilityRequest,
-    PrimeTupleAdmissibilityResult,
+)
+from jacobian.math.prime_affine_forms._operations import (
+    compute_interval_count,
+    compute_interval_enumerate,
+    compute_interval_residue_profile,
+    compute_residue_wheel,
+    compute_residue_wheel_enumeration,
+    compute_translation,
+    compute_wheel_membership,
+)
+from jacobian.math.prime_affine_forms._residue_wheel import (
     PrimeTupleIntervalResidueProfileRequest,
     PrimeTupleIntervalResidueProfileResult,
-    PrimeTupleLocalFactorRequest,
-    PrimeTupleLocalFactorResult,
-    PrimeTupleLocalFactorsRequest,
     PrimeTupleResidueWheel,
     PrimeTupleResidueWheelEnumeration,
     PrimeTupleResidueWheelEnumerationRequest,
     PrimeTupleResidueWheelRequest,
     PrimeTupleWheelMembershipRequest,
     PrimeTupleWheelMembershipResult,
-)
-from jacobian.math.prime_affine_forms._operations import (
-    compute_interval_count,
-    compute_interval_enumerate,
-    compute_interval_residue_profile,
-    compute_local_admissibility,
-    compute_local_factor,
-    compute_local_factors,
-    compute_residue_wheel,
-    compute_residue_wheel_enumeration,
-    compute_translation,
-    compute_wheel_membership,
 )
 from jacobian.math.prime_affine_forms.values import PrimeAffineTuple
 

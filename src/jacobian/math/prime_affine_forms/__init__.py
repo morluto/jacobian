@@ -1,6 +1,6 @@
 """Canonical public values and native operations for prime-affine arithmetic."""
 
-from jacobian.math.prime_affine_forms._models import PrimeTupleResidueWheel
+from jacobian.math.prime_affine_forms._residue_wheel import PrimeTupleResidueWheel
 from jacobian.math.prime_affine_forms.operations import (
     enumerate_residue_wheel,
     interval_count,

@@ -19,29 +19,35 @@ from jacobian.math.prime_affine_forms import (
     translate_tuple,
     wheel_membership,
 )
+from jacobian.math.prime_affine_forms._admissibility import (
+    PrimeTupleAdmissibilityRequest,
+    compute_local_admissibility,
+)
+from jacobian.math.prime_affine_forms._local_factors import (
+    PrimeTupleLocalFactorRequest,
+    PrimeTupleLocalFactorsRequest,
+    compute_local_factor,
+    compute_local_factors,
+)
 from jacobian.math.prime_affine_forms._models import (
     PrimeAffineIntervalCountRequest,
     PrimeAffineIntervalEnumerateRequest,
     PrimeAffineTranslationRequest,
-    PrimeTupleAdmissibilityRequest,
-    PrimeTupleIntervalResidueProfileRequest,
-    PrimeTupleLocalFactorRequest,
-    PrimeTupleLocalFactorsRequest,
-    PrimeTupleResidueWheelEnumerationRequest,
-    PrimeTupleResidueWheelRequest,
-    PrimeTupleWheelMembershipRequest,
 )
 from jacobian.math.prime_affine_forms._operations import (
     compute_interval_count,
     compute_interval_enumerate,
     compute_interval_residue_profile,
-    compute_local_admissibility,
-    compute_local_factor,
-    compute_local_factors,
     compute_residue_wheel,
     compute_residue_wheel_enumeration,
     compute_translation,
     compute_wheel_membership,
+)
+from jacobian.math.prime_affine_forms._residue_wheel import (
+    PrimeTupleIntervalResidueProfileRequest,
+    PrimeTupleResidueWheelEnumerationRequest,
+    PrimeTupleResidueWheelRequest,
+    PrimeTupleWheelMembershipRequest,
 )
 
 

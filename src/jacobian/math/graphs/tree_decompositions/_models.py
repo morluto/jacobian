@@ -22,6 +22,10 @@ def _json_array_size(item_sizes: list[int]) -> int:
     return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
 
 
+def _normalized_tree_nodes(decomposition: TreeDecomposition) -> list[str]:
+    return [unicodedata.normalize("NFC", node) for node in decomposition.tree_nodes]
+
+
 def _reroot_result_wire_bytes(decomposition: TreeDecomposition, root: str) -> int:
     """Return the exact strict-JSON size of ``reroot(decomposition, root)``.
 
@@ -55,9 +59,7 @@ def _reroot_result_wire_bytes(decomposition: TreeDecomposition, root: str) -> in
             traversal.append(neighbor)
             queue.append(neighbor)
 
-    normalized_nodes = [
-        unicodedata.normalize("NFC", node) for node in decomposition.tree_nodes
-    ]
+    normalized_nodes = _normalized_tree_nodes(decomposition)
     encoded_nodes = [len(encode_strict_json(node)) for node in normalized_nodes]
     parent_fields = []
     children: list[list[int]] = [[] for _ in decomposition.tree_nodes]
@@ -175,8 +177,16 @@ class RerootRequest(StrictModel):
         repeated node labels across its root-to-node paths.  Compute that
         deterministic projection while admitting the request, so the final
         transport wrapper never discovers an oversized result after execution.
+        Labels are compared after the transport boundary's NFC normalization,
+        so canonically equivalent spellings cannot collide as result keys.
         """
 
+        normalized_nodes = _normalized_tree_nodes(self.decomposition)
+        if len(set(normalized_nodes)) != len(normalized_nodes):
+            raise PydanticCustomError(
+                "graph.reroot_tree_node_labels_collide_after_normalization",
+                "tree node labels collide after Unicode NFC normalization",
+            )
         result_bytes = _reroot_result_wire_bytes(self.decomposition, self.root)
         output_limit = CanonicalLimits().max_output_bytes
         if result_bytes > output_limit:

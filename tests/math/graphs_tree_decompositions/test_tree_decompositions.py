@@ -200,6 +200,23 @@ class TestReroot:
             "graph.reroot_result_exceeds_transport_limit"
         )
 
+    def test_rejects_labels_colliding_after_canonicalization(self) -> None:
+        # The raw spellings are distinct, so TreeDecomposition admits them;
+        # NFC composes both to the same key and delivery would reject the
+        # result maps, so admission must reject the request instead.
+        nodes = ("e\u0301x", "\u00e9x")
+        td = TreeDecomposition(
+            graph=SimpleUndirectedGraph(vertices=("a",), edges=()),
+            tree_nodes=nodes,
+            tree_edges=((nodes[0], nodes[1]),),
+            bags=(("a",), ("a",)),
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            RerootRequest(decomposition=td, root=nodes[0])
+        assert exc_info.value.errors()[0]["type"] == (
+            "graph.reroot_tree_node_labels_collide_after_normalization"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Restrict

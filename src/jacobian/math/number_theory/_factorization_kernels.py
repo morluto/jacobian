@@ -220,6 +220,14 @@ def _bounded_direct_factorization(value: int) -> tuple[PrimePower, ...] | None:
             (factor.prime for factor in factors), key=int
         ) or len({factor.prime for factor in factors}) != len(factors):
             raise ValueError("noncanonical factors")
+        from sympy import isprime
+
+        if (
+            not all(isprime(int(factor.prime)) for factor in factors)
+            or math.prod(int(factor.prime) ** factor.power for factor in factors)
+            != abs(value)
+        ):
+            raise ValueError("factorization does not reconstruct the input")
         return factors
     except (
         IndexError,

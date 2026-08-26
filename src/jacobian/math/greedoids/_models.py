@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -145,10 +145,25 @@ class RankRequest(StrictModel):
 class RankResult(StrictModel):
     """The greedoid rank of the supplied subset."""
 
-    status: str = "GREEDOID"
+    status: Literal["GREEDOID", "NOT_A_GREEDOID"] = "GREEDOID"
     rank: int | None = Field(default=None, ge=0)
     subset: tuple[int, ...] | None = Field(default=None)
     obstruction: str | None = None
+
+    @model_validator(mode="after")
+    def bind_status(self) -> Self:
+        if self.status == "GREEDOID":
+            if self.rank is None or self.obstruction is not None:
+                raise _validation_error(
+                    "rank_greedoid_branch_invalid",
+                    "a GREEDOID result requires rank and has no obstruction",
+                )
+        elif self.rank is not None or self.obstruction is None:
+            raise _validation_error(
+                "rank_non_greedoid_branch_invalid",
+                "a NOT_A_GREEDOID result requires an obstruction and no rank",
+            )
+        return self
 
 
 class BasesRequest(StrictModel):
@@ -179,10 +194,25 @@ class BasesRequest(StrictModel):
 class BasesResult(StrictModel):
     """The basis family and common rank."""
 
-    status: str = "GREEDOID"
+    status: Literal["GREEDOID", "NOT_A_GREEDOID"] = "GREEDOID"
     rank: int | None = Field(default=None, ge=0)
     bases: tuple[tuple[int, ...], ...]
     obstruction: str | None = None
+
+    @model_validator(mode="after")
+    def bind_status(self) -> Self:
+        if self.status == "GREEDOID":
+            if self.rank is None or self.obstruction is not None:
+                raise _validation_error(
+                    "bases_greedoid_branch_invalid",
+                    "a GREEDOID result requires rank and has no obstruction",
+                )
+        elif self.rank is not None or self.bases or self.obstruction is None:
+            raise _validation_error(
+                "bases_non_greedoid_branch_invalid",
+                "a NOT_A_GREEDOID result requires an obstruction with no rank or bases",
+            )
+        return self
 
 
 class BasicWordProfileRequest(StrictModel):
@@ -242,10 +272,25 @@ class ConvexGeometryResult(StrictModel):
     the wire representation stays JSON-safe.
     """
 
-    status: str = "ANTIMATROID"
+    status: Literal["ANTIMATROID", "NOT_AN_ANTIMATROID"] = "ANTIMATROID"
     closed_family: tuple[tuple[int, ...], ...] = ()
     complement_map: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...] = ()
     obstruction: str | None = None
+
+    @model_validator(mode="after")
+    def bind_status(self) -> Self:
+        if self.status == "ANTIMATROID":
+            if self.obstruction is not None:
+                raise _validation_error(
+                    "antimatroid_has_obstruction",
+                    "an ANTIMATROID result has no obstruction",
+                )
+        elif self.closed_family or self.complement_map or self.obstruction is None:
+            raise _validation_error(
+                "non_antimatroid_branch_invalid",
+                "a NOT_AN_ANTIMATROID result requires an obstruction and no closed-family data",
+            )
+        return self
 
 
 __all__ = [

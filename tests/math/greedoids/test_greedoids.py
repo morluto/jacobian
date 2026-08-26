@@ -9,9 +9,12 @@ from jacobian.math import greedoids
 from jacobian.math.greedoids import FiniteFeasibleSetSystem
 from jacobian.math.greedoids._models import (
     BasesRequest,
+    BasesResult,
     BasicWordProfileRequest,
     ConvexGeometryRequest,
+    ConvexGeometryResult,
     RankRequest,
+    RankResult,
     RecognizeRequest,
 )
 from jacobian.math.greedoids._operations import (
@@ -71,6 +74,21 @@ def _non_greedoid_exchange() -> FiniteFeasibleSetSystem:
         ground=("a", "b", "c"),
         feasible=((), (0,), (1,), (0, 1), (2,)),
     )
+
+
+@pytest.mark.parametrize(
+    "result",
+    (
+        RankResult.model_construct(status="GREEDOID", rank=None),
+        BasesResult.model_construct(status="NOT_A_GREEDOID", rank=2, bases=()),
+        ConvexGeometryResult.model_construct(
+            status="NOT_AN_ANTIMATROID", closed_family=((),), obstruction="x"
+        ),
+    ),
+)
+def test_result_models_reject_mixed_outcome_branches(result: object) -> None:
+    with pytest.raises(ValidationError):
+        type(result).model_validate(result.model_dump())
 
 
 # ---------------------------------------------------------------------------

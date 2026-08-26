@@ -106,6 +106,15 @@ class GraphIsomorphismResult(StrictModel):
     vertex_mapping: tuple[VertexMappingPair, ...] = Field(default=())
     convention: Literal["NETWORKX_IS_ISOMORPHIC"] = "NETWORKX_IS_ISOMORPHIC"
 
+    @model_validator(mode="after")
+    def bind_mapping_to_status(self) -> Self:
+        if self.status != "ISOMORPHIC" and self.vertex_mapping:
+            raise PydanticCustomError(
+                "graph.nonisomorphic_result_has_mapping",
+                "only an ISOMORPHIC result may carry a vertex mapping",
+            )
+        return self
+
 
 class ColoredGraphCanonicalizationRequest(StrictModel):
     """Canonicalize one materialized colored graph under color-preserving maps."""

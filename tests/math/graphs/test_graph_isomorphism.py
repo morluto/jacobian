@@ -85,6 +85,14 @@ def _is_mapping_valid_isomorphism(
     return True
 
 
+@pytest.mark.parametrize("status", ("NOT_ISOMORPHIC", "UNKNOWN"))
+def test_nonisomorphic_result_branches_reject_vertex_mappings(status: str) -> None:
+    with pytest.raises(ValidationError):
+        GraphIsomorphismResult.model_validate(
+            {"status": status, "vertex_mapping": [{"from_vertex": 0, "to_vertex": 0}]}
+        )
+
+
 # ---------------------------------------------------------------------------
 # Path graphs
 # ---------------------------------------------------------------------------

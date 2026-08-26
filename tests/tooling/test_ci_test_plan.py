@@ -50,6 +50,20 @@ def test_public_operation_kernel_selects_catalog_examples() -> None:
     assert plan.run_catalog_examples is True
 
 
+def test_partitioned_operation_modules_select_catalog_examples() -> None:
+    for filename in (
+        "_factorization_operations.py",
+        "_presentation_operations.py",
+        "_summary_operations.py",
+    ):
+        plan = _plan([f"src/jacobian/math/numerical_semigroups/{filename}"])
+
+        assert plan.run_math is True
+        assert plan.math_tests == ("tests/math/numerical_semigroups",)
+        assert plan.run_catalog is True
+        assert plan.run_catalog_examples is True
+
+
 def test_nested_math_owner_selects_its_top_level_test_root() -> None:
     plan = _plan(["src/jacobian/math/matrices/canonical_forms/_models.py"])
 

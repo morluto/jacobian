@@ -6,7 +6,7 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.numerical_semigroups._factorizations import (
+from jacobian.math.numerical_semigroups._factorization_operations import (
     FactorizationComputeRequest,
     FactorizationComputeResult,
     FactorizationGraphComputeRequest,
@@ -34,7 +34,7 @@ from jacobian.math.numerical_semigroups._operations import (
     compute_elasticity,
     compute_element_elasticity,
 )
-from jacobian.math.numerical_semigroups._presentations import (
+from jacobian.math.numerical_semigroups._presentation_operations import (
     MinimalPresentationRequest,
     MinimalPresentationResult,
     PresentationBinomialsRequest,
@@ -42,7 +42,7 @@ from jacobian.math.numerical_semigroups._presentations import (
     compute_minimal_presentation,
     compute_presentation_binomials,
 )
-from jacobian.math.numerical_semigroups._summary import (
+from jacobian.math.numerical_semigroups._summary_operations import (
     NumericalSemigroupSummaryRequest,
     NumericalSemigroupSummaryResult,
     SemigroupMembershipRequest,

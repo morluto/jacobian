@@ -7,7 +7,7 @@ from math import lcm
 
 from tests.math.numerical_semigroups._support import numerical_semigroup_error
 
-from jacobian.math.numerical_semigroups._factorizations import (
+from jacobian.math.numerical_semigroups._factorization_operations import (
     FactorizationComputeRequest,
     FactorizationGraphComputeRequest,
 )
@@ -27,7 +27,7 @@ from jacobian.math.numerical_semigroups._operations import (
     compute_elasticity,
     compute_element_catenary_degree,
 )
-from jacobian.math.numerical_semigroups._presentations import (
+from jacobian.math.numerical_semigroups._presentation_operations import (
     MinimalPresentationRequest,
     MinimalPresentationResult,
     PresentationBinomialsRequest,

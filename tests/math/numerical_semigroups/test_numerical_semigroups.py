@@ -9,7 +9,7 @@ from jacobian.math.numerical_semigroups._models import (
     MAX_GENERATOR,
     MAX_GENERATORS,
 )
-from jacobian.math.numerical_semigroups._summary import (
+from jacobian.math.numerical_semigroups._summary_operations import (
     NumericalSemigroupSummaryRequest,
     NumericalSemigroupSummaryResult,
     SemigroupMembershipRequest,

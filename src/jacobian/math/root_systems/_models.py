@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -175,13 +175,21 @@ class SimpleReflectionRequest(StrictModel):
     """One bounded simple reflection on a finite-type root lattice."""
 
     matrix: tuple[tuple[int, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_RANK,
         description=(
             "Finite-type generalized Cartan matrix of rank 1 through "
             f"{MAX_RANK}; it must meet the same Cartan conditions as "
             "``CartanMatrixRequest.matrix``."
-        )
+        ),
     )
-    vector: tuple[int, ...] = Field(
+    vector: tuple[
+        Annotated[
+            int,
+            Field(ge=-MAX_REFLECTION_COORDINATE, le=MAX_REFLECTION_COORDINATE),
+        ],
+        ...,
+    ] = Field(
         min_length=1,
         description=(
             "Root-lattice coordinates in the matrix's simple-root basis; "

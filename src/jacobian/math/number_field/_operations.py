@@ -6,8 +6,8 @@ import json
 import sys
 from pathlib import Path
 
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_field._models import (
     NumberFieldDiscriminantResult,
     NumberFieldRequest,

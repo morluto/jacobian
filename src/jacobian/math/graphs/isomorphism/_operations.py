@@ -101,9 +101,6 @@ def _vertex_mapping(
     ):
         raise ValueError("worker mapping is not bijective")
     forward = dict(pairs)
-    edges_a = {
-        edge if graph_a.directed else tuple(sorted(edge)) for edge in graph_a.edges
-    }
     edges_b = {
         edge if graph_b.directed else tuple(sorted(edge)) for edge in graph_b.edges
     }

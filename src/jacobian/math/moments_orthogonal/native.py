@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
+from jacobian.math.moments_orthogonal._jacobi import (
+    jacobi_matrix_from_family,
+    require_jacobi_matrix_admission,
+)
 from jacobian.math.moments_orthogonal._models import (
     GaussianQuadratureRequest,
-    HankelRequest,
-    JacobiMatrixRequest,
-    ShiftedHankelRequest,
 )
 from jacobian.math.moments_orthogonal.operations import (
     _require_gram_schmidt_admission,
     christoffel_darboux_kernel_from_family,
     compute_gaussian_quadrature,
-    compute_hankel_matrix,
-    compute_jacobi_matrix,
-    compute_shifted_hankel,
+    hankel_matrix_from_prefix,
     orthogonal_polynomials_from_moments,
     recurrence_coefficients_from_family,
+    require_hankel_matrix_admission,
 )
 from jacobian.math.moments_orthogonal.values import (
     ChristoffelDarbouxKernel,
@@ -41,14 +41,16 @@ __all__ = [
 
 def hankel_matrix(prefix: MomentFunctionalPrefix, order: int) -> HankelMomentMatrix:
     """Exact Hankel matrix H_order[i,j] = mu_(i+j) of one moment prefix."""
-    return compute_hankel_matrix(HankelRequest(prefix=prefix, order=order))
+    require_hankel_matrix_admission(prefix, order, shifted=False)
+    return hankel_matrix_from_prefix(prefix, order, shifted=False)
 
 
 def shifted_hankel_matrix(
     prefix: MomentFunctionalPrefix, order: int
 ) -> HankelMomentMatrix:
     """Exact shifted Hankel matrix H_order^(1)[i,j] = mu_(i+j+1)."""
-    return compute_shifted_hankel(ShiftedHankelRequest(prefix=prefix, order=order))
+    require_hankel_matrix_admission(prefix, order, shifted=True)
+    return hankel_matrix_from_prefix(prefix, order, shifted=True)
 
 
 def orthogonal_polynomials(
@@ -79,7 +81,8 @@ def christoffel_darboux_kernel(
 
 def jacobi_matrix(family: OrthogonalPolynomialFamily) -> JacobiMatrix:
     """Exact finite tridiagonal Jacobi matrix of one orthogonal family."""
-    return compute_jacobi_matrix(JacobiMatrixRequest(family=family))
+    require_jacobi_matrix_admission(family)
+    return jacobi_matrix_from_family(family)
 
 
 def gaussian_quadrature_rule(

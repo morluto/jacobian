@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.math._rational_height import RationalHeight
+from jacobian.math.moments_orthogonal._jacobi import jacobi_matrix_from_family
 from jacobian.math.moments_orthogonal._models import (
     ChristoffelDarbouxRequest,
     GaussianQuadratureRequest,
@@ -25,6 +27,14 @@ from jacobian.math.moments_orthogonal.values import (
     QuadratureNode,
     ThreeTermRecurrence,
 )
+
+
+class HankelMatrixAdmissionError(ValueError):
+    """A value-based Hankel admission failure with an owner-local code."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 def _to_fraction(r: CanonicalRational) -> Fraction:
@@ -108,44 +118,75 @@ def _eliminate_below(mat: list[list[Fraction]], rank: int, col: int) -> None:
             mat[row][j] -= factor * mat[rank][j]
 
 
-def compute_hankel_matrix(request: HankelRequest) -> HankelMomentMatrix:
-    """Compute the Hankel matrix H_r[i,j] = mu_(i+j)."""
-    moments = [_to_fraction(m) for m in request.prefix.moments]
-    order = request.order
-    matrix = [[moments[i + j] for j in range(order + 1)] for i in range(order + 1)]
-    det = _rational_det(matrix)
+def require_hankel_matrix_admission(
+    prefix: MomentFunctionalPrefix, order: int, *, shifted: bool
+) -> None:
+    """Validate one canonical prefix for a bounded Hankel construction."""
+    from jacobian.math.moments_orthogonal.values import MAX_HANKEL_ORDER
+
+    maximum = MAX_HANKEL_ORDER - int(shifted)
+    if (
+        isinstance(order, bool)
+        or not isinstance(order, int)
+        or not 0 <= order <= maximum
+    ):
+        raise HankelMatrixAdmissionError(
+            "order_out_of_range",
+            f"Hankel order must be an integer between 0 and {maximum}",
+        )
+    needed = 2 * order + 1 + int(shifted)
+    if len(prefix.moments) < needed:
+        kind = "shifted " if shifted else ""
+        raise HankelMatrixAdmissionError(
+            "insufficient_moments",
+            f"need at least {needed} moments for {kind}order {order}, got "
+            f"{len(prefix.moments)}",
+        )
+    consumed = prefix.moments[1:] if shifted else prefix.moments
+    per_entry = MAX_CANONICAL_RATIONAL_DIGITS // ((order + 1) ** 2)
+    bound = max(per_entry - 2, 8)
+    if any(
+        RationalHeight.from_canonical(value).exceeds(bound)
+        for value in consumed[: 2 * order + 1]
+    ):
+        raise HankelMatrixAdmissionError(
+            "determinant_height",
+            f"moment heights exceed the conservative {bound}-digit bound for "
+            f"an exact order-{order} determinant",
+        )
+
+
+def hankel_matrix_from_prefix(
+    prefix: MomentFunctionalPrefix, order: int, *, shifted: bool
+) -> HankelMomentMatrix:
+    """Compute one admitted ordinary or shifted exact Hankel matrix."""
+    moments = [_to_fraction(moment) for moment in prefix.moments]
+    offset = int(shifted)
+    matrix = [
+        [moments[i + j + offset] for j in range(order + 1)] for i in range(order + 1)
+    ]
+    determinant = _rational_det(matrix)
     rank = _rational_rank(matrix)
-    entries = tuple(
-        tuple(_from_fraction(matrix[i][j]) for j in range(order + 1))
-        for i in range(order + 1)
-    )
     return HankelMomentMatrix(
         order=order,
-        entries=entries,
-        determinant=_from_fraction(det),
+        entries=tuple(
+            tuple(_from_fraction(matrix[i][j]) for j in range(order + 1))
+            for i in range(order + 1)
+        ),
+        determinant=_from_fraction(determinant),
         rank=rank,
-        variable=request.prefix.variable,
+        variable=prefix.variable,
     )
+
+
+def compute_hankel_matrix(request: HankelRequest) -> HankelMomentMatrix:
+    """MCP adapter: parse one request, call the canonical-prefix kernel."""
+    return hankel_matrix_from_prefix(request.prefix, request.order, shifted=False)
 
 
 def compute_shifted_hankel(request: ShiftedHankelRequest) -> HankelMomentMatrix:
-    """Compute the shifted Hankel matrix H_r^(1)[i,j] = mu_(i+j+1)."""
-    moments = [_to_fraction(m) for m in request.prefix.moments]
-    order = request.order
-    matrix = [[moments[i + j + 1] for j in range(order + 1)] for i in range(order + 1)]
-    det = _rational_det(matrix)
-    rank = _rational_rank(matrix)
-    entries = tuple(
-        tuple(_from_fraction(matrix[i][j]) for j in range(order + 1))
-        for i in range(order + 1)
-    )
-    return HankelMomentMatrix(
-        order=order,
-        entries=entries,
-        determinant=_from_fraction(det),
-        rank=rank,
-        variable=request.prefix.variable,
-    )
+    """MCP adapter: parse one request, call the canonical-prefix kernel."""
+    return hankel_matrix_from_prefix(request.prefix, request.order, shifted=True)
 
 
 def _poly_eval(coeffs: list[Fraction], x: Fraction) -> Fraction:
@@ -514,68 +555,8 @@ def compute_christoffel_darboux(
 
 
 def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrix:
-    """Compute the finite Jacobi matrix from the orthogonal polynomial family."""
-    family = request.family
-    polys = family.polynomials
-    n = len(polys)
-
-    if n < 2:
-        return JacobiMatrix(
-            alphas=(),
-            betas=(),
-            matrix=(),
-            variable=family.variable,
-        )
-
-    alphas: list[Fraction] = []
-    betas: list[Fraction] = []
-
-    for k in range(n - 1):
-        p_k = [_to_fraction(c) for c in polys[k].coefficients]
-        p_next = [_to_fraction(c) for c in polys[k + 1].coefficients]
-        squared_norm_k = _to_fraction(polys[k].squared_norm)
-
-        if k == 0:
-            alphas.append(-p_next[0])
-            betas.append(Fraction(0))
-        else:
-            squared_norm_prev = _to_fraction(polys[k - 1].squared_norm)
-
-            x_pk = [Fraction(0)] * (len(p_k) + 1)
-            for i in range(len(p_k)):
-                x_pk[i + 1] = p_k[i]
-
-            residual = [
-                x_pk[i] - p_next[i] if i < len(p_next) else x_pk[i]
-                for i in range(len(x_pk))
-            ]
-            alpha_k = residual[k] if k < len(residual) else Fraction(0)
-            alphas.append(alpha_k)
-
-            # Admission guarantees every norm feeding an emitted ratio is
-            # nonzero.
-            betas.append(squared_norm_k / squared_norm_prev)
-
-    matrix_size = n - 1
-    matrix = [[Fraction(0)] * matrix_size for _ in range(matrix_size)]
-    for i in range(matrix_size):
-        matrix[i][i] = alphas[i]
-        if i < matrix_size - 1:
-            # Monic-basis multiplication by x: x p_k = p_{k+1} + alpha_k p_k
-            # + beta_k p_{k-1}, so the subdiagonal carries the monic
-            # normalization 1 and the superdiagonal carries beta_{i+1}.
-            matrix[i + 1][i] = Fraction(1)
-            matrix[i][i + 1] = betas[i + 1]
-
-    return JacobiMatrix(
-        alphas=tuple(_from_fraction(a) for a in alphas),
-        betas=tuple(_from_fraction(b) for b in betas),
-        matrix=tuple(
-            tuple(_from_fraction(matrix[i][j]) for j in range(matrix_size))
-            for i in range(matrix_size)
-        ),
-        variable=family.variable,
-    )
+    """MCP adapter: parse one request, call the canonical-family kernel."""
+    return jacobi_matrix_from_family(request.family)
 
 
 def _construct_quadrature_rule(

@@ -1208,6 +1208,49 @@ class TestAdmissionReplaysExecution:
 
 
 class TestNativeAdmission:
+    def test_native_hankel_surfaces_match_mcp_adapters(self) -> None:
+        """Native Hankel calls consume the canonical prefix without a request."""
+        from jacobian.math.moments_orthogonal import (
+            hankel_matrix,
+            shifted_hankel_matrix,
+        )
+        from jacobian.math.moments_orthogonal.values import MomentFunctionalPrefix
+
+        restored = MomentFunctionalPrefix.model_validate_json(
+            _prefix(_moments_uniform(6)).model_dump_json()
+        )
+        assert hankel_matrix(restored, 2) == compute_hankel_matrix(
+            HankelRequest(prefix=restored, order=2)
+        )
+        assert shifted_hankel_matrix(restored, 2) == compute_shifted_hankel(
+            ShiftedHankelRequest(prefix=restored, order=2)
+        )
+
+    def test_native_jacobi_composes_serialized_family_and_matches_mcp_adapter(
+        self,
+    ) -> None:
+        """A native family producer composes into the native Jacobi kernel.
+
+        The JSON round trip models a canonical producer payload received by a
+        second native caller. The direct and MCP paths retain one identical
+        result value while each owns its proper input boundary.
+        """
+        from jacobian.math.moments_orthogonal import (
+            jacobi_matrix,
+            orthogonal_polynomials,
+        )
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+        )
+
+        family = orthogonal_polynomials(_prefix(_moments_uniform(7)), 3)
+        restored = OrthogonalPolynomialFamily.model_validate_json(
+            family.model_dump_json()
+        )
+        expected = compute_jacobi_matrix(JacobiMatrixRequest(family=restored))
+
+        assert jacobi_matrix(restored) == expected
+
     def test_native_short_prefix_rejected_before_kernel(self) -> None:
         """The native surface applies the shared moment-count admission so
         it cannot fabricate omitted moments as zeros."""

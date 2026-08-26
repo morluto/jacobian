@@ -94,13 +94,15 @@ class HankelRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_sufficient_moments(self) -> Self:
-        needed = 2 * self.order + 1
-        if len(self.prefix.moments) < needed:
-            raise _validation_error(
-                "insufficient_moments",
-                f"need at least {needed} moments for order {self.order}, got {len(self.prefix.moments)}",
-            )
-        _require_determinant_representable(self.prefix.moments, self.order)
+        from jacobian.math.moments_orthogonal.operations import (
+            HankelMatrixAdmissionError,
+            require_hankel_matrix_admission,
+        )
+
+        try:
+            require_hankel_matrix_admission(self.prefix, self.order, shifted=False)
+        except HankelMatrixAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 
@@ -115,15 +117,15 @@ class ShiftedHankelRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_sufficient_moments(self) -> Self:
-        needed = 2 * self.order + 2
-        if len(self.prefix.moments) < needed:
-            raise _validation_error(
-                "insufficient_moments",
-                f"need at least {needed} moments for shifted order {self.order}, got {len(self.prefix.moments)}",
-            )
-        # The shifted determinant consumes mu_1..mu_(2r+1); bound exactly
-        # that slice so det H_r^(1) stays canonical.
-        _require_determinant_representable(self.prefix.moments[1:], self.order)
+        from jacobian.math.moments_orthogonal.operations import (
+            HankelMatrixAdmissionError,
+            require_hankel_matrix_admission,
+        )
+
+        try:
+            require_hankel_matrix_admission(self.prefix, self.order, shifted=True)
+        except HankelMatrixAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 
@@ -260,61 +262,15 @@ class JacobiMatrixRequest(StrictModel):
         height. Reject such families here so every accepted request can
         return its declared result.
         """
-        from fractions import Fraction
+        from jacobian.math.moments_orthogonal._jacobi import (
+            JacobiMatrixAdmissionError,
+            require_jacobi_matrix_admission,
+        )
 
-        polys = self.family.polynomials
-        # A canonical rational carries at most MAX_CANONICAL_RATIONAL_DIGITS
-        # digits, i.e. its absolute value stays below 10**that limit.
-        digit_limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
-        # Derived alphas: alpha_0 = -p_1's constant term; for k >= 1 the
-        # residual x*p_k - p_{k+1} carries alpha_k on p_k. Each emitted
-        # entry must stay canonical before the operation converts it.
-        for k in range(len(polys) - 1):
-            p_k = [c.as_fraction() for c in polys[k].coefficients]
-            p_next = [c.as_fraction() for c in polys[k + 1].coefficients]
-            if k == 0:
-                alpha_k = -p_next[0]
-            else:
-                x_pk = [Fraction(0)] * (len(p_k) + 1)
-                for i, coefficient in enumerate(p_k):
-                    x_pk[i + 1] = coefficient
-                residual = [
-                    (x_pk[i] - p_next[i]) if i < len(p_next) else x_pk[i]
-                    for i in range(len(x_pk))
-                ]
-                alpha_k = residual[k] if k < len(residual) else Fraction(0)
-            if (
-                abs(alpha_k.numerator) >= digit_limit
-                or alpha_k.denominator >= digit_limit
-            ):
-                raise _validation_error(
-                    "recurrence_height",
-                    f"derived recurrence entry alpha_{k} exceeds the "
-                    "canonical rational digit limit; supply a family whose "
-                    "coefficient differences stay representable",
-                )
-        # The operation derives norm ratios h_k/h_{k-1} only for the
-        # interior steps that actually appear in the (n-1)-dimensional
-        # matrix; terminal ratios are never emitted and must not gate
-        # admission.
-        for k in range(1, len(polys) - 1):
-            h_k = polys[k].squared_norm.as_fraction()
-            h_prev = polys[k - 1].squared_norm.as_fraction()
-            if h_prev == 0 or h_k == 0:
-                raise _validation_error(
-                    "norm_ratio",
-                    f"adjacent-norm ratio beta_{k} is undefined because "
-                    f"squared norm h_{k - 1 if h_prev == 0 else k} vanishes; "
-                    "supply a family with nonzero norms for every emitted ratio",
-                )
-            ratio = h_k / h_prev
-            if abs(ratio.numerator) >= digit_limit or ratio.denominator >= digit_limit:
-                raise _validation_error(
-                    "norm_ratio_height",
-                    f"adjacent-norm ratio beta_{k} exceeds the canonical "
-                    "rational digit limit; supply a family whose squared "
-                    "norm ratios stay representable",
-                )
+        try:
+            require_jacobi_matrix_admission(self.family)
+        except JacobiMatrixAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 

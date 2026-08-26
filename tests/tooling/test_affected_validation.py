@@ -8,6 +8,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from tools.command_runner import ToolCommandResult, ToolCommandStatus
 
 ROOT = Path(__file__).parents[2]
 
@@ -131,3 +132,70 @@ def test_changed_paths_include_worktree_and_untracked_files(
         "src/jacobian/math/graphs/values.py",
         "tests/math/graphs/test_graph_coloring.py",
     )
+
+
+def test_git_metadata_queries_use_the_bounded_operator_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load()
+    observed: list[tuple[str, tuple[str, ...], Path, float]] = []
+
+    def run_operator(
+        command: str,
+        arguments: tuple[str, ...],
+        *,
+        cwd: Path,
+        timeout_seconds: float,
+        stdout_limit_bytes: int,
+        stderr_limit_bytes: int,
+        environment: dict[str, str],
+    ) -> ToolCommandResult:
+        assert environment["PATH"]
+        assert stdout_limit_bytes == 4 * 1024 * 1024
+        assert stderr_limit_bytes == 1024 * 1024
+        observed.append((command, arguments, cwd, timeout_seconds))
+        return ToolCommandResult(
+            status=ToolCommandStatus.EXITED,
+            exit_code=0,
+            stdout=b"deadbeef\n",
+            stderr=b"",
+        )
+
+    monkeypatch.setattr(runner, "run_operator_command", run_operator)
+
+    assert runner._git("rev-parse", "HEAD", repository=ROOT) == "deadbeef"
+    assert observed == [("git", ("rev-parse", "HEAD"), ROOT, 30.0)]
+
+
+def test_selected_commands_use_the_bounded_operator_runner(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    runner = _load()
+    observed: list[tuple[str, tuple[str, ...], Path, float]] = []
+
+    def run_operator(
+        command: str,
+        arguments: tuple[str, ...],
+        *,
+        cwd: Path,
+        timeout_seconds: float,
+        environment: dict[str, str],
+    ) -> ToolCommandResult:
+        assert environment["PATH"]
+        observed.append((command, arguments, cwd, timeout_seconds))
+        return ToolCommandResult(
+            status=ToolCommandStatus.EXITED,
+            exit_code=0,
+            stdout=b"selected output\n",
+            stderr=b"selected diagnostics\n",
+        )
+
+    monkeypatch.setattr(runner, "run_operator_command", run_operator)
+
+    runner._run((("make", "test-math"),), repository=ROOT)
+
+    assert observed == [("make", ("test-math",), ROOT, 30 * 60)]
+    captured = capsys.readouterr()
+    assert "selected output" in captured.out
+    assert "selected diagnostics" in captured.err

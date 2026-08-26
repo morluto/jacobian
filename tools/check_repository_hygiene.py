@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path, PurePosixPath
+
+from tools.command_runner import ToolCommandStatus, run_operator_command
 
 ROOT = Path(__file__).resolve().parents[1]
 _FIXTURE_PREFIXES = (
@@ -14,9 +15,20 @@ _FIXTURE_PREFIXES = (
 
 
 def tracked_paths(root: Path) -> tuple[PurePosixPath, ...]:
-    result = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "-z"], check=True, capture_output=True
+    """Return tracked paths through the bounded repository-command policy."""
+
+    result = run_operator_command(
+        "git",
+        ("ls-files", "-z"),
+        cwd=root,
+        timeout_seconds=30.0,
+        stdout_limit_bytes=16 * 1024 * 1024,
+        stderr_limit_bytes=64 * 1024,
     )
+    if result.status is not ToolCommandStatus.EXITED or result.exit_code != 0:
+        raise RuntimeError(
+            result.diagnostic or "git ls-files failed during repository hygiene check"
+        )
     return tuple(PurePosixPath(p.decode()) for p in result.stdout.split(b"\0") if p)
 
 
@@ -25,10 +37,7 @@ def _is_local_artifact(path: PurePosixPath) -> bool:
     return (
         any(part.startswith(".agents-tmp-") for part in path.parts)
         or "pr-audit" in path.parts
-        or (
-            path.parent == PurePosixPath(".")
-            and path.match("*audit_report*.md")
-        )
+        or (path.parent == PurePosixPath(".") and path.match("*audit_report*.md"))
     )
 
 
@@ -39,11 +48,7 @@ def _allows_literal_conflict_markers(path: PurePosixPath) -> bool:
 
 def _is_conflict_marker(line: str) -> bool:
     """Recognize the three line forms emitted by Git's conflict renderer."""
-    return (
-        line.startswith("<<<<<<< ")
-        or line.startswith(">>>>>>> ")
-        or line == "======="
-    )
+    return line.startswith(("<<<<<<< ", ">>>>>>> ")) or line == "======="
 
 
 def check(root: Path = ROOT) -> tuple[str, ...]:

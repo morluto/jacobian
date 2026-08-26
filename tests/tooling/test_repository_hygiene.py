@@ -1,7 +1,58 @@
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 from tools import check_repository_hygiene
+from tools.command_runner import ToolCommandResult, ToolCommandStatus
+
+
+def test_tracked_paths_uses_the_bounded_git_runner(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    seen: dict[str, object] = {}
+
+    def run(
+        command: str, arguments: tuple[str, ...], **kwargs: object
+    ) -> ToolCommandResult:
+        seen.update(command=command, arguments=arguments, **kwargs)
+        return ToolCommandResult(
+            status=ToolCommandStatus.EXITED,
+            exit_code=0,
+            stdout=b"src/jacobian/__init__.py\0",
+            stderr=b"",
+        )
+
+    monkeypatch.setattr(check_repository_hygiene, "run_operator_command", run)
+
+    assert check_repository_hygiene.tracked_paths(tmp_path) == (
+        PurePosixPath("src/jacobian/__init__.py"),
+    )
+    assert seen == {
+        "command": "git",
+        "arguments": ("ls-files", "-z"),
+        "cwd": tmp_path,
+        "timeout_seconds": 30.0,
+        "stdout_limit_bytes": 16 * 1024 * 1024,
+        "stderr_limit_bytes": 64 * 1024,
+    }
+
+
+def test_tracked_paths_rejects_a_failed_bounded_git_runner(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        check_repository_hygiene,
+        "run_operator_command",
+        lambda *_args, **_kwargs: ToolCommandResult(
+            status=ToolCommandStatus.TIMED_OUT,
+            exit_code=None,
+            stdout=b"",
+            stderr=b"",
+            diagnostic="timed out",
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="timed out"):
+        check_repository_hygiene.tracked_paths(tmp_path)
 
 
 def test_rejects_artifacts_and_conflict_markers(

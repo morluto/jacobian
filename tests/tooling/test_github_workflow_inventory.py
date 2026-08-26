@@ -3,8 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tools.command_runner import ToolCommandResult, ToolCommandStatus
 from tools.inventory_github_workflows import (
     WORKFLOW_LIST_LIMIT,
+    _registered_from_gh,
     _stems_from_workflow_rows,
     _workflow_list_command,
     classify,
@@ -58,3 +60,30 @@ def test_workflow_list_fails_closed_when_gh_hits_the_limit() -> None:
                 for index in range(WORKFLOW_LIST_LIMIT)
             ]
         )
+
+
+def test_registered_workflows_use_the_bounded_operator_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tools.inventory_github_workflows as inventory
+
+    observed: dict[str, object] = {}
+
+    def run_operator(
+        command: str,
+        arguments: list[str],
+        **kwargs: object,
+    ) -> ToolCommandResult:
+        observed.update(command=command, arguments=arguments, **kwargs)
+        return ToolCommandResult(
+            status=ToolCommandStatus.EXITED,
+            exit_code=0,
+            stdout=b'[{"path": ".github/workflows/ci.yml"}]',
+            stderr=b"",
+        )
+
+    monkeypatch.setattr(inventory, "run_operator_command", run_operator)
+
+    assert _registered_from_gh() == {"ci"}
+    assert observed["command"] == "gh"
+    assert observed["timeout_seconds"] == 30.0

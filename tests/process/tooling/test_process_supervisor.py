@@ -5,6 +5,7 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
 from tools.process_supervisor import run_process_tree
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -74,3 +75,22 @@ def test_timeout_kills_a_descendant_that_ignores_sigterm(tmp_path: Path) -> None
     assert still_alive is False, (
         f"descendant (pid={child_pid}) survived timeout — SIGKILL not sent?"
     )
+
+
+def test_omitted_environment_preserves_the_parent_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("JACOBIAN_SUPERVISOR_ENV_PROBE", "available")
+
+    result = run_process_tree(
+        (
+            sys.executable,
+            "-c",
+            "import os; raise SystemExit(os.environ['JACOBIAN_SUPERVISOR_ENV_PROBE'] != 'available')",
+        ),
+        timeout=5.0,
+        cwd=tmp_path,
+    )
+
+    assert result.exit_code == 0
+    assert not result.timed_out

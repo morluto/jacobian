@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 from tools import check_repository_hygiene
 
 

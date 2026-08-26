@@ -173,7 +173,9 @@ def test_tool_command_timeout_is_preserved_with_streaming(tmp_path: Path) -> Non
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX process-group fixture")
-def test_reader_timeout_kills_descendants_that_hold_output_pipes(tmp_path: Path) -> None:
+def test_reader_timeout_kills_descendants_that_hold_output_pipes(
+    tmp_path: Path,
+) -> None:
     pid_file = tmp_path / "descendant.pid"
     descendant = "import time; time.sleep(30)"
     root = (

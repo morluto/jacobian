@@ -310,6 +310,26 @@ def test_maximum_point_count_translation_configuration_is_admitted() -> None:
     assert len(result.intersection_numbers) == 12**3
 
 
+def test_produced_results_round_trip_through_independent_source_replay() -> None:
+    """Both trusted outcome shapes remain valid canonical wire values."""
+
+    coherent = compute_analyze(_request(_complete_graph_k3()))
+    noncoherent = compute_analyze(_request(_path_four_relation_partition()))
+
+    assert (
+        CoherentConfigurationAnalyzeResult.model_validate(
+            coherent.model_dump(mode="json")
+        )
+        == coherent
+    )
+    assert (
+        CoherentConfigurationAnalyzeResult.model_validate(
+            noncoherent.model_dump(mode="json")
+        )
+        == noncoherent
+    )
+
+
 def test_over_relation_bound_is_rejected_before_analysis() -> None:
     payload = _thin_four_point_configuration()
     payload["relation_ids"] = [f"r{index:02d}" for index in range(17)]

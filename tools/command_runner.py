@@ -369,6 +369,7 @@ def run_tool_command(
         stdout_overflow=stdout_overflow,
         stderr_overflow=stderr_overflow,
         sink_failure=sink_failure,
+        reader_deadline=execution_deadline,
         cleanup_deadline=absolute_deadline,
     )
 
@@ -441,6 +442,7 @@ def _finish_tool_process(
     stdout_overflow: threading.Event,
     stderr_overflow: threading.Event,
     sink_failure: queue.Queue[tuple[str, str]],
+    reader_deadline: float,
     cleanup_deadline: float,
 ) -> ToolCommandResult:
     if status is not ToolCommandStatus.EXITED:
@@ -462,9 +464,12 @@ def _finish_tool_process(
                 diagnostic="tool process did not stop within the shutdown deadline",
             )
     for reader in readers:
-        reader.join(timeout=max(0.0, cleanup_deadline - time.monotonic()))
+        reader.join(timeout=max(0.0, reader_deadline - time.monotonic()))
     if any(reader.is_alive() for reader in readers):
         status = ToolCommandStatus.TIMED_OUT
+        _kill_tool_process_tree(process)
+        for reader in readers:
+            reader.join(timeout=max(0.0, cleanup_deadline - time.monotonic()))
     if status is ToolCommandStatus.EXITED:
         if stdout_overflow.is_set() or stderr_overflow.is_set():
             status = ToolCommandStatus.OUTPUT_LIMIT_EXCEEDED

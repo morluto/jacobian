@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -169,6 +170,40 @@ def test_tool_command_timeout_is_preserved_with_streaming(tmp_path: Path) -> Non
 
     assert result.status is ToolCommandStatus.TIMED_OUT
     assert streamed == b"ready\n"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process-group fixture")
+def test_reader_timeout_kills_descendants_that_hold_output_pipes(tmp_path: Path) -> None:
+    pid_file = tmp_path / "descendant.pid"
+    descendant = "import time; time.sleep(30)"
+    root = (
+        "import pathlib, subprocess, sys; "
+        f"child = subprocess.Popen([sys.executable, '-c', {descendant!r}]); "
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(child.pid))"
+    )
+
+    result = run_tool_command(
+        ToolCommandRequest(
+            executable=sys.executable,
+            arguments=("-c", root),
+            cwd=str(tmp_path),
+            timeout_seconds=0.4,
+            stdout_limit_bytes=128,
+            stderr_limit_bytes=128,
+        )
+    )
+
+    assert result.status is ToolCommandStatus.TIMED_OUT
+    child_pid = int(pid_file.read_text())
+    deadline = time.monotonic() + 1.0
+    while time.monotonic() < deadline:
+        try:
+            os.kill(child_pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.01)
+    else:
+        raise AssertionError(f"descendant (pid={child_pid}) survived reader timeout")
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX executable path fixture")

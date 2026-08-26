@@ -153,7 +153,7 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "graph": {
                         "vertex_count": 3,
-                        "edges": [[0, 1], [1, 2], [2, 0]],
+                        "edges": [[0, 1], [1, 2], [0, 2]],
                     },
                     "colors": 3,
                 },

@@ -2,15 +2,18 @@
 
 Covers the transport projection (`src/jacobian/mcp/tools.py:91 math_run`)
 in addition to the dispatch path (`tests/integration/catalog/test_builtin_examples.py:27`).
-Sequential replay avoids the known concurrent-worker segfault while still
-establishing that every published example returns a mathematical value rather
-than a host-level ExceptionGroup. See https://github.com/morluto/jacobian/issues/2713.
+Sequential replay establishes that every published example returns a mathematical
+value rather than a host-level ExceptionGroup. The dedicated concurrent case below
+proves that the server serializes mathematical kernel execution. See
+https://github.com/morluto/jacobian/issues/2720.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import threading
+import time
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.mcp.server import create_server
@@ -124,5 +127,76 @@ def test_mcp_host_failures_are_not_exception_groups() -> None:
             text = result.content[0].text if result.content else ""
             assert "synthetic boom" in text
             assert len(text) < 5000
+
+    asyncio.run(scenario())
+
+
+def test_mcp_concurrent_math_runs_return_serialized_results() -> None:
+    """Concurrent clients must not enter one server's kernels simultaneously."""
+
+    from jacobian._models import StrictModel
+    from jacobian.catalog.builtins import BUILTIN_TOOLS
+    from jacobian.catalog.models import MathTool
+    from jacobian.mcp.runtime import AppState
+    from jacobian.mcp.server import _build_server
+
+    class Request(StrictModel):
+        value: int
+
+    class Result(StrictModel):
+        value: int
+        concurrent_kernel_calls: int
+
+    active_calls = 0
+    active_calls_lock = threading.Lock()
+
+    def serial_kernel(request: Request) -> Result:
+        nonlocal active_calls
+        with active_calls_lock:
+            active_calls += 1
+            concurrent_kernel_calls = active_calls
+        try:
+            # The SDK runs sync tools in worker threads. This pause turns a
+            # missing server gate into an observable, incorrect result.
+            time.sleep(0.025)
+            return Result(
+                value=request.value,
+                concurrent_kernel_calls=concurrent_kernel_calls,
+            )
+        finally:
+            with active_calls_lock:
+                active_calls -= 1
+
+    tool = MathTool(
+        operation_id="test.concurrent.serial_kernel",
+        title="Concurrent execution sentinel",
+        description="Reports concurrent mathematical-kernel calls.",
+        request_type=Request,
+        result_type=Result,
+        run=serial_kernel,
+    )
+    catalog = Catalog((*BUILTIN_TOOLS, tool))
+    server = _build_server(state=AppState(operation_catalog=catalog))
+
+    async def scenario() -> None:
+        async with Client(server, raise_exceptions=False) as client:
+            results = await asyncio.gather(
+                *(
+                    client.call_tool(
+                        "math.run",
+                        {
+                            "operation_id": "test.concurrent.serial_kernel",
+                            "payload": {"value": value},
+                        },
+                    )
+                    for value in range(12)
+                )
+            )
+
+        assert all(not result.is_error for result in results)
+        outputs = [result.structured_content["output"] for result in results]
+        assert outputs == [
+            {"value": value, "concurrent_kernel_calls": 1} for value in range(12)
+        ]
 
     asyncio.run(scenario())

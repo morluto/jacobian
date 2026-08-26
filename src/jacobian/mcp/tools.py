@@ -29,6 +29,7 @@ from jacobian.mcp.runtime import (
     AppState,
     _authorize,
     _catalog,
+    _state,
 )
 from jacobian.process import bounded_process_cancellation
 
@@ -103,7 +104,12 @@ def math_run(
         # MCP runs synchronous tools in a worker thread.  Its request event
         # is polled by the shared external-process runner, which kills and
         # reaps only an operation's owned child tree.
-        with bounded_process_cancellation(_request_cancellation(ctx)):
+        # Maintained mathematical backends may retain process-global state
+        # that cannot safely execute on concurrent MCP worker threads.
+        with (
+            bounded_process_cancellation(_request_cancellation(ctx)),
+            _state(ctx).execution_lock,
+        ):
             return invoke_operation(operation_id, payload, catalog)
     except OperationRequestValidationError as exc:
         errors = _bounded_validation_issues(exc.errors())

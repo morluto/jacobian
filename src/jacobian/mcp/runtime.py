@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from _thread import LockType
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from threading import Lock
 from typing import Any
 
 from mcp.server.mcpserver import Context
@@ -15,6 +17,7 @@ from jacobian.catalog.catalog import Catalog
 class AppState:
     operation_catalog: Catalog
     authorize: Callable[[], None] | None = None
+    execution_lock: LockType = field(default_factory=Lock, repr=False, compare=False)
 
 
 class AuthenticationError(PermissionError):

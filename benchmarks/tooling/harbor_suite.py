@@ -19,7 +19,11 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from tools.command_runner import ToolCommandStatus, run_operator_command
+from tools.command_runner import (
+    ToolCommandStatus,
+    operator_environment,
+    run_operator_command,
+)
 
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_digest import (
@@ -856,6 +860,12 @@ def _is_ignored_python_cache(path: Path) -> bool:
         timeout_seconds=10.0,
         stdout_limit_bytes=4096,
         stderr_limit_bytes=4096,
+        environment={
+            **operator_environment(),
+            # Do not accidentally consult a parent repository when a caller
+            # supplies an isolated synthetic Harbor root.
+            "GIT_CEILING_DIRECTORIES": str(ROOT.parent),
+        },
     )
     return result.status is ToolCommandStatus.EXITED and result.exit_code == 0
 

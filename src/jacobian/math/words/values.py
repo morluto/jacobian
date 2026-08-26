@@ -306,9 +306,9 @@ class SubstitutionDependencyGraph(StrictModel):
         return substitution
 
     @model_validator(mode="after")
-    def bind_graph_to_substitution(self) -> Self:
-        # Recheck before replay when Pydantic receives an existing model instance;
-        # instance revalidation may not revisit the field validator above.
+    def require_structural_edges(self) -> Self:
+        """Validate graph shape without re-running the graph construction kernel."""
+
         try:
             _require_dependency_occurrence_bound(self.substitution)
         except ValueError as error:
@@ -316,28 +316,28 @@ class SubstitutionDependencyGraph(StrictModel):
                 "dependency_occurrence_bound", str(error)
             ) from error
         morphism = self.substitution.morphism
-        expected = tuple(
-            SubstitutionDependencyEdge(
-                source=source,
-                target=target,
-                multiplicity=image.count(target),
-                positions=tuple(
-                    position
-                    for position, letter in enumerate(image)
-                    if letter == target
-                ),
-            )
-            for source, image in zip(
-                morphism.source_alphabet, morphism.images, strict=True
-            )
-            for target in morphism.target_alphabet
-            if target in image
-        )
-        if self.edges != expected:
+        images = dict(zip(morphism.source_alphabet, morphism.images, strict=True))
+        edge_pairs = tuple((edge.source, edge.target) for edge in self.edges)
+        if len(edge_pairs) != len(set(edge_pairs)):
             raise _validation_error(
-                "dependency_graph_unbound",
-                "dependency graph is not bound to the substitution",
+                "dependency_graph_duplicate_edge",
+                "dependency graph may contain at most one edge per source-target pair",
             )
+        for edge in self.edges:
+            if edge.source not in images or edge.target not in morphism.target_alphabet:
+                raise _validation_error(
+                    "dependency_graph_endpoint",
+                    "dependency edge endpoint is outside the alphabet",
+                )
+            image = images[edge.source]
+            if any(
+                position >= len(image) or image[position] != edge.target
+                for position in edge.positions
+            ):
+                raise _validation_error(
+                    "dependency_graph_position",
+                    "dependency edge positions must point to its target in the source image",
+                )
         return self
 
 

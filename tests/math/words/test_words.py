@@ -52,6 +52,12 @@ from jacobian.math.words._operations import (
     compute_substitution_dependency_graph,
     compute_substitution_fixed_point_prefix,
     compute_substitution_primitivity_profile,
+    verify_factors_length_result,
+    verify_incidence_matrix_result,
+    verify_periods_result,
+    verify_substitution_dependency_graph_result,
+    verify_substitution_fixed_point_prefix_result,
+    verify_substitution_primitivity_profile_result,
 )
 from jacobian.math.words._tools import TOOLS
 
@@ -111,9 +117,9 @@ def test_factor_result_is_complete_and_bound_to_the_request() -> None:
     assert result.complete is True
 
     payload = result.model_dump()
-    payload["distinct_count"] = 2
-    with _raises_code("word.factor_result_unbound"):
-        FactorsLengthResult.model_validate(payload)
+    payload["factors"] = (("b", "b"), *payload["factors"][1:])
+    supplied = FactorsLengthResult.model_validate(payload)
+    assert not verify_factors_length_result(supplied)
 
 
 def test_empty_factor_occurs_at_every_boundary() -> None:
@@ -149,8 +155,8 @@ def test_empty_period_convention_and_result_binding() -> None:
 
     payload = result.model_dump()
     payload["is_primitive"] = True
-    with _raises_code("word.period_result_unbound"):
-        PeriodsResult.model_validate(payload)
+    supplied = PeriodsResult.model_validate(payload)
+    assert not verify_periods_result(supplied)
 
 
 def test_fibonacci_incidence_matrix_and_binding() -> None:
@@ -165,8 +171,8 @@ def test_fibonacci_incidence_matrix_and_binding() -> None:
 
     payload = result.model_dump()
     payload["matrix"] = ((1, 0), (1, 1))
-    with _raises_code("word.incidence_matrix_unbound"):
-        IncidenceMatrixResult.model_validate(payload)
+    supplied = IncidenceMatrixResult.model_validate(payload)
+    assert not verify_incidence_matrix_result(supplied)
 
 
 def test_substitution_requires_an_endomorphism() -> None:
@@ -196,9 +202,9 @@ def test_fibonacci_dependency_graph_retains_positions_and_source() -> None:
     assert result.complete is True
 
     payload = result.model_dump()
-    payload["graph"]["edges"][0]["positions"] = (1,)
-    with _raises_code("word.dependency_graph_unbound"):
-        SubstitutionDependencyGraphResult.model_validate(payload)
+    payload["graph"]["edges"] = payload["graph"]["edges"][:-1]
+    supplied = SubstitutionDependencyGraphResult.model_validate(payload)
+    assert not verify_substitution_dependency_graph_result(supplied)
 
 
 def test_dependency_graph_output_budget_is_admitted_before_enumeration() -> None:
@@ -270,8 +276,8 @@ def test_primitivity_result_replay_rejects_mutation() -> None:
     )
     payload = result.model_dump()
     payload["least_positive_power"] = 1
-    with _raises_code("word.primitivity_result_unbound"):
-        SubstitutionPrimitivityProfileResult.model_validate(payload)
+    supplied = SubstitutionPrimitivityProfileResult.model_validate(payload)
+    assert not verify_substitution_primitivity_profile_result(supplied)
 
 
 def test_fixed_point_prefix_uses_the_least_sufficient_iterate() -> None:
@@ -290,8 +296,8 @@ def test_fixed_point_prefix_uses_the_least_sufficient_iterate() -> None:
 
     payload = result.model_dump()
     payload["prefix"]["letters"] = (*payload["prefix"]["letters"][:-1], "1")
-    with _raises_code("word.fixed_point_prefix_unbound"):
-        SubstitutionFixedPointPrefixResult.model_validate(payload)
+    supplied = SubstitutionFixedPointPrefixResult.model_validate(payload)
+    assert not verify_substitution_fixed_point_prefix_result(supplied)
 
 
 def test_fixed_point_prefix_empty_and_length_boundaries() -> None:

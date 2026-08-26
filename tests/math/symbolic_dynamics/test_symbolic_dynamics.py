@@ -37,6 +37,9 @@ from jacobian.math.symbolic_dynamics._operations import (
     compute_higher_block,
     compute_periodic_point_profile,
     construct_finite_type_shift,
+    verify_artin_mazur_zeta_result,
+    verify_block_language_result,
+    verify_periodic_point_profile_result,
 )
 from jacobian.math.symbolic_dynamics._tools import TOOLS
 
@@ -80,22 +83,16 @@ def test_golden_mean_artin_mazur_zeta_is_bound_to_periodic_traces() -> None:
 
     payload = result.model_dump()
     payload["replay"][2]["logarithmic_derivative_coefficient"] = "5"
-    with pytest.raises(ValidationError) as exc_info:
+    assert not verify_artin_mazur_zeta_result(
         ArtinMazurZetaResult.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "symbolic_dynamics.artin_mazur_zeta_not_bound"
     )
 
     payload = result.model_dump()
     payload["determinant_polynomial"]["polynomial"]["terms"][0]["coefficient"][
         "num"
     ] = "-2"
-    with pytest.raises(ValidationError) as exc_info:
+    assert not verify_artin_mazur_zeta_result(
         ArtinMazurZetaResult.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "symbolic_dynamics.artin_mazur_zeta_not_bound"
     )
 
 
@@ -286,9 +283,13 @@ def test_complete_block_language_includes_empty_word_convention() -> None:
     with pytest.raises(ValidationError) as exc_info:
         BlockLanguageResult.model_validate(payload)
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "symbolic_dynamics.block_language_not_bound"
+        exc_info.value.errors()[0]["type"] == "symbolic_dynamics.block_language_count"
     )
+
+    payload = result.model_dump()
+    payload["allowed_blocks"] = payload["allowed_blocks"][:-1]
+    payload["count"] = len(payload["allowed_blocks"])
+    assert not verify_block_language_result(BlockLanguageResult.model_validate(payload))
 
 
 def test_oversized_enumerations_fail_before_computation() -> None:
@@ -399,11 +400,8 @@ def test_periodic_profile_handles_square_mobius_factor() -> None:
 
     payload = result.model_dump()
     payload["primitive_orbit_counts"] = ("2", "1", "2", "4")
-    with pytest.raises(ValidationError) as exc_info:
+    assert not verify_periodic_point_profile_result(
         PeriodicPointProfileResult.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "symbolic_dynamics.periodic_point_profile_not_bound"
     )
 
 

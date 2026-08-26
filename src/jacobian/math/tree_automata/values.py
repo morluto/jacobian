@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 from math import comb
 from typing import Annotated, Self
 
@@ -166,9 +167,9 @@ class ReachableStateProfile(StrictModel):
     (``1 + sum(child witness node counts)``), then by the lexicographically
     smallest ``(symbol, child_states, target_state)`` transition with
     ``child_states`` compared element-wise as integers, and each child's
-    witness is chosen by the same rule recursively.  Source binding replays
-    exactly this rule, so only the published witness for each state
-    validates.
+    witness is chosen by the same rule recursively.  Result validation checks
+    only this value's structural invariants; callers that accept an
+    independently supplied claim can use the owner-local verifier.
     """
 
     automaton: BottomUpTreeAutomaton
@@ -229,28 +230,23 @@ class ReachableStateProfile(StrictModel):
             )
         return self
 
-    @model_validator(mode="after")
-    def require_source_bound_profile(self) -> Self:
-        self.require_source_binding()
-        return self
+    @classmethod
+    def _from_kernel(
+        cls,
+        automaton: BottomUpTreeAutomaton,
+        *,
+        reachable_states: tuple[int, ...],
+        unreachable_states: tuple[int, ...],
+        witnesses: tuple[tuple[int, RankedTree], ...],
+    ) -> Self:
+        """Construct the canonical profile emitted by the trusted kernel."""
 
-    def require_source_binding(self) -> None:
-        """Replay the exact least fixed point against the retained automaton.
-
-        Model validation invokes this replay automatically, so any
-        deserialized or independently supplied profile proves itself against
-        its automaton before being accepted as the declared exact result
-        type.  The producing kernel instead constructs via ``model_construct``
-        so one admitted execution performs exactly one profile; the public
-        path invokes this method once as its source-bound result replay.
-        """
-        from jacobian.math.tree_automata.operations import reachable_state_profile
-
-        if self != reachable_state_profile(self.automaton):
-            raise _validation_error(
-                "profile_not_bound",
-                "reachability profile is not bound to its automaton",
-            )
+        return cls(
+            automaton=automaton,
+            reachable_states=reachable_states,
+            unreachable_states=unreachable_states,
+            witnesses=witnesses,
+        )
 
 
 def _ranked_witness_nodes(
@@ -286,6 +282,159 @@ def _ranked_witness_nodes(
             )
         stack.extend((child, depth + 1) for child in node.children)
     return running_total + node_count
+
+
+@dataclass(frozen=True)
+class _WitnessChoice:
+    node_count: int
+    transition: TreeAutomatonTransition
+
+
+def reachability_admission_profile(
+    automaton: BottomUpTreeAutomaton,
+) -> ReachableStateProfile:
+    """Materialize the request-admission profile used to bound witnesses."""
+
+    return _build_reachable_state_profile(automaton)
+
+
+def _build_reachable_state_profile(
+    automaton: BottomUpTreeAutomaton,
+) -> ReachableStateProfile:
+    """Build the canonical least-fixed-point profile in one priced pass."""
+
+    _, sort_work, per_scan_work, scan_rounds, choices = _priced_saturation(automaton)
+    if sort_work + scan_rounds * per_scan_work + 3 * MAX_REACHABILITY_WITNESS_NODES > (
+        MAX_TREE_AUTOMATON_REACHABILITY_WORK
+    ):
+        raise ValueError("tree automaton reachability work bound exceeded")
+    reachable_choices = tuple(
+        (state, choice) for state, choice in enumerate(choices) if choice is not None
+    )
+    reachable_states = tuple(state for state, _ in reachable_choices)
+    if sum(choice.node_count for _, choice in reachable_choices) > (
+        MAX_REACHABILITY_WITNESS_NODES
+    ):
+        raise ValueError("reachable-state witness output exceeds the node bound")
+    return ReachableStateProfile._from_kernel(
+        automaton,
+        reachable_states=reachable_states,
+        unreachable_states=tuple(
+            state for state, choice in enumerate(choices) if choice is None
+        ),
+        witnesses=tuple(
+            (state, _materialize_witness(state, choices)) for state in reachable_states
+        ),
+    )
+
+
+def _saturate_choices(
+    transitions: tuple[TreeAutomatonTransition, ...], state_count: int
+) -> tuple[list[_WitnessChoice | None], int]:
+    choices: list[_WitnessChoice | None] = [None] * state_count
+    scans = 0
+    for _ in range(state_count + 1):
+        scans += 1
+        next_choices = choices.copy()
+        for transition in transitions:
+            child_choices = tuple(choices[state] for state in transition.child_states)
+            if any(choice is None for choice in child_choices):
+                continue
+            node_count = 1 + sum(
+                choice.node_count for choice in child_choices if choice is not None
+            )
+            candidate = _WitnessChoice(node_count, transition)
+            current = next_choices[transition.target_state]
+            if current is None or _witness_key(candidate) < _witness_key(current):
+                next_choices[transition.target_state] = candidate
+        if next_choices == choices:
+            return choices, scans
+        choices = next_choices
+    raise RuntimeError("tree automaton reachability did not reach a fixed point")
+
+
+def _priced_saturation(
+    automaton: BottomUpTreeAutomaton,
+) -> tuple[
+    tuple[TreeAutomatonTransition, ...], int, int, int, list[_WitnessChoice | None]
+]:
+    """Run exactly one sorted least-fixed-point pass and price that same pass."""
+
+    transition_count = len(automaton.transitions)
+    maximum_arity = max(
+        (len(row.child_states) for row in automaton.transitions), default=0
+    )
+    sort_work = (
+        transition_count
+        * max(1, (transition_count - 1).bit_length())
+        * (4 + maximum_arity)
+    )
+    per_scan_work = 2 * automaton.state_count + sum(
+        6 + 4 * len(row.child_states) for row in automaton.transitions
+    )
+    sorted_transitions = tuple(sorted(automaton.transitions, key=_transition_key))
+    choices, scan_rounds = _saturate_choices(sorted_transitions, automaton.state_count)
+    return sorted_transitions, sort_work, per_scan_work, scan_rounds, choices
+
+
+def reachability_price_components(
+    automaton: BottomUpTreeAutomaton,
+) -> tuple[int, int, int]:
+    """Return the exact sort, scan, and measured-round prices for one pass."""
+
+    _, sort_work, per_scan_work, scan_rounds, _ = _priced_saturation(automaton)
+    return sort_work, per_scan_work, scan_rounds
+
+
+def reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
+    """Price one native profile: one pass and its bounded witness output."""
+
+    sort_work, per_scan_work, scan_rounds = reachability_price_components(automaton)
+    return sort_work + scan_rounds * per_scan_work + 3 * MAX_REACHABILITY_WITNESS_NODES
+
+
+def reachability_public_path_work_bound(automaton: BottomUpTreeAutomaton) -> int:
+    """Price request-bound evaluation, admission profile, and kernel profile.
+
+    A result model no longer replays the kernel.  The public operation thus
+    executes three sorted saturation passes: measuring the request bound,
+    materializing the request's witness envelope, and producing the result.
+    Only the latter two materialize witnesses.
+    """
+
+    sort_work, per_scan_work, scan_rounds = reachability_price_components(automaton)
+    return (
+        3 * sort_work
+        + 3 * scan_rounds * per_scan_work
+        + 2 * 3 * MAX_REACHABILITY_WITNESS_NODES
+    )
+
+
+def _transition_key(
+    transition: TreeAutomatonTransition,
+) -> tuple[int, tuple[int, ...], int]:
+    return (transition.symbol, transition.child_states, transition.target_state)
+
+
+def _witness_key(
+    choice: _WitnessChoice,
+) -> tuple[int, int, tuple[int, ...], int]:
+    return (choice.node_count, *_transition_key(choice.transition))
+
+
+def _materialize_witness(
+    state: int, choices: list[_WitnessChoice | None]
+) -> RankedTree:
+    choice = choices[state]
+    if choice is None:  # pragma: no cover - callers pass reachable states only.
+        raise ValueError("cannot materialize an unreachable state")
+    return RankedTree(
+        symbol=choice.transition.symbol,
+        children=tuple(
+            _materialize_witness(child_state, choices)
+            for child_state in choice.transition.child_states
+        ),
+    )
 
 
 def accepted_tree_count_work_bound(

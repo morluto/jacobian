@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Literal
 
+from jacobian.math.words._fixed_point_admission import require_fixed_point_prefix_budget
 from jacobian.math.words.values import (
     MAX_MORPHISM_OUTPUT_LENGTH,
     FiniteWord,
@@ -15,11 +15,7 @@ from jacobian.math.words.values import (
     SubstitutionDependencyGraph,
     WordMorphism,
     _require_dependency_occurrence_bound,
-    _require_prolongable_source_occurrence_bound,
 )
-
-MAX_FIXED_POINT_GENERATION_WORK = 1_000_000
-MAX_FIXED_POINT_RESULT_BYTES = 512_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,7 +203,7 @@ def fixed_point_prefix(
 ) -> FixedPointPrefixAnalysis:
     """Return the requested prefix from the least sufficient seed iterate."""
 
-    _require_fixed_point_prefix_budget(source, prefix_length)
+    require_fixed_point_prefix_budget(source, prefix_length)
     morphism = source.substitution.morphism
     image_map = dict(zip(morphism.source_alphabet, morphism.images, strict=True))
     current: tuple[str, ...] = (source.seed,)
@@ -233,48 +229,6 @@ def fixed_point_prefix(
         least_iterate_depth=depth,
         retained_prefix_lengths=tuple(retained_prefix_lengths),
     )
-
-
-def _fixed_point_result_byte_bound(
-    source: ProlongableSubstitution, prefix_length: int
-) -> int:
-    alphabet = source.substitution.morphism.target_alphabet
-    encoded_symbols = tuple(
-        len(json.dumps(symbol, ensure_ascii=True).encode("utf-8"))
-        for symbol in alphabet
-    )
-    prefix_bytes = (
-        128
-        + sum(encoded_symbols)
-        + len(encoded_symbols)
-        + prefix_length * (max(encoded_symbols) + 1)
-    )
-    ledger_length = max(1, prefix_length)
-    ledger_bytes = 128 + ledger_length * (len(str(max(1, prefix_length))) + 1)
-    source_bytes = len(source.model_dump_json().encode("utf-8"))
-    return 4_096 + source_bytes + prefix_bytes + ledger_bytes
-
-
-def _require_fixed_point_prefix_budget(
-    source: ProlongableSubstitution, prefix_length: int
-) -> None:
-    if not 0 <= prefix_length <= MAX_MORPHISM_OUTPUT_LENGTH:
-        raise ValueError(f"prefix length must be in 0..{MAX_MORPHISM_OUTPUT_LENGTH}")
-    _require_prolongable_source_occurrence_bound(source)
-    # One capped generation inspects/appends fewer than 2N cells, there are at
-    # most N generations, and a public result replays the kernel once.
-    generation_work = 4 * prefix_length * prefix_length
-    if generation_work > MAX_FIXED_POINT_GENERATION_WORK:
-        raise ValueError(
-            "fixed-point generation exceeds the work bound "
-            f"({generation_work} > {MAX_FIXED_POINT_GENERATION_WORK})"
-        )
-    result_bytes = _fixed_point_result_byte_bound(source, prefix_length)
-    if result_bytes > MAX_FIXED_POINT_RESULT_BYTES:
-        raise ValueError(
-            "fixed-point result exceeds the byte bound "
-            f"({result_bytes} > {MAX_FIXED_POINT_RESULT_BYTES})"
-        )
 
 
 def _boolean_product(left: tuple[int, ...], right: tuple[int, ...]) -> tuple[int, ...]:

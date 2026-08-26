@@ -321,7 +321,7 @@ def support_from_polynomial(polynomial: RationalPolynomial) -> PolynomialSupport
     terms = _term_pairs(polynomial)
 
     if not terms:
-        return PolynomialSupport(
+        return PolynomialSupport._from_kernel(
             is_zero=True,
             term_count=0,
             exponents=(),
@@ -336,7 +336,7 @@ def support_from_polynomial(polynomial: RationalPolynomial) -> PolynomialSupport
     coord_min = tuple(min(e[i] for _, e in terms) for i in range(n))
     coord_max = tuple(max(e[i] for _, e in terms) for i in range(n))
 
-    return PolynomialSupport(
+    return PolynomialSupport._from_kernel(
         is_zero=False,
         term_count=len(terms),
         exponents=tuple(exponents),
@@ -371,7 +371,7 @@ def newton_polytope_from_polynomial(
     variables = polynomial.variables
 
     if not terms:
-        return NewtonPolytope(
+        return NewtonPolytope._from_kernel(
             is_zero=True,
             variables=variables,
             ambient_dimension=len(variables),
@@ -401,7 +401,7 @@ def newton_polytope_from_polynomial(
         diffs = [[v[j] - first[j] for j in range(n)] for v in vertices[1:]]
         affine_dim = _matrix_rank(diffs)
 
-    return NewtonPolytope(
+    return NewtonPolytope._from_kernel(
         is_zero=False,
         variables=variables,
         ambient_dimension=n,
@@ -422,7 +422,7 @@ def compute_weight_profile(request: WeightProfileRequest) -> PolynomialWeightPro
     minimum_weight, minimizing, weight_layers = _compute_weight_layers(
         request.polynomial, request.weight
     )
-    return PolynomialWeightProfile(
+    return PolynomialWeightProfile._from_kernel(
         polynomial=request.polynomial,
         weight=request.weight,
         minimum_weight=minimum_weight,
@@ -449,8 +449,86 @@ def compute_initial_form(request: InitialFormRequest) -> PolynomialFaceData:
         ),
     )
 
-    return PolynomialFaceData(
+    return PolynomialFaceData._from_kernel(
         polynomial=source,
         weight=request.weight,
         initial_form=initial_form,
     )
+
+
+def verify_polynomial_support(result: PolynomialSupport) -> bool:
+    """Verify an independently supplied support claim without parsing replay."""
+
+    try:
+        return result == support_from_polynomial(
+            RationalPolynomial(
+                variables=result.variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=tuple(
+                        RationalPolynomialTerm(
+                            coefficient=coefficient, exponents=exponents
+                        )
+                        for coefficient, exponents in zip(
+                            result.coefficients, result.exponents, strict=True
+                        )
+                    )
+                ),
+            )
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_newton_polytope(result: NewtonPolytope) -> bool:
+    """Verify a supplied bounded Newton-polytope classification."""
+
+    try:
+        # Reuse the request envelope before the exact per-point hull replay.
+        support = RationalPolynomial(
+            variables=result.variables,
+            polynomial=SparseRationalPolynomial(
+                terms=tuple(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational(num="1", den="1"),
+                        exponents=exponents,
+                    )
+                    for exponents in result.all_support_exponents
+                )
+            ),
+        )
+        request = NewtonPolytopeRequest(polynomial=support)
+        return result == newton_polytope_from_polynomial(request.polynomial)
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_weight_profile(result: PolynomialWeightProfile) -> bool:
+    """Verify an independently supplied profile inside its request envelope."""
+
+    try:
+        request = WeightProfileRequest(
+            polynomial=result.polynomial, weight=result.weight
+        )
+        minimum_weight, minimizing, weight_layers = _compute_weight_layers(
+            request.polynomial, request.weight
+        )
+        expected = PolynomialWeightProfile._from_kernel(
+            polynomial=request.polynomial,
+            weight=request.weight,
+            minimum_weight=minimum_weight,
+            minimizing_exponents=minimizing,
+            weight_layers=weight_layers,
+        )
+        return result == expected
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_initial_form(result: PolynomialFaceData) -> bool:
+    """Verify an independently supplied initial-form claim in bounds."""
+
+    try:
+        request = InitialFormRequest(polynomial=result.polynomial, weight=result.weight)
+        return result == compute_initial_form(request)
+    except (TypeError, ValueError):
+        return False

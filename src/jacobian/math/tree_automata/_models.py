@@ -60,21 +60,33 @@ class TreeRunResult(TreeRunRequest):
             raise _validation_error(
                 "root_states_not_canonical", "root states must be unique and sorted"
             )
-        from jacobian.math.tree_automata.operations import tree_state_chart
-
-        expected_chart = tree_state_chart(self.automaton, self.tree)
-        expected = expected_chart[-1][1]
-        if self.state_chart != expected_chart or self.root_states != expected:
+        if any(
+            not 0 <= state < self.automaton.state_count for state in self.root_states
+        ):
             raise _validation_error(
-                "root_states_not_bound",
-                "root states are not bound to the automaton and tree",
-            )
-        if self.accepted != bool(set(expected) & set(self.automaton.final_states)):
-            raise _validation_error(
-                "acceptance_not_bound",
-                "tree acceptance must agree with the reachable root states",
+                "root_state_out_of_range", "root state out of range"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: TreeRunRequest,
+        *,
+        accepted: bool,
+        root_states: tuple[int, ...],
+        state_chart: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...],
+        node_count: int,
+    ) -> Self:
+        """Construct a result emitted by the trusted tree-run kernel."""
+
+        return cls(
+            **request.model_dump(),
+            accepted=accepted,
+            root_states=root_states,
+            state_chart=state_chart,
+            node_count=node_count,
+        )
 
 
 class AcceptedTreeCountRequest(StrictModel):
@@ -105,13 +117,25 @@ class AcceptedTreeCountResult(AcceptedTreeCountRequest):
 
     @model_validator(mode="after")
     def bind_count(self) -> Self:
-        from jacobian.math.tree_automata.operations import accepted_tree_count
-
-        if int(self.count) != accepted_tree_count(self.automaton, self.tree_size):
-            raise _validation_error(
-                "count_not_bound", "tree count is not bound to its automaton"
-            )
+        if int(self.count) < 0:
+            raise _validation_error("count_negative", "tree count must be nonnegative")
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: AcceptedTreeCountRequest,
+        *,
+        count: CanonicalInteger,
+        estimated_work_bound: int,
+    ) -> Self:
+        """Construct a result emitted by the trusted subset-DP kernel."""
+
+        return cls(
+            **request.model_dump(),
+            count=count,
+            estimated_work_bound=estimated_work_bound,
+        )
 
 
 class TreeAutomatonReachabilityRequest(StrictModel):
@@ -123,10 +147,10 @@ class TreeAutomatonReachabilityRequest(StrictModel):
     - ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` ({MAX_TREE_AUTOMATON_REACHABILITY_WORK:,} units) prices one
       profile's transition sorting, saturation scans measured to their exact
       convergence depth by a shared-code-path pass, and witness
-      materialization and recount, charged across the four priced passes the
+      materialization and recount, charged across the three priced passes the
       public path performs: work admission's own convergence-measuring pass
-      plus one pass consumed by each of the three profile invocations
-      (request admission, execution, and source-bound result replay).  Each
+      plus one pass consumed by each of the two profile invocations
+      (request admission and execution).  Each
       pass performs exactly one sort and one saturation, and each profile
       reuses its own pass's result, so no unpriced sort or probe executes.
       The pass always terminates within ``state_count + 1`` rounds for any
@@ -147,8 +171,7 @@ class TreeAutomatonReachabilityRequest(StrictModel):
             "Requests are additionally rejected when the coupled "
             "reachability work envelope (MAX_TREE_AUTOMATON_REACHABILITY_"
             f"WORK = {MAX_TREE_AUTOMATON_REACHABILITY_WORK:,} units, priced across the four passes behind "
-            "request admission, execution, and source-bound result replay "
-            "together with request admission's own saturation convergence "
+            "request admission and execution together with request admission's own saturation convergence "
             "pass) or the "
             "aggregate witness output envelope (MAX_REACHABILITY_WITNESS_"
             f"NODES = {MAX_REACHABILITY_WITNESS_NODES} nodes summed across every reachable state's "
@@ -158,12 +181,12 @@ class TreeAutomatonReachabilityRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_witness_profile(self) -> Self:
-        from jacobian.math.tree_automata.operations import (
-            _reachability_public_path_work_bound,
-            reachable_state_profile,
+        from jacobian.math.tree_automata.values import (
+            reachability_admission_profile,
+            reachability_public_path_work_bound,
         )
 
-        if _reachability_public_path_work_bound(self.automaton) > (
+        if reachability_public_path_work_bound(self.automaton) > (
             MAX_TREE_AUTOMATON_REACHABILITY_WORK
         ):
             raise _validation_error(
@@ -171,7 +194,7 @@ class TreeAutomatonReachabilityRequest(StrictModel):
                 "tree automaton reachability work bound exceeded",
             )
         try:
-            reachable_state_profile(self.automaton)
+            reachability_admission_profile(self.automaton)
         except ValueError as exc:
             if "witness output" in str(exc):
                 raise _validation_error("witness_output_bound", str(exc)) from exc

@@ -11,19 +11,14 @@ from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.polynomials.values import RationalFunction, RationalPolynomial
-from jacobian.math.symbolic_dynamics.operations import (
+from jacobian.math.symbolic_dynamics._bounds import (
     MAX_ZETA_REPLAY_PERIOD,
-    _presentation_memory,
-    _require_bounded_presentation,
-    _require_bounded_support,
-    _require_zeta_budget,
-    artin_mazur_zeta,
-    block_language,
     enumeration_size,
-    finite_type_presentation,
-    higher_block_presentation,
     normalize_forbidden_blocks,
-    periodic_point_profile,
+    presentation_memory,
+    require_bounded_presentation,
+    require_bounded_support,
+    require_zeta_budget,
 )
 from jacobian.math.symbolic_dynamics.values import (
     MAX_FORBIDDEN_BLOCK_LENGTH,
@@ -56,9 +51,9 @@ class FiniteTypeShiftRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_presentation(self) -> Self:
-        memory = _presentation_memory(self.shift)
+        memory = presentation_memory(self.shift)
         try:
-            _require_bounded_presentation(self.shift, memory)
+            require_bounded_presentation(self.shift, memory)
         except ValueError as error:
             raise _validation_error_from_message(error) from error
         return self
@@ -71,13 +66,11 @@ class FiniteTypeShiftResult(FiniteTypeShiftRequest):
     method: Literal["EXACT_DE_BRUIJN_PRESENTATION"] = "EXACT_DE_BRUIJN_PRESENTATION"
 
     @model_validator(mode="after")
-    def bind_presentation(self) -> Self:
-        if self.presentation != finite_type_presentation(
-            self.shift
-        ) or self.normalized_forbidden_blocks != normalize_forbidden_blocks(self.shift):
+    def require_normalized_forbidden_blocks(self) -> Self:
+        if self.normalized_forbidden_blocks != normalize_forbidden_blocks(self.shift):
             raise _validation_error(
                 "finite_type_presentation_not_bound",
-                "finite-type presentation is not bound to the request",
+                "normalized forbidden blocks are not bound to the request",
             )
         return self
 
@@ -90,7 +83,7 @@ class BlockLanguageRequest(StrictModel):
     def require_bounded_enumeration(self) -> Self:
         try:
             enumeration_size(len(self.shift.alphabet), self.block_length)
-            _require_bounded_support(self.shift)
+            require_bounded_support(self.shift)
         except ValueError as error:
             raise _validation_error_from_message(error) from error
         return self
@@ -108,11 +101,10 @@ class BlockLanguageResult(BlockLanguageRequest):
     )
 
     @model_validator(mode="after")
-    def bind_language(self) -> Self:
-        expected = block_language(self.shift, self.block_length)
-        if self.allowed_blocks != expected or self.count != len(expected):
+    def require_language_count(self) -> Self:
+        if self.count != len(self.allowed_blocks):
             raise _validation_error(
-                "block_language_not_bound", "block language is not bound to the request"
+                "block_language_count", "block-language count must match its rows"
             )
         return self
 
@@ -151,21 +143,17 @@ class PeriodicPointProfileResult(PeriodicPointProfileRequest):
     )
 
     @model_validator(mode="after")
-    def bind_profile(self) -> Self:
-        fixed, exact, orbits = periodic_point_profile(self.shift, self.max_period)
+    def require_profile_shape(self) -> Self:
         if (
             self.periods != tuple(range(1, self.max_period + 1))
-            or self.fixed_point_counts
-            != tuple(format_canonical_integer(value) for value in fixed)
-            or self.least_period_point_counts
-            != tuple(format_canonical_integer(value) for value in exact)
-            or self.primitive_orbit_counts
-            != tuple(format_canonical_integer(value) for value in orbits)
+            or len(self.fixed_point_counts) != self.max_period
+            or len(self.least_period_point_counts) != self.max_period
+            or len(self.primitive_orbit_counts) != self.max_period
             or self.complete_through_period != self.max_period
         ):
             raise _validation_error(
-                "periodic_point_profile_not_bound",
-                "periodic-point profile is not bound to the request",
+                "periodic_point_profile_shape",
+                "periodic-point profile must cover the requested period range",
             )
         return self
 
@@ -176,14 +164,14 @@ class HigherBlockRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_bounded_presentation(self) -> Self:
-        required_memory = _presentation_memory(self.shift)
+        required_memory = presentation_memory(self.shift)
         if self.block_length < required_memory:
             raise _validation_error(
                 "higher_block_memory_bound",
                 "block_length must be at least the SFT presentation memory",
             )
         try:
-            _require_bounded_presentation(self.shift, self.block_length)
+            require_bounded_presentation(self.shift, self.block_length)
         except ValueError as error:
             raise _validation_error_from_message(error) from error
         return self
@@ -196,17 +184,6 @@ class HigherBlockResult(HigherBlockRequest):
         "EXACT_ALLOWED_OVERLAP_PRESENTATION"
     )
 
-    @model_validator(mode="after")
-    def bind_higher_block_presentation(self) -> Self:
-        if self.presentation != higher_block_presentation(
-            self.shift, self.block_length
-        ):
-            raise _validation_error(
-                "higher_block_presentation_not_bound",
-                "higher-block presentation is not bound to the request",
-            )
-        return self
-
 
 class ArtinMazurZetaRequest(StrictModel):
     """Request the exact Artin--Mazur zeta function of one edge shift."""
@@ -217,7 +194,7 @@ class ArtinMazurZetaRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_exact_zeta(self) -> Self:
         try:
-            _require_zeta_budget(self.shift, self.replay_period)
+            require_zeta_budget(self.shift, self.replay_period)
         except ValueError as error:
             raise _validation_error_from_message(error) from error
         return self
@@ -241,45 +218,24 @@ class ArtinMazurZetaResult(ArtinMazurZetaRequest):
     )
 
     @model_validator(mode="after")
-    def bind_zeta_and_periodic_replay(self) -> Self:
-        determinant, zeta, coefficients = artin_mazur_zeta(
-            self.shift, self.replay_period
-        )
-        expected_replay = tuple(
-            ArtinMazurZetaReplayRow(
-                period=period,
-                trace_fixed_points=format_canonical_integer(coefficient),
-                logarithmic_derivative_coefficient=format_canonical_integer(
-                    coefficient
-                ),
-            )
-            for period, coefficient in enumerate(coefficients, 1)
-        )
-        if (
-            self.determinant_polynomial != determinant
-            or self.zeta_function != zeta
-            or self.replay != expected_replay
-        ):
+    def require_replay_scope(self) -> Self:
+        if len(self.replay) != self.replay_period or tuple(
+            row.period for row in self.replay
+        ) != tuple(range(1, self.replay_period + 1)):
             raise _validation_error(
-                "artin_mazur_zeta_not_bound",
-                "Artin--Mazur zeta result is not bound to the request",
+                "artin_mazur_zeta_replay_scope",
+                "zeta replay must cover each requested period exactly once",
             )
         return self
 
 
-def _computed_artin_mazur_zeta_result(
+def _from_kernel_artin_mazur_zeta(
     request: ArtinMazurZetaRequest,
     determinant_polynomial: RationalPolynomial,
     zeta_function: RationalFunction,
     coefficients: tuple[int, ...],
 ) -> ArtinMazurZetaResult:
-    """Bind a fresh kernel result without a second determinant/replay pass.
-
-    ``artin_mazur_zeta`` has already established these exact values for the
-    typed request.  The public operation therefore constructs its result
-    directly; independently supplied result payloads still take the complete
-    source-binding replay in ``bind_zeta_and_periodic_replay``.
-    """
+    """Construct a zeta result from the trusted one-pass owner kernel."""
 
     if (
         determinant_polynomial.variables != ("t",)
@@ -290,7 +246,7 @@ def _computed_artin_mazur_zeta_result(
             "artin_mazur_zeta_computed_shape",
             "computed zeta values must retain the canonical t axis and replay scope",
         )
-    return ArtinMazurZetaResult.model_construct(
+    return ArtinMazurZetaResult(
         shift=request.shift,
         replay_period=request.replay_period,
         determinant_polynomial=determinant_polynomial,
@@ -308,6 +264,60 @@ def _computed_artin_mazur_zeta_result(
         convention="EDGE_SHIFT_ARTIN_MAZUR_ZETA",
         method="SYMPY_EXACT_CHARACTERISTIC_POLYNOMIAL",
     )
+
+
+def _from_kernel_finite_type_shift(
+    request: FiniteTypeShiftRequest,
+    presentation: BlockPresentation,
+    normalized_forbidden_blocks: tuple[tuple[str, ...], ...],
+) -> FiniteTypeShiftResult:
+    """Construct a presentation result from its trusted owner kernel."""
+
+    return FiniteTypeShiftResult(
+        **request.model_dump(),
+        presentation=presentation,
+        normalized_forbidden_blocks=normalized_forbidden_blocks,
+    )
+
+
+def _from_kernel_block_language(
+    request: BlockLanguageRequest, allowed_blocks: tuple[tuple[str, ...], ...]
+) -> BlockLanguageResult:
+    """Construct an enumerated language result from its trusted owner kernel."""
+
+    return BlockLanguageResult(
+        **request.model_dump(), allowed_blocks=allowed_blocks, count=len(allowed_blocks)
+    )
+
+
+def _from_kernel_periodic_point_profile(
+    request: PeriodicPointProfileRequest,
+    fixed: tuple[int, ...],
+    exact: tuple[int, ...],
+    orbits: tuple[int, ...],
+) -> PeriodicPointProfileResult:
+    """Construct a periodic profile from the trusted trace-and-inversion pass."""
+
+    return PeriodicPointProfileResult(
+        **request.model_dump(),
+        periods=tuple(range(1, request.max_period + 1)),
+        fixed_point_counts=tuple(format_canonical_integer(value) for value in fixed),
+        least_period_point_counts=tuple(
+            format_canonical_integer(value) for value in exact
+        ),
+        primitive_orbit_counts=tuple(
+            format_canonical_integer(value) for value in orbits
+        ),
+        complete_through_period=request.max_period,
+    )
+
+
+def _from_kernel_higher_block(
+    request: HigherBlockRequest, presentation: BlockPresentation
+) -> HigherBlockResult:
+    """Construct a higher-block result from the trusted overlap kernel."""
+
+    return HigherBlockResult(**request.model_dump(), presentation=presentation)
 
 
 __all__ = [

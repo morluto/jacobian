@@ -18,6 +18,7 @@ from jacobian.math.impartial_games._models import (
 from jacobian.math.impartial_games._operations import (
     compute_nim_options,
     compute_nim_sum,
+    verify_nim_options_result,
 )
 from jacobian.math.impartial_games._tools import TOOLS
 from jacobian.math.impartial_games.values import (
@@ -49,6 +50,7 @@ def test_nim_options_deduplicate_equal_heaps_and_retain_all_source_indices() -> 
     assert result.raw_candidate_count == 4
     assert result.distinct_option_count == 3
     assert result.complete is True
+    assert verify_nim_options_result(result)
 
 
 @pytest.mark.parametrize("heaps", ((), (0,), (0, 0, 0)))
@@ -149,18 +151,21 @@ def test_nim_options_result_is_source_bound_and_canonical_json_bounded() -> None
 
     source_mutation = deepcopy(payload)
     source_mutation["position"]["heaps"] = [1, 2, 3]
-    with pytest.raises(ValidationError):
+    assert not verify_nim_options_result(
         NimOptionsResult.model_validate(source_mutation)
+    )
 
     option_mutation = deepcopy(payload)
     option_mutation["options"][0]["source_heap_indices"] = [0]
-    with pytest.raises(ValidationError):
+    assert not verify_nim_options_result(
         NimOptionsResult.model_validate(option_mutation)
+    )
 
     witness_mutation = deepcopy(payload)
     witness_mutation["options"][0]["resulting_position"]["heaps"] = [0, 0, 2]
-    with pytest.raises(ValidationError):
+    assert not verify_nim_options_result(
         NimOptionsResult.model_validate(witness_mutation)
+    )
 
     order_mutation = deepcopy(payload)
     order_mutation["options"][0], order_mutation["options"][1] = (
@@ -177,8 +182,9 @@ def test_nim_options_result_is_source_bound_and_canonical_json_bounded() -> None
 
     count_mutation = deepcopy(payload)
     count_mutation["raw_candidate_count"] += 1
-    with pytest.raises(ValidationError):
+    assert not verify_nim_options_result(
         NimOptionsResult.model_validate(count_mutation)
+    )
 
 
 def test_nim_options_is_a_public_exact_operation() -> None:

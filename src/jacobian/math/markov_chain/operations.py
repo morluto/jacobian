@@ -5,12 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 
-from jacobian.canonical import parse_canonical_integer
-from jacobian.math.markov_chain._models import (
-    StationaryDistributionRequest,
-    TransitionMatrixRequest,
-)
-
 __all__ = [
     "MixingTimeSearchResult",
     "ergodic_properties",
@@ -63,22 +57,18 @@ def mixing_time(
 
 
 def _stationary_distribution_extremes(
-    request: TransitionMatrixRequest,
+    matrix: tuple[tuple[Fraction, ...], ...],
 ) -> list[tuple[tuple[int, ...], tuple[Fraction, ...]]]:
     """Return one normalized stationary vector for every closed class."""
 
     import networkx as nx
     import sympy
 
-    matrix = request.matrix
     n = len(matrix)
     p = sympy.Matrix(
         [
             [
-                sympy.Rational(
-                    parse_canonical_integer(matrix[i][j].num),
-                    parse_canonical_integer(matrix[i][j].den),
-                )
+                sympy.Rational(matrix[i][j].numerator, matrix[i][j].denominator)
                 for j in range(n)
             ]
             for i in range(n)
@@ -90,7 +80,7 @@ def _stationary_distribution_extremes(
         (source, target)
         for source, row in enumerate(matrix)
         for target, value in enumerate(row)
-        if value.as_fraction() != 0
+        if value != 0
     )
     closed_classes = sorted(
         (
@@ -125,19 +115,19 @@ def _stationary_distribution_extremes(
 
 
 def stationary_distribution_extremes(
-    request: StationaryDistributionRequest,
+    matrix: tuple[tuple[Fraction, ...], ...],
 ) -> list[tuple[tuple[int, ...], tuple[Fraction, ...]]]:
     """Return one normalized stationary vector for every closed class."""
 
-    return _stationary_distribution_extremes(request)
+    return _stationary_distribution_extremes(matrix)
 
 
 def stationary_distribution(
-    request: StationaryDistributionRequest,
+    matrix: tuple[tuple[Fraction, ...], ...],
 ) -> tuple[Fraction, ...]:
     """Return the unique stationary distribution, rejecting non-unique chains."""
 
-    extremes = _stationary_distribution_extremes(request)
+    extremes = _stationary_distribution_extremes(matrix)
     if len(extremes) != 1:
         raise ValueError(
             "the Markov chain does not have a unique stationary distribution"
@@ -145,17 +135,16 @@ def stationary_distribution(
     return extremes[0][1]
 
 
-def ergodic_properties(request: TransitionMatrixRequest) -> tuple[bool, bool]:
+def ergodic_properties(matrix: tuple[tuple[Fraction, ...], ...]) -> tuple[bool, bool]:
     import networkx as nx
 
     graph: nx.DiGraph[int] = nx.DiGraph()
-    matrix = request.matrix
     graph.add_nodes_from(range(len(matrix)))
     graph.add_edges_from(
         (source, target)
         for source, row in enumerate(matrix)
         for target, value in enumerate(row)
-        if value.as_fraction() != 0
+        if value != 0
     )
     irreducible = nx.is_strongly_connected(graph)
     aperiodic = all(

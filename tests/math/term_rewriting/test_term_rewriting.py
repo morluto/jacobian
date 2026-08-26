@@ -8,28 +8,8 @@ from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
 from jacobian.math import term_rewriting
-from jacobian.math.term_rewriting import operations as operations_module
-from jacobian.math.term_rewriting._models import (
-    CriticalPairsRequest,
-    CriticalPairsResult,
-    NormalFormRequest,
-    NormalFormResult,
-    RewriteStepRequest,
-    RewriteStepResult,
-    SubstitutionRequest,
-    SubstitutionResult,
-    UnificationRequest,
-    UnificationResult,
-)
-from jacobian.math.term_rewriting._operations import (
-    compute_critical_pairs,
-    compute_normal_form,
-    compute_rewrite_step,
-    compute_substitution,
-    compute_unification,
-)
-from jacobian.math.term_rewriting._tools import TOOLS
-from jacobian.math.term_rewriting.operations import (
+from jacobian.math.term_rewriting import _kernel as operations_module
+from jacobian.math.term_rewriting._kernel import (
     _bounded_unify,
     _MaterializationBudget,
     _nonvariable_positions,
@@ -49,6 +29,28 @@ from jacobian.math.term_rewriting.operations import (
     term_at_position,
     unify,
 )
+from jacobian.math.term_rewriting._models import (
+    CriticalPairsRequest,
+    CriticalPairsResult,
+    NormalFormRequest,
+    NormalFormResult,
+    RewriteStepRequest,
+    RewriteStepResult,
+    SubstitutionRequest,
+    SubstitutionResult,
+    UnificationRequest,
+    UnificationResult,
+)
+from jacobian.math.term_rewriting._operations import (
+    compute_critical_pairs,
+    compute_normal_form,
+    compute_rewrite_step,
+    compute_substitution,
+    compute_unification,
+    verify_critical_pairs_result,
+    verify_substitution_result,
+)
+from jacobian.math.term_rewriting._tools import TOOLS
 from jacobian.math.term_rewriting.values import (
     MAX_CRITICAL_PAIR_CANDIDATES,
     MAX_CRITICAL_PAIR_RESULT_BYTES,
@@ -271,8 +273,9 @@ class TestSubstitution:
         )
         payload = result.model_dump()
         payload["result"] = _app(1).model_dump()
-        with _validation_error("term_rewriting.substitution_result"):
+        assert not verify_substitution_result(
             SubstitutionResult.model_validate(payload)
+        )
 
 
 class TestMatching:
@@ -677,8 +680,9 @@ class TestCriticalPairs:
         )
         payload = result.model_dump()
         payload["profile"]["pairs"][0]["outer_reduct"] = _app(0, _var(1)).model_dump()
-        with _validation_error("term_rewriting.critical_pairs_replay"):
+        assert not verify_critical_pairs_result(
             CriticalPairsResult.model_validate(payload)
+        )
 
     def test_duplicate_rules_are_rejected_before_trivial_root_pairs(self):
         first = RewriteRule(lhs=_app(0, _var(7)), rhs=_var(7))

@@ -24,7 +24,7 @@ def compute_mixing_time(request: MixingTimeRequest) -> MixingTimeResult:
     matrix = tuple(
         tuple(value.as_fraction() for value in row) for row in request.matrix
     )
-    irreducible, aperiodic = ergodic_properties(request)
+    irreducible, aperiodic = ergodic_properties(matrix)
     if not (irreducible and aperiodic):
         return MixingTimeResult(
             status="NOT_ERGODIC",
@@ -32,7 +32,7 @@ def compute_mixing_time(request: MixingTimeRequest) -> MixingTimeResult:
             max_steps=request.max_steps,
             steps_examined=0,
         )
-    extremes = _stationary_distribution_extremes(request)
+    extremes = _stationary_distribution_extremes(matrix)
     stationary = extremes[0][1]
     outcome = mixing_time(
         matrix, stationary, request.epsilon.as_fraction(), request.max_steps
@@ -54,7 +54,10 @@ def compute_mixing_time(request: MixingTimeRequest) -> MixingTimeResult:
 def compute_stationary_distribution(
     request: StationaryDistributionRequest,
 ) -> StationaryDistributionResult:
-    extremes = _stationary_distribution_extremes(request)
+    matrix = tuple(
+        tuple(value.as_fraction() for value in row) for row in request.matrix
+    )
+    extremes = _stationary_distribution_extremes(matrix)
     return StationaryDistributionResult(
         extreme_distributions=tuple(
             ExtremeStationaryDistribution(
@@ -73,7 +76,10 @@ def compute_stationary_distribution(
 
 
 def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisionResult:
-    irreducible, aperiodic = ergodic_properties(request)
+    matrix = tuple(
+        tuple(value.as_fraction() for value in row) for row in request.matrix
+    )
+    irreducible, aperiodic = ergodic_properties(matrix)
     return ErgodicDecisionResult(
         is_ergodic=irreducible and aperiodic,
         is_irreducible=irreducible,

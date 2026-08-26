@@ -1,5 +1,9 @@
 """Tests for Petri net operations."""
 
+# The behavior-focused legacy test methods intentionally follow pytest's
+# unannotated method convention; Petri production modules are type-checked.
+# mypy: disable-error-code=no-untyped-def
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,6 +12,7 @@ from jacobian.math.petri_nets._models import (
     FireTransitionRequest,
     IncidenceMatrixRequest,
     ReachabilityRequest,
+    SiphonTrapRequest,
 )
 from jacobian.math.petri_nets._operations import (
     compute_enabled_transitions,
@@ -86,6 +91,7 @@ class TestFireTransition:
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
         assert result.status == "FIRED"
+        assert result.new_marking is not None
         assert result.new_marking.tokens == (1, 0)
 
     def test_fire_disabled(self):
@@ -95,6 +101,7 @@ class TestFireTransition:
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
         assert result.status == "NOT_ENABLED"
+        assert result.new_marking is not None
         assert result.new_marking.tokens == (0, 0)
 
     def test_fire_cyclic(self):
@@ -104,6 +111,7 @@ class TestFireTransition:
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
         assert result.status == "FIRED"
+        assert result.new_marking is not None
         assert result.new_marking.tokens == (0, 1)
 
 
@@ -202,7 +210,6 @@ class TestValidation:
 # Siphon and trap detection
 # ---------------------------------------------------------------------------
 
-from jacobian.math.petri_nets._models import SiphonTrapRequest  # noqa: E402
 from jacobian.math.petri_nets._operations import compute_siphon_trap  # noqa: E402
 from jacobian.math.petri_nets.operations import (  # noqa: E402
     find_minimal_siphons,
@@ -324,3 +331,23 @@ class TestSiphonTrapAdapter:
         assert frozenset({0}) in siphon_sets
         assert frozenset({0}) not in trap_sets
         assert frozenset({1}) in trap_sets
+
+
+def test_petri_values_enforce_advertised_arc_and_marking_bounds() -> None:
+    assert PetriNet(place_count=1, transition_count=1, pre=((1000,),), post=((1000,),))
+    assert Marking(tokens=(1000,))
+    with pytest.raises(ValidationError, match="pre weights must not exceed"):
+        PetriNet(place_count=1, transition_count=1, pre=((1001,),), post=((0,),))
+    with pytest.raises(ValidationError, match="marking tokens must not exceed"):
+        Marking(tokens=(1001,))
+
+
+def test_siphon_trap_admission_charges_transition_scan_work() -> None:
+    net = PetriNet(
+        place_count=20,
+        transition_count=64,
+        pre=tuple((0,) * 64 for _ in range(20)),
+        post=tuple((0,) * 64 for _ in range(20)),
+    )
+    with pytest.raises(ValidationError, match="candidate and transition-scan work"):
+        SiphonTrapRequest(net=net)

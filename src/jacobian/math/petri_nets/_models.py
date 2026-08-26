@@ -16,6 +16,8 @@ from jacobian.math.petri_nets.values import (
     require_reachability_bounds,
 )
 
+MAX_SIPHON_TRAP_WORK = 20_000_000
+
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"petri_net.{reason}", message)
@@ -138,11 +140,19 @@ class SiphonTrapRequest(StrictModel):
     net: PetriNet
 
     @model_validator(mode="after")
-    def require_bounded_places(self) -> Self:
+    def require_bounded_enumeration_work(self) -> Self:
         if self.net.place_count > 20:
             raise _validation_error(
                 "siphon_trap_place_bound",
                 "siphon/trap check supports at most 20 places for exact enumeration",
+            )
+        candidates = (1 << self.net.place_count) - 1
+        transition_checks = 2 * candidates * self.net.transition_count
+        set_work = 2 * candidates * self.net.place_count
+        if transition_checks + set_work > MAX_SIPHON_TRAP_WORK:
+            raise _validation_error(
+                "siphon_trap_work_bound",
+                "siphon/trap candidate and transition-scan work exceeds the admitted bound",
             )
         return self
 
@@ -158,6 +168,7 @@ class SiphonTrapResult(StrictModel):
 
 
 __all__ = [
+    "MAX_SIPHON_TRAP_WORK",
     "EnabledTransitionsRequest",
     "EnabledTransitionsResult",
     "FireTransitionRequest",

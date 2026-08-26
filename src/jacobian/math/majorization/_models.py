@@ -154,6 +154,26 @@ class TTransformSequenceResult(StrictModel):
     composed_matrix: tuple[tuple[str, ...], ...]
     target_match: bool
 
+    @model_validator(mode="after")
+    def bind_majorization_outcome(self) -> Self:
+        if self.majorizes and not self.target_match:
+            raise _validation_error(
+                "t_transform_target_mismatch",
+                "a positive T-transform construction must reach the target",
+            )
+        if not self.majorizes and (
+            self.steps
+            or self.final_permutation
+            or self.intermediate_vectors
+            or self.composed_matrix
+            or self.target_match
+        ):
+            raise _validation_error(
+                "negative_t_transform_shape",
+                "a negative majorization result has no construction witness",
+            )
+        return self
+
 
 class DoublyStochasticCheckRequest(StrictModel):
     """Check if a rational matrix is doubly stochastic."""

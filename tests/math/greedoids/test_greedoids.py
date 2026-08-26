@@ -171,6 +171,15 @@ class TestRankAndBases:
         assert result.rank == 1
         assert result.bases == ((0,),)
 
+    def test_non_greedoid_cannot_claim_bases_or_rank(self) -> None:
+        system = _non_greedoid_exchange()
+        bases_result = compute_bases(BasesRequest(system=system))
+        rank_result = compute_rank(RankRequest(system=system))
+        assert bases_result.status == "NOT_A_GREEDOID"
+        assert bases_result.bases == ()
+        assert rank_result.status == "NOT_A_GREEDOID"
+        assert rank_result.rank is None
+
 
 # ---------------------------------------------------------------------------
 # Basic word profile
@@ -234,6 +243,17 @@ class TestConvexGeometry:
         lookup = dict(result.complement_map)
         assert lookup[()] == (0, 1)
         assert lookup[(0, 1)] == ()
+
+    def test_non_antimatroid_cannot_claim_a_convex_geometry(self) -> None:
+        result = compute_convex_geometry(
+            ConvexGeometryRequest(
+                system=FiniteFeasibleSetSystem(
+                    ground=("a", "b"), feasible=((), (0,), (1,))
+                )
+            )
+        )
+        assert result.status == "NOT_AN_ANTIMATROID"
+        assert result.closed_family == ()
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +333,26 @@ def test_union_closed_true_for_antimatroid() -> None:
 def test_feasible_continuations() -> None:
     cont = greedoids.feasible_continuations(_two_element_antimatroid(), frozenset({0}))
     assert set(cont) == {1}
+
+
+def test_native_greedoid_consumers_reject_an_unrecognized_family() -> None:
+    """Structural feasible-set data cannot claim greedoid-derived facts."""
+    system = _non_greedoid_exchange()
+    calls = (
+        lambda: greedoids.rank(system),
+        lambda: greedoids.bases(system),
+        lambda: greedoids.feasible_continuations(system, frozenset()),
+        lambda: greedoids.basic_word_profile(system, ()),
+    )
+    for call in calls:
+        with pytest.raises(ValueError, match="recognized greedoid"):
+            call()
+
+
+def test_native_convex_geometry_consumer_rejects_a_non_antimatroid() -> None:
+    system = FiniteFeasibleSetSystem(ground=("a", "b"), feasible=((), (0,), (1,)))
+    with pytest.raises(ValueError, match="full support and union closure"):
+        greedoids.antimatroid_to_convex_geometry(system)
 
 
 # ---------------------------------------------------------------------------

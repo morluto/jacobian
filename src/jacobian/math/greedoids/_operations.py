@@ -17,10 +17,10 @@ from jacobian.math.greedoids._models import (
     RecognizeResult,
 )
 from jacobian.math.greedoids.operations import (
-    antimatroid_to_convex_geometry,
-    bases,
-    basic_word_profile,
-    rank,
+    _antimatroid_to_convex_geometry_unchecked,
+    _bases_unchecked,
+    _basic_word_profile_unchecked,
+    _rank_unchecked,
     recognize,
 )
 
@@ -52,18 +52,32 @@ def compute_recognize(request: RecognizeRequest) -> RecognizeResult:
 
 
 def compute_rank(request: RankRequest) -> RankResult:
+    recognized = recognize(request.system)
+    if recognized["status"] != "GREEDOID":
+        return RankResult(
+            status="NOT_A_GREEDOID",
+            obstruction=str(recognized["obstruction"]),
+            subset=request.subset,
+        )
     if request.subset is None:
-        r = rank(request.system)
+        r = _rank_unchecked(request.system, None)
     else:
-        r = rank(request.system, frozenset(request.subset))
+        r = _rank_unchecked(request.system, frozenset(request.subset))
     return RankResult(rank=r, subset=request.subset)
 
 
 def compute_bases(request: BasesRequest) -> BasesResult:
+    recognized = recognize(request.system)
+    if recognized["status"] != "GREEDOID":
+        return BasesResult(
+            status="NOT_A_GREEDOID",
+            bases=(),
+            obstruction=str(recognized["obstruction"]),
+        )
     if request.subset is None:
-        r, basis_list = bases(request.system)
+        r, basis_list = _bases_unchecked(request.system, None)
     else:
-        r, basis_list = bases(request.system, frozenset(request.subset))
+        r, basis_list = _bases_unchecked(request.system, frozenset(request.subset))
     return BasesResult(
         rank=r,
         bases=tuple(tuple(sorted(b)) for b in basis_list),
@@ -73,7 +87,13 @@ def compute_bases(request: BasesRequest) -> BasesResult:
 def compute_basic_word_profile(
     request: BasicWordProfileRequest,
 ) -> BasicWordProfileResult:
-    result: dict[str, Any] = basic_word_profile(request.system, request.word)
+    recognized = recognize(request.system)
+    if recognized["status"] != "GREEDOID":
+        return BasicWordProfileResult(
+            status="NOT_A_BASIC_WORD",
+            obstruction="not_a_greedoid",
+        )
+    result: dict[str, Any] = _basic_word_profile_unchecked(request.system, request.word)
     if result["status"] == "BASIC_WORD":
         return BasicWordProfileResult(
             status="BASIC_WORD",
@@ -92,7 +112,24 @@ def compute_basic_word_profile(
 def compute_convex_geometry(
     request: ConvexGeometryRequest,
 ) -> ConvexGeometryResult:
-    closed_family, complement_map = antimatroid_to_convex_geometry(request.system)
+    recognized = recognize(request.system)
+    if recognized["status"] != "GREEDOID":
+        return ConvexGeometryResult(
+            status="NOT_AN_ANTIMATROID",
+            obstruction=str(recognized["obstruction"]),
+        )
+    from jacobian.math.greedoids.operations import union_closed
+
+    full_ground = tuple(range(len(request.system.ground)))
+    if full_ground not in request.system.feasible_index() or not union_closed(
+        request.system
+    ):
+        return ConvexGeometryResult(
+            status="NOT_AN_ANTIMATROID", obstruction="not_full_support_or_union_closed"
+        )
+    closed_family, complement_map = _antimatroid_to_convex_geometry_unchecked(
+        request.system
+    )
     return ConvexGeometryResult(
         closed_family=tuple(closed_family),
         complement_map=tuple(sorted(complement_map.items())),

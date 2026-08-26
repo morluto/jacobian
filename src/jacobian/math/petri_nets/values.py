@@ -51,6 +51,11 @@ class PetriNet(StrictModel):
                 raise _validation_error(
                     "pre_weight_sign", "pre weights must be non-negative"
                 )
+            if any(w > MAX_PETRI_ARC_WEIGHT for w in row):
+                raise _validation_error(
+                    "pre_weight_bound",
+                    f"pre weights must not exceed {MAX_PETRI_ARC_WEIGHT}",
+                )
         for row in self.post:
             if len(row) != self.transition_count:
                 raise _validation_error(
@@ -59,6 +64,11 @@ class PetriNet(StrictModel):
             if any(w < 0 for w in row):
                 raise _validation_error(
                     "post_weight_sign", "post weights must be non-negative"
+                )
+            if any(w > MAX_PETRI_ARC_WEIGHT for w in row):
+                raise _validation_error(
+                    "post_weight_bound",
+                    f"post weights must not exceed {MAX_PETRI_ARC_WEIGHT}",
                 )
         return self
 
@@ -73,6 +83,11 @@ class Marking(StrictModel):
         if any(t < 0 for t in self.tokens):
             raise _validation_error(
                 "marking_token_sign", "marking tokens must be non-negative"
+            )
+        if any(t > MAX_PETRI_MARKING for t in self.tokens):
+            raise _validation_error(
+                "marking_token_bound",
+                f"marking tokens must not exceed {MAX_PETRI_MARKING}",
             )
         return self
 

@@ -102,13 +102,33 @@ def recognize(
     exch = _exchange_obstruction(feasible_sets, index)
     if exch is not None:
         return exch
-    r, basis_list = bases(system)
+    r, basis_list = _bases_unchecked(system, None)
     return {
         "status": "GREEDOID",
         "rank": r,
         "bases": [tuple(sorted(b)) for b in basis_list],
         "ground_size": n,
     }
+
+
+def _require_greedoid(system: FiniteFeasibleSetSystem) -> None:
+    """Reject a structural family that has not established the greedoid axioms."""
+    recognized = recognize(system)
+    if recognized["status"] != "GREEDOID":
+        raise ValueError(
+            "a greedoid operation requires a recognized greedoid "
+            f"(first obstruction: {recognized['obstruction']})"
+        )
+
+
+def _require_antimatroid(system: FiniteFeasibleSetSystem) -> None:
+    """Reject a greedoid that has not established the antimatroid axioms."""
+    _require_greedoid(system)
+    full_ground = tuple(range(len(system.ground)))
+    if full_ground not in system.feasible_index() or not union_closed(system):
+        raise ValueError(
+            "an antimatroid operation requires full support and union closure"
+        )
 
 
 def union_closed(system: FiniteFeasibleSetSystem) -> bool:
@@ -129,7 +149,14 @@ def rank(system: FiniteFeasibleSetSystem, subset: frozenset[int] | None = None) 
     If ``subset`` is ``None``, the rank of the whole greedoid (the common size
     of its bases) is returned.
     """
-    require_bounded_carrier(system)
+    _require_greedoid(system)
+    return _rank_unchecked(system, subset)
+
+
+def _rank_unchecked(
+    system: FiniteFeasibleSetSystem, subset: frozenset[int] | None
+) -> int:
+    """Compute rank after the greedoid axioms have been established."""
     if subset is None:
         candidates = _feasible_sets(system)
     else:
@@ -145,7 +172,14 @@ def bases(
     A basis of ``X`` is a maximal feasible subset of ``X``. All bases have the
     same cardinality under the greedoid theorem convention.
     """
-    require_bounded_carrier(system)
+    _require_greedoid(system)
+    return _bases_unchecked(system, subset)
+
+
+def _bases_unchecked(
+    system: FiniteFeasibleSetSystem, subset: frozenset[int] | None
+) -> tuple[int, list[frozenset[int]]]:
+    """Compute bases after the greedoid axioms have been established."""
     if subset is None:
         subset = frozenset(range(len(system.ground)))
     feasible_in_subset = [fs for fs in _feasible_sets(system) if fs <= subset]
@@ -165,7 +199,7 @@ def feasible_continuations(
     system: FiniteFeasibleSetSystem, feasible_set: frozenset[int]
 ) -> list[int]:
     """Return ``Gamma(X) = {e in E\\X : X union {e} in F}`` for a feasible ``X``."""
-    require_bounded_carrier(system)
+    _require_greedoid(system)
     index = system.feasible_index()
     if tuple(sorted(feasible_set)) not in index:
         raise ValueError("input set must be feasible")
@@ -186,7 +220,14 @@ def basic_word_profile(
     every prefix set is feasible. A full basic word has length ``r(E)`` and its
     underlying set is a greedoid basis.
     """
-    require_bounded_carrier(system)
+    _require_greedoid(system)
+    return _basic_word_profile_unchecked(system, word)
+
+
+def _basic_word_profile_unchecked(
+    system: FiniteFeasibleSetSystem, word: tuple[int, ...]
+) -> dict[str, object]:
+    """Profile a basic word after the greedoid axioms have been established."""
     n = len(system.ground)
     seen: set[int] = set()
     for elem in word:
@@ -214,7 +255,7 @@ def basic_word_profile(
                 "prefix_index": i,
                 "prefix_set": tuple(sorted(prefix)),
             }
-    r, _ = bases(system)
+    r, _ = _bases_unchecked(system, None)
     is_full = len(word) == r
     return {
         "status": "BASIC_WORD",
@@ -234,7 +275,14 @@ def antimatroid_to_convex_geometry(
     family (sorted tuples of ground indices) and the feasible->closed
     complement map.
     """
-    require_bounded_carrier(system)
+    _require_antimatroid(system)
+    return _antimatroid_to_convex_geometry_unchecked(system)
+
+
+def _antimatroid_to_convex_geometry_unchecked(
+    system: FiniteFeasibleSetSystem,
+) -> tuple[list[tuple[int, ...]], dict[tuple[int, ...], tuple[int, ...]]]:
+    """Project an already-established antimatroid to its closed family."""
     n = len(system.ground)
     ground_set = frozenset(range(n))
     complement_map: dict[tuple[int, ...], tuple[int, ...]] = {}

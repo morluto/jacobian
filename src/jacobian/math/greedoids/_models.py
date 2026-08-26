@@ -16,6 +16,9 @@ MAX_GROUND_SIZE = 64
 MAX_FEASIBLE_COUNT = 4096
 """Schema-visible cap on feasible-row count for greedoid requests."""
 
+MAX_EXCHANGE_WORK = 2_000_000
+"""Maximum ordered exchange candidate-membership checks per recognition."""
+
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable validation error owned by greedoid contracts."""
@@ -48,6 +51,23 @@ def require_bounded_carrier(system: FiniteFeasibleSetSystem) -> None:
             "feasible_count_exceeds_budget",
             f"feasible-set count exceeds the bounded budget of "
             f"{MAX_FEASIBLE_COUNT} rows",
+        )
+    by_size: dict[int, int] = {}
+    memberships = 0
+    for row in system.feasible:
+        by_size[len(row)] = by_size.get(len(row), 0) + 1
+        memberships += len(row)
+    exchange_pairs = sum(
+        larger_count * smaller_count
+        for larger_size, larger_count in by_size.items()
+        for smaller_size, smaller_count in by_size.items()
+        if larger_size > smaller_size
+    )
+    exchange_work = exchange_pairs * len(system.ground)
+    if exchange_work > MAX_EXCHANGE_WORK:
+        raise GreedoidAdmissionError(
+            "exchange_work_exceeds_budget",
+            "exhaustive exchange candidate-membership work exceeds the bounded budget",
         )
 
 
@@ -125,8 +145,10 @@ class RankRequest(StrictModel):
 class RankResult(StrictModel):
     """The greedoid rank of the supplied subset."""
 
-    rank: int = Field(ge=0)
+    status: str = "GREEDOID"
+    rank: int | None = Field(default=None, ge=0)
     subset: tuple[int, ...] | None = Field(default=None)
+    obstruction: str | None = None
 
 
 class BasesRequest(StrictModel):
@@ -157,8 +179,10 @@ class BasesRequest(StrictModel):
 class BasesResult(StrictModel):
     """The basis family and common rank."""
 
-    rank: int = Field(ge=0)
+    status: str = "GREEDOID"
+    rank: int | None = Field(default=None, ge=0)
     bases: tuple[tuple[int, ...], ...]
+    obstruction: str | None = None
 
 
 class BasicWordProfileRequest(StrictModel):
@@ -218,8 +242,10 @@ class ConvexGeometryResult(StrictModel):
     the wire representation stays JSON-safe.
     """
 
-    closed_family: tuple[tuple[int, ...], ...]
-    complement_map: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]
+    status: str = "ANTIMATROID"
+    closed_family: tuple[tuple[int, ...], ...] = ()
+    complement_map: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...] = ()
+    obstruction: str | None = None
 
 
 __all__ = [

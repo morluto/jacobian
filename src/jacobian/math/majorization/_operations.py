@@ -148,28 +148,48 @@ def _majorizes_values(x_vals: Sequence[Fraction], y_vals: Sequence[Fraction]) ->
 
 
 def _compute_t_transform_steps(
-    x_vals: list[Fraction], target: list[Fraction]
+    x_vals: list[Fraction], target: list[Fraction], order: list[int]
 ) -> tuple[list[Fraction], list[tuple[int, int, Fraction]]]:
+    """Use the rank-aligned Hardy--Littlewood--Pólya construction.
+
+    ``order`` places the original coordinates in nonincreasing source order.
+    The target is assigned in that order, so every mixing step acts on the
+    caller's original coordinates while preserving the theorem's sorted-vector
+    invariant.  A final permutation then restores the requested target labels.
+    """
+
     n = len(x_vals)
     current = list(x_vals)
     steps: list[tuple[int, int, Fraction]] = []
-    for _ in range(5 * n):
-        if all(current[k] == target[k] for k in range(n)):
+    for _ in range(n - 1):
+        if all(current[index] == target[index] for index in order):
             break
-        i_idx = next((idx for idx in range(n) if current[idx] > target[idx]), None)
-        j_idx = next((idx for idx in range(n) if current[idx] < target[idx]), None)
-        if i_idx is None or j_idx is None:
+        i_rank = next(
+            (
+                rank
+                for rank, index in enumerate(order)
+                if current[index] > target[index]
+            ),
+            None,
+        )
+        if i_rank is None:
             break
+        i_idx = order[i_rank]
         ci = current[i_idx]
+        target_i = target[i_idx]
+        j_rank = next(
+            (rank for rank in range(i_rank + 1, n) if current[order[rank]] <= target_i),
+            None,
+        )
+        if j_rank is None:
+            break
+        j_idx = order[j_rank]
         cj = current[j_idx]
         denom = ci - cj
         if denom == 0:
             break
-        deficit_j = target[j_idx] - cj
-        excess_i = ci - target[i_idx]
-        delta = min(deficit_j, excess_i)
-        lam = Fraction(1) - delta / denom
-        if lam < 0 or lam > 1 or lam == 1:
+        lam = (target_i - cj) / denom
+        if lam < 0 or lam >= 1:
             break
         current[i_idx] = lam * ci + (Fraction(1) - lam) * cj
         current[j_idx] = (Fraction(1) - lam) * ci + lam * cj
@@ -247,11 +267,16 @@ def compute_t_transform_sequence(
             target_match=False,
         )
 
-    target = list(y_vals)
-    current, steps = _compute_t_transform_steps(x_vals, target)
-    final_perm, needs_perm, current = _target_permutation(current, target)
+    order = sorted(range(n), key=lambda index: (-x_vals[index], index))
+    sorted_target = _sorted_desc(y_vals)
+    rank_aligned_target = [Fraction(0)] * n
+    for rank, index in enumerate(order):
+        rank_aligned_target[index] = sorted_target[rank]
 
-    target_match = current == target
+    current, steps = _compute_t_transform_steps(x_vals, rank_aligned_target, order)
+    final_perm, needs_perm, current = _target_permutation(current, list(y_vals))
+
+    target_match = current == y_vals
 
     # Build the composed doubly stochastic matrix
     composed = _build_composed_matrix(steps, final_perm if needs_perm else None, n)

@@ -256,6 +256,26 @@ class TestTTransform:
         )
         assert result.majorizes is True
         assert len(result.steps) > 0
+        assert result.target_match is True
+
+    def test_permutation_equivalent_vectors_return_an_exact_witness(self) -> None:
+        """A label permutation needs no averaging, but must still replay to y."""
+
+        result = compute_t_transform_sequence(
+            TTransformSequenceRequest(
+                x=rv(["a", "b", "c"], [("0", "1"), ("1", "1"), ("2", "1")]),
+                y=rv(["a", "b", "c"], [("1", "1"), ("2", "1"), ("0", "1")]),
+            )
+        )
+
+        assert result.majorizes is True
+        assert result.target_match is True
+        assert result.steps == ()
+        assert result.final_permutation == (1, 2, 0)
+        assert result.intermediate_vectors[-1] == ("1", "2", "0")
+        matrix = [[Fraction(entry) for entry in row] for row in result.composed_matrix]
+        image = [sum(row[index] * index for index in range(3)) for row in matrix]
+        assert image == [Fraction(1), Fraction(2), Fraction(0)]
 
     def test_not_majorizes(self) -> None:
         """When x does not majorize y, return empty result."""

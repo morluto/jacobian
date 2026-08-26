@@ -223,7 +223,7 @@ class TestEnumeration:
         result = compute_enumerate_concepts(EnumerateConceptsRequest(context=context))
         assert result.count == 2
 
-    def test_attribute_fallback_boundary_is_admitted_and_rejected(self) -> None:
+    def test_attribute_fallback_boundary_is_admitted(self) -> None:
         wide = FormalContext(
             objects=("o0",),
             attributes=tuple(f"a{index}" for index in range(64)),
@@ -233,14 +233,22 @@ class TestEnumeration:
             compute_enumerate_concepts(EnumerateConceptsRequest(context=wide)).count
             == 2
         )
-        with pytest.raises(ValidationError):
-            EnumerateConceptsRequest(
-                context=FormalContext(
-                    objects=("o0",),
-                    attributes=tuple(f"a{index}" for index in range(65)),
-                    incidence=(),
-                )
+
+    def test_formal_context_rejects_one_attribute_above_its_contract_cap(self) -> None:
+        with pytest.raises(ValidationError) as error:
+            FormalContext(
+                objects=("o0",),
+                attributes=tuple(f"a{index}" for index in range(65)),
+                incidence=(),
             )
+        detail = error.value.errors()[0]
+        assert detail["type"] == "too_long"
+        assert detail["loc"] == ("attributes",)
+        assert detail["ctx"] == {
+            "field_type": "Tuple",
+            "max_length": 64,
+            "actual_length": 65,
+        }
 
 
 # ---------------------------------------------------------------------------

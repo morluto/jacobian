@@ -13,7 +13,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
-from jacobian.math.logic._operations import (
+from jacobian.math.logic._smt import (
     SmtLogic,
     SmtSolveRequest,
     _is_smtlib_source_diagnostic,

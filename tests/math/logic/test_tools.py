@@ -7,7 +7,8 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.logic import _operations as operations
+from jacobian.math.logic import _sat as sat
+from jacobian.math.logic import _smt as smt
 from jacobian.math.logic._cnf import (
     CanonicalCnf,
     CnfCanonicalizeRequest,
@@ -15,7 +16,7 @@ from jacobian.math.logic._cnf import (
     canonicalize_cnf,
     check_sat_assignment,
 )
-from jacobian.math.logic._operations import (
+from jacobian.math.logic._sat import (
     LprAddition,
     LprDeletion,
     LprPropagationHint,
@@ -23,11 +24,13 @@ from jacobian.math.logic._operations import (
     SatRefutationCheckRequest,
     SatSolveRequest,
     SatSolveResult,
+    check_sat_refutation,
+    solve_sat,
+)
+from jacobian.math.logic._smt import (
     SmtLogic,
     SmtSolveRequest,
     SmtSolveResult,
-    check_sat_refutation,
-    solve_sat,
     solve_smt,
 )
 from jacobian.math.logic._tools import TOOLS
@@ -126,8 +129,8 @@ def _unit_refutation_request() -> SatRefutationCheckRequest:
 def test_lpr_refutation_serializes_the_typed_profile_without_backend_syntax() -> None:
     request = _unit_refutation_request()
 
-    assert operations._dimacs_cnf(request.cnf) == b"p cnf 1 2\n-1 0\n1 0\n"
-    assert operations._ascii_lpr(request.refutation) == b"3 0 1 2 0\n"
+    assert sat._dimacs_cnf(request.cnf) == b"p cnf 1 2\n-1 0\n1 0\n"
+    assert sat._ascii_lpr(request.refutation) == b"3 0 1 2 0\n"
 
 
 def test_lpr_refutation_keeps_witnesses_and_deletions_structural() -> None:
@@ -146,7 +149,7 @@ def test_lpr_refutation_keeps_witnesses_and_deletions_structural() -> None:
         )
     )
 
-    assert operations._ascii_lpr(refutation) == b"0 d 1 0\n3 1 1 -1 0 2 -2 0\n"
+    assert sat._ascii_lpr(refutation) == b"0 d 1 0\n3 1 1 -1 0 2 -2 0\n"
 
 
 def test_lpr_refutation_rejects_out_of_axis_literals_and_non_live_hints() -> None:
@@ -205,7 +208,7 @@ def test_lpr_refutation_admits_sparse_solver_assigned_clause_labels() -> None:
     )
 
     assert (
-        operations._ascii_lpr(request.refutation)
+        sat._ascii_lpr(request.refutation)
         == b"50000 1 0 2 0\n4000000000 0 1 2 -50000 0\n0 d 50000 0\n"
     )
 
@@ -260,7 +263,7 @@ def test_lpr_refutation_still_binds_sparse_labels_to_live_clauses() -> None:
 def test_lpr_refutation_reserves_the_transport_result_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(operations, "_MAX_LPR_RESULT_BYTES", 1)
+    monkeypatch.setattr(sat, "_MAX_LPR_RESULT_BYTES", 1)
 
     with pytest.raises(ValueError, match="source-bound result limit"):
         _unit_refutation_request()
@@ -269,7 +272,7 @@ def test_lpr_refutation_reserves_the_transport_result_budget(
 def test_lpr_refutation_returns_unavailable_without_the_pinned_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(operations.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(sat.shutil, "which", lambda _name: None)
 
     result = check_sat_refutation(_unit_refutation_request())
 
@@ -281,10 +284,10 @@ def test_lpr_refutation_returns_unavailable_without_the_pinned_provider(
 def test_lpr_refutation_accepts_only_the_exact_cake_verdict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(operations.shutil, "which", lambda name: f"/usr/bin/{name}")
-    monkeypatch.setattr(operations, "_cake_lpr_is_supported", lambda _path: True)
+    monkeypatch.setattr(sat.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(sat, "_cake_lpr_is_supported", lambda _path: True)
     monkeypatch.setattr(
-        operations,
+        sat,
         "run_bounded_process",
         lambda *_args, **_kwargs: SimpleNamespace(
             returncode=0,
@@ -306,10 +309,10 @@ def test_lpr_refutation_accepts_only_the_exact_cake_verdict(
 def test_lpr_refutation_projects_a_recognized_checker_rejection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(operations.shutil, "which", lambda name: f"/usr/bin/{name}")
-    monkeypatch.setattr(operations, "_cake_lpr_is_supported", lambda _path: True)
+    monkeypatch.setattr(sat.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(sat, "_cake_lpr_is_supported", lambda _path: True)
     monkeypatch.setattr(
-        operations,
+        sat,
         "run_bounded_process",
         lambda *_args, **_kwargs: SimpleNamespace(
             returncode=0,
@@ -379,11 +382,9 @@ def test_lpr_refutation_never_upgrades_process_failure_to_a_math_verdict(
     completed: SimpleNamespace,
     outcome: str,
 ) -> None:
-    monkeypatch.setattr(operations.shutil, "which", lambda name: f"/usr/bin/{name}")
-    monkeypatch.setattr(operations, "_cake_lpr_is_supported", lambda _path: True)
-    monkeypatch.setattr(
-        operations, "run_bounded_process", lambda *_args, **_kwargs: completed
-    )
+    monkeypatch.setattr(sat.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(sat, "_cake_lpr_is_supported", lambda _path: True)
+    monkeypatch.setattr(sat, "run_bounded_process", lambda *_args, **_kwargs: completed)
 
     result = check_sat_refutation(_unit_refutation_request())
 
@@ -581,16 +582,16 @@ def test_smt_request_admits_a_literal_beyond_the_former_ceiling_with_its_exact_m
 
 
 def test_atom_numeral_weight_classifies_literal_tokens_not_symbols() -> None:
-    assert operations._atom_numeral_weight("9" * 193) == 193
-    assert operations._atom_numeral_weight("007") == 3
-    assert operations._atom_numeral_weight("1234.5678") == 8
-    assert operations._atom_numeral_weight("1.") == 1
-    assert operations._atom_numeral_weight("#xdeadbeef") == 8
-    assert operations._atom_numeral_weight("#b1010") == 4
-    assert operations._atom_numeral_weight("v" + "0" * 193) == 0
-    assert operations._atom_numeral_weight("a1.b2") == 0
-    assert operations._atom_numeral_weight(":named") == 0
-    assert operations._atom_numeral_weight("1.2.3") == 0
+    assert smt._atom_numeral_weight("9" * 193) == 193
+    assert smt._atom_numeral_weight("007") == 3
+    assert smt._atom_numeral_weight("1234.5678") == 8
+    assert smt._atom_numeral_weight("1.") == 1
+    assert smt._atom_numeral_weight("#xdeadbeef") == 8
+    assert smt._atom_numeral_weight("#b1010") == 4
+    assert smt._atom_numeral_weight("v" + "0" * 193) == 0
+    assert smt._atom_numeral_weight("a1.b2") == 0
+    assert smt._atom_numeral_weight(":named") == 0
+    assert smt._atom_numeral_weight("1.2.3") == 0
 
 
 def test_smt_request_admits_digits_inside_simple_symbols_and_still_solves() -> None:
@@ -643,15 +644,11 @@ def test_smt_request_admits_a_decimal_at_the_digit_boundary_and_still_solves() -
 
 
 def test_smtlib_structure_weights_indexed_bit_vector_values_not_bv_symbols() -> None:
-    assert operations._smtlib_structure(f"(_ bv{'9' * 193} 8)").numeral_digits == 193
-    assert operations._smtlib_structure("(_ bv1010 8)").numeral_digits == 4
+    assert smt._smtlib_structure(f"(_ bv{'9' * 193} 8)").numeral_digits == 193
+    assert smt._smtlib_structure("(_ bv1010 8)").numeral_digits == 4
+    assert smt._smtlib_structure("(declare-const bv1010 Int)").numeral_digits == 0
     assert (
-        operations._smtlib_structure("(declare-const bv1010 Int)").numeral_digits == 0
-    )
-    assert (
-        operations._smtlib_structure(
-            "(assert (= x |bv" + "9" * 193 + "|))"
-        ).numeral_digits
+        smt._smtlib_structure("(assert (= x |bv" + "9" * 193 + "|))").numeral_digits
         == 0
     )
 
@@ -712,12 +709,10 @@ def test_smt_request_schema_publishes_the_structural_limits() -> None:
     schema = SmtSolveRequest.model_json_schema()
     description = schema["properties"]["smtlib"]["description"]
 
-    assert f"nesting depth at most {operations._MAX_SMTLIB_DEPTH}" in description
-    assert f"compound terms at most {operations._MAX_SMTLIB_TERMS}" in description
-    assert (
-        f"declared symbols at most {operations._MAX_SMTLIB_DECLARATIONS}" in description
-    )
-    assert f"at most {operations._MAX_SMTLIB_NUMERAL_DIGITS} digits" in description
+    assert f"nesting depth at most {smt._MAX_SMTLIB_DEPTH}" in description
+    assert f"compound terms at most {smt._MAX_SMTLIB_TERMS}" in description
+    assert f"declared symbols at most {smt._MAX_SMTLIB_DECLARATIONS}" in description
+    assert f"at most {smt._MAX_SMTLIB_NUMERAL_DIGITS} digits" in description
 
 
 def test_smt_request_rejects_more_than_the_declaration_budget() -> None:
@@ -790,15 +785,15 @@ def test_smt_solver_passes_time_work_and_memory_budgets_to_z3(monkeypatch) -> No
     assert result.outcome == "UNSAT"
     assert recorded == {
         "timeout": 2_500,
-        "rlimit": operations._SOLVER_RLIMIT,
-        "max_memory": operations._SOLVER_MAX_MEMORY_MB,
+        "rlimit": smt._SOLVER_RLIMIT,
+        "max_memory": smt._SOLVER_MAX_MEMORY_MB,
     }
 
 
 def test_smt_solver_projects_exhausted_work_budget_as_typed_unknown(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(operations, "_SOLVER_RLIMIT", 1)
+    monkeypatch.setattr(smt, "_SOLVER_RLIMIT", 1)
     result = solve_smt(
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
@@ -815,7 +810,7 @@ def test_smt_solver_projects_exhausted_work_budget_as_typed_unknown(
 def test_sat_solver_projects_exhausted_work_budget_as_typed_unknown(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(operations, "_SOLVER_RLIMIT", 1)
+    monkeypatch.setattr(smt, "_SOLVER_RLIMIT", 1)
     result = solve_sat(
         SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
     )
@@ -829,7 +824,7 @@ def test_sat_solver_projects_exhausted_work_budget_as_typed_unknown(
 def test_smt_solver_projects_exhausted_memory_budget_as_typed_unknown(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(operations, "_SOLVER_MAX_MEMORY_MB", 2)
+    monkeypatch.setattr(smt, "_SOLVER_MAX_MEMORY_MB", 2)
     result = solve_smt(
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
@@ -917,7 +912,7 @@ def test_sat_solver_projects_exhaustion_messages_from_z3_exceptions(
     assert result.outcome == "UNKNOWN"
     assert result.exhausted == exhausted
     assert result.assignment is None
-    assert result.detail == operations._EXHAUSTION_DETAILS[exhausted]
+    assert result.detail == smt._EXHAUSTION_DETAILS[exhausted]
 
 
 @pytest.mark.parametrize(
@@ -956,7 +951,7 @@ def test_smt_solver_projects_exhaustion_messages_from_z3_exceptions(
     assert result.outcome == "UNKNOWN"
     assert result.exhausted == exhausted
     assert result.model_smtlib is None
-    assert result.detail == operations._EXHAUSTION_DETAILS[exhausted]
+    assert result.detail == smt._EXHAUSTION_DETAILS[exhausted]
 
 
 def test_smt_solver_projects_exhaustion_from_model_serialization(monkeypatch) -> None:
@@ -1159,7 +1154,7 @@ def test_smt_solver_types_parse_stage_backend_failures_as_unknown(monkeypatch) -
 
     assert result.outcome == "UNKNOWN"
     assert result.exhausted == "memory"
-    assert result.detail == operations._EXHAUSTION_DETAILS["memory"]
+    assert result.detail == smt._EXHAUSTION_DETAILS["memory"]
 
 
 def test_smt_solver_never_classifies_located_source_text_as_exhaustion(
@@ -1259,17 +1254,17 @@ def test_every_concrete_smt_request_rejects_malformed_grammar(request_type) -> N
 
 
 def test_unknown_projection_maps_every_exhausted_resource() -> None:
-    assert operations._project_unknown("max. resource limit exceeded") == (
+    assert smt._project_unknown("max. resource limit exceeded") == (
         "work",
         "the bounded solver work budget was exhausted",
     )
-    assert operations._project_unknown("canceled")[0] == "work"
-    assert operations._project_unknown("max. memory exceeded")[0] == "memory"
-    assert operations._project_unknown("timeout")[0] == "time"
-    passthrough = operations._project_unknown("max. engine depth reached")
+    assert smt._project_unknown("canceled")[0] == "work"
+    assert smt._project_unknown("max. memory exceeded")[0] == "memory"
+    assert smt._project_unknown("timeout")[0] == "time"
+    passthrough = smt._project_unknown("max. engine depth reached")
     assert passthrough[0] is None
     assert passthrough[1] == "max. engine depth reached"
-    assert operations._project_unknown(None)[1].endswith("no completeness evidence")
+    assert smt._project_unknown(None)[1].endswith("no completeness evidence")
 
 
 def test_result_models_bind_exhausted_budgets_to_unknown_outcomes() -> None:

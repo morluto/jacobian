@@ -212,7 +212,7 @@ ignore_imports = [
     "jacobian.math.** -> jacobian.catalog._examples",
     "jacobian.math.** -> jacobian.catalog.admission",
     # The logic domain launches bounded external solvers via jacobian.process.
-    "jacobian.math.logic._operations -> jacobian.process",
+    "jacobian.math.logic._sat -> jacobian.process",
     # Private exact-algebra adapters share one bounded Singular process owner.
     "jacobian.math._singular -> jacobian.process",
     # General ideal radical/quotient run in a bounded one-shot Singular process.

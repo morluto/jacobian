@@ -39,6 +39,8 @@ _PUBLIC_MATH_FILES = frozenset(
         "_cnf.py",
         "_models.py",
         "_operations.py",
+        "_sat.py",
+        "_smt.py",
         "_tools.py",
         "operations.py",
         "values.py",

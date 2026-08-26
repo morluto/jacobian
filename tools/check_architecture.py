@@ -20,7 +20,7 @@ _EXTERNAL_OPERATION_OWNERS = frozenset(
         _PROCESS_OWNER,
         PurePosixPath("src/jacobian/math/_singular.py"),
         PurePosixPath("src/jacobian/math/polynomials/ideals/_singular.py"),
-        PurePosixPath("src/jacobian/math/logic/_operations.py"),
+        PurePosixPath("src/jacobian/math/logic/_sat.py"),
         PurePosixPath(
             "src/jacobian/math/polynomials/multivariate/_factor_backend.py"
         ),

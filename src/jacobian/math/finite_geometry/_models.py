@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Self
 
 from pydantic import ConfigDict, Field, model_validator
@@ -240,9 +241,10 @@ class ProjectiveSpaceEnumerateRequest(StrictModel):
         Runs before execution on admitted mathematics alone. Each returned
         point is a bare coordinate array with at most ``n`` entries carrying
         at most ``len(str(q - 1))`` digits, so the exact worst-case point
-        array size follows from q and n; the parent space echoes once, and a
-        fixed constant covers keys, method string, count digits, and
-        punctuation.
+        array size follows from q and n; the parent space echoes once with
+        NFC-normalized labels, matching how canonical JSON serialization
+        normalizes string values before transport; and a fixed constant
+        covers keys, method string, count digits, and punctuation.
         """
 
         q = self.space.field_order
@@ -252,7 +254,10 @@ class ProjectiveSpaceEnumerateRequest(StrictModel):
         per_point_bytes = 2 + n * digit_width + (n - 1) + 1
         predicted = (
             _PROJECTIVE_ENUMERATION_ENVELOPE_BYTES
-            + sum(len(encode_strict_json(label)) for label in self.space.axis)
+            + sum(
+                len(encode_strict_json(unicodedata.normalize("NFC", label)))
+                for label in self.space.axis
+            )
             + point_count * per_point_bytes
         )
         if predicted > MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES:

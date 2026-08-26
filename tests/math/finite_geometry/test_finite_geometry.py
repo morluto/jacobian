@@ -366,6 +366,23 @@ def test_enumerate_admission_rejects_results_beyond_the_transport_budget() -> No
     )
 
 
+def test_enumerate_admission_estimates_normalized_label_encoding() -> None:
+    """The serialized-result bound measures NFC-normalized labels.
+
+    Canonical JSON normalizes string values, so combining-character
+    spellings can double in encoded length after normalization; a label
+    that fits the budget only before normalization must still be rejected
+    before any enumeration runs.
+    """
+    label = "x" + "\u0344" * (2_600_000)
+    with pytest.raises(ValidationError) as error:
+        ProjectiveSpaceEnumerateRequest(space={"field_order": 2, "axis": ("x", label)})
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_geometry.projective_enumeration_result_too_large"
+    )
+
+
 def test_enumeration_replay_rejects_unnormalized_representatives() -> None:
     """Sequence coordinates stay bound to the canonical representative
     invariant of the declared parent space."""

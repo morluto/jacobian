@@ -376,6 +376,13 @@ class TestRepresentations:
         ]["target"]
         assert "2*floor_sqrt(4*a*n/(-D))+1" in target_schema["description"]
 
+    def test_schema_exposes_the_modular_empty_admission_exception(self) -> None:
+        target_schema = BinaryQuadraticFormRepresentationsRequest.model_json_schema()[
+            "properties"
+        ]["target"]
+        assert "(a,b,c)=(1,0,1)" in target_schema["description"]
+        assert "n mod 4 is 3" in target_schema["description"]
+
     def test_x_squared_plus_y_squared_of_five_has_eight_ordered_signed_pairs(
         self,
     ) -> None:

@@ -230,7 +230,9 @@ class BinaryQuadraticFormRepresentationsRequest(StrictModel):
         le=MAX_REPRESENTATION_TARGET,
         description=(
             "Nonnegative target n. With D=b^2-4ac for form, this request is "
-            "admitted exactly when 2*floor_sqrt(4*a*n/(-D))+1 is at most "
+            "admitted exactly when either (a,b,c)=(1,0,1) and n mod 4 is 3, "
+            "where squares are 0 or 1 modulo 4 so x^2+y^2=n is proved empty "
+            "without any scan, or 2*floor_sqrt(4*a*n/(-D))+1 is at most "
             f"{MAX_REPRESENTATION_Y_CANDIDATES}; that is the complete "
             "y-coordinate scan size."
         ),

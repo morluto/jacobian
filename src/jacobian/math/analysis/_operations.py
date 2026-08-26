@@ -43,10 +43,6 @@ class _EvaluationFailure(StrEnum):
     PRECISION_INSUFFICIENT = "PRECISION_INSUFFICIENT"
 
 
-class _BoxEvaluationFailure(StrEnum):
-    BACKEND_ERROR = "BACKEND_ERROR"
-
-
 class _SecondJetEvaluationFailure(StrEnum):
     BACKEND_ERROR = "BACKEND_ERROR"
 

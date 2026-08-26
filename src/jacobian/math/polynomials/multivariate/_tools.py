@@ -10,15 +10,13 @@ from jacobian.math.polynomials.multivariate._division import (
     MultivariateDivisionRequest,
     MultivariateDivisionResult,
 )
+from jacobian.math.polynomials.multivariate._factor_models import (
+    MultivariateFactorRequest,
+    MultivariateFactorResult,
+)
 from jacobian.math.polynomials.multivariate._gcd import (
     MultivariateGcdRequest,
     MultivariateGcdResult,
-)
-from jacobian.math.polynomials.multivariate._models import (
-    MultivariateFactorRequest,
-    MultivariateFactorResult,
-    MultivariateSubresultantSequenceRequest,
-    MultivariateSubresultantSequenceResult,
 )
 from jacobian.math.polynomials.multivariate._operations import (
     compute_multivariate_division,
@@ -30,6 +28,10 @@ from jacobian.math.polynomials.multivariate._operations import (
 from jacobian.math.polynomials.multivariate._resultant import (
     MultivariateResultantRequest,
     MultivariateResultantResult,
+)
+from jacobian.math.polynomials.multivariate._subresultants import (
+    MultivariateSubresultantSequenceRequest,
+    MultivariateSubresultantSequenceResult,
 )
 
 

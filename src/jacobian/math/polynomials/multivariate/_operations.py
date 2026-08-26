@@ -19,29 +19,29 @@ from jacobian.math.polynomials.multivariate._factor_backend import (
     FactorBackendFailureError,
     FactorBackendInterruptedError,
 )
+from jacobian.math.polynomials.multivariate._factor_models import (
+    _MAX_FACTOR_OUTPUT_TERMS,
+    MultivariateFactorRequest,
+    MultivariateFactorResult,
+    MultivariateIrreducibleFactor,
+    _monic_content_fraction,
+)
 from jacobian.math.polynomials.multivariate._gcd import (
     MultivariateGcdRequest,
     MultivariateGcdResult,
 )
-from jacobian.math.polynomials.multivariate._models import (
-    _MAX_FACTOR_OUTPUT_TERMS as _MAX_OUTPUT_TERMS,
-)
-from jacobian.math.polynomials.multivariate._models import (
-    _MAX_SUBRESULTANT_SEQUENCE_TERMS,
-    MultivariateFactorRequest,
-    MultivariateFactorResult,
-    MultivariateIrreducibleFactor,
-    MultivariatePrincipalSubresultantCoefficient,
-    MultivariateSubresultantMember,
-    MultivariateSubresultantSequenceRequest,
-    MultivariateSubresultantSequenceResult,
-    _degree_in_variable,
-    _monic_content_fraction,
-)
+from jacobian.math.polynomials.multivariate._models import _degree_in_variable
 from jacobian.math.polynomials.multivariate._resultant import (
     MultivariateResultantRequest,
     MultivariateResultantResult,
     _sylvester_resultant_value,
+)
+from jacobian.math.polynomials.multivariate._subresultants import (
+    _MAX_SUBRESULTANT_SEQUENCE_TERMS,
+    MultivariatePrincipalSubresultantCoefficient,
+    MultivariateSubresultantMember,
+    MultivariateSubresultantSequenceRequest,
+    MultivariateSubresultantSequenceResult,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -53,6 +53,8 @@ class MultivariateOutputBudgetError(RuntimeError):
 def _result_polynomial(
     poly: Any,
     variables: tuple[str, ...],
+    *,
+    maximum_terms: int = 1_024,
 ) -> Any:
     """Convert a SymPy ``Poly`` to a ``RationalPolynomial``, re-raising budget errors."""
 
@@ -60,7 +62,7 @@ def _result_polynomial(
         return rational_polynomial_from_sympy(
             poly,
             variables,
-            maximum_terms=_MAX_OUTPUT_TERMS,
+            maximum_terms=maximum_terms,
         )
     except ValueError as exc:
         if "term operation budget" in str(exc):
@@ -291,7 +293,11 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
         for factor, multiplicity in raw_factors:
             factors_list.append(
                 MultivariateIrreducibleFactor(
-                    factor=_result_polynomial(factor, request.polynomial.variables),
+                    factor=_result_polynomial(
+                        factor,
+                        request.polynomial.variables,
+                        maximum_terms=_MAX_FACTOR_OUTPUT_TERMS,
+                    ),
                     multiplicity=multiplicity,
                 )
             )
@@ -315,7 +321,11 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
     )
     factors = tuple(factors_list)
 
-    reconstructed_poly = _result_polynomial(reconstructed, request.polynomial.variables)
+    reconstructed_poly = _result_polynomial(
+        reconstructed,
+        request.polynomial.variables,
+        maximum_terms=_MAX_FACTOR_OUTPUT_TERMS,
+    )
 
     return MultivariateFactorResult(
         coefficient=coefficient_value,

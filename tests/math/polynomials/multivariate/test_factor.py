@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.polynomials.multivariate._models import (
+from jacobian.math.polynomials.multivariate._factor_models import (
     MultivariateFactorRequest,
     MultivariateFactorResult,
     MultivariateIrreducibleFactor,
@@ -184,10 +184,7 @@ class TestOutputBudgetOutcome:
                 status="OUTPUT_BUDGET_EXCEEDED",
                 coefficient=CanonicalRational.from_fraction(Fraction(2)),
                 factors=(
-                    __import__(
-                        "jacobian.math.polynomials.multivariate._models",
-                        fromlist=["MultivariateIrreducibleFactor"],
-                    ).MultivariateIrreducibleFactor(
+                    MultivariateIrreducibleFactor(
                         factor=_poly(("x", "y"), ((1, 1, (1, 1)), (-1, 1, (1, 0)))),
                         multiplicity=1,
                     ),

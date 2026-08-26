@@ -116,7 +116,7 @@ def math_run(
             message="operation payload failed validation",
             data=data.model_dump(mode="json"),
         ) from exc
-    except Exception as exc:  # noqa: BLE001 - math has no sensitive errors
+    except Exception as exc:
         raise ToolError(str(exc) or "operation failed") from exc
 
 

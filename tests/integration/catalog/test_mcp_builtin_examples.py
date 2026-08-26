@@ -12,11 +12,9 @@ from __future__ import annotations
 import asyncio
 import json
 
-import pytest
-from mcp import Client
-
 from jacobian.catalog.catalog import Catalog
 from jacobian.mcp.server import create_server
+from mcp import Client
 
 _CATALOG = Catalog.open()
 
@@ -29,7 +27,9 @@ def test_mcp_advertised_examples_execute_as_typed_results() -> None:
             for descriptor in catalog.snapshot().operations:
                 operation = catalog.operation(descriptor.operation_id)
                 assert operation is not None
-                assert operation.examples, f"{descriptor.operation_id} must advertise an example"
+                assert operation.examples, (
+                    f"{descriptor.operation_id} must advertise an example"
+                )
                 for example in operation.examples:
                     payload = dict(example.input)
                     result = await client.call_tool(
@@ -37,25 +37,42 @@ def test_mcp_advertised_examples_execute_as_typed_results() -> None:
                         {"operation_id": descriptor.operation_id, "payload": payload},
                     )
                     if result.is_error:
-                        text = result.content[0].text if result.content else "<no content>"
-                        failures.append(f"{descriptor.operation_id} {example.name}: is_error {text[:500]}")
+                        text = (
+                            result.content[0].text if result.content else "<no content>"
+                        )
+                        failures.append(
+                            f"{descriptor.operation_id} {example.name}: is_error {text[:500]}"
+                        )
                         continue
                     structured = result.structured_content
                     if not isinstance(structured, dict) or "output" not in structured:
-                        failures.append(f"{descriptor.operation_id} {example.name}: missing output {structured}")
+                        failures.append(
+                            f"{descriptor.operation_id} {example.name}: missing output {structured}"
+                        )
                         continue
                     output = structured["output"]
                     try:
                         validated = operation.result_type.model_validate(output)
-                    except Exception as exc:  # noqa: BLE001
-                        failures.append(f"{descriptor.operation_id} {example.name}: result validation {exc} output={json.dumps(output)[:500]}")
+                    except Exception as exc:
+                        failures.append(
+                            f"{descriptor.operation_id} {example.name}: result validation {exc} output={json.dumps(output)[:500]}"
+                        )
                         continue
                     if validated.model_dump(mode="json") != output:
-                        failures.append(f"{descriptor.operation_id} {example.name}: round-trip mismatch")
+                        failures.append(
+                            f"{descriptor.operation_id} {example.name}: round-trip mismatch"
+                        )
                     if structured.get("operation_id") != descriptor.operation_id:
-                        failures.append(f"{descriptor.operation_id}: operation_id mismatch in MCP output")
-                    if not isinstance(structured.get("runtime_ms"), int) or structured["runtime_ms"] < 0:
-                        failures.append(f"{descriptor.operation_id}: missing/invalid runtime_ms")
+                        failures.append(
+                            f"{descriptor.operation_id}: operation_id mismatch in MCP output"
+                        )
+                    if (
+                        not isinstance(structured.get("runtime_ms"), int)
+                        or structured["runtime_ms"] < 0
+                    ):
+                        failures.append(
+                            f"{descriptor.operation_id}: missing/invalid runtime_ms"
+                        )
         assert not failures, "MCP example replay failures:\n" + "\n".join(failures)
 
     asyncio.run(scenario())
@@ -64,10 +81,11 @@ def test_mcp_advertised_examples_execute_as_typed_results() -> None:
 def test_mcp_host_failures_are_not_exception_groups() -> None:
     """A broken operation must return ToolError, not a host ExceptionGroup."""
 
+    from pydantic import Field
+
+    from jacobian._models import StrictModel
     from jacobian.catalog.builtins import BUILTIN_TOOLS
     from jacobian.catalog.models import MathTool
-    from jacobian._models import StrictModel
-    from pydantic import Field
 
     class BoomRequest(StrictModel):
         x: int = Field(ge=0)

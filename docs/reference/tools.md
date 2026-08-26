@@ -53,3 +53,21 @@ caller-supplied pagination cursor. The built-in MCP resource
 `operation://catalog` provides an exact bulk export; ordinary discovery should
 prefer `math.find`. The server registers typed Pydantic tools directly with the
 MCP Python SDK.
+
+## Execution capacity and cancellation
+
+Each operation owner declares the concurrency safety of its complete kernel
+path. Operations backed only by verified thread-safe code may overlap in one
+server process. All other operations share a conservative FIFO serialization
+scope unless an owner declares a narrower verified backend scope; omission is
+therefore fail-closed rather than concurrent by default.
+
+Waiting for a serialized backend is bounded and cancellation-aware. If the
+queue limit expires, `math.run` returns a typed `SERVER_BUSY` transport error
+with the operation ID, observed queue wait, configured wait limit, and retry
+guidance. Successful calls report `queue_wait_ms` separately from kernel
+`runtime_ms`. A cancelled queued request never enters the kernel. Cancellation
+of an admitted in-process kernel remains cooperative and best-effort because a
+Python worker thread cannot be terminated safely; request-owned subprocesses
+receive the cancellation signal through the bounded process runner, which
+terminates and reaps their owned process tree.

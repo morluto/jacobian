@@ -20,13 +20,33 @@ MATH_TOOL_NAMES = {"math.find", "math.run"}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
 
 
+def test_validation_issue_projection_enforces_aggregate_byte_budget() -> None:
+    from jacobian.canonical import encode_strict_json
+    from jacobian.mcp.tools import _bounded_validation_issues
+
+    errors = [
+        {
+            "loc": tuple(f"{'location' * 32}{component}" for component in range(32)),
+            "type": "validation_code" * 32,
+            "msg": "validation message " * 128,
+        }
+        for _ in range(64)
+    ]
+
+    issues = _bounded_validation_issues(errors)
+    encoded = encode_strict_json([issue.model_dump(mode="json") for issue in issues])
+
+    assert 0 < len(issues) < 64
+    assert len(encoded) <= 48 * 1_024
+
+
 def test_mcp_runs_independent_sync_operations_concurrently() -> None:
     """One slow kernel cannot block an independent MCP request."""
 
     from jacobian._models import StrictModel
     from jacobian.catalog.builtins import BUILTIN_TOOLS
     from jacobian.catalog.catalog import Catalog
-    from jacobian.catalog.models import MathTool
+    from jacobian.catalog.models import VERIFIED_CONCURRENT_EXECUTION, MathTool
     from jacobian.mcp.runtime import AppState
     from jacobian.mcp.server import _build_server
 
@@ -62,6 +82,7 @@ def test_mcp_runs_independent_sync_operations_concurrently() -> None:
         request_type=Request,
         result_type=Result,
         run=concurrent_kernel,
+        execution_admission=VERIFIED_CONCURRENT_EXECUTION,
     )
     server = _build_server(
         state=AppState(operation_catalog=Catalog((*BUILTIN_TOOLS, tool)))
@@ -253,6 +274,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 for component in issue["location"]
                 if isinstance(component, str)
             )
+            assert len(json.dumps(bounded_data).encode("utf-8")) <= 64 * 1_024
 
             with pytest.raises(MCPError) as multiple_errors:
                 await client.call_tool(

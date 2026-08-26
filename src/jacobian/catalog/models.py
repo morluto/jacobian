@@ -220,6 +220,7 @@ class OperationResult(StrictModel):
 
     operation_id: OperationId
     runtime_ms: int = Field(ge=0, strict=True)
+    queue_wait_ms: int = Field(default=0, ge=0, strict=True)
     output: dict[str, Any]
 
     @model_validator(mode="after")
@@ -242,6 +243,35 @@ class OperationCatalogSnapshot(StrictModel):
 
 
 @dataclass(frozen=True, slots=True)
+class OperationExecutionAdmission:
+    """One owner's immutable assertion about concurrent kernel execution.
+
+    A serialization key names the process-local safety boundary shared by
+    operations whose maintained backends have not been verified for concurrent
+    worker-thread entry. ``None`` is reserved for an owner that has verified
+    its complete request path for concurrent execution.
+    """
+
+    serialization_key: str | None
+
+    def __post_init__(self) -> None:
+        if self.serialization_key is not None and not self.serialization_key.strip():
+            raise ValueError("execution serialization keys must not be empty")
+
+    @property
+    def permits_concurrency(self) -> bool:
+        """Whether the owner verified concurrent entry into this kernel."""
+
+        return self.serialization_key is None
+
+
+DEFAULT_EXECUTION_ADMISSION = OperationExecutionAdmission(
+    serialization_key="unverified-maintained-backend"
+)
+VERIFIED_CONCURRENT_EXECUTION = OperationExecutionAdmission(serialization_key=None)
+
+
+@dataclass(frozen=True, slots=True)
 class MathTool[RequestT: StrictModel, ResultT: StrictModel]:
     """One discoverable mathematical function and its public typed contract."""
 
@@ -253,6 +283,7 @@ class MathTool[RequestT: StrictModel, ResultT: StrictModel]:
     run: Callable[[RequestT], ResultT]
     tags: tuple[str, ...] = ()
     examples: tuple[OperationExample, ...] = ()
+    execution_admission: OperationExecutionAdmission = DEFAULT_EXECUTION_ADMISSION
 
     def __post_init__(self) -> None:
         if not self.operation_id.strip():
@@ -270,6 +301,8 @@ class MathTool[RequestT: StrictModel, ResultT: StrictModel]:
 type MathTools = tuple[MathTool[Any, Any], ...]
 
 __all__ = [
+    "DEFAULT_EXECUTION_ADMISSION",
+    "VERIFIED_CONCURRENT_EXECUTION",
     "MathTool",
     "MathTools",
     "OperationBrowseCard",
@@ -281,6 +314,7 @@ __all__ = [
     "OperationDiscoveryResult",
     "OperationDomainValidationError",
     "OperationExample",
+    "OperationExecutionAdmission",
     "OperationId",
     "OperationResult",
 ]

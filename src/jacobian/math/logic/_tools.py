@@ -1,7 +1,11 @@
 """Catalog declarations for bounded logic operations."""
 
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import (
+    VERIFIED_CONCURRENT_EXECUTION,
+    MathTool,
+    MathTools,
+)
 from jacobian.math.logic._cnf import (
     CnfCanonicalizeRequest,
     CnfCanonicalizeResult,
@@ -31,6 +35,7 @@ TOOLS: MathTools = (
         request_type=CnfCanonicalizeRequest,
         result_type=CnfCanonicalizeResult,
         run=canonicalize_cnf,
+        execution_admission=VERIFIED_CONCURRENT_EXECUTION,
         tags=("sat", "cnf", "canonical"),
         examples=(
             example(
@@ -47,6 +52,7 @@ TOOLS: MathTools = (
         request_type=SatAssignmentCheckRequest,
         result_type=SatAssignmentCheckResult,
         run=check_sat_assignment,
+        execution_admission=VERIFIED_CONCURRENT_EXECUTION,
         tags=("sat", "cnf", "assignment", "predicate"),
         examples=(
             example(

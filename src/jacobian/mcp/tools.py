@@ -20,6 +20,7 @@ from jacobian.dispatch import (
 )
 from jacobian.mcp.models import (
     OperationBrowseRequest,
+    OperationBusyData,
     OperationFindRequest,
     OperationFindResponse,
     OperationInspectionResult,
@@ -33,14 +34,18 @@ from jacobian.mcp.projections import (
 )
 from jacobian.mcp.runtime import (
     AppState,
+    ExecutionAdmissionStatus,
     _authorize,
     _catalog,
+    _state,
 )
 from jacobian.process import bounded_process_cancellation
 
 _MAX_VALIDATION_ERRORS = 64
 _MAX_VALIDATION_LOCATION_COMPONENTS = 32
 _MAX_VALIDATION_LOCATION_LENGTH = 128
+_MAX_VALIDATION_ISSUES_BYTES = 48 * 1_024
+_SERVER_BUSY = -32_001
 
 
 class _CancellationSignal(Protocol):
@@ -133,29 +138,63 @@ def _run_prepared_operation(
     prepared: _PreparedOperation,
     ctx: Context[AppState, Any],
 ) -> OperationResult:
-    """Run one prepared operation without serializing independent requests."""
+    """Admit one prepared operation through its owner-declared safety scope."""
 
     cancellation = _request_cancellation(ctx)
     if cancellation.is_set():
         raise ToolError("operation cancelled before execution")
-    with bounded_process_cancellation(cancellation):
-        return _invoke_prepared_operation(prepared)
+    state = _state(ctx)
+    permit = state.execution_admission.acquire(
+        prepared.execution_admission,
+        cancellation,
+        timeout_seconds=state.execution_queue_wait_seconds,
+    )
+    if permit.status is ExecutionAdmissionStatus.CANCELLED:
+        raise ToolError("operation cancelled before execution")
+    if permit.status is ExecutionAdmissionStatus.BUSY:
+        wait_limit_ms = max(1, round(state.execution_queue_wait_seconds * 1_000))
+        data = OperationBusyData(
+            operation_id=prepared.operation_id,
+            queue_wait_ms=permit.waited_ms,
+            queue_wait_limit_ms=wait_limit_ms,
+        )
+        raise MCPError(
+            code=_SERVER_BUSY,
+            message="mathematical execution capacity is busy",
+            data=data.model_dump(mode="json"),
+        )
+    try:
+        if cancellation.is_set():
+            raise ToolError("operation cancelled before execution")
+        with bounded_process_cancellation(cancellation):
+            return _invoke_prepared_operation(
+                prepared,
+                queue_wait_ms=permit.waited_ms,
+            )
+    finally:
+        state.execution_admission.release(permit)
 
 
 def _bounded_validation_issues(
     errors: Sequence[Mapping[str, Any]],
 ) -> tuple[OperationValidationIssue, ...]:
-    """Build bounded field diagnostics without reflecting raw caller input."""
+    """Build aggregate-bounded diagnostics without reflecting raw caller input."""
+
+    from jacobian.canonical import encode_strict_json
 
     issues: list[OperationValidationIssue] = []
     for error in errors[:_MAX_VALIDATION_ERRORS]:
-        issues.append(
-            OperationValidationIssue(
-                location=_bounded_validation_location(error["loc"]),
-                code=str(error["type"]),
-                message=_bounded_validation_message(error["msg"]),
-            )
+        issue = OperationValidationIssue(
+            location=_bounded_validation_location(error["loc"]),
+            code=_bounded_text(str(error["type"]), 128),
+            message=_bounded_validation_message(error["msg"]),
         )
+        encoded_candidate = encode_strict_json(
+            [existing.model_dump(mode="json") for existing in (*issues, issue)]
+        )
+        if len(encoded_candidate) > _MAX_VALIDATION_ISSUES_BYTES:
+            break
+        issues.append(issue)
     return tuple(issues)
 
 

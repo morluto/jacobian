@@ -65,6 +65,19 @@ authenticated service. Streamable HTTP is stateless by default. Use
 `--stateful-http` only when the deployment deliberately provides stateful
 session handling.
 
+## Plan execution capacity
+
+One server process allows verified thread-safe operation paths to overlap.
+Operations whose complete maintained-backend path has not been verified share
+a conservative single-slot FIFO scope. Queueing is cancellation-aware and
+bounded; saturation returns typed `SERVER_BUSY` retry data, while successful
+responses report `queue_wait_ms` separately from kernel `runtime_ms`.
+
+Because the service and catalog are stateless, deploy multiple supervised
+process replicas when one unsafe-backend slot does not provide enough
+throughput. Route each MCP request to one replica; do not rely on stateful HTTP
+sessions unless `--stateful-http` was explicitly selected.
+
 ## Install the example service files
 
 [`deploy/systemd/jacobian-mcp.service`](../../deploy/systemd/jacobian-mcp.service)

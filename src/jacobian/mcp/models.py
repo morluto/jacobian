@@ -75,6 +75,10 @@ class OperationSearchResult(StrictModel):
     truncated: bool
     next_cursor: str | None = None
     catalog_resource: Literal["operation://catalog"] = "operation://catalog"
+    response_byte_limit: StrictInt
+    truncation_reason: Literal["BYTE_LIMIT"] | None = None
+    query_metadata_truncated: bool = False
+    match_metadata_truncated: bool = False
 
 
 class OperationBrowseResult(StrictModel):
@@ -85,6 +89,9 @@ class OperationBrowseResult(StrictModel):
     truncated: bool
     next_cursor: str | None = None
     catalog_resource: Literal["operation://catalog"] = "operation://catalog"
+    response_byte_limit: StrictInt
+    truncation_reason: Literal["BYTE_LIMIT"] | None = None
+    operation_metadata_truncated: bool = False
 
 
 class OperationInspectionResult(StrictModel):
@@ -118,6 +125,21 @@ class OperationInvalidRequestData(StrictModel):
     )
 
 
+class OperationBusyData(StrictModel):
+    """Structured retry guidance for bounded execution-capacity contention."""
+
+    code: Literal["SERVER_BUSY"] = "SERVER_BUSY"
+    stage: Literal["execution_admission"] = "execution_admission"
+    operation_id: OperationId
+    queue_wait_ms: StrictInt = Field(ge=0)
+    queue_wait_limit_ms: StrictInt = Field(gt=0)
+    retryable: Literal[True] = True
+    hint: str = (
+        "Retry after the current serialized operation completes, or use an "
+        "independent Jacobian server process for separate execution capacity."
+    )
+
+
 class OperationDiscoveryError(StrictModel):
     kind: Literal["error"]
     error: OperationDiscoveryErrorDetail
@@ -142,6 +164,7 @@ class OperationFindResponse(
 __all__ = [
     "OperationBrowseRequest",
     "OperationBrowseResult",
+    "OperationBusyData",
     "OperationDiscoveryError",
     "OperationDiscoveryErrorDetail",
     "OperationFindRequest",

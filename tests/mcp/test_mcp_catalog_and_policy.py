@@ -52,6 +52,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
             index = listed.structured_content
             assert len(listed.content[0].text.encode("utf-8")) <= 16 * 1024
             assert json.loads(listed.content[0].text) == index
+            assert index["response_byte_limit"] == 16 * 1024
             assert "discovery_version" not in index
             assert len(index["matches"]) <= 20
             indexed_ids = {
@@ -148,6 +149,7 @@ def test_mcp_operation_browse_pages_the_complete_immutable_library() -> None:
                 assert page["kind"] == "browse"
                 assert len(page_result.content[0].text.encode("utf-8")) <= 16 * 1024
                 assert json.loads(page_result.content[0].text) == page
+                assert page["response_byte_limit"] == 16 * 1024
                 assert "discovery_version" not in page
                 assert len(page["operations"]) <= 20
                 assert all(
@@ -180,5 +182,80 @@ def test_mcp_operation_browse_pages_the_complete_immutable_library() -> None:
             )
             invalid = json.loads(invalid_cursor.content[0].text)
             assert invalid["error"]["code"] == "INVALID_CURSOR"
+
+    asyncio.run(scenario())
+
+
+def test_mcp_search_and_browse_bound_unrestricted_card_metadata() -> None:
+    from jacobian._models import StrictModel
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.catalog.models import MathTool
+    from jacobian.mcp.runtime import AppState
+    from jacobian.mcp.server import _build_server
+
+    class Request(StrictModel):
+        value: int
+
+    class Result(StrictModel):
+        value: int
+
+    tools = tuple(
+        MathTool(
+            operation_id=f"test.large_metadata.card{index}",
+            title=f"Large metadata card {index}",
+            description="exact " + ("数学" * 12_000),
+            request_type=Request,
+            result_type=Result,
+            run=lambda request: Result(value=request.value),
+            tags=("标签" * 12_000,),
+        )
+        for index in range(4)
+    )
+    server = _build_server(state=AppState(operation_catalog=Catalog(tools)))
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(server, raise_exceptions=True) as client:
+            searched = await client.call_tool(
+                "math.find",
+                {"request": {"op": "search", "query": "exact", "limit": 4}},
+            )
+            assert isinstance(searched.structured_content, dict)
+            search_page = searched.structured_content
+            assert len(searched.content[0].text.encode("utf-8")) <= 16 * 1024
+            assert search_page["response_byte_limit"] == 16 * 1024
+            assert search_page["truncation_reason"] == "BYTE_LIMIT"
+            assert search_page["match_metadata_truncated"] is True
+
+            long_query = await client.call_tool(
+                "math.find",
+                {"request": {"op": "search", "query": "q" * 20_000}},
+            )
+            assert isinstance(long_query.structured_content, dict)
+            long_query_page = long_query.structured_content
+            assert len(long_query.content[0].text.encode("utf-8")) <= 16 * 1024
+            assert long_query_page["query_metadata_truncated"] is True
+            assert long_query_page["truncation_reason"] == "BYTE_LIMIT"
+
+            request: dict[str, object] = {"op": "browse", "limit": 4}
+            browsed_ids: list[str] = []
+            while True:
+                browsed = await client.call_tool("math.find", {"request": request})
+                assert isinstance(browsed.structured_content, dict)
+                browse_page = browsed.structured_content
+                assert len(browsed.content[0].text.encode("utf-8")) <= 16 * 1024
+                assert browse_page["response_byte_limit"] == 16 * 1024
+                assert browse_page["truncation_reason"] == "BYTE_LIMIT"
+                assert browse_page["operation_metadata_truncated"] is True
+                browsed_ids.extend(
+                    operation["operation_id"] for operation in browse_page["operations"]
+                )
+                cursor = browse_page["next_cursor"]
+                if cursor is None:
+                    break
+                request["cursor"] = cursor
+
+        assert browsed_ids == sorted(tool.operation_id for tool in tools)
 
     asyncio.run(scenario())

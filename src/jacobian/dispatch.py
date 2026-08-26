@@ -13,7 +13,9 @@ from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalizationError, encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
+    DEFAULT_EXECUTION_ADMISSION,
     OperationDomainValidationError,
+    OperationExecutionAdmission,
     OperationId,
     OperationResult,
 )
@@ -51,6 +53,7 @@ class _PreparedOperation:
     """One request parsed against its selected immutable operation binding."""
 
     operation_id: OperationId
+    execution_admission: OperationExecutionAdmission
     run: Callable[[StrictModel], StrictModel]
     request: StrictModel
 
@@ -94,6 +97,11 @@ def _prepare_operation(
         raise OperationRequestValidationError(exc) from exc
     return _PreparedOperation(
         operation_id=operation_id,
+        execution_admission=getattr(
+            binding,
+            "execution_admission",
+            DEFAULT_EXECUTION_ADMISSION,
+        ),
         run=binding.run,
         request=parsed,
     )
@@ -103,6 +111,7 @@ def _invoke_prepared_operation(
     prepared: _PreparedOperation,
     *,
     started: float | None = None,
+    queue_wait_ms: int = 0,
 ) -> OperationResult:
     """Run one already-admitted request and project its typed result."""
 
@@ -113,6 +122,7 @@ def _invoke_prepared_operation(
     return OperationResult(
         operation_id=prepared.operation_id,
         runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
+        queue_wait_ms=queue_wait_ms,
         output=result.model_dump(mode="json"),
     )
 

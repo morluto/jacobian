@@ -16,6 +16,7 @@ from jacobian.catalog.models import (
     OperationDiscoveryRequest,
     OperationDiscoveryResult,
     OperationExample,
+    OperationExecutionAdmission,
 )
 from jacobian.catalog.search import browse_operations, discover_operations
 
@@ -26,6 +27,7 @@ class _BoundMathTool:
 
     request_type: type[StrictModel]
     result_type: type[StrictModel]
+    execution_admission: OperationExecutionAdmission
     _run: Callable[[StrictModel], StrictModel]
 
     def run(self, request: StrictModel) -> StrictModel:
@@ -54,6 +56,7 @@ def _bind_operation[RequestT: StrictModel, ResultT: StrictModel](
     return _BoundMathTool(
         request_type=operation.request_type,
         result_type=operation.result_type,
+        execution_admission=operation.execution_admission,
         _run=run,
     )
 

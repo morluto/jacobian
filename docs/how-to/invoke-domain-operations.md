@@ -27,4 +27,5 @@ jacobian run integer.compute.extended_gcd --json '{"left":"84","right":"30"}'
 ```
 
 The CLI prints a JSON envelope containing the operation ID, its typed `output`,
-and `runtime_ms`. It does not retain results or create workflow state.
+`runtime_ms`, and `queue_wait_ms` (zero for direct CLI execution). It does not
+retain results or create workflow state.

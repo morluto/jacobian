@@ -74,7 +74,7 @@ PUBLIC_COMMANDS: tuple[CommandContract, ...] = (
     ),
     CommandContract(
         name="check",
-        help="Broad ordinary gate: lint, types, and all non-integration owner tests.",
+        help="Final broad gate: lint, types, and all non-integration owner tests.",
         mutates_checkout=False,
         scope="lint + typecheck + math/catalog/dispatch/CLI/tooling tests",
         ci_relationship="subset of required PR jobs, not PR-equivalent",
@@ -82,7 +82,7 @@ PUBLIC_COMMANDS: tuple[CommandContract, ...] = (
     ),
     CommandContract(
         name="check-all",
-        help="Reproduce the ordinary Python CI lanes locally.",
+        help="Escalation: reproduce all ordinary Python CI lanes locally.",
         mutates_checkout=False,
         scope="lint + typecheck + all ordinary semantic owners",
         ci_relationship="local equivalent of the python matrix, not all CI jobs",

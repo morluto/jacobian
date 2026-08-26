@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import json
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 
+from benchmarks.validation._solution import run_solution
 from benchmarks.validation._verifier_child import VerifierOutput
 from benchmarks.validation.mathematical_benchmarks_v1 import _verifier
 
@@ -26,10 +25,7 @@ def _case(tmp_path: Path) -> tuple[Path, Path, dict]:
     app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
-    subprocess.run(
-        [sys.executable, str(TASK / "solution" / "oracle.py"), str(app)],
-        check=True,
-    )
+    run_solution(TASK, app, script="oracle.py", arguments=(str(app),))
     return app, logs, json.loads((app / "submission.json").read_text())
 
 

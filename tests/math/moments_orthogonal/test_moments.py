@@ -1208,6 +1208,18 @@ class TestAdmissionReplaysExecution:
 
 
 class TestNativeAdmission:
+    def test_native_quadrature_matches_mcp_adapter(self) -> None:
+        """Native quadrature consumes a canonical prefix without a request."""
+        from jacobian.math.moments_orthogonal import gaussian_quadrature_rule
+        from jacobian.math.moments_orthogonal.values import MomentFunctionalPrefix
+
+        restored = MomentFunctionalPrefix.model_validate_json(
+            _prefix(_moments_uniform(3)).model_dump_json()
+        )
+        assert gaussian_quadrature_rule(restored, 1) == compute_gaussian_quadrature(
+            GaussianQuadratureRequest(prefix=restored, order=1)
+        )
+
     def test_native_hankel_surfaces_match_mcp_adapters(self) -> None:
         """Native Hankel calls consume the canonical prefix without a request."""
         from jacobian.math.moments_orthogonal import (

@@ -6,16 +6,14 @@ from jacobian.math.moments_orthogonal._jacobi import (
     jacobi_matrix_from_family,
     require_jacobi_matrix_admission,
 )
-from jacobian.math.moments_orthogonal._models import (
-    GaussianQuadratureRequest,
-)
 from jacobian.math.moments_orthogonal.operations import (
     _require_gram_schmidt_admission,
     christoffel_darboux_kernel_from_family,
-    compute_gaussian_quadrature,
+    gaussian_quadrature_rule_from_prefix,
     hankel_matrix_from_prefix,
     orthogonal_polynomials_from_moments,
     recurrence_coefficients_from_family,
+    require_gaussian_quadrature_admission,
     require_hankel_matrix_admission,
 )
 from jacobian.math.moments_orthogonal.values import (
@@ -89,6 +87,5 @@ def gaussian_quadrature_rule(
     prefix: MomentFunctionalPrefix, order: int
 ) -> GaussianQuadratureRule:
     """Exact Gaussian quadrature rule of one bounded moment prefix."""
-    return compute_gaussian_quadrature(
-        GaussianQuadratureRequest(prefix=prefix, order=order)
-    )
+    require_gaussian_quadrature_admission(prefix, order)
+    return gaussian_quadrature_rule_from_prefix(prefix, order)

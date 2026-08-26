@@ -25,14 +25,6 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"moments_orthogonal.{reason}", message)
 
 
-class MomentsOrthogonalAdmissionError(ValueError):
-    """Native admission failure for moments-orthogonal operations."""
-
-    def __init__(self, reason: str, message: str) -> None:
-        super().__init__(message)
-        self.reason = reason
-
-
 def _require_determinant_representable(
     moments: tuple[CanonicalRational, ...], order: int
 ) -> None:
@@ -52,37 +44,6 @@ def _require_determinant_representable(
                 "determinant_height",
                 f"moment heights exceed the conservative {max(per_entry - 2, 8)}-digit "
                 f"bound for an exact order-{order} determinant",
-            )
-
-
-def _require_gram_schmidt_heights_admissible(
-    moments: tuple[CanonicalRational, ...], max_degree: int
-) -> None:
-    """Bound moment heights BEFORE any exact projection runs.
-
-    Monic Gram-Schmidt expresses every derived coefficient and squared
-    norm through degree d as a ratio of determinants of at most (d+1)
-    -square Hankel matrices over the consumed moments mu_0..mu_2d (the
-    classical Cramer-rule form of the elimination). Scaling each row by
-    its denominator product bounds an s x s rational determinant's
-    numerator and denominator by 10**(s*(s+1)*B + s) when every entry
-    carries at most B digits, so bounding each moment by the quotient
-    below guarantees every derived value stays canonical. Degree 0
-    performs no elimination - its only derived value is mu_0 itself -
-    so it needs no input gate beyond canonality.
-    """
-    if max_degree == 0:
-        return
-    side = max_degree + 1
-    per_entry = (MAX_CANONICAL_RATIONAL_DIGITS - 2 * side) // (2 * side * (side + 1))
-    bound = max(per_entry, 8)
-    for value in moments[: 2 * max_degree + 1]:
-        if RationalHeight.from_canonical(value).exceeds(bound):
-            raise MomentsOrthogonalAdmissionError(
-                "gram_schmidt_height",
-                f"moment heights exceed the conservative {bound}-digit "
-                f"bound for exact degree-{max_degree} Gram-Schmidt; supply "
-                "a smaller or better-scaled moment prefix",
             )
 
 
@@ -157,6 +118,11 @@ class OrthogonalPolynomialRequest(StrictModel):
         gate, both this admission replay and the execution that follows it
         operate on provably bounded intermediates with typed height checks.
         """
+        from jacobian.math.moments_orthogonal.operations import (
+            MomentsOrthogonalAdmissionError,
+            _require_gram_schmidt_heights_admissible,
+        )
+
         try:
             _require_gram_schmidt_heights_admissible(
                 self.prefix.moments, self.max_degree
@@ -282,87 +248,15 @@ class GaussianQuadratureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_sufficient_moments(self) -> Self:
-        # The conservative Gram-Schmidt height gate runs BEFORE any exact
-        # projection: without it, a single schema-valid payload such as
-        # mu_0 = 10^-32767 with mu_1 = 10^32767 forces enormous exact
-        # backend work during parsing before the derived-node check fires.
-        try:
-            _require_gram_schmidt_heights_admissible(self.prefix.moments, self.order)
-        except MomentsOrthogonalAdmissionError as exc:
-            raise _validation_error(exc.reason, str(exc)) from None
-        # Building p_order projects only onto earlier polynomials, so the
-        # Gram-Schmidt kernel and the Vandermonde weight solve consume
-        # moments through mu_(2n-1) exactly; execution verifies exactness
-        # through degree 2n-1, so 2n moments are both sufficient and
-        # required.
-        needed = 2 * self.order
-        if len(self.prefix.moments) < needed:
-            raise _validation_error(
-                "insufficient_moments",
-                f"need at least {needed} moments for quadrature order {self.order}, got {len(self.prefix.moments)}",
-            )
-        return self
-
-    @model_validator(mode="after")
-    def require_rational_nodes(self) -> Self:
-        """Admit only prefixes whose degree-n orthogonal polynomial splits
-        into distinct linear factors over QQ.
-
-        The exact-node contract carries canonical rationals; algebraic
-        nodes such as +-sqrt(1/3) cannot be represented, so such prefixes
-        are rejected here instead of failing during execution. Gaussian
-        construction divides by norms only through p_{n-1}, so a vanishing
-        terminal norm (a measure supported on exactly n points) stays
-        admissible.
-        """
-        from fractions import Fraction
-
-        import sympy
-
         from jacobian.math.moments_orthogonal.operations import (
-            _build_quadrature_rule,
-            _construct_monic_orthogonal_polynomial,
-            _fraction_exceeds_canonical_limit,
+            GaussianQuadratureAdmissionError,
+            require_gaussian_quadrature_admission,
         )
 
-        moments = [Fraction(*v.as_integer_ratio()) for v in self.prefix.moments]
-        coefficients = _construct_monic_orthogonal_polynomial(moments, self.order)
-        x = sympy.Symbol(self.prefix.variable)
-        poly = sum(coefficient * x**i for i, coefficient in enumerate(coefficients))
-        _, factors = sympy.factor_list(poly)
-        if any(
-            sympy.degree(factor, x) != 1 or multiplicity != 1
-            for factor, multiplicity in factors
-        ):
-            raise _validation_error(
-                "rational_nodes",
-                f"quadrature order {self.order} requires p_{self.order} to "
-                "split into distinct linear factors over QQ so every node "
-                "is an exact rational; this moment prefix yields algebraic "
-                "or repeated nodes",
-            )
-        # Positive weights are part of the declared contract; replay the
-        # exact construction so a nonpositive weight is rejected here
-        # instead of raising during execution.
-        _nodes, weights = _build_quadrature_rule(self.prefix, self.order)
-        # Derived nodes and weights can leave the canonical range even when
-        # every input moment stays inside it; measure the exact Fractions
-        # before execution converts them.
-        if any(
-            _fraction_exceeds_canonical_limit(value) for value in (*_nodes, *weights)
-        ):
-            raise _validation_error(
-                "quadrature_height",
-                "derived quadrature nodes or weights exceed the canonical "
-                "rational digit limit; supply a moment prefix whose exact "
-                "rule stays representable",
-            )
-        if any(weight <= 0 for weight in weights):
-            raise _validation_error(
-                "positive_weights",
-                "quadrature admission requires strictly positive weights; "
-                "this moment prefix yields a nonpositive weight",
-            )
+        try:
+            require_gaussian_quadrature_admission(self.prefix, self.order)
+        except GaussianQuadratureAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 

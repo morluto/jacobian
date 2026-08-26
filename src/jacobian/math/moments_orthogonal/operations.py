@@ -37,6 +37,18 @@ class HankelMatrixAdmissionError(ValueError):
         self.reason = reason
 
 
+class MomentsOrthogonalAdmissionError(ValueError):
+    """A shared value-based admission failure for moment operations."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+class GaussianQuadratureAdmissionError(MomentsOrthogonalAdmissionError):
+    """A value-based Gaussian-quadrature admission failure."""
+
+
 def _to_fraction(r: CanonicalRational) -> Fraction:
     # Canonical chunked parsing: int() on the decimal strings would trip
     # CPython's 4300-digit conversion limit inside the admitted range.
@@ -59,6 +71,25 @@ def _fraction_exceeds_canonical_limit(value: Fraction) -> bool:
         abs(value.numerator) >= _CANONICAL_DIGIT_LIMIT
         or value.denominator >= _CANONICAL_DIGIT_LIMIT
     )
+
+
+def _require_gram_schmidt_heights_admissible(
+    moments: tuple[CanonicalRational, ...], max_degree: int
+) -> None:
+    """Bound moment heights before exact Gram-Schmidt projection begins."""
+    if max_degree == 0:
+        return
+    side = max_degree + 1
+    per_entry = (MAX_CANONICAL_RATIONAL_DIGITS - 2 * side) // (2 * side * (side + 1))
+    bound = max(per_entry, 8)
+    for value in moments[: 2 * max_degree + 1]:
+        if RationalHeight.from_canonical(value).exceeds(bound):
+            raise MomentsOrthogonalAdmissionError(
+                "gram_schmidt_height",
+                f"moment heights exceed the conservative {bound}-digit "
+                f"bound for exact degree-{max_degree} Gram-Schmidt; supply "
+                "a smaller or better-scaled moment prefix",
+            )
 
 
 def _rational_det(matrix: list[list[Fraction]]) -> Fraction:
@@ -372,9 +403,6 @@ def _require_gram_schmidt_admission(
     prefix silently reads missing moments as zero) or accepting
     unsupported degrees.
     """
-    from jacobian.math.moments_orthogonal._models import (
-        _require_gram_schmidt_heights_admissible,
-    )
     from jacobian.math.moments_orthogonal.values import MAX_POLYNOMIAL_DEGREE
 
     if not 0 <= max_degree <= MAX_POLYNOMIAL_DEGREE:
@@ -604,66 +632,96 @@ def _build_quadrature_rule(
     return nodes, weights
 
 
+def require_gaussian_quadrature_admission(
+    prefix: MomentFunctionalPrefix, order: int
+) -> None:
+    """Admit a canonical prefix for one exact rational Gaussian rule."""
+    from jacobian.math.moments_orthogonal.values import MAX_QUADRATURE_ORDER
+
+    if (
+        isinstance(order, bool)
+        or not isinstance(order, int)
+        or not 1 <= order <= MAX_QUADRATURE_ORDER
+    ):
+        raise GaussianQuadratureAdmissionError(
+            "order_out_of_range",
+            f"quadrature order must be an integer between 1 and {MAX_QUADRATURE_ORDER}",
+        )
+    try:
+        _require_gram_schmidt_heights_admissible(prefix.moments, order)
+    except MomentsOrthogonalAdmissionError as exc:
+        raise GaussianQuadratureAdmissionError(exc.reason, str(exc)) from None
+    needed = 2 * order
+    if len(prefix.moments) < needed:
+        raise GaussianQuadratureAdmissionError(
+            "insufficient_moments",
+            f"need at least {needed} moments for quadrature order {order}, got "
+            f"{len(prefix.moments)}",
+        )
+
+    import sympy
+
+    moments = [_to_fraction(value) for value in prefix.moments]
+    coefficients = _construct_monic_orthogonal_polynomial(moments, order)
+    variable = sympy.Symbol(prefix.variable)
+    polynomial = sum(
+        coefficient * variable**index for index, coefficient in enumerate(coefficients)
+    )
+    _, factors = sympy.factor_list(polynomial)
+    if any(
+        sympy.degree(factor, variable) != 1 or multiplicity != 1
+        for factor, multiplicity in factors
+    ):
+        raise GaussianQuadratureAdmissionError(
+            "rational_nodes",
+            f"quadrature order {order} requires p_{order} to split into "
+            "distinct linear factors over QQ so every node is an exact rational; "
+            "this moment prefix yields algebraic or repeated nodes",
+        )
+    nodes, weights = _build_quadrature_rule(prefix, order)
+    if any(_fraction_exceeds_canonical_limit(value) for value in (*nodes, *weights)):
+        raise GaussianQuadratureAdmissionError(
+            "quadrature_height",
+            "derived quadrature nodes or weights exceed the canonical rational "
+            "digit limit; supply a moment prefix whose exact rule stays "
+            "representable",
+        )
+    if any(weight <= 0 for weight in weights):
+        raise GaussianQuadratureAdmissionError(
+            "positive_weights",
+            "quadrature admission requires strictly positive weights; this "
+            "moment prefix yields a nonpositive weight",
+        )
+
+
+def gaussian_quadrature_rule_from_prefix(
+    prefix: MomentFunctionalPrefix, order: int
+) -> GaussianQuadratureRule:
+    """Construct one admitted exact Gaussian quadrature rule."""
+    nodes_frac, weights = _build_quadrature_rule(prefix, order)
+    for k in range(2 * order):
+        approximation = sum(
+            weights[index] * nodes_frac[index] ** k for index in range(order)
+        )
+        if approximation != _to_fraction(prefix.moments[k]):
+            raise ValueError(f"quadrature is not exact at degree {k}")
+    return GaussianQuadratureRule(
+        order=order,
+        nodes=tuple(
+            QuadratureNode(node=_from_fraction(node), weight=_from_fraction(weight))
+            for node, weight in zip(nodes_frac, weights, strict=True)
+        ),
+        variable=prefix.variable,
+        exactness_degree=2 * order - 1,
+        prefix=prefix,
+    )
+
+
 def compute_gaussian_quadrature(
     request: GaussianQuadratureRequest,
 ) -> GaussianQuadratureRule:
-    """Compute an exact Gaussian quadrature rule from moments.
-
-    For small orders, we use the fact that the nodes are roots of the
-    degree-n orthogonal polynomial. We compute weights from the Vandermonde
-    moment system.
-    """
-    n = request.order
-    var = request.prefix.variable
-
-    nodes_frac, weights = _build_quadrature_rule(request.prefix, n)
-
-    # Find rational roots using the rational root theorem
-    # For a monic polynomial with rational coefficients, rational roots
-    # are of the form p/q where p | constant term, q | leading coefficient
-    # Since the polynomial is monic, q = 1, so rational roots are integers
-    # dividing the constant term
-
-    # Actually, for general rational moments, we need to clear denominators
-    # and use the rational root theorem on the resulting integer polynomial
-
-    # For now, let's use numpy or sympy for root finding
-    # But we should use exact methods. Let's try a simple approach:
-    # For small n, we can try all rational candidates
-
-    # Actually, let's use sympy for exact root finding
-    import sympy  # noqa: F401 - availability guard for the exact backend
-
-    if weights is None:
-        raise ValueError("Vandermonde system is singular")
-
-    # Check that all weights are positive
-    for w in weights:
-        if w <= 0:
-            raise ValueError(f"Non-positive weight {w} in Gaussian quadrature")
-
-    # Verify exactness through degree 2n-1 against the retained prefix.
-    prefix_moments = [_to_fraction(m) for m in request.prefix.moments]
-    for k in range(2 * n):
-        approx = sum(weights[i] * nodes_frac[i] ** k for i in range(n))
-        if k < len(prefix_moments) and approx != prefix_moments[k]:
-            raise ValueError(f"Quadrature not exact at degree {k}")
-
-    nodes = [
-        QuadratureNode(
-            node=_from_fraction(nodes_frac[i]),
-            weight=_from_fraction(weights[i]),
-        )
-        for i in range(n)
-    ]
-
-    return GaussianQuadratureRule(
-        order=n,
-        nodes=tuple(nodes),
-        variable=var,
-        exactness_degree=2 * n - 1,
-        prefix=request.prefix,
-    )
+    """MCP adapter: parse one request, call the canonical-prefix kernel."""
+    return gaussian_quadrature_rule_from_prefix(request.prefix, request.order)
 
 
 def _solve_linear_system(

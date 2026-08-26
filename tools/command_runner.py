@@ -37,6 +37,7 @@ _OPERATOR_ENVIRONMENT_ALLOWLIST = frozenset(
     }
 )
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+_TOOL_CLEANUP_ALLOWANCE_SECONDS = 0.5
 
 
 class ToolCommandStatus(StrEnum):
@@ -328,6 +329,12 @@ def run_tool_command(
 ) -> ToolCommandResult:
     """Execute a tooling request without shell parsing or ambient discovery."""
 
+    started = time.monotonic()
+    absolute_deadline = started + request.timeout_seconds
+    cleanup_allowance = min(
+        _TOOL_CLEANUP_ALLOWANCE_SECONDS, request.timeout_seconds / 4
+    )
+    execution_deadline = absolute_deadline - cleanup_allowance
     process = _launch_tool_process(request)
     if isinstance(process, tuple):
         return ToolCommandResult(
@@ -341,14 +348,17 @@ def run_tool_command(
         _start_stream_readers(process, request)
     )
     _start_input_writer(process, request.stdin_bytes)
-    deadline = time.monotonic() + request.timeout_seconds
-    status = _poll_tool_status(
-        process,
-        request,
-        stdout_overflow,
-        stderr_overflow,
-        sink_failure,
-        deadline,
+    status = (
+        ToolCommandStatus.TIMED_OUT
+        if time.monotonic() >= execution_deadline
+        else _poll_tool_status(
+            process,
+            request,
+            stdout_overflow,
+            stderr_overflow,
+            sink_failure,
+            execution_deadline,
+        )
     )
     return _finish_tool_process(
         process,
@@ -359,6 +369,7 @@ def run_tool_command(
         stdout_overflow=stdout_overflow,
         stderr_overflow=stderr_overflow,
         sink_failure=sink_failure,
+        cleanup_deadline=absolute_deadline,
     )
 
 
@@ -430,15 +441,16 @@ def _finish_tool_process(
     stdout_overflow: threading.Event,
     stderr_overflow: threading.Event,
     sink_failure: queue.Queue[tuple[str, str]],
+    cleanup_deadline: float,
 ) -> ToolCommandResult:
     if status is not ToolCommandStatus.EXITED:
         _kill_tool_process_tree(process)
     try:
-        process.wait(timeout=5.0)
+        process.wait(timeout=max(0.0, cleanup_deadline - time.monotonic()))
     except subprocess.TimeoutExpired:
         process.kill()
         try:
-            process.wait(timeout=5.0)
+            process.wait(timeout=max(0.0, cleanup_deadline - time.monotonic()))
         except subprocess.TimeoutExpired:
             return ToolCommandResult(
                 status=status,
@@ -450,7 +462,7 @@ def _finish_tool_process(
                 diagnostic="tool process did not stop within the shutdown deadline",
             )
     for reader in readers:
-        reader.join(timeout=1.0)
+        reader.join(timeout=max(0.0, cleanup_deadline - time.monotonic()))
     if status is ToolCommandStatus.EXITED:
         if stdout_overflow.is_set() or stderr_overflow.is_set():
             status = ToolCommandStatus.OUTPUT_LIMIT_EXCEEDED
@@ -486,7 +498,7 @@ class ToolInteractiveRequest:
     """Immutable request for one long-lived interactive tooling process.
 
     The process owns its own process group, bounded stderr capture, startup
-    deadline, per-read deadline, and shutdown deadline.  Callers exchange
+    deadline, per-exchange deadline, and shutdown deadline.  Callers exchange
     line-delimited request/response frames through the typed
     :class:`ToolInteractiveCommand` methods and never touch ``subprocess``
     directly.
@@ -639,17 +651,48 @@ class ToolInteractiveCommand:
             self._stdout_queue.put(line)
 
     def send(self, frame: str) -> None:
-        """Write one request frame (without trailing newline) to the child stdin."""
+        """Write one request frame (without trailing newline) within its deadline."""
         if self._process is None or self._process.stdin is None:
             raise RuntimeError("interactive process is not started")
-        try:
-            self._process.stdin.write(frame + "\n\n")
-            self._process.stdin.flush()
-        except (BrokenPipeError, OSError) as exc:
+        if not isinstance(frame, str):
+            raise TypeError("interactive frame must be a string")
+
+        write_failure: queue.Queue[BaseException] = queue.Queue(maxsize=1)
+        write_complete = threading.Event()
+        stdin = self._process.stdin
+
+        def write_frame() -> None:
+            try:
+                stdin.write(frame + "\n\n")
+                stdin.flush()
+            except Exception as exc:  # surfaced on the caller thread below
+                write_failure.put(exc)
+            finally:
+                write_complete.set()
+
+        threading.Thread(target=write_frame, daemon=True).start()
+        timeout = (
+            self._request.startup_timeout_seconds
+            if self._responses_read == 0
+            else self._request.read_timeout_seconds
+        )
+        deadline = time.monotonic() + timeout
+        while not write_complete.wait(timeout=0.05):
+            abort = self._check_read_abort(deadline)
+            if abort is not None:
+                raise abort
+        abort = self._check_read_abort(deadline)
+        if abort is not None:
+            raise abort
+        if write_failure.empty():
+            return
+        exc = write_failure.get_nowait()
+        if isinstance(exc, (BrokenPipeError, OSError)):
             self._abort(ToolInteractiveStatus.CLOSED)
             raise RuntimeError(
                 "interactive process closed before receiving input"
             ) from exc
+        raise RuntimeError("interactive process failed while receiving input") from exc
 
     def _check_read_abort(self, deadline: float) -> Exception | None:
         """Return an abort exception if a read must stop, else ``None``."""

@@ -214,9 +214,8 @@ def test_interactive_stderr_is_bounded(tmp_path: Path) -> None:
         while not command.stderr_exceeded and time.monotonic() < deadline:
             time.sleep(0.01)
         assert command.stderr_exceeded is True
-        command.send("ping")
         with pytest.raises(RuntimeError, match="stderr bounds"):
-            command.read_response()
+            command.send("ping")
     finally:
         command.close()
     assert len(command.stderr) <= 64

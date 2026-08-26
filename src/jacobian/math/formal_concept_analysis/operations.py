@@ -464,7 +464,27 @@ def concept_lattice(
 ) -> dict[str, object]:
     """Return the concept lattice: concepts, partial order by extent inclusion,
     cover relation, top and bottom concepts."""
-    concepts = enumerate_concepts(ctx)
+    return _concept_lattice_from_concepts(enumerate_concepts(ctx))
+
+
+def _concept_lattice_from_canonical_concepts(
+    concepts: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...],
+) -> dict[str, object]:
+    """Derive one lattice from an already admitted canonical concept family."""
+
+    return _concept_lattice_from_concepts(
+        [
+            {"extent": frozenset(extent), "intent": frozenset(intent)}
+            for extent, intent in concepts
+        ]
+    )
+
+
+def _concept_lattice_from_concepts(
+    concepts: list[dict[str, frozenset[int]]],
+) -> dict[str, object]:
+    """Derive one lattice from a complete exact concept family."""
+
     n = len(concepts)
     order = _inclusion_order(concepts)
     covers = _cover_relation(order, n)

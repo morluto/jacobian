@@ -20,12 +20,11 @@ from jacobian.math.formal_concept_analysis.basis import (
     CanonicalImplicationBasisResult,
 )
 from jacobian.math.formal_concept_analysis.operations import (
+    _concept_lattice_from_canonical_concepts,
     attribute_derivation,
     concept_from_attributes,
     concept_from_objects,
-    concept_lattice,
     duquenne_guigues_basis,
-    enumerate_concepts,
     implication_closure,
     object_derivation,
 )
@@ -111,11 +110,9 @@ def compute_concept_from_attributes(request: AttributeSubsetRequest) -> ConceptR
 def compute_enumerate_concepts(
     request: EnumerateConceptsRequest,
 ) -> EnumerateConceptsResult:
-    concepts = enumerate_concepts(request.context)
+    concepts = request._concepts_for_execution()
     return EnumerateConceptsResult(
-        concepts=tuple(
-            (tuple(sorted(c["extent"])), tuple(sorted(c["intent"]))) for c in concepts
-        ),
+        concepts=concepts,
         count=len(concepts),
     )
 
@@ -123,7 +120,7 @@ def compute_enumerate_concepts(
 def compute_concept_lattice(
     request: EnumerateConceptsRequest,
 ) -> ConceptLatticeResult:
-    result = concept_lattice(request.context)
+    result = _concept_lattice_from_canonical_concepts(request._concepts_for_execution())
     concepts = cast(list[Any], result["concepts"])
     return ConceptLatticeResult(
         concepts=tuple(

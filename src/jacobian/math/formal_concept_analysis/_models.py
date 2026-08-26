@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, PrivateAttr, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -152,6 +152,13 @@ class EnumerateConceptsRequest(StrictModel):
     """Enumerate all formal concepts."""
 
     context: FormalContext
+    _admitted_concept_family: (
+        tuple[
+            FormalContext,
+            tuple[tuple[tuple[int, ...], tuple[int, ...]], ...],
+        ]
+        | None
+    ) = PrivateAttr(default=None)
 
     @model_validator(mode="after")
     def require_bounded_concept_family(self) -> Self:
@@ -160,19 +167,63 @@ class EnumerateConceptsRequest(StrictModel):
         )
         if worst_case_concepts > MAX_CONCEPTS:
             from jacobian.math.formal_concept_analysis.operations import (
-                concept_family_size_capped,
+                enumerate_concepts,
             )
 
-            family_size = concept_family_size_capped(self.context, MAX_CONCEPTS)
-            if family_size > MAX_CONCEPTS:
+            try:
+                concepts = enumerate_concepts(self.context)
+            except ValueError as exc:
                 raise PydanticCustomError(
                     "formal_concept_analysis.concept_family_exceeds_bound",
                     f"the context carries more than {MAX_CONCEPTS} concepts "
                     "and concept enumeration returns at most "
                     f"{MAX_CONCEPTS}; narrow the context or split the "
                     "enumeration",
-                )
+                ) from exc
+            object.__setattr__(
+                self,
+                "_admitted_concept_family",
+                (
+                    self.context,
+                    tuple(
+                        (
+                            tuple(sorted(concept["extent"])),
+                            tuple(sorted(concept["intent"])),
+                        )
+                        for concept in concepts
+                    ),
+                ),
+            )
         return self
+
+    def _concepts_for_execution(
+        self,
+    ) -> tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]:
+        """Return the exact family admitted by this request when available.
+
+        Wide contexts need a bounded exact family probe because their
+        worst-case carrier alone cannot decide admission. That probe is the
+        same deterministic NextClosure traversal the operation serves, so an
+        accepted request retains its canonical projection instead of running
+        a second exhaustive traversal. Requests constructed outside normal
+        Pydantic validation (or copied with a new context) conservatively run
+        the same bounded kernel once rather than trusting stale private data.
+        """
+        cached = self._admitted_concept_family
+        if cached is not None and cached[0] == self.context:
+            return cached[1]
+
+        from jacobian.math.formal_concept_analysis.operations import (
+            enumerate_concepts,
+        )
+
+        return tuple(
+            (
+                tuple(sorted(concept["extent"])),
+                tuple(sorted(concept["intent"])),
+            )
+            for concept in enumerate_concepts(self.context)
+        )
 
 
 class EnumerateConceptsResult(StrictModel):

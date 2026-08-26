@@ -1110,6 +1110,36 @@ def test_smt_request_rejects_malformed_source_as_a_request_error(monkeypatch) ->
     assert error.value.errors(include_url=False)[0]["type"] == "logic.smtlib_grammar"
 
 
+@pytest.mark.parametrize(
+    "identifier",
+    ("memory", "timeout", "canceled", "|resource limit|"),
+)
+def test_smt_request_rejects_undeclared_identifiers_named_after_resource_keywords(
+    identifier: str,
+) -> None:
+    """A located diagnostic quoting a caller symbol is never budget exhaustion.
+
+    Z3 reports an undeclared identifier as
+    ``(error "line L column C: unknown constant <identifier>")``; when the
+    caller-controlled spelling contains a resource keyword, that text must
+    still be a caller-correctable grammar rejection rather than an admitted
+    request whose execution reports an exhausted budget.
+    """
+
+    with pytest.raises(ValidationError) as error:
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                f"(assert (> {identifier} 0))\n"
+                "(check-sat)"
+            ),
+        )
+
+    assert error.value.errors(include_url=False)[0]["type"] == "logic.smtlib_grammar"
+
+
 def test_smt_solver_types_parse_stage_backend_failures_as_unknown(monkeypatch) -> None:
     """A backend parser failure on an admitted source is execution UNKNOWN."""
 
@@ -1130,29 +1160,32 @@ def test_smt_solver_types_parse_stage_backend_failures_as_unknown(monkeypatch) -
     assert result.detail == operations._EXHAUSTION_DETAILS["memory"]
 
 
-def test_smt_request_admission_defers_parser_resource_failures(monkeypatch) -> None:
-    """A parser resource failure cannot be claimed as malformed caller input.
+def test_smt_solver_never_classifies_located_source_text_as_exhaustion(
+    monkeypatch,
+) -> None:
+    """Located diagnostic text quotes the caller's source, not a budget.
 
-    Even when Z3 wraps a backend failure in its located error shape, an
-    exhausted budget is not evidence about the source grammar.
+    A located ``(error "line ... column ...: ...")`` diagnostic embeds
+    caller-controlled spellings, so its resource keywords cannot establish an
+    exhausted budget; execution reports it as a generic backend failure.
     """
 
     import z3
 
-    def exhausting_parser(_source: str) -> object:
+    def diagnosing_parser(_source: str) -> object:
         raise z3.Z3Exception(b'(error "line 1 column 0: out of memory")')
 
-    monkeypatch.setattr(z3, "parse_smt2_string", exhausting_parser)
     admitted = SmtSolveRequest(
         logic=SmtLogic.QF_LIA,
         smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
     )
+    monkeypatch.setattr(z3, "parse_smt2_string", diagnosing_parser)
 
     result = solve_smt(admitted)
 
     assert result.outcome == "UNKNOWN"
-    assert result.exhausted == "memory"
-    assert result.detail == operations._EXHAUSTION_DETAILS["memory"]
+    assert result.exhausted is None
+    assert result.detail is not None and "bounded solve" in result.detail
 
 
 def test_smt_request_admission_rejects_located_parser_diagnostics(monkeypatch) -> None:

@@ -714,14 +714,12 @@ def _is_smtlib_source_diagnostic(exc: Exception) -> bool:
     ``(error "line L column C: <diagnostic>")``. Backend conditions such as
     exhausted memory or interruption surface through Z3's fixed error-code
     message table and carry no source locator. A located diagnostic names a
-    grammar defect unless it also classifies as an exhausted budget, in which
-    case admission defers to execution instead of claiming malformed input.
+    grammar defect regardless of which resource keywords its text contains,
+    because the diagnostic quotes caller-controlled source spellings that may
+    legitimately contain words such as ``memory``.
     """
 
-    message = _exception_message(exc)
-    if _Z3_SOURCE_DIAGNOSTIC.search(message) is None:
-        return False
-    return _classify_exhaustion(message) is None
+    return _Z3_SOURCE_DIAGNOSTIC.search(_exception_message(exc)) is not None
 
 
 def _require_parseable_smtlib(source: str) -> None:
@@ -919,8 +917,19 @@ _EXHAUSTION_DETAILS: dict[_UnknownResource, str] = {
 
 
 def _classify_exhaustion(message: str) -> _UnknownResource | None:
-    """Classify one Z3 reason or exception message onto the exhausted budgets."""
+    """Classify one Z3 reason or exception message onto the exhausted budgets.
 
+    Exhaustion keywords classify only backend conditions, which carry no
+    source locator. A message containing a located ``(error "line ...
+    column ...: ...")`` diagnostic is never classified as exhaustion, even
+    when its text mentions a resource keyword: the diagnostic quotes
+    caller-controlled source spellings, so an undeclared identifier named
+    ``memory`` or a comment mentioning ``timeout`` must not report an
+    exhausted budget.
+    """
+
+    if _Z3_SOURCE_DIAGNOSTIC.search(message) is not None:
+        return None
     lowered = message.strip().lower()
     if "resource limit" in lowered or "canceled" in lowered:
         return "work"

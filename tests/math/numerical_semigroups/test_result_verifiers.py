@@ -119,6 +119,37 @@ def test_factorization_replay_results_reapply_request_value_envelopes(
         result_type.model_validate(payload)
 
 
+@pytest.mark.parametrize(
+    ("result_type", "payload"),
+    (
+        (
+            ElementDeltaSetResult,
+            {
+                "value": "100000000",
+                "minimal_generators": ("2", "3"),
+                "factorization_lengths": (),
+                "delta_set": (),
+            },
+        ),
+        (
+            ElementElasticityResult,
+            {
+                "value": "100000000",
+                "minimal_generators": ("2", "3"),
+                "minimum_length": 1,
+                "maximum_length": 1,
+                "elasticity": "1",
+            },
+        ),
+    ),
+)
+def test_element_invariant_replay_results_reapply_request_value_envelopes(
+    result_type: type[Any], payload: dict[str, Any]
+) -> None:
+    with pytest.raises(ValueError, match="value must be at most"):
+        result_type.model_validate(payload)
+
+
 def test_factorization_length_verifier_rejects_forged_length_set() -> None:
     result = compute_factorization_lengths(
         FactorizationLengthsComputeRequest(generators=("3", "5"), value="15")

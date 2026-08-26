@@ -76,7 +76,8 @@ class ElementDeltaSetResult(StrictModel):
 
     @model_validator(mode="after")
     def require_set_semantics(self) -> Self:
-        _require_canonical_minimal_axis(self.minimal_generators)
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        _require_bounded_value(generators, self.value)
         if self.factorization_lengths != tuple(
             sorted(set(self.factorization_lengths))
         ) or any(length < 0 for length in self.factorization_lengths):
@@ -154,7 +155,8 @@ class ElementElasticityResult(StrictModel):
 
     @model_validator(mode="after")
     def require_length_ratio(self) -> Self:
-        _require_canonical_minimal_axis(self.minimal_generators)
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        _require_bounded_value(generators, self.value)
         if self.minimum_length > self.maximum_length:
             raise _validation_error("minimum_length must not exceed maximum_length")
         if Fraction(self.elasticity) != Fraction(
@@ -220,7 +222,11 @@ class ElementCatenaryDegreeResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_degree(self) -> Self:
-        _require_canonical_minimal_axis(self.minimal_generators)
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        value = _require_bounded_value(generators, self.value)
+        _require_materializable_factorizations(
+            generators, value, MAX_GRAPH_FACTORIZATIONS
+        )
         return self
 
 

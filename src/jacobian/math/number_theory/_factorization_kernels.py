@@ -255,11 +255,17 @@ def verify_divisor_list_result(result: DivisorListResult) -> bool:
     if result.status != "COMPLETE":
         return False
     factors = _bounded_direct_factorization(int(result.value))
-    return factors is not None and result.divisors == _divisors_from_factors(
-        factors,
-        proper=result.convention == "PROPER_DIVISORS",
-        value=int(result.value),
-    )
+    if factors is None:
+        return False
+    try:
+        divisors = _divisors_from_factors(
+            factors,
+            proper=result.convention == "PROPER_DIVISORS",
+            value=int(result.value),
+        )
+    except ValueError:
+        return False
+    return result.divisors == divisors
 
 
 def verify_prime_factorization_result(result: PrimeFactorizationResult) -> bool:

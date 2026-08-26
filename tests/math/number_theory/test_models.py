@@ -237,6 +237,18 @@ def test_divisor_list_result_rejects_sources_beyond_factorization_domain() -> No
     )
 
 
+def test_divisor_list_verifier_rejects_sources_beyond_its_output_envelope() -> None:
+    """Replay must reject a complete claim whose source has too many divisors."""
+
+    assert not verify_divisor_list_result(
+        DivisorListResult(
+            value="4839309619200000",
+            divisors=("1",),
+            convention="ALL_POSITIVE_DIVISORS",
+        )
+    )
+
+
 def test_divisor_list_result_rejects_mutations() -> None:
     assert not verify_divisor_list_result(
         DivisorListResult(value="99", divisors=("1", "2", "3", "4", "6", "12"))

@@ -59,9 +59,7 @@ class DirectedGraph(StrictModel):
                     "directed graph edge list exceeds the "
                     f"{MAX_DIRECTED_GRAPH_PARSE_EDGES}-edge parse-safety envelope",
                 )
-            return tuple(
-                tuple(row) if isinstance(row, list) else row for row in edges
-            )
+            return tuple(tuple(row) if isinstance(row, list) else row for row in edges)
         if isinstance(edges, tuple) and len(edges) > MAX_DIRECTED_GRAPH_PARSE_EDGES:
             raise PydanticCustomError(
                 "graph.edge_list_parse_envelope_exceeded",

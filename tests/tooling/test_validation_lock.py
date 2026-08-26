@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import pytest
+import tools.with_validation_lock as validation_lock
 from tools.with_validation_lock import main
 
 ROOT = Path(__file__).parents[2]
@@ -57,3 +58,25 @@ def test_second_broad_run_is_rejected_while_lock_is_held(
     finally:
         holder.wait(timeout=15)
     assert holder.returncode == 0
+
+
+def test_timed_out_command_releases_the_validation_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(_worktree(tmp_path))
+    monkeypatch.setattr(validation_lock, "_VALIDATION_TIMEOUT_SECONDS", 0.2)
+
+    result = main(
+        [
+            "run",
+            "--target",
+            "test-timeout",
+            "--",
+            sys.executable,
+            "-c",
+            "import time; time.sleep(30)",
+        ]
+    )
+
+    assert result != 0
+    assert main(["status"]) == 0

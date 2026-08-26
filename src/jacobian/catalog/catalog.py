@@ -45,7 +45,7 @@ def _bind_operation[RequestT: StrictModel, ResultT: StrictModel](
                 f"{operation.operation_id} received a request outside its declared type"
             )
         result = operation.run(request)
-        if not isinstance(result, operation.result_type):
+        if type(result) is not operation.result_type:
             raise TypeError(
                 f"{operation.operation_id} returned a result outside its declared type"
             )

@@ -28,7 +28,7 @@ class _InvalidResultOperation:
 
 class _CatalogWithInvalidResult:
     @staticmethod
-    def operation(operation_id: str) -> _InvalidResultOperation:
+    def _binding(operation_id: str) -> _InvalidResultOperation:
         del operation_id
         return _InvalidResultOperation()
 

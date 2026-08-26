@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping, Sequence
-from typing import Any, cast
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalizationError, encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationId, OperationResult
@@ -58,20 +57,17 @@ def invoke_operation(
     """Select, parse, call, and project one typed mathematical operation."""
 
     started = time.monotonic()
-    operation = catalog.operation(operation_id)
-    if operation is None:
+    binding = catalog._binding(operation_id)
+    if binding is None:
         raise ValueError(f"unknown operation: {operation_id}")
     try:
-        parsed = cast(
-            StrictModel,
-            parse_operation_input(operation.request_type, payload),
-        )
+        parsed = parse_operation_input(binding.request_type, payload)
     except (CanonicalizationError, ValidationError) as exc:
         raise OperationRequestValidationError(exc) from exc
-    result = operation.run(parsed)
+    result = binding.run(parsed)
 
     return OperationResult(
-        operation_id=operation.operation_id,
+        operation_id=operation_id,
         runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
         output=result.model_dump(mode="json"),
     )

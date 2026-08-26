@@ -2,9 +2,8 @@
 
 Covers the transport projection (`src/jacobian/mcp/tools.py:91 math_run`)
 in addition to the dispatch path (`tests/integration/catalog/test_builtin_examples.py:27`).
-Sequential replay avoids the known concurrent-worker segfault while still
-establishing that every published example returns a mathematical value rather
-than a host-level ExceptionGroup. See https://github.com/morluto/jacobian/issues/2713.
+The catalog sweep is sequential so a failure identifies one advertised
+invocation; the MCP journey separately proves independent requests can overlap.
 """
 
 from __future__ import annotations

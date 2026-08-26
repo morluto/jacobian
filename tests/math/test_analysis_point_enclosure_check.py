@@ -7,7 +7,9 @@ import pytest
 from pydantic import ValidationError
 from tests.math._analysis_support import analysis_validation_error
 
-from jacobian.math.analysis._models import (
+from jacobian.math.analysis._models import ExactDyadic
+from jacobian.math.analysis._operations import _check_point_enclosure
+from jacobian.math.analysis._point_enclosure import (
     MAX_POINT_CHECK_DYADIC_EXPONENT,
     MAX_POINT_CHECK_FRACTION_BITS,
     MAX_POINT_CHECK_FRACTION_UPDATES,
@@ -16,12 +18,10 @@ from jacobian.math.analysis._models import (
     ArbPointEnclosureRequest,
     ArbPointEnclosureResult,
     ClaimedPointEnclosure,
-    ExactDyadic,
     PointEnclosureCheckRequest,
     PointEnclosureCheckResult,
     _point_check_fraction_bound_bits,
 )
-from jacobian.math.analysis._operations import _check_point_enclosure
 from jacobian.math.analysis._point_enclosure_check import (
     _log_range_reduction,
     _positive_atanh_enclosures,

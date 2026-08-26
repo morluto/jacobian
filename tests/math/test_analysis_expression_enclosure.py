@@ -5,12 +5,11 @@ from fractions import Fraction
 import pytest
 from tests.math._analysis_support import analysis_validation_error
 
-from jacobian.math.analysis._models import (
-    MAX_DYADIC_EXPONENT,
-    ExactDyadic,
+from jacobian.math.analysis._expression_enclosure import (
     IntervalExpressionEnclosureRequest,
     IntervalExpressionEnclosureResult,
 )
+from jacobian.math.analysis._models import MAX_DYADIC_EXPONENT, ExactDyadic
 from jacobian.math.analysis._operations import _dyadic_endpoints, _expression_enclosure
 
 

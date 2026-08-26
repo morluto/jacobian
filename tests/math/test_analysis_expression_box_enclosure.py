@@ -9,10 +9,12 @@ import pytest
 from pydantic import ValidationError
 from tests.math._analysis_support import analysis_validation_error
 
+from jacobian.math.analysis._expression_enclosure import (
+    IntervalExpressionEnclosureRequest,
+)
 from jacobian.math.analysis._models import (
     IntervalExpressionBoxEnclosureRequest,
     IntervalExpressionBoxEnclosureResult,
-    IntervalExpressionEnclosureRequest,
     RationalIntervalBox,
 )
 from jacobian.math.analysis._operations import (

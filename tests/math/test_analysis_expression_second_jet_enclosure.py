@@ -8,12 +8,12 @@ import pytest
 from pydantic import ValidationError
 from tests.math._analysis_support import analysis_validation_error
 
-from jacobian.math.analysis._models import (
-    DyadicClosedInterval,
+from jacobian.math.analysis._models import DyadicClosedInterval
+from jacobian.math.analysis._operations import _second_jet_enclosure
+from jacobian.math.analysis._second_jet import (
     IntervalExpressionSecondJetEnclosureRequest,
     IntervalExpressionSecondJetEnclosureResult,
 )
-from jacobian.math.analysis._operations import _second_jet_enclosure
 
 
 def _q(numerator: int, denominator: int = 1) -> dict[str, str]:

@@ -9,33 +9,40 @@ from typing import Any
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
+from jacobian.math.analysis._expression_enclosure import (
+    IntervalExpressionEnclosureRequest,
+    IntervalExpressionEnclosureResult,
+)
 from jacobian.math.analysis._models import (
     MAX_BOX_PREFLIGHT_TEMPORARY_BITS,
     MAX_DYADIC_EXPONENT,
-    ArbPointEnclosureRequest,
-    ArbPointEnclosureResult,
-    ClaimedPointEnclosure,
     DyadicClosedInterval,
     ExactDyadic,
-    FirstPartialEnclosure,
-    HessianEntryEnclosure,
     IntervalExpressionBoxEnclosureRequest,
     IntervalExpressionBoxEnclosureResult,
     IntervalExpressionBoxEnclosureStatus,
     IntervalExpressionDomainFailure,
-    IntervalExpressionEnclosureRequest,
-    IntervalExpressionEnclosureResult,
     IntervalExpressionNode,
-    IntervalExpressionSecondJetEnclosureRequest,
-    IntervalExpressionSecondJetEnclosureResult,
-    IntervalExpressionSecondJetEnclosureStatus,
-    PointEnclosureCheckRequest,
-    PointEnclosureCheckResult,
     _preflight_box_expression,
     _rational_box_bounds,
 )
+from jacobian.math.analysis._point_enclosure import (
+    ArbPointEnclosureRequest,
+    ArbPointEnclosureResult,
+    ClaimedPointEnclosure,
+    PointEnclosureCheckRequest,
+    PointEnclosureCheckResult,
+)
 from jacobian.math.analysis._point_enclosure_check import (
     point_enclosure_check_outcome,
+)
+from jacobian.math.analysis._second_jet import (
+    FirstPartialEnclosure,
+    HessianEntryEnclosure,
+    IntervalExpressionSecondJetEnclosureRequest,
+    IntervalExpressionSecondJetEnclosureResult,
+    IntervalExpressionSecondJetEnclosureStatus,
+    _preflight_second_jet_expression,
 )
 from jacobian.math.geometry.boxes.values import RationalClosedInterval
 
@@ -710,8 +717,6 @@ def _constructed_second_jet_result(
 def _second_jet_enclosure(
     request: IntervalExpressionSecondJetEnclosureRequest,
 ) -> IntervalExpressionSecondJetEnclosureResult:
-    from jacobian.math.analysis._models import _preflight_second_jet_expression
-
     preflight = _preflight_second_jet_expression(
         request.expression, _rational_box_bounds(request.box)
     )

@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from fractions import Fraction
 
-from jacobian.math.analysis._models import (
+from jacobian.math.analysis._point_enclosure import (
     MAX_POINT_CHECK_LOG_TERMS,
     PointEnclosureCheckOutcome,
     PointEnclosureCheckRequest,

@@ -15,6 +15,8 @@ from jacobian.math.geometry.exact._operations import (
     compute_distance_graph,
     compute_distance_profile,
 )
+from jacobian.math.graphs.spectral._models import GraphSpectrumRequest
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 
 def _make_point(label: str, coords: list[tuple[str, str]]) -> LabelledRationalPoint:
@@ -72,7 +74,31 @@ class TestDistanceGraph:
             target_squared_distance=CanonicalRational(num="1", den="1"),
         )
         result = compute_distance_graph(req)
+        assert isinstance(result, IndexedSimpleUndirectedGraph)
         assert len(result.edges) == 4
+
+    def test_serialized_result_feeds_graph_consumer_unchanged(self):
+        """A distance graph is the graphs owner's value, including no-edge cases."""
+        configuration = PointConfiguration(
+            points=(
+                _make_point("a", [("0", "1")]),
+                _make_point("b", [("1", "1")]),
+            )
+        )
+        produced = compute_distance_graph(
+            DistanceGraphRequest(
+                configuration=configuration,
+                target_squared_distance=CanonicalRational(num="2", den="1"),
+            )
+        )
+
+        assert produced == IndexedSimpleUndirectedGraph(vertex_count=2, edges=())
+        assert (
+            GraphSpectrumRequest.model_validate(
+                {"graph": produced.model_dump(mode="json")}
+            ).graph
+            == produced
+        )
 
     def test_rejects_single_point_configuration(self):
         import pytest

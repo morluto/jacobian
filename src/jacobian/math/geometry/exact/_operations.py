@@ -11,7 +11,6 @@ from jacobian.math.geometry.exact._line_arithmetic import (
 )
 from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
-    DistanceGraphResult,
     DistanceMultiplicityEntry,
     DistanceProfileRequest,
     DistanceProfileResult,
@@ -19,6 +18,7 @@ from jacobian.math.geometry.exact._models import (
     PinnedLineDistanceRequest,
     PinnedLineDistanceResult,
 )
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 
 def _to_fraction_point(point: LabelledRationalPoint) -> tuple[Fraction, ...]:
@@ -68,7 +68,7 @@ def compute_distance_profile(
 
 def compute_distance_graph(
     request: DistanceGraphRequest,
-) -> DistanceGraphResult:
+) -> IndexedSimpleUndirectedGraph:
     """Build the graph whose edges connect pairs at the target squared distance."""
     config = request.configuration
     n = len(config.points)
@@ -81,7 +81,7 @@ def compute_distance_graph(
             if _squared_distance(points[i], points[j]) == target:
                 edges.append((i, j))
 
-    return DistanceGraphResult(
+    return IndexedSimpleUndirectedGraph(
         vertex_count=n,
         edges=tuple(edges),
     )

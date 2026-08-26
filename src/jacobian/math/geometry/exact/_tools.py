@@ -8,7 +8,6 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
-    DistanceGraphResult,
     DistanceProfileRequest,
     DistanceProfileResult,
     PinnedLineDistanceRequest,
@@ -19,6 +18,7 @@ from jacobian.math.geometry.exact._operations import (
     compute_distance_profile,
     compute_pinned_line_distance_profile,
 )
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 
 def _op[
@@ -138,9 +138,10 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "geometry.points.distance_graph.compute",
         "Build distance-selected graph",
         "Given a point configuration and a target squared distance, return "
-        "the graph whose edges connect pairs at exactly that distance.",
+        "the canonical integer-indexed simple graph whose edges connect pairs "
+        "at exactly that distance.",
         DistanceGraphRequest,
-        DistanceGraphResult,
+        IndexedSimpleUndirectedGraph,
         compute_distance_graph,
         "geometry",
         "distance-graph",

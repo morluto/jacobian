@@ -137,16 +137,8 @@ class DistanceGraphRequest(StrictModel):
         return self
 
 
-class DistanceGraphResult(StrictModel):
-    """Graph whose edges connect pairs at the target squared distance."""
-
-    vertex_count: int = Field(ge=2)
-    edges: tuple[tuple[int, int], ...]
-
-
 __all__ = [
     "DistanceGraphRequest",
-    "DistanceGraphResult",
     "DistanceMultiplicityEntry",
     "DistanceProfileRequest",
     "DistanceProfileResult",

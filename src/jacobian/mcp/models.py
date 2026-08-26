@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field, RootModel, StrictInt
 
@@ -75,9 +75,6 @@ class OperationSearchResult(StrictModel):
     truncated: bool
     next_cursor: str | None = None
     catalog_resource: Literal["operation://catalog"] = "operation://catalog"
-    response_byte_limit: StrictInt
-    truncation_reason: str | None = None
-    match_metadata_truncated: bool = False
 
 
 class OperationBrowseResult(StrictModel):
@@ -88,9 +85,6 @@ class OperationBrowseResult(StrictModel):
     truncated: bool
     next_cursor: str | None = None
     catalog_resource: Literal["operation://catalog"] = "operation://catalog"
-    response_byte_limit: StrictInt
-    truncation_reason: str | None = None
-    operation_metadata_truncated: bool = False
 
 
 class OperationInspectionResult(StrictModel):
@@ -106,7 +100,6 @@ class OperationValidationIssue(StrictModel):
     )
     code: str = Field(min_length=1, max_length=128)
     message: str = Field(min_length=1, max_length=1_024)
-    input: Any | None = None
 
 
 class OperationInvalidRequestData(StrictModel):

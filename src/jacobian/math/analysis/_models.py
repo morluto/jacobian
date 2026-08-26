@@ -61,9 +61,6 @@ type IntervalExpressionOp = Literal[
     "sin",
     "cos",
 ]
-type IntervalExpressionBoxEnclosureStatus = Literal[
-    "ENCLOSED", "DOMAIN_UNPROVEN", "BACKEND_ERROR"
-]
 
 
 def _bound_raw_rational(value: object, label: str) -> None:
@@ -505,40 +502,8 @@ def _preflight_box_binary(
     return bounds
 
 
-def _preflight_box_expression(
-    node: IntervalExpressionNode,
-    variables: dict[str, _RationalBounds],
-    path: tuple[int, ...] = (),
-) -> _BoxPreflight:
-    """Bound exact admission work and locate the first domain obstruction."""
-
-    if node.op == "const":
-        assert node.value is not None
-        value = node.value.as_fraction()
-        return _bounded_rational_bounds(value, value)
-    if node.op == "var":
-        assert node.variable is not None
-        return variables[node.variable]
-
-    children: list[_BoxPreflight] = []
-    for index, child_node in enumerate(node.children):
-        child = _preflight_box_expression(child_node, variables, (*path, index))
-        if isinstance(child, IntervalExpressionDomainFailure):
-            return child
-        children.append(child)
-
-    left = children[0]
-    assert isinstance(left, _RationalBounds)
-    if len(children) == 1:
-        return _preflight_box_unary(node, left, path)
-
-    right = children[1]
-    assert isinstance(right, _RationalBounds)
-    return _preflight_box_binary(node, left, right, path)
-
-
-class IntervalExpressionBoxEnclosureRequest(StrictModel):
-    """Enclose one named-variable expression on a complete rational box."""
+class _IntervalExpressionBoxRequest(StrictModel):
+    """Shared complete-source contract for operations over rational boxes."""
 
     expression: IntervalExpressionNode = Field(
         description=(
@@ -564,7 +529,7 @@ class IntervalExpressionBoxEnclosureRequest(StrictModel):
         return value
 
     @model_validator(mode="after")
-    def require_complete_bounded_source(self) -> Self:
+    def require_complete_named_source_axis(self) -> Self:
         nodes = _bounded_expression_nodes(self.expression)
         used_variables: set[str] = set()
         for node in nodes:
@@ -586,7 +551,6 @@ class IntervalExpressionBoxEnclosureRequest(StrictModel):
                 "box variables are unused by the expression: "
                 + ", ".join(sorted(unused))
             )
-        _preflight_box_expression(self.expression, _rational_box_bounds(self.box))
         return self
 
 
@@ -651,63 +615,5 @@ class DyadicClosedInterval(StrictModel):
         if self.lower.compare(self.upper) > 0:
             raise _validation_error(
                 "dyadic interval lower endpoint exceeds upper endpoint"
-            )
-        return self
-
-
-class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest):
-    """A replayable enclosure bound to its expression, axis, and source box.
-
-    For ``ENCLOSED``, every defined real source-box value lies between the two
-    exact dyadic endpoints.  Full validation recomputes that canonical claim.
-    ``DOMAIN_UNPROVEN`` replays its deterministic first-obstruction evidence.
-    ``BACKEND_ERROR`` asserts no enclosure conclusion at all, so it is
-    validated structurally: rerunning Arb would reject the operation's own
-    serialized result whenever a transient backend condition does not recur.
-    """
-
-    status: IntervalExpressionBoxEnclosureStatus
-    lower: ExactDyadic | None = None
-    upper: ExactDyadic | None = None
-    domain_failure: IntervalExpressionDomainFailure | None = None
-    method: Literal["ARB_NATURAL_INTERVAL_EXTENSION"] = "ARB_NATURAL_INTERVAL_EXTENSION"
-    detail: str = Field(min_length=1, max_length=1024)
-
-    @model_validator(mode="after")
-    def bind_enclosure_to_source(self) -> Self:
-        enclosed = self.status == "ENCLOSED"
-        if enclosed != (self.lower is not None and self.upper is not None):
-            raise _validation_error(
-                "only an enclosed result may carry dyadic endpoints"
-            )
-        if enclosed:
-            assert self.lower is not None and self.upper is not None
-            if self.lower.compare(self.upper) > 0:
-                raise _validation_error(
-                    "enclosure lower endpoint exceeds upper endpoint"
-                )
-            if self.domain_failure is not None:
-                raise _validation_error(
-                    "an enclosed result cannot carry a domain failure"
-                )
-        else:
-            domain_unproven = self.status == "DOMAIN_UNPROVEN"
-            if domain_unproven != (self.domain_failure is not None):
-                raise _validation_error(
-                    "domain-failure evidence must agree with DOMAIN_UNPROVEN status"
-                )
-            if self.status == "BACKEND_ERROR":
-                return self
-
-        from jacobian.math.analysis._operations import _box_expression_enclosure
-
-        request = IntervalExpressionBoxEnclosureRequest.model_construct(
-            expression=self.expression,
-            box=self.box,
-            precision_bits=self.precision_bits,
-        )
-        if self != _box_expression_enclosure(request):
-            raise _validation_error(
-                "box enclosure does not replay from its expression, axis, and source box"
             )
         return self

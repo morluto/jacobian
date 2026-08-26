@@ -9,16 +9,18 @@ import pytest
 from pydantic import ValidationError
 from tests.math._analysis_support import analysis_validation_error
 
+from jacobian.math.analysis._box_enclosure import (
+    IntervalExpressionBoxEnclosureRequest,
+    IntervalExpressionBoxEnclosureResult,
+    _box_expression_enclosure,
+)
 from jacobian.math.analysis._expression_enclosure import (
     IntervalExpressionEnclosureRequest,
 )
 from jacobian.math.analysis._models import (
-    IntervalExpressionBoxEnclosureRequest,
-    IntervalExpressionBoxEnclosureResult,
     RationalIntervalBox,
 )
 from jacobian.math.analysis._operations import (
-    _box_expression_enclosure,
     _expression_enclosure,
 )
 from jacobian.math.geometry.boxes import RationalAxisAlignedBox, RationalClosedInterval
@@ -395,11 +397,11 @@ def test_producer_does_not_pay_a_second_backend_replay(
 ) -> None:
     from flint import ctx
 
-    import jacobian.math.analysis._operations as operations
+    import jacobian.math.analysis._box_enclosure as box_enclosure
 
     calls = 0
     work_precisions: list[int] = []
-    original = operations._evaluate_box_expression
+    original = box_enclosure._evaluate_box_expression
 
     def counting(*args: Any, **kwargs: Any) -> Any:
         nonlocal calls
@@ -408,7 +410,7 @@ def test_producer_does_not_pay_a_second_backend_replay(
             work_precisions.append(ctx.prec)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(operations, "_evaluate_box_expression", counting)
+    monkeypatch.setattr(box_enclosure, "_evaluate_box_expression", counting)
     _run(
         {"op": "exp", "children": [_var("x")]},
         (("x", Fraction(0), Fraction(1)),),
@@ -420,12 +422,12 @@ def test_producer_does_not_pay_a_second_backend_replay(
 def test_backend_value_error_has_a_typed_nonconclusion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import jacobian.math.analysis._operations as operations
+    import jacobian.math.analysis._box_enclosure as box_enclosure
 
     def fail(*args: Any, **kwargs: Any) -> Any:
         raise ValueError("synthetic backend rejection")
 
-    monkeypatch.setattr(operations, "_evaluate_box_expression", fail)
+    monkeypatch.setattr(box_enclosure, "_evaluate_box_expression", fail)
     result = _run(
         {"op": "exp", "children": [_var("x")]},
         (("x", Fraction(0), Fraction(1)),),
@@ -438,9 +440,9 @@ def test_backend_value_error_has_a_typed_nonconclusion(
 def test_backend_error_result_round_trips_when_the_failure_does_not_recur(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import jacobian.math.analysis._operations as operations
+    import jacobian.math.analysis._box_enclosure as box_enclosure
 
-    original = operations._evaluate_box_expression
+    original = box_enclosure._evaluate_box_expression
     calls = 0
 
     def transient_then_original(*args: Any, **kwargs: Any) -> Any:
@@ -450,7 +452,9 @@ def test_backend_error_result_round_trips_when_the_failure_does_not_recur(
             raise ValueError("transient backend rejection")
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(operations, "_evaluate_box_expression", transient_then_original)
+    monkeypatch.setattr(
+        box_enclosure, "_evaluate_box_expression", transient_then_original
+    )
     result = _run(
         {"op": "exp", "children": [_var("x")]},
         (("x", Fraction(0), Fraction(1)),),
@@ -492,12 +496,12 @@ def test_backend_error_result_round_trips_when_the_failure_does_not_recur(
 def test_backend_error_payload_cannot_smuggle_conclusion_evidence(
     field: str, payload_patch: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import jacobian.math.analysis._operations as operations
+    import jacobian.math.analysis._box_enclosure as box_enclosure
 
     def fail(*args: Any, **kwargs: Any) -> Any:
         raise ValueError("synthetic backend rejection")
 
-    monkeypatch.setattr(operations, "_evaluate_box_expression", fail)
+    monkeypatch.setattr(box_enclosure, "_evaluate_box_expression", fail)
     result = _run(
         {"op": "exp", "children": [_var("x")]},
         (("x", Fraction(1), Fraction(2)),),

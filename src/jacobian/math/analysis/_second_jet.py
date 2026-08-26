@@ -10,13 +10,13 @@ from jacobian._models import StrictModel
 from jacobian.math.analysis._models import (
     MAX_BOX_VARIABLES,
     DyadicClosedInterval,
-    IntervalExpressionBoxEnclosureRequest,
     IntervalExpressionDomainFailure,
     IntervalExpressionNode,
     IntervalVariable,
     _bounded_expression_nodes,
     _bounded_rational_bounds,
     _BoxPreflight,
+    _IntervalExpressionBoxRequest,
     _preflight_box_binary,
     _preflight_box_unary,
     _rational_box_bounds,
@@ -93,9 +93,7 @@ def _preflight_second_jet_expression(
     return _preflight_box_binary(node, left, right, path)
 
 
-class IntervalExpressionSecondJetEnclosureRequest(
-    IntervalExpressionBoxEnclosureRequest
-):
+class IntervalExpressionSecondJetEnclosureRequest(_IntervalExpressionBoxRequest):
     """Enclose an elementary expression and all derivatives through order two."""
 
     @model_validator(mode="after")

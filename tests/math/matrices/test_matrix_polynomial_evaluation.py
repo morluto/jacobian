@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import random
 from copy import deepcopy
 from fractions import Fraction
+from typing import Any
 
 import pytest
 from hypothesis import given, settings
@@ -143,7 +145,11 @@ def _assert_matrix_polynomial_envelope_conformance(
     dimension = len(request.matrix.entries)
     degree = _polynomial_degree(request.polynomial)
     assert metrics.scalar_product_terms == degree * dimension**3
-    assert metrics.stored_states == 2 * degree + 1
+    # One initial state; per multiplication every scalar-product term and
+    # partial accumulation inside each dot product is recorded (two states
+    # per term) together with the assembled product and the reduced
+    # accumulator.
+    assert metrics.stored_states == 1 + degree * (2 * dimension**3 + 2)
     total_scalar_products = (
         MATRIX_POLYNOMIAL_EVALUATION_PASSES * metrics.scalar_product_terms
     )
@@ -236,7 +242,7 @@ def test_cancelled_horner_products_are_recorded_before_the_scalar_addition() -> 
 
     assert measured_value == ((Fraction(0),),)
     assert metrics.maximum_component_digits == len(str(height))
-    assert metrics.stored_states == 2 * 2 + 1
+    assert metrics.stored_states == 1 + 2 * (2 * 1**3 + 2)
 
     estimated_work_digits = _require_matrix_polynomial_output_budget(
         request.matrix,
@@ -246,6 +252,141 @@ def test_cancelled_horner_products_are_recorded_before_the_scalar_addition() -> 
     assert len(str(height)) <= estimated_work_digits
     assert metrics.maximum_component_digits <= estimated_work_digits
     _assert_matrix_polynomial_envelope_conformance(request)
+
+
+def test_canceling_dot_product_terms_are_observed_inside_each_product() -> None:
+    # A = H [[1, 1], [-1, -1]] squares to zero: every entry of A^2 is a dot
+    # product whose H^2 and -H^2 terms cancel, so recording only reduced
+    # matrices observes nothing wider than H even though the multiplication
+    # forms full H^2 terms mid-dot-product.  An admission regression that
+    # underbounds scalar-product intermediates would then pass the
+    # conformance assertion vacuously; the measured expansion must charge
+    # each term and partial accumulation at its product width.
+    height = 10**120
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=_matrix((height, height), (-height, -height)),
+        polynomial=_polynomial((1, 2)),
+    )
+
+    metrics = _HornerEvaluationMetrics()
+    measured_value = _evaluate_polynomial(
+        _fractions(request.matrix),
+        _dense_polynomial_coefficients(request),
+        metrics=metrics,
+    )
+
+    assert measured_value == (
+        (Fraction(0), Fraction(0)),
+        (Fraction(0), Fraction(0)),
+    )
+    assert metrics.maximum_component_digits == len(str(height**2))
+    assert metrics.stored_states == 1 + 2 * (2 * 2**3 + 2)
+
+    estimated_work_digits = _require_matrix_polynomial_output_budget(
+        request.matrix,
+        request.polynomial,
+        _polynomial_degree(request.polynomial),
+    )
+    assert len(str(height**2)) <= estimated_work_digits
+    _assert_matrix_polynomial_envelope_conformance(request)
+
+
+def _plain_sympy_horner_trace(
+    entries: tuple[tuple[Fraction, ...], ...],
+    coefficients: tuple[Fraction, ...],
+) -> tuple[tuple[tuple[Fraction, ...], ...], int]:
+    """Evaluate ``f(A)`` with plain SymPy matrix products, old-observer style.
+
+    Returns the exact value together with the widest component among the
+    pre-addition products and reduced accumulators -- exactly what recording
+    whole matrices observed before dot products were expanded.
+    """
+
+    from sympy import Matrix, Rational, eye, zeros
+
+    dimension = len(entries)
+    matrix = Matrix(
+        [
+            [Rational(entry.numerator, entry.denominator) for entry in row]
+            for row in entries
+        ]
+    )
+    widest = 0
+
+    def observe(state: Any) -> None:
+        nonlocal widest
+        widest = max(
+            widest,
+            max(
+                max(len(str(abs(int(entry.p)))), len(str(int(entry.q))))
+                for entry in state
+            ),
+        )
+
+    if not coefficients:
+        result = zeros(dimension)
+        observe(result)
+    else:
+        result = Rational(
+            coefficients[-1].numerator, coefficients[-1].denominator
+        ) * eye(dimension)
+        observe(result)
+        for coefficient in reversed(coefficients[:-1]):
+            scalar = Rational(coefficient.numerator, coefficient.denominator)
+            observe(result * matrix)
+            result = result * matrix + scalar * eye(dimension)
+            observe(result)
+    value = tuple(
+        tuple(
+            Fraction(int(result[row, column].p), int(result[row, column].q))
+            for column in range(dimension)
+        )
+        for row in range(dimension)
+    )
+    return value, widest
+
+
+def test_measured_dot_product_expansion_matches_plain_sympy_multiplication() -> None:
+    # Semantic neutrality of the observer expansion: on deterministic
+    # pseudo-random shapes the instrumented evaluation returns exactly the
+    # same rational matrix as plain ``result * matrix`` Horner evaluation,
+    # while observing a superset of the plain whole-matrix states.
+    rng = random.Random(20260826)
+    cancellation_cases = (
+        (
+            ((Fraction(1), Fraction(1)), (Fraction(-1), Fraction(-1))),
+            (Fraction(0), Fraction(0), Fraction(1)),
+        ),
+        (
+            ((Fraction(1, 2), Fraction(1, 3)), (Fraction(-1, 3), Fraction(-1, 2))),
+            (Fraction(0), Fraction(2), Fraction(1)),
+        ),
+    )
+    random_cases = []
+    for _case in range(6):
+        dimension = rng.randint(1, 4)
+        degree = rng.randint(0, 5)
+        entries = tuple(
+            tuple(
+                Fraction(rng.randint(-6, 6), rng.choice((1, 1, 2, 3)))
+                for _column in range(dimension)
+            )
+            for _row in range(dimension)
+        )
+        coefficients = tuple(
+            Fraction(rng.randint(-9, 9), rng.choice((1, 2, 5)))
+            for _exponent in range(degree + 1)
+        )
+        random_cases.append((entries, coefficients))
+
+    for entries, coefficients in cancellation_cases + tuple(random_cases):
+        plain_value, plain_widest = _plain_sympy_horner_trace(entries, coefficients)
+
+        metrics = _HornerEvaluationMetrics()
+        measured_value = _evaluate_polynomial(entries, coefficients, metrics=metrics)
+
+        assert measured_value == plain_value
+        assert metrics.maximum_component_digits >= plain_widest
 
 
 @st.composite

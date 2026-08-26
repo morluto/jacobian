@@ -46,7 +46,11 @@ class _HornerEvaluationMetrics:
     a cross-operation instrumentation protocol.  It records the published
     dense scalar-product proxy and the widest component of every materialized
     Horner state -- each pre-addition matrix product together with each
-    reduced accumulator -- without changing evaluation semantics.
+    reduced accumulator -- without changing evaluation semantics.  Inside a
+    measured matrix product the observer additionally records every scalar
+    multiplication term and every partial accumulation of the standard
+    row-times-column dot products, so canceling terms are observed at their
+    full product width before the following addition reduces them.
     """
 
     maximum_component_digits: int = 0
@@ -68,6 +72,48 @@ class _HornerEvaluationMetrics:
         )
         self.maximum_component_digits = max(self.maximum_component_digits, state_digits)
         self.stored_states += 1
+
+
+def _measured_matrix_product(
+    result: Any,
+    matrix: Any,
+    dimension: int,
+    metrics: _HornerEvaluationMetrics,
+) -> Any:
+    """Return ``result * matrix`` while observing inside each dot product.
+
+    SymPy reduces every dot product fully before ``result * matrix``
+    returns, so a plain product observer never sees canceling scalar-product
+    terms: with ``A = H [[1, 1], [-1, -1]]`` the square ``A**2`` is zero even
+    though each entry forms ``H**2`` and ``-H**2`` terms mid-multiplication.
+    This helper walks the same standard row-times-column accumulation in one
+    deterministic order (entries row-major, each inner index ascending), and
+    SymPy still performs every entry multiplication and addition.  The
+    returned matrix equals ``result * matrix`` exactly because reduced
+    rational arithmetic is independent of the association order.
+    """
+
+    from sympy import Matrix, S
+
+    rows: list[list[Any]] = []
+    for row_index in range(dimension):
+        row_entries: list[Any] = []
+        for column_index in range(dimension):
+            accumulator = S.Zero
+            for inner_index in range(dimension):
+                term = (
+                    result[row_index, inner_index] * matrix[inner_index, column_index]
+                )
+                metrics.record_state((term,))
+                accumulator = accumulator + term
+                metrics.record_state((accumulator,))
+            row_entries.append(accumulator)
+        rows.append(row_entries)
+    product = Matrix(rows)
+    # The assembled product is materialized before the scalar term can
+    # cancel it, so the observed bound must cover this state too.
+    metrics.record_state(product)
+    return product
 
 
 def _square_dimension(entries: RationalEntries) -> int:
@@ -144,12 +190,17 @@ def _evaluate_polynomial(
             metrics.record_state(result)
         for coefficient in reversed(coefficients[:-1]):
             scalar = Rational(coefficient.numerator, coefficient.denominator)
-            product = result * matrix
-            if metrics is not None:
+            if metrics is None:
+                product = result * matrix
+            else:
+                # Each dot product reduces before ``result * matrix`` would
+                # return, so measuring the plain product alone would miss
+                # canceling scalar-product terms.  The measured expansion
+                # records every term and partial accumulation of the same
+                # standard row-times-column order and returns the identical
+                # exact matrix.
                 metrics.scalar_product_terms += dimension**3
-                # The product is materialized before the scalar term can
-                # cancel it, so the observed bound must cover this state too.
-                metrics.record_state(product)
+                product = _measured_matrix_product(result, matrix, dimension, metrics)
             result = product + scalar * identity
             if metrics is not None:
                 metrics.record_state(result)

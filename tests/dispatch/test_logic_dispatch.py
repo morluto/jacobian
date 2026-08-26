@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from jacobian.catalog.catalog import Catalog
@@ -79,3 +81,19 @@ def test_dispatch_reports_memory_exhaustion_for_smt_solve(monkeypatch) -> None:
 
     assert result.output["outcome"] == "UNKNOWN"
     assert result.output["exhausted"] == "memory"
+
+
+def test_dispatch_types_unsat_core_initialization_failure_as_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unavailable Z3 backend must not turn an accepted request into an import error."""
+
+    monkeypatch.setitem(sys.modules, "z3", None)
+
+    result = invoke_operation(
+        "smt.unsat_core", _contradictory_bounds_core(), Catalog.open()
+    )
+
+    assert result.output["outcome"] == "UNKNOWN"
+    assert result.output["core_indices"] == []
+    assert result.output["detail"].startswith("the Z3 backend could not initialize:")

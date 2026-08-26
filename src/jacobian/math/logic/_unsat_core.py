@@ -332,7 +332,13 @@ def _parsed_request_error(
 ) -> str | None:
     """Inspect parsed terms without attaching Z3 objects to validation errors."""
 
-    import z3
+    try:
+        import z3
+    except (ImportError, OSError):
+        # Backend absence provides no information about caller-controlled
+        # source. Leave this accepted request for execution to report as its
+        # typed UNKNOWN outcome.
+        return None
 
     try:
         assertions = _parse_assertions(smtlib)
@@ -345,7 +351,7 @@ def _parsed_request_error(
                 f"{_MAX_CORE_AST_NODES} distinct AST nodes"
             )
         _require_declared_logic(assertions, logic)
-    except z3.Z3Exception:
+    except (OSError, z3.Z3Exception):
         # A deferred backend failure carries no evidence about this source;
         # execution reports it through the typed UNKNOWN outcome.
         return None
@@ -1228,7 +1234,10 @@ def _bounded_outcome(
 def _extract_source_core(
     source: SmtUnsatCoreRequest,
 ) -> tuple[Literal["SAT", "UNSAT", "UNKNOWN"], tuple[int, ...], str | None]:
-    import z3
+    try:
+        import z3
+    except (ImportError, OSError) as exc:
+        return "UNKNOWN", (), f"the Z3 backend could not initialize: {exc}"[:1_024]
 
     try:
         context = z3.Context()
@@ -1251,7 +1260,7 @@ def _extract_source_core(
             if tracker.get_id() in core_ids
         )
         return "UNSAT", core_indices, None
-    except (ValueError, z3.Z3Exception):
+    except (OSError, ValueError, z3.Z3Exception):
         return "UNKNOWN", (), "Z3 could not complete the bounded source check."
 
 
@@ -1259,7 +1268,10 @@ def _replay_source(
     source: SmtUnsatCoreRequest,
     selected_indices: tuple[int, ...] | None,
 ) -> tuple[Literal["SAT", "UNSAT", "UNKNOWN"], str | None]:
-    import z3
+    try:
+        import z3
+    except (ImportError, OSError) as exc:
+        return "UNKNOWN", f"the Z3 backend could not initialize: {exc}"[:1_024]
 
     try:
         context = z3.Context()
@@ -1272,7 +1284,7 @@ def _replay_source(
         solver = _configured_solver(source, context=context)
         solver.add(*(assertions[index] for index in selected))
         return _bounded_outcome(solver)
-    except (ValueError, z3.Z3Exception):
+    except (OSError, ValueError, z3.Z3Exception):
         return "UNKNOWN", "Z3 could not complete the bounded source replay."
 
 

@@ -31,6 +31,7 @@ _VALIDATION_ENVIRONMENT = (
     "VIRTUAL_ENV",
 )
 _BOUNDARY_LANE_TIMEOUT_SECONDS = 4_800
+_VALIDATION_OUTPUT_LIMIT_BYTES = 64 * 1024 * 1024
 
 
 def _validation_environment() -> dict[str, str]:
@@ -161,6 +162,8 @@ def _run(commands: Sequence[Sequence[str]], *, repository: Path) -> None:
                 if len(command) > 1 and command[1] in {"test-process", "test-mcp"}
                 else 30 * 60
             ),
+            stdout_limit_bytes=_VALIDATION_OUTPUT_LIMIT_BYTES,
+            stderr_limit_bytes=_VALIDATION_OUTPUT_LIMIT_BYTES,
             environment=_validation_environment(),
         )
         if result.stdout:

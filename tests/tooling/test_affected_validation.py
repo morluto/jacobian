@@ -180,9 +180,12 @@ def test_selected_commands_use_the_bounded_operator_runner(
         *,
         cwd: Path,
         timeout_seconds: float,
+        stdout_limit_bytes: int,
+        stderr_limit_bytes: int,
         environment: dict[str, str],
     ) -> ToolCommandResult:
         assert environment["PATH"]
+        assert stdout_limit_bytes == stderr_limit_bytes == 64 * 1024 * 1024
         observed.append((command, arguments, cwd, timeout_seconds))
         return ToolCommandResult(
             status=ToolCommandStatus.EXITED,

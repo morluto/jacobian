@@ -190,7 +190,7 @@ known_first_party = ["jacobian"]
 # tomli-w dependency; it is intentionally absent from the runtime wheel.
 # numpy arrives transitively with the exactly pinned scipy (HiGHS) wheel;
 # kernels import it directly for MILP matrix construction.
-per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["python-flint"], "DEP003" = ["httpx2", "numpy"], "DEP004" = ["jsonschema", "tomli_w"] }
+per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["python-flint"], "DEP003" = ["httpx2", "numpy"], "DEP004" = ["jsonschema", "pytest", "tomli_w"] }
 
 [tool.importlinter]
 root_package = "jacobian"

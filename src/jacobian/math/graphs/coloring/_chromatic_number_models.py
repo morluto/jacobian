@@ -605,6 +605,7 @@ class ChromaticNumberCertificateCheckResult(StrictModel):
 
 __all__ = [
     "MAX_CHROMATIC_CERTIFICATE_DERIVED_RATIONAL_DIGITS",
+    "MAX_CHROMATIC_CERTIFICATE_EDGES",
     "MAX_CHROMATIC_CERTIFICATE_RATIONAL_DIGITS",
     "MAX_CHROMATIC_CERTIFICATE_VERTICES",
     "ChromaticNumberCertificateCheckRequest",

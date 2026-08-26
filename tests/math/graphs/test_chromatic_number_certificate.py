@@ -12,6 +12,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.coloring._chromatic_number_models import (
     MAX_CHROMATIC_CERTIFICATE_DERIVED_RATIONAL_DIGITS,
+    MAX_CHROMATIC_CERTIFICATE_EDGES,
     MAX_CHROMATIC_CERTIFICATE_RATIONAL_DIGITS,
     MAX_CHROMATIC_CERTIFICATE_VERTICES,
     ChromaticNumberCertificateCheckRequest,
@@ -376,7 +377,7 @@ def test_vertex_and_subset_enumeration_boundaries() -> None:
     order = MAX_CHROMATIC_CERTIFICATE_VERTICES
     vertices = tuple(f"v{index:02d}" for index in range(order))
     graph = _graph(vertices, tuple(combinations(vertices, 2)))
-    assert len(graph.edges) == 190
+    assert len(graph.edges) == MAX_CHROMATIC_CERTIFICATE_EDGES
     result = _check(
         graph,
         order,
@@ -389,13 +390,17 @@ def test_vertex_and_subset_enumeration_boundaries() -> None:
         tuple(f"v{index:02d}" for index in range(order + 1)),
         (),
     )
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as error:
         ChromaticNumberCertificateCheckRequest(
             graph=oversized_graph,
             claimed_chromatic_number=1,
             coloring=(0,) * order,
             weights=(_rational(1, order),) * order,
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "graph.chromatic_number_certificate_checking_supports_at_most"
+    )
 
 
 def test_rational_digit_and_total_work_boundaries() -> None:
@@ -436,7 +441,7 @@ def test_rational_digit_and_total_work_boundaries() -> None:
     assert accepted_work.verdict == "ACCEPTED"
 
     rejected_order = MAX_CHROMATIC_CERTIFICATE_VERTICES
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as error:
         ChromaticNumberCertificateCheckRequest(
             graph=_graph(tuple(f"r{index:02d}" for index in range(rejected_order)), ()),
             claimed_chromatic_number=1,
@@ -446,6 +451,10 @@ def test_rational_digit_and_total_work_boundaries() -> None:
                 for index in range(rejected_order)
             ),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "graph.chromatic_number_certificate_exact_replay_work_exceeds"
+    )
 
 
 def test_retained_source_output_headroom_boundary() -> None:
@@ -475,15 +484,28 @@ def test_schema_and_tool_expose_bounds_axis_and_example() -> None:
 
     schema = ChromaticNumberCertificateCheckRequest.model_json_schema()
     graph_schema = schema["properties"]["graph"]
-    assert graph_schema["properties"]["vertices"]["maxItems"] == 20
-    assert graph_schema["properties"]["edges"]["maxItems"] == 190
-    assert schema["properties"]["coloring"]["maxItems"] == 20
-    assert schema["properties"]["weights"]["maxItems"] == 20
+    assert (
+        graph_schema["properties"]["vertices"]["maxItems"]
+        == MAX_CHROMATIC_CERTIFICATE_VERTICES
+    )
+    assert (
+        graph_schema["properties"]["edges"]["maxItems"]
+        == MAX_CHROMATIC_CERTIFICATE_EDGES
+    )
+    assert (
+        schema["properties"]["coloring"]["maxItems"]
+        == MAX_CHROMATIC_CERTIFICATE_VERTICES
+    )
+    assert (
+        schema["properties"]["weights"]["maxItems"]
+        == MAX_CHROMATIC_CERTIFICATE_VERTICES
+    )
     assert "graph.vertices order" in schema["properties"]["coloring"]["description"]
     assert "independent set" in schema["properties"]["weights"]["description"]
     result_schema = ChromaticNumberCertificateCheckResult.model_json_schema()
     assert (
-        result_schema["properties"]["graph"]["properties"]["vertices"]["maxItems"] == 20
+        result_schema["properties"]["graph"]["properties"]["vertices"]["maxItems"]
+        == MAX_CHROMATIC_CERTIFICATE_VERTICES
     )
     assert (
         "does not by itself refute"

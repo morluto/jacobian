@@ -43,11 +43,11 @@ class RSKTableauPair(StrictModel):
     """
 
     alphabet: tuple[Symbol, ...] = Field(
-        min_length=1,
         max_length=MAX_ALPHABET_SIZE,
         description=(
             "The exact ordered source alphabet; insertion-tableau entry i "
-            "denotes alphabet[i - 1]."
+            "denotes alphabet[i - 1]. The empty alphabet is canonical exactly "
+            "when both tableaux and their common shape are empty."
         ),
         json_schema_extra={"uniqueItems": True},
     )

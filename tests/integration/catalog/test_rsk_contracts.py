@@ -32,3 +32,9 @@ def test_word_rsk_descriptor_publishes_version_two() -> None:
         descriptor.input_schema["properties"]["convention"]["const"]
         == "ROW_INSERTION_RSK_V1"
     )
+    assert (
+        "minItems"
+        not in (
+            descriptor.input_schema["$defs"]["FiniteWord"]["properties"]["alphabet"]
+        )
+    )

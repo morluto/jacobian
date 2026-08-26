@@ -572,6 +572,17 @@ def test_value_models_reject_ambiguous_or_unbounded_inputs() -> None:
         )
 
 
+def test_empty_alphabet_carries_exactly_the_empty_word_through_json() -> None:
+    """The empty word has a canonical empty ambient alphabet."""
+    word = FiniteWord.model_validate_json(
+        '{"alphabet": [], "letters": []}', strict=True
+    )
+
+    assert word.alphabet == ()
+    assert word.letters == ()
+    assert FiniteWord.model_validate(word.model_dump(mode="json")) == word
+
+
 @pytest.mark.parametrize("symbol", ["\ud800", "\udfff", "a\ud800b"])
 def test_symbols_admit_only_unicode_scalar_strings(symbol: str) -> None:
     with pytest.raises(ValidationError):

@@ -40,7 +40,14 @@ Symbol = Annotated[
 
 
 class FiniteWord(StrictModel):
-    alphabet: tuple[Symbol, ...] = Field(min_length=1, max_length=MAX_ALPHABET_SIZE)
+    """A bounded word over an explicitly ordered finite alphabet.
+
+    The empty alphabet carries exactly the empty word.  Keeping that
+    degenerate value representable lets canonical word values compose through
+    operations such as RSK without inventing an ambient symbol.
+    """
+
+    alphabet: tuple[Symbol, ...] = Field(max_length=MAX_ALPHABET_SIZE)
     letters: tuple[str, ...] = Field(max_length=MAX_WORD_LENGTH)
 
     @model_validator(mode="after")

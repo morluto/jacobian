@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,77 @@ from jacobian.mcp.server import create_server
 
 MATH_TOOL_NAMES = {"math.find", "math.run"}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
+
+
+def test_mcp_runs_independent_sync_operations_concurrently() -> None:
+    """One slow kernel cannot block an independent MCP request."""
+
+    from jacobian._models import StrictModel
+    from jacobian.catalog.builtins import BUILTIN_TOOLS
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.catalog.models import MathTool
+    from jacobian.mcp.runtime import AppState
+    from jacobian.mcp.server import _build_server
+
+    class Request(StrictModel):
+        value: int
+
+    class Result(StrictModel):
+        value: int
+        simultaneous_calls: int
+
+    active_calls = 0
+    active_lock = threading.Lock()
+    second_call_entered = threading.Event()
+
+    def concurrent_kernel(request: Request) -> Result:
+        nonlocal active_calls
+        with active_lock:
+            active_calls += 1
+            simultaneous_calls = active_calls
+            if active_calls == 2:
+                second_call_entered.set()
+        try:
+            second_call_entered.wait(timeout=0.25)
+            return Result(value=request.value, simultaneous_calls=simultaneous_calls)
+        finally:
+            with active_lock:
+                active_calls -= 1
+
+    tool = MathTool(
+        operation_id="test.concurrent.kernel",
+        title="Concurrent execution sentinel",
+        description="Reports simultaneous kernel calls.",
+        request_type=Request,
+        result_type=Result,
+        run=concurrent_kernel,
+    )
+    server = _build_server(
+        state=AppState(operation_catalog=Catalog((*BUILTIN_TOOLS, tool)))
+    )
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(server, raise_exceptions=True) as client:
+            results = await asyncio.gather(
+                *(
+                    client.call_tool(
+                        "math.run",
+                        {
+                            "operation_id": "test.concurrent.kernel",
+                            "payload": {"value": value},
+                        },
+                    )
+                    for value in range(2)
+                )
+            )
+        assert any(
+            result.structured_content["output"]["simultaneous_calls"] == 2
+            for result in results
+        )
+
+    asyncio.run(scenario())
 
 
 def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
@@ -114,7 +186,6 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                         "location": ["private"],
                         "code": "extra_forbidden",
                         "message": "Extra inputs are not permitted",
-                        "input": "reject-this-private-value",
                     }
                 ],
                 "hint": (
@@ -138,7 +209,6 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                     "location": [],
                     "code": "canonicalization_error",
                     "message": "JSON floating-point numbers are not allowed",
-                    "input": None,
                 }
             ]
 

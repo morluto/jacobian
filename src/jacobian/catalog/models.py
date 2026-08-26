@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Self
 
@@ -21,6 +21,35 @@ OperationId = Annotated[
         strict=True,
     ),
 ]
+
+
+class OperationDomainValidationError(ValueError):
+    """One owner-declared semantic rejection discovered during execution.
+
+    Request models establish structural and bounded domains before a kernel is
+    called. A small number of mathematical preconditions, such as matrix
+    nonsingularity, are established by the bounded exact kernel itself. An
+    owner raises this type only for such documented, expected outcomes; MCP
+    projects it through the same typed invalid-parameter channel as request
+    validation. It is deliberately not a catch-all for backend exceptions.
+    """
+
+    def __init__(
+        self,
+        *,
+        location: tuple[str | int, ...],
+        code: str,
+        message: str,
+    ) -> None:
+        self._errors: tuple[Mapping[str, Any], ...] = (
+            {"loc": location, "type": code, "msg": message},
+        )
+        super().__init__(message)
+
+    def errors(self) -> Sequence[Mapping[str, Any]]:
+        """Return the stable owner diagnostic for the MCP projection."""
+
+        return self._errors
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -250,6 +279,7 @@ __all__ = [
     "OperationDiscoveryMatch",
     "OperationDiscoveryRequest",
     "OperationDiscoveryResult",
+    "OperationDomainValidationError",
     "OperationExample",
     "OperationId",
     "OperationResult",

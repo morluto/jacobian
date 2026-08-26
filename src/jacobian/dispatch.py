@@ -12,7 +12,11 @@ from pydantic import BaseModel, ValidationError
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalizationError, encode_strict_json
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationId, OperationResult
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationId,
+    OperationResult,
+)
 
 
 class OperationRequestValidationError(ValueError):
@@ -114,6 +118,7 @@ def _invoke_prepared_operation(
 
 
 __all__ = [
+    "OperationDomainValidationError",
     "OperationRequestValidationError",
     "invoke_operation",
     "parse_operation_input",

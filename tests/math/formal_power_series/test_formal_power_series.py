@@ -194,21 +194,21 @@ def test_product_can_exceed_input_digit_bound() -> None:
 
 def test_native_exports_admit_inputs_before_kernel_work() -> None:
     import pytest
-    from pydantic import ValidationError
+    from pydantic_core import PydanticCustomError
 
     wide = _ascending(513)
-    with pytest.raises(ValidationError) as error:
+    with pytest.raises(PydanticCustomError) as error:
         multiply(wide, wide)
-    assert error.value.errors()[0]["type"] == "less_than_equal"
-    with pytest.raises(ValidationError) as error:
+    assert error.value.type == "formal_power_series.input_order"
+    with pytest.raises(PydanticCustomError) as error:
         power(wide, 2)
-    assert error.value.errors()[0]["type"] == "less_than_equal"
-    with pytest.raises(ValidationError) as error:
+    assert error.value.type == "formal_power_series.input_order"
+    with pytest.raises(PydanticCustomError) as error:
         compose(wide, wide)
-    assert error.value.errors()[0]["type"] == "less_than_equal"
-    with pytest.raises(ValidationError) as error:
+    assert error.value.type == "formal_power_series.input_order"
+    with pytest.raises(PydanticCustomError) as error:
         to_polynomial(wide)
-    assert error.value.errors()[0]["type"] == "less_than_equal"
+    assert error.value.type == "formal_power_series.input_order"
 
     tall = "1" + "0" * MAX_RATIONAL_DIGITS
     oversized = TruncatedSeries(
@@ -216,9 +216,152 @@ def test_native_exports_admit_inputs_before_kernel_work() -> None:
         truncation_order=1,
         coefficients=(_coeff(tall),),
     )
-    with pytest.raises(ValidationError) as error:
+    with pytest.raises(ValueError) as error:
         multiply(oversized, oversized)
-    assert error.value.errors()[0]["type"] == "value_error"
+    assert str(error.value) == "input coefficient exceeds the 256-digit bound"
+
+
+def test_native_and_wire_operations_return_the_same_canonical_values() -> None:
+    """Native canonical calls and catalog wire adapters share each kernel."""
+    from jacobian.math.formal_power_series import (
+        add,
+        divide,
+        from_polynomial,
+        integral_zero_constant,
+        inverse,
+        reversion,
+        scalar_multiply,
+        subtract,
+    )
+    from jacobian.math.formal_power_series._tools import TOOLS
+
+    def run_wire(operation_id: str, payload: dict[str, object]) -> object:
+        tool = next(tool for tool in TOOLS if tool.operation_id == operation_id)
+        return tool.run(tool.request_type.model_validate(payload))
+
+    series = TruncatedSeries(
+        variable="x",
+        truncation_order=3,
+        coefficients=(_coeff("1"), _coeff("2"), _coeff("0")),
+    )
+    inner = TruncatedSeries(
+        variable="x",
+        truncation_order=3,
+        coefficients=(_coeff("0"), _coeff("1"), _coeff("0")),
+    )
+    reversible = TruncatedSeries(
+        variable="x",
+        truncation_order=3,
+        coefficients=(_coeff("0"), _coeff("1"), _coeff("1")),
+    )
+    from jacobian._exact import CanonicalRational
+
+    scalar = CanonicalRational(num="3", den="2")
+    cases = (
+        (
+            "formal_series.rational.add.compute",
+            {"left": series, "right": series},
+            add(series, series),
+        ),
+        (
+            "formal_series.rational.subtract.compute",
+            {"left": series, "right": series},
+            subtract(series, series),
+        ),
+        (
+            "formal_series.rational.multiply.compute",
+            {"left": series, "right": series},
+            multiply(series, series),
+        ),
+        (
+            "formal_series.rational.scalar_multiply.compute",
+            {"series": series, "scalar": scalar},
+            scalar_multiply(series, scalar),
+        ),
+        (
+            "formal_series.rational.power.compute",
+            {"series": series, "exponent": 2},
+            power(series, 2),
+        ),
+        (
+            "formal_series.rational.inverse.compute",
+            series.model_dump(),
+            inverse(series),
+        ),
+        (
+            "formal_series.rational.divide.compute",
+            {"left": series, "right": series},
+            divide(series, series),
+        ),
+        (
+            "formal_series.rational.compose.compute",
+            {"outer": series, "inner": inner},
+            compose(series, inner),
+        ),
+        (
+            "formal_series.rational.reversion.compute",
+            reversible.model_dump(),
+            reversion(reversible),
+        ),
+        (
+            "formal_series.rational.derivative.compute",
+            series.model_dump(),
+            derivative(series),
+        ),
+        (
+            "formal_series.rational.integral_zero_constant.compute",
+            {"series": series, "output_order": 3},
+            integral_zero_constant(series, 3),
+        ),
+        (
+            "formal_series.rational.truncate.compute",
+            {"series": series, "target_order": 2},
+            truncate(series, 2),
+        ),
+        (
+            "formal_series.rational.identity.check",
+            {"left": series, "right": series},
+            identity_check(series, series),
+        ),
+        (
+            "formal_series.rational.from_polynomial.compute",
+            series.model_dump(),
+            from_polynomial(
+                series.variable, series.coefficients, series.truncation_order
+            ),
+        ),
+        (
+            "formal_series.rational.to_polynomial.compute",
+            series.model_dump(),
+            to_polynomial(series),
+        ),
+    )
+    for operation_id, payload, native in cases:
+        normalized = {
+            key: value.model_dump() if isinstance(value, TruncatedSeries) else value
+            for key, value in payload.items()
+        }
+        assert native.model_dump() == run_wire(operation_id, normalized).model_dump()
+
+
+def test_native_and_wire_boundaries_reject_the_same_oversized_series() -> None:
+    import pytest
+    from pydantic import ValidationError
+    from pydantic_core import PydanticCustomError
+
+    from jacobian.math.formal_power_series._tools import TOOLS
+
+    wide = _ascending(MAX_TRUNCATION_ORDER + 1)
+    with pytest.raises(PydanticCustomError) as native:
+        power(wide, 2)
+    tool = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "formal_series.rational.power.compute"
+    )
+    with pytest.raises(ValidationError):
+        tool.request_type.model_validate({"series": wide.model_dump(), "exponent": 2})
+    assert native.value.type == "formal_power_series.input_order"
 
 
 def test_native_exports_still_admit_the_wire_boundary_order() -> None:

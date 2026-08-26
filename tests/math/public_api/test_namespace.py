@@ -79,6 +79,17 @@ def test_no_private_names_in_any_public_all() -> None:
         )
 
 
+def test_public_math_namespaces_expose_no_wire_models() -> None:
+    """Native APIs expose mathematical values and kernels, not wire requests."""
+    from jacobian import math
+
+    for domain in math.__all__:
+        module = importlib.import_module(f"jacobian.math.{domain}")
+        assert all(
+            not name.endswith(("Request", "Input")) for name in module.__all__
+        ), f"{domain} exports a wire model"
+
+
 def test_no_duplicate_root_exports() -> None:
     """Root domain exports must be unique."""
     from jacobian import math

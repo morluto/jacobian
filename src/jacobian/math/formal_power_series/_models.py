@@ -249,7 +249,7 @@ def _composition_coefficients(
     return tuple(result)
 
 
-def _inverse_height(series: InputTruncatedSeries) -> RationalHeight:
+def _inverse_height(series: TruncatedSeries) -> RationalHeight:
     source = _max_height(series.coefficients)
     reciprocal = RationalHeight(1, 1).quotient(_height(series.coefficients[0]))
     _require_height(reciprocal, "inverse")
@@ -363,6 +363,232 @@ def as_input_series(series: TruncatedSeries) -> InputTruncatedSeries:
         truncation_order=series.truncation_order,
         coefficients=series.coefficients,
     )
+
+
+# Native callers already hold the canonical carrier.  Keep their admission
+# separate from the JSON request models: rebuilding an InputTruncatedSeries or
+# an operation Request here would turn the native API into a wire adapter and
+# would make its public exceptions and coercions depend on Pydantic.
+def _require_native_scalar(value: int, label: str) -> None:
+    if type(value) is not int:  # bool is not a semantic integer scalar here.
+        raise _validation_error(f"{label}_type", f"{label} must be an integer scalar")
+
+
+def _require_native_input_series(series: TruncatedSeries) -> None:
+    if series.truncation_order > MAX_TRUNCATION_ORDER:
+        raise _validation_error(
+            "input_order", f"truncation order exceeds {MAX_TRUNCATION_ORDER}"
+        )
+    for value in series.coefficients:
+        require_bounded_rational(
+            value, max_digits=MAX_RATIONAL_DIGITS, label="input coefficient"
+        )
+
+
+def _require_native_pair(left: TruncatedSeries, right: TruncatedSeries) -> None:
+    _require_native_input_series(left)
+    _require_native_input_series(right)
+    if left.variable != right.variable:
+        raise _validation_error(
+            "operand_variable_mismatch", "operands must share the same variable"
+        )
+    if left.truncation_order != right.truncation_order:
+        raise _validation_error(
+            "operand_order_mismatch", "operands must share the same truncation order"
+        )
+
+
+def admit_native_add_subtract(left: TruncatedSeries, right: TruncatedSeries) -> None:
+    _require_native_pair(left, right)
+    for left_value, right_value in zip(
+        left.coefficients, right.coefficients, strict=True
+    ):
+        _require_height(sum_heights((_height(left_value), _height(right_value))), "sum")
+
+
+def admit_native_multiply(left: TruncatedSeries, right: TruncatedSeries) -> None:
+    _require_native_pair(left, right)
+    _require_height(
+        _convolution_height(
+            _max_height(left.coefficients),
+            _max_height(right.coefficients),
+            left.truncation_order,
+        ),
+        "multiplication",
+    )
+
+
+def admit_native_scalar_multiply(
+    series: TruncatedSeries, scalar: CanonicalRational
+) -> None:
+    _require_native_input_series(series)
+    _require_height(
+        _max_height(series.coefficients).product(_height(scalar)),
+        "scalar multiplication",
+    )
+
+
+def admit_native_power(series: TruncatedSeries, exponent: int) -> None:
+    _require_native_input_series(series)
+    _require_native_scalar(exponent, "exponent")
+    if not 0 <= exponent <= MAX_POWER_EXPONENT:
+        raise _validation_error(
+            "power_exponent", f"exponent must be between 0 and {MAX_POWER_EXPONENT}"
+        )
+    order = series.truncation_order
+    result = RationalHeight(1, 1)
+    base = _max_height(series.coefficients)
+    while exponent > 0:
+        if exponent & 1:
+            result = _convolution_height(result, base, order)
+            _require_height(result, "power")
+        exponent >>= 1
+        if exponent:
+            base = _convolution_height(base, base, order)
+            _require_height(base, "power")
+
+
+def admit_native_inverse(series: TruncatedSeries) -> None:
+    _require_native_input_series(series)
+    if series.coefficients[0].as_fraction() == 0:
+        raise _validation_error(
+            "inverse_zero_constant", "inverse requires a nonzero constant term"
+        )
+    inverse = _inverse_height(series)
+    _require_height(
+        _convolution_height(
+            _max_height(series.coefficients), inverse, series.truncation_order
+        ),
+        "inverse residual",
+    )
+
+
+def admit_native_divide(
+    numerator: TruncatedSeries, denominator: TruncatedSeries
+) -> None:
+    _require_native_pair(numerator, denominator)
+    if denominator.coefficients[0].as_fraction() == 0:
+        raise _validation_error(
+            "denominator_zero_constant", "denominator must have a nonzero constant term"
+        )
+    inverse = _inverse_height(denominator)
+    quotient = _convolution_height(
+        _max_height(numerator.coefficients), inverse, numerator.truncation_order
+    )
+    _require_height(quotient, "division")
+    residual = _convolution_height(
+        _max_height(denominator.coefficients), quotient, numerator.truncation_order
+    )
+    _require_height(
+        sum_heights((residual, _max_height(numerator.coefficients))),
+        "division residual",
+    )
+
+
+def admit_native_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None:
+    _require_native_pair(outer, inner)
+    if inner.coefficients[0].as_fraction() != 0:
+        raise _validation_error(
+            "composition_nonzero_inner_constant",
+            "inner series must have zero constant term for composition with a finite prefix",
+        )
+    _composition_height_vector(
+        _height_vector(outer.coefficients),
+        _height_vector(inner.coefficients),
+        outer.truncation_order,
+        "composition",
+    )
+
+
+def admit_native_reversion(series: TruncatedSeries) -> None:
+    _require_native_input_series(series)
+    if series.truncation_order < 2:
+        raise _validation_error(
+            "reversion_order", "reversion requires truncation order >= 2"
+        )
+    if series.coefficients[0].as_fraction() != 0:
+        raise _validation_error(
+            "reversion_nonzero_constant", "reversion requires zero constant term"
+        )
+    if series.coefficients[1].as_fraction() == 0:
+        raise _validation_error(
+            "reversion_zero_linear_coefficient",
+            "reversion requires nonzero linear coefficient",
+        )
+    source = _height_vector(series.coefficients)
+    linear = _height(series.coefficients[1])
+    result: list[CoefficientHeight] = [None, RationalHeight(1, 1).quotient(linear)]
+    _require_height_vector(tuple(result), "reversion")
+    for degree in range(2, series.truncation_order):
+        padded = (*result, None)
+        power = padded
+        terms: list[RationalHeight] = []
+        for source_degree in range(2, degree + 1):
+            power = _convolve_height_vectors(power, padded, degree + 1, "reversion")
+            source_height = source[source_degree]
+            power_height = power[degree]
+            if source_height is not None and power_height is not None:
+                terms.append(source_height.product(power_height))
+        coefficient = sum_heights(terms).quotient(linear)
+        _require_height(coefficient, "reversion")
+        result.append(coefficient)
+    result_vector = tuple(result)
+    _composition_height_vector(
+        source, result_vector, series.truncation_order, "reversion residual"
+    )
+    _composition_height_vector(
+        result_vector, source, series.truncation_order, "reversion residual"
+    )
+
+
+def admit_native_integral(series: TruncatedSeries, output_order: int) -> None:
+    _require_native_input_series(series)
+    _require_native_scalar(output_order, "output_order")
+    if not 1 <= output_order <= MAX_TRUNCATION_ORDER:
+        raise _validation_error(
+            "integral_output_order",
+            f"output_order must be between 1 and {MAX_TRUNCATION_ORDER}",
+        )
+    if output_order > series.truncation_order + 1:
+        raise _validation_error(
+            "integral_output_order_exceeds_source",
+            "output_order must not exceed source_order + 1",
+        )
+    integer = RationalHeight(len(str(max(1, output_order - 1))), 1)
+    _require_height(_max_height(series.coefficients).quotient(integer), "integration")
+
+
+def admit_native_truncate(series: TruncatedSeries, target_order: int) -> None:
+    _require_native_scalar(target_order, "target_order")
+    if series.truncation_order > MAX_TRUNCATE_SOURCE_ORDER:
+        raise _validation_error(
+            "truncate_source_order",
+            f"source truncation order exceeds {MAX_TRUNCATE_SOURCE_ORDER}",
+        )
+    if target_order > series.truncation_order:
+        raise _validation_error(
+            "truncate_target_exceeds_source",
+            "target_order must not exceed source truncation order",
+        )
+    if not 1 <= target_order <= MAX_TRUNCATION_ORDER:
+        raise _validation_error(
+            "truncate_target_exceeds_public_bound",
+            "target_order exceeds the public bound",
+        )
+
+
+def admit_native_identity_check(left: TruncatedSeries, right: TruncatedSeries) -> None:
+    _require_native_pair(left, right)
+    for left_value, right_value in zip(
+        left.coefficients, right.coefficients, strict=True
+    ):
+        _require_height(
+            sum_heights((_height(left_value), _height(right_value))), "difference"
+        )
+
+
+def admit_native_from_polynomial(series: TruncatedSeries) -> None:
+    _require_native_input_series(series)
 
 
 class TruncateSourceSeries(TruncatedSeries):

@@ -175,23 +175,29 @@ class LagrangeInterpolationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_matching_lengths(self) -> Self:
-        if len(self.values) != len(self.nodes.nodes):
-            raise _validation_error(
-                "interpolation_length_mismatch",
-                "values must have the same length as nodes",
-            )
-        for value in self.values:
-            try:
-                require_bounded_rational(
-                    value,
-                    max_digits=MAX_INTERPOLATION_VALUE_DIGITS,
-                    label="interpolation value",
-                )
-            except ValueError as exc:
-                raise _validation_error(
-                    "interpolation_value_too_large", str(exc)
-                ) from exc
+        admit_interpolation_values(self.nodes, self.values)
         return self
+
+
+def admit_interpolation_values(
+    nodes: RationalNodeSet, values: tuple[CanonicalRational, ...]
+) -> None:
+    """Apply the shared canonical interpolation envelope before its kernel."""
+
+    if len(values) != len(nodes.nodes):
+        raise _validation_error(
+            "interpolation_length_mismatch",
+            "values must have the same length as nodes",
+        )
+    for value in values:
+        try:
+            require_bounded_rational(
+                value,
+                max_digits=MAX_INTERPOLATION_VALUE_DIGITS,
+                label="interpolation value",
+            )
+        except ValueError as exc:
+            raise _validation_error("interpolation_value_too_large", str(exc)) from exc
 
 
 class LagrangeInterpolationResult(StrictModel):

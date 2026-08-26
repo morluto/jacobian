@@ -68,6 +68,13 @@ def test_rational_linear_operations_return_mathematical_outcomes() -> None:
     assert contradiction.status == "INCONSISTENT"
     assert contradiction.left_witness is not None
     assert contradiction.rhs_pairing is not None
+    witness = tuple(value.as_fraction() for value in contradiction.left_witness)
+    assert witness == (Fraction(-1), Fraction(1))
+    assert sum(coordinate * Fraction(1) for coordinate in witness) == 0
+    assert sum(
+        coordinate * value
+        for coordinate, value in zip(witness, (Fraction(1), Fraction(2)), strict=True)
+    ) == Fraction(1)
     assert contradiction.rhs_pairing.model_dump(mode="json") == q(1)
 
 

@@ -14,11 +14,13 @@ from jacobian.math.algebraic_number_arithmetic._models import (
 from jacobian.math.algebraic_number_arithmetic._operations import (
     compute_algebraic_multiply,
 )
-from jacobian.math.arithmetic._real_quadratic import REAL_QUADRATIC_OPERATIONS
+from jacobian.math.arithmetic._real_quadratic import (
+    REAL_QUADRATIC_OPERATIONS,
+    RealQuadraticEmbeddingsRequest,
+)
 from jacobian.math.real_quadratic import (
     _MAX_EMBEDDING_PROFILE_RESULT_DIGITS,
     RealQuadraticEmbeddingProfile,
-    RealQuadraticEmbeddingsRequest,
     RealQuadraticValue,
     real_quadratic_embeddings,
 )
@@ -196,3 +198,6 @@ def test_native_embedding_profile_api_is_explicit() -> None:
 
     assert "real_quadratic_embeddings" in real_quadratic.__all__
     assert real_quadratic.real_quadratic_embeddings is real_quadratic_embeddings
+    assert all(
+        not name.endswith(("Request", "Input")) for name in real_quadratic.__all__
+    )

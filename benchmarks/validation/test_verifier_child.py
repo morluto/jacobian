@@ -6,6 +6,8 @@ import pytest
 from benchmarks.validation._verifier_child import (
     VerifierExecutionError,
     _MappedPathFactory,
+    _read_verifier_output,
+    _write_failure_output,
     run_verifier_in_child,
 )
 
@@ -91,17 +93,52 @@ def test_symlinked_evidence_is_rejected_before_verifier_execution(
     assert not marker.exists()
 
 
-def test_reward_must_be_a_regular_scalar_record(tmp_path: Path) -> None:
-    task, app, logs = _workspace(tmp_path)
-    (task / "tests" / "verifier.py").write_text(
-        "from pathlib import Path\n"
-        "Path('/logs/verifier/reward.json').write_text('[]')\n"
-        "Path('/logs/verifier/reward-details.json').write_text('{}')\n",
-        encoding="utf-8",
-    )
+def _write_output_records(logs: Path, reward: str, details: str | None) -> None:
+    (logs / "reward.json").write_text(reward, encoding="utf-8")
+    if details is not None:
+        (logs / "reward-details.json").write_text(details, encoding="utf-8")
+
+
+def test_verifier_output_schema_normalizes_a_valid_reward_record(
+    tmp_path: Path,
+) -> None:
+    _task, _app, logs = _workspace(tmp_path)
+    _write_output_records(logs, '{"reward": 1}', '{"correctness": 1.0}')
+
+    output = _read_verifier_output(logs)
+
+    assert output.reward == 1.0
+    assert output.details == {"correctness": 1.0}
+
+
+def test_verifier_output_schema_rejects_a_nonobject_reward_without_a_child(
+    tmp_path: Path,
+) -> None:
+    _task, _app, logs = _workspace(tmp_path)
+    _write_output_records(logs, "[]", "{}")
 
     with pytest.raises(VerifierExecutionError, match="JSON object"):
+        _read_verifier_output(logs)
+
+
+def test_child_execution_failure_remains_a_process_boundary(tmp_path: Path) -> None:
+    task, app, logs = _workspace(tmp_path)
+    (task / "tests" / "verifier.py").write_text(
+        "raise RuntimeError('intentional verifier failure')\n", encoding="utf-8"
+    )
+
+    with pytest.raises(VerifierExecutionError, match="verifier child"):
         run_verifier_in_child(task=task, app=app, logs=logs)
+
+    assert _read_verifier_output(logs).reward == 0.0
+
+
+def test_failure_output_is_a_directly_checked_protocol_record(tmp_path: Path) -> None:
+    _task, _app, logs = _workspace(tmp_path)
+
+    _write_failure_output(logs)
+
+    assert _read_verifier_output(logs).reward == 0.0
 
 
 @pytest.mark.parametrize(
@@ -115,19 +152,11 @@ def test_reward_must_be_a_regular_scalar_record(tmp_path: Path) -> None:
         ('{"reward": 1.0}', '{"reward": 1.0}', "must not contain reward"),
     ],
 )
-def test_verifier_output_rejects_noncanonical_records(
+def test_verifier_output_schema_rejects_noncanonical_records_without_a_child(
     tmp_path: Path, reward: str, details: str | None, message: str
 ) -> None:
-    task, app, logs = _workspace(tmp_path)
-    writer = [
-        "from pathlib import Path",
-        f"Path('/logs/verifier/reward.json').write_text({reward!r})",
-    ]
-    if details is not None:
-        writer.append(
-            f"Path('/logs/verifier/reward-details.json').write_text({details!r})"
-        )
-    (task / "tests" / "verifier.py").write_text("\n".join(writer), encoding="utf-8")
+    _task, _app, logs = _workspace(tmp_path)
+    _write_output_records(logs, reward, details)
 
     with pytest.raises(VerifierExecutionError, match=message):
-        run_verifier_in_child(task=task, app=app, logs=logs)
+        _read_verifier_output(logs)

@@ -92,32 +92,29 @@ class RealQuadraticValue(StrictModel):
         return self
 
 
-class RealQuadraticOrderRequest(StrictModel):
-    left: RealQuadraticValue
-    right: RealQuadraticValue
+def _require_order_admission(
+    left: RealQuadraticValue, right: RealQuadraticValue
+) -> None:
+    """Validate the owner-local envelope of an exact order comparison."""
 
-    @model_validator(mode="after")
-    def require_shared_field(self) -> Self:
-        if self.left.radicand != self.right.radicand:
-            raise _validation_error(
-                "radicand_mismatch", "comparison requires one shared radicand"
-            )
-        difference_components = (
-            self.left.rational_part.as_fraction()
-            - self.right.rational_part.as_fraction(),
-            self.left.radical_coefficient.as_fraction()
-            - self.right.radical_coefficient.as_fraction(),
+    if left.radicand != right.radicand:
+        raise _validation_error(
+            "radicand_mismatch", "comparison requires one shared radicand"
         )
-        if any(
-            len(format_canonical_integer(component.numerator).lstrip("-")) > _MAX_DIGITS
-            or len(format_canonical_integer(component.denominator)) > _MAX_DIGITS
-            for component in difference_components
-        ):
-            raise _validation_error(
-                "difference_bound_exceeded",
-                "exact quadratic difference exceeds the 256-digit result bound",
-            )
-        return self
+    difference_components = (
+        left.rational_part.as_fraction() - right.rational_part.as_fraction(),
+        left.radical_coefficient.as_fraction()
+        - right.radical_coefficient.as_fraction(),
+    )
+    if any(
+        len(format_canonical_integer(component.numerator).lstrip("-")) > _MAX_DIGITS
+        or len(format_canonical_integer(component.denominator)) > _MAX_DIGITS
+        for component in difference_components
+    ):
+        raise _validation_error(
+            "difference_bound_exceeded",
+            "exact quadratic difference exceeds the 256-digit result bound",
+        )
 
 
 def _embedding_scalars(
@@ -132,29 +129,6 @@ def _embedding_scalars(
         rational_part * rational_part
         - element.radicand * radical_coefficient * radical_coefficient,
     )
-
-
-class RealQuadraticEmbeddingsRequest(StrictModel):
-    """One bounded element whose two real embeddings are requested."""
-
-    element: RealQuadraticValue = Field(
-        description=(
-            "The exact element a + b*sqrt(d) in a real quadratic field. "
-            "Its square-free radicand selects the field and its rational "
-            "components are bounded to 256 decimal digits."
-        ),
-    )
-
-    @model_validator(mode="after")
-    def require_profile_within_result_bound(self) -> Self:
-        trace, norm = _embedding_scalars(self.element)
-        for label, value in (("trace", trace), ("norm", norm)):
-            _require_bounded_rational(
-                CanonicalRational.from_fraction(value),
-                max_digits=_MAX_EMBEDDING_PROFILE_RESULT_DIGITS,
-                label=f"real-quadratic embedding {label}",
-            )
-        return self
 
 
 class RealQuadraticEmbeddingImage(StrictModel):
@@ -293,17 +267,15 @@ class RealQuadraticOrderValue(StrictModel):
 
 
 def real_quadratic_order(
-    request: RealQuadraticOrderRequest,
+    left: RealQuadraticValue,
+    right: RealQuadraticValue,
 ) -> RealQuadraticOrderValue:
-    a = (
-        request.left.rational_part.as_fraction()
-        - request.right.rational_part.as_fraction()
-    )
-    b = (
-        request.left.radical_coefficient.as_fraction()
-        - request.right.radical_coefficient.as_fraction()
-    )
-    d = request.left.radicand
+    """Compare two canonical values from the same real quadratic field."""
+
+    _require_order_admission(left, right)
+    a = left.rational_part.as_fraction() - right.rational_part.as_fraction()
+    b = left.radical_coefficient.as_fraction() - right.radical_coefficient.as_fraction()
+    d = left.radicand
     sign = _sign(a, b, d)
     basis: RealQuadraticSignBasis = (
         "RATIONAL_ONLY"
@@ -317,8 +289,8 @@ def real_quadratic_order(
     rational_square = a * a
     radical_square = b * b * d
     return RealQuadraticOrderValue(
-        left=request.left,
-        right=request.right,
+        left=left,
+        right=right,
         difference=RealQuadraticValue(
             rational_part=CanonicalRational.from_fraction(a),
             radical_coefficient=CanonicalRational.from_fraction(b),
@@ -367,8 +339,6 @@ __all__ = [
     "RealQuadraticEmbeddingConvention",
     "RealQuadraticEmbeddingImage",
     "RealQuadraticEmbeddingProfile",
-    "RealQuadraticEmbeddingsRequest",
-    "RealQuadraticOrderRequest",
     "RealQuadraticOrderValue",
     "RealQuadraticSignCertificate",
     "RealQuadraticValue",

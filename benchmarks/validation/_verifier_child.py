@@ -192,7 +192,7 @@ def _execute_child(app: Path, tests: Path, logs: Path) -> None:
     importlib.import_module("referencing")
     original_path = pathlib.Path
     try:
-        pathlib.Path = mapper  # type: ignore[assignment]
+        pathlib.Path = mapper  # type: ignore[misc,assignment]
         sys.path.insert(0, str(tests_root))
         support_module = type(sys)("verifier_support")
         support_module.__file__ = "/tests/verifier_support.py"
@@ -211,7 +211,7 @@ def _execute_child(app: Path, tests: Path, logs: Path) -> None:
     finally:
         sys.path.remove(str(tests_root))
         sys.modules.pop("verifier_support", None)
-        pathlib.Path = original_path
+        pathlib.Path = original_path  # type: ignore[misc]
 
 
 def run_verifier_in_child(

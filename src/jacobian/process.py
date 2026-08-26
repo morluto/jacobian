@@ -278,8 +278,15 @@ def _monitor_bounded_process(
     Returns ``(timed_out, cancelled)``.
     """
 
-    timed_out = False
+    # Setup may consume the execution allowance before monitoring starts.  Do
+    # not accept an already-exited child as timely merely because ``poll``
+    # would skip the loop below.
+    timed_out = time.monotonic() >= deadline
     cancelled = False
+    if timed_out:
+        _kill_process_tree(process, platform_tools)
+        process.wait()
+        return timed_out, cancelled
     while process.poll() is None:
         if cancellation_event is not None and cancellation_event.is_set():
             cancelled = True

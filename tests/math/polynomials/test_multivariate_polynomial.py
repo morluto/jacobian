@@ -10,12 +10,12 @@ from typing import Any
 import pytest
 from tests.math.polynomials._support import polynomial_validation_error
 
+from jacobian.math.polynomials.multivariate._division import (
+    MultivariateDivisionRequest,
+)
+from jacobian.math.polynomials.multivariate._gcd import MultivariateGcdRequest
 from jacobian.math.polynomials.multivariate._models import (
     _MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
-    MultivariateDivisionRequest,
-    MultivariateGcdRequest,
-    MultivariateResultantRequest,
-    MultivariateResultantResult,
     MultivariateSubresultantSequenceRequest,
     MultivariateSubresultantSequenceResult,
 )
@@ -24,6 +24,10 @@ from jacobian.math.polynomials.multivariate._operations import (
     compute_multivariate_gcd,
     compute_multivariate_resultant,
     compute_multivariate_subresultant_sequence,
+)
+from jacobian.math.polynomials.multivariate._resultant import (
+    MultivariateResultantRequest,
+    MultivariateResultantResult,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 

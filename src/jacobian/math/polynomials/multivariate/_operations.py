@@ -10,33 +10,38 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials.multivariate import _factor_backend
+from jacobian.math.polynomials.multivariate._division import (
+    MultivariateDivisionRequest,
+    MultivariateDivisionResult,
+)
 from jacobian.math.polynomials.multivariate._factor_backend import (
     FactorBackendExhaustedError,
     FactorBackendFailureError,
     FactorBackendInterruptedError,
+)
+from jacobian.math.polynomials.multivariate._gcd import (
+    MultivariateGcdRequest,
+    MultivariateGcdResult,
 )
 from jacobian.math.polynomials.multivariate._models import (
     _MAX_FACTOR_OUTPUT_TERMS as _MAX_OUTPUT_TERMS,
 )
 from jacobian.math.polynomials.multivariate._models import (
     _MAX_SUBRESULTANT_SEQUENCE_TERMS,
-    MultivariateDivisionRequest,
-    MultivariateDivisionResult,
     MultivariateFactorRequest,
     MultivariateFactorResult,
-    MultivariateGcdRequest,
-    MultivariateGcdResult,
     MultivariateIrreducibleFactor,
-    MultivariatePolynomialValue,
     MultivariatePrincipalSubresultantCoefficient,
-    MultivariateResultantRequest,
-    MultivariateResultantResult,
-    MultivariateScalarValue,
     MultivariateSubresultantMember,
     MultivariateSubresultantSequenceRequest,
     MultivariateSubresultantSequenceResult,
     _degree_in_variable,
     _monic_content_fraction,
+)
+from jacobian.math.polynomials.multivariate._resultant import (
+    MultivariateResultantRequest,
+    MultivariateResultantResult,
+    _sylvester_resultant_value,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -118,44 +123,6 @@ def compute_multivariate_division(
         quotient=_result_polynomial(quotient_poly, variables),
         remainder=_result_polynomial(remainder_poly, variables),
         monomial_order=request.monomial_order,
-    )
-
-
-def _sylvester_resultant_value(
-    request: MultivariateResultantRequest,
-) -> MultivariateScalarValue | MultivariatePolynomialValue:
-    """Compute the exact resultant value of an admitted request.
-
-    Returns the classical Sylvester-determinant orientation.  The shared
-    ``polynomial_resultant`` backend helper owns the SymPy swap-sign
-    restoration (upstream sympy/sympy#10666), so no further compensation
-    happens here.
-    """
-    from sympy import QQ, Poly
-
-    from jacobian.math.polynomials._sympy import polynomial_resultant
-
-    variables = request.left.variables
-    elimination_index = variables.index(request.elimination_variable)
-    generator = symbols_for_variables(variables)[elimination_index]
-
-    left = rational_polynomial_to_sympy(request.left)
-    right = rational_polynomial_to_sympy(request.right)
-    value = polynomial_resultant(left, right, generator)
-
-    remaining_variables = tuple(
-        variable for variable in variables if variable != request.elimination_variable
-    )
-    if not remaining_variables:
-        # The resultant is a rational scalar.
-        from jacobian.math.polynomials._conversions import rational_from_sympy
-
-        return MultivariateScalarValue(
-            value=rational_from_sympy(value),
-        )
-    resultant_poly = Poly(value, *symbols_for_variables(remaining_variables), domain=QQ)
-    return MultivariatePolynomialValue(
-        value=_result_polynomial(resultant_poly, remaining_variables),
     )
 
 

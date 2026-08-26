@@ -6,15 +6,17 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.polynomials.multivariate._models import (
+from jacobian.math.polynomials.multivariate._division import (
     MultivariateDivisionRequest,
     MultivariateDivisionResult,
-    MultivariateFactorRequest,
-    MultivariateFactorResult,
+)
+from jacobian.math.polynomials.multivariate._gcd import (
     MultivariateGcdRequest,
     MultivariateGcdResult,
-    MultivariateResultantRequest,
-    MultivariateResultantResult,
+)
+from jacobian.math.polynomials.multivariate._models import (
+    MultivariateFactorRequest,
+    MultivariateFactorResult,
     MultivariateSubresultantSequenceRequest,
     MultivariateSubresultantSequenceResult,
 )
@@ -24,6 +26,10 @@ from jacobian.math.polynomials.multivariate._operations import (
     compute_multivariate_resultant,
     compute_multivariate_subresultant_sequence,
     multivariate_factor,
+)
+from jacobian.math.polynomials.multivariate._resultant import (
+    MultivariateResultantRequest,
+    MultivariateResultantResult,
 )
 
 

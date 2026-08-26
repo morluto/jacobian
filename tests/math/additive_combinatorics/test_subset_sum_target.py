@@ -13,6 +13,9 @@ from jacobian.math.additive_combinatorics import (
     IndexSubset,
     subset_sum_profile,
 )
+from jacobian.math.additive_combinatorics._operations import (
+    verify_subset_sum_target_result,
+)
 from jacobian.math.additive_combinatorics._subset_sum_residue import (
     SubsetSumResidueProfileRequest,
     compute_subset_sum_residue_profile,
@@ -179,7 +182,7 @@ def test_input_permutations_preserve_status_and_transport_a_witness() -> None:
         assert sum(values[index] for index in result.witness.indices) == 3
 
 
-def test_result_rejects_source_decision_and_witness_mutations() -> None:
+def test_verifier_rejects_source_decision_and_witness_mutations() -> None:
     valid = _operation().run(_request((3, 2, 5), 5, allow_empty_subset=False))
     payload = valid.model_dump(mode="json")
     mutations = (
@@ -195,14 +198,14 @@ def test_result_rejects_source_decision_and_witness_mutations() -> None:
         {**payload, "reconstructed_sum": "6"},
     )
     for mutation in mutations:
-        with pytest.raises(ValidationError):
-            SubsetSumTargetResult.model_validate(mutation)
+        candidate = SubsetSumTargetResult.model_validate(mutation)
+        assert not verify_subset_sum_target_result(candidate)
 
     empty = _operation().run(_request((), 0, allow_empty_subset=True))
-    with pytest.raises(ValidationError):
-        SubsetSumTargetResult.model_validate(
-            {**empty.model_dump(mode="json"), "allow_empty_subset": False}
-        )
+    candidate = SubsetSumTargetResult.model_validate(
+        {**empty.model_dump(mode="json"), "allow_empty_subset": False}
+    )
+    assert not verify_subset_sum_target_result(candidate)
 
 
 def test_result_bounds_raw_witness_and_sum_before_replay() -> None:
@@ -244,19 +247,19 @@ def test_request_admits_large_low_state_and_exact_digit_and_state_boundaries() -
 def test_request_rejects_immediately_above_each_search_bound() -> None:
     with pytest.raises(ValidationError):
         SubsetSumTargetRequest(
-            source={"items": ["1" + "0" * 256]},
+            source={"items": ["1" + "0" * 256]},  # type: ignore[arg-type]
             target="0",
             allow_empty_subset=False,
         )
     with pytest.raises(ValidationError):
         SubsetSumTargetRequest(
-            source={"items": ["-" + "9" * 256]},
+            source={"items": ["-" + "9" * 256]},  # type: ignore[arg-type]
             target="-" + "9" * 263,
             allow_empty_subset=True,
         )
     with pytest.raises(ValidationError):
         SubsetSumTargetRequest(
-            source={"items": ["-" + "9" * 256]},
+            source={"items": ["-" + "9" * 256]},  # type: ignore[arg-type]
             target="9" * 263,
             allow_empty_subset=True,
         )
@@ -265,7 +268,7 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
     above_wire_count = (4 * 1024 * 1024 - 64) // (len(widest) + 4) + 1
     with pytest.raises(ValidationError):
         SubsetSumTargetRequest(
-            source={"items": [widest] * above_wire_count},
+            source={"items": [widest] * above_wire_count},  # type: ignore[arg-type]
             target="0",
             allow_empty_subset=True,
         )
@@ -284,7 +287,7 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
     # pushes 2**17 reachable states past the 65,536-state bound.
     with pytest.raises(ValidationError):
         SubsetSumTargetRequest(
-            source={
+            source={  # type: ignore[arg-type]
                 "items": [str(1 << exponent) for exponent in range(16)] + ["131072"]
             },
             target="100000",
@@ -459,7 +462,7 @@ def test_request_resolves_targets_beyond_the_derived_subset_sum_width() -> None:
 
     wide = _operation().run(
         SubsetSumTargetRequest(
-            source={"items": []},
+            source={"items": []},  # type: ignore[arg-type]
             target="1" + "0" * 256,
             allow_empty_subset=False,
         )
@@ -564,7 +567,9 @@ def test_resolving_scan_is_charged_against_the_transition_bound() -> None:
 
     with pytest.raises(ValidationError):
         SubsetSumTargetRequest(
-            source={"items": [str(value) for value in powers + (0,) * 6 + (1,)]},
+            source={  # type: ignore[arg-type]
+                "items": [str(value) for value in powers + (0,) * 6 + (1,)]
+            },
             target=target,
             allow_empty_subset=True,
         )

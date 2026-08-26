@@ -25,12 +25,10 @@ from jacobian.math.additive_combinatorics.values import (
 MAX_SUBSET_SUM_INTEGER_DIGITS = 256
 MAX_SUBSET_SUM_REACHABLE_STATES = 65_536
 MAX_SUBSET_SUM_TRANSITIONS_PER_PASS = 500_000
-# One complete public call performs four charged DP-equivalent passes: the
-# request admission scan, the solver kernel, and their source-binding replays
-# inside result validation. Each pass inspects the same reachable states
-# through the same resolving prefix, so charging four identical per-pass
-# ceilings bounds every accepted complete call.
-MAX_SUBSET_SUM_COMPLETE_CALL_PASSES = 4
+# One complete public call performs two charged DP-equivalent passes: request
+# admission and the solver kernel. Independent claims are checked explicitly
+# by the owner verifier, rather than as a result-model side effect.
+MAX_SUBSET_SUM_COMPLETE_CALL_PASSES = 2
 MAX_SUBSET_SUM_TOTAL_TRANSITIONS = (
     MAX_SUBSET_SUM_COMPLETE_CALL_PASSES * MAX_SUBSET_SUM_TRANSITIONS_PER_PASS
 )
@@ -143,11 +141,10 @@ def _require_admitted_work(
     prefix replay never resolves must fit the exhaustive reachable-state and
     transition bounds across the whole source before execution.
 
-    The public path performs this scan twice (request admission and its
-    source-binding replay inside result validation) and runs the kernel
-    equally often (computation and validation replay). Each pass inspects the
-    same reachable states through the same prefix, so charging four identical
-    per-pass ceilings bounds every accepted complete call by
+    The public path performs this scan once for request admission and runs the
+    kernel once for computation. Each pass inspects the same reachable states
+    through the same prefix, so charging two identical per-pass ceilings bounds
+    every accepted complete call by
     ``MAX_SUBSET_SUM_TOTAL_TRANSITIONS``.
     """
 
@@ -361,57 +358,34 @@ class SubsetSumTargetResult(StrictModel):
                 )
         return prepared
 
-    @model_validator(mode="after")
-    def bind_decision_to_source(self) -> Self:
-        request = SubsetSumTargetRequest(
-            source=self.source,
-            target=self.target,
-            allow_empty_subset=self.allow_empty_subset,
-        )
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: SubsetSumTargetRequest,
+        indices: tuple[int, ...] | None,
+    ) -> Self:
+        """Construct trusted output without replaying the target search."""
+
+        if indices is None:
+            return cls.model_construct(
+                source=request.source,
+                target=request.target,
+                allow_empty_subset=request.allow_empty_subset,
+                status="NOT_ATTAINED",
+                witness=None,
+                reconstructed_sum=None,
+            )
         values = tuple(parse_canonical_integer(value) for value in request.source.items)
-        target = parse_canonical_integer(request.target)
-        expected_indices = _solve_subset_sum_target(
-            values,
-            target,
+        return cls.model_construct(
+            source=request.source,
+            target=request.target,
             allow_empty_subset=request.allow_empty_subset,
+            status="ATTAINED",
+            witness=IndexSubset(indices=indices),
+            reconstructed_sum=format_canonical_integer(
+                sum(values[index] for index in indices)
+            ),
         )
-
-        if expected_indices is None:
-            if self.status != "NOT_ATTAINED":
-                raise _validation_error(
-                    "bind_decision_to_source",
-                    "status must report the exhaustive target decision",
-                )
-            if self.witness is not None or self.reconstructed_sum is not None:
-                raise _validation_error(
-                    "bind_decision_to_source",
-                    "an unattained target cannot carry a witness or sum",
-                )
-            return self
-
-        if self.status != "ATTAINED":
-            raise _validation_error(
-                "bind_decision_to_source",
-                "status must report the exhaustive target decision",
-            )
-        expected_witness = IndexSubset(indices=expected_indices)
-        if self.witness != expected_witness:
-            raise _validation_error(
-                "bind_decision_to_source",
-                "witness must be the canonical attaining index subset",
-            )
-        expected_sum = sum(values[index] for index in expected_indices)
-        expected_sum_wire = format_canonical_integer(expected_sum)
-        if self.reconstructed_sum != expected_sum_wire:
-            raise _validation_error(
-                "bind_decision_to_source",
-                "reconstructed_sum must equal the witness sum",
-            )
-        if expected_sum != target:
-            raise _validation_error(
-                "bind_decision_to_source", "witness sum must equal the requested target"
-            )
-        return self
 
 
 def solve_subset_sum_target_request(
@@ -427,22 +401,9 @@ def solve_subset_sum_target_request(
         allow_empty_subset=request.allow_empty_subset,
     )
     if indices is None:
-        return SubsetSumTargetResult(
-            source=request.source,
-            target=request.target,
-            allow_empty_subset=request.allow_empty_subset,
-            status="NOT_ATTAINED",
-        )
+        return SubsetSumTargetResult._from_kernel(request, None)
 
-    reconstructed_sum = sum(values[index] for index in indices)
-    return SubsetSumTargetResult(
-        source=request.source,
-        target=request.target,
-        allow_empty_subset=request.allow_empty_subset,
-        status="ATTAINED",
-        witness=IndexSubset(indices=indices),
-        reconstructed_sum=format_canonical_integer(reconstructed_sum),
-    )
+    return SubsetSumTargetResult._from_kernel(request, indices)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

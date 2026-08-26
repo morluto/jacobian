@@ -32,8 +32,15 @@ from jacobian.math.additive_combinatorics._subset_sum_profile import (
     subset_sum_profile_counts,
     subset_sum_profile_envelope,
 )
+from jacobian.math.additive_combinatorics._subset_sum_target import (
+    SubsetSumTargetRequest,
+    SubsetSumTargetResult,
+)
+from jacobian.math.additive_combinatorics._subset_sum_target_kernel import (
+    _solve_subset_sum_target,
+)
 from jacobian.math.additive_combinatorics.operations import subset_sum_profile
-from jacobian.math.additive_combinatorics.values import SubsetSumProfile
+from jacobian.math.additive_combinatorics.values import IndexSubset, SubsetSumProfile
 
 
 def _parse_set(spec: FiniteIntegerSet) -> frozenset[int]:
@@ -104,6 +111,37 @@ def compute_subset_sum_profile(
     """Compute the complete exact indexed-subset sum profile."""
 
     return subset_sum_profile(request.source)
+
+
+def verify_subset_sum_target_result(result: SubsetSumTargetResult) -> bool:
+    """Verify an independently supplied target decision within its envelope."""
+
+    try:
+        request = SubsetSumTargetRequest(
+            source=result.source,
+            target=result.target,
+            allow_empty_subset=result.allow_empty_subset,
+        )
+        values = tuple(parse_canonical_integer(value) for value in request.source.items)
+        target = parse_canonical_integer(request.target)
+        indices = _solve_subset_sum_target(
+            values, target, allow_empty_subset=request.allow_empty_subset
+        )
+    except ValueError:
+        return False
+    if indices is None:
+        return (
+            result.status == "NOT_ATTAINED"
+            and result.witness is None
+            and result.reconstructed_sum is None
+        )
+    return (
+        result.status == "ATTAINED"
+        and result.witness == IndexSubset(indices=indices)
+        and result.reconstructed_sum
+        == format_canonical_integer(sum(values[index] for index in indices))
+        and sum(values[index] for index in indices) == target
+    )
 
 
 def compute_additive_energy(

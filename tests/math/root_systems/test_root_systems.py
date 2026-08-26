@@ -144,10 +144,32 @@ class TestWeylGroupOrder:
 
     def test_result_replays_signed_root_action_order(self) -> None:
         from jacobian.math.root_systems._models import WeylGroupOrderResult
+        from jacobian.math.root_systems._operations import (
+            verify_weyl_group_order_result,
+        )
 
-        with pytest.raises(ValidationError) as exc_info:
-            WeylGroupOrderResult(matrix=A2, group_order=5)
-        assert exc_info.value.errors()[0]["type"] == "root_system.group_order_mismatch"
+        claimed = WeylGroupOrderResult(matrix=A2, group_order=5)
+        assert not verify_weyl_group_order_result(claimed)
+
+    def test_kernel_results_are_verified_by_explicit_owner_paths(self) -> None:
+        from jacobian.math.root_systems._models import SimpleReflectionRequest
+        from jacobian.math.root_systems._operations import (
+            compute_simple_reflection,
+            compute_weyl_group_order,
+            verify_root_system_data_result,
+            verify_simple_reflection_result,
+            verify_weyl_group_order_result,
+        )
+
+        root_data = compute_root_system_data(CartanMatrixRequest(matrix=A2))
+        reflection = compute_simple_reflection(
+            SimpleReflectionRequest(matrix=A2, vector=(1, 0), simple_index=0)
+        )
+        order = compute_weyl_group_order(CartanMatrixRequest(matrix=A2))
+
+        assert verify_root_system_data_result(root_data)
+        assert verify_simple_reflection_result(reflection)
+        assert verify_weyl_group_order_result(order)
 
     def test_catalog_replaces_the_invalid_mixed_weyl_data_contract(self) -> None:
         from jacobian.math.root_systems._tools import TOOLS

@@ -14,6 +14,7 @@ from jacobian.math.recurrence_solving._models import (
 )
 from jacobian.math.recurrence_solving._operations import (
     compute_prime_field_find_recurrence,
+    verify_prime_field_recurrence_find_result,
 )
 from jacobian.math.recurrence_solving.operations import berlekamp_massey
 
@@ -126,18 +127,16 @@ class TestPrimeFieldRecurrenceFind:
         assert result.recurrence.status == "FOUND"
         assert result.recurrence.order == 2
         assert result.recurrence.coefficients == (1, 1)
+        assert verify_prime_field_recurrence_find_result(result)
 
-    def test_result_rejects_non_minimal_fibonacci_recurrence(self):
-        with pytest.raises(ValidationError) as exc_info:
-            PrimeFieldRecurrenceFindResult(
-                sequence=FIBONACCI_MOD_7,
-                recurrence=PrimeFieldRecurrence(
-                    prime=7, coefficients=(1, 1, 0), order=3, status="FOUND"
-                ),
-            )
-        assert (
-            exc_info.value.errors()[0]["type"] == "recurrence_solving.result_mismatch"
+    def test_explicit_verifier_rejects_nonminimal_fibonacci_recurrence(self):
+        result = PrimeFieldRecurrenceFindResult(
+            sequence=FIBONACCI_MOD_7,
+            recurrence=PrimeFieldRecurrence(
+                prime=7, coefficients=(1, 1, 0), order=3, status="FOUND"
+            ),
         )
+        assert not verify_prime_field_recurrence_find_result(result)
 
     def test_no_fitting_status_is_not_part_of_the_prime_field_contract(self):
         with pytest.raises(ValidationError):
@@ -153,17 +152,14 @@ class TestPrimeFieldRecurrenceFind:
             PrimeFieldRecurrenceFindResult.model_json_schema()
         )
 
-    def test_result_rejects_wrong_coefficients_at_minimal_order(self):
-        with pytest.raises(ValidationError) as exc_info:
-            PrimeFieldRecurrenceFindResult(
-                sequence=FIBONACCI_MOD_7,
-                recurrence=PrimeFieldRecurrence(
-                    prime=7, coefficients=(1, 2), order=2, status="FOUND"
-                ),
-            )
-        assert (
-            exc_info.value.errors()[0]["type"] == "recurrence_solving.result_mismatch"
+    def test_explicit_verifier_rejects_wrong_coefficients_at_minimal_order(self):
+        result = PrimeFieldRecurrenceFindResult(
+            sequence=FIBONACCI_MOD_7,
+            recurrence=PrimeFieldRecurrence(
+                prime=7, coefficients=(1, 2), order=2, status="FOUND"
+            ),
         )
+        assert not verify_prime_field_recurrence_find_result(result)
 
     def test_impulse_sequence_is_the_minimal_order_n_recurrence(self):
         sequence = (0, 0, 0, 1)
@@ -173,13 +169,10 @@ class TestPrimeFieldRecurrenceFind:
         assert result.recurrence.status == "FOUND"
         assert result.recurrence.order == len(sequence)
         PrimeFieldRecurrenceFindResult.model_validate(result.model_dump())
-        with pytest.raises(ValidationError) as exc_info:
-            PrimeFieldRecurrenceFindResult(
-                sequence=sequence,
-                recurrence=PrimeFieldRecurrence(
-                    prime=2, coefficients=(1,), order=1, status="FOUND"
-                ),
-            )
-        assert (
-            exc_info.value.errors()[0]["type"] == "recurrence_solving.result_mismatch"
+        incorrect = PrimeFieldRecurrenceFindResult(
+            sequence=sequence,
+            recurrence=PrimeFieldRecurrence(
+                prime=2, coefficients=(1,), order=1, status="FOUND"
+            ),
         )
+        assert not verify_prime_field_recurrence_find_result(incorrect)

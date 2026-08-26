@@ -1,18 +1,18 @@
 """Exact number-theory operations with structured, argument-bound results."""
 
 from jacobian.catalog._examples import example
-from jacobian.math.number_theory._derived_operations import (
-    compute_factorial_valuation,
-    compute_floor_square_root,
-    compute_legendre_symbol,
-)
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._derived_models import (
     FactorialValuationRequest,
     FactorialValuationResult,
     FloorSquareRootRequest,
     FloorSquareRootResult,
     LegendreSymbolRequest,
     LegendreSymbolResult,
+)
+from jacobian.math.number_theory._derived_operations import (
+    compute_factorial_valuation,
+    compute_floor_square_root,
+    compute_legendre_symbol,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 

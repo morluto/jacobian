@@ -7,10 +7,9 @@ from pydantic import model_validator
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.affine_forms.values import MAX_AFFINE_COMPONENT_DIGITS
+from jacobian.math.prime_affine_forms._interval import IntervalEndpointInteger
 from jacobian.math.prime_affine_forms._kernel import translated_tuple
 from jacobian.math.prime_affine_forms._models import (
-    MAX_INTERVAL_ENDPOINT_DIGITS,
-    IntervalEndpointInteger,
     _digits,
     _validation_error,
 )
@@ -28,10 +27,6 @@ class PrimeAffineTranslationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_translated_tuple(self) -> PrimeAffineTranslationRequest:
-        if _digits(self.shift) > MAX_INTERVAL_ENDPOINT_DIGITS:
-            raise _validation_error(
-                f"translation shift must have at most {MAX_INTERVAL_ENDPOINT_DIGITS} digits"
-            )
         shift = parse_canonical_integer(self.shift)
         aggregate_digits = 0
         for form in self.source.forms:

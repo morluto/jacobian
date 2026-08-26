@@ -19,7 +19,7 @@ from jacobian.math.recurrence_solving._models import (
 
 def compute_find_recurrence(request: RecurrenceFindRequest) -> RecurrenceFindResult:
     result = find_recurrence(request.sequence)
-    return RecurrenceFindResult(
+    return RecurrenceFindResult._from_kernel(
         coefficients=result.coefficients,
         order=result.order,
         status=result.status,
@@ -31,7 +31,7 @@ def compute_closed_form(request: ClosedFormRequest) -> ClosedFormResult:
         request.characteristic_coefficients,
         request.initial_values,
     )
-    return ClosedFormResult(expression=result.expression)
+    return ClosedFormResult._from_kernel(expression=result.expression)
 
 
 def compute_prime_field_find_recurrence(
@@ -43,7 +43,26 @@ def compute_prime_field_find_recurrence(
     ``L <= n < len(sequence)``.
     """
     rec = berlekamp_massey(list(request.sequence), request.prime)
-    return PrimeFieldRecurrenceFindResult(
+    return PrimeFieldRecurrenceFindResult._from_kernel(
         sequence=request.sequence,
         recurrence=rec,
     )
+
+
+def verify_prime_field_recurrence_find_result(
+    result: PrimeFieldRecurrenceFindResult,
+) -> bool:
+    """Verify an independently supplied Berlekamp-Massey result.
+
+    The result's request bounds cap the replay at 256 terms and a prime below
+    10,000.  This deliberately lives outside Pydantic validation: parsing an
+    untrusted wire result must not execute the operation or import the native
+    API.
+    """
+
+    recurrence = result.recurrence
+    try:
+        expected = berlekamp_massey(list(result.sequence), recurrence.prime)
+    except ValueError:
+        return False
+    return recurrence == expected

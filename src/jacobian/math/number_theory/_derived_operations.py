@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, cast
 
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._derived_models import (
     FactorialValuationRequest,
     FactorialValuationResult,
     FloorSquareRootRequest,
@@ -22,10 +22,8 @@ def compute_floor_square_root(request: FloorSquareRootRequest) -> FloorSquareRoo
 
 
 def compute_legendre_symbol(request: LegendreSymbolRequest) -> LegendreSymbolResult:
-    from sympy import isprime, legendre_symbol
+    from sympy import legendre_symbol
 
-    if not isprime(request.prime):
-        raise ValueError("Legendre denominator must be prime")
     return LegendreSymbolResult(
         a=request.a,
         prime=request.prime,

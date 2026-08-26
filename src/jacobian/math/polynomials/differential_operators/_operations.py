@@ -29,17 +29,32 @@ def compute_differential_operator_application(
         request.iterations,
         envelope,
     )
-    return DifferentialOperatorApplyResult(
-        polynomial=request.polynomial,
-        operator=request.operator,
-        iterations=request.iterations,
-        expected=request.expected,
-        output=output,
-        is_zero=not output.polynomial.terms,
-        matches_expected=(
-            None if request.expected is None else output == request.expected
-        ),
-    )
+    return DifferentialOperatorApplyResult._from_kernel(request, output)
 
 
-__all__ = ["compute_differential_operator_application"]
+def verify_differential_operator_application_result(
+    result: DifferentialOperatorApplyResult,
+) -> bool:
+    """Replay one independently supplied result inside its admitted envelope."""
+
+    try:
+        envelope = validate_application_envelope(
+            result.polynomial,
+            result.operator,
+            result.iterations,
+            result.expected,
+        )
+        return result.output == apply_with_flint(
+            result.polynomial,
+            result.operator,
+            result.iterations,
+            envelope,
+        )
+    except (ImportError, RuntimeError, TypeError, ValueError):
+        return False
+
+
+__all__ = [
+    "compute_differential_operator_application",
+    "verify_differential_operator_application_result",
+]

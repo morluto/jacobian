@@ -16,6 +16,8 @@ from jacobian.math.sum_of_squares._models import (
 from jacobian.math.sum_of_squares._operations import (
     check_gram_certificate,
     check_sos_decomposition,
+    verify_gram_certificate_result,
+    verify_sos_decomposition_result,
 )
 
 
@@ -94,6 +96,25 @@ class TestSOSDecompositionCheck:
             SOSDecompositionCheckRequest(polynomial=p, summands=(q1,))
         )
         assert result.is_valid
+
+    def test_empty_decomposition_is_the_canonical_zero_sum(self):
+        """The zero polynomial has the empty sum-of-squares decomposition."""
+        zero = _poly(("x",))
+        result = check_sos_decomposition(
+            SOSDecompositionCheckRequest(polynomial=zero, summands=())
+        )
+        assert result.is_valid
+        assert result.summands == ()
+        assert result.computed_sum == zero
+
+    def test_empty_decomposition_does_not_certify_a_nonzero_polynomial(self):
+        """The same degenerate witness is rejected by the exact identity check."""
+        nonzero = _poly(("x",), (1, 1, (0,)))
+        result = check_sos_decomposition(
+            SOSDecompositionCheckRequest(polynomial=nonzero, summands=())
+        )
+        assert not result.is_valid
+        assert result.computed_sum.polynomial.terms == ()
 
 
 def _expand_poly(expr, variables) -> RationalPolynomial:
@@ -258,7 +279,7 @@ class TestGramCertificateAdmission:
 
 
 class TestGramCertificateResultAdmission:
-    """Deserialized Gram results replay through the bounded request contract."""
+    """Deserialized Gram results retain bounded source structure."""
 
     def _valid_result(self):
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
@@ -278,7 +299,7 @@ class TestGramCertificateResultAdmission:
         )
         return request.model_dump(mode="json")
 
-    def test_oversized_result_matrix_is_rejected_before_replay(self):
+    def test_oversized_result_matrix_is_rejected_before_verification(self):
         payload = self._valid_result()
         huge = "9" * 129
         payload["gram_matrix"]["entries"][0][0] = {"num": huge, "den": "1"}
@@ -288,7 +309,7 @@ class TestGramCertificateResultAdmission:
 
     def test_oversized_result_dimension_is_rejected_at_field_validation(self):
         """A 40x40 result matrix fails the parse-time dimension bound before
-        any invariant replay traverses its entries."""
+        any explicit verification traverses its entries."""
         payload = self._valid_result()
         payload["monomial_basis"] = [
             _poly(("x",), (1, 1, (k,))).model_dump(mode="json") for k in range(40)
@@ -389,6 +410,18 @@ class TestSOSResultAdmission:
             SOSDecompositionCheckResult.model_validate(payload)
         assert exc_info.value.errors()[0]["type"] == "sum_of_squares.sos_work_bound"
 
+    def test_forged_sos_claim_is_rejected_by_explicit_verifier(self):
+        """Result parsing is structural; only the verifier replays the identity."""
+        p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
+        q = _poly(("x",), (1, 1, (1,)))
+        result = check_sos_decomposition(
+            SOSDecompositionCheckRequest(polynomial=p, summands=(q,))
+        )
+        payload = result.model_dump(mode="json")
+        payload["computed_sum"] = _poly(("x",), (1, 1, (0,))).model_dump(mode="json")
+        forged = SOSDecompositionCheckResult.model_validate(payload)
+        assert not verify_sos_decomposition_result(forged)
+
 
 class TestSOSResultRingAdmission:
     def test_result_replay_rejects_mismatched_summand_ring(self):
@@ -465,10 +498,31 @@ class TestExactPsdCriterion:
         )
         assert result.is_psd is False
 
+    def test_forged_gram_claim_is_rejected_by_explicit_verifier(self) -> None:
+        result = check_gram_certificate(
+            GramCertificateRequest(
+                polynomial=_poly(("x",), (1, 1, (2,)), (1, 1, (0,))),
+                monomial_basis=(
+                    _poly(("x",), (1, 1, (1,))),
+                    _poly(("x",), (1, 1, (0,))),
+                ),
+                gram_matrix={
+                    "entries": (
+                        ({"num": "1", "den": "1"}, {"num": "0", "den": "1"}),
+                        ({"num": "0", "den": "1"}, {"num": "1", "den": "1"}),
+                    )
+                },
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["is_valid"] = False
+        payload["is_psd"] = False
+        forged = GramCertificateResult.model_validate(payload)
+        assert not verify_gram_certificate_result(forged)
+
 
 class TestSOSCoefficientGrowthAdmission:
-    """Admission replays the exact expansion so over-canonical computed sums
-    fail parsing instead of raising inside execution."""
+    """Admission bounds coefficient growth without expanding the summands."""
 
     def test_aligned_prime_denominators_rejected_at_admission(self) -> None:
         """64 eight-term summands meet the 4,096-product cap while their

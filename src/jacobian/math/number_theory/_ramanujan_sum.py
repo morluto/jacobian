@@ -10,7 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.math.number_theory._models import _MAX_INTEGER_LENGTH
+from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
 from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.ramanujan_sums import (
     _MAX_MODULUS_DIGITS,
@@ -39,7 +39,7 @@ RamanujanModulus = Annotated[
 # validation rather than part of the owned encoding.
 RamanujanSumInteger = Annotated[
     CanonicalInteger,
-    Field(max_length=_MAX_INTEGER_LENGTH),
+    Field(max_length=MAX_INTEGER_DIGITS),
 ]
 
 

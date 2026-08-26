@@ -8,10 +8,6 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.polynomials._conversions import (
-    rational_function_to_sympy,
-    symbols_for_variables,
-)
 from jacobian.math.polynomials.values import (
     RationalFunction,
     require_sparse_polynomial_budget,
@@ -25,6 +21,7 @@ def _validation_error(message: str) -> PydanticCustomError:
 MAX_HERMITE_NUMERATOR_DEGREE = 6
 MAX_HERMITE_DENOMINATOR_DEGREE = 3
 MAX_HERMITE_COEFFICIENT_DIGITS = 2
+MAX_HERMITE_RESULT_COEFFICIENT_DIGITS = 128
 
 
 def require_hermite_reduction_budget(function: RationalFunction) -> None:
@@ -46,6 +43,35 @@ def require_hermite_reduction_budget(function: RationalFunction) -> None:
         maximum_coefficient_digits=MAX_HERMITE_COEFFICIENT_DIGITS,
         label="Hermite-reduction denominator",
     )
+
+
+def _require_hermite_result_budget(
+    rational_part: RationalFunction,
+    remainder: RationalFunction,
+) -> None:
+    """Bound the certificate algebra accepted by the explicit verifier.
+
+    A degree-six numerator over a degree-three denominator yields a
+    zero-constant rational part with numerator degree at most six and
+    denominator degree at most two.  The square-free residual denominator has
+    degree at most three and its numerator is proper.  These derived limits
+    keep independently supplied certificates within the same exact envelope
+    as a kernel-produced result.
+    """
+
+    for label, polynomial, maximum_terms, maximum_exponent in (
+        ("Hermite rational-part numerator", rational_part.numerator, 7, 6),
+        ("Hermite rational-part denominator", rational_part.denominator, 3, 2),
+        ("Hermite remainder numerator", remainder.numerator, 3, 2),
+        ("Hermite remainder denominator", remainder.denominator, 4, 3),
+    ):
+        require_sparse_polynomial_budget(
+            polynomial,
+            maximum_terms=maximum_terms,
+            maximum_exponent=maximum_exponent,
+            maximum_coefficient_digits=MAX_HERMITE_RESULT_COEFFICIENT_DIGITS,
+            label=label,
+        )
 
 
 class HermiteReductionRequest(StrictModel):
@@ -81,9 +107,7 @@ class HermiteReductionResult(HermiteReductionRequest):
     rational_primitive: RationalFunction | None
 
     @model_validator(mode="after")
-    def bind_exact_reduction(self) -> Self:
-        from sympy import Poly, cancel, diff, fraction
-
+    def require_structural_contract(self) -> Self:
         variables = self.function.variables
         if (
             self.rational_part.variables != variables
@@ -92,31 +116,8 @@ class HermiteReductionResult(HermiteReductionRequest):
             raise _validation_error(
                 "all Hermite-reduction values must use the source variable"
             )
-        (variable,) = symbols_for_variables(variables)
-        source = rational_function_to_sympy(self.function)
-        rational_part = rational_function_to_sympy(self.rational_part)
-        remainder = cancel(rational_function_to_sympy(self.remainder))
-        if cancel(diff(rational_part, variable) + remainder - source) != 0:
-            raise _validation_error("Hermite reduction does not reconstruct the source")
-
-        remainder_numerator, remainder_denominator = fraction(remainder)
-        numerator = Poly(remainder_numerator, variable, domain="QQ")
-        denominator = Poly(remainder_denominator, variable, domain="QQ")
-        if not numerator.is_zero and numerator.degree() >= denominator.degree():
-            raise _validation_error("Hermite remainder must be proper")
-        if not denominator.gcd(denominator.diff()).degree() == 0:
-            raise _validation_error("Hermite remainder denominator must be square-free")
-
-        part_numerator, part_denominator = fraction(cancel(rational_part))
-        quotient, _ = Poly(part_numerator, variable, domain="QQ").div(
-            Poly(part_denominator, variable, domain="QQ")
-        )
-        if quotient.nth(0) != 0:
-            raise _validation_error(
-                "Hermite rational part must use zero additive constant"
-            )
-
-        has_primitive = numerator.is_zero
+        _require_hermite_result_budget(self.rational_part, self.remainder)
+        has_primitive = not self.remainder.numerator.terms
         expected_status = (
             "RATIONAL_PRIMITIVE" if has_primitive else "NO_RATIONAL_PRIMITIVE"
         )
@@ -134,6 +135,27 @@ class HermiteReductionResult(HermiteReductionRequest):
                 "a nonzero Hermite remainder has no rational primitive"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        function: RationalFunction,
+        rational_part: RationalFunction,
+        remainder: RationalFunction,
+    ) -> Self:
+        """Build a trusted result from the owner-local Hermite kernel."""
+
+        has_primitive = not remainder.numerator.terms
+        return cls(
+            function=function,
+            rational_part=rational_part,
+            remainder=remainder,
+            rational_primitive_status=(
+                "RATIONAL_PRIMITIVE" if has_primitive else "NO_RATIONAL_PRIMITIVE"
+            ),
+            rational_primitive=rational_part if has_primitive else None,
+        )
 
 
 __all__ = ["HermiteReductionRequest", "HermiteReductionResult"]

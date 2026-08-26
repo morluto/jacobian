@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -52,36 +51,26 @@ class HankelMomentMatrix(StrictModel):
                 "value_invariant",
                 f"entries must form a {side}x{side} matrix for order {self.order}",
             )
-        from jacobian.math.moments_orthogonal.operations import (
-            _rational_det,
-            _rational_rank,
-        )
-
-        # Hankel structure: entries depend only on i+j.
-        for i in range(side):
-            for j in range(side):
-                reference = self.entries[i][j]
-                if any(
-                    self.entries[a][b] != reference
-                    for a in range(side)
-                    for b in range(side)
-                    if a + b == i + j
-                ):
-                    raise _validation_error(
-                        "value_invariant",
-                        "entries along each anti-diagonal of a Hankel "
-                        "matrix must be equal",
-                    )
-        matrix = [[value.as_fraction() for value in row] for row in self.entries]
-        if self.determinant.as_fraction() != _rational_det(matrix):
-            raise _validation_error(
-                "value_invariant", "determinant must match the retained entries"
-            )
-        if self.rank != _rational_rank(matrix):
-            raise _validation_error(
-                "value_invariant", "rank must match the retained entries"
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        order: int,
+        entries: tuple[tuple[CanonicalRational, ...], ...],
+        determinant: CanonicalRational,
+        rank: int,
+        variable: str,
+    ) -> Self:
+        """Build a trusted matrix result without replaying exact elimination."""
+        return cls(
+            order=order,
+            entries=entries,
+            determinant=determinant,
+            rank=rank,
+            variable=variable,
+        )
 
 
 class OrthogonalPolynomialTerm(StrictModel):
@@ -95,79 +84,6 @@ class OrthogonalPolynomialTerm(StrictModel):
         min_length=1, max_length=MAX_POLYNOMIAL_DEGREE + 1
     )
     squared_norm: CanonicalRational
-
-
-def _decompose_residual_in_basis(
-    polynomials: tuple[OrthogonalPolynomialTerm, ...], k: int
-) -> list[Fraction]:
-    """Decompose ``R_k = x*p_k - p_{k+1}`` in the monic basis p_0..p_k.
-
-    Every p_j is monic of exact degree j, so greedy division from the top
-    degree downward yields the exact basis components; a nonzero remainder
-    after division is impossible for a complete decomposition and raises.
-    """
-    from fractions import Fraction
-
-    p_k = polynomials[k]
-    p_next = polynomials[k + 1]
-    shifted = [Fraction(0), *[c.as_fraction() for c in p_k.coefficients]]
-    next_coeffs = [c.as_fraction() for c in p_next.coefficients]
-    size = len(shifted)
-    remainder = [
-        shifted[i] - (next_coeffs[i] if i < len(next_coeffs) else Fraction(0))
-        for i in range(size)
-    ]
-    components = [Fraction(0)] * size
-    for j in range(size - 1, -1, -1):
-        if remainder[j] == 0:
-            continue
-        if j >= k + 1:
-            raise _validation_error(
-                "value_invariant",
-                f"residual x*p_{k} - p_{k + 1} leaves the span of the retained family",
-            )
-        basis = [c.as_fraction() for c in polynomials[j].coefficients]
-        components[j] = remainder[j]
-        for power, coefficient in enumerate(basis):
-            remainder[power] -= components[j] * coefficient
-    if any(coefficient != 0 for coefficient in remainder[: k + 1]):
-        raise _validation_error(
-            "value_invariant",
-            f"p_{k + 1} does not satisfy the three-term recurrence against p_{k}",
-        )
-    return components
-
-
-def _require_three_term_consistency(family: OrthogonalPolynomialFamily) -> None:
-    """R_k must lie in span{p_{k-1}, p_k} with h_k = beta_k * h_{k-1}."""
-    polynomials = family.polynomials
-    for k in range(len(polynomials) - 1):
-        components = _decompose_residual_in_basis(polynomials, k)
-        lowest_free = max(k - 1, 0)
-        if any(component != 0 for component in components[:lowest_free]):
-            raise _validation_error(
-                "value_invariant",
-                f"p_{k + 1} does not satisfy the three-term recurrence "
-                f"against p_{k}: the residual has a nonzero component "
-                "below p_{k-1}",
-            )
-        if k >= 1:
-            h_k = polynomials[k].squared_norm.as_fraction()
-            h_prev = polynomials[k - 1].squared_norm.as_fraction()
-            # Claimed orthogonality forces h_k = beta_k * h_{k-1}: reduce
-            # h_k = <p_k, p_k> modulo the recurrence identities and the
-            # vanishing cross products. Unlike a ratio, this multiplicative
-            # form stays meaningful for degenerate norms - a vanishing
-            # h_{k-1} forces h_k = 0 and a nonzero h_k with vanishing
-            # h_{k-1} is unrealizable by any linear functional - so no
-            # degenerate case escapes the norm relation.
-            beta_k = components[k - 1]
-            if h_k != beta_k * h_prev:
-                raise _validation_error(
-                    "value_invariant",
-                    "squared norms disagree with the three-term recurrence: "
-                    f"beta_{k} must satisfy h_{k} = beta_{k} * h_{k - 1}",
-                )
 
 
 class OrthogonalPolynomialFamily(StrictModel):
@@ -198,13 +114,6 @@ class OrthogonalPolynomialFamily(StrictModel):
                 raise _validation_error(
                     "value_invariant", f"p_{term.degree} must be monic"
                 )
-        # Three-term consistency: R_k = x*p_k - p_{k+1} must lie in the
-        # span of {p_{k-1}, p_k}. Because every p_j is monic, R_k is exactly
-        # decomposable in the p_0,...,p_k basis by greedy division; nonzero
-        # components below p_{k-1} break the recurrence. The component on
-        # p_{k-1} IS beta_k, so it must also equal the norm ratio
-        # h_k / h_{k-1}.
-        _require_three_term_consistency(self)
         # Definiteness classifications are derived from the retained norms,
         # never free labels: quasi-definite means every norm nonzero, and
         # positive-definite means every norm positive.
@@ -220,6 +129,22 @@ class OrthogonalPolynomialFamily(StrictModel):
                 "is_positive_definite must equal every squared norm being positive",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        polynomials: tuple[OrthogonalPolynomialTerm, ...],
+        variable: str,
+        is_quasi_definite: bool,
+        is_positive_definite: bool,
+    ) -> Self:
+        return cls(
+            polynomials=polynomials,
+            variable=variable,
+            is_quasi_definite=is_quasi_definite,
+            is_positive_definite=is_positive_definite,
+        )
 
 
 class ThreeTermRecurrence(StrictModel):
@@ -245,6 +170,16 @@ class ThreeTermRecurrence(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        alpha: tuple[CanonicalRational, ...],
+        beta: tuple[CanonicalRational, ...],
+        variable: str,
+    ) -> Self:
+        return cls(alpha=alpha, beta=beta, variable=variable)
+
 
 class ChristoffelDarbouxKernel(StrictModel):
     """Christoffel-Darboux kernel K_m(x,y) = sum_{k=0}^m p_k(x) p_k(y) / h_k.
@@ -261,10 +196,6 @@ class ChristoffelDarbouxKernel(StrictModel):
 
     @model_validator(mode="after")
     def bind_kernel_to_family(self) -> Self:
-        from jacobian.math.moments_orthogonal.operations import (
-            _kernel_coefficient_matrix,
-        )
-
         side = self.degree + 1
         if len(self.coefficients) != side or any(
             len(row) != side for row in self.coefficients
@@ -282,19 +213,23 @@ class ChristoffelDarbouxKernel(StrictModel):
             raise _validation_error(
                 "value_invariant", "kernel degree exceeds the retained family"
             )
-        # Exact replay of the defining sum against the retained family;
-        # every kernel is symmetric by construction.
-        expected = _kernel_coefficient_matrix(self.family.polynomials, self.degree)
-        actual = tuple(
-            tuple(value.as_fraction() for value in row) for row in self.coefficients
-        )
-        if actual != tuple(tuple(row) for row in expected):
-            raise _validation_error(
-                "value_invariant",
-                "kernel coefficients must be the exact Christoffel-Darboux "
-                "sum of the retained family",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        degree: int,
+        coefficients: tuple[tuple[CanonicalRational, ...], ...],
+        variable: str,
+        family: OrthogonalPolynomialFamily,
+    ) -> Self:
+        return cls(
+            degree=degree,
+            coefficients=coefficients,
+            variable=variable,
+            family=family,
+        )
 
 
 class QuadratureNode(StrictModel):
@@ -338,66 +273,24 @@ class GaussianQuadratureRule(StrictModel):
                 "value_invariant",
                 "quadrature variable must match the retained moment prefix",
             )
-        # Pure-kernel replay: rebuild nodes and weights from the retained
-        # prefix without constructing another result model.
-
-        from jacobian.math.moments_orthogonal.operations import (
-            _to_fraction,
-        )
-
-        p_n = _family_p_n_coefficients(self.prefix, self.order)
-        moments = [_to_fraction(m) for m in self.prefix.moments]
-        nodes_frac, weights = _construct_quadrature_rule(p_n, moments, self.order)
-        if weights is None:
-            raise _validation_error("value_invariant", "Vandermonde system is singular")
-        # The operation's contract carries strictly positive weights only;
-        # a payload replaying to a nonpositive rule is not an exact result
-        # of this operation.
-        if any(weight <= 0 for weight in weights):
-            raise _validation_error(
-                "value_invariant",
-                "replayed quadrature rules must carry strictly positive weights",
-            )
-        if tuple(self.nodes) != tuple(
-            QuadratureNode(
-                node=CanonicalRational.from_fraction(node),
-                weight=CanonicalRational.from_fraction(weight),
-            )
-            for node, weight in zip(nodes_frac, weights, strict=True)
-        ):
-            raise _validation_error(
-                "value_invariant",
-                "quadrature nodes must be the exact rule of the retained moment prefix",
-            )
         return self
 
-
-def _family_p_n_coefficients(
-    prefix: MomentFunctionalPrefix, order: int
-) -> list[Fraction]:
-    """The monic p_order of the retained prefix, as exact fractions.
-
-    Gaussian construction divides by norms only through p_{order-1}, so a
-    vanishing terminal norm (finite-support measure) stays admissible;
-    only the polynomial's coefficients are needed for the node replay.
-    """
-    from jacobian.math.moments_orthogonal.operations import (
-        _construct_monic_orthogonal_polynomial,
-    )
-
-    return _construct_monic_orthogonal_polynomial(
-        [m.as_fraction() for m in prefix.moments], order
-    )
-
-
-def _construct_quadrature_rule(
-    p_n: list[Fraction], moments: list[Fraction], order: int
-) -> tuple[list[Fraction], list[Fraction] | None]:
-    from jacobian.math.moments_orthogonal.operations import (
-        _construct_quadrature_rule as _kernel,
-    )
-
-    return _kernel(p_n, moments, order)
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        order: int,
+        nodes: tuple[QuadratureNode, ...],
+        variable: str,
+        prefix: MomentFunctionalPrefix,
+    ) -> Self:
+        return cls(
+            order=order,
+            nodes=nodes,
+            variable=variable,
+            exactness_degree=2 * order - 1,
+            prefix=prefix,
+        )
 
 
 __all__ = [
@@ -478,3 +371,19 @@ class JacobiMatrix(StrictModel):
                 "value_invariant", "entries outside the tridiagonal band must be zero"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        alphas: tuple[CanonicalRational, ...],
+        betas: tuple[CanonicalRational, ...],
+        matrix: tuple[tuple[CanonicalRational, ...], ...],
+        variable: str,
+    ) -> Self:
+        return cls(
+            alphas=alphas,
+            betas=betas,
+            matrix=matrix,
+            variable=variable,
+        )

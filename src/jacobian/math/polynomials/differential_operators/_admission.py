@@ -18,7 +18,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
             "multi-index operator on a canonical QQ polynomial; unlike the "
             "univariate derivative and fixed gradient/Laplacian projections, it "
             "preserves an arbitrary supplied operator and finite iterate while "
-            "bounding its complete expansion, replay, coefficient growth, and output"
+            "bounding its complete expansion, coefficient growth, and output"
         ),
     ),
 )

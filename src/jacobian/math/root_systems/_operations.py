@@ -24,15 +24,8 @@ MAX_SIGNED_ROOT_ACTION_DEGREE = 240
 
 def compute_positive_roots(request: CartanMatrixRequest) -> PositiveRootsResult:
     """Compute all positive roots of a root system from its Cartan matrix."""
-    n = len(request.matrix)
     all_positive = enumerate_positive_roots(request.matrix)
-
-    return PositiveRootsResult(
-        matrix=request.matrix,
-        rank=n,
-        positive_roots=all_positive,
-        num_positive_roots=len(all_positive),
-    )
+    return PositiveRootsResult._from_kernel(request, all_positive)
 
 
 def compute_root_system_data(request: CartanMatrixRequest) -> RootSystemDataResult:
@@ -60,13 +53,11 @@ def compute_root_system_data(request: CartanMatrixRequest) -> RootSystemDataResu
             )
         )
 
-    return RootSystemDataResult(
-        rank=n,
-        cartan_matrix=request.matrix,
+    return RootSystemDataResult._from_kernel(
+        request,
         positive_roots=roots,
         negative_roots=tuple(tuple(-value for value in root) for root in roots),
         simple_roots=simple_roots,
-        num_positive_roots=len(roots),
         components=tuple(components),
     )
 
@@ -116,24 +107,62 @@ def compute_simple_reflection(
     request: SimpleReflectionRequest,
 ) -> SimpleReflectionResult:
     """Apply a simple reflection to a root lattice vector."""
-    from jacobian.math.root_systems._models import SimpleReflectionResult
-
-    reflected = _apply_reflection(
-        [list(row) for row in request.matrix],
-        list(request.vector),
-        request.simple_index,
+    reflected = tuple(
+        _apply_reflection(
+            [list(row) for row in request.matrix],
+            list(request.vector),
+            request.simple_index,
+        )
     )
-    return SimpleReflectionResult(
-        matrix=request.matrix,
-        vector=request.vector,
-        simple_index=request.simple_index,
-        reflected_vector=tuple(reflected),
-    )
+    return SimpleReflectionResult._from_kernel(request, reflected)
 
 
 def compute_weyl_group_order(request: CartanMatrixRequest) -> WeylGroupOrderResult:
     """Compute the exact order of a finite Weyl group without enumeration."""
-    return WeylGroupOrderResult(
-        matrix=request.matrix,
-        group_order=_weyl_group_order(request.matrix),
+    return WeylGroupOrderResult._from_kernel(request, _weyl_group_order(request.matrix))
+
+
+def verify_positive_roots_result(result: PositiveRootsResult) -> bool:
+    """Verify a claimed positive-root enumeration within the admitted envelope."""
+
+    expected = enumerate_positive_roots(result.matrix)
+    return result.positive_roots == expected and result.num_positive_roots == len(
+        expected
     )
+
+
+def verify_root_system_data_result(result: RootSystemDataResult) -> bool:
+    """Verify claimed root-system data within the admitted finite-type envelope."""
+
+    request = CartanMatrixRequest(matrix=result.cartan_matrix)
+    expected = compute_root_system_data(request)
+    return result == expected
+
+
+def verify_simple_reflection_result(result: SimpleReflectionResult) -> bool:
+    """Verify one claimed simple reflection without re-entering model validation."""
+
+    expected = _apply_reflection(
+        [list(row) for row in result.matrix],
+        list(result.vector),
+        result.simple_index,
+    )
+    return result.reflected_vector == tuple(expected)
+
+
+def verify_weyl_group_order_result(result: WeylGroupOrderResult) -> bool:
+    """Verify one claimed signed-root-action order in the admitted envelope."""
+
+    return result.group_order == _weyl_group_order(result.matrix)
+
+
+__all__ = [
+    "compute_positive_roots",
+    "compute_root_system_data",
+    "compute_simple_reflection",
+    "compute_weyl_group_order",
+    "verify_positive_roots_result",
+    "verify_root_system_data_result",
+    "verify_simple_reflection_result",
+    "verify_weyl_group_order_result",
+]

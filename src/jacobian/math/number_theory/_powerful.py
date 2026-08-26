@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
-from jacobian.math.number_theory._models import PrimePower
+from jacobian.math.number_theory._integer_models import PrimePower
 from jacobian.math.number_theory._powerful_kernels import decide_powerful_data
 from jacobian.math.number_theory._powerful_models import (
     PowerfulNumberRequest,

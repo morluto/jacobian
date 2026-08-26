@@ -24,6 +24,9 @@ from jacobian.math.moments_orthogonal.operations import (
     compute_orthogonal_polynomials,
     compute_recurrence,
     compute_shifted_hankel,
+    verify_christoffel_darboux_kernel,
+    verify_gaussian_quadrature_rule,
+    verify_orthogonal_polynomial_family,
 )
 from jacobian.math.moments_orthogonal.values import (
     GaussianQuadratureRule,
@@ -158,9 +161,9 @@ class TestOrthogonalPolynomials:
             compute_orthogonal_polynomials(
                 OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=2)
             )
-        # The same prefix is rejected at request admission.
-        with pytest.raises(ValueError):
-            OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=2)
+        # Request parsing admits the bounded envelope; the kernel establishes
+        # quasi-definiteness when it constructs the family.
+        assert OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=2)
 
     def test_quasi_definite_is_not_positive_definite(self) -> None:
         """Moments (1, 0, -1): norms are 1 and -1 - quasi-definite but not
@@ -459,8 +462,9 @@ class TestGaussianQuadrature:
         admission rejects instead of crashing on .p/.q access."""
 
         uniform = tuple(CanonicalRational(num="1", den=str(k + 1)) for k in range(5))
+        request = GaussianQuadratureRequest(prefix=_prefix(uniform), order=2)
         with pytest.raises(ValueError):
-            GaussianQuadratureRequest(prefix=_prefix(uniform), order=2)
+            compute_gaussian_quadrature(request)
 
 
 class TestQuadratureSourceBinding:
@@ -583,17 +587,17 @@ class TestFamilyResidualBasisCheck:
             OrthogonalPolynomialFamily,
         )
 
-        with pytest.raises(ValidationError):
-            OrthogonalPolynomialFamily(
-                polynomials=(
-                    self._term(0, (1,), 1),
-                    self._term(1, (0, 1), 1),
-                    self._term(2, (1, 0, 1), 1),
-                ),
-                variable="x",
-                is_quasi_definite=True,
-                is_positive_definite=True,
-            )
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                self._term(0, (1,), 1),
+                self._term(1, (0, 1), 1),
+                self._term(2, (1, 0, 1), 1),
+            ),
+            variable="x",
+            is_quasi_definite=True,
+            is_positive_definite=True,
+        )
+        assert not verify_orthogonal_polynomial_family(family)
 
     def test_consistent_family_accepted(self) -> None:
         """The Legendre prefix p_0=1, p_1=x, p_2=x^2-1/3 with h=(1,1/3,1/45)
@@ -638,17 +642,17 @@ class TestDegenerateNormRecurrenceIdentities:
             OrthogonalPolynomialFamily,
         )
 
-        with pytest.raises(ValidationError):
-            OrthogonalPolynomialFamily(
-                polynomials=(
-                    self._term(0, (1,), 0),
-                    self._term(1, (0, 1), 1),
-                    self._term(2, (0, 0, 1), 1),
-                ),
-                variable="x",
-                is_quasi_definite=False,
-                is_positive_definite=False,
-            )
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                self._term(0, (1,), 0),
+                self._term(1, (0, 1), 1),
+                self._term(2, (0, 0, 1), 1),
+            ),
+            variable="x",
+            is_quasi_definite=False,
+            is_positive_definite=False,
+        )
+        assert not verify_orthogonal_polynomial_family(family)
 
     def test_all_zero_norms_remain_admitted(self) -> None:
         """The zero functional realizes every-vanishing norms, so the fully
@@ -952,8 +956,8 @@ class TestKernelFamilyBinding:
             ({"num": "1", "den": "2"}, {"num": "7", "den": "5"}),
             ({"num": "0", "den": "1"}, {"num": "3", "den": "2"}),
         )
-        with pytest.raises(ValidationError):
-            ChristoffelDarbouxKernel.model_validate(payload)
+        claim = ChristoffelDarbouxKernel.model_validate(payload)
+        assert not verify_christoffel_darboux_kernel(claim)
 
 
 class TestDerivedAlphaHeightAdmission:
@@ -1071,19 +1075,19 @@ class TestReplayedRulePositivity:
         prefix = _prefix(
             tuple(CanonicalRational(num=v, den="1") for v in ("-1", "0", "0"))
         )
-        with pytest.raises(ValidationError):
-            GaussianQuadratureRule(
-                order=1,
-                nodes=(
-                    QuadratureNode(
-                        node=CanonicalRational(num="0", den="1"),
-                        weight=CanonicalRational(num="-1", den="1"),
-                    ),
+        rule = GaussianQuadratureRule(
+            order=1,
+            nodes=(
+                QuadratureNode(
+                    node=CanonicalRational(num="0", den="1"),
+                    weight=CanonicalRational(num="-1", den="1"),
                 ),
-                variable="x",
-                exactness_degree=1,
-                prefix=prefix,
-            )
+            ),
+            variable="x",
+            exactness_degree=1,
+            prefix=prefix,
+        )
+        assert not verify_gaussian_quadrature_rule(rule)
 
     def test_quasi_definite_positive_weight_rule_revalidates(self) -> None:
         """A genuine positive-weight order-1 rule keeps validating against
@@ -1174,8 +1178,9 @@ class TestAdmissionReplaysExecution:
             }
         )
         # h_1/h_0 = 10^20000 exceeds canonical; swap so a ratio overflows.
-        with pytest.raises(ValidationError):
-            RecurrenceRequest(family=family)
+        request = RecurrenceRequest(family=family)
+        with pytest.raises(ValueError):
+            compute_recurrence(request)
 
     def test_kernel_coefficient_overflow_rejected_at_admission(self) -> None:
         """p_1 = x + 10^17000 with unit norms: the degree-1 CD kernel's
@@ -1203,8 +1208,9 @@ class TestAdmissionReplaysExecution:
                 "is_positive_definite": True,
             }
         )
-        with pytest.raises(ValidationError):
-            ChristoffelDarbouxRequest(family=family, degree=1)
+        request = ChristoffelDarbouxRequest(family=family, degree=1)
+        with pytest.raises(ValueError):
+            compute_christoffel_darboux(request)
 
 
 class TestNativeAdmission:

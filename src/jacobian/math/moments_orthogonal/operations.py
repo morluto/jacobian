@@ -198,7 +198,7 @@ def hankel_matrix_from_prefix(
     ]
     determinant = _rational_det(matrix)
     rank = _rational_rank(matrix)
-    return HankelMomentMatrix(
+    return HankelMomentMatrix._from_kernel(
         order=order,
         entries=tuple(
             tuple(_from_fraction(matrix[i][j]) for j in range(order + 1))
@@ -384,7 +384,7 @@ def orthogonal_polynomials_from_moments(
             )
         )
 
-    return OrthogonalPolynomialFamily(
+    return OrthogonalPolynomialFamily._from_kernel(
         polynomials=tuple(poly_terms),
         variable=var,
         is_quasi_definite=is_quasi_definite,
@@ -499,7 +499,7 @@ def recurrence_coefficients_from_family(
                 "recurrence coefficients exceed the canonical rational "
                 "digit limit for this family"
             )
-    return ThreeTermRecurrence(
+    return ThreeTermRecurrence._from_kernel(
         alpha=tuple(_from_fraction(a) for a in alphas),
         beta=tuple(_from_fraction(b) for b in betas),
         variable=family.variable,
@@ -564,7 +564,7 @@ def christoffel_darboux_kernel_from_family(
                     "Christoffel-Darboux kernel coefficients exceed the "
                     "canonical rational digit limit for this family"
                 )
-    return ChristoffelDarbouxKernel(
+    return ChristoffelDarbouxKernel._from_kernel(
         degree=m,
         coefficients=tuple(
             tuple(_from_fraction(coefficients[i][j]) for j in range(size))
@@ -705,14 +705,13 @@ def gaussian_quadrature_rule_from_prefix(
         )
         if approximation != _to_fraction(prefix.moments[k]):
             raise ValueError(f"quadrature is not exact at degree {k}")
-    return GaussianQuadratureRule(
+    return GaussianQuadratureRule._from_kernel(
         order=order,
         nodes=tuple(
             QuadratureNode(node=_from_fraction(node), weight=_from_fraction(weight))
             for node, weight in zip(nodes_frac, weights, strict=True)
         ),
         variable=prefix.variable,
-        exactness_degree=2 * order - 1,
         prefix=prefix,
     )
 
@@ -748,3 +747,105 @@ def _solve_linear_system(
             for j in range(n + 1):
                 aug[row][j] -= factor * aug[col][j]
     return [aug[i][n] / aug[i][i] for i in range(n)]
+
+
+def verify_hankel_moment_matrix(result: HankelMomentMatrix) -> bool:
+    """Verify an independently supplied bounded Hankel matrix claim."""
+    try:
+        side = result.order + 1
+        matrix = [[entry.as_fraction() for entry in row] for row in result.entries]
+        if len(matrix) != side or any(len(row) != side for row in matrix):
+            return False
+        if any(
+            matrix[i][j] != matrix[a][b]
+            for i in range(side)
+            for j in range(side)
+            for a in range(side)
+            for b in range(side)
+            if i + j == a + b
+        ):
+            return False
+        return result.determinant.as_fraction() == _rational_det(
+            matrix
+        ) and result.rank == _rational_rank(matrix)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return False
+
+
+def verify_orthogonal_polynomial_family(family: OrthogonalPolynomialFamily) -> bool:
+    """Check the bounded three-term and norm identities of a supplied family."""
+    try:
+        polynomials = family.polynomials
+        for k in range(len(polynomials) - 1):
+            p_k = [
+                coefficient.as_fraction() for coefficient in polynomials[k].coefficients
+            ]
+            p_next = [
+                coefficient.as_fraction()
+                for coefficient in polynomials[k + 1].coefficients
+            ]
+            residual = [Fraction(0), *p_k]
+            for index, coefficient in enumerate(p_next):
+                residual[index] -= coefficient
+            components = [Fraction(0)] * (k + 1)
+            for degree in range(k, -1, -1):
+                coefficient = residual[degree]
+                components[degree] = coefficient
+                for power, basis_coefficient in enumerate(
+                    polynomials[degree].coefficients
+                ):
+                    residual[power] -= coefficient * basis_coefficient.as_fraction()
+            if any(residual) or any(components[: max(k - 1, 0)]):
+                return False
+            if k >= 1 and (
+                polynomials[k].squared_norm.as_fraction()
+                != components[k - 1] * polynomials[k - 1].squared_norm.as_fraction()
+            ):
+                return False
+        norms = [term.squared_norm.as_fraction() for term in polynomials]
+        return family.is_quasi_definite == all(
+            norm != 0 for norm in norms
+        ) and family.is_positive_definite == all(norm > 0 for norm in norms)
+    except (IndexError, TypeError, ValueError, ZeroDivisionError):
+        return False
+
+
+def verify_christoffel_darboux_kernel(result: ChristoffelDarbouxKernel) -> bool:
+    """Verify one independently supplied bounded Christoffel--Darboux claim."""
+    try:
+        expected = _kernel_coefficient_matrix(result.family.polynomials, result.degree)
+        actual = tuple(
+            tuple(value.as_fraction() for value in row) for row in result.coefficients
+        )
+        return actual == tuple(tuple(row) for row in expected)
+    except (IndexError, TypeError, ValueError, ZeroDivisionError):
+        return False
+
+
+def verify_gaussian_quadrature_rule(result: GaussianQuadratureRule) -> bool:
+    """Verify a supplied bounded rational Gaussian quadrature certificate."""
+    try:
+        require_gaussian_quadrature_admission(result.prefix, result.order)
+        nodes, weights = _build_quadrature_rule(result.prefix, result.order)
+        expected = tuple(
+            QuadratureNode(node=_from_fraction(node), weight=_from_fraction(weight))
+            for node, weight in zip(nodes, weights, strict=True)
+        )
+        return result.nodes == expected
+    except (TypeError, ValueError, ZeroDivisionError):
+        return False
+
+
+__all__ = [
+    "compute_christoffel_darboux",
+    "compute_gaussian_quadrature",
+    "compute_hankel_matrix",
+    "compute_jacobi_matrix",
+    "compute_orthogonal_polynomials",
+    "compute_recurrence",
+    "compute_shifted_hankel",
+    "verify_christoffel_darboux_kernel",
+    "verify_gaussian_quadrature_rule",
+    "verify_hankel_moment_matrix",
+    "verify_orthogonal_polynomial_family",
+]

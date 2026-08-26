@@ -17,6 +17,7 @@ from jacobian.math.polynomials.rational_functions._models import (
 )
 from jacobian.math.polynomials.rational_functions._operations import (
     compute_hermite_reduction,
+    verify_hermite_reduction_result,
 )
 from jacobian.math.polynomials.rational_functions._tools import TOOLS
 
@@ -50,6 +51,7 @@ def test_hermite_reduction_reconstructs_source(
     assert cancel(diff(rational_part, x) + remainder - expression) == 0
     assert result.rational_primitive_status == status
     assert (result.rational_primitive is not None) == (status == "RATIONAL_PRIMITIVE")
+    assert verify_hermite_reduction_result(result)
 
 
 def test_native_hermite_reduction_uses_canonical_polynomial_owner() -> None:
@@ -87,58 +89,58 @@ def test_adding_exact_derivative_preserves_remainder() -> None:
     )
 
 
-def test_result_rejects_source_mutation() -> None:
+def test_structural_result_allows_source_mutation_but_verifier_rejects_it() -> None:
     result = compute_hermite_reduction(_request(1 / (x - 1)))
     mutated_source = rational_function_from_sympy(1 / (x - 1) + 1, ("x",))
 
-    with pytest.raises(ValidationError):
-        HermiteReductionResult.model_validate(
-            {
-                **result.model_dump(mode="json"),
-                "function": mutated_source.model_dump(mode="json"),
-            }
-        )
+    forged = HermiteReductionResult.model_validate(
+        {
+            **result.model_dump(mode="json"),
+            "function": mutated_source.model_dump(mode="json"),
+        }
+    )
+    assert not verify_hermite_reduction_result(forged)
 
 
-def test_result_rejects_nonzero_additive_constant() -> None:
+def test_verifier_rejects_nonzero_additive_constant() -> None:
     result = compute_hermite_reduction(_request(x))
     translated_part = rational_function_from_sympy(x**2 / 2 + 1, ("x",))
 
-    with pytest.raises(ValidationError):
-        HermiteReductionResult.model_validate(
-            {
-                **result.model_dump(mode="json"),
-                "rational_part": translated_part.model_dump(mode="json"),
-                "rational_primitive": translated_part.model_dump(mode="json"),
-            }
-        )
+    forged = HermiteReductionResult.model_validate(
+        {
+            **result.model_dump(mode="json"),
+            "rational_part": translated_part.model_dump(mode="json"),
+            "rational_primitive": translated_part.model_dump(mode="json"),
+        }
+    )
+    assert not verify_hermite_reduction_result(forged)
 
 
-def test_result_rejects_non_square_free_remainder() -> None:
+def test_verifier_rejects_non_square_free_remainder() -> None:
     request = _request(1 / (x - 1) ** 2)
     zero = rational_function_from_sympy(0, ("x",))
 
-    with pytest.raises(ValidationError):
-        HermiteReductionResult(
-            function=request.function,
-            rational_part=zero,
-            remainder=request.function,
-            rational_primitive_status="NO_RATIONAL_PRIMITIVE",
-            rational_primitive=None,
-        )
+    forged = HermiteReductionResult(
+        function=request.function,
+        rational_part=zero,
+        remainder=request.function,
+        rational_primitive_status="NO_RATIONAL_PRIMITIVE",
+        rational_primitive=None,
+    )
+    assert not verify_hermite_reduction_result(forged)
 
 
-def test_result_rejects_improper_remainder() -> None:
+def test_verifier_rejects_improper_remainder() -> None:
     request = _request(0)
 
-    with pytest.raises(ValidationError):
-        HermiteReductionResult(
-            function=request.function,
-            rational_part=rational_function_from_sympy(x**2 / 2, ("x",)),
-            remainder=rational_function_from_sympy(-x, ("x",)),
-            rational_primitive_status="NO_RATIONAL_PRIMITIVE",
-            rational_primitive=None,
-        )
+    forged = HermiteReductionResult(
+        function=request.function,
+        rational_part=rational_function_from_sympy(x**2 / 2, ("x",)),
+        remainder=rational_function_from_sympy(-x, ("x",)),
+        rational_primitive_status="NO_RATIONAL_PRIMITIVE",
+        rational_primitive=None,
+    )
+    assert not verify_hermite_reduction_result(forged)
 
 
 @pytest.mark.parametrize(

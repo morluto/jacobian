@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight
 from jacobian.math.moments_orthogonal.values import (
     MAX_HANKEL_ORDER,
     MAX_POLYNOMIAL_DEGREE,
@@ -20,6 +21,17 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"moments_orthogonal.{reason}", message)
 
 
+def _require_moment_height(
+    prefix: MomentFunctionalPrefix, count: int, bound: int, reason: str, message: str
+) -> None:
+    """Apply a request-local exact-height envelope without running a kernel."""
+    if any(
+        RationalHeight.from_canonical(value).exceeds(bound)
+        for value in prefix.moments[:count]
+    ):
+        raise _validation_error(reason, message)
+
+
 class HankelRequest(StrictModel):
     """Compute the Hankel matrix H_r from a moment prefix."""
 
@@ -28,15 +40,20 @@ class HankelRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_sufficient_moments(self) -> Self:
-        from jacobian.math.moments_orthogonal.operations import (
-            HankelMatrixAdmissionError,
-            require_hankel_matrix_admission,
+        needed = 2 * self.order + 1
+        if len(self.prefix.moments) < needed:
+            raise _validation_error(
+                "insufficient_moments",
+                f"need at least {needed} moments for order {self.order}, got {len(self.prefix.moments)}",
+            )
+        bound = max(32_768 // ((self.order + 1) ** 2) - 2, 8)
+        _require_moment_height(
+            self.prefix,
+            needed,
+            bound,
+            "determinant_height",
+            f"moment heights exceed the conservative {bound}-digit bound for an exact order-{self.order} determinant",
         )
-
-        try:
-            require_hankel_matrix_admission(self.prefix, self.order, shifted=False)
-        except HankelMatrixAdmissionError as exc:
-            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 
@@ -51,15 +68,22 @@ class ShiftedHankelRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_sufficient_moments(self) -> Self:
-        from jacobian.math.moments_orthogonal.operations import (
-            HankelMatrixAdmissionError,
-            require_hankel_matrix_admission,
+        needed = 2 * self.order + 2
+        if len(self.prefix.moments) < needed:
+            raise _validation_error(
+                "insufficient_moments",
+                f"need at least {needed} moments for shifted order {self.order}, got {len(self.prefix.moments)}",
+            )
+        bound = max(32_768 // ((self.order + 1) ** 2) - 2, 8)
+        _require_moment_height(
+            MomentFunctionalPrefix(
+                moments=self.prefix.moments[1:], variable=self.prefix.variable
+            ),
+            2 * self.order + 1,
+            bound,
+            "determinant_height",
+            f"moment heights exceed the conservative {bound}-digit bound for an exact order-{self.order} determinant",
         )
-
-        try:
-            require_hankel_matrix_admission(self.prefix, self.order, shifted=True)
-        except HankelMatrixAdmissionError as exc:
-            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 
@@ -80,36 +104,16 @@ class OrthogonalPolynomialRequest(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def require_quasi_definite_prefix(self) -> Self:
-        """Replay the exact Gram-Schmidt kernel so a prefix whose orthogonal
-        family would hit a zero squared norm is rejected at the boundary
-        instead of failing inside execution.
-
-        The conservative height gate runs FIRST: without it, parsing would
-        perform every exact projection on unbounded intermediates before
-        discovering an over-tall family at wire construction. After the
-        gate, both this admission replay and the execution that follows it
-        operate on provably bounded intermediates with typed height checks.
-        """
-        from jacobian.math.moments_orthogonal.operations import (
-            MomentsOrthogonalAdmissionError,
-            _require_gram_schmidt_heights_admissible,
-        )
-
-        try:
-            _require_gram_schmidt_heights_admissible(
-                self.prefix.moments, self.max_degree
-            )
-        except MomentsOrthogonalAdmissionError as exc:
-            raise _validation_error(exc.reason, str(exc)) from None
-        from jacobian.math.moments_orthogonal.operations import (
-            orthogonal_polynomials_from_moments,
-        )
-
-        orthogonal_polynomials_from_moments(
-            [_m.as_fraction() for _m in self.prefix.moments],
-            self.max_degree,
-            self.prefix.variable,
+    def require_gram_schmidt_height(self) -> Self:
+        """Bound only the request envelope; execution remains owner-local."""
+        side = self.max_degree + 1
+        bound = max((32_768 - 2 * side) // (2 * side * (side + 1)), 8)
+        _require_moment_height(
+            self.prefix,
+            2 * self.max_degree + 1,
+            bound,
+            "gram_schmidt_height",
+            f"moment heights exceed the conservative {bound}-digit bound for exact degree-{self.max_degree} Gram-Schmidt; supply a smaller or better-scaled moment prefix",
         )
         return self
 
@@ -137,9 +141,6 @@ class RecurrenceRequest(StrictModel):
                 "recurrence coefficients require every non-terminal "
                 "squared norm to be nonzero",
             )
-        from jacobian.math.moments_orthogonal.operations import compute_recurrence
-
-        compute_recurrence(self)
         return self
 
 
@@ -161,13 +162,7 @@ class ChristoffelDarbouxRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_nonzero_norms_through_degree(self) -> Self:
-        """The defining sum divides each p_k(x) p_k(y) term by h_k; only
-        norms through the requested degree are consumed and gate admission.
-        Admission then replays the bounded coefficient construction so an
-        over-tall kernel (e.g. p_1 = x + 10^17000 with unit norms at
-        degree 1, whose constant coefficient reaches 10^34000 + 1) fails
-        parsing instead of raising during execution.
-        """
+        """The defining sum divides only by norms through this degree."""
         for term in self.family.polynomials[: self.degree + 1]:
             if term.squared_norm.as_fraction() == 0:
                 raise _validation_error(
@@ -176,11 +171,6 @@ class ChristoffelDarbouxRequest(StrictModel):
                     f"requires nonzero squared norms through degree "
                     f"{self.degree}, but p_{term.degree} has a vanishing norm",
                 )
-        from jacobian.math.moments_orthogonal.operations import (
-            compute_christoffel_darboux,
-        )
-
-        compute_christoffel_darboux(self)
         return self
 
 
@@ -221,15 +211,21 @@ class GaussianQuadratureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_sufficient_moments(self) -> Self:
-        from jacobian.math.moments_orthogonal.operations import (
-            GaussianQuadratureAdmissionError,
-            require_gaussian_quadrature_admission,
+        needed = 2 * self.order
+        if len(self.prefix.moments) < needed:
+            raise _validation_error(
+                "insufficient_moments",
+                f"need at least {needed} moments for quadrature order {self.order}, got {len(self.prefix.moments)}",
+            )
+        side = self.order + 1
+        bound = max((32_768 - 2 * side) // (2 * side * (side + 1)), 8)
+        _require_moment_height(
+            self.prefix,
+            needed,
+            bound,
+            "gram_schmidt_height",
+            f"moment heights exceed the conservative {bound}-digit bound for exact degree-{self.order} Gram-Schmidt; supply a smaller or better-scaled moment prefix",
         )
-
-        try:
-            require_gaussian_quadrature_admission(self.prefix, self.order)
-        except GaussianQuadratureAdmissionError as exc:
-            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 

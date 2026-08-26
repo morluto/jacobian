@@ -4,7 +4,7 @@ from jacobian.catalog._examples import example
 from jacobian.math.modular_polynomials import (
     ModularPolynomialIdentityRequest,
     ModularPolynomialIdentityValue,
-    modular_polynomial_identity,
+    _modular_polynomial_identity_request,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 
@@ -19,7 +19,7 @@ MODULAR_IDENTITY_OPERATIONS = (
         ),
         ModularPolynomialIdentityRequest,
         ModularPolynomialIdentityValue,
-        modular_polynomial_identity,
+        _modular_polynomial_identity_request,
         "number-theory",
         "modular",
         "polynomial",

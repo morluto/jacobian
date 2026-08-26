@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import ceil, log10
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -92,6 +93,25 @@ def _require_bounded_sos_work(
         raise _validation_error(
             "sos_work_bound", "predicted SOS expansion exceeds term bound"
         )
+    # A coefficient in the expansion combines at most ``predicted`` products.
+    # Each product has a numerator and denominator no wider than twice its
+    # input coefficient width.  Bounding the unreduced common denominator is
+    # deliberately conservative, but means parsing never needs to expand a
+    # polynomial merely to discover that its canonical result cannot fit.
+    max_digits = max(
+        (
+            max(len(term.coefficient.num.lstrip("-")), len(term.coefficient.den))
+            for summand in summands
+            for term in summand.polynomial.terms
+        ),
+        default=1,
+    )
+    coefficient_digits = 2 * max_digits * predicted + ceil(log10(predicted + 1))
+    if coefficient_digits > 32_768:
+        raise _validation_error(
+            "coefficient_growth_bound",
+            "predicted SOS coefficient growth exceeds the canonical rational limit",
+        )
 
 
 def _require_square_gram_side(
@@ -137,10 +157,15 @@ def _require_bounded_gram_work(
 
 
 class SOSDecompositionCheckRequest(StrictModel):
-    """Check that p = q_1^2 + ... + q_r^2 over QQ."""
+    """Check that p = q_1^2 + ... + q_r^2 over QQ.
+
+    The summand family may be empty: its exact sum is the canonical zero
+    polynomial.  This makes the zero decomposition available without an
+    artificial zero witness.
+    """
 
     polynomial: RationalPolynomial
-    summands: tuple[RationalPolynomial, ...] = Field(min_length=1, max_length=64)
+    summands: tuple[RationalPolynomial, ...] = Field(max_length=64)
 
     @model_validator(mode="after")
     def require_matching_ring(self) -> Self:
@@ -152,21 +177,6 @@ class SOSDecompositionCheckRequest(StrictModel):
                 )
         # Bound polynomial expansion before squaring.
         _require_bounded_sos_work(self.polynomial, self.summands)
-        # The term-product cap does not bound exact coefficient growth: 64
-        # eight-term summands with distinct 128-digit prime denominators can
-        # align onto one output coefficient and reduce to a ~65,000-digit
-        # denominator. Admission therefore replays the exact expansion so
-        # any over-canonical computed_sum fails parsing, not execution.
-        from jacobian.math.sum_of_squares._operations import _check_sos_invariants
-
-        try:
-            _check_sos_invariants(self.polynomial, self.summands)
-        except Exception as exc:
-            raise _validation_error(
-                "sos_replay",
-                "SOS expansion leaves the canonical polynomial domain; "
-                "supply smaller or better-scaled summand coefficients",
-            ) from exc
         return self
 
 
@@ -175,25 +185,44 @@ class SOSDecompositionCheckResult(StrictModel):
 
     is_valid: bool
     polynomial: RationalPolynomial
-    summands: tuple[RationalPolynomial, ...] = Field(min_length=1, max_length=64)
+    summands: tuple[RationalPolynomial, ...] = Field(max_length=64)
     computed_sum: RationalPolynomial
     method: Literal["EXACT_COEFFICIENT_IDENTITY"] = "EXACT_COEFFICIENT_IDENTITY"
 
     @model_validator(mode="after")
     def bind_sos(self) -> Self:
-        from jacobian.math.sum_of_squares._operations import _check_sos_invariants
-
         _require_bounded_sos_work(self.polynomial, self.summands)
-        is_valid, computed = _check_sos_invariants(self.polynomial, self.summands)
-        if self.is_valid != is_valid:
+        _require_bounded_polynomial(
+            self.computed_sum, "computed_sum", max_terms=MAX_SOS_TERMS
+        )
+        if self.computed_sum.variables != self.polynomial.variables:
             raise _validation_error(
-                "sos_validity", "is_valid must match the exact coefficient identity"
+                "ring_mismatch", "computed_sum must use the polynomial ring"
             )
-        if self.computed_sum != computed:
+        if self.is_valid != (self.computed_sum == self.polynomial):
             raise _validation_error(
-                "sos_computed_sum", "computed_sum must be the exact sum of squares"
+                "sos_validity",
+                "is_valid must agree with whether computed_sum equals polynomial",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        polynomial: RationalPolynomial,
+        summands: tuple[RationalPolynomial, ...],
+        is_valid: bool,
+        computed_sum: RationalPolynomial,
+    ) -> Self:
+        """Construct a result emitted by the owner-local exact kernel."""
+
+        return cls(
+            is_valid=is_valid,
+            polynomial=polynomial,
+            summands=summands,
+            computed_sum=computed_sum,
+        )
 
 
 def _require_bounded_gram_admission(
@@ -259,32 +288,39 @@ class GramCertificateResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_invariants(self) -> Self:
-        from jacobian.math.sum_of_squares._operations import _check_gram_invariants
-
-        # Deserialized results replay through the same bounded admission as
-        # the request: no unbounded exact reconstruction or eigenvalue work.
         _require_bounded_gram_admission(
             self.polynomial, self.monomial_basis, self.gram_matrix
         )
-        is_sym, recon, psd = _check_gram_invariants(
-            self.polynomial, self.monomial_basis, self.gram_matrix.entries
-        )
-        if self.is_symmetric != is_sym:
-            raise _validation_error(
-                "gram_symmetry", "is_symmetric must match the exact symmetry check"
-            )
-        if self.reconstructs_polynomial != recon:
-            raise _validation_error(
-                "gram_reconstruction",
-                "reconstructs_polynomial must match the exact reconstruction check",
-            )
-        if self.is_psd != psd:
-            raise _validation_error("gram_psd", "is_psd must match the exact PSD check")
-        if self.is_valid != (is_sym and recon and psd):
+        if self.is_valid != (
+            self.is_symmetric and self.reconstructs_polynomial and self.is_psd
+        ):
             raise _validation_error(
                 "gram_validity", "is_valid must be the conjunction of the three checks"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        polynomial: RationalPolynomial,
+        monomial_basis: tuple[RationalPolynomial, ...],
+        gram_matrix: RationalMatrix,
+        is_symmetric: bool,
+        reconstructs_polynomial: bool,
+        is_psd: bool,
+    ) -> Self:
+        """Construct a result emitted by the owner-local exact kernel."""
+
+        return cls(
+            is_valid=is_symmetric and reconstructs_polynomial and is_psd,
+            is_symmetric=is_symmetric,
+            reconstructs_polynomial=reconstructs_polynomial,
+            is_psd=is_psd,
+            polynomial=polynomial,
+            monomial_basis=monomial_basis,
+            gram_matrix=gram_matrix,
+        )
 
 
 __all__ = [

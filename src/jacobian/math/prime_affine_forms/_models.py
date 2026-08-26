@@ -10,12 +10,8 @@ from sympy import isprime
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.affine_forms.values import AffineFormId
 from jacobian.math.prime_affine_forms._kernel import (
-    MAX_DETERMINISTIC_PRIME_INPUT,
-    interval_match_summary,
-    interval_matches,
     local_bad_residues,
 )
 from jacobian.math.prime_affine_forms.values import (
@@ -31,9 +27,6 @@ MAX_BATCH_ROOT_WORK = 250_000
 MAX_FACTOR_COMPONENT_DIGITS = 4_096
 MAX_FACTOR_PRODUCT_DIGITS = 8_192
 MAX_RESULT_CHARACTER_BUDGET = 2_000_000
-MAX_INTERVAL_ENDPOINT_DIGITS = 64
-MAX_INTERVAL_REPLAY_EVALUATIONS = 200_000
-MAX_INTERVAL_ENUMERATION_CELLS = 65_536
 
 CompactPrime = Annotated[
     StrictInt,
@@ -45,10 +38,6 @@ CompactPrime = Annotated[
             f"{MAX_BATCH_PRIME}."
         ),
     ),
-]
-IntervalEndpointInteger = Annotated[
-    CanonicalInteger,
-    StringConstraints(max_length=MAX_INTERVAL_ENDPOINT_DIGITS + 1, strict=True),
 ]
 DeterministicPrimeInteger = Annotated[
     CanonicalInteger,
@@ -143,39 +132,6 @@ def _require_summary(source: PrimeAffineTuple, summary: PrimeTupleLocalSummary) 
         raise _validation_error("local residue counts do not match the source tuple")
 
 
-def _parse_interval(lower: str, upper: str) -> tuple[int, int, int]:
-    if (
-        _digits(lower) > MAX_INTERVAL_ENDPOINT_DIGITS
-        or _digits(upper) > MAX_INTERVAL_ENDPOINT_DIGITS
-    ):
-        raise _validation_error(
-            "interval endpoints must each have at most "
-            f"{MAX_INTERVAL_ENDPOINT_DIGITS} digits"
-        )
-    lower_value = parse_canonical_integer(lower)
-    upper_value = parse_canonical_integer(upper)
-    if lower_value > upper_value:
-        raise _validation_error(
-            "interval lower endpoint must not exceed upper endpoint"
-        )
-    return lower_value, upper_value, upper_value - lower_value + 1
-
-
-def _interval_value_digit_bound(
-    source: PrimeAffineTuple, lower: int, upper: int
-) -> int:
-    maximum_digits = 1
-    for form in source.forms:
-        values = (form.evaluate(lower), form.evaluate(upper))
-        maximum_digits = max(maximum_digits, *(_digits(value) for value in values))
-        if max(values) > MAX_DETERMINISTIC_PRIME_INPUT:
-            raise _validation_error(
-                "a positive affine value exceeds SymPy's deterministic primality "
-                f"range 0..{MAX_DETERMINISTIC_PRIME_INPUT}"
-            )
-    return maximum_digits
-
-
 class PrimeTupleBadResidueRow(StrictModel):
     """One residue excluded by the labelled forms that vanish there."""
 
@@ -235,161 +191,10 @@ class PrimeTupleLocalSummary(StrictModel):
         return self
 
 
-class PrimeAffineIntervalCountRequest(StrictModel):
-    """Count all positive-prime affine tuples on one closed integer interval."""
-
-    source: PrimeAffineTuple
-    lower: IntervalEndpointInteger = Field(
-        description="Canonical lower endpoint of a nonempty closed integer interval."
-    )
-    upper: IntervalEndpointInteger = Field(
-        description="Canonical upper endpoint, required to be at least lower."
-    )
-
-    @model_validator(mode="after")
-    def require_bounded_complete_count(self) -> Self:
-        lower, upper, interval_size = _parse_interval(self.lower, self.upper)
-        _interval_value_digit_bound(self.source, lower, upper)
-        replay_evaluations = 2 * interval_size * self.source.form_count
-        if replay_evaluations > MAX_INTERVAL_REPLAY_EVALUATIONS:
-            raise _validation_error(
-                f"interval result and validation need {replay_evaluations} affine "
-                f"evaluations, exceeding {MAX_INTERVAL_REPLAY_EVALUATIONS}"
-            )
-        return self
-
-
-class PrimeAffineIntervalEnumerateRequest(PrimeAffineIntervalCountRequest):
-    """Enumerate all positive-prime affine tuples on a stricter output envelope."""
-
-    @model_validator(mode="after")
-    def require_bounded_complete_enumeration(self) -> Self:
-        lower, upper, interval_size = _parse_interval(self.lower, self.upper)
-        value_digits = _interval_value_digit_bound(self.source, lower, upper)
-        result_cells = interval_size * (self.source.form_count + 1)
-        if result_cells > MAX_INTERVAL_ENUMERATION_CELLS:
-            raise _validation_error(
-                f"interval enumeration may need {result_cells} result cells, "
-                f"exceeding {MAX_INTERVAL_ENUMERATION_CELLS}"
-            )
-        parameter_digits = max(_digits(lower), _digits(upper))
-        serialized_characters = (
-            _source_character_upper_bound(self.source)
-            + interval_size
-            * (40 + parameter_digits + self.source.form_count * (value_digits + 4))
-            + 256
-        )
-        if serialized_characters > MAX_RESULT_CHARACTER_BUDGET:
-            raise _validation_error(
-                "interval enumeration exceeds the conservative serialized bound"
-            )
-        return self
-
-
-class PrimePatternMatch(StrictModel):
-    parameter: IntervalEndpointInteger
-    prime_values: tuple[DeterministicPrimeInteger, ...] = Field(
-        min_length=1, max_length=MAX_AFFINE_FORMS
-    )
-
-
-class PrimePatternIntervalCountResult(StrictModel):
-    source: PrimeAffineTuple
-    lower: IntervalEndpointInteger
-    upper: IntervalEndpointInteger
-    interval_size: StrictInt = Field(ge=1)
-    affine_values_examined: StrictInt = Field(ge=1)
-    match_count: StrictInt = Field(ge=0)
-    first_match: IntervalEndpointInteger | None = None
-    last_match: IntervalEndpointInteger | None = None
-
-    @model_validator(mode="after")
-    def bind_exact_interval_count(self) -> Self:
-        PrimeAffineIntervalCountRequest(
-            source=self.source, lower=self.lower, upper=self.upper
-        )
-        lower, upper, interval_size = _parse_interval(self.lower, self.upper)
-        expected_count, expected_first, expected_last = interval_match_summary(
-            self.source, lower, upper
-        )
-        if self.interval_size != interval_size:
-            raise _validation_error("interval_size must equal upper-lower+1")
-        if self.affine_values_examined != interval_size * self.source.form_count:
-            raise _validation_error(
-                "affine_values_examined does not match the complete interval"
-            )
-        if self.match_count != expected_count:
-            raise _validation_error(
-                "match_count does not match exact interval primality"
-            )
-        if (
-            None
-            if self.first_match is None
-            else parse_canonical_integer(self.first_match)
-        ) != expected_first or (
-            None
-            if self.last_match is None
-            else parse_canonical_integer(self.last_match)
-        ) != expected_last:
-            raise _validation_error(
-                "first or last match does not match exact interval primality"
-            )
-        return self
-
-
-class PrimePatternIntervalEnumerateResult(StrictModel):
-    source: PrimeAffineTuple
-    lower: IntervalEndpointInteger
-    upper: IntervalEndpointInteger
-    interval_size: StrictInt = Field(ge=1)
-    affine_values_examined: StrictInt = Field(ge=1)
-    matches: tuple[PrimePatternMatch, ...] = Field(
-        max_length=MAX_INTERVAL_ENUMERATION_CELLS
-    )
-
-    @model_validator(mode="after")
-    def bind_complete_interval_enumeration(self) -> Self:
-        result_cells = len(self.matches) + sum(
-            len(match.prime_values) for match in self.matches
-        )
-        if result_cells > MAX_INTERVAL_ENUMERATION_CELLS:
-            raise _validation_error("matches exceed the interval result-cell bound")
-        PrimeAffineIntervalEnumerateRequest(
-            source=self.source, lower=self.lower, upper=self.upper
-        )
-        lower, upper, interval_size = _parse_interval(self.lower, self.upper)
-        expected = interval_matches(self.source, lower, upper)
-        actual = tuple(
-            (
-                parse_canonical_integer(match.parameter),
-                tuple(parse_canonical_integer(value) for value in match.prime_values),
-            )
-            for match in self.matches
-        )
-        if actual != expected:
-            raise _validation_error(
-                "matches must be every and only positive-prime affine tuple"
-            )
-        if self.interval_size != interval_size:
-            raise _validation_error("interval_size must equal upper-lower+1")
-        if self.affine_values_examined != interval_size * self.source.form_count:
-            raise _validation_error(
-                "affine_values_examined does not match the complete interval"
-            )
-        return self
-
-
 __all__ = [
     "MAX_BATCH_PRIME",
-    "MAX_INTERVAL_ENUMERATION_CELLS",
-    "MAX_INTERVAL_REPLAY_EVALUATIONS",
     "MAX_LOCAL_PROFILE_PRIME",
     "MAX_PRIME_BATCH",
-    "PrimeAffineIntervalCountRequest",
-    "PrimeAffineIntervalEnumerateRequest",
-    "PrimePatternIntervalCountResult",
-    "PrimePatternIntervalEnumerateResult",
-    "PrimePatternMatch",
     "PrimeTupleBadResidueRow",
     "PrimeTupleLocalSummary",
     "PrimeTupleResidueRow",

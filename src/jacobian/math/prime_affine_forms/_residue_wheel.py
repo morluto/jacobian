@@ -16,16 +16,18 @@ from jacobian.math.affine_forms.values import (
     AffineComponentInteger,
     AffineFormId,
 )
+from jacobian.math.prime_affine_forms._interval import (
+    MAX_INTERVAL_REPLAY_EVALUATIONS,
+    IntervalEndpointInteger,
+    _parse_interval,
+)
 from jacobian.math.prime_affine_forms._kernel import wheel_modulus
 from jacobian.math.prime_affine_forms._models import (
     MAX_BATCH_PRIME,
-    MAX_INTERVAL_REPLAY_EVALUATIONS,
     MAX_RESULT_CHARACTER_BUDGET,
     CompactPrime,
-    IntervalEndpointInteger,
     PrimeTupleLocalSummary,
     _digits,
-    _parse_interval,
     _require_prime_set,
     _require_summary,
     _source_character_upper_bound,

@@ -3,20 +3,25 @@ from __future__ import annotations
 import pytest
 from tests.math.number_theory._validation import expect_validation
 
+from jacobian.math.number_theory._derived_models import (
+    FactorialValuationRequest,
+    LegendreSymbolRequest,
+)
 from jacobian.math.number_theory._direct_factorization_models import (
     MAX_DIRECT_FACTORIZATION_DIGITS,
     DivisorListResult,
     FactorizationRequest,
     PrimeFactorizationResult,
 )
-from jacobian.math.number_theory._models import (
-    _MAX_CRT_SIZE,
-    _MAX_INTEGER_LENGTH,
-    ChineseRemainderRequest,
-    FactorialValuationRequest,
-    ModularValueRequest,
+from jacobian.math.number_theory._integer_models import (
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
+)
+from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
+from jacobian.math.number_theory._modular_basic_models import (
+    MAX_CRT_SIZE,
+    ChineseRemainderRequest,
+    ModularValueRequest,
 )
 from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueImageRequest,
@@ -46,6 +51,19 @@ def test_chinese_remainder_rejects_invalid_system_bounds(
         ChineseRemainderRequest.model_validate(payload)
 
 
+@pytest.mark.parametrize("prime", (3, 97, 9_999_991))
+def test_legendre_request_admits_prime_denominators_without_a_backend(
+    prime: int,
+) -> None:
+    assert LegendreSymbolRequest(a=2, prime=prime).prime == prime
+
+
+@pytest.mark.parametrize("composite", (9, 99, 9_999_999))
+def test_legendre_request_rejects_composite_denominators(composite: int) -> None:
+    with expect_validation("number_theory.legendre_denominator_must_be_prime"):
+        LegendreSymbolRequest(a=2, prime=composite)
+
+
 def test_chinese_remainder_rejects_combined_modulus_beyond_result_budget() -> None:
     """64 pairwise-coprime six-digit moduli each fit the per-modulus bound
     while their LCM exceeds the declared 256-character ``BoundedInteger``
@@ -55,7 +73,7 @@ def test_chinese_remainder_rejects_combined_modulus_beyond_result_budget() -> No
 
     moduli: list[int] = []
     candidate = 1_000_000
-    while len(moduli) < _MAX_CRT_SIZE:
+    while len(moduli) < MAX_CRT_SIZE:
         candidate = int(prevprime(candidate))
         moduli.append(candidate)
 
@@ -80,11 +98,11 @@ def test_chinese_remainder_admits_boundary_system_and_solves_exactly() -> None:
     candidate = 1_000_000
     while True:
         candidate = int(prevprime(candidate))
-        if len(str(combined * candidate)) > _MAX_INTEGER_LENGTH:
+        if len(str(combined * candidate)) > MAX_INTEGER_DIGITS:
             break
         moduli.append(candidate)
         combined *= candidate
-    assert len(str(combined)) >= _MAX_INTEGER_LENGTH - 6
+    assert len(str(combined)) >= MAX_INTEGER_DIGITS - 6
 
     request = ChineseRemainderRequest(residues=(1,) * len(moduli), moduli=tuple(moduli))
     result = solve_chinese_remainder(request)
@@ -92,7 +110,7 @@ def test_chinese_remainder_admits_boundary_system_and_solves_exactly() -> None:
     assert result.residue == "1"
     assert result.modulus == str(combined)
     assert int(result.modulus) == lcm(*moduli)
-    assert len(result.modulus) <= _MAX_INTEGER_LENGTH
+    assert len(result.modulus) <= MAX_INTEGER_DIGITS
 
 
 def test_in_process_factorization_dependencies_have_small_input_bounds() -> None:
@@ -109,7 +127,7 @@ def test_in_process_factorization_dependencies_have_small_input_bounds() -> None
 
 def test_primality_keeps_its_operation_specific_input_bound() -> None:
     with expect_validation("string_too_long"):
-        PrimalityRequest(value="1" + "0" * _MAX_INTEGER_LENGTH)
+        PrimalityRequest(value="1" + "0" * MAX_INTEGER_DIGITS)
 
 
 def test_direct_factorization_contract_schemas_preserve_their_envelopes() -> None:
@@ -123,7 +141,7 @@ def test_direct_factorization_contract_schemas_preserve_their_envelopes() -> Non
 
     assert request_value["maxLength"] == MAX_DIRECT_FACTORIZATION_DIGITS
     assert divisor_source["maxLength"] == MAX_DIRECT_FACTORIZATION_DIGITS
-    assert factorization_source["maxLength"] == _MAX_INTEGER_LENGTH
+    assert factorization_source["maxLength"] == MAX_INTEGER_DIGITS
 
 
 def test_modular_residue_image_contract_replays_canonical_assignments() -> None:
@@ -249,7 +267,7 @@ def test_divisor_list_result_rejects_mutations() -> None:
 
 
 def test_prime_factorization_result_replays_source() -> None:
-    from jacobian.math.number_theory._models import PrimePower
+    from jacobian.math.number_theory._integer_models import PrimePower
 
     result = PrimeFactorizationResult(
         value="72",
@@ -266,7 +284,7 @@ def test_prime_factorization_result_replays_source() -> None:
 
 
 def test_prime_factorization_result_rejects_mutations() -> None:
-    from jacobian.math.number_theory._models import PrimePower
+    from jacobian.math.number_theory._integer_models import PrimePower
 
     with expect_validation("number_theory."):
         PrimeFactorizationResult(value="4", factors=(PrimePower(prime="4", power=1),))
@@ -292,7 +310,7 @@ def test_prime_factorization_result_rejects_mutations() -> None:
 def test_prime_factorization_result_bounds_reconstruction_work() -> None:
     """Replay rejects reconstructions larger than the source before expanding."""
 
-    from jacobian.math.number_theory._models import PrimePower
+    from jacobian.math.number_theory._integer_models import PrimePower
 
     with expect_validation("number_theory."):
         PrimeFactorizationResult(

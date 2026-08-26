@@ -8,9 +8,9 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 from tests.math.number_theory._validation import expect_validation
 
+from jacobian.math import modular_polynomials
 from jacobian.math.modular_polynomials import (
     _INTEGER,
-    ModularPolynomialIdentityRequest,
     ModularPolynomialTerm,
     NormalizedModularPolynomialTerm,
     modular_polynomial_identity,
@@ -61,11 +61,9 @@ def test_residue_image_consumes_and_produces_the_canonical_term_types() -> None:
     ]
 
     identity = modular_polynomial_identity(
-        ModularPolynomialIdentityRequest(
-            modulus=5,
-            variables=("x",),
-            left=request.terms,
-        )
+        5,
+        ("x",),
+        request.terms,
     )
     result = compute_modular_polynomial_residue_image(request)
 
@@ -74,6 +72,17 @@ def test_residue_image_consumes_and_produces_the_canonical_term_types() -> None:
     assert result.model_dump(mode="json")["normalized_terms"] == [
         {"coefficient": 3, "exponents": [1]}
     ]
+
+
+def test_identity_native_api_exposes_values_and_semantic_scalars() -> None:
+    term = ModularPolynomialTerm(coefficient="6", exponents=(1,))
+
+    result = modular_polynomial_identity(5, ("x",), (term,))
+
+    assert "ModularPolynomialIdentityRequest" not in modular_polynomials.__all__
+    assert result.normalized_left == (
+        NormalizedModularPolynomialTerm(coefficient=1, exponents=(1,)),
+    )
 
 
 def test_residue_image_keeps_its_narrower_exponent_admission() -> None:
@@ -179,11 +188,9 @@ def test_emitted_results_parse_under_their_advertised_output_schema() -> None:
 def test_shared_normalized_term_type_retains_its_wider_envelope_elsewhere() -> None:
     wide_vector = (0, 0, 0, 0, 0, 0, 1)
     identity = modular_polynomial_identity(
-        ModularPolynomialIdentityRequest(
-            modulus=5,
-            variables=("a", "b", "c", "d", "e", "f", "g"),
-            left=(ModularPolynomialTerm(coefficient="1", exponents=wide_vector),),
-        )
+        5,
+        ("a", "b", "c", "d", "e", "f", "g"),
+        (ModularPolynomialTerm(coefficient="1", exponents=wide_vector),),
     )
 
     assert identity.normalized_left[0].exponents == wide_vector
@@ -200,11 +207,9 @@ def test_coefficient_boundary_follows_the_advertised_envelope() -> None:
 def test_shared_term_type_retains_its_wider_envelope_elsewhere() -> None:
     widest = "-" + "9" * 256
     identity = modular_polynomial_identity(
-        ModularPolynomialIdentityRequest(
-            modulus=5,
-            variables=("x",),
-            left=(ModularPolynomialTerm(coefficient=widest, exponents=(1,)),),
-        )
+        5,
+        ("x",),
+        (ModularPolynomialTerm(coefficient=widest, exponents=(1,)),),
     )
 
     assert identity.normalized_left[0].coefficient == int(widest) % 5

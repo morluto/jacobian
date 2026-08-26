@@ -8,7 +8,7 @@ from typing import Literal, cast
 
 from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.modular_polynomials import NormalizedModularPolynomialTerm
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._modular_basic_models import (
     ChineseRemainderRequest,
     ChineseRemainderResult,
     JacobiSymbolRequest,

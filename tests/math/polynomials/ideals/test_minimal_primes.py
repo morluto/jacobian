@@ -19,6 +19,7 @@ from jacobian.math.polynomials.ideals._models import (
 )
 from jacobian.math.polynomials.ideals._operations import (
     compute_ideal_minimal_primes,
+    verify_ideal_minimal_primes_result,
 )
 from jacobian.math.polynomials.ideals._singular import SingularMinimalPrimesResult
 from jacobian.math.polynomials.values import (
@@ -128,7 +129,7 @@ def _forbid_verifier(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def test_computed_family_passes_independent_defining_invariant_verification(
+def test_result_construction_is_structural_and_explicit_verifier_checks_family(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = _axes_request()
@@ -143,12 +144,10 @@ def test_computed_family_passes_independent_defining_invariant_verification(
         seen.append((source, claimed))
         return "VERIFIED"
 
-    monkeypatch.setattr(
-        f"{_VERIFIER_TARGET}.run_singular_minimal_primes_verification", verify
-    )
+    monkeypatch.setattr(_VERIFICATION_TARGET, verify)
     monkeypatch.setattr(
         _PRODUCER_TARGET,
-        lambda *args: pytest.fail("the model validator must not re-run the kernel"),
+        lambda *args: pytest.fail("result construction must not re-run the kernel"),
     )
 
     result = IdealMinimalPrimesResult(
@@ -159,48 +158,44 @@ def test_computed_family_passes_independent_defining_invariant_verification(
     )
 
     assert result.components == components
+    assert seen == []
+    assert verify_ideal_minimal_primes_result(result)
     assert seen == [(request.ideal, components)]
 
 
 @pytest.mark.parametrize("verdict", ["REFUTED", "TIMEOUT", "UNAVAILABLE", "ERROR"])
-def test_non_verified_verdicts_cannot_authorize_a_result(
+def test_non_verified_verdicts_fail_explicit_verification(
     monkeypatch: pytest.MonkeyPatch, verdict: str
 ) -> None:
     request = _axes_request()
     components = _axes_components()
 
-    monkeypatch.setattr(
-        f"{_VERIFIER_TARGET}.run_singular_minimal_primes_verification",
-        lambda source, claimed, budget: verdict,
+    monkeypatch.setattr(_VERIFICATION_TARGET, lambda source, claimed, budget: verdict)
+
+    result = IdealMinimalPrimesResult(
+        request=request,
+        outcome="COMPUTED",
+        components=components,
+        backend_version="4.4.0",
     )
-
-    with pytest.raises(ValidationError):
-        IdealMinimalPrimesResult(
-            request=request,
-            outcome="COMPUTED",
-            components=components,
-            backend_version="4.4.0",
-        )
+    assert not verify_ideal_minimal_primes_result(result)
 
 
-def test_computed_family_rejects_an_incomplete_family_by_radical_intersection(
+def test_explicit_verifier_rejects_incomplete_family_by_radical_intersection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = _axes_request()
     components = _axes_components()
 
-    monkeypatch.setattr(
-        f"{_VERIFIER_TARGET}.run_singular_minimal_primes_verification",
-        lambda source, claimed, budget: "REFUTED",
-    )
+    monkeypatch.setattr(_VERIFICATION_TARGET, lambda source, claimed, budget: "REFUTED")
 
-    with pytest.raises(ValidationError):
-        IdealMinimalPrimesResult(
-            request=request,
-            outcome="COMPUTED",
-            components=components[:1],
-            backend_version="4.4.0",
-        )
+    result = IdealMinimalPrimesResult(
+        request=request,
+        outcome="COMPUTED",
+        components=components[:1],
+        backend_version="4.4.0",
+    )
+    assert not verify_ideal_minimal_primes_result(result)
 
 
 def test_missing_backend_is_typed_and_makes_no_component_claim(
@@ -963,20 +958,20 @@ def test_high_degree_pure_power_source_has_the_single_axis_component() -> None:
     shutil.which("Singular") is None,
     reason="Singular 4.4 backend is not installed",
 )
-def test_forged_well_shaped_family_fails_independent_verification() -> None:
+def test_forged_well_shaped_family_fails_explicit_verification() -> None:
     variables = ("x", "y")
     request = IdealMinimalPrimesRequest(
         ideal=_ideal(variables, _poly(variables, (1, 1, (1, 1))))
     )
     forged = (_ideal(variables, _poly(variables, (1, 1, (1, 1)))),)
 
-    with pytest.raises(ValidationError):
-        IdealMinimalPrimesResult(
-            request=request,
-            outcome="COMPUTED",
-            components=forged,
-            backend_version="4.4.0",
-        )
+    result = IdealMinimalPrimesResult(
+        request=request,
+        outcome="COMPUTED",
+        components=forged,
+        backend_version="4.4.0",
+    )
+    assert not verify_ideal_minimal_primes_result(result)
 
 
 @pytest.mark.skipif(

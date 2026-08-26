@@ -316,10 +316,10 @@ def _powered_support_bound(
 
 ENUMERATION_WORK_CAP = 250_000
 _HEIGHT_CAP_BITS = 64 * MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS
-# A single catalog invocation validates the request, runs the compute
-# preflight, validates the inherited result, and runs the replay preflight;
-# per-pass admission scans share one quarter of the deterministic budget.
-_ADMISSION_SCAN_PASSES = 4
+# A catalog invocation validates the request and rechecks the envelope before
+# its one FLINT application; per-pass admission scans share that deterministic
+# budget.  Result construction is structural and does not replay the kernel.
+_ADMISSION_SCAN_PASSES = 2
 _RETAINED_WEIGHT_BITS = MAX_APPLICATION_RESULT_BYTES * 8
 
 
@@ -1160,9 +1160,9 @@ def validate_application_envelope(
         )
 
     if rescale_only:
-        # The result is c0^k * f: scaling costs one pass per source term and
-        # the replay doubles it; no operator power or derivative expansion runs.
-        work_units = 2 * 2 * len(polynomial.polynomial.terms)
+        # The result is c0^k * f: one source pass scales the coefficients; no
+        # operator power or derivative expansion runs.
+        work_units = 2 * len(polynomial.polynomial.terms)
     else:
         maximum_operator_order = max(
             (sum(term.orders) for term in operator.terms),
@@ -1184,9 +1184,7 @@ def validate_application_envelope(
         conversion_work = 2 * (
             len(polynomial.polynomial.terms) + term_count + candidate_terms
         )
-        # Result validation replays the same defining relation, so the public path
-        # pays for two complete applications rather than hiding replay work.
-        work_units = 2 * (power_work + derivative_work) + conversion_work
+        work_units = power_work + derivative_work + conversion_work
     if work_units > MAX_APPLICATION_WORK_UNITS:
         raise ValueError(
             "differential-operator application exceeds the deterministic work budget"

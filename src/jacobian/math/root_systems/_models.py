@@ -83,16 +83,38 @@ class PositiveRootsResult(CartanMatrixRequest):
     num_positive_roots: int
 
     @model_validator(mode="after")
-    def bind_roots(self) -> Self:
-        from jacobian.math.root_systems._cartan import positive_roots
-
-        expected = positive_roots(self.matrix)
-        if self.positive_roots != expected or self.num_positive_roots != len(expected):
+    def require_root_shape(self) -> Self:
+        if self.rank != len(self.matrix):
             raise _validation_error(
-                "positive_roots_mismatch",
-                "positive roots are not bound to the Cartan matrix",
+                "positive_roots_rank", "rank must equal the Cartan-matrix rank"
+            )
+        if self.num_positive_roots != len(self.positive_roots):
+            raise _validation_error(
+                "positive_roots_count",
+                "num_positive_roots must equal the number of positive roots",
+            )
+        if len(self.positive_roots) > 120 or any(
+            len(root) != self.rank
+            or any(coordinate < 0 or coordinate > 6 for coordinate in root)
+            or not any(root)
+            for root in self.positive_roots
+        ):
+            raise _validation_error(
+                "positive_roots_shape",
+                "positive roots must be nonzero bounded vectors on the Cartan axis",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: CartanMatrixRequest, positive_roots: tuple[tuple[int, ...], ...]
+    ) -> Self:
+        return cls.model_construct(
+            matrix=request.matrix,
+            rank=len(request.matrix),
+            positive_roots=positive_roots,
+            num_positive_roots=len(positive_roots),
+        )
 
 
 class RootComponentData(StrictModel):
@@ -115,60 +137,87 @@ class RootSystemDataResult(StrictModel):
     components: tuple[RootComponentData, ...]
 
     @model_validator(mode="after")
-    def bind_root_data(self) -> Self:
-        from jacobian.math.root_systems._cartan import (
-            connected_components,
-            positive_roots,
-        )
-
+    def require_root_data_shape(self) -> Self:
         CartanMatrixRequest(matrix=self.cartan_matrix)
-        expected = positive_roots(self.cartan_matrix)
         rank = len(self.cartan_matrix)
-        simple = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
-        if (
-            self.rank != rank
-            or self.simple_roots != simple
-            or self.positive_roots != expected
-            or self.num_positive_roots != len(expected)
+        if self.rank != rank or self.num_positive_roots != len(self.positive_roots):
+            raise _validation_error(
+                "root_data_count",
+                "root data must agree with its declared rank and count",
+            )
+        if any(
+            len(root) != rank
+            or any(coordinate < 0 or coordinate > 6 for coordinate in root)
+            or not any(root)
+            for root in self.positive_roots
+        ) or any(
+            len(root) != rank
+            or any(coordinate < -6 or coordinate > 0 for coordinate in root)
+            or not any(root)
+            for root in self.negative_roots
         ):
             raise _validation_error(
-                "root_data_mismatch",
-                "root-system data is not bound to its Cartan matrix",
+                "root_data_root_shape",
+                "roots must be nonzero bounded vectors on the Cartan axis",
             )
-        if self.negative_roots != tuple(
-            tuple(-value for value in root) for root in expected
+        if self.simple_roots != tuple(
+            tuple(int(i == j) for j in range(rank)) for i in range(rank)
         ):
             raise _validation_error(
-                "negative_roots_mismatch",
-                "negative roots must be the negatives of positive roots",
+                "simple_roots", "simple roots must be the canonical Cartan basis"
             )
-        expected_components = []
-        for indices in connected_components(self.cartan_matrix):
-            roots = tuple(
-                root
-                for root in expected
-                if any(root[index] for index in indices)
-                and all(
-                    root[index] == 0 for index in range(rank) if index not in indices
-                )
+        indices = [
+            index
+            for component in self.components
+            for index in component.simple_root_indices
+        ]
+        if tuple(sorted(indices)) != tuple(range(rank)) or any(
+            not component.positive_roots
+            or tuple(sorted(set(component.simple_root_indices)))
+            != component.simple_root_indices
+            or any(not 0 <= index < rank for index in component.simple_root_indices)
+            or any(
+                len(root) != rank
+                or any(coordinate < 0 or coordinate > 6 for coordinate in root)
+                or not any(root)
+                for root in component.positive_roots
             )
-            highest = max(roots, key=lambda root: sum(root))
-            marks = tuple(highest[index] for index in indices)
-            expected_components.append(
-                RootComponentData(
-                    simple_root_indices=indices,
-                    positive_roots=roots,
-                    highest_root=highest,
-                    marks=marks,
-                    coxeter_number=sum(marks) + 1,
-                )
+            or len(component.highest_root) != rank
+            or any(
+                coordinate < 0 or coordinate > 6
+                for coordinate in component.highest_root
             )
-        if self.components != tuple(expected_components):
+            or len(component.marks) != len(component.simple_root_indices)
+            or any(mark < 0 or mark > 6 for mark in component.marks)
+            or component.coxeter_number < 2
+            or component.coxeter_number > 49
+            for component in self.components
+        ):
             raise _validation_error(
-                "component_data_mismatch",
-                "component data is not bound to the Cartan matrix",
+                "component_data_shape",
+                "components must be a nonempty partition with bounded root data",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: CartanMatrixRequest,
+        *,
+        positive_roots: tuple[tuple[int, ...], ...],
+        negative_roots: tuple[tuple[int, ...], ...],
+        simple_roots: tuple[tuple[int, ...], ...],
+        components: tuple[RootComponentData, ...],
+    ) -> Self:
+        return cls.model_construct(
+            rank=len(request.matrix),
+            cartan_matrix=request.matrix,
+            positive_roots=positive_roots,
+            negative_roots=negative_roots,
+            simple_roots=simple_roots,
+            num_positive_roots=len(positive_roots),
+            components=components,
+        )
 
 
 class SimpleReflectionRequest(StrictModel):
@@ -241,22 +290,32 @@ class SimpleReflectionResult(StrictModel):
     reflected_vector: tuple[int, ...]
 
     @model_validator(mode="after")
-    def bind_reflection(self) -> Self:
-        from jacobian.math.root_systems._operations import _apply_reflection
-
+    def require_reflection_shape(self) -> Self:
         SimpleReflectionRequest(
             matrix=self.matrix,
             vector=self.vector,
             simple_index=self.simple_index,
         )
-        reflected = _apply_reflection(
-            [list(row) for row in self.matrix], list(self.vector), self.simple_index
-        )
-        if self.reflected_vector != tuple(reflected):
+        if len(self.reflected_vector) != len(self.vector) or any(
+            abs(coordinate) > MAX_REFLECTION_COORDINATE
+            for coordinate in self.reflected_vector
+        ):
             raise _validation_error(
-                "reflected_vector_mismatch", "reflected_vector must be s_i(vector)"
+                "reflected_vector_shape",
+                "reflected_vector must fit the bounded root-lattice axis",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: SimpleReflectionRequest, reflected_vector: tuple[int, ...]
+    ) -> Self:
+        return cls.model_construct(
+            matrix=request.matrix,
+            vector=request.vector,
+            simple_index=request.simple_index,
+            reflected_vector=reflected_vector,
+        )
 
 
 class WeylGroupOrderResult(StrictModel):
@@ -269,13 +328,14 @@ class WeylGroupOrderResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_weyl_group_order(self) -> Self:
-        from jacobian.math.root_systems._operations import _weyl_group_order
-
+    def require_order_domain(self) -> Self:
         CartanMatrixRequest(matrix=self.matrix)
-        if self.group_order != _weyl_group_order(self.matrix):
-            raise _validation_error(
-                "group_order_mismatch",
-                "group_order must equal the order of the root action",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: CartanMatrixRequest, group_order: int) -> Self:
+        return cls.model_construct(
+            matrix=request.matrix,
+            group_order=group_order,
+            method="SYMPY_SCHREIER_SIMS_SIGNED_ROOT_ACTION",
+        )

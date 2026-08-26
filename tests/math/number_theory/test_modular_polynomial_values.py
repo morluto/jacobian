@@ -15,7 +15,7 @@ from jacobian.math.modular_polynomials import (
     NormalizedModularPolynomialTerm,
     modular_polynomial_identity,
 )
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
     ModularPolynomialVariable,

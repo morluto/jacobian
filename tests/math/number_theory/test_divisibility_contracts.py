@@ -6,6 +6,7 @@ import pytest
 from tests.math.number_theory._validation import expect_validation
 
 from jacobian.catalog.models import MathTool
+from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._divisibility import DIVISIBILITY_OPERATIONS
 from jacobian.math.number_theory._divisibility_models import (
     DivisibilityRequest,
@@ -13,7 +14,6 @@ from jacobian.math.number_theory._divisibility_models import (
     IntegerPairRequest,
     ValuationRequest,
 )
-from jacobian.math.number_theory._models import IntegerValueResult
 
 
 def _operation(operation_id: str) -> MathTool[Any, Any]:
@@ -30,13 +30,13 @@ def _operation(operation_id: str) -> MathTool[Any, Any]:
         (
             "integer.compute.gcd",
             IntegerPairRequest,
-            IntegerValueResult,
+            IntegerValue,
             {"left", "right"},
         ),
         (
             "integer.compute.lcm",
             IntegerPairRequest,
-            IntegerValueResult,
+            IntegerValue,
             {"left", "right"},
         ),
         (
@@ -48,7 +48,7 @@ def _operation(operation_id: str) -> MathTool[Any, Any]:
         (
             "integer.compute.valuation",
             ValuationRequest,
-            IntegerValueResult,
+            IntegerValue,
             {"value", "prime"},
         ),
         ("integer.decide.divides", DivisibilityRequest, None, {"divisor", "dividend"}),
@@ -57,7 +57,7 @@ def _operation(operation_id: str) -> MathTool[Any, Any]:
 def test_divisibility_declarations_keep_their_owner_local_contracts(
     operation_id: str,
     request_type: type[IntegerPairRequest | DivisibilityRequest | ValuationRequest],
-    result_type: type[IntegerValueResult | ExtendedGcdResult] | None,
+    result_type: type[IntegerValue | ExtendedGcdResult] | None,
     request_fields: set[str],
 ) -> None:
     operation = _operation(operation_id)

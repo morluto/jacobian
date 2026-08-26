@@ -98,10 +98,14 @@ BoundedInteger = Annotated[
         strict=True,
     ),
 ]
+
+
 class PrimalityRequest(StrictModel):
     """One bounded canonical integer for the maintained primality backend."""
 
     value: BoundedInteger
+
+
 PowerfulInteger = Annotated[
     str,
     StringConstraints(

@@ -6,7 +6,7 @@ from contextlib import contextmanager
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.combinatorics._models import (
+from jacobian.math.combinatorics._difference_set_models import (
     CyclicDifferenceMultiplicity,
     CyclicDifferenceSetExtensionRequest,
     CyclicDifferenceSetExtensionResult,

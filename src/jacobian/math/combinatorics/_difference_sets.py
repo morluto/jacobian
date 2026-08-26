@@ -6,7 +6,7 @@ import math
 from collections import Counter
 
 from jacobian.catalog._examples import example
-from jacobian.math.combinatorics._models import (
+from jacobian.math.combinatorics._difference_set_models import (
     CyclicDifferenceMultiplicity,
     CyclicDifferenceSetExtensionRequest,
     CyclicDifferenceSetExtensionResult,

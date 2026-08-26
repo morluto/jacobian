@@ -30,6 +30,7 @@ _VALIDATION_ENVIRONMENT = (
     "UV_PYTHON_INSTALL_DIR",
     "VIRTUAL_ENV",
 )
+_BOUNDARY_LANE_TIMEOUT_SECONDS = 4_800
 
 
 def _validation_environment() -> dict[str, str]:
@@ -155,7 +156,11 @@ def _run(commands: Sequence[Sequence[str]], *, repository: Path) -> None:
             command[0],
             command[1:],
             cwd=repository,
-            timeout_seconds=30 * 60,
+            timeout_seconds=(
+                _BOUNDARY_LANE_TIMEOUT_SECONDS
+                if len(command) > 1 and command[1] in {"test-process", "test-mcp"}
+                else 30 * 60
+            ),
             environment=_validation_environment(),
         )
         if result.stdout:

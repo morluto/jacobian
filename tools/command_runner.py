@@ -585,6 +585,7 @@ class ToolInteractiveCommand:
         self._stdout_closed = threading.Event()
         self._stdout_exceeded = threading.Event()
         self._responses_read = 0
+        self._exchange_deadline: float | None = None
         self._status = ToolInteractiveStatus.START_FAILED
 
     @property
@@ -679,6 +680,7 @@ class ToolInteractiveCommand:
             else self._request.read_timeout_seconds
         )
         deadline = time.monotonic() + timeout
+        self._exchange_deadline = deadline
         while not write_complete.wait(timeout=0.05):
             abort = self._check_read_abort(deadline)
             if abort is not None:
@@ -726,7 +728,7 @@ class ToolInteractiveCommand:
             if self._responses_read == 0
             else self._request.read_timeout_seconds
         )
-        deadline = time.monotonic() + timeout
+        deadline = self._exchange_deadline or (time.monotonic() + timeout)
         response_bytes = 0
         while True:
             abort = self._check_read_abort(deadline)
@@ -745,6 +747,7 @@ class ToolInteractiveCommand:
                     if abort is not None:
                         raise abort
                     self._responses_read += 1
+                    self._exchange_deadline = None
                     return "\n".join(lines)
                 continue
             response_bytes += len(item.encode("utf-8", "replace"))

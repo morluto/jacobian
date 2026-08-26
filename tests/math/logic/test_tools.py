@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 import sys
+import time
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -41,7 +43,9 @@ from jacobian.math.logic._unsat_core import SmtUnsatCoreRequest
 
 
 @contextmanager
-def raises_logic_validation():
+def raises_logic_validation() -> Generator[
+    pytest.ExceptionInfo[ValidationError], None, None
+]:
     with pytest.raises(ValidationError) as error:
         yield error
     assert error.value.errors()[0]["type"].startswith("logic.")
@@ -119,7 +123,7 @@ def test_sat_solver_returns_unsat_without_a_model() -> None:
 def test_sat_solver_does_not_promote_a_malformed_backend_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import z3
+    import z3  # type: ignore[import-untyped]
 
     class MisreportingSolver:
         def set(self, **_settings: object) -> None:
@@ -356,7 +360,7 @@ def test_lpr_refutation_reserves_the_transport_result_budget(
 def test_lpr_refutation_returns_unavailable_without_the_pinned_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(sat.shutil, "which", lambda _name: None)
+    monkeypatch.setattr("jacobian.math.logic._sat.shutil.which", lambda _name: None)
 
     result = check_sat_refutation(_unit_refutation_request())
 
@@ -409,7 +413,9 @@ def test_cake_lpr_manifest_is_structural_while_dockerfile_owns_its_pin() -> None
 def test_lpr_refutation_accepts_only_the_exact_cake_verdict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(sat.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(
+        "jacobian.math.logic._sat.shutil.which", lambda name: f"/usr/bin/{name}"
+    )
     monkeypatch.setattr(sat, "_cake_lpr_is_supported", lambda _path: True)
     monkeypatch.setattr(
         sat,
@@ -434,7 +440,9 @@ def test_lpr_refutation_accepts_only_the_exact_cake_verdict(
 def test_lpr_refutation_projects_a_recognized_checker_rejection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(sat.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(
+        "jacobian.math.logic._sat.shutil.which", lambda name: f"/usr/bin/{name}"
+    )
     monkeypatch.setattr(sat, "_cake_lpr_is_supported", lambda _path: True)
     monkeypatch.setattr(
         sat,
@@ -495,7 +503,9 @@ def test_lpr_refutation_never_upgrades_process_failure_to_a_math_verdict(
     completed: SimpleNamespace,
     outcome: str,
 ) -> None:
-    monkeypatch.setattr(sat.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(
+        "jacobian.math.logic._sat.shutil.which", lambda name: f"/usr/bin/{name}"
+    )
     monkeypatch.setattr(sat, "_cake_lpr_is_supported", lambda _path: True)
     monkeypatch.setattr(sat, "run_bounded_process", lambda *_args, **_kwargs: completed)
 
@@ -794,10 +804,10 @@ def test_smt_request_rejects_an_indexed_bit_vector_value_beyond_the_digit_budget
         )
 
 
-def test_smt_request_rejects_an_ill_sorted_indexed_bit_vector_equality() -> None:
-    """Lexical digit admission cannot override backend well-sortedness."""
+def test_smt_request_structurally_admits_an_ill_sorted_expression() -> None:
+    """Well-sortedness is a bounded execution concern, not model validation."""
 
-    with pytest.raises(ValidationError) as error:
+    result = solve_smt(
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib=(
@@ -807,8 +817,9 @@ def test_smt_request_rejects_an_ill_sorted_indexed_bit_vector_equality() -> None
                 "(check-sat)\n"
             ),
         )
+    )
 
-    assert error.value.errors(include_url=False)[0]["type"] == "logic.smtlib_grammar"
+    assert result.outcome == "UNKNOWN"
 
 
 def test_smt_request_admits_a_bv_named_symbol_outside_index_context_and_solves() -> (
@@ -865,7 +876,9 @@ def test_smt_request_admits_at_the_declaration_boundary_and_still_solves() -> No
     assert result.model_smtlib is not None
 
 
-def test_structural_rejection_precedes_z3_parsing(monkeypatch) -> None:
+def test_structural_rejection_precedes_z3_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import z3
 
     def refuse(*_args: object, **_kwargs: object) -> object:
@@ -884,7 +897,9 @@ def test_structural_rejection_precedes_z3_parsing(monkeypatch) -> None:
         )
 
 
-def test_smt_solver_passes_time_work_and_memory_budgets_to_z3(monkeypatch) -> None:
+def test_smt_solver_passes_time_work_and_memory_budgets_to_z3(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import z3
 
     recorded: dict[str, int] = {}
@@ -909,15 +924,41 @@ def test_smt_solver_passes_time_work_and_memory_budgets_to_z3(monkeypatch) -> No
     )
 
     assert result.outcome == "UNSAT"
-    assert recorded == {
-        "timeout": 2_500,
-        "rlimit": smt._SOLVER_RLIMIT,
-        "max_memory": smt._SOLVER_MAX_MEMORY_MB,
-    }
+    assert recorded["timeout"] <= 2_500
+    assert recorded["timeout"] > 0
+    assert recorded["rlimit"] == smt._SOLVER_RLIMIT
+    assert recorded["max_memory"] == smt._SOLVER_MAX_MEMORY_MB
+
+
+def test_smt_parse_stage_expiry_is_a_typed_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Parser work consumes the same owner deadline as solver work."""
+
+    import z3
+
+    original = z3.parse_smt2_string
+
+    def delayed_parser(source: str) -> object:
+        time.sleep(0.01)
+        return original(source)
+
+    monkeypatch.setattr(z3, "parse_smt2_string", delayed_parser)
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(check-sat)",
+            timeout_ms=1,
+        )
+    )
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted == "time"
+    assert result.detail == smt._EXHAUSTION_DETAILS["time"]
 
 
 def test_smt_solver_projects_exhausted_work_budget_as_typed_unknown(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(smt, "_SOLVER_RLIMIT", 1)
     result = solve_smt(
@@ -934,7 +975,7 @@ def test_smt_solver_projects_exhausted_work_budget_as_typed_unknown(
 
 
 def test_sat_solver_projects_exhausted_work_budget_as_typed_unknown(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(smt, "_SOLVER_RLIMIT", 1)
     result = solve_sat(
@@ -948,7 +989,7 @@ def test_sat_solver_projects_exhausted_work_budget_as_typed_unknown(
 
 
 def test_smt_solver_projects_exhausted_memory_budget_as_typed_unknown(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(smt, "_SOLVER_MAX_MEMORY_MB", 2)
     result = solve_smt(
@@ -977,7 +1018,9 @@ def test_smt_solver_projects_exhausted_time_budget_as_typed_unknown() -> None:
     assert result.detail is not None and "time budget" in result.detail
 
 
-def test_smt_solver_wraps_backend_failure_during_the_solve(monkeypatch) -> None:
+def test_smt_solver_wraps_backend_failure_during_the_solve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import z3
 
     class ExplodingSolver:
@@ -1014,7 +1057,7 @@ def test_smt_solver_wraps_backend_failure_during_the_solve(monkeypatch) -> None:
     ),
 )
 def test_sat_solver_projects_exhaustion_messages_from_z3_exceptions(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     message: str,
     exhausted: str,
 ) -> None:
@@ -1050,7 +1093,7 @@ def test_sat_solver_projects_exhaustion_messages_from_z3_exceptions(
     ),
 )
 def test_smt_solver_projects_exhaustion_messages_from_z3_exceptions(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     message: str,
     exhausted: str,
 ) -> None:
@@ -1080,7 +1123,9 @@ def test_smt_solver_projects_exhaustion_messages_from_z3_exceptions(
     assert result.detail == smt._EXHAUSTION_DETAILS[exhausted]
 
 
-def test_smt_solver_projects_exhaustion_from_model_serialization(monkeypatch) -> None:
+def test_smt_solver_projects_exhaustion_from_model_serialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import z3
 
     class ExhaustingModel:
@@ -1117,7 +1162,7 @@ def test_smt_solver_projects_exhaustion_from_model_serialization(monkeypatch) ->
 
 
 def test_solver_wraps_unrecognized_z3_exceptions_without_typed_exhaustion(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import z3
 
@@ -1177,8 +1222,8 @@ def test_solver_wraps_unrecognized_z3_exceptions_without_typed_exhaustion(
     ),
 )
 def test_z3_initialization_failure_is_a_typed_unknown(
-    operation,
-    accepted_request,
+    operation: Callable[[object], SatSolveResult | SmtSolveResult],
+    accepted_request: object,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A failed Z3 module initialization cannot escape an accepted request."""
@@ -1195,7 +1240,7 @@ def test_z3_initialization_failure_is_a_typed_unknown(
 
 
 def test_smt_request_admission_skips_grammar_rejection_without_the_backend(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Backend absence at admission stays the typed execution init outcome."""
 
@@ -1213,46 +1258,35 @@ def test_smt_request_admission_skips_grammar_rejection_without_the_backend(
     assert "could not initialize" in result.detail
 
 
-def test_smt_request_rejects_malformed_source_as_a_request_error(monkeypatch) -> None:
-    """Malformed SMT-LIB stays caller-correctable instead of solver indeterminacy."""
+def test_smt_request_does_not_parse_before_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Model validation remains structural and does not invoke Z3."""
 
     import z3
 
-    def refuse_solver(_logic: object) -> object:
-        raise AssertionError("a malformed request reached solver construction")
+    def refuse_parser(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("model validation invoked the Z3 parser")
 
-    monkeypatch.setattr(z3, "SolverFor", refuse_solver)
-    with pytest.raises(ValidationError) as error:
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib=(
-                "(set-logic QF_LIA)\n"
-                "(declare-const x Int)\n"
-                "(assert (> y 0))\n"
-                "(check-sat)"
-            ),
-        )
-
-    assert error.value.errors(include_url=False)[0]["type"] == "logic.smtlib_grammar"
+    monkeypatch.setattr(z3, "parse_smt2_string", refuse_parser)
+    SmtSolveRequest(
+        logic=SmtLogic.QF_LIA,
+        smtlib=(
+            "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> y 0))\n(check-sat)"
+        ),
+    )
 
 
 @pytest.mark.parametrize(
     "identifier",
     ("memory", "timeout", "canceled", "|resource limit|"),
 )
-def test_smt_request_rejects_undeclared_identifiers_named_after_resource_keywords(
+def test_smt_execution_reports_undeclared_identifiers_without_resource_claims(
     identifier: str,
 ) -> None:
-    """A located diagnostic quoting a caller symbol is never budget exhaustion.
+    """Located parser diagnostics never fabricate an exhausted-resource claim."""
 
-    Z3 reports an undeclared identifier as
-    ``(error "line L column C: unknown constant <identifier>")``; when the
-    caller-controlled spelling contains a resource keyword, that text must
-    still be a caller-correctable grammar rejection rather than an admitted
-    request whose execution reports an exhausted budget.
-    """
-
-    with pytest.raises(ValidationError) as error:
+    result = solve_smt(
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib=(
@@ -1262,11 +1296,15 @@ def test_smt_request_rejects_undeclared_identifiers_named_after_resource_keyword
                 "(check-sat)"
             ),
         )
+    )
 
-    assert error.value.errors(include_url=False)[0]["type"] == "logic.smtlib_grammar"
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted is None
 
 
-def test_smt_solver_types_parse_stage_backend_failures_as_unknown(monkeypatch) -> None:
+def test_smt_solver_types_parse_stage_backend_failures_as_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A backend parser failure on an admitted source is execution UNKNOWN."""
 
     import z3
@@ -1287,7 +1325,7 @@ def test_smt_solver_types_parse_stage_backend_failures_as_unknown(monkeypatch) -
 
 
 def test_smt_solver_never_classifies_located_source_text_as_exhaustion(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Located diagnostic text quotes the caller's source, not a budget.
 
@@ -1314,8 +1352,10 @@ def test_smt_solver_never_classifies_located_source_text_as_exhaustion(
     assert result.detail is not None and "bounded solve" in result.detail
 
 
-def test_smt_request_admission_rejects_located_parser_diagnostics(monkeypatch) -> None:
-    """A located Z3 parser diagnostic stays a caller-correctable rejection."""
+def test_smt_execution_projects_located_parser_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Backend parser diagnostics are projected by the bounded execution path."""
 
     import z3
 
@@ -1323,7 +1363,7 @@ def test_smt_request_admission_rejects_located_parser_diagnostics(monkeypatch) -
         raise z3.Z3Exception(b'(error "line 2 column 11: unknown constant y")\n')
 
     monkeypatch.setattr(z3, "parse_smt2_string", diagnosing_parser)
-    with pytest.raises(ValidationError) as error:
+    result = solve_smt(
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib=(
@@ -1333,11 +1373,15 @@ def test_smt_request_admission_rejects_located_parser_diagnostics(monkeypatch) -
                 "(check-sat)"
             ),
         )
+    )
 
-    assert error.value.errors(include_url=False)[0]["type"] == "logic.smtlib_grammar"
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted is None
 
 
-def test_smt_request_admission_defers_parse_stage_os_errors(monkeypatch) -> None:
+def test_smt_request_admission_defers_parse_stage_os_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A parse-stage native backend failure stays off the caller's hands.
 
     ``math.run`` validates the request before calling the solver, so admission
@@ -1362,24 +1406,22 @@ def test_smt_request_admission_defers_parse_stage_os_errors(monkeypatch) -> None
 @pytest.mark.parametrize(
     "request_type",
     sorted(
-        {SmtSolveRequest, SmtUnsatCoreRequest, *SmtSolveRequest.__subclasses__()},
-        key=lambda request_type: request_type.__name__,
+        {SmtSolveRequest, *SmtSolveRequest.__subclasses__()} - {SmtUnsatCoreRequest},
+        key=str,
     ),
-    ids=lambda request_type: request_type.__name__,
+    ids=str,
 )
-def test_every_concrete_smt_request_rejects_malformed_grammar(request_type) -> None:
-    """No SMT request subclass may leave malformed grammar to execution."""
+def test_every_concrete_smt_request_keeps_grammar_validation_structural(
+    request_type: type[SmtSolveRequest],
+) -> None:
+    """No request model may invoke Z3 merely to validate a payload."""
 
-    with pytest.raises(ValidationError):
-        request_type(
-            logic=SmtLogic.QF_LIA,
-            smtlib=(
-                "(set-logic QF_LIA)\n"
-                "(declare-const x Int)\n"
-                "(assert (> y 0))\n"
-                "(check-sat)"
-            ),
-        )
+    request_type(
+        logic=SmtLogic.QF_LIA,
+        smtlib=(
+            "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> y 0))\n(check-sat)"
+        ),
+    )
 
 
 def test_unknown_projection_maps_every_exhausted_resource() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from enum import StrEnum
 from typing import Literal, NamedTuple, Self
 
@@ -232,33 +233,6 @@ def _is_smtlib_source_diagnostic(exc: Exception) -> bool:
     return _Z3_SOURCE_DIAGNOSTIC.search(_exception_message(exc)) is not None
 
 
-def _require_parseable_smtlib(source: str) -> None:
-    """Reject source that Z3's SMT-LIB 2 parser cannot read as a request error.
-
-    Admission runs the same non-evaluating backend parse that execution uses,
-    so a schema-admitted request never discovers malformed syntax through an
-    execution exception. Only located parser diagnostics establish malformed
-    input; resource or other backend failures carry no evidence about the
-    source, so they defer to execution, which reports them as typed UNKNOWN.
-    Backend absence here is left to execution, where it keeps its typed
-    initialization outcome.
-    """
-
-    try:
-        import z3  # type: ignore[import-untyped]
-    except (ImportError, OSError):
-        return
-    try:
-        z3.parse_smt2_string(source)
-    except (z3.Z3Exception, OSError) as exc:
-        if not _is_smtlib_source_diagnostic(exc):
-            return
-        raise _validation_error(
-            "logic.smtlib_grammar",
-            "SMT-LIB input could not be parsed by the declared logic",
-        ) from exc
-
-
 class SmtSolveRequest(StrictModel):
     logic: SmtLogic
     smtlib: str = Field(
@@ -270,8 +244,8 @@ class SmtSolveRequest(StrictModel):
             f"{_MAX_SMTLIB_DEPTH}, compound terms at most {_MAX_SMTLIB_TERMS}, declared "
             f"symbols at most {_MAX_SMTLIB_DECLARATIONS}, and any one numeral, decimal, "
             f"or indexed bit-vector spelling at most {_MAX_SMTLIB_NUMERAL_DIGITS} digits. "
-            "The source must be well-formed SMT-LIB 2 for the declared logic; malformed "
-            "input is rejected during request validation."
+            "The source is structurally admitted before execution; Z3 parsing and "
+            "solving occur within the operation's bounded execution envelope."
         ),
         examples=[
             "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)"
@@ -342,19 +316,7 @@ class SmtSolveRequest(StrictModel):
                 raise _validation_error(
                     "logic.smtlib_command", f"unsupported SMT-LIB command: {command[0]}"
                 )
-        self._complete_backend_admission()
         return self
-
-    def _complete_backend_admission(self) -> None:
-        """Parse through the backend once every structural check has passed.
-
-        Called at the end of ``require_single_smtlib_query``. A subclass whose
-        own ``mode="after"`` validators impose a stricter envelope overrides
-        this hook so out-of-envelope source never reaches the backend parser;
-        the most-derived request completes backend admission.
-        """
-
-        _require_parseable_smtlib(self.smtlib)
 
 
 class SmtSolveResult(StrictModel):
@@ -430,11 +392,31 @@ def _solver_settings(timeout_ms: int) -> dict[str, int]:
     }
 
 
+def _time_exhausted_result() -> SmtSolveResult:
+    """Project expiry of the admitted owner envelope as a non-conclusion."""
+
+    return SmtSolveResult(
+        outcome="UNKNOWN",
+        exhausted="time",
+        detail=_EXHAUSTION_DETAILS["time"],
+    )
+
+
+def _remaining_timeout_ms(deadline: float) -> int | None:
+    """Return the remaining owner time in milliseconds, or ``None`` on expiry."""
+
+    remaining_seconds = deadline - time.monotonic()
+    if remaining_seconds <= 0:
+        return None
+    return max(1, int(remaining_seconds * 1_000))
+
+
 def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
     """Solve one bounded SMT-LIB query through the maintained Z3 Python binding."""
 
+    deadline = time.monotonic() + request.timeout_ms / 1_000
     try:
-        import z3
+        import z3  # type: ignore[import-untyped]
     except (ImportError, OSError) as exc:
         return SmtSolveResult(
             outcome="UNKNOWN",
@@ -443,10 +425,17 @@ def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
 
     try:
         assertions = z3.parse_smt2_string(request.smtlib)
+        remaining_timeout_ms = _remaining_timeout_ms(deadline)
+        if remaining_timeout_ms is None:
+            return _time_exhausted_result()
         solver = z3.SolverFor(request.logic.value)
-        solver.set(**_solver_settings(request.timeout_ms))
+        solver.set(**_solver_settings(remaining_timeout_ms))
         solver.add(assertions)
+        if _remaining_timeout_ms(deadline) is None:
+            return _time_exhausted_result()
         outcome = solver.check()
+        if _remaining_timeout_ms(deadline) is None:
+            return _time_exhausted_result()
         if outcome == z3.sat:
             model = solver.model()
             if not all(
@@ -461,6 +450,8 @@ def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
                     ),
                 )
             model_smtlib = model.sexpr()
+            if _remaining_timeout_ms(deadline) is None:
+                return _time_exhausted_result()
             if len(model_smtlib.encode("utf-8")) > _MAX_MODEL_BYTES:
                 return SmtSolveResult(
                     outcome="UNKNOWN",
@@ -479,6 +470,8 @@ def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
             )
         detail = f"the Z3 backend failed during the bounded solve: {exc}"
         return SmtSolveResult(outcome="UNKNOWN", detail=detail[:1_024])
+    if _remaining_timeout_ms(deadline) is None:
+        return _time_exhausted_result()
     exhausted, detail = _project_unknown(solver.reason_unknown())
     return SmtSolveResult(outcome="UNKNOWN", exhausted=exhausted, detail=detail)
 
@@ -492,6 +485,7 @@ __all__ = [
     "_classify_exhaustion",
     "_is_smtlib_source_diagnostic",
     "_project_unknown",
+    "_remaining_timeout_ms",
     "_solver_settings",
     "_tokenize_smtlib",
     "_top_level_smtlib_commands",

@@ -216,14 +216,6 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
             raise _logic_error(parsed_error)
         return self
 
-    def _complete_backend_admission(self) -> None:
-        """Skip the inherited base-class parse.
-
-        ``require_bounded_indexed_assertions`` already parses through the
-        backend only after every core-specific structural bound has passed,
-        so sources outside this operation's envelope never reach Z3.
-        """
-
 
 class SmtUnsatCoreResult(StrictModel):
     """A source-bound satisfiability outcome and replayable UNSAT core."""

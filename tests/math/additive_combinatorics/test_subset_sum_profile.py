@@ -7,6 +7,7 @@ from itertools import product
 
 import pytest
 from pydantic import ValidationError
+from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import (
     CanonicalLimits,
@@ -246,6 +247,45 @@ def test_wide_canonical_items_are_rejected_by_the_raw_item_count_bound() -> None
 
     with pytest.raises(ValidationError):
         SubsetSumProfileRequest.model_validate(payload)
+
+
+def test_oversized_json_list_is_rejected_before_nested_item_parsing() -> None:
+    payload = {"source": {"items": ["z", *(["1"] * MAX_SUBSET_SUM_ITEMS)]}}
+
+    with pytest.raises(ValidationError) as error:
+        SubsetSumProfileRequest.model_validate(payload)
+
+    assert (
+        f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound" in error.value.errors()[0]["msg"]
+    )
+
+
+def test_oversized_tuple_container_is_rejected_before_nested_item_parsing() -> None:
+    payload = {"source": {"items": ("z", *(["1"] * MAX_SUBSET_SUM_ITEMS))}}
+
+    with pytest.raises(ValidationError) as error:
+        SubsetSumProfileRequest.model_validate(payload)
+
+    assert (
+        f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound" in error.value.errors()[0]["msg"]
+    )
+
+
+def test_expensive_admissible_items_are_rejected_by_the_raw_preflight_bound() -> None:
+    payload = {"source": {"items": ("9" * 2_048,) * (MAX_SUBSET_SUM_ITEMS + 1)}}
+
+    with pytest.raises(PydanticCustomError) as error:
+        SubsetSumProfileRequest.bound_raw_source(payload)
+
+    assert error.value.type == "additive_combinatorics.bound_raw_source"
+
+
+def test_json_list_at_the_item_ceiling_remains_admitted_and_canonical() -> None:
+    admitted = SubsetSumProfileRequest.model_validate(
+        {"source": {"items": ["0"] * MAX_SUBSET_SUM_ITEMS}}
+    )
+
+    assert admitted.source.items == ("0",) * MAX_SUBSET_SUM_ITEMS
 
 
 @pytest.mark.parametrize(

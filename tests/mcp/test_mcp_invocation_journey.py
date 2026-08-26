@@ -13,11 +13,18 @@ from pathlib import Path
 
 import pytest
 from mcp.shared.exceptions import MCPError
+from mcp.types import CallToolResult, TextContent
 
 from jacobian.mcp.server import create_server
 
 MATH_TOOL_NAMES = {"math.find", "math.run"}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
+
+
+def _tool_text(result: CallToolResult) -> str:
+    content = result.content[0]
+    assert isinstance(content, TextContent)
+    return content.text
 
 
 def test_validation_issue_projection_enforces_aggregate_byte_budget() -> None:
@@ -141,7 +148,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 },
             )
             assert isinstance(result.structured_content, dict)
-            response = json.loads(result.content[0].text)
+            response = json.loads(_tool_text(result))
             assert response["runtime_ms"] >= 0
             assert isinstance(result.structured_content, dict)
             assert "mcp_projection" not in result.structured_content
@@ -312,8 +319,9 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 },
             )
             assert unknown.is_error is True
-            assert "unknown operation" in unknown.content[0].text
-            assert len(unknown.content[0].text.encode("utf-8")) < 2_048
+            unknown_text = _tool_text(unknown)
+            assert "unknown operation" in unknown_text
+            assert len(unknown_text.encode("utf-8")) < 2_048
             assert unknown.structured_content is None
 
     asyncio.run(scenario())

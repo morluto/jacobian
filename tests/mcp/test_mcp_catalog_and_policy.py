@@ -5,7 +5,26 @@ from __future__ import annotations
 import asyncio
 import json
 
+from mcp.types import (
+    CallToolResult,
+    ReadResourceResult,
+    TextContent,
+    TextResourceContents,
+)
+
 from jacobian.mcp.server import create_server
+
+
+def _tool_text(result: CallToolResult) -> str:
+    content = result.content[0]
+    assert isinstance(content, TextContent)
+    return content.text
+
+
+def _resource_text(result: ReadResourceResult) -> str:
+    content = result.contents[0]
+    assert isinstance(content, TextResourceContents)
+    return content.text
 
 
 def test_mcp_catalog_is_the_complete_static_operation_library() -> None:
@@ -17,7 +36,7 @@ def test_mcp_catalog_is_the_complete_static_operation_library() -> None:
             raise_exceptions=True,
         ) as client:
             resource = await client.read_resource("operation://catalog")
-            catalog = json.loads(resource.contents[0].text)
+            catalog = json.loads(_resource_text(resource))
             assert catalog["operations"]
             assert "policy_profile" not in catalog
             assert "policy_digest" not in catalog
@@ -39,7 +58,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
             raise_exceptions=True,
         ) as client:
             resource_result = await client.read_resource("operation://catalog")
-            full_catalog = json.loads(resource_result.contents[0].text)
+            full_catalog = json.loads(_resource_text(resource_result))
             discoverable_ids = {
                 descriptor["operation_id"] for descriptor in full_catalog["operations"]
             }
@@ -50,8 +69,9 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
             )
             assert isinstance(listed.structured_content, dict)
             index = listed.structured_content
-            assert len(listed.content[0].text.encode("utf-8")) <= 16 * 1024
-            assert json.loads(listed.content[0].text) == index
+            listed_text = _tool_text(listed)
+            assert len(listed_text.encode("utf-8")) <= 16 * 1024
+            assert json.loads(listed_text) == index
             assert index["response_byte_limit"] == 16 * 1024
             assert "discovery_version" not in index
             assert len(index["matches"]) <= 20
@@ -76,7 +96,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
                 )
                 assert isinstance(next_page.structured_content, dict)
                 page = next_page.structured_content
-                assert len(next_page.content[0].text.encode("utf-8")) <= 16 * 1024
+                assert len(_tool_text(next_page).encode("utf-8")) <= 16 * 1024
                 indexed_ids.update(
                     descriptor["operation_id"] for descriptor in page["matches"]
                 )
@@ -120,7 +140,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
                     }
                 },
             )
-            invalid = json.loads(invalid_cursor.content[0].text)
+            invalid = json.loads(_tool_text(invalid_cursor))
             assert invalid["error"]["code"] == "INVALID_CURSOR"
 
     asyncio.run(scenario())
@@ -135,7 +155,7 @@ def test_mcp_operation_browse_pages_the_complete_immutable_library() -> None:
             raise_exceptions=True,
         ) as client:
             resource_result = await client.read_resource("operation://catalog")
-            full_catalog = json.loads(resource_result.contents[0].text)
+            full_catalog = json.loads(_resource_text(resource_result))
             catalog_ids = [
                 descriptor["operation_id"] for descriptor in full_catalog["operations"]
             ]
@@ -147,8 +167,9 @@ def test_mcp_operation_browse_pages_the_complete_immutable_library() -> None:
                 assert isinstance(page_result.structured_content, dict)
                 page = page_result.structured_content
                 assert page["kind"] == "browse"
-                assert len(page_result.content[0].text.encode("utf-8")) <= 16 * 1024
-                assert json.loads(page_result.content[0].text) == page
+                page_text = _tool_text(page_result)
+                assert len(page_text.encode("utf-8")) <= 16 * 1024
+                assert json.loads(page_text) == page
                 assert page["response_byte_limit"] == 16 * 1024
                 assert "discovery_version" not in page
                 assert len(page["operations"]) <= 20
@@ -180,7 +201,7 @@ def test_mcp_operation_browse_pages_the_complete_immutable_library() -> None:
                     }
                 },
             )
-            invalid = json.loads(invalid_cursor.content[0].text)
+            invalid = json.loads(_tool_text(invalid_cursor))
             assert invalid["error"]["code"] == "INVALID_CURSOR"
 
     asyncio.run(scenario())
@@ -223,7 +244,7 @@ def test_mcp_search_and_browse_bound_unrestricted_card_metadata() -> None:
             )
             assert isinstance(searched.structured_content, dict)
             search_page = searched.structured_content
-            assert len(searched.content[0].text.encode("utf-8")) <= 16 * 1024
+            assert len(_tool_text(searched).encode("utf-8")) <= 16 * 1024
             assert search_page["response_byte_limit"] == 16 * 1024
             assert search_page["truncation_reason"] == "BYTE_LIMIT"
             assert search_page["match_metadata_truncated"] is True
@@ -234,7 +255,7 @@ def test_mcp_search_and_browse_bound_unrestricted_card_metadata() -> None:
             )
             assert isinstance(long_query.structured_content, dict)
             long_query_page = long_query.structured_content
-            assert len(long_query.content[0].text.encode("utf-8")) <= 16 * 1024
+            assert len(_tool_text(long_query).encode("utf-8")) <= 16 * 1024
             assert long_query_page["query_metadata_truncated"] is True
             assert long_query_page["truncation_reason"] == "BYTE_LIMIT"
 
@@ -244,7 +265,7 @@ def test_mcp_search_and_browse_bound_unrestricted_card_metadata() -> None:
                 browsed = await client.call_tool("math.find", {"request": request})
                 assert isinstance(browsed.structured_content, dict)
                 browse_page = browsed.structured_content
-                assert len(browsed.content[0].text.encode("utf-8")) <= 16 * 1024
+                assert len(_tool_text(browsed).encode("utf-8")) <= 16 * 1024
                 assert browse_page["response_byte_limit"] == 16 * 1024
                 assert browse_page["truncation_reason"] == "BYTE_LIMIT"
                 assert browse_page["operation_metadata_truncated"] is True

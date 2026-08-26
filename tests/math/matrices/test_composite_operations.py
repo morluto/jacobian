@@ -19,7 +19,11 @@ from jacobian.math.matrices._operations import (
     compute_partial_trace,
     compute_permanent,
 )
-from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, RationalMatrix
+from jacobian.math.matrices.values import (
+    MAX_MATRIX_DIMENSION,
+    MAX_RATIONAL_MATRIX_ORDER,
+    RationalMatrix,
+)
 
 
 def _cr(num: int, den: int = 1) -> CanonicalRational:
@@ -103,20 +107,35 @@ def test_kronecker_request_rejects_operands_above_the_computation_dimension() ->
         MatrixKroneckerProductRequest(left=unit, right=tall)
 
 
-def test_kronecker_request_rejects_products_beyond_the_canonical_matrix_order() -> None:
+def test_kronecker_request_rejects_products_beyond_the_operation_axis_budget() -> None:
     from pydantic import ValidationError
 
-    from jacobian.math.matrices.values import MAX_RATIONAL_MATRIX_ORDER
+    from jacobian.math.matrices._operation_models import (
+        MAX_KRONECKER_PRODUCT_AXIS,
+    )
 
-    factor = RationalMatrix(entries=_identity_entries(9))
-    with pytest.raises(ValidationError):
+    factor = RationalMatrix(entries=_identity_entries(8))
+    with pytest.raises(ValidationError) as excinfo:
         MatrixKroneckerProductRequest(left=factor, right=factor)
-    assert MAX_RATIONAL_MATRIX_ORDER < 9 * 9
+    assert excinfo.value.errors()[0]["type"] == "matrix.budget_exceeded"
+    assert MAX_KRONECKER_PRODUCT_AXIS < 8 * 8 <= MAX_RATIONAL_MATRIX_ORDER
 
 
-def test_kronecker_product_at_the_canonical_matrix_order_boundary() -> None:
-    from jacobian.math.matrices.values import MAX_RATIONAL_MATRIX_ORDER
+def test_kronecker_product_admits_the_operation_axis_budget_boundary() -> None:
+    from jacobian.math.matrices._operation_models import (
+        MAX_KRONECKER_PRODUCT_AXIS,
+    )
 
+    left = RationalMatrix(entries=_identity_entries(5))
+    right = RationalMatrix(entries=_identity_entries(10))
+    result = compute_kronecker_product(
+        MatrixKroneckerProductRequest(left=left, right=right)
+    )
+    assert len(result.product.entries) == MAX_KRONECKER_PRODUCT_AXIS
+    assert len(result.product.entries[0]) == MAX_KRONECKER_PRODUCT_AXIS
+
+
+def test_kronecker_product_within_the_operation_axis_budget() -> None:
     side = 7
     request = MatrixKroneckerProductRequest(
         left=RationalMatrix(entries=_identity_entries(side)),
@@ -124,7 +143,7 @@ def test_kronecker_product_at_the_canonical_matrix_order_boundary() -> None:
     )
     result = compute_kronecker_product(request)
     order = side * side
-    assert order <= MAX_RATIONAL_MATRIX_ORDER
+    assert order < MAX_RATIONAL_MATRIX_ORDER
     assert result.left_rows == result.right_rows == side
     assert len(result.product.entries) == order
     assert result.product.entries[0][0] == _cr(1)

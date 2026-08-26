@@ -12,7 +12,6 @@ from jacobian._models import StrictModel
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
-    MAX_RATIONAL_MATRIX_ORDER,
     IntegerMatrix,
     RationalMatrix,
     require_matrix_scalar_digits,
@@ -20,6 +19,10 @@ from jacobian.math.matrices.values import (
 
 MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 64
+# The canonical dense rational matrix carries determinant inputs through
+# order 64, but Kronecker admission was established only for product axes
+# through order 50. Pin each admitted output axis to that envelope.
+MAX_KRONECKER_PRODUCT_AXIS = 50
 
 
 def _require_computation_dimensions(
@@ -569,14 +572,14 @@ class MatrixKroneckerProductRequest(StrictModel):
         _require_computation_dimensions(self.left.entries)
         _require_computation_dimensions(self.right.entries)
         if len(self.left.entries) * len(self.right.entries) > (
-            MAX_RATIONAL_MATRIX_ORDER
+            MAX_KRONECKER_PRODUCT_AXIS
         ) or len(self.left.entries[0]) * len(self.right.entries[0]) > (
-            MAX_RATIONAL_MATRIX_ORDER
+            MAX_KRONECKER_PRODUCT_AXIS
         ):
             raise _validation_error(
                 "budget_exceeded",
                 "kronecker products must fit within "
-                f"{MAX_RATIONAL_MATRIX_ORDER} rows and columns",
+                f"{MAX_KRONECKER_PRODUCT_AXIS} rows and columns",
             )
         require_matrix_scalar_digits(
             self.left.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"

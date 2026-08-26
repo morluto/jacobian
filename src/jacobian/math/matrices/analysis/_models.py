@@ -20,10 +20,15 @@ from jacobian.canonical import (
     encode_strict_json,
 )
 from jacobian.math.matrices.values import (
-    MAX_RATIONAL_MATRIX_ORDER,
     RationalMatrix,
     require_matrix_scalar_digits,
 )
+
+# The canonical dense rational matrix carries determinant inputs through
+# order 64, but the symmetric definiteness request's work and result
+# budgets were established only through order 50. Pin the admitted
+# dimension to that established envelope.
+MAX_SYMMETRIC_MATRIX_DIMENSION = 50
 
 # The inertia result echoes its source matrix in the domain's dense
 # canonical form, so a request whose normalized echo is near the canonical
@@ -259,7 +264,7 @@ class MatrixEntry(StrictModel):
 class SymmetricMatrixRequest(StrictModel):
     """A symmetric rational matrix for definiteness analysis."""
 
-    dimension: int = Field(ge=1, le=MAX_RATIONAL_MATRIX_ORDER)
+    dimension: int = Field(ge=1, le=MAX_SYMMETRIC_MATRIX_DIMENSION)
     entries: tuple[MatrixEntry, ...] = Field(min_length=1)
 
     @model_validator(mode="after")

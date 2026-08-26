@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.matrices.analysis._models import (
+    MAX_SYMMETRIC_MATRIX_DIMENSION,
     FarkasCertificateRequest,
     InertiaResult,
     MatrixEntry,
@@ -313,9 +314,16 @@ def test_inertia_request_admits_order_33_diagonal_source() -> None:
     assert isinstance(result.matrix, RationalMatrix)
 
 
-def test_inertia_request_rejects_dimensions_above_the_canonical_matrix_order() -> None:
-    with pytest.raises(ValidationError):
-        _inertia_request(MAX_RATIONAL_MATRIX_ORDER + 1, {(0, 0): "1"})
+@pytest.mark.parametrize(
+    "dimension",
+    range(MAX_SYMMETRIC_MATRIX_DIMENSION + 1, MAX_RATIONAL_MATRIX_ORDER + 1),
+)
+def test_inertia_request_rejects_dimensions_widened_by_the_canonical_value(
+    dimension: int,
+) -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        _inertia_request(dimension, {(0, 0): "1"})
+    assert excinfo.value.errors()[0]["type"] == "less_than_equal"
 
 
 def _encoded_inertia_payload_near_limit(offset: int) -> bytes:

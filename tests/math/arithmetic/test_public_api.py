@@ -9,8 +9,23 @@ from jacobian.math import arithmetic
 
 @given(st.integers())
 def test_absolute_value_and_sign_preserve_integer_invariants(value: int) -> None:
-    assert arithmetic.absolute_value(value) >= 0
-    assert arithmetic.absolute_value(value) * arithmetic.sign(value) == value
+    absolute = arithmetic.absolute_value(value)
+
+    assert type(absolute) is arithmetic.IntegerValue
+    assert absolute == arithmetic.IntegerValue(value=str(abs(value)))
+    assert arithmetic.sign(value) * abs(value) == value
+    assert arithmetic.sign(absolute) == arithmetic.sign(abs(value))
+
+
+@given(st.integers())
+def test_absolute_value_and_sign_compose_through_canonical_integer_value(
+    value: int,
+) -> None:
+    absolute = arithmetic.absolute_value(arithmetic.IntegerValue(value=str(value)))
+
+    assert type(absolute) is arithmetic.IntegerValue
+    assert absolute == arithmetic.absolute_value(value)
+    assert arithmetic.sign(absolute) == arithmetic.sign(abs(value))
 
 
 def test_exact_rational_operations() -> None:

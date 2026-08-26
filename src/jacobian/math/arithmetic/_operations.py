@@ -48,13 +48,11 @@ def _canonical(value: int) -> str:
 
 
 def absolute_value(request: IntegerValue) -> IntegerValue:
-    return IntegerValue(
-        value=_canonical(native_arithmetic.absolute_value(_int(request.value)))
-    )
+    return native_arithmetic.absolute_value(request)
 
 
 def sign(request: IntegerValue) -> IntegerSignResult:
-    value = native_arithmetic.sign(_int(request.value))
+    value = native_arithmetic.sign(request)
     if value < 0:
         sign: Literal[-1, 0, 1] = -1
     elif value > 0:

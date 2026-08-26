@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, WithJsonSchema, model_validator
+from pydantic import Field, WithJsonSchema, field_validator, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
@@ -37,14 +37,29 @@ class DirectedGraph(StrictModel):
     vertex_count: int = Field(ge=2)
     edges: tuple[tuple[int, int], ...] = Field()
 
-    @model_validator(mode="after")
-    def require_valid_edges(self) -> Self:
-        if len(self.edges) > MAX_DIRECTED_GRAPH_PARSE_EDGES:
+    @field_validator("edges", mode="before")
+    @classmethod
+    def require_edge_parse_envelope(cls, edges: object) -> object:
+        """Reject oversized edge lists before any nested row is materialized.
+
+        Pydantic coerces and validates each nested tuple only after this
+        before-validator returns, so a payload beyond the parse-safety
+        envelope rejects on its raw sequence length without building the
+        edge tuples or entering structural validation at all.
+        """
+
+        if isinstance(edges, (list, tuple)) and (
+            len(edges) > MAX_DIRECTED_GRAPH_PARSE_EDGES
+        ):
             raise PydanticCustomError(
                 "graph.edge_list_parse_envelope_exceeded",
                 "directed graph edge list exceeds the "
                 f"{MAX_DIRECTED_GRAPH_PARSE_EDGES}-edge parse-safety envelope",
             )
+        return edges
+
+    @model_validator(mode="after")
+    def require_valid_edges(self) -> Self:
         seen: set[tuple[int, int]] = set()
         for source, target in self.edges:
             if not (

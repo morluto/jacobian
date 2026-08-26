@@ -448,6 +448,25 @@ class TestCarrierParseEnvelope:
         assert "unique" not in message
         assert "self-loops" not in message
 
+    def test_oversized_rejection_precedes_nested_row_materialization(self) -> None:
+        """The envelope fires on the raw sequence before any row is coerced.
+
+        Every oversized row is deliberately not even an edge tuple, so an
+        after-validator placement would fail with coercion errors instead of
+        the parse-safety envelope.
+        """
+        edges = ["not-an-edge"] * (MAX_DIRECTED_GRAPH_PARSE_EDGES + 1)
+
+        with pytest.raises(ValidationError) as excinfo:
+            DirectedGraph.model_validate({"vertex_count": 2, "edges": edges})
+
+        message = str(excinfo.value)
+        assert "parse-safety envelope" in message
+        assert excinfo.value.errors(include_url=False)[0]["type"] == (
+            "graph.edge_list_parse_envelope_exceeded"
+        )
+        assert len(excinfo.value.errors(include_url=False)) == 1
+
     def test_oversized_rejection_covers_every_request_consumer(self) -> None:
         edges = [
             [index % 97, (index + 1) % 97]

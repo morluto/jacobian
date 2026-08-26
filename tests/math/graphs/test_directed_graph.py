@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from itertools import combinations, islice
+
 import networkx as nx
 import pytest
 from pydantic import ValidationError
 
 from jacobian.math.graphs.directed._models import (
+    MAX_DIRECTED_OPERATION_EDGES,
+    MAX_DIRECTED_OPERATION_VERTICES,
     AcyclicOrderRequest,
     AcyclicOrderResult,
     CondensationRequest,
@@ -47,6 +51,12 @@ def _condensation(graph: dict) -> CondensationResult:
 
 def _acyclic_order(graph: dict) -> AcyclicOrderResult:
     return compute_acyclic_order(AcyclicOrderRequest.model_validate({"graph": graph}))
+
+
+def _directed_pairs(edge_count: int) -> list[list[int]]:
+    """Distinct loop-free directed pairs over 33 vertices: C(33, 2) = 528."""
+
+    return [list(pair) for pair in islice(combinations(range(33), 2), edge_count)]
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +307,90 @@ class TestAcyclicOrder:
         result = _acyclic_order({"vertex_count": 2, "edges": [[0, 1]]})
         assert result.acyclic
         assert result.order == (0, 1)
+
+
+# ---------------------------------------------------------------------------
+# Published direct-operation envelope
+# ---------------------------------------------------------------------------
+
+
+DIRECT_OPERATION_REQUESTS = (
+    ReachabilityRequest,
+    StronglyConnectedComponentsRequest,
+    CondensationRequest,
+    AcyclicOrderRequest,
+)
+
+
+class TestDirectOperationEnvelope:
+    """Published schemas advertise exactly the direct-operation admission."""
+
+    def test_published_schemas_advertise_the_operation_envelope(self) -> None:
+        for request_type in DIRECT_OPERATION_REQUESTS:
+            graph_schema = request_type.model_json_schema()["properties"]["graph"]
+            assert (
+                graph_schema["properties"]["vertex_count"]["maximum"]
+                == MAX_DIRECTED_OPERATION_VERTICES
+            )
+            assert (
+                graph_schema["properties"]["edges"]["maxItems"]
+                == MAX_DIRECTED_OPERATION_EDGES
+            )
+            assert str(MAX_DIRECTED_OPERATION_VERTICES) in graph_schema["description"]
+            assert str(MAX_DIRECTED_OPERATION_EDGES) in graph_schema["description"]
+
+    def test_shared_carrier_schema_stays_free_of_the_operation_caps(self) -> None:
+        """The reusable carrier keeps its structural schema without this cap."""
+
+        carrier_properties = DirectedGraph.model_json_schema()["properties"]
+        assert "maximum" not in carrier_properties["vertex_count"]
+        assert "maxItems" not in carrier_properties["edges"]
+
+    def test_envelope_boundary_is_admitted_by_every_direct_request(self) -> None:
+        edgeless = {
+            "graph": {"vertex_count": MAX_DIRECTED_OPERATION_VERTICES, "edges": []}
+        }
+        ReachabilityRequest.model_validate({**edgeless, "source": 0})
+        StronglyConnectedComponentsRequest.model_validate(edgeless)
+        CondensationRequest.model_validate(edgeless)
+        AcyclicOrderRequest.model_validate(edgeless)
+
+        full_envelope = {
+            "graph": {
+                "vertex_count": MAX_DIRECTED_OPERATION_VERTICES,
+                "edges": _directed_pairs(MAX_DIRECTED_OPERATION_EDGES),
+            }
+        }
+        assert len(full_envelope["graph"]["edges"]) == MAX_DIRECTED_OPERATION_EDGES
+        ReachabilityRequest.model_validate({**full_envelope, "source": 0})
+        StronglyConnectedComponentsRequest.model_validate(full_envelope)
+        CondensationRequest.model_validate(full_envelope)
+        AcyclicOrderRequest.model_validate(full_envelope)
+
+    def test_requests_beyond_the_envelope_are_rejected_at_runtime(self) -> None:
+        beyond_envelope = [
+            {
+                "graph": {
+                    "vertex_count": MAX_DIRECTED_OPERATION_VERTICES + 1,
+                    "edges": [],
+                }
+            },
+            {
+                "graph": {
+                    "vertex_count": MAX_DIRECTED_OPERATION_VERTICES,
+                    "edges": _directed_pairs(MAX_DIRECTED_OPERATION_EDGES + 1),
+                }
+            },
+        ]
+        for request in beyond_envelope:
+            with pytest.raises(ValidationError):
+                ReachabilityRequest.model_validate({**request, "source": 0})
+            with pytest.raises(ValidationError):
+                StronglyConnectedComponentsRequest.model_validate(request)
+            with pytest.raises(ValidationError):
+                CondensationRequest.model_validate(request)
+            with pytest.raises(ValidationError):
+                AcyclicOrderRequest.model_validate(request)
 
 
 # ---------------------------------------------------------------------------

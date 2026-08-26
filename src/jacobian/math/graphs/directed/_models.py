@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, WithJsonSchema, model_validator
+from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -64,8 +65,31 @@ def _require_directed_operation_admission(graph: DirectedGraph) -> None:
         )
 
 
+def _directed_operation_graph_schema() -> JsonSchemaValue:
+    """Project the direct-operation envelope onto the shared carrier schema."""
+
+    schema = DirectedGraph.model_json_schema()
+    schema["description"] = (
+        "A structurally valid finite simple directed graph accepted by the "
+        "direct traversal operations: at most "
+        f"{MAX_DIRECTED_OPERATION_VERTICES} vertices and at most "
+        f"{MAX_DIRECTED_OPERATION_EDGES} edges."
+    )
+    schema["properties"]["vertex_count"].update(
+        maximum=MAX_DIRECTED_OPERATION_VERTICES,
+    )
+    schema["properties"]["edges"].update(maxItems=MAX_DIRECTED_OPERATION_EDGES)
+    return schema
+
+
+DirectedOperationGraph = Annotated[
+    DirectedGraph,
+    WithJsonSchema(_directed_operation_graph_schema()),
+]
+
+
 class ReachabilityRequest(StrictModel):
-    graph: DirectedGraph
+    graph: DirectedOperationGraph
     source: int = Field(ge=0)
 
     @model_validator(mode="after")
@@ -87,7 +111,7 @@ class ReachabilityResult(StrictModel):
 
 
 class StronglyConnectedComponentsRequest(StrictModel):
-    graph: DirectedGraph
+    graph: DirectedOperationGraph
 
     @model_validator(mode="after")
     def require_operation_admission(self) -> Self:
@@ -104,7 +128,7 @@ class StronglyConnectedComponentsResult(StrictModel):
 
 
 class CondensationRequest(StrictModel):
-    graph: DirectedGraph
+    graph: DirectedOperationGraph
 
     @model_validator(mode="after")
     def require_operation_admission(self) -> Self:
@@ -125,7 +149,7 @@ class CondensationResult(StrictModel):
 
 
 class AcyclicOrderRequest(StrictModel):
-    graph: DirectedGraph
+    graph: DirectedOperationGraph
 
     @model_validator(mode="after")
     def require_operation_admission(self) -> Self:

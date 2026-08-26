@@ -151,6 +151,16 @@ def test_contracts_and_values_cannot_reenter_their_own_operations(
     )
     _write(
         tmp_path,
+        "src/jacobian/math/relative/_models.py",
+        "from .operations import compute\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/imported/_models.py",
+        "import jacobian.math.imported._operations as operations\n",
+    )
+    _write(
+        tmp_path,
         "src/jacobian/math/example/values.py",
         "import importlib as loader\n"
         "operation = loader.import_module('jacobian.math.example._operations')\n",
@@ -169,6 +179,8 @@ def test_contracts_and_values_cannot_reenter_their_own_operations(
     assert _violations(tmp_path, "owner-operation-reentry") == [
         "src/jacobian/math/example/_models.py",
         "src/jacobian/math/example/values.py",
+        "src/jacobian/math/imported/_models.py",
+        "src/jacobian/math/relative/_models.py",
     ]
 
 

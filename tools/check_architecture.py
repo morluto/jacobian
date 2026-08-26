@@ -402,6 +402,23 @@ def _is_owner_operation_module(module: str, owner: str) -> bool:
     return module in {f"{owner}.operations", f"{owner}._operations"}
 
 
+def _resolve_import_from_module(
+    node: ast.ImportFrom, relative: PurePosixPath
+) -> str | None:
+    """Resolve one ``from`` target relative to its source package."""
+
+    if node.level == 0:
+        return node.module
+    package_parts = relative.parent.relative_to(PurePosixPath("src")).parts
+    parents_to_remove = node.level - 1
+    if parents_to_remove >= len(package_parts):
+        return None
+    base_parts = package_parts[: len(package_parts) - parents_to_remove]
+    if node.module is not None:
+        base_parts += tuple(node.module.split("."))
+    return ".".join(base_parts)
+
+
 def _dynamic_import_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
     """Return direct ``import_module`` names and imported ``importlib`` names."""
 
@@ -441,8 +458,30 @@ def _owner_operation_reentry_violations(
     dynamic_functions, dynamic_modules = _dynamic_import_aliases(tree)
     violations: list[Violation] = []
     for node in _walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module is not None:
-            if _is_owner_operation_module(node.module, owner):
+        if isinstance(node, ast.ImportFrom):
+            module = _resolve_import_from_module(node, relative)
+            if module is not None and _is_owner_operation_module(module, owner):
+                violations.append(
+                    _violation(
+                        relative,
+                        node,
+                        "owner-operation-reentry",
+                        "contract and value modules must not import their own operations",
+                    )
+                )
+            elif module == owner and any(
+                alias.name in {"operations", "_operations"} for alias in node.names
+            ):
+                violations.append(
+                    _violation(
+                        relative,
+                        node,
+                        "owner-operation-reentry",
+                        "contract and value modules must not import their own operations",
+                    )
+                )
+        elif isinstance(node, ast.Import):
+            if any(_is_owner_operation_module(alias.name, owner) for alias in node.names):
                 violations.append(
                     _violation(
                         relative,

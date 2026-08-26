@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import pairwise
 
+from jacobian._exact import format_canonical_rational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.numerical_semigroups._algorithms import (
     catenary_degree_from_factorizations,
@@ -29,15 +30,6 @@ def _minimal_generators(generators: tuple[str, ...]) -> tuple[int, ...]:
     return minimal_generating_system(
         tuple(sorted({parse_canonical_integer(generator) for generator in generators}))
     )
-
-
-def _format_ratio(numerator: int, denominator: int) -> str:
-    """Return an exact fraction in the canonical transport spelling."""
-
-    fraction = Fraction(numerator, denominator)
-    if fraction.denominator == 1:
-        return str(fraction.numerator)
-    return f"{fraction.numerator}/{fraction.denominator}"
 
 
 def compute_element_delta_set(
@@ -69,7 +61,7 @@ def compute_element_elasticity(
         minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
         minimum_length=minimum_length,
         maximum_length=maximum_length,
-        elasticity=_format_ratio(maximum_length, minimum_length),
+        elasticity=format_canonical_rational(Fraction(maximum_length, minimum_length)),
     )
 
 

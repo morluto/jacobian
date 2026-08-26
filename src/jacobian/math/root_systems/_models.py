@@ -25,7 +25,14 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 class CartanMatrixRequest(StrictModel):
     """A bounded finite-type Cartan matrix."""
 
-    matrix: tuple[tuple[int, ...], ...]
+    matrix: tuple[tuple[int, ...], ...] = Field(
+        description=(
+            "Finite-type generalized Cartan matrix of rank 1 through "
+            f"{MAX_RANK}: square, diagonal entries 2, non-positive "
+            "off-diagonal entries with paired products in {0, 1, 2, 3}, "
+            "and positive-definite symmetrization."
+        )
+    )
 
     @model_validator(mode="after")
     def require_valid_cartan(self) -> Self:
@@ -165,11 +172,31 @@ class RootSystemDataResult(StrictModel):
 
 
 class SimpleReflectionRequest(StrictModel):
-    """Request to apply a simple reflection s_i to a root lattice vector."""
+    """One bounded simple reflection on a finite-type root lattice."""
 
-    matrix: tuple[tuple[int, ...], ...]
-    vector: tuple[int, ...] = Field(min_length=1)
-    simple_index: int = Field(ge=0)
+    matrix: tuple[tuple[int, ...], ...] = Field(
+        description=(
+            "Finite-type generalized Cartan matrix of rank 1 through "
+            f"{MAX_RANK}; it must meet the same Cartan conditions as "
+            "``CartanMatrixRequest.matrix``."
+        )
+    )
+    vector: tuple[int, ...] = Field(
+        min_length=1,
+        description=(
+            "Root-lattice coordinates in the matrix's simple-root basis; "
+            "length must equal the Cartan-matrix rank, and each coordinate "
+            f"must lie in [-{MAX_REFLECTION_COORDINATE}, "
+            f"{MAX_REFLECTION_COORDINATE}]."
+        ),
+    )
+    simple_index: int = Field(
+        ge=0,
+        description=(
+            "Zero-based simple-root index; it must be smaller than the "
+            "Cartan-matrix rank."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:

@@ -7,6 +7,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.root_systems._models import (
+    MAX_RANK,
     CartanMatrixRequest,
     RootSystemDataResult,
     SimpleReflectionRequest,
@@ -75,7 +76,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Apply a simple reflection to a root lattice vector",
         "Apply the simple reflection s_i to a vector in the root lattice "
         "of a finite crystallographic root system defined by its Cartan "
-        "matrix.",
+        f"matrix of rank at most {MAX_RANK}. The vector uses that same "
+        "simple-root axis and the index is zero-based.",
         SimpleReflectionRequest,
         SimpleReflectionResult,
         compute_simple_reflection,
@@ -85,7 +87,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "a2_reflection",
-                "Apply s_0 to the simple root alpha_0 in A2.",
+                "Apply s_0 to the simple root alpha_0 in A2. The matrix is "
+                "a finite-type generalized Cartan matrix, the vector has its "
+                "two simple-root coordinates, and index 0 is below its rank.",
                 {"matrix": _A2["matrix"], "vector": [1, 0], "simple_index": 0},
             ),
         ),

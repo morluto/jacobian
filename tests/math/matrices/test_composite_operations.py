@@ -108,10 +108,10 @@ def test_kronecker_request_rejects_products_beyond_the_canonical_matrix_order() 
 
     from jacobian.math.matrices.values import MAX_RATIONAL_MATRIX_ORDER
 
-    factor = RationalMatrix(entries=_identity_entries(8))
+    factor = RationalMatrix(entries=_identity_entries(9))
     with pytest.raises(ValidationError):
         MatrixKroneckerProductRequest(left=factor, right=factor)
-    assert MAX_RATIONAL_MATRIX_ORDER < 8 * 8
+    assert MAX_RATIONAL_MATRIX_ORDER < 9 * 9
 
 
 def test_kronecker_product_at_the_canonical_matrix_order_boundary() -> None:

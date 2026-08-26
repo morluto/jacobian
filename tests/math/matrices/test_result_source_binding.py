@@ -10,19 +10,25 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.matrices._operation_models import (
+    MAX_DETERMINANT_MATRIX_DIMENSION,
+    MatrixDeterminantRequest,
     MatrixRankRequest,
     MatrixRankResult,
     NullspaceResult,
+    RationalMatrixProductRequest,
     RationalMatrixRequest,
     RrefResult,
 )
 from jacobian.math.matrices._operations import (
+    compute_determinant,
     compute_nullspace,
+    compute_product,
     compute_rank,
     compute_rref,
 )
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
+    MAX_RATIONAL_MATRIX_ORDER,
     RationalMatrix,
     rational_matrix_from_fractions,
 )
@@ -230,6 +236,27 @@ def test_producer_to_serialized_interoperability() -> None:
     assert list(rref.free_columns) == list(nullspace.free_columns)
 
 
+def test_product_value_feeds_determinant_without_reencoding() -> None:
+    """A matrix producer's canonical value is the determinant input value."""
+
+    left = _matrix([["1", "2"], ["3", "4"]])
+    right = _matrix([["0", "1"], ["1", "0"]])
+    product = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    # Transport composition parses the producer's canonical payload directly,
+    # and native composition retains its exact owner type unchanged.
+    transported = MatrixDeterminantRequest.model_validate(
+        {"matrix": product.product.model_dump(mode="json")}
+    )
+    assert transported.matrix == product.product
+
+    request = MatrixDeterminantRequest(matrix=product.product)
+    assert request.matrix is product.product
+    assert compute_determinant(request).determinant == CanonicalRational(
+        num="2", den="1"
+    )
+
+
 def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
     one = CanonicalRational(num="1", den="1")
     zero = CanonicalRational(num="0", den="1")
@@ -269,3 +296,9 @@ def test_request_admission_keeps_the_boundary_computation_dimension() -> None:
     assert rank.rank == MAX_MATRIX_DIMENSION
     assert len(rank.pivot_columns) == MAX_MATRIX_DIMENSION
     assert rank.matrix == boundary
+
+
+def test_determinant_accepts_the_canonical_matrix_boundary() -> None:
+    assert MAX_RATIONAL_MATRIX_ORDER == MAX_DETERMINANT_MATRIX_DIMENSION
+    matrix = RationalMatrix(entries=_identity_entries(MAX_RATIONAL_MATRIX_ORDER))
+    assert MatrixDeterminantRequest(matrix=matrix).matrix is matrix

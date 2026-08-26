@@ -6,7 +6,6 @@ from typing import Any
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.math.matrices._operation_models import DeterminantRationalMatrix
 from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix, SmithNormalForm
 
 __all__ = [
@@ -32,9 +31,7 @@ def rational_from_sympy(value: Any) -> CanonicalRational:
     )
 
 
-def rational_matrix_to_sympy(
-    matrix: RationalMatrix | DeterminantRationalMatrix,
-) -> Any:
+def rational_matrix_to_sympy(matrix: RationalMatrix) -> Any:
     import sympy
 
     return sympy.Matrix(

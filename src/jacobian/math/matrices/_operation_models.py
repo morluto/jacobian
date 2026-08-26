@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
@@ -20,11 +20,6 @@ from jacobian.math.matrices.values import (
 
 MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 64
-
-DeterminantRow = Annotated[
-    tuple[CanonicalRational, ...],
-    Field(min_length=1, max_length=MAX_DETERMINANT_MATRIX_DIMENSION),
-]
 
 
 def _require_computation_dimensions(
@@ -123,46 +118,27 @@ class SquareRationalMatrixRequest(StrictModel):
         return self
 
 
-class DeterminantRationalMatrix(StrictModel):
-    """One determinant-owned rational matrix bounded independently to order 64."""
-
-    domain: Literal["QQ"] = "QQ"
-    entries: tuple[DeterminantRow, ...] = Field(
-        min_length=1, max_length=MAX_DETERMINANT_MATRIX_DIMENSION
-    )
-
-    @model_validator(mode="after")
-    def require_rectangular_nonempty_rows(self) -> Self:
-        column_count = len(self.entries[0])
-        if not 1 <= column_count <= MAX_DETERMINANT_MATRIX_DIMENSION:
-            raise _validation_error(
-                "budget_exceeded",
-                "determinant matrix rows must contain between 1 and 64 entries",
-            )
-        if any(len(row) != column_count for row in self.entries):
-            raise _validation_error(
-                "budget_exceeded",
-                "determinant matrix rows must all have the same length",
-            )
-        require_matrix_scalar_digits(
-            self.entries,
-            maximum=MAX_INPUT_SCALAR_DIGITS,
-            label="determinant input",
-        )
-        return self
-
-
 class MatrixDeterminantRequest(StrictModel):
     """One square rational matrix of order at most 64."""
 
-    matrix: DeterminantRationalMatrix
+    matrix: RationalMatrix
 
     @model_validator(mode="after")
     def require_square(self) -> Self:
-        if len(self.matrix.entries) != len(self.matrix.entries[0]):
+        order = len(self.matrix.entries)
+        if order != len(self.matrix.entries[0]):
             raise _validation_error(
                 "budget_exceeded", "determinant computation requires a square matrix"
             )
+        if order > MAX_DETERMINANT_MATRIX_DIMENSION:
+            raise _validation_error(
+                "budget_exceeded", "determinant matrices are limited to order 64"
+            )
+        require_matrix_scalar_digits(
+            self.matrix.entries,
+            maximum=MAX_INPUT_SCALAR_DIGITS,
+            label="determinant input",
+        )
         return self
 
 

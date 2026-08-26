@@ -9,16 +9,6 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
-from jacobian.math.probability._gaussian import (
-    ExactComplexRational,
-    GaussianMomentContraction,
-    GaussianPolynomialMomentRequest,
-    GaussianPolynomialMomentResult,
-)
-from jacobian.math.probability._gaussian_inputs import (
-    CanonicalGaussianPolynomialMomentRequest,
-)
-from jacobian.math.probability._gaussian_moments import gaussian_univariate_moment
 from jacobian.math.probability._distribution import (
     FiniteConditionalContribution,
     FiniteConditionRequest,
@@ -37,6 +27,16 @@ from jacobian.math.probability._distribution import (
     FiniteRawMomentRequest,
     FiniteRawMomentResult,
 )
+from jacobian.math.probability._gaussian import (
+    ExactComplexRational,
+    GaussianMomentContraction,
+    GaussianPolynomialMomentRequest,
+    GaussianPolynomialMomentResult,
+)
+from jacobian.math.probability._gaussian_inputs import (
+    CanonicalGaussianPolynomialMomentRequest,
+)
+from jacobian.math.probability._gaussian_moments import gaussian_univariate_moment
 from jacobian.math.probability._graph_connection_probability import (
     GRAPH_CONNECTION_PROBABILITY_OPERATION,
 )

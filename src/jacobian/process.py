@@ -303,13 +303,14 @@ def _drain_reader_threads(
     process: subprocess.Popen[bytes],
     readers: tuple[threading.Thread, ...],
     platform_tools: ProcessPlatformTools | None,
+    *,
+    cleanup_deadline: float,
 ) -> bool:
     """Kill the tree, drain readers, and return ``True`` if any survived."""
 
     _kill_process_tree(process, platform_tools)
-    drain_deadline = time.monotonic() + _PIPE_DRAIN_GRACE_SECONDS
     for reader in readers:
-        reader.join(timeout=max(0.0, drain_deadline - time.monotonic()))
+        reader.join(timeout=max(0.0, cleanup_deadline - time.monotonic()))
     return any(reader.is_alive() for reader in readers)
 
 
@@ -341,6 +342,14 @@ def run_bounded_process(
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("subprocess timeout must be positive")
 
+    # This envelope includes input spooling, process setup, execution, result
+    # capture, and reaping.  Keep a finite portion for teardown so a timeout
+    # cannot acquire a second, fresh cleanup clock after the admitted lifetime.
+    started = time.monotonic()
+    absolute_deadline = started + timeout_seconds
+    cleanup_allowance = min(_PIPE_DRAIN_GRACE_SECONDS, timeout_seconds / 4)
+    execution_deadline = absolute_deadline - cleanup_allowance
+
     start_new_session = os.name == "posix"
     creationflags = (
         int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
@@ -362,6 +371,28 @@ def run_bounded_process(
     with tempfile.TemporaryFile() as stdin_file:
         stdin_file.write(input_bytes)
         stdin_file.seek(0)
+        # Spooling is part of the admitted execution envelope.  Do not launch
+        # a worker once it has already consumed the execution portion that was
+        # reserved before teardown.
+        if cancellation_event is not None and cancellation_event.is_set():
+            return BoundedProcessResult(
+                returncode=None,
+                stdout=b"",
+                stderr=b"",
+                stdout_exceeded=False,
+                stderr_exceeded=False,
+                timed_out=False,
+                cancelled=True,
+            )
+        if time.monotonic() >= execution_deadline:
+            return BoundedProcessResult(
+                returncode=None,
+                stdout=b"",
+                stderr=b"",
+                stdout_exceeded=False,
+                stderr_exceeded=False,
+                timed_out=True,
+            )
         bounded_command, limits_applied_before_exec = (
             _resource_limited_command(command, resource_limits, prlimit_executable)
             if resource_limits is not None
@@ -422,11 +453,12 @@ def run_bounded_process(
         for reader in readers:
             reader.start()
 
-        deadline = time.monotonic() + timeout_seconds
+        timed_out = False
+        cancelled = False
         try:
             timed_out, cancelled = _monitor_bounded_process(
                 process,
-                deadline=deadline,
+                deadline=execution_deadline,
                 cancellation_event=cancellation_event,
                 platform_tools=platform_tools,
             )
@@ -434,9 +466,12 @@ def run_bounded_process(
             # A clean worker may leave descendants holding inherited pipe
             # handles. Terminate the process group before draining so those
             # handles cannot turn successful completion into a false timeout.
-            if _drain_reader_threads(process, readers, platform_tools) and not (
-                stdout_exceeded.is_set() or stderr_exceeded.is_set()
-            ):
+            if _drain_reader_threads(
+                process,
+                readers,
+                platform_tools,
+                cleanup_deadline=absolute_deadline,
+            ) and not (stdout_exceeded.is_set() or stderr_exceeded.is_set()):
                 # A descendant may have escaped the worker process group while
                 # retaining a pipe. Fail closed instead of returning partial
                 # output as a successful worker completion.  Do not override

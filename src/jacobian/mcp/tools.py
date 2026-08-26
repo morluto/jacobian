@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
@@ -16,7 +17,6 @@ from jacobian.dispatch import (
     OperationRequestValidationError,
     _invoke_prepared_operation,
     _prepare_operation,
-    _PreparedOperation,
 )
 from jacobian.mcp.models import (
     OperationBrowseRequest,
@@ -104,12 +104,18 @@ def math_run(
     catalog = _catalog(ctx)
     if catalog.operation(operation_id) is None:
         raise ToolError(f"unknown operation: {operation_id}")
+    cancellation = _request_cancellation(ctx)
+    if cancellation.is_set():
+        raise ToolError("operation cancelled before execution")
     try:
-        prepared = _prepare_operation(operation_id, payload, catalog)
+        started = time.monotonic()
         # MCP runs synchronous tools in a worker thread.  Its request event
         # is polled by the shared external-process runner, which kills and
-        # reaps only an operation's owned child tree.
-        return _run_prepared_operation(prepared, ctx)
+        # reaps only an operation's owned child tree.  Bind it before
+        # preparation because owner admission may itself use a child worker.
+        with bounded_process_cancellation(cancellation):
+            prepared = _prepare_operation(operation_id, payload, catalog)
+            return _invoke_prepared_operation(prepared, started=started)
     except (OperationRequestValidationError, OperationDomainValidationError) as exc:
         errors = _bounded_validation_issues(exc.errors())
         data = OperationInvalidRequestData(
@@ -127,19 +133,6 @@ def _request_cancellation(ctx: Context[AppState, Any]) -> _CancellationSignal:
     """Return MCP 2.1's request signal through its only available SDK seam."""
 
     return ctx.request_context.session._request_outbound.cancel_requested
-
-
-def _run_prepared_operation(
-    prepared: _PreparedOperation,
-    ctx: Context[AppState, Any],
-) -> OperationResult:
-    """Run one prepared operation without serializing independent requests."""
-
-    cancellation = _request_cancellation(ctx)
-    if cancellation.is_set():
-        raise ToolError("operation cancelled before execution")
-    with bounded_process_cancellation(cancellation):
-        return _invoke_prepared_operation(prepared)
 
 
 def _bounded_validation_issues(

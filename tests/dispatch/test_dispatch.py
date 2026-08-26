@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import time
+from typing import cast
+
 import pytest
-from pydantic import ValidationError
+from pydantic import ValidationError, field_serializer
 
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
@@ -14,6 +17,13 @@ class _Request(StrictModel):
 
 class _Result(StrictModel):
     value: int
+
+
+class _TimedResult(_Result):
+    @field_serializer("value")
+    def serialize_value(self, value: int) -> int:
+        time.monotonic()
+        return value
 
 
 class _InvalidResultOperation:
@@ -31,6 +41,23 @@ class _CatalogWithInvalidResult:
     def _binding(operation_id: str) -> _InvalidResultOperation:
         del operation_id
         return _InvalidResultOperation()
+
+
+class _TimedResultOperation:
+    operation_id = "test.timed-result"
+    request_type = _Request
+
+    @staticmethod
+    def run(request: StrictModel) -> StrictModel:
+        assert isinstance(request, _Request)
+        return _TimedResult(value=request.value)
+
+
+class _CatalogWithTimedResult:
+    @staticmethod
+    def _binding(operation_id: str) -> _TimedResultOperation:
+        del operation_id
+        return _TimedResultOperation()
 
 
 def test_invoke_operation_runs_determinant_directly() -> None:
@@ -103,3 +130,17 @@ def test_dispatch_classifies_noncanonical_json_as_request_validation() -> None:
         invoke_operation("test.invalid-result", {"value": 1.5}, catalog)  # type: ignore[arg-type]
 
     assert error.value.errors()[0]["type"] == "canonicalization_error"
+
+
+def test_runtime_includes_canonical_result_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = iter((1.0, 1.1, 1.2))
+    monkeypatch.setattr(time, "monotonic", lambda: next(clock))
+
+    result = invoke_operation(
+        "test.timed-result", {"value": 7}, cast(Catalog, _CatalogWithTimedResult())
+    )
+
+    assert result.output == {"value": 7}
+    assert result.runtime_ms == 200

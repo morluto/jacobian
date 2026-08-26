@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import Never
 
 import pytest
 
@@ -18,6 +19,31 @@ from jacobian.process import (
     bounded_process_cancellation,
     run_bounded_process,
 )
+
+
+def test_expired_input_spooling_does_not_launch_a_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monotonic = iter((0.0, 2.0))
+    monkeypatch.setattr("jacobian.process.time.monotonic", lambda: next(monotonic))
+
+    def fail_to_launch(*_args: object, **_kwargs: object) -> Never:
+        raise AssertionError("expired request must not launch a worker")
+
+    monkeypatch.setattr("jacobian.process.subprocess.Popen", fail_to_launch)
+
+    completed = run_bounded_process(
+        [sys.executable, "-c", "raise SystemExit(0)"],
+        input_bytes=b"input",
+        timeout_seconds=1,
+        environment=dict(os.environ),
+        stdout_limit=4096,
+        stderr_limit=4096,
+    )
+
+    assert completed.timed_out
+    assert not completed.cancelled
+    assert completed.returncode is None
 
 
 @pytest.mark.parametrize("timeout_seconds", [math.inf, math.nan])

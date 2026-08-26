@@ -109,11 +109,12 @@ def _invoke_prepared_operation(
     if started is None:
         started = time.monotonic()
     result = prepared.run(prepared.request)
+    output = result.model_dump(mode="json")
 
     return OperationResult(
         operation_id=prepared.operation_id,
         runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
-        output=result.model_dump(mode="json"),
+        output=output,
     )
 
 

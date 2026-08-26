@@ -486,7 +486,11 @@ def run_bounded_process(
             process.stdout.close()
             process.stderr.close()
             for reader in readers:
-                reader.join(timeout=0.1)
+                # Closing the pipes can unblock a reader that was still
+                # draining when the shared cleanup deadline expired.  Give
+                # it only the time remaining in that same envelope; never
+                # append a fresh grace period after the request has ended.
+                reader.join(timeout=max(0.0, absolute_deadline - time.monotonic()))
 
     return BoundedProcessResult(
         returncode=process.returncode,

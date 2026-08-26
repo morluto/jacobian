@@ -92,6 +92,28 @@ def _vertex_mapping(
         json.JSONDecodeError,
     ) as exc:
         raise RuntimeError("bounded VF2 worker returned malformed output") from exc
+    if len(pairs) != graph_a.vertex_count:
+        raise ValueError("worker mapping is not complete")
+    sources = {source for source, _ in pairs}
+    targets = {target for _, target in pairs}
+    if sources != set(range(graph_a.vertex_count)) or targets != set(
+        range(graph_b.vertex_count)
+    ):
+        raise ValueError("worker mapping is not bijective")
+    forward = dict(pairs)
+    edges_a = {
+        edge if graph_a.directed else tuple(sorted(edge)) for edge in graph_a.edges
+    }
+    edges_b = {
+        edge if graph_b.directed else tuple(sorted(edge)) for edge in graph_b.edges
+    }
+    if {
+        (forward[source], forward[target])
+        if graph_a.directed
+        else tuple(sorted((forward[source], forward[target])))
+        for source, target in graph_a.edges
+    } != edges_b:
+        raise ValueError("worker mapping does not preserve adjacency")
     return [VertexMappingPair(from_vertex=src, to_vertex=dst) for src, dst in pairs]
 
 

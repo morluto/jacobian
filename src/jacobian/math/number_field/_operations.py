@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_field._models import (
     NumberFieldDiscriminantResult,
     NumberFieldRequest,
@@ -49,7 +50,10 @@ def compute_nf_discriminant(
     try:
         response = json.loads(completed.stdout.decode("utf-8"))
         if response["kind"] == "complete":
-            return NumberFieldDiscriminantResult(discriminant=response["discriminant"])
+            discriminant = format_canonical_integer(
+                parse_canonical_integer(response["discriminant"])
+            )
+            return NumberFieldDiscriminantResult(discriminant=discriminant)
     except (KeyError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
         response = None
     if isinstance(response, dict) and response.get("kind") == "invalid":

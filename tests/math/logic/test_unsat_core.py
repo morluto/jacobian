@@ -382,6 +382,53 @@ def test_request_bounds_source_nesting() -> None:
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(256))
 
 
+def test_core_bounds_reject_before_any_backend_parse(monkeypatch) -> None:
+    """Sources outside the core envelope must not reach the Z3 parser.
+
+    Each source fits the broader ``smt.solve`` envelope, so only the
+    core-specific bounds can reject it and they must do so lexically,
+    before this operation's single backend parse.
+    """
+
+    def refuse(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("Z3 parsed a source outside the core envelope")
+
+    monkeypatch.setattr(z3, "parse_smt2_string", refuse)
+
+    nesting_over_core_within_solve = (
+        "(set-logic QF_LIA)\n(assert "
+        + "(not " * 256
+        + "true"
+        + ")" * 256
+        + ")\n(check-sat)"
+    )
+    with raises_logic_validation():
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=nesting_over_core_within_solve)
+
+    numeral_over_core_within_solve = (
+        f"(set-logic QF_LIA)\n(assert (= {'9' * 257} 0))\n(check-sat)"
+    )
+    with raises_logic_validation():
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=numeral_over_core_within_solve)
+
+
+def test_core_admission_defers_parser_resource_failures_to_execution(
+    monkeypatch,
+) -> None:
+    """A parser resource failure is typed UNKNOWN, not a contract rejection."""
+
+    def exhausting_parser(_source: str, **_kwargs: object) -> object:
+        raise z3.Z3Exception("out of memory")
+
+    monkeypatch.setattr(z3, "parse_smt2_string", exhausting_parser)
+    admitted = SmtUnsatCoreRequest(logic="QF_LIA", smtlib=CONTRADICTORY_LIA)
+
+    result = compute_smt_unsat_core(admitted)
+
+    assert result.outcome == "UNKNOWN"
+    assert result.core_indices == ()
+
+
 def test_request_bounds_numeric_coefficient_digits() -> None:
     accepted_number = "1" * 256
     accepted = (

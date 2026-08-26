@@ -16,6 +16,7 @@ from jacobian.catalog.models import MathTool
 from jacobian.math.logic._operations import (
     SmtLogic,
     SmtSolveRequest,
+    _is_smtlib_source_diagnostic,
     _tokenize_smtlib,
     _top_level_smtlib_commands,
 )
@@ -187,6 +188,14 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
 
     @model_validator(mode="after")
     def require_bounded_indexed_assertions(self) -> Self:
+        """Reject out-of-envelope source before any backend work.
+
+        These core-specific bounds run inside the most-derived validator, so
+        a source that fits the broader ``smt.solve`` envelope but violates a
+        core limit is rejected lexically, before this class's single backend
+        parse below.
+        """
+
         tokens = _tokenize_smtlib(self.smtlib)
         if len(tokens) > _MAX_CORE_TOKENS:
             raise _logic_error(
@@ -206,6 +215,14 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
         if parsed_error is not None:
             raise _logic_error(parsed_error)
         return self
+
+    def _complete_backend_admission(self) -> None:
+        """Skip the inherited base-class parse.
+
+        ``require_bounded_indexed_assertions`` already parses through the
+        backend only after every core-specific structural bound has passed,
+        so sources outside this operation's envelope never reach Z3.
+        """
 
 
 class SmtUnsatCoreResult(StrictModel):
@@ -302,6 +319,8 @@ def _parse_assertions(smtlib: str, *, context: Any | None = None) -> tuple[Any, 
         ctx = context if context is not None else z3.Context()
         return tuple(z3.parse_smt2_string(smtlib, ctx=ctx))
     except z3.Z3Exception as exc:
+        if not _is_smtlib_source_diagnostic(exc):
+            raise
         raise _logic_error("SMT core source could not be parsed as SMT-LIB") from exc
 
 
@@ -312,6 +331,8 @@ def _parsed_request_error(
     logic: SmtLogic,
 ) -> str | None:
     """Inspect parsed terms without attaching Z3 objects to validation errors."""
+
+    import z3
 
     try:
         assertions = _parse_assertions(smtlib)
@@ -324,6 +345,10 @@ def _parsed_request_error(
                 f"{_MAX_CORE_AST_NODES} distinct AST nodes"
             )
         _require_declared_logic(assertions, logic)
+    except z3.Z3Exception:
+        # A deferred backend failure carries no evidence about this source;
+        # execution reports it through the typed UNKNOWN outcome.
+        return None
     except ValueError as exc:
         return str(exc)
     return None

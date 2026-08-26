@@ -29,6 +29,7 @@ from jacobian.math.logic._operations import (
     solve_smt,
 )
 from jacobian.math.logic._tools import TOOLS
+from jacobian.math.logic._unsat_core import SmtUnsatCoreRequest
 
 
 @contextmanager
@@ -1127,6 +1128,77 @@ def test_smt_solver_types_parse_stage_backend_failures_as_unknown(monkeypatch) -
     assert result.outcome == "UNKNOWN"
     assert result.exhausted == "memory"
     assert result.detail == operations._EXHAUSTION_DETAILS["memory"]
+
+
+def test_smt_request_admission_defers_parser_resource_failures(monkeypatch) -> None:
+    """A parser resource failure cannot be claimed as malformed caller input.
+
+    Even when Z3 wraps a backend failure in its located error shape, an
+    exhausted budget is not evidence about the source grammar.
+    """
+
+    import z3
+
+    def exhausting_parser(_source: str) -> object:
+        raise z3.Z3Exception(b'(error "line 1 column 0: out of memory")')
+
+    monkeypatch.setattr(z3, "parse_smt2_string", exhausting_parser)
+    admitted = SmtSolveRequest(
+        logic=SmtLogic.QF_LIA,
+        smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+    )
+
+    result = solve_smt(admitted)
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted == "memory"
+    assert result.detail == operations._EXHAUSTION_DETAILS["memory"]
+
+
+def test_smt_request_admission_rejects_located_parser_diagnostics(monkeypatch) -> None:
+    """A located Z3 parser diagnostic stays a caller-correctable rejection."""
+
+    import z3
+
+    def diagnosing_parser(_source: str) -> object:
+        raise z3.Z3Exception(b'(error "line 2 column 11: unknown constant y")\n')
+
+    monkeypatch.setattr(z3, "parse_smt2_string", diagnosing_parser)
+    with pytest.raises(ValidationError) as error:
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                "(assert (> y 0))\n"
+                "(check-sat)"
+            ),
+        )
+
+    assert error.value.errors(include_url=False)[0]["type"] == "logic.smtlib_grammar"
+
+
+@pytest.mark.parametrize(
+    "request_type",
+    sorted(
+        {SmtSolveRequest, SmtUnsatCoreRequest, *SmtSolveRequest.__subclasses__()},
+        key=lambda request_type: request_type.__name__,
+    ),
+    ids=lambda request_type: request_type.__name__,
+)
+def test_every_concrete_smt_request_rejects_malformed_grammar(request_type) -> None:
+    """No SMT request subclass may leave malformed grammar to execution."""
+
+    with pytest.raises(ValidationError):
+        request_type(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                "(assert (> y 0))\n"
+                "(check-sat)"
+            ),
+        )
 
 
 def test_unknown_projection_maps_every_exhausted_resource() -> None:

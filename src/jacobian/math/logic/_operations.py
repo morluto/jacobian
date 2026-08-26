@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import tempfile
 from enum import StrEnum
@@ -696,13 +697,43 @@ def _smtlib_structure(source: str) -> _SmtLibStructure:
     return _SmtLibStructure(max_depth, compound_terms, numeral_digits)
 
 
+_Z3_SOURCE_DIAGNOSTIC = re.compile(r'\(error "line \d+ column \d+: ')
+
+
+def _exception_message(exc: Exception) -> str:
+    message = exc.args[0] if exc.args else ""
+    if isinstance(message, bytes):
+        return message.decode("ascii", errors="replace")
+    return str(message)
+
+
+def _is_smtlib_source_diagnostic(exc: Exception) -> bool:
+    """Report whether one backend parse exception diagnoses the caller's source.
+
+    Z3's SMT-LIB front end reports caller-correctable source problems as
+    ``(error "line L column C: <diagnostic>")``. Backend conditions such as
+    exhausted memory or interruption surface through Z3's fixed error-code
+    message table and carry no source locator. A located diagnostic names a
+    grammar defect unless it also classifies as an exhausted budget, in which
+    case admission defers to execution instead of claiming malformed input.
+    """
+
+    message = _exception_message(exc)
+    if _Z3_SOURCE_DIAGNOSTIC.search(message) is None:
+        return False
+    return _classify_exhaustion(message) is None
+
+
 def _require_parseable_smtlib(source: str) -> None:
     """Reject source that Z3's SMT-LIB 2 parser cannot read as a request error.
 
     Admission runs the same non-evaluating backend parse that execution uses,
     so a schema-admitted request never discovers malformed syntax through an
-    execution exception. Backend absence here is left to execution, where it
-    keeps its typed initialization outcome.
+    execution exception. Only located parser diagnostics establish malformed
+    input; resource or other backend failures carry no evidence about the
+    source, so they defer to execution, which reports them as typed UNKNOWN.
+    Backend absence here is left to execution, where it keeps its typed
+    initialization outcome.
     """
 
     try:
@@ -712,6 +743,8 @@ def _require_parseable_smtlib(source: str) -> None:
     try:
         z3.parse_smt2_string(source)
     except z3.Z3Exception as exc:
+        if not _is_smtlib_source_diagnostic(exc):
+            return
         raise _validation_error(
             "logic.smtlib_grammar",
             "SMT-LIB input could not be parsed by the declared logic",
@@ -801,8 +834,19 @@ class SmtSolveRequest(StrictModel):
                 raise _validation_error(
                     "logic.smtlib_command", f"unsupported SMT-LIB command: {command[0]}"
                 )
-        _require_parseable_smtlib(self.smtlib)
+        self._complete_backend_admission()
         return self
+
+    def _complete_backend_admission(self) -> None:
+        """Parse through the backend once every structural check has passed.
+
+        Called at the end of ``require_single_smtlib_query``. A subclass whose
+        own ``mode="after"`` validators impose a stricter envelope overrides
+        this hook so out-of-envelope source never reaches the backend parser;
+        the most-derived request completes backend admission.
+        """
+
+        _require_parseable_smtlib(self.smtlib)
 
 
 class SmtSolveResult(StrictModel):

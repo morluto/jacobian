@@ -22,6 +22,7 @@ from jacobian.math.logic._sat import (
     LprPropagationHint,
     SatLprRefutation,
     SatRefutationCheckRequest,
+    SatRefutationCheckResult,
     SatSolveRequest,
     SatSolveResult,
     check_sat_refutation,
@@ -353,18 +354,6 @@ def test_lpr_refutation_projects_a_recognized_checker_rejection(
         ),
         (
             SimpleNamespace(
-                returncode=None,
-                stdout=b"",
-                stderr=b"",
-                stdout_exceeded=False,
-                stderr_exceeded=False,
-                timed_out=False,
-                cancelled=True,
-            ),
-            "CANCELLED",
-        ),
-        (
-            SimpleNamespace(
                 returncode=0,
                 stdout=b"s VERIFIED UNSAT\ntrailing\n",
                 stderr=b"",
@@ -391,6 +380,19 @@ def test_lpr_refutation_never_upgrades_process_failure_to_a_math_verdict(
     assert result.outcome == outcome
     assert result.cnf == _unit_refutation_request().cnf
     assert result.refutation == _unit_refutation_request().refutation
+
+
+def test_lpr_result_exposes_cancellation_as_a_typed_execution_outcome() -> None:
+    request = _unit_refutation_request()
+
+    result = SatRefutationCheckResult(
+        outcome="CANCELLED",
+        cnf=request.cnf,
+        refutation=request.refutation,
+        detail="Cake LPR execution was cancelled.",
+    )
+
+    assert result.outcome == "CANCELLED"
 
 
 def test_smt_solver_uses_the_inline_smtlib_query() -> None:

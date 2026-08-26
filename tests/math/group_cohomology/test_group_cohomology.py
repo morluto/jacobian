@@ -12,7 +12,10 @@ from jacobian.math.group_cohomology._models import (
     GroupCohomologyRequest,
     GroupCohomologyResult,
 )
-from jacobian.math.group_cohomology._operations import compute_group_cohomology
+from jacobian.math.group_cohomology._operations import (
+    compute_group_cohomology,
+    verify_group_cohomology_result,
+)
 
 
 class TestGroupCohomology:
@@ -308,7 +311,7 @@ class TestDeclarationContract:
 
 
 class TestResultBinding:
-    """Results retain their source request and replay the bar complex."""
+    """Results are structural; explicit verification replays the bar complex."""
 
     def _request(self):
         return GroupCohomologyRequest(
@@ -317,7 +320,7 @@ class TestResultBinding:
             max_degree=2,
         )
 
-    def test_result_retains_request_and_replays(self):
+    def test_result_retains_request_without_replaying(self):
         request = self._request()
         result = compute_group_cohomology(request)
         assert result.request == request
@@ -327,14 +330,18 @@ class TestResultBinding:
             group_order=result.group_order,
         )
 
-    def test_forged_table_rejected(self):
+    def test_forged_table_requires_explicit_verification(self):
         request = self._request()
-        with pytest.raises(ValidationError):
-            GroupCohomologyResult(
-                request=request,
-                groups=(CohomologyGroup(degree=0, betti=5, cochain_dimension=7),),
-                group_order=request.max_degree + 1,
-            )
+        forged = GroupCohomologyResult(
+            request=request,
+            groups=(
+                CohomologyGroup(degree=0, betti=1, cochain_dimension=1),
+                CohomologyGroup(degree=1, betti=1, cochain_dimension=6),
+                CohomologyGroup(degree=2, betti=0, cochain_dimension=36),
+            ),
+            group_order=6,
+        )
+        assert verify_group_cohomology_result(forged) is False
 
     def test_composite_prime_table_rejected_via_source_request(self):
         with pytest.raises(ValidationError) as error:

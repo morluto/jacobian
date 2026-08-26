@@ -28,6 +28,7 @@ from jacobian.math.polynomials.differential_operators._models import (
 )
 from jacobian.math.polynomials.differential_operators._operations import (
     compute_differential_operator_application,
+    verify_differential_operator_application_result,
 )
 from jacobian.math.polynomials.differential_operators._tools import TOOLS
 from jacobian.math.polynomials.differential_operators.operations import (
@@ -2065,7 +2066,9 @@ def test_coefficient_growth_boundary_is_admitted_then_rejected() -> None:
         )
 
 
-def test_result_replay_rejects_source_operator_iteration_and_output_mutations() -> None:
+def test_explicit_result_verifier_rejects_source_operator_iteration_and_output_mutations() -> (
+    None
+):
     request = TOOLS[0].request_type.model_validate(TOOLS[0].examples[0].input)
     result = compute_differential_operator_application(request)
 
@@ -2080,8 +2083,10 @@ def test_result_replay_rejects_source_operator_iteration_and_output_mutations() 
     ):
         payload = result.model_dump(mode="json")
         mutate(payload)
-        with polynomial_validation_error():
-            DifferentialOperatorApplyResult.model_validate(payload)
+        if payload["expected"] is not None:
+            payload["matches_expected"] = payload["output"] == payload["expected"]
+        supplied = DifferentialOperatorApplyResult.model_validate(payload)
+        assert not verify_differential_operator_application_result(supplied)
 
 
 def test_result_rejects_forged_zero_and_expected_decisions() -> None:

@@ -21,9 +21,7 @@ _EXTERNAL_OPERATION_OWNERS = frozenset(
         PurePosixPath("src/jacobian/math/_singular.py"),
         PurePosixPath("src/jacobian/math/polynomials/ideals/_singular.py"),
         PurePosixPath("src/jacobian/math/logic/_sat.py"),
-        PurePosixPath(
-            "src/jacobian/math/polynomials/multivariate/_factor_backend.py"
-        ),
+        PurePosixPath("src/jacobian/math/polynomials/multivariate/_factor_backend.py"),
         PurePosixPath("src/jacobian/math/polynomials/maps/_replay.py"),
     }
 )
@@ -383,6 +381,375 @@ def _evaluator_parser_violations(
     return tuple(violations)
 
 
+def _owner_operation_module(relative: PurePosixPath) -> str | None:
+    """Return the operation-module prefix forbidden to one contract file.
+
+    Contracts and canonical values may depend on neutral values from another
+    owner, but must not re-enter their own public operation path.  This stays
+    deliberately narrower than a backend-import rule: it constrains only the
+    owner that would otherwise make parsing execute its own kernel.
+    """
+
+    if relative.name not in {"_models.py", "values.py"} or not relative.is_relative_to(
+        PurePosixPath("src/jacobian/math")
+    ):
+        return None
+    owner_parts = relative.parent.relative_to(PurePosixPath("src")).parts
+    return ".".join(owner_parts)
+
+
+def _is_owner_operation_module(module: str, owner: str) -> bool:
+    return module in {f"{owner}.operations", f"{owner}._operations"}
+
+
+def _resolve_import_from_module(
+    node: ast.ImportFrom, relative: PurePosixPath
+) -> str | None:
+    """Resolve one ``from`` target relative to its source package."""
+
+    if node.level == 0:
+        return node.module
+    package_parts = relative.parent.relative_to(PurePosixPath("src")).parts
+    parents_to_remove = node.level - 1
+    if parents_to_remove >= len(package_parts):
+        return None
+    base_parts = package_parts[: len(package_parts) - parents_to_remove]
+    if node.module is not None:
+        base_parts += tuple(node.module.split("."))
+    return ".".join(base_parts)
+
+
+def _dynamic_import_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
+    """Return direct ``import_module`` names and imported ``importlib`` names."""
+
+    functions = {"import_module"}
+    modules = {"importlib"}
+    for node in _walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "importlib":
+                    modules.add(alias.asname or alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module == "importlib":
+            for alias in node.names:
+                if alias.name == "import_module":
+                    functions.add(alias.asname or alias.name)
+    return functions, modules
+
+
+def _is_dynamic_import_call(
+    node: ast.Call, functions: set[str], modules: set[str]
+) -> bool:
+    return (isinstance(node.func, ast.Name) and node.func.id in functions) or (
+        isinstance(node.func, ast.Attribute)
+        and node.func.attr == "import_module"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id in modules
+    )
+
+
+def _owner_operation_reentry_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    """Reject static and literal dynamic re-entry into an owner's kernel."""
+
+    owner = _owner_operation_module(relative)
+    if owner is None:
+        return ()
+    dynamic_functions, dynamic_modules = _dynamic_import_aliases(tree)
+    violations: list[Violation] = []
+    for node in _walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            module = _resolve_import_from_module(node, relative)
+            if module is not None and _is_owner_operation_module(module, owner):
+                violations.append(
+                    _violation(
+                        relative,
+                        node,
+                        "owner-operation-reentry",
+                        "contract and value modules must not import their own operations",
+                    )
+                )
+            elif module == owner and any(
+                alias.name in {"operations", "_operations"} for alias in node.names
+            ):
+                violations.append(
+                    _violation(
+                        relative,
+                        node,
+                        "owner-operation-reentry",
+                        "contract and value modules must not import their own operations",
+                    )
+                )
+        elif isinstance(node, ast.Import):
+            if any(_is_owner_operation_module(alias.name, owner) for alias in node.names):
+                violations.append(
+                    _violation(
+                        relative,
+                        node,
+                        "owner-operation-reentry",
+                        "contract and value modules must not import their own operations",
+                    )
+                )
+        elif (
+            isinstance(node, ast.Call)
+            and _is_dynamic_import_call(node, dynamic_functions, dynamic_modules)
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+            and _is_owner_operation_module(node.args[0].value, owner)
+        ):
+            violations.append(
+                _violation(
+                    relative,
+                    node,
+                    "owner-operation-reentry",
+                    "contract and value modules must not dynamically import their own operations",
+                )
+            )
+    return tuple(violations)
+
+
+def _literal_string_sequence(tree: ast.AST, name: str) -> tuple[str, ...]:
+    """Return a literal ``list`` or ``tuple`` assignment when one is present."""
+
+    for node in tree.body if isinstance(tree, ast.Module) else ():
+        if not isinstance(node, ast.Assign) or not any(
+            isinstance(target, ast.Name) and target.id == name
+            for target in node.targets
+        ):
+            continue
+        if not isinstance(node.value, (ast.List, ast.Tuple)):
+            return ()
+        values = tuple(
+            item.value
+            for item in node.value.elts
+            if isinstance(item, ast.Constant) and isinstance(item.value, str)
+        )
+        return values if len(values) == len(node.value.elts) else ()
+    return ()
+
+
+def _module_name(relative: PurePosixPath) -> str | None:
+    """Map one source path below ``src`` to its importable module name."""
+
+    if not relative.is_relative_to(PurePosixPath("src")):
+        return None
+    parts = relative.relative_to(PurePosixPath("src")).parts
+    if not parts:
+        return None
+    if parts[-1] == "__init__.py":
+        return ".".join(parts[:-1])
+    if not parts[-1].endswith(".py"):
+        return None
+    return ".".join((*parts[:-1], parts[-1][:-3]))
+
+
+def _module_path(root: Path, module: str) -> Path | None:
+    """Resolve an installed source module without importing it."""
+
+    base = root / "src" / Path(*module.split("."))
+    module_file = base.with_suffix(".py")
+    if module_file.is_file():
+        return module_file
+    package_file = base / "__init__.py"
+    return package_file if package_file.is_file() else None
+
+
+def _import_module_name(
+    root: Path, node: ast.ImportFrom, source_module: str
+) -> str | None:
+    """Resolve an ``ImportFrom`` module relative to its source module."""
+
+    if node.level == 0:
+        return node.module
+    source_parts = source_module.split(".")
+    source_path = _module_path(root, source_module)
+    if source_path is not None and source_path.name != "__init__.py":
+        source_parts = source_parts[:-1]
+    parent_parts = source_parts[: len(source_parts) - (node.level - 1)]
+    if not parent_parts:
+        return None
+    return ".".join((*parent_parts, *(node.module or "").split(".")))
+
+
+def _imports_by_local_name(
+    root: Path, tree: ast.AST, source_module: str
+) -> dict[str, tuple[str, str]]:
+    """Return statically resolvable imported symbols by local binding name."""
+
+    imports: dict[str, tuple[str, str]] = {}
+    for node in tree.body if isinstance(tree, ast.Module) else ():
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        module = _import_module_name(root, node, source_module)
+        if module is None:
+            continue
+        for alias in node.names:
+            imports[alias.asname or alias.name] = (module, alias.name)
+    return imports
+
+
+def _function_target(
+    root: Path,
+    module: str,
+    symbol: str,
+    seen: set[tuple[str, str]] | None = None,
+) -> tuple[Path, ast.FunctionDef | ast.AsyncFunctionDef] | None:
+    """Resolve a re-exported function through static ``from`` imports only."""
+
+    seen = seen or set()
+    if (module, symbol) in seen:
+        return None
+    seen.add((module, symbol))
+    path = _module_path(root, module)
+    if path is None:
+        return None
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError):
+        return None
+    for node in tree.body:
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == symbol
+        ):
+            return path, node
+    imported = _imports_by_local_name(root, tree, module).get(symbol)
+    if imported is None:
+        return None
+    return _function_target(root, *imported, seen)
+
+
+def _native_public_function_targets(
+    root: Path,
+) -> tuple[tuple[PurePosixPath, ast.FunctionDef | ast.AsyncFunctionDef], ...]:
+    """Resolve the functions exposed by root ``jacobian.math`` domains.
+
+    ``jacobian.math.__all__`` and each domain's literal ``__all__`` are the
+    supported native surface.  Following only their static re-exports keeps
+    this check out of private MCP/catalog adapters and unrelated operation
+    modules.
+    """
+
+    math_module = "jacobian.math"
+    math_path = _module_path(root, math_module)
+    if math_path is None:
+        return ()
+    try:
+        math_tree = ast.parse(math_path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return ()
+    targets: dict[
+        tuple[str, int], tuple[PurePosixPath, ast.FunctionDef | ast.AsyncFunctionDef]
+    ] = {}
+    for domain in _literal_string_sequence(math_tree, "__all__"):
+        module = f"{math_module}.{domain}"
+        path = _module_path(root, module)
+        if path is None:
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, SyntaxError):
+            continue
+        for symbol in _literal_string_sequence(tree, "__all__"):
+            target = _function_target(root, module, symbol)
+            if target is None:
+                continue
+            source, function = target
+            relative = PurePosixPath(source.relative_to(root).as_posix())
+            targets[(str(relative), function.lineno)] = (relative, function)
+    return tuple(targets.values())
+
+
+def _wire_model_names(root: Path, tree: ast.AST, source_module: str) -> set[str]:
+    """Find local bindings that name a Request/Input wire model."""
+
+    names = set()
+    if isinstance(tree, ast.Module):
+        names = {
+            node.name
+            for node in tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name.endswith(("Request", "Input"))
+        }
+    for local, (_, original) in _imports_by_local_name(
+        root, tree, source_module
+    ).items():
+        if original.endswith(("Request", "Input")):
+            names.add(local)
+    return names
+
+
+def _is_wire_model_reference(node: ast.AST, names: set[str]) -> bool:
+    return (isinstance(node, ast.Name) and node.id in names) or (
+        isinstance(node, ast.Attribute) and node.attr.endswith(("Request", "Input"))
+    )
+
+
+def _native_compute_adapter_names(
+    root: Path, tree: ast.AST, source_module: str
+) -> set[str]:
+    """Find public ``operations``-module compute adapters imported by a wrapper."""
+
+    return {
+        local
+        for local, (module, original) in _imports_by_local_name(
+            root, tree, source_module
+        ).items()
+        if module.endswith(".operations") and original.startswith("compute_")
+    }
+
+
+def _native_public_boundary_violations(root: Path) -> tuple[Violation, ...]:
+    """Keep exported native functions on canonical values and direct kernels."""
+
+    violations: list[Violation] = []
+    parsed: dict[PurePosixPath, tuple[ast.Module, str]] = {}
+    for relative, function in _native_public_function_targets(root):
+        if relative not in parsed:
+            path = root / relative
+            try:
+                tree = ast.parse(
+                    path.read_text(encoding="utf-8"), filename=str(relative)
+                )
+            except (OSError, SyntaxError):
+                continue
+            module = _module_name(relative)
+            if module is None:
+                continue
+            parsed[relative] = tree, module
+        tree, module = parsed[relative]
+        wire_names = _wire_model_names(root, tree, module)
+        compute_adapters = _native_compute_adapter_names(root, tree, module)
+        for node in _walk(function):
+            if not isinstance(node, ast.Call):
+                continue
+            constructs_wire = _is_wire_model_reference(node.func, wire_names) or (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "model_validate"
+                and _is_wire_model_reference(node.func.value, wire_names)
+            )
+            if constructs_wire:
+                violations.append(
+                    _violation(
+                        relative,
+                        node,
+                        "native-wire-boundary",
+                        "exported native functions must not construct wire Request/Input models",
+                    )
+                )
+            elif isinstance(node.func, ast.Name) and node.func.id in compute_adapters:
+                violations.append(
+                    _violation(
+                        relative,
+                        node,
+                        "native-wire-boundary",
+                        "exported native functions must call a private direct kernel, not a public compute adapter",
+                    )
+                )
+    return tuple(violations)
+
+
 def _contains_component(node: ast.AST, attributes: frozenset[str]) -> bool:
     return any(
         isinstance(descendant, ast.Attribute) and descendant.attr in attributes
@@ -490,6 +857,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         *_resolver_violations(relative, tree),
         *_environment_violations(relative, tree),
         *_evaluator_parser_violations(relative, tree),
+        *_owner_operation_reentry_violations(relative, tree),
         *_unsafe_wire_conversion_violations(relative, tree),
         *_rational_output_violations(relative, tree),
     )
@@ -503,9 +871,12 @@ def check_architecture(root: Path | str = ROOT) -> ArchitectureReport:
     violations = tuple(
         sorted(
             (
-                violation
-                for path in files
-                for violation in _check_file(project_root, path)
+                *(
+                    violation
+                    for path in files
+                    for violation in _check_file(project_root, path)
+                ),
+                *_native_public_boundary_violations(project_root),
             ),
             key=lambda item: (item.path, item.line or 0, item.code),
         )

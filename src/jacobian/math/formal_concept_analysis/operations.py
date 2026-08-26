@@ -98,7 +98,7 @@ def implication_closure(
         closure.update(first_sources)
 
     canonical_replay_work = implication_checks + membership_checks
-    return ImplicationClosureResult(
+    return ImplicationClosureResult._from_kernel(
         system=system,
         seed=tuple(sorted(seed)),
         closure=tuple(sorted(closure)),
@@ -279,7 +279,7 @@ def duquenne_guigues_basis(
             "serialized_result_bytes": 1,
         },
     }
-    return CanonicalImplicationBasisResult.model_validate(
+    return CanonicalImplicationBasisResult._from_kernel(
         _result_payload_with_exact_wire_bytes(payload)
     )
 

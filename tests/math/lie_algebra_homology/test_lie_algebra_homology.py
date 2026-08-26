@@ -16,6 +16,8 @@ from jacobian.math.lie_algebra_homology._models import (
 from jacobian.math.lie_algebra_homology._operations import (
     compute_chevalley_eilenberg_complex,
     compute_lie_homology,
+    verify_ce_complex_result,
+    verify_lie_homology_result,
 )
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rank
 
@@ -322,6 +324,7 @@ class TestComplexResultBinding:
             prime=result.prime,
         )
         assert replayed == result
+        assert verify_ce_complex_result(replayed)
 
     def test_reviewer_payload_shape_rejected(self):
         """A complex without its source algebra cannot validate."""
@@ -363,7 +366,9 @@ class TestComplexResultBinding:
                     prime=5, entries=tampered_rows, columns=d2.matrix.columns
                 ),
             )
-        # A well-formed but forged differential still fails source replay.
+        # A well-formed but forged differential is a separately supplied
+        # claim: structural validation admits it and the explicit verifier
+        # rejects it without result validation entering the CE kernel.
         forged_rows = [list(row) for row in d2.matrix.entries]
         forged_rows[0][0] = (forged_rows[0][0] + 1) % 5
         broken = DifferentialMatrix(
@@ -375,14 +380,14 @@ class TestComplexResultBinding:
             ),
         )
         others = tuple(d for d in full.differentials if d.degree != 2)
-        with pytest.raises(ValidationError):
-            ChevalleyEilenbergComplexResult(
-                lie_algebra=g,
-                dimension=3,
-                group_dimensions=(1, 3, 3, 1),
-                differentials=(others[0], broken, others[1]),
-                prime=5,
-            )
+        claimed = ChevalleyEilenbergComplexResult(
+            lie_algebra=g,
+            dimension=3,
+            group_dimensions=(1, 3, 3, 1),
+            differentials=(others[0], broken, others[1]),
+            prime=5,
+        )
+        assert not verify_ce_complex_result(claimed)
 
     def test_broken_d_squared_composition_rejected(self):
         """Tampering one d_2 entry must fail the bracket reconstruction.
@@ -407,15 +412,14 @@ class TestComplexResultBinding:
             ),
         )
         others = tuple(d for d in full.differentials if d.degree != 2)
-        with pytest.raises(ValidationError) as exc_info:
-            ChevalleyEilenbergComplexResult(
-                lie_algebra=g,
-                dimension=3,
-                group_dimensions=(1, 3, 3, 1),
-                differentials=(others[0], forged_d2, others[1]),
-                prime=5,
-            )
-        _assert_error_type(exc_info, "lie_algebra_homology.complex_replay")
+        claimed = ChevalleyEilenbergComplexResult(
+            lie_algebra=g,
+            dimension=3,
+            group_dimensions=(1, 3, 3, 1),
+            differentials=(others[0], forged_d2, others[1]),
+            prime=5,
+        )
+        assert not verify_ce_complex_result(claimed)
 
     def test_non_residue_entries_rejected(self):
         g = _sl2_gf5()
@@ -439,20 +443,21 @@ class TestComplexResultBinding:
 
 
 class TestHomologySourceBinding:
-    def test_forged_groups_rejected(self):
-        from pydantic import ValidationError
+    def test_kernel_homology_verifies(self):
+        result = compute_lie_homology(LieHomologyRequest(lie_algebra=_sl2_gf5()))
+        assert verify_lie_homology_result(result)
 
+    def test_forged_groups_require_explicit_verification(self):
         genuine = compute_lie_homology(LieHomologyRequest(lie_algebra=_sl2_gf5()))
         payload = genuine.model_dump()
         payload["groups"] = [
-            {"degree": 0, "betti": 0, "chain_dimension": 9},
-            {"degree": 1, "betti": 99, "chain_dimension": 9},
-            {"degree": 2, "betti": 0, "chain_dimension": 9},
-            {"degree": 3, "betti": 1, "chain_dimension": 27},
+            {"degree": 0, "betti": 0, "chain_dimension": 1},
+            {"degree": 1, "betti": 1, "chain_dimension": 3},
+            {"degree": 2, "betti": 0, "chain_dimension": 3},
+            {"degree": 3, "betti": 1, "chain_dimension": 1},
         ]
-        with pytest.raises(ValidationError) as exc_info:
-            LieHomologyResult.model_validate(payload)
-        _assert_error_type(exc_info, "lie_algebra_homology.homology_replay")
+        claimed = LieHomologyResult.model_validate(payload)
+        assert not verify_lie_homology_result(claimed)
 
     def test_dimension_mismatch_with_source_rejected(self):
         from pydantic import ValidationError

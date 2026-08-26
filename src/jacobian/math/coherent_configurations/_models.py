@@ -11,7 +11,6 @@ from jacobian._models import StrictModel
 from jacobian.math.coherent_configurations.values import (
     MAX_COHERENT_CONFIGURATION_POINTS,
     MAX_COHERENT_CONFIGURATION_RELATIONS,
-    MAX_COHERENT_CONFIGURATION_RESULT_BYTES,
     CoherentConfigurationInput,
     FiniteCoherentConfiguration,
     PointLabel,
@@ -84,7 +83,7 @@ CoherenceObstruction = Annotated[
 
 
 class CoherentConfigurationAnalyzeResult(StrictModel):
-    """A source-bound exact coherence conclusion and its complete derivation."""
+    """One structural exact coherence conclusion and its declared derivation."""
 
     configuration: CoherentConfigurationInput
     status: Literal["COHERENT_CONFIGURATION", "NOT_COHERENT"]
@@ -102,51 +101,99 @@ class CoherentConfigurationAnalyzeResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_complete_analysis_to_source(self) -> Self:
-        from jacobian.math.coherent_configurations._operations import (
-            analysis_models_from_source,
-        )
+    def require_result_shape(self) -> Self:
+        """Check bounded internal consistency without replaying the kernel."""
 
-        expected = analysis_models_from_source(self.configuration)
-        if self.status != expected.status:
-            raise PydanticCustomError(
-                "coherent_configuration.result_status",
-                "status does not match the exact coherence analysis",
-            )
-        if self.coherent_configuration != expected.coherent_configuration:
-            raise PydanticCustomError(
-                "coherent_configuration.result_value",
-                "coherent_configuration is not bound to the source",
-            )
-        if self.fibers != expected.fibers:
-            raise PydanticCustomError(
-                "coherent_configuration.result_fibers",
-                "fibers are not bound to the source configuration",
-            )
-        if self.transpose_map != expected.transpose_map:
-            raise PydanticCustomError(
-                "coherent_configuration.result_transpose_map",
-                "transpose_map is not bound to the source configuration",
-            )
-        if self.intersection_numbers != expected.intersection_numbers:
-            raise PydanticCustomError(
-                "coherent_configuration.result_intersection_numbers",
-                "intersection_numbers are not bound to the source configuration",
-            )
-        if self.obstruction != expected.obstruction:
-            raise PydanticCustomError(
-                "coherent_configuration.result_obstruction",
-                "obstruction does not match the first failed axiom",
-            )
+        relation_ids = set(self.configuration.relation_ids)
+        points = set(self.configuration.points)
+        relation_count = len(relation_ids)
+        if self.status == "NOT_COHERENT":
+            if (
+                self.coherent_configuration is not None
+                or self.fibers
+                or self.transpose_map
+                or self.intersection_numbers
+                or self.obstruction is None
+            ):
+                raise PydanticCustomError(
+                    "coherent_configuration.result_shape",
+                    "a non-coherent result must carry exactly one obstruction",
+                )
+            return self
         if (
-            len(self.model_dump_json().encode("utf-8"))
-            > MAX_COHERENT_CONFIGURATION_RESULT_BYTES
+            self.coherent_configuration is None
+            or self.coherent_configuration.model_dump()
+            != self.configuration.model_dump()
+            or self.obstruction is not None
         ):
             raise PydanticCustomError(
-                "coherent_configuration.result_bytes",
-                "coherent-configuration result exceeds the byte budget",
+                "coherent_configuration.result_shape",
+                "a coherent result must carry its source configuration and no obstruction",
+            )
+        if (
+            len(self.transpose_map) != relation_count
+            or len(self.intersection_numbers) != relation_count**3
+        ):
+            raise PydanticCustomError(
+                "coherent_configuration.result_shape",
+                "a coherent result must contain its complete relation-derived shapes",
+            )
+        if {entry.relation_id for entry in self.transpose_map} != relation_ids or any(
+            entry.transpose_relation_id not in relation_ids
+            for entry in self.transpose_map
+        ):
+            raise PydanticCustomError(
+                "coherent_configuration.result_transpose_map",
+                "transpose-map relation identifiers must belong to the source",
+            )
+        intersection_keys = {
+            (entry.left_relation_id, entry.right_relation_id, entry.target_relation_id)
+            for entry in self.intersection_numbers
+        }
+        if len(intersection_keys) != relation_count**3 or any(
+            set(key) - relation_ids for key in intersection_keys
+        ):
+            raise PydanticCustomError(
+                "coherent_configuration.result_intersection_numbers",
+                "intersection-number relation triples must be the source cube",
+            )
+        if len({entry.relation_id for entry in self.fibers}) != len(self.fibers) or any(
+            entry.relation_id not in relation_ids
+            or not set(entry.points) <= points
+            or tuple(sorted(entry.points)) != entry.points
+            for entry in self.fibers
+        ):
+            raise PydanticCustomError(
+                "coherent_configuration.result_fibers",
+                "fiber data must use sorted source points and relations",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        configuration: CoherentConfigurationInput,
+        status: Literal["COHERENT_CONFIGURATION", "NOT_COHERENT"],
+        coherent_configuration: FiniteCoherentConfiguration | None,
+        fibers: tuple[Fiber, ...],
+        transpose_map: tuple[TransposeRelation, ...],
+        intersection_numbers: tuple[IntersectionNumber, ...],
+        obstruction: CoherenceObstruction | None,
+    ) -> Self:
+        """Construct one fresh result after the owner-local kernel completed."""
+
+        return cls.model_validate(
+            {
+                "configuration": configuration,
+                "status": status,
+                "coherent_configuration": coherent_configuration,
+                "fibers": fibers,
+                "transpose_map": transpose_map,
+                "intersection_numbers": intersection_numbers,
+                "obstruction": obstruction,
+            }
+        )
 
 
 __all__ = [

@@ -8,6 +8,8 @@ from jacobian.math.numerical_semigroups._models import (
     MAX_ELEMENT,
     MAX_GENERATOR,
     MAX_GENERATORS,
+)
+from jacobian.math.numerical_semigroups._summary_models import (
     NumericalSemigroupSummaryRequest,
     NumericalSemigroupSummaryResult,
     SemigroupMembershipRequest,
@@ -134,4 +136,14 @@ class TestSemigroupMembership:
     def test_zero_is_in(self):
         req = SemigroupMembershipRequest(generators=("3", "5"), value="0")
         result = compute_membership(req)
+        assert result.in_semigroup is True
+
+    def test_free_axis_membership_does_not_allocate_to_the_element_value(self):
+        value = str(MAX_ELEMENT + 1)
+        result = compute_membership(
+            SemigroupMembershipRequest(
+                generators=("1", str(MAX_GENERATOR + 1)), value=value
+            )
+        )
+        assert result.value == value
         assert result.in_semigroup is True

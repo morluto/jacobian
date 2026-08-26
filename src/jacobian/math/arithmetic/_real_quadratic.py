@@ -1,22 +1,75 @@
 """Typed real-quadratic order operation and checker declaration."""
 
+from __future__ import annotations
+
+from typing import Self
+
+from pydantic import Field, model_validator
+
+from jacobian._exact import CanonicalRational
+from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.math.arithmetic._support import arithmetic_operation
 from jacobian.math.real_quadratic import (
     _MAX_EMBEDDING_PROFILE_RESULT_DIGITS,
     RealQuadraticEmbeddingProfile,
-    RealQuadraticEmbeddingsRequest,
-    RealQuadraticOrderRequest,
     RealQuadraticOrderValue,
+    RealQuadraticValue,
+    _embedding_scalars,
+    _require_bounded_rational,
+    _require_order_admission,
     real_quadratic_embeddings,
     real_quadratic_order,
 )
+
+
+class RealQuadraticEmbeddingsRequest(StrictModel):
+    """One bounded element whose two real embeddings are requested."""
+
+    element: RealQuadraticValue = Field(
+        description=(
+            "The exact element a + b*sqrt(d) in a real quadratic field. "
+            "Its square-free radicand selects the field and its rational "
+            "components are bounded to 256 decimal digits."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_profile_within_result_bound(self) -> Self:
+        trace, norm = _embedding_scalars(self.element)
+        for label, value in (("trace", trace), ("norm", norm)):
+            _require_bounded_rational(
+                CanonicalRational.from_fraction(value),
+                max_digits=_MAX_EMBEDDING_PROFILE_RESULT_DIGITS,
+                label=f"real-quadratic embedding {label}",
+            )
+        return self
+
+
+class RealQuadraticOrderRequest(StrictModel):
+    """One bounded comparison in a shared real quadratic field."""
+
+    left: RealQuadraticValue
+    right: RealQuadraticValue
+
+    @model_validator(mode="after")
+    def require_shared_field(self) -> Self:
+        _require_order_admission(self.left, self.right)
+        return self
 
 
 def _compute_real_quadratic_embeddings(
     request: RealQuadraticEmbeddingsRequest,
 ) -> RealQuadraticEmbeddingProfile:
     return real_quadratic_embeddings(request.element)
+
+
+def _compute_real_quadratic_order(
+    request: RealQuadraticOrderRequest,
+) -> RealQuadraticOrderValue:
+    """Project the wire request onto the native canonical-value kernel."""
+
+    return real_quadratic_order(request.left, request.right)
 
 
 REAL_QUADRATIC_OPERATIONS = (
@@ -66,7 +119,7 @@ REAL_QUADRATIC_OPERATIONS = (
         ),
         RealQuadraticOrderRequest,
         RealQuadraticOrderValue,
-        real_quadratic_order,
+        _compute_real_quadratic_order,
         "arithmetic",
         "real-quadratic",
         "quadratic-surd",

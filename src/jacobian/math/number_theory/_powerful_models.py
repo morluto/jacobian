@@ -7,7 +7,8 @@ from typing import Annotated, Literal
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.math.number_theory._models import PrimePower, _validation_error
+from jacobian.math.number_theory._integer_models import PrimePower
+from jacobian.math.number_theory._models import _validation_error
 
 # The kernel derives ``B = ceil(value**(1/5))`` and trial-divides through B.
 # These limits therefore bound both the request and the source-bound result

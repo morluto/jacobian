@@ -9,7 +9,6 @@ from pydantic import (
     Field,
     StrictBool,
     StrictInt,
-    ValidationInfo,
     model_validator,
 )
 from pydantic_core import PydanticCustomError
@@ -265,14 +264,6 @@ class HypergraphIndependenceRequest(StrictModel):
         return self
 
 
-# Internal-only validation-context key. The producer-side constructor in
-# ``_independence_z3`` sets it after its own threshold search has proved every
-# reported bound within the same bounded call, skipping only the duplicate
-# upper-bound solver replay during construction. Independently supplied results
-# never carry this key and always execute the bounded replay.
-_PRODUCER_ESTABLISHED_BOUNDS = "producer_established_bounds"
-
-
 class HypergraphIndependenceResult(StrictModel):
     """Exact optimum or sound incumbent and bounds for one source hypergraph."""
 
@@ -291,6 +282,38 @@ class HypergraphIndependenceResult(StrictModel):
     convention: Literal["MAXIMUM_NO_COMPLETE_HYPEREDGE_VERTEX_SUBSET"] = (
         "MAXIMUM_NO_COMPLETE_HYPEREDGE_VERTEX_SUBSET"
     )
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        hypergraph: FiniteHypergraph,
+        resource_budget: HypergraphIndependenceBudget,
+        status: HypergraphIndependenceStatus,
+        independence_number: int | None,
+        incumbent_vertices: tuple[str, ...],
+        upper_bound: int,
+        solver_calls: int,
+        wall_budget_exhausted: bool,
+        termination_reason: HypergraphIndependenceTermination,
+        detail: str,
+    ) -> Self:
+        """Construct an outcome established by the owner-local Z3 kernel."""
+
+        return cls(
+            hypergraph=hypergraph,
+            hypergraph_digest=_hypergraph_digest(hypergraph),
+            resource_budget=resource_budget,
+            status=status,
+            independence_number=independence_number,
+            incumbent_vertices=incumbent_vertices,
+            lower_bound=len(incumbent_vertices),
+            upper_bound=upper_bound,
+            solver_calls=solver_calls,
+            wall_budget_exhausted=wall_budget_exhausted,
+            termination_reason=termination_reason,
+            detail=detail,
+        )
 
     @model_validator(mode="after")
     def bind_source_and_witness(self) -> Self:
@@ -320,7 +343,7 @@ class HypergraphIndependenceResult(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def bind_bounds_to_source(self, info: ValidationInfo) -> Self:
+    def bind_bounds_to_source(self) -> Self:
         initial_upper = _independence_upper_bound(self.hypergraph)
         if self.solver_calls > self.resource_budget.max_solver_calls:
             raise _validation_error("solver calls must fit the submitted call budget")
@@ -328,16 +351,6 @@ class HypergraphIndependenceResult(StrictModel):
             raise _validation_error(
                 "independence-number bounds must lie in the source range"
             )
-        producer_established = (info.context or {}).get(_PRODUCER_ESTABLISHED_BOUNDS)
-        if self.upper_bound < initial_upper and not producer_established:
-            from jacobian.math.hypergraphs import _independence_z3
-
-            if not _independence_z3.verify_upper_bound(
-                self.hypergraph,
-                self.upper_bound,
-                self.resource_budget.wall_seconds,
-            ):
-                raise _validation_error("upper bound failed its bounded source replay")
         return self
 
     @model_validator(mode="after")
@@ -594,7 +607,8 @@ class EdgeIntersectionsResult(StrictModel):
     ``pair_intersections`` contains every unordered pair exactly once in
     declared edge order.  ``histogram`` is reconstructed from that ledger.
     The maximum, linearity decision, and first canonical violation are derived
-    from the same authoritative entries and replayed against ``hypergraph``.
+    from the same authoritative entries.  An explicit owner verifier checks
+    the ledger against the retained source hypergraph when required.
     """
 
     hypergraph: FiniteHypergraph
@@ -636,35 +650,54 @@ class EdgeIntersectionsResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_edge_intersections(self) -> Self:
-        from jacobian.math.hypergraphs._operations import _edge_intersections_data
-
         _require_edge_intersection_preflight(self.hypergraph)
-        (
-            pair_intersections,
-            histogram,
-            pair_count,
-            maximum_intersection_size,
-            is_linear,
-            first_linearity_violation,
-        ) = _edge_intersections_data(self.hypergraph)
-        if self.pair_intersections != pair_intersections:
+        edge_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        expected_pairs = tuple(
+            (edge_ids[left], edge_ids[right])
+            for left in range(len(edge_ids))
+            for right in range(left + 1, len(edge_ids))
+        )
+        pairs = tuple(
+            (entry.left_edge_id, entry.right_edge_id)
+            for entry in self.pair_intersections
+        )
+        if pairs != expected_pairs:
             raise _validation_error(
                 "pair_intersections must be the complete canonical source ledger"
             )
-        if self.histogram != histogram:
+        if any(
+            vertex not in self.hypergraph.vertices
+            for entry in self.pair_intersections
+            for vertex in entry.intersection
+        ):
             raise _validation_error(
-                "histogram must be the exact intersection-size histogram"
+                "intersection vertices must be declared source vertices"
             )
-        if self.pair_count != pair_count:
+        histogram_counts: dict[int, int] = {}
+        for entry in self.pair_intersections:
+            histogram_counts[entry.intersection_size] = (
+                histogram_counts.get(entry.intersection_size, 0) + 1
+            )
+        histogram = tuple(sorted(histogram_counts.items()))
+        if self.histogram != histogram:
+            raise _validation_error("histogram must be the intersection-size histogram")
+        if self.pair_count != len(self.pair_intersections):
             raise _validation_error(
                 "pair_count must equal the complete edge-pair count"
             )
+        maximum_intersection_size = max(
+            (entry.intersection_size for entry in self.pair_intersections), default=0
+        )
         if self.maximum_intersection_size != maximum_intersection_size:
             raise _validation_error(
                 "maximum_intersection_size must be derived from pair_intersections"
             )
-        if self.is_linear != is_linear:
-            raise _validation_error("is_linear must match the exact pair intersections")
+        first_linearity_violation = next(
+            (entry for entry in self.pair_intersections if entry.intersection_size > 1),
+            None,
+        )
+        if self.is_linear != (first_linearity_violation is None):
+            raise _validation_error("is_linear must match the pair intersections")
         if self.first_linearity_violation != first_linearity_violation:
             raise _validation_error(
                 "first_linearity_violation must be the first canonical pair "
@@ -690,40 +723,12 @@ class ParametersResult(StrictModel):
     """
 
     hypergraph: FiniteHypergraph
-    vertex_count: int = Field(ge=0)
-    edge_count: int = Field(ge=0)
-    rank: int = Field(ge=0)
-    corank: int = Field(ge=0)
-    uniform_size: int | None = None
-    total_incidences: int = Field(ge=0)
-
-    @model_validator(mode="after")
-    def bind_parameters(self) -> Self:
-        from jacobian.math.hypergraphs._operations import _parameters_data
-
-        (
-            vertex_count,
-            edge_count,
-            rank,
-            corank,
-            uniform_size,
-            total_incidences,
-        ) = _parameters_data(self.hypergraph)
-        if self.vertex_count != vertex_count:
-            raise _validation_error("vertex_count must be the exact number of vertices")
-        if self.edge_count != edge_count:
-            raise _validation_error("edge_count must be the exact number of edges")
-        if self.rank != rank:
-            raise _validation_error("rank must be the exact maximum edge size")
-        if self.corank != corank:
-            raise _validation_error("corank must be the exact minimum edge size")
-        if self.uniform_size != uniform_size:
-            raise _validation_error("uniform_size must match the exact uniformity")
-        if self.total_incidences != total_incidences:
-            raise _validation_error(
-                "total_incidences must be the exact incidence count"
-            )
-        return self
+    vertex_count: int = Field(ge=0, le=MAX_VERTICES)
+    edge_count: int = Field(ge=0, le=MAX_EDGES)
+    rank: int = Field(ge=0, le=MAX_VERTICES)
+    corank: int = Field(ge=0, le=MAX_VERTICES)
+    uniform_size: int | None = Field(default=None, ge=0, le=MAX_VERTICES)
+    total_incidences: int = Field(ge=0, le=MAX_TOTAL_INCIDENCES)
 
 
 class VertexDegreesRequest(StrictModel):
@@ -742,21 +747,27 @@ class VertexDegreesResult(StrictModel):
     """
 
     hypergraph: FiniteHypergraph
-    degrees: tuple[tuple[str, int], ...]
-    histogram: tuple[tuple[int, int], ...]
+    degrees: tuple[tuple[str, int], ...] = Field(max_length=MAX_VERTICES)
+    histogram: tuple[tuple[int, int], ...] = Field(max_length=MAX_VERTICES + 1)
 
     @model_validator(mode="after")
     def bind_vertex_degrees(self) -> Self:
-        from jacobian.math.hypergraphs._operations import _vertex_degrees_data
-
-        degrees, histogram = _vertex_degrees_data(self.hypergraph)
-        if self.degrees != degrees:
+        if tuple(vertex for vertex, _ in self.degrees) != self.hypergraph.vertices:
             raise _validation_error(
-                "degrees must be the exact vertex-degree map of the hypergraph"
+                "degrees must list each source vertex in declared order"
             )
-        if self.histogram != histogram:
+        if any(degree < 0 or degree > MAX_EDGES for _, degree in self.degrees):
             raise _validation_error(
-                "histogram must be the exact degree histogram of the hypergraph"
+                "vertex-degree values must be within the source bound"
+            )
+        expected_histogram_counts: dict[int, int] = {}
+        for _, degree in self.degrees:
+            expected_histogram_counts[degree] = (
+                expected_histogram_counts.get(degree, 0) + 1
+            )
+        if self.histogram != tuple(sorted(expected_histogram_counts.items())):
+            raise _validation_error(
+                "histogram must be the degree histogram of the returned map"
             )
         return self
 
@@ -779,15 +790,6 @@ class DualResult(StrictModel):
     hypergraph: FiniteHypergraph
     dual: FiniteHypergraph
 
-    @model_validator(mode="after")
-    def bind_dual(self) -> Self:
-        from jacobian.math.hypergraphs._operations import _dual_data
-
-        dual = _dual_data(self.hypergraph)
-        if self.dual != dual:
-            raise _validation_error("dual must be the exact dual hypergraph")
-        return self
-
 
 class IncidenceGraphRequest(StrictModel):
     """Request the bipartite incidence graph (Levi graph) of a hypergraph."""
@@ -807,25 +809,47 @@ class IncidenceGraphResult(StrictModel):
     """
 
     hypergraph: FiniteHypergraph
-    vertex_incidence: tuple[tuple[str, tuple[str, ...]], ...]
-    edge_incidence: tuple[tuple[str, tuple[str, ...]], ...]
-    edges: tuple[tuple[str, str], ...]
+    vertex_incidence: tuple[tuple[str, tuple[str, ...]], ...] = Field(
+        max_length=MAX_VERTICES
+    )
+    edge_incidence: tuple[tuple[str, tuple[str, ...]], ...] = Field(
+        max_length=MAX_EDGES
+    )
+    edges: tuple[tuple[str, str], ...] = Field(max_length=MAX_TOTAL_INCIDENCES)
 
     @model_validator(mode="after")
     def bind_incidence_graph(self) -> Self:
-        from jacobian.math.hypergraphs._operations import _incidence_graph_data
-
-        vertex_incidence, edge_incidence, edges = _incidence_graph_data(self.hypergraph)
-        if self.vertex_incidence != vertex_incidence:
+        if (
+            tuple(vertex for vertex, _ in self.vertex_incidence)
+            != self.hypergraph.vertices
+        ):
             raise _validation_error(
-                "vertex_incidence must be the exact vertex-to-edges map"
+                "vertex_incidence must list source vertices in declared order"
             )
-        if self.edge_incidence != edge_incidence:
+        edge_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        if tuple(edge_id for edge_id, _ in self.edge_incidence) != edge_ids:
             raise _validation_error(
-                "edge_incidence must be the exact edge-to-vertices map"
+                "edge_incidence must list source edge ids in declared order"
             )
-        if self.edges != edges:
-            raise _validation_error("edges must be the exact incidence pairs")
+        vertex_set = set(self.hypergraph.vertices)
+        edge_id_set = set(edge_ids)
+        if (
+            any(
+                vertex not in vertex_set or edge_id not in edge_id_set
+                for vertex, edge_ids_for_vertex in self.vertex_incidence
+                for edge_id in edge_ids_for_vertex
+            )
+            or any(
+                vertex not in vertex_set
+                for _, vertices_for_edge in self.edge_incidence
+                for vertex in vertices_for_edge
+            )
+            or any(
+                vertex not in vertex_set or edge_id not in edge_id_set
+                for vertex, edge_id in self.edges
+            )
+        ):
+            raise _validation_error("incidence entries must use source labels")
         return self
 
 
@@ -862,18 +886,9 @@ class CliqueExpansionResult(StrictModel):
     order per the canonical graph value's own convention, independent of the
     source hypergraph's declared ordering, so the value composes directly
     with downstream graph operations without translation.  This defining
-    property is validated against the retained source hypergraph.
+    property is checked by the explicit owner verifier against the retained
+    source hypergraph.
     """
 
     hypergraph: FiniteHypergraph
     graph: SimpleUndirectedGraph
-
-    @model_validator(mode="after")
-    def bind_clique_expansion(self) -> Self:
-        from jacobian.math.hypergraphs._operations import _clique_expansion_graph
-
-        if self.graph != _clique_expansion_graph(self.hypergraph):
-            raise _validation_error(
-                "graph must be the exact 2-section of the hypergraph"
-            )
-        return self

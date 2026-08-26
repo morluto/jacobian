@@ -6,19 +6,10 @@ from math import prod
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.prime_affine_forms._kernel import (
-    interval_match_summary,
-    interval_matches,
     wheel_modulus,
     wheel_rows,
 )
 from jacobian.math.prime_affine_forms._local_factors import local_summary
-from jacobian.math.prime_affine_forms._models import (
-    PrimeAffineIntervalCountRequest,
-    PrimeAffineIntervalEnumerateRequest,
-    PrimePatternIntervalCountResult,
-    PrimePatternIntervalEnumerateResult,
-    PrimePatternMatch,
-)
 from jacobian.math.prime_affine_forms._residue_wheel import (
     PrimeTupleIntervalResidueProfileRequest,
     PrimeTupleIntervalResidueProfileResult,
@@ -89,48 +80,6 @@ def compute_wheel_membership(
     )
 
 
-def compute_interval_count(
-    request: PrimeAffineIntervalCountRequest,
-) -> PrimePatternIntervalCountResult:
-    lower = parse_canonical_integer(request.lower)
-    upper = parse_canonical_integer(request.upper)
-    interval_size = upper - lower + 1
-    count, first, last = interval_match_summary(request.source, lower, upper)
-    return PrimePatternIntervalCountResult(
-        source=request.source,
-        lower=request.lower,
-        upper=request.upper,
-        interval_size=interval_size,
-        affine_values_examined=interval_size * request.source.form_count,
-        match_count=count,
-        first_match=None if first is None else format_canonical_integer(first),
-        last_match=None if last is None else format_canonical_integer(last),
-    )
-
-
-def compute_interval_enumerate(
-    request: PrimeAffineIntervalEnumerateRequest,
-) -> PrimePatternIntervalEnumerateResult:
-    lower = parse_canonical_integer(request.lower)
-    upper = parse_canonical_integer(request.upper)
-    interval_size = upper - lower + 1
-    matches = interval_matches(request.source, lower, upper)
-    return PrimePatternIntervalEnumerateResult(
-        source=request.source,
-        lower=request.lower,
-        upper=request.upper,
-        interval_size=interval_size,
-        affine_values_examined=interval_size * request.source.form_count,
-        matches=tuple(
-            PrimePatternMatch(
-                parameter=format_canonical_integer(parameter),
-                prime_values=tuple(format_canonical_integer(value) for value in values),
-            )
-            for parameter, values in matches
-        ),
-    )
-
-
 def compute_interval_residue_profile(
     request: PrimeTupleIntervalResidueProfileRequest,
 ) -> PrimeTupleIntervalResidueProfileResult:
@@ -158,8 +107,6 @@ def compute_interval_residue_profile(
 
 
 __all__ = [
-    "compute_interval_count",
-    "compute_interval_enumerate",
     "compute_interval_residue_profile",
     "compute_residue_wheel",
     "compute_residue_wheel_enumeration",

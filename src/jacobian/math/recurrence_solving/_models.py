@@ -59,6 +59,23 @@ class RecurrenceFindResult(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        coefficients: tuple[CanonicalRational, ...],
+        order: int,
+        status: Literal["FOUND", "NO_FITTING_RECURRENCE"],
+    ) -> Self:
+        """Construct a rational recurrence result from the trusted kernel."""
+
+        return cls.model_construct(
+            coefficients=coefficients,
+            order=order,
+            status=status,
+            method="RATIONAL_INTERPOLATION",
+        )
+
 
 class ClosedFormRequest(StrictModel):
     """Compute a SymPy-expression closed form for a recurrence of degree at most 16."""
@@ -100,6 +117,12 @@ class ClosedFormResult(StrictModel):
 
     expression: str
     method: Literal["SYMPY_RSOLVE"] = "SYMPY_RSOLVE"
+
+    @classmethod
+    def _from_kernel(cls, *, expression: str) -> Self:
+        """Construct a closed-form result from the trusted SymPy adapter."""
+
+        return cls.model_construct(expression=expression, method="SYMPY_RSOLVE")
 
 
 # ---------------------------------------------------------------------------
@@ -220,15 +243,27 @@ class PrimeFieldRecurrenceFindResult(StrictModel):
         _require_canonical_residues(
             self.sequence, self.recurrence.prime, "sequence values"
         )
-        from jacobian.math.recurrence_solving.operations import berlekamp_massey
-
-        expected = berlekamp_massey(list(self.sequence), self.recurrence.prime)
-        if self.recurrence != expected:
-            raise _validation_error(
-                "result_mismatch",
-                "result must match the exact bounded Berlekamp-Massey recurrence",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        sequence: tuple[int, ...],
+        recurrence: PrimeFieldRecurrence,
+    ) -> Self:
+        """Construct a result from the trusted Berlekamp-Massey kernel.
+
+        Normal model parsing deliberately checks only the bounded wire
+        structure.  Use the explicit owner verifier for a result supplied by
+        an independent producer.
+        """
+
+        return cls.model_construct(
+            sequence=sequence,
+            recurrence=recurrence,
+            method="BERLEKAMP_MASSEY",
+        )
 
 
 __all__ = [

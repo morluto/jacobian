@@ -101,6 +101,12 @@ class BestResponseResult(StrictModel):
     value: CanonicalRational
     best_row: int = Field(ge=0)
 
+    @classmethod
+    def _from_kernel(cls, value: CanonicalRational, best_row: int) -> Self:
+        """Construct trusted output from the owner-local exact kernel."""
+
+        return cls.model_construct(value=value, best_row=best_row)
+
 
 class NashEquilibriumResult(StrictModel):
     """Nash equilibrium of a 2-player zero-sum game."""
@@ -108,6 +114,21 @@ class NashEquilibriumResult(StrictModel):
     row_strategy: tuple[CanonicalRational, ...]
     col_strategy: tuple[CanonicalRational, ...]
     value: CanonicalRational
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        row_strategy: tuple[CanonicalRational, ...],
+        col_strategy: tuple[CanonicalRational, ...],
+        value: CanonicalRational,
+    ) -> Self:
+        """Construct trusted output from the owner-local exact kernel."""
+
+        return cls.model_construct(
+            row_strategy=row_strategy,
+            col_strategy=col_strategy,
+            value=value,
+        )
 
 
 class DeterministicTerminalGameRequest(StrictModel):

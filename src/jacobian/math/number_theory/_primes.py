@@ -2,7 +2,7 @@
 
 from jacobian.catalog._examples import example
 from jacobian.math.arithmetic.values import IntegerValue
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._integer_models import (
     BooleanResult,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,

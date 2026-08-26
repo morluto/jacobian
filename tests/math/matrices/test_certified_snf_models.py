@@ -7,6 +7,9 @@ from jacobian.math.matrices.certified_snf._models import (
     CertifiedSmithNormalFormRequest,
     CertifiedSmithNormalFormResult,
 )
+from jacobian.math.matrices.certified_snf.operations import (
+    verify_smith_normal_form_certificate,
+)
 from jacobian.math.matrices.certified_snf.values import (
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
@@ -123,13 +126,14 @@ def _certificate_kwargs(**overrides: object) -> dict[str, object]:
     return values
 
 
-def test_certificate_contract_replays_the_exact_transformation_relation() -> None:
-    with pytest.raises(ValidationError):
-        SmithNormalFormCertificate(
-            **_certificate_kwargs(
-                left_transformation=_certified_matrix([[2]]),
-            )
+def test_certificate_verifier_rejects_the_exact_transformation_relation() -> None:
+    certificate = SmithNormalFormCertificate(
+        **_certificate_kwargs(
+            left_transformation=_certified_matrix([[2]]),
         )
+    )
+
+    assert not verify_smith_normal_form_certificate(certificate)
 
 
 def test_certificate_contract_replays_declared_determinant_signs() -> None:
@@ -149,7 +153,8 @@ def test_certificate_contract_replays_declared_determinant_signs() -> None:
     )
 
     assert certificate.left_determinant == "-1"
-    with pytest.raises(ValidationError):
+    assert verify_smith_normal_form_certificate(certificate)
+    assert not verify_smith_normal_form_certificate(
         SmithNormalFormCertificate(
             **_certificate_kwargs(
                 source=permutation,
@@ -161,6 +166,7 @@ def test_certificate_contract_replays_declared_determinant_signs() -> None:
                 left_determinant="1",
             )
         )
+    )
 
 
 @pytest.mark.parametrize(
@@ -176,14 +182,20 @@ def test_certificate_contract_replays_declared_determinant_signs() -> None:
         ("right_determinant", "-1"),
     ],
 )
-def test_certificate_contract_fails_closed_on_any_field_mutation(
+def test_certificate_verifier_fails_closed_on_any_claim_field_mutation(
     field: str,
     value: object,
 ) -> None:
     SmithNormalFormCertificate(**_certificate_kwargs())
 
-    with pytest.raises(ValidationError):
-        SmithNormalFormCertificate(**_certificate_kwargs(**{field: value}))
+    candidate = _certificate_kwargs(**{field: value})
+    if field in {"diagonal", "rank", "invariant_factors"}:
+        with pytest.raises(ValidationError):
+            SmithNormalFormCertificate(**candidate)
+    else:
+        assert not verify_smith_normal_form_certificate(
+            SmithNormalFormCertificate(**candidate)
+        )
 
 
 def test_certificate_contract_replays_rectangular_sources() -> None:
@@ -196,7 +208,8 @@ def test_certificate_contract_replays_rectangular_sources() -> None:
     )
 
     assert certificate.rank == 1
-    with pytest.raises(ValidationError):
+    assert verify_smith_normal_form_certificate(certificate)
+    assert not verify_smith_normal_form_certificate(
         SmithNormalFormCertificate(
             **_certificate_kwargs(
                 source=_certified_matrix([[2, 6]]),
@@ -204,6 +217,7 @@ def test_certificate_contract_replays_rectangular_sources() -> None:
                 right_transformation=_certified_matrix([[1, -6], [0, 1]]),
             )
         )
+    )
 
 
 def test_certificate_contract_replays_rank_deficient_sources() -> None:
@@ -217,7 +231,8 @@ def test_certificate_contract_replays_rank_deficient_sources() -> None:
     )
 
     assert certificate.rank == 1
-    with pytest.raises(ValidationError):
+    assert verify_smith_normal_form_certificate(certificate)
+    assert not verify_smith_normal_form_certificate(
         SmithNormalFormCertificate(
             **_certificate_kwargs(
                 source=_certified_matrix([[2, 4], [0, 0]]),
@@ -228,6 +243,7 @@ def test_certificate_contract_replays_rank_deficient_sources() -> None:
                 invariant_factors=("2", "2"),
             )
         )
+    )
 
 
 @pytest.mark.parametrize(
@@ -273,8 +289,10 @@ def test_certificate_contract_replays_zero_dimensional_boundaries(
     certificate = SmithNormalFormCertificate(**kwargs)
 
     assert certificate.rank == 0
-    with pytest.raises(ValidationError):
+    assert not verify_smith_normal_form_certificate(certificate)
+    assert not verify_smith_normal_form_certificate(
         SmithNormalFormCertificate(**{**kwargs, "left_determinant": "-1"})
+    )
 
 
 def test_certificate_contract_replays_rank_zero_determinants_without_formatting_them() -> (
@@ -297,11 +315,13 @@ def test_certificate_contract_replays_rank_zero_determinants_without_formatting_
     )
 
     assert certificate.left_determinant == "-1"
-    with pytest.raises(ValidationError) as exc_info:
+    assert not verify_smith_normal_form_certificate(certificate)
+    assert not verify_smith_normal_form_certificate(
         SmithNormalFormCertificate(
-            **{**kwargs, "left_transformation": inflated, "left_determinant": "-1"}
+            **{
+                **kwargs,
+                "left_transformation": inflated,
+                "left_determinant": "-1",
+            }
         )
-
-    message = str(exc_info.value)
-    assert "must be the declared unimodular -1" in message
-    assert "1" * 64 not in message
+    )

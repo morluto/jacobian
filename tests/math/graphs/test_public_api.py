@@ -2,6 +2,10 @@ import networkx as nx
 import pytest
 
 from jacobian.math import graphs
+from jacobian.math.graphs.independence import IndependenceNumberRequest
+from jacobian.math.graphs.optimization._independence import (
+    INDEPENDENCE_NUMBER_OPERATION,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -30,22 +34,41 @@ def test_graph_construction_functions_use_immutable_graph_values() -> None:
     assert explicit.vertices == ("a", "b", "c")
     assert explicit.edges == (("a", "b"), ("b", "c"))
 
-    complement = graphs.compose_graphs(
-        graphs.GraphCompositionInput(operation="COMPLEMENT", left=explicit)
-    )
+    complement = graphs.compose_graphs("COMPLEMENT", explicit)
 
     assert complement.vertices == ("v0", "v1", "v2")
     assert complement.edges == (("v0", "v2"),)
     assert type(explicit) is SimpleUndirectedGraph
 
 
+def test_independence_number_accepts_the_canonical_graph_value() -> None:
+    graph = graphs.explicit_graph(
+        ("a", "b", "c"),
+        (("a", "b"), ("b", "c")),
+    )
+
+    result = graphs.independence_number(graph)
+
+    assert result.status == "EXACT"
+    assert result.optimum_value == 2
+    assert result.witness_vertices == ("a", "c")
+    with pytest.raises(TypeError, match="SimpleUndirectedGraph"):
+        graphs.independence_number(graph.model_dump())  # type: ignore[arg-type]
+
+
+def test_native_independence_number_matches_the_catalog_kernel() -> None:
+    graph = graphs.explicit_graph(("a", "b", "c"), (("a", "b"), ("b", "c")))
+
+    native = graphs.independence_number(graph)
+    wire = INDEPENDENCE_NUMBER_OPERATION.run(IndependenceNumberRequest(graph=graph))
+
+    assert native == wire
+
+
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the graphs public API."""
     expected = (
         "ColoredUndirectedGraph",
-        "GraphCompositionInput",
-        "IndependenceNumberBudget",
-        "IndependenceNumberRequest",
         "IndependenceNumberResult",
         "IndexedSimpleUndirectedGraph",
         "SimpleUndirectedGraph",

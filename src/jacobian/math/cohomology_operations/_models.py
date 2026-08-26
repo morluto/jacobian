@@ -409,7 +409,12 @@ class SteenrodSquareRequest(StrictModel):
 
 
 class SteenrodSquareResult(SteenrodSquareRequest):
-    """The result of a Steenrod square operation, bound to its source."""
+    """A canonical Steenrod-square result bound structurally to its source.
+
+    Deserialization checks only the source-derived degree and canonical
+    cochain representation.  Recomputing the cup product is an explicit
+    owner-local verifier concern, never a result-model side effect.
+    """
 
     result_degree: int = Field(ge=0)
     result_simplex_values: tuple[tuple[int, ...], ...] = Field(default=())
@@ -417,32 +422,81 @@ class SteenrodSquareResult(SteenrodSquareRequest):
     is_zero: bool
 
     @model_validator(mode="after")
-    def bind_to_source_cochain(self) -> Self:
-        from jacobian.math.cohomology_operations._operations import (
-            steenrod_square_fields,
-        )
-
-        effective = _effective_ambient(self.ambient_simplices, self.ambient_complex)
-        expected = steenrod_square_fields(
-            self.cochain_degree,
-            self.simplex_values,
-            self.simplex_coefficients,
-            self.square_degree,
-            effective,
-        )
-        actual = (
-            self.result_degree,
-            self.result_simplex_values,
-            self.result_simplex_coefficients,
-            self.is_zero,
-        )
-        if actual != expected:
+    def require_canonical_result_shape(self) -> Self:
+        expected_degree = self.cochain_degree + self.square_degree
+        if self.result_degree != expected_degree:
             raise _validation_error(
-                "steenrod_replay_mismatch",
-                "result must equal the exact Steenrod-square replay of the "
-                "retained source cochain",
+                "result_degree",
+                "result_degree must equal cochain_degree plus square_degree",
+            )
+        if len(self.result_simplex_values) != len(self.result_simplex_coefficients):
+            raise _validation_error(
+                "result_length_mismatch",
+                "result_simplex_values and result_simplex_coefficients must have the same length",
+            )
+        if self.is_zero != (not self.result_simplex_values):
+            raise _validation_error(
+                "result_zero_shape",
+                "is_zero must agree with whether the canonical result support is empty",
+            )
+        if len(set(self.result_simplex_values)) != len(self.result_simplex_values):
+            raise _validation_error(
+                "result_duplicate_simplex",
+                "canonical result support must not repeat a simplex",
+            )
+        for simplex in self.result_simplex_values:
+            if len(simplex) != self.result_degree + 1:
+                raise _validation_error(
+                    "result_simplex_dimension",
+                    "each result simplex must have result_degree plus one vertices",
+                )
+            _validate_simplex_entries((simplex,), "result simplex")
+        _require_bounded_coefficients(
+            self.result_simplex_coefficients, "result_simplex_coefficient"
+        )
+        if any(
+            coefficient % 2 != 1 for coefficient in self.result_simplex_coefficients
+        ):
+            raise _validation_error(
+                "result_coefficient",
+                "canonical GF(2) result coefficients must equal one",
+            )
+        effective_ambient = _effective_ambient(
+            self.ambient_simplices, self.ambient_complex
+        )
+        ambient_faces = set(effective_ambient)
+        if effective_ambient and any(
+            simplex not in ambient_faces for simplex in self.result_simplex_values
+        ):
+            raise _validation_error(
+                "result_outside_ambient",
+                "result support must lie inside the ambient complex",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: SteenrodSquareRequest,
+        result_degree: int,
+        result_simplex_values: tuple[tuple[int, ...], ...],
+        result_simplex_coefficients: tuple[int, ...],
+        is_zero: bool,
+    ) -> Self:
+        """Construct a trusted result emitted by the owner-local kernel."""
+
+        return cls(
+            cochain_degree=request.cochain_degree,
+            simplex_values=request.simplex_values,
+            simplex_coefficients=request.simplex_coefficients,
+            square_degree=request.square_degree,
+            ambient_simplices=request.ambient_simplices,
+            ambient_complex=request.ambient_complex,
+            result_degree=result_degree,
+            result_simplex_values=result_simplex_values,
+            result_simplex_coefficients=result_simplex_coefficients,
+            is_zero=is_zero,
+        )
 
 
 class BocksteinRequest(StrictModel):
@@ -540,7 +594,7 @@ class BocksteinRequest(StrictModel):
 
 
 class BocksteinResult(BocksteinRequest):
-    """The result of the Bockstein homomorphism, bound to its source."""
+    """The structurally canonical result of the supported Bockstein branch."""
 
     result_degree: int = Field(ge=0)
     result_simplex_values: tuple[tuple[int, ...], ...] = Field(default=())
@@ -548,30 +602,42 @@ class BocksteinResult(BocksteinRequest):
     is_zero: bool
 
     @model_validator(mode="after")
-    def bind_to_source_cochain(self) -> Self:
-        from jacobian.math.cohomology_operations._operations import (
-            bockstein_fields,
-        )
-
-        expected = bockstein_fields(
-            self.prime,
-            self.cochain_degree,
-            self.simplex_coefficients,
-            self.simplex_values,
-        )
-        actual = (
-            self.result_degree,
-            self.result_simplex_values,
-            self.result_simplex_coefficients,
-            self.is_zero,
-        )
-        if actual != expected:
+    def require_supported_zero_shape(self) -> Self:
+        if (
+            self.result_degree != self.cochain_degree + 1
+            or self.result_simplex_values
+            or self.result_simplex_coefficients
+            or not self.is_zero
+        ):
             raise _validation_error(
-                "bockstein_replay_mismatch",
-                "result must equal the exact Bockstein replay of the "
-                "retained source cochain",
+                "result_shape",
+                "the supported Bockstein branch returns the empty degree-(cochain_degree + 1) cochain",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: BocksteinRequest,
+        result_degree: int,
+        result_simplex_values: tuple[tuple[int, ...], ...],
+        result_simplex_coefficients: tuple[int, ...],
+        is_zero: bool,
+    ) -> Self:
+        """Construct a trusted result emitted by the owner-local kernel."""
+
+        return cls(
+            prime=request.prime,
+            cochain_degree=request.cochain_degree,
+            simplex_values=request.simplex_values,
+            simplex_coefficients=request.simplex_coefficients,
+            ambient_simplices=request.ambient_simplices,
+            ambient_complex=request.ambient_complex,
+            result_degree=result_degree,
+            result_simplex_values=result_simplex_values,
+            result_simplex_coefficients=result_simplex_coefficients,
+            is_zero=is_zero,
+        )
 
 
 __all__ = [

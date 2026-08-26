@@ -124,8 +124,8 @@ def steenrod_square_fields(
 ) -> tuple[int, tuple[tuple[int, ...], ...], tuple[int, ...], bool]:
     """Pure Sq^k core returning ``(degree, values, coefficients, is_zero)``.
 
-    Kept free of models so result validation can replay the exact
-    computation without recursion.
+    Kept free of models so the explicit claim verifier can replay the exact
+    computation without re-entering result validation.
     """
     p = cochain_degree
     k = square_degree
@@ -206,17 +206,12 @@ def compute_steenrod_square(request: SteenrodSquareRequest) -> SteenrodSquareRes
         request.square_degree,
         effective,
     )
-    return SteenrodSquareResult(
-        cochain_degree=request.cochain_degree,
-        simplex_values=request.simplex_values,
-        simplex_coefficients=request.simplex_coefficients,
-        square_degree=request.square_degree,
-        ambient_simplices=request.ambient_simplices,
-        ambient_complex=getattr(request, "ambient_complex", None),
-        result_degree=result_degree,
-        result_simplex_values=result_simplex_values,
-        result_simplex_coefficients=result_simplex_coefficients,
-        is_zero=is_zero,
+    return SteenrodSquareResult._from_kernel(
+        request,
+        result_degree,
+        result_simplex_values,
+        result_simplex_coefficients,
+        is_zero,
     )
 
 
@@ -274,18 +269,50 @@ def compute_bockstein(request: BocksteinRequest) -> BocksteinResult:
         request.simplex_coefficients,
         request.simplex_values,
     )
-    return BocksteinResult(
-        prime=request.prime,
-        cochain_degree=request.cochain_degree,
-        simplex_values=request.simplex_values,
-        simplex_coefficients=request.simplex_coefficients,
-        ambient_simplices=getattr(request, "ambient_simplices", ()),
-        ambient_complex=getattr(request, "ambient_complex", None),
-        result_degree=result_degree,
-        result_simplex_values=result_simplex_values,
-        result_simplex_coefficients=result_simplex_coefficients,
-        is_zero=is_zero,
+    return BocksteinResult._from_kernel(
+        request,
+        result_degree,
+        result_simplex_values,
+        result_simplex_coefficients,
+        is_zero,
     )
+
+
+def verify_steenrod_square_result(result: SteenrodSquareResult) -> bool:
+    """Replay an independently supplied Steenrod-square claim when needed."""
+
+    expected = steenrod_square_fields(
+        result.cochain_degree,
+        result.simplex_values,
+        result.simplex_coefficients,
+        result.square_degree,
+        _effective_ambient_for_request(result),
+    )
+    actual = (
+        result.result_degree,
+        result.result_simplex_values,
+        result.result_simplex_coefficients,
+        result.is_zero,
+    )
+    return actual == expected
+
+
+def verify_bockstein_result(result: BocksteinResult) -> bool:
+    """Replay an independently supplied Bockstein claim when needed."""
+
+    expected = bockstein_fields(
+        result.prime,
+        result.cochain_degree,
+        result.simplex_coefficients,
+        result.simplex_values,
+    )
+    actual = (
+        result.result_degree,
+        result.result_simplex_values,
+        result.result_simplex_coefficients,
+        result.is_zero,
+    )
+    return actual == expected
 
 
 __all__ = [
@@ -293,4 +320,6 @@ __all__ = [
     "compute_bockstein",
     "compute_steenrod_square",
     "steenrod_square_fields",
+    "verify_bockstein_result",
+    "verify_steenrod_square_result",
 ]

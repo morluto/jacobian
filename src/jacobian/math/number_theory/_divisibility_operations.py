@@ -11,7 +11,7 @@ from jacobian.math.number_theory._divisibility_models import (
     IntegerPairRequest,
     ValuationRequest,
 )
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._integer_models import (
     BooleanResult,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,

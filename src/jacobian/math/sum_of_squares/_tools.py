@@ -121,8 +121,9 @@ SOS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     sos_operation(
         "polynomial.sos.decomposition.check",
         "Check a rational sum-of-squares decomposition by exact coefficient identity",
-        "Given a polynomial p and summands q_1, ..., q_r, check that "
-        "p = q_1^2 + ... + q_r^2 by exact coefficient identity over QQ. "
+        "Given a polynomial p and zero or more summands q_1, ..., q_r, check that "
+        "p = q_1^2 + ... + q_r^2 by exact coefficient identity over QQ "
+        "(the empty sum is zero). "
         "This is the trust-critical boundary: a floating comparison or "
         "solver status is not a mathematical certificate.",
         SOSDecompositionCheckRequest,

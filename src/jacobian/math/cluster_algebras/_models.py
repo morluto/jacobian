@@ -205,11 +205,7 @@ class SeedMutationResult(StrictModel):
     mutation_index: int = Field(ge=0)
 
     @model_validator(mode="after")
-    def require_source_bound_mutation(self) -> Self:
-        from jacobian.math.cluster_algebras._operations import (
-            _mutation_of,
-        )
-
+    def require_result_shape(self) -> Self:
         if self.mutation_index >= self.exchange_matrix.n:
             raise _validation_error(
                 "cluster_algebra.mutation_index", "mutation_index must be in 0..n-1"
@@ -218,15 +214,22 @@ class SeedMutationResult(StrictModel):
             raise _validation_error(
                 "cluster_algebra.mutation_index", "mutation_index must be in 0..n-1"
             )
-        # Replay the Fomin-Zelevinsky relation against the retained source.
-        expected = _mutation_of(self.source_exchange_matrix, self.mutation_index)
-        if self.exchange_matrix != expected:
-            raise _validation_error(
-                "cluster_algebra.mutation_replay",
-                "exchange_matrix must be the exact mutation of the retained "
-                "source matrix",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: SeedMutationRequest,
+        *,
+        exchange_matrix: ExchangeMatrix,
+    ) -> Self:
+        """Construct a result emitted by the owner-local mutation kernel."""
+
+        return cls.model_construct(
+            source_exchange_matrix=request.exchange_matrix,
+            exchange_matrix=exchange_matrix,
+            mutation_index=request.mutation_index,
+        )
 
 
 class GVectorRequest(StrictModel):
@@ -255,13 +258,24 @@ class GVectorResult(StrictModel):
     convention: Literal["FOMIN_ZELEVINSKY"] = "FOMIN_ZELEVINSKY"
 
     @model_validator(mode="after")
-    def require_initial_g_vectors(self) -> Self:
-        if self.g_matrix != _identity_matrix(self.exchange_matrix.n):
+    def require_g_matrix_shape(self) -> Self:
+        n = self.exchange_matrix.n
+        if len(self.g_matrix) != n or any(len(row) != n for row in self.g_matrix):
             raise _validation_error(
-                "cluster_algebra.g_matrix_identity",
-                "g_matrix must be the n x n identity of the source exchange matrix",
+                "cluster_algebra.g_matrix_shape",
+                "g_matrix must be an n x n matrix for the source exchange matrix",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: GVectorRequest) -> Self:
+        """Construct initial-seed g-vectors emitted by the owner-local kernel."""
+
+        return cls.model_construct(
+            exchange_matrix=request.exchange_matrix,
+            g_matrix=_identity_matrix(request.exchange_matrix.n),
+            convention="FOMIN_ZELEVINSKY",
+        )
 
 
 __all__ = [

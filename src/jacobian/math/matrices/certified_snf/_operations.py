@@ -23,7 +23,7 @@ def _certified_smith(
         row_count=request.matrix.row_count,
         column_count=request.matrix.column_count,
     )
-    return CertifiedSmithNormalFormResult(
+    return CertifiedSmithNormalFormResult._from_kernel(
         certificate=certificate_from_reduction(reduction)
     )
 

@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import copy
 import time
-from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs import _independence_z3 as z3_backend
-from jacobian.math.graphs import independence as independence_models
 from jacobian.math.graphs._independence_z3 import solve_independence_number
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
@@ -40,12 +38,14 @@ def test_budget_exposes_only_enforced_limits() -> None:
         IndependenceNumberBudget(max_solver_calls=1)
 
 
-def test_producer_results_replay_against_source() -> None:
+def test_producer_results_parse_structurally_then_verify_exact_claims() -> None:
     empty = solve_independence_number(IndependenceNumberRequest(graph=_graph((), ())))
     assert empty.status == "EXACT"
     assert empty.optimum_value == 0
     assert "result_schema_version" not in empty.model_dump(mode="json")
-    assert IndependenceNumberResult.model_validate(empty.model_dump()) == empty
+    reparsed_empty = IndependenceNumberResult.model_validate(empty.model_dump())
+    assert reparsed_empty == empty
+    assert z3_backend.verify_independence_result(reparsed_empty)
 
     complete = solve_independence_number(
         IndependenceNumberRequest(graph=_graph(("a", "b"), (("a", "b"),)))
@@ -64,6 +64,9 @@ def test_producer_results_replay_against_source() -> None:
     )
     assert nonunique.optimum_value == 2
     assert nonunique.witness_vertices == ("a", "b")
+    assert z3_backend.verify_independence_result(
+        IndependenceNumberResult.model_validate(nonunique.model_dump())
+    )
 
 
 def test_witness_membership_and_edge_freedom_are_enforced() -> None:
@@ -160,7 +163,9 @@ def test_matching_via_edge_intersection_composition() -> None:
         assert result.optimum_value == 1
 
 
-def test_forged_nonmaximum_optimum_is_rejected_by_source_replay() -> None:
+def test_forged_nonmaximum_optimum_is_rejected_by_explicit_verifier() -> None:
+    """Parsing stays structural; only the explicit verifier replays a claim."""
+
     feasible = solve_independence_number(
         IndependenceNumberRequest(graph=_graph(("a", "b", "c"), ()))
     )
@@ -175,11 +180,13 @@ def test_forged_nonmaximum_optimum_is_rejected_by_source_replay() -> None:
     ):
         dumped[field] = 1
     dumped["termination_reason"] = "OPTIMUM_ESTABLISHED"
-    with pytest.raises(ValidationError):
-        IndependenceNumberResult.model_validate(dumped)
+    forged = IndependenceNumberResult.model_validate(dumped)
+    assert not z3_backend.verify_independence_result(forged)
 
 
-def test_edge_removal_invalidating_the_claimed_optimum_is_rejected() -> None:
+def test_edge_removal_invalidating_the_claimed_optimum_is_rejected_by_verifier() -> (
+    None
+):
     triangle = solve_independence_number(
         IndependenceNumberRequest(
             graph=_graph(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c")))
@@ -188,21 +195,22 @@ def test_edge_removal_invalidating_the_claimed_optimum_is_rejected() -> None:
     assert triangle.optimum_value == 1
     dumped = triangle.model_dump()
     dumped["graph"]["edges"] = []
-    with pytest.raises(ValidationError):
-        IndependenceNumberResult.model_validate(dumped)
+    forged = IndependenceNumberResult.model_validate(dumped)
+    assert not z3_backend.verify_independence_result(forged)
 
 
-def test_exhausted_exact_replay_budget_is_fail_closed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    request = IndependenceNumberRequest(
-        graph=_graph(("a", "b", "c", "d"), (("a", "b"), ("b", "c"), ("c", "d")))
-    )
-    result = solve_independence_number(request)
-    assert result.status == "EXACT"
-    monkeypatch.setattr(independence_models, "_EXACT_REPLAY_SEARCH_NODES", 1)
-    with pytest.raises(ValidationError):
-        IndependenceNumberResult.model_validate(result.model_dump())
+def test_explicit_replay_deadline_is_fail_closed() -> None:
+    """A stale verifier deadline fails before branch-and-bound can expand."""
+
+    graph = _graph(("a", "b", "c", "d"), (("a", "b"), ("b", "c"), ("c", "d")))
+    with pytest.raises(ValueError):
+        # The public verifier rejects illegal caller-selected envelopes before work.
+        z3_backend.verify_independence_result(
+            solve_independence_number(IndependenceNumberRequest(graph=graph)),
+            wall_seconds=0,
+        )
+    with pytest.raises(ValueError):
+        z3_backend._replay_exact_optimum(graph, 2, deadline=time.monotonic() - 1.0)
 
 
 def _matching_graph(edges: int) -> SimpleUndirectedGraph:
@@ -212,12 +220,12 @@ def _matching_graph(edges: int) -> SimpleUndirectedGraph:
     )
 
 
-def test_matching_produced_exact_result_revalidates() -> None:
+def test_matching_produced_exact_result_parses_then_verifies() -> None:
     """The reported rejection case: 15 disjoint edges, order 30, optimum 15.
 
     The producing solve must emit an ``EXACT`` payload whose serialized
-    output loads back as an equal ``IndependenceNumberResult``, so every
-    produced result revalidates against the retained source graph.
+    output loads back structurally as an equal ``IndependenceNumberResult``;
+    the explicit verifier then checks its nonlocal optimum claim.
     """
 
     graph = _matching_graph(15)
@@ -226,18 +234,17 @@ def test_matching_produced_exact_result_revalidates() -> None:
     assert result.optimum_value == 15
     assert result.order == 30
     assert result.termination_reason == "OPTIMUM_ESTABLISHED"
-    assert IndependenceNumberResult.model_validate(result.model_dump()) == result
+    reparsed = IndependenceNumberResult.model_validate(result.model_dump())
+    assert reparsed == result
+    assert z3_backend.verify_independence_result(reparsed)
 
 
-def test_structured_disjoint_graphs_replay_within_tight_budgets(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_structured_disjoint_graphs_verify_within_default_envelope() -> None:
     """Component decomposition keeps disjoint structures inside tiny budgets.
 
     Ten disjoint five-cycles have optimum 20, isolated vertices are forced
-    without branching, and the whole replay stays deterministic and exact
-    well below the default search-node envelope that the naive search
-    exceeded on a 30-vertex matching.
+    without branching, and each exact claim verifies under the documented
+    default finite envelope.
     """
 
     cycle_vertices = []
@@ -261,27 +268,10 @@ def test_structured_disjoint_graphs_replay_within_tight_budgets(
         assert result.optimum_value == expected
         produced.append(result)
 
-    monkeypatch.setattr(independence_models, "_EXACT_REPLAY_SEARCH_NODES", 512)
     for result in produced:
-        assert IndependenceNumberResult.model_validate(result.model_dump()) == result
-
-
-def test_unreplayable_solver_optimum_demotes_to_unknown(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A solver optimum the bounded replay cannot certify claims no optimum."""
-
-    request = IndependenceNumberRequest(
-        graph=_graph(("a", "b", "c", "d"), (("a", "b"), ("b", "c"), ("c", "d")))
-    )
-    monkeypatch.setattr(independence_models, "_EXACT_REPLAY_SEARCH_NODES", 1)
-    result = solve_independence_number(request)
-    assert result.status == "UNKNOWN"
-    assert result.optimum_value is None
-    assert result.termination_reason == "REPLAY_INCOMPLETE"
-    assert result.lower_bound == result.incumbent_value
-    assert result.upper_bound == 4
-    assert IndependenceNumberResult.model_validate(result.model_dump()) == result
+        reparsed = IndependenceNumberResult.model_validate(result.model_dump())
+        assert reparsed == result
+        assert z3_backend.verify_independence_result(reparsed)
 
 
 class _StubBound:
@@ -379,7 +369,7 @@ def test_sat_with_open_objective_bounds_reports_order_as_upper_bound(
     Z3 can return ``sat`` with a feasible incumbent while its objective
     bounds remain open, so the producing fallthrough must normalize the
     upper bound to the independently safe graph order instead of echoing
-    the optimizer's intermediate estimate through ``model_construct``.
+    the optimizer's intermediate estimate into the result.
     """
 
     monkeypatch.setattr(z3_backend, "z3", _StubZ3())
@@ -389,45 +379,6 @@ def test_sat_with_open_objective_bounds_reports_order_as_upper_bound(
     assert result.incumbent_value == 1
     assert result.lower_bound == 1
     assert result.upper_bound == result.order == 3
-    assert IndependenceNumberResult.model_validate(result.model_dump()) == result
-
-
-def test_replay_deadline_is_charged_to_the_request_envelope() -> None:
-    """An elapsed deadline rejects the claim instead of opening a fresh budget."""
-
-    graph = _graph(("a", "b", "c", "d"), (("a", "b"), ("b", "c"), ("c", "d")))
-    with pytest.raises(ValueError):
-        independence_models._replay_exact_optimum(
-            graph, 2, deadline=time.monotonic() - 1.0
-        )
-    independence_models._replay_exact_optimum(graph, 2, deadline=time.monotonic() + 60)
-
-
-def test_producer_replay_shares_the_request_deadline(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Replay work cannot extend the producing solve past its wall budget.
-
-    The solver establishes the optimum inside the budget, but the shared
-    deadline has elapsed by replay time, so the typed ``UNKNOWN`` demotion
-    keeps the whole call inside the one admitted envelope and still
-    revalidates against the retained source graph.
-    """
-
-    request = IndependenceNumberRequest(
-        graph=_graph(("a", "b", "c", "d"), (("a", "b"), ("b", "c"), ("c", "d"))),
-        resource_budget=IndependenceNumberBudget(wall_seconds=5),
-    )
-    monkeypatch.setattr(
-        independence_models,
-        "time",
-        SimpleNamespace(monotonic=lambda: float("inf")),
-    )
-    result = solve_independence_number(request)
-    assert result.status == "UNKNOWN"
-    assert result.optimum_value is None
-    assert result.termination_reason == "REPLAY_INCOMPLETE"
-    assert result.upper_bound == 4
     assert IndependenceNumberResult.model_validate(result.model_dump()) == result
 
 

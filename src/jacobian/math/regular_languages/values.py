@@ -278,28 +278,29 @@ class TransitionParikhProfile(StrictModel):
                     "when source_state equals target_state",
                 )
 
-        # Replay the bounded recurrence so a serialized value cannot preserve
-        # local shape invariants while changing its automaton or path scope.
-        from jacobian.math.regular_languages.operations import (
-            _transition_parikh_profile_data,
-        )
-
-        expected_entries, expected_total = _transition_parikh_profile_data(
-            self.automaton,
-            self.source_state,
-            self.target_state,
-            self.path_length,
-        )
-        actual_entries = tuple(
-            (entry.transition_counts, parse_canonical_integer(entry.multiplicity))
-            for entry in self.entries
-        )
-        if actual_entries != expected_entries or total != expected_total:
-            raise _validation_error(
-                "profile_not_bound",
-                "transition-Parikh profile is not bound to its automaton and path scope",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        automaton: FiniteLabeledAutomaton,
+        source_state: int,
+        target_state: int,
+        path_length: int,
+        entries: tuple[TransitionParikhCell, ...],
+        total_path_count: CanonicalInteger,
+    ) -> Self:
+        """Construct a profile produced by the trusted bounded recurrence."""
+
+        return cls.model_construct(
+            automaton=automaton,
+            source_state=source_state,
+            target_state=target_state,
+            path_length=path_length,
+            entries=entries,
+            total_path_count=total_path_count,
+        )
 
 
 __all__ = [

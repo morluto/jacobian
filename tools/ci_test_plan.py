@@ -37,8 +37,11 @@ _PUBLIC_MATH_FILES = frozenset(
     {
         "_admission.py",
         "_cnf.py",
+        "_interval.py",
         "_models.py",
         "_operations.py",
+        "_pseudomanifold.py",
+        "_structural.py",
         "_sat.py",
         "_smt.py",
         "_tools.py",

@@ -86,7 +86,12 @@ class ConstantWeightRequest(StrictModel):
 
 
 class ConstantWeightResult(StrictModel):
-    """Complete generated constant-weight code, bound to length and weight."""
+    """Complete generated constant-weight code.
+
+    Construction checks the declared structural envelope only.  The owner
+    kernel uses ``_from_kernel``; ``verify_constant_weight_result`` is the
+    explicit bounded check for a claim supplied independently of that kernel.
+    """
 
     length: Annotated[int, Field(strict=True, ge=0, le=MAX_EXPLICIT_CODE_LENGTH)]
     weight: Annotated[int, Field(strict=True, ge=0, le=MAX_EXPLICIT_CODE_LENGTH)]
@@ -94,25 +99,28 @@ class ConstantWeightResult(StrictModel):
     count: StrictPositiveInt
 
     @model_validator(mode="after")
-    def bind_generated_code(self) -> Self:
-        from jacobian.math.code_nonlinear._operations import _constant_weight_code
-
+    def require_structural_envelope(self) -> Self:
         _require_admission(
             lambda: require_constant_weight_admission(self.length, self.weight),
             "nonlinear_code.admission_bound",
         )
-        expected = _constant_weight_code(self.length, self.weight)
-        if self.code != expected:
+        if self.code.length != self.length:
             raise _validation_error(
-                "nonlinear_code.generated_code_mismatch",
-                "code must contain every word of the declared weight",
+                "nonlinear_code.length_mismatch",
+                "code length must equal the declared length",
             )
-        if self.count != len(expected.codewords):
+        if self.count != len(self.code.codewords):
             raise _validation_error(
                 "nonlinear_code.cardinality_mismatch",
-                "count must equal the generated code cardinality",
+                "count must equal the retained code cardinality",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, *, length: int, weight: int, code: ExplicitBinaryCode
+    ) -> Self:
+        return cls(length=length, weight=weight, code=code, count=len(code.codewords))
 
 
 class WordDistanceRequest(StrictModel):
@@ -158,9 +166,7 @@ class WordDistanceResult(StrictModel):
     support_intersection: StrictNonnegativeInt
 
     @model_validator(mode="after")
-    def bind_distance(self) -> Self:
-        from jacobian.math.code_nonlinear._operations import _word_distance_data
-
+    def require_structural_words(self) -> Self:
         if not self.word1 or len(self.word1) != len(self.word2):
             raise _validation_error(
                 "nonlinear_code.invalid_words",
@@ -170,19 +176,34 @@ class WordDistanceResult(StrictModel):
             lambda: require_word_distance_output_bound(self.word1, self.word2),
             "nonlinear_code.admission_bound",
         )
-        expected = _word_distance_data(self.word1, self.word2)
-        if (
-            self.distance,
-            self.differing_coordinates,
-            self.weight1,
-            self.weight2,
-            self.support_intersection,
-        ) != expected:
+        if self.distance > len(self.word1):
             raise _validation_error(
-                "nonlinear_code.replay_mismatch",
-                "word-distance fields must replay from the retained words",
+                "nonlinear_code.distance_bound",
+                "distance cannot exceed the common word length",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        word1: BinaryWord,
+        word2: BinaryWord,
+        distance: int,
+        differing_coordinates: tuple[int, ...],
+        weight1: int,
+        weight2: int,
+        support_intersection: int,
+    ) -> Self:
+        return cls(
+            word1=word1,
+            word2=word2,
+            distance=distance,
+            differing_coordinates=differing_coordinates,
+            weight1=weight1,
+            weight2=weight2,
+            support_intersection=support_intersection,
+        )
 
 
 class BinaryCodeDistanceWitness(StrictModel):
@@ -199,72 +220,6 @@ class BinaryCodeDistanceWitness(StrictModel):
     right_weight: StrictNonnegativeInt
     support_intersection: StrictNonnegativeInt
     distance: StrictNonnegativeInt
-
-
-def _require_extremal_witness(
-    source: ExplicitBinaryCode,
-    witness: BinaryCodeDistanceWitness | None,
-    expected_distance: int | None,
-    label: str,
-) -> None:
-    from jacobian.math.code_nonlinear._operations import _word_distance_data
-
-    if expected_distance is None:
-        if witness is not None:
-            raise _validation_error(
-                "nonlinear_code.witness_unexpected",
-                f"{label} witness must be null when there are no pairs",
-            )
-        return
-    if witness is None:
-        raise _validation_error(
-            "nonlinear_code.witness_missing",
-            f"{label} witness is required when pairs exist",
-        )
-    cardinality = len(source.codewords)
-    if not 0 <= witness.left_index < witness.right_index < cardinality:
-        raise _validation_error(
-            "nonlinear_code.witness_indices",
-            f"{label} witness indices must name one unordered source pair",
-        )
-    left_word = source.codewords[witness.left_index]
-    right_word = source.codewords[witness.right_index]
-    if witness.left_word != left_word or witness.right_word != right_word:
-        raise _validation_error(
-            "nonlinear_code.witness_source_mismatch",
-            f"{label} witness words must match their source indices",
-        )
-    distance, differing, left_weight, right_weight, intersection = _word_distance_data(
-        left_word, right_word
-    )
-    left_support = tuple(i for i, bit in enumerate(left_word) if bit)
-    right_support = tuple(i for i, bit in enumerate(right_word) if bit)
-    if (
-        witness.left_support,
-        witness.right_support,
-        witness.differing_coordinates,
-        witness.left_weight,
-        witness.right_weight,
-        witness.support_intersection,
-        witness.distance,
-    ) != (
-        left_support,
-        right_support,
-        differing,
-        left_weight,
-        right_weight,
-        intersection,
-        distance,
-    ):
-        raise _validation_error(
-            "nonlinear_code.witness_replay_mismatch",
-            f"{label} witness metadata must replay from its source pair",
-        )
-    if distance != expected_distance:
-        raise _validation_error(
-            "nonlinear_code.witness_distance_mismatch",
-            f"{label} witness must attain the declared extremal distance",
-        )
 
 
 class ExplicitProfileRequest(StrictModel):
@@ -306,14 +261,11 @@ class ExplicitProfileResult(StrictModel):
     maximum_distance_witness: BinaryCodeDistanceWitness | None
 
     @model_validator(mode="after")
-    def bind_profile(self) -> Self:
-        from jacobian.math.code_nonlinear._operations import _explicit_profile_data
-
+    def require_structural_profile_relations(self) -> Self:
         plan = _require_admission(
             lambda: require_profile_admission(self.source),
             "nonlinear_code.admission_bound",
         )
-        expected = _explicit_profile_data(self.source)
         if self.length != self.source.length:
             raise _validation_error(
                 "nonlinear_code.length_mismatch",
@@ -329,39 +281,36 @@ class ExplicitProfileResult(StrictModel):
                 "nonlinear_code.pair_count_mismatch",
                 "pair_count must equal cardinality*(cardinality-1)/2",
             )
-        if self.weight_distribution != expected.weight_distribution:
+        if len(self.weight_distribution) != self.length + 1:
             raise _validation_error(
-                "nonlinear_code.replay_mismatch",
-                "weight_distribution must replay from the retained source",
+                "nonlinear_code.histogram_length",
+                "weight_distribution must cover every possible weight",
             )
-        if self.minimum_distance != expected.minimum_distance:
+        if len(self.distance_histogram) != self.length + 1:
             raise _validation_error(
-                "nonlinear_code.replay_mismatch",
-                "minimum_distance must replay from the retained source",
+                "nonlinear_code.histogram_length",
+                "distance_histogram must cover every possible distance",
             )
-        if self.maximum_distance != expected.maximum_distance:
+        if sum(self.weight_distribution) != self.cardinality:
             raise _validation_error(
-                "nonlinear_code.replay_mismatch",
-                "maximum_distance must replay from the retained source",
+                "nonlinear_code.weight_total_mismatch",
+                "weight_distribution must total cardinality",
             )
-        if self.distance_histogram != expected.distance_histogram:
+        if sum(self.distance_histogram) != self.pair_count:
             raise _validation_error(
-                "nonlinear_code.replay_mismatch",
-                "distance_histogram must replay from the retained source",
+                "nonlinear_code.distance_total_mismatch",
+                "distance_histogram must total pair_count",
             )
-        _require_extremal_witness(
-            self.source,
-            self.minimum_distance_witness,
-            self.minimum_distance,
-            "minimum-distance",
-        )
-        _require_extremal_witness(
-            self.source,
-            self.maximum_distance_witness,
-            self.maximum_distance,
-            "maximum-distance",
-        )
+        if (self.minimum_distance is None) != (self.maximum_distance is None):
+            raise _validation_error(
+                "nonlinear_code.extremum_presence",
+                "minimum and maximum distance must both be null or both be present",
+            )
         return self
+
+    @classmethod
+    def _from_kernel(cls, **kwargs: Any) -> Self:
+        return cls(**kwargs)
 
 
 class ConstantWeightProfileRequest(StrictModel):
@@ -405,17 +354,12 @@ class ConstantWeightProfileResult(StrictModel):
     maximum_distance_witness: BinaryCodeDistanceWitness | None
 
     @model_validator(mode="after")
-    def bind_profile(self) -> Self:
-        from jacobian.math.code_nonlinear._operations import (
-            _constant_weight_profile_data,
-        )
-
+    def require_structural_profile_relations(self) -> Self:
         weight = _require_constant_weight(self.source)
         plan = _require_admission(
             lambda: require_profile_admission(self.source),
             "nonlinear_code.admission_bound",
         )
-        expected = _constant_weight_profile_data(self.source)
         if self.length != self.source.length:
             raise _validation_error(
                 "nonlinear_code.length_mismatch",
@@ -436,39 +380,34 @@ class ConstantWeightProfileResult(StrictModel):
                 "nonlinear_code.pair_count_mismatch",
                 "pair_count must equal cardinality*(cardinality-1)/2",
             )
-        if self.minimum_distance != expected.minimum_distance:
+        if len(self.distance_histogram) != self.length + 1:
             raise _validation_error(
-                "nonlinear_code.replay_mismatch",
-                "minimum_distance must replay from the retained source",
+                "nonlinear_code.histogram_length",
+                "distance_histogram must cover every possible distance",
             )
-        if self.maximum_distance != expected.maximum_distance:
+        if len(self.intersection_histogram) != self.length + 1:
             raise _validation_error(
-                "nonlinear_code.replay_mismatch",
-                "maximum_distance must replay from the retained source",
+                "nonlinear_code.histogram_length",
+                "intersection_histogram must cover every possible intersection",
             )
-        if self.distance_histogram != expected.distance_histogram:
+        if (
+            sum(self.distance_histogram) != self.pair_count
+            or sum(self.intersection_histogram) != self.pair_count
+        ):
             raise _validation_error(
-                "nonlinear_code.replay_mismatch",
-                "distance_histogram must replay from the retained source",
+                "nonlinear_code.histogram_total_mismatch",
+                "both pair histograms must total pair_count",
             )
-        if self.intersection_histogram != expected.intersection_histogram:
+        if (self.minimum_distance is None) != (self.maximum_distance is None):
             raise _validation_error(
-                "nonlinear_code.replay_mismatch",
-                "intersection_histogram must replay from the retained source",
+                "nonlinear_code.extremum_presence",
+                "minimum and maximum distance must both be null or both be present",
             )
-        _require_extremal_witness(
-            self.source,
-            self.minimum_distance_witness,
-            self.minimum_distance,
-            "minimum-distance",
-        )
-        _require_extremal_witness(
-            self.source,
-            self.maximum_distance_witness,
-            self.maximum_distance,
-            "maximum-distance",
-        )
         return self
+
+    @classmethod
+    def _from_kernel(cls, **kwargs: Any) -> Self:
+        return cls(**kwargs)
 
 
 class ToSetSystemRequest(StrictModel):
@@ -495,12 +434,7 @@ class ToSetSystemResult(StrictModel):
     supports: tuple[tuple[Coordinate, ...], ...]
 
     @model_validator(mode="after")
-    def bind_supports(self) -> Self:
-        expected_axis = tuple(range(self.source.length))
-        expected_supports = tuple(
-            tuple(i for i, bit in enumerate(word) if bit)
-            for word in self.source.codewords
-        )
+    def require_structural_support_relations(self) -> Self:
         if self.length != self.source.length:
             raise _validation_error(
                 "nonlinear_code.length_mismatch",
@@ -511,17 +445,21 @@ class ToSetSystemResult(StrictModel):
                 "nonlinear_code.cardinality_mismatch",
                 "cardinality must equal the retained source cardinality",
             )
-        if self.coordinate_axis != expected_axis:
+        if len(self.coordinate_axis) != self.length:
             raise _validation_error(
-                "nonlinear_code.coordinate_axis_mismatch",
-                "coordinate_axis must be exactly 0 through length-1",
+                "nonlinear_code.coordinate_axis_length",
+                "coordinate_axis must have one coordinate per source position",
             )
-        if self.supports != expected_supports:
+        if len(self.supports) != self.cardinality:
             raise _validation_error(
-                "nonlinear_code.supports_mismatch",
-                "supports must be the exact 1-positions of source words",
+                "nonlinear_code.support_count_mismatch",
+                "supports must have one block per source word",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, **kwargs: Any) -> Self:
+        return cls(**kwargs)
 
 
 __all__ = [

@@ -24,6 +24,7 @@ from jacobian.math.finite_game_theory._models import (
 )
 from jacobian.math.finite_game_theory._operations import (
     compute_deterministic_terminal_game,
+    verify_deterministic_terminal_game_solution,
 )
 from jacobian.math.finite_game_theory._tools import TOOLS
 
@@ -381,62 +382,38 @@ def test_result_size_is_rejected_independently_of_threshold_work() -> None:
     assert exc_info.value.errors()[0]["type"] == "finite_game.result_size_exceeded"
 
 
-def test_solution_rejects_value_strategy_and_source_mutations() -> None:
+def test_solution_claims_are_structural_and_verifier_rejects_mutations() -> None:
     result = solve_terminal_game(_paper_game())
 
     bad_classes = (
         TerminalGameValueClass(payoff=_r(0), positions=("s", "u", "t1")),
         *result.value_classes[1:],
     )
-    with pytest.raises(ValidationError) as exc_info:
-        DeterministicTerminalGameSolution(
-            game=result.game,
-            value_classes=bad_classes,
-            max_strategy=result.max_strategy,
-            min_strategy=result.min_strategy,
-        )
-    assert (
-        exc_info.value.errors()[0]["type"] == "finite_game.value_classes_not_canonical"
+    bad_value_classes = DeterministicTerminalGameSolution(
+        game=result.game,
+        value_classes=bad_classes,
+        max_strategy=result.max_strategy,
+        min_strategy=result.min_strategy,
     )
+    assert not verify_deterministic_terminal_game_solution(bad_value_classes)
 
-    with pytest.raises(ValidationError) as exc_info:
-        DeterministicTerminalGameSolution(
-            game=result.game,
-            value_classes=result.value_classes,
-            max_strategy=(StationaryChoice(position="u", target="u"),),
-            min_strategy=result.min_strategy,
-        )
-    assert (
-        exc_info.value.errors()[0]["type"] == "finite_game.max_strategy_not_canonical"
+    bad_strategy = DeterministicTerminalGameSolution(
+        game=result.game,
+        value_classes=result.value_classes,
+        max_strategy=(StationaryChoice(position="u", target="u"),),
+        min_strategy=result.min_strategy,
     )
+    assert not verify_deterministic_terminal_game_solution(bad_strategy)
 
-    source_mutations = []
     draw_mutation = result.game.model_dump(mode="json")
     draw_mutation["draw_payoff"] = {"num": "3", "den": "1"}
-    source_mutations.append(draw_mutation)
-    owner_mutation = result.game.model_dump(mode="json")
-    owner_mutation["positions"][1]["owner"] = "MIN"
-    source_mutations.append(owner_mutation)
-    graph_mutation = result.game.model_dump(mode="json")
-    graph_mutation["moves"] = [
-        move
-        for move in graph_mutation["moves"]
-        if move != {"source": "u", "target": "t1"}
-    ]
-    source_mutations.append(graph_mutation)
-
-    for mutated_game in source_mutations:
-        with pytest.raises(ValidationError) as exc_info:
-            DeterministicTerminalGameSolution(
-                game=DeterministicTerminalGame.model_validate(mutated_game),
-                value_classes=result.value_classes,
-                max_strategy=result.max_strategy,
-                min_strategy=result.min_strategy,
-            )
-        assert (
-            exc_info.value.errors()[0]["type"]
-            == "finite_game.value_classes_not_canonical"
-        )
+    claim = DeterministicTerminalGameSolution(
+        game=DeterministicTerminalGame.model_validate(draw_mutation),
+        value_classes=result.value_classes,
+        max_strategy=result.max_strategy,
+        min_strategy=result.min_strategy,
+    )
+    assert not verify_deterministic_terminal_game_solution(claim)
 
 
 def test_public_request_and_example_return_the_declared_result() -> None:

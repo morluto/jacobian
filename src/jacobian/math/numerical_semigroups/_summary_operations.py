@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.math.numerical_semigroups._models import (
+from jacobian.math.numerical_semigroups._algorithms import apery_set, belongs
+from jacobian.math.numerical_semigroups._summary_models import (
     NumericalSemigroupSummaryRequest,
     NumericalSemigroupSummaryResult,
     SemigroupMembershipRequest,
@@ -96,22 +97,11 @@ def compute_membership(
 ) -> SemigroupMembershipResult:
     """Check whether one admitted integer belongs to the generated semigroup."""
 
-    generators = _normalize_generators(request.generators)
+    generators = tuple(_normalize_generators(request.generators))
     value = parse_canonical_integer(request.value)
-    if value < 0:
-        return SemigroupMembershipResult(value=request.value, in_semigroup=False)
-    if value == 0:
-        return SemigroupMembershipResult(value=request.value, in_semigroup=True)
-    can_reach = [False] * (value + 1)
-    can_reach[0] = True
-    for index in range(1, value + 1):
-        can_reach[index] = any(
-            index >= generator and can_reach[index - generator]
-            for generator in generators
-        )
     return SemigroupMembershipResult(
         value=request.value,
-        in_semigroup=can_reach[value],
+        in_semigroup=belongs(value, apery_set(generators)),
     )
 
 

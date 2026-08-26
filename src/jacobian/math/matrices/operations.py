@@ -30,6 +30,10 @@ __all__ = [
 ]
 
 
+class MatrixSingularError(ValueError):
+    """The exact inverse kernel proved that a matrix has no inverse."""
+
+
 def _exact_matrix(value: MatrixBase, *, maximum_dimension: int = 32) -> MatrixBase:
     import sympy
     from sympy.matrices.matrixbase import MatrixBase
@@ -57,9 +61,14 @@ def inverse(matrix: MatrixBase) -> MatrixBase:
     source = _exact_matrix(matrix)
     if source.rows != source.cols:
         raise ValueError("inverse requires a square matrix")
-    if source.det() == 0:
-        raise ValueError("matrix is singular; inverse does not exist")
-    return source.inv()
+    from sympy.polys.matrices import DomainMatrix
+    from sympy.polys.matrices.exceptions import DMNonInvertibleMatrixError
+
+    try:
+        numerator, denominator = DomainMatrix.from_Matrix(source).inv_den()
+    except DMNonInvertibleMatrixError as exc:
+        raise MatrixSingularError("matrix is singular; inverse does not exist") from exc
+    return numerator.to_Matrix() / int(denominator)
 
 
 def trace(matrix: MatrixBase) -> Any:

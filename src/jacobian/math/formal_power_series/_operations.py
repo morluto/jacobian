@@ -434,16 +434,9 @@ def compute_from_polynomial(
     truncation_order: int,
 ) -> SeriesFromPolynomialResult:
     """Convert a dense rational coefficient tuple into a truncated series."""
-    from jacobian.math.formal_power_series._models import SeriesFromPolynomialRequest
-
-    request = SeriesFromPolynomialRequest(
-        variable=variable,
-        coefficients=tuple(coefficients),
-        truncation_order=truncation_order,
-    )
-    coeffs = [c.as_fraction() for c in request.coefficients]
+    coeffs = [coefficient.as_fraction() for coefficient in coefficients]
     return SeriesFromPolynomialResult(
-        result=_series_result(request.variable, request.truncation_order, coeffs)
+        result=_series_result(variable, truncation_order, coeffs)
     )
 
 

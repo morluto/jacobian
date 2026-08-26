@@ -15,6 +15,7 @@ from jacobian.math.regular_languages._models import (
 )
 from jacobian.math.regular_languages._operations import (
     compute_transition_parikh_profile,
+    verify_transition_parikh_profile,
 )
 from jacobian.math.regular_languages.operations import (
     _MAX_TRANSITION_PROFILE_RESULT_BYTES,
@@ -350,7 +351,7 @@ def test_sparse_dp_matches_bounded_brute_force(
     )
 
 
-def test_wire_result_rejects_source_and_conclusion_forgeries() -> None:
+def test_profile_verifier_rejects_source_and_conclusion_forgeries() -> None:
     automaton = _automaton(
         2,
         2,
@@ -397,8 +398,11 @@ def test_wire_result_rejects_source_and_conclusion_forgeries() -> None:
     forgeries.append(wrong_transition)
 
     for forged in forgeries:
-        with pytest.raises(ValidationError):
-            TransitionParikhProfile.model_validate(forged)
+        try:
+            candidate = TransitionParikhProfile.model_validate(forged)
+        except ValidationError:
+            continue
+        assert not verify_transition_parikh_profile(candidate)
 
 
 def test_transition_axis_requires_contiguous_stable_identifiers() -> None:

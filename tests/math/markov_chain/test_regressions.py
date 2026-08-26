@@ -6,15 +6,25 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.markov_chain import (
-    StationaryDistributionRequest,
-    TransitionMatrixRequest,
     ergodic_properties,
     stationary_distribution,
+)
+from jacobian.math.markov_chain._models import (
+    StationaryDistributionRequest,
+    TransitionMatrixRequest,
 )
 from jacobian.math.markov_chain._operations import (
     compute_ergodic_decision,
     compute_stationary_distribution,
 )
+
+
+def test_native_namespace_exposes_values_and_kernels_not_wire_requests() -> None:
+    import jacobian.math.markov_chain as markov_chain
+
+    assert "StationaryDistributionRequest" not in markov_chain.__all__
+    assert "TransitionMatrixRequest" not in markov_chain.__all__
+    assert markov_chain.stationary_distribution is stationary_distribution
 
 
 def test_ergodicity_uses_irreducibility_and_period_not_square_positivity() -> None:
@@ -114,10 +124,12 @@ def test_native_singular_stationary_helper_rejects_nonunique_chain() -> None:
     )
 
     with pytest.raises(ValueError, match="does not have a unique"):
-        stationary_distribution(request)
+        stationary_distribution(
+            tuple(tuple(value.as_fraction() for value in row) for row in request.matrix)
+        )
 
 
-def test_native_markov_api_accepts_public_validated_requests() -> None:
+def test_native_markov_api_accepts_canonical_fraction_matrices() -> None:
     request = StationaryDistributionRequest.model_validate(
         {
             "matrix": [
@@ -127,8 +139,11 @@ def test_native_markov_api_accepts_public_validated_requests() -> None:
         }
     )
 
-    assert stationary_distribution(request) == (Fraction(1, 2), Fraction(1, 2))
-    assert ergodic_properties(request) == (True, True)
+    matrix = tuple(
+        tuple(value.as_fraction() for value in row) for row in request.matrix
+    )
+    assert stationary_distribution(matrix) == (Fraction(1, 2), Fraction(1, 2))
+    assert ergodic_properties(matrix) == (True, True)
 
 
 def test_stationary_family_solves_each_nonsingleton_closed_class_exactly() -> None:

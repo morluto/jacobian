@@ -8,14 +8,14 @@ from jacobian.math.numerical_semigroups._algorithms import (
     factorization_predecessors,
     reconstruct_factorization,
 )
-from jacobian.math.numerical_semigroups._models import (
+from jacobian.math.numerical_semigroups._models import _require_minimal_generators
+from jacobian.math.numerical_semigroups._presentation_models import (
     MinimalPresentationRelation,
     MinimalPresentationRequest,
     MinimalPresentationResult,
     PresentationBinomial,
     PresentationBinomialsRequest,
     PresentationBinomialsResult,
-    _require_minimal_generators,
 )
 
 

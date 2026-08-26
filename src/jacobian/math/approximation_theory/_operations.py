@@ -11,6 +11,7 @@ from jacobian.math.approximation_theory._models import (
     LagrangeBasisResult,
     LagrangeInterpolationRequest,
     LagrangeInterpolationResult,
+    RationalNodeSet,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -124,8 +125,16 @@ def compute_lagrange_interpolation(
     Uses the Lagrange formula: p(x) = sum_k y_k * l_k(x)
     where l_k(x) is the k-th Lagrange basis polynomial.
     """
-    nodes = [n.as_fraction() for n in request.nodes.nodes]
-    values = [v.as_fraction() for v in request.values]
+    return _interpolate(request.nodes, request.values)
+
+
+def _interpolate(
+    node_set: RationalNodeSet, values: tuple[CanonicalRational, ...]
+) -> LagrangeInterpolationResult:
+    """Compute from admitted canonical values shared by native and wire paths."""
+
+    nodes = [node.as_fraction() for node in node_set.nodes]
+    interpolation_values = [value.as_fraction() for value in values]
     n = len(nodes)
 
     result_poly = [Fraction(0)]
@@ -147,7 +156,7 @@ def compute_lagrange_interpolation(
             x_i = nodes[i]
             poly = _poly_scale(poly, Fraction(1) / (x_k - x_i))
 
-        scaled_poly = _poly_scale(poly, values[k])
+        scaled_poly = _poly_scale(poly, interpolation_values[k])
         result_poly = _poly_add(result_poly, scaled_poly)
 
     while len(result_poly) > 1 and result_poly[-1] == 0:

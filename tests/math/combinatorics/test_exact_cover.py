@@ -47,16 +47,22 @@ def _solve(
     search_node_limit: int = 100_000,
 ) -> GeneralizedExactCoverResult:
     return find_generalized_exact_cover(
-        GeneralizedExactCoverRequest(
-            instance=instance,
-            search_node_limit=search_node_limit,
-        )
+        instance,
+        search_node_limit=search_node_limit,
     )
 
 
 def _multiplicities(result: GeneralizedExactCoverResult) -> dict[str, int]:
     assert result.item_multiplicities is not None
     return {item.item_id: item.multiplicity for item in result.item_multiplicities}
+
+
+def test_native_exact_cover_accepts_canonical_values_not_wire_requests() -> None:
+    instance = _instance(primary=("p",), rows=(("row", ("p",)),))
+
+    assert find_generalized_exact_cover(instance).selected_row_ids == ("row",)
+    with pytest.raises(TypeError, match="GeneralizedExactCoverInstance"):
+        find_generalized_exact_cover(GeneralizedExactCoverRequest(instance=instance))
 
 
 def test_knuth_exact_cover_known_answer_is_deterministic() -> None:

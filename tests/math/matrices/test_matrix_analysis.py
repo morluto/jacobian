@@ -17,6 +17,7 @@ from jacobian.math.matrices.analysis._models import (
 from jacobian.math.matrices.analysis._operations import (
     check_farkas_certificate,
     compute_inertia,
+    verify_inertia_result,
 )
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
@@ -193,7 +194,7 @@ def test_inertia_results_replay_known_answers(
     assert InertiaResult.model_validate(result.model_dump()) == result
 
 
-def test_inertia_result_rejects_mutations() -> None:
+def test_inertia_result_rejects_structural_mutations() -> None:
     request = _inertia_request(2, {(0, 0): "1"})
     result = compute_inertia(request)
     dumped = result.model_dump(mode="json")
@@ -210,8 +211,8 @@ def test_inertia_result_rejects_mutations() -> None:
 
     foreign_source = copy.deepcopy(dumped)
     foreign_source["matrix"]["entries"][0][0] = {"num": "-1", "den": "1"}
-    with pytest.raises(ValidationError):
-        InertiaResult.model_validate(foreign_source)
+    supplied = InertiaResult.model_validate(foreign_source)
+    assert verify_inertia_result(supplied) is False
 
     asymmetric_source = copy.deepcopy(dumped)
     asymmetric_source["matrix"]["entries"][0][1] = {"num": "3", "den": "1"}

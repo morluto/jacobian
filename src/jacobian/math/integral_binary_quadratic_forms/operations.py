@@ -3,22 +3,20 @@
 from __future__ import annotations
 
 from jacobian.math.integral_binary_quadratic_forms._models import (
-    BinaryQuadraticFormEvaluateRequest,
-    BinaryQuadraticFormReduceRequest,
+    MAX_REPRESENTATION_TARGET,
     BinaryQuadraticFormRepresentation,
-    BinaryQuadraticFormRepresentationsRequest,
     PrimitivePositiveDefiniteBinaryQuadraticForm,
+    _require_evaluated_value_bound,
+    _require_representation_budget,
+    _require_representation_coordinate,
 )
 
 
 def evaluate(form: PrimitivePositiveDefiniteBinaryQuadraticForm, x: int, y: int) -> int:
     """Return the exact value ``Q(x,y)`` within the public coordinate envelope."""
-    from jacobian.math.integral_binary_quadratic_forms._operations import _evaluate
-
-    request = BinaryQuadraticFormEvaluateRequest(form=form, x=x, y=y)
-    return _evaluate(
-        request.form.a, request.form.b, request.form.c, request.x, request.y
-    )
+    _require_representation_coordinate(x)
+    _require_representation_coordinate(y)
+    return _require_evaluated_value_bound(form, x, y)
 
 
 def reduced_form(
@@ -27,8 +25,7 @@ def reduced_form(
     """Return the canonical Gauss-reduced representative of ``form``."""
     from jacobian.math.integral_binary_quadratic_forms._operations import _reduce
 
-    request = BinaryQuadraticFormReduceRequest(form=form)
-    a, b, c, _p, _q, _r, _s = _reduce(request.form.a, request.form.b, request.form.c)
+    a, b, c, _p, _q, _r, _s = _reduce(form.a, form.b, form.c)
     return PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c)
 
 
@@ -40,8 +37,10 @@ def representations(
         _enumerate_representations,
     )
 
-    request = BinaryQuadraticFormRepresentationsRequest(form=form, target=target)
-    return _enumerate_representations(request.form, request.target)
+    if not 0 <= target <= MAX_REPRESENTATION_TARGET:
+        raise ValueError(f"target must be between 0 and {MAX_REPRESENTATION_TARGET}")
+    _require_representation_budget(form, target)
+    return _enumerate_representations(form, target)
 
 
 __all__ = ["evaluate", "reduced_form", "representations"]

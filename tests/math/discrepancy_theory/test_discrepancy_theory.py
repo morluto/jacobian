@@ -679,6 +679,7 @@ class TestDiscrepancyOptimum:
             "inf_bound",
             "short_vector",
             "long_vector",
+            "non_array_vector",
             "outside_binary_bounds",
             "integral_outside_binary_bounds",
         ],
@@ -703,6 +704,10 @@ class TestDiscrepancyOptimum:
             "inf_bound": np.array([0.0, 1.0, np.inf]),
             "short_vector": np.ones(n),
             "long_vector": np.ones(n + 2),
+            # A status-zero backend response still has to be an inspectable
+            # finite vector.  A tuple has no array shape and previously
+            # escaped from the canonical conversion as AttributeError.
+            "non_array_vector": (0.0, 1.0, 0.0),
             # Fractional values outside [0, 1]: the old threshold alone
             # coerced these into a coloring with a wrong discrepancy.
             "outside_binary_bounds": np.array([-1.0, -1.0, 2.0]),

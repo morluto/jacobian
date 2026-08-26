@@ -85,6 +85,9 @@ def test_canonical_cnf_can_be_passed_directly_to_assignment_and_solver() -> None
     solved = solve_sat(SatSolveRequest(cnf=canonical))
     assert solved.outcome == "SAT"
     assert solved.assignment is not None
+    assert check_sat_assignment(
+        SatAssignmentCheckRequest(cnf=canonical, assignment=solved.assignment)
+    ).satisfies
 
 
 def test_tautological_cnf_is_a_typed_invalid_request() -> None:

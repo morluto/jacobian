@@ -67,6 +67,16 @@ class CertifiedSmithNormalFormResult(StrictModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     completeness: Literal["FULL_MATRIX_TRANSFORMATIONS"] = "FULL_MATRIX_TRANSFORMATIONS"
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        certificate: SmithNormalFormCertificate,
+    ) -> Self:
+        """Construct the result emitted by the trusted Smith kernel."""
+
+        return cls(certificate=certificate)
+
 
 __all__ = [
     "CertifiedSmithNormalFormRequest",

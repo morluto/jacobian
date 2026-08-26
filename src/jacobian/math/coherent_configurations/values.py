@@ -115,27 +115,30 @@ class CoherentConfigurationInput(StrictModel):
                 "every declared relation_id must occur in relation_matrix",
             )
 
-        from jacobian.math.coherent_configurations.operations import (
-            _require_analysis_admission,
+        # This is request admission over canonical data, not a coherence replay.
+        # Keeping it neutral lets every boundary reject oversized complete
+        # partitions before the cubic kernel is considered.
+        from jacobian.math.coherent_configurations._bounds import (
+            require_analysis_admission,
         )
 
-        _require_analysis_admission(self)
+        require_analysis_admission(self)
         return self
 
 
 class FiniteCoherentConfiguration(CoherentConfigurationInput):
-    """A complete pair partition satisfying the coherent-configuration axioms."""
+    """A claimed finite coherent configuration with canonical pair-partition data.
 
-    @model_validator(mode="after")
-    def require_coherence(self) -> Self:
-        from jacobian.math.coherent_configurations.operations import _analyze
+    Coherence is a derived mathematical claim.  Kernel-produced values are
+    constructed by the owner-local trusted factory; independently supplied
+    values must be checked with ``verify_finite_coherent_configuration``.
+    """
 
-        if _analyze(self).obstruction is not None:
-            raise PydanticCustomError(
-                "coherent_configuration.not_coherent",
-                "relation matrix does not define a coherent configuration",
-            )
-        return self
+    @classmethod
+    def _from_kernel(cls, source: CoherentConfigurationInput) -> Self:
+        """Construct a value after the exact owner-local coherence kernel passed."""
+
+        return cls.model_validate(source.model_dump())
 
 
 __all__ = [

@@ -2,60 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Hashable, Mapping
-
-import networkx as nx
-
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
-from jacobian.math.graphs.symmetry._edges import canonical_edge
 from jacobian.math.graphs.symmetry._models import (
     GraphEdgeOrbit,
     GraphSymmetryOrbitRequest,
     GraphSymmetryOrbitResult,
     GraphVertexOrbit,
 )
-
-
-def _orbit_components[Element: Hashable](
-    elements: tuple[Element, ...],
-    actions: tuple[Mapping[Element, Element], ...],
-) -> tuple[tuple[Element, ...], ...]:
-    union_find = nx.utils.UnionFind(elements)
-    for action in actions:
-        for element in elements:
-            union_find.union(element, action[element])
-    return tuple(tuple(members) for members in union_find.to_sets())
-
-
-def _vertex_orbits(
-    elements: tuple[str, ...],
-    actions: tuple[Mapping[str, str], ...],
-) -> tuple[tuple[str, ...], ...]:
-    return tuple(
-        sorted(
-            (
-                tuple(sorted(members))
-                for members in _orbit_components(elements, actions)
-            ),
-            key=lambda orbit: orbit[0],
-        )
-    )
-
-
-def _edge_orbits(
-    elements: tuple[tuple[str, str], ...],
-    actions: tuple[Mapping[tuple[str, str], tuple[str, str]], ...],
-) -> tuple[tuple[tuple[str, str], ...], ...]:
-    return tuple(
-        sorted(
-            (
-                tuple(sorted(members))
-                for members in _orbit_components(elements, actions)
-            ),
-            key=lambda orbit: orbit[0],
-        )
-    )
+from jacobian.math.graphs.symmetry._orbits import declared_orbit_partitions
 
 
 def _declared_orbit_partitions(
@@ -64,22 +19,11 @@ def _declared_orbit_partitions(
     tuple[tuple[str, ...], ...],
     tuple[tuple[tuple[str, str], ...], ...],
 ]:
-    """Canonical vertex and edge orbit members of the declared generators.
-
-    Shared by execution and result-model validation so both replay the exact
-    same orbit computation on the retained source action.
-    """
+    """Canonical vertex and edge orbit members of the declared generators."""
     vertices = tuple(sorted(request.graph.graph.vertices))
     edges = tuple(sorted(request.graph.graph.edges))
     vertex_actions = tuple(dict(generator.mapping) for generator in request.generators)
-    edge_actions = tuple(
-        {edge: canonical_edge(mapping[edge[0]], mapping[edge[1]]) for edge in edges}
-        for mapping in vertex_actions
-    )
-    return (
-        _vertex_orbits(vertices, vertex_actions),
-        _edge_orbits(edges, edge_actions),
-    )
+    return declared_orbit_partitions(vertices, edges, vertex_actions)
 
 
 def _generator_orbits(
@@ -104,20 +48,31 @@ def _generator_orbits(
         )
         for index, members in enumerate(edge_orbit_members)
     )
-    return GraphSymmetryOrbitResult(
+    return GraphSymmetryOrbitResult._from_kernel(
         source=request,
         vertices=vertices,
         edges=edges,
         generator_ids=tuple(
             sorted(generator.generator_id for generator in request.generators)
         ),
-        generator_count=len(request.generators),
         vertex_orbits=vertex_orbits,
         edge_orbits=edge_orbits,
-        vertex_orbit_count=len(vertex_orbits),
-        edge_orbit_count=len(edge_orbits),
         vertex_color_mode=("DECLARED" if request.graph.vertex_colors else "UNCOLORED"),
         edge_color_mode="DECLARED" if request.graph.edge_colors else "UNCOLORED",
+    )
+
+
+def verify_graph_symmetry_orbit_result(result: GraphSymmetryOrbitResult) -> bool:
+    """Independently verify a bounded source-bound orbit-partition claim."""
+
+    expected_vertex_members, expected_edge_members = _declared_orbit_partitions(
+        result.source
+    )
+    return (
+        tuple(orbit.members for orbit in result.vertex_orbits)
+        == expected_vertex_members
+        and tuple(orbit.members for orbit in result.edge_orbits)
+        == expected_edge_members
     )
 
 

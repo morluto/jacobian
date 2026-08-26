@@ -44,8 +44,8 @@ _FACTOR_ADDRESS_SPACE_BYTES = 4 * 1024 * 1024 * 1024
 _FACTOR_STDOUT_LIMIT = 64 * 1024 * 1024
 _FACTOR_STDERR_LIMIT = 1024 * 1024
 
-# Result validation replays a factorization that already succeeded once
-# inside the operation budget, so verification gets a wider margin.
+# Explicit verification may replay a factorization that already succeeded once
+# inside the operation budget, so it gets a wider bounded margin.
 FACTOR_VERIFY_WALL_SECONDS = 60.0
 
 

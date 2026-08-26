@@ -8,6 +8,7 @@ from fractions import Fraction
 from itertools import combinations
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.graphical_models._validation import validate_d_separation_input
 from jacobian.math.graphical_models.values import (
     MAX_FACTOR_COUNT,
     MAX_MODEL_VARS,
@@ -102,8 +103,8 @@ def d_separation(
 ) -> bool:
     """Decide d-separation by ancestral restriction and moralization."""
 
-    parents = _validate_dag(variable_count, edges)
-    _validate_node_sets(variable_count, set_a, set_b, set_c)
+    validate_d_separation_input(variable_count, edges, set_a, set_b, set_c)
+    parents = _parents(variable_count, edges)
     ancestral = _ancestors(set(set_a) | set(set_b) | set(set_c), parents)
     adjacency: dict[int, set[int]] = {node: set() for node in ancestral}
     for child in ancestral:
@@ -139,19 +140,6 @@ def validate_variable_elimination_input(
     _require_elimination_contract(
         factors, domain_sizes, elimination_order, query_variables
     )
-
-
-def validate_d_separation_input(
-    variable_count: int,
-    edges: tuple[tuple[int, int], ...],
-    set_a: tuple[int, ...],
-    set_b: tuple[int, ...],
-    set_c: tuple[int, ...],
-) -> None:
-    """Validate one bounded DAG and its pairwise-disjoint node sets."""
-
-    _validate_dag(variable_count, edges)
-    _validate_node_sets(variable_count, set_a, set_b, set_c)
 
 
 def _multiply_all(factors: Sequence[Factor]) -> Factor:
@@ -214,52 +202,13 @@ def _require_bounded_intermediate_scopes(
     )
 
 
-def _validate_dag(
+def _parents(
     variable_count: int, edges: tuple[tuple[int, int], ...]
 ) -> dict[int, set[int]]:
-    if not 1 <= variable_count <= MAX_MODEL_VARS:
-        raise ValueError("variable_count must be between 1 and 16")
-    if len(set(edges)) != len(edges):
-        raise ValueError("directed edges must be distinct")
     parents: dict[int, set[int]] = {node: set() for node in range(variable_count)}
-    children: dict[int, set[int]] = {node: set() for node in range(variable_count)}
     for parent, child in edges:
-        if not 0 <= parent < variable_count or not 0 <= child < variable_count:
-            raise ValueError("edge endpoint is outside the graph")
-        if parent == child:
-            raise ValueError("directed graph cannot contain a self-loop")
         parents[child].add(parent)
-        children[parent].add(child)
-    indegree = {node: len(parents[node]) for node in parents}
-    queue = deque(node for node, degree in indegree.items() if degree == 0)
-    visited = 0
-    while queue:
-        node = queue.popleft()
-        visited += 1
-        for child in children[node]:
-            indegree[child] -= 1
-            if indegree[child] == 0:
-                queue.append(child)
-    if visited != variable_count:
-        raise ValueError("d-separation requires a directed acyclic graph")
     return parents
-
-
-def _validate_node_sets(
-    variable_count: int,
-    set_a: tuple[int, ...],
-    set_b: tuple[int, ...],
-    set_c: tuple[int, ...],
-) -> None:
-    node_sets = (set_a, set_b, set_c)
-    if not set_a or not set_b:
-        raise ValueError("sets A and B must be nonempty")
-    if any(len(values) != len(set(values)) for values in node_sets):
-        raise ValueError("d-separation node sets cannot contain duplicates")
-    if any(not 0 <= node < variable_count for values in node_sets for node in values):
-        raise ValueError("d-separation node is outside the graph")
-    if set(set_a) & set(set_b) or set(set_a) & set(set_c) or set(set_b) & set(set_c):
-        raise ValueError("d-separation node sets must be pairwise disjoint")
 
 
 def _ancestors(nodes: set[int], parents: dict[int, set[int]]) -> set[int]:

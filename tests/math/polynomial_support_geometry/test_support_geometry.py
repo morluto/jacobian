@@ -17,6 +17,10 @@ from jacobian.math.polynomial_support_geometry.operations import (
     compute_newton_polytope,
     compute_support,
     compute_weight_profile,
+    verify_initial_form,
+    verify_newton_polytope,
+    verify_polynomial_support,
+    verify_weight_profile,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -61,6 +65,7 @@ class TestSupport:
         result = compute_support(
             SupportRequest(polynomial=_polynomial(_XY_TERMS, VARS))
         )
+        assert verify_polynomial_support(result)
         assert not result.is_zero
         assert result.term_count == 3
         assert result.coordinate_min == (0, 0)
@@ -162,6 +167,7 @@ class TestWeightProfile:
         result = compute_weight_profile(
             WeightProfileRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=[1, 0])
         )
+        assert verify_weight_profile(result)
         # Weights: (2,0)->2, (0,2)->0, (1,1)->1
         # min weight is 0 at (0,2)
         assert result.minimum_weight == 0
@@ -210,8 +216,7 @@ class TestInitialForm:
         assert term.coefficient.num == "5"
 
     def test_initial_form_binds_to_canonical_value(self) -> None:
-        """A serialized producer result revalidates; a mismatched weight
-        fails against the retained source."""
+        """Parsing remains structural; explicit verification checks claims."""
         from jacobian.math.polynomial_support_geometry.values import (
             PolynomialFaceData,
         )
@@ -224,8 +229,8 @@ class TestInitialForm:
 
         payload = result.model_dump()
         payload["weight"] = [1, 1]
-        with raises_code("initial_form_mismatch"):
-            PolynomialFaceData.model_validate(payload)
+        forged = PolynomialFaceData.model_validate(payload)
+        assert not verify_initial_form(forged)
 
     def test_initial_form_composes_as_polynomial_input(self) -> None:
         """The returned canonical value feeds another request unchanged."""
@@ -387,8 +392,7 @@ class TestNewtonReplay:
             )
 
     def test_forged_classification_rejected(self) -> None:
-        """A payload claiming an interior point is a vertex fails the exact
-        hull replay."""
+        """A supplied vertex claim is rejected by the explicit hull verifier."""
         from jacobian.math.polynomial_support_geometry.values import (
             NewtonPolytope,
         )
@@ -405,8 +409,8 @@ class TestNewtonReplay:
         good = payload["vertices"]
         payload["vertices"] = [*list(good), [1, 1]]
         payload["nonextreme"] = []
-        with raises_code("newton_vertex_classification_mismatch"):
-            NewtonPolytope.model_validate(payload)
+        forged = NewtonPolytope.model_validate(payload)
+        assert not verify_newton_polytope(forged)
 
     def test_wrong_affine_dimension_rejected(self) -> None:
         from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
@@ -416,8 +420,34 @@ class TestNewtonReplay:
         )
         payload = result.model_dump()
         payload["affine_dimension"] = 2
-        with raises_code("newton_affine_dimension_mismatch"):
-            NewtonPolytope.model_validate(payload)
+        forged = NewtonPolytope.model_validate(payload)
+        assert not verify_newton_polytope(forged)
+
+
+class TestExplicitResultVerification:
+    def test_support_extrema_are_verified_outside_result_parsing(self) -> None:
+        result = compute_support(
+            SupportRequest(polynomial=_polynomial(_XY_TERMS, VARS))
+        )
+        payload = result.model_dump()
+        payload["total_degree_max"] = 99
+        from jacobian.math.polynomial_support_geometry.values import PolynomialSupport
+
+        forged = PolynomialSupport.model_validate(payload)
+        assert not verify_polynomial_support(forged)
+
+    def test_weight_profile_is_verified_outside_result_parsing(self) -> None:
+        result = compute_weight_profile(
+            WeightProfileRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=[1, 0])
+        )
+        payload = result.model_dump()
+        payload["minimum_weight"] = 99
+        from jacobian.math.polynomial_support_geometry.values import (
+            PolynomialWeightProfile,
+        )
+
+        forged = PolynomialWeightProfile.model_validate(payload)
+        assert not verify_weight_profile(forged)
 
 
 class TestSupportValueInvariants:

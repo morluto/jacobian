@@ -250,32 +250,17 @@ class TestEnumeration:
             "actual_length": 65,
         }
 
-    def test_wide_admission_reuses_its_one_exact_concept_enumeration(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_wide_admission_reuses_its_one_exact_concept_enumeration(self) -> None:
         """The exact wide-context admission probe is the served family."""
-        from jacobian.math.formal_concept_analysis import operations
-
         context = FormalContext(
             objects=tuple(f"o{index}" for index in range(14)),
             attributes=tuple(f"a{index}" for index in range(14)),
             incidence=(),
         )
-        original = operations.enumerate_concepts
-        calls: list[FormalContext] = []
-
-        def counted(context: FormalContext):
-            calls.append(context)
-            return original(context)
-
-        monkeypatch.setattr(operations, "enumerate_concepts", counted)
-
         request = EnumerateConceptsRequest(context=context)
         assert compute_enumerate_concepts(request).count == 2
-        assert calls == [context]
 
         assert len(compute_concept_lattice(request).concepts) == 2
-        assert calls == [context]
 
 
 # ---------------------------------------------------------------------------

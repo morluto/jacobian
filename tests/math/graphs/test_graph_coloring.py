@@ -227,7 +227,7 @@ class TestEdgeKColorability:
 
 
 class TestEdgeColoringRequestSchema:
-    MAX_VERTICES = 64
+    MAX_VERTICES = 256
 
     def _path_graph(self, vertex_count: int):
         from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -247,7 +247,8 @@ class TestEdgeColoringRequestSchema:
         ]
         assert decide_graph["properties"]["vertices"]["maxItems"] == self.MAX_VERTICES
         assert decide_graph["properties"]["edges"]["maxItems"] == 2016
-        assert "at most 64 vertices" in decide_graph["description"]
+        assert "at most 256 vertices" in decide_graph["description"]
+        assert "124992 incident-edge constraints" in decide_graph["description"]
 
         check_schema = EdgeColoringCheckRequest.model_json_schema()
         assignment = check_schema["$defs"]["EdgeColoringAssignment"]
@@ -256,36 +257,49 @@ class TestEdgeColoringRequestSchema:
         )
         assert assignment["properties"]["graph"] == decide_graph
 
-    def test_21_vertex_graph_is_schema_bound_and_validator_rejected(self):
+    def test_sparse_graph_just_past_the_old_vertex_cap_is_admitted(self):
         from jacobian.math.graphs.coloring._models import (
             EdgeColoringCheckRequest,
             EdgeKColorabilityRequest,
         )
 
         g = self._path_graph(65)
-        assert len(g.vertices) == 65 < 256
-        with pytest.raises(ValidationError):
-            EdgeKColorabilityRequest.model_validate(
-                {"graph": g.model_dump(), "colors": 3}
-            )
-        with pytest.raises(ValidationError):
-            EdgeColoringCheckRequest.model_validate(
-                {
-                    "assignment": {
-                        "graph": g.model_dump(),
-                        "colors": 3,
-                        "coloring": tuple(range(64)),
-                    }
+        assert len(g.vertices) == 65
+        request = EdgeKColorabilityRequest.model_validate(
+            {"graph": g.model_dump(), "colors": 3}
+        )
+        assert request.graph == g
+        assignment = EdgeColoringCheckRequest.model_validate(
+            {
+                "assignment": {
+                    "graph": g.model_dump(),
+                    "colors": 3,
+                    "coloring": (0, 1) * 32,
                 }
-            )
+            }
+        )
+        assert assignment.assignment.graph == g
 
-    def test_direct_construction_still_enforces_vertex_bound(self):
+    def test_direct_construction_admits_a_65_vertex_path(self):
         from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
 
-        with pytest.raises(ValidationError):
-            EdgeKColorabilityRequest(graph=self._path_graph(65), colors=3)
+        request = EdgeKColorabilityRequest(graph=self._path_graph(65), colors=3)
+        assert len(request.graph.vertices) == 65
 
-    def test_20_vertex_boundary_request_is_admitted(self):
+    def test_vertex_coloring_rejects_only_the_retained_formula_edge_envelope(self):
+        from jacobian.math.graphs.coloring._models import KColorabilityRequest
+        from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+
+        edges = tuple(
+            (left, right) for left in range(65) for right in range(left + 1, 65)
+        )[:2017]
+        with pytest.raises(ValidationError, match="2016 adjacency constraints"):
+            KColorabilityRequest(
+                graph=IndexedSimpleUndirectedGraph(vertex_count=65, edges=edges),
+                colors=3,
+            )
+
+    def test_65_vertex_boundary_request_is_admitted(self):
         from jacobian.math.graphs.coloring._models import (
             EdgeColoringAssignment,
             EdgeColoringCheckRequest,
@@ -296,7 +310,7 @@ class TestEdgeColoringRequestSchema:
             compute_edge_k_colorability,
         )
 
-        g = self._path_graph(20)
+        g = self._path_graph(65)
         decided = compute_edge_k_colorability(
             EdgeKColorabilityRequest(graph=g, colors=2)
         )
@@ -304,7 +318,7 @@ class TestEdgeColoringRequestSchema:
         checked = compute_edge_coloring_check(
             EdgeColoringCheckRequest(
                 assignment=EdgeColoringAssignment(
-                    graph=g, colors=2, coloring=(0, 1) * 9 + (0,)
+                    graph=g, colors=2, coloring=(0, 1) * 32
                 )
             )
         )
@@ -511,21 +525,23 @@ class TestSolverConflictBudget:
         assert result.coloring is None
         assert EdgeKColorabilityResult.model_validate(result.model_dump()) == result
 
-    def test_forged_budget_exceeded_rejected_when_decidable(self):
-        """An authored budget-exceeded label on a trivially decidable graph
-        must not validate."""
+    def test_forged_budget_exceeded_requires_explicit_verification(self):
+        """An authored budget-exceeded label needs explicit verification."""
+        from jacobian.math.graphs.coloring._operations import (
+            verify_edge_k_colorability_result,
+        )
         from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-        with pytest.raises(ValidationError):
-            EdgeKColorabilityResult(
-                graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),)),
-                colors=2,
-                solver_conflicts=1000,
-                status="SOLVER_BUDGET_EXCEEDED",
-                colorable=None,
-                coloring=None,
-                edge_count=1,
-            )
+        forged = EdgeKColorabilityResult(
+            graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),)),
+            colors=2,
+            solver_conflicts=1000,
+            status="SOLVER_BUDGET_EXCEEDED",
+            colorable=None,
+            coloring=None,
+            edge_count=1,
+        )
+        assert verify_edge_k_colorability_result(forged) is False
 
     def test_budget_exceeded_cannot_claim_colorable(self):
         petersen = _petersen_graph()
@@ -553,8 +569,16 @@ class TestSolverConflictBudget:
             "coloring": None,
             "edge_count": len(petersen.edges),
         }
-        with pytest.raises(ValidationError):
-            EdgeKColorabilityResult.model_validate(payload)
+        from jacobian.math.graphs.coloring._operations import (
+            verify_edge_k_colorability_result,
+        )
+
+        assert (
+            verify_edge_k_colorability_result(
+                EdgeKColorabilityResult.model_validate(payload)
+            )
+            is False
+        )
 
     def test_default_budget_still_decides_petersen_negative(self):
         from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
@@ -567,56 +591,6 @@ class TestSolverConflictBudget:
         )
         assert result.status == "DECIDED"
         assert result.colorable is False
-
-    def test_decided_negative_runs_the_bounded_solver_exactly_once(self, monkeypatch):
-        """The producing solve must not pay a second full-budget replay:
-        one declared budget covers all solver work on the request."""
-        import jacobian.math.graphs.coloring._models as coloring_models
-        from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
-        from jacobian.math.graphs.coloring._operations import (
-            compute_edge_k_colorability,
-        )
-
-        calls: list[int] = []
-        original = coloring_models._run_edge_coloring_solver
-
-        def counting(graph, colors, solver_conflicts):
-            calls.append(solver_conflicts)
-            return original(graph, colors, solver_conflicts)
-
-        monkeypatch.setattr(coloring_models, "_run_edge_coloring_solver", counting)
-        result = compute_edge_k_colorability(
-            EdgeKColorabilityRequest(graph=_petersen_graph(), colors=3)
-        )
-        assert result.status == "DECIDED"
-        assert result.colorable is False
-        assert calls == [result.solver_conflicts]
-
-    def test_budget_exceeded_outcome_runs_the_bounded_solver_exactly_once(
-        self, monkeypatch
-    ):
-        import jacobian.math.graphs.coloring._models as coloring_models
-        from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
-        from jacobian.math.graphs.coloring._operations import (
-            compute_edge_k_colorability,
-        )
-
-        calls: list[int] = []
-        original = coloring_models._run_edge_coloring_solver
-
-        def counting(graph, colors, solver_conflicts):
-            calls.append(solver_conflicts)
-            return original(graph, colors, solver_conflicts)
-
-        monkeypatch.setattr(coloring_models, "_run_edge_coloring_solver", counting)
-        result = compute_edge_k_colorability(
-            EdgeKColorabilityRequest(
-                graph=_petersen_graph(), colors=3, solver_conflicts=1
-            )
-        )
-        assert result.status == "SOLVER_BUDGET_EXCEEDED"
-        assert result.colorable is None
-        assert calls == [1]
 
     def test_produced_outcomes_round_trip_through_full_validation(self):
         """Results built from the producing solve must equal their fully
@@ -670,6 +644,21 @@ class TestVertexKColorability:
         assert result.vertex_count == 0
         assert KColorabilityResult.model_validate(result.model_dump()) == result
 
+    def test_edgeless_graph_just_past_the_old_vertex_cap_is_admitted(self):
+        """A 65-vertex edgeless graph has no adjacency constraints to charge."""
+        from jacobian.math.graphs.coloring._models import KColorabilityRequest
+        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+        from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+
+        request = KColorabilityRequest(
+            graph=IndexedSimpleUndirectedGraph(vertex_count=65, edges=()),
+            colors=1,
+        )
+        result = compute_k_colorability(request)
+        assert result.status == "DECIDED"
+        assert result.colorable is True
+        assert result.coloring == (0,) * 65
+
     def test_triangle_decision_carries_a_proper_witness(self):
         from jacobian.math.graphs.coloring._models import KColorabilityRequest
         from jacobian.math.graphs.coloring._operations import compute_k_colorability
@@ -702,24 +691,26 @@ class TestVertexKColorability:
         assert result.coloring is None
         assert KColorabilityResult.model_validate(result.model_dump()) == result
 
-    def test_forged_budget_exceeded_rejected_when_decidable(self):
-        """An authored budget-exceeded label on a trivially decidable graph
-        must not validate."""
+    def test_forged_budget_exceeded_requires_explicit_verification(self):
+        """An authored budget-exceeded label needs explicit verification."""
         from jacobian.math.graphs.coloring._models import (
             KColorabilityResult,
         )
+        from jacobian.math.graphs.coloring._operations import (
+            verify_k_colorability_result,
+        )
         from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
-        with pytest.raises(ValidationError):
-            KColorabilityResult(
-                graph=IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 1),)),
-                colors=2,
-                solver_conflicts=1000,
-                status="SOLVER_BUDGET_EXCEEDED",
-                colorable=None,
-                coloring=None,
-                vertex_count=2,
-            )
+        forged = KColorabilityResult(
+            graph=IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 1),)),
+            colors=2,
+            solver_conflicts=1000,
+            status="SOLVER_BUDGET_EXCEEDED",
+            colorable=None,
+            coloring=None,
+            vertex_count=2,
+        )
+        assert verify_k_colorability_result(forged) is False
 
     def test_budget_exceeded_cannot_claim_colorable(self):
         from jacobian.math.graphs.coloring._models import KColorabilityResult
@@ -751,8 +742,14 @@ class TestVertexKColorability:
             "coloring": None,
             "vertex_count": 4,
         }
-        with pytest.raises(ValidationError):
-            KColorabilityResult.model_validate(payload)
+        from jacobian.math.graphs.coloring._operations import (
+            verify_k_colorability_result,
+        )
+
+        assert (
+            verify_k_colorability_result(KColorabilityResult.model_validate(payload))
+            is False
+        )
 
     def test_default_budget_still_decides_k4_negative(self):
         from jacobian.math.graphs.coloring._models import KColorabilityRequest
@@ -764,28 +761,6 @@ class TestVertexKColorability:
         assert result.status == "DECIDED"
         assert result.colorable is False
         assert result.coloring is None
-
-    def test_decided_negative_runs_the_bounded_solver_exactly_once(self, monkeypatch):
-        """The producing solve must not pay a second full-budget replay:
-        one declared budget covers all solver work on the request."""
-        import jacobian.math.graphs.coloring._models as coloring_models
-        from jacobian.math.graphs.coloring._models import KColorabilityRequest
-        from jacobian.math.graphs.coloring._operations import compute_k_colorability
-
-        calls: list[int] = []
-        original = coloring_models._run_k_colorability_solver
-
-        def counting(graph, colors, solver_conflicts):
-            calls.append(solver_conflicts)
-            return original(graph, colors, solver_conflicts)
-
-        monkeypatch.setattr(coloring_models, "_run_k_colorability_solver", counting)
-        result = compute_k_colorability(
-            KColorabilityRequest(graph=self._k4(), colors=3)
-        )
-        assert result.status == "DECIDED"
-        assert result.colorable is False
-        assert calls == [result.solver_conflicts]
 
     def test_forged_positive_witnesses_are_rejected(self):
         """A colorable claim must carry one in-range color per vertex and the

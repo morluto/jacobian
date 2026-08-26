@@ -7,12 +7,15 @@ from pydantic import ValidationError
 
 from jacobian.math.cohomology_operations._models import (
     BocksteinRequest,
+    BocksteinResult,
     SteenrodSquareRequest,
     SteenrodSquareResult,
 )
 from jacobian.math.cohomology_operations._operations import (
     compute_bockstein,
     compute_steenrod_square,
+    verify_bockstein_result,
+    verify_steenrod_square_result,
 )
 
 
@@ -189,8 +192,8 @@ class TestSteenrodSquare:
         )
         assert result.is_zero
 
-    def test_forged_result_rejected(self):
-        """An authored payload cannot detach from the retained cochain."""
+    def test_forged_result_is_rejected_by_explicit_verifier(self):
+        """An authored claim is structural but fails the bounded replay verifier."""
         request = SteenrodSquareRequest(
             cochain_degree=1,
             simplex_values=((0, 1), (1, 2)),
@@ -201,12 +204,11 @@ class TestSteenrodSquare:
         genuine = compute_steenrod_square(request)
         assert genuine.result_simplex_values == ((0, 1, 2),)
         payload = genuine.model_dump()
-        payload["result_simplex_values"] = [[2, 3, 4]]
-        payload["result_simplex_coefficients"] = [1]
-        payload["is_zero"] = False
-        with pytest.raises(ValidationError) as excinfo:
-            SteenrodSquareResult.model_validate(payload)
-        _assert_error_code(excinfo, "cohomology_operation.steenrod_replay_mismatch")
+        payload["result_simplex_values"] = []
+        payload["result_simplex_coefficients"] = []
+        payload["is_zero"] = True
+        forged = SteenrodSquareResult.model_validate(payload)
+        assert not verify_steenrod_square_result(forged)
 
 
 class TestBockstein:
@@ -277,6 +279,20 @@ class TestBockstein:
                 result.result_simplex_coefficients,
                 result.is_zero,
             ) == (degree + 1, (), (), True)
+
+    def test_forged_result_is_rejected_by_explicit_verifier(self):
+        request = BocksteinRequest(
+            prime=2,
+            cochain_degree=1,
+            simplex_values=(),
+            simplex_coefficients=(),
+        )
+        payload = compute_bockstein(request).model_dump()
+        payload["result_degree"] = 3
+        with pytest.raises(ValidationError) as excinfo:
+            BocksteinResult.model_validate(payload)
+        _assert_error_code(excinfo, "cohomology_operation.result_shape")
+        assert verify_bockstein_result(compute_bockstein(request))
 
     def test_nonzero_cocycle(self):
         """Bockstein of a non-zero cocycle is unsupported without the complex."""

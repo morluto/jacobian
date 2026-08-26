@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from math import factorial
 from typing import Literal, Self
 
@@ -21,6 +22,7 @@ from jacobian.canonical import (
 )
 from jacobian.math.matrices.values import (
     RationalMatrix,
+    rational_matrix_from_fractions,
     require_matrix_scalar_digits,
 )
 
@@ -217,40 +219,107 @@ class RationalSpectrumClaimResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_complete_claim_to_source(self) -> Self:
+        """Check payload structure; exact replay belongs to the owner verifier."""
         request = RationalSpectrumClaimRequest(
             matrix=self.matrix,
             claimed_profile=self.claimed_profile,
         )
-        from jacobian.math.matrices.analysis._operations import (
-            _replay_rational_spectrum_claim,
-        )
-
-        (
-            expected_ledger,
-            claimed_sum,
-            established_sum,
-            mismatch,
-            failure,
-        ) = _replay_rational_spectrum_claim(request)
-        valid = failure is None
-
-        expected = (
-            self.nullity_ledger == expected_ledger
-            and self.matrix_order == len(request.matrix.entries)
-            and self.claimed_multiplicity_sum == claimed_sum
-            and self.established_multiplicity_sum == established_sum
-            and self.outcome == ("VALID" if valid else "INVALID")
-            and self.valid_complete_rational_spectrum is valid
-            and self.first_failed_condition == failure
-            and self.first_failed_claim_index == mismatch
-        )
-        if not expected:
+        if self.matrix_order != len(request.matrix.entries):
             raise _validation_error(
                 "shape_mismatch",
-                "rational spectrum result does not match exact replay from the "
-                "retained source and claim",
+                "matrix_order must equal the retained source matrix order",
+            )
+        if len(self.nullity_ledger) != len(request.claimed_profile):
+            raise _validation_error(
+                "shape_mismatch",
+                "nullity ledger must contain one entry for every claimed eigenvalue",
+            )
+        if any(
+            entry.eigenvalue != claim.eigenvalue
+            or entry.claimed_multiplicity != claim.multiplicity
+            for entry, claim in zip(
+                self.nullity_ledger, request.claimed_profile, strict=True
+            )
+        ):
+            raise _validation_error(
+                "shape_mismatch",
+                "nullity ledger entries must remain aligned with the claimed profile",
+            )
+        claimed_sum = sum(claim.multiplicity for claim in request.claimed_profile)
+        if self.claimed_multiplicity_sum != claimed_sum:
+            raise _validation_error(
+                "shape_mismatch",
+                "claimed_multiplicity_sum must equal the claimed-profile sum",
+            )
+        established_sum = sum(entry.exact_nullity for entry in self.nullity_ledger)
+        if self.established_multiplicity_sum != established_sum:
+            raise _validation_error(
+                "shape_mismatch",
+                "established_multiplicity_sum must equal the nullity-ledger sum",
+            )
+        mismatch = next(
+            (
+                index
+                for index, entry in enumerate(self.nullity_ledger)
+                if not entry.multiplicity_matches
+            ),
+            None,
+        )
+        if any(
+            entry.multiplicity_matches
+            != (entry.exact_nullity == entry.claimed_multiplicity)
+            for entry in self.nullity_ledger
+        ):
+            raise _validation_error(
+                "shape_mismatch",
+                "multiplicity_matches must agree with each retained nullity",
+            )
+        failure: RationalSpectrumFailure | None
+        if mismatch is not None:
+            failure = "MULTIPLICITY_MISMATCH"
+        elif claimed_sum != self.matrix_order:
+            failure = "CLAIMED_MULTIPLICITY_SUM_DOES_NOT_EQUAL_MATRIX_ORDER"
+        else:
+            failure = None
+        valid = failure is None
+        if (
+            self.outcome != ("VALID" if valid else "INVALID")
+            or self.valid_complete_rational_spectrum is not valid
+            or self.first_failed_condition != failure
+            or self.first_failed_claim_index != mismatch
+        ):
+            raise _validation_error(
+                "shape_mismatch",
+                "rational spectrum outcome must agree with the retained ledger",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        request: RationalSpectrumClaimRequest,
+        nullity_ledger: tuple[RationalSpectrumNullityLedgerEntry, ...],
+        claimed_multiplicity_sum: int,
+        established_multiplicity_sum: int,
+        first_failed_claim_index: int | None,
+        first_failed_condition: RationalSpectrumFailure | None,
+    ) -> Self:
+        """Construct a result emitted by the exact owner-local kernel."""
+
+        valid = first_failed_condition is None
+        return cls(
+            matrix=request.matrix,
+            claimed_profile=request.claimed_profile,
+            nullity_ledger=nullity_ledger,
+            matrix_order=len(request.matrix.entries),
+            claimed_multiplicity_sum=claimed_multiplicity_sum,
+            established_multiplicity_sum=established_multiplicity_sum,
+            outcome="VALID" if valid else "INVALID",
+            valid_complete_rational_spectrum=valid,
+            first_failed_condition=first_failed_condition,
+            first_failed_claim_index=first_failed_claim_index,
+        )
 
 
 class MatrixEntry(StrictModel):
@@ -269,10 +338,6 @@ class SymmetricMatrixRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        from jacobian.math.matrices.analysis._operations import (
-            _canonical_source_matrix,
-        )
-
         seen: set[tuple[int, int]] = set()
         for e in self.entries:
             if e.row >= self.dimension or e.col >= self.dimension:
@@ -301,15 +366,27 @@ class SymmetricMatrixRequest(StrictModel):
         return self
 
 
+def _canonical_source_matrix(request: SymmetricMatrixRequest) -> RationalMatrix:
+    """Normalize sparse symmetric input without entering the operation module."""
+
+    matrix = [[Fraction(0)] * request.dimension for _ in range(request.dimension)]
+    for entry in request.entries:
+        value = entry.value.as_fraction()
+        matrix[entry.row][entry.col] = value
+        if entry.row != entry.col:
+            matrix[entry.col][entry.row] = value
+    return rational_matrix_from_fractions(matrix)
+
+
 class InertiaResult(StrictModel):
     """Sylvester inertia (n_pos, n_neg, n_zero) of a symmetric matrix.
 
     Retains the source matrix in the domain's canonical dense
     ``RationalMatrix`` form, so every payload describing the same symmetric
     matrix yields identical outputs and digests regardless of entry order,
-    triangular coordinates, or explicit zeros. Validation replays the exact
-    congruence-diagonal counts and enforces the definiteness label against
-    them:
+    triangular coordinates, or explicit zeros. Structural validation enforces
+    the count and definiteness-label invariants. Exact congruence replay for
+    independently supplied outcomes is provided by the owner verifier:
 
     - ``n_positive + n_negative + n_zero`` equals the dimension;
     - positive_definite iff all eigenvalues are positive, negative_definite
@@ -326,13 +403,12 @@ class InertiaResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound(self) -> Self:
-        from jacobian.math.matrices.analysis._operations import (
-            _definiteness_label,
-            _dense_fractions,
-            _symmetric_inertia,
-        )
-
         dimension = len(self.matrix.entries)
+        if dimension > MAX_SYMMETRIC_MATRIX_DIMENSION:
+            raise _validation_error(
+                "budget_exceeded",
+                "retained source matrix exceeds the inertia order envelope",
+            )
         if any(len(row) != dimension for row in self.matrix.entries):
             raise _validation_error(
                 "shape_mismatch", "retained source matrix must be square"
@@ -349,14 +425,7 @@ class InertiaResult(StrictModel):
             raise _validation_error(
                 "shape_mismatch", "inertia counts must sum to the matrix dimension"
             )
-        replayed = _symmetric_inertia(_dense_fractions(self.matrix))
-        if replayed != (self.n_positive, self.n_negative, self.n_zero):
-            raise _validation_error(
-                "shape_mismatch",
-                "inertia counts must be the exact Sylvester inertia of the "
-                "retained source matrix",
-            )
-        expected_label = _definiteness_label(
+        expected_label = _inertia_definiteness_label(
             self.n_positive, self.n_negative, self.n_zero
         )
         if self.definiteness != expected_label:
@@ -366,6 +435,41 @@ class InertiaResult(StrictModel):
                 f"{expected_label!r}",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        matrix: RationalMatrix,
+        n_positive: int,
+        n_negative: int,
+        n_zero: int,
+    ) -> Self:
+        """Construct a result emitted by the exact owner-local kernel."""
+
+        return cls(
+            matrix=matrix,
+            n_positive=n_positive,
+            n_negative=n_negative,
+            n_zero=n_zero,
+            definiteness=_inertia_definiteness_label(n_positive, n_negative, n_zero),
+        )
+
+
+def _inertia_definiteness_label(n_pos: int, n_neg: int, n_zero: int) -> str:
+    """Return the public definiteness label implied by one inertia triple."""
+
+    if n_zero == 0:
+        if n_neg == 0:
+            return "positive_definite"
+        if n_pos == 0:
+            return "negative_definite"
+        return "indefinite"
+    if n_neg == 0:
+        return "positive_semidefinite"
+    if n_pos == 0:
+        return "negative_semidefinite"
+    return "indefinite"
 
 
 class FarkasCertificateRequest(StrictModel):

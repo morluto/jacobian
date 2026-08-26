@@ -6,11 +6,11 @@ from collections.abc import Sequence
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.approximation_theory._models import (
-    LagrangeInterpolationRequest,
     RationalNodeSet,
+    admit_interpolation_values,
 )
 from jacobian.math.approximation_theory._operations import (
-    compute_lagrange_interpolation,
+    _interpolate,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -27,8 +27,7 @@ def lagrange_interpolate(
     canonical domain values and returns the unique interpolant in the
     domain-owned :class:`RationalPolynomial` representation.
     """
-    request = LagrangeInterpolationRequest(
-        nodes=RationalNodeSet(nodes=tuple(nodes)),
-        values=tuple(values),
-    )
-    return compute_lagrange_interpolation(request).polynomial
+    node_set = RationalNodeSet(nodes=tuple(nodes))
+    canonical_values = tuple(values)
+    admit_interpolation_values(node_set, canonical_values)
+    return _interpolate(node_set, canonical_values).polynomial

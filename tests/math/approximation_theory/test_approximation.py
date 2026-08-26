@@ -422,11 +422,10 @@ class TestLagrangeInterpolateNative:
     def test_mismatched_values_rejected(self):
         from jacobian.math.approximation_theory import lagrange_interpolate
 
-        with pytest.raises(ValidationError) as exc_info:
+        with pytest.raises(
+            ValueError, match="values must have the same length as nodes"
+        ):
             lagrange_interpolate((_canonical("0"), _canonical("1")), (_canonical("1"),))
-        _assert_validation_code(
-            exc_info, "approximation_theory.interpolation_length_mismatch"
-        )
 
 
 class TestInterpolationAdmissionDisposition:

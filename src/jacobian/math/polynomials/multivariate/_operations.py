@@ -24,7 +24,6 @@ from jacobian.math.polynomials.multivariate._factor_models import (
     MultivariateFactorRequest,
     MultivariateFactorResult,
     MultivariateIrreducibleFactor,
-    _monic_content_fraction,
 )
 from jacobian.math.polynomials.multivariate._gcd import (
     MultivariateGcdRequest,
@@ -240,6 +239,92 @@ def _sympy_factorization(
     )
 
 
+_SympyFactorKey = tuple[tuple[tuple[int, ...], int, int], ...]
+
+
+def _monic_content_fraction(content: Any) -> Any:
+    """Extract exact rational content from a monic decomposition."""
+
+    from fractions import Fraction
+
+    leading = getattr(content, "LC", None)
+    value = leading() if callable(leading) else content
+    return Fraction(int(value.p), int(value.q))
+
+
+def _sympy_factor_key(poly: Any) -> _SympyFactorKey:
+    """Return a canonical hashable representation of one QQ ``Poly``."""
+
+    return tuple(
+        sorted(
+            (tuple(monom), int(coeff.p), int(coeff.q)) for monom, coeff in poly.terms()
+        )
+    )
+
+
+def verify_multivariate_factor_result(result: MultivariateFactorResult) -> bool:
+    """Verify an independently supplied factorization claim once, boundedly.
+
+    Construction of a kernel result never re-enters the worker that produced
+    it.  This verifier is deliberately separate for consumers that need to
+    authenticate a deserialized ``FACTORIZED`` or ``OUTPUT_BUDGET_EXCEEDED``
+    claim.  ``EXECUTION_FAILED`` is a retryable process condition rather than
+    a mathematical certificate and therefore has no positive verifier verdict.
+    """
+
+    if result.status == "EXECUTION_FAILED":
+        return False
+    try:
+        decomposition = _factor_backend.run_bounded_factorization(
+            result.reconstructed,
+            wall_seconds=_factor_backend.FACTOR_VERIFY_WALL_SECONDS,
+        )
+    except FactorBackendExhaustedError:
+        return result.status == "OUTPUT_BUDGET_EXCEEDED"
+    except (FactorBackendInterruptedError, FactorBackendFailureError):
+        return False
+    except Exception:  # pragma: no cover - defensive worker boundary
+        return False
+
+    if result.status == "OUTPUT_BUDGET_EXCEEDED":
+        try:
+            for factor, _multiplicity in decomposition[1]:
+                _result_polynomial(
+                    factor,
+                    result.reconstructed.variables,
+                    maximum_terms=_MAX_FACTOR_OUTPUT_TERMS,
+                )
+        except MultivariateOutputBudgetError:
+            return True
+        return False
+
+    try:
+        from jacobian.math.polynomials._sympy import _monic_decomposition
+
+        source = rational_polynomial_to_sympy(result.reconstructed)
+        content, raw_factors, _ = _monic_decomposition(
+            source,
+            decomposition,
+            label="multivariate factorization verification",
+        )
+        claimed = {
+            _sympy_factor_key(
+                rational_polynomial_to_sympy(record.factor)
+            ): record.multiplicity
+            for record in result.factors
+        }
+        replayed = {
+            _sympy_factor_key(factor): multiplicity
+            for factor, multiplicity in raw_factors
+        }
+        return (
+            _monic_content_fraction(content) == result.coefficient.as_fraction()
+            and claimed == replayed
+        )
+    except Exception:  # pragma: no cover - defensive verifier boundary
+        return False
+
+
 def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFactorResult:
     """Exact factorization over ``QQ[variables]`` via SymPy's ``factor_list``.
 
@@ -263,15 +348,13 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
     ) -> MultivariateFactorResult:
         # Non-FACTORIZED outcomes restate the source and carry its exact
         # positive primitive content, matching result validation.
-        return MultivariateFactorResult(
+        return MultivariateFactorResult._from_kernel(
             status=status,
             coefficient=CanonicalRational.from_fraction(
                 _factor_backend.primitive_content_fraction(request.polynomial)
             ),
             factors=(),
             reconstructed=request.polynomial,
-            normalization=None,
-            product_reconstruction=None,
         )
 
     try:
@@ -327,7 +410,8 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
         maximum_terms=_MAX_FACTOR_OUTPUT_TERMS,
     )
 
-    return MultivariateFactorResult(
+    return MultivariateFactorResult._from_kernel(
+        status="FACTORIZED",
         coefficient=coefficient_value,
         factors=factors,
         reconstructed=reconstructed_poly,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from jacobian.math.matroids._models import (
     LinearMatroid,
+    MatroidClosureResult,
     validate_subset_indices,
 )
 from jacobian.math.prime_field_linear_algebra import (
@@ -66,3 +67,15 @@ def compute_matroid_closure(
     """
     validate_subset_indices(matroid, subset)
     return _closure_invariant(matroid, subset)
+
+
+def verify_matroid_closure_result(result: MatroidClosureResult) -> bool:
+    """Verify an independently supplied closure claim in its bounded domain.
+
+    The request model limits the ground set to 32 elements.  Replaying the
+    defining span test therefore performs at most 33 prime-field rank calls,
+    each on a matrix with at most 32 columns.
+    """
+
+    closure, rank = _closure_invariant(result.matroid, list(result.subset))
+    return result.closure == closure and result.rank == rank

@@ -139,11 +139,14 @@ def compute_group_cohomology(request: GroupCohomologyRequest) -> GroupCohomology
     dim ker(delta^n) - rank(im(delta^{n-1})) = dim H^n(G, GF(p)).
     """
     groups, group_order = _cohomology_profile(request)
-    return GroupCohomologyResult(
-        request=request,
-        groups=groups,
-        group_order=group_order,
-    )
+    return GroupCohomologyResult._from_kernel(request, groups, group_order)
 
 
-__all__ = ["compute_group_cohomology"]
+def verify_group_cohomology_result(result: GroupCohomologyResult) -> bool:
+    """Replay a separately supplied claim inside its admitted owner envelope."""
+
+    groups, group_order = _cohomology_profile(result.request)
+    return result.groups == groups and result.group_order == group_order
+
+
+__all__ = ["compute_group_cohomology", "verify_group_cohomology_result"]

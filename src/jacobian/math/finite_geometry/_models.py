@@ -10,7 +10,7 @@ from sympy import isprime
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json, format_canonical_integer
+from jacobian.canonical import encode_strict_json
 from jacobian.math.finite_geometry.values import (
     MAX_DIM,
     MAX_FIELD_ORDER,
@@ -274,24 +274,22 @@ class ProjectivePointCanonicalizeResult(ProjectivePointCanonicalizeRequest):
     method: str = "FIRST_NONZERO_TO_ONE"
 
     @model_validator(mode="after")
-    def replay(self) -> Self:
-        expected_scale = next(value for value in self.vector if value != 0)
-        expected = tuple(
-            value
-            * pow(expected_scale, -1, self.space.field_order)
-            % self.space.field_order
-            for value in self.vector
-        )
-        if (
-            self.point.space != self.space
-            or self.point.coordinates != expected
-            or self.scale != expected_scale
-        ):
+    def bind_point_parent(self) -> Self:
+        if self.point.space != self.space:
             raise _validation_error(
-                "canonicalization_replay_mismatch",
-                "projective point is not the canonicalized source vector",
+                "canonicalization_parent_mismatch",
+                "projective point must use the declared parent space",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: ProjectivePointCanonicalizeRequest,
+        point: ProjectivePoint,
+        scale: int,
+    ) -> Self:
+        return cls(**request.model_dump(), point=point, scale=scale)
 
 
 class ProjectivePointEqualResult(StrictModel):
@@ -301,18 +299,17 @@ class ProjectivePointEqualResult(StrictModel):
     method: str = "CANONICAL_REPRESENTATIVE"
 
     @model_validator(mode="after")
-    def replay(self) -> Self:
+    def require_same_parent(self) -> Self:
         if self.point_a.space != self.point_b.space:
             raise _validation_error(
                 "projective_parent_mismatch",
                 "projective points must have the same field and axis",
             )
-        if self.equal != (self.point_a.coordinates == self.point_b.coordinates):
-            raise _validation_error(
-                "equality_replay_mismatch",
-                "projective equality must match canonical coordinates",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: ProjectivePointEqualRequest, equal: bool) -> Self:
+        return cls(point_a=request.point_a, point_b=request.point_b, equal=equal)
 
 
 class SubspaceComputeResult(SubspaceComputeRequest):
@@ -320,21 +317,19 @@ class SubspaceComputeResult(SubspaceComputeRequest):
     method: str = "RREF"
 
     @model_validator(mode="after")
-    def replay(self) -> Self:
-        from jacobian.math.finite_geometry._operations import _canonical_basis
-
-        expected = tuple(
-            tuple(row)
-            for row in _canonical_basis(
-                [list(vector) for vector in self.vectors], self.space.field_order
-            )
-        )
-        if self.subspace.space != self.space or self.subspace.basis != expected:
+    def bind_subspace_parent(self) -> Self:
+        if self.subspace.space != self.space:
             raise _validation_error(
-                "subspace_replay_mismatch",
-                "subspace is not the span of its source vectors",
+                "subspace_parent_mismatch",
+                "subspace must use the declared parent space",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: SubspaceComputeRequest, subspace: LinearSubspace
+    ) -> Self:
+        return cls(**request.model_dump(), subspace=subspace)
 
 
 class SubspaceMembershipResult(StrictModel):
@@ -344,18 +339,15 @@ class SubspaceMembershipResult(StrictModel):
     method: str = "RREF_MEMBERSHIP"
 
     @model_validator(mode="after")
-    def replay(self) -> Self:
-        from jacobian.math.finite_geometry._operations import _canonical_basis
-
-        q = self.subspace.space.field_order
-        enlarged = [list(row) for row in self.subspace.basis] + [list(self.vector)]
-        expected = len(_canonical_basis(enlarged, q)) == self.subspace.dimension
-        if self.is_member != expected:
-            raise _validation_error(
-                "membership_replay_mismatch",
-                "membership does not match the bound subspace and vector",
-            )
+    def bind_vector_parent(self) -> Self:
+        _validate_vector(self.vector, self.subspace.space)
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: SubspaceMembershipRequest, is_member: bool) -> Self:
+        return cls(
+            subspace=request.subspace, vector=request.vector, is_member=is_member
+        )
 
 
 class SubspaceSpanResult(SubspaceSpanRequest):
@@ -363,21 +355,18 @@ class SubspaceSpanResult(SubspaceSpanRequest):
     method: str = "RREF"
 
     @model_validator(mode="after")
-    def replay(self) -> Self:
-        from jacobian.math.finite_geometry._operations import _canonical_basis
-
-        generators = [list(vector) for vector in self.vectors]
-        generators.extend(
-            list(row) for subspace in self.subspaces for row in subspace.basis
-        )
-        expected = tuple(
-            tuple(row) for row in _canonical_basis(generators, self.space.field_order)
-        )
-        if self.subspace.space != self.space or self.subspace.basis != expected:
+    def bind_subspace_parent(self) -> Self:
+        if self.subspace.space != self.space:
             raise _validation_error(
-                "span_replay_mismatch", "span result is not bound to its source values"
+                "span_parent_mismatch", "subspace must use the declared parent space"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: SubspaceSpanRequest, subspace: LinearSubspace
+    ) -> Self:
+        return cls(**request.model_dump(), subspace=subspace)
 
 
 class SubspaceIntersectionResult(SubspaceIntersectionRequest):
@@ -385,19 +374,19 @@ class SubspaceIntersectionResult(SubspaceIntersectionRequest):
     method: str = "INTERSECTION"
 
     @model_validator(mode="after")
-    def replay(self) -> Self:
-        from jacobian.math.finite_geometry._operations import _intersection_basis
-
-        expected = _intersection_basis(self.subspace_a, self.subspace_b)
-        if (
-            self.subspace.space != self.subspace_a.space
-            or self.subspace.basis != expected
-        ):
+    def bind_subspace_parent(self) -> Self:
+        if self.subspace.space != self.subspace_a.space:
             raise _validation_error(
-                "intersection_replay_mismatch",
-                "intersection is not bound to its source subspaces",
+                "intersection_result_parent_mismatch",
+                "intersection must use the input parent space",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: SubspaceIntersectionRequest, subspace: LinearSubspace
+    ) -> Self:
+        return cls(**request.model_dump(), subspace=subspace)
 
 
 class GrassmannianCountResult(StrictModel):
@@ -410,7 +399,7 @@ class GrassmannianCountResult(StrictModel):
     method: str = "GAUSSIAN_BINOMIAL"
 
     @model_validator(mode="after")
-    def replay(self) -> Self:
+    def require_parameter_domain(self) -> Self:
         if not isprime(self.field_order) or not (
             0 <= self.subspace_dimension <= self.ambient_dimension <= MAX_DIM
         ):
@@ -418,17 +407,18 @@ class GrassmannianCountResult(StrictModel):
                 "grassmannian_parameters_invalid",
                 "Grassmannian parameters are outside the public domain",
             )
-        numerator = 1
-        denominator = 1
-        for index in range(self.subspace_dimension):
-            numerator *= self.field_order ** (self.ambient_dimension - index) - 1
-            denominator *= self.field_order ** (self.subspace_dimension - index) - 1
-        if self.count != format_canonical_integer(numerator // denominator):
-            raise _validation_error(
-                "grassmannian_count_mismatch",
-                "count does not match its Gaussian-binomial parameters",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: GrassmannianCountRequest, count: CanonicalInteger
+    ) -> Self:
+        return cls(
+            field_order=request.field_order,
+            ambient_dimension=request.ambient_dimension,
+            subspace_dimension=request.subspace_dimension,
+            count=count,
+        )
 
 
 class ProjectiveSpaceEnumerateResult(StrictModel):

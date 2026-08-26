@@ -141,6 +141,112 @@ def test_backend_eval_methods_are_not_confused_with_python_eval(tmp_path: Path) 
     assert check_architecture(tmp_path).ok
 
 
+def test_contracts_and_values_cannot_reenter_their_own_operations(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/_models.py",
+        "from jacobian.math.example.operations import compute\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/relative/_models.py",
+        "from .operations import compute\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/imported/_models.py",
+        "import jacobian.math.imported._operations as operations\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/values.py",
+        "import importlib as loader\n"
+        "operation = loader.import_module('jacobian.math.example._operations')\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/other.py",
+        "from jacobian.math.example.operations import compute\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/other/_models.py",
+        "from jacobian.math.example.operations import compute\n",
+    )
+
+    assert _violations(tmp_path, "owner-operation-reentry") == [
+        "src/jacobian/math/example/_models.py",
+        "src/jacobian/math/example/values.py",
+        "src/jacobian/math/imported/_models.py",
+        "src/jacobian/math/relative/_models.py",
+    ]
+
+
+def test_exported_native_functions_do_not_construct_wire_models(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path, "src/jacobian/math/__init__.py", "__all__ = ['example']\n")
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/__init__.py",
+        "from .native import value\n__all__ = ['value']\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/native.py",
+        "from jacobian.math.example._models import ExampleRequest\n"
+        "def value():\n"
+        "    return ExampleRequest()\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/_mcp_adapter.py",
+        "from jacobian.math.example._models import ExampleRequest\n"
+        "def parse():\n"
+        "    return ExampleRequest()\n",
+    )
+
+    assert _violations(tmp_path, "native-wire-boundary") == [
+        "src/jacobian/math/example/native.py"
+    ]
+
+
+def test_exported_native_functions_do_not_call_public_compute_adapters(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path, "src/jacobian/math/__init__.py", "__all__ = ['example']\n")
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/__init__.py",
+        "from .native import value\n__all__ = ['value']\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/native.py",
+        "from jacobian.math.example.operations import compute_value\n"
+        "def value():\n"
+        "    return compute_value()\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/operations.py",
+        "def compute_value():\n    return 1\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/private.py",
+        "from jacobian.math.example._operations import compute_value\n"
+        "def helper():\n"
+        "    return compute_value()\n",
+    )
+
+    assert _violations(tmp_path, "native-wire-boundary") == [
+        "src/jacobian/math/example/native.py"
+    ]
+
+
 def test_direct_rational_result_formatting_is_rejected(tmp_path: Path) -> None:
     _write(
         tmp_path,

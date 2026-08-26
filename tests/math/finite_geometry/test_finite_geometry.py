@@ -33,6 +33,8 @@ from jacobian.math.finite_geometry._operations import (
     compute_subspace_intersection,
     compute_subspace_membership,
     compute_subspace_span,
+    verify_grassmannian_count_result,
+    verify_subspace_compute_result,
 )
 from jacobian.math.finite_geometry._tools import TOOLS
 
@@ -473,7 +475,7 @@ def test_axis_identity_is_part_of_the_parent() -> None:
     )
 
 
-def test_source_bound_results_reject_forged_values() -> None:
+def test_source_bound_results_use_explicit_bounded_verifiers() -> None:
     result = compute_subspace_compute(
         SubspaceComputeRequest(
             space={"field_order": 3, "axis": ("x", "y")},
@@ -482,9 +484,8 @@ def test_source_bound_results_reject_forged_values() -> None:
     )
     payload = result.model_dump()
     payload["subspace"]["basis"] = ((0, 1),)
-    with pytest.raises(ValidationError) as error:
-        type(result).model_validate(payload)
-    assert error.value.errors()[0]["type"] == "finite_geometry.subspace_replay_mismatch"
+    forged = type(result).model_validate(payload)
+    assert not verify_subspace_compute_result(forged)
 
     count = compute_grassmannian_count(
         GrassmannianCountRequest(
@@ -493,8 +494,5 @@ def test_source_bound_results_reject_forged_values() -> None:
     )
     payload = count.model_dump()
     payload["count"] = "8"
-    with pytest.raises(ValidationError) as error:
-        type(count).model_validate(payload)
-    assert (
-        error.value.errors()[0]["type"] == "finite_geometry.grassmannian_count_mismatch"
-    )
+    forged_count = type(count).model_validate(payload)
+    assert not verify_grassmannian_count_result(forged_count)

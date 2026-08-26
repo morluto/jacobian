@@ -88,11 +88,11 @@ class PowerProfileRequest(StrictModel):
 class PowerProfileResult(StrictModel):
     """The power profile of one element in a finite semigroup.
 
-    The supplied semigroup and element are carried on the result so the
-    bound model can re-run the exact native kernel and verify the power
-    sequence, index, period, idempotent, and cyclic subsemigroup.  ``index``
-    is the smallest positive exponent whose power first repeats; ``powers``
-    is ``a, a^2, a^3, ...`` in one-based exponent order.
+    ``index`` is the smallest positive exponent whose power first repeats;
+    ``powers`` is ``a, a^2, a^3, ...`` in one-based exponent order.
+    Deserialization checks the bounded result shape only.  Exact replay is
+    available through the owner-local verifier for independently supplied
+    claims; kernel output uses the trusted factory below.
     """
 
     semigroup: FiniteSemigroup
@@ -104,37 +104,54 @@ class PowerProfileResult(StrictModel):
     cyclic_subsemigroup: tuple[OpaqueLabel, ...]
 
     @model_validator(mode="after")
-    def bind_power_profile(self) -> Self:
-        from jacobian.math.finite_semigroups._operations import _power_profile_data
-
-        powers, index, period, idempotent, cyclic = _power_profile_data(
-            self.semigroup.elements,
-            self.semigroup.multiplication,
-            self.element,
-        )
-        if self.powers != powers:
+    def require_bounded_shape(self) -> Self:
+        labels = set(self.semigroup.elements)
+        if (
+            not self.powers
+            or len(self.powers) > len(labels)
+            or self.element not in labels
+            or self.powers[0] != self.element
+            or len(set(self.powers)) != len(self.powers)
+            or any(power not in labels for power in self.powers)
+        ):
             raise _validation_error(
-                "powers_mismatch",
-                "powers must be the exact power sequence of the element",
+                "power_profile_shape",
+                "powers must be a bounded distinct sequence starting at element",
             )
-        if self.index != index:
+        if self.index + self.period - 1 != len(self.powers):
             raise _validation_error(
-                "index_mismatch", "index must be the first repeated power exponent"
+                "power_profile_length",
+                "powers length must equal index plus period minus one",
             )
-        if self.period != period:
+        if (
+            self.idempotent not in self.powers
+            or self.cyclic_subsemigroup != self.powers
+        ):
             raise _validation_error(
-                "period_mismatch", "period must be the power cycle length"
-            )
-        if self.idempotent != idempotent:
-            raise _validation_error(
-                "idempotent_mismatch", "idempotent must be the unique idempotent power"
-            )
-        if self.cyclic_subsemigroup != cyclic:
-            raise _validation_error(
-                "cyclic_subsemigroup_mismatch",
-                "cyclic_subsemigroup must be the exact closure of the element",
+                "power_profile_values",
+                "idempotent and cyclic subsemigroup must use the declared power profile",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PowerProfileRequest,
+        powers: tuple[OpaqueLabel, ...],
+        index: int,
+        period: int,
+        idempotent: OpaqueLabel,
+        cyclic_subsemigroup: tuple[OpaqueLabel, ...],
+    ) -> Self:
+        return cls(
+            semigroup=request.semigroup,
+            element=request.element,
+            powers=powers,
+            index=index,
+            period=period,
+            idempotent=idempotent,
+            cyclic_subsemigroup=cyclic_subsemigroup,
+        )
 
 
 class GeneratedSubsemigroupRequest(StrictModel):
@@ -187,21 +204,23 @@ class ElementPowerResult(StrictModel):
     power: OpaqueLabel
 
     @model_validator(mode="after")
-    def bind_power(self) -> Self:
-        from jacobian.math.finite_semigroups._operations import _element_power
-
-        power = _element_power(
-            self.semigroup.elements,
-            self.semigroup.multiplication,
-            self.element,
-            self.exponent,
-        )
-        if self.power != power:
+    def require_declared_power(self) -> Self:
+        labels = set(self.semigroup.elements)
+        if self.element not in labels or self.power not in labels:
             raise _validation_error(
-                "power_mismatch",
-                "power must be the exact iterated product of the element",
+                "power_not_declared",
+                "element and power must be declared semigroup elements",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: ElementPowerRequest, power: OpaqueLabel) -> Self:
+        return cls(
+            semigroup=request.semigroup,
+            element=request.element,
+            exponent=request.exponent,
+            power=power,
+        )
 
 
 class IdempotentsRequest(StrictModel):
@@ -217,18 +236,24 @@ class IdempotentsResult(StrictModel):
     idempotents: tuple[OpaqueLabel, ...]
 
     @model_validator(mode="after")
-    def bind_idempotents(self) -> Self:
-        from jacobian.math.finite_semigroups._operations import _idempotents
-
-        idempotents = _idempotents(
-            self.semigroup.elements, self.semigroup.multiplication
+    def require_idempotent_shape(self) -> Self:
+        declared = tuple(
+            element
+            for element in self.semigroup.elements
+            if element in self.idempotents
         )
-        if self.idempotents != idempotents:
+        if self.idempotents != declared:
             raise _validation_error(
-                "idempotents_mismatch",
-                "idempotents must be exactly the elements with e*e = e",
+                "idempotents_not_canonical",
+                "idempotents must be distinct declared elements in semigroup order",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: IdempotentsRequest, idempotents: tuple[OpaqueLabel, ...]
+    ) -> Self:
+        return cls(semigroup=request.semigroup, idempotents=idempotents)
 
 
 class PrincipalIdealsRequest(StrictModel):
@@ -271,20 +296,35 @@ class PrincipalIdealsResult(StrictModel):
     ideals: tuple[tuple[OpaqueLabel, ...], ...]
 
     @model_validator(mode="after")
-    def bind_ideals(self) -> Self:
-        from jacobian.math.finite_semigroups._operations import _principal_ideals
-
-        ideals = _principal_ideals(
-            self.semigroup.elements,
-            self.semigroup.multiplication,
-            self.elements,
+    def require_ideal_shape(self) -> Self:
+        declared_elements = tuple(
+            element for element in self.semigroup.elements if element in self.elements
         )
-        if self.ideals != ideals:
+        if self.elements != declared_elements or len(self.ideals) != len(self.elements):
             raise _validation_error(
-                "ideals_mismatch",
-                "ideals must be the exact principal ideals of the elements",
+                "principal_ideal_shape",
+                "elements and ideals must have matching canonical length",
             )
+        for element, ideal in zip(self.elements, self.ideals, strict=True):
+            declared_ideal = tuple(
+                candidate for candidate in self.semigroup.elements if candidate in ideal
+            )
+            if not ideal or ideal != declared_ideal or element not in ideal:
+                raise _validation_error(
+                    "principal_ideal_values",
+                    "every ideal must be a nonempty canonical declared set containing its element",
+                )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PrincipalIdealsRequest,
+        ideals: tuple[tuple[OpaqueLabel, ...], ...],
+    ) -> Self:
+        return cls(
+            semigroup=request.semigroup, elements=request.elements, ideals=ideals
+        )
 
 
 class GreenRelationsRequest(StrictModel):
@@ -310,30 +350,28 @@ class GreenRelationsResult(StrictModel):
     J: tuple[tuple[str, ...], ...]
 
     @model_validator(mode="after")
-    def bind_green_relations(self) -> Self:
-        from jacobian.math.finite_semigroups._operations import _green_relations
-
-        L, R, H, D, J = _green_relations(  # noqa: N806
-            self.semigroup.elements, self.semigroup.multiplication
-        )
-        if self.L != L:
-            raise _validation_error(
-                "green_l_mismatch", "L must be the exact Green L-relation"
-            )
-        if self.R != R:
-            raise _validation_error(
-                "green_r_mismatch", "R must be the exact Green R-relation"
-            )
-        if self.H != H:
-            raise _validation_error(
-                "green_h_mismatch", "H must be the exact Green H-relation"
-            )
-        if self.D != D:
-            raise _validation_error(
-                "green_d_mismatch", "D must be the exact Green D-relation"
-            )
-        if self.J != J:
-            raise _validation_error(
-                "green_j_mismatch", "J must be the exact Green J-relation"
-            )
+    def require_partition_shapes(self) -> Self:
+        for relation in (self.L, self.R, self.H, self.D, self.J):
+            flattened = tuple(element for block in relation for element in block)
+            if (
+                not relation
+                or any(not block for block in relation)
+                or flattened != self.semigroup.elements
+            ):
+                raise _validation_error(
+                    "green_partition_shape",
+                    "every Green relation must partition elements in declared order",
+                )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: GreenRelationsRequest,
+        L: tuple[tuple[str, ...], ...],  # noqa: N803
+        R: tuple[tuple[str, ...], ...],  # noqa: N803
+        H: tuple[tuple[str, ...], ...],  # noqa: N803
+        D: tuple[tuple[str, ...], ...],  # noqa: N803
+        J: tuple[tuple[str, ...], ...],  # noqa: N803
+    ) -> Self:
+        return cls(semigroup=request.semigroup, L=L, R=R, H=H, D=D, J=J)

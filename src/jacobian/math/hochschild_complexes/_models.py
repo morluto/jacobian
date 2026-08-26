@@ -8,7 +8,6 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.hochschild_complexes._bar import bar_differential_entries
 from jacobian.math.prime_field_linear_algebra import (
     _MAX_DIMENSION as PRIME_FIELD_MAX_DIM,
 )
@@ -260,7 +259,13 @@ class HochschildDifferential(StrictModel):
 
 
 class HochschildChainComplexResult(StrictModel):
-    """The Hochschild chain complex prefix, bound to its source algebra."""
+    """A structurally coherent Hochschild chain-complex prefix.
+
+    Kernel-produced boundaries use :meth:`_from_kernel`. Deserializing a
+    separately supplied result validates only source binding, field,
+    dimensions, and the admitted envelope; the explicit owner verifier checks
+    that matrices are the bar differentials of ``algebra``.
+    """
 
     algebra: AlgebraStructure
     algebra_dimension: int = Field(ge=1)
@@ -274,8 +279,6 @@ class HochschildChainComplexResult(StrictModel):
 
     @model_validator(mode="after")
     def require_bound_to_algebra(self) -> Self:
-        # Replay the exact derived value from the retained source so an authored
-        # payload is never trusted on its shape alone.
         algebra = self.algebra
         if self.algebra_dimension != algebra.dimension or self.prime != algebra.prime:
             raise _validation_error(
@@ -324,19 +327,24 @@ class HochschildChainComplexResult(StrictModel):
                     "hochschild_complex.matrix_budget",
                     "differential exceeds the supported boundary-matrix entry budget",
                 )
-            expected_entries = bar_differential_entries(
-                algebra.structure_constants,
-                algebra.prime,
-                degree,
-                algebra.augmentation,
-            )
-            if differential.matrix.entries != tuple(expected_entries):
-                raise _validation_error(
-                    "hochschild_complex.differential_entries",
-                    "differential entries must be the exact bar differential "
-                    "of the retained algebra",
-                )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        algebra: AlgebraStructure,
+        group_dimensions: tuple[int, ...],
+        differentials: tuple[HochschildDifferential, ...],
+    ) -> Self:
+        """Construct a result emitted by the owner-local kernel."""
+
+        return cls(
+            algebra=algebra,
+            algebra_dimension=algebra.dimension,
+            group_dimensions=group_dimensions,
+            differentials=differentials,
+            prime=algebra.prime,
+        )
 
 
 class HochschildHomologyRequest(StrictModel):
@@ -384,7 +392,11 @@ class HochschildHomologyGroup(StrictModel):
 
 
 class HochschildHomologyResult(StrictModel):
-    """Hochschild homology groups with trivial coefficients."""
+    """Structurally bounded Hochschild homology groups with trivial coefficients.
+
+    The exact rank computation is an explicit owner verifier, never a result
+    validation side effect.
+    """
 
     algebra: AlgebraStructure
     max_degree: int = Field(ge=1, le=MAX_HOCHSCHILD_DEGREE)
@@ -393,26 +405,43 @@ class HochschildHomologyResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_to_source_algebra(self) -> Self:
-        from jacobian.math.hochschild_complexes._operations import (
-            hochschild_homology_groups,
-        )
-
         if self.prime != self.algebra.prime:
             raise _validation_error(
                 "hochschild_complex.prime_binding",
                 "prime must match the retained algebra",
             )
-        # Reapply the enumeration admission bound before replaying so a
-        # directly supplied payload cannot bypass the request budget.
+        # Retain the same derived envelope for independently supplied claims.
         require_hochschild_budget(self.algebra.dimension, self.max_degree)
-        expected_groups = hochschild_homology_groups(self.algebra, self.max_degree)
-        if self.groups != expected_groups:
+        if len(self.groups) != self.max_degree + 1 or tuple(
+            group.degree for group in self.groups
+        ) != tuple(range(self.max_degree + 1)):
             raise _validation_error(
-                "hochschild_complex.homology_replay",
-                "groups must equal the exact bar-homology replay of the "
-                "retained algebra",
+                "hochschild_complex.group_degrees",
+                "groups must cover degrees 0..max_degree exactly once in order",
             )
+        for group in self.groups:
+            if group.betti > self.algebra.dimension**group.degree:
+                raise _validation_error(
+                    "hochschild_complex.betti_bound",
+                    "betti cannot exceed its Hochschild chain-group dimension",
+                )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        algebra: AlgebraStructure,
+        max_degree: int,
+        groups: tuple[HochschildHomologyGroup, ...],
+    ) -> Self:
+        """Construct a result emitted by the owner-local kernel."""
+
+        return cls(
+            algebra=algebra,
+            max_degree=max_degree,
+            groups=groups,
+            prime=algebra.prime,
+        )
 
 
 __all__ = [

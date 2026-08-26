@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import itertools
 from fractions import Fraction
-from typing import Any, Literal, Self
+from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -28,8 +28,6 @@ MAX_INPUT_EXPONENT = 20
 MAX_COEFFICIENT_DIGITS = 128
 MAX_OUTPUT_GENERATORS = 64
 MAX_OUTPUT_TERMS = 1024
-DEFAULT_WALL_SECONDS = 10.0
-
 _RATIONAL_ROOT_PROBES = (0, 1, -1)
 
 
@@ -523,7 +521,7 @@ class IdealMinimalPrimesResult(StrictModel):
     detail: str | None = None
 
     @model_validator(mode="after")
-    def require_outcome_shape_and_independent_verification(self) -> Self:
+    def require_outcome_shape(self) -> Self:
         if self.outcome != "COMPUTED":
             if (
                 self.components is not None
@@ -543,44 +541,22 @@ class IdealMinimalPrimesResult(StrictModel):
                 "computed minimal-prime family requires components and backend version"
             )
         _require_computed_minimal_prime_family(self.request, self.components)
-        _require_source_bound_minimal_primes(self.request, self.components)
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: IdealMinimalPrimesRequest,
+        components: tuple[RationalPolynomialIdeal, ...] | None,
+        backend_version: str | None,
+    ) -> Self:
+        """Build a computed result after operation-local verification."""
 
-def _require_source_bound_minimal_primes(
-    request: IdealMinimalPrimesRequest,
-    components: tuple[RationalPolynomialIdeal, ...],
-) -> None:
-    """Verify the defining minimal-prime invariants by independent evidence.
-
-    Repetition of one deterministic kernel establishes reproducibility only,
-    so a second bounded Singular pass decides each defining claim without
-    the producing ``minAssGTZE`` kernel: every component is prime and no
-    component contains another (pairwise non-containment), the components'
-    intersection equals the source radical (mutual Groebner reduction), and
-    the independent characteristic-set decomposition (``minAssCharE``)
-    returns the same family.
-    """
-
-    from jacobian.math.polynomials.ideals._singular import (
-        run_singular_minimal_primes_verification,
-    )
-
-    verdict = run_singular_minimal_primes_verification(
-        request.ideal,
-        components,
-        request.resource_budget,
-    )
-    if verdict == "REFUTED":
-        raise _validation_error(
-            "components must equal the complete minimal-prime family of the "
-            "retained source ideal over QQ: an independent primality, "
-            "minimality, or radical-intersection check failed"
-        )
-    if verdict != "VERIFIED":
-        raise _validation_error(
-            "the minimal-prime family could not be independently verified "
-            f"within the enforced backend budget: {verdict}"
+        return cls(
+            request=request,
+            outcome="COMPUTED",
+            components=components,
+            backend_version=backend_version,
         )
 
 
@@ -623,29 +599,9 @@ def computed_minimal_primes_result(
     components: tuple[RationalPolynomialIdeal, ...] | None,
     backend_version: str | None,
 ) -> IdealMinimalPrimesResult:
-    """Build the typed computed result from this request's own passes.
+    """Compatibility shim for the operation-local trusted factory."""
 
-    The caller has just completed the bounded producing pass plus the
-    independent defining-invariant verification pass under one operation-
-    level deadline, so this trusted factory skips only a repeated backend
-    verification while still enforcing the computed shape plus the ring,
-    exact-result-envelope, canonical-ordering, and uniqueness invariants;
-    independently supplied results always validate through the full model
-    validator.
-    """
-
-    if components is None or backend_version is None:
-        raise _validation_error(
-            "computed minimal-prime family requires components and backend version"
-        )
-    _require_computed_minimal_prime_family(request, components)
-    return IdealMinimalPrimesResult.model_construct(
-        request=request,
-        outcome="COMPUTED",
-        components=components,
-        backend_version=backend_version,
-        detail=None,
-    )
+    return IdealMinimalPrimesResult._from_kernel(request, components, backend_version)
 
 
 __all__ = [
@@ -724,91 +680,54 @@ class GroebnerBasisResult(StrictModel):
                 )
             if self.request.monomial_order != self.monomial_order:
                 raise _validation_error("basis must carry its request's monomial order")
-            _require_source_bound_basis(
-                self.basis,
-                self.request.ideal,
-                self.request.monomial_order,
-                float(self.request.resource_budget.wall_seconds),
-            )
+            _require_basis_shape(self.basis, self.request)
         elif self.basis is not None or self.detail is None:
             raise _validation_error("timed-out computation carries only a safe detail")
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: GroebnerBasisRequest,
+        basis: RationalPolynomialIdeal,
+        monomial_order: Literal["lex", "grlex", "grevlex"],
+    ) -> Self:
+        """Build a computed result after the bounded kernel has produced it."""
 
-def _require_zero_free_basis(
-    basis_exprs: list[Any],
-    source_exprs: list[Any],
-) -> list[Any] | None:
-    """Gate zero entries, returning ``None`` when no replay is needed.
-
-    A reduced Gröbner basis never contains the zero polynomial. Only the
-    producer's singleton-zero representation of the zero ideal itself may
-    carry one; any other zero entry silently weakens every invariant check.
-    """
-    if not basis_exprs:
-        if any(not expr.is_zero for expr in source_exprs):
-            raise _validation_error("basis must contain every source-ideal generator")
-        return None
-    if any(expr.is_zero for expr in basis_exprs):
-        if not (len(basis_exprs) == 1 and all(expr.is_zero for expr in source_exprs)):
-            raise _validation_error(
-                "a reduced Gröbner basis contains no zero generator; only "
-                "the zero ideal admits the singleton-zero representation"
-            )
-        return None
-    return basis_exprs
+        return cls(
+            request=request,
+            basis=basis,
+            generator_count=len(basis.generators),
+            monomial_order=monomial_order,
+        )
 
 
-def _require_source_bound_basis(
+def _is_zero_polynomial(polynomial: RationalPolynomial) -> bool:
+    return not polynomial.polynomial.terms
+
+
+def _require_basis_shape(
     basis: RationalPolynomialIdeal,
-    source: RationalPolynomialIdeal,
-    monomial_order: str,
-    wall_seconds: float,
+    request: GroebnerBasisRequest,
 ) -> None:
-    """Gate cheap structural invariants, then replay the exact ones.
+    """Gate result-local ring, zero, and exact-result envelope invariants."""
 
-    Reducedness, the Buchberger criterion, and both ideal inclusions are
-    exact work with unbounded intermediate growth, so they run as ONE
-    bounded killable-worker pass under the declared budget instead of
-    unbounded parent-process SymPy calls.
-    """
-    from jacobian.math.polynomials._conversions import (
-        rational_polynomial_to_sympy,
-    )
-
-    if basis.variables != source.variables:
+    if basis.variables != request.ideal.variables:
         raise _validation_error("basis must use the source ideal's ordered ring")
-    basis_exprs = [rational_polynomial_to_sympy(g).as_expr() for g in basis.generators]
-    source_exprs = [
-        rational_polynomial_to_sympy(g).as_expr() for g in source.generators
-    ]
-    nonzero = _require_zero_free_basis(basis_exprs, source_exprs)
-    if nonzero is None:
-        return
-    from jacobian.math.polynomials.ideals._operations import (
-        _run_sympy_kernel,
-    )
-
-    payload = {
-        "mode": "verify_groebner_basis",
-        "variables": list(source.variables),
-        "order": monomial_order,
-        "generators": [
-            generator.model_dump(mode="json") for generator in source.generators
-        ],
-        "basis": [generator.model_dump(mode="json") for generator in basis.generators],
-    }
-    try:
-        result = _run_sympy_kernel(payload, wall_seconds)
-    except Exception as error:
+    if any(_is_zero_polynomial(generator) for generator in basis.generators) and not (
+        len(basis.generators) == 1
+        and all(
+            _is_zero_polynomial(generator) for generator in request.ideal.generators
+        )
+    ):
         raise _validation_error(
-            "the retained sources could not be verified against this basis "
-            f"within the enforced wall-time budget: {error}"
-        ) from None
-    if not result.get("equal"):
+            "a reduced Gröbner basis contains no zero generator; only "
+            "the zero ideal admits the singleton-zero representation"
+        )
+    total_terms = sum(len(generator.polynomial.terms) for generator in basis.generators)
+    if total_terms > request.resource_budget.maximum_output_terms:
         raise _validation_error(
-            "basis and source ideals differ: "
-            + str(result.get("detail", "inclusion replay failed"))
+            "basis exceeds the declared aggregate exact-result term envelope"
         )
 
 
@@ -888,47 +807,27 @@ class IdealNormalFormResult(StrictModel):
                 raise _validation_error(
                     "a polynomial not in the ideal must have a nonzero remainder"
                 )
-            _require_source_bound_remainder(self.request, self.remainder)
+            if self.remainder.variables != self.request.ideal.variables:
+                raise _validation_error(
+                    "remainder must use the retained ideal's ordered ring"
+                )
         elif self.remainder is not None or self.detail is None:
             raise _validation_error("timed-out computation carries only a safe detail")
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: IdealNormalFormRequest,
+        remainder: RationalPolynomial,
+    ) -> Self:
+        """Build a computed normal form from the bounded kernel output."""
 
-def _require_source_bound_remainder(
-    request: IdealNormalFormRequest,
-    remainder: RationalPolynomial,
-) -> None:
-    """Replay the defining Gröbner reduction inside the bounded kernel.
-
-    The exact reduction has unbounded intermediate work, so it reuses the
-    producer's killable-worker mode under the declared wall budget instead
-    of an unbounded parent-process SymPy call.
-    """
-    from jacobian.math.polynomials.ideals._operations import (
-        _run_sympy_kernel,
-    )
-
-    payload = {
-        "mode": "normal_form",
-        "variables": list(request.ideal.variables),
-        "order": request.monomial_order,
-        "generators": [
-            generator.model_dump(mode="json") for generator in request.ideal.generators
-        ],
-        "polynomial": request.polynomial.model_dump(mode="json"),
-    }
-    try:
-        result_payload = _run_sympy_kernel(payload, DEFAULT_WALL_SECONDS)
-    except Exception as error:
-        raise _validation_error(
-            "the remainder could not be re-verified within the enforced "
-            f"wall-time budget: {error}"
-        ) from None
-    expected = RationalPolynomial.model_validate(result_payload["remainder"])
-    if remainder != expected:
-        raise _validation_error(
-            "remainder must be the defining reduction of the retained "
-            "polynomial modulo the retained ideal"
+        return cls(
+            request=request,
+            remainder=remainder,
+            in_ideal=_is_zero_polynomial(remainder),
+            monomial_order=request.monomial_order,
         )
 
 
@@ -992,82 +891,29 @@ class EliminationIdealResult(StrictModel):
                     raise _validation_error(
                         "eliminated variables must not appear in the elimination ideal"
                     )
-            _require_source_bound_elimination(self.request, self.elimination_ideal)
+            remaining = tuple(
+                variable
+                for variable in self.request.ideal.variables
+                if variable not in set(self.request.eliminated_variables)
+            )
+            if self.elimination_ideal.variables != remaining:
+                raise _validation_error(
+                    "elimination ideal must use exactly the remaining ordered ring"
+                )
         elif self.elimination_ideal is not None or self.detail is None:
             raise _validation_error("timed-out computation carries only a safe detail")
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: EliminationIdealRequest,
+        elimination_ideal: RationalPolynomialIdeal,
+    ) -> Self:
+        """Build a computed elimination result from the bounded kernel output."""
 
-def _require_source_bound_elimination(
-    request: EliminationIdealRequest,
-    elimination_ideal: RationalPolynomialIdeal,
-) -> None:
-    """Replay the exact intersection in the bounded kernel.
-
-    The lex Groebner intersection is unbounded exact work, so it reuses the
-    producer's killable-worker elimination mode under the declared wall
-    budget instead of an unbounded parent-process SymPy call.
-    """
-    from jacobian.math.polynomials.ideals._operations import (
-        _run_sympy_kernel,
-    )
-    from jacobian.math.polynomials.values import SparseRationalPolynomial
-
-    payload = {
-        "mode": "elimination",
-        "variables": list(request.ideal.variables),
-        "eliminated": list(request.eliminated_variables),
-        "generators": [
-            generator.model_dump(mode="json") for generator in request.ideal.generators
-        ],
-    }
-    try:
-        result_payload = _run_sympy_kernel(
-            payload, float(request.resource_budget.wall_seconds)
-        )
-    except Exception as error:
-        raise _validation_error(
-            "the elimination ideal could not be re-verified within the "
-            f"enforced wall-time budget: {error}"
-        ) from None
-    remaining = tuple(
-        v for v in request.ideal.variables if v not in set(request.eliminated_variables)
-    )
-    if result_payload.get("unit_ideal"):
-        from jacobian._exact import CanonicalRational
-        from jacobian.math.polynomials.values import RationalPolynomialTerm
-
-        replayed_generators = [
-            RationalPolynomial(
-                variables=remaining,
-                polynomial=SparseRationalPolynomial(
-                    terms=(
-                        RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num="1", den="1"),
-                            exponents=(0,) * len(remaining),
-                        ),
-                    )
-                ),
-            )
-        ]
-    elif result_payload.get("generators"):
-        replayed_generators = [
-            RationalPolynomial.model_validate(item)
-            for item in result_payload["generators"]
-        ]
-    else:
-        replayed_generators = [
-            RationalPolynomial(
-                variables=remaining,
-                polynomial=SparseRationalPolynomial(terms=()),
-            )
-        ]
-    replayed = RationalPolynomialIdeal(
-        variables=remaining,
-        generators=tuple(replayed_generators),
-    )
-    if elimination_ideal != replayed:
-        raise _validation_error(
-            "elimination ideal must equal the exact intersection "
-            "I \u2229 QQ[remaining variables] of the retained source ideal"
+        return cls(
+            request=request,
+            elimination_ideal=elimination_ideal,
+            eliminated_variables=request.eliminated_variables,
         )

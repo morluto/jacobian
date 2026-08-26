@@ -220,11 +220,21 @@ def compute_facet_incidence(
     assert isinstance(vertices, tuple)  # projected by the request validator
     dimension = len(vertices[0].coordinates)
     facets = _computed_facets_from_vertices(vertices, dimension)
-    return FacetIncidenceResult(
+    return FacetIncidenceResult._from_kernel(
         vertices=vertices,
         dimension=dimension,
         facets=facets,
     )
+
+
+def verify_facet_incidence_result(result: FacetIncidenceResult) -> bool:
+    """Verify a claimed facet profile in its admitted finite envelope."""
+
+    try:
+        expected = _computed_facets_from_vertices(result.vertices, result.dimension)
+    except ValueError:
+        return False
+    return result.facets == expected
 
 
 def _deduplicate_halfspaces(
@@ -808,10 +818,18 @@ def polytope_support(
 
     if polytope.space != covector.space:
         raise ValueError("polytope and covector must use the same coordinate space")
+    # Native callers bypass wire-request validation, so apply the same
+    # operation-local component admission before exact hull work.
+    from jacobian.math.polytope._models import (
+        require_support_components_within_envelope,
+    )
+
+    require_support_components_within_envelope(polytope, covector)
+    require_full_dimensional_extreme_vertices(polytope)
     value, vertices = support_data(polytope, covector)
     from jacobian.math.polytope._models import RationalExposedFace
 
-    return PolytopeSupportResult(
+    return PolytopeSupportResult._from_kernel(
         polytope=polytope,
         covector=covector,
         support_value=CanonicalRational.from_fraction(value),
@@ -819,6 +837,21 @@ def polytope_support(
             space=polytope.space,
             vertices=vertices,
         ),
+    )
+
+
+def verify_polytope_support_result(result: PolytopeSupportResult) -> bool:
+    """Verify a claimed support value and exposed face in the admitted envelope."""
+
+    try:
+        require_full_dimensional_extreme_vertices(result.polytope)
+    except ValueError:
+        return False
+    value, vertices = support_data(result.polytope, result.covector)
+    return (
+        result.support_value == CanonicalRational.from_fraction(value)
+        and result.exposed_face.space == result.polytope.space
+        and result.exposed_face.vertices == vertices
     )
 
 
@@ -913,4 +946,6 @@ __all__ = [
     "compute_facet_incidence",
     "compute_polytope_volume",
     "convex_hull_volume",
+    "verify_facet_incidence_result",
+    "verify_polytope_support_result",
 ]

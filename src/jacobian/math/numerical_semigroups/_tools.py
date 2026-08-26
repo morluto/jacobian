@@ -6,21 +6,24 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.numerical_semigroups._element_invariant_models import (
+    ElementElasticityRequest,
+    ElementElasticityResult,
+)
 from jacobian.math.numerical_semigroups._element_invariant_operations import (
     compute_element_elasticity,
+)
+from jacobian.math.numerical_semigroups._factorization_models import (
+    FactorizationComputeRequest,
+    FactorizationComputeResult,
+    FactorizationGraphComputeRequest,
+    FactorizationGraphComputeResult,
 )
 from jacobian.math.numerical_semigroups._factorization_operations import (
     compute_factorization_graph,
     compute_factorizations,
 )
-from jacobian.math.numerical_semigroups._global_invariant_operations import (
-    compute_betti_elements,
-    compute_catenary_degree,
-    compute_delta_set,
-    compute_elasticity,
-)
-from jacobian.math.numerical_semigroups._models import (
-    MAX_GENERATOR,
+from jacobian.math.numerical_semigroups._global_invariant_models import (
     BettiElementsRequest,
     BettiElementsResult,
     CatenaryDegreeRequest,
@@ -29,24 +32,29 @@ from jacobian.math.numerical_semigroups._models import (
     DeltaSetResult,
     ElasticityRequest,
     ElasticityResult,
-    ElementElasticityRequest,
-    ElementElasticityResult,
-    FactorizationComputeRequest,
-    FactorizationComputeResult,
-    FactorizationGraphComputeRequest,
-    FactorizationGraphComputeResult,
+)
+from jacobian.math.numerical_semigroups._global_invariant_operations import (
+    compute_betti_elements,
+    compute_catenary_degree,
+    compute_delta_set,
+    compute_elasticity,
+)
+from jacobian.math.numerical_semigroups._models import MAX_GENERATOR
+from jacobian.math.numerical_semigroups._presentation_models import (
     MinimalPresentationRequest,
     MinimalPresentationResult,
-    NumericalSemigroupSummaryRequest,
-    NumericalSemigroupSummaryResult,
     PresentationBinomialsRequest,
     PresentationBinomialsResult,
-    SemigroupMembershipRequest,
-    SemigroupMembershipResult,
 )
 from jacobian.math.numerical_semigroups._presentation_operations import (
     compute_minimal_presentation,
     compute_presentation_binomials,
+)
+from jacobian.math.numerical_semigroups._summary_models import (
+    NumericalSemigroupSummaryRequest,
+    NumericalSemigroupSummaryResult,
+    SemigroupMembershipRequest,
+    SemigroupMembershipResult,
 )
 from jacobian.math.numerical_semigroups._summary_operations import (
     compute_membership,
@@ -122,7 +130,8 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _operation(
         "number_theory.numerical_semigroup.factorizations.compute",
         "Compute complete factorization family Z(s)",
-        f"Given positive gcd-one generators, each at most {MAX_GENERATOR}, and "
+        f"Given positive gcd-one generators (general-path generators each at most {MAX_GENERATOR}; "
+        "a presentation containing 1 uses the constant-size free-semigroup path), and "
         "an element, compute the complete bounded factorization family Z(s) on "
         "the increasing minimal generator axis. Redundant or reordered generators "
         "normalize before exact output validation.",
@@ -204,8 +213,9 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _operation(
         "number_theory.numerical_semigroup.presentation_binomials.compute",
         "Convert presentation to sparse binomials",
-        "Normalize a positive gcd-one generator presentation, each at most "
-        f"{MAX_GENERATOR}, to its minimal axis, validate relations against that "
+        "Normalize a positive gcd-one generator presentation (general-path generators each at most "
+        f"{MAX_GENERATOR}; a presentation containing 1 uses the constant-size free-semigroup path) "
+        "to its minimal axis, validate relations against that "
         "axis, and convert each relation (u,v) to the toric binomial X^u-X^v "
         "with coefficients 1 and -1.",
         PresentationBinomialsRequest,
@@ -282,7 +292,7 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "elasticity_15_in_3_5",
-                "Elasticity of 15 in <3,5>; positive gcd-one generators, each at "
+                "Elasticity of 15 in <3,5>; positive gcd-one general-path generators, each at "
                 f"most {MAX_GENERATOR}, normalize to the minimal axis and the "
                 "value must be a positive member.",
                 {"generators": ["3", "5"], "value": "15"},
@@ -304,7 +314,7 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "global_elasticity_3_5",
-                "Global elasticity of <3,5>; positive gcd-one generators, each at "
+                "Global elasticity of <3,5>; positive gcd-one general-path generators, each at "
                 f"most {MAX_GENERATOR}, normalize to the minimal axis.",
                 {"generators": ["3", "5"]},
             ),

@@ -383,7 +383,7 @@ class _SPQRBuilder:
         pairs = tuple(
             sorted((left, right) for left, right in self._pairs.items() if left < right)
         )
-        return SPQRTreeResult(
+        return SPQRTreeResult._from_kernel(
             source_graph=graph,
             status="SPQR_TREE",
             nodes=nodes,
@@ -646,7 +646,7 @@ class _SPQRBuilder:
 
 def _negative_spqr_result(graph: UndirectedGraph) -> SPQRTreeResult:
     if graph.vertex_count < 3:
-        return SPQRTreeResult(
+        return SPQRTreeResult._from_kernel(
             source_graph=graph,
             status="NOT_BICONNECTED",
             witness_kind="MINIMUM_SIZE",
@@ -657,7 +657,7 @@ def _negative_spqr_result(graph: UndirectedGraph) -> SPQRTreeResult:
         sorted(nx.connected_components(value), key=lambda component: min(component))
     )
     if len(components) > 1:
-        return SPQRTreeResult(
+        return SPQRTreeResult._from_kernel(
             source_graph=graph,
             status="NOT_BICONNECTED",
             witness_kind="DISCONNECTED",
@@ -666,7 +666,7 @@ def _negative_spqr_result(graph: UndirectedGraph) -> SPQRTreeResult:
     articulation = min(nx.articulation_points(value), default=None)
     if articulation is None:
         raise ValueError("positive SPQR precondition failed without a graph witness")
-    return SPQRTreeResult(
+    return SPQRTreeResult._from_kernel(
         source_graph=graph,
         status="NOT_BICONNECTED",
         witness_kind="ARTICULATION",
@@ -736,6 +736,22 @@ def _validate_spqr_tree(result: SPQRTreeResult) -> None:
     if tuple(sorted(derived_tree)) != result.tree_edges:
         raise ValueError("SPQR tree edges must be induced by virtual-edge pairs")
     _validate_normalized_tree(nodes, result.tree_edges)
+
+
+def verify_spqr_tree_result(result: SPQRTreeResult) -> bool:
+    """Independently replay one bounded, externally supplied SPQR claim.
+
+    Construction trusts the owner-local decomposition kernel.  This verifier
+    is the separate, explicit path for callers that need to establish the
+    defining source, skeleton, and normalized-tree invariants of supplied
+    serialized data.
+    """
+
+    try:
+        _validate_spqr_tree(result)
+    except (ValueError, nx.NetworkXException):
+        return False
+    return True
 
 
 def _collect_spqr_edges(

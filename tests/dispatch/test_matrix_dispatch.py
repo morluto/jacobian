@@ -5,8 +5,12 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
-from jacobian.math.matrices._operation_models import MAX_MATRIX_DIMENSION
+from jacobian.math.matrices._operation_models import (
+    MAX_DETERMINANT_MATRIX_DIMENSION,
+    MAX_MATRIX_DIMENSION,
+)
 from jacobian.math.matrices.values import MAX_RATIONAL_MATRIX_ORDER
 
 
@@ -88,3 +92,37 @@ def test_dispatch_returns_typed_results_at_the_boundary_order() -> None:
     )
     assert result.output["degree"] == MAX_MATRIX_DIMENSION
     assert len(result.output["coefficients_descending"]) == MAX_MATRIX_DIMENSION + 1
+
+
+def test_native_and_dispatch_determinants_share_the_canonical_boundary() -> None:
+    import sympy
+
+    from jacobian.math import matrices
+
+    native = matrices.determinant(sympy.eye(MAX_DETERMINANT_MATRIX_DIMENSION))
+    dispatched = invoke_operation(
+        "matrix.determinant.compute",
+        _identity_payload(MAX_DETERMINANT_MATRIX_DIMENSION),
+        Catalog.open(),
+    )
+
+    assert dispatched.output["determinant"] == {"num": str(native), "den": "1"}
+
+
+def test_dispatch_preserves_the_typed_singular_inverse_rejection() -> None:
+    """A proved singularity is an owner error, never an SDK/host fault."""
+
+    with pytest.raises(OperationDomainValidationError) as excinfo:
+        invoke_operation(
+            "matrix.inverse.compute",
+            {"matrix": {"entries": [["1", "2"], ["2", "4"]]}},
+            Catalog.open(),
+        )
+
+    assert excinfo.value.errors() == (
+        {
+            "loc": ("matrix",),
+            "type": "matrix.singular_matrix",
+            "msg": "matrix is singular; inverse does not exist",
+        },
+    )

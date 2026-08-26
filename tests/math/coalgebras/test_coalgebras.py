@@ -24,6 +24,9 @@ from jacobian.math.coalgebras._operations import (
     compute_comultiplication,
     compute_counit,
     find_group_like_elements,
+    verify_comultiplication_result,
+    verify_counit_result,
+    verify_group_like_elements_result,
 )
 
 
@@ -205,7 +208,7 @@ class TestGroupLikeElements:
 
 
 class TestSourceBoundResults:
-    """Results retain their coalgebra and replay the defining relations."""
+    """Results retain their carrier; semantic claims use explicit verifiers."""
 
     def _two_dim_coalgebra(self) -> Coalgebra:
         return Coalgebra(
@@ -231,16 +234,19 @@ class TestSourceBoundResults:
             GroupLikeElementsResult.model_validate(group_like.model_dump())
             == group_like
         )
+        assert verify_comultiplication_result(comult)
+        assert verify_counit_result(counit)
+        assert verify_group_like_elements_result(group_like)
 
     def test_detached_empty_group_like_result_is_rejected(self):
         with pytest.raises(ValidationError):
             GroupLikeElementsResult(elements=(), count=0)
 
-    def test_forged_group_like_set_is_rejected(self):
-        """A nonempty coalgebra cannot validate an empty enumeration."""
+    def test_forged_group_like_set_fails_explicit_verification(self):
+        """Structural parsing does not replay the exhaustive conclusion."""
         ca = self._two_dim_coalgebra()
-        with _raises_code("coalgebra.group_like_set_mismatch"):
-            GroupLikeElementsResult(coalgebra=ca, elements=(), count=0)
+        claimed = GroupLikeElementsResult(coalgebra=ca, elements=(), count=0)
+        assert not verify_group_like_elements_result(claimed)
 
     def test_detached_result_reapplies_scan_work_budget(self):
         """A serialized result validates its coalgebra as a plain Coalgebra,
@@ -260,28 +266,28 @@ class TestSourceBoundResults:
         with _raises_code("coalgebra.scan_work_budget_exceeded"):
             GroupLikeElementsResult(coalgebra=ca, elements=(), count=0)
 
-    def test_forged_comultiplication_coefficients_are_rejected(self):
+    def test_forged_comultiplication_coefficients_fail_explicit_verification(self):
         from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
         ca = self._two_dim_coalgebra()
-        with _raises_code("coalgebra.comultiplication_mismatch"):
-            ComultiplicationResult(
-                coalgebra=ca,
-                element_index=0,
-                matrix=PrimeFieldMatrix(
-                    prime=ca.prime,
-                    entries=((4, 0), (0, 0)),
-                    columns=2,
-                ),
-                dimension=2,
-            )
+        claimed = ComultiplicationResult(
+            coalgebra=ca,
+            element_index=0,
+            matrix=PrimeFieldMatrix(
+                prime=ca.prime,
+                entries=((4, 0), (0, 0)),
+                columns=2,
+            ),
+            dimension=2,
+        )
+        assert not verify_comultiplication_result(claimed)
 
-    def test_forged_counit_value_is_rejected(self):
+    def test_forged_counit_value_fails_explicit_verification(self):
         ca = self._two_dim_coalgebra()
-        with _raises_code("coalgebra.counit_mismatch"):
-            CounitResult(coalgebra=ca, element_index=0, value=3)
+        claimed = CounitResult(coalgebra=ca, element_index=0, value=3)
+        assert not verify_counit_result(claimed)
 
-    def test_result_from_other_coalgebra_is_rejected(self):
+    def test_result_from_other_coalgebra_fails_explicit_verification(self):
         ca = self._two_dim_coalgebra()
         other = Coalgebra(
             prime=5,
@@ -293,12 +299,12 @@ class TestSourceBoundResults:
             counit=(1, 0),
         )
         result = compute_counit(CounitRequest(coalgebra=ca, element_index=1))
-        with _raises_code("coalgebra.counit_mismatch"):
-            CounitResult(
-                coalgebra=other,
-                element_index=result.element_index,
-                value=result.value,
-            )
+        claimed = CounitResult(
+            coalgebra=other,
+            element_index=result.element_index,
+            value=result.value,
+        )
+        assert not verify_counit_result(claimed)
 
 
 class TestScanWorkBeforeReplay:

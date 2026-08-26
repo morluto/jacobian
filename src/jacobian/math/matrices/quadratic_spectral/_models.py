@@ -7,6 +7,11 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.matrices.quadratic_spectral._bounds import (
+    require_inertia_matrix,
+    require_singular_spectrum_matrix,
+    require_symmetric_spectrum_matrix,
+)
 from jacobian.math.matrices.values import RealQuadraticMatrix
 
 
@@ -23,10 +28,6 @@ class RealQuadraticSymmetricSpectrumRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admitted_matrix(self) -> Self:
-        from jacobian.math.matrices.quadratic_spectral.operations import (
-            require_symmetric_spectrum_matrix,
-        )
-
         require_symmetric_spectrum_matrix(self.matrix)
         return self
 
@@ -44,10 +45,6 @@ class RealQuadraticSingularSpectrumRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admitted_matrix(self) -> Self:
-        from jacobian.math.matrices.quadratic_spectral.operations import (
-            require_singular_spectrum_matrix,
-        )
-
         require_singular_spectrum_matrix(self.matrix)
         return self
 
@@ -64,10 +61,6 @@ class RealQuadraticInertiaRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admitted_matrix(self) -> Self:
-        from jacobian.math.matrices.quadratic_spectral.operations import (
-            require_inertia_matrix,
-        )
-
         require_inertia_matrix(self.matrix)
         return self
 

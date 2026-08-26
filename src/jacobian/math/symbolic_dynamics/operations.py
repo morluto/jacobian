@@ -13,22 +13,21 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
 )
 from jacobian.math.polynomials.values import RationalFunction, RationalPolynomial
+from jacobian.math.symbolic_dynamics._bounds import (
+    enumeration_size,
+    normalize_forbidden_blocks,
+    presentation_memory,
+    require_bounded_presentation,
+    require_bounded_support,
+    require_zeta_budget,
+)
 from jacobian.math.symbolic_dynamics.values import (
     MAX_ADJACENCY_STATES,
-    MAX_ENUMERATED_BLOCKS,
-    MAX_PERIOD,
-    MAX_PRESENTATION_CELLS,
     AdjacencyShift,
     BlockPresentation,
     ForbiddenBlockShift,
     LabeledTransition,
 )
-
-MAX_ZETA_REPLAY_PERIOD = MAX_PERIOD
-MAX_ZETA_COEFFICIENT_DIGITS = 128
-MAX_ZETA_RESULT_DIGITS = 100_000
-MAX_ZETA_RESULT_BYTES = 512_000
-MAX_ZETA_WORK = 13_000_000
 
 
 def _contains(word: tuple[str, ...], factor: tuple[str, ...]) -> bool:
@@ -36,55 +35,6 @@ def _contains(word: tuple[str, ...], factor: tuple[str, ...]) -> bool:
         word[start : start + len(factor)] == factor
         for start in range(len(word) - len(factor) + 1)
     )
-
-
-def enumeration_size(alphabet_size: int, block_length: int) -> int:
-    if block_length < 0:
-        raise ValueError("block length must be nonnegative")
-    size = 1
-    for _ in range(block_length):
-        size *= alphabet_size
-        if size > MAX_ENUMERATED_BLOCKS:
-            raise ValueError("requested block enumeration exceeds the work bound")
-    return size
-
-
-def normalize_forbidden_blocks(
-    shift: ForbiddenBlockShift,
-) -> tuple[tuple[str, ...], ...]:
-    rank = {symbol: index for index, symbol in enumerate(shift.alphabet)}
-    ordered = sorted(
-        set(shift.forbidden_blocks),
-        key=lambda block: (len(block), tuple(rank[symbol] for symbol in block)),
-    )
-    minimal: list[tuple[str, ...]] = []
-    for block in ordered:
-        if not any(_contains(block, forbidden) for forbidden in minimal):
-            minimal.append(block)
-    return tuple(minimal)
-
-
-def _presentation_memory(shift: ForbiddenBlockShift) -> int:
-    return max(
-        0,
-        max(
-            (len(block) - 1 for block in normalize_forbidden_blocks(shift)),
-            default=0,
-        ),
-    )
-
-
-def _require_bounded_support(shift: ForbiddenBlockShift) -> int:
-    memory = _presentation_memory(shift)
-    enumeration_size(len(shift.alphabet), memory + 1)
-    return memory
-
-
-def _require_bounded_presentation(shift: ForbiddenBlockShift, memory: int) -> None:
-    state_count = enumeration_size(len(shift.alphabet), memory)
-    enumeration_size(len(shift.alphabet), memory + 1)
-    if state_count * state_count > MAX_PRESENTATION_CELLS:
-        raise ValueError("presentation adjacency exceeds the result bound")
 
 
 def block_language(
@@ -96,7 +46,7 @@ def block_language(
     forbidden = normalize_forbidden_blocks(shift)
     if () in forbidden:
         return ()
-    memory = _require_bounded_support(shift)
+    memory = require_bounded_support(shift)
     states, _, left_infinite, right_infinite = _presentation_support(shift, memory)
     if block_length == 0:
         return (
@@ -225,8 +175,8 @@ def _presentation_from_states_and_words(
 
 
 def finite_type_presentation(shift: ForbiddenBlockShift) -> BlockPresentation:
-    memory = _presentation_memory(shift)
-    _require_bounded_presentation(shift, memory)
+    memory = presentation_memory(shift)
+    require_bounded_presentation(shift, memory)
     states = block_language(shift, memory)
     extensions = block_language(shift, memory + 1)
     return _presentation_from_states_and_words(shift, memory, states, extensions)
@@ -237,10 +187,10 @@ def higher_block_presentation(
 ) -> BlockPresentation:
     if block_length < 1:
         raise ValueError("higher-block length must be positive")
-    required_memory = _presentation_memory(shift)
+    required_memory = presentation_memory(shift)
     if block_length < required_memory:
         raise ValueError("higher-block length is below the presentation memory")
-    _require_bounded_presentation(shift, block_length)
+    require_bounded_presentation(shift, block_length)
     states = block_language(shift, block_length)
     extensions = block_language(shift, block_length + 1)
     return _presentation_from_states_and_words(shift, block_length, states, extensions)
@@ -322,34 +272,6 @@ def _determinant_coefficients(shift: AdjacencyShift) -> tuple[int, ...]:
     return tuple(int(coefficient) for coefficient in characteristic.all_coeffs())
 
 
-def _require_zeta_budget(shift: AdjacencyShift, replay_period: int) -> None:
-    if not 1 <= replay_period <= MAX_ZETA_REPLAY_PERIOD:
-        raise ValueError("replay period is outside the supported bounds")
-    states = len(shift.matrix)
-    maximum_entry = max(entry for row in shift.matrix for entry in row)
-    # The degree-k coefficient is a sum of principal k-minors. Its absolute
-    # value is at most C(states,k) k! M^k <= (states M)^k.
-    coefficient_digits = states * len(str(states * max(1, maximum_entry))) + 1
-    if coefficient_digits > MAX_ZETA_COEFFICIENT_DIGITS:
-        raise ValueError("zeta polynomial exceeds the coefficient digit bound")
-    work = states**4 + states**3 * replay_period
-    if work > MAX_ZETA_WORK:
-        raise ValueError("zeta determinant and replay exceed the work bound")
-    maximum_row_sum = max(sum(row) for row in shift.matrix)
-    count_bound = states * max(1, maximum_row_sum) ** replay_period
-    count_digits = len(str(count_bound))
-    result_digits = (
-        2 * (states + 1) * coefficient_digits + 2 * replay_period * count_digits
-    )
-    if result_digits > MAX_ZETA_RESULT_DIGITS:
-        raise ValueError("zeta result exceeds the aggregate digit bound")
-    source_bytes = 4096 + states**2 * (len(str(maximum_entry)) + 3)
-    polynomial_bytes = 2 * (states + 1) * (2 * coefficient_digits + 160)
-    replay_bytes = replay_period * (2 * count_digits + 160)
-    if source_bytes + polynomial_bytes + replay_bytes > MAX_ZETA_RESULT_BYTES:
-        raise ValueError("zeta result exceeds the byte bound")
-
-
 def _logarithmic_derivative_coefficients(
     determinant_coefficients: tuple[int, ...], period_count: int
 ) -> tuple[int, ...]:
@@ -374,7 +296,7 @@ def artin_mazur_zeta(
 ) -> tuple[RationalPolynomial, RationalFunction, tuple[int, ...]]:
     """Return ``det(I-tA)``, ``1/det(I-tA)``, and its fixed-point replay."""
 
-    _require_zeta_budget(shift, replay_period)
+    require_zeta_budget(shift, replay_period)
     from sympy import QQ, Poly, Symbol
 
     variable = Symbol("t")

@@ -17,6 +17,11 @@ from math import gcd
 def minimal_generating_system(generators: tuple[int, ...]) -> tuple[int, ...]:
     """Return the increasing minimal generating system for ``generators``."""
     values = tuple(sorted(set(generators)))
+    # A presentation containing 1 is the free numerical semigroup N.  This
+    # avoids allocating up to a redundant raw generator when the canonical
+    # axis is already known to be the singleton (1,).
+    if 1 in values:
+        return (1,)
     minimal: list[int] = []
     for generator in values:
         reachable = [False] * (generator + 1)
@@ -63,6 +68,8 @@ def factorization_count(generators: tuple[int, ...], target: int) -> int:
     """Count all nonnegative factorizations without materializing them."""
     if target < 0:
         return 0
+    if generators == (1,):
+        return 1
     counts = [0] * (target + 1)
     counts[0] = 1
     for generator in generators:
@@ -77,6 +84,8 @@ def factorizations(
     """Exhaustively enumerate all factorizations in lexicographic order."""
     if target < 0:
         return ()
+    if generators == (1,):
+        return ((target,),)
     result: list[tuple[int, ...]] = []
 
     def visit(index: int, remainder: int, prefix: tuple[int, ...]) -> None:
@@ -100,6 +109,8 @@ def factorization_lengths(generators: tuple[int, ...], target: int) -> tuple[int
     """Compute the complete factorization-length set by dynamic programming."""
     if target < 0:
         return ()
+    if generators == (1,):
+        return (target,)
     lengths: list[set[int]] = [set() for _ in range(target + 1)]
     lengths[0].add(0)
     for value in range(1, target + 1):
@@ -117,6 +128,8 @@ def factorization_length_extrema(
     """Compute the minimum and maximum factorization lengths without sets."""
     if target < 0:
         raise ValueError("target must be non-negative")
+    if generators == (1,):
+        return target, target
     minimum: list[int | None] = [None] * (target + 1)
     maximum: list[int | None] = [None] * (target + 1)
     minimum[0] = maximum[0] = 0

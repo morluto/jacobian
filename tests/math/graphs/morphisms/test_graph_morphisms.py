@@ -13,7 +13,10 @@ from jacobian.math.graphs.morphisms._models import (
     HomomorphismCheckRequest,
     HomomorphismCheckResult,
 )
-from jacobian.math.graphs.morphisms._operations import compute_homomorphism_check
+from jacobian.math.graphs.morphisms._operations import (
+    compute_homomorphism_check,
+    verify_homomorphism_check_result,
+)
 from jacobian.math.graphs.morphisms._tools import TOOLS
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -126,7 +129,23 @@ def test_vertex_map_rejects_incomplete_out_of_order_and_foreign_rows() -> None:
         )
 
 
-def test_homomorphism_result_replays_and_rejects_forged_conclusions() -> None:
+def test_homomorphism_result_is_structural_and_verifier_rejects_forged_claim() -> None:
+    forged = HomomorphismCheckResult(
+        status="EDGE_IMAGE_NOT_EDGE",
+        obstruction=GraphHomomorphismObstruction(
+            vertex_map=_vertex_map(
+                ("a", "b"),
+                (("a", "b"),),
+                ("x", "y"),
+                (("x", "y"),),
+                (("a", "x"), ("b", "y")),
+            ),
+            source_edge=("a", "b"),
+            image_vertices=("x", "y"),
+        ),
+    )
+    assert not verify_homomorphism_check_result(forged)
+
     with pytest.raises(ValidationError):
         HomomorphismCheckResult(
             status="EDGE_IMAGE_NOT_EDGE",
@@ -282,16 +301,17 @@ class TestFixedLengthCycle:
         result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.decision == "EXISTS"
 
-    def test_forged_negative_decision_is_rejected_by_replay(self):
-        import pytest
-
+    def test_forged_negative_decision_is_rejected_by_explicit_verifier(self):
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleResult
+        from jacobian.math.graphs.morphisms._operations import (
+            verify_fixed_length_cycle_result,
+        )
 
         triangle = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
-        with pytest.raises(ValueError):
-            FixedLengthCycleResult(
-                graph=triangle, decision="DOES_NOT_EXIST", length=3, cycle=()
-            )
+        forged = FixedLengthCycleResult(
+            graph=triangle, decision="DOES_NOT_EXIST", length=3, cycle=()
+        )
+        assert not verify_fixed_length_cycle_result(forged)
 
     def test_oversized_length_is_rejected_before_exponentiating(self):
         import time
@@ -300,9 +320,8 @@ class TestFixedLengthCycle:
 
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleResult
 
-        # length has no schema upper bound on results, so the replay
-        # validator must reject out-of-domain lengths before raising
-        # d_max to that power.
+        # Result parsing keeps the negative request envelope bounded before
+        # raising d_max to an untrusted exponent.
         triangle = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
         start = time.monotonic()
         with pytest.raises(ValueError):
@@ -314,7 +333,7 @@ class TestFixedLengthCycle:
             )
         assert time.monotonic() - start < 1.0
 
-    def test_negative_decision_replays_inside_request_domain(self):
+    def test_negative_decision_is_structural_inside_request_domain(self):
         from itertools import combinations
 
         import pytest
@@ -326,10 +345,11 @@ class TestFixedLengthCycle:
         )
         from jacobian.math.graphs.morphisms._operations import (
             compute_fixed_length_cycle,
+            verify_fixed_length_cycle_result,
         )
 
         # A path on 6 vertices has no triangle; the honest negative result
-        # must validate through replay like any operation-produced value.
+        # round-trips structurally and the owner verifier checks its claim.
         path_edges = [[chr(ord("a") + i), chr(ord("a") + i + 1)] for i in range(5)]
         g = self._g(list("abcdef"), path_edges)
         result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
@@ -338,6 +358,7 @@ class TestFixedLengthCycle:
             graph=g, decision=result.decision, length=result.length, cycle=result.cycle
         )
         assert revalidated.decision == "DOES_NOT_EXIST"
+        assert verify_fixed_length_cycle_result(revalidated)
 
         # Outside the bounded request domain a negative decision is not
         # exact: reject an oversized retained graph with no witness check
@@ -475,25 +496,21 @@ class TestSubgraphPatternFind:
         )
         assert result.decision == "EXISTS"
 
-    def test_request_admission_accounts_for_operation_and_replay_passes(self):
-        import pytest
-
+    def test_request_admission_charges_the_kernel_pass(self):
         from jacobian.math.graphs.morphisms._models import (
             MAX_CYCLE_SEARCH_PATHS,
             SubgraphPatternFindRequest,
         )
 
-        # P(11, 8) = 6,652,800 assignments fits inside the advertised total
-        # budget but not inside the per-pass share that also covers the
-        # validator's replay of a negative decision, so it must be rejected.
+        # P(11, 8) = 6,652,800 assignments fits in the one kernel pass. Result
+        # parsing does not replay the backend search.
         pat = self._g(
             [f"x{i}" for i in range(8)], [[f"x{i}", f"x{i + 1}"] for i in range(7)]
         )
         host_labels = [f"h{i:02d}" for i in range(11)]
         host = self._g(host_labels, [[f"h{i:02d}", f"h{i + 1:02d}"] for i in range(10)])
-        assert MAX_CYCLE_SEARCH_PATHS // 2 < 11 * 10 * 9 * 8 * 7 * 6 * 5 * 4
-        with pytest.raises(ValueError):
-            SubgraphPatternFindRequest(pattern=pat, host=host)
+        assert MAX_CYCLE_SEARCH_PATHS > 11 * 10 * 9 * 8 * 7 * 6 * 5 * 4
+        assert SubgraphPatternFindRequest(pattern=pat, host=host).pattern == pat
 
     def test_request_admission_reserves_output_headroom_for_source_echo(self):
         import pytest
@@ -509,19 +526,20 @@ class TestSubgraphPatternFind:
         with pytest.raises(ValueError):
             FixedLengthCycleRequest(graph=g, length=3)
 
-    def test_forged_negative_decision_is_rejected_by_replay(self):
-        import pytest
-
+    def test_forged_negative_decision_is_rejected_by_explicit_verifier(self):
         from jacobian.math.graphs.morphisms._models import SubgraphPatternFindResult
+        from jacobian.math.graphs.morphisms._operations import (
+            verify_subgraph_pattern_find_result,
+        )
 
         pat = self._g(["x", "y", "z"], [["x", "y"], ["x", "z"], ["y", "z"]])
         host = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
-        with pytest.raises(ValueError):
-            SubgraphPatternFindResult(
-                pattern=pat, host=host, decision="DOES_NOT_EXIST", vertex_map=()
-            )
+        forged = SubgraphPatternFindResult(
+            pattern=pat, host=host, decision="DOES_NOT_EXIST", vertex_map=()
+        )
+        assert not verify_subgraph_pattern_find_result(forged)
 
-    def test_negative_decision_replays_inside_request_domain(self):
+    def test_negative_decision_is_structural_inside_request_domain(self):
         import pytest
 
         from jacobian.math.graphs.morphisms._models import (
@@ -532,6 +550,7 @@ class TestSubgraphPatternFind:
         )
         from jacobian.math.graphs.morphisms._operations import (
             compute_subgraph_pattern_find,
+            verify_subgraph_pattern_find_result,
         )
 
         # An honest negative: a triangle pattern cannot embed in a path.
@@ -545,6 +564,7 @@ class TestSubgraphPatternFind:
             pattern=pat, host=host, decision=result.decision, vertex_map=()
         )
         assert revalidated.decision == "DOES_NOT_EXIST"
+        assert verify_subgraph_pattern_find_result(revalidated)
 
         # Outside the bounded request domain (pattern over the vertex cap)
         # a negative conclusion is not exact and must be rejected.
@@ -632,9 +652,9 @@ class TestBacktrackingNodeBudget:
         """K10 into K10-minus-an-edge cannot return a free negative.
 
         A failed search visits 1,863,219 partial mappings and scans all ten
-        host candidates at each one (~18.6M candidate checks, twice with the
-        validation replay). The kernel charges those candidate checks to the
-        per-pass budget and reports the typed non-conclusion instead of a
+        host candidates at each one (~18.6M candidate checks in one pass).
+        The kernel charges those candidate checks to the work budget and
+        reports the typed non-conclusion instead of a
         negative decision established by a partially searched space.
         """
         from jacobian.math.graphs.morphisms._models import (
@@ -655,15 +675,17 @@ class TestBacktrackingNodeBudget:
         result = compute_subgraph_pattern_find(request)
         assert result.decision == "BUDGET_EXCEEDED"
         assert result.vertex_map == ()
-        # The typed non-conclusion round-trips without an exhaustive replay.
+        # The typed non-conclusion round-trips without a backend replay.
         type(result).model_validate(result.model_dump())
 
-        import pytest
+        from jacobian.math.graphs.morphisms._operations import (
+            verify_subgraph_pattern_find_result,
+        )
 
-        with pytest.raises(ValueError):
-            type(result)(
-                pattern=request.pattern,
-                host=request.host,
-                decision="DOES_NOT_EXIST",
-                vertex_map=(),
-            )
+        forged = type(result)(
+            pattern=request.pattern,
+            host=request.host,
+            decision="DOES_NOT_EXIST",
+            vertex_map=(),
+        )
+        assert not verify_subgraph_pattern_find_result(forged)

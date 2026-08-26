@@ -4,38 +4,20 @@ import pytest
 from pydantic import ValidationError
 from tests.math.numerical_semigroups._support import numerical_semigroup_error
 
-from jacobian.math.numerical_semigroups._element_invariant_operations import (
-    compute_element_catenary_degree,
-    compute_element_delta_set,
-    compute_element_elasticity,
-)
-from jacobian.math.numerical_semigroups._factorization_operations import (
-    compute_factorization_distance,
-    compute_factorization_graph,
-    compute_factorization_lengths,
-    compute_factorizations,
-)
-from jacobian.math.numerical_semigroups._global_invariant_operations import (
-    compute_betti_elements,
-    compute_catenary_degree,
-    compute_delta_set,
-    compute_elasticity,
-)
-from jacobian.math.numerical_semigroups._models import (
-    MAX_GENERATOR,
-    BettiElementsRequest,
-    BettiElementsResult,
-    CatenaryDegreeRequest,
-    CatenaryDegreeResult,
-    DeltaSetRequest,
-    DeltaSetResult,
-    ElasticityRequest,
+from jacobian.math.numerical_semigroups._element_invariant_models import (
     ElementCatenaryDegreeRequest,
     ElementCatenaryDegreeResult,
     ElementDeltaSetRequest,
     ElementDeltaSetResult,
     ElementElasticityRequest,
     ElementElasticityResult,
+)
+from jacobian.math.numerical_semigroups._element_invariant_operations import (
+    compute_element_catenary_degree,
+    compute_element_delta_set,
+    compute_element_elasticity,
+)
+from jacobian.math.numerical_semigroups._factorization_models import (
     FactorizationComputeRequest,
     FactorizationComputeResult,
     FactorizationDistanceRequest,
@@ -43,6 +25,30 @@ from jacobian.math.numerical_semigroups._models import (
     FactorizationGraphComputeResult,
     FactorizationLengthsComputeRequest,
     FactorizationLengthsComputeResult,
+)
+from jacobian.math.numerical_semigroups._factorization_operations import (
+    compute_factorization_distance,
+    compute_factorization_graph,
+    compute_factorization_lengths,
+    compute_factorizations,
+)
+from jacobian.math.numerical_semigroups._global_invariant_models import (
+    BettiElementsRequest,
+    BettiElementsResult,
+    CatenaryDegreeRequest,
+    CatenaryDegreeResult,
+    DeltaSetRequest,
+    DeltaSetResult,
+    ElasticityRequest,
+)
+from jacobian.math.numerical_semigroups._global_invariant_operations import (
+    compute_betti_elements,
+    compute_catenary_degree,
+    compute_delta_set,
+    compute_elasticity,
+)
+from jacobian.math.numerical_semigroups._models import MAX_ELEMENT, MAX_GENERATOR
+from jacobian.math.numerical_semigroups._presentation_models import (
     MinimalPresentationRequest,
     MinimalPresentationResult,
     PresentationBinomialsRequest,
@@ -680,10 +686,21 @@ class TestGeneratorEnvelopeIsSchemaVisible:
             schema = model.model_json_schema()
             description = schema["properties"]["generators"]["description"]
             assert f"each at most {MAX_GENERATOR}" in description
+            assert "containing 1 canonicalizes to (1,)" in description
 
     def test_rejects_a_generator_above_the_published_ceiling(self):
         with numerical_semigroup_error():
             FactorizationComputeRequest(generators=("2", "501"), value="503")
+
+    def test_free_axis_admits_a_redundant_generator_just_past_the_general_cap(self):
+        result = compute_factorizations(
+            FactorizationComputeRequest(
+                generators=("1", str(MAX_GENERATOR + 1)),
+                value=str(MAX_ELEMENT + 1),
+            )
+        )
+        assert result.minimal_generators == ("1",)
+        assert result.factorizations == ((MAX_ELEMENT + 1,),)
 
     def test_broadened_declarations_state_the_per_generator_ceiling(self):
         from jacobian.math.numerical_semigroups._tools import TOOLS

@@ -81,7 +81,7 @@ def jacobi_matrix_from_family(family: OrthogonalPolynomialFamily) -> JacobiMatri
     n = len(polys)
 
     if n < 2:
-        return JacobiMatrix(
+        return JacobiMatrix._from_kernel(
             alphas=(),
             betas=(),
             matrix=(),
@@ -120,7 +120,7 @@ def jacobi_matrix_from_family(family: OrthogonalPolynomialFamily) -> JacobiMatri
             matrix[i + 1][i] = Fraction(1)
             matrix[i][i + 1] = betas[i + 1]
 
-    return JacobiMatrix(
+    return JacobiMatrix._from_kernel(
         alphas=tuple(_from_fraction(alpha) for alpha in alphas),
         betas=tuple(_from_fraction(beta) for beta in betas),
         matrix=tuple(

@@ -5,7 +5,6 @@ from jacobian.math.combinatorics.exact_cover import (
     ExactCoverRow,
     ExactCoverSearchStatus,
     GeneralizedExactCoverInstance,
-    GeneralizedExactCoverRequest,
     GeneralizedExactCoverResult,
     find_generalized_exact_cover,
 )
@@ -25,7 +24,6 @@ from jacobian.math.combinatorics.operations import (
 )
 from jacobian.math.combinatorics.recurrence_tables import (
     IndexedRecurrenceResidual,
-    PolynomialCoefficientRecurrenceTableRequest,
     PolynomialCoefficientRecurrenceTableResult,
     recurrence_table_residuals,
 )
@@ -35,10 +33,8 @@ __all__ = [
     "ExactCoverRow",
     "ExactCoverSearchStatus",
     "GeneralizedExactCoverInstance",
-    "GeneralizedExactCoverRequest",
     "GeneralizedExactCoverResult",
     "IndexedRecurrenceResidual",
-    "PolynomialCoefficientRecurrenceTableRequest",
     "PolynomialCoefficientRecurrenceTableResult",
     "bell_number",
     "bernoulli_number",

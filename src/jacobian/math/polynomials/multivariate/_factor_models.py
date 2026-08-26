@@ -1,11 +1,11 @@
-"""Contracts and bounded replay for multivariate factorization."""
+"""Structural contracts for multivariate factorization."""
 
 from __future__ import annotations
 
 from fractions import Fraction
 from functools import reduce
 from math import gcd, lcm
-from typing import Any, Literal, Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -23,9 +23,7 @@ from jacobian.math.polynomials.values import (
     require_polynomial_budget,
 )
 
-# Public output-term budget for one converted irreducible factor.  The
-# operation converter and result replay use the same bound, so a typed
-# output-capacity outcome can reproduce the exact limit that the producer hit.
+# Public output-term budget for one converted irreducible factor.
 _MAX_FACTOR_OUTPUT_TERMS = 1_024
 
 
@@ -134,9 +132,9 @@ class MultivariateFactorResult(StrictModel):
             maximum_exponent=_MAX_MULTIVARIATE_EXPONENT,
             maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
         )
+        if not self.reconstructed.polynomial.terms:
+            raise _validation_error("reconstructed polynomial must be nonzero")
         if self.status != "FACTORIZED":
-            from jacobian.math.polynomials.multivariate import _factor_backend
-
             if self.factors:
                 raise _validation_error(
                     "non-FACTORIZED outcomes carry no irreducible factors"
@@ -149,16 +147,12 @@ class MultivariateFactorResult(StrictModel):
                     "non-FACTORIZED outcomes declare no normalization or "
                     "product reconstruction"
                 )
-            if _factor_backend.primitive_content_fraction(self.reconstructed) != (
+            if _primitive_content_fraction(self.reconstructed) != (
                 self.coefficient.as_fraction()
             ):
                 raise _validation_error(
                     "outcome coefficient does not match the exact content "
                     "of the restated polynomial"
-                )
-            if self.status == "OUTPUT_BUDGET_EXCEEDED":
-                _verify_output_budget_exceeded_claim(
-                    self.coefficient, self.reconstructed
                 )
             return self
         if (
@@ -169,22 +163,41 @@ class MultivariateFactorResult(StrictModel):
                 "FACTORIZED outcomes declare content-and-monic-irreducibles "
                 "normalization and exact product reconstruction"
             )
-        if not self.reconstructed.polynomial.terms:
-            raise _validation_error("reconstructed polynomial must be nonzero")
         _check_factor_records(self.factors, self.reconstructed.variables)
         _require_aggregate_degree_consistent(self.factors, self.reconstructed)
         _require_distinct_canonical_order(self.factors)
-        _verify_monic_irreducibles(self.factors)
-        _verify_exact_reconstruction(
-            self.coefficient,
-            self.factors,
-            self.reconstructed,
-        )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        status: Literal["FACTORIZED", "OUTPUT_BUDGET_EXCEEDED", "EXECUTION_FAILED"],
+        coefficient: CanonicalRational,
+        factors: tuple[MultivariateIrreducibleFactor, ...],
+        reconstructed: RationalPolynomial,
+    ) -> Self:
+        """Build one result from the operation's already-checked kernel output.
+
+        The public model intentionally retains structural validation only.
+        An independently supplied claim can be checked with the explicit
+        owner verifier, which is the only path that may replay the bounded
+        factorization worker.
+        """
+
+        return cls(
+            status=status,
+            coefficient=coefficient,
+            factors=factors,
+            reconstructed=reconstructed,
+            normalization=(
+                "CONTENT_AND_MONIC_IRREDUCIBLES" if status == "FACTORIZED" else None
+            ),
+            product_reconstruction="EXACT" if status == "FACTORIZED" else None,
+        )
 
 
 _FactorContentKey = tuple[tuple[tuple[int, ...], str, str], ...]
-_SympyFactorKey = tuple[tuple[tuple[int, ...], int, int], ...]
 
 
 def _factor_content_key(record: MultivariateIrreducibleFactor) -> _FactorContentKey:
@@ -225,72 +238,16 @@ def _require_aggregate_degree_consistent(
             )
 
 
-def _monic_content_fraction(content: Any) -> Fraction:
-    """Extract the exact rational content returned by ``_monic_decomposition``."""
+def _primitive_content_fraction(polynomial: RationalPolynomial) -> Fraction:
+    """Return exact positive rational content without entering a backend."""
 
-    leading = getattr(content, "LC", None)
-    value = leading() if callable(leading) else content
-    return Fraction(int(value.p), int(value.q))
-
-
-def _verify_output_budget_exceeded_claim(
-    coefficient: CanonicalRational,
-    reconstructed: RationalPolynomial,
-) -> None:
-    """Re-derive a claimed ``OUTPUT_BUDGET_EXCEEDED`` status from its source."""
-
-    from jacobian.math.polynomials.multivariate import _factor_backend
-    from jacobian.math.polynomials.multivariate._factor_backend import (
-        FactorBackendExhaustedError,
-        FactorBackendInterruptedError,
-    )
-
-    if _factor_backend.primitive_content_fraction(reconstructed) != (
-        coefficient.as_fraction()
-    ):
-        raise _validation_error(
-            "budget-exceeded outcome coefficient does not match the exact "
-            "content of the restated polynomial"
-        )
-    try:
-        decomposition = _factor_backend.run_bounded_factorization(
-            reconstructed,
-            wall_seconds=_factor_backend.FACTOR_VERIFY_WALL_SECONDS,
-        )
-    except FactorBackendExhaustedError:
-        return
-    except FactorBackendInterruptedError as exc:
-        raise _validation_error(
-            "budget-exceeded outcome could not be re-derived because the "
-            "verification replay was itself stopped before completing"
-        ) from exc
-    from jacobian.math.polynomials._conversions import (
-        rational_polynomial_from_sympy,
-        rational_polynomial_to_sympy,
-    )
-    from jacobian.math.polynomials._sympy import _monic_decomposition
-
-    source = rational_polynomial_to_sympy(reconstructed)
-    _content, raw_factors, _reconstructed = _monic_decomposition(
-        source,
-        decomposition,
-        label="multivariate factorization",
-    )
-    for factor, _multiplicity in raw_factors:
-        try:
-            rational_polynomial_from_sympy(
-                factor,
-                reconstructed.variables,
-                maximum_terms=_MAX_FACTOR_OUTPUT_TERMS,
-            )
-        except ValueError as exc:
-            if "term operation budget" in str(exc):
-                return
-            raise
-    raise _validation_error(
-        "claimed output-budget exceedance is not reproduced by the exact "
-        "factorization of the restated polynomial"
-    )
+    fractions = [term.coefficient.as_fraction() for term in polynomial.polynomial.terms]
+    common_denominator = reduce(lcm, (value.denominator for value in fractions), 1)
+    scaled = [
+        value.numerator * (common_denominator // value.denominator)
+        for value in fractions
+    ]
+    return Fraction(gcd(*scaled), common_denominator)
 
 
 def _check_factor_records(
@@ -332,93 +289,6 @@ def _require_distinct_canonical_order(
     )
     if factors != ordered:
         raise _validation_error("irreducible factors must use canonical order")
-
-
-def _require_monic(poly: Any, factor: RationalPolynomial) -> None:
-    lc = poly.LC()
-    if getattr(lc, "p", None) != 1 or getattr(lc, "q", None) != 1:
-        raise _validation_error(f"irreducible factor {factor} is not monic")
-
-
-def _verify_monic_irreducibles(
-    factors: tuple[MultivariateIrreducibleFactor, ...],
-) -> None:
-    """Enforce CONTENT_AND_MONIC_IRREDUCIBLES on every listed factor."""
-
-    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
-
-    for record in factors:
-        poly = rational_polynomial_to_sympy(record.factor)
-        try:
-            _require_monic(poly, record.factor)
-            if not poly.is_irreducible:
-                raise _validation_error(f"factor {record.factor} is not irreducible")
-        except ValueError:
-            raise
-        except Exception as exc:  # pragma: no cover - defensive
-            raise _validation_error("invalid factor normalization check") from exc
-
-
-def _sympy_factor_key(poly: Any) -> _SympyFactorKey:
-    """Return the canonical hashable form of one monic QQ ``Poly``."""
-
-    return tuple(
-        sorted(
-            (tuple(monom), int(coeff.p), int(coeff.q)) for monom, coeff in poly.terms()
-        )
-    )
-
-
-def _verify_exact_reconstruction(
-    coefficient: CanonicalRational,
-    factors: tuple[MultivariateIrreducibleFactor, ...],
-    reconstructed: RationalPolynomial,
-) -> None:
-    """Replay the bounded factorization and compare its unique monic factors."""
-
-    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
-    from jacobian.math.polynomials._sympy import _monic_decomposition
-    from jacobian.math.polynomials.multivariate import _factor_backend
-    from jacobian.math.polynomials.multivariate._factor_backend import (
-        FactorBackendExhaustedError,
-        FactorBackendInterruptedError,
-    )
-
-    try:
-        decomposition = _factor_backend.run_bounded_factorization(
-            reconstructed,
-            wall_seconds=_factor_backend.FACTOR_VERIFY_WALL_SECONDS,
-        )
-        source = rational_polynomial_to_sympy(reconstructed)
-        content, raw_factors, _ = _monic_decomposition(
-            source,
-            decomposition,
-            label="multivariate factorization",
-        )
-        claimed: dict[_SympyFactorKey, int] = {}
-        for record in factors:
-            key = _sympy_factor_key(rational_polynomial_to_sympy(record.factor))
-            claimed[key] = claimed.get(key, 0) + record.multiplicity
-        replayed: dict[_SympyFactorKey, int] = {}
-        for factor, multiplicity in raw_factors:
-            key = _sympy_factor_key(factor)
-            replayed[key] = replayed.get(key, 0) + multiplicity
-        if (
-            _monic_content_fraction(content) != coefficient.as_fraction()
-            or claimed != replayed
-        ):
-            raise _validation_error(
-                "factorization product does not equal reconstructed polynomial"
-            )
-    except ValueError:
-        raise
-    except (FactorBackendExhaustedError, FactorBackendInterruptedError) as exc:
-        raise _validation_error(
-            "factorization verification could not reproduce the exact "
-            "factorization within the declared work budget"
-        ) from exc
-    except Exception as exc:  # pragma: no cover - defensive
-        raise _validation_error("invalid factorization reconstruction") from exc
 
 
 __all__ = [

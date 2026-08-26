@@ -8,6 +8,10 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.chain_complexes._algebra import (
+    require_chain_map_relation,
+    require_square_zero,
+)
 from jacobian.math.chain_complexes.values import (
     MAX_TENSOR_GROUP_DIMENSION,
     MAX_TENSOR_TOTAL_CELLS,
@@ -85,39 +89,22 @@ class ConstructChainComplexRequest(StrictModel):
         # A chain complex must satisfy d^2 = 0; unchecked candidate data
         # would let the public operation label arbitrary matrices as an
         # exact chain complex.
-        from jacobian.math.chain_complexes.operations import (
-            _matrix_multiply,
-            _matrix_to_fractions,
-        )
-
-        prime = self.prime
-        differentials = [
-            _matrix_to_fractions(
-                matrix,
-                self.basis_sizes[index],
-                self.basis_sizes[index + 1],
-                prime=prime,
+        try:
+            require_square_zero(
+                ChainComplexValue(
+                    coefficient_field=self.coefficient_field,
+                    prime=self.prime,
+                    degree_min=0,
+                    degree_max=len(self.basis_sizes) - 1,
+                    basis_sizes=self.basis_sizes,
+                    differential_matrices=self.differential_matrices,
+                ),
+                label="constructed",
             )
-            for index, matrix in enumerate(self.differential_matrices)
-        ]
-        for index in range(len(differentials) - 1):
-            composite = _matrix_multiply(
-                differentials[index],
-                differentials[index + 1],
-                prime=prime,
-                # Declared group widths keep zero-row/zero-width composites
-                # shape-faithful: an empty 0 x n map must not be re-inferred
-                # as zero-width during the construct-time replay.
-                left_declared_columns=self.basis_sizes[index + 1],
-                result_columns=self.basis_sizes[index + 2],
-            )
-            if any(any(entry != 0 for entry in row) for row in composite):
-                raise _validation_error(
-                    "differential_not_square_zero",
-                    "differential matrices must satisfy d^2 = 0: the "
-                    f"composite of degrees {index + 1} and {index} is "
-                    "nonzero",
-                )
+        except ValueError as error:
+            raise _validation_error(
+                "differential_not_square_zero", str(error)
+            ) from None
         return self
 
 
@@ -258,18 +245,7 @@ def _require_square_zero_at_admission(
     complex_value: ChainComplexValue, *, label: str
 ) -> None:
     """Homology-type outputs are defined only for genuine complexes."""
-    from jacobian.math.chain_complexes.operations import (
-        _parsed_differentials,
-        _require_square_zero,
-    )
-
-    _require_square_zero(
-        _parsed_differentials(complex_value),
-        complex_value.prime,
-        label=label,
-        group_columns=list(complex_value.basis_sizes),
-        degree_min=complex_value.degree_min,
-    )
+    require_square_zero(complex_value, label=label)
 
 
 class ComputeHomologyRequest(StrictModel):
@@ -307,13 +283,16 @@ def _require_admissible_cone_value(
     envelope must be established at admission rather than discovered
     during execution.
     """
-    from jacobian.math.chain_complexes.operations import _cone_group_sizes
     from jacobian.math.chain_complexes.values import (
         MAX_MATRIX_ENTRY_CHARS,
         ChainComplexValue,
     )
 
-    cone_basis_sizes = _cone_group_sizes(source, target)
+    cone_basis_sizes = tuple(
+        (target.basis_sizes[index] if index < len(target.basis_sizes) else 0)
+        + (source.basis_sizes[index - 1] if 0 < index <= len(source.basis_sizes) else 0)
+        for index in range(max(len(source.basis_sizes), len(target.basis_sizes)) + 1)
+    )
     degree_min = source.degree_min
     placeholder_diffs = tuple(
         tuple(("0",) * cone_basis_sizes[deg + 1] for _ in range(cone_basis_sizes[deg]))
@@ -378,47 +357,7 @@ class MappingConeRequest(StrictModel):
         # commutation relation d_target * f_{i+1} == f_i * d_source is part
         # of the accepted request domain: checking it here keeps an accepted
         # math.run request from dying in execution.
-        from jacobian.math.chain_complexes.operations import (
-            _matrix_to_fractions,
-            _require_chain_map_relation,
-        )
-
-        prime = self.source.prime
-        source_diffs = [
-            _matrix_to_fractions(
-                m,
-                self.source.basis_sizes[i],
-                self.source.basis_sizes[i + 1],
-                prime,
-            )
-            for i, m in enumerate(self.source.differential_matrices)
-        ]
-        target_diffs = [
-            _matrix_to_fractions(
-                m,
-                self.target.basis_sizes[i],
-                self.target.basis_sizes[i + 1],
-                prime,
-            )
-            for i, m in enumerate(self.target.differential_matrices)
-        ]
-        map_mats = [
-            _matrix_to_fractions(
-                m,
-                self.target.basis_sizes[i],
-                self.source.basis_sizes[i],
-                prime,
-            )
-            for i, m in enumerate(self.map_matrices)
-        ]
-        _require_chain_map_relation(
-            source_diffs,
-            target_diffs,
-            map_mats,
-            prime,
-            list(self.source.basis_sizes),
-            list(self.target.basis_sizes),
-        )
+        require_chain_map_relation(self.source, self.target, self.map_matrices)
         # The returned cone is exposed as a first-class canonical value, so
         # its derived bounds are part of the accepted request domain.
         _require_admissible_cone_value(self.source, self.target, self.map_matrices)

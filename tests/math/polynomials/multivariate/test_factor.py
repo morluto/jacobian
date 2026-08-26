@@ -11,7 +11,10 @@ from jacobian.math.polynomials.multivariate._factor_models import (
     MultivariateFactorResult,
     MultivariateIrreducibleFactor,
 )
-from jacobian.math.polynomials.multivariate._operations import multivariate_factor
+from jacobian.math.polynomials.multivariate._operations import (
+    multivariate_factor,
+    verify_multivariate_factor_result,
+)
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -76,6 +79,31 @@ class TestMultivariateFactorResultInvariants:
         result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
+    def test_kernel_result_uses_one_worker_call_until_explicitly_verified(
+        self, monkeypatch
+    ):
+        """Construction and deserialization do not replay the producing worker."""
+
+        from jacobian.math.polynomials.multivariate import _factor_backend
+
+        calls = 0
+        original = _factor_backend.run_bounded_factorization
+
+        def counted(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(_factor_backend, "run_bounded_factorization", counted)
+        poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
+        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        assert calls == 1
+        restored = MultivariateFactorResult.model_validate(result.model_dump())
+        assert restored == result
+        assert calls == 1
+        assert verify_multivariate_factor_result(restored)
+        assert calls == 2
+
     def test_rejects_zero_coefficient_with_zero_reconstruction(self):
         """Zero coefficient plus zero reconstruction must not validate."""
         zero = _poly(("x", "y"), ())
@@ -101,20 +129,20 @@ class TestMultivariateFactorResultInvariants:
                 reconstructed=zero,
             )
 
-    def test_rejects_product_mismatch(self):
+    def test_structural_result_defers_product_mismatch_to_explicit_verifier(self):
         reconstructed = _poly(("x", "y"), ((1, 1, (2, 0)),))
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                coefficient=CanonicalRational.from_fraction(Fraction(2)),
-                factors=(),
-                reconstructed=reconstructed,
-            )
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                coefficient=CanonicalRational.from_fraction(Fraction(1)),
-                factors=(),
-                reconstructed=reconstructed,
-            )
+        wrong_content = MultivariateFactorResult(
+            coefficient=CanonicalRational.from_fraction(Fraction(2)),
+            factors=(),
+            reconstructed=reconstructed,
+        )
+        assert not verify_multivariate_factor_result(wrong_content)
+        forged = MultivariateFactorResult(
+            coefficient=CanonicalRational.from_fraction(Fraction(1)),
+            factors=(),
+            reconstructed=reconstructed,
+        )
+        assert not verify_multivariate_factor_result(forged)
 
     def test_factorized_outcome_requires_invariant_markers(self):
         """A FACTORIZED result without the public contract's normalization
@@ -163,19 +191,19 @@ class TestOutputBudgetOutcome:
         assert result.reconstructed == poly
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
-    def test_budget_exceeded_claim_must_replay(self):
+    def test_budget_exceeded_claim_requires_explicit_replay(self):
         """An authored OUTPUT_BUDGET_EXCEEDED label on a polynomial whose
         exact factorization fits the output budget must not validate."""
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                status="OUTPUT_BUDGET_EXCEEDED",
-                coefficient=CanonicalRational.from_fraction(Fraction(1)),
-                factors=(),
-                reconstructed=poly,
-                normalization=None,
-                product_reconstruction=None,
-            )
+        forged = MultivariateFactorResult(
+            status="OUTPUT_BUDGET_EXCEEDED",
+            coefficient=CanonicalRational.from_fraction(Fraction(1)),
+            factors=(),
+            reconstructed=poly,
+            normalization=None,
+            product_reconstruction=None,
+        )
+        assert not verify_multivariate_factor_result(forged)
 
     def test_budget_exceeded_cannot_carry_factors(self):
         poly = _poly(("x", "y"), ((2, 1, (2, 1)), (-2, 1, (1, 0))))
@@ -273,12 +301,12 @@ class TestBoundedReconstructionReplay:
             records.append(MultivariateIrreducibleFactor(factor=linear, multiplicity=1))
         records.sort(key=_sort_key)
         target = _poly(variables, ((1, 1, exponents({"v0": 64})),))
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                coefficient=CanonicalRational.from_fraction(Fraction(1)),
-                factors=tuple(records),
-                reconstructed=target,
-            )
+        forged = MultivariateFactorResult(
+            coefficient=CanonicalRational.from_fraction(Fraction(1)),
+            factors=tuple(records),
+            reconstructed=target,
+        )
+        assert not verify_multivariate_factor_result(forged)
 
     def test_telescoped_geometric_product_replays_boundedly(self):
         """(x^64-1)(y^64-1)(z^64-1) reconstructs through many geometric-sum
@@ -309,12 +337,12 @@ class TestBoundedReconstructionReplay:
             factor=_poly(("x", "y"), ((1, 1, (1, 1)), (1, 1, (0, 0)))),
             multiplicity=1,
         )
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                coefficient=CanonicalRational.from_fraction(Fraction(1)),
-                factors=(factor,),
-                reconstructed=reconstructed,
-            )
+        forged = MultivariateFactorResult(
+            coefficient=CanonicalRational.from_fraction(Fraction(1)),
+            factors=(factor,),
+            reconstructed=reconstructed,
+        )
+        assert not verify_multivariate_factor_result(forged)
 
     def test_scaled_constant_coefficient_verified(self):
         """coefficient * product must equal reconstructed exactly, including
@@ -328,18 +356,19 @@ class TestBoundedReconstructionReplay:
             ),
         )
         reconstructed = _poly(("x", "y"), ((3, 1, (1, 1)),))
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                coefficient=CanonicalRational.from_fraction(Fraction(2)),
-                factors=records,
-                reconstructed=reconstructed,
-            )
+        forged = MultivariateFactorResult(
+            coefficient=CanonicalRational.from_fraction(Fraction(2)),
+            factors=records,
+            reconstructed=reconstructed,
+        )
+        assert not verify_multivariate_factor_result(forged)
         accepted = MultivariateFactorResult(
             coefficient=CanonicalRational.from_fraction(Fraction(3)),
             factors=records,
             reconstructed=reconstructed,
         )
         assert accepted.product_reconstruction == "EXACT"
+        assert verify_multivariate_factor_result(accepted)
 
 
 class TestBudgetOutcomeCoefficientBinding:
@@ -433,12 +462,12 @@ class TestUniqueFactorizationReplay:
         )
         records = [*result.factors[:-1], impostor]
         records.sort(key=_sort_key)
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                coefficient=result.coefficient,
-                factors=tuple(records),
-                reconstructed=result.reconstructed,
-            )
+        forged = MultivariateFactorResult(
+            coefficient=result.coefficient,
+            factors=tuple(records),
+            reconstructed=result.reconstructed,
+        )
+        assert not verify_multivariate_factor_result(forged)
 
     def test_multiplicity_shift_between_equal_degree_factors_rejected(self):
         """Moving multiplicity between equal-degree factors preserves the
@@ -469,12 +498,12 @@ class TestUniqueFactorizationReplay:
         ]
         records.append(promoted)
         records.sort(key=_sort_key)
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                coefficient=result.coefficient,
-                factors=tuple(records),
-                reconstructed=result.reconstructed,
-            )
+        forged = MultivariateFactorResult(
+            coefficient=result.coefficient,
+            factors=tuple(records),
+            reconstructed=result.reconstructed,
+        )
+        assert not verify_multivariate_factor_result(forged)
 
 
 def _prime_denominator_poly(prime_count):
@@ -781,7 +810,6 @@ class TestKillableFactorBackend:
     def test_interrupted_budget_claim_replay_rejected(self, monkeypatch):
         """An authored OUTPUT_BUDGET_EXCEEDED claim whose verification
         replay is interrupted must be rejected, not authenticated."""
-        from jacobian.math.polynomials.multivariate import _factor_backend
         from jacobian.math.polynomials.multivariate._factor_backend import (
             FactorBackendInterruptedError,
         )
@@ -795,22 +823,17 @@ class TestKillableFactorBackend:
             "jacobian.process.run_bounded_process",
             fake_run,
         )
-        monkeypatch.setattr(
-            _factor_backend,
-            "primitive_content_fraction",
-            lambda _poly: Fraction(2),
-        )
         from jacobian._exact import CanonicalRational
 
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                status="OUTPUT_BUDGET_EXCEEDED",
-                coefficient=CanonicalRational.from_fraction(Fraction(2)),
-                factors=(),
-                reconstructed=poly,
-                normalization=None,
-                product_reconstruction=None,
-            )
+        claim = MultivariateFactorResult(
+            status="OUTPUT_BUDGET_EXCEEDED",
+            coefficient=CanonicalRational.from_fraction(Fraction(2)),
+            factors=(),
+            reconstructed=poly,
+            normalization=None,
+            product_reconstruction=None,
+        )
+        assert not verify_multivariate_factor_result(claim)
 
     def test_memory_exhausted_budget_claim_replay_rejected(self, monkeypatch):
         """An authored OUTPUT_BUDGET_EXCEEDED claim whose verification
@@ -818,8 +841,6 @@ class TestKillableFactorBackend:
         not authenticated: an allocation failure under the address-space
         cap proves nothing about the exact output size (PR #2226 review)."""
         import json as _json
-
-        from jacobian.math.polynomials.multivariate import _factor_backend
 
         poly = _poly(("x", "y"), ((2, 1, (2, 1)), (-2, 1, (1, 0))))
 
@@ -838,22 +859,17 @@ class TestKillableFactorBackend:
             )
 
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
-        monkeypatch.setattr(
-            _factor_backend,
-            "primitive_content_fraction",
-            lambda _poly: Fraction(2),
-        )
         from jacobian._exact import CanonicalRational
 
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                status="OUTPUT_BUDGET_EXCEEDED",
-                coefficient=CanonicalRational.from_fraction(Fraction(2)),
-                factors=(),
-                reconstructed=poly,
-                normalization=None,
-                product_reconstruction=None,
-            )
+        claim = MultivariateFactorResult(
+            status="OUTPUT_BUDGET_EXCEEDED",
+            coefficient=CanonicalRational.from_fraction(Fraction(2)),
+            factors=(),
+            reconstructed=poly,
+            normalization=None,
+            product_reconstruction=None,
+        )
+        assert not verify_multivariate_factor_result(claim)
 
 
 class TestSignedBudgetOutcomeContent:

@@ -32,8 +32,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "lexicographic table on indexed elements 0..n-1 with n <= 10; the "
             "result gives exact checked counts and the first obstruction, if any. "
             "Nonalternating or zero presentations are rejected at request "
-            "admission. Each public invocation reserves one producer scan and one "
-            "source-bound replay scan, while the reported count describes one scan."
+            "admission. Each public invocation reserves one producer scan, while "
+            "the reported count describes that exact scan."
         ),
         request_type=ChirotopeCheckRequest,
         result_type=ChirotopeCheckResult,

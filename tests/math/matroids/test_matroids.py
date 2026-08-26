@@ -12,6 +12,7 @@ from jacobian.math.matroids import (
     matroid_rank,
 )
 from jacobian.math.matroids._models import MatroidClosureRequest
+from jacobian.math.matroids._operations import verify_matroid_closure_result
 from jacobian.math.matroids._tools import compute_closure
 
 
@@ -97,6 +98,7 @@ class TestClosure:
         result = compute_closure(request)
         assert result.closure == (0,)
         assert result.rank == 1
+        assert verify_matroid_closure_result(result)
         payload = result.model_dump(mode="json")
         assert type(result).model_validate(payload) == result
 
@@ -116,7 +118,7 @@ class TestClosure:
         with pytest.raises(ValueError, match="distinct"):
             compute_matroid_closure(m, [0, 0])
 
-    def test_forged_closure_rejected(self):
+    def test_forged_closure_requires_explicit_verification(self):
         m = _matroid(5, [(1, 0, 1), (0, 1, 1)], 3)
         request = MatroidClosureRequest(matroid=m, subset=(0, 1))
         forged = request.model_dump()
@@ -127,8 +129,8 @@ class TestClosure:
         forged["rank"] = rank
         from jacobian.math.matroids._models import MatroidClosureResult
 
-        with pytest.raises(ValidationError):
-            MatroidClosureResult.model_validate(forged)
+        claim = MatroidClosureResult.model_validate(forged)
+        assert not verify_matroid_closure_result(claim)
 
 
 class TestCatalogAdmission:

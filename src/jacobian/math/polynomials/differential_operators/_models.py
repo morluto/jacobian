@@ -12,7 +12,6 @@ from jacobian.math.polynomials.differential_operators._bounds import (
     ApplicationEnvelope,
     validate_application_envelope,
 )
-from jacobian.math.polynomials.differential_operators._flint import apply_with_flint
 from jacobian.math.polynomials.differential_operators.values import (
     ConstantCoefficientDifferentialOperator,
 )
@@ -93,24 +92,13 @@ class DifferentialOperatorApplyResult(DifferentialOperatorApplyRequest):
     matches_expected: StrictBool | None = None
 
     @model_validator(mode="after")
-    def bind_exact_application(self) -> Self:
-        envelope = _application_envelope(
-            self.polynomial,
-            self.operator,
-            self.iterations,
-            self.expected,
-        )
-        replayed = apply_with_flint(
-            self.polynomial,
-            self.operator,
-            self.iterations,
-            envelope,
-        )
-        if self.output != replayed:
-            raise _validation_error(
-                "output_mismatch",
-                "differential-operator output is not bound to the supplied application",
-            )
+    def require_result_shape(self) -> Self:
+        """Validate canonical result relations without re-executing FLINT.
+
+        Kernel-produced results use ``_from_kernel``.  A caller that receives a
+        separately supplied claim can ask the owner-local explicit verifier to
+        replay its admitted defining relation under a fresh bounded envelope.
+        """
         if self.is_zero != (not self.output.polynomial.terms):
             raise _validation_error(
                 "zero_flag_mismatch", "is_zero must match the exact output polynomial"
@@ -127,6 +115,26 @@ class DifferentialOperatorApplyResult(DifferentialOperatorApplyRequest):
                 "matches_expected must report exact equality with the expected polynomial",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: DifferentialOperatorApplyRequest,
+        output: RationalPolynomial,
+    ) -> Self:
+        """Construct a trusted result after the admitted FLINT kernel returns."""
+
+        return cls.model_construct(
+            polynomial=request.polynomial,
+            operator=request.operator,
+            iterations=request.iterations,
+            expected=request.expected,
+            output=output,
+            is_zero=not output.polynomial.terms,
+            matches_expected=(
+                None if request.expected is None else output == request.expected
+            ),
+        )
 
 
 __all__ = [

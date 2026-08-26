@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.finite_geometry._linear import (
+    canonical_basis,
+    intersection_basis,
+    rref_rank,
+)
 from jacobian.math.finite_geometry._models import (
     GrassmannianCountRequest,
     GrassmannianCountResult,
@@ -26,27 +31,6 @@ from jacobian.math.finite_geometry.values import (
     ProjectivePoint,
     ProjectivePointSequence,
 )
-from jacobian.math.prime_field_linear_algebra import (
-    PrimeFieldMatrix,
-    nullspace,
-    rref,
-)
-
-
-def _rref(matrix: list[list[int]], field_order: int) -> tuple[list[list[int]], int]:
-    """Reduced row echelon form and rank over a prime field."""
-    shared_matrix = PrimeFieldMatrix(
-        prime=field_order,
-        entries=tuple(tuple(row) for row in matrix),
-        columns=len(matrix[0]) if matrix else 0,
-    )
-    reduced, pivots = rref(shared_matrix)
-    return [list(row) for row in reduced], len(pivots)
-
-
-def _canonical_basis(matrix: list[list[int]], field_order: int) -> list[list[int]]:
-    rref, rank = _rref(matrix, field_order)
-    return list(rref[:rank]) if rank > 0 else []
 
 
 def compute_projective_point_canonicalize(
@@ -59,12 +43,10 @@ def compute_projective_point_canonicalize(
             scale = v % q
             inv = pow(scale, -1, q)
             canonical = [(v * inv) % q for v in vector]
-            return ProjectivePointCanonicalizeResult(
-                **request.model_dump(),
-                point=ProjectivePoint(
-                    space=request.space, coordinates=tuple(canonical)
-                ),
-                scale=scale,
+            return ProjectivePointCanonicalizeResult._from_kernel(
+                request,
+                ProjectivePoint(space=request.space, coordinates=tuple(canonical)),
+                scale,
             )
     raise ValueError("zero vector has no projective point")
 
@@ -81,10 +63,8 @@ def _canonicalize_projective(vector: list[int], q: int) -> tuple[int, ...]:
 def compute_projective_point_equal(
     request: ProjectivePointEqualRequest,
 ) -> ProjectivePointEqualResult:
-    return ProjectivePointEqualResult(
-        point_a=request.point_a,
-        point_b=request.point_b,
-        equal=request.point_a.coordinates == request.point_b.coordinates,
+    return ProjectivePointEqualResult._from_kernel(
+        request, request.point_a.coordinates == request.point_b.coordinates
     )
 
 
@@ -92,10 +72,9 @@ def compute_subspace_compute(
     request: SubspaceComputeRequest,
 ) -> SubspaceComputeResult:
     matrix = [list(row) for row in request.vectors]
-    basis = _canonical_basis(matrix, request.space.field_order)
-    return SubspaceComputeResult(
-        **request.model_dump(),
-        subspace=LinearSubspace(space=request.space, basis=tuple(map(tuple, basis))),
+    basis = canonical_basis(matrix, request.space.field_order)
+    return SubspaceComputeResult._from_kernel(
+        request, LinearSubspace(space=request.space, basis=basis)
     )
 
 
@@ -106,16 +85,12 @@ def compute_subspace_membership(
     word = list(request.vector)
     q = request.subspace.space.field_order
 
-    _, rank_g = _rref([list(r) for r in matrix], q)
+    _, rank_g = rref_rank([list(r) for r in matrix], q)
     augmented = [list(row) for row in matrix] + [word]
-    _, rank_aug = _rref(augmented, q)
+    _, rank_aug = rref_rank(augmented, q)
     is_member = rank_aug == rank_g
 
-    return SubspaceMembershipResult(
-        is_member=is_member,
-        subspace=request.subspace,
-        vector=request.vector,
-    )
+    return SubspaceMembershipResult._from_kernel(request, is_member)
 
 
 def compute_subspace_span(
@@ -123,76 +98,24 @@ def compute_subspace_span(
 ) -> SubspaceSpanResult:
     matrix = [list(row) for row in request.vectors]
     matrix.extend(list(row) for subspace in request.subspaces for row in subspace.basis)
-    basis = _canonical_basis(matrix, request.space.field_order)
-    return SubspaceSpanResult(
-        **request.model_dump(),
-        subspace=LinearSubspace(space=request.space, basis=tuple(map(tuple, basis))),
+    basis = canonical_basis(matrix, request.space.field_order)
+    return SubspaceSpanResult._from_kernel(
+        request, LinearSubspace(space=request.space, basis=basis)
     )
 
 
 def compute_subspace_intersection(
     request: SubspaceIntersectionRequest,
 ) -> SubspaceIntersectionResult:
-    canonical = _intersection_basis(request.subspace_a, request.subspace_b)
-    return SubspaceIntersectionResult(
-        **request.model_dump(),
-        subspace=LinearSubspace(space=request.subspace_a.space, basis=canonical),
+    canonical = intersection_basis(
+        request.subspace_a.basis,
+        request.subspace_b.basis,
+        request.subspace_a.space.field_order,
+        len(request.subspace_a.space.axis),
     )
-
-
-def _intersection_basis(
-    subspace_a: LinearSubspace,
-    subspace_b: LinearSubspace,
-) -> tuple[tuple[int, ...], ...]:
-    q = subspace_a.space.field_order
-    matrix_a = [list(row) for row in subspace_a.basis]
-    matrix_b = [list(row) for row in subspace_b.basis]
-
-    # Intersect row spaces: solve x in rowspace(A) and x in rowspace(B)
-    # Intersection of rowspace(A) ∩ rowspace(B):
-    # A vector v is in both row spaces iff v = A^T * a = B^T * b for some
-    # coefficient vectors a, b.  This gives [A^T | -B^T] * [a; b] = 0.
-    # The nullspace of [A^T | -B^T] gives coefficient pairs [a; b]; the
-    # intersection vectors are A^T * a (= B^T * b).
-    n = len(subspace_a.space.axis)
-    k = len(matrix_a)
-    m = len(matrix_b)
-
-    # Build [A^T | -B^T]: an n x (k+m) matrix where columns 0..k-1 are A^T
-    # and columns k..k+m-1 are -B^T.
-    combined: list[list[int]] = []
-    for j in range(n):
-        row: list[int] = []
-        for i in range(k):
-            row.append(matrix_a[i][j] % q)
-        for i in range(m):
-            row.append((-matrix_b[i][j]) % q)
-        combined.append(row)
-
-    null = _nullspace(combined, q)
-
-    intersection_basis: list[list[int]] = []
-    for vec in null:
-        a_part = vec[:k]
-        iv = [0] * n
-        for ai, coeff in enumerate(a_part):
-            for j in range(n):
-                iv[j] = (iv[j] + coeff * matrix_a[ai][j]) % q
-        intersection_basis.append(iv)
-
-    # Canonicalize
-    canonical = _canonical_basis(intersection_basis, q) if intersection_basis else []
-
-    return tuple(tuple(row) for row in canonical)
-
-
-def _nullspace(matrix: list[list[int]], field_order: int) -> list[list[int]]:
-    shared_matrix = PrimeFieldMatrix(
-        prime=field_order,
-        entries=tuple(tuple(row) for row in matrix),
-        columns=len(matrix[0]),
+    return SubspaceIntersectionResult._from_kernel(
+        request, LinearSubspace(space=request.subspace_a.space, basis=canonical)
     )
-    return [list(row) for row in nullspace(shared_matrix)]
 
 
 def compute_grassmannian_count(
@@ -211,11 +134,8 @@ def compute_grassmannian_count(
         numerator *= q ** (n - i) - 1
         denominator *= q ** (k - i) - 1
     count = numerator // denominator
-    return GrassmannianCountResult(
-        field_order=q,
-        ambient_dimension=n,
-        subspace_dimension=k,
-        count=format_canonical_integer(count),
+    return GrassmannianCountResult._from_kernel(
+        request, format_canonical_integer(count)
     )
 
 
@@ -248,3 +168,75 @@ def compute_projective_space_enumerate(
             space=request.space, coordinates=tuple(points)
         ),
     )
+
+
+def verify_projective_point_canonicalize_result(
+    result: ProjectivePointCanonicalizeResult,
+) -> bool:
+    """Verify one bounded externally supplied projective-point claim."""
+
+    scale = next(value for value in result.vector if value != 0)
+    expected = tuple(
+        value * pow(scale, -1, result.space.field_order) % result.space.field_order
+        for value in result.vector
+    )
+    return result.scale == scale and result.point.coordinates == expected
+
+
+def verify_projective_point_equal_result(result: ProjectivePointEqualResult) -> bool:
+    """Verify one bounded externally supplied point-equality claim."""
+
+    return result.equal == (result.point_a.coordinates == result.point_b.coordinates)
+
+
+def verify_subspace_compute_result(result: SubspaceComputeResult) -> bool:
+    """Verify one bounded externally supplied span-basis claim."""
+
+    return result.subspace.basis == canonical_basis(
+        [list(vector) for vector in result.vectors], result.space.field_order
+    )
+
+
+def verify_subspace_membership_result(result: SubspaceMembershipResult) -> bool:
+    """Verify one bounded externally supplied subspace-membership claim."""
+
+    q = result.subspace.space.field_order
+    _, rank_subspace = rref_rank([list(row) for row in result.subspace.basis], q)
+    _, rank_enlarged = rref_rank(
+        [*map(list, result.subspace.basis), list(result.vector)], q
+    )
+    return result.is_member == (rank_subspace == rank_enlarged)
+
+
+def verify_subspace_span_result(result: SubspaceSpanResult) -> bool:
+    """Verify one bounded externally supplied mixed-generator span claim."""
+
+    generators = [*map(list, result.vectors)]
+    generators.extend(
+        list(row) for subspace in result.subspaces for row in subspace.basis
+    )
+    return result.subspace.basis == canonical_basis(
+        generators, result.space.field_order
+    )
+
+
+def verify_subspace_intersection_result(result: SubspaceIntersectionResult) -> bool:
+    """Verify one bounded externally supplied subspace-intersection claim."""
+
+    space = result.subspace_a.space
+    return result.subspace.basis == intersection_basis(
+        result.subspace_a.basis,
+        result.subspace_b.basis,
+        space.field_order,
+        len(space.axis),
+    )
+
+
+def verify_grassmannian_count_result(result: GrassmannianCountResult) -> bool:
+    """Verify one bounded externally supplied Gaussian-binomial claim."""
+
+    numerator = denominator = 1
+    for index in range(result.subspace_dimension):
+        numerator *= result.field_order ** (result.ambient_dimension - index) - 1
+        denominator *= result.field_order ** (result.subspace_dimension - index) - 1
+    return result.count == format_canonical_integer(numerator // denominator)

@@ -1324,8 +1324,9 @@ def _raw_system_column_bound(system: Any) -> int:
 class SymbolicLinearSystemResult(StrictModel):
     """Classification and solution data for one symbolic linear system.
 
-    The source system is retained so the classification and every solution
-    vector remain verifiable against it after serialization.
+    The source system is retained for an explicit bounded verifier. Kernel
+    output uses :meth:`_from_kernel`; this transport model checks only the
+    source-coupled payload shape and never re-enters a symbolic operation.
     """
 
     system: SymbolicLinearSystemRequest
@@ -1336,21 +1337,9 @@ class SymbolicLinearSystemResult(StrictModel):
     consistency: Literal["EXACT_RATIONAL_FUNCTION"] = "EXACT_RATIONAL_FUNCTION"
     field_semantics: Literal["GENERIC_OVER_QQ_FIELD"] = "GENERIC_OVER_QQ_FIELD"
 
-    def _replayed_solution(self) -> tuple[str, object, object, object]:
-        from jacobian.math.matrices.symbolic.operations import (
-            symbolic_linear_system_solve,
-        )
-
-        return symbolic_linear_system_solve(
-            self.system.matrix.entries,
-            self.system.rhs,
-            self.system.matrix.variables,
-        )
-
     @model_validator(mode="before")
     @classmethod
     def require_bounded_payload_shapes(cls, data: Any) -> Any:
-        data = canonicalize_json_containers(data)
         # Cap relayed solution payloads against the retained source's column
         # count BEFORE nested RationalFunction parsing; an unbounded tuple of
         # individually valid values would otherwise be fully parsed before
@@ -1381,94 +1370,24 @@ class SymbolicLinearSystemResult(StrictModel):
                         "a nullspace basis vector exceeds the retained "
                         f"system's column count {limit}",
                     )
-        return data
+        return canonicalize_json_containers(data)
 
-    def _require_mathematical_witnesses(self) -> None:
-        """Verify NON_UNIQUE witnesses by their defining equations.
-
-        A particular solution is valid iff ``A p = b`` exactly, and a basis
-        list is complete iff its vectors lie in the kernel, are linearly
-        independent, and number ``n - rank(A)``. The public contract fixes no
-        canonical free-variable normalization, so backend-identity comparison
-        would reject mathematically equivalent witnesses.
-        """
-        import sympy
-
-        from jacobian.math.polynomials._conversions import (
-            rational_function_to_sympy,
-        )
-
-        entries = self.system.matrix.entries
-        n_cols = len(entries[0])
-        declared_variables = self.system.matrix.variables
-        particular = self.particular_solution
-        assert particular is not None
-        # Every witness must live on the retained system's declared ordered
-        # field and match its exact column count. Both are checked before
-        # any SymPy arithmetic so a malformed relayed payload fails as a
-        # contract violation instead of a backend host exception.
-        if len(particular) != n_cols:
+    def _require_witness_vector_shape(
+        self,
+        vector: tuple[RationalFunction, ...],
+        *,
+        label: str,
+    ) -> None:
+        columns = len(self.system.matrix.entries[0])
+        if len(vector) != columns:
             raise _validation_error(
                 "shape_mismatch",
-                "particular_solution must have exactly the retained "
-                "system's column count",
+                f"{label} must have exactly the retained system's column count",
             )
-        for value in particular:
-            if value.variables != declared_variables:
-                raise _validation_error(
-                    "shape_mismatch",
-                    "witness vectors must use the retained system's "
-                    "declared ordered field",
-                )
-        basis = self.nullspace_basis or ()
-        for vector in basis:
-            if len(vector) != n_cols:
-                raise _validation_error(
-                    "shape_mismatch",
-                    "every nullspace basis vector must have exactly the "
-                    "retained system's column count",
-                )
-            for value in vector:
-                if value.variables != declared_variables:
-                    raise _validation_error(
-                        "shape_mismatch",
-                        "witness vectors must use the retained system's "
-                        "declared ordered field",
-                    )
-        coefficient = sympy.Matrix(
-            [[rational_function_to_sympy(e) for e in row] for row in entries]
-        )
-        rhs_vec = sympy.Matrix(
-            [[rational_function_to_sympy(v)] for v in self.system.rhs]
-        )
-        p_vec = sympy.Matrix([[rational_function_to_sympy(v)] for v in particular])
-        residual = coefficient * p_vec - rhs_vec
-        if any(sympy.cancel(entry) != 0 for entry in residual):
+        if any(value.variables != self.system.matrix.variables for value in vector):
             raise _validation_error(
                 "shape_mismatch",
-                "particular_solution must satisfy the retained system exactly",
-            )
-        kernel_columns = []
-        for vector in basis:
-            v_vec = sympy.Matrix([[rational_function_to_sympy(v)] for v in vector])
-            image = coefficient * v_vec
-            if any(sympy.cancel(entry) != 0 for entry in image):
-                raise _validation_error(
-                    "shape_mismatch",
-                    "every nullspace basis vector must satisfy A v = 0",
-                )
-            kernel_columns.append(v_vec)
-        rank_coefficient = coefficient.rank()
-        nullity = n_cols - rank_coefficient
-        if len(kernel_columns) != nullity:
-            raise _validation_error(
-                "shape_mismatch",
-                "nullspace_basis must carry exactly n - rank(A) independent "
-                "vectors to span the kernel completely",
-            )
-        if nullity and (sympy.Matrix.hstack(*kernel_columns).rank() != nullity):
-            raise _validation_error(
-                "shape_mismatch", "nullspace basis vectors must be linearly independent"
+                "witness vectors must use the retained system's declared ordered field",
             )
 
     def _require_classification_payload_shape(self) -> None:
@@ -1482,6 +1401,7 @@ class SymbolicLinearSystemResult(StrictModel):
                     "status_mismatch",
                     "UNIQUE must not populate particular_solution or nullspace_basis",
                 )
+            self._require_witness_vector_shape(self.solution, label="solution")
         elif self.classification == "NON_UNIQUE":
             if self.particular_solution is None:
                 raise _validation_error(
@@ -1491,6 +1411,14 @@ class SymbolicLinearSystemResult(StrictModel):
                 raise _validation_error(
                     "budget_exceeded",
                     "NON_UNIQUE must not populate the unique solution",
+                )
+            self._require_witness_vector_shape(
+                self.particular_solution,
+                label="particular_solution",
+            )
+            for vector in self.nullspace_basis or ():
+                self._require_witness_vector_shape(
+                    vector, label="nullspace basis vector"
                 )
         elif (
             self.solution is not None
@@ -1509,34 +1437,27 @@ class SymbolicLinearSystemResult(StrictModel):
         # MAX_SYMBOLIC_RESULT_TERMS, so per-component term checks here would
         # be ineffective anyway.
         self._require_classification_payload_shape()
-        # Source-bound replay: the retained classification must be the exact
-        # solve of this result's own coefficient matrix and right-hand side,
-        # so a relayed or forged payload cannot validate as a solution of an
-        # unrelated system. The unique solution is compared by identity (it
-        # is mathematically unique); NON_UNIQUE witnesses are validated by
-        # their defining equations instead of backend identity, since the
-        # contract fixes no canonical free-variable normalization.
-        (
-            expected_classification,
-            expected_solution,
-            _expected_particular,
-            _expected_nullspace,
-        ) = self._replayed_solution()
-        if self.classification != expected_classification:
-            raise _validation_error(
-                "invariant_mismatch",
-                "linear-system conclusion must be the exact solve of the "
-                "retained source system",
-            )
-        if self.classification == "UNIQUE" and self.solution != expected_solution:
-            raise _validation_error(
-                "invariant_mismatch",
-                "the unique solution must be the exact solve of the "
-                "retained source system",
-            )
-        if self.classification == "NON_UNIQUE":
-            self._require_mathematical_witnesses()
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        system: SymbolicLinearSystemRequest,
+        classification: Literal["UNIQUE", "NON_UNIQUE", "INCONSISTENT"],
+        solution: tuple[RationalFunction, ...] | None,
+        particular_solution: tuple[RationalFunction, ...] | None,
+        nullspace_basis: tuple[tuple[RationalFunction, ...], ...] | None,
+    ) -> Self:
+        """Construct a result from the owner-local bounded kernel output."""
+
+        return cls.model_construct(
+            system=system,
+            classification=classification,
+            solution=solution,
+            particular_solution=particular_solution,
+            nullspace_basis=nullspace_basis,
+        )
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

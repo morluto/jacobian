@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Any, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -18,6 +18,7 @@ from jacobian.math.polynomials.values import (
 MAX_SUPPORT_TERMS = 4096
 MAX_NEWTON_DIMENSION = 8
 MAX_WEIGHT_COMPONENTS = 8
+MAX_WEIGHT_PROFILE_TERMS = 1024
 # The Newton polytope operation decides each support point with an exact
 # Phase-1 rational membership kernel against all other points. Worst-case
 # admitted work was measured across adversarial supports (convex-position,
@@ -44,7 +45,7 @@ def _require_canonical_exponents(exponents: tuple[tuple[int, ...], ...]) -> None
 
 
 def _require_nonzero_support(value: PolynomialSupport) -> None:
-    """A claimed nonzero support carries nonzero coefficients and extrema."""
+    """A claimed nonzero support carries only nonzero coefficients."""
     # An exponent with a zero coefficient is not part of a support.
     if any(coefficient.as_fraction() == 0 for coefficient in value.coefficients):
         raise _validation_error(
@@ -54,7 +55,7 @@ def _require_nonzero_support(value: PolynomialSupport) -> None:
 
 
 def _require_shape_consistency(value: PolynomialSupport, width: int) -> None:
-    """Term count, distinctness, and axis shape precede extrema replay."""
+    """Term count, distinctness, and axis shape are structural invariants."""
     if len(value.exponents) != len(value.coefficients) or value.term_count != len(
         value.exponents
     ):
@@ -86,24 +87,6 @@ def _require_shape_consistency(value: PolynomialSupport, width: int) -> None:
         )
 
 
-def _require_replayed_extrema(value: PolynomialSupport, width: int) -> None:
-    """A nonzero support carries the exact extrema of its own exponents."""
-    degrees = [sum(exp) for exp in value.exponents]
-    if (
-        value.total_degree_min != min(degrees)
-        or value.total_degree_max != max(degrees)
-        or tuple(value.coordinate_min)
-        != tuple(min(exp[i] for exp in value.exponents) for i in range(width))
-        or tuple(value.coordinate_max)
-        != tuple(max(exp[i] for exp in value.exponents) for i in range(width))
-    ):
-        raise _validation_error(
-            "extrema_mismatch",
-            "coordinate and degree extrema must be the exact extrema of "
-            "the retained support",
-        )
-
-
 class PolynomialSupport(StrictModel):
     """The exponent support of a nonzero polynomial."""
 
@@ -127,9 +110,9 @@ class PolynomialSupport(StrictModel):
 
     @model_validator(mode="after")
     def bind_extrema_to_support(self) -> Self:
-        # Cross-field consistency: the term count, exponent tuples, and
-        # coefficients must agree, and the coordinate/degree extrema must
-        # match the retained support.
+        # Parsing checks the self-contained canonical shape only.  Computing
+        # extrema is deliberately left to ``verify_polynomial_support`` so
+        # deserializing a result never re-enters an operation kernel.
         width = len(self.variables)
         _require_shape_consistency(self, width)
         if self.is_zero:
@@ -154,12 +137,16 @@ class PolynomialSupport(StrictModel):
                 "nonzero_support_missing_degree_extrema",
                 "a nonzero support must carry its degree extrema",
             )
-        _require_replayed_extrema(self, width)
         return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build a support value from the trusted owner-local kernel."""
+        return cls(**values)
 
 
 def _require_newton_context(value: NewtonPolytope) -> None:
-    """Dimension context and exponent widths precede any hull replay."""
+    """Dimension context and exponent widths bound an independent verifier."""
     if len(set(value.variables)) != len(value.variables):
         raise _validation_error(
             "variables_not_unique", "variables must be unique and canonically named"
@@ -176,7 +163,7 @@ def _require_newton_context(value: NewtonPolytope) -> None:
         )
     # Duplicates are not a valid support or vertex set: the tuple fields are
     # authoritative, so they must be unique before the set-based partition
-    # and classification checks below.
+    # and partition checks below.
     for points in (value.vertices, value.nonextreme, value.all_support_exponents):
         if len(set(points)) != len(points):
             raise _validation_error(
@@ -210,9 +197,8 @@ class NewtonPolytope(StrictModel):
     )
     ambient_dimension: int = Field(ge=0)
     affine_dimension: int = Field(ge=0)
-    # Retained support fields carry the admitted hull size (96 points): the
-    # exact replay below runs one convex-membership LP per point, so a
-    # deserialized payload must not bypass the operation's work admission.
+    # Retained support fields carry the admitted hull size (96 points), so an
+    # explicit verifier cannot be asked to replay an unbounded hull claim.
     vertices: tuple[tuple[int, ...], ...] = Field(
         default=(), max_length=MAX_NEWTON_TERMS
     )
@@ -250,51 +236,6 @@ class NewtonPolytope(StrictModel):
                     "newton_vertex_overlap",
                     "an exponent cannot be both a vertex and non-extreme",
                 )
-            # Exact replay: the classification must be the true hull of the
-            # retained support (bounded by the 96-term admission).
-            from jacobian.math.polynomial_support_geometry.operations import (
-                _is_vertex,
-                _matrix_rank,
-            )
-
-            replayed_vertices = [
-                exp
-                for exp in self.all_support_exponents
-                if _is_vertex(exp, [q for q in self.all_support_exponents if q != exp])
-            ]
-            replayed_nonextreme = [
-                exp
-                for exp in self.all_support_exponents
-                if exp not in set(replayed_vertices)
-            ]
-            if set(self.vertices) != set(replayed_vertices) or set(
-                self.nonextreme
-            ) != set(replayed_nonextreme):
-                raise _validation_error(
-                    "newton_vertex_classification_mismatch",
-                    (
-                        "vertex classification must be the exact convex-hull "
-                        "classification of the retained support"
-                    ),
-                )
-            if len(replayed_vertices) > 1:
-                first = replayed_vertices[0]
-                dimension = _matrix_rank(
-                    [
-                        [v[j] - first[j] for j in range(len(first))]
-                        for v in replayed_vertices[1:]
-                    ]
-                )
-            else:
-                dimension = 0
-            if self.affine_dimension != dimension:
-                raise _validation_error(
-                    "newton_affine_dimension_mismatch",
-                    (
-                        f"affine_dimension {self.affine_dimension} must equal "
-                        f"the hull's exact affine dimension {dimension}"
-                    ),
-                )
         elif self.vertices or self.nonextreme or self.all_support_exponents:
             raise _validation_error(
                 "zero_newton_has_points",
@@ -310,20 +251,28 @@ class NewtonPolytope(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build a Newton polytope from trusted owner-local kernel output."""
+        return cls(**values)
+
 
 class PolynomialWeightProfile(StrictModel):
     """Weight profile of a polynomial support under a retained weight vector.
 
-    The source polynomial and weight are retained so the minimum,
-    minimizing exponents, and layers replay against their own inputs after
-    serialization instead of carrying detached integer data.
+    The source polynomial and weight keep the claimed profile composable and
+    make its defining identity available to an explicit bounded verifier.
     """
 
     polynomial: RationalPolynomial
     weight: tuple[int, ...] = Field(min_length=1)
     minimum_weight: int
-    minimizing_exponents: tuple[tuple[int, ...], ...]
-    weight_layers: tuple[tuple[int, tuple[tuple[int, ...], ...]], ...]
+    minimizing_exponents: tuple[tuple[int, ...], ...] = Field(
+        max_length=MAX_WEIGHT_PROFILE_TERMS
+    )
+    weight_layers: tuple[tuple[int, tuple[tuple[int, ...], ...]], ...] = Field(
+        max_length=MAX_WEIGHT_PROFILE_TERMS
+    )
 
     @model_validator(mode="after")
     def bind_profile_to_source(self) -> Self:
@@ -332,24 +281,24 @@ class PolynomialWeightProfile(StrictModel):
                 "weight_dimension_mismatch",
                 "weight vector length must match variable count",
             )
-        from jacobian.math.polynomial_support_geometry.operations import (
-            _compute_weight_layers,
-        )
-
-        expected = _compute_weight_layers(self.polynomial, self.weight)
-        if (
-            self.minimum_weight != expected[0]
-            or self.minimizing_exponents != expected[1]
-            or self.weight_layers != expected[2]
+        if any(
+            len(exponents) > MAX_WEIGHT_COMPONENTS
+            for exponents in self.minimizing_exponents
+        ) or any(
+            len(exponents) > MAX_WEIGHT_COMPONENTS
+            for _, layer in self.weight_layers
+            for exponents in layer
         ):
             raise _validation_error(
-                "weight_profile_mismatch",
-                (
-                    "weight profile must be the exact weighting of its "
-                    "retained polynomial and weight"
-                ),
+                "weight_profile_exponent_dimension_exceeded",
+                "weight-profile exponents exceed the canonical variable-axis bound",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build a weight profile from trusted owner-local kernel output."""
+        return cls(**values)
 
 
 class PolynomialFaceData(StrictModel):
@@ -371,24 +320,14 @@ class PolynomialFaceData(StrictModel):
                 "weight_dimension_mismatch",
                 "weight vector length must match variable count",
             )
-        from jacobian.math.polynomial_support_geometry.operations import (
-            _initial_form_terms,
-        )
-
-        expected = _initial_form_terms(self.polynomial, self.weight)
-        actual = tuple(
-            (term.coefficient.as_fraction(), tuple(term.exponents))
-            for term in self.initial_form.polynomial.terms
-        )
-        if (
-            self.initial_form.variables != self.polynomial.variables
-            or actual != expected
-        ):
+        if self.initial_form.variables != self.polynomial.variables:
             raise _validation_error(
-                "initial_form_mismatch",
-                (
-                    "initial form must be the exact minimum-weight face of its "
-                    "retained polynomial under the retained weight"
-                ),
+                "initial_form_variable_mismatch",
+                ("initial form must use the source polynomial's variable axis"),
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build an initial-form value from trusted owner-local kernel output."""
+        return cls(**values)

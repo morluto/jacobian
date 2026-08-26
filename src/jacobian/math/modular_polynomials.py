@@ -51,15 +51,7 @@ class ModularPolynomialIdentityRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_scope(self) -> Self:
-        if len(set(self.variables)) != len(self.variables) or any(
-            _VARIABLE.fullmatch(name) is None for name in self.variables
-        ):
-            raise ValueError("polynomial variables must be unique canonical names")
-        if any(
-            len(term.exponents) != len(self.variables)
-            for term in (*self.left, *self.right)
-        ):
-            raise ValueError("every exponent vector must match variable count")
+        _require_identity_admission(self.modulus, self.variables, self.left, self.right)
         return self
 
 
@@ -141,24 +133,88 @@ def _subtract_normalized(
     )
 
 
-def modular_polynomial_identity(
-    request: ModularPolynomialIdentityRequest,
+def _require_identity_admission(
+    modulus: int,
+    variables: tuple[str, ...],
+    left: tuple[ModularPolynomialTerm, ...],
+    right: tuple[ModularPolynomialTerm, ...],
+) -> None:
+    """Validate the owner-local formal-polynomial identity envelope."""
+
+    if not 2 <= modulus <= _MAX_MODULUS:
+        raise ValueError(f"modulus must be between 2 and {_MAX_MODULUS}")
+    if not 1 <= len(variables) <= _MAX_VARIABLES:
+        raise ValueError(f"variable count must be between 1 and {_MAX_VARIABLES}")
+    if len(left) > _MAX_TERMS or len(right) > _MAX_TERMS:
+        raise ValueError(f"each polynomial may contain at most {_MAX_TERMS} terms")
+    if len(set(variables)) != len(variables) or any(
+        _VARIABLE.fullmatch(name) is None for name in variables
+    ):
+        raise ValueError("polynomial variables must be unique canonical names")
+    if any(len(term.exponents) != len(variables) for term in (*left, *right)):
+        raise ValueError("every exponent vector must match variable count")
+
+
+def _compute_modular_polynomial_identity(
+    modulus: int,
+    variables: tuple[str, ...],
+    left: tuple[ModularPolynomialTerm, ...],
+    right: tuple[ModularPolynomialTerm, ...],
 ) -> ModularPolynomialIdentityValue:
-    left = _normalize(request.left, request.modulus)
-    right = _normalize(request.right, request.modulus)
-    residual = _subtract_normalized(left, right, request.modulus)
+    """Compare already admitted canonical sparse polynomials."""
+
+    normalized_left = _normalize(left, modulus)
+    normalized_right = _normalize(right, modulus)
+    residual = _subtract_normalized(normalized_left, normalized_right, modulus)
     return ModularPolynomialIdentityValue(
-        modulus=request.modulus,
-        variable_order=request.variables,
-        normalized_left=left,
-        normalized_right=right,
+        modulus=modulus,
+        variable_order=variables,
+        normalized_left=normalized_left,
+        normalized_right=normalized_right,
         residual=residual,
         identical=not residual,
     )
 
 
+def modular_polynomial_identity(
+    modulus: int,
+    variables: tuple[str, ...],
+    left: tuple[ModularPolynomialTerm, ...] = (),
+    right: tuple[ModularPolynomialTerm, ...] = (),
+) -> ModularPolynomialIdentityValue:
+    """Compare canonical sparse polynomials coefficientwise modulo ``modulus``.
+
+    This native boundary accepts domain values and semantic scalars.  Catalog
+    and MCP calls parse ``ModularPolynomialIdentityRequest`` once and use the
+    private adapter below.
+    """
+
+    if type(modulus) is not int:
+        raise TypeError("modulus must be an integer")
+    if not isinstance(variables, tuple) or not all(
+        type(variable) is str for variable in variables
+    ):
+        raise TypeError("variables must be a tuple of strings")
+    for name, terms in (("left", left), ("right", right)):
+        if not isinstance(terms, tuple) or not all(
+            isinstance(term, ModularPolynomialTerm) for term in terms
+        ):
+            raise TypeError(f"{name} must be a tuple of ModularPolynomialTerm values")
+    _require_identity_admission(modulus, variables, left, right)
+    return _compute_modular_polynomial_identity(modulus, variables, left, right)
+
+
+def _modular_polynomial_identity_request(
+    request: ModularPolynomialIdentityRequest,
+) -> ModularPolynomialIdentityValue:
+    """Catalog adapter for the strict modular-polynomial identity request."""
+
+    return _compute_modular_polynomial_identity(
+        request.modulus, request.variables, request.left, request.right
+    )
+
+
 __all__ = [
-    "ModularPolynomialIdentityRequest",
     "ModularPolynomialIdentityValue",
     "ModularPolynomialTerm",
     "NormalizedModularPolynomialTerm",

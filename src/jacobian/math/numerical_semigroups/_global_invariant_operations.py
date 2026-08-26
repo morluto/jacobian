@@ -14,7 +14,7 @@ from jacobian.math.numerical_semigroups._algorithms import (
     factorizations,
     minimal_generating_system,
 )
-from jacobian.math.numerical_semigroups._models import (
+from jacobian.math.numerical_semigroups._global_invariant_models import (
     BettiCatenaryDegree,
     BettiElementsRequest,
     BettiElementsResult,

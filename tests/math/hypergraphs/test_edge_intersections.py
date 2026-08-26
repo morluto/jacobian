@@ -19,6 +19,7 @@ from jacobian.math.hypergraphs._models import (
 from jacobian.math.hypergraphs._operations import (
     compute_edge_intersections,
     edge_intersections,
+    verify_edge_intersections_result,
 )
 
 NONLINEAR = {
@@ -155,12 +156,15 @@ class TestEdgeIntersectionBinding:
         with pytest.raises(ValidationError):
             EdgeIntersectionsResult.model_validate(payload)
 
-    def test_rejects_source_mutation_with_stale_ledger(self) -> None:
+    def test_source_mutation_with_stale_ledger_requires_explicit_verification(
+        self,
+    ) -> None:
         payload = _profile(NONLINEAR).model_dump(mode="json")
         payload["hypergraph"]["edges"][0][1] = ["a", "b"]
 
-        with pytest.raises(ValidationError):
+        assert not verify_edge_intersections_result(
             EdgeIntersectionsResult.model_validate(payload)
+        )
 
     def test_rejects_forged_histogram(self) -> None:
         payload = _profile(NONLINEAR).model_dump(mode="json")

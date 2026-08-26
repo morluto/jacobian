@@ -174,8 +174,14 @@ class TestLatticeResultBoundToSourceGroup:
         )
         payload["subgroups"] = [trivial_only]
         payload["subgroup_count"] = 1
-        with _group_error("group.lattice_canonical"):
-            GroupSubgroupLatticeResult.model_validate(payload)
+        from jacobian.math.group._operations import verify_group_subgroup_lattice_result
+
+        assert (
+            verify_group_subgroup_lattice_result(
+                GroupSubgroupLatticeResult.model_validate(payload)
+            )
+            is False
+        )
 
     def test_foreign_group_entries_rejected(self) -> None:
         """Entries of one source group cannot be relayed under another."""
@@ -186,8 +192,14 @@ class TestLatticeResultBoundToSourceGroup:
         ).model_dump(mode="json")
         s3_payload["degree"] = 4
         s3_payload["generators"] = [[1, 2, 3, 0]]
-        with _group_error("group.lattice_canonical"):
-            GroupSubgroupLatticeResult.model_validate(s3_payload)
+        from jacobian.math.group._operations import verify_group_subgroup_lattice_result
+
+        assert (
+            verify_group_subgroup_lattice_result(
+                GroupSubgroupLatticeResult.model_validate(s3_payload)
+            )
+            is False
+        )
 
 
 class TestLatticeWorkBound:
@@ -311,8 +323,14 @@ class TestExceededOutcomeSourceBinding:
 
     def test_oversized_source_group_rejected_on_exceeded_path(self):
         s6 = ((1, 0, 2, 3, 4, 5), (1, 2, 3, 4, 5, 0))
-        with _group_error("group.order_bound"):
-            self._exceeded(degree=6, generators=s6)
+        from jacobian.math.group._operations import verify_group_subgroup_lattice_result
+
+        assert (
+            verify_group_subgroup_lattice_result(
+                self._exceeded(degree=6, generators=s6)
+            )
+            is False
+        )
 
     def test_entries_chain_into_permutation_group_consumers(self):
         from jacobian.math.group._models import PermutationGroupRequest

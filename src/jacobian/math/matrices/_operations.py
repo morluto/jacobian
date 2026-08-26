@@ -6,6 +6,7 @@ from typing import Any
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import matrices
 from jacobian.math.matrices import _conversions as conversions
 from jacobian.math.matrices._operation_models import (
@@ -34,6 +35,7 @@ from jacobian.math.matrices._operation_models import (
     SquareIntegerMatrixRequest,
     SquareRationalMatrixRequest,
 )
+from jacobian.math.matrices.operations import MatrixSingularError
 from jacobian.math.matrices.values import RationalMatrix, SmithNormalForm
 
 
@@ -77,7 +79,7 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     rank, pivot_columns = matrices.rank(
         conversions.rational_matrix_to_sympy(request.matrix)
     )
-    return MatrixRankResult(
+    return MatrixRankResult._from_kernel(
         matrix=request.matrix,
         rank=rank,
         pivot_columns=tuple(int(column) for column in pivot_columns),
@@ -90,7 +92,7 @@ def compute_rref(request: RationalMatrixRequest) -> RrefResult:
     )
     columns = reduced.cols
     pivot_columns = tuple(int(column) for column in pivots)
-    return RrefResult(
+    return RrefResult._from_kernel(
         matrix=request.matrix,
         reduced_matrix=conversions.rational_matrix_from_sympy(reduced),
         rank=len(pivot_columns),
@@ -120,7 +122,7 @@ def compute_nullspace(request: RationalMatrixRequest) -> NullspaceResult:
         for pivot_column, row in pivot_row_by_column.items():
             vector[pivot_column] = -reduced[row, free_column]
         basis.append(tuple(conversions.rational_from_sympy(value) for value in vector))
-    return NullspaceResult(
+    return NullspaceResult._from_kernel(
         matrix=request.matrix,
         ambient_dimension=matrix.cols,
         rank=len(pivot_columns),
@@ -155,7 +157,14 @@ def compute_smith_normal_form(
 
 
 def compute_inverse(request: NonsingularIntegerMatrixRequest) -> MatrixInverseResult:
-    inverse = matrices.inverse(conversions.integer_matrix_to_sympy(request.matrix))
+    try:
+        inverse = matrices.inverse(conversions.integer_matrix_to_sympy(request.matrix))
+    except MatrixSingularError as exc:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="matrix.singular_matrix",
+            message="matrix is singular; inverse does not exist",
+        ) from exc
     return MatrixInverseResult(inverse=conversions.rational_matrix_from_sympy(inverse))
 
 
@@ -189,18 +198,18 @@ def compute_rational_linear_solve(
     try:
         solution, parameters = matrices.solve_linear_system(source, rhs)
     except ValueError:
-        return RationalLinearSolveResult(
+        return RationalLinearSolveResult._from_kernel(
             matrix=request.matrix,
             rhs=request.rhs,
             outcome="INCONSISTENT",
         )
     if parameters.rows:
-        return RationalLinearSolveResult(
+        return RationalLinearSolveResult._from_kernel(
             matrix=request.matrix,
             rhs=request.rhs,
             outcome="NON_UNIQUE",
         )
-    return RationalLinearSolveResult(
+    return RationalLinearSolveResult._from_kernel(
         matrix=request.matrix,
         rhs=request.rhs,
         outcome="UNIQUE",
@@ -250,4 +259,79 @@ def compute_partial_trace(
         reduced_matrix=conversions.rational_matrix_from_sympy(reduced),
         traced_dimension=request.traced_dimension,
         kept_dimension=request.kept_dimension,
+    )
+
+
+def verify_rref_result(result: RrefResult) -> bool:
+    """Independently replay one bounded RREF claim from its retained source."""
+
+    expected, pivots = _rref_replay(result.matrix)
+    return tuple(int(pivot) for pivot in pivots) == result.pivot_columns and (
+        conversions.rational_matrix_to_sympy(result.reduced_matrix) == expected
+    )
+
+
+def verify_rank_result(result: MatrixRankResult) -> bool:
+    """Independently replay one bounded rank and pivot claim."""
+
+    rank, pivots = _rank_replay(result.matrix)
+    return rank == result.rank and pivots == result.pivot_columns
+
+
+def verify_nullspace_result(result: NullspaceResult) -> bool:
+    """Check a bounded fundamental nullspace basis against its source."""
+
+    matrix = conversions.rational_matrix_to_sympy(result.matrix)
+    _reduced, pivots = matrices.rref(matrix)
+    pivot_columns = tuple(int(column) for column in pivots)
+    free_columns = tuple(
+        column for column in range(matrix.cols) if column not in pivot_columns
+    )
+    if (
+        result.rank != len(pivot_columns)
+        or result.free_columns != free_columns
+        or result.nullity != len(free_columns)
+    ):
+        return False
+    for index, vector in enumerate(result.basis_vectors):
+        components = [value.as_fraction() for value in vector]
+        if any(
+            sum(
+                coefficient.as_fraction() * component
+                for coefficient, component in zip(row, components, strict=True)
+            )
+            != 0
+            for row in result.matrix.entries
+        ):
+            return False
+        own = free_columns[index]
+        if components[own] != 1 or any(
+            components[column] != 0 for column in free_columns if column != own
+        ):
+            return False
+    return True
+
+
+def verify_rational_linear_solve_result(result: RationalLinearSolveResult) -> bool:
+    """Replay one bounded linear-system outcome and optional exact witness."""
+
+    coefficient_rank, augmented_rank = _system_rank_replay(result.matrix, result.rhs)
+    columns = len(result.matrix.entries[0])
+    if result.outcome == "UNIQUE":
+        if result.solution is None or coefficient_rank != columns:
+            return False
+        return all(
+            sum(
+                coefficient.as_fraction() * component.as_fraction()
+                for coefficient, component in zip(row, result.solution, strict=True)
+            )
+            == bound.as_fraction()
+            for row, bound in zip(result.matrix.entries, result.rhs, strict=True)
+        )
+    if result.outcome == "INCONSISTENT":
+        return result.solution is None and coefficient_rank < augmented_rank
+    return (
+        result.solution is None
+        and coefficient_rank < columns
+        and coefficient_rank == augmented_rank
     )

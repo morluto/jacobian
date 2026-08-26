@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.symmetry._edges import canonical_edge
+from jacobian.math.graphs.symmetry._orbits import declared_orbit_partitions
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 MAX_GRAPH_SYMMETRY_VERTICES = 256
@@ -152,11 +153,13 @@ def _orbit_result_canonical_wire_bytes(request: GraphSymmetryOrbitRequest) -> in
     count values' digit widths, and the two color-mode literals selected by
     the declared colors.
     """
-    from jacobian.math.graphs.symmetry._operations import _declared_orbit_partitions
-
     vertices = tuple(sorted(request.graph.graph.vertices))
     edges = tuple(sorted(request.graph.graph.edges))
-    vertex_members, edge_members = _declared_orbit_partitions(request)
+    vertex_members, edge_members = declared_orbit_partitions(
+        vertices,
+        edges,
+        tuple(dict(generator.mapping) for generator in request.generators),
+    )
 
     vertex_label_sizes = [_quoted_wire_size(vertex) for vertex in vertices]
     edge_pair_sizes = [
@@ -372,10 +375,10 @@ class GraphSymmetryOrbitResult(StrictModel):
 
     The result retains its complete declared source action - the canonical
     graph, the generator mappings, and the declared colors - through the
-    domain-owned request value. Validation binds every claim to that source:
-    the retained graph and generators must equal it, the color modes must
-    match its declared colors, and both returned partitions must equal a
-    replay of the exact orbits of the declared generators.
+    domain-owned request value. Validation checks its canonical structure and
+    source binding. The trusted kernel constructs exact partitions; an
+    independently supplied partition can be checked by the explicit bounded
+    verifier in ``_operations``.
     """
 
     source: GraphSymmetryOrbitRequest
@@ -409,7 +412,7 @@ class GraphSymmetryOrbitResult(StrictModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @model_validator(mode="after")
-    def bind_complete_canonical_partitions(self) -> Self:
+    def require_canonical_source_bound_partitions(self) -> Self:
         if tuple(sorted(self.vertices)) != self.vertices or len(
             set(self.vertices)
         ) != len(self.vertices):
@@ -493,26 +496,36 @@ class GraphSymmetryOrbitResult(StrictModel):
                 "graph.edge_orbits_must_be_a_complete_canonical_edge_pa",
                 "edge orbits must be a complete canonical edge partition",
             )
-        from jacobian.math.graphs.symmetry._operations import _declared_orbit_partitions
-
-        expected_vertex_members, expected_edge_members = _declared_orbit_partitions(
-            self.source
-        )
-        if tuple(orbit.members for orbit in self.vertex_orbits) != (
-            expected_vertex_members
-        ):
-            raise PydanticCustomError(
-                "graph.vertex_orbits_exact_orbits_declared_generators",
-                "vertex orbits must be the exact orbits of the declared generators",
-            )
-        if tuple(orbit.members for orbit in self.edge_orbits) != (
-            expected_edge_members
-        ):
-            raise PydanticCustomError(
-                "graph.edge_orbits_exact_orbits_declared_generators",
-                "edge orbits must be the exact orbits of the declared generators",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: GraphSymmetryOrbitRequest,
+        vertices: tuple[GraphSymmetryLabel, ...],
+        edges: tuple[GraphSymmetryEdge, ...],
+        generator_ids: tuple[GraphSymmetryLabel, ...],
+        vertex_orbits: tuple[GraphVertexOrbit, ...],
+        edge_orbits: tuple[GraphEdgeOrbit, ...],
+        vertex_color_mode: Literal["UNCOLORED", "DECLARED"],
+        edge_color_mode: Literal["UNCOLORED", "DECLARED"],
+    ) -> Self:
+        """Construct an exact source-bound result from the trusted kernel."""
+
+        return cls.model_construct(
+            source=source,
+            vertices=vertices,
+            edges=edges,
+            generator_ids=generator_ids,
+            generator_count=len(generator_ids),
+            vertex_orbits=vertex_orbits,
+            edge_orbits=edge_orbits,
+            vertex_orbit_count=len(vertex_orbits),
+            edge_orbit_count=len(edge_orbits),
+            vertex_color_mode=vertex_color_mode,
+            edge_color_mode=edge_color_mode,
+        )
 
 
 __all__ = [

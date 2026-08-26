@@ -4,7 +4,7 @@ from jacobian.math.finite_categories._models import (
     CategoryProductRequest,
     CategoryProfileResult,
 )
-from jacobian.math.finite_categories.operations import product
+from jacobian.math.finite_categories._product import product
 from jacobian.math.finite_categories.values import (
     CategoryIdentifier,
     FiniteCategory,
@@ -13,10 +13,16 @@ from jacobian.math.finite_categories.values import (
 )
 
 
-def compute_category_profile(request: FiniteCategory) -> CategoryProfileResult:
-    """Compute the profile of a finite category."""
-    objects = request.objects
-    morphisms = request.morphisms
+def _category_profile_data(
+    category: FiniteCategory,
+) -> tuple[
+    tuple[tuple[CategoryIdentifier, CategoryIdentifier, int], ...],
+    tuple[tuple[CategoryIdentifier, int], ...],
+]:
+    """Compute the canonical derived profile data for a bounded category."""
+
+    objects = category.objects
+    morphisms = category.morphisms
 
     # Build hom-sets: Hom(a,b) = count of morphisms from a to b.
     hom_counts: dict[tuple[CategoryIdentifier, CategoryIdentifier], int] = {}
@@ -40,16 +46,29 @@ def compute_category_profile(request: FiniteCategory) -> CategoryProfileResult:
         (obj, endo_counts.get(obj, 0)) for obj in objects if obj in endo_counts
     ]
 
-    # Designated identity morphisms (one per object, from the value).
-    identities = tuple(request.identities)
+    return tuple(hom_list), tuple(endo_list)
 
-    return CategoryProfileResult(
-        objects=objects,
-        num_objects=len(objects),
-        num_morphisms=len(morphisms),
-        hom_sets=tuple(hom_list),
-        endomorphisms=tuple(endo_list),
-        identity_morphisms=identities,
+
+def compute_category_profile(request: FiniteCategory) -> CategoryProfileResult:
+    """Compute the profile of a finite category."""
+
+    hom_sets, endomorphisms = _category_profile_data(request)
+    return CategoryProfileResult._from_kernel(request, hom_sets, endomorphisms)
+
+
+def verify_category_profile_claim(
+    category: FiniteCategory, result: CategoryProfileResult
+) -> bool:
+    """Check a supplied profile claim against its explicit source category."""
+
+    hom_sets, endomorphisms = _category_profile_data(category)
+    return (
+        result.objects == category.objects
+        and result.num_objects == len(category.objects)
+        and result.num_morphisms == len(category.morphisms)
+        and result.hom_sets == hom_sets
+        and result.endomorphisms == endomorphisms
+        and result.identity_morphisms == category.identities
     )
 
 

@@ -26,7 +26,7 @@ from jacobian.math.number_theory._divisibility_operations import (
     decide_square,
 )
 from jacobian.math.number_theory._factorization import FACTORIZATION_OPERATIONS
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._integer_models import (
     BooleanResult,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,

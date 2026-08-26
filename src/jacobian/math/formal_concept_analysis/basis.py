@@ -12,6 +12,10 @@ from jacobian.canonical import (
     CanonicalLimits,
     encode_strict_json,
 )
+from jacobian.math.formal_concept_analysis._concepts import (
+    attribute_derivation,
+    object_derivation,
+)
 from jacobian.math.formal_concept_analysis.values import (
     MAX_IMPLICATION_MEMBERSHIPS,
     MAX_IMPLICATIONS,
@@ -19,6 +23,7 @@ from jacobian.math.formal_concept_analysis.values import (
     AttributeImplication,
     FiniteAttributeImplicationSystem,
     FormalContext,
+    _canonical_implication_closure_work,
 )
 
 # Admission bounds three operation-specific quantities instead of a coarse
@@ -526,13 +531,13 @@ class CanonicalImplicationBasisResult(StrictModel):
     )
     work: DGBasisWork
 
-    @model_validator(mode="after")
-    def replay_complete_canonical_basis(self) -> Self:
-        from jacobian.math.formal_concept_analysis.operations import (
-            attribute_derivation,
-            implication_closure,
-            object_derivation,
-        )
+    @classmethod
+    def _from_kernel(cls, payload: dict[str, object]) -> Self:
+        """Build a result emitted by the owner-local exhaustive kernel."""
+
+        return cls.model_validate(payload)
+
+    def _verify_complete_canonical_basis(self) -> None:
 
         attribute_count = len(self.context.attributes)
         states, reserved_work, reserved_bytes = _duquenne_guigues_preflight(
@@ -619,15 +624,15 @@ class CanonicalImplicationBasisResult(StrictModel):
 
         basis_replay_work = 0
         for state, expected_closure_mask in enumerate(closure_masks):
-            replay = implication_closure(
+            replay, replay_work = _canonical_implication_closure_work(
                 self.basis,
                 frozenset(_subset_for_state(state, attribute_count)),
             )
-            if _state_for_subset(replay.closure) != expected_closure_mask:
+            if _state_for_subset(replay) != expected_closure_mask:
                 raise ValueError(
                     "basis closure does not equal context closure for every subset"
                 )
-            basis_replay_work += replay.work.canonical_replay_work
+            basis_replay_work += replay_work
 
         closure_matrix_memberships = sum(
             len(row.subset) + len(row.closure) for row in self.closure_matrix
@@ -679,7 +684,15 @@ class CanonicalImplicationBasisResult(StrictModel):
             raise ValueError(
                 "serialized-result byte accounting does not match the exact result"
             )
-        return self
+        return None
+
+
+def verify_canonical_implication_basis_result(
+    result: CanonicalImplicationBasisResult,
+) -> None:
+    """Independently replay a supplied complete basis within the admitted bound."""
+
+    result._verify_complete_canonical_basis()
 
 
 __all__ = [
@@ -691,4 +704,5 @@ __all__ = [
     "DGBasisClosureRow",
     "DGBasisWork",
     "PseudoIntent",
+    "verify_canonical_implication_basis_result",
 ]

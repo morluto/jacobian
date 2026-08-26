@@ -271,16 +271,14 @@ class ComultiplicationResult(StrictModel):
         The digit budget and the equality with the already-validated
         coalgebra prime are therefore enforced on the raw nested input.
         """
-        data = canonicalize_json_containers(data)
-
         if not isinstance(data, dict):
-            return data
+            return canonicalize_json_containers(data)
         matrix_input = data.get("matrix")
         if not isinstance(matrix_input, dict):
-            return data
+            return canonicalize_json_containers(data)
         nested_prime = matrix_input.get("prime")
         if type(nested_prime) is not int:
-            return data
+            return canonicalize_json_containers(data)
         _require_admitted_prime_digits(nested_prime)
         coalgebra_input = data.get("coalgebra")
         coalgebra_prime = (
@@ -293,11 +291,11 @@ class ComultiplicationResult(StrictModel):
                 "matrix_prime_mismatch",
                 "matrix prime must match the retained coalgebra's field",
             )
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
-    def bind_comultiplication_to_source(self) -> Self:
-        """Replay Delta(c_i) against the retained canonical coalgebra."""
+    def require_structural_source_binding(self) -> Self:
+        """Check the retained carrier and matrix shape without recomputing Delta."""
         ca = self.coalgebra
         n = ca.dimension
         p = ca.prime
@@ -320,17 +318,21 @@ class ComultiplicationResult(StrictModel):
                 "matrix_prime_mismatch",
                 "matrix prime must match the retained coalgebra's field",
             )
-        expected = tuple(
-            tuple(ca.comultiplication[self.element_index][j][k] % p for k in range(n))
-            for j in range(n)
-        )
-        if self.matrix.entries != expected:
-            raise _validation_error(
-                "comultiplication_mismatch",
-                "coefficients must be the exact comultiplication of the "
-                "retained coalgebra basis element",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: ComultiplicationRequest,
+        matrix: PrimeFieldMatrix,
+    ) -> Self:
+        """Construct a result from the already-admitted kernel output."""
+        return cls.model_construct(
+            coalgebra=request.coalgebra,
+            element_index=request.element_index,
+            matrix=matrix,
+            dimension=request.coalgebra.dimension,
+        )
 
 
 class CounitRequest(StrictModel):
@@ -356,19 +358,28 @@ class CounitResult(StrictModel):
     value: int
 
     @model_validator(mode="after")
-    def bind_counit_to_source(self) -> Self:
-        """Replay epsilon(c_i) against the retained canonical coalgebra."""
+    def require_structural_source_binding(self) -> Self:
+        """Check the retained carrier without recomputing the counit."""
         ca = self.coalgebra
         if self.element_index >= ca.dimension:
             raise _validation_error(
                 "element_index_out_of_range", "element_index must be in 0..dimension-1"
             )
-        if self.value != ca.counit[self.element_index] % ca.prime:
+        if not 0 <= self.value < ca.prime:
             raise _validation_error(
-                "counit_mismatch",
-                "value must be the exact counit of the retained coalgebra basis element",
+                "noncanonical_counit_value",
+                "value must be a canonical residue in the coalgebra field",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: CounitRequest, value: int) -> Self:
+        """Construct a result from the already-admitted kernel output."""
+        return cls.model_construct(
+            coalgebra=request.coalgebra,
+            element_index=request.element_index,
+            value=value,
+        )
 
 
 class GroupLikeElementsRequest(StrictModel):
@@ -412,25 +423,10 @@ class GroupLikeElementsResult(StrictModel):
     count: int = Field(ge=0)
 
     @model_validator(mode="after")
-    def bind_group_like_to_source(self) -> Self:
-        """Replay the exhaustive enumeration against the retained coalgebra.
-
-        The scan-work admission bound is reapplied here because a serialized
-        result validates its ``coalgebra`` as a plain ``Coalgebra``, which
-        carries no enumerability guarantee; only then is the defining replay
-        Delta(g) = g (x) g and epsilon(g) = 1 over the whole element space
-        deterministic bounded work that the retained conclusion must match.
-        The bound covers kernel and replay together, so a validated result
-        never pays more than twice GROUP_LIKE_SCAN_WORK_BUDGET.
-        """
-        from jacobian.math.coalgebras._operations import _group_like_coefficients
-
+    def require_structural_elements(self) -> Self:
+        """Check bounded canonical result structure without replaying a search."""
         if self.count != len(self.elements):
             raise _validation_error("count_mismatch", "count must match element count")
-        # Reapply the scan-work admission bound before replaying: when a
-        # serialized result is validated directly, its coalgebra is parsed as
-        # a Coalgebra, not as a GroupLikeElementsRequest, so the request
-        # guard alone never runs.
         work = group_like_scan_work(self.coalgebra.prime, self.coalgebra.dimension)
         if work > GROUP_LIKE_SCAN_WORK_BUDGET:
             raise _validation_error(
@@ -449,18 +445,30 @@ class GroupLikeElementsResult(StrictModel):
                     "element coefficients must match the coalgebra dimension",
                 )
             key = tuple(element.coefficients)
+            if any(not 0 <= coefficient < self.coalgebra.prime for coefficient in key):
+                raise _validation_error(
+                    "noncanonical_group_like_coefficients",
+                    "group-like coefficients must be canonical field residues",
+                )
             if key in seen:
                 raise _validation_error(
                     "duplicate_group_like", "group-like elements must be distinct"
                 )
             seen.add(key)
-        expected = _group_like_coefficients(self.coalgebra)
-        if tuple(element.coefficients for element in self.elements) != expected:
-            raise _validation_error(
-                "group_like_set_mismatch",
-                "elements must be the exact group-like set of the retained coalgebra",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: GroupLikeElementsRequest,
+        elements: tuple[GroupLikeElement, ...],
+    ) -> Self:
+        """Construct an exhaustive result from the already-admitted kernel output."""
+        return cls.model_construct(
+            coalgebra=request.coalgebra,
+            elements=elements,
+            count=len(elements),
+        )
 
 
 __all__ = [

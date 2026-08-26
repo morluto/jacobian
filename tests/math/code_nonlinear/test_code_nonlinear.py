@@ -41,6 +41,11 @@ from jacobian.math.code_nonlinear._operations import (
     compute_explicit_profile,
     compute_to_set_system,
     compute_word_distance,
+    verify_constant_weight_profile_result,
+    verify_constant_weight_result,
+    verify_explicit_profile_result,
+    verify_to_set_system_result,
+    verify_word_distance_result,
 )
 from jacobian.math.code_nonlinear.values import (
     MAX_EXPLICIT_CODE_BITS,
@@ -198,15 +203,14 @@ class TestWordDistance:
         assert result.weight1 == result.weight2 == 2
         assert result.support_intersection == 1
 
-    def test_result_rejects_conclusion_mutation(self) -> None:
+    def test_explicit_verifier_rejects_conclusion_mutation(self) -> None:
         result = compute_word_distance(
             WordDistanceRequest(word1=(1, 0, 1), word2=(0, 1, 1))
         )
         payload = result.model_dump(mode="json")
         payload["distance"] = 1
-        with pytest.raises(ValidationError) as exc_info:
-            type(result).model_validate(payload)
-        assert exc_info.value.errors()[0]["type"] == "nonlinear_code.replay_mismatch"
+        supplied = type(result).model_validate(payload)
+        assert not verify_word_distance_result(supplied)
 
     def test_contract_version_tracks_the_wire_shape_change(self) -> None:
         from jacobian.math.code_nonlinear._tools import TOOLS
@@ -226,6 +230,7 @@ class TestWordDistance:
         assert result.support_intersection == 0
         replayed = WordDistanceResult.model_validate(result.model_dump(mode="json"))
         assert replayed == result
+        assert verify_word_distance_result(replayed)
 
     def test_word_distance_output_bound_covers_the_canonical_result(self) -> None:
         word = [0] * MAX_EXPLICIT_CODE_LENGTH
@@ -338,6 +343,7 @@ class TestExplicitProfile:
         )
         replayed = ExplicitProfileResult.model_validate(payload)
         assert replayed.minimum_distance_witness == _witness(source, 1, 2)
+        assert verify_explicit_profile_result(replayed)
 
     @pytest.mark.parametrize(
         ("path", "replacement"),
@@ -361,8 +367,11 @@ class TestExplicitProfile:
         for component in path[:-1]:
             target = target[component]  # type: ignore[index]
         target[path[-1]] = replacement  # type: ignore[index]
-        with pytest.raises(ValidationError):
-            ExplicitProfileResult.model_validate(payload)
+        try:
+            supplied = ExplicitProfileResult.model_validate(payload)
+        except ValidationError:
+            return
+        assert not verify_explicit_profile_result(supplied)
 
     def test_rejects_one_bit_source_mutation(self) -> None:
         result = compute_explicit_profile(
@@ -370,8 +379,8 @@ class TestExplicitProfile:
         )
         payload = result.model_dump(mode="json")
         payload["source"]["codewords"][1][0] = 1
-        with pytest.raises(ValidationError):
-            ExplicitProfileResult.model_validate(payload)
+        supplied = ExplicitProfileResult.model_validate(payload)
+        assert not verify_explicit_profile_result(supplied)
 
     def test_standard_a_23_6_10_2992_profile_replays_completely(self) -> None:
         """The source has length 23, minimum distance 6, and constant weight 10."""
@@ -422,6 +431,7 @@ class TestExplicitProfile:
             0,
         )
         assert sum(result.distance_histogram) == 4_474_536
+        assert verify_explicit_profile_result(result)
 
 
 class TestConstantWeightProfile:
@@ -496,8 +506,11 @@ class TestConstantWeightProfile:
         )
         payload = result.model_dump(mode="json")
         payload[field] = replacement
-        with pytest.raises(ValidationError):
-            ConstantWeightProfileResult.model_validate(payload)
+        try:
+            supplied = ConstantWeightProfileResult.model_validate(payload)
+        except ValidationError:
+            return
+        assert not verify_constant_weight_profile_result(supplied)
 
 
 class TestSetSystemConversion:
@@ -554,8 +567,8 @@ class TestSetSystemConversion:
             payload["coordinate_axis"][2] = 3
         else:
             payload["supports"][0][0] = 0
-        with pytest.raises(ValidationError):
-            ToSetSystemResult.model_validate(payload)
+        supplied = ToSetSystemResult.model_validate(payload)
+        assert not verify_to_set_system_result(supplied)
 
 
 class TestProducerConsumerClosure:
@@ -770,6 +783,7 @@ class TestCanonicalConsumers:
         serialized = wide.model_dump(mode="json")
         replayed = ConstantWeightResult.model_validate(serialized)
         assert replayed.code == wide.code
+        assert verify_constant_weight_result(replayed)
         axis = compute_constant_weight(
             ConstantWeightRequest(length=MAX_EXPLICIT_CODE_LENGTH, weight=0)
         )

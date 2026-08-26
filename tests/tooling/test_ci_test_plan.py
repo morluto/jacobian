@@ -54,6 +54,35 @@ def test_canonical_cnf_contract_change_selects_public_contract_evidence() -> Non
     assert plan.run_catalog_examples is True
 
 
+def test_pseudomanifold_contract_change_selects_public_contract_evidence() -> None:
+    plan = _plan(["src/jacobian/math/topology/_pseudomanifold.py"])
+
+    assert plan.run_math is True
+    assert plan.math_tests == ("tests/math/topology",)
+    assert plan.run_catalog is True
+    assert plan.run_catalog_examples is True
+
+
+def test_structural_topology_contract_change_selects_public_contract_evidence() -> None:
+    plan = _plan(["src/jacobian/math/topology/_structural.py"])
+
+    assert plan.run_math is True
+    assert plan.math_tests == ("tests/math/topology",)
+    assert plan.run_catalog is True
+    assert plan.run_catalog_examples is True
+
+
+def test_prime_affine_interval_contract_change_selects_public_contract_evidence() -> (
+    None
+):
+    plan = _plan(["src/jacobian/math/prime_affine_forms/_interval.py"])
+
+    assert plan.run_math is True
+    assert plan.math_tests == ("tests/math/prime_affine_forms",)
+    assert plan.run_catalog is True
+    assert plan.run_catalog_examples is True
+
+
 @pytest.mark.parametrize("filename", ["_sat.py", "_smt.py"])
 def test_logic_solver_contract_change_selects_public_contract_evidence(
     filename: str,

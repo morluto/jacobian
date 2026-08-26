@@ -66,16 +66,16 @@ class GraphSpectrumRequest(StrictModel):
 class GraphSpectrumResult(StrictModel):
     """The exact eigenvalues with algebraic multiplicities of a graph matrix.
 
-    Retains the source graph and matrix convention so validation replays
-    the exact spectrum of the same matrix.  Each ``eigenvalues`` entry is
+    Retains the source graph and matrix convention.  Each ``eigenvalues`` entry is
     the canonical exact SymPy rendering (over the algebraic closure of QQ,
     never a float) of one distinct eigenvalue; multiplicities are positive
     and sum to the graph order, so the claimed spectrum reconstructs
     ``det(xI - M)`` exactly, where ``M`` is the adjacency matrix A for
     ``matrix_convention="ADJACENCY"`` and the Laplacian matrix L for
     ``matrix_convention="LAPLACIAN"``.  Pair order carries no mathematical
-    meaning: validation compares ``(eigenvalue, multiplicity)`` pairs as a
-    multiset rather than by backend iteration order.
+    meaning.  The explicit owner verifier compares ``(eigenvalue,
+    multiplicity)`` pairs as a multiset when an independently supplied claim
+    needs checking.
     """
 
     graph: SpectralGraph
@@ -85,12 +85,7 @@ class GraphSpectrumResult(StrictModel):
     convention: Literal["SYMPY_EIGENVALS"] = "SYMPY_EIGENVALS"
 
     @model_validator(mode="after")
-    def require_source_bound(self) -> Self:
-        from jacobian.math.graphs.spectral.operations import (
-            adjacency_spectrum,
-            laplacian_spectrum,
-        )
-
+    def require_structural_shape(self) -> Self:
         _require_spectral_graph(self.graph)
         order = self.graph.vertex_count
         if len(self.eigenvalues) != len(self.multiplicities):
@@ -112,18 +107,26 @@ class GraphSpectrumResult(StrictModel):
                 "graph.multiplicities_must_sum_to_the_graph_order",
                 "multiplicities must sum to the graph order",
             )
-        replayed = (
-            adjacency_spectrum(self.graph)
-            if self.matrix_convention == "ADJACENCY"
-            else laplacian_spectrum(self.graph)
-        )
-        claimed = dict(zip(self.eigenvalues, self.multiplicities, strict=True))
-        if dict(replayed) != claimed:
-            raise PydanticCustomError(
-                "graph.spectrum_must_be_the_exact_spectrum_of_the_sourc",
-                "spectrum must be the exact spectrum of the source graph",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: IndexedSimpleUndirectedGraph,
+        matrix_convention: Literal["ADJACENCY", "LAPLACIAN"],
+        eigenvalues: tuple[str, ...],
+        multiplicities: tuple[int, ...],
+    ) -> Self:
+        """Construct a spectrum emitted by the trusted exact kernel."""
+
+        return cls.model_construct(
+            graph=graph,
+            matrix_convention=matrix_convention,
+            eigenvalues=eigenvalues,
+            multiplicities=multiplicities,
+            convention="SYMPY_EIGENVALS",
+        )
 
 
 def _dense_to_canonical_polynomial(
@@ -146,8 +149,8 @@ class GraphCharacteristicPolynomialResult(StrictModel):
 
     ``polynomial`` is the domain-owned canonical sparse value so downstream
     polynomial operations compose without translation.  The result retains
-    its source graph and convention so validation can replay the defining
-    determinant relation.
+    its source graph and convention; the explicit owner verifier checks the
+    defining determinant relation for independently supplied claims.
     """
 
     graph: SpectralGraph
@@ -155,15 +158,7 @@ class GraphCharacteristicPolynomialResult(StrictModel):
     polynomial: RationalPolynomial
 
     @model_validator(mode="after")
-    def require_bound_to_source(self) -> Self:
-        from jacobian.math.graphs.spectral.operations import (
-            _adjacency_matrix,
-            _laplacian_matrix,
-        )
-        from jacobian.math.polynomials._conversions import (
-            rational_polynomial_to_sympy,
-        )
-
+    def require_structural_shape(self) -> Self:
         _require_spectral_graph(self.graph)
         if self.polynomial.variables != (_VARIABLE,):
             raise PydanticCustomError(
@@ -177,21 +172,21 @@ class GraphCharacteristicPolynomialResult(StrictModel):
             maximum_coefficient_digits=_MAX_CHARPOLY_COEFFICIENT_DIGITS,
             label="characteristic polynomial",
         )
-        matrix = (
-            _adjacency_matrix(self.graph)
-            if self.convention == "ADJACENCY"
-            else _laplacian_matrix(self.graph)
-        )
-        poly_sym = rational_polynomial_to_sympy(self.polynomial)
-        actual = poly_sym.as_expr()
-        charpoly = matrix.charpoly()
-        expected = charpoly.as_expr().subs(charpoly.gen, poly_sym.gen)
-        if expected != actual:
-            raise PydanticCustomError(
-                "graph.characteristic_polynomial_does_match_source",
-                "characteristic polynomial does not match the source graph",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: IndexedSimpleUndirectedGraph,
+        convention: Literal["ADJACENCY", "LAPLACIAN"],
+        polynomial: RationalPolynomial,
+    ) -> Self:
+        """Construct a polynomial emitted by the trusted exact kernel."""
+
+        return cls.model_construct(
+            graph=graph, convention=convention, polynomial=polynomial
+        )
 
 
 __all__ = [

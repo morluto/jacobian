@@ -8,15 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.words.operations import (
-    _require_fixed_point_prefix_budget,
-    factors_of_length,
-    fixed_point_prefix,
-    incidence_matrix,
-    periods,
-    substitution_dependency_graph,
-    substitution_primitivity_profile,
-)
+from jacobian.math.words._fixed_point_admission import require_fixed_point_prefix_budget
 from jacobian.math.words.values import (
     MAX_MORPHISM_OUTPUT_LENGTH,
     FiniteWord,
@@ -65,23 +57,68 @@ class FactorsLengthResult(FactorsLengthRequest):
     )
 
     @model_validator(mode="after")
-    def bind_exact_factor_enumeration(self) -> Self:
-        expected = factors_of_length(self.word, self.factor_length)
-        expected_occurrences = expected.occurrences
-        if (
-            self.factors != expected.factors
-            or self.occurrences != expected_occurrences
-            or self.multiplicities
-            != tuple(len(indices) for indices in expected_occurrences)
-            or self.first_occurrence
-            != tuple(indices[0] for indices in expected_occurrences)
-            or self.distinct_count != len(expected.factors)
+    def require_structural_factor_enumeration(self) -> Self:
+        if not (
+            len(self.factors)
+            == len(self.occurrences)
+            == len(self.multiplicities)
+            == len(self.first_occurrence)
+            == self.distinct_count
         ):
             raise _validation_error(
-                "factor_result_unbound",
-                "factor result is not bound to the requested word",
+                "factor_result_shape",
+                "factor result fields must have one entry per factor",
             )
+        for factor, positions, multiplicity, first in zip(
+            self.factors,
+            self.occurrences,
+            self.multiplicities,
+            self.first_occurrence,
+            strict=True,
+        ):
+            if len(factor) != self.factor_length or any(
+                letter not in self.word.alphabet for letter in factor
+            ):
+                raise _validation_error(
+                    "factor_result_factor",
+                    "each factor must be a requested-length word",
+                )
+            if not positions or positions != tuple(sorted(set(positions))):
+                raise _validation_error(
+                    "factor_result_positions",
+                    "each factor must retain nonempty increasing occurrence positions",
+                )
+            if any(
+                position < 0 or position + self.factor_length > len(self.word.letters)
+                for position in positions
+            ):
+                raise _validation_error(
+                    "factor_result_positions",
+                    "factor occurrence position is outside the word",
+                )
+            if multiplicity != len(positions) or first != positions[0]:
+                raise _validation_error(
+                    "factor_result_summary",
+                    "factor summaries must agree with occurrences",
+                )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: FactorsLengthRequest,
+        *,
+        factors: tuple[tuple[str, ...], ...],
+        occurrences: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        return cls(
+            **request.model_dump(),
+            factors=factors,
+            occurrences=occurrences,
+            multiplicities=tuple(len(indices) for indices in occurrences),
+            first_occurrence=tuple(indices[0] for indices in occurrences),
+            distinct_count=len(factors),
+        )
 
 
 class PeriodsRequest(StrictModel):
@@ -106,18 +143,38 @@ class PeriodsResult(PeriodsRequest):
     )
 
     @model_validator(mode="after")
-    def bind_exact_period_profile(self) -> Self:
-        expected = periods(self.word)
-        if (
-            self.periods != expected.periods
-            or self.least_period != expected.least_period
-            or self.is_primitive != expected.primitive
+    def require_structural_period_profile(self) -> Self:
+        if self.periods != tuple(sorted(set(self.periods))) or any(
+            period <= 0 or period > len(self.word.letters) for period in self.periods
         ):
             raise _validation_error(
-                "period_result_unbound",
-                "period result is not bound to the requested word",
+                "period_result_periods",
+                "periods must be increasing positive word offsets",
+            )
+        if (self.periods and self.least_period != self.periods[0]) or (
+            not self.periods and self.least_period != 0
+        ):
+            raise _validation_error(
+                "period_result_least",
+                "least_period must be the first reported period, or zero",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PeriodsRequest,
+        *,
+        periods: tuple[int, ...],
+        least_period: int,
+        is_primitive: bool,
+    ) -> Self:
+        return cls(
+            **request.model_dump(),
+            periods=periods,
+            least_period=least_period,
+            is_primitive=is_primitive,
+        )
 
 
 class IncidenceMatrixRequest(StrictModel):
@@ -135,13 +192,23 @@ class IncidenceMatrixResult(IncidenceMatrixRequest):
     orientation: Literal["ROWS_TARGET_COLUMNS_SOURCE"] = "ROWS_TARGET_COLUMNS_SOURCE"
 
     @model_validator(mode="after")
-    def bind_exact_incidence_matrix(self) -> Self:
-        if self.matrix != incidence_matrix(self.morphism):
+    def require_matrix_shape(self) -> Self:
+        if len(self.matrix) != len(self.morphism.target_alphabet) or any(
+            len(row) != len(self.morphism.source_alphabet)
+            or any(entry < 0 for entry in row)
+            for row in self.matrix
+        ):
             raise _validation_error(
-                "incidence_matrix_unbound",
-                "incidence matrix is not bound to the requested morphism",
+                "incidence_matrix_shape",
+                "matrix must be nonnegative target-by-source counts",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: IncidenceMatrixRequest, matrix: tuple[tuple[int, ...], ...]
+    ) -> Self:
+        return cls(**request.model_dump(), matrix=matrix)
 
 
 class SubstitutionDependencyGraphRequest(StrictModel):
@@ -172,14 +239,13 @@ class SubstitutionDependencyGraphResult(SubstitutionDependencyGraphRequest):
         "SOURCE_TO_OCCURRING_TARGET"
     )
 
-    @model_validator(mode="after")
-    def bind_exact_dependency_graph(self) -> Self:
-        if self.graph != substitution_dependency_graph(self.substitution):
-            raise _validation_error(
-                "dependency_graph_unbound",
-                "dependency graph result is not bound to the substitution",
-            )
-        return self
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: SubstitutionDependencyGraphRequest,
+        graph: SubstitutionDependencyGraph,
+    ) -> Self:
+        return cls(**request.model_dump(), graph=graph)
 
 
 class SubstitutionPrimitivityProfileRequest(StrictModel):
@@ -216,22 +282,69 @@ class SubstitutionPrimitivityProfileResult(SubstitutionPrimitivityProfileRequest
     )
 
     @model_validator(mode="after")
-    def bind_exact_primitivity_profile(self) -> Self:
-        expected = substitution_primitivity_profile(self.dependency_graph)
+    def require_structural_primitivity_profile(self) -> Self:
+        alphabet = self.dependency_graph.substitution.morphism.source_alphabet
+        flattened = tuple(
+            symbol
+            for component in self.strongly_connected_components
+            for symbol in component
+        )
         if (
-            self.strongly_connected_components != expected.strongly_connected_components
-            or self.irreducible != expected.irreducible
-            or self.aperiodic != expected.aperiodic
-            or self.primitive != expected.primitive
-            or self.least_positive_power != expected.least_positive_power
-            or self.exponent_upper_bound != expected.exponent_upper_bound
-            or self.obstruction != expected.obstruction
+            not self.strongly_connected_components
+            or any(not component for component in self.strongly_connected_components)
+            or set(flattened) != set(alphabet)
+            or len(flattened) != len(set(flattened))
         ):
             raise _validation_error(
-                "primitivity_result_unbound",
-                "primitivity result is not bound to the dependency graph",
+                "primitivity_components",
+                "components must partition the substitution alphabet",
+            )
+        if self.irreducible != (len(self.strongly_connected_components) == 1):
+            raise _validation_error(
+                "primitivity_irreducible", "irreducible must match component count"
+            )
+        if self.primitive:
+            if (
+                self.aperiodic is not True
+                or self.least_positive_power is None
+                or self.obstruction != "NONE"
+            ):
+                raise _validation_error(
+                    "primitivity_positive",
+                    "a primitive profile needs a positive aperiodic witness",
+                )
+        elif self.least_positive_power is not None or self.obstruction == "NONE":
+            raise _validation_error(
+                "primitivity_negative",
+                "a nonprimitive profile cannot claim a positive power",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: SubstitutionPrimitivityProfileRequest,
+        *,
+        strongly_connected_components: tuple[tuple[str, ...], ...],
+        irreducible: bool,
+        aperiodic: bool | None,
+        primitive: bool,
+        least_positive_power: int | None,
+        exponent_upper_bound: int,
+        obstruction: Literal[
+            "NONE", "REDUCIBLE_DEPENDENCY_GRAPH", "PERIODIC_DEPENDENCY_GRAPH"
+        ],
+    ) -> Self:
+        return cls(
+            **request.model_dump(),
+            strongly_connected_components=strongly_connected_components,
+            irreducible=irreducible,
+            aperiodic=aperiodic,
+            primitive=primitive,
+            least_positive_power=least_positive_power,
+            exponent_upper_bound=exponent_upper_bound,
+            obstruction=obstruction,
+        )
 
 
 class SubstitutionFixedPointPrefixRequest(StrictModel):
@@ -243,7 +356,7 @@ class SubstitutionFixedPointPrefixRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_source_work_and_result(self) -> Self:
         try:
-            _require_fixed_point_prefix_budget(self.source, self.prefix_length)
+            require_fixed_point_prefix_budget(self.source, self.prefix_length)
         except ValueError as error:
             raise _validation_error("fixed_point_budget", str(error)) from error
         return self
@@ -266,18 +379,49 @@ class SubstitutionFixedPointPrefixResult(SubstitutionFixedPointPrefixRequest):
     )
 
     @model_validator(mode="after")
-    def bind_exact_fixed_point_prefix(self) -> Self:
-        expected = fixed_point_prefix(self.source, self.prefix_length)
+    def require_structural_fixed_point_prefix(self) -> Self:
         if (
-            self.prefix != expected.prefix
-            or self.least_iterate_depth != expected.least_iterate_depth
-            or self.retained_prefix_lengths != expected.retained_prefix_lengths
+            self.prefix.alphabet != self.source.substitution.morphism.target_alphabet
+            or len(self.prefix.letters) != self.prefix_length
         ):
             raise _validation_error(
-                "fixed_point_prefix_unbound",
-                "fixed-point prefix is not bound to the request",
+                "fixed_point_prefix_shape",
+                "prefix must have the requested target-alphabet length",
+            )
+        if (
+            self.retained_prefix_lengths[0] != min(1, self.prefix_length)
+            or self.retained_prefix_lengths[-1] != self.prefix_length
+            or any(
+                left > right
+                for left, right in zip(
+                    self.retained_prefix_lengths,
+                    self.retained_prefix_lengths[1:],
+                    strict=False,
+                )
+            )
+            or self.least_iterate_depth != len(self.retained_prefix_lengths) - 1
+        ):
+            raise _validation_error(
+                "fixed_point_prefix_ledger",
+                "retained prefix lengths must describe the iterate ledger",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: SubstitutionFixedPointPrefixRequest,
+        *,
+        prefix: FiniteWord,
+        least_iterate_depth: int,
+        retained_prefix_lengths: tuple[int, ...],
+    ) -> Self:
+        return cls(
+            **request.model_dump(),
+            prefix=prefix,
+            least_iterate_depth=least_iterate_depth,
+            retained_prefix_lengths=retained_prefix_lengths,
+        )
 
 
 __all__ = [

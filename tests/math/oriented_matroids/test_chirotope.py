@@ -13,7 +13,6 @@ from pydantic import ValidationError
 from jacobian.math.oriented_matroids._models import (
     MAX_B2_EXCHANGE_INSTANCES,
     MAX_EXECUTION_B2_EXCHANGE_INSTANCES,
-    SOURCE_BOUND_REPLAY_PASSES,
     ChirotopeCheckRequest,
     ChirotopeCheckResult,
     ChirotopeCheckStatus,
@@ -22,6 +21,7 @@ from jacobian.math.oriented_matroids._models import (
 from jacobian.math.oriented_matroids._operations import (
     _alternating_value,
     check_chirotope,
+    verify_chirotope_check_result,
 )
 from jacobian.math.oriented_matroids._tools import TOOLS
 
@@ -217,23 +217,23 @@ class TestChirotopeCheck:
         assert result.status is ChirotopeCheckStatus.VALID
         assert result.b2_exchange_instances_checked == 531_441
 
-    def test_result_replay_rejects_source_and_conclusion_corruption(self) -> None:
+    def test_explicit_verifier_rejects_source_and_conclusion_corruption(self) -> None:
         result = check_chirotope(
             ChirotopeCheckRequest.model_validate({"chirotope": _ringel_table()})
         )
         source_corruption = result.model_dump(mode="json")
         source_corruption["chirotope"]["entries"][0]["sign"] *= -1
-        with pytest.raises(ValidationError) as exc_info:
+        assert not verify_chirotope_check_result(
             ChirotopeCheckResult.model_validate(source_corruption)
-        assert exc_info.value.errors()[0]["type"] == "oriented_matroid.result.replay"
+        )
 
         conclusion_corruption = result.model_dump(mode="json")
         conclusion_corruption["b2_exchange_instances_checked"] -= 1
-        with pytest.raises(ValidationError) as exc_info:
+        assert not verify_chirotope_check_result(
             ChirotopeCheckResult.model_validate(conclusion_corruption)
-        assert exc_info.value.errors()[0]["type"] == "oriented_matroid.result.replay"
+        )
 
-    def test_result_replay_rejects_corrupted_b2_witness(self) -> None:
+    def test_explicit_verifier_rejects_corrupted_b2_witness(self) -> None:
         table = _ringel_table()
         table["entries"][0]["sign"] *= -1
         result = check_chirotope(
@@ -247,31 +247,17 @@ class TestChirotopeCheck:
             original_x[1],
             original_x[2],
         ]
-        with pytest.raises(ValidationError) as exc_info:
+        assert not verify_chirotope_check_result(
             ChirotopeCheckResult.model_validate(witness_corruption)
-        assert exc_info.value.errors()[0]["type"] == "oriented_matroid.result.replay"
+        )
 
-    def test_boundary_ten_reserves_two_b2_scans(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        from jacobian.math.oriented_matroids import _operations
-
-        calls = 0
-        original = _operations._expected_result
-
-        def count_scan(request: ChirotopeCheckRequest) -> ChirotopeCheckResult:
-            nonlocal calls
-            calls += 1
-            return original(request)
-
-        monkeypatch.setattr(_operations, "_expected_result", count_scan)
+    def test_boundary_ten_reserves_one_b2_scan(self) -> None:
         result = check_chirotope(
             ChirotopeCheckRequest.model_validate({"chirotope": _alternating_table(10)})
         )
         assert result.status is ChirotopeCheckStatus.VALID
         assert result.b2_exchange_instances_checked == MAX_B2_EXCHANGE_INSTANCES
-        assert calls == SOURCE_BOUND_REPLAY_PASSES == 2
-        assert MAX_EXECUTION_B2_EXCHANGE_INSTANCES == 2_000_000
+        assert MAX_EXECUTION_B2_EXCHANGE_INSTANCES == 1_000_000
 
 
 class TestIndependentOracleAndCatalog:

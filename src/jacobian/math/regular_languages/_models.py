@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.regular_languages.values import (
     DFA,
     MAX_COUNT_WORD_LENGTH,
@@ -86,12 +87,12 @@ class TransitionParikhProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_bounded_profile(self) -> Self:
-        from jacobian.math.regular_languages.operations import (
-            _require_transition_profile_envelope,
+        from jacobian.math.regular_languages._profile_admission import (
+            require_transition_profile_envelope,
         )
 
         try:
-            _require_transition_profile_envelope(
+            require_transition_profile_envelope(
                 self.automaton,
                 self.source_state,
                 self.target_state,
@@ -111,22 +112,44 @@ class RunResult(RunRequest):
     method: Literal["DFA_SIMULATION"] = "DFA_SIMULATION"
 
     @model_validator(mode="after")
-    def bind_run(self) -> Self:
-        transitions = {
-            (item.source, item.symbol): item.target for item in self.dfa.transitions
-        }
-        trace = [self.dfa.initial_state]
-        for symbol in self.word:
-            trace.append(transitions[(trace[-1], symbol)])
-        if self.state_trace != tuple(trace) or self.final_state != trace[-1]:
+    def require_run_shape(self) -> Self:
+        if len(self.state_trace) != len(self.word) + 1:
             raise _validation_error(
-                "run_trace_not_bound", "DFA run trace is not bound to its source"
+                "run_trace_length_mismatch",
+                "DFA run trace must contain the initial state and one state per symbol",
             )
-        if self.accepted != (self.final_state in self.dfa.accepting_states):
+        if (
+            self.state_trace[0] != self.dfa.initial_state
+            or self.final_state != self.state_trace[-1]
+        ):
             raise _validation_error(
-                "acceptance_mismatch", "DFA acceptance must agree with the final state"
+                "run_trace_endpoint_mismatch",
+                "DFA run trace must begin at the initial state and end at final_state",
+            )
+        if any(not 0 <= state < self.dfa.state_count for state in self.state_trace):
+            raise _validation_error(
+                "run_trace_state_out_of_range",
+                "DFA run trace contains a state outside its carrier",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: RunRequest,
+        *,
+        accepted: bool,
+        final_state: int,
+        state_trace: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            dfa=request.dfa,
+            word=request.word,
+            accepted=accepted,
+            final_state=final_state,
+            state_trace=state_trace,
+            method="DFA_SIMULATION",
+        )
 
 
 class CountResult(CountRequest):
@@ -137,14 +160,19 @@ class CountResult(CountRequest):
     method: Literal["MATRIX_POWERING"] = "MATRIX_POWERING"
 
     @model_validator(mode="after")
-    def bind_count(self) -> Self:
-        from jacobian.math.regular_languages.operations import count_accepted_words
-
-        if int(self.count) != count_accepted_words(self.dfa, self.word_length):
-            raise _validation_error(
-                "count_not_bound", "word count is not bound to its DFA"
-            )
+    def require_nonnegative_count(self) -> Self:
+        if parse_canonical_integer(self.count) < 0:
+            raise _validation_error("count_negative", "word count must be nonnegative")
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: CountRequest, *, count: CanonicalInteger) -> Self:
+        return cls.model_construct(
+            dfa=request.dfa,
+            word_length=request.word_length,
+            count=count,
+            method="MATRIX_POWERING",
+        )
 
 
 class ComplementResult(StrictModel):

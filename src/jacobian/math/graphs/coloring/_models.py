@@ -10,20 +10,26 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
 )
 
-MAX_EDGE_COLORING_VERTICES = 64
-MAX_EDGE_COLORING_EDGES = (
-    MAX_EDGE_COLORING_VERTICES * (MAX_EDGE_COLORING_VERTICES - 1) // 2
-)
-# Polynomial-time checks (independent_set.maximal, edge_coloring.check) scale
-# as O(V+E) and O(E^2) respectively and can use the full SimpleGraph limit
-# of 64 vertices (SimpleUndirectedGraph max 256 is a future step). SAT-based
-# operations (k_colorability.decide, edge_coloring.k_decide) use the same
-# 64-vertex envelope but remain bounded by the explicit solver conflict
-# budget (MAX_SOLVER_CONFLICT_BUDGET) per request.
+# The old 64-vertex envelope admitted a complete 64-vertex graph, hence at
+# most C(64, 2) edge variables.  Retain that formula/output envelope rather
+# than treating 64 vertices as the mathematical domain: sparse graphs on the
+# shared 256-vertex axis are no more expensive in the vertex-coloring formula.
+MAX_COLORING_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
+MAX_EDGE_COLORING_VERTICES = MAX_COLORING_VERTICES
+MAX_EDGE_COLORING_EDGES = 64 * 63 // 2
+# Edge coloring has one inequality for every incident pair of edges.  A K_64
+# has 64 * C(63, 2) such pairs; this is the retained bound on the materialized
+# edge-coloring formula and checker, independently of the vertex count.
+MAX_EDGE_COLORING_CONFLICT_PAIRS = 64 * 63 * 62 // 2
+# Polynomial-time checks (independent_set.maximal, edge_coloring.check) and
+# SAT-based operations use the shared 256-vertex graph axis.  The derived
+# edge-variable and incident-pair limits above bound formula construction;
+# SAT search itself remains bounded by the explicit conflict budget.
 DEFAULT_SOLVER_CONFLICT_BUDGET = 100_000
 """Default request-visible SAT conflict budget for one colorability decision."""
 
@@ -32,10 +38,11 @@ MAX_SOLVER_CONFLICT_BUDGET = 1_000_000
 
 
 def _require_indexed_coloring_graph(graph: IndexedSimpleUndirectedGraph) -> None:
-    if graph.vertex_count > MAX_EDGE_COLORING_VERTICES:
+    if len(graph.edges) > MAX_EDGE_COLORING_EDGES:
         raise PydanticCustomError(
-            "graph.coloring_vertex_count_exceeds_operation_bound",
-            f"coloring operations support at most {MAX_EDGE_COLORING_VERTICES} vertices",
+            "graph.coloring_edge_count_exceeds_formula_bound",
+            "coloring operations support at most "
+            f"{MAX_EDGE_COLORING_EDGES} adjacency constraints",
         )
 
 
@@ -45,10 +52,11 @@ def _indexed_coloring_graph_schema() -> JsonSchemaValue:
     schema = IndexedSimpleUndirectedGraph.model_json_schema()
     schema["description"] = (
         "An integer-indexed simple undirected graph accepted by the coloring "
-        f"operations: at most {MAX_EDGE_COLORING_VERTICES} vertices and at most "
-        f"{MAX_EDGE_COLORING_EDGES} edges."
+        f"operations: at most {MAX_COLORING_VERTICES} vertices and at most "
+        f"{MAX_EDGE_COLORING_EDGES} adjacency constraints. Sparse graphs may "
+        "use the full vertex axis."
     )
-    schema["properties"]["vertex_count"].update(maximum=MAX_EDGE_COLORING_VERTICES)
+    schema["properties"]["vertex_count"].update(maximum=MAX_COLORING_VERTICES)
     schema["properties"]["edges"].update(maxItems=MAX_EDGE_COLORING_EDGES)
     return schema
 
@@ -57,67 +65,6 @@ IndexedColoringGraph = Annotated[
     IndexedSimpleUndirectedGraph,
     WithJsonSchema(_indexed_coloring_graph_schema()),
 ]
-
-
-def _run_edge_coloring_solver(
-    graph: SimpleUndirectedGraph,
-    colors: int,
-    solver_conflicts: int,
-) -> tuple[str, tuple[int, ...] | None]:
-    """Run one bounded exact edge-coloring SAT check.
-
-    Returns ``("sat", coloring)``, ``("unsat", None)``, or
-    ``("unknown", None)``.  Non-colorability is only ever claimed on an
-    explicit ``unsat``; an exhausted budget reports ``unknown`` so the
-    caller returns the typed incomplete outcome.
-    """
-
-    import z3  # type: ignore[import-untyped]
-
-    solver = z3.Solver()
-    solver.set("max_conflicts", solver_conflicts)
-    edge_colors = [z3.Int(f"c_{i}") for i in range(len(graph.edges))]
-    solver.add(*(z3.And(c >= 0, c < colors) for c in edge_colors))
-    for a, b in _incident_edge_index_pairs_for_canonical_graph(graph):
-        solver.add(edge_colors[a] != edge_colors[b])
-    result = solver.check()
-    if result == z3.sat:
-        model = solver.model()
-        return "sat", tuple(model.eval(c).as_long() for c in edge_colors)
-    if result == z3.unsat:
-        return "unsat", None
-    return "unknown", None
-
-
-def _run_k_colorability_solver(
-    graph: IndexedSimpleUndirectedGraph,
-    colors: int,
-    solver_conflicts: int,
-) -> tuple[str, tuple[int, ...] | None]:
-    """Run one bounded exact vertex-coloring SAT check.
-
-    Returns ``("sat", coloring)``, ``("unsat", None)``, or
-    ``("unknown", None)``; the coloring assigns one color in
-    ``0..colors-1`` to each vertex index ``0..vertex_count-1``.
-    Non-colorability is only ever claimed on an explicit ``unsat``; an
-    exhausted budget reports ``unknown`` so the caller returns the typed
-    incomplete outcome.
-    """
-
-    import z3
-
-    solver = z3.Solver()
-    solver.set("max_conflicts", solver_conflicts)
-    vertex_colors = [z3.Int(f"color_{vertex}") for vertex in range(graph.vertex_count)]
-    solver.add(*(z3.And(color >= 0, color < colors) for color in vertex_colors))
-    solver.add(*(vertex_colors[u] != vertex_colors[v] for u, v in graph.edges))
-    result = solver.check()
-    if result == z3.sat:
-        model = solver.model()
-        return "sat", tuple(model.eval(color).as_long() for color in vertex_colors)
-    if result == z3.unsat:
-        return "unsat", None
-    return "unknown", None
 
 
 def _is_proper_vertex_coloring(
@@ -135,10 +82,11 @@ def _edge_coloring_graph_schema() -> JsonSchemaValue:
     schema = SimpleUndirectedGraph.model_json_schema()
     schema["description"] = (
         "A simple undirected graph accepted by the edge-coloring operations: "
-        f"at most {MAX_EDGE_COLORING_VERTICES} vertices and at most "
-        f"{MAX_EDGE_COLORING_EDGES} edges."
+        f"at most {MAX_COLORING_VERTICES} vertices, at most "
+        f"{MAX_EDGE_COLORING_EDGES} edges, and at most "
+        f"{MAX_EDGE_COLORING_CONFLICT_PAIRS} incident-edge constraints."
     )
-    schema["properties"]["vertices"].update(maxItems=MAX_EDGE_COLORING_VERTICES)
+    schema["properties"]["vertices"].update(maxItems=MAX_COLORING_VERTICES)
     schema["properties"]["edges"].update(maxItems=MAX_EDGE_COLORING_EDGES)
     return schema
 
@@ -176,11 +124,27 @@ def _is_proper_edge_coloring(
     return True
 
 
+def _edge_coloring_conflict_pair_count(graph: SimpleUndirectedGraph) -> int:
+    """Count edge-pair inequalities without materializing the pair list."""
+
+    degrees = dict.fromkeys(graph.vertices, 0)
+    for left, right in graph.edges:
+        degrees[left] += 1
+        degrees[right] += 1
+    return sum(degree * (degree - 1) // 2 for degree in degrees.values())
+
+
 def _require_edge_coloring_graph_bound(graph: SimpleUndirectedGraph) -> None:
-    if len(graph.vertices) > MAX_EDGE_COLORING_VERTICES:
+    if len(graph.edges) > MAX_EDGE_COLORING_EDGES:
         raise PydanticCustomError(
-            "graph.edge_coloring_supports_at_most_max_edge",
-            f"edge-coloring supports at most {MAX_EDGE_COLORING_VERTICES} vertices",
+            "graph.edge_coloring_edge_count_exceeds_formula_bound",
+            f"edge-coloring supports at most {MAX_EDGE_COLORING_EDGES} edges",
+        )
+    if _edge_coloring_conflict_pair_count(graph) > MAX_EDGE_COLORING_CONFLICT_PAIRS:
+        raise PydanticCustomError(
+            "graph.edge_coloring_incident_pair_count_exceeds_formula_bound",
+            "edge-coloring supports at most "
+            f"{MAX_EDGE_COLORING_CONFLICT_PAIRS} incident-edge constraints",
         )
 
 
@@ -273,7 +237,30 @@ class KColorabilityResult(StrictModel):
     status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED"] = "DECIDED"
     colorable: bool | None = None
     coloring: tuple[int, ...] | None = None
-    vertex_count: int = Field(ge=0, le=64)
+    vertex_count: int = Field(ge=0, le=MAX_COLORING_VERTICES)
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: IndexedSimpleUndirectedGraph,
+        colors: int,
+        solver_conflicts: int,
+        status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED"],
+        colorable: bool | None,
+        coloring: tuple[int, ...] | None,
+    ) -> Self:
+        """Construct a result already established by the owner-local kernel."""
+
+        return cls(
+            graph=graph,
+            colors=colors,
+            solver_conflicts=solver_conflicts,
+            status=status,
+            colorable=colorable,
+            coloring=coloring,
+            vertex_count=graph.vertex_count,
+        )
 
     @model_validator(mode="after")
     def require_claim_consistency(self) -> Self:
@@ -294,14 +281,14 @@ class KColorabilityResult(StrictModel):
         if self.colorable:
             _require_k_colorability_positive_witness(self)
         else:
-            _require_k_colorability_negative_replay(self)
+            _require_k_colorability_negative_shape(self)
         return self
 
 
 def _require_k_colorability_budget_exceeded_shape(
     result: KColorabilityResult,
 ) -> None:
-    """A budget-exceeded outcome carries no claim and must replay unknown."""
+    """A budget-exceeded outcome carries no mathematical claim."""
 
     if result.colorable is not None or result.coloring is not None:
         raise PydanticCustomError(
@@ -312,16 +299,6 @@ def _require_k_colorability_budget_exceeded_shape(
         raise PydanticCustomError(
             "graph.empty_graph_is_decided_colorable_without_any_sea",
             "empty graph is decided colorable without any search",
-        )
-    if (
-        _run_k_colorability_solver(
-            result.graph, result.colors, result.solver_conflicts
-        )[0]
-        != "unknown"
-    ):
-        raise PydanticCustomError(
-            "graph.claimed_solver_budget_exceedance_reproduced_by_bounded",
-            "claimed solver-budget exceedance is not reproduced by the bounded replay",
         )
 
 
@@ -350,8 +327,8 @@ def _require_k_colorability_positive_witness(result: KColorabilityResult) -> Non
         )
 
 
-def _require_k_colorability_negative_replay(result: KColorabilityResult) -> None:
-    """Replay non-colorability; only an explicit unsat may support it."""
+def _require_k_colorability_negative_shape(result: KColorabilityResult) -> None:
+    """A non-colorability claim carries no positive witness."""
 
     if result.coloring is not None:
         raise PydanticCustomError(
@@ -362,16 +339,6 @@ def _require_k_colorability_negative_replay(result: KColorabilityResult) -> None
         raise PydanticCustomError(
             "graph.empty_graph_is_k_colorable_but_result_claims_not",
             "empty graph is k-colorable but result claims not colorable",
-        )
-    if (
-        _run_k_colorability_solver(
-            result.graph, result.colors, result.solver_conflicts
-        )[0]
-        != "unsat"
-    ):
-        raise PydanticCustomError(
-            "graph.colorable_undecided_but_result_claims_colorable",
-            "graph is k-colorable or undecided but result claims not colorable",
         )
 
 
@@ -480,54 +447,8 @@ class EdgeColoringAssignment(StrictModel):
         return self
 
 
-def _decided_unsat_result(
-    graph: SimpleUndirectedGraph,
-    colors: int,
-    solver_conflicts: int,
-) -> EdgeKColorabilityResult:
-    """Build a decided-negative result from one explicit bounded unsat.
-
-    Direct construction from the producing solve skips result replay so one
-    declared budget covers all solver work; independently supplied results
-    always validate through ``_require_negative_replay``.
-    """
-
-    return EdgeKColorabilityResult.model_construct(
-        graph=graph,
-        colors=colors,
-        solver_conflicts=solver_conflicts,
-        status="DECIDED",
-        colorable=False,
-        coloring=None,
-        edge_count=len(graph.edges),
-    )
-
-
-def _budget_exceeded_result(
-    graph: SimpleUndirectedGraph,
-    colors: int,
-    solver_conflicts: int,
-) -> EdgeKColorabilityResult:
-    """Build the typed incomplete outcome from one explicit bounded unknown.
-
-    As with ``_decided_unsat_result``, the producing solve's own answer is
-    carried unclaimed; replay stays reserved for independently supplied
-    results via ``_require_budget_exceeded_shape``.
-    """
-
-    return EdgeKColorabilityResult.model_construct(
-        graph=graph,
-        colors=colors,
-        solver_conflicts=solver_conflicts,
-        status="SOLVER_BUDGET_EXCEEDED",
-        colorable=None,
-        coloring=None,
-        edge_count=len(graph.edges),
-    )
-
-
 def _require_budget_exceeded_shape(result: EdgeKColorabilityResult) -> None:
-    """A budget-exceeded outcome carries no claim and must replay unknown."""
+    """A budget-exceeded outcome carries no mathematical claim."""
 
     if result.colorable is not None or result.coloring is not None:
         raise PydanticCustomError(
@@ -539,20 +460,10 @@ def _require_budget_exceeded_shape(result: EdgeKColorabilityResult) -> None:
             "graph.empty_graph_is_decided_colorable_without_any_sea",
             "empty graph is decided colorable without any search",
         )
-    if (
-        _run_edge_coloring_solver(result.graph, result.colors, result.solver_conflicts)[
-            0
-        ]
-        != "unknown"
-    ):
-        raise PydanticCustomError(
-            "graph.claimed_solver_budget_exceedance_reproduced_by_bounded",
-            "claimed solver-budget exceedance is not reproduced by the bounded replay",
-        )
 
 
-def _require_negative_replay(result: EdgeKColorabilityResult) -> None:
-    """Replay non-colorability; only an explicit unsat may support it."""
+def _require_negative_shape(result: EdgeKColorabilityResult) -> None:
+    """A non-colorability claim carries no positive witness."""
 
     if result.coloring is not None:
         raise PydanticCustomError(
@@ -563,16 +474,6 @@ def _require_negative_replay(result: EdgeKColorabilityResult) -> None:
         raise PydanticCustomError(
             "graph.empty_edge_colorable_but_result_claims_colorable",
             "empty graph is k-edge-colorable but result claims not colorable",
-        )
-    if (
-        _run_edge_coloring_solver(result.graph, result.colors, result.solver_conflicts)[
-            0
-        ]
-        != "unsat"
-    ):
-        raise PydanticCustomError(
-            "graph.edge_colorable_undecided_but_result_claims_colorable",
-            "graph is k-edge-colorable or undecided but result claims not colorable",
         )
 
 
@@ -634,6 +535,29 @@ class EdgeKColorabilityResult(StrictModel):
     coloring: EdgeColoringAssignment | None = None
     edge_count: StrictInt = Field(ge=0, le=MAX_EDGE_COLORING_EDGES)
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: SimpleUndirectedGraph,
+        colors: int,
+        solver_conflicts: int,
+        status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED"],
+        colorable: bool | None,
+        coloring: EdgeColoringAssignment | None,
+    ) -> Self:
+        """Construct a result already established by the owner-local kernel."""
+
+        return cls(
+            graph=graph,
+            colors=colors,
+            solver_conflicts=solver_conflicts,
+            status=status,
+            colorable=colorable,
+            coloring=coloring,
+            edge_count=len(graph.edges),
+        )
+
     @model_validator(mode="after")
     def require_witness_consistency(self) -> Self:
         _require_edge_coloring_graph_bound(self.graph)
@@ -653,7 +577,7 @@ class EdgeKColorabilityResult(StrictModel):
         if self.colorable:
             _require_positive_witness(self)
         else:
-            _require_negative_replay(self)
+            _require_negative_shape(self)
         return self
 
 

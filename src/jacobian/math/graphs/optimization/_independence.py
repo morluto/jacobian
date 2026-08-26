@@ -7,7 +7,7 @@ from jacobian.catalog.models import MathTool
 from jacobian.math.graphs.independence import (
     IndependenceNumberRequest,
     IndependenceNumberResult,
-    independence_number,
+    _compute_independence_number,
 )
 
 INDEPENDENCE_NUMBER_OPERATION = MathTool(
@@ -20,7 +20,7 @@ INDEPENDENCE_NUMBER_OPERATION = MathTool(
     ),
     request_type=IndependenceNumberRequest,
     result_type=IndependenceNumberResult,
-    run=independence_number,
+    run=_compute_independence_number,
     tags=(
         "graph",
         "invariant",

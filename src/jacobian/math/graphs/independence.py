@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-from collections.abc import Iterator
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -69,11 +67,7 @@ class IndependenceNumberRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_supported_order(self) -> Self:
-        order = len(self.graph.vertices)
-        if order > self.resource_budget.max_order:
-            raise ValueError("graph order exceeds the declared max_order budget")
-        if order > 128:
-            raise ValueError("independence-number search supports order at most 128")
+        _require_supported_order(self.graph, self.resource_budget)
         return self
 
     @model_validator(mode="after")
@@ -88,189 +82,29 @@ class IndependenceNumberRequest(StrictModel):
         return self
 
 
-_EXACT_REPLAY_SEARCH_NODES = 200_000
-
-
-def _replay_deadline_elapsed(deadline: float | None) -> bool:
-    """Report whether the shared request wall-clock envelope has elapsed."""
-
-    return deadline is not None and time.monotonic() >= deadline
-
-
-def _require_replay_budget(node_expansions: int, deadline: float | None) -> None:
-    """Reject the claim once the replay exhausts its node or wall budget."""
-
-    if node_expansions > _EXACT_REPLAY_SEARCH_NODES:
-        raise ValueError(
-            "claimed exact optimum was not reproduced by the bounded "
-            "source-graph replay"
-        )
-    if _replay_deadline_elapsed(deadline):
-        raise ValueError(
-            "claimed exact optimum replay exceeded the request wall-clock deadline"
-        )
-
-
-def _component_masks(
-    neighbours: list[int],
-    unvisited: int,
-) -> Iterator[int]:
-    """Yield each connected component of ``unvisited`` as a vertex bitmask."""
-
-    while unvisited:
-        component = unvisited & -unvisited
-        frontier = component
-        while frontier:
-            bit = frontier & -frontier
-            frontier ^= bit
-            fresh = neighbours[bit.bit_length() - 1] & ~component
-            component |= fresh
-            frontier |= fresh
-        unvisited &= ~component
-        yield component
-
-
-def _greedy_clique_cover_size(candidates: int, neighbours: list[int]) -> int:
-    """Count clique classes in one greedy cover of ``candidates``.
-
-    Vertices enter in descending candidate-degree order and join the first
-    class whose members they are all adjacent to, so every class stays a
-    clique and an independent set meets it at most once.
-    """
-
-    weighted = []
-    rest = candidates
-    while rest:
-        bit = rest & -rest
-        rest ^= bit
-        position = bit.bit_length() - 1
-        weighted.append((-(neighbours[position] & candidates).bit_count(), position))
-    weighted.sort()
-    classes: list[int] = []
-    for _, position in weighted:
-        adjacent = neighbours[position]
-        for slot, members in enumerate(classes):
-            if members & ~adjacent == 0:
-                classes[slot] = members | (1 << position)
-                break
-        else:
-            classes.append(1 << position)
-    return len(classes)
-
-
-def _replay_exact_optimum(
+def _require_supported_order(
     graph: SimpleUndirectedGraph,
-    claimed_optimum: int,
-    deadline: float | None = None,
+    resource_budget: IndependenceNumberBudget,
 ) -> None:
-    """Replay the claimed optimum as an exact search over the source graph.
+    """Admit the mathematical graph order for one bounded kernel call."""
 
-    The producing solve establishes optimality with its own budgeted Z3 call;
-    independently supplied results must reproduce the claim through this
-    deterministic branch-and-bound before an ``EXACT`` conclusion validates.
-    The replay decomposes the source graph into connected components and sums
-    their exact maxima, which is sound because the independence number is
-    additive over components.  Inside one component it forces every
-    candidate-isolated vertex without branching (each such vertex belongs to
-    every maximum independent set of the remaining candidates), prunes
-    through a greedy clique cover of the candidates (an independent set
-    meets each clique at most once, so the class count bounds any
-    completion), and otherwise branches on a maximum-degree candidate, so
-    structured sparse graphs such as matchings or disjoint gadget unions
-    stay linear while dense graphs prune through the cover and
-    candidate-popcount bounds.  Each component seeds its incumbent with one
-    deterministic lowest-index greedy independent set before branching, so
-    pruning compares completions against an achieved feasible size.  Each
-    expanded node performs bounded bitset work over at most 128 vertices,
-    and the whole replay is bounded by ``_EXACT_REPLAY_SEARCH_NODES`` node
-    expansions charged across all components plus one linear greedy pass per
-    component; exhausting that budget rejects the claim fail-closed.  When
-    ``deadline`` carries a monotonic timestamp, each expansion also charges
-    the replay to that shared request envelope and rejects the claim once it
-    elapses, so a producing solve never spends time beyond its own budget.
-    """
-
-    vertices = tuple(sorted(graph.vertices))
-    index = {vertex: position for position, vertex in enumerate(vertices)}
-    order = len(vertices)
-    neighbours = [0] * order
-    for left, right in graph.edges:
-        mask = (1 << index[left]) | (1 << index[right])
-        neighbours[index[left]] |= mask
-        neighbours[index[right]] |= mask
-    state_nodes = 0
-
-    def component_optimum(component: int) -> int:
-        nonlocal state_nodes
-        greedy = 0
-        rest = component
-        while rest:
-            bit = rest & -rest
-            rest &= ~(bit | neighbours[bit.bit_length() - 1])
-            greedy += 1
-        best_size = greedy
-
-        def search(candidates: int, chosen: int) -> None:
-            nonlocal state_nodes, best_size
-            state_nodes += 1
-            _require_replay_budget(state_nodes, deadline)
-            neighbourhood = 0
-            rest = candidates
-            while rest:
-                bit = rest & -rest
-                rest ^= bit
-                neighbourhood |= neighbours[bit.bit_length() - 1]
-            forced = candidates & ~neighbourhood
-            if forced:
-                chosen += forced.bit_count()
-                candidates ^= forced
-            if chosen + candidates.bit_count() <= best_size:
-                return
-            if not candidates:
-                best_size = chosen
-                return
-            if chosen + _greedy_clique_cover_size(candidates, neighbours) <= best_size:
-                return
-            pivot_degree = -1
-            rest = candidates
-            while rest:
-                bit = rest & -rest
-                rest ^= bit
-                degree = (neighbours[bit.bit_length() - 1] & candidates).bit_count()
-                if degree > pivot_degree:
-                    pivot_degree = degree
-                    pivot = bit.bit_length() - 1
-            search(candidates & ~((1 << pivot) | neighbours[pivot]), chosen + 1)
-            search(candidates & ~(1 << pivot), chosen)
-
-        search(component, 0)
-        return best_size
-
-    unvisited = (1 << order) - 1
-    total_optimum = 0
-    for component in _component_masks(neighbours, unvisited):
-        total_optimum += component_optimum(component)
-    if total_optimum != claimed_optimum:
-        raise ValueError(
-            "claimed exact optimum contradicts the independent source-graph replay"
-        )
+    order = len(graph.vertices)
+    if order > resource_budget.max_order:
+        raise ValueError("graph order exceeds the declared max_order budget")
+    if order > 128:
+        raise ValueError("independence-number search supports order at most 128")
 
 
 class IndependenceNumberResult(StrictModel):
     """Exact optimum or bounded incumbent and bounds for one supplied graph.
 
-    Retains the canonical source graph so validation replays the defining
-    incumbent invariant: every witness identifier belongs to the source,
-    no source edge has both endpoints in the witness, the incumbent equals
-    the witness cardinality, and the reported order matches the source.
-    An ``EXACT`` conclusion additionally replays a bounded maximum
-    independent-set search on the retained source graph — the same replay
-    the producing solve runs before claiming optimality, so every produced
-    result validates — and a feasible but non-maximum witness cannot
-    validate a forged optimum or upper bound.
-    Operational ``UNKNOWN`` stays distinct from a mathematical optimum;
-    ``REPLAY_INCOMPLETE`` marks a solver optimum that the bounded
-    source-graph replay could not certify, so no optimum is claimed.  An
+    Retains the canonical source graph and checks structural source binding:
+    every witness identifier belongs to the source, no source edge has both
+    endpoints in the witness, the incumbent equals the witness cardinality,
+    and the reported order matches the source.  Exact optimality is a
+    semantic claim, not structural JSON validation; callers accepting a
+    separately supplied ``EXACT`` result use the owner-local bounded verifier.
+    Operational ``UNKNOWN`` stays distinct from a mathematical optimum. An
     incomplete outcome reports the graph order as its independently safe
     upper bound, so no unauthenticated incumbent gap survives validation.
     """
@@ -288,6 +122,34 @@ class IndependenceNumberResult(StrictModel):
     convention: Literal["MAXIMUM_EDGE_FREE_VERTEX_SUBSET"] = (
         "MAXIMUM_EDGE_FREE_VERTEX_SUBSET"
     )
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: SimpleUndirectedGraph,
+        status: IndependenceSearchStatus,
+        optimum_value: int | None,
+        incumbent_vertices: tuple[str, ...],
+        upper_bound: int,
+        termination_reason: IndependenceTermination,
+        detail: str,
+    ) -> Self:
+        """Construct one structurally checked outcome from the trusted kernel."""
+
+        incumbent_value = len(incumbent_vertices)
+        return cls(
+            graph=graph,
+            status=status,
+            order=len(graph.vertices),
+            optimum_value=optimum_value,
+            incumbent_value=incumbent_value,
+            lower_bound=incumbent_value,
+            upper_bound=upper_bound,
+            witness_vertices=incumbent_vertices,
+            termination_reason=termination_reason,
+            detail=detail,
+        )
 
     @model_validator(mode="after")
     def bind_result(self) -> Self:
@@ -320,7 +182,6 @@ class IndependenceNumberResult(StrictModel):
                 not in {"OPTIMUM_ESTABLISHED", "SPECIAL_CASE"}
             ):
                 raise ValueError("exact result must bind one coincident optimum")
-            _replay_exact_optimum(self.graph, self.optimum_value)
         elif self.optimum_value is not None:
             raise ValueError("incomplete search cannot claim an optimum")
         elif self.upper_bound != self.order:
@@ -331,17 +192,36 @@ class IndependenceNumberResult(StrictModel):
         return self
 
 
-def independence_number(request: IndependenceNumberRequest) -> IndependenceNumberResult:
-    """Return an exact optimum when bounded Z3 optimization establishes it."""
+def _compute_independence_number(
+    request: IndependenceNumberRequest,
+) -> IndependenceNumberResult:
+    """Run the wire-request adapter retained for the catalog and MCP path."""
 
     from jacobian.math.graphs import _independence_z3
 
     return _independence_z3.solve_independence_number(request)
 
 
+def independence_number(graph: SimpleUndirectedGraph) -> IndependenceNumberResult:
+    """Return the bounded independence-number outcome of ``graph``.
+
+    Native callers supply the canonical graph value directly.  The public
+    default execution envelope is the same order-128, five-second envelope
+    advertised by the catalog; MCP-specific request parsing and transport
+    headroom checks remain in the private wire adapter.
+    """
+
+    if not isinstance(graph, SimpleUndirectedGraph):
+        raise TypeError("independence_number expects a SimpleUndirectedGraph")
+    resource_budget = IndependenceNumberBudget()
+    _require_supported_order(graph, resource_budget)
+
+    from jacobian.math.graphs import _independence_z3
+
+    return _independence_z3.solve_independence_number_values(graph, resource_budget)
+
+
 __all__ = [
-    "IndependenceNumberBudget",
-    "IndependenceNumberRequest",
     "IndependenceNumberResult",
     "IndependenceSearchStatus",
     "IndependenceTermination",

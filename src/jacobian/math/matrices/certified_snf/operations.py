@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from itertools import pairwise
 from typing import Literal
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.matrices.certified_snf.values import (
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
@@ -238,7 +238,7 @@ def certificate_from_reduction(
     right_determinant: Literal["-1", "1"] = (
         "1" if reduction.right_determinant == 1 else "-1"
     )
-    return SmithNormalFormCertificate(
+    return SmithNormalFormCertificate._from_kernel(
         source=_contract_matrix(reduction.source, rows=rows, columns=columns),
         diagonal=_contract_matrix(reduction.diagonal, rows=rows, columns=columns),
         left_transformation=_contract_matrix(
@@ -260,6 +260,58 @@ def certificate_from_reduction(
     )
 
 
+def verify_smith_normal_form_certificate(
+    certificate: SmithNormalFormCertificate,
+) -> bool:
+    """Verify an independently supplied certificate in the admitted envelope.
+
+    Parsing the certificate only establishes its canonical shape and Smith
+    diagonal.  This explicit path checks the claimed transformations and
+    determinant signs after first requiring the source to fit the public
+    certified-Smith request envelope, which bounds the exact replay.
+    """
+
+    from pydantic import ValidationError
+
+    from jacobian.math.matrices.certified_snf._models import (
+        CertifiedSmithNormalFormRequest,
+    )
+
+    try:
+        CertifiedSmithNormalFormRequest(matrix=certificate.source)
+    except ValidationError:
+        return False
+
+    source = [
+        [parse_canonical_integer(value) for value in row]
+        for row in certificate.source.entries
+    ]
+    diagonal = [
+        [parse_canonical_integer(value) for value in row]
+        for row in certificate.diagonal.entries
+    ]
+    left = [
+        [parse_canonical_integer(value) for value in row]
+        for row in certificate.left_transformation.entries
+    ]
+    right = [
+        [parse_canonical_integer(value) for value in row]
+        for row in certificate.right_transformation.entries
+    ]
+    try:
+        if matrix_multiply(matrix_multiply(left, source), right) != diagonal:
+            return False
+        return all(
+            matrix_determinant(transformation) == int(determinant)
+            for transformation, determinant in (
+                (left, certificate.left_determinant),
+                (right, certificate.right_determinant),
+            )
+        )
+    except (ArithmeticError, ValueError):
+        return False
+
+
 __all__ = [
     "Matrix",
     "SmithReduction",
@@ -272,5 +324,6 @@ __all__ = [
     "matrix_shape",
     "matrix_vector_multiply",
     "smith_reduce",
+    "verify_smith_normal_form_certificate",
     "zero_matrix",
 ]

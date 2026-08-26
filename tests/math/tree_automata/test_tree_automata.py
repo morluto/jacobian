@@ -18,6 +18,8 @@ from jacobian.math.tree_automata._operations import (
     compute_accepted_tree_count,
     compute_tree_automaton_reachability,
     compute_tree_run,
+    verify_reachable_state_profile,
+    verify_tree_run_result,
 )
 from jacobian.math.tree_automata._tools import TREE_AUTOMATA_OPERATIONS
 from jacobian.math.tree_automata.operations import (
@@ -207,9 +209,8 @@ class TestRun:
 
         payload = result.model_dump()
         payload["state_chart"] = (((), (0,)),)
-        with pytest.raises(ValidationError) as exc:
-            type(result).model_validate(payload)
-        _assert_validation_code(exc, "tree_automata.root_states_not_bound")
+        forged = type(result).model_validate(payload)
+        assert not verify_tree_run_result(forged)
 
     def test_native_run_rejects_invalid_nested_rank(self):
         automaton = _simple_automaton()
@@ -489,9 +490,9 @@ class TestReachableStates:
 
         forged_payload = result.model_dump()
         forged_payload["witnesses"] = [[0, {"symbol": 1, "children": []}], [1, _leaf()]]
-        with pytest.raises(ValidationError) as exc:
+        assert not verify_reachable_state_profile(
             ReachableStateProfile.model_validate(forged_payload)
-        _assert_validation_code(exc, "tree_automata.profile_not_bound")
+        )
 
     def test_equal_node_tie_breaks_by_smallest_child_state_tuple(self):
         automaton = BottomUpTreeAutomaton(
@@ -564,11 +565,11 @@ class TestReachableStates:
             ],
         }
 
-        with pytest.raises(ValidationError) as exc:
+        assert not verify_reachable_state_profile(
             ReachableStateProfile.model_validate(forged_payload)
-        _assert_validation_code(exc, "tree_automata.profile_not_bound")
+        )
 
-    def test_deserialized_profile_replays_binding_automatically(self):
+    def test_deserialized_profile_is_structural_and_explicitly_verifiable(self):
         automaton = _simple_automaton()
         profile = reachable_state_profile(automaton)
 
@@ -576,7 +577,7 @@ class TestReachableStates:
         revalidated = ReachableStateProfile.model_validate(payload)
 
         assert revalidated == profile
-        assert revalidated == reachable_state_profile(automaton)
+        assert verify_reachable_state_profile(revalidated)
 
     def test_profile_shape_validators_reject_independent_forgeries(self):
         automaton = _simple_automaton()
@@ -702,8 +703,8 @@ class TestValidation:
         assert per_profile <= 30_000_000
 
         public_path = _reachability_public_path_work_bound(automaton)
-        assert public_path == 4 * 983_040 + 4 * 2 * per_scan_work + 3 * 3 * 4096
-        assert public_path == 6_231_040
+        assert public_path == 3 * 983_040 + 3 * 2 * per_scan_work + 2 * 3 * 4096
+        assert public_path == 4_670_208
         assert public_path <= 30_000_000
 
         result = compute_tree_automaton_reachability(
@@ -804,20 +805,18 @@ class TestValidation:
             ranked_tree_node_count(tree) for _, tree in profile.witnesses
         ) == tuple(range(1, 17))
 
-    def test_public_request_prices_four_passes_against_shared_envelope(self):
-        automaton = _seeded_chain_with_padded_rows(22)
+    def test_public_request_prices_three_passes_against_shared_envelope(self):
+        automaton = _seeded_chain_with_padded_rows(31)
 
         _, per_scan_work, scan_rounds = _reachability_price_components(automaton)
-        assert scan_rounds == 23
+        assert scan_rounds == 32
         per_profile = _reachability_execution_work_bound(automaton)
-        assert per_profile == 983_040 + 23 * per_scan_work + 3 * 4096
-        assert per_profile == 7_562_380
+        assert per_profile == 983_040 + 32 * per_scan_work + 3 * 4096
         assert per_profile <= 30_000_000
 
         public_path = _reachability_public_path_work_bound(automaton)
-        assert public_path == 4 * 983_040 + 4 * 23 * per_scan_work + 3 * 3 * 4096
-        assert public_path == 30_237_232
-        assert public_path > 3 * per_profile
+        assert public_path == 3 * 983_040 + 3 * 32 * per_scan_work + 2 * 3 * 4096
+        assert public_path > 2 * per_profile
         assert public_path > 30_000_000
 
         assert isinstance(reachable_state_profile(automaton), ReachableStateProfile)
@@ -832,8 +831,8 @@ class TestValidation:
 
         Each profile on the public path consumes exactly one priced pass --
         its own sort plus measured saturation -- and evaluating the
-        public-path bound runs one more pass, so the advertised bound is four
-        passes; no fourth, fifth, sixth, or seventh unpriced sort executes.
+        public-path bound runs one more pass, so the advertised bound is three
+        passes; no fourth or unpriced sort executes.
         The sibling one link deeper crosses 30,000,000 units only through
         that honestly priced work and must be rejected.
         """
@@ -842,12 +841,12 @@ class TestValidation:
             sort_work, per_scan_work, scan_rounds = _reachability_price_components(
                 automaton
             )
-            return 4 * sort_work + 4 * scan_rounds * per_scan_work + 3 * 3 * 4096
+            return 3 * sort_work + 3 * scan_rounds * per_scan_work + 2 * 3 * 4096
 
-        admitted = _seeded_chain_with_padded_rows(21)
-        rejected = _seeded_chain_with_padded_rows(22)
+        admitted = _seeded_chain_with_padded_rows(30)
+        rejected = _seeded_chain_with_padded_rows(31)
 
-        assert _reachability_public_path_work_bound(admitted) == 29_100_416
+        assert _reachability_public_path_work_bound(admitted) == 29_482_788
         assert _reachability_public_path_work_bound(admitted) == (
             advertised_public_bound(admitted)
         )
@@ -856,10 +855,10 @@ class TestValidation:
         result = compute_tree_automaton_reachability(
             TreeAutomatonReachabilityRequest(automaton=admitted)
         )
-        assert result.reachable_states == tuple(range(21))
-        assert _reachability_execution_work_bound(admitted) == 7_278_176
+        assert result.reachable_states == tuple(range(30))
+        assert _reachability_execution_work_bound(admitted) == 9_831_692
 
-        assert _reachability_public_path_work_bound(rejected) == 30_237_232
+        assert _reachability_public_path_work_bound(rejected) == 30_332_160
         assert _reachability_public_path_work_bound(rejected) == (
             advertised_public_bound(rejected)
         )
@@ -879,7 +878,7 @@ class TestValidation:
         assert per_profile == 19_390_588
         assert per_profile <= 30_000_000
 
-        assert _reachability_public_path_work_bound(automaton) == 77_550_064
+        assert _reachability_public_path_work_bound(automaton) == 58_159_476
         assert _reachability_public_path_work_bound(automaton) > 30_000_000
 
         profile = reachable_state_profile(automaton)

@@ -12,9 +12,9 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.number_theory._integer_models import PrimePower
 from jacobian.math.number_theory._models import (
     BoundedInteger,
-    PrimePower,
     _validation_error,
 )
 

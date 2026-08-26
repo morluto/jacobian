@@ -28,6 +28,7 @@ from jacobian.math.graphs.decomposition._operations import (
     compute_bridge_block_tree,
     compute_ear_decomposition,
     compute_spqr_tree,
+    verify_spqr_tree_result,
 )
 from jacobian.math.graphs.multigraph._models import LooplessMultigraph, MultigraphEdge
 
@@ -533,7 +534,7 @@ class TestSPQRTree:
         )
         assert isinstance(result.nodes[0].graph, LooplessMultigraph)
 
-    def test_result_deserialization_rejects_missing_real_source_edge(self) -> None:
+    def test_explicit_verifier_rejects_missing_real_source_edge(self) -> None:
         result = _spqr_tree(
             {
                 "vertex_count": 4,
@@ -542,10 +543,9 @@ class TestSPQRTree:
         )
         malformed = result.model_dump(mode="json")
         malformed["source_graph"]["edges"] = malformed["source_graph"]["edges"][:-1]
-        with pytest.raises(ValueError):
-            SPQRTreeResult.model_validate(malformed)
+        assert not verify_spqr_tree_result(SPQRTreeResult.model_validate(malformed))
 
-    def test_result_deserialization_rejects_virtual_pairing_and_transport_mutations(
+    def test_explicit_verifier_rejects_virtual_pairing_and_transport_mutations(
         self,
     ) -> None:
         result = _spqr_tree(
@@ -556,18 +556,15 @@ class TestSPQRTree:
         )
         malformed = result.model_dump(mode="json")
         malformed["virtual_edge_pairs"] = []
-        with pytest.raises(ValueError):
-            SPQRTreeResult.model_validate(malformed)
+        assert not verify_spqr_tree_result(SPQRTreeResult.model_validate(malformed))
         malformed = result.model_dump(mode="json")
         malformed["source_edge_owners"][0][1] = "missing-node"
-        with pytest.raises(ValueError):
-            SPQRTreeResult.model_validate(malformed)
+        assert not verify_spqr_tree_result(SPQRTreeResult.model_validate(malformed))
         malformed = result.model_dump(mode="json")
         malformed["source_vertex_incidence"] = []
-        with pytest.raises(ValueError):
-            SPQRTreeResult.model_validate(malformed)
+        assert not verify_spqr_tree_result(SPQRTreeResult.model_validate(malformed))
 
-    def test_result_deserialization_rejects_forged_branches(self) -> None:
+    def test_explicit_verifier_rejects_forged_branches(self) -> None:
         positive = _spqr_tree(
             {
                 "vertex_count": 4,
@@ -575,8 +572,7 @@ class TestSPQRTree:
             }
         ).model_dump(mode="json")
         positive["source_graph"] = {"vertex_count": 3, "edges": [[0, 1], [1, 2]]}
-        with pytest.raises(ValueError):
-            SPQRTreeResult.model_validate(positive)
+        assert not verify_spqr_tree_result(SPQRTreeResult.model_validate(positive))
         forged_negative = positive | {
             "source_graph": {
                 "vertex_count": 4,
@@ -591,31 +587,26 @@ class TestSPQRTree:
             "source_vertex_incidence": [],
             "source_edge_owners": [],
         }
-        with pytest.raises(ValueError):
+        assert not verify_spqr_tree_result(
             SPQRTreeResult.model_validate(forged_negative)
+        )
 
-    def test_result_validation_rejects_forged_empty_positive_tree(self) -> None:
+    def test_explicit_verifier_rejects_forged_empty_positive_tree(self) -> None:
         k4 = UndirectedGraph.model_validate(
             {
                 "vertex_count": 4,
                 "edges": [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
             }
         )
-        with pytest.raises(ValidationError):
-            SPQRTreeResult(source_graph=k4, status="SPQR_TREE")
-        forged = SPQRTreeResult.model_construct(
-            source_graph=k4,
-            status="SPQR_TREE",
-        )
-        with pytest.raises(ValidationError):
-            SPQRTreeResult.model_validate(forged.model_dump(mode="json"))
+        forged = SPQRTreeResult(source_graph=k4, status="SPQR_TREE")
+        assert not verify_spqr_tree_result(forged)
 
-    def test_negative_replay_rejects_witnesses_absent_from_source(self) -> None:
+    def test_explicit_verifier_rejects_witnesses_absent_from_source(self) -> None:
         k4 = {
             "vertex_count": 4,
             "edges": [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
         }
-        with pytest.raises(ValidationError):
+        assert not verify_spqr_tree_result(
             SPQRTreeResult.model_validate(
                 {
                     "source_graph": k4,
@@ -624,23 +615,17 @@ class TestSPQRTree:
                     "witness_vertices": [0],
                 }
             )
-        with pytest.raises(ValidationError):
-            SPQRTreeResult.model_validate(
-                {
-                    "source_graph": {"vertex_count": 2, "edges": [[0, 1]]},
-                    "status": "NOT_BICONNECTED",
-                    "witness_kind": "DISCONNECTED",
-                    "witness_vertices": [0, 99],
-                }
-            )
-        with pytest.raises(ValidationError):
-            SPQRTreeResult.model_validate(
-                {
-                    "source_graph": {"vertex_count": 2, "edges": [[0, 1]]},
-                    "status": "NOT_BICONNECTED",
-                    "witness_kind": "DISCONNECTED",
-                    "witness_vertices": [0, -1],
-                }
+        )
+        for vertices in ([0, 99], [0, -1]):
+            assert not verify_spqr_tree_result(
+                SPQRTreeResult.model_validate(
+                    {
+                        "source_graph": {"vertex_count": 2, "edges": [[0, 1]]},
+                        "status": "NOT_BICONNECTED",
+                        "witness_kind": "DISCONNECTED",
+                        "witness_vertices": vertices,
+                    }
+                )
             )
 
     def test_replay_rejects_virtual_pair_without_genuine_separation(self) -> None:
@@ -707,7 +692,7 @@ class TestSPQRTree:
             )
             for vertex in range(5)
         )
-        with pytest.raises(ValidationError):
+        assert not verify_spqr_tree_result(
             SPQRTreeResult(
                 source_graph=genuine.source_graph,
                 status="SPQR_TREE",
@@ -717,8 +702,9 @@ class TestSPQRTree:
                 source_vertex_incidence=incidence,
                 source_edge_owners=owners,
             )
+        )
 
-    def test_result_deserialization_rejects_extra_isolated_q_carrier(self) -> None:
+    def test_explicit_verifier_rejects_extra_isolated_q_carrier(self) -> None:
         result = _spqr_tree(
             {
                 "vertex_count": 4,
@@ -743,8 +729,7 @@ class TestSPQRTree:
             )
             for vertex in range(malformed["source_graph"]["vertex_count"])
         ]
-        with pytest.raises(ValidationError):
-            SPQRTreeResult.model_validate(malformed)
+        assert not verify_spqr_tree_result(SPQRTreeResult.model_validate(malformed))
 
     def test_replay_rejects_duplicate_virtual_pair_on_one_tree_edge(self) -> None:
         """Two K4 blocks glued along {0,1}: one tree adjacency, one gluing pair.
@@ -799,8 +784,7 @@ class TestSPQRTree:
             *malformed["virtual_edge_pairs"],
             [f"virtual:forged-{p_id}", f"virtual:forged-{r_id}"],
         ]
-        with pytest.raises(ValidationError):
-            SPQRTreeResult.model_validate(malformed)
+        assert not verify_spqr_tree_result(SPQRTreeResult.model_validate(malformed))
 
     def test_replay_rejects_parallel_edges_inside_r_skeleton(self) -> None:
         """Two K4 blocks sharing {0,1}: a forged R/R split without the P junction."""
@@ -894,7 +878,7 @@ class TestSPQRTree:
             )
             for vertex in range(6)
         )
-        with pytest.raises(ValidationError):
+        assert not verify_spqr_tree_result(
             SPQRTreeResult(
                 source_graph=genuine.source_graph,
                 status="SPQR_TREE",
@@ -904,6 +888,7 @@ class TestSPQRTree:
                 source_vertex_incidence=incidence,
                 source_edge_owners=owners,
             )
+        )
 
     def test_replay_rejects_disconnected_s_skeleton_of_two_cycles(self) -> None:
         """K6 plus an ear at {0,1}: a forged S skeleton of two disjoint triangles."""
@@ -987,7 +972,7 @@ class TestSPQRTree:
             )
             for vertex in range(7)
         )
-        with pytest.raises(ValidationError):
+        assert not verify_spqr_tree_result(
             SPQRTreeResult(
                 source_graph=genuine.source_graph,
                 status="SPQR_TREE",
@@ -997,6 +982,7 @@ class TestSPQRTree:
                 source_vertex_incidence=incidence,
                 source_edge_owners=owners,
             )
+        )
 
     def test_request_admits_complete_graphs_on_the_declared_vertex_axis(self) -> None:
         k33_edges = [(i, j) for i in range(33) for j in range(i + 1, 33)]
@@ -1007,6 +993,7 @@ class TestSPQRTree:
         assert len(result.source_edge_owners) == 528
         replayed = SPQRTreeResult.model_validate(result.model_dump(mode="json"))
         assert replayed == result
+        assert verify_spqr_tree_result(replayed)
 
     def test_result_deserialization_round_trips_genuine_decomposition(self) -> None:
         result = _spqr_tree(
@@ -1017,6 +1004,7 @@ class TestSPQRTree:
         )
         replayed = SPQRTreeResult.model_validate(result.model_dump(mode="json"))
         assert replayed == result
+        assert verify_spqr_tree_result(replayed)
 
     def test_replays_every_biconnected_networkx_atlas_graph(self) -> None:
         """The finite atlas covers overlapping separator patterns through 7 vertices."""

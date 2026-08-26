@@ -13,7 +13,7 @@ from jacobian.math.finite_game_theory._models import (
     NashEquilibriumResult,
     ZeroSumGameRequest,
 )
-from jacobian.math.finite_game_theory.operations import solve_terminal_game
+from jacobian.math.finite_game_theory.operations import _solve_terminal_game_data
 from jacobian.math.finite_game_theory.values import DeterministicTerminalGameSolution
 
 
@@ -40,7 +40,9 @@ def compute_best_response(request: ZeroSumGameRequest) -> BestResponseResult:
         if row_min > best_value:
             best_value = row_min
             best_row = row_index
-    return BestResponseResult(value=_wire_rational(best_value), best_row=best_row)
+    return BestResponseResult._from_kernel(
+        value=_wire_rational(best_value), best_row=best_row
+    )
 
 
 def compute_nash_equilibrium(
@@ -113,7 +115,7 @@ def compute_nash_equilibrium(
         for row in range(n_rows)
     ):
         raise RuntimeError("column strategy does not attain the reported game value")
-    return NashEquilibriumResult(
+    return NashEquilibriumResult._from_kernel(
         row_strategy=tuple(_wire_rational(weight) for weight in row_strategy),
         col_strategy=tuple(_wire_rational(weight) for weight in column_strategy),
         value=_wire_rational(value),
@@ -125,11 +127,76 @@ def compute_deterministic_terminal_game(
 ) -> DeterministicTerminalGameSolution:
     """Compute every value and canonical optimal stationary strategy pair."""
 
-    return solve_terminal_game(request.game)
+    value_classes, max_strategy, min_strategy = _solve_terminal_game_data(request.game)
+    return DeterministicTerminalGameSolution._from_kernel(
+        request.game, value_classes, max_strategy, min_strategy
+    )
+
+
+def verify_best_response_result(
+    request: ZeroSumGameRequest, result: BestResponseResult
+) -> bool:
+    """Check one independently supplied maximin-row claim."""
+
+    matrix = _payoff_matrix(request)
+    if result.best_row >= len(matrix):
+        return False
+    value = result.value.as_fraction()
+    row_minima = tuple(min(row) for row in matrix)
+    return value == max(row_minima) and row_minima[result.best_row] == value
+
+
+def verify_nash_equilibrium_result(
+    request: NashEquilibriumRequest, result: NashEquilibriumResult
+) -> bool:
+    """Check a zero-sum equilibrium witness inside the admitted LP envelope."""
+
+    matrix = _payoff_matrix(request)
+    n_rows = len(matrix)
+    n_cols = len(matrix[0])
+    if len(result.row_strategy) != n_rows or len(result.col_strategy) != n_cols:
+        return False
+    row_strategy = tuple(weight.as_fraction() for weight in result.row_strategy)
+    col_strategy = tuple(weight.as_fraction() for weight in result.col_strategy)
+    value = result.value.as_fraction()
+    if (
+        sum(row_strategy) != 1
+        or sum(col_strategy) != 1
+        or any(weight < 0 for weight in (*row_strategy, *col_strategy))
+    ):
+        return False
+    return all(
+        sum(row_strategy[row] * matrix[row][column] for row in range(n_rows)) >= value
+        for column in range(n_cols)
+    ) and all(
+        sum(matrix[row][column] * col_strategy[column] for column in range(n_cols))
+        <= value
+        for row in range(n_rows)
+    )
+
+
+def verify_deterministic_terminal_game_solution(
+    result: DeterministicTerminalGameSolution,
+) -> bool:
+    """Check one independently supplied terminal-game minimax profile.
+
+    ``result.game`` was admitted before result construction, so this bounded
+    replay uses exactly the game's published threshold-work envelope.
+    """
+
+    value_classes, max_strategy, min_strategy = _solve_terminal_game_data(result.game)
+    return (
+        result.value_classes == value_classes
+        and result.max_strategy == max_strategy
+        and result.min_strategy == min_strategy
+    )
 
 
 __all__ = [
     "compute_best_response",
     "compute_deterministic_terminal_game",
     "compute_nash_equilibrium",
+    "verify_best_response_result",
+    "verify_deterministic_terminal_game_solution",
+    "verify_nash_equilibrium_result",
 ]

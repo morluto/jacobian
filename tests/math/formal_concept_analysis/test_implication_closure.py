@@ -23,6 +23,7 @@ from jacobian.math.formal_concept_analysis.values import (
     MAX_IMPLICATION_MEMBERSHIPS,
     MAX_IMPLICATIONS,
     ImplicationClosureResult,
+    verify_implication_closure_result,
 )
 
 
@@ -56,6 +57,10 @@ def _brute_force_closure(
                 closed_supersets.append(candidate)
     closure = set.intersection(*closed_supersets)
     return tuple(sorted(closure))
+
+
+def _verify_payload(payload: dict[str, object]) -> None:
+    verify_implication_closure_result(ImplicationClosureResult.model_validate(payload))
 
 
 def test_multi_round_closure_has_replayable_first_lineage() -> None:
@@ -194,8 +199,8 @@ def test_result_validation_rejects_forged_conclusions(
     payload = result.model_dump()
     payload[field] = replacement
 
-    with pytest.raises(ValidationError):
-        ImplicationClosureResult.model_validate(payload)
+    with pytest.raises(ValueError):
+        _verify_payload(payload)
 
 
 def test_closed_nonleast_superset_is_rejected_by_lineage_replay() -> None:
@@ -209,8 +214,8 @@ def test_closed_nonleast_superset_is_rejected_by_lineage_replay() -> None:
         {"attribute": 2, "implication_index": 1, "activation_round": 2},
     ]
 
-    with pytest.raises(ValidationError):
-        ImplicationClosureResult.model_validate(payload)
+    with pytest.raises(ValueError):
+        _verify_payload(payload)
 
 
 def test_coherently_omitted_consequence_is_rejected_as_not_closed() -> None:
@@ -226,8 +231,8 @@ def test_coherently_omitted_consequence_is_rejected_as_not_closed() -> None:
         "canonical_replay_work": 15,
     }
 
-    with pytest.raises(ValidationError):
-        ImplicationClosureResult.model_validate(payload)
+    with pytest.raises(ValueError):
+        _verify_payload(payload)
 
 
 def test_lineage_cannot_delay_an_already_enabled_derivation() -> None:
@@ -243,8 +248,8 @@ def test_lineage_cannot_delay_an_already_enabled_derivation() -> None:
     payload["lineage"][1]["activation_round"] = 2
     payload["work"]["productive_rounds"] = 2
 
-    with pytest.raises(ValidationError):
-        ImplicationClosureResult.model_validate(payload)
+    with pytest.raises(ValueError):
+        _verify_payload(payload)
 
 
 def test_work_cannot_append_a_nonproductive_round() -> None:
@@ -252,8 +257,8 @@ def test_work_cannot_append_a_nonproductive_round() -> None:
     payload = result.model_dump()
     payload["work"]["productive_rounds"] += 1
 
-    with pytest.raises(ValidationError):
-        ImplicationClosureResult.model_validate(payload)
+    with pytest.raises(ValueError):
+        _verify_payload(payload)
 
 
 def test_result_validation_rejects_source_and_work_mutations() -> None:
@@ -261,19 +266,19 @@ def test_result_validation_rejects_source_and_work_mutations() -> None:
 
     seed_payload = result.model_dump()
     seed_payload["seed"] = [0, 3]
-    with pytest.raises(ValidationError):
-        ImplicationClosureResult.model_validate(seed_payload)
+    with pytest.raises(ValueError):
+        _verify_payload(seed_payload)
 
     system_payload = result.model_dump()
     system_payload["system"]["implications"][0]["conclusion"] = [3]
-    with pytest.raises(ValidationError):
-        ImplicationClosureResult.model_validate(system_payload)
+    with pytest.raises(ValueError):
+        _verify_payload(system_payload)
 
     work_payload = result.model_dump()
     work_payload["work"]["canonical_implication_checks"] += 1
     work_payload["work"]["canonical_replay_work"] += 1
-    with pytest.raises(ValidationError):
-        ImplicationClosureResult.model_validate(work_payload)
+    with pytest.raises(ValueError):
+        _verify_payload(work_payload)
 
 
 def test_request_rejects_duplicate_or_foreign_seed_indices() -> None:

@@ -16,12 +16,7 @@ from jacobian.math.matroids._operations import (
 def compute_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
     """Compute the closure (smallest flat) of a subset in a linear matroid."""
     closure, subset_rank = _closure_invariant(request.matroid, list(request.subset))
-    return MatroidClosureResult(
-        matroid=request.matroid,
-        subset=request.subset,
-        closure=closure,
-        rank=subset_rank,
-    )
+    return MatroidClosureResult._from_kernel(request, closure, subset_rank)
 
 
 _CLOSURE_EXAMPLE: dict[str, Any] = {

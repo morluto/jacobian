@@ -8,19 +8,16 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalizationError, CanonicalLimits, canonicalize_json
-from jacobian.math.term_rewriting.operations import (
+from jacobian.math.term_rewriting._kernel import (
     _bounded_unify,
     _validate_critical_pair_source,
     apply_substitution,
-    critical_pairs,
     normal_form,
     rewrite_steps,
     selected_rewrite_step,
     term_at_position,
 )
 from jacobian.math.term_rewriting.values import (
-    MAX_CRITICAL_PAIR_RESULT_BYTES,
     MAX_CRITICAL_PAIR_RULES,
     MAX_RULES,
     MAX_TERM_DEPTH,
@@ -90,12 +87,12 @@ class SubstitutionResult(SubstitutionRequest):
     @model_validator(mode="after")
     def bind_substitution(self) -> Self:
         self.signature.validate_term(self.result)
-        if self.result != apply_substitution(self.term, self.substitution.mapping):
-            raise _validation_error(
-                "substitution_result", "substitution result is not bound to its source"
-            )
         _require_transport_safe_depth(self.result)
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: SubstitutionRequest, result: Term) -> Self:
+        return cls(**request.model_dump(), result=result)
 
 
 class MatchingRequest(StrictModel):
@@ -121,16 +118,20 @@ class MatchingResult(MatchingRequest):
 
     @model_validator(mode="after")
     def bind_matching(self) -> Self:
-        from jacobian.math.term_rewriting.operations import match
-
-        expected = match(self.pattern, self.subject)
-        if self.matched != (expected is not None) or self.substitution != (
-            expected or {}
-        ):
+        if not self.matched and self.substitution:
             raise _validation_error(
-                "matching_result", "matching result is not bound to its signed terms"
+                "matching_result", "an unmatched result cannot include a substitution"
             )
+        for replacement in self.substitution.values():
+            self.signature.validate_term(replacement)
+        _require_transport_safe_depth(*self.substitution.values())
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: MatchingRequest, matched: bool, substitution: dict[int, Term]
+    ) -> Self:
+        return cls(**request.model_dump(), matched=matched, substitution=substitution)
 
 
 class UnificationRequest(StrictModel):
@@ -151,27 +152,6 @@ class UnificationRequest(StrictModel):
             raise _validation_error("unification_bound", str(error)) from error
         if expected is not None:
             _require_transport_safe_depth(*expected.values())
-            try:
-                canonicalize_json(
-                    {
-                        "signature": self.signature.model_dump(mode="json"),
-                        "left": self.left.model_dump(mode="json"),
-                        "right": self.right.model_dump(mode="json"),
-                        "unified": True,
-                        "substitution": {
-                            str(variable): term.model_dump(mode="json")
-                            for variable, term in expected.items()
-                        },
-                    },
-                    limits=CanonicalLimits(
-                        max_output_bytes=MAX_CRITICAL_PAIR_RESULT_BYTES
-                    ),
-                )
-            except CanonicalizationError as error:
-                raise _validation_error(
-                    "unification_transport",
-                    "unification result exceeds the supported transport bound",
-                ) from error
         return self
 
 
@@ -183,18 +163,20 @@ class UnificationResult(UnificationRequest):
 
     @model_validator(mode="after")
     def require_exact_unifier(self) -> Self:
-        expected = _bounded_unify(self.left, self.right)
-        if expected is None:
-            if self.unified or self.substitution:
-                raise _validation_error(
-                    "failed_unification",
-                    "failed unification must not claim a substitution",
-                )
-        elif not self.unified or self.substitution != expected:
+        if not self.unified and self.substitution:
             raise _validation_error(
-                "unifier_mismatch", "substitution must be the computed idempotent MGU"
+                "failed_unification", "failed unification must not claim a substitution"
             )
+        for replacement in self.substitution.values():
+            self.signature.validate_term(replacement)
+        _require_transport_safe_depth(*self.substitution.values())
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: UnificationRequest, unified: bool, substitution: dict[int, Term]
+    ) -> Self:
+        return cls(**request.model_dump(), unified=unified, substitution=substitution)
 
 
 class RewriteStepSelection(StrictModel):
@@ -276,28 +258,30 @@ class RewriteStepResult(StrictModel):
         _require_transport_safe_depth(
             *(application.term for application in self.applications)
         )
-        if self.selection is None:
-            expected = rewrite_steps(self.source_term, self.rules)
-            expected_scope = "ALL_APPLICABLE_STEPS"
-        else:
-            application = selected_rewrite_step(
-                self.source_term,
-                self.rules,
-                self.selection.position,
-                self.selection.rule_index,
-            )
-            expected = () if application is None else (application,)
-            expected_scope = "SELECTED_STEP"
+        expected_scope = (
+            "ALL_APPLICABLE_STEPS" if self.selection is None else "SELECTED_STEP"
+        )
         if self.scope != expected_scope:
             raise _validation_error(
                 "scope_selection", "scope must agree with selection"
             )
-        if self.applications != expected:
-            raise _validation_error(
-                "applications_mismatch",
-                "applications do not match the declared rewrite scope",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: RewriteStepRequest,
+        scope: Literal["ALL_APPLICABLE_STEPS", "SELECTED_STEP"],
+        applications: tuple[RewriteApplication, ...],
+    ) -> Self:
+        return cls(
+            signature=request.signature,
+            source_term=request.term,
+            rules=request.rules,
+            selection=request.selection,
+            scope=scope,
+            applications=applications,
+        )
 
 
 class NormalFormRequest(StrictModel):
@@ -353,19 +337,32 @@ class NormalFormResult(StrictModel):
         if self.next_step is not None:
             observed.append(self.next_step.term)
         _require_transport_safe_depth(*observed)
-        term, status, steps, next_step = normal_form(
-            self.source_term, self.rules, self.max_steps
-        )
-        if (self.term, self.status, self.steps, self.next_step) != (
-            term,
-            status,
-            steps,
-            next_step,
-        ):
+        if self.status == "NORMAL_FORM" and self.next_step is not None:
             raise _validation_error(
-                "normal_form_replay", "normal-form result does not replay exactly"
+                "normal_form_shape", "a normal form cannot carry a next step"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: NormalFormRequest,
+        term: Term,
+        status: Literal["NORMAL_FORM", "STEP_LIMIT"],
+        steps: int,
+        next_step: RewriteApplication | None,
+    ) -> Self:
+        return cls(
+            signature=request.signature,
+            source_term=request.term,
+            rules=request.rules,
+            strategy=request.strategy,
+            max_steps=request.max_steps,
+            term=term,
+            status=status,
+            steps=steps,
+            next_step=next_step,
+        )
 
 
 class CriticalPairsRequest(StrictModel):
@@ -423,13 +420,13 @@ class CriticalPairsResult(CriticalPairsRequest):
 
     @model_validator(mode="after")
     def bind_critical_pairs(self) -> Self:
-        expected = critical_pairs(self.signature, self.rules)
-        if self.profile != expected:
-            raise _validation_error(
-                "critical_pairs_replay",
-                "critical pairs do not replay from the source rules",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: CriticalPairsRequest, profile: CriticalPairProfile
+    ) -> Self:
+        return cls(signature=request.signature, rules=request.rules, profile=profile)
 
 
 __all__ = [

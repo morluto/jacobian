@@ -13,6 +13,7 @@ from jacobian.math.logic._unsat_core import (
     SmtUnsatCoreRequest,
     SmtUnsatCoreResult,
     compute_smt_unsat_core,
+    verify_smt_unsat_core_result,
 )
 
 
@@ -56,6 +57,7 @@ def test_unsat_core_is_an_indexed_replayable_source_subset() -> None:
     replay = z3.SolverFor(result.source.logic.value)
     replay.add(*(assertions[index] for index in result.core_indices))
     assert replay.check() == z3.unsat
+    assert verify_smt_unsat_core_result(result)
 
 
 def test_repeated_calls_have_a_stable_exact_outcome() -> None:
@@ -65,32 +67,29 @@ def test_repeated_calls_have_a_stable_exact_outcome() -> None:
     assert tuple(result.core_indices for result in results) == ((0, 1),) * 16
 
 
-def test_unsat_core_result_rejects_a_core_detached_from_its_source() -> None:
+def test_unsat_core_verifier_rejects_a_core_detached_from_its_source() -> None:
     result = compute_smt_unsat_core(_request())
     payload = result.model_dump(mode="json")
     payload["source"]["smtlib"] = CONTRADICTORY_LIA.replace("(>= x 1)", "(>= x -1)")
 
-    with raises_logic_validation():
-        SmtUnsatCoreResult.model_validate(payload)
+    assert not verify_smt_unsat_core_result(SmtUnsatCoreResult.model_validate(payload))
 
 
-def test_unsat_core_result_rejects_a_forged_proper_subset() -> None:
+def test_unsat_core_verifier_rejects_a_forged_proper_subset() -> None:
     result = compute_smt_unsat_core(_request())
     payload = result.model_dump(mode="json")
     payload["core_indices"] = [0]
 
-    with raises_logic_validation():
-        SmtUnsatCoreResult.model_validate(payload)
+    assert not verify_smt_unsat_core_result(SmtUnsatCoreResult.model_validate(payload))
 
 
-def test_unsat_core_result_rejects_a_forged_sat_conclusion() -> None:
+def test_unsat_core_verifier_rejects_a_forged_sat_conclusion() -> None:
     result = compute_smt_unsat_core(_request())
     payload = result.model_dump(mode="json")
     payload["outcome"] = "SAT"
     payload["core_indices"] = []
 
-    with raises_logic_validation():
-        SmtUnsatCoreResult.model_validate(payload)
+    assert not verify_smt_unsat_core_result(SmtUnsatCoreResult.model_validate(payload))
 
 
 def test_empty_assertion_collection_is_satisfiable() -> None:
@@ -122,24 +121,15 @@ def test_core_extraction_failure_is_a_typed_unknown(monkeypatch) -> None:
     assert result.detail == "Z3 could not complete the bounded source check."
 
 
-def test_replay_resource_exhaustion_is_a_typed_unknown(monkeypatch) -> None:
-    monkeypatch.setattr(
-        unsat_core,
-        "_extract_source_core",
-        lambda _source: ("UNSAT", (0, 1), None),
-    )
-    monkeypatch.setattr(
-        unsat_core,
-        "_replay_source",
-        lambda _source, _indices: ("UNKNOWN", "canceled"),
-    )
+def test_kernel_producer_does_not_replay_its_established_core(monkeypatch) -> None:
+    def replay_is_not_part_of_production(*_args: object) -> None:
+        pytest.fail("kernel-produced UNSAT core must not run a second replay")
 
+    monkeypatch.setattr(unsat_core, "_replay_source", replay_is_not_part_of_production)
     result = compute_smt_unsat_core(_request())
 
-    assert result.outcome == "UNKNOWN"
-    assert result.core_indices == ()
-    assert result.detail is not None
-    assert "result-validation replay" in result.detail
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1)
 
 
 @pytest.mark.parametrize(

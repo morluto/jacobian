@@ -8,21 +8,12 @@ from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json
-from jacobian.math.impartial_games.operations import (
-    _nim_option_plan,
-    birthdays,
-    grundy_table,
-    nim_options,
-    nim_sum,
-    subtraction_grundy_prefix,
-)
+from jacobian.math.impartial_games._nim_admission import nim_option_plan
 from jacobian.math.impartial_games.values import (
     MAX_HEAP_BOUND,
     MAX_HEAP_SIZE,
     MAX_HEAPS,
     MAX_NIM_DISTINCT_OPTIONS,
-    MAX_NIM_OPTION_RESULT_BYTES,
     MAX_NIM_RAW_CANDIDATES,
     MAX_POSITIONS,
     MAX_SUBTRACTION_VALUE,
@@ -55,33 +46,46 @@ class GrundyTableResult(GrundyTableRequest):
     method: Literal["REVERSE_TOPOLOGICAL_MEX"] = "REVERSE_TOPOLOGICAL_MEX"
 
     @model_validator(mode="after")
-    def bind_complete_table(self) -> Self:
-        analysis = grundy_table(self.game)
-        option_sets = dict(analysis.option_value_sets)
-        expected_entries = tuple(
-            GrundyEntry(
-                position=position,
-                grundy=value,
-                option_grundy_set=option_sets[position],
-            )
-            for position, value in analysis.values
-        )
-        values = tuple(value for _, value in analysis.values)
+    def require_bounded_complete_shape(self) -> Self:
+        values = tuple(entry.grundy for entry in self.entries)
         expected_max = max(values, default=0)
         expected_histogram = tuple(
             values.count(index) for index in range(expected_max + 1)
         )
         if (
-            self.entries != expected_entries
+            tuple(entry.position for entry in self.entries) != self.game.positions
+            or any(
+                entry.option_grundy_set != tuple(sorted(set(entry.option_grundy_set)))
+                for entry in self.entries
+            )
+            or any(value > MAX_POSITIONS - 1 for value in values)
             or self.max_grundy != expected_max
             or self.histogram != expected_histogram
-            or self.topological_order != analysis.topological_order
+            or set(self.topological_order) != set(self.game.positions)
+            or len(self.topological_order) != len(self.game.positions)
         ):
             raise PydanticCustomError(
-                "impartial_game.grundy_table_mismatch",
-                "result must be the exact complete Grundy table",
+                "impartial_game.grundy_table_shape",
+                "result must have a bounded canonical complete-table shape",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: GrundyTableRequest,
+        entries: tuple[GrundyEntry, ...],
+        max_grundy: int,
+        histogram: tuple[int, ...],
+        topological_order: tuple[str, ...],
+    ) -> Self:
+        return cls(
+            game=request.game,
+            entries=entries,
+            max_grundy=max_grundy,
+            histogram=histogram,
+            topological_order=topological_order,
+        )
 
 
 class BirthdayRequest(StrictModel):
@@ -94,13 +98,24 @@ class BirthdayResult(BirthdayRequest):
     method: Literal["REVERSE_TOPOLOGICAL_HEIGHT"] = "REVERSE_TOPOLOGICAL_HEIGHT"
 
     @model_validator(mode="after")
-    def bind_birthdays(self) -> Self:
-        if self.birthdays != birthdays(self.game):
+    def require_bounded_complete_shape(self) -> Self:
+        if tuple(
+            position for position, _ in self.birthdays
+        ) != self.game.positions or any(
+            birthday < 0 or birthday >= len(self.game.positions)
+            for _, birthday in self.birthdays
+        ):
             raise PydanticCustomError(
-                "impartial_game.birthday_table_mismatch",
-                "result must be the exact complete birthday table",
+                "impartial_game.birthday_table_shape",
+                "result must have a bounded canonical complete-table shape",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: BirthdayRequest, birthdays: tuple[tuple[str, int], ...]
+    ) -> Self:
+        return cls(game=request.game, birthdays=birthdays)
 
 
 class SubtractionGrundyPrefixRequest(StrictModel):
@@ -141,25 +156,49 @@ class SubtractionGrundyPrefixResult(SubtractionGrundyPrefixRequest):
     method: Literal["BOUNDED_DYNAMIC_PROGRAMMING"] = "BOUNDED_DYNAMIC_PROGRAMMING"
 
     @model_validator(mode="after")
-    def bind_complete_prefix(self) -> Self:
-        analysis = subtraction_grundy_prefix(self.subtraction_set, self.max_heap)
+    def require_bounded_complete_shape(self) -> Self:
         expected_p = tuple(
-            heap for heap, value in enumerate(analysis.grundy_values) if value == 0
+            heap for heap, value in enumerate(self.grundy_values) if value == 0
         )
         expected_n = tuple(
-            heap for heap, value in enumerate(analysis.grundy_values) if value != 0
+            heap for heap, value in enumerate(self.grundy_values) if value != 0
         )
         if (
-            self.grundy_values != analysis.grundy_values
-            or self.option_sets != analysis.option_value_sets
+            len(self.grundy_values) != self.max_heap + 1
+            or len(self.option_sets) != self.max_heap + 1
+            or any(
+                value < 0 or value > len(self.subtraction_set)
+                for value in self.grundy_values
+            )
+            or any(
+                options != tuple(sorted(set(options))) for options in self.option_sets
+            )
             or self.p_positions != expected_p
             or self.n_positions != expected_n
         ):
             raise PydanticCustomError(
-                "impartial_game.grundy_prefix_mismatch",
-                "result must be the exact complete bounded Grundy prefix",
+                "impartial_game.grundy_prefix_shape",
+                "result must have a bounded canonical complete-prefix shape",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: SubtractionGrundyPrefixRequest,
+        grundy_values: tuple[int, ...],
+        option_sets: tuple[tuple[int, ...], ...],
+        p_positions: tuple[int, ...],
+        n_positions: tuple[int, ...],
+    ) -> Self:
+        return cls(
+            subtraction_set=request.subtraction_set,
+            max_heap=request.max_heap,
+            grundy_values=grundy_values,
+            option_sets=option_sets,
+            p_positions=p_positions,
+            n_positions=n_positions,
+        )
 
 
 __all__ = [
@@ -193,19 +232,19 @@ class NimSumResult(NimSumRequest):
     is_p_position: StrictBool
 
     @model_validator(mode="after")
-    def bind_exact_nim_sum(self) -> Self:
-        expected = nim_sum(self.position)
-        if self.nim_sum != expected:
-            raise PydanticCustomError(
-                "impartial_game.nim_sum_mismatch",
-                "nim_sum must be the exact xor of the source position",
-            )
-        if self.is_p_position != (expected == 0):
+    def require_status_semantics(self) -> Self:
+        if self.is_p_position != (self.nim_sum == 0):
             raise PydanticCustomError(
                 "impartial_game.p_position_mismatch",
                 "is_p_position must report whether the exact xor is zero",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: NimSumRequest, nim_sum: int) -> Self:
+        return cls(
+            position=request.position, nim_sum=nim_sum, is_p_position=(nim_sum == 0)
+        )
 
 
 class NimOptionsRequest(StrictModel):
@@ -219,7 +258,7 @@ class NimOptionsRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_complete_family(self) -> Self:
-        _nim_option_plan(self.position)
+        nim_option_plan(self.position)
         return self
 
 
@@ -246,28 +285,34 @@ class NimOptionsResult(NimOptionsRequest):
     complete: Literal[True] = True
 
     @model_validator(mode="after")
-    def bind_complete_option_family(self) -> Self:
-        expected = nim_options(self.position)
-        plan = _nim_option_plan(self.position)
+    def require_bounded_complete_shape(self) -> Self:
         if (
-            self.options != expected
-            or self.raw_candidate_count != plan.raw_candidate_count
-            or self.distinct_option_count != plan.distinct_option_count
+            self.distinct_option_count != len(self.options)
+            or tuple(option.resulting_position.heaps for option in self.options)
+            != tuple(sorted(option.resulting_position.heaps for option in self.options))
+            or len({option.resulting_position.heaps for option in self.options})
+            != len(self.options)
         ):
             raise PydanticCustomError(
-                "impartial_game.nim_options_mismatch",
-                "result must be the exact complete Nim option family",
-            )
-        actual_bytes = len(encode_strict_json(self.model_dump(mode="json")))
-        if (
-            actual_bytes != plan.serialized_result_bytes
-            or actual_bytes > MAX_NIM_OPTION_RESULT_BYTES
-        ):
-            raise PydanticCustomError(
-                "impartial_game.nim_options_serialization_mismatch",
-                "serialized result must match the request-time Nim option bound",
+                "impartial_game.nim_options_shape",
+                "result must have a bounded canonical Nim-option shape",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: NimOptionsRequest,
+        options: tuple[NimOption, ...],
+        raw_candidate_count: int,
+        distinct_option_count: int,
+    ) -> Self:
+        return cls(
+            position=request.position,
+            options=options,
+            raw_candidate_count=raw_candidate_count,
+            distinct_option_count=distinct_option_count,
+        )
 
 
 class OutcomeProfileRequest(StrictModel):

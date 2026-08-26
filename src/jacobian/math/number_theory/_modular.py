@@ -5,7 +5,7 @@ from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._discrete_logarithm import (
     DISCRETE_LOGARITHM_OPERATION,
 )
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._modular_basic_models import (
     ChineseRemainderRequest,
     ChineseRemainderResult,
     JacobiSymbolRequest,

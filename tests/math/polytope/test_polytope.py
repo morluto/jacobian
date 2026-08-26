@@ -36,6 +36,7 @@ from jacobian.math.polytope._operations import (
     compute_facet_incidence,
     compute_polytope_support,
     compute_polytope_volume,
+    verify_facet_incidence_result,
 )
 
 
@@ -187,7 +188,9 @@ class TestFacetIncidence:
         assert len(result.facets) == 3
         assert all(len(facet.source_vertex_indices) >= 2 for facet in result.facets)
 
-    def test_result_rejects_missing_facet_and_wrong_source(self) -> None:
+    def test_result_is_structural_and_verifier_rejects_missing_facet_and_wrong_source(
+        self,
+    ) -> None:
         vertices = (
             _v((0, 1), (0, 1)),
             _v((1, 1), (0, 1)),
@@ -196,19 +199,19 @@ class TestFacetIncidence:
         )
         result = _facet_profile(vertices)
 
-        with pytest.raises(ValidationError):
-            FacetIncidenceResult(
-                vertices=vertices,
-                dimension=2,
-                facets=result.facets[:-1],
-            )
+        missing_facet = FacetIncidenceResult(
+            vertices=vertices,
+            dimension=2,
+            facets=result.facets[:-1],
+        )
+        assert not verify_facet_incidence_result(missing_facet)
         changed_source = (_v((0, 1), (0, 1)), _v((2, 1), (0, 1)), *vertices[2:])
-        with pytest.raises(ValidationError):
-            FacetIncidenceResult(
-                vertices=changed_source,
-                dimension=2,
-                facets=result.facets,
-            )
+        forged_source = FacetIncidenceResult(
+            vertices=changed_source,
+            dimension=2,
+            facets=result.facets,
+        )
+        assert not verify_facet_incidence_result(forged_source)
 
     def test_facet_profile_composes_unchanged_into_volume_request(self) -> None:
         """Each computed facet's shared half-space value feeds
@@ -1537,9 +1540,8 @@ class TestCanonicalVPolytopeComposition:
             num="1", den="1"
         )
 
-    def test_forged_serialized_value_rejected_by_defining_invariant(self) -> None:
-        """A mutated dump is re-validated as the canonical type, so a
-        forged non-extreme vertex is rejected by the extremality proof."""
+    def test_structural_serialized_value_feeds_volume_kernel(self) -> None:
+        """Volume consumes a structural V-representation directly."""
         payload = _support_square_result().polytope.model_dump(mode="json")
         payload["vertices"].insert(
             2,
@@ -1549,8 +1551,10 @@ class TestCanonicalVPolytopeComposition:
             },
         )
 
-        with pytest.raises(ValidationError):
-            PolytopeVolumeRequest.model_validate({"vertices": payload})
+        request = PolytopeVolumeRequest.model_validate({"vertices": payload})
+        assert compute_polytope_volume(request).volume == CanonicalRational(
+            num="1", den="1"
+        )
 
     def test_outer_halfspace_conflict_rejects_before_the_hull_replay(self) -> None:
         payload = _support_square_result().polytope.model_dump(mode="json")
@@ -1827,11 +1831,13 @@ class TestCanonicalVPolytopeFacetComposition:
             self._labelled_seven_dimensional_simplex()
         )
 
-    def test_forged_serialized_value_rejected_by_defining_invariant(self) -> None:
+    def test_structural_serialized_value_feeds_facet_kernel(self) -> None:
         payload = self._forged_serialized_square()
 
-        with pytest.raises(ValidationError):
+        result = compute_facet_incidence(
             FacetIncidenceRequest.model_validate({"vertices": payload})
+        )
+        assert len(result.facets) == 4
 
     def _serialized_support_simplex(self, digits: int) -> dict[str, object]:
         """A six-dimensional simplex as a serialized support-source value.

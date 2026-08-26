@@ -25,6 +25,7 @@ from jacobian.math.formal_concept_analysis.basis import (
     MAX_DG_LOGICAL_WORK,
     MAX_DG_RESULT_BYTES,
     _require_dg_canonical_carrier_fit,
+    verify_canonical_implication_basis_result,
 )
 from jacobian.math.formal_concept_analysis.values import MAX_IMPLICATIONS
 
@@ -284,8 +285,10 @@ def test_result_validator_rejects_corrupted_source_family_basis_matrix_and_work(
         payload["work"]["context_object_row_checks"] += 1
         payload["work"]["accounted_logical_work"] += 1
 
-    with pytest.raises(ValidationError):
-        CanonicalImplicationBasisResult.model_validate(payload)
+    with pytest.raises(ValueError):
+        verify_canonical_implication_basis_result(
+            CanonicalImplicationBasisResult.model_validate(payload)
+        )
 
 
 def test_coordinate_map_preserves_unrestricted_source_labels() -> None:

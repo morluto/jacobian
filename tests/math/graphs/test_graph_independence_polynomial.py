@@ -19,13 +19,14 @@ from jacobian.math.graphs.polynomials import (
     independence_polynomial,
     independence_polynomial_coefficients,
 )
-from jacobian.math.graphs.polynomials import operations as polynomial_operations
 from jacobian.math.graphs.polynomials._models import (
+    MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS,
     TreeIndependencePolynomialRequest,
     TreeIndependencePolynomialResult,
 )
 from jacobian.math.graphs.polynomials._operations import (
     compute_independence_polynomial,
+    verify_tree_independence_polynomial_result,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.polynomials._elementary_operations import (
@@ -313,33 +314,20 @@ def test_result_rejects_a_polynomial_outside_qq_x() -> None:
         TreeIndependencePolynomialResult.model_validate(valid)
 
 
-def test_result_rejects_overbudget_coefficients_before_replay(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_result_rejects_overbudget_coefficients() -> None:
     valid = compute_independence_polynomial(
         TreeIndependencePolynomialRequest(graph=_path(4))
     ).model_dump(mode="json")
-    digits = polynomial_operations.MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
+    digits = MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
     valid["polynomial"]["polynomial"]["terms"][0]["coefficient"]["num"] = "9" * (
         digits + 1
-    )
-
-    def fail_replay(_graph: SimpleUndirectedGraph) -> tuple[int, ...]:
-        raise AssertionError("overbudget polynomial must fail before replay")
-
-    monkeypatch.setattr(
-        polynomial_operations,
-        "independence_polynomial_coefficients",
-        fail_replay,
     )
 
     with pytest.raises(ValidationError):
         TreeIndependencePolynomialResult.model_validate(valid)
 
 
-_OVERBUDGET_DIGITS = (
-    polynomial_operations.MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS + 1
-)
+_OVERBUDGET_DIGITS = MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS + 1
 
 
 @pytest.mark.parametrize(
@@ -349,24 +337,14 @@ _OVERBUDGET_DIGITS = (
         ("independent_set_count", "9" * _OVERBUDGET_DIGITS),
     ],
 )
-def test_result_rejects_overbudget_derived_values_before_replay(
+def test_result_rejects_overbudget_derived_values(
     field: str,
     replacement: object,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     valid = compute_independence_polynomial(
         TreeIndependencePolynomialRequest(graph=_path(4))
     ).model_dump(mode="json")
     valid[field] = replacement
-
-    def fail_replay(_graph: SimpleUndirectedGraph) -> tuple[int, ...]:
-        raise AssertionError("overbudget derived value must fail before replay")
-
-    monkeypatch.setattr(
-        polynomial_operations,
-        "independence_polynomial_coefficients",
-        fail_replay,
-    )
 
     with pytest.raises(ValidationError):
         TreeIndependencePolynomialResult.model_validate(valid)
@@ -379,27 +357,51 @@ def test_result_rejects_overbudget_derived_values_before_replay(
         ("independent_set_count", "-8"),
     ],
 )
-def test_result_rejects_negative_derived_values_before_replay(
+def test_result_rejects_negative_derived_values(
     field: str,
     replacement: object,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     valid = compute_independence_polynomial(
         TreeIndependencePolynomialRequest(graph=_path(4))
     ).model_dump(mode="json")
     valid[field] = replacement
 
-    def fail_replay(_graph: SimpleUndirectedGraph) -> tuple[int, ...]:
-        raise AssertionError("negative cardinalities must fail before replay")
-
-    monkeypatch.setattr(
-        polynomial_operations,
-        "independence_polynomial_coefficients",
-        fail_replay,
-    )
-
     with pytest.raises(ValidationError):
         TreeIndependencePolynomialResult.model_validate(valid)
+
+
+def test_explicit_verifier_rejects_a_structurally_consistent_forged_claim() -> None:
+    graph = _path(4)
+    forged = TreeIndependencePolynomialResult(
+        graph=graph,
+        coefficients=("1", "4", "2"),
+        polynomial=RationalPolynomial.model_validate(
+            {
+                "domain": "QQ",
+                "variables": ["x"],
+                "polynomial": {
+                    "terms": [
+                        {
+                            "coefficient": {"num": "2", "den": "1"},
+                            "exponents": [2],
+                        },
+                        {
+                            "coefficient": {"num": "4", "den": "1"},
+                            "exponents": [1],
+                        },
+                        {
+                            "coefficient": {"num": "1", "den": "1"},
+                            "exponents": [0],
+                        },
+                    ]
+                },
+            }
+        ),
+        independence_number=2,
+        independent_set_count="7",
+    )
+
+    assert not verify_tree_independence_polynomial_result(forged)
 
 
 def test_native_module_exports_canonical_value_and_dense_projection() -> None:

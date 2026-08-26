@@ -332,6 +332,47 @@ def _require_exact_implication_work(
         )
 
 
+def _canonical_implication_closure(
+    system: FiniteAttributeImplicationSystem,
+    seed: frozenset[int],
+) -> tuple[int, ...]:
+    """Return the least closure for independent bounded-result verification."""
+
+    closure = set(seed)
+    while True:
+        added = {
+            attribute
+            for implication in system.implications
+            if set(implication.premise).issubset(closure)
+            for attribute in implication.conclusion
+            if attribute not in closure
+        }
+        if not added:
+            return tuple(sorted(closure))
+        closure.update(added)
+
+
+def _canonical_implication_closure_work(
+    system: FiniteAttributeImplicationSystem,
+    seed: frozenset[int],
+) -> tuple[tuple[int, ...], int]:
+    """Replay closure with the public logical-work accounting convention."""
+
+    closure = set(seed)
+    work = 0
+    while True:
+        first_sources: set[int] = set()
+        for implication in system.implications:
+            work += 1 + len(implication.premise)
+            if not set(implication.premise).issubset(closure):
+                continue
+            work += len(implication.conclusion)
+            first_sources.update(set(implication.conclusion) - closure)
+        if not first_sources:
+            return tuple(sorted(closure)), work
+        closure.update(first_sources)
+
+
 class ImplicationClosureResult(StrictModel):
     """The least source-bound closure of a seed under finite implications."""
 
@@ -342,57 +383,80 @@ class ImplicationClosureResult(StrictModel):
     lineage: tuple[ImplicationDerivation, ...]
     work: ImplicationClosureWork
 
-    @model_validator(mode="after")
-    def bind_to_exact_least_fixed_point(self) -> Self:
-        for name in ("seed", "closure", "added"):
-            _require_canonical_carrier_subset(
-                name,
-                getattr(self, name),
-                len(self.system.attributes),
-            )
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        system: FiniteAttributeImplicationSystem,
+        seed: tuple[int, ...],
+        closure: tuple[int, ...],
+        added: tuple[int, ...],
+        lineage: tuple[ImplicationDerivation, ...],
+        work: ImplicationClosureWork,
+    ) -> Self:
+        """Build a result emitted by the owner-local closure kernel."""
 
-        seed = set(self.seed)
-        closure = set(self.closure)
-        if not seed.issubset(closure):
-            raise PydanticCustomError(
-                "formal_concept_analysis.closure_missing_seed",
-                "closure must contain every seed attribute",
-            )
-        if set(self.added) != closure - seed:
-            raise PydanticCustomError(
-                "formal_concept_analysis.added_attributes_mismatch",
-                "added attributes are not bound to the seed and closure",
-            )
-        if len(self.lineage) != len(self.added):
-            raise PydanticCustomError(
-                "formal_concept_analysis.lineage_length_mismatch",
-                "lineage must justify every added attribute exactly once",
-            )
-        if self.lineage != tuple(
-            sorted(
-                self.lineage,
-                key=lambda step: (step.activation_round, step.attribute),
-            )
-        ):
-            raise PydanticCustomError(
-                "formal_concept_analysis.lineage_not_ordered",
-                "lineage must be ordered by activation round and attribute",
-            )
-        expected_implication_checks, expected_membership_checks = (
-            _replay_implication_lineage(
-                self.system,
-                seed,
-                closure,
-                self.lineage,
-                self.work.productive_rounds,
-            )
+        return cls(
+            system=system,
+            seed=seed,
+            closure=closure,
+            added=added,
+            lineage=lineage,
+            work=work,
         )
-        _require_exact_implication_work(
-            expected_implication_checks,
-            expected_membership_checks,
-            self.work,
+
+
+def verify_implication_closure_result(result: ImplicationClosureResult) -> None:
+    """Independently replay one supplied closure claim within its carrier bound."""
+
+    for name in ("seed", "closure", "added"):
+        _require_canonical_carrier_subset(
+            name,
+            getattr(result, name),
+            len(result.system.attributes),
         )
-        return self
+
+    seed = set(result.seed)
+    closure = set(result.closure)
+    if not seed.issubset(closure):
+        raise PydanticCustomError(
+            "formal_concept_analysis.closure_missing_seed",
+            "closure must contain every seed attribute",
+        )
+    if set(result.added) != closure - seed:
+        raise PydanticCustomError(
+            "formal_concept_analysis.added_attributes_mismatch",
+            "added attributes are not bound to the seed and closure",
+        )
+    if len(result.lineage) != len(result.added):
+        raise PydanticCustomError(
+            "formal_concept_analysis.lineage_length_mismatch",
+            "lineage must justify every added attribute exactly once",
+        )
+    if result.lineage != tuple(
+        sorted(
+            result.lineage,
+            key=lambda step: (step.activation_round, step.attribute),
+        )
+    ):
+        raise PydanticCustomError(
+            "formal_concept_analysis.lineage_not_ordered",
+            "lineage must be ordered by activation round and attribute",
+        )
+    expected_implication_checks, expected_membership_checks = (
+        _replay_implication_lineage(
+            result.system,
+            seed,
+            closure,
+            result.lineage,
+            result.work.productive_rounds,
+        )
+    )
+    _require_exact_implication_work(
+        expected_implication_checks,
+        expected_membership_checks,
+        result.work,
+    )
 
 
 class FormalContext(StrictModel):
@@ -456,4 +520,5 @@ __all__ = [
     "ImplicationClosureResult",
     "ImplicationClosureWork",
     "ImplicationDerivation",
+    "verify_implication_closure_result",
 ]

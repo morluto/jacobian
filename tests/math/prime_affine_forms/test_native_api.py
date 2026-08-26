@@ -23,19 +23,19 @@ from jacobian.math.prime_affine_forms._admissibility import (
     PrimeTupleAdmissibilityRequest,
     compute_local_admissibility,
 )
+from jacobian.math.prime_affine_forms._interval import (
+    PrimeAffineIntervalCountRequest,
+    PrimeAffineIntervalEnumerateRequest,
+    compute_interval_count,
+    compute_interval_enumerate,
+)
 from jacobian.math.prime_affine_forms._local_factors import (
     PrimeTupleLocalFactorRequest,
     PrimeTupleLocalFactorsRequest,
     compute_local_factor,
     compute_local_factors,
 )
-from jacobian.math.prime_affine_forms._models import (
-    PrimeAffineIntervalCountRequest,
-    PrimeAffineIntervalEnumerateRequest,
-)
 from jacobian.math.prime_affine_forms._operations import (
-    compute_interval_count,
-    compute_interval_enumerate,
     compute_interval_residue_profile,
     compute_residue_wheel,
     compute_residue_wheel_enumeration,

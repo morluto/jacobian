@@ -9,7 +9,11 @@ from jacobian.math.coherent_configurations._models import (
     CoherentConfigurationAnalyzeRequest,
     CoherentConfigurationAnalyzeResult,
 )
-from jacobian.math.coherent_configurations._operations import compute_analyze
+from jacobian.math.coherent_configurations._operations import (
+    compute_analyze,
+    verify_analyze_result,
+    verify_finite_coherent_configuration,
+)
 from jacobian.math.coherent_configurations._tools import TOOLS
 from jacobian.math.coherent_configurations.values import (
     MAX_POINT_LABEL_BYTES,
@@ -200,10 +204,12 @@ def test_path_partition_reports_nonconstant_intersection_numbers() -> None:
     assert result.obstruction.second_count == 2
 
 
-def test_positive_value_rejects_noncoherent_pair_partition() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        FiniteCoherentConfiguration.model_validate(_path_four_relation_partition())
-    assert exc_info.value.errors()[0]["type"] == "coherent_configuration.not_coherent"
+def test_positive_value_is_structural_and_has_an_explicit_coherence_verifier() -> None:
+    claimed = FiniteCoherentConfiguration.model_validate(
+        _path_four_relation_partition()
+    )
+
+    assert not verify_finite_coherent_configuration(claimed)
 
 
 def test_malformed_partition_is_request_invalid_not_a_negative_conclusion() -> None:
@@ -310,24 +316,22 @@ def test_maximum_point_count_translation_configuration_is_admitted() -> None:
     assert len(result.intersection_numbers) == 12**3
 
 
-def test_produced_results_round_trip_through_independent_source_replay() -> None:
+def test_produced_results_round_trip_and_pass_explicit_replay() -> None:
     """Both trusted outcome shapes remain valid canonical wire values."""
 
     coherent = compute_analyze(_request(_complete_graph_k3()))
     noncoherent = compute_analyze(_request(_path_four_relation_partition()))
 
-    assert (
-        CoherentConfigurationAnalyzeResult.model_validate(
-            coherent.model_dump(mode="json")
-        )
-        == coherent
+    restored_coherent = CoherentConfigurationAnalyzeResult.model_validate(
+        coherent.model_dump(mode="json")
     )
-    assert (
-        CoherentConfigurationAnalyzeResult.model_validate(
-            noncoherent.model_dump(mode="json")
-        )
-        == noncoherent
+    restored_noncoherent = CoherentConfigurationAnalyzeResult.model_validate(
+        noncoherent.model_dump(mode="json")
     )
+    assert restored_coherent == coherent
+    assert restored_noncoherent == noncoherent
+    assert verify_analyze_result(restored_coherent)
+    assert verify_analyze_result(restored_noncoherent)
 
 
 def test_over_relation_bound_is_rejected_before_analysis() -> None:
@@ -338,22 +342,17 @@ def test_over_relation_bound_is_rejected_before_analysis() -> None:
         _request(payload)
 
 
-def test_result_replay_rejects_intersection_and_source_mutations() -> None:
+def test_explicit_result_replay_rejects_intersection_and_source_mutations() -> None:
     result = compute_analyze(_request(_complete_graph_k3()))
     payload = result.model_dump(mode="json")
     payload["intersection_numbers"][0]["value"] = 99
-    with pytest.raises(ValidationError) as exc_info:
+    assert not verify_analyze_result(
         CoherentConfigurationAnalyzeResult.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "coherent_configuration.result_intersection_numbers"
     )
 
     payload = result.model_dump(mode="json")
     payload["configuration"]["relation_matrix"][0][1] = "diagonal"
-    with pytest.raises(ValidationError) as exc_info:
+    payload["coherent_configuration"]["relation_matrix"][0][1] = "diagonal"
+    assert not verify_analyze_result(
         CoherentConfigurationAnalyzeResult.model_validate(payload)
-    assert exc_info.value.errors()[0]["type"] in {
-        "coherent_configuration.result_status",
-        "coherent_configuration.result_value",
-    }
+    )

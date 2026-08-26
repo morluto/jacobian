@@ -9,12 +9,17 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import canonical_rational_component_digits
+from jacobian.canonical import encode_strict_json
+from jacobian.math.geometry.polygon_kernel._kernel import oriented_half_planes
 from jacobian.math.geometry.polygon_kernel._models import (
     MAX_KERNEL_COORDINATE_DIGITS,
+    MAX_KERNEL_RESULT_CHARS,
     MAX_KERNEL_SOURCE_VERTICES,
     KernelPolygon,
     PolygonKernelRequest,
     PolygonKernelResult,
+    _estimate_visibility_kernel_result_characters,
 )
 from jacobian.math.geometry.polygon_kernel._operations import (
     compute_visibility_kernel,
@@ -360,3 +365,54 @@ def test_rejects_derived_work_before_pairwise_expansion() -> None:
 def test_rejects_derived_result_size_before_pairwise_expansion() -> None:
     with pytest.raises(ValidationError):
         _request(_parabola_polygon(10**45))
+
+
+@pytest.mark.parametrize(
+    "points",
+    [
+        PUBLISHED_PENTAGON,
+        [(0, 0), (4, 0), (4, 4), (0, 4)],
+        [(0, 0), (6, 0), (6, 5), (4, 3), (2, 5), (0, 5)],
+    ],
+)
+def test_result_reservation_dominates_produced_canonical_json(
+    points: list[tuple[int, int]],
+) -> None:
+    """The preflight reservation covers each complete produced result shape."""
+
+    request = _request(points)
+    half_planes = oriented_half_planes(request.polygon)
+    max_coordinate_digits = max(
+        canonical_rational_component_digits(component)
+        for point in request.polygon.points
+        for component in (point.x, point.y)
+    )
+    coefficient_digits = max(
+        canonical_rational_component_digits(component)
+        for half_plane in half_planes
+        for component in (half_plane.a, half_plane.b, half_plane.c)
+    )
+    estimate = _estimate_visibility_kernel_result_characters(
+        len(request.polygon.points),
+        max_coordinate_digits,
+        coefficient_digits,
+        8 * coefficient_digits + 8,
+    )
+    actual = len(
+        encode_strict_json(compute_visibility_kernel(request).model_dump(mode="json"))
+    )
+
+    assert actual <= estimate <= MAX_KERNEL_RESULT_CHARS
+
+
+def test_feasibility_admission_flips_at_the_derived_work_boundary() -> None:
+    """The work ledger, rather than a fixed vertex cap, decides this family."""
+
+    accepted = _request(_parabola_polygon(10**28))
+    assert len(accepted.polygon.points) == MAX_KERNEL_SOURCE_VERTICES
+
+    with pytest.raises(ValidationError) as error:
+        _request(_parabola_polygon(10**29))
+    assert error.value.errors()[0]["type"] == (
+        "geometry.visibility_kernel_feasibility_work_f_c"
+    )

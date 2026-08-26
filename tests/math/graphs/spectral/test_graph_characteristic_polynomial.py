@@ -17,6 +17,7 @@ from jacobian.math.graphs.spectral._models import (
 from jacobian.math.graphs.spectral._operations import (
     compute_adjacency_characteristic_polynomial,
     compute_laplacian_characteristic_polynomial,
+    verify_graph_characteristic_polynomial_result,
 )
 from jacobian.math.graphs.spectral._tools import TOOLS
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
@@ -171,23 +172,23 @@ class TestLaplacianCharacteristicPolynomial:
         assert leading.coefficient.as_fraction() == 1
 
 
-def test_forged_result_rejected():
+def test_forged_result_is_rejected_by_the_explicit_owner_verifier():
     graph = IndexedSimpleUndirectedGraph(vertex_count=3, edges=((0, 1), (1, 2)))
-    with pytest.raises(ValidationError):
-        GraphCharacteristicPolynomialResult.model_validate(
-            {
-                "graph": graph.model_dump(),
-                "convention": "ADJACENCY",
+    result = GraphCharacteristicPolynomialResult.model_validate(
+        {
+            "graph": graph.model_dump(),
+            "convention": "ADJACENCY",
+            "polynomial": {
+                "variables": ["x"],
                 "polynomial": {
-                    "variables": ["x"],
-                    "polynomial": {
-                        "terms": [
-                            {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
-                        ]
-                    },
+                    "terms": [
+                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
+                    ]
                 },
-            }
-        )
+            },
+        }
+    )
+    assert not verify_graph_characteristic_polynomial_result(result)
 
 
 def test_replay_rejects_more_terms_than_any_admitted_charpoly_has():
@@ -210,13 +211,14 @@ def test_replay_rejects_coefficients_beyond_the_charpoly_digit_budget():
         GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(huge))
 
 
-def test_maximum_shaped_nonmatching_polynomial_fails_only_on_source_binding():
+def test_maximum_shaped_nonmatching_polynomial_fails_only_in_owner_verification():
     # Exactly 33 terms of degree at most 32 with one-digit coefficients sits
-    # inside every replay budget, so validation must reach the determinant
-    # comparison and fail there instead.
+    # inside every structural budget, so only the explicit determinant
+    # verification rejects it.
     dense = _univariate_polynomial(dict.fromkeys(range(33), "1"))
-    with pytest.raises(ValidationError):
+    assert not verify_graph_characteristic_polynomial_result(
         GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(dense))
+    )
 
 
 def test_maximal_path_round_trips_through_serialization():
@@ -281,6 +283,7 @@ def test_catalog_result_round_trips_source_binding():
     assert restored.graph == request.graph
     assert restored.convention == "ADJACENCY"
     assert restored.polynomial == adjacency_characteristic_polynomial(request.graph)
+    assert verify_graph_characteristic_polynomial_result(restored)
 
 
 def test_serialized_native_terms_use_descending_exponent_order():

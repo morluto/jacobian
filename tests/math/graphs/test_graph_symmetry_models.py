@@ -22,7 +22,10 @@ from jacobian.math.graphs.symmetry._models import (
     GraphVertexOrbit,
     _orbit_result_canonical_wire_bytes,
 )
-from jacobian.math.graphs.symmetry._operations import _generator_orbits
+from jacobian.math.graphs.symmetry._operations import (
+    _generator_orbits,
+    verify_graph_symmetry_orbit_result,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -552,6 +555,7 @@ def test_graph_symmetry_operation_produces_source_bound_result() -> None:
     assert tuple(orbit.members for orbit in result.edge_orbits) == (
         (("a", "b"), ("b", "c")),
     )
+    assert verify_graph_symmetry_orbit_result(result)
 
 
 def test_graph_symmetry_retained_source_action_is_deeply_immutable() -> None:
@@ -593,7 +597,7 @@ def test_graph_symmetry_den_num_identity_generator_canonicalizes() -> None:
     assert b"vertex_orbit_count" in encoded
 
 
-def test_graph_symmetry_result_rejects_singletons_contradicting_reflection() -> None:
+def test_graph_symmetry_verifier_rejects_singletons_contradicting_reflection() -> None:
     payload = _reflection_path_result_payload()
     payload["vertex_orbits"] = [
         {"orbit_index": index, "representative": vertex, "members": [vertex]}
@@ -601,11 +605,12 @@ def test_graph_symmetry_result_rejects_singletons_contradicting_reflection() -> 
     ]
     payload["vertex_orbit_count"] = 3
 
-    with pytest.raises(ValidationError):
+    assert not verify_graph_symmetry_orbit_result(
         GraphSymmetryOrbitResult.model_validate(payload)
+    )
 
 
-def test_graph_symmetry_result_rejects_edge_split_contradicting_generators() -> None:
+def test_graph_symmetry_verifier_rejects_edge_split_contradicting_generators() -> None:
     payload = _reflection_path_result_payload()
     payload["edge_orbits"] = [
         {
@@ -621,8 +626,9 @@ def test_graph_symmetry_result_rejects_edge_split_contradicting_generators() -> 
     ]
     payload["edge_orbit_count"] = 2
 
-    with pytest.raises(ValidationError):
+    assert not verify_graph_symmetry_orbit_result(
         GraphSymmetryOrbitResult.model_validate(payload)
+    )
 
 
 def test_graph_symmetry_result_rejects_generator_ids_not_matching_source() -> None:

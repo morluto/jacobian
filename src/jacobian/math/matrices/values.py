@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import pairwise
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
@@ -14,7 +14,7 @@ from jacobian._exact import (
     CanonicalInteger,
     CanonicalRational,
 )
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.real_quadratic import RealQuadraticValue
 
@@ -47,6 +47,56 @@ def require_matrix_scalar_digits(
                 )
 
 
+def _require_raw_matrix_envelope(
+    data: object, *, maximum_axis: int, label: str
+) -> object:
+    """Bound raw matrix depth, axes, and scalar strings before tuple copying."""
+
+    if not isinstance(data, dict):
+        return data
+    if set(data).difference({"domain", "entries"}):
+        raise _validation_error("shape_mismatch", f"{label} contains unknown fields")
+    entries = data.get("entries")
+    if not isinstance(entries, (list, tuple)):
+        return data
+    if len(entries) > maximum_axis:
+        raise _validation_error(
+            "budget_exceeded", f"{label} has at most {maximum_axis} rows"
+        )
+    for row in entries:
+        if not isinstance(row, (list, tuple)):
+            continue
+        if len(row) > maximum_axis:
+            raise _validation_error(
+                "budget_exceeded", f"{label} has at most {maximum_axis} columns"
+            )
+        for scalar in row:
+            if isinstance(scalar, (list, tuple)):
+                raise _validation_error(
+                    "shape_mismatch", f"{label} entries must be scalar values"
+                )
+            if isinstance(scalar, dict) and set(scalar).difference({"num", "den"}):
+                raise _validation_error(
+                    "shape_mismatch", f"{label} rational scalar contains unknown fields"
+                )
+            components = (
+                (scalar.get("num"), scalar.get("den"))
+                if isinstance(scalar, dict)
+                else (scalar,)
+            )
+            for component in components:
+                if (
+                    isinstance(component, (str, int))
+                    and len(str(component).lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
+                ):
+                    raise _validation_error(
+                        "budget_exceeded",
+                        f"{label} scalars are limited to "
+                        f"{MAX_MATRIX_SCALAR_DIGITS} decimal digits",
+                    )
+    return data
+
+
 class RationalMatrix(StrictModel):
     """One nonempty rectangular matrix over canonical rationals."""
 
@@ -55,6 +105,14 @@ class RationalMatrix(StrictModel):
         min_length=1,
         max_length=MAX_RATIONAL_MATRIX_ORDER,
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_matrix_envelope(cls, data: Any) -> Any:
+        data = _require_raw_matrix_envelope(
+            data, maximum_axis=MAX_RATIONAL_MATRIX_ORDER, label="matrix"
+        )
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:
@@ -131,6 +189,14 @@ class IntegerMatrix(StrictModel):
         min_length=1,
         max_length=MAX_MATRIX_DIMENSION,
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_matrix_envelope(cls, data: Any) -> Any:
+        data = _require_raw_matrix_envelope(
+            data, maximum_axis=MAX_MATRIX_DIMENSION, label="matrix"
+        )
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:

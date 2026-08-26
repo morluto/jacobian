@@ -13,12 +13,10 @@ from jacobian.math.graphs.coloring._operations import (
 )
 from jacobian.math.graphs.flow._models import MaxFlowRequest
 from jacobian.math.graphs.flow._operations import compute_max_flow
-from jacobian.math.graphs.independence import (
-    IndependenceNumberRequest,
-    independence_number,
-)
+from jacobian.math.graphs.independence import independence_number
 from jacobian.math.graphs.spectral._models import GraphSpectrumRequest
 from jacobian.math.graphs.spectral._operations import compute_laplacian_spectrum
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def test_k_colorability_uses_an_exact_decision_procedure() -> None:
@@ -155,28 +153,16 @@ def test_catalog_retires_the_duplicate_and_discovers_independence_number() -> No
 
 
 def test_exact_independence_witness_is_independent_and_binds_its_bounds() -> None:
-    request = IndependenceNumberRequest.model_validate(
-        {
-            "graph": {
-                "vertices": ["0", "1", "2", "3", "4"],
-                "edges": [
-                    ["0", "1"],
-                    ["1", "2"],
-                    ["2", "3"],
-                    ["3", "4"],
-                    ["0", "4"],
-                ],
-            },
-            "resource_budget": {"wall_seconds": 5, "max_order": 5},
-        }
+    graph = SimpleUndirectedGraph(
+        vertices=("0", "1", "2", "3", "4"),
+        edges=(("0", "1"), ("1", "2"), ("2", "3"), ("3", "4"), ("0", "4")),
     )
-    result = independence_number(request)
+    result = independence_number(graph)
 
     assert result.status == "EXACT"
     assert result.optimum_value == result.incumbent_value == result.lower_bound
     assert result.upper_bound == result.optimum_value
     witness = set(result.witness_vertices)
     assert all(
-        left not in witness or right not in witness
-        for left, right in request.graph.edges
+        left not in witness or right not in witness for left, right in graph.edges
     )

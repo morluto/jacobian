@@ -9,15 +9,15 @@ from pydantic import ValidationError
 from tests.math.number_theory._validation import expect_validation
 
 from jacobian.canonical import parse_canonical_integer
-from jacobian.math.number_theory._factorization_kernels import (
-    compute_pratt_certificate,
-    factorize_certified,
-)
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._certification_models import (
     CertifiedFactorizationRequest,
     PrattCertificateNode,
     PrimalityCertificateRequest,
     PrimalityCertificateResult,
+)
+from jacobian.math.number_theory._factorization_kernels import (
+    compute_pratt_certificate,
+    factorize_certified,
 )
 
 # ---------------------------------------------------------------------------

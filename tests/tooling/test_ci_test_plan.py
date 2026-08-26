@@ -42,6 +42,15 @@ def test_model_change_selects_its_math_owner_and_public_contract_evidence() -> N
     assert plan.run_catalog_examples is True
 
 
+def test_canonical_cnf_contract_change_selects_public_contract_evidence() -> None:
+    plan = _plan(["src/jacobian/math/logic/_cnf.py"])
+
+    assert plan.run_math is True
+    assert plan.math_tests == ("tests/math/logic",)
+    assert plan.run_catalog is True
+    assert plan.run_catalog_examples is True
+
+
 def test_public_operation_kernel_selects_catalog_examples() -> None:
     plan = _plan(["src/jacobian/math/code_theory/_dual_operations.py"])
 

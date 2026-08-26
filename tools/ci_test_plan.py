@@ -36,6 +36,7 @@ _SHARED_PREFIXES = (
 _PUBLIC_MATH_FILES = frozenset(
     {
         "_admission.py",
+        "_cnf.py",
         "_models.py",
         "_operations.py",
         "_tools.py",

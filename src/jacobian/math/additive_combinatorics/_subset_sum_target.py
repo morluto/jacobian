@@ -291,6 +291,21 @@ class SubsetSumTargetResult(StrictModel):
         description="The exact sum reconstructed from an attaining witness.",
     )
 
+    @model_validator(mode="after")
+    def require_result_branch_shape(self) -> Self:
+        if self.status == "ATTAINED":
+            if self.witness is None or self.reconstructed_sum is None:
+                raise _validation_error(
+                    "result_branch_shape",
+                    "an ATTAINED result requires a witness and reconstructed sum",
+                )
+        elif self.witness is not None or self.reconstructed_sum is not None:
+            raise _validation_error(
+                "result_branch_shape",
+                "a NOT_ATTAINED result cannot carry a witness or reconstructed sum",
+            )
+        return self
+
     @model_validator(mode="before")
     @classmethod
     def bound_raw_result(cls, value: object) -> object:

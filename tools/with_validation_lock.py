@@ -26,7 +26,13 @@ from tools.command_runner import (  # noqa: E402
 LOCK_NAME = ".jacobian-validation.lock"
 _VALIDATION_TIMEOUT_SECONDS = 4_800.0
 _VALIDATION_OUTPUT_LIMIT_BYTES = 64 * 1024 * 1024
-_VALIDATION_ENVIRONMENT = ("PATH", "VIRTUAL_ENV", "UV_CACHE_DIR", "UV_PYTHON_INSTALL_DIR")
+_VALIDATION_ENVIRONMENT = (
+    "PATH",
+    "VIRTUAL_ENV",
+    "UV_CACHE_DIR",
+    "UV_PYTHON_INSTALL_DIR",
+    "MAKEFLAGS",
+)
 
 
 def _repo_root() -> Path:

@@ -2,13 +2,98 @@
 
 from __future__ import annotations
 
+from collections import deque
 from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    strict_json_object_size,
+)
 from jacobian.math.graphs.tree_decompositions.values import TreeDecomposition
+
+
+def _json_array_size(item_sizes: list[int]) -> int:
+    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
+
+
+def _reroot_result_wire_bytes(decomposition: TreeDecomposition, root: str) -> int:
+    """Return the exact strict-JSON size of ``reroot(decomposition, root)``.
+
+    The result's only superlinear field is the map of root-to-node paths.  Its
+    exact encoded size follows from one traversal and one accumulated array
+    size per node, without constructing or retaining every repeated path
+    label before admission.
+    """
+
+    node_index = {node: index for index, node in enumerate(decomposition.tree_nodes)}
+    root_index = node_index[root]
+    adjacency: list[list[int]] = [[] for _ in decomposition.tree_nodes]
+    for left, right in decomposition.tree_edges:
+        left_index = node_index[left]
+        right_index = node_index[right]
+        adjacency[left_index].append(right_index)
+        adjacency[right_index].append(left_index)
+
+    parent: list[int | None] = [None] * len(decomposition.tree_nodes)
+    depth = [0] * len(decomposition.tree_nodes)
+    traversal = [root_index]
+    queue = deque([root_index])
+    while queue:
+        current = queue.popleft()
+        for neighbor in adjacency[current]:
+            if neighbor == parent[current] or neighbor == root_index:
+                continue
+            parent[neighbor] = current
+            depth[neighbor] = depth[current] + 1
+            traversal.append(neighbor)
+            queue.append(neighbor)
+
+    encoded_nodes = [len(encode_strict_json(node)) for node in decomposition.tree_nodes]
+    parent_fields = []
+    children: list[list[int]] = [[] for _ in decomposition.tree_nodes]
+    for index in traversal:
+        parent_index = parent[index]
+        parent_fields.append(
+            (
+                decomposition.tree_nodes[index],
+                4 if parent_index is None else encoded_nodes[parent_index],
+            )
+        )
+        if parent_index is not None:
+            children[parent_index].append(index)
+    children_size = strict_json_object_size(
+        (
+            decomposition.tree_nodes[index],
+            _json_array_size([encoded_nodes[child] for child in children[index]]),
+        )
+        for index in range(len(decomposition.tree_nodes))
+    )
+    depth_size = strict_json_object_size(
+        (decomposition.tree_nodes[index], len(str(depth[index]))) for index in traversal
+    )
+    path_sizes = [0] * len(decomposition.tree_nodes)
+    path_sizes[root_index] = _json_array_size([encoded_nodes[root_index]])
+    for index in traversal[1:]:
+        parent_index = parent[index]
+        assert parent_index is not None
+        path_sizes[index] = path_sizes[parent_index] + 1 + encoded_nodes[index]
+    paths_size = strict_json_object_size(
+        (decomposition.tree_nodes[index], path_sizes[index]) for index in traversal
+    )
+    return strict_json_object_size(
+        (
+            ("root", encoded_nodes[root_index]),
+            ("parent", strict_json_object_size(parent_fields)),
+            ("children", children_size),
+            ("depth", depth_size),
+            ("paths", paths_size),
+        )
+    )
 
 
 class WidthRequest(StrictModel):
@@ -74,6 +159,26 @@ class RerootRequest(StrictModel):
             raise PydanticCustomError(
                 "graph.root_must_be_a_declared_tree_node",
                 "root must be a declared tree node",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_transportable_result(self) -> Self:
+        """Preflight the owner-local root-to-node path projection.
+
+        A tree with at most 256 nodes can still produce quadratically many
+        repeated node labels across its root-to-node paths.  Compute that
+        deterministic projection while admitting the request, so the final
+        transport wrapper never discovers an oversized result after execution.
+        """
+
+        result_bytes = _reroot_result_wire_bytes(self.decomposition, self.root)
+        output_limit = CanonicalLimits().max_output_bytes
+        if result_bytes > output_limit:
+            raise PydanticCustomError(
+                "graph.reroot_result_exceeds_transport_limit",
+                "rerooted tree-decomposition paths exceed the "
+                f"{output_limit}-byte canonical output limit",
             )
         return self
 

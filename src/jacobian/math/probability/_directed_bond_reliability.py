@@ -34,8 +34,7 @@ MAX_DIRECTED_BOND_RELIABILITY_RATIONAL_DIGITS = (
     MAX_INPUT_RATIONAL_DIGITS * MAX_DIRECTED_BOND_RELIABILITY_ARCS
     + MAX_DIRECTED_BOND_RELIABILITY_ARCS
 )
-# The producer enumerates every arc subset and result validation replays it.
-# Per state and pass it selects open arcs, evaluates every probability,
+# The producer enumerates every arc subset once. Per state it selects open arcs, evaluates every probability,
 # collects the endpoints of open arcs into the relevant vertex set (two
 # endpoint visits per open arc), adds those arcs to the directed graph, and
 # traverses them: six arc visits. Traversal materializes only the relevant
@@ -47,8 +46,7 @@ MAX_DIRECTED_BOND_RELIABILITY_RELEVANT_VERTICES = (
     2 * MAX_DIRECTED_BOND_RELIABILITY_ARCS + 2
 )
 MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK = (
-    2
-    * MAX_DIRECTED_BOND_RELIABILITY_STATES
+    MAX_DIRECTED_BOND_RELIABILITY_STATES
     * (
         7 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
         + 4 * MAX_DIRECTED_BOND_RELIABILITY_RELEVANT_VERTICES
@@ -196,11 +194,10 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
             {self.source, self.target}
             | {vertex for arc in canonical_arcs for vertex in arc}
         )
-        logical_work = 2 * state_count * (7 * arc_count + 4 * relevant_vertices + 3) + 8
+        logical_work = state_count * (7 * arc_count + 4 * relevant_vertices + 3) + 8
         if logical_work > MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK:
             raise _validation_error(
-                "directed bond reliability exceeds the complete producer and "
-                "replay work budget"
+                "directed bond reliability exceeds the complete producer work budget"
             )
         if self.graph.vertex_count > MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES:
             raise _validation_error(
@@ -359,7 +356,12 @@ class DirectedBondReliabilityState(StrictModel):
 
 
 class DirectedBondConnectionProbabilityResult(StrictModel):
-    """An exact, complete, source-bound directed bond reliability result."""
+    """An exact complete directed bond reliability result.
+
+    Deserialization validates a bounded ledger shape only. The kernel builds
+    output through ``_from_kernel`` after its one complete enumeration; use
+    the explicit verifier below for independently supplied claims.
+    """
 
     source: DirectedBondConnectionProbabilitySource
     connection_probability: CanonicalRational
@@ -382,15 +384,16 @@ class DirectedBondConnectionProbabilityResult(StrictModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @model_validator(mode="after")
-    def bind_to_directed_bond_source(self) -> Self:
+    def require_bounded_ledger_shape(self) -> Self:
         require_bounded_rational(
             self.connection_probability,
             max_digits=MAX_DIRECTED_BOND_RELIABILITY_RATIONAL_DIGITS,
             label="directed bond connection probability",
         )
-        connection_probability, expected_states = (
-            _directed_bond_connection_probability_data(self.source)
-        )
+        if not 0 <= self.connection_probability.as_fraction() <= 1:
+            raise _validation_error(
+                "directed bond connection probability must lie in [0, 1]"
+            )
         if self.arc_count != len(self.source.graph.edges):
             raise _validation_error("arc_count must match the source graph")
         if self.visited_states != 1 << self.arc_count:
@@ -403,25 +406,33 @@ class DirectedBondConnectionProbabilityResult(StrictModel):
             raise _validation_error(
                 "state ledger indices must be complete and canonical"
             )
-        if len(expected_states) != len(self.states):
-            raise _validation_error("state ledger length does not match source replay")
-        for state, expected in zip(self.states, expected_states, strict=True):
-            open_arcs, reaches_target, state_probability = expected
-            if state.open_arcs != open_arcs:
-                raise _validation_error("state open arcs do not match source subset")
-            if state.source_reaches_target != reaches_target:
-                raise _validation_error(
-                    "state reachability does not match source subset"
-                )
-            if state.state_probability.as_fraction() != state_probability:
-                raise _validation_error(
-                    "state probability does not match source subset"
-                )
-        if self.connection_probability.as_fraction() != connection_probability:
-            raise _validation_error(
-                "connection probability does not match source replay"
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: DirectedBondConnectionProbabilitySource,
+        connection_probability: CanonicalRational,
+        states: tuple[DirectedBondReliabilityState, ...],
+    ) -> Self:
+        """Build trusted kernel output without replaying every arc subset."""
+
+        return cls.model_construct(
+            source=source,
+            connection_probability=connection_probability,
+            arc_count=len(source.graph.edges),
+            visited_states=len(states),
+            states=states,
+            event="DIRECTED_PATH_EXISTS",
+            arc_independence="INDEPENDENT_BERNOULLI",
+            enumeration="COMPLETE_ARC_SUBSETS",
+            completeness="COMPLETE",
+            truncated=False,
+            termination_reason="EXHAUSTED",
+            exactness="EXACT_RATIONAL",
+            determinism="DETERMINISTIC",
+        )
 
 
 def _wire(value: Any) -> CanonicalRational:
@@ -466,6 +477,30 @@ def _directed_bond_connection_probability_data(
             connection_probability += state_probability
         states.append((open_arcs, reaches_target, state_probability))
     return connection_probability, tuple(states)
+
+
+def verify_directed_bond_connection_probability_result(
+    result: DirectedBondConnectionProbabilityResult,
+) -> bool:
+    """Replay one bounded independently supplied directed bond claim."""
+
+    try:
+        connection_probability, expected_states = (
+            _directed_bond_connection_probability_data(result.source)
+        )
+    except (TypeError, ValueError):
+        return False
+    if len(expected_states) != len(result.states):
+        return False
+    for state, expected in zip(result.states, expected_states, strict=True):
+        open_arcs, reaches_target, state_probability = expected
+        if (
+            state.open_arcs != open_arcs
+            or state.source_reaches_target != reaches_target
+            or state.state_probability.as_fraction() != state_probability
+        ):
+            return False
+    return result.connection_probability.as_fraction() == connection_probability
 
 
 def _directed_path_exists(
@@ -535,11 +570,9 @@ def _directed_bond_connection_probability(
                 state_probability=_wire(state_probability),
             )
         )
-    return DirectedBondConnectionProbabilityResult(
+    return DirectedBondConnectionProbabilityResult._from_kernel(
         source=source,
         connection_probability=_wire(connection_probability),
-        arc_count=len(source.graph.edges),
-        visited_states=len(states),
         states=tuple(states),
     )
 
@@ -551,7 +584,7 @@ DIRECTED_BOND_CONNECTION_PROBABILITY_OPERATION = MathTool(
         "Compute the exact probability of a directed path from one stated "
         "source vertex to one stated target vertex in a bounded directed "
         "graph with independent rational arc-open probabilities. The complete "
-        "arc-subset ledger is source-bound and replayed."
+        "arc-subset ledger is source-bound and admits explicit bounded replay."
     ),
     request_type=DirectedBondConnectionProbabilityRequest,
     result_type=DirectedBondConnectionProbabilityResult,
@@ -608,4 +641,5 @@ __all__ = [
     "DirectedBondConnectionProbabilitySource",
     "DirectedBondReliabilityArcProbability",
     "DirectedBondReliabilityState",
+    "verify_directed_bond_connection_probability_result",
 ]

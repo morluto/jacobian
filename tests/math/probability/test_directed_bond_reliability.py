@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from fractions import Fraction
+from importlib import import_module
 from typing import Any
 
 import pytest
@@ -25,6 +26,7 @@ from jacobian.math.probability._directed_bond_reliability import (
     DirectedBondConnectionProbabilitySource,
     DirectedBondReliabilityArcProbability,
     _directed_bond_connection_probability,
+    verify_directed_bond_connection_probability_result,
 )
 
 
@@ -278,7 +280,7 @@ def _mutate_connection_probability(payload: dict[str, Any]) -> None:
     ),
     ids=("open-arcs", "reachability", "aggregate-probability"),
 )
-def test_result_replay_rejects_mutated_source_bound_conclusions(
+def test_explicit_result_verifier_rejects_mutated_source_bound_conclusions(
     mutation: Callable[[dict[str, Any]], None],
 ) -> None:
     result = _directed_bond_connection_probability(
@@ -293,8 +295,9 @@ def test_result_replay_rejects_mutated_source_bound_conclusions(
     payload = result.model_dump(mode="json")
     mutation(payload)
 
-    with pytest.raises(ValidationError):
-        DirectedBondConnectionProbabilityResult.model_validate(payload)
+    claim = DirectedBondConnectionProbabilityResult.model_validate(payload)
+
+    assert not verify_directed_bond_connection_probability_result(claim)
 
 
 def test_probability_bound_rejects_thirteenth_arc_before_enumeration() -> None:
@@ -309,8 +312,8 @@ def test_probability_bound_rejects_thirteenth_arc_before_enumeration() -> None:
         )
 
 
-def test_logical_work_bound_covers_two_pass_reachability_and_state_records() -> None:
-    """The 12-arc envelope charges both passes over the relevant vertices."""
+def test_logical_work_bound_covers_one_producer_pass() -> None:
+    """The 12-arc envelope charges its one subset-enumeration pass."""
     per_state_kernel_work = (
         6 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
         + 4 * MAX_DIRECTED_BOND_RELIABILITY_RELEVANT_VERTICES
@@ -318,11 +321,40 @@ def test_logical_work_bound_covers_two_pass_reachability_and_state_records() -> 
     per_state_record_work = MAX_DIRECTED_BOND_RELIABILITY_ARCS + 3
 
     assert (
-        2
-        * MAX_DIRECTED_BOND_RELIABILITY_STATES
+        MAX_DIRECTED_BOND_RELIABILITY_STATES
         * (per_state_kernel_work + per_state_record_work)
         + 8
     ) == MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK
+
+
+def test_successful_compute_enumerates_each_arc_subset_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Trusted result construction does not replay the complete state ledger."""
+
+    reliability_module = import_module(
+        "jacobian.math.probability._directed_bond_reliability"
+    )
+
+    request = _request(
+        vertex_count=4,
+        arcs=((0, 1), (0, 2), (1, 3), (2, 3)),
+        probabilities=(Fraction(1, 2),) * 4,
+        source=0,
+        target=3,
+    )
+    call_count = 0
+    original = reliability_module._directed_path_exists
+
+    def counted(**kwargs: object) -> bool:
+        nonlocal call_count
+        call_count += 1
+        return original(**kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(reliability_module, "_directed_path_exists", counted)
+    _directed_bond_connection_probability(request)
+
+    assert call_count == 1 << len(request.graph.edges)
 
 
 def test_ledger_bound_rejects_large_exact_probability_products_before_enumeration() -> (

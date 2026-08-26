@@ -190,6 +190,24 @@ def _require_source_bound_result(
         raise ValueError("visited_states does not match the complete edge powerset")
 
 
+def verify_all_terminal_reliability_result(
+    result: AllTerminalReliabilityResult,
+) -> bool:
+    """Replay one bounded independently supplied all-terminal claim."""
+
+    try:
+        _require_source_bound_result(
+            result.graph,
+            result.open_probability,
+            result.connected_spanning_subgraph_counts,
+            result.reliability_probability,
+            result.visited_states,
+        )
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 @dataclass(frozen=True, slots=True)
 class AllTerminalReliabilityResult:
     """A graph-bound exact reliability value and its coefficient profile."""
@@ -214,13 +232,54 @@ class AllTerminalReliabilityResult:
             raise TypeError("visited_states must be an integer")
         if self.event != "ALL_VERTICES_CONNECTED":
             raise ValueError("unsupported all-terminal reliability event")
-        _require_source_bound_result(
-            self.graph,
-            self.open_probability,
-            self.connected_spanning_subgraph_counts,
-            self.reliability_probability,
-            self.visited_states,
+        _require_bounded_problem(self.graph, self.open_probability)
+        if (
+            abs(self.reliability_probability.numerator)
+            >= _MAX_ALL_TERMINAL_RELIABILITY_RESULT_ABS
+            or self.reliability_probability.denominator
+            >= _MAX_ALL_TERMINAL_RELIABILITY_RESULT_ABS
+        ):
+            raise ValueError(
+                "all-terminal reliability result probability exceeds the "
+                f"{MAX_ALL_TERMINAL_RELIABILITY_RESULT_DIGITS}-digit bound"
+            )
+        if len(self.connected_spanning_subgraph_counts) != len(self.graph.edges) + 1:
+            raise ValueError(
+                "connected-spanning-subgraph counts must cover edge counts 0..m"
+            )
+        for open_edges, count in enumerate(self.connected_spanning_subgraph_counts):
+            if not 0 <= count <= comb(len(self.graph.edges), open_edges):
+                raise ValueError(
+                    "connected-spanning-subgraph count lies outside its subset class"
+                )
+            if open_edges < len(self.graph.vertices) - 1 and count:
+                raise ValueError("a connected spanning subgraph has at least n-1 edges")
+        if self.visited_states != 1 << len(self.graph.edges):
+            raise ValueError("visited_states does not match the complete edge powerset")
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        graph: SimpleUndirectedGraph,
+        open_probability: Fraction,
+        connected_spanning_subgraph_counts: tuple[int, ...],
+        reliability_probability: Fraction,
+        visited_states: int,
+    ) -> AllTerminalReliabilityResult:
+        """Build one trusted result without re-enumerating its source graph."""
+
+        result = object.__new__(cls)
+        object.__setattr__(result, "graph", graph)
+        object.__setattr__(result, "open_probability", open_probability)
+        object.__setattr__(
+            result,
+            "connected_spanning_subgraph_counts",
+            connected_spanning_subgraph_counts,
         )
+        object.__setattr__(result, "reliability_probability", reliability_probability)
+        object.__setattr__(result, "visited_states", visited_states)
+        object.__setattr__(result, "event", "ALL_VERTICES_CONNECTED")
+        return result
 
 
 def _compute_all_terminal_reliability(
@@ -250,16 +309,17 @@ def all_terminal_reliability(
     counts, reliability_probability, visited_states = _compute_all_terminal_reliability(
         graph, open_probability
     )
-    return AllTerminalReliabilityResult(
-        graph=graph,
-        open_probability=open_probability,
-        connected_spanning_subgraph_counts=counts,
-        reliability_probability=reliability_probability,
-        visited_states=visited_states,
+    return AllTerminalReliabilityResult._from_kernel(
+        graph,
+        open_probability,
+        counts,
+        reliability_probability,
+        visited_states,
     )
 
 
 __all__ = [
     "AllTerminalReliabilityResult",
     "all_terminal_reliability",
+    "verify_all_terminal_reliability_result",
 ]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from math import comb
 from typing import Any, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
@@ -23,9 +24,10 @@ from jacobian.math.probability.all_terminal_reliability import (
     MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS,
     MAX_ALL_TERMINAL_RELIABILITY_RESULT_DIGITS,
     MAX_ALL_TERMINAL_RELIABILITY_STATES,
+    AllTerminalReliabilityResult,
     _compute_all_terminal_reliability,
     _require_bounded_problem,
-    _require_source_bound_result,
+    verify_all_terminal_reliability_result,
 )
 
 
@@ -75,7 +77,12 @@ class AllTerminalReliabilityRequest(StrictModel):
 
 
 class AllTerminalReliabilityWireResult(StrictModel):
-    """Source-bound exact probability with its connected-subgraph profile."""
+    """Exact probability with its bounded connected-subgraph profile.
+
+    Deserialization checks the structural result envelope.  The kernel uses
+    ``_from_kernel`` after its one complete enumeration; an independently
+    supplied claim can be replayed with the owner-local verifier below.
+    """
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -83,8 +90,7 @@ class AllTerminalReliabilityWireResult(StrictModel):
                 "Exact all-terminal reliability bound to the retained graph and "
                 "uniform edge probability. Entry k of "
                 "`connected_spanning_subgraph_counts` is the number of connected "
-                "spanning edge subsets containing exactly k edges; result "
-                "validation replays the complete bounded enumeration."
+                "spanning edge subsets containing exactly k edges."
             )
         }
     )
@@ -130,8 +136,7 @@ class AllTerminalReliabilityWireResult(StrictModel):
         return value
 
     @model_validator(mode="after")
-    def bind_to_source_graph(self) -> Self:
-        probability = self.open_probability.as_fraction()
+    def require_bounded_shape(self) -> Self:
         require_bounded_rational(
             self.open_probability,
             max_digits=MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS,
@@ -142,18 +147,87 @@ class AllTerminalReliabilityWireResult(StrictModel):
             max_digits=MAX_ALL_TERMINAL_RELIABILITY_RESULT_DIGITS,
             label="all-terminal reliability result probability",
         )
+        if not 0 <= self.open_probability.as_fraction() <= 1:
+            raise _validation_error(
+                "all-terminal reliability open probability must lie in [0, 1]"
+            )
         actual_counts = tuple(
             parse_canonical_integer(value)
             for value in self.connected_spanning_subgraph_counts
         )
-        _require_source_bound_result(
-            self.graph,
-            probability,
-            actual_counts,
-            self.reliability_probability.as_fraction(),
-            self.visited_states,
-        )
+        if len(actual_counts) != len(self.graph.edges) + 1:
+            raise _validation_error(
+                "connected-spanning-subgraph counts must cover edge counts 0..m"
+            )
+        for open_edges, count in enumerate(actual_counts):
+            if not 0 <= count <= comb(len(self.graph.edges), open_edges):
+                raise _validation_error(
+                    "connected-spanning-subgraph count lies outside its subset class"
+                )
+            if open_edges < len(self.graph.vertices) - 1 and count:
+                raise _validation_error(
+                    "a connected spanning subgraph has at least n-1 edges"
+                )
+        if self.visited_states != 1 << len(self.graph.edges):
+            raise _validation_error(
+                "visited_states does not match the complete edge powerset"
+            )
+        if not 0 <= self.reliability_probability.as_fraction() <= 1:
+            raise _validation_error(
+                "all-terminal reliability result probability must lie in [0, 1]"
+            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: AllTerminalReliabilityRequest,
+        counts: tuple[int, ...],
+        reliability_probability: CanonicalRational,
+        visited_states: int,
+    ) -> Self:
+        """Build trusted kernel output without replaying the enumeration."""
+
+        return cls.model_construct(
+            graph=request.graph,
+            open_probability=request.open_probability,
+            connected_spanning_subgraph_counts=tuple(
+                format_canonical_integer(count) for count in counts
+            ),
+            reliability_probability=reliability_probability,
+            visited_states=visited_states,
+            event="ALL_VERTICES_CONNECTED",
+        )
+
+
+def verify_all_terminal_reliability_wire_result(
+    result: AllTerminalReliabilityWireResult,
+) -> bool:
+    """Replay one bounded independently supplied wire claim."""
+
+    try:
+        native_result = _result_to_native(result)
+    except (TypeError, ValueError):
+        return False
+    return verify_all_terminal_reliability_result(native_result)
+
+
+def _result_to_native(
+    result: AllTerminalReliabilityWireResult,
+) -> AllTerminalReliabilityResult:
+    """Convert a structurally admitted wire value for explicit verification."""
+
+    return AllTerminalReliabilityResult(
+        graph=result.graph,
+        open_probability=result.open_probability.as_fraction(),
+        connected_spanning_subgraph_counts=tuple(
+            parse_canonical_integer(value)
+            for value in result.connected_spanning_subgraph_counts
+        ),
+        reliability_probability=result.reliability_probability.as_fraction(),
+        visited_states=result.visited_states,
+        event=result.event,
+    )
 
 
 def compute_all_terminal_reliability(
@@ -163,16 +237,11 @@ def compute_all_terminal_reliability(
     counts, reliability_probability, visited_states = _compute_all_terminal_reliability(
         request.graph, probability
     )
-    return AllTerminalReliabilityWireResult(
-        graph=request.graph,
-        open_probability=request.open_probability,
-        connected_spanning_subgraph_counts=tuple(
-            format_canonical_integer(count) for count in counts
-        ),
-        reliability_probability=CanonicalRational.from_fraction(
-            reliability_probability
-        ),
-        visited_states=visited_states,
+    return AllTerminalReliabilityWireResult._from_kernel(
+        request,
+        counts,
+        CanonicalRational.from_fraction(reliability_probability),
+        visited_states,
     )
 
 

@@ -159,8 +159,8 @@ class SubsetSumProfileEntry(StrictModel):
 class SubsetSumProfile(StrictModel):
     """The complete exact multiplicity profile of one indexed sequence.
 
-    The empty subset is always included. Validation replays the complete
-    bounded dynamic program, binding every row and multiplicity to ``source``.
+    The empty subset is always included. Deserialization validates bounded
+    canonical shape; an owner-local verifier checks supplied exact claims.
     """
 
     source: Annotated[
@@ -175,58 +175,28 @@ class SubsetSumProfile(StrictModel):
     total_subsets: SubsetSumMultiplicity
 
     @model_validator(mode="after")
-    def bind_complete_profile(self) -> Self:
+    def require_canonical_profile_shape(self) -> Self:
         sums = tuple(parse_canonical_integer(entry.sum) for entry in self.entries)
         if sums != tuple(sorted(sums)) or len(sums) != len(set(sums)):
             raise _validation_error(
-                "bind_complete_profile",
+                "profile_entries",
                 "subset-sum profile entries must have unique sorted sums",
             )
         if self.support_size != len(self.entries):
             raise _validation_error(
-                "bind_complete_profile",
+                "profile_support_size",
                 "support_size must equal the number of profile entries",
             )
 
-        expected_total = 1 << len(self.source.items)
-        if parse_canonical_integer(self.total_subsets) != expected_total:
-            raise _validation_error(
-                "bind_complete_profile", "total_subsets must equal 2^len(source.items)"
-            )
-
-        from jacobian.math.additive_combinatorics.operations import (
-            _subset_sum_profile_counts,
-            _subset_sum_profile_envelope,
-        )
-
-        _subset_sum_profile_envelope(self.source)
-        expected = tuple(sorted(_subset_sum_profile_counts(self.source).items()))
-        actual = tuple(
-            (
-                parse_canonical_integer(entry.sum),
-                parse_canonical_integer(entry.multiplicity),
-            )
-            for entry in self.entries
-        )
-        if actual != expected:
-            raise _validation_error(
-                "bind_complete_profile",
-                "entries must be the complete exact subset-sum profile of source",
-            )
-        if sum(multiplicity for _, multiplicity in actual) != expected_total:
-            raise _validation_error(
-                "bind_complete_profile",
-                "profile multiplicities must sum to total_subsets",
-            )
         return self
 
     @classmethod
-    def from_counts(
+    def _from_kernel(
         cls,
         source: IndexedIntegerSequence,
         counts: dict[int, int],
     ) -> SubsetSumProfile:
-        """Construct the canonical source-bound profile from exact counts."""
+        """Construct a trusted canonical profile from bounded kernel output."""
 
         entries = tuple(
             SubsetSumProfileEntry(

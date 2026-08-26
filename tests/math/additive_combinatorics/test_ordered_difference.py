@@ -13,6 +13,7 @@ from jacobian.math.additive_combinatorics._models import (
 )
 from jacobian.math.additive_combinatorics._operations import (
     compute_ordered_difference_profile,
+    verify_ordered_difference_profile,
 )
 
 
@@ -154,15 +155,16 @@ class TestOrderedDifferenceProfile:
         n = result.set_size
         assert seen == {(i, j) for i in range(n) for j in range(n) if i != j}
 
-    def test_result_rejects_forged_difference(self):
+    def test_verifier_rejects_forged_difference(self):
         req = _request((0,), (1,))
         result = compute_ordered_difference_profile(req)
         payload = result.model_dump()
         payload["entries"][-1]["difference"] = {"coordinates": ["2"]}
-        with pytest.raises(ValidationError):
+        assert not verify_ordered_difference_profile(
             OrderedDifferenceProfileResult.model_validate(payload)
+        )
 
-    def test_result_rejects_mutated_source(self):
+    def test_verifier_rejects_mutated_source(self):
         req = _request((0, 0), (1, 0), (1, 1), (0, 1))
         result = compute_ordered_difference_profile(req)
         payload = result.model_dump()
@@ -170,8 +172,9 @@ class TestOrderedDifferenceProfile:
             {"coordinates": ["9", "9"]},
             *payload["vectors"]["vectors"][1:],
         )
-        with pytest.raises(ValidationError):
+        assert not verify_ordered_difference_profile(
             OrderedDifferenceProfileResult.model_validate(payload)
+        )
 
     def test_result_rejects_later_collision_as_first_witness(self):
         """The witness must be pairs[0] of the first sorted repeated entry,

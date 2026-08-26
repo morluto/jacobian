@@ -12,12 +12,17 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    format_canonical_integer,
+    parse_canonical_integer,
+    strict_json_object_size,
+)
 from jacobian.math.additive_combinatorics import _multiset_sum
-from jacobian.math.additive_combinatorics.operations import (
+from jacobian.math.additive_combinatorics._subset_sum_profile import (
     MAX_SUBSET_SUM_DP_TRANSITIONS,
     MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
-    _subset_sum_profile_envelope,
+    subset_sum_profile_envelope,
 )
 from jacobian.math.additive_combinatorics.values import (
     MAX_SUBSET_SUM_ITEMS,
@@ -41,6 +46,13 @@ _MAX_MULTISET_SUM_ENUMERATION_WORK = _multiset_sum.MAX_ENUMERATION_WORK
 _MAX_MULTISET_SUM_INTEGER_LENGTH = _multiset_sum.MAX_INTEGER_LENGTH
 _MAX_MULTISET_SUM_RESULT_DIGITS = _multiset_sum.MAX_RESULT_DIGITS
 _MAX_MULTISET_SUM_SUPPORT_SIZE = _multiset_sum.MAX_SUPPORT_SIZE
+
+# ``direct_sum_predicate`` returns a complete partition of Z_n: every residue
+# occurs exactly once in either ``representatives`` or ``missing``.  Collisions
+# are an additional, distinct-residue diagnostic.  Reserve the real canonical
+# transport budget before enumerating the missing set, rather than allowing a
+# valid computation to fail only when dispatch serializes its result.
+_MAX_DIRECT_SUM_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 # One serialized ordered-difference entry carries an eight-coordinate signed
 # difference, a multiplicity, and one index pair, which stays under 256
@@ -350,6 +362,80 @@ def _require_bounded_cartesian_product(
         )
 
 
+def _decimal_digit_sum_through(value: int) -> int:
+    """Return the total decimal digit count of the integers in ``[0, value)``."""
+
+    if value <= 0:
+        return 0
+    total = 0
+    lower = 1
+    digits = 1
+    while lower < value:
+        upper = min(value, lower * 10)
+        total += (upper - lower) * digits
+        lower = upper
+        digits += 1
+    return total + 1  # The residue 0 has one decimal digit.
+
+
+def _direct_sum_predicate_result_upper_bound(
+    modulus: int,
+    source_pair_count: int,
+) -> int:
+    """Bound the canonical JSON result for one admitted direct-sum request.
+
+    The representatives and missing lists partition the residue classes, so
+    their combined decimal text is exact. A collision needs two distinct
+    source pairs, hence at most ``source_pair_count // 2`` distinct collision
+    residues can be reported. For those optional entries, charging the widest
+    residue text is conservative.
+    """
+
+    partition_value_bytes = (
+        _decimal_digit_sum_through(modulus)
+        + 2 * modulus  # JSON string quotes
+        + modulus  # at most one comma per partition entry across two arrays
+        + 4  # the two array delimiters
+    )
+    collision_count = min(modulus, source_pair_count // 2)
+    collision_digit_bound = len(str(modulus - 1))
+    collision_value_bytes = (
+        2 if collision_count == 0 else collision_count * (collision_digit_bound + 3) + 1
+    )
+    return (
+        strict_json_object_size(
+            (
+                ("holds", len("false")),
+                ("modulus", len(str(modulus))),
+                ("representatives", 0),
+                ("collisions", collision_value_bytes),
+                ("missing", 0),
+            )
+        )
+        + partition_value_bytes
+    )
+
+
+def _require_direct_sum_result_transport_bound(
+    modulus: int,
+    left: FiniteIntegerSet,
+    right: FiniteIntegerSet,
+) -> None:
+    source_pair_count = len(left.elements) * len(right.elements)
+    predicted = _direct_sum_predicate_result_upper_bound(
+        modulus,
+        source_pair_count,
+    )
+    if predicted > _MAX_DIRECT_SUM_RESULT_BYTES:
+        raise _validation_error(
+            "direct_sum_result_transport_exceeded",
+            "direct-sum diagnostics would use up to "
+            f"{predicted:,} canonical JSON bytes, exceeding the "
+            f"{_MAX_DIRECT_SUM_RESULT_BYTES:,}-byte output limit; reduce the "
+            "modulus or partition the residue classes",
+        )
+
+
 class FiniteCyclicGroup(StrictModel):
     """The cyclic group ``Z_n`` carrying a direct-sum/tiling predicate."""
 
@@ -553,10 +639,9 @@ class MultisetSumRepresentationProfileResult(StrictModel):
     """Source-bound exact multiplicities for one complete sum scope.
 
     For each row ``s -> m``, ``m`` is the number of nondecreasing source-index
-    tuples of the declared arity summing to ``s``. The retained source, arity,
-    and optional window determine the complete candidate family and are replayed
-    during result validation. A missing row means zero only inside the declared
-    window, or globally when ``window`` is null.
+    tuples of the declared arity summing to ``s``. Deserialization validates
+    only the bounded canonical shape; the owner-local verifier checks an
+    independently supplied complete claim under the request envelope.
     """
 
     source: FiniteIntegerSet = Field(description=_MULTISET_SUM_SOURCE_DESCRIPTION)
@@ -567,30 +652,27 @@ class MultisetSumRepresentationProfileResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def replay_complete_profile(self) -> Self:
-        request = MultisetSumRepresentationProfileRequest(
-            source=self.source,
-            arity=self.arity,
-            window=self.window,
-        )
-        values = _multiset_sum_source_values(request.source)
-        bounds = (
-            request.window.as_integer_bounds() if request.window is not None else None
-        )
-        expected_counts = _multiset_sum.count_sums(values, request.arity, bounds)
-        expected_entries = tuple(
-            RepresentationProfileEntry(
-                sum=format_canonical_integer(value),
-                multiplicity=expected_counts[value],
-            )
-            for value in sorted(expected_counts)
-        )
-        if self.entries != expected_entries:
+    def require_canonical_entries(self) -> Self:
+        sums = tuple(entry.sum for entry in self.entries)
+        if sums != _sorted_canonical_integers(sums):
             raise _validation_error(
-                "replay_complete_profile",
-                "entries must equal the exact source-bound multiset-sum profile",
+                "multiset_sum_profile_entries",
+                "multiset-sum entries must be sorted and unique",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: MultisetSumRepresentationProfileRequest,
+        entries: tuple[RepresentationProfileEntry, ...],
+    ) -> Self:
+        return cls(
+            source=request.source,
+            arity=request.arity,
+            window=request.window,
+            entries=entries,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -661,7 +743,7 @@ class SubsetSumProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admitted_profile_envelope(self) -> Self:
-        _subset_sum_profile_envelope(self.source)
+        subset_sum_profile_envelope(self.source)
         return self
 
 
@@ -711,6 +793,12 @@ class AdditiveEnergyResult(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls, energy: int, decomposition: tuple[RepresentationProfileEntry, ...]
+    ) -> Self:
+        return cls(energy=energy, decomposition=decomposition)
+
 
 # ---------------------------------------------------------------------------
 # Sumset cardinality
@@ -751,6 +839,10 @@ class SumsetCardinalityResult(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(cls, support: tuple[CanonicalInteger, ...]) -> Self:
+        return cls(cardinality=len(support), support=support)
+
 
 # ---------------------------------------------------------------------------
 # Direct sum / tiling predicate in Z_n
@@ -770,6 +862,11 @@ class DirectSumPredicateRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_cartesian_product(self) -> Self:
         _require_bounded_cartesian_product(self.left, self.right)
+        _require_direct_sum_result_transport_bound(
+            self.modulus,
+            self.left,
+            self.right,
+        )
         return self
 
 
@@ -792,6 +889,24 @@ class DirectSumPredicateResult(StrictModel):
                     f"direct-sum {name} values must be sorted and unique",
                 )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        holds: bool,
+        modulus: int,
+        representatives: tuple[CanonicalInteger, ...],
+        collisions: tuple[CanonicalInteger, ...],
+        missing: tuple[CanonicalInteger, ...],
+    ) -> Self:
+        return cls(
+            holds=holds,
+            modulus=modulus,
+            representatives=representatives,
+            collisions=collisions,
+            missing=missing,
+        )
 
 
 __all__ = [
@@ -886,8 +1001,7 @@ class OrderedDifferenceProfileResult(StrictModel):
     @model_validator(mode="after")
     def require_vectors(self) -> Self:
         # The canonical vector-set value enforces distinctness, uniform
-        # bounded dimension, and nonemptiness; replay binds the remaining
-        # derived fields to it.
+        # bounded dimension, and nonemptiness.
         if len(self.vectors.vectors) != self.set_size:
             raise _validation_error(
                 "require_vectors", "vectors length must equal set_size"
@@ -917,10 +1031,6 @@ class OrderedDifferenceProfileResult(StrictModel):
     def require_entries(self) -> Self:
         if self.entries:
             _check_entries_sorted(self.entries)
-            _check_entry_pairs(
-                self.entries, self.dimension, self.vectors.vectors, self.set_size
-            )
-            _check_all_pairs_exactly_once(self.entries, self.set_size)
             _check_first_collision(
                 self.entries, self.has_repeated_difference, self.first_collision
             )
@@ -929,3 +1039,28 @@ class OrderedDifferenceProfileResult(StrictModel):
                 "require_entries", "first_collision must be null when entries is empty"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: OrderedDifferenceProfileRequest,
+        *,
+        dimension: int,
+        total_ordered_pairs: int,
+        support_size: int,
+        max_multiplicity: int,
+        entries: tuple[OrderedDifferenceEntry, ...],
+        has_repeated_difference: bool,
+        first_collision: OrderedDifferencePair | None,
+    ) -> Self:
+        return cls(
+            vectors=request.vectors,
+            dimension=dimension,
+            set_size=len(request.vectors.vectors),
+            total_ordered_pairs=total_ordered_pairs,
+            support_size=support_size,
+            max_multiplicity=max_multiplicity,
+            entries=entries,
+            has_repeated_difference=has_repeated_difference,
+            first_collision=first_collision,
+        )

@@ -1,12 +1,20 @@
 """Tests for additive combinatorics operations."""
 
-from jacobian.canonical import parse_canonical_integer
+import pytest
+from pydantic import ValidationError
+
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    parse_canonical_integer,
+)
 from jacobian.math.additive_combinatorics._models import (
     AdditiveEnergyRequest,
     DirectSumPredicateRequest,
     FiniteIntegerSet,
     RepresentationProfileRequest,
     SumsetCardinalityRequest,
+    _direct_sum_predicate_result_upper_bound,
 )
 from jacobian.math.additive_combinatorics._operations import (
     compute_additive_energy,
@@ -190,3 +198,37 @@ class TestDirectSumPredicate:
         result = decide_direct_sum_predicate(req)
         assert result.holds is False
         assert result.missing == tuple(str(value) for value in range(12))
+
+    def test_preflights_complete_missing_diagnostic_at_transport_boundary(self):
+        """The nearly 10 MiB empty-source result remains serializable."""
+
+        modulus = 1_048_576
+        request = DirectSumPredicateRequest(
+            modulus=modulus,
+            left=FiniteIntegerSet(elements=()),
+            right=FiniteIntegerSet(elements=()),
+        )
+
+        payload = {
+            "holds": False,
+            "modulus": modulus,
+            "representatives": [],
+            "collisions": [],
+            "missing": [str(value) for value in range(modulus)],
+        }
+        encoded = encode_strict_json(payload)
+        assert len(encoded) <= CanonicalLimits().max_output_bytes
+        assert _direct_sum_predicate_result_upper_bound(modulus, 0) >= len(encoded)
+        assert request.modulus == modulus
+
+    def test_rejects_oversized_missing_diagnostic_before_kernel_execution(self):
+        with pytest.raises(ValidationError) as exc_info:
+            DirectSumPredicateRequest(
+                modulus=1_200_000,
+                left=FiniteIntegerSet(elements=()),
+                right=FiniteIntegerSet(elements=()),
+            )
+
+        assert exc_info.value.errors()[0]["type"] == (
+            "additive_combinatorics.direct_sum_result_transport_exceeded"
+        )

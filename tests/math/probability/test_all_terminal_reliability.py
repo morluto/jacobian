@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from copy import deepcopy
 from fractions import Fraction
+from importlib import import_module
 from itertools import combinations
 from typing import Any
 
@@ -17,6 +18,7 @@ from jacobian.math.probability._all_terminal_reliability import (
     AllTerminalReliabilityRequest,
     AllTerminalReliabilityWireResult,
     compute_all_terminal_reliability,
+    verify_all_terminal_reliability_wire_result,
 )
 from jacobian.math.probability._graph_connection_probability import (
     GraphConnectionProbabilityRequest,
@@ -27,6 +29,7 @@ from jacobian.math.probability.all_terminal_reliability import (
     MAX_ALL_TERMINAL_RELIABILITY_EDGES,
     AllTerminalReliabilityResult,
     all_terminal_reliability,
+    verify_all_terminal_reliability_result,
 )
 
 
@@ -144,20 +147,21 @@ def test_rosenstock_canale_nine_vertex_profile() -> None:
     assert result.reliability_probability == Fraction(66329, 131072)
 
 
-def test_native_result_replays_its_retained_graph() -> None:
+def test_native_result_requires_explicit_verification_for_replay() -> None:
     graph = _graph(
         ("a", "b", "c"),
         (("a", "b"), ("a", "c"), ("b", "c")),
     )
 
-    with pytest.raises(ValueError):
-        AllTerminalReliabilityResult(
-            graph=graph,
-            open_probability=Fraction(1, 2),
-            connected_spanning_subgraph_counts=(0, 0, 2, 1),
-            reliability_probability=Fraction(1, 2),
-            visited_states=8,
-        )
+    claim = AllTerminalReliabilityResult(
+        graph=graph,
+        open_probability=Fraction(1, 2),
+        connected_spanning_subgraph_counts=(0, 0, 2, 1),
+        reliability_probability=Fraction(1, 2),
+        visited_states=8,
+    )
+
+    assert not verify_all_terminal_reliability_result(claim)
 
 
 def test_all_terminal_event_differs_from_two_terminal_connectivity() -> None:
@@ -287,15 +291,57 @@ def test_degenerate_and_boundary_conventions(
         "source-graph",
     ),
 )
-def test_result_replay_rejects_independent_mutations(
+def test_explicit_result_verifier_rejects_independent_mutations(
     mutation: Callable[[dict[str, Any]], None],
     message: str,
 ) -> None:
     candidate = deepcopy(_triangle_result().model_dump(mode="json"))
     mutation(candidate)
 
-    with pytest.raises(ValidationError):
-        AllTerminalReliabilityWireResult.model_validate(candidate)
+    if message in {
+        "visited_states does not match",
+        "connected spanning subgraph has at least n-1 edges",
+    }:
+        with pytest.raises(ValidationError):
+            AllTerminalReliabilityWireResult.model_validate(candidate)
+    else:
+        claim = AllTerminalReliabilityWireResult.model_validate(candidate)
+        assert not verify_all_terminal_reliability_wire_result(claim)
+
+
+@pytest.mark.parametrize("wire", (False, True), ids=("native", "wire"))
+def test_successful_compute_enumerates_each_edge_subset_once(
+    monkeypatch: pytest.MonkeyPatch,
+    wire: bool,
+) -> None:
+    """Kernel output construction does not replay the complete powerset."""
+
+    native_module = import_module("jacobian.math.probability.all_terminal_reliability")
+
+    graph = _graph(
+        ("a", "b", "c", "d"),
+        (("a", "b"), ("a", "c"), ("a", "d"), ("b", "c")),
+    )
+    call_count = 0
+    original = native_module._connected_spanning_subgraph_counts
+
+    def counted(value: SimpleUndirectedGraph) -> tuple[int, ...]:
+        nonlocal call_count
+        call_count += 1
+        return original(value)
+
+    monkeypatch.setattr(native_module, "_connected_spanning_subgraph_counts", counted)
+    if wire:
+        compute_all_terminal_reliability(
+            AllTerminalReliabilityRequest(
+                graph=graph,
+                open_probability=CanonicalRational(num="1", den="2"),
+            )
+        )
+    else:
+        all_terminal_reliability(graph, Fraction(1, 2))
+
+    assert call_count == 1
 
 
 @pytest.mark.parametrize(

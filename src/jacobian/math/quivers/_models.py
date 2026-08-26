@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.quivers._path_bounds import fixed_length_paths_envelope
 
 MAX_VERTICES = 128
 MAX_ARROWS = 1024
@@ -56,6 +57,16 @@ class FixedLengthPathsRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
+        try:
+            fixed_length_paths_envelope(
+                vertex_count=self.quiver.vertex_count,
+                arrow_count=len(self.quiver.arrows),
+                length=self.length,
+            )
+        except ValueError as exc:
+            raise _validation_error(
+                "fixed_length_paths_exceeds_envelope", str(exc)
+            ) from exc
         return self
 
 

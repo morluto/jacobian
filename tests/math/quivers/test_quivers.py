@@ -1,5 +1,9 @@
 """Tests for quiver operations."""
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.canonical import encode_strict_json
 from jacobian.math.quivers._models import (
     AdjacencyMatricesRequest,
     FiniteQuiver,
@@ -56,3 +60,37 @@ def test_fixed_length_paths_zero() -> None:
     )
     result = compute_fixed_length_paths(request)
     assert result.total_paths == 2
+
+
+def test_fixed_length_paths_admits_transportable_count_boundary() -> None:
+    """Eight parallel loops have exactly 8**17 length-17 paths."""
+    request = FixedLengthPathsRequest(
+        quiver=FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 8), length=17
+    )
+
+    result = compute_fixed_length_paths(request)
+
+    assert result.path_matrix == ((8**17,),)
+    assert result.total_paths == 8**17
+    # This is the actual final delivery primitive, not merely model parsing.
+    assert encode_strict_json(result.model_dump(mode="json"))
+
+
+def test_fixed_length_paths_rejects_untransportable_count_before_kernel() -> None:
+    """The next power would produce raw JSON integers above 2**53 - 1."""
+    with pytest.raises(ValidationError) as exc_info:
+        FixedLengthPathsRequest(
+            quiver=FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 8), length=18
+        )
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "quiver.fixed_length_paths_exceeds_envelope"
+    )
+
+
+def test_fixed_length_paths_rejects_parallel_loop_explosion_before_kernel() -> None:
+    """The reported 32-loop, length-32 request is rejected at admission."""
+    with pytest.raises(ValidationError):
+        FixedLengthPathsRequest(
+            quiver=FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 32), length=32
+        )

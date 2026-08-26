@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.finite_game_theory._models import (
+    NashEquilibriumRequest,
     PayoffMatrix,
     ZeroSumGameRequest,
 )
@@ -37,12 +38,32 @@ class TestBestResponse:
         result = compute_best_response(req)
         assert result.best_row == 0  # Row 0 has minimum 0, Row 1 has minimum 0
 
+    def test_payoffs_beyond_the_equilibrium_bound_still_admit_best_response(
+        self,
+    ) -> None:
+        large = 10**8_200
+        req = ZeroSumGameRequest(
+            payoff_matrix=PayoffMatrix(
+                n_rows=2,
+                n_cols=2,
+                entries=(
+                    _r(Fraction(1, large - 1)),
+                    _r(Fraction(1, large - 2)),
+                    _r(Fraction(1, large - 3)),
+                    _r(Fraction(1, large - 4)),
+                ),
+            ),
+        )
+        result = compute_best_response(req)
+        assert result.best_row == 1
+        assert result.value.as_fraction() == Fraction(1, large - 3)
+
 
 class TestNashEquilibrium:
     def test_payoffs_must_bound_exact_strategy_growth(self) -> None:
         large = 10**32_767
         with pytest.raises(ValidationError) as exc_info:
-            ZeroSumGameRequest(
+            NashEquilibriumRequest(
                 payoff_matrix=PayoffMatrix(
                     n_rows=2,
                     n_cols=2,
@@ -59,7 +80,7 @@ class TestNashEquilibrium:
         )
 
     def test_pure_strategy(self) -> None:
-        req = ZeroSumGameRequest(
+        req = NashEquilibriumRequest(
             payoff_matrix=PayoffMatrix(
                 n_rows=2,
                 n_cols=2,
@@ -75,7 +96,7 @@ class TestNashEquilibrium:
         assert result.value.as_fraction() == 1  # (0,0) is the pure equilibrium
 
     def test_mixed_equilibrium(self) -> None:
-        req = ZeroSumGameRequest(
+        req = NashEquilibriumRequest(
             payoff_matrix=PayoffMatrix(
                 n_rows=2,
                 n_cols=2,
@@ -99,7 +120,7 @@ class TestNashEquilibrium:
         assert result.value.as_fraction() == 1
 
     def test_degenerate_game_uses_exact_linear_programming(self) -> None:
-        req = ZeroSumGameRequest(
+        req = NashEquilibriumRequest(
             payoff_matrix=PayoffMatrix(
                 n_rows=3,
                 n_cols=3,
@@ -114,7 +135,7 @@ class TestNashEquilibrium:
         assert sum(value.as_fraction() for value in result.col_strategy) == 1
 
     def test_negative_game_value_is_not_clamped_by_simplex_nonnegativity(self) -> None:
-        req = ZeroSumGameRequest(
+        req = NashEquilibriumRequest(
             payoff_matrix=PayoffMatrix(
                 n_rows=2,
                 n_cols=2,
@@ -138,7 +159,7 @@ class TestNashEquilibrium:
         self,
     ) -> None:
         values = (Fraction(1, 3), Fraction(-2, 5), Fraction(7, 4), Fraction(1, 2))
-        req = ZeroSumGameRequest(
+        req = NashEquilibriumRequest(
             payoff_matrix=PayoffMatrix(
                 n_rows=2,
                 n_cols=2,

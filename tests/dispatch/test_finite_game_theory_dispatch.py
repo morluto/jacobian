@@ -6,6 +6,7 @@ from jsonschema.validators import Draft202012Validator
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.finite_game_theory._models import MAX_EXACT_EQUILIBRIUM_WORK
+from jacobian.math.finite_game_theory._tools import FINITE_GAME_THEORY_OPERATIONS
 
 
 def _small_game() -> dict[str, object]:
@@ -68,3 +69,31 @@ def test_zero_sum_schema_explains_structurally_valid_exact_work_rejection() -> N
     with pytest.raises(OperationRequestValidationError) as exc_info:
         invoke_operation(operation.operation_id, payload, Catalog.open())
     assert exc_info.value.errors()[0]["type"] == "finite_game.exact_equilibrium_budget"
+
+
+def test_best_response_declaration_publishes_an_operation_neutral_schema() -> None:
+    """The exact-equilibrium envelope appears only on the Nash operation."""
+
+    tools = {tool.operation_id: tool for tool in FINITE_GAME_THEORY_OPERATIONS}
+    best_response_schema = tools[
+        "game_theory.best_response.compute"
+    ].request_type.model_json_schema()
+    equilibrium_schema = tools[
+        "game_theory.nash_equilibrium.compute"
+    ].request_type.model_json_schema()
+
+    assert "linear program" not in best_response_schema["description"]
+    assert "x-jacobian-bounds" not in best_response_schema
+    assert (
+        "(max(n_rows, n_cols) + 2) * (sum of payoff denominator decimal digits "
+        "+ maximum payoff numerator decimal digits)"
+    ) not in best_response_schema["description"]
+    assert str(MAX_EXACT_EQUILIBRIUM_WORK) not in str(best_response_schema)
+
+    assert "linear program" in equilibrium_schema["description"]
+    assert equilibrium_schema["x-jacobian-bounds"]["max_exact_equilibrium_work"] == (
+        MAX_EXACT_EQUILIBRIUM_WORK
+    )
+
+    payload = _small_game()
+    assert not list(Draft202012Validator(best_response_schema).iter_errors(payload))

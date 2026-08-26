@@ -9,6 +9,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.math.finite_game_theory._models import (
     BestResponseResult,
     DeterministicTerminalGameRequest,
+    NashEquilibriumRequest,
     NashEquilibriumResult,
     ZeroSumGameRequest,
 )
@@ -42,7 +43,9 @@ def compute_best_response(request: ZeroSumGameRequest) -> BestResponseResult:
     return BestResponseResult(value=_wire_rational(best_value), best_row=best_row)
 
 
-def compute_nash_equilibrium(request: ZeroSumGameRequest) -> NashEquilibriumResult:
+def compute_nash_equilibrium(
+    request: NashEquilibriumRequest,
+) -> NashEquilibriumResult:
     """Compute one exact saddle point of a finite 2-player zero-sum game."""
 
     import sympy

@@ -10,6 +10,7 @@ from jacobian.math.finite_game_theory._models import (
     MAX_EXACT_EQUILIBRIUM_WORK,
     BestResponseResult,
     DeterministicTerminalGameRequest,
+    NashEquilibriumRequest,
     NashEquilibriumResult,
     ZeroSumGameRequest,
 )
@@ -117,7 +118,7 @@ FINITE_GAME_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "row-major with n_rows * n_cols entries; exact-equilibrium admission "
         "requires its published coupled work measure to be at most "
         f"{MAX_EXACT_EQUILIBRIUM_WORK}.",
-        ZeroSumGameRequest,
+        NashEquilibriumRequest,
         NashEquilibriumResult,
         compute_nash_equilibrium,
         "game-theory",

@@ -61,6 +61,14 @@ class PayoffMatrix(StrictModel):
 class ZeroSumGameRequest(StrictModel):
     """A 2-player zero-sum game specified by the row player's payoff matrix."""
 
+    payoff_matrix: PayoffMatrix = Field(
+        description="Row-major zero-sum payoff matrix with n_rows * n_cols entries."
+    )
+
+
+class NashEquilibriumRequest(ZeroSumGameRequest):
+    """A zero-sum game admitted for exact primal/dual equilibrium solving."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "description": (
@@ -74,14 +82,6 @@ class ZeroSumGameRequest(StrictModel):
                 "max_exact_equilibrium_work": MAX_EXACT_EQUILIBRIUM_WORK,
             },
         }
-    )
-
-    payoff_matrix: PayoffMatrix = Field(
-        description=(
-            "Row-major zero-sum payoff matrix. Its entries must have shape "
-            "n_rows * n_cols and must fit the request's published coupled "
-            "exact-equilibrium work bound."
-        )
     )
 
     @model_validator(mode="after")
@@ -125,6 +125,7 @@ __all__ = [
     "MAX_EXACT_EQUILIBRIUM_WORK",
     "BestResponseResult",
     "DeterministicTerminalGameRequest",
+    "NashEquilibriumRequest",
     "NashEquilibriumResult",
     "PayoffMatrix",
     "ZeroSumGameRequest",

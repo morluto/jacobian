@@ -115,6 +115,8 @@ def math_run(
         # preparation because owner admission may itself use a child worker.
         with bounded_process_cancellation(cancellation):
             prepared = _prepare_operation(operation_id, payload, catalog)
+            if cancellation.is_set():
+                raise ToolError("operation cancelled before execution")
             return _invoke_prepared_operation(prepared, started=started)
     except (OperationRequestValidationError, OperationDomainValidationError) as exc:
         errors = _bounded_validation_issues(exc.errors())

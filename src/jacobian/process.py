@@ -354,6 +354,8 @@ def run_bounded_process(
     # cannot acquire a second, fresh cleanup clock after the admitted lifetime.
     started = time.monotonic()
     absolute_deadline = started + timeout_seconds
+    cleanup_allowance = min(_PIPE_DRAIN_GRACE_SECONDS, timeout_seconds / 100)
+    execution_deadline = absolute_deadline - cleanup_allowance
 
     start_new_session = os.name == "posix"
     creationflags = (
@@ -388,7 +390,7 @@ def run_bounded_process(
                 timed_out=False,
                 cancelled=True,
             )
-        if time.monotonic() >= absolute_deadline:
+        if time.monotonic() >= execution_deadline:
             return BoundedProcessResult(
                 returncode=None,
                 stdout=b"",
@@ -462,7 +464,7 @@ def run_bounded_process(
         try:
             timed_out, cancelled = _monitor_bounded_process(
                 process,
-                deadline=absolute_deadline,
+                deadline=execution_deadline,
                 cancellation_event=cancellation_event,
                 platform_tools=platform_tools,
             )

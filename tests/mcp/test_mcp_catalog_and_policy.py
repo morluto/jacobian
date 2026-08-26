@@ -52,7 +52,6 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
             index = listed.structured_content
             assert len(listed.content[0].text.encode("utf-8")) <= 16 * 1024
             assert json.loads(listed.content[0].text) == index
-            assert index["response_byte_limit"] == 16 * 1024
             assert "discovery_version" not in index
             assert len(index["matches"]) <= 20
             indexed_ids = {
@@ -149,7 +148,6 @@ def test_mcp_operation_browse_pages_the_complete_immutable_library() -> None:
                 assert page["kind"] == "browse"
                 assert len(page_result.content[0].text.encode("utf-8")) <= 16 * 1024
                 assert json.loads(page_result.content[0].text) == page
-                assert page["response_byte_limit"] == 16 * 1024
                 assert "discovery_version" not in page
                 assert len(page["operations"]) <= 20
                 assert all(

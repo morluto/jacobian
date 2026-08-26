@@ -72,3 +72,37 @@ def test_indexed_null_graph_admits_no_edge() -> None:
 def test_indexed_graph_rejects_negative_vertex_counts() -> None:
     with pytest.raises(ValidationError):
         IndexedSimpleUndirectedGraph(vertex_count=-1, edges=())
+
+
+def test_indexed_graph_requires_canonical_edge_orientation() -> None:
+    """A reversed pair must be rejected, not silently retained: the shared
+    value composes on serialized equality, so ``(1, 0)`` and ``(0, 1)``
+    cannot both represent the same undirected edge."""
+
+    with pytest.raises(ValidationError, match="left < right"):
+        IndexedSimpleUndirectedGraph(vertex_count=2, edges=((1, 0),))
+
+
+def test_indexed_graph_rejects_duplicate_edges_across_orientation() -> None:
+    """``(0, 1)`` and ``(1, 0)`` are the same undirected edge; submitting
+    both can never validate.  As in ``SimpleUndirectedGraph``, the
+    per-edge canonical-order rule fires before duplicate detection."""
+
+    with pytest.raises(ValidationError):
+        IndexedSimpleUndirectedGraph(vertex_count=2, edges=((1, 0), (0, 1)))
+    with pytest.raises(ValidationError, match="left < right"):
+        IndexedSimpleUndirectedGraph(vertex_count=3, edges=((0, 1), (2, 0)))
+
+
+def test_indexed_canonical_edges_round_trip_serialization() -> None:
+    """Canonical nonempty values keep their exact edge order through the
+    serialized composition boundary."""
+
+    graph = IndexedSimpleUndirectedGraph(vertex_count=3, edges=((0, 1), (1, 2), (0, 2)))
+
+    assert graph.edges == ((0, 1), (1, 2), (0, 2))
+    assert IndexedSimpleUndirectedGraph.model_validate(graph.model_dump()) == graph
+    assert (
+        IndexedSimpleUndirectedGraph.model_validate_json(graph.model_dump_json())
+        == graph
+    )

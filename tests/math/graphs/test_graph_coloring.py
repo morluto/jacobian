@@ -45,7 +45,7 @@ def test_non_independent_candidate_returns_canonical_blocking_edge() -> None:
     result = compute_maximal_independent_set_decision(
         _request(
             vertex_count=3,
-            edges=[[1, 0], [1, 2]],
+            edges=[[0, 1], [1, 2]],
             candidate_set=[0, 1],
         )
     )
@@ -676,7 +676,7 @@ class TestVertexKColorability:
 
         result = compute_k_colorability(
             KColorabilityRequest(
-                graph={"vertex_count": 3, "edges": [[0, 1], [1, 2], [2, 0]]},
+                graph={"vertex_count": 3, "edges": [[0, 1], [1, 2], [0, 2]]},
                 colors=3,
             )
         )

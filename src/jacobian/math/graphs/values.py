@@ -89,9 +89,12 @@ class SimpleUndirectedGraph(StrictModel):
 class IndexedSimpleUndirectedGraph(StrictModel):
     """A finite simple undirected graph on the integer axis ``0..n-1``.
 
-    The null graph (``vertex_count=0`` with no edges) is a valid canonical
-    value; operations admitting only nonempty graphs enforce that envelope
-    in their own request validators.
+    Edges are canonical ordered pairs ``(left, right)`` with
+    ``left < right``, matching ``SimpleUndirectedGraph``, so serialized
+    equality identifies mathematically identical graphs.  The null graph
+    (``vertex_count=0`` with no edges) is a valid canonical value;
+    operations admitting only nonempty graphs enforce that envelope in
+    their own request validators.
     """
 
     vertex_count: int = Field(ge=0, le=MAX_INDEXED_SIMPLE_GRAPH_VERTICES)
@@ -113,13 +116,17 @@ class IndexedSimpleUndirectedGraph(StrictModel):
                     "graph.a_simple_graph_cannot_contain_self_loops",
                     "a simple graph cannot contain self-loops",
                 )
-            edge = (min(left, right), max(left, right))
-            if edge in seen:
+            if left > right:
+                raise PydanticCustomError(
+                    "graph.indexed_edges_must_be_canonical_pairs_with_left",
+                    "indexed edges must be canonical pairs with left < right",
+                )
+            if (left, right) in seen:
                 raise PydanticCustomError(
                     "graph.a_simple_graph_cannot_contain_duplicate_edges",
                     "a simple graph cannot contain duplicate edges",
                 )
-            seen.add(edge)
+            seen.add((left, right))
         return self
 
 

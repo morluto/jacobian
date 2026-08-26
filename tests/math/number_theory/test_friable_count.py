@@ -8,6 +8,8 @@ import pytest
 from pydantic import ValidationError
 from tests.math.number_theory._validation import expect_validation
 
+from jacobian.math.arithmetic import absolute_value
+from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory import FriableCountResult, count_friable
 from jacobian.math.number_theory._friable_operations import compute_friable_count
 from jacobian.math.number_theory._models import (
@@ -124,6 +126,24 @@ def test_native_api_enforces_the_source_digit_bound_before_work() -> None:
         match=rf"{_MAX_FRIABLE_SOURCE_DIGITS} decimal digits",
     ):
         count_friable(_MAX_FRIABLE_SOURCE_ABS, 1)
+
+
+def test_native_api_accepts_the_shared_canonical_integer_value() -> None:
+    canonical_source = IntegerValue(value="100")
+    canonical_cutoff = IntegerValue(value="5")
+
+    assert count_friable(canonical_source, canonical_cutoff) == 34
+    assert count_friable(canonical_source, canonical_source) == 100
+    assert count_friable(absolute_value(-(10**12)), 2) == 40
+
+
+def test_native_source_digit_bound_covers_canonical_integer_values() -> None:
+    beyond = "9" * (_MAX_FRIABLE_SOURCE_DIGITS + 1)
+    with pytest.raises(
+        ValueError,
+        match=rf"{_MAX_FRIABLE_SOURCE_DIGITS} decimal digits",
+    ):
+        count_friable(IntegerValue(value=beyond), 1)
 
 
 def test_request_rejects_negative_and_noncanonical_sources() -> None:

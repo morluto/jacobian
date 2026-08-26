@@ -5,6 +5,7 @@ from __future__ import annotations
 from math import isqrt
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._models import (
     FriableCountRequest,
     FriableCountResult,
@@ -51,7 +52,15 @@ def _count_generated(x: int, primes: tuple[int, ...]) -> int:
     return visit(0, x)
 
 
-def count_friable(x: int, y: int) -> int:
+def _as_python_integer(value: int | IntegerValue) -> int:
+    """Return one admitted integer input as its Python integer value."""
+
+    if isinstance(value, IntegerValue):
+        return parse_canonical_integer(value.value)
+    return value
+
+
+def count_friable(x: int | IntegerValue, y: int | IntegerValue) -> int:
     """Return ``Psi(x, y)``, the number of positive y-friable integers <= x.
 
     The cutoff is inclusive. By convention ``Psi(0, y) = 0`` and, for
@@ -59,6 +68,8 @@ def count_friable(x: int, y: int) -> int:
     same result-sensitive execution envelope as the public operation.
     """
 
+    x = _as_python_integer(x)
+    y = _as_python_integer(y)
     if type(x) is not int or type(y) is not int:
         raise TypeError("friable-count inputs must be integers")
     regime, primes = _plan_friable_count(x, y)

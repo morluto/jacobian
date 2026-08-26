@@ -8,6 +8,8 @@ from sympy import divisors, mobius
 from tests.math.number_theory._validation import expect_validation
 
 from jacobian._exact import CanonicalInteger
+from jacobian.math.arithmetic import absolute_value
+from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory import ramanujan_sum
 from jacobian.math.number_theory._models import _MAX_INTEGER_LENGTH
 from jacobian.math.number_theory._ramanujan_sum import (
@@ -297,6 +299,22 @@ def test_native_ramanujan_sum_bounds_frequency_magnitude() -> None:
     assert ramanujan_sum(4, 10**_MAX_INTEGER_LENGTH - 2) == -2
     assert ramanujan_sum(4, -(10 ** (_MAX_INTEGER_LENGTH - 1) - 2)) == -2
     assert ramanujan_sum(4, 10**_MAX_INTEGER_LENGTH - 1) == 0
+
+
+def test_native_ramanujan_sum_accepts_the_shared_canonical_integer_value() -> None:
+    assert ramanujan_sum(IntegerValue(value="4"), IntegerValue(value="-2")) == -2
+    assert ramanujan_sum(absolute_value(-5), 0) == 4
+    assert (
+        ramanujan_sum(
+            IntegerValue(value="549755813888"), IntegerValue(value="274877906944")
+        )
+        == -274877906944
+    )
+
+
+def test_native_frequency_bound_covers_canonical_integer_values() -> None:
+    with pytest.raises(ValueError, match=rf"at most {_MAX_INTEGER_LENGTH}"):
+        ramanujan_sum(4, IntegerValue(value="9" * (_MAX_INTEGER_LENGTH + 1)))
 
 
 def test_native_frequency_bound_matches_wire_admission() -> None:

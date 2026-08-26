@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import SupportsIndex
 
+from jacobian.canonical import parse_canonical_integer
+from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._models import _MAX_INTEGER_LENGTH
 
 __all__ = ["ramanujan_sum"]
@@ -16,7 +18,17 @@ __all__ = ["ramanujan_sum"]
 _MAX_MODULUS_DIGITS = 12
 
 
-def ramanujan_sum(modulus: SupportsIndex, frequency: SupportsIndex) -> int:
+def _as_python_integer(value: SupportsIndex | IntegerValue) -> int:
+    """Return one admitted integer input as its Python integer value."""
+
+    if isinstance(value, IntegerValue):
+        return parse_canonical_integer(value.value)
+    return value.__index__()
+
+
+def ramanujan_sum(
+    modulus: SupportsIndex | IntegerValue, frequency: SupportsIndex | IntegerValue
+) -> int:
     """Return the exact Ramanujan sum ``c_modulus(frequency)``.
 
     The zero modulus denotes the empty reduced-residue sum.  Positive moduli
@@ -28,8 +40,8 @@ def ramanujan_sum(modulus: SupportsIndex, frequency: SupportsIndex) -> int:
     entry point performs deterministic bounded modular work.
     """
 
-    q = modulus.__index__()
-    n = frequency.__index__()
+    q = _as_python_integer(modulus)
+    n = _as_python_integer(frequency)
     if q < 0:
         raise ValueError("a Ramanujan-sum modulus must be nonnegative")
     # Character-length parity with the wire contract: positive frequencies

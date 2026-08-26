@@ -131,7 +131,10 @@ def _run_checked(
     if output:
         print(output)
     if result.status is not ToolCommandStatus.EXITED or result.exit_code != 0:
-        detail = result.diagnostic or f"status={result.status}, exit={result.exit_code}"
+        detail = result.diagnostic or (
+            f"status={result.status}, exit={result.exit_code}, "
+            f"stdout_limit={OUTPUT_LIMIT}, stderr_limit={OUTPUT_LIMIT}"
+        )
         raise TaskWorkflowError(f"{label} failed after {elapsed:.2f}s ({detail})")
     timings.append(StageTiming(label=label, seconds=elapsed))
 

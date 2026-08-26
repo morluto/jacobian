@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from jacobian.math import greedoids
 from jacobian.math.greedoids import FiniteFeasibleSetSystem
 from jacobian.math.greedoids._models import (
+    MAX_GROUND_LABEL_UTF8_BYTES,
     BasesRequest,
     BasesResult,
     BasicWordProfileRequest,
@@ -104,6 +105,18 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "greedoid.basic_word.profile.compute",
         "greedoid.convex_geometry.compute",
     }
+
+
+def test_recognition_rejects_a_ground_label_outside_utf8_budget() -> None:
+    with pytest.raises(ValidationError, match="ground_label_exceeds_budget"):
+        compute_recognize(
+            RecognizeRequest(
+                system=FiniteFeasibleSetSystem(
+                    ground=("x" * (MAX_GROUND_LABEL_UTF8_BYTES + 1),),
+                    feasible=((),),
+                )
+            )
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -19,6 +19,18 @@ MAX_FEASIBLE_COUNT = 4096
 MAX_EXCHANGE_WORK = 2_000_000
 """Maximum ordered exchange candidate-membership checks per recognition."""
 
+MAX_GROUND_LABEL_UTF8_BYTES = 1_024
+"""Maximum UTF-8 size of one retained ground label."""
+
+MAX_GROUND_LABEL_TOTAL_UTF8_BYTES = 65_536
+"""Maximum UTF-8 storage for all retained ground labels."""
+
+MAX_INTERMEDIATE_MEMBERSHIPS = 262_144
+"""Maximum feasible-row membership storage inspected by a kernel."""
+
+MAX_RESULT_BYTES = 2_000_000
+"""Conservative bound for complete index-family results."""
+
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable validation error owned by greedoid contracts."""
@@ -52,22 +64,58 @@ def require_bounded_carrier(system: FiniteFeasibleSetSystem) -> None:
             f"feasible-set count exceeds the bounded budget of "
             f"{MAX_FEASIBLE_COUNT} rows",
         )
+    label_bytes = 0
+    for label in system.ground:
+        try:
+            encoded_length = len(label.encode("utf-8"))
+        except UnicodeError as exc:
+            raise GreedoidAdmissionError(
+                "ground_label_invalid_utf8",
+                "ground labels must be UTF-8 encodable",
+            ) from exc
+        if encoded_length > MAX_GROUND_LABEL_UTF8_BYTES:
+            raise GreedoidAdmissionError(
+                "ground_label_exceeds_budget",
+                "a ground label exceeds the bounded UTF-8 size budget",
+            )
+        label_bytes += encoded_length
+    if label_bytes > MAX_GROUND_LABEL_TOTAL_UTF8_BYTES:
+        raise GreedoidAdmissionError(
+            "ground_labels_exceed_budget",
+            "ground labels exceed the bounded UTF-8 storage budget",
+        )
     by_size: dict[int, int] = {}
     memberships = 0
     for row in system.feasible:
         by_size[len(row)] = by_size.get(len(row), 0) + 1
         memberships += len(row)
+    if memberships > MAX_INTERMEDIATE_MEMBERSHIPS:
+        raise GreedoidAdmissionError(
+            "intermediate_memberships_exceed_budget",
+            "feasible-set memberships exceed the bounded intermediate-storage budget",
+        )
     exchange_pairs = sum(
         larger_count * smaller_count
         for larger_size, larger_count in by_size.items()
         for smaller_size, smaller_count in by_size.items()
         if larger_size > smaller_size
     )
-    exchange_work = exchange_pairs * len(system.ground)
-    if exchange_work > MAX_EXCHANGE_WORK:
+    candidate_membership_probes = exchange_pairs * len(system.ground)
+    accessibility_probes = memberships
+    total_probes = candidate_membership_probes + accessibility_probes
+    if total_probes > MAX_EXCHANGE_WORK:
         raise GreedoidAdmissionError(
             "exchange_work_exceeds_budget",
-            "exhaustive exchange candidate-membership work exceeds the bounded budget",
+            "exhaustive exchange and accessibility membership work exceeds the bounded budget",
+        )
+    # Recognition and bases can retain every feasible row. Charge the exact
+    # index-family shape, including tuple delimiters and the source labels,
+    # before any kernel allocates its working index.
+    result_bytes = label_bytes + memberships * 3 + len(system.feasible) * 16
+    if result_bytes > MAX_RESULT_BYTES:
+        raise GreedoidAdmissionError(
+            "result_exceeds_budget",
+            "the complete greedoid result exceeds the bounded result budget",
         )
 
 
@@ -121,7 +169,7 @@ class RankRequest(StrictModel):
     """Compute greedoid rank for an optional ground subset."""
 
     system: FiniteFeasibleSetSystem
-    subset: tuple[int, ...] | None = Field(default=None)
+    subset: tuple[int, ...] | None = Field(default=None, max_length=MAX_GROUND_SIZE)
 
     @model_validator(mode="after")
     def require_valid_subset(self) -> Self:
@@ -170,7 +218,7 @@ class BasesRequest(StrictModel):
     """Compute the maximal feasible subsets (bases)."""
 
     system: FiniteFeasibleSetSystem
-    subset: tuple[int, ...] | None = Field(default=None)
+    subset: tuple[int, ...] | None = Field(default=None, max_length=MAX_GROUND_SIZE)
 
     @model_validator(mode="after")
     def require_valid_subset(self) -> Self:
@@ -219,7 +267,7 @@ class BasicWordProfileRequest(StrictModel):
     """Profile a candidate basic word."""
 
     system: FiniteFeasibleSetSystem
-    word: tuple[int, ...] = Field(default=())
+    word: tuple[int, ...] = Field(default=(), max_length=MAX_GROUND_SIZE)
 
     @model_validator(mode="after")
     def require_bounded_system(self) -> Self:

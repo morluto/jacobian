@@ -4,18 +4,22 @@ import pytest
 from jsonschema.validators import Draft202012Validator
 from pydantic import ValidationError
 
+from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import invoke_operation, parse_operation_input
+from jacobian.dispatch import (
+    OperationRequestValidationError,
+    invoke_operation,
+    parse_operation_input,
+)
 from jacobian.math.finite_geometry._models import (
+    MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES,
     MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS,
     GrassmannianCountRequest,
 )
 from jacobian.math.finite_geometry._operations import compute_grassmannian_count
 
 
-def test_grassmannian_count_past_json_integer_range_round_trips_through_dispatch() -> (
-    None
-):
+def test_dispatch_round_trips_an_exact_count_past_the_json_integer_range() -> None:
     """A lawful exact count past 2^53 survives canonical request transport."""
 
     last_safe_slice = compute_grassmannian_count(
@@ -63,6 +67,10 @@ def test_projective_space_schema_publishes_coupled_enumeration_bound() -> None:
         f"q**len(axis) <= {MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS}"
         in space_description
     )
+    assert (
+        f"{MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES}-byte result budget" in description
+    )
+    assert "bare coordinate tuples" in description
 
     validator = Draft202012Validator(schema)
     accepted = {"space": {"field_order": 2, "axis": ["x", "y"]}}
@@ -83,4 +91,44 @@ def test_projective_space_schema_publishes_coupled_enumeration_bound() -> None:
     assert (
         exc_info.value.errors()[0]["type"]
         == "finite_geometry.projective_space_too_large"
+    )
+
+
+def test_dispatch_returns_maximal_enumeration_within_transport_limit() -> None:
+    """The admitted-envelope-maximal request returns its complete declared
+    result: q=2 with 16 axis labels yields all 65,535 projective points of
+    PG(15, F_2), and the compact bare-coordinate-tuple reply serializes well
+    inside the canonical transport limit instead of failing only after
+    enumeration."""
+    payload = {"space": {"field_order": 2, "axis": [f"x{i}" for i in range(16)]}}
+
+    result = invoke_operation(
+        "finite_geometry.projective_space.enumerate_points", payload, Catalog.open()
+    )
+
+    assert result.output["count"] == MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS - 1
+    assert len(result.output["points"]) == result.output["count"]
+    assert result.output["points"][0] == [0] * 15 + [1]
+    encoded = len(canonicalize_json(result.output))
+    assert encoded <= CanonicalLimits().max_output_bytes
+    assert encoded < MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES
+
+
+def test_dispatch_rejects_untransportable_enumeration_as_invalid_request() -> None:
+    """A request whose predicted serialized result exceeds the owner-local
+    budget fails admission before execution as a typed invalid request --
+    never as a post-enumeration host exception."""
+    payload = {
+        "space": {"field_order": 2, "axis": ["x", "y" * (9 * 1024 * 1024)]},
+    }
+
+    with pytest.raises(OperationRequestValidationError) as exc_info:
+        invoke_operation(
+            "finite_geometry.projective_space.enumerate_points",
+            payload,
+            Catalog.open(),
+        )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_geometry.projective_enumeration_result_too_large"
     )

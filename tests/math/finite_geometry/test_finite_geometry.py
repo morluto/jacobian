@@ -19,6 +19,7 @@ from jacobian.math.finite_geometry._models import (
     ProjectivePointCanonicalizeRequest,
     ProjectivePointEqualRequest,
     ProjectiveSpaceEnumerateRequest,
+    ProjectiveSpaceEnumerateResult,
     SubspaceComputeRequest,
     SubspaceIntersectionRequest,
     SubspaceMembershipRequest,
@@ -269,13 +270,59 @@ def test_grassmannian_count_planes_in_f2_4() -> None:
     assert result.count == "35"
 
 
+def test_grassmannian_count_exact_past_json_integer_range() -> None:
+    """The exact Gaussian-binomial value stays a canonical decimal string."""
+
+    result = compute_grassmannian_count(
+        GrassmannianCountRequest(
+            field_order=2,
+            ambient_dimension=15,
+            subspace_dimension=7,
+        )
+    )
+    assert result.count == "246614610741341843"
+    assert int(result.count) > (1 << 53) - 1
+
+
 def test_projective_space_enumerate_pg1_f2() -> None:
     request = ProjectiveSpaceEnumerateRequest(
         space={"field_order": 2, "axis": ("x", "y")}
     )
     result = compute_projective_space_enumerate(request)
     assert result.count == 3
-    assert len(result.points) == 3
+    assert result.points == ((0, 1), (1, 0), (1, 1))
+
+
+def test_enumerate_admission_rejects_results_beyond_the_transport_budget() -> None:
+    """A pathological axis label cannot smuggle an untransportable complete
+    result past admission: the serialized-result bound fires before any
+    enumeration runs."""
+    with pytest.raises(ValidationError) as error:
+        ProjectiveSpaceEnumerateRequest(
+            space={"field_order": 2, "axis": ("x", "y" * (9 * 1024 * 1024))}
+        )
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_geometry.projective_enumeration_result_too_large"
+    )
+
+
+def test_enumeration_replay_rejects_unnormalized_representatives() -> None:
+    """Bare coordinate tuples stay bound to the canonical representative
+    invariant of the declared parent space."""
+    result = compute_projective_space_enumerate(
+        ProjectiveSpaceEnumerateRequest(space={"field_order": 3, "axis": ("x", "y")})
+    )
+    assert result.points == ((0, 1), (1, 0), (1, 1), (1, 2))
+
+    payload = result.model_dump()
+    payload["points"] = ((2, 1), *payload["points"][1:])
+    with pytest.raises(ValidationError) as error:
+        ProjectiveSpaceEnumerateResult.model_validate(payload)
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_geometry.projective_coordinates_not_normalized"
+    )
 
 
 def test_request_rejects_nonprime_field() -> None:

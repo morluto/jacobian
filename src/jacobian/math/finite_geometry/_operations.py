@@ -242,8 +242,6 @@ def compute_projective_space_enumerate(
 
     return ProjectiveSpaceEnumerateResult(
         space=request.space,
-        points=tuple(
-            ProjectivePoint(space=request.space, coordinates=point) for point in points
-        ),
+        points=tuple(points),
         count=len(points),
     )

@@ -7,12 +7,6 @@ Jacobian exposes two MCP tools for atomic mathematics.
 - `math.run` executes one operation with a typed `payload` and returns that
   operation's typed mathematical result.
 
-A server may receive multiple `math.run` requests concurrently. Jacobian
-currently serializes mathematical kernel execution within each server instance
-because some maintained computational backends are not thread-safe. Requests
-remain independent; this affects scheduling and throughput, not the
-mathematical result contract.
-
 Built-in membership follows the
 [public mathematical operation admission contract](public-operation-admission.md),
 which keeps the public catalog distinct from the broader native Python API.

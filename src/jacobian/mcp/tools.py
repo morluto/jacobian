@@ -12,6 +12,7 @@ from mcp.types import INVALID_PARAMS
 
 from jacobian.catalog.models import OperationId, OperationResult
 from jacobian.dispatch import (
+    OperationDomainValidationError,
     OperationRequestValidationError,
     _invoke_prepared_operation,
     _prepare_operation,
@@ -34,15 +35,12 @@ from jacobian.mcp.runtime import (
     AppState,
     _authorize,
     _catalog,
-    _state,
 )
 from jacobian.process import bounded_process_cancellation
 
 _MAX_VALIDATION_ERRORS = 64
 _MAX_VALIDATION_LOCATION_COMPONENTS = 32
 _MAX_VALIDATION_LOCATION_LENGTH = 128
-_MAX_VALIDATION_ISSUES_BYTES = 48 * 1_024
-_EXECUTION_LOCK_POLL_SECONDS = 0.05
 
 
 class _CancellationSignal(Protocol):
@@ -111,10 +109,8 @@ def math_run(
         # MCP runs synchronous tools in a worker thread.  Its request event
         # is polled by the shared external-process runner, which kills and
         # reaps only an operation's owned child tree.
-        # Maintained mathematical backends may retain process-global state
-        # that cannot safely execute on concurrent MCP worker threads.
         return _run_prepared_operation(prepared, ctx)
-    except OperationRequestValidationError as exc:
+    except (OperationRequestValidationError, OperationDomainValidationError) as exc:
         errors = _bounded_validation_issues(exc.errors())
         data = OperationInvalidRequestData(
             operation_id=operation_id,
@@ -137,44 +133,29 @@ def _run_prepared_operation(
     prepared: _PreparedOperation,
     ctx: Context[AppState, Any],
 ) -> OperationResult:
-    """Wait cooperatively, then run one admitted operation under the server gate."""
+    """Run one prepared operation without serializing independent requests."""
 
     cancellation = _request_cancellation(ctx)
-    execution_lock = _state(ctx).execution_lock
-    while not cancellation.is_set():
-        if not execution_lock.acquire(timeout=_EXECUTION_LOCK_POLL_SECONDS):
-            continue
-        try:
-            if cancellation.is_set():
-                break
-            with bounded_process_cancellation(cancellation):
-                return _invoke_prepared_operation(prepared)
-        finally:
-            execution_lock.release()
-    raise ToolError("operation cancelled before execution")
+    if cancellation.is_set():
+        raise ToolError("operation cancelled before execution")
+    with bounded_process_cancellation(cancellation):
+        return _invoke_prepared_operation(prepared)
 
 
 def _bounded_validation_issues(
     errors: Sequence[Mapping[str, Any]],
 ) -> tuple[OperationValidationIssue, ...]:
-    """Build useful field diagnostics within one aggregate response budget."""
-
-    from jacobian.canonical import encode_strict_json
+    """Build bounded field diagnostics without reflecting raw caller input."""
 
     issues: list[OperationValidationIssue] = []
-    encoded_size = 0
     for error in errors[:_MAX_VALIDATION_ERRORS]:
-        issue = OperationValidationIssue(
-            location=_bounded_validation_location(error["loc"]),
-            code=str(error["type"]),
-            message=_bounded_validation_message(error["msg"]),
-            input=_recoverable_error_input(error.get("input")),
+        issues.append(
+            OperationValidationIssue(
+                location=_bounded_validation_location(error["loc"]),
+                code=str(error["type"]),
+                message=_bounded_validation_message(error["msg"]),
+            )
         )
-        issue_size = len(encode_strict_json(issue.model_dump(mode="json")))
-        if encoded_size + issue_size > _MAX_VALIDATION_ISSUES_BYTES:
-            break
-        issues.append(issue)
-        encoded_size += issue_size
     return tuple(issues)
 
 
@@ -190,18 +171,6 @@ def _bounded_validation_location(value: Any) -> tuple[str | int, ...]:
         if len(location) == _MAX_VALIDATION_LOCATION_COMPONENTS:
             break
     return tuple(location)
-
-
-def _recoverable_error_input(value: Any) -> Any | None:
-    """Return bounded JSON error input without rendering it into error text."""
-
-    from jacobian.canonical import CanonicalizationError, encode_strict_json
-
-    try:
-        encoded = encode_strict_json(value)
-    except CanonicalizationError:
-        return None
-    return value if len(encoded) <= 2_048 else None
 
 
 def _bounded_validation_message(value: Any) -> str:

@@ -7,6 +7,15 @@ from math import lcm
 
 from tests.math.numerical_semigroups._support import numerical_semigroup_error
 
+from jacobian.math.numerical_semigroups._element_invariants import (
+    compute_element_catenary_degree,
+)
+from jacobian.math.numerical_semigroups._global_invariants import (
+    compute_betti_elements,
+    compute_catenary_degree,
+    compute_delta_set,
+    compute_elasticity,
+)
 from jacobian.math.numerical_semigroups._models import (
     BettiElementsRequest,
     CatenaryDegreeRequest,
@@ -20,13 +29,6 @@ from jacobian.math.numerical_semigroups._models import (
     MinimalPresentationRequest,
     MinimalPresentationResult,
     PresentationBinomialsRequest,
-)
-from jacobian.math.numerical_semigroups._operations import (
-    compute_betti_elements,
-    compute_catenary_degree,
-    compute_delta_set,
-    compute_elasticity,
-    compute_element_catenary_degree,
 )
 from jacobian.math.numerical_semigroups._presentation_operations import (
     compute_minimal_presentation,

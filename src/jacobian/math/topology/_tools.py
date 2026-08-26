@@ -5,6 +5,20 @@ from jacobian.catalog.models import MathTool, MathTools
 from jacobian.math.topology._models import (
     BarycentricSubdivisionRequest,
     BarycentricSubdivisionResult,
+    ShellingCheckRequest,
+    ShellingCheckResult,
+)
+from jacobian.math.topology._operations import (
+    TOPOLOGY_OPERATIONS,
+    compute_barycentric_subdivision,
+    compute_pseudomanifold_decision,
+    compute_shelling_check,
+)
+from jacobian.math.topology._pseudomanifold import (
+    PseudomanifoldRequest,
+    PseudomanifoldResult,
+)
+from jacobian.math.topology._structural import (
     ElementaryCollapseRequest,
     ElementaryCollapseResult,
     FVectorRequest,
@@ -13,31 +27,19 @@ from jacobian.math.topology._models import (
     JoinResult,
     LinkRequest,
     LinkResult,
-    ShellingCheckRequest,
-    ShellingCheckResult,
     SkeletonRequest,
     SkeletonResult,
     StarRequest,
     StarResult,
     VertexDeletionRequest,
     VertexDeletionResult,
-)
-from jacobian.math.topology._operations import (
-    TOPOLOGY_OPERATIONS,
-    compute_barycentric_subdivision,
     compute_elementary_collapse,
     compute_f_vector,
     compute_join,
     compute_link,
-    compute_pseudomanifold_decision,
-    compute_shelling_check,
     compute_skeleton,
     compute_star,
     compute_vertex_deletion,
-)
-from jacobian.math.topology._pseudomanifold import (
-    PseudomanifoldRequest,
-    PseudomanifoldResult,
 )
 
 __all__ = ["TOOLS"]

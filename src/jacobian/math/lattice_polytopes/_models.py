@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Self
+from typing import Literal, Self
 
 from pydantic import Field, PrivateAttr, model_validator
 from pydantic_core import PydanticCustomError
@@ -15,8 +15,8 @@ from jacobian._models import StrictModel
 from jacobian.math.polytope.values import Halfspace as RationalHalfspace
 from jacobian.math.polytope.values import Vertex as RationalVertex
 
-if TYPE_CHECKING:
-    from jacobian.math.lattice_polytopes._operations import AdmittedGeometry
+AdmittedGeometry = tuple[list[tuple[tuple[int, ...], int]], list[int], list[int], int]
+"""Trusted exact geometry retained on an admitted request."""
 
 MAX_DIMENSION = 4
 """Absolute upper bound on the ambient dimension of a polytope.
@@ -206,11 +206,11 @@ class LatticePolytopeRequest(StrictModel):
         """
         geometry = self._geometry
         if geometry is None:
-            from jacobian.math.lattice_polytopes._operations import (
-                _facets_and_box,
+            from jacobian.math.lattice_polytopes._geometry_admission import (
+                admitted_geometry,
             )
 
-            geometry = _facets_and_box(self)
+            geometry = admitted_geometry(self)
             self._geometry = geometry
         return geometry
 
@@ -313,6 +313,11 @@ class LatticePoint(StrictModel):
                 )
         return self
 
+    @classmethod
+    def _from_kernel(cls, coordinates: tuple[CanonicalInteger, ...]) -> Self:
+        """Construct a lattice point from trusted canonical kernel output."""
+        return cls.model_construct(coordinates=coordinates)
+
 
 class EnumerateLatticePointsResult(StrictModel):
     """The complete list of lattice points inside a bounded rational polytope.
@@ -348,6 +353,22 @@ class EnumerateLatticePointsResult(StrictModel):
                 )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        dimension: int,
+        points: tuple[LatticePoint, ...],
+        representation: RepresentationName,
+    ) -> Self:
+        """Construct a result from the owner's already-admitted scan output."""
+        return cls.model_construct(
+            dimension=dimension,
+            point_count=len(points),
+            points=points,
+            representation=representation,
+        )
+
 
 class CountLatticePointsResult(StrictModel):
     """The number of lattice points inside a bounded rational polytope."""
@@ -355,6 +376,21 @@ class CountLatticePointsResult(StrictModel):
     dimension: int = Field(ge=1, le=MAX_DIMENSION)
     point_count: int = Field(ge=0, le=MAX_TOTAL_SCAN)
     representation: RepresentationName
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        dimension: int,
+        point_count: int,
+        representation: RepresentationName,
+    ) -> Self:
+        """Construct a result from the owner's already-admitted scan output."""
+        return cls.model_construct(
+            dimension=dimension,
+            point_count=point_count,
+            representation=representation,
+        )
 
 
 class EnumerateLatticePointsRequest(LatticePolytopeRequest):
@@ -368,7 +404,7 @@ class EnumerateLatticePointsRequest(LatticePolytopeRequest):
 
     @model_validator(mode="after")
     def require_enumeration_artifact_fits(self) -> Self:
-        from jacobian.math.lattice_polytopes._operations import (
+        from jacobian.math.lattice_polytopes._geometry_admission import (
             enumeration_output_admission,
         )
 

@@ -21,6 +21,10 @@ from jacobian.math.matrices.quadratic_spectral._models import (
     RealQuadraticSymmetricSpectrumRequest,
 )
 from jacobian.math.matrices.quadratic_spectral._tools import TOOLS
+from jacobian.math.matrices.quadratic_spectral.operations import (
+    verify_real_quadratic_inertia,
+    verify_real_quadratic_spectrum,
+)
 from jacobian.math.matrices.values import RealQuadraticMatrix
 from jacobian.math.real_algebraic import compare_real_algebraic
 from jacobian.math.real_quadratic import RealQuadraticValue
@@ -256,7 +260,7 @@ def test_operation_specific_shape_and_work_bounds_are_preflighted() -> None:
         RealQuadraticSingularSpectrumRequest(matrix=large_diagonal)
 
 
-def test_source_bound_results_reject_forged_spectrum_and_inertia() -> None:
+def test_explicit_verifiers_reject_forged_spectrum_and_inertia() -> None:
     source = _matrix(
         (
             (_q(1, 0, 2), _q(0, 0, 2)),
@@ -264,16 +268,22 @@ def test_source_bound_results_reject_forged_spectrum_and_inertia() -> None:
         )
     )
     spectrum_payload = symmetric_spectrum(source).model_dump()
-    spectrum_payload["values"] = tuple(reversed(spectrum_payload["values"]))
-    with pytest.raises(ValidationError):
+    assert verify_real_quadratic_spectrum(
         RealQuadraticSpectrum.model_validate(spectrum_payload)
+    )
+    spectrum_payload["values"] = tuple(reversed(spectrum_payload["values"]))
+    forged_spectrum = RealQuadraticSpectrum.model_validate(spectrum_payload)
+    assert not verify_real_quadratic_spectrum(forged_spectrum)
 
     inertia_payload = inertia(source).model_dump()
+    assert verify_real_quadratic_inertia(
+        RealQuadraticInertia.model_validate(inertia_payload)
+    )
     inertia_payload["n_positive"] = 1
     inertia_payload["n_zero"] = 1
     inertia_payload["definiteness"] = "positive_semidefinite"
-    with pytest.raises(ValidationError):
-        RealQuadraticInertia.model_validate(inertia_payload)
+    forged_inertia = RealQuadraticInertia.model_validate(inertia_payload)
+    assert not verify_real_quadratic_inertia(forged_inertia)
 
 
 def test_quadratic_spectral_public_api_and_catalog_are_exact() -> None:

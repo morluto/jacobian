@@ -12,18 +12,27 @@ from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.boxes import (
     BoxIntersectionLedgerEntry,
-    BoxUnionVolumeRequest,
     BoxUnionVolumeResult,
     RationalAxisAlignedBox,
     RationalClosedInterval,
     compute_box_union_volume,
 )
-from jacobian.math.geometry.boxes._models import MAX_BOX_UNION_RESULT_BYTES
+from jacobian.math.geometry.boxes._models import (
+    MAX_BOX_UNION_RESULT_BYTES,
+    BoxUnionVolumeRequest,
+)
 from jacobian.math.geometry.boxes.values import MAX_CANONICAL_BOX_DIMENSION
 
 
 def _rational(value: str | int | Fraction) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
+
+
+def test_native_namespace_exposes_box_values_not_wire_requests() -> None:
+    import jacobian.math.geometry.boxes as boxes
+
+    assert "BoxUnionVolumeRequest" not in boxes.__all__
+    assert boxes.compute_box_union_volume is compute_box_union_volume
 
 
 def _box(*bounds: tuple[str | int, str | int]) -> RationalAxisAlignedBox:

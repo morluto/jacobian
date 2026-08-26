@@ -651,13 +651,9 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
         )
     if isinstance(exposed_face, RationalExposedFace):
         # Its ordering, distinctness, and serialization invariants already
-        # hold by construction; membership forgery is still bound to the
-        # raw source here so a guaranteed-rejected result never pays the
-        # nested extremality replay.
-        _require_raw_support_conclusions_bound(
-            canonical,
-            [_raw_support_vertex_key(vertex) for vertex in exposed_face.vertices],
-        )
+        # hold by construction.  Whether it is the complete maximizing face
+        # is a mathematical claim, checked by the explicit owner verifier
+        # rather than while parsing a result.
         return
     vertices = exposed_face["vertices"]
     if not isinstance(vertices, (list, tuple)):
@@ -690,136 +686,6 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
         raise _validation_error(
             "exposed_face_coordinates_unique",
             "exposed-face vertices must have distinct coordinates",
-        )
-    _require_raw_support_conclusions_bound(canonical, parsed)
-
-
-def _raw_support_vertex_key(
-    vertex: RationalPolytopeVertex,
-) -> tuple[str, tuple[tuple[str, str], ...]]:
-    """Return one labelled vertex's identity as its reduced-component key."""
-
-    return (
-        vertex.vertex_id,
-        tuple((component.num, component.den) for component in vertex.coordinates),
-    )
-
-
-def _assemble_raw_support_source(
-    canonical: Any,
-) -> tuple[RationalVPolytope, RationalCovector] | None:
-    """Assemble the validated raw source without the extremality proof.
-
-    Every component has already been parsed as a canonical rational and
-    measured against the envelope, so ``model_construct`` assembles a
-    faithful value for exact arithmetic; structural faults the canonical
-    type would reject (ID ordering, dimension agreement, distinctness)
-    return ``None`` here and stay the business of ordinary nested
-    validation, which reports them with the published errors.
-    """
-
-    raw_polytope = canonical.get("polytope")
-    raw_covector = canonical.get("covector")
-    if not isinstance(raw_polytope, dict) or not isinstance(raw_covector, dict):
-        return None
-    axes = _raw_space_axes(raw_polytope.get("space"))
-    if axes is None:
-        return None
-    dimension = len(axes)
-    components = []
-    for component in raw_covector["components"]:
-        components.append(
-            component
-            if isinstance(component, CanonicalRational)
-            else CanonicalRational.model_validate(component)
-        )
-    if len(components) != dimension:
-        return None
-    vertices = []
-    for vertex in _iter_raw_entries(raw_polytope, "vertices"):
-        if (
-            not isinstance(vertex, dict)
-            or set(vertex) != {"vertex_id", "coordinates"}
-            or not isinstance(vertex["vertex_id"], str)
-            or not isinstance(vertex["coordinates"], (list, tuple))
-            or len(vertex["coordinates"]) != dimension
-        ):
-            return None
-        coordinates = [
-            component
-            if isinstance(component, CanonicalRational)
-            else CanonicalRational.model_validate(component)
-            for component in vertex["coordinates"]
-        ]
-        vertices.append(
-            RationalPolytopeVertex.model_construct(
-                vertex_id=vertex["vertex_id"],
-                coordinates=tuple(coordinates),
-            )
-        )
-    if not vertices:
-        return None
-    space = RationalCoordinateSpace.model_construct(axes=tuple(axes))
-    return (
-        RationalVPolytope.model_construct(
-            space=space,
-            vertices=tuple(vertices),
-        ),
-        RationalCovector.model_construct(
-            space=space,
-            components=tuple(components),
-        ),
-    )
-
-
-def _require_raw_support_conclusions_bound(
-    canonical: Any,
-    face_keys: list[tuple[str, tuple[tuple[str, str], ...]]],
-) -> None:
-    """Bind well-formed raw conclusions to the raw source before replay.
-
-    Every local conclusion shape and invariant has passed, so the only
-    remaining fault a serialized result can carry is a forged
-    ``support_value`` or ``exposed_face`` - rejected by nested validation
-    only after reconstructing (and canonically proving) the retained
-    source. This gate evaluates the same ``support_data`` kernel over the
-    assembled raw values and raises the identical binding errors first;
-    the after-validator still recomputes the binding authoritatively on
-    the proven value, so the accept/reject boundary is unchanged.
-    """
-
-    from jacobian.math.polytope._operations import support_data
-
-    assembled = _assemble_raw_support_source(canonical)
-    if assembled is None:
-        return
-    polytope, covector = assembled
-
-    expected_value, expected_vertices = support_data(polytope, covector)
-    support_claim = canonical.get("support_value")
-    claim_value = (
-        support_claim
-        if isinstance(support_claim, CanonicalRational)
-        else CanonicalRational.model_validate(support_claim)
-    )
-    if claim_value != CanonicalRational.from_fraction(expected_value):
-        raise _validation_error(
-            "support_value_binding",
-            "support value must equal the exact maximum on every vertex",
-        )
-
-    exposed_face = canonical.get("exposed_face")
-    if isinstance(exposed_face, RationalExposedFace):
-        claimed_keys = [
-            _raw_support_vertex_key(vertex) for vertex in exposed_face.vertices
-        ]
-    else:
-        claimed_keys = face_keys
-    expected_keys = [_raw_support_vertex_key(vertex) for vertex in expected_vertices]
-    if claimed_keys != expected_keys:
-        raise _validation_error(
-            "exposed_face_complete",
-            "exposed face must be exactly the complete maximizing vertex family",
         )
 
 
@@ -947,9 +813,8 @@ def require_volume_components_within_result_bound(
         _require_interval_volume_within_result_bound(unique)
         return
 
-    from jacobian.math.polytope._operations import (
-        _filter_redundant_vertices,
-        _triangulate,
+    from jacobian.math.polytope._admission_kernels import (
+        triangulation_for_volume_admission,
     )
 
     # Deduplicate exactly as the kernel does before any admission work:
@@ -968,10 +833,9 @@ def require_volume_components_within_result_bound(
             "polytope hull enumeration exceeds the combinatorial bound "
             f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)",
         )
-    pts = _filter_redundant_vertices(pts, dim)
+    pts, triangulation = triangulation_for_volume_admission(pts, dim)
     if len(pts) < dim + 1:
         return
-    triangulation = _triangulate(pts, dim)
     if not triangulation:
         return
     table = [_point_digit_lengths(row) for row in pts]
@@ -1070,7 +934,7 @@ class FacetIncidenceResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_complete_source_bound_profile(self) -> Self:
+    def require_source_bound_profile_shape(self) -> Self:
         if any(len(vertex.coordinates) != self.dimension for vertex in self.vertices):
             raise _validation_error(
                 "dimension_bound",
@@ -1092,13 +956,14 @@ class FacetIncidenceResult(StrictModel):
                 "facet profile exceeds the "
                 f"{MAX_FACET_INCIDENCES}-incidence result bound",
             )
-        from jacobian.math.polytope._operations import _computed_facets_from_vertices
-
-        expected = _computed_facets_from_vertices(self.vertices, self.dimension)
-        if self.facets != expected:
+        if any(
+            index >= len(self.vertices)
+            for facet in self.facets
+            for index in facet.source_vertex_indices
+        ):
             raise _validation_error(
-                "facet_profile_complete",
-                "facets must be the complete canonical source-bound facet profile",
+                "facet_source_indices",
+                "facet source vertex indices must refer to the retained vertices",
             )
         try:
             encode_strict_json(self.model_dump(mode="json"), limits=CanonicalLimits())
@@ -1108,6 +973,22 @@ class FacetIncidenceResult(StrictModel):
                 "facet profile exceeds the canonical JSON output bound",
             ) from exc
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        vertices: tuple[Vertex, ...],
+        dimension: int,
+        facets: tuple[PrimitiveFacet, ...],
+    ) -> Self:
+        """Build a trusted kernel outcome without replaying its enumeration."""
+
+        return cls.model_construct(
+            vertices=vertices,
+            dimension=dimension,
+            facets=facets,
+        )
 
 
 FacetVertexTuple = Annotated[
@@ -1230,13 +1111,15 @@ class FacetIncidenceRequest(StrictModel):
                     max_digits=MAX_FACET_COORDINATE_DIGITS,
                     label="facet-profile vertex coordinate",
                 )
-        from jacobian.math.polytope._operations import _computed_facets_from_vertices
+        from jacobian.math.polytope._admission_kernels import (
+            facet_profile_for_admission,
+        )
 
         # Materializing the complete bounded enumeration here proves the
         # facet and incidence result bounds during request validation, so an
         # admitted request cannot discover an oversized profile only in the
         # execution backend.
-        _computed_facets_from_vertices(vertices, dimension)
+        facet_profile_for_admission(vertices, dimension)
         return self
 
 
@@ -1290,11 +1173,12 @@ class RationalPolytopeVertex(StrictModel):
 class RationalVPolytope(StrictModel):
     """A full-dimensional bounded rational polytope by its exact vertices.
 
-    The vertices are a canonical V-representation: their IDs are strictly
-    ordered, their coordinate tuples are distinct, and each one is an exact
-    extreme vertex of the hull. Lower-dimensional polytopes need explicit
-    intrinsic affine coordinates and are intentionally outside this first
-    support-operation contract.
+    The vertices are a canonical labelled V-representation: their IDs are
+    strictly ordered and their coordinate tuples are distinct.  Whether the
+    rows are a full-dimensional irredundant hull is a support-operation
+    precondition, proved by its bounded kernel rather than when a canonical
+    value is parsed.  This keeps the value neutral for consumers such as
+    volume, which intentionally accepts redundant V-representation rows.
     """
 
     space: RationalCoordinateSpace
@@ -1302,8 +1186,8 @@ class RationalVPolytope(StrictModel):
         min_length=1,
         max_length=MAX_VERTICES,
         description=(
-            "Complete irredundant vertex family, ordered strictly by vertex_id. "
-            "The exact extremality proof requires C(n,d) <= "
+            "Ordered distinct V-representation rows. The support operation's "
+            "exact extremality proof requires C(n,d) <= "
             f"{MAX_SUPPORT_VERTEX_SUBSETS} candidate subfacets, C(n,d) * "
             f"(n-d) <= {MAX_SUPPORT_ORIENTATION_TESTS} orientation tests, and "
             f"C(n,d) * (n-d) * D^2 <= {MAX_EXTREMALITY_HEIGHT_WORK}, where D is "
@@ -1338,11 +1222,6 @@ class RationalVPolytope(StrictModel):
             raise _validation_error(
                 "polytope_vertices", "polytope vertices must have distinct coordinates"
             )
-        from jacobian.math.polytope._operations import (
-            require_full_dimensional_extreme_vertices,
-        )
-
-        require_full_dimensional_extreme_vertices(self)
         return self
 
 
@@ -1645,31 +1524,46 @@ class PolytopeSupportResult(StrictModel):
         return canonical
 
     @model_validator(mode="after")
-    def bind_support_data_to_source(self) -> Self:
+    def require_source_and_conclusion_shape(self) -> Self:
         if self.polytope.space != self.covector.space:
             raise _validation_error(
                 "coordinate_space_mismatch",
                 "polytope and covector must use the same coordinate space",
             )
         require_support_components_within_envelope(self.polytope, self.covector)
-        from jacobian.math.polytope._operations import support_data
-
-        expected_value, expected_vertices = support_data(self.polytope, self.covector)
-        if self.support_value != CanonicalRational.from_fraction(expected_value):
+        if self.exposed_face.space != self.polytope.space:
             raise _validation_error(
-                "support_value_binding",
-                "support value must equal the exact maximum on every vertex",
+                "coordinate_space_mismatch",
+                "exposed face must use the same coordinate space as the polytope",
             )
-        expected_face = RationalExposedFace(
-            space=self.polytope.space,
-            vertices=expected_vertices,
-        )
-        if self.exposed_face != expected_face:
+        source_by_id = {vertex.vertex_id: vertex for vertex in self.polytope.vertices}
+        if any(
+            source_by_id.get(vertex.vertex_id) != vertex
+            for vertex in self.exposed_face.vertices
+        ):
             raise _validation_error(
-                "exposed_face_complete",
-                "exposed face must be exactly the complete maximizing vertex family",
+                "exposed_face_source",
+                "exposed-face vertices must occur unchanged in the retained polytope",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        polytope: RationalVPolytope,
+        covector: RationalCovector,
+        support_value: CanonicalRational,
+        exposed_face: RationalExposedFace,
+    ) -> Self:
+        """Build one trusted kernel outcome without replaying its dot products."""
+
+        return cls.model_construct(
+            polytope=polytope,
+            covector=covector,
+            support_value=support_value,
+            exposed_face=exposed_face,
+        )
 
 
 def _canonical_v_polytope_vertices(polytope: RationalVPolytope) -> tuple[Vertex, ...]:
@@ -1923,13 +1817,13 @@ def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> No
             raise _validation_error(
                 "vertex_dimension_consistency", "all vertices must share one dimension"
             )
-    from jacobian.math.polytope._operations import _vertices_from_v_representation
+    from jacobian.math.polytope._admission_kernels import volume_vertices_for_admission
 
     # Exact-volume growth is bounded over the whole triangulation, so the
     # same admission runs on the rational points themselves; it applies
     # the combinatorial hull-work bound after exact deduplication,
     # mirroring the kernel pipeline.
-    points, resolved_dim = _vertices_from_v_representation(vertices)
+    points, resolved_dim = volume_vertices_for_admission(vertices)
     require_volume_components_within_result_bound(points, resolved_dim)
 
 
@@ -1945,17 +1839,16 @@ def _require_admissible_h_vertices(halfspaces: tuple[Halfspace, ...], dim: int) 
     result-size admission applies before accepting the request.
     """
 
-    from jacobian.math.polytope._operations import (
-        _is_bounded_h,
-        _vertices_from_h_representation,
+    from jacobian.math.polytope._admission_kernels import (
+        bounded_h_vertices_for_admission,
     )
 
-    if not _is_bounded_h(halfspaces):
+    bounded, verts, _resolved_dim = bounded_h_vertices_for_admission(halfspaces)
+    if not bounded:
         raise _validation_error(
             "halfspaces",
             "the H-representation is unbounded; polytope volume requires a bounded polytope",
         )
-    verts, _ = _vertices_from_h_representation(halfspaces)
     if not verts:
         raise _validation_error(
             "h_representation", "the H-representation defines an empty polytope"

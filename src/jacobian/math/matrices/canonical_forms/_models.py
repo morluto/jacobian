@@ -30,14 +30,13 @@ from jacobian.math.polynomials.values import (
 MAX_CANONICAL_FORM_DIMENSION = 16
 MAX_CANONICAL_FORM_SCALAR_DIGITS = 256
 
-# A Horner pass performs ``degree`` dense n-by-n products. Ordinary execution
-# performs one producer pass and result construction performs one independent
-# source-bound replay. This limit therefore admits at most 2,000,000 scalar
-# product terms per pass and bounds every accepted exact call before SymPy.
+# A Horner pass performs ``degree`` dense n-by-n products. The retained
+# conservative envelope permits one producer pass and one independently
+# verifiable replay without widening this established public admission bound.
 MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS = 4_000_000
 MATRIX_POLYNOMIAL_EVALUATION_PASSES = 2
 # Couple exact operation count to the largest admitted rational component.
-# Reference cases, including result replay: a dense 32x32 degree-61 request
+# Reference cases, including explicit verification: a dense 32x32 degree-61 request
 # costs about 33 billion proxy units and 1.5 seconds; a 1x1 degree-327 request
 # with a 32,701-digit denominator costs about 700 billion units and one second.
 MAX_MATRIX_POLYNOMIAL_DIGIT_WORK = 1_000_000_000_000
@@ -1382,7 +1381,12 @@ class MatrixPolynomialEvaluationRequest(StrictModel):
 
 
 class MatrixPolynomialEvaluationResult(StrictModel):
-    """Source-bound exact value of one polynomial at one rational matrix."""
+    """Exact value of one polynomial at one rational matrix.
+
+    Kernel-produced instances use :meth:`_from_kernel`. This transport model
+    checks source/value shape and declared Horner accounting only;
+    independently supplied claims use an explicit bounded verifier.
+    """
 
     source_matrix: RationalMatrix
     polynomial: RationalPolynomial
@@ -1401,12 +1405,8 @@ class MatrixPolynomialEvaluationResult(StrictModel):
     method: Literal["HORNER_OVER_QQ"] = "HORNER_OVER_QQ"
 
     @model_validator(mode="after")
-    def bind_exact_evaluation(self) -> Self:
-        request = MatrixPolynomialEvaluationRequest(
-            matrix=self.source_matrix,
-            polynomial=self.polynomial,
-        )
-        expected_degree = _mathematical_polynomial_degree(request.polynomial)
+    def require_structural_accounting(self) -> Self:
+        expected_degree = _mathematical_polynomial_degree(self.polynomial)
         if self.polynomial_degree != expected_degree:
             raise _validation_error(
                 "budget_exceeded",
@@ -1418,23 +1418,38 @@ class MatrixPolynomialEvaluationResult(StrictModel):
                 "budget_exceeded",
                 "Horner matrix multiplication count must equal the polynomial degree",
             )
-        dimension = len(request.matrix.entries)
+        dimension = len(self.source_matrix.entries)
+        if len(self.value.entries) != dimension or any(
+            len(row) != dimension for row in self.value.entries
+        ):
+            raise _validation_error(
+                "shape_mismatch",
+                "matrix polynomial value must have the source matrix shape",
+            )
         if self.scalar_product_terms != expected_multiplications * dimension**3:
             raise _validation_error(
                 "shape_mismatch",
                 "Horner scalar-product count must equal degree times matrix order cubed",
             )
-        from jacobian.math.matrices.canonical_forms._operations import (
-            evaluate_matrix_polynomial_value,
-        )
-
-        expected = evaluate_matrix_polynomial_value(request)
-        if self.value != expected:
-            raise _validation_error(
-                "budget_exceeded",
-                "matrix polynomial value does not equal the retained exact evaluation",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        request: MatrixPolynomialEvaluationRequest,
+        value: RationalMatrix,
+    ) -> Self:
+        polynomial_degree = _mathematical_polynomial_degree(request.polynomial)
+        return cls(
+            source_matrix=request.matrix,
+            polynomial=request.polynomial,
+            value=value,
+            polynomial_degree=polynomial_degree,
+            matrix_multiplications=polynomial_degree or 0,
+            scalar_product_terms=(polynomial_degree or 0)
+            * len(request.matrix.entries) ** 3,
+        )
 
 
 class SquareMatrixRequest(StrictModel):
@@ -1483,11 +1498,9 @@ class MonicPolynomial(StrictModel):
 class MinimalPolynomialResult(StrictModel):
     """Exact minimal polynomial of a square rational matrix.
 
-    Retains the source matrix so validation replays the defining relations:
-    the claimed polynomial is monic of the claimed degree, annihilates the
-    retained matrix, and equals the exact minimal polynomial re-derived
-    from that matrix; the characteristic polynomial must be the matrix's.
-    Annihilation alone never upgrades a polynomial to minimality.
+    Retains source and structural polynomial metadata. Kernel output uses
+    :meth:`_from_kernel`; independently supplied claims use an explicit
+    bounded defining-invariant verifier.
     """
 
     matrix: SquareMatrixRequest
@@ -1497,51 +1510,34 @@ class MinimalPolynomialResult(StrictModel):
     method: Literal["KRYLOV_NULLSPACE"] = "KRYLOV_NULLSPACE"
 
     @model_validator(mode="after")
-    def require_source_bound(self) -> Self:
-        from jacobian.math.matrices.canonical_forms._replay import (
-            _coefficients_of,
-            _matrix_entries,
-            _matrix_from_request,
-            _polynomial_degree,
-        )
-        from jacobian.math.matrices.canonical_forms.operations import (
-            characteristic_polynomial as replay_characteristic,
-        )
-        from jacobian.math.matrices.canonical_forms.operations import (
-            minimal_polynomial as replay_minimal,
-        )
-
-        if self.degree != _polynomial_degree(self.minimal_polynomial):
+    def require_structural_metadata(self) -> Self:
+        if self.degree != len(self.minimal_polynomial.coefficients) - 1:
             raise _validation_error(
                 "invariant_mismatch", "degree must equal the minimal-polynomial degree"
             )
-        entries = _matrix_entries(self.matrix.matrix)
-        if _coefficients_of(self.minimal_polynomial) != tuple(replay_minimal(entries)):
-            raise _validation_error(
-                "invariant_mismatch",
-                "minimal polynomial must be the exact minimal polynomial of "
-                "the retained matrix",
-            )
-        if _coefficients_of(self.characteristic_polynomial) != tuple(
-            replay_characteristic(entries)
+        if len(self.characteristic_polynomial.coefficients) - 1 != len(
+            self.matrix.matrix.entries
         ):
             raise _validation_error(
                 "shape_mismatch",
-                "characteristic polynomial must be the characteristic "
-                "polynomial of the retained matrix",
-            )
-        matrix = _matrix_from_request(self.matrix)
-        evaluated = matrix.zeros(matrix.rows, matrix.cols)
-        power = matrix.eye(matrix.rows)
-        for coefficient in self.minimal_polynomial.coefficients:
-            evaluated = evaluated + power * coefficient.as_fraction()
-            power = power * matrix
-        if evaluated != matrix.zeros(matrix.rows, matrix.cols):
-            raise _validation_error(
-                "shape_mismatch",
-                "minimal polynomial must annihilate the retained matrix",
+                "characteristic-polynomial degree must equal matrix order",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        matrix: SquareMatrixRequest,
+        minimal_polynomial: MonicPolynomial,
+        characteristic_polynomial: MonicPolynomial,
+    ) -> Self:
+        return cls(
+            matrix=matrix,
+            minimal_polynomial=minimal_polynomial,
+            characteristic_polynomial=characteristic_polynomial,
+            degree=len(minimal_polynomial.coefficients) - 1,
+        )
 
 
 class InvariantFactorEntry(StrictModel):
@@ -1554,12 +1550,9 @@ class InvariantFactorEntry(StrictModel):
 class RationalCanonicalFormResult(StrictModel):
     """Exact rational (Frobenius) canonical form of a square rational matrix.
 
-    Retains the source matrix so validation replays the invariant-factor
-    relations: each block size equals its factor's degree, sizes total the
-    matrix dimension, factors divide successively, their product equals the
-    characteristic polynomial of the retained matrix, the last factor
-    is that matrix's minimal polynomial, and the claimed tuple equals the
-    exact invariant-factor tuple re-derived from the retained matrix.
+    Retains source and structural metadata. Kernel output uses
+    :meth:`_from_kernel`; independently supplied claims use an explicit
+    bounded defining-invariant verifier.
     """
 
     matrix: SquareMatrixRequest
@@ -1570,25 +1563,8 @@ class RationalCanonicalFormResult(StrictModel):
     method: Literal["SMITH_NORMAL_FORM"] = "SMITH_NORMAL_FORM"
 
     @model_validator(mode="after")
-    def require_source_bound(self) -> Self:
-        from jacobian.math.matrices.canonical_forms._replay import (
-            _coefficients_of,
-            _matrix_entries,
-            _poly_from_monic,
-            _polynomial_degree,
-        )
-        from jacobian.math.matrices.canonical_forms.operations import (
-            characteristic_polynomial as replay_characteristic,
-        )
-        from jacobian.math.matrices.canonical_forms.operations import (
-            invariant_factors as replay_invariant_factors,
-        )
-        from jacobian.math.matrices.canonical_forms.operations import (
-            minimal_polynomial as replay_minimal,
-        )
-
-        entries = _matrix_entries(self.matrix.matrix)
-        dimension = len(entries)
+    def require_structural_metadata(self) -> Self:
+        dimension = len(self.matrix.matrix.entries)
         if self.total_block_size != sum(
             entry.block_size for entry in self.invariant_factors
         ):
@@ -1600,71 +1576,41 @@ class RationalCanonicalFormResult(StrictModel):
                 "shape_mismatch", "block sizes must total the matrix dimension"
             )
         for entry in self.invariant_factors:
-            if entry.block_size != _polynomial_degree(entry.factor):
+            if entry.block_size != len(entry.factor.coefficients) - 1:
                 raise _validation_error(
                     "invariant_mismatch", "each block size must equal its factor degree"
                 )
-
-        if _coefficients_of(self.minimal_polynomial) != tuple(replay_minimal(entries)):
-            raise _validation_error(
-                "invariant_mismatch",
-                "minimal polynomial must be the exact minimal polynomial of "
-                "the retained matrix",
-            )
-        if _coefficients_of(self.characteristic_polynomial) != tuple(
-            replay_characteristic(entries)
-        ):
-            raise _validation_error(
-                "invariant_mismatch",
-                "characteristic polynomial must be the characteristic "
-                "polynomial of the retained matrix",
-            )
-
-        previous = None
-        product = None
-        for entry in self.invariant_factors:
-            factor = _poly_from_monic(entry.factor)
-            if previous is not None:
-                _quotient, remainder = factor.div(previous)
-                if remainder.as_expr() != 0:
-                    raise _validation_error(
-                        "invariant_mismatch",
-                        "invariant factors must divide successively",
-                    )
-            product = factor if product is None else product * factor
-            previous = factor
-        characteristic = _poly_from_monic(self.characteristic_polynomial)
-        if product is None or product.as_expr() != characteristic.as_expr():
-            raise _validation_error(
-                "invariant_mismatch",
-                "invariant factors must multiply to the characteristic polynomial",
-            )
-        last_factor = _poly_from_monic(self.invariant_factors[-1].factor)
-        minimal = _poly_from_monic(self.minimal_polynomial)
-        if last_factor.as_expr() != minimal.as_expr():
+        if self.invariant_factors[-1].factor != self.minimal_polynomial:
             raise _validation_error(
                 "invariant_mismatch",
                 "the final invariant factor is the minimal polynomial",
             )
-        if tuple(
-            _coefficients_of(entry.factor) for entry in self.invariant_factors
-        ) != tuple(replay_invariant_factors(entries)):
-            raise _validation_error(
-                "invariant_mismatch",
-                "invariant factors must be the exact invariant factors of "
-                "the retained matrix",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        matrix: SquareMatrixRequest,
+        invariant_factors: tuple[InvariantFactorEntry, ...],
+        characteristic_polynomial: MonicPolynomial,
+        minimal_polynomial: MonicPolynomial,
+    ) -> Self:
+        return cls(
+            matrix=matrix,
+            invariant_factors=invariant_factors,
+            characteristic_polynomial=characteristic_polynomial,
+            minimal_polynomial=minimal_polynomial,
+            total_block_size=sum(entry.block_size for entry in invariant_factors),
+        )
 
 
 class PrimaryDecompositionResult(StrictModel):
     """Primary decomposition of the minimal polynomial into irreducible-power components.
 
-    Retains the source matrix so validation replays the defining relations:
-    every component is one monic irreducible power, components are pairwise
-    coprime, and their product equals the source minimal polynomial
-    re-derived from the retained matrix (for pairwise-coprime components the
-    product equals their least common multiple).
+    Retains source and component values. Kernel output uses :meth:`_from_kernel`;
+    independently supplied claims use an explicit bounded defining-invariant
+    verifier.
     """
 
     matrix: SquareMatrixRequest
@@ -1673,50 +1619,29 @@ class PrimaryDecompositionResult(StrictModel):
     method: Literal["FACTOR_LCM"] = "FACTOR_LCM"
 
     @model_validator(mode="after")
-    def require_source_bound(self) -> Self:
-        from jacobian.math.matrices.canonical_forms._replay import (
-            _coefficients_of,
-            _matrix_entries,
-            _poly_from_monic,
-        )
-        from jacobian.math.matrices.canonical_forms.operations import (
-            minimal_polynomial as replay_minimal,
-        )
-
-        entries = _matrix_entries(self.matrix.matrix)
-
-        if _coefficients_of(self.minimal_polynomial) != tuple(replay_minimal(entries)):
+    def require_structural_metadata(self) -> Self:
+        if len(self.minimal_polynomial.coefficients) - 1 > len(
+            self.matrix.matrix.entries
+        ):
             raise _validation_error(
-                "field_mismatch",
-                "minimal polynomial must be the exact minimal polynomial of "
-                "the retained matrix",
-            )
-
-        component_polys = [_poly_from_monic(component) for component in self.components]
-        for component in component_polys:
-            _content, factors = component.factor_list()
-            if len(factors) != 1:
-                raise _validation_error(
-                    "invariant_mismatch",
-                    "each primary component must be one monic irreducible power",
-                )
-        for index, first in enumerate(component_polys):
-            for second in component_polys[index + 1 :]:
-                if first.gcd(second).degree() >= 1:
-                    raise _validation_error(
-                        "invariant_mismatch",
-                        "primary components must be pairwise coprime",
-                    )
-        product = component_polys[0]
-        for component in component_polys[1:]:
-            product = product * component
-        minimal = _poly_from_monic(self.minimal_polynomial)
-        if product.as_expr() != minimal.as_expr():
-            raise _validation_error(
-                "budget_exceeded",
-                "primary components must multiply to the claimed minimal polynomial",
+                "shape_mismatch",
+                "minimal-polynomial degree cannot exceed matrix order",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        matrix: SquareMatrixRequest,
+        components: tuple[MonicPolynomial, ...],
+        minimal_polynomial: MonicPolynomial,
+    ) -> Self:
+        return cls(
+            matrix=matrix,
+            components=components,
+            minimal_polynomial=minimal_polynomial,
+        )
 
 
 __all__ = [

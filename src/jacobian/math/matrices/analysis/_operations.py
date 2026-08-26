@@ -15,8 +15,9 @@ from jacobian.math.matrices.analysis._models import (
     RationalSpectrumFailure,
     RationalSpectrumNullityLedgerEntry,
     SymmetricMatrixRequest,
+    _canonical_source_matrix,
 )
-from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
+from jacobian.math.matrices.values import RationalMatrix
 
 
 def _exact_shifted_nullities(
@@ -62,18 +63,13 @@ def check_rational_spectrum_claim(
     ledger, claimed_sum, established_sum, mismatch, failure = (
         _replay_rational_spectrum_claim(request)
     )
-    valid = failure is None
-    return RationalSpectrumClaimResult(
-        matrix=request.matrix,
-        claimed_profile=request.claimed_profile,
+    return RationalSpectrumClaimResult._from_kernel(
+        request=request,
         nullity_ledger=ledger,
-        matrix_order=len(request.matrix.entries),
         claimed_multiplicity_sum=claimed_sum,
         established_multiplicity_sum=established_sum,
-        outcome="VALID" if valid else "INVALID",
-        valid_complete_rational_spectrum=valid,
-        first_failed_condition=failure,
         first_failed_claim_index=mismatch,
+        first_failed_condition=failure,
     )
 
 
@@ -114,6 +110,27 @@ def _replay_rational_spectrum_claim(
     return ledger, claimed_sum, sum(nullities), mismatch, failure
 
 
+def verify_rational_spectrum_claim_result(result: RationalSpectrumClaimResult) -> bool:
+    """Replay an independently supplied spectrum claim in its admitted envelope."""
+
+    request = RationalSpectrumClaimRequest(
+        matrix=result.matrix,
+        claimed_profile=result.claimed_profile,
+    )
+    ledger, claimed_sum, established_sum, mismatch, failure = (
+        _replay_rational_spectrum_claim(request)
+    )
+    expected = RationalSpectrumClaimResult._from_kernel(
+        request=request,
+        nullity_ledger=ledger,
+        claimed_multiplicity_sum=claimed_sum,
+        established_multiplicity_sum=established_sum,
+        first_failed_claim_index=mismatch,
+        first_failed_condition=failure,
+    )
+    return result == expected
+
+
 def _build_matrix(request: SymmetricMatrixRequest) -> list[list[Fraction]]:
     """Build a full symmetric matrix from sparse entries."""
     n = request.dimension
@@ -124,11 +141,6 @@ def _build_matrix(request: SymmetricMatrixRequest) -> list[list[Fraction]]:
         if entry.row != entry.col:
             mat[entry.col][entry.row] = value
     return mat
-
-
-def _canonical_source_matrix(request: SymmetricMatrixRequest) -> RationalMatrix:
-    """Normalize the sparse symmetric request into the canonical dense value."""
-    return rational_matrix_from_fractions(_build_matrix(request))
 
 
 def _dense_fractions(matrix: RationalMatrix) -> list[list[Fraction]]:
@@ -244,30 +256,24 @@ def _symmetric_inertia(matrix: list[list[Fraction]]) -> tuple[int, int, int]:
     return n_pos, n_neg, n_zero
 
 
-def _definiteness_label(n_pos: int, n_neg: int, n_zero: int) -> str:
-    """Return the definiteness label implied by one inertia triple."""
-    if n_zero == 0:
-        if n_neg == 0:
-            return "positive_definite"
-        if n_pos == 0:
-            return "negative_definite"
-        return "indefinite"
-    if n_neg == 0:
-        return "positive_semidefinite"
-    if n_pos == 0:
-        return "negative_semidefinite"
-    return "indefinite"
-
-
 def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
     """Compute the Sylvester inertia of a symmetric rational matrix."""
     n_pos, n_neg, n_zero = _symmetric_inertia(_build_matrix(request))
-    return InertiaResult(
+    return InertiaResult._from_kernel(
         matrix=_canonical_source_matrix(request),
         n_positive=n_pos,
         n_negative=n_neg,
         n_zero=n_zero,
-        definiteness=_definiteness_label(n_pos, n_neg, n_zero),
+    )
+
+
+def verify_inertia_result(result: InertiaResult) -> bool:
+    """Replay an independently supplied inertia claim over its retained matrix."""
+
+    return _symmetric_inertia(_dense_fractions(result.matrix)) == (
+        result.n_positive,
+        result.n_negative,
+        result.n_zero,
     )
 
 
@@ -326,4 +332,6 @@ __all__ = [
     "check_farkas_certificate",
     "check_rational_spectrum_claim",
     "compute_inertia",
+    "verify_inertia_result",
+    "verify_rational_spectrum_claim_result",
 ]

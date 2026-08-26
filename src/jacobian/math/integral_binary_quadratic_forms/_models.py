@@ -99,6 +99,8 @@ class BinaryQuadraticFormEvaluateRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_transportable_value(self) -> Self:
+        _require_representation_coordinate(self.x)
+        _require_representation_coordinate(self.y)
         _require_evaluated_value_bound(self.form, self.x, self.y)
         return self
 
@@ -221,6 +223,16 @@ def _require_evaluated_value_bound(
     return value
 
 
+def _require_representation_coordinate(value: int) -> int:
+    """Validate one coordinate accepted by form evaluation and enumeration."""
+    if not -MAX_REPRESENTATION_COORDINATE <= value <= MAX_REPRESENTATION_COORDINATE:
+        raise _validation_error(
+            "integral_binary_quadratic_form.coordinate_bound",
+            "coordinate exceeds the supported bound",
+        )
+    return value
+
+
 class BinaryQuadraticFormRepresentationsRequest(StrictModel):
     """Request the complete ordered signed representation set of one target."""
 
@@ -275,18 +287,8 @@ class BinaryQuadraticFormRepresentationsResult(StrictModel):
     primitive_count: int = Field(ge=0)
 
     @model_validator(mode="after")
-    def bind_complete_representation_set(self) -> Self:
-        from jacobian.math.integral_binary_quadratic_forms._operations import (
-            _enumerate_representations,
-        )
-
+    def require_result_shape(self) -> Self:
         _require_representation_budget(self.form, self.target)
-        expected = _enumerate_representations(self.form, self.target)
-        if self.representations != expected:
-            raise _validation_error(
-                "integral_binary_quadratic_form.representations_mismatch",
-                "representations must be the complete lexicographically ordered set",
-            )
         if self.count != len(self.representations):
             raise _validation_error(
                 "integral_binary_quadratic_form.count_mismatch",
@@ -299,6 +301,23 @@ class BinaryQuadraticFormRepresentationsResult(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        form: PrimitivePositiveDefiniteBinaryQuadraticForm,
+        target: int,
+        representations: tuple[BinaryQuadraticFormRepresentation, ...],
+    ) -> Self:
+        """Construct a trusted result from the owner-local enumeration kernel."""
+        return cls(
+            form=form,
+            target=target,
+            representations=representations,
+            count=len(representations),
+            primitive_count=sum(row.primitive for row in representations),
+        )
+
 
 class BinaryQuadraticFormCheckResult(StrictModel):
     """Result of checking a binary quadratic form."""
@@ -310,58 +329,19 @@ class BinaryQuadraticFormCheckResult(StrictModel):
     obstruction: str | None = None
     form: PrimitivePositiveDefiniteBinaryQuadraticForm | None = None
 
-    @model_validator(mode="after")
-    def bind_result(self) -> Self:
-        obstruction: str | None = None
-        discriminant = self.b**2 - 4 * self.a * self.c
-        if self.a <= 0:
-            obstruction = "a<=0: form is not positive definite (a must be positive)"
-        elif discriminant >= 0:
-            obstruction = f"discriminant D={discriminant}>=0: only negative discriminants are supported"
-        else:
-            from math import gcd
-
-            divisor = gcd(gcd(abs(self.a), abs(self.b)), abs(self.c))
-            if divisor > 1:
-                obstruction = f"gcd(a,b,c)={divisor}>1: form is not primitive"
-        if self.status == "PRIMITIVE_POSITIVE_DEFINITE":
-            if obstruction is not None:
-                raise _validation_error(
-                    "integral_binary_quadratic_form.accepted_domain_mismatch",
-                    "accepted form must satisfy the initial domain",
-                )
-            if self.form is None:
-                raise _validation_error(
-                    "integral_binary_quadratic_form.accepted_form_missing",
-                    "accepted form must carry the canonical form value",
-                )
-            if (self.form.a, self.form.b, self.form.c) != (self.a, self.b, self.c):
-                raise _validation_error(
-                    "integral_binary_quadratic_form.checked_coefficients_mismatch",
-                    "canonical form must match the checked coefficients",
-                )
-            if self.obstruction is not None:
-                raise _validation_error(
-                    "integral_binary_quadratic_form.accepted_obstruction",
-                    "accepted form cannot carry an obstruction",
-                )
-        else:
-            if obstruction is None:
-                raise _validation_error(
-                    "integral_binary_quadratic_form.invalid_domain_status",
-                    "valid form cannot be classified outside the initial domain",
-                )
-            if self.form is not None:
-                raise _validation_error(
-                    "integral_binary_quadratic_form.rejected_form_present",
-                    "rejected form cannot carry a canonical form value",
-                )
-            if self.obstruction != obstruction:
-                raise _validation_error(
-                    "integral_binary_quadratic_form.obstruction_mismatch",
-                    "obstruction must match the checked coefficients",
-                )
-        return self
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        a: int,
+        b: int,
+        c: int,
+        status: Literal["PRIMITIVE_POSITIVE_DEFINITE", "NOT_IN_INITIAL_DOMAIN"],
+        obstruction: str | None = None,
+        form: PrimitivePositiveDefiniteBinaryQuadraticForm | None = None,
+    ) -> Self:
+        """Construct a trusted result from the owner-local domain check."""
+        return cls(a=a, b=b, c=c, status=status, obstruction=obstruction, form=form)
 
 
 class BinaryQuadraticFormEvaluateResult(StrictModel):
@@ -370,30 +350,21 @@ class BinaryQuadraticFormEvaluateResult(StrictModel):
     form: PrimitivePositiveDefiniteBinaryQuadraticForm
     x: int = Field(ge=-MAX_REPRESENTATION_COORDINATE, le=MAX_REPRESENTATION_COORDINATE)
     y: int = Field(ge=-MAX_REPRESENTATION_COORDINATE, le=MAX_REPRESENTATION_COORDINATE)
-    value: int
+    value: int = Field(ge=0, le=MAX_EVALUATED_VALUE)
     primitive: bool
 
-    @model_validator(mode="after")
-    def bind_value(self) -> Self:
-        from jacobian.math.integral_binary_quadratic_forms._operations import (
-            _evaluate,
-            _gcd,
-        )
-
-        _require_evaluated_value_bound(self.form, self.x, self.y)
-        value = _evaluate(self.form.a, self.form.b, self.form.c, self.x, self.y)
-        if self.value != value:
-            raise _validation_error(
-                "integral_binary_quadratic_form.value_mismatch",
-                "value must be a*x^2 + b*x*y + c*y^2",
-            )
-        primitive = _gcd(self.x, self.y) == 1
-        if self.primitive != primitive:
-            raise _validation_error(
-                "integral_binary_quadratic_form.primitive_mismatch",
-                "primitive must be gcd(x,y)==1",
-            )
-        return self
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        form: PrimitivePositiveDefiniteBinaryQuadraticForm,
+        x: int,
+        y: int,
+        value: int,
+        primitive: bool,
+    ) -> Self:
+        """Construct a trusted result from the owner-local evaluation kernel."""
+        return cls(form=form, x=x, y=y, value=value, primitive=primitive)
 
 
 class ReducedBinaryQuadraticFormResult(StrictModel):
@@ -403,47 +374,16 @@ class ReducedBinaryQuadraticFormResult(StrictModel):
     reduced_form: PrimitivePositiveDefiniteBinaryQuadraticForm
     matrix: tuple[tuple[int, int], tuple[int, int]]
 
-    @model_validator(mode="after")
-    def bind_reduction(self) -> Self:
-        from jacobian.math.integral_binary_quadratic_forms._operations import (
-            _check_reduced,
-        )
-
-        if not _check_reduced(
-            self.reduced_form.a, self.reduced_form.b, self.reduced_form.c
-        ):
-            raise _validation_error(
-                "integral_binary_quadratic_form.reduced_form_invalid",
-                "reduced form must satisfy |b|<=a<=c with tie-breaking",
-            )
-        p, q = self.matrix[0]
-        r, s = self.matrix[1]
-        if p * s - q * r != 1:
-            raise _validation_error(
-                "integral_binary_quadratic_form.transformation_determinant",
-                "transformation matrix must have determinant 1",
-            )
-        ra, rb, rc = _transform(self.form.a, self.form.b, self.form.c, p, q, r, s)
-        if (ra, rb, rc) != (
-            self.reduced_form.a,
-            self.reduced_form.b,
-            self.reduced_form.c,
-        ):
-            raise _validation_error(
-                "integral_binary_quadratic_form.transformation_mismatch",
-                "transformation must map original to reduced form",
-            )
-        return self
-
-
-def _transform(
-    a: int, b: int, c: int, p: int, q: int, r: int, s: int
-) -> tuple[int, int, int]:
-    """Apply SL_2(Z) transformation U=[[p,q],[r,s]] to form [a,b,c]."""
-    na = a * p * p + b * p * r + c * r * r
-    nb = 2 * a * p * q + b * (p * s + q * r) + 2 * c * r * s
-    nc = a * q * q + b * q * s + c * s * s
-    return na, nb, nc
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        form: PrimitivePositiveDefiniteBinaryQuadraticForm,
+        reduced_form: PrimitivePositiveDefiniteBinaryQuadraticForm,
+        matrix: tuple[tuple[int, int], tuple[int, int]],
+    ) -> Self:
+        """Construct a trusted result from the owner-local reduction kernel."""
+        return cls(form=form, reduced_form=reduced_form, matrix=matrix)
 
 
 class ProperEquivalenceResult(StrictModel):
@@ -454,48 +394,17 @@ class ProperEquivalenceResult(StrictModel):
     status: Literal["PROPERLY_EQUIVALENT", "NOT_PROPERLY_EQUIVALENT"]
     matrix: tuple[tuple[int, int], tuple[int, int]] | None = None
 
-    @model_validator(mode="after")
-    def bind_equivalence(self) -> Self:
-        from jacobian.math.integral_binary_quadratic_forms._operations import _reduce
-
-        first_reduced = _reduce(self.first.a, self.first.b, self.first.c)[:3]
-        second_reduced = _reduce(self.second.a, self.second.b, self.second.c)[:3]
-        equivalent = (
-            self.first.discriminant == self.second.discriminant
-            and first_reduced == second_reduced
-        )
-        if (self.status == "PROPERLY_EQUIVALENT") != equivalent:
-            raise _validation_error(
-                "integral_binary_quadratic_form.equivalence_status_mismatch",
-                "status must match canonical proper-equivalence decision",
-            )
-        if self.status == "PROPERLY_EQUIVALENT" and self.matrix is None:
-            raise _validation_error(
-                "integral_binary_quadratic_form.equivalence_witness_missing",
-                "proper equivalence requires a witness matrix",
-            )
-        if self.status == "PROPERLY_EQUIVALENT" and self.matrix is not None:
-            p, q = self.matrix[0]
-            r, s = self.matrix[1]
-            if p * s - q * r != 1:
-                raise _validation_error(
-                    "integral_binary_quadratic_form.witness_determinant",
-                    "witness matrix must have determinant 1",
-                )
-            ta, tb, tc = _transform(
-                self.first.a, self.first.b, self.first.c, p, q, r, s
-            )
-            if (ta, tb, tc) != (self.second.a, self.second.b, self.second.c):
-                raise _validation_error(
-                    "integral_binary_quadratic_form.witness_mismatch",
-                    "witness must map first to second form",
-                )
-        if self.status == "NOT_PROPERLY_EQUIVALENT" and self.matrix is not None:
-            raise _validation_error(
-                "integral_binary_quadratic_form.nonequivalence_witness",
-                "nonequivalence cannot carry a witness matrix",
-            )
-        return self
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        first: PrimitivePositiveDefiniteBinaryQuadraticForm,
+        second: PrimitivePositiveDefiniteBinaryQuadraticForm,
+        status: Literal["PROPERLY_EQUIVALENT", "NOT_PROPERLY_EQUIVALENT"],
+        matrix: tuple[tuple[int, int], tuple[int, int]] | None = None,
+    ) -> Self:
+        """Construct a trusted result from the owner-local equivalence kernel."""
+        return cls(first=first, second=second, status=status, matrix=matrix)
 
 
 class ReducedClassesResult(StrictModel):
@@ -508,41 +417,25 @@ class ReducedClassesResult(StrictModel):
     class_number: int
 
     @model_validator(mode="after")
-    def bind_classes(self) -> Self:
-        from jacobian.math.integral_binary_quadratic_forms._operations import (
-            _check_reduced,
-        )
-
+    def require_result_shape(self) -> Self:
         if self.class_number != len(self.classes):
             raise _validation_error(
                 "integral_binary_quadratic_form.class_number_mismatch",
                 "class_number must equal the number of classes",
             )
         _require_reduced_class_search_budget(self.discriminant)
-        for form in self.classes:
-            if form.discriminant != self.discriminant:
-                raise _validation_error(
-                    "integral_binary_quadratic_form.class_discriminant_mismatch",
-                    "every class must have the requested discriminant",
-                )
-            if not _check_reduced(form.a, form.b, form.c):
-                raise _validation_error(
-                    "integral_binary_quadratic_form.class_not_reduced",
-                    "every class must be reduced",
-                )
-        seen = set(self.classes)
-        if len(seen) != len(self.classes):
-            raise _validation_error(
-                "integral_binary_quadratic_form.classes_not_distinct",
-                "classes must be distinct",
-            )
-        from jacobian.math.integral_binary_quadratic_forms._operations import (
-            _enumerate_reduced_classes,
-        )
-
-        if self.classes != _enumerate_reduced_classes(self.discriminant):
-            raise _validation_error(
-                "integral_binary_quadratic_form.classes_incomplete",
-                "classes must be the complete reduced class set",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        discriminant: int,
+        classes: tuple[PrimitivePositiveDefiniteBinaryQuadraticForm, ...],
+    ) -> Self:
+        """Construct a trusted result from the owner-local class enumerator."""
+        return cls(
+            discriminant=discriminant,
+            classes=classes,
+            class_number=len(classes),
+        )

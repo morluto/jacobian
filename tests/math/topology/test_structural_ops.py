@@ -6,35 +6,37 @@ from pydantic import ValidationError
 from jacobian.math.topology._models import (
     BarycentricSubdivisionRequest,
     BarycentricSubdivisionResult,
+    ShellingCheckRequest,
+    ShellingCheckResult,
+    SimplicialComplexRequest,
+)
+from jacobian.math.topology._operations import (
+    _CANONICAL_CIRCLE,
+    _canonical_complex,
+    compute_barycentric_subdivision,
+    compute_pseudomanifold_decision,
+    compute_shelling_check,
+)
+from jacobian.math.topology._pseudomanifold import (
+    PseudomanifoldRequest,
+    PseudomanifoldResult,
+)
+from jacobian.math.topology._structural import (
     ElementaryCollapseRequest,
     ElementaryCollapseResult,
     JoinRequest,
     JoinResult,
-    ShellingCheckRequest,
-    ShellingCheckResult,
-    SimplicialComplexRequest,
     SkeletonRequest,
     SkeletonResult,
     StarRequest,
     StarResult,
     VertexDeletionRequest,
     VertexDeletionResult,
-)
-from jacobian.math.topology._operations import (
-    _CANONICAL_CIRCLE,
-    _canonical_complex,
-    compute_barycentric_subdivision,
     compute_elementary_collapse,
     compute_join,
-    compute_pseudomanifold_decision,
-    compute_shelling_check,
     compute_skeleton,
     compute_star,
     compute_vertex_deletion,
-)
-from jacobian.math.topology._pseudomanifold import (
-    PseudomanifoldRequest,
-    PseudomanifoldResult,
 )
 from jacobian.math.topology._tools import TOOLS
 

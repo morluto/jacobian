@@ -17,6 +17,7 @@ from jacobian.math.matrices.analysis._models import (
 )
 from jacobian.math.matrices.analysis._operations import (
     check_rational_spectrum_claim,
+    verify_rational_spectrum_claim_result,
 )
 
 
@@ -214,7 +215,7 @@ def test_invalid_request_domain_is_rejected_before_backend(
         _request(entries, claims)
 
 
-def test_source_claim_ledger_and_conclusion_mutations_cannot_revalidate() -> None:
+def test_result_structure_rejects_misaligned_claim_data() -> None:
     result = check_rational_spectrum_claim(
         _request(
             [[_rational(1), _rational(0)], [_rational(0), _rational(2)]],
@@ -223,7 +224,6 @@ def test_source_claim_ledger_and_conclusion_mutations_cannot_revalidate() -> Non
     )
 
     mutations: tuple[Callable[[dict[str, Any]], None], ...] = (
-        _mutate_source_matrix,
         _mutate_claim,
         _mutate_nullity,
         _mutate_validity,
@@ -234,6 +234,21 @@ def test_source_claim_ledger_and_conclusion_mutations_cannot_revalidate() -> Non
         mutate(forged)
         with pytest.raises(ValidationError):
             RationalSpectrumClaimResult.model_validate(forged)
+
+
+def test_explicit_verifier_rejects_a_structurally_valid_forged_source() -> None:
+    result = check_rational_spectrum_claim(
+        _request(
+            [[_rational(1), _rational(0)], [_rational(0), _rational(2)]],
+            [_claim(1, 1), _claim(2, 1)],
+        )
+    )
+    forged = deepcopy(result.model_dump(mode="json"))
+    _mutate_source_matrix(forged)
+
+    supplied = RationalSpectrumClaimResult.model_validate(forged)
+
+    assert verify_rational_spectrum_claim_result(supplied) is False
 
 
 def test_simultaneous_row_column_permutation_preserves_claim() -> None:

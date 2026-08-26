@@ -56,7 +56,7 @@ def _result(
     b2_exchange_instances_checked: int,
     obstruction: B2Obstruction | None,
 ) -> ChirotopeCheckResult:
-    return ChirotopeCheckResult.model_construct(
+    return ChirotopeCheckResult._from_kernel(
         chirotope=chirotope,
         status=status,
         b2_exchange_instances_checked=b2_exchange_instances_checked,
@@ -64,7 +64,7 @@ def _result(
     )
 
 
-def _expected_result(request: ChirotopeCheckRequest) -> ChirotopeCheckResult:
+def _compute_result(chirotope: UniformRank3Chirotope) -> ChirotopeCheckResult:
     """Exhaustively check the complete rank-3 B2 axiom.
 
     The materialized request pre-bounds the direct enumeration: at most
@@ -73,7 +73,6 @@ def _expected_result(request: ChirotopeCheckRequest) -> ChirotopeCheckResult:
     table.
     """
 
-    chirotope = request.chirotope
     table = _table(chirotope)
     ordered_triples = _ordered_triples(chirotope.ground_size)
     values = {triple: _alternating_value(table, triple) for triple in ordered_triples}
@@ -131,14 +130,15 @@ def _expected_result(request: ChirotopeCheckRequest) -> ChirotopeCheckResult:
 
 
 def check_chirotope(request: ChirotopeCheckRequest) -> ChirotopeCheckResult:
-    """Return a result after producer and source-bound replay scans.
+    """Return the exact result of one bounded B2 enumeration."""
 
-    The reported count describes the first mathematical scan. Constructing the
-    result through ``model_validate`` performs the mandatory second replay scan;
-    admission reserves both scans before this function is entered.
-    """
-
-    return ChirotopeCheckResult.model_validate(_expected_result(request).model_dump())
+    return _compute_result(request.chirotope)
 
 
-__all__ = ["check_chirotope"]
+def verify_chirotope_check_result(result: ChirotopeCheckResult) -> bool:
+    """Verify an independently supplied exact claim in the admitted envelope."""
+
+    return result == _compute_result(result.chirotope)
+
+
+__all__ = ["check_chirotope", "verify_chirotope_check_result"]

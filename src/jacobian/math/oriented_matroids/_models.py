@@ -20,13 +20,8 @@ MAX_CHIROTOPE_ENTRIES = 120
 MAX_B2_EXCHANGE_INSTANCES = MAX_GROUND_SIZE**6
 """The complete B2 negative-case work bound for one mathematical scan."""
 
-SOURCE_BOUND_REPLAY_PASSES = 2
-"""One producer scan plus mandatory result-validation replay."""
-
-MAX_EXECUTION_B2_EXCHANGE_INSTANCES = (
-    SOURCE_BOUND_REPLAY_PASSES * MAX_B2_EXCHANGE_INSTANCES
-)
-"""The work envelope charged by one public checker invocation."""
+MAX_EXECUTION_B2_EXCHANGE_INSTANCES = MAX_B2_EXCHANGE_INSTANCES
+"""The one producer-scan work envelope charged by the public checker."""
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -66,8 +61,8 @@ class UniformRank3Chirotope(StrictModel):
         le=MAX_GROUND_SIZE,
         description=(
             "Number n of indexed ground elements 0..n-1. The checker admits "
-            "n <= 10 because it reserves two B2 scans of n^6 pairs: at most "
-            "2,000,000 pair checks per public invocation."
+            "n <= 10 because it reserves one B2 scan of n^6 pairs: at most "
+            "1,000,000 pair checks per public invocation."
         ),
     )
     entries: tuple[Rank3ChirotopeEntry, ...] = Field(
@@ -143,7 +138,12 @@ class ChirotopeCheckRequest(StrictModel):
 
 
 class ChirotopeCheckResult(StrictModel):
-    """A source-bound exact validity result or deterministic first obstruction."""
+    """A structurally bounded validity result or B2-obstruction claim.
+
+    Kernel-produced results use :meth:`_from_kernel`. Use
+    :func:`verify_chirotope_check_result` for an independently supplied exact
+    claim; model validation deliberately does not execute the B2 enumeration.
+    """
 
     chirotope: UniformRank3Chirotope
     status: ChirotopeCheckStatus = Field(
@@ -154,25 +154,53 @@ class ChirotopeCheckResult(StrictModel):
     )
     b2_exchange_instances_checked: StrictInt = Field(
         ge=0,
-        description=(
-            "Pairs checked in one mathematical producer scan. The mandatory "
-            "source-bound replay performs the same scan again but is not added "
-            "to this mathematical count."
-        ),
+        le=MAX_B2_EXCHANGE_INSTANCES,
+        description=("Pairs checked in the mathematical producer scan."),
     )
     obstruction: B2Obstruction | None = None
 
     @model_validator(mode="after")
-    def replay_complete_check(self) -> Self:
-        from jacobian.math.oriented_matroids._operations import _expected_result
-
-        expected = _expected_result(ChirotopeCheckRequest(chirotope=self.chirotope))
-        if self != expected:
+    def require_bounded_result_shape(self) -> Self:
+        if self.b2_exchange_instances_checked > self.chirotope.ground_size**6:
             raise _validation_error(
-                "result.replay",
-                "result must be the exact axiom replay of the retained chirotope",
+                "result.checked_instances",
+                "b2_exchange_instances_checked exceeds the retained table's "
+                "bounded B2 envelope",
+            )
+        if (self.status is ChirotopeCheckStatus.VALID) != (self.obstruction is None):
+            raise _validation_error(
+                "result.status_obstruction",
+                "VALID results have no obstruction and B2_OBSTRUCTION results "
+                "retain one obstruction",
+            )
+        if self.obstruction is not None and any(
+            not 0 <= index < self.chirotope.ground_size
+            for triple in (self.obstruction.x, self.obstruction.y)
+            for index in triple
+        ):
+            raise _validation_error(
+                "result.obstruction_indices",
+                "obstruction triples must use indices in the retained ground set",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        chirotope: UniformRank3Chirotope,
+        status: ChirotopeCheckStatus,
+        b2_exchange_instances_checked: int,
+        obstruction: B2Obstruction | None,
+    ) -> Self:
+        """Construct a result from the trusted bounded checker kernel."""
+
+        return cls.model_construct(
+            chirotope=chirotope,
+            status=status,
+            b2_exchange_instances_checked=b2_exchange_instances_checked,
+            obstruction=obstruction,
+        )
 
 
 __all__ = [
@@ -180,7 +208,6 @@ __all__ = [
     "MAX_CHIROTOPE_ENTRIES",
     "MAX_EXECUTION_B2_EXCHANGE_INSTANCES",
     "MAX_GROUND_SIZE",
-    "SOURCE_BOUND_REPLAY_PASSES",
     "B2Obstruction",
     "ChirotopeCheckRequest",
     "ChirotopeCheckResult",

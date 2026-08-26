@@ -12,7 +12,11 @@ from jacobian.math.matrices._operation_models import (
     RationalLinearSolveRequest,
     RationalLinearSolveResult,
 )
-from jacobian.math.matrices._operations import compute_rational_linear_solve
+from jacobian.math.matrices._operations import (
+    compute_inverse,
+    compute_rational_linear_solve,
+    verify_rational_linear_solve_result,
+)
 
 
 def _matrix(entries: list[list[str]]) -> list[list[dict]]:
@@ -92,16 +96,17 @@ def test_non_unique_system_returns_typed_outcome() -> None:
     assert coefficients.rank() == coefficients.row_join(rhs).rank() < coefficients.cols
 
 
-def test_singular_inverse_rejected() -> None:
-    """Singular matrix inverse is rejected at the request boundary."""
+def test_singular_inverse_rejected_by_the_exact_kernel() -> None:
+    """Request parsing stays structural; the inverse kernel rejects singularity."""
     from jacobian.math.matrices._operation_models import (
         NonsingularIntegerMatrixRequest,
     )
 
-    with pytest.raises(ValidationError):
-        NonsingularIntegerMatrixRequest.model_validate(
-            {"matrix": {"entries": [["1", "2"], ["2", "4"]]}}
-        )
+    request = NonsingularIntegerMatrixRequest.model_validate(
+        {"matrix": {"entries": [["1", "2"], ["2", "4"]]}}
+    )
+    with pytest.raises(ValueError, match="singular"):
+        compute_inverse(request)
 
 
 def _mutable(dumped: dict) -> dict:
@@ -127,6 +132,7 @@ def test_results_retain_their_source_system() -> None:
         assert result.outcome == outcome
         assert result.matrix == request.matrix
         assert result.rhs == request.rhs
+        assert verify_rational_linear_solve_result(result)
         assert (
             RationalLinearSolveResult.model_validate_json(result.model_dump_json())
             == result
@@ -146,8 +152,9 @@ def test_unique_result_rejects_forged_solution_mutations() -> None:
 
     forged_coordinate = copy.deepcopy(dumped)
     forged_coordinate["solution"][1] = {"num": "4", "den": "1"}
-    with pytest.raises(ValidationError):
+    assert not verify_rational_linear_solve_result(
         RationalLinearSolveResult.model_validate(forged_coordinate)
+    )
 
     forged_length = copy.deepcopy(dumped)
     forged_length["solution"] = [
@@ -179,8 +186,9 @@ def test_results_reject_outcome_and_source_mutations() -> None:
 
     flipped_non_unique = copy.deepcopy(inconsistent)
     flipped_non_unique["outcome"] = "NON_UNIQUE"
-    with pytest.raises(ValidationError):
+    assert not verify_rational_linear_solve_result(
         RationalLinearSolveResult.model_validate(flipped_non_unique)
+    )
 
     flipped_unique = copy.deepcopy(inconsistent)
     flipped_unique["outcome"] = "UNIQUE"
@@ -189,13 +197,15 @@ def test_results_reject_outcome_and_source_mutations() -> None:
 
     feasible_source = copy.deepcopy(inconsistent)
     feasible_source["rhs"] = _rhs("0", "0")
-    with pytest.raises(ValidationError):
+    assert not verify_rational_linear_solve_result(
         RationalLinearSolveResult.model_validate(feasible_source)
+    )
 
     nonsingular_source = copy.deepcopy(inconsistent)
     nonsingular_source["matrix"]["entries"] = _matrix([["1", "0"], ["0", "1"]])
-    with pytest.raises(ValidationError):
+    assert not verify_rational_linear_solve_result(
         RationalLinearSolveResult.model_validate(nonsingular_source)
+    )
 
     nonunique_request = RationalLinearSolveRequest.model_validate(
         {
@@ -207,14 +217,16 @@ def test_results_reject_outcome_and_source_mutations() -> None:
 
     flipped_inconsistent = copy.deepcopy(non_unique)
     flipped_inconsistent["outcome"] = "INCONSISTENT"
-    with pytest.raises(ValidationError):
+    assert not verify_rational_linear_solve_result(
         RationalLinearSolveResult.model_validate(flipped_inconsistent)
+    )
 
     singular_to_nonsingular = copy.deepcopy(non_unique)
     singular_to_nonsingular["matrix"]["entries"] = _matrix([["1", "0"], ["0", "1"]])
     singular_to_nonsingular["rhs"] = _rhs("1", "1")
-    with pytest.raises(ValidationError):
+    assert not verify_rational_linear_solve_result(
         RationalLinearSolveResult.model_validate(singular_to_nonsingular)
+    )
 
     unique_request = RationalLinearSolveRequest.model_validate(
         {
@@ -226,8 +238,9 @@ def test_results_reject_outcome_and_source_mutations() -> None:
 
     foreign_rhs = copy.deepcopy(unique)
     foreign_rhs["rhs"] = _rhs("2", "4")
-    with pytest.raises(ValidationError):
+    assert not verify_rational_linear_solve_result(
         RationalLinearSolveResult.model_validate(foreign_rhs)
+    )
 
     # A singular source whose claimed solution still satisfies A x = b
     # exactly: only the nonsingularity replay can reject this forgery.
@@ -237,8 +250,9 @@ def test_results_reject_outcome_and_source_mutations() -> None:
         "outcome": "UNIQUE",
         "solution": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
     }
-    with pytest.raises(ValidationError):
+    assert not verify_rational_linear_solve_result(
         RationalLinearSolveResult.model_validate(singular_source)
+    )
 
 
 def test_serialized_results_round_trip_through_the_wire_shape() -> None:
@@ -274,17 +288,8 @@ def test_serialized_results_round_trip_through_the_wire_shape() -> None:
         assert restored.convention == "LINEAR_SYSTEM_CLASSIFICATION_OVER_QQ"
 
 
-def test_result_reapplies_source_admission_before_replay(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A relayed source outside the work envelope is rejected before replay."""
-
-    import jacobian.math.matrices._operations as operations
-
-    def fail_if_called(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("rank replay ran on an unadmitted source system")
-
-    monkeypatch.setattr(operations, "_system_rank_replay", fail_if_called)
+def test_result_reapplies_source_admission_without_replay() -> None:
+    """A relayed source outside the work envelope is rejected structurally."""
     unadmitted = {
         "matrix": {
             "entries": [

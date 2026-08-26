@@ -276,14 +276,14 @@ class HomologyResult(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def bind_profile_to_source(self) -> Self:
-        # Source-bound replay: the profile must be the exact homology of
-        # the retained complex, with contiguous degrees and the defining
-        # rank identity per group.
-        from jacobian.math.chain_complexes.operations import (
-            _compute_homology_groups,
-        )
+    def require_structural_profile(self) -> Self:
+        """Keep source provenance and the defining rank identity structural.
 
+        Kernel-produced profiles are constructed through ``_from_kernel``.
+        Recomputing ranks here would turn ordinary result decoding into a
+        second execution of the operation; callers accepting an independent
+        profile use ``verify_homology_result`` instead.
+        """
         if (
             self.degree_min != self.complex.degree_min
             or self.degree_max != self.complex.degree_max
@@ -321,13 +321,23 @@ class HomologyResult(StrictModel):
                     f"homology group at degree {group.degree} violates "
                     "betti_number = cycle_rank - boundary_rank",
                 )
-        expected = _compute_homology_groups(self.complex)
-        if self.homology_groups != tuple(expected):
-            raise _validation_error(
-                "homology_not_bound",
-                "homology groups must be the exact homology of the retained complex",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        homology_groups: tuple[HomologyGroupValue, ...],
+        source_complex: ChainComplexValue,
+    ) -> Self:
+        return cls(
+            homology_groups=homology_groups,
+            coefficient_field=source_complex.coefficient_field,
+            prime=source_complex.prime,
+            degree_min=source_complex.degree_min,
+            degree_max=source_complex.degree_max,
+            complex=source_complex,
+        )
 
 
 class MappingConeResult(StrictModel):
@@ -348,25 +358,12 @@ class MappingConeResult(StrictModel):
     value: ChainComplexValue
 
     @model_validator(mode="after")
-    def bind_cone_to_source(self) -> Self:
-        """Replay the defining construction so only the exact mapping
-        cone of the retained chain map validates."""
-        from jacobian.math.chain_complexes._models import (
-            _require_chain_map_components,
-        )
-        from jacobian.math.chain_complexes.operations import (
-            _compute_mapping_cone,
-        )
+    def require_structural_cone(self) -> Self:
+        """Bind projections to the retained canonical cone value.
 
-        # The retained map must satisfy the request contract before the
-        # replay: _matrix_to_fractions zero-pads undersized matrices, so an
-        # unpadded replay alone could bind a cone to a malformed non-map.
-        _require_chain_map_components(
-            self.source,
-            self.target,
-            self.map_matrices,
-            label="mapping cone",
-        )
+        The explicit owner verifier checks that this value is the cone of
+        the retained map.  Result construction itself remains non-executing.
+        """
         if (
             self.source_degree_min != self.source.degree_min
             or self.target_degree_min != self.target.degree_min
@@ -375,26 +372,14 @@ class MappingConeResult(StrictModel):
                 "cone_degree_provenance_mismatch",
                 "cone degree provenance must match the retained endpoints",
             )
-        basis_sizes, differential_matrices = _compute_mapping_cone(
-            self.source, self.target, self.map_matrices
-        )
-        if (
-            self.cone_basis_sizes != basis_sizes
-            or self.cone_differential_matrices != differential_matrices
+        if self.cone_basis_sizes != self.value.basis_sizes or (
+            self.cone_differential_matrices != self.value.differential_matrices
         ):
             raise _validation_error(
-                "cone_not_bound",
-                "cone must be the exact mapping cone of the retained chain map",
+                "cone_projection_not_bound",
+                "cone projections must equal the retained canonical value",
             )
-        if (
-            self.value.basis_sizes != basis_sizes
-            or self.value.differential_matrices != differential_matrices
-        ):
-            raise _validation_error(
-                "cone_value_not_bound",
-                "retained canonical value must equal the exact mapping cone",
-            )
-        expected_degree_max = self.source.degree_min + len(basis_sizes) - 1
+        expected_degree_max = self.source.degree_min + len(self.value.basis_sizes) - 1
         if (
             self.value.coefficient_field != self.source.coefficient_field
             or self.value.prime != self.source.prime
@@ -406,6 +391,28 @@ class MappingConeResult(StrictModel):
                 "canonical value context must match the retained endpoints",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        cone_basis_sizes: tuple[int, ...],
+        cone_differential_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+        source: ChainComplexValue,
+        target: ChainComplexValue,
+        map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+        value: ChainComplexValue,
+    ) -> Self:
+        return cls(
+            cone_basis_sizes=cone_basis_sizes,
+            cone_differential_matrices=cone_differential_matrices,
+            source_degree_min=source.degree_min,
+            target_degree_min=target.degree_min,
+            source=source,
+            target=target,
+            map_matrices=map_matrices,
+            value=value,
+        )
 
 
 class TensorProductResult(StrictModel):
@@ -428,18 +435,7 @@ class TensorProductResult(StrictModel):
     value: ChainComplexValue
 
     @model_validator(mode="after")
-    def require_consistent_context(self) -> Self:
-        # One canonical tensor-product value carries the mathematical
-        # result; it must be the exact tensor product of the retained
-        # factors, so a revalidated result cannot hold a forged or merely
-        # shape-compatible product.
-        from jacobian.math.chain_complexes._models import (
-            _require_admissible_tensor_work,
-        )
-        from jacobian.math.chain_complexes.operations import (
-            _compute_tensor_product,
-        )
-
+    def require_structural_context(self) -> Self:
         if self.left.prime != self.right.prime or (
             self.left.coefficient_field != self.right.coefficient_field
         ):
@@ -447,8 +443,6 @@ class TensorProductResult(StrictModel):
                 "tensor_context_mismatch",
                 "tensor product requires same coefficient field and prime",
             )
-        # Bound the replay work before expanding any derived intermediate.
-        _require_admissible_tensor_work(self.left, self.right)
         if self.coefficient_field != self.value.coefficient_field:
             raise _validation_error(
                 "tensor_result_field_mismatch",
@@ -458,8 +452,7 @@ class TensorProductResult(StrictModel):
             raise _validation_error(
                 "tensor_result_prime_mismatch", "prime must match the retained value"
             )
-        expected_sizes, expected_diffs = _compute_tensor_product(self.left, self.right)
-        group_count = len(expected_sizes)
+        group_count = len(self.value.basis_sizes)
         derived_min = self.left.degree_min + self.right.degree_min
         derived_max = derived_min + group_count - 1
         if (self.degree_min, self.degree_max) != (derived_min, derived_max):
@@ -468,19 +461,15 @@ class TensorProductResult(StrictModel):
                 "degree interval must equal the pairwise-sum interval of "
                 "the retained factors",
             )
-        expected_value = ChainComplexValue(
-            coefficient_field=self.left.coefficient_field,
-            prime=self.left.prime,
-            degree_min=derived_min,
-            degree_max=derived_max,
-            basis_sizes=expected_sizes,
-            differential_matrices=expected_diffs,
-        )
-        if self.value != expected_value:
+        if (
+            self.value.coefficient_field != self.left.coefficient_field
+            or self.value.prime != self.left.prime
+            or self.value.degree_min != derived_min
+            or self.value.degree_max != derived_max
+        ):
             raise _validation_error(
-                "tensor_value_not_bound",
-                "tensor projections must equal the retained canonical "
-                "tensor-product complex",
+                "tensor_value_context_mismatch",
+                "retained canonical value must have the derived tensor context",
             )
         if self.tensor_basis_sizes != self.value.basis_sizes:
             raise _validation_error(
@@ -502,6 +491,28 @@ class TensorProductResult(StrictModel):
                 "tensor_prime_required", "GF_p tensor products must carry their prime"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        tensor_basis_sizes: tuple[int, ...],
+        tensor_differential_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+        left: ChainComplexValue,
+        right: ChainComplexValue,
+        value: ChainComplexValue,
+    ) -> Self:
+        return cls(
+            tensor_basis_sizes=tensor_basis_sizes,
+            tensor_differential_matrices=tensor_differential_matrices,
+            coefficient_field=left.coefficient_field,
+            prime=left.prime,
+            degree_min=value.degree_min,
+            degree_max=value.degree_max,
+            left=left,
+            right=right,
+            value=value,
+        )
 
 
 __all__ = [
@@ -531,58 +542,48 @@ class VerificationResult(StrictModel):
     map_matrices: tuple[tuple[tuple[str, ...], ...], ...] | None = None
 
     @model_validator(mode="after")
-    def bind_verification_to_source(self) -> Self:
-        """Replay the checked relation against the retained inputs so a
-        detached or forged verdict cannot validate, and require the detail
-        to be the exact authoritative explanation of that replay."""
-        from jacobian.math.chain_complexes._models import (
-            _require_chain_map_components,
-        )
-        from jacobian.math.chain_complexes.operations import (
-            _chain_map_verdict,
-            _differential_verdict,
-        )
-
+    def require_complete_source(self) -> Self:
+        """Require exactly one structurally complete checked relation."""
         if self.complex is not None:
             if self.source or self.target or self.map_matrices:
                 raise _validation_error(
                     "verification_inputs_conflict",
                     "a differential verification result must not carry chain-map inputs",
                 )
-            holds, expected_detail = _differential_verdict(self.complex)
         elif (
             self.source is not None
             and self.target is not None
             and self.map_matrices is not None
         ):
-            # Replay must apply the request model's complete component
-            # and parent checks: otherwise endpoints with different
-            # coefficient fields, primes, or degree intervals validate
-            # by being interpreted under the source modulus alone.
-            _require_chain_map_components(
-                self.source,
-                self.target,
-                self.map_matrices,
-                label="chain-map verification",
-            )
-            holds, expected_detail = _chain_map_verdict(
-                self.source, self.target, self.map_matrices
-            )
+            pass
         else:
             raise _validation_error(
                 "verification_inputs_missing",
                 "a verification result must retain the complete checked "
                 "input (the complex, or both endpoints with their map)",
             )
-        if holds != self.is_valid:
-            raise _validation_error(
-                "verification_verdict_not_bound",
-                "verification verdict must be the exact replay of the retained relation",
-            )
-        if self.detail != expected_detail:
-            raise _validation_error(
-                "verification_detail_not_bound",
-                "verification detail must be the exact explanation of the "
-                "replayed relation",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, *, is_valid: bool, detail: str, source_complex: ChainComplexValue
+    ) -> Self:
+        return cls(is_valid=is_valid, detail=detail, complex=source_complex)
+
+    @classmethod
+    def _from_chain_map_kernel(
+        cls,
+        *,
+        is_valid: bool,
+        detail: str,
+        source: ChainComplexValue,
+        target: ChainComplexValue,
+        map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+    ) -> Self:
+        return cls(
+            is_valid=is_valid,
+            detail=detail,
+            source=source,
+            target=target,
+            map_matrices=map_matrices,
+        )

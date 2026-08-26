@@ -25,6 +25,9 @@ from jacobian.math.matrices._operations import (
     compute_product,
     compute_rank,
     compute_rref,
+    verify_nullspace_result,
+    verify_rank_result,
+    verify_rref_result,
 )
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
@@ -79,6 +82,7 @@ def test_producer_results_replay_across_shapes() -> None:
         request = RationalMatrixRequest(matrix=matrix)
         rref = compute_rref(request)
         assert rref.matrix == matrix
+        assert verify_rref_result(rref)
         assert (
             rref.reduced_matrix.entries
             == compute_rref(RationalMatrixRequest(matrix=matrix)).reduced_matrix.entries
@@ -88,11 +92,13 @@ def test_producer_results_replay_across_shapes() -> None:
         rank = compute_rank(rank_request)
         assert rank.matrix == matrix
         assert rank.rank == len(rank.pivot_columns)
+        assert verify_rank_result(rank)
 
         nullspace = compute_nullspace(request)
         assert nullspace.matrix == matrix
         assert nullspace.rank + nullspace.nullity == nullspace.ambient_dimension
         assert len(nullspace.basis_vectors) == nullspace.nullity
+        assert verify_nullspace_result(nullspace)
 
 
 @pytest.mark.parametrize(
@@ -139,19 +145,16 @@ def test_rref_result_rejects_mutations() -> None:
         [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
         [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
     ]
-    with pytest.raises(ValidationError):
-        RrefResult.model_validate(foreign_source)
+    assert not verify_rref_result(RrefResult.model_validate(foreign_source))
 
     forged_form = copy.deepcopy(_mutable(dumped))
     forged_form["reduced_matrix"]["entries"][0][1] = {"num": "9", "den": "1"}
-    with pytest.raises(ValidationError):
-        RrefResult.model_validate(forged_form)
+    assert not verify_rref_result(RrefResult.model_validate(forged_form))
 
     forged_pivots = copy.deepcopy(_mutable(dumped))
     forged_pivots["pivot_columns"] = [1]
     forged_pivots["free_columns"] = [0]
-    with pytest.raises(ValidationError):
-        RrefResult.model_validate(forged_pivots)
+    assert not verify_rref_result(RrefResult.model_validate(forged_pivots))
 
     broken_partition = copy.deepcopy(_mutable(dumped))
     broken_partition["free_columns"] = []
@@ -165,22 +168,19 @@ def test_rank_result_rejects_mutations() -> None:
     dumped = result.model_dump()
 
     forged_rank = copy.deepcopy(_mutable(dumped))
-    forged_rank["rank"] = 32
-    with pytest.raises(ValidationError):
-        MatrixRankResult.model_validate(forged_rank)
+    forged_rank["pivot_columns"] = [1]
+    assert not verify_rank_result(MatrixRankResult.model_validate(forged_rank))
 
     forged_pivots = copy.deepcopy(_mutable(dumped))
     forged_pivots["pivot_columns"] = [1]
-    with pytest.raises(ValidationError):
-        MatrixRankResult.model_validate(forged_pivots)
+    assert not verify_rank_result(MatrixRankResult.model_validate(forged_pivots))
 
     foreign_source = copy.deepcopy(_mutable(dumped))
     foreign_source["matrix"]["entries"] = [
         [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
         [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
     ]
-    with pytest.raises(ValidationError):
-        MatrixRankResult.model_validate(foreign_source)
+    assert not verify_rank_result(MatrixRankResult.model_validate(foreign_source))
 
 
 def test_nullspace_result_rejects_mutations() -> None:
@@ -197,16 +197,14 @@ def test_nullspace_result_rejects_mutations() -> None:
     outside_vector["basis_vectors"] = [
         [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}]
     ]
-    with pytest.raises(ValidationError):
-        NullspaceResult.model_validate(outside_vector)
+    assert not verify_nullspace_result(NullspaceResult.model_validate(outside_vector))
 
     non_fundamental = copy.deepcopy(_mutable(dumped))
     scaled = copy.deepcopy(non_fundamental["basis_vectors"][0])
     scaled[1] = {"num": "2", "den": "1"}
     scaled[0] = {"num": "-4", "den": "1"}
     non_fundamental["basis_vectors"] = [scaled]
-    with pytest.raises(ValidationError):
-        NullspaceResult.model_validate(non_fundamental)
+    assert not verify_nullspace_result(NullspaceResult.model_validate(non_fundamental))
 
     forged_dimension = copy.deepcopy(_mutable(dumped))
     forged_dimension["ambient_dimension"] = 3
@@ -218,8 +216,7 @@ def test_nullspace_result_rejects_mutations() -> None:
     forged_rank["nullity"] = 0
     forged_rank["basis_vectors"] = []
     forged_rank["free_columns"] = []
-    with pytest.raises(ValidationError):
-        NullspaceResult.model_validate(forged_rank)
+    assert not verify_nullspace_result(NullspaceResult.model_validate(forged_rank))
 
 
 def test_producer_to_serialized_interoperability() -> None:
@@ -302,3 +299,44 @@ def test_determinant_accepts_the_canonical_matrix_boundary() -> None:
     assert MAX_RATIONAL_MATRIX_ORDER == MAX_DETERMINANT_MATRIX_DIMENSION
     matrix = RationalMatrix(entries=_identity_entries(MAX_RATIONAL_MATRIX_ORDER))
     assert MatrixDeterminantRequest(matrix=matrix).matrix is matrix
+
+
+def test_raw_preflight_keeps_32_and_64_axes_and_rejects_the_next_axis() -> None:
+    def wire_identity(order: int) -> list[list[dict[str, str]]]:
+        return [
+            [{"num": str(int(row == column)), "den": "1"} for column in range(order)]
+            for row in range(order)
+        ]
+
+    rank_boundary = {"matrix": {"entries": wire_identity(MAX_MATRIX_DIMENSION)}}
+    assert MatrixRankRequest.model_validate(
+        rank_boundary
+    ).matrix.entries == _identity_entries(MAX_MATRIX_DIMENSION)
+    with pytest.raises(ValidationError):
+        MatrixRankRequest.model_validate(
+            {"matrix": {"entries": wire_identity(MAX_MATRIX_DIMENSION + 1)}}
+        )
+
+    determinant_boundary = {
+        "matrix": {"entries": wire_identity(MAX_DETERMINANT_MATRIX_DIMENSION)}
+    }
+    assert MatrixDeterminantRequest.model_validate(
+        determinant_boundary
+    ).matrix.entries == (_identity_entries(MAX_DETERMINANT_MATRIX_DIMENSION))
+    with pytest.raises(ValidationError):
+        MatrixDeterminantRequest.model_validate(
+            {"matrix": {"entries": wire_identity(MAX_DETERMINANT_MATRIX_DIMENSION + 1)}}
+        )
+
+
+def test_raw_preflight_rejects_a_257_digit_operation_scalar() -> None:
+    with pytest.raises(ValidationError):
+        MatrixRankRequest.model_validate(
+            {
+                "matrix": {
+                    "entries": [
+                        [{"num": "9" * 257, "den": "1"}],
+                    ]
+                }
+            }
+        )

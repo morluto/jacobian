@@ -132,7 +132,14 @@ class MatroidClosureRequest(StrictModel):
 
 
 class MatroidClosureResult(MatroidClosureRequest):
-    """The closure (flat) of a subset in a linear matroid."""
+    """The claimed closure (flat) of a subset in a linear matroid.
+
+    Deserialization establishes only the retained request and bounded canonical
+    result shape.  The exact span claim is checked by
+    :func:`verify_matroid_closure_result` when an independently supplied
+    result needs verification.  Kernel output uses ``_from_kernel`` after its
+    trusted bounded computation.
+    """
 
     closure: tuple[StrictInt, ...] = Field(
         default=(),
@@ -148,23 +155,39 @@ class MatroidClosureResult(MatroidClosureRequest):
     )
 
     @model_validator(mode="after")
-    def require_valid_closure(self) -> Self:
-        from jacobian.math.matroids._operations import (
-            _closure_invariant,
-        )
-
-        expected_closure, subset_rank = _closure_invariant(
-            self.matroid, list(self.subset)
-        )
-        if tuple(self.closure) != tuple(expected_closure):
+    def require_bounded_canonical_claim(self) -> Self:
+        if self.closure != tuple(sorted(set(self.closure))):
             raise _validation_error(
-                "closure.invariant", "closure must be the exact flat of the subset"
+                "closure.canonical",
+                "closure indices must be distinct and in increasing order",
             )
-        if self.rank != subset_rank:
+        if any(not 0 <= index < self.matroid.ground_size for index in self.closure):
             raise _validation_error(
-                "rank.invariant", "rank must be the rank of the requested subset"
+                "closure.indices",
+                "closure indices must be in 0..matroid.matrix.columns-1",
+            )
+        if self.rank > len(self.subset):
+            raise _validation_error(
+                "rank.bound",
+                "rank cannot exceed the number of selected ground-set elements",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: MatroidClosureRequest,
+        closure: tuple[int, ...],
+        rank: int,
+    ) -> Self:
+        """Construct trusted output of the owner-local closure kernel."""
+
+        return cls(
+            matroid=request.matroid,
+            subset=request.subset,
+            closure=closure,
+            rank=rank,
+        )
 
 
 __all__ = [

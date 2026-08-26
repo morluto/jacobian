@@ -1,7 +1,6 @@
 """Tests for simplicial complex f-vector operation."""
 
-from jacobian.math.topology._models import FVectorRequest
-from jacobian.math.topology._operations import compute_f_vector
+from jacobian.math.topology._structural import FVectorRequest, compute_f_vector
 
 
 def test_triangle() -> None:

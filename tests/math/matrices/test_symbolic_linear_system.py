@@ -9,7 +9,10 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicLinearSystemRequest,
     SymbolicMatrix,
 )
-from jacobian.math.matrices.symbolic._operations import compute_symbolic_linear_system
+from jacobian.math.matrices.symbolic._operations import (
+    compute_symbolic_linear_system,
+    verify_symbolic_linear_system_result,
+)
 from jacobian.math.polynomials.values import RationalFunction
 
 
@@ -68,6 +71,7 @@ class TestSymbolicLinearSystem:
         assert result.classification == "UNIQUE"
         assert result.solution is not None
         assert len(result.solution) == 1
+        assert verify_symbolic_linear_system_result(result)
 
     def test_unique_solution_identity_2x2(self):
         """Solve [[1, a], [b, 1]] * x = [1, 1] for a symbolic 2x2 system."""
@@ -117,6 +121,7 @@ class TestSymbolicLinearSystem:
         assert result.classification == "INCONSISTENT"
         assert result.solution is None
         assert result.particular_solution is None
+        assert verify_symbolic_linear_system_result(result)
 
     def test_orthocenter_system(self):
         """Solve a 2x2 symbolic system from the orthocenter derivation."""
@@ -401,11 +406,9 @@ class TestSourceBoundResult:
         revalidated = SymbolicLinearSystemResult.model_validate(result.model_dump())
         assert revalidated.classification == "UNIQUE"
         assert revalidated.solution == result.solution
+        assert verify_symbolic_linear_system_result(revalidated)
 
-    def test_forged_solution_for_other_system_is_rejected(self):
-        import pytest
-        from pydantic import ValidationError
-
+    def test_forged_solution_for_other_system_fails_explicit_verification(self):
         from jacobian.math.matrices.symbolic._models import (
             SymbolicLinearSystemResult,
         )
@@ -418,16 +421,14 @@ class TestSourceBoundResult:
             "matrix": {"variables": [], "entries": ((three,),)},
             "rhs": (_rf(vars_, (7, ())),),
         }
-        # Same shape as the foreign 1x1 system so the source-bound replay
-        # is what rejects the payload, not a payload-shape bound.
+        # Same shape as the foreign 1x1 system so only explicit source-bound
+        # verification, rather than transport-shape validation, rejects it.
         payload["solution"] = (three,)
-        with pytest.raises(ValidationError):
+        assert not verify_symbolic_linear_system_result(
             SymbolicLinearSystemResult.model_validate(payload)
+        )
 
-    def test_wrong_solution_vector_is_rejected(self):
-        import pytest
-        from pydantic import ValidationError
-
+    def test_wrong_solution_vector_fails_explicit_verification(self):
         from jacobian.math.matrices.symbolic._models import (
             SymbolicLinearSystemResult,
         )
@@ -436,8 +437,9 @@ class TestSourceBoundResult:
         payload = result.model_dump()
         wrong = _rf(("a", "b"), (5, (1, 1)))
         payload["solution"] = (wrong, wrong)
-        with pytest.raises(ValidationError):
+        assert not verify_symbolic_linear_system_result(
             SymbolicLinearSystemResult.model_validate(payload)
+        )
 
 
 class TestNativeSystemAdmission:
@@ -529,7 +531,7 @@ class TestNonUniqueWitnessEquivalence:
             SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
         )
 
-    def test_alternative_valid_witnesses_revalidate(self):
+    def test_alternative_valid_witnesses_pass_explicit_verification(self):
         from jacobian.math.matrices.symbolic._models import (
             SymbolicLinearSystemResult,
         )
@@ -545,8 +547,9 @@ class TestNonUniqueWitnessEquivalence:
         payload["nullspace_basis"] = [basis_vector]
         revalidated = SymbolicLinearSystemResult.model_validate(payload)
         assert revalidated.classification == "NON_UNIQUE"
+        assert verify_symbolic_linear_system_result(revalidated)
 
-    def test_wrong_particular_solution_rejected(self):
+    def test_wrong_particular_solution_fails_explicit_verification(self):
         from jacobian.math.matrices.symbolic._models import (
             SymbolicLinearSystemResult,
         )
@@ -555,10 +558,11 @@ class TestNonUniqueWitnessEquivalence:
         wrong = _rf(("t",), (8, (0,)))
         payload = self._non_unique_result().model_dump()
         payload["particular_solution"] = [wrong.model_dump(), zero.model_dump()]
-        with pytest.raises(ValidationError):
+        assert not verify_symbolic_linear_system_result(
             SymbolicLinearSystemResult.model_validate(payload)
+        )
 
-    def test_non_kernel_basis_vector_rejected(self):
+    def test_non_kernel_basis_vector_fails_explicit_verification(self):
         from jacobian.math.matrices.symbolic._models import (
             SymbolicLinearSystemResult,
         )
@@ -567,11 +571,12 @@ class TestNonUniqueWitnessEquivalence:
         zero = _rf(("t",))
         payload = self._non_unique_result().model_dump()
         payload["nullspace_basis"] = [[one_one.model_dump(), zero.model_dump()]]
-        with pytest.raises(ValidationError):
+        assert not verify_symbolic_linear_system_result(
             SymbolicLinearSystemResult.model_validate(payload)
+        )
 
-    def test_incomplete_or_degenerate_basis_rejected(self):
-        """Duplicated vectors cannot pass for a complete independent basis."""
+    def test_incomplete_or_degenerate_basis_fails_explicit_verification(self):
+        """Duplicated vectors cannot satisfy the verifier's basis invariant."""
         from jacobian.math.matrices.symbolic._models import (
             SymbolicLinearSystemResult,
         )
@@ -586,8 +591,9 @@ class TestNonUniqueWitnessEquivalence:
             [zero.model_dump(), one.model_dump()],
             [zero.model_dump(), two.model_dump()],
         ]
-        with pytest.raises(ValidationError):
+        assert not verify_symbolic_linear_system_result(
             SymbolicLinearSystemResult.model_validate(payload)
+        )
 
 
 class TestWitnessDeserializationHardening:

@@ -19,6 +19,9 @@ from jacobian.math.chain_complexes.operations import (
     compute_tensor_product,
     construct_chain_complex,
     verify_differential,
+    verify_mapping_cone_result,
+    verify_tensor_product_result,
+    verify_verification_result,
 )
 from jacobian.math.chain_complexes.values import ChainComplexValue, CoefficientField
 
@@ -355,8 +358,7 @@ class TestMappingConeDefiningEquations:
         payload["map_matrices"] = [()]
         from jacobian.math.chain_complexes.values import MappingConeResult
 
-        with pytest.raises(ValidationError):
-            MappingConeResult.model_validate(payload)
+        assert not verify_mapping_cone_result(MappingConeResult.model_validate(payload))
 
 
 class TestTensorProductSignAndBudget:
@@ -1029,17 +1031,17 @@ class TestTensorProductFactorBinding:
             basis_sizes=(7,),
             differential_matrices=(),
         )
-        with pytest.raises(ValidationError):
-            TensorProductResult(
-                tensor_basis_sizes=(7,),
-                tensor_differential_matrices=(),
-                coefficient_field=CoefficientField.RATIONAL,
-                degree_min=0,
-                degree_max=0,
-                left=_point_complex(),
-                right=_point_complex(),
-                value=unrelated,
-            )
+        claim = TensorProductResult(
+            tensor_basis_sizes=(7,),
+            tensor_differential_matrices=(),
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=0,
+            left=_point_complex(),
+            right=_point_complex(),
+            value=unrelated,
+        )
+        assert not verify_tensor_product_result(claim)
 
     def test_non_square_zero_factor_rejected_by_replay(self) -> None:
         """A retained factor violating d^2=0 fails the construction
@@ -1053,17 +1055,17 @@ class TestTensorProductFactorBinding:
             basis_sizes=(1, 1, 1),
             differential_matrices=((("1",),), (("1",),)),
         )
-        with pytest.raises(ValidationError):
-            TensorProductResult(
-                tensor_basis_sizes=(1, 1, 1),
-                tensor_differential_matrices=((("1",),), (("1",),)),
-                coefficient_field=CoefficientField.RATIONAL,
-                degree_min=0,
-                degree_max=2,
-                left=bad,
-                right=_point_complex(),
-                value=bad,
-            )
+        claim = TensorProductResult(
+            tensor_basis_sizes=(1, 1, 1),
+            tensor_differential_matrices=((("1",),), (("1",),)),
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=2,
+            left=bad,
+            right=_point_complex(),
+            value=bad,
+        )
+        assert not verify_tensor_product_result(claim)
 
     def test_genuine_result_round_trips(self) -> None:
         from jacobian.math.chain_complexes.values import TensorProductResult
@@ -1082,8 +1084,9 @@ class TestTensorProductFactorBinding:
         )
         payload = result.model_dump()
         payload["right"] = payload["right"] | {"basis_sizes": (2,)}
-        with pytest.raises(ValidationError):
+        assert not verify_tensor_product_result(
             TensorProductResult.model_validate(payload)
+        )
 
     def test_tampered_degree_provenance_rejected(self) -> None:
         from jacobian.math.chain_complexes.values import TensorProductResult
@@ -1426,8 +1429,9 @@ class TestVerificationVerdictBinding:
             basis_sizes=(1, 1, 1),
             differential_matrices=((("1",),), (("1",),)),
         )
-        with pytest.raises(ValidationError):
+        assert not verify_verification_result(
             VerificationResult(is_valid=True, detail="d^2 = 0", complex=bad)
+        )
         with pytest.raises(ValidationError):
             VerificationResult(is_valid=True, detail="d^2 = 0")
 
@@ -1437,12 +1441,13 @@ class TestVerificationVerdictBinding:
         from jacobian.math.chain_complexes.values import VerificationResult
 
         point = _point_complex()
-        with pytest.raises(ValidationError):
+        assert not verify_verification_result(
             VerificationResult(
                 is_valid=True,
                 detail="d^2 != 0",
                 complex=point,
             )
+        )
         genuine = verify_differential(VerifyDifferentialRequest(complex=point))
         revalidated = VerificationResult.model_validate(genuine.model_dump())
         assert revalidated.detail == "d^2 = 0 for all degrees"
@@ -1475,26 +1480,26 @@ class TestVerificationReplayParentChecks:
     def test_cross_field_endpoints_rejected(self) -> None:
         from jacobian.math.chain_complexes.values import VerificationResult
 
-        with pytest.raises(ValidationError):
-            VerificationResult(
-                is_valid=True,
-                detail="commutes",
-                source=self._point(CoefficientField.RATIONAL, None),
-                target=self._point(CoefficientField.PRIME_FIELD, 2),
-                map_matrices=((("1",),),),
-            )
+        claim = VerificationResult(
+            is_valid=True,
+            detail="commutes",
+            source=self._point(CoefficientField.RATIONAL, None),
+            target=self._point(CoefficientField.PRIME_FIELD, 2),
+            map_matrices=((("1",),),),
+        )
+        assert not verify_verification_result(claim)
 
     def test_mismatched_primes_rejected(self) -> None:
         from jacobian.math.chain_complexes.values import VerificationResult
 
-        with pytest.raises(ValidationError):
-            VerificationResult(
-                is_valid=True,
-                detail="commutes",
-                source=self._point(CoefficientField.PRIME_FIELD, 2),
-                target=self._point(CoefficientField.PRIME_FIELD, 3),
-                map_matrices=((("1",),),),
-            )
+        claim = VerificationResult(
+            is_valid=True,
+            detail="commutes",
+            source=self._point(CoefficientField.PRIME_FIELD, 2),
+            target=self._point(CoefficientField.PRIME_FIELD, 3),
+            map_matrices=((("1",),),),
+        )
+        assert not verify_verification_result(claim)
 
     def test_shifted_degree_intervals_rejected(self) -> None:
         from jacobian.math.chain_complexes.values import VerificationResult
@@ -1506,28 +1511,28 @@ class TestVerificationReplayParentChecks:
             basis_sizes=(1,),
             differential_matrices=(),
         )
-        with pytest.raises(ValidationError):
-            VerificationResult(
-                is_valid=True,
-                detail="commutes",
-                source=_point_complex(),
-                target=shifted,
-                map_matrices=((("1",),),),
-            )
+        claim = VerificationResult(
+            is_valid=True,
+            detail="commutes",
+            source=_point_complex(),
+            target=shifted,
+            map_matrices=((("1",),),),
+        )
+        assert not verify_verification_result(claim)
 
     def test_out_of_range_map_residue_rejected(self) -> None:
         """GF(3) map entries are replayed under p=3, so '4' cannot pass."""
         from jacobian.math.chain_complexes.values import VerificationResult
 
         gf3 = self._point(CoefficientField.PRIME_FIELD, 3)
-        with pytest.raises(ValidationError):
-            VerificationResult(
-                is_valid=True,
-                detail="commutes",
-                source=gf3,
-                target=gf3,
-                map_matrices=((("4",),),),
-            )
+        claim = VerificationResult(
+            is_valid=True,
+            detail="commutes",
+            source=gf3,
+            target=gf3,
+            map_matrices=((("4",),),),
+        )
+        assert not verify_verification_result(claim)
 
     def test_genuine_verdict_round_trips(self) -> None:
         from jacobian.math.chain_complexes.values import VerificationResult

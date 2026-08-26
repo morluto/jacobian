@@ -1,7 +1,10 @@
 """Tests for simplicial complex link operation."""
 
-from jacobian.math.topology._models import FVectorRequest, LinkRequest
-from jacobian.math.topology._operations import compute_link
+from jacobian.math.topology._structural import (
+    FVectorRequest,
+    LinkRequest,
+    compute_link,
+)
 
 
 def test_link_of_vertex_in_triangle() -> None:
@@ -51,7 +54,7 @@ def test_link_of_face_in_boundary() -> None:
 
 def test_f_vector_filled_triangle() -> None:
     """Filled triangle has f=(3,3,1) and h=(1,0,0,0)."""
-    from jacobian.math.topology._operations import compute_f_vector
+    from jacobian.math.topology._structural import compute_f_vector
 
     request = FVectorRequest(
         complex={"vertices": ["v0", "v1", "v2"], "facets": [["v0", "v1", "v2"]]}
@@ -63,7 +66,7 @@ def test_f_vector_filled_triangle() -> None:
 
 def test_f_vector_single_edge() -> None:
     """Single edge has f=(2,1) and h=(1,0,0)."""
-    from jacobian.math.topology._operations import compute_f_vector
+    from jacobian.math.topology._structural import compute_f_vector
 
     request = FVectorRequest(
         complex={"vertices": ["v0", "v1"], "facets": [["v0", "v1"]]}
@@ -75,7 +78,7 @@ def test_f_vector_single_edge() -> None:
 
 def test_f_vector_h_vector_invariant() -> None:
     """h_0 must always be 1 for a non-empty complex."""
-    from jacobian.math.topology._operations import compute_f_vector
+    from jacobian.math.topology._structural import compute_f_vector
 
     request = FVectorRequest(
         complex={"vertices": ["v0", "v1", "v2"], "facets": [["v0", "v1", "v2"]]}

@@ -21,7 +21,11 @@ from jacobian.math.polytope._models import (
     MAX_SUPPORT_COMPONENT_DIGITS,
     PolytopeSupportRequest,
 )
-from jacobian.math.polytope._operations import compute_polytope_support
+from jacobian.math.polytope._operations import (
+    compute_polytope_support,
+    require_full_dimensional_extreme_vertices,
+    verify_polytope_support_result,
+)
 from jacobian.math.polytope._tools import POLYTOPE_OPERATIONS
 
 
@@ -161,41 +165,41 @@ def test_positive_covector_scaling_preserves_face_and_scales_support() -> None:
     assert scaled.exposed_face == unit.exposed_face
 
 
-def test_support_is_source_bound_against_forged_value_or_face() -> None:
+def test_support_result_is_structural_and_verifier_rejects_forged_claims() -> None:
     result = compute_polytope_support(
         PolytopeSupportRequest(polytope=_square(), covector=_covector(0, 1))
     )
 
-    with pytest.raises(ValidationError):
-        PolytopeSupportResult.model_validate(
-            {
-                **result.model_dump(mode="json"),
-                "support_value": {"num": "2", "den": "1"},
-            }
-        )
-    with pytest.raises(ValidationError):
-        PolytopeSupportResult(
-            polytope=result.polytope,
-            covector=result.covector,
-            support_value=result.support_value,
-            exposed_face=RationalExposedFace(
-                space=result.polytope.space,
-                vertices=(result.polytope.vertices[0],),
-            ),
-        )
-    with pytest.raises(ValidationError):
-        PolytopeSupportResult.model_validate(
-            {
-                **result.model_dump(mode="json"),
-                "covector": {
-                    "space": {"axes": ["x", "y"]},
-                    "components": [
-                        {"num": "1", "den": "1"},
-                        {"num": "0", "den": "1"},
-                    ],
-                },
-            }
-        )
+    forged_value = PolytopeSupportResult.model_validate(
+        {
+            **result.model_dump(mode="json"),
+            "support_value": {"num": "2", "den": "1"},
+        }
+    )
+    assert not verify_polytope_support_result(forged_value)
+    forged_face = PolytopeSupportResult(
+        polytope=result.polytope,
+        covector=result.covector,
+        support_value=result.support_value,
+        exposed_face=RationalExposedFace(
+            space=result.polytope.space,
+            vertices=(result.polytope.vertices[0],),
+        ),
+    )
+    assert not verify_polytope_support_result(forged_face)
+    forged_covector = PolytopeSupportResult.model_validate(
+        {
+            **result.model_dump(mode="json"),
+            "covector": {
+                "space": {"axes": ["x", "y"]},
+                "components": [
+                    {"num": "1", "den": "1"},
+                    {"num": "0", "den": "1"},
+                ],
+            },
+        }
+    )
+    assert not verify_polytope_support_result(forged_covector)
 
 
 def test_request_rejects_coordinate_axis_mismatch() -> None:
@@ -208,30 +212,32 @@ def test_request_rejects_coordinate_axis_mismatch() -> None:
         PolytopeSupportRequest(polytope=_square(), covector=bad_covector)
 
 
-def test_v_polytope_rejects_nonextreme_vertex() -> None:
-    with pytest.raises(ValidationError):
-        RationalVPolytope(
-            space=RationalCoordinateSpace(axes=("x", "y")),
-            vertices=(
-                _vertex("bottom_left", 0, 0),
-                _vertex("bottom_right", 2, 0),
-                _vertex("middle", 1, 0),
-                _vertex("top_left", 0, 2),
-                _vertex("top_right", 2, 2),
-            ),
-        )
+def test_support_kernel_rejects_nonextreme_vertex() -> None:
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=(
+            _vertex("bottom_left", 0, 0),
+            _vertex("bottom_right", 2, 0),
+            _vertex("middle", 1, 0),
+            _vertex("top_left", 0, 2),
+            _vertex("top_right", 2, 2),
+        ),
+    )
+    with pytest.raises(ValueError, match="extreme"):
+        polytope_support(polytope, _covector(0, 1))
 
 
-def test_v_polytope_rejects_lower_dimensional_hull() -> None:
-    with pytest.raises(ValidationError):
-        RationalVPolytope(
-            space=RationalCoordinateSpace(axes=("x", "y")),
-            vertices=(
-                _vertex("left", 0, 0),
-                _vertex("middle", 1, 0),
-                _vertex("right", 2, 0),
-            ),
-        )
+def test_support_kernel_rejects_lower_dimensional_hull() -> None:
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=(
+            _vertex("left", 0, 0),
+            _vertex("middle", 1, 0),
+            _vertex("right", 2, 0),
+        ),
+    )
+    with pytest.raises(ValueError, match="affinely span"):
+        polytope_support(polytope, _covector(0, 1))
 
 
 def test_support_request_rejects_over_envelope_covector_component() -> None:
@@ -873,34 +879,30 @@ def test_result_preflights_built_foreign_exposed_face_space_before_nested_parsin
         PolytopeSupportResult.model_validate(payload)
 
 
-def test_result_preflights_forged_support_value_before_nested_parsing(
+def test_result_parses_forged_support_value_for_explicit_verification(
     square_result: PolytopeSupportResult,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A well-formed but incorrect support value binds against the raw
-    source before nested validation reconstructs (and proves) it."""
+    """Result parsing is structural; claim replay belongs to the verifier."""
 
-    _forbid_extremality_proof(monkeypatch)
     payload = square_result.model_dump(mode="json")
     payload["support_value"] = {"num": "2", "den": "1"}
 
-    with pytest.raises(ValidationError):
+    assert not verify_polytope_support_result(
         PolytopeSupportResult.model_validate(payload)
+    )
 
 
-def test_result_preflights_forged_exposed_face_before_nested_parsing(
+def test_result_parses_forged_exposed_face_for_explicit_verification(
     square_result: PolytopeSupportResult,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A same-space face with wrong membership binds against the raw
-    source before nested validation reconstructs (and proves) it."""
+    """A structurally sound but incomplete face is rejected by the verifier."""
 
-    _forbid_extremality_proof(monkeypatch)
     payload = square_result.model_dump(mode="json")
     payload["exposed_face"]["vertices"] = payload["exposed_face"]["vertices"][:1]
 
-    with pytest.raises(ValidationError):
+    assert not verify_polytope_support_result(
         PolytopeSupportResult.model_validate(payload)
+    )
 
 
 def test_result_preflight_binding_defers_unparsed_structural_faults(
@@ -918,23 +920,20 @@ def test_result_preflight_binding_defers_unparsed_structural_faults(
         PolytopeSupportResult.model_validate(payload)
 
 
-def test_result_preflights_forged_built_face_before_nested_parsing(
+def test_result_parses_forged_built_face_for_explicit_verification(
     square_result: PolytopeSupportResult,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An already-built same-space face with forged membership binds
-    against the raw source before nested validation reconstructs (and
-    proves) it - the built-value shortcut must not skip the binding."""
+    """Built canonical values follow the same structural result boundary."""
 
-    _forbid_extremality_proof(monkeypatch)
     payload = square_result.model_dump(mode="json")
     payload["exposed_face"] = RationalExposedFace(
         space=square_result.polytope.space,
         vertices=(square_result.exposed_face.vertices[0],),
     )
 
-    with pytest.raises(ValidationError):
+    assert not verify_polytope_support_result(
         PolytopeSupportResult.model_validate(payload)
+    )
 
 
 def test_result_defers_malformed_coordinate_containers_to_nested_validation(
@@ -986,22 +985,21 @@ def test_built_matching_exposed_face_composes_with_serialized_result(
     assert PolytopeSupportResult.model_validate(payload) == square_result
 
 
-def test_constructed_result_still_rejects_forged_face_at_bind(
+def test_constructed_result_leaves_forged_face_to_explicit_verification(
     square_result: PolytopeSupportResult,
 ) -> None:
-    """A built face in the correct space but with forged membership is
-    still bound to the source by the after-validator."""
+    """A built face in the correct space is a verifier-owned claim."""
 
-    with pytest.raises(ValidationError):
-        PolytopeSupportResult(
-            polytope=square_result.polytope,
-            covector=square_result.covector,
-            support_value=square_result.support_value,
-            exposed_face=RationalExposedFace(
-                space=square_result.polytope.space,
-                vertices=(square_result.polytope.vertices[0],),
-            ),
-        )
+    forged = PolytopeSupportResult(
+        polytope=square_result.polytope,
+        covector=square_result.covector,
+        support_value=square_result.support_value,
+        exposed_face=RationalExposedFace(
+            space=square_result.polytope.space,
+            vertices=(square_result.polytope.vertices[0],),
+        ),
+    )
+    assert not verify_polytope_support_result(forged)
 
 
 def test_result_rejects_forbidden_extra_field_before_nested_parsing(
@@ -1102,8 +1100,11 @@ def test_extremality_subfacet_bound_is_enforced_before_filtering() -> None:
         for index in range(64)
     )
 
-    with pytest.raises(ValidationError):
-        RationalVPolytope(space=RationalCoordinateSpace(axes=axes), vertices=vertices)
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=axes), vertices=vertices
+    )
+    with pytest.raises(ValueError, match="subfacet"):
+        require_full_dimensional_extreme_vertices(polytope)
 
 
 def test_extremality_orientation_work_is_enforced_before_filtering() -> None:
@@ -1116,8 +1117,11 @@ def test_extremality_orientation_work_is_enforced_before_filtering() -> None:
         for index in range(64)
     )
 
-    with pytest.raises(ValidationError):
-        RationalVPolytope(space=RationalCoordinateSpace(axes=axes), vertices=vertices)
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=axes), vertices=vertices
+    )
+    with pytest.raises(ValueError, match="orientation"):
+        require_full_dimensional_extreme_vertices(polytope)
 
 
 def test_extremality_budget_bounds_are_enforced_before_exact_conversion(
@@ -1143,11 +1147,12 @@ def test_extremality_budget_bounds_are_enforced_before_exact_conversion(
         for index in range(64)
     )
 
-    with pytest.raises(ValidationError):
-        RationalVPolytope(
-            space=RationalCoordinateSpace(axes=six_axes),
-            vertices=vertices_64_by_6,
-        )
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=six_axes),
+        vertices=vertices_64_by_6,
+    )
+    with pytest.raises(ValueError, match="subfacet"):
+        require_full_dimensional_extreme_vertices(polytope)
 
     four_axes = ("w", "x", "y", "z")
     vertices_40_by_4 = tuple(
@@ -1158,11 +1163,12 @@ def test_extremality_budget_bounds_are_enforced_before_exact_conversion(
         for index in range(40)
     )
 
-    with pytest.raises(ValidationError):
-        RationalVPolytope(
-            space=RationalCoordinateSpace(axes=four_axes),
-            vertices=vertices_40_by_4,
-        )
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=four_axes),
+        vertices=vertices_40_by_4,
+    )
+    with pytest.raises(ValueError, match="orientation"):
+        require_full_dimensional_extreme_vertices(polytope)
 
 
 def test_extremality_height_work_bound_is_enforced_before_exact_conversion(
@@ -1192,11 +1198,12 @@ def test_extremality_height_work_bound_is_enforced_before_exact_conversion(
         for index in range(12)
     )
 
-    with pytest.raises(ValidationError):
-        RationalVPolytope(
-            space=RationalCoordinateSpace(axes=four_axes),
-            vertices=vertices_12_by_4,
-        )
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=four_axes),
+        vertices=vertices_12_by_4,
+    )
+    with pytest.raises(ValueError, match="height-work"):
+        require_full_dimensional_extreme_vertices(polytope)
 
 
 def test_extremality_height_work_grades_admission_by_coordinate_height() -> None:
@@ -1232,11 +1239,12 @@ def test_extremality_height_work_grades_admission_by_coordinate_height() -> None
         )
         for index in range(6)
     )
-    with pytest.raises(ValidationError) as exc_info:
-        RationalVPolytope(
-            space=RationalCoordinateSpace(axes=("x", "y", "z")),
-            vertices=vertices_over,
-        )
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y", "z")),
+        vertices=vertices_over,
+    )
+    with pytest.raises(ValueError) as exc_info:
+        require_full_dimensional_extreme_vertices(polytope)
     assert str(MAX_EXTREMALITY_HEIGHT_WORK) in str(exc_info.value)
 
 

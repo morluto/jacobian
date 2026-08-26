@@ -37,6 +37,7 @@ from jacobian.math.matrices.canonical_forms._models import (
 from jacobian.math.matrices.canonical_forms._operations import (
     _dense_polynomial_coefficients,
     compute_matrix_polynomial_evaluation,
+    verify_matrix_polynomial_evaluation_result,
 )
 from jacobian.math.matrices.canonical_forms.operations import (
     _evaluate_polynomial,
@@ -606,8 +607,13 @@ def test_result_rejects_independent_source_value_and_work_mutations(
     else:
         wire["scalar_product_terms"] = 1
 
-    with pytest.raises(ValidationError):
-        MatrixPolynomialEvaluationResult.model_validate(wire)
+    if mutation in {"degree", "matrix_work", "scalar_work"}:
+        with pytest.raises(ValidationError):
+            MatrixPolynomialEvaluationResult.model_validate(wire)
+    else:
+        assert not verify_matrix_polynomial_evaluation_result(
+            MatrixPolynomialEvaluationResult.model_validate(wire)
+        )
 
 
 def test_request_rejects_non_square_and_multivariate_sources() -> None:

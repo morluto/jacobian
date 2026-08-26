@@ -18,6 +18,8 @@ from jacobian.math.lattice_polytopes._operations import (
     LatticePointBudgetError,
     count_lattice_points,
     enumerate_lattice_points,
+    verify_count_lattice_points_result,
+    verify_enumerate_lattice_points_result,
 )
 from jacobian.math.polytope import Halfspace, Vertex
 
@@ -211,6 +213,42 @@ class TestCount:
         counted = count_lattice_points(request2).point_count
         assert enumerated == 8
         assert counted == 8
+
+
+class TestExplicitResultVerification:
+    """Kernel construction trusts output; supplied claims use a bounded replay."""
+
+    def test_count_claim_verification_is_explicit_and_source_bound(self) -> None:
+        from jacobian.math.lattice_polytopes._models import CountLatticePointsResult
+
+        request = LatticePolytopeRequest(vertices=UNIT_SQUARE_V)
+        result = count_lattice_points(request)
+        assert verify_count_lattice_points_result(request, result)
+        assert not verify_count_lattice_points_result(
+            request,
+            CountLatticePointsResult(
+                dimension=2, point_count=3, representation="vertices"
+            ),
+        )
+
+    def test_enumeration_claim_verification_is_explicit_and_source_bound(self) -> None:
+        from jacobian.math.lattice_polytopes._models import (
+            EnumerateLatticePointsResult,
+            LatticePoint,
+        )
+
+        request = LatticePolytopeRequest(vertices=UNIT_SQUARE_V)
+        result = enumerate_lattice_points(request)
+        assert verify_enumerate_lattice_points_result(request, result)
+        assert not verify_enumerate_lattice_points_result(
+            request,
+            EnumerateLatticePointsResult(
+                dimension=2,
+                point_count=1,
+                points=(LatticePoint(coordinates=("0", "0")),),
+                representation="vertices",
+            ),
+        )
 
 
 class TestRejection:

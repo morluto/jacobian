@@ -410,8 +410,8 @@ def _scan_box(
             )
         if collect:
             points.append(
-                LatticePoint(
-                    coordinates=tuple(format_canonical_integer(c) for c in coord)
+                LatticePoint._from_kernel(
+                    tuple(format_canonical_integer(c) for c in coord)
                 )
             )
     return points, count
@@ -475,9 +475,8 @@ def enumerate_lattice_points(
     )
     facets, lo, hi, d = request.admitted_geometry()
     points, _count = _scan_box(facets, lo, hi, d, collect=True)
-    return EnumerateLatticePointsResult(
+    return EnumerateLatticePointsResult._from_kernel(
         dimension=d,
-        point_count=len(points),
         points=tuple(points),
         representation=representation,
     )
@@ -492,8 +491,28 @@ def count_lattice_points(
     )
     facets, lo, hi, d = request.admitted_geometry()
     _points, count = _scan_box(facets, lo, hi, d, collect=False)
-    return CountLatticePointsResult(
+    return CountLatticePointsResult._from_kernel(
         dimension=d,
         point_count=count,
         representation=representation,
     )
+
+
+def verify_enumerate_lattice_points_result(
+    request: LatticePolytopeRequest,
+    result: EnumerateLatticePointsResult,
+) -> bool:
+    """Verify an independently supplied enumeration under request admission.
+
+    This explicit path intentionally performs one bounded scan.  Kernel
+    construction does not replay its own result model validation.
+    """
+    return enumerate_lattice_points(request) == result
+
+
+def verify_count_lattice_points_result(
+    request: LatticePolytopeRequest,
+    result: CountLatticePointsResult,
+) -> bool:
+    """Verify an independently supplied exact count under request admission."""
+    return count_lattice_points(request) == result

@@ -32,6 +32,31 @@ MAX_KERNEL_FEASIBILITY_WORK = 500_000_000
 MAX_KERNEL_RESULT_CHARS = 500_000
 
 
+def _estimate_visibility_kernel_result_characters(
+    vertex_count: int,
+    max_coordinate_digits: int,
+    coefficient_digits: int,
+    intersection_digits: int,
+) -> int:
+    """Conservatively reserve the complete canonical kernel result.
+
+    The result retains the source polygon, one half-plane and one turn per
+    source vertex, and no more than one kernel-boundary point per edge.  The
+    four rational components of every retained point dominate the variable
+    portion; the remaining term covers labels, indices, arrays, and the
+    scalar area profile.  Keeping this calculation pure makes the admission
+    proof directly testable against produced canonical JSON.
+    """
+
+    return vertex_count * (
+        16 * max_coordinate_digits
+        + 6 * coefficient_digits
+        + 8 * intersection_digits
+        + 4 * vertex_count
+        + 400
+    )
+
+
 class KernelPolygon(PolygonRequest):
     """Operation-local bounded view of one simple CCW rational polygon.
 
@@ -102,12 +127,11 @@ class KernelPolygon(PolygonRequest):
         # The result retains the source once, n half-planes and turns, and at
         # most n hull/kernel vertices. The formula charges four rational
         # components per retained point plus JSON/index overhead.
-        estimated_result_chars = vertex_count * (
-            16 * max_coordinate_digits
-            + 6 * coefficient_digits
-            + 8 * intersection_digits
-            + 4 * vertex_count
-            + 400
+        estimated_result_chars = _estimate_visibility_kernel_result_characters(
+            vertex_count,
+            max_coordinate_digits,
+            coefficient_digits,
+            intersection_digits,
         )
         if estimated_result_chars > MAX_KERNEL_RESULT_CHARS:
             raise _validation_error(

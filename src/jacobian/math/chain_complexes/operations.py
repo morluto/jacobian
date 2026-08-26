@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from pydantic_core import PydanticCustomError
+
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.chain_complexes._models import (
     ComputeHomologyRequest,
@@ -367,10 +369,10 @@ def verify_differential(request: VerifyDifferentialRequest) -> VerificationResul
     Returns a dictionary with 'is_valid' (bool) and 'detail' (str).
     """
     is_valid, detail = _differential_verdict(request.complex)
-    return VerificationResult(
+    return VerificationResult._from_kernel(
         is_valid=is_valid,
         detail=detail,
-        complex=request.complex,
+        source_complex=request.complex,
     )
 
 
@@ -385,7 +387,7 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
     is_valid, detail = _chain_map_verdict(
         request.source, request.target, request.map_matrices
     )
-    return VerificationResult(
+    return VerificationResult._from_chain_map_kernel(
         is_valid=is_valid,
         detail=detail,
         source=request.source,
@@ -457,16 +459,8 @@ def _compute_homology_groups(
 def compute_homology(request: ComputeHomologyRequest) -> HomologyResult:
     """Compute the homology groups of a chain complex."""
     cx = request.complex
-    prime = cx.prime
     groups = _compute_homology_groups(cx)
-    return HomologyResult(
-        homology_groups=tuple(groups),
-        coefficient_field=cx.coefficient_field,
-        prime=prime,
-        degree_min=cx.degree_min,
-        degree_max=cx.degree_max,
-        complex=cx,
-    )
+    return HomologyResult._from_kernel(homology_groups=groups, source_complex=cx)
 
 
 def _serialize_entry(value: Fraction, prime: int | None) -> str:
@@ -728,22 +722,21 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
         request.source, request.target, request.map_matrices
     )
 
-    return MappingConeResult(
+    value = ChainComplexValue(
+        coefficient_field=request.source.coefficient_field,
+        prime=request.source.prime,
+        degree_min=request.source.degree_min,
+        degree_max=request.source.degree_min + len(cone_basis_sizes) - 1,
+        basis_sizes=cone_basis_sizes,
+        differential_matrices=cone_diffs,
+    )
+    return MappingConeResult._from_kernel(
         cone_basis_sizes=cone_basis_sizes,
         cone_differential_matrices=cone_diffs,
-        source_degree_min=request.source.degree_min,
-        target_degree_min=request.target.degree_min,
         source=request.source,
         target=request.target,
         map_matrices=request.map_matrices,
-        value=ChainComplexValue(
-            coefficient_field=request.source.coefficient_field,
-            prime=request.source.prime,
-            degree_min=request.source.degree_min,
-            degree_max=request.source.degree_min + len(cone_basis_sizes) - 1,
-            basis_sizes=cone_basis_sizes,
-            differential_matrices=cone_diffs,
-        ),
+        value=value,
     )
 
 
@@ -942,21 +935,81 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
     degree_min = left.degree_min + right.degree_min
     degree_max = degree_min + group_count - 1
 
-    return TensorProductResult(
-        tensor_basis_sizes=tensor_basis_sizes,
-        tensor_differential_matrices=tensor_diffs,
+    value = ChainComplexValue(
         coefficient_field=left.coefficient_field,
         prime=left.prime,
         degree_min=degree_min,
         degree_max=degree_max,
+        basis_sizes=tensor_basis_sizes,
+        differential_matrices=tensor_diffs,
+    )
+    return TensorProductResult._from_kernel(
+        tensor_basis_sizes=tensor_basis_sizes,
+        tensor_differential_matrices=tensor_diffs,
         left=left,
         right=right,
-        value=ChainComplexValue(
-            coefficient_field=left.coefficient_field,
-            prime=left.prime,
-            degree_min=degree_min,
-            degree_max=degree_max,
-            basis_sizes=tensor_basis_sizes,
-            differential_matrices=tensor_diffs,
-        ),
+        value=value,
     )
+
+
+def verify_homology_result(result: HomologyResult) -> bool:
+    """Independently replay a bounded supplied homology claim."""
+    try:
+        request = ComputeHomologyRequest(complex=result.complex)
+        return compute_homology(request) == result
+    except (ValueError, PydanticCustomError):
+        return False
+
+
+def verify_mapping_cone_result(result: MappingConeResult) -> bool:
+    """Independently replay a bounded supplied mapping-cone claim."""
+    try:
+        request = MappingConeRequest(
+            source=result.source,
+            target=result.target,
+            map_matrices=result.map_matrices,
+        )
+        return compute_mapping_cone(request) == result
+    except (ValueError, PydanticCustomError):
+        return False
+
+
+def verify_tensor_product_result(result: TensorProductResult) -> bool:
+    """Independently replay a bounded supplied tensor-product claim."""
+    try:
+        return (
+            compute_tensor_product(
+                TensorProductRequest(left=result.left, right=result.right)
+            )
+            == result
+        )
+    except (ValueError, PydanticCustomError):
+        return False
+
+
+def verify_verification_result(result: VerificationResult) -> bool:
+    """Independently replay a bounded supplied verification verdict."""
+    try:
+        if result.complex is not None:
+            return (
+                verify_differential(VerifyDifferentialRequest(complex=result.complex))
+                == result
+            )
+        if (
+            result.source is not None
+            and result.target is not None
+            and result.map_matrices is not None
+        ):
+            return (
+                verify_chain_map(
+                    VerifyChainMapRequest(
+                        source=result.source,
+                        target=result.target,
+                        map_matrices=result.map_matrices,
+                    )
+                )
+                == result
+            )
+    except (ValueError, PydanticCustomError):
+        return False
+    return False

@@ -2,6 +2,8 @@
 
 from math import isqrt
 
+from pydantic import ValidationError
+
 from jacobian.math.integral_binary_quadratic_forms._models import (
     BinaryQuadraticFormCheckRequest,
     BinaryQuadraticFormCheckResult,
@@ -151,7 +153,7 @@ def compute_check(
     disc = b * b - 4 * a * c
 
     if a <= 0:
-        return BinaryQuadraticFormCheckResult(
+        return BinaryQuadraticFormCheckResult._from_kernel(
             a=a,
             b=b,
             c=c,
@@ -159,7 +161,7 @@ def compute_check(
             obstruction="a<=0: form is not positive definite (a must be positive)",
         )
     if disc >= 0:
-        return BinaryQuadraticFormCheckResult(
+        return BinaryQuadraticFormCheckResult._from_kernel(
             a=a,
             b=b,
             c=c,
@@ -168,7 +170,7 @@ def compute_check(
         )
     g = _gcd(_gcd(abs(a), abs(b)), abs(c))
     if g > 1:
-        return BinaryQuadraticFormCheckResult(
+        return BinaryQuadraticFormCheckResult._from_kernel(
             a=a,
             b=b,
             c=c,
@@ -176,7 +178,7 @@ def compute_check(
             obstruction=f"gcd(a,b,c)={g}>1: form is not primitive",
         )
     if disc % 4 not in (0, 1):
-        return BinaryQuadraticFormCheckResult(
+        return BinaryQuadraticFormCheckResult._from_kernel(
             a=a,
             b=b,
             c=c,
@@ -184,7 +186,7 @@ def compute_check(
             obstruction=f"discriminant D={disc} mod 4 = {disc % 4}: must be 0 or 1",
         )
 
-    return BinaryQuadraticFormCheckResult(
+    return BinaryQuadraticFormCheckResult._from_kernel(
         a=a,
         b=b,
         c=c,
@@ -202,7 +204,7 @@ def compute_evaluate(
         request.form.a, request.form.b, request.form.c, request.x, request.y
     )
     primitive = _gcd(request.x, request.y) == 1
-    return BinaryQuadraticFormEvaluateResult(
+    return BinaryQuadraticFormEvaluateResult._from_kernel(
         form=request.form,
         x=request.x,
         y=request.y,
@@ -217,7 +219,7 @@ def compute_reduce(
     """Gauss-reduce a primitive positive-definite form."""
 
     ra, rb, rc, p, q, r, s = _reduce(request.form.a, request.form.b, request.form.c)
-    return ReducedBinaryQuadraticFormResult(
+    return ReducedBinaryQuadraticFormResult._from_kernel(
         form=request.form,
         reduced_form=PrimitivePositiveDefiniteBinaryQuadraticForm(a=ra, b=rb, c=rc),
         matrix=((p, q), (r, s)),
@@ -235,7 +237,7 @@ def compute_proper_equivalence(
     disc1 = b1 * b1 - 4 * a1 * c1
     disc2 = b2 * b2 - 4 * a2 * c2
     if disc1 != disc2:
-        return ProperEquivalenceResult(
+        return ProperEquivalenceResult._from_kernel(
             first=request.first,
             second=request.second,
             status="NOT_PROPERLY_EQUIVALENT",
@@ -245,7 +247,7 @@ def compute_proper_equivalence(
     ra2, rb2, rc2, p2, q2, r2, s2 = _reduce(a2, b2, c2)
 
     if (ra1, rb1, rc1) != (ra2, rb2, rc2):
-        return ProperEquivalenceResult(
+        return ProperEquivalenceResult._from_kernel(
             first=request.first,
             second=request.second,
             status="NOT_PROPERLY_EQUIVALENT",
@@ -264,7 +266,7 @@ def compute_proper_equivalence(
     wr = r1 * inv_p2 + s1 * inv_r2
     ws = r1 * inv_q2 + s1 * inv_s2
 
-    return ProperEquivalenceResult(
+    return ProperEquivalenceResult._from_kernel(
         first=request.first,
         second=request.second,
         status="PROPERLY_EQUIVALENT",
@@ -278,10 +280,8 @@ def compute_reduced_classes(
     """Enumerate all reduced primitive positive-definite classes of a discriminant."""
 
     classes = _enumerate_reduced_classes(request.discriminant)
-    return ReducedClassesResult(
-        discriminant=request.discriminant,
-        classes=classes,
-        class_number=len(classes),
+    return ReducedClassesResult._from_kernel(
+        discriminant=request.discriminant, classes=classes
     )
 
 
@@ -332,13 +332,62 @@ def compute_representations(
 ) -> BinaryQuadraticFormRepresentationsResult:
     """Return all ordered signed integer representations of one target exactly."""
     representations = _enumerate_representations(request.form, request.target)
-    return BinaryQuadraticFormRepresentationsResult(
-        form=request.form,
-        target=request.target,
-        representations=representations,
-        count=len(representations),
-        primitive_count=sum(row.primitive for row in representations),
+    return BinaryQuadraticFormRepresentationsResult._from_kernel(
+        form=request.form, target=request.target, representations=representations
     )
+
+
+def verify_check_result(result: BinaryQuadraticFormCheckResult) -> bool:
+    """Verify an independently supplied form-domain classification."""
+    expected = compute_check(
+        BinaryQuadraticFormCheckRequest(a=result.a, b=result.b, c=result.c)
+    )
+    return result == expected
+
+
+def verify_evaluate_result(result: BinaryQuadraticFormEvaluateResult) -> bool:
+    """Verify an independently supplied exact form-evaluation claim."""
+    try:
+        expected = compute_evaluate(
+            BinaryQuadraticFormEvaluateRequest(form=result.form, x=result.x, y=result.y)
+        )
+    except ValidationError:
+        return False
+    return result == expected
+
+
+def verify_reduced_form_result(result: ReducedBinaryQuadraticFormResult) -> bool:
+    """Verify an independently supplied Gauss-reduction result."""
+    expected = compute_reduce(BinaryQuadraticFormReduceRequest(form=result.form))
+    return result == expected
+
+
+def verify_proper_equivalence_result(result: ProperEquivalenceResult) -> bool:
+    """Verify an independently supplied proper-equivalence decision and witness."""
+    expected = compute_proper_equivalence(
+        BinaryQuadraticFormProperEquivRequest(first=result.first, second=result.second)
+    )
+    return result == expected
+
+
+def verify_representations_result(
+    result: BinaryQuadraticFormRepresentationsResult,
+) -> bool:
+    """Verify an independently supplied complete representation-set claim."""
+    expected = compute_representations(
+        BinaryQuadraticFormRepresentationsRequest(
+            form=result.form, target=result.target
+        )
+    )
+    return result == expected
+
+
+def verify_reduced_classes_result(result: ReducedClassesResult) -> bool:
+    """Verify an independently supplied complete reduced-class enumeration."""
+    expected = compute_reduced_classes(
+        BinaryQuadraticFormReducedClassesRequest(discriminant=result.discriminant)
+    )
+    return result == expected
 
 
 def _enumerate_reduced_classes(

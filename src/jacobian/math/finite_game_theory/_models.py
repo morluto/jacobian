@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -13,6 +13,16 @@ from jacobian.math.finite_game_theory.values import DeterministicTerminalGame
 
 MAX_PLAYERS = 10
 MAX_STRATEGIES = 50
+MAX_EXACT_EQUILIBRIUM_WORK = 32_768
+
+
+def _exact_equilibrium_work(matrix: PayoffMatrix) -> int:
+    """Return the conservative exact primal/dual work measure for ``matrix``."""
+
+    denominator_digits = sum(len(value.den) for value in matrix.entries)
+    numerator_digits = max(len(value.num.lstrip("-")) for value in matrix.entries)
+    elimination_dimension = max(matrix.n_rows, matrix.n_cols) + 2
+    return elimination_dimension * (denominator_digits + numerator_digits)
 
 
 class PayoffMatrix(StrictModel):
@@ -22,9 +32,21 @@ class PayoffMatrix(StrictModel):
     (for zero-sum games, it is the negative of the row player's payoff).
     """
 
-    n_rows: int = Field(ge=1, le=MAX_STRATEGIES)
-    n_cols: int = Field(ge=1, le=MAX_STRATEGIES)
-    entries: tuple[CanonicalRational, ...]
+    n_rows: int = Field(
+        ge=1,
+        le=MAX_STRATEGIES,
+        description="Number of row-player strategies.",
+    )
+    n_cols: int = Field(
+        ge=1,
+        le=MAX_STRATEGIES,
+        description="Number of column-player strategies.",
+    )
+    entries: tuple[CanonicalRational, ...] = Field(
+        description=(
+            "Row-major payoff entries. The tuple has exactly n_rows * n_cols elements."
+        )
+    )
 
     @model_validator(mode="after")
     def require_valid_size(self) -> Self:
@@ -39,18 +61,36 @@ class PayoffMatrix(StrictModel):
 class ZeroSumGameRequest(StrictModel):
     """A 2-player zero-sum game specified by the row player's payoff matrix."""
 
-    payoff_matrix: PayoffMatrix
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "A 2-player zero-sum game specified by the row player's payoff "
+                "matrix. Exact primal and dual linear programs are admitted only "
+                "when (max(n_rows, n_cols) + 2) * (sum of payoff denominator "
+                "decimal digits + maximum payoff numerator decimal digits) is at "
+                f"most {MAX_EXACT_EQUILIBRIUM_WORK}."
+            ),
+            "x-jacobian-bounds": {
+                "max_exact_equilibrium_work": MAX_EXACT_EQUILIBRIUM_WORK,
+            },
+        }
+    )
+
+    payoff_matrix: PayoffMatrix = Field(
+        description=(
+            "Row-major zero-sum payoff matrix. Its entries must have shape "
+            "n_rows * n_cols and must fit the request's published coupled "
+            "exact-equilibrium work bound."
+        )
+    )
 
     @model_validator(mode="after")
     def require_bounded_exact_equilibrium(self) -> Self:
         matrix = self.payoff_matrix
-        denominator_digits = sum(len(value.den) for value in matrix.entries)
-        numerator_digits = max(len(value.num.lstrip("-")) for value in matrix.entries)
-        elimination_dimension = max(matrix.n_rows, matrix.n_cols) + 2
-        if elimination_dimension * (denominator_digits + numerator_digits) > 32_768:
+        if _exact_equilibrium_work(matrix) > MAX_EXACT_EQUILIBRIUM_WORK:
             raise PydanticCustomError(
                 "finite_game.exact_equilibrium_budget",
-                "payoffs exceed the exact-equilibrium result budget",
+                "payoffs exceed the published exact-equilibrium work bound",
             )
         return self
 
@@ -82,6 +122,7 @@ class DeterministicTerminalGameRequest(StrictModel):
 
 
 __all__ = [
+    "MAX_EXACT_EQUILIBRIUM_WORK",
     "BestResponseResult",
     "DeterministicTerminalGameRequest",
     "NashEquilibriumResult",

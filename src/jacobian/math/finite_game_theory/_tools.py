@@ -7,6 +7,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_game_theory._models import (
+    MAX_EXACT_EQUILIBRIUM_WORK,
     BestResponseResult,
     DeterministicTerminalGameRequest,
     NashEquilibriumResult,
@@ -112,7 +113,10 @@ FINITE_GAME_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "game_theory.nash_equilibrium.compute",
         "Compute Nash equilibrium of a zero-sum game",
         "Find the Nash equilibrium of a 2-player zero-sum game using "
-        "exact rational primal and dual linear programs.",
+        "exact rational primal and dual linear programs. Payoff entries are "
+        "row-major with n_rows * n_cols entries; exact-equilibrium admission "
+        "requires its published coupled work measure to be at most "
+        f"{MAX_EXACT_EQUILIBRIUM_WORK}.",
         ZeroSumGameRequest,
         NashEquilibriumResult,
         compute_nash_equilibrium,

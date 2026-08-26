@@ -285,8 +285,14 @@ def enumerate_divisors(request: FactorizationRequest) -> DivisorListResult:
     try:
         divisors = _divisors_from_factors(factors, proper=False, value=value)
     except ValueError:
-        return DivisorListResult._unknown(value=request.value, convention="ALL_POSITIVE_DIVISORS", detail="the complete divisor family exceeds the admitted output bound")
-    return DivisorListResult(value=request.value, divisors=divisors, convention="ALL_POSITIVE_DIVISORS")
+        return DivisorListResult._unknown(
+            value=request.value,
+            convention="ALL_POSITIVE_DIVISORS",
+            detail="the complete divisor family exceeds the admitted output bound",
+        )
+    return DivisorListResult(
+        value=request.value, divisors=divisors, convention="ALL_POSITIVE_DIVISORS"
+    )
 
 
 def enumerate_proper_divisors(request: FactorizationRequest) -> DivisorListResult:
@@ -303,8 +309,14 @@ def enumerate_proper_divisors(request: FactorizationRequest) -> DivisorListResul
     try:
         divisors = _divisors_from_factors(factors, proper=True, value=value)
     except ValueError:
-        return DivisorListResult._unknown(value=request.value, convention="PROPER_DIVISORS", detail="the complete divisor family exceeds the admitted output bound")
-    return DivisorListResult(value=request.value, divisors=divisors, convention="PROPER_DIVISORS")
+        return DivisorListResult._unknown(
+            value=request.value,
+            convention="PROPER_DIVISORS",
+            detail="the complete divisor family exceeds the admitted output bound",
+        )
+    return DivisorListResult(
+        value=request.value, divisors=divisors, convention="PROPER_DIVISORS"
+    )
 
 
 def factorize_primes(request: FactorizationRequest) -> PrimeFactorizationResult:

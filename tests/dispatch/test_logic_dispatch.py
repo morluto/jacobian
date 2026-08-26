@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from jacobian.catalog.catalog import Catalog
@@ -79,3 +81,46 @@ def test_dispatch_reports_memory_exhaustion_for_smt_solve(monkeypatch) -> None:
 
     assert result.output["outcome"] == "UNKNOWN"
     assert result.output["exhausted"] == "memory"
+
+
+def test_dispatch_preserves_the_cancelled_lpr_backend_outcome(monkeypatch) -> None:
+    """Cancellation crosses the LPR adapter and dispatch without becoming ERROR."""
+
+    from jacobian.math.logic import _sat as sat
+
+    monkeypatch.setattr(sat.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(sat, "_cake_lpr_is_supported", lambda _path: True)
+    monkeypatch.setattr(
+        sat,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=None,
+            stdout=b"",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=False,
+            cancelled=True,
+        ),
+    )
+
+    result = invoke_operation(
+        "sat.refutation.check",
+        {
+            "cnf": {"variables": ["x"], "clauses": [[-1], [1]]},
+            "refutation": {
+                "steps": [
+                    {
+                        "kind": "addition",
+                        "clause_id": 3,
+                        "clause": [],
+                        "at_hint_clause_ids": [1, 2],
+                        "propagation_hints": [],
+                    }
+                ]
+            },
+        },
+        Catalog.open(),
+    )
+
+    assert result.output["outcome"] == "CANCELLED"

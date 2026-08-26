@@ -361,7 +361,7 @@ def test_lpr_refutation_projects_a_recognized_checker_rejection(
                 timed_out=False,
                 cancelled=True,
             ),
-            "ERROR",
+            "CANCELLED",
         ),
         (
             SimpleNamespace(

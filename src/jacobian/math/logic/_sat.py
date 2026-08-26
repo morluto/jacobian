@@ -246,7 +246,12 @@ class SatRefutationCheckResult(StrictModel):
     """A source-bound LPR replay outcome; only VALID_REFUTATION proves UNSAT."""
 
     outcome: Literal[
-        "VALID_REFUTATION", "INVALID_REFUTATION", "UNAVAILABLE", "TIMEOUT", "ERROR"
+        "VALID_REFUTATION",
+        "INVALID_REFUTATION",
+        "UNAVAILABLE",
+        "TIMEOUT",
+        "CANCELLED",
+        "ERROR",
     ]
     cnf: CanonicalCnf
     refutation: SatLprRefutation
@@ -534,11 +539,13 @@ def check_sat_refutation(
             )
     except OSError:
         return unavailable("The fixed Cake LPR backend could not be started.")
-    outcome: Literal["INVALID_REFUTATION", "UNAVAILABLE", "TIMEOUT", "ERROR"]
+    outcome: Literal[
+        "INVALID_REFUTATION", "UNAVAILABLE", "TIMEOUT", "CANCELLED", "ERROR"
+    ]
     if completed.timed_out:
         outcome, detail = "TIMEOUT", "Cake LPR exceeded the declared wall-time limit."
     elif completed.cancelled:
-        outcome, detail = "ERROR", "Cake LPR execution was cancelled."
+        outcome, detail = "CANCELLED", "Cake LPR execution was cancelled."
     elif completed.stdout_exceeded or completed.stderr_exceeded:
         outcome, detail = "ERROR", "Cake LPR exceeded the diagnostic-output limit."
     elif (

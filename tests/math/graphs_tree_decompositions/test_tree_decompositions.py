@@ -7,6 +7,8 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import CanonicalLimits, canonicalize_json
+from jacobian.catalog.models import OperationResult
 from jacobian.math.graphs.tree_decompositions import TreeDecomposition
 from jacobian.math.graphs.tree_decompositions._models import (
     AdhesionsRequest,
@@ -46,6 +48,20 @@ def _path_decomposition() -> TreeDecomposition:
         tree_nodes=("t0", "t1"),
         tree_edges=(("t0", "t1"),),
         bags=(("a", "b"), ("b", "c")),
+    )
+
+
+def _labeled_path_decomposition(
+    *, node_count: int, label_body: str
+) -> TreeDecomposition:
+    nodes = tuple(f"n{index:03d}_{label_body}" for index in range(node_count))
+    return TreeDecomposition(
+        graph=SimpleUndirectedGraph(vertices=("a",), edges=()),
+        tree_nodes=nodes,
+        tree_edges=tuple(
+            (nodes[index], nodes[index + 1]) for index in range(node_count - 1)
+        ),
+        bags=(("a",),) * node_count,
     )
 
 
@@ -154,6 +170,35 @@ class TestReroot:
         result = compute_reroot(RerootRequest(decomposition=td, root="t0"))
         assert result.parent["t0"] is None
         assert result.children["t0"] == ("t1",)
+
+    def test_admits_decomposed_labels_whose_canonical_projection_fits(self) -> None:
+        # Each raw label encodes to 337 bytes, so measuring the unnormalized
+        # spelling exceeds the 10 MiB transport limit; NFC composes each
+        # e + U+0301 pair into a 2-byte character and the canonical
+        # projection of the same request fits.
+        td = _labeled_path_decomposition(node_count=256, label_body="e\u0301" * 110)
+        request = RerootRequest(decomposition=td, root=td.tree_nodes[0])
+        projected = compute_reroot(request).model_dump(mode="json")
+        assert len(canonicalize_json(projected)) <= CanonicalLimits().max_output_bytes
+        public_result = OperationResult(
+            operation_id="graph.tree_decomposition.reroot.compute",
+            runtime_ms=0,
+            output=projected,
+        )
+        assert (
+            OperationResult.model_validate_json(public_result.model_dump_json())
+            == public_result
+        )
+
+    def test_rejects_projection_over_the_canonical_transport_limit(self) -> None:
+        # ASCII labels are unchanged by NFC, so the canonical projection
+        # itself exceeds the limit and admission must still reject.
+        td = _labeled_path_decomposition(node_count=256, label_body="x" * 394)
+        with pytest.raises(ValidationError) as exc_info:
+            RerootRequest(decomposition=td, root=td.tree_nodes[0])
+        assert exc_info.value.errors()[0]["type"] == (
+            "graph.reroot_result_exceeds_transport_limit"
+        )
 
 
 # ---------------------------------------------------------------------------

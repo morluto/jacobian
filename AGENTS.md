@@ -225,6 +225,18 @@ service behavior.
 - Preserve unrelated work in a shared checkout. Agents must not concurrently
   switch branches, stage, commit, clean, rewrite history, or edit overlapping
   paths.
+- For a parallel change wave, give each writer an isolated worktree and a
+  distinct branch. A branch has one active writer at a time; the coordinator
+  records each issue or PR claim before implementation, and a worker checks
+  for a current claim before starting the same scope.
+- Before a first public-operation push, search open pull requests for the
+  operation ID. If this change intentionally replaces an existing operation,
+  say which contract it supersedes in the PR body. After resolving a catalog
+  conflict, run catalog conformance before pushing and compare the final
+  branch diff with the intended files and public symbols.
+- Fetch the branch immediately before pushing. If its head changed, inspect
+  the landed work instead of retrying an equivalent fix. Never push to a
+  merged or closed PR head: move remaining work to a new follow-up branch.
 - Run `make check` and the named lane that owns changed behavior before
   handoff. Only the coordinating agent may run exhaustive validation in a
   shared checkout.

@@ -145,6 +145,14 @@ while another agent is working. Integrate their edits first, then run the
 planned checks on the final tree. Use isolated worktrees only when the workflow
 explicitly assigns them.
 
+For parallel pull-request work, each writer owns one isolated worktree and
+one branch at a time. Record an issue or PR claim before implementation; check
+for a current claim and for sibling public-operation IDs before beginning the
+same scope. Fetch immediately before pushing and inspect a changed head rather
+than retrying equivalent work. Do not recreate a merged or closed pull-request
+branch: start a follow-up branch instead. The agent-facing version of this
+protocol, including conflict-resolution checks, lives in `AGENTS.md`.
+
 Before final validation, run `make check` plus the named lane that owns the
 changed behavior. If the tree changes during validation, rerun checks whose
 evidence was invalidated by that change; do not describe results from an

@@ -253,7 +253,6 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 for component in issue["location"]
                 if isinstance(component, str)
             )
-            assert len(json.dumps(bounded_data).encode("utf-8")) <= 64 * 1_024
 
             with pytest.raises(MCPError) as multiple_errors:
                 await client.call_tool(

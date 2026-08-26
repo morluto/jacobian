@@ -130,14 +130,19 @@ class ProjectivePointSequence(StrictModel):
     def __len__(self) -> int:
         return len(self.coordinates)
 
-    @property
-    def points(self) -> Iterator[ProjectivePoint]:
-        """Iterate the sequence as typed parent-bound projective points."""
+    def __iter__(self) -> Iterator[ProjectivePoint]:
+        """Iterate as typed projective points bound to ``space``."""
 
         return (
             ProjectivePoint(space=self.space, coordinates=coordinates)
             for coordinates in self.coordinates
         )
+
+    @property
+    def points(self) -> Iterator[ProjectivePoint]:
+        """Iterate the sequence as typed parent-bound projective points."""
+
+        return iter(self)
 
 
 __all__ = [

@@ -194,7 +194,7 @@ def test_enumeration_sequence_composes_into_embeddings_directly() -> None:
         finite_geometry.embed_projective_point_in_finite_field(
             point, presentation, row_axis
         )
-        for point in result.sequence.points
+        for point in result.sequence
     ]
 
     assert [tuple(v.coordinates for v in d.coordinates) for d in directions] == [
@@ -202,7 +202,7 @@ def test_enumeration_sequence_composes_into_embeddings_directly() -> None:
         ((1, 0), (0, 0)),
         ((1, 0), (1, 0)),
     ]
-    for point in result.sequence.points:
+    for point in result.sequence:
         assert isinstance(point, finite_geometry.ProjectivePoint)
         assert point.space.axis == ("x", "y")
 

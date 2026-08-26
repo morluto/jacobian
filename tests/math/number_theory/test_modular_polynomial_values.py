@@ -25,6 +25,16 @@ def _request(*, exponent: int = 1) -> ModularPolynomialResidueImageRequest:
     )
 
 
+def _request_with_coefficient(
+    coefficient: str,
+) -> ModularPolynomialResidueImageRequest:
+    return ModularPolynomialResidueImageRequest(
+        modulus=5,
+        variables=(ModularPolynomialVariable(name="x", residues=(0, 1)),),
+        terms=(ModularPolynomialTerm(coefficient=coefficient, exponents=(1,)),),
+    )
+
+
 def test_residue_image_consumes_and_produces_the_canonical_term_types() -> None:
     request = _request()
 
@@ -52,3 +62,38 @@ def test_residue_image_consumes_and_produces_the_canonical_term_types() -> None:
 def test_residue_image_keeps_its_narrower_exponent_admission() -> None:
     with expect_validation("number_theory.term_outside_residue_image_admission"):
         _request(exponent=33)
+
+
+def test_published_term_schema_matches_residue_image_admission() -> None:
+    term_schema = ModularPolynomialResidueImageRequest.model_json_schema()[
+        "properties"
+    ]["terms"]["items"]
+
+    assert term_schema["properties"]["coefficient"]["maxLength"] == 256
+    assert term_schema["properties"]["exponents"]["maxItems"] == 6
+    assert term_schema["properties"]["exponents"]["items"]["maximum"] == 32
+
+    shared_schema = ModularPolynomialTerm.model_json_schema()
+    assert shared_schema["properties"]["coefficient"]["maxLength"] == 257
+    assert shared_schema["properties"]["exponents"]["maxItems"] == 20
+
+
+def test_coefficient_boundary_follows_the_advertised_envelope() -> None:
+    admitted = _request_with_coefficient("-" + "9" * 255)
+    assert int(admitted.terms[0].coefficient) < 0
+
+    with expect_validation("number_theory.term_outside_residue_image_admission"):
+        _request_with_coefficient("-" + "9" * 256)
+
+
+def test_shared_term_type_retains_its_wider_envelope_elsewhere() -> None:
+    widest = "-" + "9" * 256
+    identity = modular_polynomial_identity(
+        ModularPolynomialIdentityRequest(
+            modulus=5,
+            variables=("x",),
+            left=(ModularPolynomialTerm(coefficient=widest, exponents=(1,)),),
+        )
+    )
+
+    assert identity.normalized_left[0].coefficient == int(widest) % 5

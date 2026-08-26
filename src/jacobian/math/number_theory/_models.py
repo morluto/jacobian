@@ -16,7 +16,15 @@ from collections import Counter
 from itertools import product
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic import (
+    Field,
+    StrictBool,
+    StrictInt,
+    StringConstraints,
+    WithJsonSchema,
+    model_validator,
+)
+from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -526,6 +534,34 @@ class ModularPolynomialVariable(StrictModel):
         return self
 
 
+def _residue_image_term_schema() -> JsonSchemaValue:
+    """Project the shared term schema onto residue-image admission.
+
+    ``ModularPolynomialTerm`` publishes the widest consumer envelope: a
+    coefficient of a sign plus 256 digits and up to 20 exponents of
+    magnitude 256. Residue-image admission rejects any coefficient string
+    longer than ``_MAX_INTEGER_LENGTH`` characters, exponent magnitudes
+    above ``_MAX_RESIDUE_EXPONENT``, and — because every exponent vector
+    must match at most ``_MAX_RESIDUE_VARIABLES`` variables — vectors longer
+    than six entries. Discovery publishes exactly that narrower envelope so
+    schema-driven callers never submit a term the request validator rejects.
+    Validation itself stays with the shared runtime type.
+    """
+
+    schema = _ModularPolynomialTerm.model_json_schema()
+    schema["properties"]["coefficient"]["maxLength"] = _MAX_INTEGER_LENGTH
+    exponents = schema["properties"]["exponents"]
+    exponents["maxItems"] = _MAX_RESIDUE_VARIABLES
+    exponents["items"]["maximum"] = _MAX_RESIDUE_EXPONENT
+    return schema
+
+
+ResidueImagePolynomialTerm = Annotated[
+    _ModularPolynomialTerm,
+    WithJsonSchema(_residue_image_term_schema()),
+]
+
+
 class ModularPolynomialResidueImageRequest(StrictModel):
     """A bounded sparse polynomial over declared finite residue domains."""
 
@@ -534,7 +570,7 @@ class ModularPolynomialResidueImageRequest(StrictModel):
         min_length=1,
         max_length=_MAX_RESIDUE_VARIABLES,
     )
-    terms: tuple[_ModularPolynomialTerm, ...] = Field(
+    terms: tuple[ResidueImagePolynomialTerm, ...] = Field(
         min_length=0,
         max_length=_MAX_RESIDUE_TERMS,
     )

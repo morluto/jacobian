@@ -1,4 +1,4 @@
-"""Execution helpers for numerical-semigroup element invariants."""
+"""Element invariant operations for numerical semigroups."""
 
 from __future__ import annotations
 

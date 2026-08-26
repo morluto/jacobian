@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 from tests.math.numerical_semigroups._support import numerical_semigroup_error
 
-from jacobian.math.numerical_semigroups._element_invariants import (
+from jacobian.math.numerical_semigroups._element_invariant_operations import (
     compute_element_catenary_degree,
     compute_element_delta_set,
     compute_element_elasticity,
@@ -15,7 +15,7 @@ from jacobian.math.numerical_semigroups._factorization_operations import (
     compute_factorization_lengths,
     compute_factorizations,
 )
-from jacobian.math.numerical_semigroups._global_invariants import (
+from jacobian.math.numerical_semigroups._global_invariant_operations import (
     compute_betti_elements,
     compute_catenary_degree,
     compute_delta_set,

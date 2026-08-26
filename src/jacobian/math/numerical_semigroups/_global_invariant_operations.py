@@ -1,4 +1,4 @@
-"""Execution helpers for global numerical-semigroup invariants."""
+"""Global invariant operations for numerical semigroups."""
 
 from __future__ import annotations
 

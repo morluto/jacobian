@@ -64,6 +64,8 @@ def test_partitioned_operation_modules_select_catalog_examples() -> None:
         "_factorization_operations.py",
         "_presentation_operations.py",
         "_summary_operations.py",
+        "_element_invariant_operations.py",
+        "_global_invariant_operations.py",
     ):
         plan = _plan([f"src/jacobian/math/numerical_semigroups/{filename}"])
 

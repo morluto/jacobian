@@ -7,10 +7,10 @@ from math import lcm
 
 from tests.math.numerical_semigroups._support import numerical_semigroup_error
 
-from jacobian.math.numerical_semigroups._element_invariants import (
+from jacobian.math.numerical_semigroups._element_invariant_operations import (
     compute_element_catenary_degree,
 )
-from jacobian.math.numerical_semigroups._global_invariants import (
+from jacobian.math.numerical_semigroups._global_invariant_operations import (
     compute_betti_elements,
     compute_catenary_degree,
     compute_delta_set,

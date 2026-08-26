@@ -298,36 +298,51 @@ class ContainmentProfileResult(StrictModel):
     constant_lambda: StrictInt | None = Field(default=None, ge=0, le=MAX_BLOCKS)
 
     @model_validator(mode="after")
-    def bind_complete_profile_to_source(self) -> Self:
-        from jacobian.math.incidence_structures.operations import (
-            _containment_profile_data,
-        )
+    def require_structural_summary_consistency(self) -> Self:
+        """Validate only relations carried by this result's own fields.
 
-        try:
-            _require_containment_profile_admitted(self.incidence, self.t)
-        except IncidenceStructureAdmissionError as exc:
-            raise _validation_error(exc.reason, str(exc)) from None
-        expected = _containment_profile_data(self.incidence, self.t)
-        actual = (
-            self.subset_profile,
-            self.histogram,
-            self.total_multiplicity,
-            self.min_multiplicity,
-            self.max_multiplicity,
-            self.is_constant,
-            self.constant_lambda,
-        )
-        if actual != expected:
+        Recomputing a profile belongs to ``verify_containment_profile_result``;
+        construction of a kernel result must not re-enter an operation path.
+        """
+        if self.is_constant != (self.min_multiplicity == self.max_multiplicity):
             raise _validation_error(
-                "containment_replay_mismatch",
-                "containment profile does not match the retained incidence source",
+                "containment_constant_mismatch",
+                "constant status must agree with the reported extrema",
             )
-        if len(encode_strict_json(self.model_dump(mode="json"))) > MAX_RESULT_BYTES:
+        expected_lambda = self.min_multiplicity if self.is_constant else None
+        if self.constant_lambda != expected_lambda:
             raise _validation_error(
-                "containment_result_budget_exceeded",
-                "containment profile exceeds the exact output budget",
+                "containment_lambda_mismatch",
+                "constant lambda must agree with the reported extrema",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        incidence: IncidenceStructure,
+        order: int,
+        data: tuple[
+            tuple[tuple[tuple[str, ...], int], ...],
+            tuple[tuple[int, int], ...],
+            int,
+            int,
+            int,
+            bool,
+            int | None,
+        ],
+    ) -> Self:
+        return cls(
+            incidence=incidence,
+            t=order,
+            subset_profile=data[0],
+            histogram=data[1],
+            total_multiplicity=data[2],
+            min_multiplicity=data[3],
+            max_multiplicity=data[4],
+            is_constant=data[5],
+            constant_lambda=data[6],
+        )
 
 
 class IncidenceMultiplicityDifference(StrictModel):
@@ -381,10 +396,6 @@ class IncidenceMomentComparison(StrictModel):
 
     @model_validator(mode="after")
     def bind_moment_to_retained_families(self) -> Self:
-        from jacobian.math.incidence_structures.operations import (
-            _containment_profile_data,
-        )
-
         if self.equal != (not self.differences):
             raise _validation_error(
                 "moment_equality_mismatch",
@@ -433,49 +444,37 @@ class IncidenceMomentComparison(StrictModel):
                     "difference rows must follow point-axis combination order",
                 )
             previous_indices = indices
-        try:
-            _require_containment_profile_admitted(self.left, self.order)
-        except IncidenceStructureAdmissionError as exc:
-            raise _validation_error(exc.reason, str(exc)) from None
-        try:
-            _require_containment_profile_admitted(self.right, self.order)
-        except IncidenceStructureAdmissionError as exc:
-            raise _validation_error(exc.reason, str(exc)) from None
-        left_profile = _containment_profile_data(self.left, self.order)
-        right_profile = _containment_profile_data(self.right, self.order)
-        expected_differences = tuple(
-            (left_entry[0], left_entry[1], right_entry[1])
-            for left_entry, right_entry in zip(
-                left_profile[0],
-                right_profile[0],
-                strict=True,
-            )
-            if left_entry[1] != right_entry[1]
-        )
-        actual_differences = tuple(
-            (
-                difference.subset,
-                difference.left_multiplicity,
-                difference.right_multiplicity,
-            )
+        if any(
+            difference.left_multiplicity > self.left_total
+            or difference.right_multiplicity > self.right_total
             for difference in self.differences
-        )
-        if actual_differences != expected_differences:
+        ):
             raise _validation_error(
-                "moment_replay_mismatch",
-                "moment comparison does not match the retained incidence families",
-            )
-        if self.left_total != left_profile[2] or self.right_total != right_profile[2]:
-            raise _validation_error(
-                "moment_totals_mismatch",
-                "moment totals do not match the retained incidence families",
-            )
-        if len(encode_strict_json(self.model_dump(mode="json"))) > MAX_RESULT_BYTES:
-            raise _validation_error(
-                "moment_result_budget_exceeded",
-                "moment comparison exceeds the exact output budget",
+                "moment_total_below_difference",
+                "moment totals must bound every reported multiplicity",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        left: IncidenceStructure,
+        right: IncidenceStructure,
+        order: int,
+        left_total: int,
+        right_total: int,
+        differences: tuple[IncidenceMultiplicityDifference, ...],
+    ) -> Self:
+        return cls(
+            left=left,
+            right=right,
+            points=left.points,
+            order=order,
+            left_total=left_total,
+            right_total=right_total,
+            differences=differences,
+            equal=not differences,
+        )
 
 
 class IncidenceTradeRequest(StrictModel):
@@ -529,30 +528,53 @@ class IncidenceTradeResult(StrictModel):
     positive_moments_equal: StrictBool
 
     @model_validator(mode="after")
-    def bind_comparison_to_sources(self) -> Self:
-        from jacobian.math.incidence_structures.operations import _incidence_trade_data
-
-        try:
-            _require_incidence_trade_admitted(self.left, self.right, self.max_order)
-        except IncidenceStructureAdmissionError as exc:
-            raise _validation_error(exc.reason, str(exc)) from None
-        expected = _incidence_trade_data(self.left, self.right, self.max_order)
-        actual = (
-            self.zeroth_difference,
-            self.comparisons,
-            self.positive_moments_equal,
-        )
-        if actual != expected:
+    def require_comparison_shape(self) -> Self:
+        if len(self.comparisons) != self.max_order:
             raise _validation_error(
-                "trade_replay_mismatch",
-                "incidence trade comparison does not match the retained sources",
+                "trade_comparison_count_mismatch",
+                "trade results require one comparison for every requested order",
             )
-        if len(encode_strict_json(self.model_dump(mode="json"))) > MAX_RESULT_BYTES:
+        if tuple(comparison.order for comparison in self.comparisons) != tuple(
+            range(1, self.max_order + 1)
+        ):
             raise _validation_error(
-                "trade_result_budget_exceeded",
-                "incidence trade comparison exceeds the exact output budget",
+                "trade_comparison_order_mismatch",
+                "trade comparisons must be in increasing order from one",
+            )
+        if any(
+            comparison.left != self.left or comparison.right != self.right
+            for comparison in self.comparisons
+        ):
+            raise _validation_error(
+                "trade_comparison_source_mismatch",
+                "each moment comparison must retain the trade sources",
+            )
+        if self.positive_moments_equal != all(
+            comparison.equal for comparison in self.comparisons
+        ):
+            raise _validation_error(
+                "trade_equality_mismatch",
+                "positive-moment equality must agree with every comparison",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        left: IncidenceStructure,
+        right: IncidenceStructure,
+        max_order: int,
+        zeroth_difference: int,
+        comparisons: tuple[IncidenceMomentComparison, ...],
+    ) -> Self:
+        return cls(
+            left=left,
+            right=right,
+            max_order=max_order,
+            zeroth_difference=zeroth_difference,
+            comparisons=comparisons,
+            positive_moments_equal=all(comparison.equal for comparison in comparisons),
+        )
 
 
 # ---------------------------------------------------------------------------

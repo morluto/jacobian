@@ -20,4 +20,10 @@ def compute_product(
     )
 
 
-__all__ = ["compute_product"]
+def verify_product_result(result: CrossedProductMultiplyResult) -> bool:
+    """Verify an independently supplied product in the admitted envelope."""
+
+    return result.product == multiply(result.left, result.right)
+
+
+__all__ = ["compute_product", "verify_product_result"]

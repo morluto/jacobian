@@ -115,12 +115,10 @@ def compute_chevalley_eilenberg_complex(
     constants, which the request model validates as a Lie algebra.
     """
     g = request.lie_algebra
-    return ChevalleyEilenbergComplexResult(
-        lie_algebra=g,
-        dimension=g.dimension,
-        group_dimensions=_chain_group_dimensions(g.dimension),
-        differentials=_ce_differentials(g),
-        prime=g.prime,
+    return ChevalleyEilenbergComplexResult._from_kernel(
+        g,
+        _chain_group_dimensions(g.dimension),
+        _ce_differentials(g),
     )
 
 
@@ -166,15 +164,32 @@ def compute_lie_homology(request: LieHomologyRequest) -> LieHomologyResult:
     """
     g = request.lie_algebra
 
-    return LieHomologyResult(
-        lie_algebra=g,
-        groups=lie_homology_groups(g),
-        dimension=g.dimension,
-        prime=g.prime,
+    return LieHomologyResult._from_kernel(
+        g,
+        lie_homology_groups(g),
     )
+
+
+def verify_ce_complex_result(result: ChevalleyEilenbergComplexResult) -> bool:
+    """Replay an independently supplied CE complex in its admitted envelope.
+
+    ``LieAlgebra`` bounds the dimension so this rebuilds at most the dense
+    complex described by the request contract; it is deliberately opt-in for
+    untrusted claims and never a result-model side effect.
+    """
+
+    return result.differentials == _ce_differentials(result.lie_algebra)
+
+
+def verify_lie_homology_result(result: LieHomologyResult) -> bool:
+    """Replay an independently supplied homology claim in its admitted envelope."""
+
+    return result.groups == lie_homology_groups(result.lie_algebra)
 
 
 __all__ = [
     "compute_chevalley_eilenberg_complex",
     "compute_lie_homology",
+    "verify_ce_complex_result",
+    "verify_lie_homology_result",
 ]

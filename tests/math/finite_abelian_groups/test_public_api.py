@@ -8,13 +8,11 @@ from jacobian.math import finite_abelian_groups
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the finite_abelian_groups public API."""
     expected = (
-        "FiniteAbelianGroupFactorizationRequest",
         "FiniteAbelianGroupFactorizationResult",
         "FiniteAbelianNonorthogonalityWitness",
         "FiniteAbelianProductGroup",
         "FiniteAbelianRepresentationCount",
         "FiniteAbelianRepresentationWitness",
-        "FiniteAbelianSpectralPairRequest",
         "FiniteAbelianSpectralPairResult",
         "FiniteAbelianSpectralPairSource",
         "decide_finite_abelian_spectral_pair",

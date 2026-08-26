@@ -146,8 +146,10 @@ class CohomologyGroup(StrictModel):
 class GroupCohomologyResult(StrictModel):
     """Group cohomology groups with trivial coefficients.
 
-    Retains the source request so validation replays the exact bar-complex
-    relation instead of trusting an independently authored table.
+    The source request and exact table stay structurally aligned here. The
+    bar-complex replay is intentionally an explicit owner verifier rather
+    than a result-validator side effect: deserializing a result must not
+    allocate a cochain matrix or invoke a mathematical backend.
     """
 
     request: GroupCohomologyRequest
@@ -156,26 +158,43 @@ class GroupCohomologyResult(StrictModel):
 
     @model_validator(mode="after")
     def require_consistent(self) -> Self:
-        from jacobian.math.group_cohomology._operations import _cohomology_profile
-
-        if not self.groups:
-            raise _validation_error(
-                "groups_empty", "at least one cohomology group is required"
-            )
-        if tuple(g.degree for g in self.groups) != tuple(
-            range(self.request.max_degree + 1)
-        ):
+        if len(self.groups) != self.request.max_degree + 1 or tuple(
+            group.degree for group in self.groups
+        ) != tuple(range(self.request.max_degree + 1)):
             raise _validation_error(
                 "degrees_not_contiguous",
                 "groups must cover degrees 0..max_degree exactly once in order",
             )
-        replay_groups, replay_order = _cohomology_profile(self.request)
-        if self.groups != replay_groups or self.group_order != replay_order:
+        if self.group_order > MAX_GROUP_ORDER:
             raise _validation_error(
-                "groups_do_not_match_replay",
-                "groups must be the exact cohomology of the retained source request",
+                "group_order_exceeds_bound",
+                f"group_order must not exceed {MAX_GROUP_ORDER}",
             )
+        for group in self.groups:
+            expected_dimension = self.group_order**group.degree
+            if group.cochain_dimension != expected_dimension:
+                raise _validation_error(
+                    "cochain_dimension",
+                    "cochain_dimension must equal group_order**degree",
+                )
+            if group.betti > group.cochain_dimension:
+                raise _validation_error(
+                    "betti_bound", "betti cannot exceed cochain_dimension"
+                )
+        if self.groups[0].betti != 1:
+            raise _validation_error("degree_zero_betti", "H^0 has betti one")
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: GroupCohomologyRequest,
+        groups: tuple[CohomologyGroup, ...],
+        group_order: int,
+    ) -> Self:
+        """Construct a trusted result emitted by the owner-local kernel."""
+
+        return cls(request=request, groups=groups, group_order=group_order)
 
 
 __all__ = [

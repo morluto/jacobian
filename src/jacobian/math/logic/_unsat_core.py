@@ -7,7 +7,7 @@ from fractions import Fraction
 from math import lcm
 from typing import Any, Literal, NamedTuple, Self
 
-from pydantic import ConfigDict, Field, StrictInt, ValidationError, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -242,7 +242,16 @@ class SmtUnsatCoreResult(StrictModel):
     detail: str | None = Field(default=None, max_length=1_024)
 
     @model_validator(mode="after")
-    def bind_outcome_to_source(self) -> Self:
+    def require_structural_outcome_shape(self) -> Self:
+        """Validate only the serializable shape of an UNSAT-core outcome.
+
+        Results produced by the owner-local Z3 kernel carry data it has already
+        established.  Replaying that data while constructing the public model
+        would run a second solver invocation with no new information.  Call
+        :func:`verify_smt_unsat_core_result` for an independently supplied
+        source-bound claim instead.
+        """
+
         if self.core_indices != tuple(sorted(set(self.core_indices))):
             raise _logic_error("core indices must be distinct and strictly increasing")
         if any(
@@ -256,19 +265,9 @@ class SmtUnsatCoreResult(StrictModel):
                 raise _logic_error(
                     "UNSAT requires a nonempty core because the source has no untracked assertions"
                 )
-            replay, _detail = _replay_source(self.source, self.core_indices)
-            if replay != "UNSAT":
-                raise _logic_error(
-                    "selected source assertions must independently replay as UNSAT"
-                )
         elif self.outcome == "SAT":
             if self.core_indices:
                 raise _logic_error("SAT cannot carry core indices")
-            replay, _detail = _replay_source(self.source, None)
-            if replay != "SAT":
-                raise _logic_error(
-                    "complete source assertions must independently replay as SAT"
-                )
         else:
             if self.core_indices:
                 raise _logic_error("UNKNOWN cannot carry core indices")
@@ -278,6 +277,24 @@ class SmtUnsatCoreResult(StrictModel):
         if self.outcome != "UNKNOWN" and self.detail is not None:
             raise _logic_error("only UNKNOWN may carry execution detail")
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: SmtUnsatCoreRequest,
+        outcome: Literal["SAT", "UNSAT", "UNKNOWN"],
+        core_indices: tuple[int, ...] = (),
+        detail: str | None = None,
+    ) -> Self:
+        """Construct an outcome already established by the bounded Z3 kernel."""
+
+        return cls.model_construct(
+            source=source,
+            outcome=outcome,
+            core_indices=core_indices,
+            detail=detail,
+        )
 
 
 def _validate_nesting(tokens: tuple[str, ...]) -> None:
@@ -1288,23 +1305,31 @@ def _replay_source(
         return "UNKNOWN", "Z3 could not complete the bounded source replay."
 
 
+def verify_smt_unsat_core_result(result: SmtUnsatCoreResult) -> bool:
+    """Replay one independently supplied non-UNKNOWN source-bound claim.
+
+    The replay uses the result's admitted timeout and rlimit, so verification
+    has the same bounded Z3 envelope as the operation.  UNKNOWN communicates
+    no satisfiability conclusion and therefore needs no replay.
+    """
+
+    if result.outcome == "UNKNOWN":
+        return True
+    selected_indices = result.core_indices if result.outcome == "UNSAT" else None
+    replay, _detail = _replay_source(result.source, selected_indices)
+    return replay == result.outcome
+
+
 def compute_smt_unsat_core(request: SmtUnsatCoreRequest) -> SmtUnsatCoreResult:
     """Return a bounded core of source-assertion indices when Z3 proves UNSAT."""
 
     outcome, core_indices, detail = _extract_source_core(request)
-    try:
-        return SmtUnsatCoreResult(
-            source=request,
-            outcome=outcome,
-            core_indices=core_indices,
-            detail=detail,
-        )
-    except ValidationError:
-        return SmtUnsatCoreResult(
-            source=request,
-            outcome="UNKNOWN",
-            detail="The bounded result-validation replay did not establish the conclusion.",
-        )
+    return SmtUnsatCoreResult._from_kernel(
+        source=request,
+        outcome=outcome,
+        core_indices=core_indices,
+        detail=detail,
+    )
 
 
 SMT_UNSAT_CORE_OPERATION = MathTool(
@@ -1346,4 +1371,5 @@ __all__ = [
     "SmtUnsatCoreRequest",
     "SmtUnsatCoreResult",
     "compute_smt_unsat_core",
+    "verify_smt_unsat_core_result",
 ]

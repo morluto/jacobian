@@ -14,16 +14,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "diophantine.continued_fraction.compute",
         AdmissionDecision.KEEP,
         "contract version 2 reevaluation: exact bounded periodic continued "
-        "fraction of sqrt(D) for squarefree D whose retained request is "
-        "replayed against the canonical preperiod/period expansion of the "
-        "same discriminant within the admitted term envelope",
+        "fraction of sqrt(D) for squarefree D; parsing retains only the "
+        "bounded carrier and an explicit owner-local verifier replays a "
+        "separately supplied claim within the admitted term envelope",
     ),
     OperationAdmission(
         "diophantine.convergents.compute",
         AdmissionDecision.NATIVE_ONLY,
         "contract version 2 reevaluation: deterministic projection of the "
-        "retained source-replayed continued-fraction result, admissible only "
-        "when the convergents replay the continuant recurrence of the same "
+        "retained continued-fraction result with a bounded canonical carrier; "
+        "the explicit verifier replays the continuant recurrence of the same "
         "sqrt(D) under the derived digit cap",
         native_symbol="jacobian.math.diophantine_approximation.convergents",
     ),

@@ -8,6 +8,10 @@ from pydantic import ConfigDict, Field, PrivateAttr, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.formal_concept_analysis._concepts import (
+    MAX_CONCEPTS,
+    enumerate_concept_pairs,
+)
 from jacobian.math.formal_concept_analysis.basis import (
     MAX_DG_ATTRIBUTES,
     MAX_DG_CANDIDATE_STATES,
@@ -145,9 +149,6 @@ class ConceptResult(StrictModel):
 # NextClosure preflight — bounded by the same budget it guards — counts the
 # true family, so sparse wide or square contexts stay admissible and only
 # contexts whose actual family overflows are rejected before execution.
-MAX_CONCEPTS = 10000
-
-
 class EnumerateConceptsRequest(StrictModel):
     """Enumerate all formal concepts."""
 
@@ -166,12 +167,8 @@ class EnumerateConceptsRequest(StrictModel):
             len(self.context.objects), len(self.context.attributes)
         )
         if worst_case_concepts > MAX_CONCEPTS:
-            from jacobian.math.formal_concept_analysis.operations import (
-                enumerate_concepts,
-            )
-
             try:
-                concepts = enumerate_concepts(self.context)
+                concepts = enumerate_concept_pairs(self.context)
             except ValueError as exc:
                 raise PydanticCustomError(
                     "formal_concept_analysis.concept_family_exceeds_bound",
@@ -185,13 +182,7 @@ class EnumerateConceptsRequest(StrictModel):
                 "_admitted_concept_family",
                 (
                     self.context,
-                    tuple(
-                        (
-                            tuple(sorted(concept["extent"])),
-                            tuple(sorted(concept["intent"])),
-                        )
-                        for concept in concepts
-                    ),
+                    concepts,
                 ),
             )
         return self
@@ -213,17 +204,7 @@ class EnumerateConceptsRequest(StrictModel):
         if cached is not None and cached[0] == self.context:
             return cached[1]
 
-        from jacobian.math.formal_concept_analysis.operations import (
-            enumerate_concepts,
-        )
-
-        return tuple(
-            (
-                tuple(sorted(concept["extent"])),
-                tuple(sorted(concept["intent"])),
-            )
-            for concept in enumerate_concepts(self.context)
-        )
+        return enumerate_concept_pairs(self.context)
 
 
 class EnumerateConceptsResult(StrictModel):

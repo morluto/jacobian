@@ -1,4 +1,4 @@
-"""Owner-local admission for finite-coset crossed-product operations."""
+"""Owner-local catalog admission for finite-coset crossed products."""
 
 from jacobian.catalog.admission import (
     AdmissionDecision,

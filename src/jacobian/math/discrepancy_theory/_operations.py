@@ -332,23 +332,32 @@ def _incumbent_outcome(
 
     sets = request.set_system.sets
     n = request.set_system.ground_set_size
-    if result.x.shape != (variable_count,) or not bool(np.all(np.isfinite(result.x))):
-        return _execution_failed_result(request.set_system)
+    try:
+        raw_result = result.x
+        if raw_result.shape != (variable_count,) or not bool(
+            np.all(np.isfinite(raw_result))
+        ):
+            return _execution_failed_result(request.set_system)
 
-    raw_assignment = result.x[:n]
-    if float(np.max(np.abs(raw_assignment - np.round(raw_assignment)))) > 1e-6:
-        return _execution_failed_result(request.set_system)
-    if bool(np.any(raw_assignment < -1e-6) or np.any(raw_assignment > 1 + 1e-6)):
-        return _execution_failed_result(request.set_system)
-    coloring = tuple(1 if value > 0.5 else -1 for value in raw_assignment)
+        raw_assignment = raw_result[:n]
+        if float(np.max(np.abs(raw_assignment - np.round(raw_assignment)))) > 1e-6:
+            return _execution_failed_result(request.set_system)
+        if bool(np.any(raw_assignment < -1e-6) or np.any(raw_assignment > 1 + 1e-6)):
+            return _execution_failed_result(request.set_system)
+        coloring = tuple(1 if value > 0.5 else -1 for value in raw_assignment)
 
-    # Bind the claimed optimum to an exact integer recomputation so no
-    # floating-point objective value reaches the public contract.
-    recomputed = max(
-        (abs(sum(coloring[element] for element in subset)) for subset in sets),
-        default=0,
-    )
-    solved_bound = float(result.x[-1])
+        # Bind the claimed optimum to an exact integer recomputation so no
+        # floating-point objective value reaches the public contract.
+        recomputed = max(
+            (abs(sum(coloring[element] for element in subset)) for subset in sets),
+            default=0,
+        )
+        solved_bound = float(raw_result[-1])
+    except (AttributeError, IndexError, TypeError, ValueError, OverflowError):
+        # A status-zero result is only an incumbent candidate.  If its vector
+        # cannot be inspected in the advertised finite floating-point domain,
+        # no canonical coloring or mathematical conclusion may escape.
+        return _execution_failed_result(request.set_system)
     if abs(solved_bound - recomputed) > 1e-6:
         return _execution_failed_result(request.set_system)
     if recomputed == 0:

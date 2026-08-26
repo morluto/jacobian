@@ -60,10 +60,9 @@ def mutate_seed(request: SeedMutationRequest) -> SeedMutationResult:
     b'_{ij} = -sgn(i-k) * sgn(j-k) * b_{ij}  if i=k or j=k
     b'_{ij} = b_{ij} + max(0, b_{ik}) * max(0, b_{kj}) + min(0, b_{ik}) * min(0, b_{kj})  otherwise
     """
-    return SeedMutationResult(
-        source_exchange_matrix=request.exchange_matrix,
+    return SeedMutationResult._from_kernel(
+        request,
         exchange_matrix=_mutation_of(request.exchange_matrix, request.mutation_index),
-        mutation_index=request.mutation_index,
     )
 
 
@@ -72,14 +71,28 @@ def compute_g_vectors(request: GVectorRequest) -> GVectorResult:
 
     For the initial seed, the g-vector matrix is the identity matrix.
     """
-    n = request.exchange_matrix.n
-    return GVectorResult(
-        exchange_matrix=request.exchange_matrix,
-        g_matrix=_identity_matrix(n),
+    return GVectorResult._from_kernel(request)
+
+
+def verify_seed_mutation_result(result: SeedMutationResult) -> bool:
+    """Verify an independently supplied mutation claim within its input bound."""
+
+    if result.mutation_index >= result.source_exchange_matrix.n:
+        return False
+    return result.exchange_matrix == _mutation_of(
+        result.source_exchange_matrix, result.mutation_index
     )
+
+
+def verify_g_vector_result(result: GVectorResult) -> bool:
+    """Verify the fixed initial-seed g-vector convention."""
+
+    return result.g_matrix == _identity_matrix(result.exchange_matrix.n)
 
 
 __all__ = [
     "compute_g_vectors",
     "mutate_seed",
+    "verify_g_vector_result",
+    "verify_seed_mutation_result",
 ]

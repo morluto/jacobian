@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 
+from ._bounds import require_analysis_admission
 from .values import (
-    MAX_ANALYSIS_WORK,
-    MAX_COHERENT_CONFIGURATION_RESULT_BYTES,
-    MAX_COHERENT_CONFIGURATION_SOURCE_BYTES,
     CoherentConfigurationInput,
 )
 
@@ -53,59 +50,6 @@ class AnalysisData:
     transpose_map: tuple[TransposeData, ...] = ()
     intersection_numbers: tuple[IntersectionData, ...] = ()
     obstruction: ObstructionData | None = None
-
-
-def _source_bytes(source: CoherentConfigurationInput) -> int:
-    return len(source.model_dump_json().encode("utf-8"))
-
-
-def _json_string_byte_bound(value: str) -> int:
-    """Conservatively bound one JSON string scalar, including escapes."""
-
-    return len(json.dumps(value, ensure_ascii=False).encode("utf-8"))
-
-
-def _estimate_result_bytes(source: CoherentConfigurationInput) -> int:
-    """Bound the full wire result before materializing its cubic tensor.
-
-    Each tensor entry contains three relation identifiers and fixed JSON/model
-    structure.  The fixed allowance is intentionally above its current wire
-    shape, so schema-local changes fail admission rather than silently growing
-    the public result envelope.
-    """
-
-    source_bytes = _source_bytes(source)
-    relation_id_bytes = max(
-        _json_string_byte_bound(value) for value in source.relation_ids
-    )
-    point_bytes = max(_json_string_byte_bound(value) for value in source.points)
-    relation_count = len(source.relation_ids)
-    point_count = len(source.points)
-    tensor_entry_bytes = 3 * relation_id_bytes + 128
-    fibre_bytes = point_count * (point_bytes + 48)
-    transpose_bytes = relation_count * (2 * relation_id_bytes + 64)
-    return (
-        2 * source_bytes
-        + relation_count**3 * tensor_entry_bytes
-        + fibre_bytes
-        + transpose_bytes
-        + 2_048
-    )
-
-
-def _require_analysis_admission(source: CoherentConfigurationInput) -> None:
-    """Reject source or predicted replay/result work before cubic expansion."""
-
-    source_bytes = _source_bytes(source)
-    if source_bytes > MAX_COHERENT_CONFIGURATION_SOURCE_BYTES:
-        raise ValueError("coherent-configuration source exceeds the byte budget")
-    point_count = len(source.points)
-    relation_count = len(source.relation_ids)
-    work = 4 * relation_count**2 * point_count**3
-    if work > MAX_ANALYSIS_WORK:
-        raise ValueError("coherent-configuration analysis exceeds the work budget")
-    if _estimate_result_bytes(source) > MAX_COHERENT_CONFIGURATION_RESULT_BYTES:
-        raise ValueError("coherent-configuration result exceeds the byte budget")
 
 
 def _relation_cells(
@@ -229,7 +173,7 @@ def _intersection_data(
 def _analyze(source: CoherentConfigurationInput) -> AnalysisData:
     """Return complete exact derived data or the first failed coherence axiom."""
 
-    _require_analysis_admission(source)
+    require_analysis_admission(source)
     cells = _relation_cells(source)
     fibres, obstruction = _fiber_data(source, cells)
     if obstruction is not None:

@@ -879,13 +879,11 @@ def finite_abelian_group_factorization(
 
 
 __all__ = [
-    "FiniteAbelianGroupFactorizationRequest",
     "FiniteAbelianGroupFactorizationResult",
     "FiniteAbelianNonorthogonalityWitness",
     "FiniteAbelianProductGroup",
     "FiniteAbelianRepresentationCount",
     "FiniteAbelianRepresentationWitness",
-    "FiniteAbelianSpectralPairRequest",
     "FiniteAbelianSpectralPairResult",
     "FiniteAbelianSpectralPairSource",
     "decide_finite_abelian_spectral_pair",

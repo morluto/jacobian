@@ -8,10 +8,7 @@ from pydantic import model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.crossed_products.operations import (
-    _require_multiplication_budget,
-    multiply,
-)
+from jacobian.math.crossed_products._budget import require_multiplication_budget
 from jacobian.math.crossed_products.values import FiniteCosetCrossedProductElement
 
 
@@ -28,31 +25,34 @@ class CrossedProductMultiplyRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_product(self) -> Self:
         try:
-            _require_multiplication_budget(self.left, self.right)
+            require_multiplication_budget(self.left, self.right)
         except ValueError as exc:
             raise _validation_error("product_budget_exceeded", str(exc)) from exc
         return self
 
 
 class CrossedProductMultiplyResult(StrictModel):
-    """An exact sparse product bound to both ordered source operands."""
+    """An exact sparse product bound to both ordered source operands.
+
+    Kernel output is built with the trusted factory below.  An independently
+    supplied claim can be checked with the explicit owner-local verifier,
+    rather than re-entering multiplication while parsing this value.
+    """
 
     left: FiniteCosetCrossedProductElement
     right: FiniteCosetCrossedProductElement
     product: FiniteCosetCrossedProductElement
 
     @model_validator(mode="after")
-    def bind_product_to_sources(self) -> Self:
+    def require_bounded_source_shape(self) -> Self:
         if self.product.presentation != self.left.presentation:
             raise _validation_error(
                 "presentation_mismatch", "product must retain the operand presentation"
             )
-        expected = multiply(self.left, self.right)
-        if self.product != expected:
-            raise _validation_error(
-                "product_invariant",
-                "product must equal exact replay from the retained operands",
-            )
+        try:
+            require_multiplication_budget(self.left, self.right)
+        except ValueError as exc:
+            raise _validation_error("product_budget_exceeded", str(exc)) from exc
         return self
 
 
@@ -61,12 +61,7 @@ def _computed_result(
     right: FiniteCosetCrossedProductElement,
     product: FiniteCosetCrossedProductElement,
 ) -> CrossedProductMultiplyResult:
-    """Bind one product freshly computed by the owning kernel.
-
-    Direct construction from the producing kernel skips result replay so the
-    admitted scalar-work budget covers all multiplication work; independently
-    supplied results always validate through ``bind_product_to_sources``.
-    """
+    """Bind one product freshly computed by the owning kernel."""
 
     return CrossedProductMultiplyResult.model_construct(
         left=left,

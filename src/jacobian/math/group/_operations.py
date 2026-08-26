@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pydantic_core import PydanticCustomError
+
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.group import (
     element_order,
@@ -24,6 +26,8 @@ from jacobian.math.group._models import (
     GroupSubgroupLatticeRequest,
     GroupSubgroupLatticeResult,
     PermutationGroupRequest,
+    _check_orbit_stabilizer,
+    _check_stabilizer_permutations,
 )
 
 
@@ -55,11 +59,32 @@ def compute_group_conjugacy_classes(
 
 
 def compute_group_stabilizer(request: GroupStabilizerRequest) -> GroupStabilizerResult:
-    return GroupStabilizerResult(
-        point=request.point,
-        source=request.group,
-        stabilizer=group_stabilizer(request.group, request.point),
+    return GroupStabilizerResult._from_kernel(
+        request.point,
+        request.group,
+        group_stabilizer(request.group, request.point),
     )
+
+
+def verify_group_stabilizer_result(result: GroupStabilizerResult) -> bool:
+    """Check a separately supplied stabilizer claim in the group owner."""
+
+    try:
+        _check_stabilizer_permutations(
+            result.source.degree,
+            result.point,
+            result.stabilizer.generators,
+            result.source.generators,
+        )
+        _check_orbit_stabilizer(
+            result.source.degree,
+            result.point,
+            result.stabilizer.generators,
+            result.source.generators,
+        )
+    except PydanticCustomError:
+        return False
+    return True
 
 
 def compute_subgroup_lattice(
@@ -73,15 +98,30 @@ def compute_subgroup_lattice(
     try:
         subgroups = subgroup_lattice(source)
     except SubgroupLatticeBudgetExceededError as error:
-        return GroupSubgroupLatticeResult(
-            outcome="LIMIT_EXCEEDED",
-            degree=request.degree,
-            generators=request.generators,
-            detail=str(error),
+        return GroupSubgroupLatticeResult._limit_exceeded_from_kernel(
+            request, str(error)
         )
-    return GroupSubgroupLatticeResult(
-        degree=request.degree,
-        generators=request.generators,
-        subgroups=tuple(subgroups),
-        subgroup_count=len(subgroups),
-    )
+    return GroupSubgroupLatticeResult._computed_from_kernel(request, tuple(subgroups))
+
+
+def verify_group_subgroup_lattice_result(result: GroupSubgroupLatticeResult) -> bool:
+    """Replay a separately supplied subgroup-lattice claim in its owner."""
+
+    try:
+        request = GroupSubgroupLatticeRequest(
+            degree=result.degree, generators=result.generators
+        )
+        if result.outcome != "COMPUTED" or result.subgroups is None:
+            return True
+        expected = tuple(
+            (entry.group.generators, entry.order)
+            for entry in subgroup_lattice(
+                PermutationGroupRequest(
+                    degree=request.degree, generators=request.generators
+                )
+            )
+        )
+    except (PydanticCustomError, ValueError):
+        return False
+    actual = tuple((entry.group.generators, entry.order) for entry in result.subgroups)
+    return actual == expected and result.subgroup_count == len(expected)

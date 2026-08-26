@@ -23,6 +23,11 @@ from jacobian.math.incidence_structures._models import (
     IncidenceTradeRequest,
 )
 from jacobian.math.incidence_structures._operations import compute_incidence_trade
+from jacobian.math.incidence_structures.operations import (
+    verify_containment_profile_result,
+    verify_incidence_moment_comparison,
+    verify_incidence_trade_result,
+)
 
 _TRADE_POINTS = ("1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "13", "20")
 _REMOVED_BLOCKS = (
@@ -87,6 +92,7 @@ def test_published_thirteen_for_twelve_trade_matches_through_order_two() -> None
     result = check_incidence_trade(removed, inserted, 2)
     assert result.zeroth_difference == 1
     assert result.positive_moments_equal
+    assert verify_incidence_trade_result(result)
     assert tuple(comparison.order for comparison in result.comparisons) == (1, 2)
     assert tuple(
         (comparison.left_total, comparison.right_total)
@@ -103,6 +109,7 @@ def test_distinct_indices_preserve_repeated_blocks() -> None:
     assert result.subset_profile == ((("a",), 2), (("b",), 0))
     assert result.histogram == ((0, 1), (2, 1))
     assert result.total_multiplicity == 2
+    assert verify_containment_profile_result(result)
 
 
 def test_nontrade_returns_every_nonzero_difference_in_point_order() -> None:
@@ -314,31 +321,34 @@ def test_result_validation_accepts_reordered_source_members() -> None:
     assert accepted == result
 
 
-def test_profile_result_replays_source_and_authoritative_totals() -> None:
+def test_profile_verifier_rejects_forged_source_and_authoritative_totals() -> None:
     incidence = _family((("a",), ("a", "b")), "b", points=("a", "b"))
     result = containment_profile(incidence, 1)
     payload: dict[str, Any] = result.model_dump(mode="python")
     payload["total_multiplicity"] = result.total_multiplicity + 1
 
-    with pytest.raises(ValidationError):
+    assert not verify_containment_profile_result(
         ContainmentProfileResult.model_validate(payload)
+    )
 
     changed_source = _family((("b",), ("a", "b")), "b", points=("a", "b"))
     payload = result.model_dump(mode="python")
     payload["incidence"] = changed_source
-    with pytest.raises(ValidationError):
+    assert not verify_containment_profile_result(
         ContainmentProfileResult.model_validate(payload)
+    )
 
 
-def test_trade_result_replays_sources_and_zeroth_difference() -> None:
+def test_trade_verifier_rejects_forged_zeroth_difference() -> None:
     left = _family((("a",), ("b",)), "l", points=("a", "b"))
     right = _family((("a", "b"),), "r", points=("a", "b"))
     result = check_incidence_trade(left, right, 1)
     payload: dict[str, Any] = result.model_dump(mode="python")
     payload["zeroth_difference"] = 0
 
-    with pytest.raises(ValidationError):
+    assert not verify_incidence_trade_result(
         IncidenceTradeResult.model_validate(payload)
+    )
 
 
 def test_moment_totals_bind_to_sparse_differences() -> None:
@@ -426,106 +436,100 @@ def test_saturated_sparse_multiplicities_are_accepted_with_witness_families() ->
     assert (comparison.left_total, comparison.right_total) == (100, 0)
 
 
-def test_forged_totals_diverging_from_retained_profiles_are_rejected() -> None:
+def test_moment_verifier_rejects_forged_totals() -> None:
     left = _family((("a", "b"),), "l", points=("a", "b"))
     right = _family(((),), "r", points=("a", "b"))
 
-    with pytest.raises(
-        ValidationError,
-    ):
-        IncidenceMomentComparison(
-            left=left,
-            right=right,
-            points=("a", "b"),
-            order=2,
-            left_total=2,
-            right_total=1,
-            differences=(
-                IncidenceMultiplicityDifference(
-                    subset=("a", "b"),
-                    left_multiplicity=2,
-                    right_multiplicity=0,
-                ),
+    forged = IncidenceMomentComparison(
+        left=left,
+        right=right,
+        points=("a", "b"),
+        order=2,
+        left_total=2,
+        right_total=1,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a", "b"),
+                left_multiplicity=2,
+                right_multiplicity=0,
             ),
-            equal=False,
-        )
+        ),
+        equal=False,
+    )
+    assert not verify_incidence_moment_comparison(forged)
 
 
-def test_forged_positive_totals_without_order_subsets_are_rejected() -> None:
+def test_moment_verifier_rejects_positive_totals_without_order_subsets() -> None:
     left = _family((("a",),), "l", points=("a",))
     right = _family((("a",),), "r", points=("a",))
 
-    with pytest.raises(ValidationError):
-        IncidenceMomentComparison(
-            left=left,
-            right=right,
-            points=("a",),
-            order=2,
-            left_total=1,
-            right_total=1,
-            differences=(),
-            equal=True,
-        )
+    forged = IncidenceMomentComparison(
+        left=left,
+        right=right,
+        points=("a",),
+        order=2,
+        left_total=1,
+        right_total=1,
+        differences=(),
+        equal=True,
+    )
+    assert not verify_incidence_moment_comparison(forged)
 
 
-def test_forged_saturated_shared_core_differences_are_rejected() -> None:
+def test_moment_verifier_rejects_forged_saturated_differences() -> None:
     left = _family((("a", "b"),) * 100, "l", points=("a", "b", "c"))
     right = _family(((),), "r", points=("a", "b", "c"))
 
-    with pytest.raises(
-        ValidationError,
-    ):
-        IncidenceMomentComparison(
-            left=left,
-            right=right,
-            points=("a", "b", "c"),
-            order=2,
-            left_total=200,
-            right_total=0,
-            differences=(
-                IncidenceMultiplicityDifference(
-                    subset=("a", "b"),
-                    left_multiplicity=100,
-                    right_multiplicity=0,
-                ),
-                IncidenceMultiplicityDifference(
-                    subset=("a", "c"),
-                    left_multiplicity=100,
-                    right_multiplicity=0,
-                ),
+    forged = IncidenceMomentComparison(
+        left=left,
+        right=right,
+        points=("a", "b", "c"),
+        order=2,
+        left_total=200,
+        right_total=0,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a", "b"),
+                left_multiplicity=100,
+                right_multiplicity=0,
             ),
-            equal=False,
-        )
+            IncidenceMultiplicityDifference(
+                subset=("a", "c"),
+                left_multiplicity=100,
+                right_multiplicity=0,
+            ),
+        ),
+        equal=False,
+    )
+    assert not verify_incidence_moment_comparison(forged)
 
 
-def test_forged_right_saturated_shared_core_differences_are_rejected() -> None:
+def test_moment_verifier_rejects_forged_right_saturated_differences() -> None:
     right = _family((("a", "b"),) * 100, "r", points=("a", "b", "c"))
     left = _family(((),), "l", points=("a", "b", "c"))
 
-    with pytest.raises(
-        ValidationError,
-    ):
-        IncidenceMomentComparison(
-            left=left,
-            right=right,
-            points=("a", "b", "c"),
-            order=2,
-            left_total=0,
-            right_total=200,
-            differences=(
-                IncidenceMultiplicityDifference(
-                    subset=("a", "b"),
-                    left_multiplicity=0,
-                    right_multiplicity=100,
-                ),
-                IncidenceMultiplicityDifference(
-                    subset=("a", "c"),
-                    left_multiplicity=0,
-                    right_multiplicity=100,
-                ),
+    forged = IncidenceMomentComparison(
+        left=left,
+        right=right,
+        points=("a", "b", "c"),
+        order=2,
+        left_total=0,
+        right_total=200,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a", "b"),
+                left_multiplicity=0,
+                right_multiplicity=100,
             ),
-            equal=False,
-        )
+            IncidenceMultiplicityDifference(
+                subset=("a", "c"),
+                left_multiplicity=0,
+                right_multiplicity=100,
+            ),
+        ),
+        equal=False,
+    )
+    assert not verify_incidence_moment_comparison(forged)
 
 
 def test_shared_core_boundary_is_witnessed_by_retained_families() -> None:
@@ -559,34 +563,34 @@ def test_shared_core_boundary_is_witnessed_by_retained_families() -> None:
     assert (comparison.left_total, comparison.right_total) == (220, 60)
 
 
-def test_forged_unwitnessable_shared_core_totals_are_rejected() -> None:
+def test_moment_verifier_rejects_unwitnessable_shared_core_totals() -> None:
     left = _family(
         (("a", "b", "c"),) * 60 + (("a", "b"),) * 40, "l", points=("a", "b", "c")
     )
     right = _family((("b", "c"),) * 60, "r", points=("a", "b", "c"))
 
-    with pytest.raises(ValidationError):
-        IncidenceMomentComparison(
-            left=left,
-            right=right,
-            points=("a", "b", "c"),
-            order=2,
-            left_total=219,
-            right_total=59,
-            differences=(
-                IncidenceMultiplicityDifference(
-                    subset=("a", "b"),
-                    left_multiplicity=100,
-                    right_multiplicity=0,
-                ),
-                IncidenceMultiplicityDifference(
-                    subset=("a", "c"),
-                    left_multiplicity=60,
-                    right_multiplicity=0,
-                ),
+    forged = IncidenceMomentComparison(
+        left=left,
+        right=right,
+        points=("a", "b", "c"),
+        order=2,
+        left_total=219,
+        right_total=59,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a", "b"),
+                left_multiplicity=100,
+                right_multiplicity=0,
             ),
-            equal=False,
-        )
+            IncidenceMultiplicityDifference(
+                subset=("a", "c"),
+                left_multiplicity=60,
+                right_multiplicity=0,
+            ),
+        ),
+        equal=False,
+    )
+    assert not verify_incidence_moment_comparison(forged)
 
 
 def test_disjoint_saturated_keys_are_accepted_with_witness_families() -> None:
@@ -620,31 +624,29 @@ def test_disjoint_saturated_keys_are_accepted_with_witness_families() -> None:
     assert (comparison.left_total, comparison.right_total) == (100, 0)
 
 
-def test_forged_unrealizable_sparse_zero_profile_is_rejected() -> None:
+def test_moment_verifier_rejects_unrealizable_sparse_zero_profile() -> None:
     paired_points = ("a", "b", "c", "d", "e", "f", "g", "h")
     left = _family((paired_points,) * 60, "l", points=paired_points)
     right = _family((("a", "c", "e", "g"),) * 100, "r", points=paired_points)
 
-    with pytest.raises(
-        ValidationError,
-    ):
-        IncidenceMomentComparison(
-            left=left,
-            right=right,
-            points=paired_points,
-            order=2,
-            left_total=960,
-            right_total=720,
-            differences=tuple(
-                IncidenceMultiplicityDifference(
-                    subset=subset,
-                    left_multiplicity=60,
-                    right_multiplicity=0,
-                )
-                for subset in (("a", "b"), ("c", "d"), ("e", "f"), ("g", "h"))
-            ),
-            equal=False,
-        )
+    forged = IncidenceMomentComparison(
+        left=left,
+        right=right,
+        points=paired_points,
+        order=2,
+        left_total=960,
+        right_total=720,
+        differences=tuple(
+            IncidenceMultiplicityDifference(
+                subset=subset,
+                left_multiplicity=60,
+                right_multiplicity=0,
+            )
+            for subset in (("a", "b"), ("c", "d"), ("e", "f"), ("g", "h"))
+        ),
+        equal=False,
+    )
+    assert not verify_incidence_moment_comparison(forged)
 
     witnessed = IncidenceMomentComparison(
         left=_family((("a", "b", "c", "d"),) * 25, "l", points=paired_points),
@@ -677,8 +679,9 @@ def test_forged_unrealizable_sparse_zero_profile_is_rejected() -> None:
     payload: dict[str, Any] = witnessed.model_dump(mode="python")
     payload["right_total"] = 720
 
-    with pytest.raises(ValidationError):
+    assert not verify_incidence_moment_comparison(
         IncidenceMomentComparison.model_validate(payload)
+    )
 
 
 def test_forged_out_of_combination_order_difference_rows_are_rejected() -> None:
@@ -737,7 +740,7 @@ def test_moment_comparison_round_trips_through_serialization() -> None:
     assert serialized["right"] == right.model_dump(mode="json")
 
 
-def test_forged_mutated_serialized_multiplicities_are_rejected() -> None:
+def test_moment_verifier_rejects_mutated_serialized_multiplicities() -> None:
     left = _family(
         (("a", "b"),) * 50 + (("c", "d"),) * 50, "l", points=("a", "b", "c", "d")
     )
@@ -767,10 +770,9 @@ def test_forged_mutated_serialized_multiplicities_are_rejected() -> None:
     payload: dict[str, Any] = comparison.model_dump(mode="json")
     payload["differences"][0]["left_multiplicity"] = 51
 
-    with pytest.raises(
-        ValidationError,
-    ):
+    assert not verify_incidence_moment_comparison(
         IncidenceMomentComparison.model_validate(payload)
+    )
 
 
 def test_forged_repeated_labels_in_difference_values_are_rejected() -> None:
@@ -782,29 +784,27 @@ def test_forged_repeated_labels_in_difference_values_are_rejected() -> None:
         )
 
 
-def test_forged_equal_totals_with_sparse_differences_are_rejected() -> None:
+def test_moment_verifier_rejects_equal_totals_with_sparse_differences() -> None:
     left = _family((("a", "b"),), "l", points=("a", "b"))
     right = _family((("a", "b"),), "r", points=("a", "b"))
 
-    with pytest.raises(
-        ValidationError,
-    ):
-        IncidenceMomentComparison(
-            left=left,
-            right=right,
-            points=("a", "b"),
-            order=2,
-            left_total=1,
-            right_total=1,
-            differences=(
-                IncidenceMultiplicityDifference(
-                    subset=("a", "b"),
-                    left_multiplicity=1,
-                    right_multiplicity=0,
-                ),
+    forged = IncidenceMomentComparison(
+        left=left,
+        right=right,
+        points=("a", "b"),
+        order=2,
+        left_total=1,
+        right_total=1,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a", "b"),
+                left_multiplicity=1,
+                right_multiplicity=0,
             ),
-            equal=False,
-        )
+        ),
+        equal=False,
+    )
+    assert not verify_incidence_moment_comparison(forged)
 
 
 def test_forged_mismatched_family_point_axes_are_rejected() -> None:

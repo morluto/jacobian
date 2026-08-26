@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from math import isqrt
+from math import ceil, isqrt, log10
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -33,7 +33,22 @@ def _convergent_component_digit_cap(count: int) -> int:
     before any bigint work.
     """
     growth = 2 * isqrt(_MAX_DISCRIMINANT) + 1
-    return len(str(growth**count))
+    # Do not materialize the bound itself: at the admitted maximum this would
+    # need more decimal digits than Python permits converting by default.
+    return ceil(count * log10(growth)) + 1
+
+
+def _pell_component_digit_cap() -> int:
+    """Conservative digit bound for the admitted fundamental Pell solution.
+
+    A continued-fraction period of ``sqrt(D)`` has length at most
+    ``2 * isqrt(D)``.  The kernel examines at most twice that many
+    convergents, and every recurrence coefficient is below
+    ``2 * isqrt(_MAX_DISCRIMINANT) + 1``.  This bounds a supplied exact Pell
+    certificate before its canonical decimal components are parsed.
+    """
+
+    return _convergent_component_digit_cap(4 * isqrt(_MAX_DISCRIMINANT))
 
 
 class SquarefreeRequest(StrictModel):
@@ -68,14 +83,11 @@ class ContinuedFractionRequest(StrictModel):
 
 
 class ContinuedFractionResult(StrictModel):
-    """The continued fraction [a_0; a_1, ...] of sqrt(D).
+    """A bounded continued-fraction prefix of ``sqrt(D)``.
 
-    Retains the complete request so validation replays the canonical
-    periodic expansion of the same ``sqrt(D)``: the coefficient prefix is
-    exactly the preperiod followed by repeats of the fundamental period, and
-    the reported preperiod/period lengths match that expansion.  A prefix
-    shorter than preperiod + period is an operationally truncated window
-    (its requested count is retained), never a complete-period claim.
+    Parsing establishes only the retained request and bounded carrier shape.
+    Use :func:`verify_continued_fraction_result` for an independently
+    supplied claim; kernel-produced results use :meth:`_from_kernel`.
     """
 
     discriminant: StrictInt = Field(ge=2, le=_MAX_DISCRIMINANT)
@@ -95,32 +107,42 @@ class ContinuedFractionResult(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def require_source_expansion(self) -> Self:
-        from jacobian.math.diophantine_approximation.operations import (
-            _cf_coefficients,
-            _coefficients,
-        )
-
-        preperiod, period = _cf_coefficients(self.discriminant)
-        if self.preperiod_length != len(preperiod) or self.period_length != len(period):
-            raise _validation_error(
-                "diophantine_approximation.period_metadata_mismatch",
-                "preperiod/period metadata must match the canonical expansion "
-                "of sqrt(discriminant)",
-            )
+    def require_bounded_shape(self) -> Self:
         if self.term_count != len(self.coefficients):
             raise _validation_error(
                 "diophantine_approximation.coefficient_count_mismatch",
                 "coefficient count must equal the requested term_count",
             )
-        expected = tuple(_coefficients(preperiod, period, self.term_count))
-        if tuple(self.coefficients) != expected:
+        coefficient_bound = 2 * isqrt(self.discriminant)
+        if any(
+            coefficient < 0 or coefficient > coefficient_bound
+            for coefficient in self.coefficients
+        ):
             raise _validation_error(
-                "diophantine_approximation.coefficients_not_canonical",
-                "coefficients must be the canonical continued fraction of "
-                "sqrt(discriminant)",
+                "diophantine_approximation.coefficient_bound_exceeded",
+                "continued-fraction coefficients exceed the admitted sqrt(D) bound",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        discriminant: int,
+        term_count: int,
+        coefficients: tuple[int, ...],
+        preperiod_length: int,
+        period_length: int,
+    ) -> Self:
+        """Build a result from the owner-local continued-fraction kernel."""
+
+        return cls(
+            discriminant=discriminant,
+            term_count=term_count,
+            coefficients=coefficients,
+            preperiod_length=preperiod_length,
+            period_length=period_length,
+        )
 
 
 class ConvergentRequest(StrictModel):
@@ -148,15 +170,11 @@ class ConvergentValue(StrictModel):
 
 
 class ConvergentResult(StrictModel):
-    """Convergents of sqrt(D).
+    """A bounded carrier for convergents of ``sqrt(D)``.
 
-    Retains the complete request so validation replays the continuant
-    recurrence from the canonical coefficient stream of the same ``sqrt(D)``:
-    indices are contiguous from zero, denominators are positive, each
-    numerator/denominator pair is reduced, and adjacent pairs satisfy
-    ``p_n q_{n-1} - p_{n-1} q_n = (-1)^(n+1)``.  Canonical numerators and
-    denominators carry no more digits than the geometric bound implied by
-    the admitted discriminant/count envelope.
+    The model does not execute a continued-fraction backend.  The explicit
+    verifier checks independently supplied values against the canonical
+    stream within this already-admitted envelope.
     """
 
     discriminant: StrictInt = Field(ge=2, le=_MAX_DISCRIMINANT)
@@ -176,15 +194,7 @@ class ConvergentResult(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def require_source_convergents(self) -> Self:
-        from math import gcd
-
-        from jacobian.canonical import parse_canonical_integer
-        from jacobian.math.diophantine_approximation.operations import (
-            _cf_coefficients,
-            _coefficients,
-        )
-
+    def require_bounded_shape(self) -> Self:
         if len(self.convergents) != self.convergent_count:
             raise _validation_error(
                 "diophantine_approximation.convergent_count_mismatch",
@@ -208,38 +218,23 @@ class ConvergentResult(StrictModel):
                     "convergent numerators/denominators exceed the "
                     f"{digit_cap}-digit bound implied by the admitted request",
                 )
-            numerator = parse_canonical_integer(value.numerator)
-            denominator = parse_canonical_integer(value.denominator)
-            if denominator <= 0:
-                raise _validation_error(
-                    "diophantine_approximation.denominator_not_positive",
-                    "convergent denominators must be positive",
-                )
-            if gcd(numerator, denominator) != 1:
-                raise _validation_error(
-                    "diophantine_approximation.pair_not_reduced",
-                    "convergent numerator/denominator pairs must be reduced",
-                )
-
-        preperiod, period = _cf_coefficients(self.discriminant)
-        coefficients = _coefficients(preperiod, period, self.convergent_count)
-        p_prev2, p_prev1 = 1, coefficients[0]
-        q_prev2, q_prev1 = 0, 1
-        for index, claimed in enumerate(self.convergents):
-            if index > 0:
-                coefficient = coefficients[index]
-                p_prev2, p_prev1 = p_prev1, coefficient * p_prev1 + p_prev2
-                q_prev2, q_prev1 = q_prev1, coefficient * q_prev1 + q_prev2
-            if (
-                parse_canonical_integer(claimed.numerator) != p_prev1
-                or parse_canonical_integer(claimed.denominator) != q_prev1
-            ):
-                raise _validation_error(
-                    "diophantine_approximation.recurrence_mismatch",
-                    "convergents must replay the continuant recurrence of the "
-                    "canonical coefficient stream",
-                )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        discriminant: int,
+        convergent_count: int,
+        convergents: tuple[ConvergentValue, ...],
+    ) -> Self:
+        """Build a result from the owner-local convergent kernel."""
+
+        return cls(
+            discriminant=discriminant,
+            convergent_count=convergent_count,
+            convergents=convergents,
+        )
 
 
 class PellEquationRequest(StrictModel):
@@ -273,6 +268,36 @@ class PellEquationResult(StrictModel):
                 "discriminant must be squarefree",
             )
         return self
+
+    @model_validator(mode="after")
+    def require_bounded_positive_components(self) -> Self:
+        if (
+            len(self.x.lstrip("-")) > _pell_component_digit_cap()
+            or len(self.y.lstrip("-")) > _pell_component_digit_cap()
+        ):
+            raise _validation_error(
+                "diophantine_approximation.pell_component_digit_bound_exceeded",
+                "Pell components exceed the digit bound implied by the admitted discriminant",
+            )
+        if (
+            self.x.startswith("-")
+            or self.x == "0"
+            or self.y.startswith("-")
+            or self.y == "0"
+        ):
+            raise _validation_error(
+                "diophantine_approximation.pell_components_not_positive",
+                "Pell solution components must be positive",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls, *, discriminant: int, x: CanonicalInteger, y: CanonicalInteger
+    ) -> Self:
+        """Build a result from the owner-local Pell kernel."""
+
+        return cls(discriminant=discriminant, x=x, y=y)
 
 
 __all__ = [

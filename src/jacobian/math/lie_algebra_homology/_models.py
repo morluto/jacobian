@@ -194,13 +194,12 @@ class DifferentialMatrix(StrictModel):
 
 
 class ChevalleyEilenbergComplexResult(StrictModel):
-    """The Chevalley-Eilenberg chain complex with trivial coefficients.
+    """A structurally coherent Chevalley-Eilenberg chain complex.
 
-    The result retains its defining ``LieAlgebra`` and every authoritative
-    claim (binomial chain-group dimensions, complete degree coverage, matrix
-    shapes, GF(p) residues, and the exact differentials of the bracket) is
-    replayed against that source at validation, so a malformed or relayed
-    complex cannot validate.
+    Kernel-produced results use :meth:`_from_kernel`.  Separately supplied
+    complexes are checked only for their source binding, canonical field, and
+    finite chain-complex envelope here; :func:`verify_ce_complex_result` is
+    the explicit bounded owner verifier for the defining bracket differential.
     """
 
     lie_algebra: LieAlgebra
@@ -239,6 +238,11 @@ class ChevalleyEilenbergComplexResult(StrictModel):
                 f"degree 1..{n} in order",
             )
         for differential in self.differentials:
+            if differential.matrix.prime != p:
+                raise _validation_error(
+                    "complex_differential_prime",
+                    "differential matrices must use the source Lie algebra prime",
+                )
             if (
                 differential.matrix.columns != expected_dims[differential.degree]
                 or len(differential.matrix.entries)
@@ -251,17 +255,24 @@ class ChevalleyEilenbergComplexResult(StrictModel):
                 )
             # Canonical GF(prime) residues are enforced by the retained
             # PrimeFieldMatrix value itself.
-        from jacobian.math.lie_algebra_homology._operations import (
-            _ce_differentials,
-        )
-
-        if tuple(self.differentials) != _ce_differentials(self.lie_algebra):
-            raise _validation_error(
-                "complex_replay",
-                "differentials must be the exact Chevalley-Eilenberg complex "
-                "reconstructed from the retained Lie algebra bracket",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        lie_algebra: LieAlgebra,
+        group_dimensions: tuple[int, ...],
+        differentials: tuple[DifferentialMatrix, ...],
+    ) -> Self:
+        """Construct a result emitted by the owner-local CE kernel."""
+
+        return cls(
+            lie_algebra=lie_algebra,
+            dimension=lie_algebra.dimension,
+            group_dimensions=group_dimensions,
+            differentials=differentials,
+            prime=lie_algebra.prime,
+        )
 
 
 class LieHomologyRequest(StrictModel):
@@ -283,7 +294,11 @@ class LieHomologyGroup(StrictModel):
 
 
 class LieHomologyResult(StrictModel):
-    """Lie algebra homology groups with trivial coefficients."""
+    """Structurally bounded Lie homology groups with trivial coefficients.
+
+    Exact rank computation belongs to :func:`verify_lie_homology_result`, not
+    to model validation.
+    """
 
     lie_algebra: LieAlgebra
     groups: tuple[LieHomologyGroup, ...] = Field(min_length=1)
@@ -292,10 +307,6 @@ class LieHomologyResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_to_source_lie_algebra(self) -> Self:
-        from jacobian.math.lie_algebra_homology._operations import (
-            lie_homology_groups,
-        )
-
         if len(self.groups) != self.dimension + 1:
             raise _validation_error(
                 "homology_group_coverage",
@@ -309,14 +320,42 @@ class LieHomologyResult(StrictModel):
                 "homology_source_mismatch",
                 "dimension and prime must match the retained Lie algebra",
             )
-        expected = lie_homology_groups(self.lie_algebra)
-        if self.groups != expected:
+        if tuple(group.degree for group in self.groups) != tuple(
+            range(self.dimension + 1)
+        ):
             raise _validation_error(
-                "homology_replay",
-                "groups must equal the exact Lie-homology replay of the "
-                "retained Lie algebra",
+                "homology_group_degrees",
+                "homology groups must cover degrees 0..dimension in order",
             )
+        for group in self.groups:
+            expected_chain_dimension = comb(self.dimension, group.degree)
+            if group.chain_dimension != expected_chain_dimension:
+                raise _validation_error(
+                    "homology_chain_dimension",
+                    "chain_dimension must equal the binomial dimension of "
+                    "the retained Lie algebra chain group",
+                )
+            if group.betti > expected_chain_dimension:
+                raise _validation_error(
+                    "homology_betti_bound",
+                    "betti cannot exceed its retained chain-group dimension",
+                )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        lie_algebra: LieAlgebra,
+        groups: tuple[LieHomologyGroup, ...],
+    ) -> Self:
+        """Construct a result emitted by the owner-local homology kernel."""
+
+        return cls(
+            lie_algebra=lie_algebra,
+            groups=groups,
+            dimension=lie_algebra.dimension,
+            prime=lie_algebra.prime,
+        )
 
 
 __all__ = [

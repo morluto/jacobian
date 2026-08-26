@@ -117,12 +117,8 @@ def compute_hochschild_chain_complex(
             )
         )
 
-    return HochschildChainComplexResult(
-        algebra=alg,
-        algebra_dimension=n,
-        group_dimensions=tuple(group_dims),
-        differentials=tuple(differentials),
-        prime=p,
+    return HochschildChainComplexResult._from_kernel(
+        alg, tuple(group_dims), tuple(differentials)
     )
 
 
@@ -168,15 +164,47 @@ def compute_hochschild_homology(
     """Compute exact Hochschild homology HH_n(A, K) for trivial coefficients."""
     alg = request.algebra
 
-    return HochschildHomologyResult(
-        algebra=alg,
-        max_degree=request.max_degree,
-        groups=hochschild_homology_groups(alg, request.max_degree),
-        prime=alg.prime,
+    return HochschildHomologyResult._from_kernel(
+        alg,
+        request.max_degree,
+        hochschild_homology_groups(alg, request.max_degree),
+    )
+
+
+def verify_hochschild_chain_complex_result(
+    result: HochschildChainComplexResult,
+) -> bool:
+    """Check an independently supplied complex against its admitted source.
+
+    The model has already bounded the degree, tensor axes, and dense matrix
+    sizes. This verifier rebuilds only the finite bar boundaries in that
+    declared envelope.
+    """
+
+    algebra = result.algebra
+    return all(
+        differential.matrix.entries
+        == bar_differential_entries(
+            algebra.structure_constants,
+            algebra.prime,
+            differential.degree,
+            algebra.augmentation,
+        )
+        for differential in result.differentials
+    )
+
+
+def verify_hochschild_homology_result(result: HochschildHomologyResult) -> bool:
+    """Replay a separately supplied homology claim inside its admitted envelope."""
+
+    return result.groups == hochschild_homology_groups(
+        result.algebra, result.max_degree
     )
 
 
 __all__ = [
     "compute_hochschild_chain_complex",
     "compute_hochschild_homology",
+    "verify_hochschild_chain_complex_result",
+    "verify_hochschild_homology_result",
 ]

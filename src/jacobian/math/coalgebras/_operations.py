@@ -34,11 +34,9 @@ def compute_comultiplication(
         tuple(ca.comultiplication[i][j][k] % p for k in range(n)) for j in range(n)
     )
 
-    return ComultiplicationResult(
-        coalgebra=ca,
-        element_index=i,
-        matrix=PrimeFieldMatrix(prime=p, entries=coeffs, columns=n),
-        dimension=n,
+    return ComultiplicationResult._from_kernel(
+        request,
+        PrimeFieldMatrix(prime=p, entries=coeffs, columns=n),
     )
 
 
@@ -48,11 +46,7 @@ def compute_counit(request: CounitRequest) -> CounitResult:
     i = request.element_index
     p = ca.prime
 
-    return CounitResult(
-        coalgebra=ca,
-        element_index=i,
-        value=ca.counit[i] % p,
-    )
+    return CounitResult._from_kernel(request, ca.counit[i] % p)
 
 
 def _group_like_coefficients(
@@ -118,15 +112,56 @@ def find_group_like_elements(
     ca = request.coalgebra
     found = _group_like_coefficients(ca)
 
-    return GroupLikeElementsResult(
-        coalgebra=ca,
+    return GroupLikeElementsResult._from_kernel(
+        request,
         elements=tuple(GroupLikeElement(coefficients=coeffs) for coeffs in found),
-        count=len(found),
     )
+
+
+def verify_comultiplication_result(result: ComultiplicationResult) -> bool:
+    """Verify an independently supplied comultiplication claim."""
+    coalgebra = result.coalgebra
+    expected = tuple(
+        tuple(
+            coalgebra.comultiplication[result.element_index][row][column]
+            % coalgebra.prime
+            for column in range(coalgebra.dimension)
+        )
+        for row in range(coalgebra.dimension)
+    )
+    return result.matrix.entries == expected
+
+
+def verify_counit_result(result: CounitResult) -> bool:
+    """Verify an independently supplied counit claim."""
+    return (
+        result.value
+        == result.coalgebra.counit[result.element_index] % result.coalgebra.prime
+    )
+
+
+def verify_group_like_elements_result(result: GroupLikeElementsResult) -> bool:
+    """Verify one exhaustive group-like claim within its admitted scan envelope."""
+    from jacobian.math.coalgebras._models import (
+        GROUP_LIKE_SCAN_WORK_BUDGET,
+        group_like_scan_work,
+    )
+
+    coalgebra = result.coalgebra
+    if (
+        group_like_scan_work(coalgebra.prime, coalgebra.dimension)
+        > GROUP_LIKE_SCAN_WORK_BUDGET
+    ):
+        return False
+    expected = _group_like_coefficients(coalgebra)
+    return tuple(element.coefficients for element in result.elements) == expected
 
 
 __all__ = [
     "compute_comultiplication",
     "compute_counit",
     "find_group_like_elements",
+    "verify_comultiplication_result",
+    "verify_counit_result",
+    "verify_group_like_elements_result",
 ]

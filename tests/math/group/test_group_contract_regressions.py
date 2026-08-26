@@ -5,21 +5,18 @@ from contextlib import contextmanager
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.group import (
-    PermutationGroupRequest,
-    group_orbit,
-    group_order,
-    group_stabilizer,
-)
+from jacobian.math.group import group_orbit, group_order, group_stabilizer
 from jacobian.math.group._models import (
     GroupOrbitRequest,
     GroupStabilizerRequest,
     GroupStabilizerResult,
+    PermutationGroupRequest,
 )
 from jacobian.math.group._operations import (
     compute_group_orbit,
     compute_group_order,
     compute_group_stabilizer,
+    verify_group_stabilizer_result,
 )
 
 S3_GENERATORS = ((1, 2, 0), (1, 0, 2))
@@ -362,26 +359,28 @@ def test_group_stabilizer_rejects_invalid_point() -> None:
         group_stabilizer(group, 7)
 
 
-def test_forged_stabilizer_results_fail_defining_invariants() -> None:
+def test_forged_stabilizer_results_require_explicit_verification() -> None:
     group = PermutationGroupRequest(degree=4, generators=((1, 2, 3, 0),))
 
-    # A generator that does not fix the point is rejected.
-    with _group_error("group.stabilizer_point"):
-        GroupStabilizerResult(
-            point=0,
-            source=group,
-            stabilizer=PermutationGroupRequest(degree=4, generators=((1, 2, 3, 0),)),
-        )
+    # A generator that does not fix the point is rejected by the explicit
+    # verifier, not deserialization.
+    nonfixing = GroupStabilizerResult(
+        point=0,
+        source=group,
+        stabilizer=PermutationGroupRequest(degree=4, generators=((1, 2, 3, 0),)),
+    )
+    assert verify_group_stabilizer_result(nonfixing) is False
 
     # A fixing permutation outside the source group breaks membership and the
     # orbit-stabilizer relation |G| = |orbit| * |stab|.
     impostor = PermutationGroupRequest(degree=4, generators=((0, 2, 1, 3),))
-    with _group_error("group.stabilizer_source"):
-        GroupStabilizerResult(point=0, source=group, stabilizer=impostor)
+    forged = GroupStabilizerResult(point=0, source=group, stabilizer=impostor)
+    assert verify_group_stabilizer_result(forged) is False
 
     # A genuine stabilizer passes its own validation unchanged.
     genuine = compute_group_stabilizer(GroupStabilizerRequest(group=group, point=0))
     assert GroupStabilizerResult.model_validate(genuine.model_dump()) == genuine
+    assert verify_group_stabilizer_result(genuine) is True
 
 
 def test_group_subgroup_lattice_serialization_is_hash_seed_independent() -> None:
@@ -417,12 +416,19 @@ def test_group_subgroup_lattice_result_requires_canonical_entry_order() -> None:
         GroupSubgroupLatticeRequest,
         GroupSubgroupLatticeResult,
     )
-    from jacobian.math.group._operations import compute_subgroup_lattice
+    from jacobian.math.group._operations import (
+        compute_subgroup_lattice,
+        verify_group_subgroup_lattice_result,
+    )
 
     result = compute_subgroup_lattice(
         GroupSubgroupLatticeRequest(degree=4, generators=((1, 2, 3, 0),))
     )
     payload = result.model_dump(mode="json")
     payload["subgroups"] = list(reversed(payload["subgroups"]))
-    with _group_error("group.lattice_canonical"):
-        GroupSubgroupLatticeResult.model_validate(payload)
+    assert (
+        verify_group_subgroup_lattice_result(
+            GroupSubgroupLatticeResult.model_validate(payload)
+        )
+        is False
+    )

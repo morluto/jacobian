@@ -9,6 +9,7 @@ from pydantic import ConfigDict, Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.math.analysis._arb import dyadic_endpoints
 from jacobian.math.analysis._models import (
     MAX_DYADIC_MANTISSA_DIGITS,
     MAX_RATIONAL_DIGITS,
@@ -300,6 +301,70 @@ class ArbPointEnclosureResult(ArbPointEnclosureRequest):
                     "exact enclosures omit relative accuracy; inexact ones report it"
                 )
         return self
+
+
+def _point_enclosure(request: ArbPointEnclosureRequest) -> ArbPointEnclosureResult:
+    """Compute one bounded Arb point enclosure in its owning family."""
+
+    from flint import arb, ctx, fmpq
+
+    numerator, denominator = request.argument.as_integer_ratio()
+    with ctx.workprec(request.precision_bits):
+        value = arb(fmpq(numerator, denominator))
+        result = getattr(value, request.function.value.lower())()
+        if not result.is_finite():
+            return ArbPointEnclosureResult(
+                function=request.function,
+                argument=request.argument,
+                precision_bits=request.precision_bits,
+                status="NONFINITE",
+                detail="Arb returned a non-finite ball; no enclosure conclusion is available.",
+            )
+        lower_mantissa, lower_exponent = result.lower().man_exp()
+        upper_mantissa, upper_exponent = result.upper().man_exp()
+        exact = bool(result.is_exact())
+        endpoints = dyadic_endpoints(
+            lower_mantissa, lower_exponent, upper_mantissa, upper_exponent
+        )
+    if endpoints is None:
+        return ArbPointEnclosureResult(
+            function=request.function,
+            argument=request.argument,
+            precision_bits=request.precision_bits,
+            status="OUTPUT_MAGNITUDE_EXCEEDED",
+            detail="Arb produced finite endpoints outside the interoperable dyadic exponent range.",
+        )
+    return ArbPointEnclosureResult(
+        function=request.function,
+        argument=request.argument,
+        precision_bits=request.precision_bits,
+        status="ENCLOSED",
+        enclosure=ClaimedPointEnclosure(
+            function=request.function,
+            argument=request.argument,
+            precision_bits=request.precision_bits,
+            lower=endpoints[0],
+            upper=endpoints[1],
+        ),
+        relative_accuracy_bits=None if exact else int(result.rel_accuracy_bits()),
+        exact=exact,
+        detail="Pinned Arb ball arithmetic returned an outward-rounded enclosure with exact dyadic endpoints.",
+    )
+
+
+def _check_point_enclosure(
+    request: PointEnclosureCheckRequest,
+) -> PointEnclosureCheckResult:
+    """Replay one point-enclosure claim in its owning family."""
+
+    from jacobian.math.analysis._point_enclosure_check import (
+        point_enclosure_check_outcome,
+    )
+
+    return PointEnclosureCheckResult(
+        enclosure=request.enclosure,
+        outcome=point_enclosure_check_outcome(request),
+    )
 
 
 __all__ = [

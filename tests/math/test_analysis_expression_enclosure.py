@@ -5,12 +5,13 @@ from fractions import Fraction
 import pytest
 from tests.math._analysis_support import analysis_validation_error
 
+from jacobian.math.analysis._arb import dyadic_endpoints
 from jacobian.math.analysis._expression_enclosure import (
     IntervalExpressionEnclosureRequest,
     IntervalExpressionEnclosureResult,
 )
 from jacobian.math.analysis._models import MAX_DYADIC_EXPONENT, ExactDyadic
-from jacobian.math.analysis._operations import _dyadic_endpoints, _expression_enclosure
+from jacobian.math.analysis._operations import _expression_enclosure
 
 
 def _run(expression: dict[str, object], argument: str = "0"):
@@ -209,4 +210,4 @@ def test_dyadic_enclosure_order_avoids_expanding_huge_binary_exponents(
 
 
 def test_non_interoperable_dyadic_exponents_have_a_typed_outcome() -> None:
-    assert _dyadic_endpoints(1, MAX_DYADIC_EXPONENT + 1, 3, 0) is None
+    assert dyadic_endpoints(1, MAX_DYADIC_EXPONENT + 1, 3, 0) is None

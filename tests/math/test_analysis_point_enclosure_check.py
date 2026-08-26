@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from tests.math._analysis_support import analysis_validation_error
 
 from jacobian.math.analysis._models import ExactDyadic
-from jacobian.math.analysis._operations import _check_point_enclosure
 from jacobian.math.analysis._point_enclosure import (
     MAX_POINT_CHECK_DYADIC_EXPONENT,
     MAX_POINT_CHECK_FRACTION_BITS,
@@ -20,7 +19,9 @@ from jacobian.math.analysis._point_enclosure import (
     ClaimedPointEnclosure,
     PointEnclosureCheckRequest,
     PointEnclosureCheckResult,
+    _check_point_enclosure,
     _point_check_fraction_bound_bits,
+    _point_enclosure,
 )
 from jacobian.math.analysis._point_enclosure_check import (
     _log_range_reduction,
@@ -133,8 +134,6 @@ def test_log_137_80_accepts_the_source_bound_arb_enclosure() -> None:
 
 
 def test_producer_enclosure_crosses_the_checker_boundary_unchanged() -> None:
-    from jacobian.math.analysis._operations import _point_enclosure
-
     producer_result = _point_enclosure(
         ArbPointEnclosureRequest.model_validate(
             {
@@ -163,8 +162,6 @@ def test_producer_enclosure_crosses_the_checker_boundary_unchanged() -> None:
 
 
 def test_nonenclosure_outcomes_retain_the_request_source() -> None:
-    from jacobian.math.analysis._operations import _point_enclosure
-
     nonfinite = _point_enclosure(
         ArbPointEnclosureRequest.model_validate(
             {
@@ -208,8 +205,6 @@ def test_nonenclosure_outcomes_retain_the_request_source() -> None:
 
 
 def test_enclosed_result_must_restate_the_retained_request_source() -> None:
-    from jacobian.math.analysis._operations import _point_enclosure
-
     producer_result = _point_enclosure(
         ArbPointEnclosureRequest.model_validate(
             {

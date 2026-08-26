@@ -8,8 +8,8 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.analysis._models import (
     MAX_DYADIC_EXPONENT,
     ExactDyadic,
-    RationalClosedInterval,
 )
+from jacobian.math.geometry.boxes.values import RationalClosedInterval
 
 
 def dyadic_endpoints(

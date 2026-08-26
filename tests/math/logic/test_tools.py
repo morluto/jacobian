@@ -1211,6 +1211,28 @@ def test_smt_request_admission_rejects_located_parser_diagnostics(monkeypatch) -
     assert error.value.errors(include_url=False)[0]["type"] == "logic.smtlib_grammar"
 
 
+def test_smt_request_admission_defers_parse_stage_os_errors(monkeypatch) -> None:
+    """A parse-stage native backend failure stays off the caller's hands.
+
+    ``math.run`` validates the request before calling the solver, so admission
+    must not let a native ``OSError`` from ``parse_smt2_string`` escape as a
+    host exception; it carries no evidence about the source and defers to
+    execution, which reports it through the typed UNKNOWN translation.
+    """
+
+    import z3
+
+    def failing_parser(_source: str) -> object:
+        raise OSError("native parser backend unavailable")
+
+    source = "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)"
+    monkeypatch.setattr(z3, "parse_smt2_string", failing_parser)
+    admitted = SmtSolveRequest(logic=SmtLogic.QF_LIA, smtlib=source)
+    result = solve_smt(admitted)
+
+    assert result.outcome == "UNKNOWN"
+
+
 @pytest.mark.parametrize(
     "request_type",
     sorted(

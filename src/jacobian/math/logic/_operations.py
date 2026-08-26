@@ -740,7 +740,7 @@ def _require_parseable_smtlib(source: str) -> None:
         return
     try:
         z3.parse_smt2_string(source)
-    except z3.Z3Exception as exc:
+    except (z3.Z3Exception, OSError) as exc:
         if not _is_smtlib_source_diagnostic(exc):
             return
         raise _validation_error(

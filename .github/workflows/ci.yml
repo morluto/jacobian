@@ -163,7 +163,7 @@ jobs:
           junit-artifact: junit-python-catalog-examples-3.12
           coverage-artifact: coverage-data-python-catalog-examples
           coverage-file: .coverage.python-catalog-examples
-          tests: tests/integration/catalog/test_builtin_examples.py
+          tests: tests/integration/catalog/
           collect-coverage: ${{ needs.plan.outputs.pr_lanes != 'true' }}
 
   python:

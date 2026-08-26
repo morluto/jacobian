@@ -1,8 +1,6 @@
 """Supported exact finite simple-graph API."""
 
 from jacobian.math.graphs.independence import (
-    IndependenceNumberBudget,
-    IndependenceNumberRequest,
     IndependenceNumberResult,
     independence_number,
 )
@@ -24,16 +22,12 @@ from jacobian.math.graphs.transforms import (
 )
 from jacobian.math.graphs.values import (
     ColoredUndirectedGraph,
-    GraphCompositionInput,
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
 )
 
 __all__ = [
     "ColoredUndirectedGraph",
-    "GraphCompositionInput",
-    "IndependenceNumberBudget",
-    "IndependenceNumberRequest",
     "IndependenceNumberResult",
     "IndexedSimpleUndirectedGraph",
     "SimpleUndirectedGraph",

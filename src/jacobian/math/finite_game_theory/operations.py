@@ -232,11 +232,8 @@ def solve_terminal_game(
     """Solve one exact finite deterministic terminal-payoff game."""
 
     value_classes, max_strategy, min_strategy = _solve_terminal_game_data(game)
-    return DeterministicTerminalGameSolution(
-        game=game,
-        value_classes=value_classes,
-        max_strategy=max_strategy,
-        min_strategy=min_strategy,
+    return DeterministicTerminalGameSolution._from_kernel(
+        game, value_classes, max_strategy, min_strategy
     )
 
 

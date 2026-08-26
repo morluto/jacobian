@@ -2,27 +2,25 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Annotated, Self
 
 from pydantic import ConfigDict, Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import (
     CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
-)
-from jacobian.math.graphs.polynomials.operations import (
-    MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS,
-    MAX_INDEPENDENCE_POLYNOMIAL_EXPONENT,
-    MAX_INDEPENDENCE_POLYNOMIAL_TERMS,
-    MAX_INDEPENDENCE_POLYNOMIAL_VERTICES,
-    _admitted_tree_profile,
+    parse_canonical_integer,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
     require_polynomial_budget,
 )
 
@@ -30,6 +28,113 @@ _NonnegativeCanonicalInteger = Annotated[
     str,
     StringConstraints(pattern=r"^(?:0|[1-9][0-9]*)$", strict=True),
 ]
+
+
+MAX_INDEPENDENCE_POLYNOMIAL_VERTICES = 256
+# The canonical graph representation accepts at most 256 vertices, and every
+# budget below derives from that input envelope rather than from any other
+# operation's consumer limit. A tree on n vertices has at most n independence
+# polynomial terms, each coefficient is at most 2^n, and the dynamic program
+# performs two dense convolutions for every rooted edge.
+MAX_INDEPENDENCE_POLYNOMIAL_TERMS = MAX_INDEPENDENCE_POLYNOMIAL_VERTICES
+MAX_INDEPENDENCE_POLYNOMIAL_EXPONENT = MAX_INDEPENDENCE_POLYNOMIAL_TERMS - 1
+MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS = len(
+    format_canonical_integer(1 << MAX_INDEPENDENCE_POLYNOMIAL_VERTICES)
+)
+MAX_INDEPENDENCE_CONVOLUTION_PRODUCTS_PER_PASS = (
+    2
+    * (MAX_INDEPENDENCE_POLYNOMIAL_VERTICES - 1)
+    * MAX_INDEPENDENCE_POLYNOMIAL_TERMS**2
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _TreeProfile:
+    """Pure structural admission data shared by the tree kernel."""
+
+    root: str
+    children: dict[str, tuple[str, ...]]
+    postorder: tuple[str, ...]
+    independence_degree: int
+    convolution_products: int
+
+
+def _admitted_tree_profile(graph: SimpleUndirectedGraph) -> _TreeProfile:
+    """Validate one tree and bound its coefficient-convolution work.
+
+    This preflight deliberately uses only canonical graph values.  NetworkX is
+    a private kernel dependency and is not needed to establish connectedness,
+    acyclicity, or the fixed dynamic-program work envelope.
+    """
+
+    vertex_count = len(graph.vertices)
+    if vertex_count == 0:
+        raise ValueError("independence polynomial requires a nonempty tree")
+    if vertex_count > MAX_INDEPENDENCE_POLYNOMIAL_VERTICES:
+        raise ValueError(
+            "independence polynomial supports at most "
+            f"{MAX_INDEPENDENCE_POLYNOMIAL_VERTICES} vertices"
+        )
+    if len(graph.edges) != vertex_count - 1:
+        raise ValueError("independence polynomial requires a connected acyclic graph")
+
+    adjacency: dict[str, list[str]] = {vertex: [] for vertex in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].append(right)
+        adjacency[right].append(left)
+
+    root = graph.vertices[0]
+    parents: dict[str, str | None] = {root: None}
+    order = [root]
+    for parent in order:
+        for child in sorted(adjacency[parent]):
+            if child == parents[parent]:
+                continue
+            if child in parents:
+                raise ValueError(
+                    "independence polynomial requires a connected acyclic graph"
+                )
+            parents[child] = parent
+            order.append(child)
+    if len(order) != vertex_count:
+        raise ValueError("independence polynomial requires a connected acyclic graph")
+
+    child_lists: dict[str, list[str]] = {vertex: [] for vertex in graph.vertices}
+    for child, predecessor in parents.items():
+        if predecessor is not None:
+            child_lists[predecessor].append(child)
+    children = {vertex: tuple(child_lists[vertex]) for vertex in graph.vertices}
+    postorder = tuple(reversed(order))
+
+    excluded_degree: dict[str, int] = {}
+    included_degree: dict[str, int] = {}
+    convolution_products = 0
+    for vertex in postorder:
+        excluded = 0
+        included = 1
+        for child in children[vertex]:
+            child_total = max(excluded_degree[child], included_degree[child])
+            convolution_products += (excluded + 1) * (child_total + 1)
+            convolution_products += (included + 1) * (excluded_degree[child] + 1)
+            excluded += child_total
+            included += excluded_degree[child]
+        excluded_degree[vertex] = excluded
+        included_degree[vertex] = included
+
+    independence_degree = max(excluded_degree[root], included_degree[root])
+    if convolution_products > MAX_INDEPENDENCE_CONVOLUTION_PRODUCTS_PER_PASS:
+        raise ValueError(
+            "tree independence polynomial exceeds the "
+            f"{MAX_INDEPENDENCE_CONVOLUTION_PRODUCTS_PER_PASS}-product "
+            "coefficient-convolution budget"
+        )
+    return _TreeProfile(
+        root=root,
+        children=children,
+        postorder=postorder,
+        independence_degree=independence_degree,
+        convolution_products=convolution_products,
+    )
 
 
 class GraphEdge(StrictModel):
@@ -210,7 +315,12 @@ class TreeIndependencePolynomialRequest(StrictModel):
 
 
 class TreeIndependencePolynomialResult(StrictModel):
-    """One source-bound exact independence polynomial and its defining values."""
+    """One source-bound exact independence polynomial and its defining values.
+
+    The trusted tree kernel constructs this result.  An independently supplied
+    claim can be checked by the explicit owner-local verifier without making
+    Pydantic validation execute the coefficient dynamic program again.
+    """
 
     graph: SimpleUndirectedGraph
     coefficients: tuple[_NonnegativeCanonicalInteger, ...] = Field(
@@ -232,7 +342,7 @@ class TreeIndependencePolynomialResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_values_bound_to_source(self) -> Self:
+    def require_structural_shape(self) -> Self:
         if self.polynomial.variables != ("x",):
             raise PydanticCustomError(
                 "graph.independence_polynomial_must_belong_to_qq_x",
@@ -265,40 +375,77 @@ class TreeIndependencePolynomialResult(StrictModel):
                 f"{MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS}-digit bound",
             )
         TreeIndependencePolynomialRequest(graph=self.graph)
-
-        from jacobian.math.graphs.polynomials.operations import (
-            _polynomial_from_coefficients,
-            independence_polynomial_coefficients,
+        coefficients = tuple(
+            parse_canonical_integer(coefficient) for coefficient in self.coefficients
         )
-
-        expected_coefficients = independence_polynomial_coefficients(self.graph)
-        expected_wire_coefficients = tuple(
-            format_canonical_integer(coefficient)
-            for coefficient in expected_coefficients
-        )
-        if self.polynomial != _polynomial_from_coefficients(expected_coefficients):
+        if self.coefficients[0] != "1":
             raise PydanticCustomError(
-                "graph.independence_polynomial_does_not_match_the_sourc",
-                "independence polynomial does not match the source tree",
+                "graph.independence_coefficients_must_begin_with_one",
+                "independence coefficients must begin with the empty-set count 1",
             )
-        if self.coefficients != expected_wire_coefficients:
+        if self.coefficients[1] != format_canonical_integer(len(self.graph.vertices)):
             raise PydanticCustomError(
-                "graph.independence_coefficients_do_not_match_the_sourc",
-                "independence coefficients do not match the source tree",
+                "graph.independence_linear_coefficient_must_equal_vertex_count",
+                "independence polynomial linear coefficient must equal vertex count",
             )
-        if self.independence_number != len(expected_coefficients) - 1:
+        if self.independence_number != len(coefficients) - 1:
             raise PydanticCustomError(
-                "graph.independence_number_does_not_match_the_source_tr",
-                "independence number does not match the source tree",
+                "graph.independence_number_must_equal_coefficient_degree",
+                "independence number must equal the dense coefficient degree",
             )
-        if self.independent_set_count != format_canonical_integer(
-            sum(expected_coefficients)
-        ):
+        if self.independent_set_count != format_canonical_integer(sum(coefficients)):
             raise PydanticCustomError(
-                "graph.independent_set_count_does_not_match_the_source_",
-                "independent-set count does not match the source tree",
+                "graph.independent_set_count_must_equal_coefficient_sum",
+                "independent-set count must equal the dense coefficient sum",
+            )
+        if self.polynomial != _polynomial_from_dense_coefficients(coefficients):
+            raise PydanticCustomError(
+                "graph.independence_polynomial_must_match_dense_coefficients",
+                "independence polynomial must match its dense coefficients",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: SimpleUndirectedGraph,
+        coefficients: tuple[int, ...],
+    ) -> Self:
+        """Construct a result emitted by the trusted tree polynomial kernel."""
+
+        return cls.model_construct(
+            graph=graph,
+            coefficients=tuple(
+                format_canonical_integer(coefficient) for coefficient in coefficients
+            ),
+            polynomial=_polynomial_from_dense_coefficients(coefficients),
+            independence_number=len(coefficients) - 1,
+            independent_set_count=format_canonical_integer(sum(coefficients)),
+        )
+
+
+def _polynomial_from_dense_coefficients(
+    coefficients: tuple[int, ...],
+) -> RationalPolynomial:
+    """Construct the canonical QQ[x] value carried by a dense coefficient list."""
+
+    return RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(
+                        num=format_canonical_integer(coefficient),
+                        den="1",
+                    ),
+                    exponents=(degree,),
+                )
+                for degree, coefficient in reversed(list(enumerate(coefficients)))
+                if coefficient != 0
+            )
+        ),
+    )
 
 
 class PolynomialTerm(StrictModel):

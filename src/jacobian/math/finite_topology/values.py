@@ -9,9 +9,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
-MAX_TOPOLOGY_POINTS = 32
-MAX_TOPOLOGY_OPENS = 1024
-
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"finite_topology.{reason}", message)
@@ -20,10 +17,8 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 class FiniteTopology(StrictModel):
     """A topology on the labelled carrier ``0..point_count-1``."""
 
-    point_count: int = Field(ge=1, le=MAX_TOPOLOGY_POINTS)
-    open_sets: tuple[tuple[int, ...], ...] = Field(
-        min_length=2, max_length=MAX_TOPOLOGY_OPENS
-    )
+    point_count: int = Field(ge=1)
+    open_sets: tuple[tuple[int, ...], ...] = Field(min_length=2)
 
     @model_validator(mode="after")
     def require_topology_axioms(self) -> Self:
@@ -68,9 +63,9 @@ class FiniteTopology(StrictModel):
 class PointMap(StrictModel):
     """A total map between labelled finite carriers."""
 
-    domain_point_count: int = Field(ge=1, le=MAX_TOPOLOGY_POINTS)
-    codomain_point_count: int = Field(ge=1, le=MAX_TOPOLOGY_POINTS)
-    values: tuple[int, ...] = Field(min_length=1, max_length=MAX_TOPOLOGY_POINTS)
+    domain_point_count: int = Field(ge=1)
+    codomain_point_count: int = Field(ge=1)
+    values: tuple[int, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def require_total_bounded_map(self) -> Self:
@@ -86,13 +81,11 @@ class PointMap(StrictModel):
 
 
 class BeatPointWitness(StrictModel):
-    point: int = Field(ge=0, le=MAX_TOPOLOGY_POINTS - 1)
-    witness: int = Field(ge=0, le=MAX_TOPOLOGY_POINTS - 1)
+    point: int = Field(ge=0)
+    witness: int = Field(ge=0)
 
 
 __all__ = [
-    "MAX_TOPOLOGY_OPENS",
-    "MAX_TOPOLOGY_POINTS",
     "BeatPointWitness",
     "FiniteTopology",
     "PointMap",

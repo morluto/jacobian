@@ -18,6 +18,7 @@ from jacobian.math.code_nonlinear._models import (
     ToSetSystemResult,
     WordDistanceRequest,
     WordDistanceResult,
+    _require_constant_weight,
 )
 from jacobian.math.code_nonlinear.values import BinaryWord, ExplicitBinaryCode
 
@@ -188,11 +189,8 @@ def _constant_weight_code(length: int, weight: int) -> ExplicitBinaryCode:
 def compute_constant_weight(request: ConstantWeightRequest) -> ConstantWeightResult:
     """Generate the complete constant-weight binary code."""
     code = _constant_weight_code(request.length, request.weight)
-    return ConstantWeightResult(
-        length=request.length,
-        weight=request.weight,
-        code=code,
-        count=len(code.codewords),
+    return ConstantWeightResult._from_kernel(
+        length=request.length, weight=request.weight, code=code
     )
 
 
@@ -201,7 +199,7 @@ def compute_word_distance(request: WordDistanceRequest) -> WordDistanceResult:
     distance, differing, weight1, weight2, intersection = _word_distance_data(
         request.word1, request.word2
     )
-    return WordDistanceResult(
+    return WordDistanceResult._from_kernel(
         word1=request.word1,
         word2=request.word2,
         distance=distance,
@@ -217,7 +215,7 @@ def compute_explicit_profile(request: ExplicitProfileRequest) -> ExplicitProfile
     code = request.code
     plan = require_profile_admission(code)
     profile = _explicit_profile_data(code)
-    return ExplicitProfileResult(
+    return ExplicitProfileResult._from_kernel(
         source=code,
         length=code.length,
         cardinality=len(code.codewords),
@@ -238,7 +236,7 @@ def compute_constant_weight_profile(
     code = request.code
     plan = require_profile_admission(code)
     profile = _constant_weight_profile_data(code)
-    return ConstantWeightProfileResult(
+    return ConstantWeightProfileResult._from_kernel(
         source=code,
         length=code.length,
         weight=sum(code.codewords[0]),
@@ -256,7 +254,7 @@ def compute_constant_weight_profile(
 def compute_to_set_system(request: ToSetSystemRequest) -> ToSetSystemResult:
     """Map each source word to its coordinate support."""
     code = request.code
-    return ToSetSystemResult(
+    return ToSetSystemResult._from_kernel(
         source=code,
         length=code.length,
         cardinality=len(code.codewords),
@@ -269,7 +267,7 @@ def compute_to_set_system(request: ToSetSystemRequest) -> ToSetSystemResult:
 
 def to_set_system(code: ExplicitBinaryCode) -> ToSetSystemResult:
     """Native support conversion for one canonical explicit binary code."""
-    return ToSetSystemResult(
+    return ToSetSystemResult._from_kernel(
         source=code,
         length=code.length,
         cardinality=len(code.codewords),
@@ -280,6 +278,104 @@ def to_set_system(code: ExplicitBinaryCode) -> ToSetSystemResult:
     )
 
 
+def verify_constant_weight_result(result: ConstantWeightResult) -> bool:
+    """Verify an independently supplied generated-code claim."""
+
+    expected = _constant_weight_code(result.length, result.weight)
+    return result.code == expected and result.count == len(expected.codewords)
+
+
+def verify_word_distance_result(result: WordDistanceResult) -> bool:
+    """Verify an independently supplied exact Hamming-relation claim."""
+
+    expected = _word_distance_data(result.word1, result.word2)
+    return (
+        result.distance,
+        result.differing_coordinates,
+        result.weight1,
+        result.weight2,
+        result.support_intersection,
+    ) == expected
+
+
+def _verify_extremal_witness(
+    source: ExplicitBinaryCode,
+    witness: BinaryCodeDistanceWitness | None,
+    distance: int | None,
+) -> bool:
+    if distance is None:
+        return witness is None
+    if witness is None or not 0 <= witness.left_index < witness.right_index < len(
+        source.codewords
+    ):
+        return False
+    left = source.codewords[witness.left_index]
+    right = source.codewords[witness.right_index]
+    expected_distance, differing, left_weight, right_weight, intersection = (
+        _word_distance_data(left, right)
+    )
+    return (
+        witness.left_word == left
+        and witness.right_word == right
+        and witness.left_support == tuple(i for i, bit in enumerate(left) if bit)
+        and witness.right_support == tuple(i for i, bit in enumerate(right) if bit)
+        and witness.differing_coordinates == differing
+        and witness.left_weight == left_weight
+        and witness.right_weight == right_weight
+        and witness.support_intersection == intersection
+        and witness.distance == expected_distance == distance
+    )
+
+
+def verify_explicit_profile_result(result: ExplicitProfileResult) -> bool:
+    """Replay an independently supplied profile inside its admitted envelope."""
+
+    expected = _explicit_profile_data(result.source)
+    return (
+        result.weight_distribution == expected.weight_distribution
+        and result.minimum_distance == expected.minimum_distance
+        and result.maximum_distance == expected.maximum_distance
+        and result.distance_histogram == expected.distance_histogram
+        and _verify_extremal_witness(
+            result.source, result.minimum_distance_witness, result.minimum_distance
+        )
+        and _verify_extremal_witness(
+            result.source, result.maximum_distance_witness, result.maximum_distance
+        )
+    )
+
+
+def verify_constant_weight_profile_result(result: ConstantWeightProfileResult) -> bool:
+    """Replay an independently supplied constant-weight profile claim."""
+
+    if _require_constant_weight(result.source) != result.weight:
+        return False
+    expected = _constant_weight_profile_data(result.source)
+    return (
+        result.minimum_distance == expected.minimum_distance
+        and result.maximum_distance == expected.maximum_distance
+        and result.distance_histogram == expected.distance_histogram
+        and result.intersection_histogram == expected.intersection_histogram
+        and _verify_extremal_witness(
+            result.source, result.minimum_distance_witness, result.minimum_distance
+        )
+        and _verify_extremal_witness(
+            result.source, result.maximum_distance_witness, result.maximum_distance
+        )
+    )
+
+
+def verify_to_set_system_result(result: ToSetSystemResult) -> bool:
+    """Verify an independently supplied source-indexed support claim."""
+
+    return result.coordinate_axis == tuple(
+        range(result.source.length)
+    ) and result.supports == tuple(
+        tuple(index for index, bit in enumerate(word) if bit)
+        for word in result.source.codewords
+    )
+
+
 __all__ = [
     "compute_constant_weight",
     "compute_constant_weight_profile",
@@ -287,4 +383,9 @@ __all__ = [
     "compute_to_set_system",
     "compute_word_distance",
     "to_set_system",
+    "verify_constant_weight_profile_result",
+    "verify_constant_weight_result",
+    "verify_explicit_profile_result",
+    "verify_to_set_system_result",
+    "verify_word_distance_result",
 ]

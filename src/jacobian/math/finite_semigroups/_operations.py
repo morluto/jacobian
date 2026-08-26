@@ -1,4 +1,4 @@
-"""Exact bounded finite semigroup operations."""
+"""Exact bounded finite semigroup operations and claim verifiers."""
 
 from jacobian.math.finite_semigroups._models import (
     ElementPowerRequest,
@@ -118,14 +118,8 @@ def compute_power_profile(request: PowerProfileRequest) -> PowerProfileResult:
         request.semigroup.multiplication,
         request.element,
     )
-    return PowerProfileResult(
-        semigroup=request.semigroup,
-        element=request.element,
-        powers=powers,
-        index=index,
-        period=period,
-        idempotent=idempotent,
-        cyclic_subsemigroup=cyclic,
+    return PowerProfileResult._from_kernel(
+        request, powers, index, period, idempotent, cyclic
     )
 
 
@@ -167,12 +161,7 @@ def compute_element_power(request: ElementPowerRequest) -> ElementPowerResult:
         request.element,
         request.exponent,
     )
-    return ElementPowerResult(
-        semigroup=request.semigroup,
-        element=request.element,
-        exponent=request.exponent,
-        power=power,
-    )
+    return ElementPowerResult._from_kernel(request, power)
 
 
 def compute_idempotents(request: IdempotentsRequest) -> IdempotentsResult:
@@ -181,10 +170,7 @@ def compute_idempotents(request: IdempotentsRequest) -> IdempotentsResult:
     idempotents = _idempotents(
         request.semigroup.elements, request.semigroup.multiplication
     )
-    return IdempotentsResult(
-        semigroup=request.semigroup,
-        idempotents=idempotents,
-    )
+    return IdempotentsResult._from_kernel(request, idempotents)
 
 
 def compute_principal_ideals(request: PrincipalIdealsRequest) -> PrincipalIdealsResult:
@@ -195,11 +181,7 @@ def compute_principal_ideals(request: PrincipalIdealsRequest) -> PrincipalIdeals
         request.semigroup.multiplication,
         request.elements,
     )
-    return PrincipalIdealsResult(
-        semigroup=request.semigroup,
-        elements=request.elements,
-        ideals=ideals,
-    )
+    return PrincipalIdealsResult._from_kernel(request, ideals)
 
 
 def _left_ideals(
@@ -404,11 +386,54 @@ def compute_green_relations(
     L, R, H, D, J = _green_relations(  # noqa: N806
         request.semigroup.elements, request.semigroup.multiplication
     )
-    return GreenRelationsResult(
-        semigroup=request.semigroup,
-        L=L,
-        R=R,
-        H=H,
-        D=D,
-        J=J,
+    return GreenRelationsResult._from_kernel(request, L, R, H, D, J)
+
+
+def verify_power_profile_result(result: PowerProfileResult) -> bool:
+    """Replay one bounded externally supplied power-profile claim."""
+
+    powers, index, period, idempotent, cyclic = _power_profile_data(
+        result.semigroup.elements, result.semigroup.multiplication, result.element
     )
+    return (
+        result.powers,
+        result.index,
+        result.period,
+        result.idempotent,
+        result.cyclic_subsemigroup,
+    ) == (powers, index, period, idempotent, cyclic)
+
+
+def verify_element_power_result(result: ElementPowerResult) -> bool:
+    """Replay one bounded externally supplied element-power claim."""
+
+    return result.power == _element_power(
+        result.semigroup.elements,
+        result.semigroup.multiplication,
+        result.element,
+        result.exponent,
+    )
+
+
+def verify_idempotents_result(result: IdempotentsResult) -> bool:
+    """Replay one bounded externally supplied idempotent-list claim."""
+
+    return result.idempotents == _idempotents(
+        result.semigroup.elements, result.semigroup.multiplication
+    )
+
+
+def verify_principal_ideals_result(result: PrincipalIdealsResult) -> bool:
+    """Replay one bounded externally supplied principal-ideal claim."""
+
+    return result.ideals == _principal_ideals(
+        result.semigroup.elements, result.semigroup.multiplication, result.elements
+    )
+
+
+def verify_green_relations_result(result: GreenRelationsResult) -> bool:
+    """Replay one bounded externally supplied Green-relations claim."""
+
+    return _green_relations(
+        result.semigroup.elements, result.semigroup.multiplication
+    ) == (result.L, result.R, result.H, result.D, result.J)

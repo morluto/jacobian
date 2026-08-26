@@ -1,11 +1,6 @@
 """Recurrence-owned exact combinatorics operations."""
 
 from jacobian.catalog._examples import example
-from jacobian.math.combinatorics import (
-    PolynomialCoefficientRecurrenceTableRequest,
-    PolynomialCoefficientRecurrenceTableResult,
-    recurrence_table_residuals,
-)
 from jacobian.math.combinatorics._models import (
     IntegerResult,
     NonnegativeIntegerRequest,
@@ -34,6 +29,11 @@ from jacobian.math.combinatorics._recurrence_series_operations import (
 )
 from jacobian.math.combinatorics._support import (
     combinatorics_operation,
+)
+from jacobian.math.combinatorics.recurrence_tables import (
+    PolynomialCoefficientRecurrenceTableRequest,
+    PolynomialCoefficientRecurrenceTableResult,
+    _compute_recurrence_table_residuals,
 )
 
 RECURRENCE_OPERATIONS = (
@@ -180,7 +180,7 @@ RECURRENCE_OPERATIONS = (
         ),
         PolynomialCoefficientRecurrenceTableRequest,
         PolynomialCoefficientRecurrenceTableResult,
-        recurrence_table_residuals,
+        _compute_recurrence_table_residuals,
         "combinatorics",
         "recurrence",
         "p-recursive",

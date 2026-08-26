@@ -198,7 +198,12 @@ class ReceivedWordWitness(StrictModel):
 
 
 class ReceivedWordProfileResult(StrictModel):
-    """Complete coset weight distribution, bound to its encoder and word."""
+    """A bounded received-word profile in the request's canonical coordinates.
+
+    Construction checks only the result's own shape and declared relations.
+    ``verify_received_word_profile_result`` performs the separately requested
+    bounded replay for a claim supplied independently of the owner kernel.
+    """
 
     source: ReceivedWordProfileRequest
     distance_histogram: tuple[_HistogramCount, ...] = Field(
@@ -231,41 +236,96 @@ class ReceivedWordProfileResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_exact_profile_to_source(self) -> Self:
-        from jacobian.math.code_linear._operations import _received_word_profile_data
-
-        expected = _received_word_profile_data(self.source)
-        if self.distance_histogram != expected.distance_histogram:
+    def require_structural_profile_relations(self) -> Self:
+        length = len(self.source.encoder.coordinate_axis)
+        dimension = len(self.source.encoder.message_axis)
+        field_order = self.source.encoder.field_order
+        if len(self.distance_histogram) != length + 1:
             raise _validation_error(
-                "distance_histogram_does_not_match_the_source_relation",
-                "distance histogram does not match the source relation",
+                "distance_histogram_must_cover_every_possible_distance",
+                "distance histogram must have one entry for every distance",
             )
-        if self.codeword_count != expected.codeword_count:
+        if sum(self.distance_histogram) != self.codeword_count:
             raise _validation_error(
-                "codeword_count_does_not_match_the_source_encoder",
-                "codeword count does not match the source encoder",
+                "codeword_count_must_equal_the_histogram_total",
+                "codeword count must equal the histogram total",
             )
-        if self.minimum_distance != expected.minimum_distance:
+        if self.maximum_agreement != length - self.minimum_distance:
             raise _validation_error(
-                "minimum_distance_does_not_match_the_source_relation",
-                "minimum distance does not match the source relation",
+                "maximum_agreement_must_complement_minimum_distance",
+                "maximum agreement must complement minimum distance",
             )
-        if self.maximum_agreement != expected.maximum_agreement:
+        threshold = self.source.threshold
+        if threshold is None:
+            if self.threshold_match_count is not None or self.witnesses:
+                raise _validation_error(
+                    "profile_without_threshold_cannot_contain_threshold_evidence",
+                    "a profile without a threshold cannot contain threshold evidence",
+                )
+            return self
+        if self.threshold_match_count is None:
             raise _validation_error(
-                "maximum_agreement_does_not_match_the_source_relation",
-                "maximum agreement does not match the source relation",
+                "threshold_profile_must_report_a_match_count",
+                "a threshold profile must report a match count",
             )
-        if self.threshold_match_count != expected.threshold_match_count:
+        if self.source.witness_mode == "COUNT" and self.witnesses:
             raise _validation_error(
-                "threshold_count_does_not_match_the_source_threshold",
-                "threshold count does not match the source threshold",
+                "count_mode_cannot_contain_witnesses",
+                "COUNT mode cannot contain witnesses",
             )
-        if self.witnesses != expected.witnesses:
+        if self.source.witness_mode == "FIRST" and len(self.witnesses) > 1:
             raise _validation_error(
-                "threshold_witnesses_do_not_replay_against_the_source",
-                "threshold witnesses do not replay against the source",
+                "first_mode_can_contain_at_most_one_witness",
+                "FIRST mode can contain at most one witness",
             )
+        if len(self.witnesses) > self.threshold_match_count:
+            raise _validation_error(
+                "witnesses_cannot_exceed_the_threshold_match_count",
+                "witnesses cannot exceed the threshold match count",
+            )
+        for witness in self.witnesses:
+            if len(witness.message) != dimension or len(witness.codeword) != length:
+                raise _validation_error(
+                    "witness_axes_must_match_the_source_encoder",
+                    "witness axes must match the source encoder",
+                )
+            if any(value >= field_order for value in witness.message) or any(
+                value >= field_order for value in witness.codeword
+            ):
+                raise _validation_error(
+                    "witness_entries_must_be_canonical_field_residues",
+                    "witness entries must be canonical field residues",
+                )
+            if witness.agreement != length - witness.distance:
+                raise _validation_error(
+                    "witness_agreement_must_complement_its_distance",
+                    "witness agreement must complement its distance",
+                )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: ReceivedWordProfileRequest,
+        distance_histogram: tuple[int, ...],
+        codeword_count: int,
+        minimum_distance: int,
+        maximum_agreement: int,
+        threshold_match_count: int | None,
+        witnesses: tuple[ReceivedWordWitness, ...],
+    ) -> Self:
+        """Build a profile produced by the owner-local enumeration kernel."""
+
+        return cls(
+            source=source,
+            distance_histogram=distance_histogram,
+            codeword_count=codeword_count,
+            minimum_distance=minimum_distance,
+            maximum_agreement=maximum_agreement,
+            threshold_match_count=threshold_match_count,
+            witnesses=witnesses,
+        )
 
 
 def _validate_prime_matrix(

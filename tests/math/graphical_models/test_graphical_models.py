@@ -24,6 +24,9 @@ from jacobian.math.graphical_models._operations import (
     compute_d_separation,
     compute_factor_marginalize,
     compute_factor_multiply,
+    verify_d_separation_result,
+    verify_factor_marginalize_result,
+    verify_factor_multiply_result,
 )
 
 
@@ -141,15 +144,16 @@ class TestBoundResultContracts:
         assert result.left == request.left
         assert result.right == request.right
         assert _strings(result.factor.table) == ("3", "8")
+        assert verify_factor_multiply_result(request, result)
 
-    def test_false_product_is_rejected(self) -> None:
+    def test_independent_product_claim_uses_explicit_verifier(self) -> None:
         left = _factor((0,), ("1", "2"))
         right = _factor((0,), ("3", "4"))
 
-        with pytest.raises(ValidationError) as error:
-            FactorMultiplyResult(left=left, right=right, factor=left)
-        assert (
-            error.value.errors()[0]["type"] == "graphical_model.factor_product_mismatch"
+        claim = FactorMultiplyResult(left=left, right=right, factor=left)
+
+        assert not verify_factor_multiply_result(
+            FactorMultiplyRequest(left=left, right=right), claim
         )
 
     def test_marginal_adapter_binds_source_and_variable(self) -> None:
@@ -161,6 +165,9 @@ class TestBoundResultContracts:
         assert result.source_factor == source
         assert result.variable == 0
         assert _strings(result.factor.table) == ("3",)
+        assert verify_factor_marginalize_result(
+            FactorMarginalizeRequest(factor=source, variable=0), result
+        )
 
 
 class TestVariableElimination:
@@ -275,20 +282,19 @@ class TestDSeparation:
 
         assert result.d_separated is True
         assert result.edges == request.edges
+        assert verify_d_separation_result(request, result)
 
-    def test_false_decision_is_rejected(self) -> None:
-        with pytest.raises(ValidationError) as error:
-            DSeparationResult(
-                variable_count=2,
-                edges=((0, 1),),
-                set_a=(0,),
-                set_b=(1,),
-                set_c=(),
-                d_separated=True,
-            )
-        assert (
-            error.value.errors()[0]["type"] == "graphical_model.d_separation_mismatch"
+    def test_independent_decision_claim_uses_explicit_verifier(self) -> None:
+        request = DSeparationRequest(
+            variable_count=2,
+            edges=((0, 1),),
+            set_a=(0,),
+            set_b=(1,),
+            set_c=(),
         )
+        claim = DSeparationResult(**request.model_dump(), d_separated=True)
+
+        assert not verify_d_separation_result(request, claim)
 
     @pytest.mark.parametrize(
         "edges",

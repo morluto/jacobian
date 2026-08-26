@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
+from itertools import pairwise
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -160,13 +161,12 @@ class StationaryChoice(StrictModel):
 class DeterministicTerminalGameSolution(StrictModel):
     """All position values and one canonical optimal stationary strategy pair.
 
-    The source game is retained so validation can replay the exact threshold
-    games. Value classes are ordered by payoff and list members in declared
-    position order. Strategy choices follow the corresponding player's declared
-    positions. Reachability choices use the first declared successor of strictly
-    smaller canonical threshold-attractor rank; safety choices use the first
-    declared safe successor. Where no stricter threshold exists, the first
-    declared successor is used.
+    The source game is retained for composition. Deserialization checks the
+    bounded result shape only; use the owner-local verifier to check an
+    independently supplied minimax claim. Kernel output uses the trusted
+    factory below. Value classes are ordered by payoff and list members in
+    declared position order. Strategy choices follow the corresponding
+    player's declared positions.
     """
 
     game: DeterministicTerminalGame
@@ -185,28 +185,80 @@ class DeterministicTerminalGameSolution(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_exact_solution_to_source(self) -> Self:
-        from jacobian.math.finite_game_theory.operations import (
-            _solve_terminal_game_data,
+    def require_bounded_solution_shape(self) -> Self:
+        labels = tuple(position.label for position in self.game.positions)
+        label_set = set(labels)
+        if any(
+            not value_class.positions
+            or any(label not in label_set for label in value_class.positions)
+            for value_class in self.value_classes
+        ):
+            raise PydanticCustomError(
+                "finite_game.value_class_position_unknown",
+                "every value-class position must be declared by game",
+            )
+        flattened = tuple(
+            label
+            for value_class in self.value_classes
+            for label in value_class.positions
         )
-
-        value_classes, max_strategy, min_strategy = _solve_terminal_game_data(self.game)
-        if self.value_classes != value_classes:
+        if len(set(flattened)) != len(flattened) or set(flattened) != label_set:
             raise PydanticCustomError(
-                "finite_game.value_classes_not_canonical",
-                "value_classes must be the exact minimax partition",
+                "finite_game.value_classes_not_partition",
+                "value classes must partition the declared positions",
             )
-        if self.max_strategy != max_strategy:
+        payoff_values = tuple(
+            value_class.payoff.as_fraction() for value_class in self.value_classes
+        )
+        if any(later <= earlier for earlier, later in pairwise(payoff_values)):
             raise PydanticCustomError(
-                "finite_game.max_strategy_not_canonical",
-                "max_strategy must be the canonical optimal strategy",
+                "finite_game.value_classes_not_ordered",
+                "value classes must be ordered by strictly increasing payoff",
             )
-        if self.min_strategy != min_strategy:
-            raise PydanticCustomError(
-                "finite_game.min_strategy_not_canonical",
-                "min_strategy must be the canonical optimal strategy",
+        successors: dict[OpaqueLabel, set[OpaqueLabel]] = {
+            label: set() for label in labels
+        }
+        for move in self.game.moves:
+            successors[move.source].add(move.target)
+        for choices, owner, error_code in (
+            (self.max_strategy, "MAX", "max_strategy"),
+            (self.min_strategy, "MIN", "min_strategy"),
+        ):
+            expected = tuple(
+                position.label
+                for position in self.game.positions
+                if position.owner == owner
             )
+            if tuple(choice.position for choice in choices) != expected:
+                raise PydanticCustomError(
+                    f"finite_game.{error_code}_positions",
+                    f"{error_code} must cover {owner} positions in declared order",
+                )
+            if any(
+                choice.target not in successors[choice.position] for choice in choices
+            ):
+                raise PydanticCustomError(
+                    f"finite_game.{error_code}_move_unknown",
+                    f"every {error_code} choice must be a declared move",
+                )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        game: DeterministicTerminalGame,
+        value_classes: tuple[TerminalGameValueClass, ...],
+        max_strategy: tuple[StationaryChoice, ...],
+        min_strategy: tuple[StationaryChoice, ...],
+    ) -> Self:
+        """Construct trusted output from the owner-local exact kernel."""
+
+        return cls.model_construct(
+            game=game,
+            value_classes=value_classes,
+            max_strategy=max_strategy,
+            min_strategy=min_strategy,
+        )
 
 
 def _require_terminal_game_envelope(game: DeterministicTerminalGame) -> None:

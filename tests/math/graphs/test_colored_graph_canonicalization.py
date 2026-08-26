@@ -18,11 +18,11 @@ import jacobian.math.graphs.isomorphism._canonicalization as isomorphism_canonic
 import jacobian.math.graphs.isomorphism._canonicalization_bounds as isomorphism_bounds
 from jacobian.math.graphs import explicit_graph
 from jacobian.math.graphs.isomorphism import (
-    ColoredGraphCanonicalizationRequest,
     ColoredGraphCanonicalizationResult,
     ColoredUndirectedGraph,
     canonicalize_colored_graph,
 )
+from jacobian.math.graphs.isomorphism._models import ColoredGraphCanonicalizationRequest
 from jacobian.math.graphs.isomorphism._operations import (
     compute_colored_graph_canonicalization,
 )

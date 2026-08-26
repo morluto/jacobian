@@ -20,6 +20,57 @@ from jacobian.math.graphs.coloring._models import (
     MaximalIndependentSetResult,
     _incident_edge_index_pairs_for_canonical_graph,
 )
+from jacobian.math.graphs.values import (
+    IndexedSimpleUndirectedGraph,
+    SimpleUndirectedGraph,
+)
+
+
+def _run_k_colorability_solver(
+    graph: IndexedSimpleUndirectedGraph,
+    colors: int,
+    solver_conflicts: int,
+) -> tuple[str, tuple[int, ...] | None]:
+    """Run the existing bounded vertex-coloring Z3 adapter once."""
+
+    import z3  # type: ignore[import-untyped]
+
+    solver = z3.Solver()
+    solver.set("max_conflicts", solver_conflicts)
+    vertex_colors = [z3.Int(f"color_{vertex}") for vertex in range(graph.vertex_count)]
+    solver.add(*(z3.And(color >= 0, color < colors) for color in vertex_colors))
+    solver.add(*(vertex_colors[u] != vertex_colors[v] for u, v in graph.edges))
+    outcome = solver.check()
+    if outcome == z3.sat:
+        model = solver.model()
+        return "sat", tuple(model.eval(color).as_long() for color in vertex_colors)
+    if outcome == z3.unsat:
+        return "unsat", None
+    return "unknown", None
+
+
+def _run_edge_coloring_solver(
+    graph: SimpleUndirectedGraph,
+    colors: int,
+    solver_conflicts: int,
+) -> tuple[str, tuple[int, ...] | None]:
+    """Run the existing bounded edge-coloring Z3 adapter once."""
+
+    import z3
+
+    solver = z3.Solver()
+    solver.set("max_conflicts", solver_conflicts)
+    edge_colors = [z3.Int(f"c_{index}") for index in range(len(graph.edges))]
+    solver.add(*(z3.And(color >= 0, color < colors) for color in edge_colors))
+    for first, second in _incident_edge_index_pairs_for_canonical_graph(graph):
+        solver.add(edge_colors[first] != edge_colors[second])
+    outcome = solver.check()
+    if outcome == z3.sat:
+        model = solver.model()
+        return "sat", tuple(model.eval(color).as_long() for color in edge_colors)
+    if outcome == z3.unsat:
+        return "unsat", None
+    return "unknown", None
 
 
 def compute_chromatic_number_certificate_check(
@@ -62,13 +113,10 @@ def compute_k_colorability(request: KColorabilityRequest) -> KColorabilityResult
     decision.  Non-colorability is claimed only on an explicit
     unsatisfiable outcome; an exhausted budget yields the typed
     ``SOLVER_BUDGET_EXCEEDED`` outcome instead of an unbounded wait.  The
-    declared budget covers the whole request: decided-negative and
-    budget-exceeded outcomes reuse the producing solve directly instead of
-    paying a second replay, while independently supplied results still
-    validate through full replay.
+    conflict budget bounds the SAT search after owner-local formula admission;
+    separately supplied negative or incomplete claims may be replayed through
+    the explicit verifier.
     """
-    from jacobian.math.graphs.coloring._models import _run_k_colorability_solver
-
     outcome, coloring = _run_k_colorability_solver(
         request.graph, request.colors, request.solver_conflicts
     )
@@ -77,34 +125,44 @@ def compute_k_colorability(request: KColorabilityRequest) -> KColorabilityResult
             raise AssertionError(
                 "the bounded solver returned a satisfying outcome without a witness"
             )
-        return KColorabilityResult(
+        return KColorabilityResult._from_kernel(
             graph=request.graph,
             colors=request.colors,
             solver_conflicts=request.solver_conflicts,
             status="DECIDED",
             colorable=True,
             coloring=coloring,
-            vertex_count=request.graph.vertex_count,
         )
     if outcome == "unsat":
-        return KColorabilityResult.model_construct(
+        return KColorabilityResult._from_kernel(
             graph=request.graph,
             colors=request.colors,
             solver_conflicts=request.solver_conflicts,
             status="DECIDED",
             colorable=False,
             coloring=None,
-            vertex_count=request.graph.vertex_count,
         )
-    return KColorabilityResult.model_construct(
+    return KColorabilityResult._from_kernel(
         graph=request.graph,
         colors=request.colors,
         solver_conflicts=request.solver_conflicts,
         status="SOLVER_BUDGET_EXCEEDED",
         colorable=None,
         coloring=None,
-        vertex_count=request.graph.vertex_count,
     )
+
+
+def verify_k_colorability_result(result: KColorabilityResult) -> bool:
+    """Replay only a separately supplied negative or incomplete SAT claim."""
+
+    if result.status == "DECIDED" and result.colorable is True:
+        return True
+    outcome, _coloring = _run_k_colorability_solver(
+        result.graph, result.colors, result.solver_conflicts
+    )
+    if result.status == "SOLVER_BUDGET_EXCEEDED":
+        return outcome == "unknown"
+    return outcome == "unsat"
 
 
 def compute_maximal_independent_set_decision(
@@ -145,21 +203,14 @@ def compute_edge_k_colorability(
     ``graph.edge_coloring.check``.  Non-colorability is claimed only on an
     explicit unsatisfiable outcome; an exhausted budget yields the typed
     ``SOLVER_BUDGET_EXCEEDED`` outcome instead of an unbounded wait.  The
-    declared budget covers the whole request: decided-negative and
-    budget-exceeded outcomes reuse the producing solve directly instead of
-    paying a second replay, while independently supplied results still
-    validate through full replay.
+    conflict budget bounds the SAT search after owner-local formula admission;
+    separately supplied negative or incomplete claims may be replayed through
+    the explicit verifier.
     """
-    from jacobian.math.graphs.coloring._models import (
-        _budget_exceeded_result,
-        _decided_unsat_result,
-        _run_edge_coloring_solver,
-    )
-
     edges = request.graph.edges
 
     def _colorable_result(witness: tuple[int, ...]) -> EdgeKColorabilityResult:
-        return EdgeKColorabilityResult(
+        return EdgeKColorabilityResult._from_kernel(
             graph=request.graph,
             colors=request.colors,
             solver_conflicts=request.solver_conflicts,
@@ -170,7 +221,6 @@ def compute_edge_k_colorability(
                 colors=request.colors,
                 coloring=witness,
             ),
-            edge_count=len(edges),
         )
 
     if not edges:
@@ -185,12 +235,35 @@ def compute_edge_k_colorability(
             )
         return _colorable_result(coloring)
     if outcome == "unsat":
-        return _decided_unsat_result(
-            request.graph, request.colors, request.solver_conflicts
+        return EdgeKColorabilityResult._from_kernel(
+            graph=request.graph,
+            colors=request.colors,
+            solver_conflicts=request.solver_conflicts,
+            status="DECIDED",
+            colorable=False,
+            coloring=None,
         )
-    return _budget_exceeded_result(
-        request.graph, request.colors, request.solver_conflicts
+    return EdgeKColorabilityResult._from_kernel(
+        graph=request.graph,
+        colors=request.colors,
+        solver_conflicts=request.solver_conflicts,
+        status="SOLVER_BUDGET_EXCEEDED",
+        colorable=None,
+        coloring=None,
     )
+
+
+def verify_edge_k_colorability_result(result: EdgeKColorabilityResult) -> bool:
+    """Replay only a separately supplied negative or incomplete SAT claim."""
+
+    if result.status == "DECIDED" and result.colorable is True:
+        return True
+    outcome, _coloring = _run_edge_coloring_solver(
+        result.graph, result.colors, result.solver_conflicts
+    )
+    if result.status == "SOLVER_BUDGET_EXCEEDED":
+        return outcome == "unknown"
+    return outcome == "unsat"
 
 
 def compute_edge_coloring_check(

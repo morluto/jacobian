@@ -34,6 +34,10 @@ from jacobian.math.finite_topology._operations import (
     compute_connected_components,
     compute_continuity,
     compute_specialization_preorder,
+    verify_beat_points_result,
+    verify_connected_components_result,
+    verify_continuity_result,
+    verify_specialization_preorder_result,
 )
 from jacobian.math.finite_topology._tools import TOOLS
 
@@ -100,21 +104,53 @@ def test_topology_axioms_are_validated_at_the_value_boundary() -> None:
     )
 
 
+def test_carriers_are_structural_while_wire_requests_own_operation_bounds() -> None:
+    """A native consumer may use a larger finite carrier than the MCP tools."""
+
+    topology = _indiscrete(33)
+    assert topology.point_count == 33
+    assert len(specialization_preorder(topology)) == 33
+
+    value_schema = FiniteTopology.model_json_schema()
+    assert "maximum" not in value_schema["properties"]["point_count"]
+    assert "maxItems" not in value_schema["properties"]["open_sets"]
+
+    with pytest.raises(ValidationError) as exc_info:
+        SpecializationPreorderRequest(topology=topology)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_topology.topology_point_budget_exceeded"
+    )
+
+    request_schema = SpecializationPreorderRequest.model_json_schema()
+    topology_schema = request_schema["properties"]["topology"]
+    assert topology_schema["properties"]["point_count"]["maximum"] == 32
+    assert topology_schema["properties"]["open_sets"]["maxItems"] == 1_024
+
+    map_schema = PointMap.model_json_schema()
+    assert "maximum" not in map_schema["properties"]["domain_point_count"]
+    assert "maximum" not in map_schema["properties"]["codomain_point_count"]
+    assert "maxItems" not in map_schema["properties"]["values"]
+
+    continuity_schema = ContinuityRequest.model_json_schema()
+    point_map_schema = continuity_schema["properties"]["point_map"]
+    assert point_map_schema["properties"]["domain_point_count"]["maximum"] == 32
+    assert point_map_schema["properties"]["codomain_point_count"]["maximum"] == 32
+    assert point_map_schema["properties"]["values"]["maxItems"] == 32
+
+
 def test_specialization_orientation_is_explicit_and_bound() -> None:
     result = compute_specialization_preorder(
         SpecializationPreorderRequest(topology=_sierpinski())
     )
     assert result.relation == ((True, True), (False, True))
     assert result.orientation == "RELATION_X_Y_MEANS_X_IN_CLOSURE_OF_SINGLETON_Y"
+    assert verify_specialization_preorder_result(result) is True
 
     payload = result.model_dump()
     payload["relation"] = ((True, False), (True, True))
-    with pytest.raises(ValidationError) as exc_info:
-        SpecializationPreorderResult.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "finite_topology.specialization_preorder_not_bound"
-    )
+    claimed = SpecializationPreorderResult.model_validate(payload)
+    assert verify_specialization_preorder_result(claimed) is False
 
 
 def test_minimal_neighborhoods_and_components() -> None:
@@ -127,19 +163,17 @@ def test_minimal_neighborhoods_and_components() -> None:
     )
     assert connected.components == ((0, 1),)
     assert connected.component_count == 1
+    assert verify_connected_components_result(connected) is True
     discrete = compute_connected_components(
         ConnectedComponentsRequest(topology=_discrete(3))
     )
     assert discrete.components == ((0,), (1,), (2,))
 
     payload = discrete.model_dump()
+    payload["components"] = ((0, 1), (2,))
     payload["component_count"] = 2
-    with pytest.raises(ValidationError) as exc_info:
-        ConnectedComponentsResult.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "finite_topology.connected_components_not_bound"
-    )
+    claimed = ConnectedComponentsResult.model_validate(payload)
+    assert verify_connected_components_result(claimed) is False
 
 
 def test_continuity_returns_an_exact_counterexample() -> None:
@@ -154,6 +188,7 @@ def test_continuity_returns_an_exact_counterexample() -> None:
     assert result.is_continuous is False
     assert result.violating_open_set == (1,)
     assert result.violating_preimage == (1,)
+    assert verify_continuity_result(result) is True
 
     identity = compute_continuity(
         ContinuityRequest(
@@ -166,12 +201,10 @@ def test_continuity_returns_an_exact_counterexample() -> None:
 
     payload = result.model_dump()
     payload["is_continuous"] = True
-    with pytest.raises(ValidationError) as exc_info:
-        ContinuityResult.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "finite_topology.continuity_result_not_bound"
-    )
+    payload["violating_open_set"] = None
+    payload["violating_preimage"] = None
+    claimed = ContinuityResult.model_validate(payload)
+    assert verify_continuity_result(claimed) is False
 
 
 def test_continuity_request_binds_map_carrier_sizes() -> None:
@@ -196,15 +229,12 @@ def test_beat_points_use_strict_t0_order_and_return_witnesses() -> None:
     assert tuple((entry.point, entry.witness) for entry in result.up_beat_points) == (
         (0, 1),
     )
+    assert verify_beat_points_result(result) is True
 
     payload = result.model_dump()
     payload["up_beat_points"] = ()
-    with pytest.raises(ValidationError) as exc_info:
-        BeatPointsResult.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "finite_topology.beat_points_result_not_bound"
-    )
+    claimed = BeatPointsResult.model_validate(payload)
+    assert verify_beat_points_result(claimed) is False
 
 
 def test_non_t0_beat_point_request_fails_closed() -> None:

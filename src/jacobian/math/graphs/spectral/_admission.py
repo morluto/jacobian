@@ -24,13 +24,15 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "graph.spectrum.adjacency.compute",
         AdmissionDecision.KEEP,
         "exact adjacency eigenvalue/multiplicity multiset bound to its "
-        "retained source graph by structural checks and exact replay",
+        "retained source graph; independently supplied claims have an exact "
+        "bounded owner verifier",
     ),
     OperationAdmission(
         "graph.spectrum.laplacian.compute",
         AdmissionDecision.KEEP,
         "exact Laplacian eigenvalue/multiplicity multiset bound to its "
-        "retained source graph by structural checks and exact replay",
+        "retained source graph; independently supplied claims have an exact "
+        "bounded owner verifier",
     ),
 )
 

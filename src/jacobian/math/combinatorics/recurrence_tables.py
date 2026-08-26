@@ -28,6 +28,40 @@ class IndexedRecurrenceResidual(StrictModel):
     value: CanonicalRational
 
 
+def _require_table_admission(
+    coefficient_polynomials: tuple[tuple[Fraction, ...], ...],
+    values: tuple[Fraction, ...],
+) -> None:
+    """Apply the recurrence-table envelope to canonical rational values."""
+
+    order = len(coefficient_polynomials) - 1
+    if not 1 <= order <= MAX_LINEAR_RECURRENCE_ORDER:
+        raise ValueError("recurrence order is outside the bound")
+    if not 2 <= len(values) <= MAX_LINEAR_RECURRENCE_INDEX + 1:
+        raise ValueError("table length is outside the bound")
+    if len(values) <= order:
+        raise ValueError(
+            "values must include the initial range and at least one checked step"
+        )
+    for polynomial in coefficient_polynomials:
+        if not polynomial or len(polynomial) > MAX_P_RECURSIVE_POLYNOMIAL_DEGREE + 1:
+            raise ValueError("coefficient polynomial degree is outside the bound")
+        if polynomial[-1] == 0:
+            raise ValueError("coefficient polynomial must omit trailing zero terms")
+        for coefficient in polynomial:
+            require_bounded_rational(
+                CanonicalRational.from_fraction(coefficient),
+                max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
+                label="recurrence polynomial coefficient",
+            )
+    for value in values:
+        require_bounded_rational(
+            CanonicalRational.from_fraction(value),
+            max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
+            label="submitted recurrence table value",
+        )
+
+
 class PolynomialCoefficientRecurrenceTableRequest(StrictModel):
     """One complete finite table and one polynomial-coefficient recurrence."""
 
@@ -45,37 +79,18 @@ class PolynomialCoefficientRecurrenceTableRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_bounded_table(self) -> Self:
-        order = len(self.coefficient_polynomials) - 1
-        if len(self.values) <= order:
-            raise ValueError(
-                "values must include the initial range and at least one checked step"
+        try:
+            _require_table_admission(
+                tuple(
+                    tuple(value.as_fraction() for value in polynomial)
+                    for polynomial in self.coefficient_polynomials
+                ),
+                tuple(value.as_fraction() for value in self.values),
             )
-        for polynomial in self.coefficient_polynomials:
-            if (
-                not polynomial
-                or len(polynomial) > MAX_P_RECURSIVE_POLYNOMIAL_DEGREE + 1
-            ):
-                raise ValueError("coefficient polynomial degree is outside the bound")
-            if polynomial[-1].as_fraction() == 0:
-                raise ValueError("coefficient polynomial must omit trailing zero terms")
-            for coefficient in polynomial:
-                try:
-                    require_bounded_rational(
-                        coefficient,
-                        max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
-                        label="recurrence polynomial coefficient",
-                    )
-                except ValueError as exc:
-                    raise _validation_error("recurrence_invariant", str(exc)) from None
-        for value in self.values:
-            try:
-                require_bounded_rational(
-                    value,
-                    max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
-                    label="submitted recurrence table value",
-                )
-            except ValueError as exc:
+        except ValueError as exc:
+            if "digits" in str(exc):
                 raise _validation_error("recurrence_invariant", str(exc)) from None
+            raise
         return self
 
 
@@ -119,21 +134,20 @@ def _evaluate(polynomial: tuple[Fraction, ...], index: int) -> Fraction:
     )
 
 
-def recurrence_table_residuals(
-    request: PolynomialCoefficientRecurrenceTableRequest,
+def _recurrence_table_residuals(
+    coefficient_polynomials: tuple[tuple[Fraction, ...], ...],
+    values: tuple[Fraction, ...],
 ) -> PolynomialCoefficientRecurrenceTableResult:
-    polynomials = tuple(
-        tuple(value.as_fraction() for value in polynomial)
-        for polynomial in request.coefficient_polynomials
-    )
-    values = tuple(value.as_fraction() for value in request.values)
-    order = len(polynomials) - 1
+    """Evaluate the bounded residual ledger after request admission."""
+
+    order = len(coefficient_polynomials) - 1
     residuals = []
     failures = []
     for index in range(order, len(values)):
         residual = sum(
             (
-                _evaluate(polynomials[offset], index) * values[index - offset]
+                _evaluate(coefficient_polynomials[offset], index)
+                * values[index - offset]
                 for offset in range(order + 1)
             ),
             Fraction(),
@@ -148,9 +162,11 @@ def recurrence_table_residuals(
         if residual:
             failures.append(index)
     return PolynomialCoefficientRecurrenceTableResult(
-        coefficient_convention=request.coefficient_convention,
-        polynomial_convention=request.polynomial_convention,
-        table_convention=request.table_convention,
+        coefficient_convention=(
+            "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
+        ),
+        polynomial_convention="ASCENDING_POWERS_OF_N",
+        table_convention="VALUES_A_0_THROUGH_A_N_IN_ORDER",
         recurrence_order=order,
         term_count=len(values),
         residuals=tuple(residuals),
@@ -159,9 +175,32 @@ def recurrence_table_residuals(
     )
 
 
+def recurrence_table_residuals(
+    coefficient_polynomials: tuple[tuple[Fraction, ...], ...],
+    values: tuple[Fraction, ...],
+) -> PolynomialCoefficientRecurrenceTableResult:
+    """Return exact residuals for canonical rational P-recursive table data."""
+
+    _require_table_admission(coefficient_polynomials, values)
+    return _recurrence_table_residuals(coefficient_polynomials, values)
+
+
+def _compute_recurrence_table_residuals(
+    request: PolynomialCoefficientRecurrenceTableRequest,
+) -> PolynomialCoefficientRecurrenceTableResult:
+    """Catalog/MCP adapter for the recurrence-table residual kernel."""
+
+    return _recurrence_table_residuals(
+        tuple(
+            tuple(value.as_fraction() for value in polynomial)
+            for polynomial in request.coefficient_polynomials
+        ),
+        tuple(value.as_fraction() for value in request.values),
+    )
+
+
 __all__ = [
     "IndexedRecurrenceResidual",
-    "PolynomialCoefficientRecurrenceTableRequest",
     "PolynomialCoefficientRecurrenceTableResult",
     "recurrence_table_residuals",
 ]

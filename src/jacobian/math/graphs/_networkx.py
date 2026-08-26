@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import networkx as nx
 
-from jacobian.math.graphs.values import GraphCompositionInput, SimpleUndirectedGraph
+from jacobian.math.graphs.values import GraphCompositionOperation, SimpleUndirectedGraph
 
 
 def simple_graph(graph: nx.Graph[Any]) -> nx.Graph[Any]:
@@ -66,27 +66,33 @@ def is_eulerian(graph: nx.Graph[Any]) -> bool:
     return bool(nx.is_eulerian(g))
 
 
-def compose_graphs(value: GraphCompositionInput) -> SimpleUndirectedGraph:
+def compose_graphs(
+    operation: GraphCompositionOperation,
+    left_value: SimpleUndirectedGraph,
+    right_value: SimpleUndirectedGraph | None = None,
+) -> SimpleUndirectedGraph:
     """Apply one composition and return its canonical semantic graph value."""
 
-    left = graph_from_value(value.left)
-    right = graph_from_value(value.right) if value.right is not None else None
-    if value.operation == "DISJOINT_UNION":
-        if right is None:  # guarded by GraphCompositionInput
+    left = graph_from_value(left_value)
+    right = graph_from_value(right_value) if right_value is not None else None
+    if operation == "DISJOINT_UNION":
+        if right is None:
             raise ValueError("disjoint union requires a right graph")
         result = nx.disjoint_union(left, right)
-    elif value.operation == "JOIN":
-        if right is None:  # guarded by GraphCompositionInput
+    elif operation == "JOIN":
+        if right is None:
             raise ValueError("join requires a right graph")
         result = nx.full_join(left, right, rename=("L", "R"))
-    elif value.operation == "COMPLEMENT":
+    elif operation == "COMPLEMENT":
+        if right is not None:
+            raise ValueError("complement does not accept a right graph")
         result = nx.complement(left)
-    elif value.operation == "LEXICOGRAPHIC_PRODUCT":
-        if right is None:  # guarded by GraphCompositionInput
+    elif operation == "LEXICOGRAPHIC_PRODUCT":
+        if right is None:
             raise ValueError("lexicographic product requires a right graph")
         result = nx.lexicographic_product(left, right)
-    else:  # pragma: no cover - closed Literal validated by Pydantic
-        raise ValueError(f"unsupported composition operation: {value.operation}")
+    else:  # pragma: no cover - closed Literal at the public type boundary
+        raise ValueError(f"unsupported composition operation: {operation}")
     return graph_value(result)
 
 

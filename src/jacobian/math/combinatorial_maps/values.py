@@ -123,9 +123,9 @@ def _validate_facial_budgets(map_: FiniteCombinatorialMap) -> None:
     here.  The constraint set is closed under duality (dual faces correspond
     to primal vertices and dual facial walks to primal rotation rows).
     """
-    from jacobian.math.combinatorial_maps.operations import face_orbits
+    from jacobian.math.combinatorial_maps._face_orbits import face_orbit_data
 
-    walks, _, _, _ = face_orbits(map_)
+    walks, _, _ = face_orbit_data(map_)
     if len(walks) > MAX_FACES:
         raise _validation_error(
             "face_count_too_large", "face count exceeds the bounded dual-vertex budget"

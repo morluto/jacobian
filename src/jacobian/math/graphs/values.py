@@ -210,29 +210,6 @@ class ColoredUndirectedGraph(StrictModel):
         return self
 
 
-class GraphCompositionInput(StrictModel):
-    """Two exact graphs and one explicit graph composition operation."""
-
-    operation: GraphCompositionOperation
-    left: SimpleUndirectedGraph
-    right: SimpleUndirectedGraph | None = None
-
-    @model_validator(mode="after")
-    def require_operands(self) -> Self:
-        if self.operation == "COMPLEMENT":
-            if self.right is not None:
-                raise PydanticCustomError(
-                    "graph.complement_does_not_accept_a_right_graph",
-                    "complement does not accept a right graph",
-                )
-        elif self.right is None:
-            raise PydanticCustomError(
-                "graph.operation_requires_right_return",
-                f"{self.operation} requires a right graph",
-            )
-        return self
-
-
 __all__ = [
     "MAX_GRAPH_COLOR_BYTES",
     "MAX_GRAPH_LABEL_BYTES",
@@ -240,7 +217,6 @@ __all__ = [
     "MAX_INDEXED_SIMPLE_GRAPH_VERTICES",
     "ColoredUndirectedGraph",
     "GraphColor",
-    "GraphCompositionInput",
     "GraphCompositionOperation",
     "GraphVertexLabel",
     "IndexedSimpleUndirectedGraph",

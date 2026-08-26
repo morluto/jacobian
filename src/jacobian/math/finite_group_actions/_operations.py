@@ -249,16 +249,15 @@ def compute_element_cycles(
     perm, cycles, lengths, cycle_type, fixed, support = _element_cycles_data(
         request.action, request.element
     )
-    return ElementCyclesResult(
-        action=request.action,
-        element=request.element,
-        permutation=perm,
-        cycles=cycles,
-        cycle_lengths=lengths,
-        cycle_type=cycle_type,
-        fixed_points=fixed,
-        fixed_point_count=len(fixed),
-        support=support,
+    return ElementCyclesResult._from_kernel(
+        request.action,
+        request.element,
+        perm,
+        cycles,
+        lengths,
+        cycle_type,
+        fixed,
+        support,
     )
 
 
@@ -270,44 +269,119 @@ def compute_subset_canonicalization(
     canonical, transporter, orbit_size, stabilizer_size = _subset_canonicalization_data(
         action, request.subset.positions
     )
-    return SubsetCanonicalizationResult(
-        source_subset=request.subset,
-        canonical_subset=ActionBoundSubset(action=action, positions=canonical),
-        transporter=transporter,
-        orbit_size=orbit_size,
-        stabilizer_size=stabilizer_size,
+    return SubsetCanonicalizationResult._from_kernel(
+        request.subset,
+        ActionBoundSubset(action=action, positions=canonical),
+        transporter,
+        orbit_size,
+        stabilizer_size,
     )
 
 
 def compute_cycle_index(request: CycleIndexRequest) -> CycleIndexResult:
     """Compute the cycle-index polynomial of the action."""
     group_order, degree, counts = _cycle_index_data(request.action)
-    return CycleIndexResult(
-        action=request.action,
-        group_order=group_order,
-        degree=degree,
-        cycle_type_counts=counts,
-    )
+    return CycleIndexResult._from_kernel(request.action, group_order, degree, counts)
 
 
 def compute_burnside_count(request: BurnsideCountRequest) -> BurnsideCountResult:
     """Compute the number of orbits under the action via Burnside's lemma."""
     group_order, contributions, orbit_count = _burnside_data(request.action)
-    return BurnsideCountResult(
-        action=request.action,
-        group_order=group_order,
-        fixed_point_sum=sum(contributions),
-        orbit_count=orbit_count,
-        fixed_point_contributions=contributions,
+    return BurnsideCountResult._from_kernel(
+        request.action, group_order, contributions, orbit_count
     )
 
 
 def compute_polya_inventory(request: PolyaInventoryRequest) -> PolyaInventoryResult:
     """Compute the Pólya enumeration inventory polynomial."""
     degree, terms = _polya_inventory_data(request.action, request.colors)
-    return PolyaInventoryResult(
-        action=request.action,
-        colors=request.colors,
-        degree=degree,
-        terms=terms,
+    return PolyaInventoryResult._from_kernel(
+        request.action, request.colors, degree, terms
     )
+
+
+def verify_subset_canonicalization_result(
+    result: SubsetCanonicalizationResult,
+) -> bool:
+    """Replay one independently supplied subset-canonicalization claim."""
+    try:
+        canonical, transporter, orbit_size, stabilizer_size = (
+            _subset_canonicalization_data(
+                result.source_subset.action, result.source_subset.positions
+            )
+        )
+    except ValueError:
+        return False
+    return (
+        result.canonical_subset.positions == canonical
+        and result.transporter == transporter
+        and result.orbit_size == orbit_size
+        and result.stabilizer_size == stabilizer_size
+    )
+
+
+def verify_element_cycles_result(result: ElementCyclesResult) -> bool:
+    """Replay one independently supplied element-cycle claim."""
+    try:
+        expected = _element_cycles_data(result.action, result.element)
+    except ValueError:
+        return False
+    return expected == (
+        result.permutation,
+        result.cycles,
+        result.cycle_lengths,
+        result.cycle_type,
+        result.fixed_points,
+        result.support,
+    )
+
+
+def verify_cycle_index_result(result: CycleIndexResult) -> bool:
+    """Replay one independently supplied cycle-index claim."""
+    try:
+        return _cycle_index_data(result.action) == (
+            result.group_order,
+            result.degree,
+            result.cycle_type_counts,
+        )
+    except ValueError:
+        return False
+
+
+def verify_burnside_count_result(result: BurnsideCountResult) -> bool:
+    """Replay one independently supplied Burnside-count claim."""
+    try:
+        group_order, contributions, orbit_count = _burnside_data(result.action)
+    except ValueError:
+        return False
+    return (
+        result.group_order == group_order
+        and result.fixed_point_contributions == contributions
+        and result.fixed_point_sum == sum(contributions)
+        and result.orbit_count == orbit_count
+    )
+
+
+def verify_polya_inventory_result(result: PolyaInventoryResult) -> bool:
+    """Replay one independently supplied Pólya inventory claim."""
+    try:
+        return _polya_inventory_data(result.action, result.colors) == (
+            result.degree,
+            result.terms,
+        )
+    except ValueError:
+        return False
+
+
+__all__ = [
+    "compute_burnside_count",
+    "compute_cycle_index",
+    "compute_element_cycles",
+    "compute_polya_inventory",
+    "compute_subset_canonicalization",
+    "verify_burnside_count_result",
+    "verify_cycle_index_result",
+    "verify_element_cycles_result",
+    "verify_polya_inventory_result",
+    "verify_subset_canonicalization_result",
+]

@@ -6,7 +6,6 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     CommodityEdgeFlow,
     EdgeLoadProfile,
     MulticommodityFlow,
-    MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
     MulticommodityFlowProfileWork,
 )
@@ -20,7 +19,6 @@ __all__ = [
     "CommodityEdgeFlow",
     "EdgeLoadProfile",
     "MulticommodityFlow",
-    "MulticommodityFlowProfileRequest",
     "MulticommodityFlowProfileResult",
     "MulticommodityFlowProfileWork",
     "compute_multicommodity_flow_profile",

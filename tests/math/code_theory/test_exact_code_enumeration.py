@@ -12,6 +12,9 @@ from jacobian.math.code_theory._operations import (
     compute_covering_radius,
     compute_min_distance,
     compute_weight_dist,
+    verify_covering_radius_result,
+    verify_minimum_distance_result,
+    verify_weight_distribution_result,
 )
 
 
@@ -185,7 +188,7 @@ def _linear_request() -> LinearCodeRequest:
     return LinearCodeRequest(field_order=3, generator_matrix=((1, 0, 1), (0, 1, 1)))
 
 
-def test_results_retain_source_and_replay() -> None:
+def test_results_retain_source_and_explicitly_verify() -> None:
     from jacobian.math.code_theory._models import (
         CoveringRadiusResult,
         MinimumDistanceResult,
@@ -197,12 +200,14 @@ def test_results_retain_source_and_replay() -> None:
     assert dist.request == request
     assert dist.minimum_distance == 2
     assert MinimumDistanceResult.model_validate(dist.model_dump()) == dist
+    assert verify_minimum_distance_result(dist)
 
     profile = compute_weight_dist(request)
     assert profile.request == request
     # q^rank = 9 distinct codewords over GF(3) with rank-2 generator rows.
     assert sum(count for _weight, count in profile.weights) == 9
     assert WeightDistributionResult.model_validate(profile.model_dump()) == profile
+    assert verify_weight_distribution_result(profile)
 
     covering = CoveringRadiusRequest(
         field_order=2, generator_matrix=((1, 0, 1), (0, 1, 1))
@@ -210,6 +215,7 @@ def test_results_retain_source_and_replay() -> None:
     radius = compute_covering_radius(covering)
     assert radius.request == covering
     assert CoveringRadiusResult.model_validate(radius.model_dump()) == radius
+    assert verify_covering_radius_result(radius)
 
     with pytest.raises(ValidationError):
         MinimumDistanceResult(
@@ -225,7 +231,9 @@ def test_results_retain_source_and_replay() -> None:
         CoveringRadiusResult(request=covering, covering_radius=200)
 
 
-def test_forged_profiles_are_rejected() -> None:
+def test_structural_models_accept_bounded_claims_and_explicit_verifiers_reject_forgery() -> (
+    None
+):
     from jacobian.math.code_theory._models import (
         MinimumDistanceResult,
         WeightDistributionResult,
@@ -237,20 +245,18 @@ def test_forged_profiles_are_rejected() -> None:
         "method": "EXACT_ENUMERATION",
     }
 
-    wrong_distance = dict(base, minimum_distance=1)
-    _assert_validation_error_code(
-        lambda: MinimumDistanceResult.model_validate(wrong_distance),
-        "code_theory.minimum_distance_replay_mismatch",
+    wrong_distance = MinimumDistanceResult.model_validate(
+        dict(base, minimum_distance=1)
     )
+    assert not verify_minimum_distance_result(wrong_distance)
 
     foreign_code = LinearCodeRequest(
         field_order=2, generator_matrix=((1, 0), (0, 1), (1, 1))
     )
-    forged_source = dict(base, request=foreign_code.model_dump(), minimum_distance=2)
-    _assert_validation_error_code(
-        lambda: MinimumDistanceResult.model_validate(forged_source),
-        "code_theory.minimum_distance_replay_mismatch",
+    forged_source = MinimumDistanceResult.model_validate(
+        dict(base, request=foreign_code.model_dump(), minimum_distance=2)
     )
+    assert not verify_minimum_distance_result(forged_source)
 
     unsorted_profile = dict(base, weights=((1, 6), (0, 1), (2, 2)))
     _assert_validation_error_code(
@@ -258,17 +264,15 @@ def test_forged_profiles_are_rejected() -> None:
         "code_theory.weights_not_strictly_ascending",
     )
 
-    bad_total = dict(base, weights=((0, 1), (2, 2)))
-    _assert_validation_error_code(
-        lambda: WeightDistributionResult.model_validate(bad_total),
-        "code_theory.weight_count_total_mismatch",
+    bad_total = WeightDistributionResult.model_validate(
+        dict(base, weights=((0, 1), (2, 2)))
     )
+    assert not verify_weight_distribution_result(bad_total)
 
-    forged_profile = dict(base, weights=((0, 1), (1, 5), (2, 3)))
-    _assert_validation_error_code(
-        lambda: WeightDistributionResult.model_validate(forged_profile),
-        "code_theory.weight_distribution_replay_mismatch",
+    forged_profile = WeightDistributionResult.model_validate(
+        dict(base, weights=((0, 1), (1, 5), (2, 3)))
     )
+    assert not verify_weight_distribution_result(forged_profile)
 
 
 def test_zero_code_result_replays_the_documented_length_convention() -> None:
@@ -283,7 +287,7 @@ def test_zero_code_result_replays_the_documented_length_convention() -> None:
     assert "empty-code convention" in description
 
 
-def test_forged_zero_code_distance_is_rejected() -> None:
+def test_explicit_verifier_rejects_forged_zero_code_distance() -> None:
     from jacobian.math.code_theory._models import MinimumDistanceResult
 
     request = LinearCodeRequest(field_order=2, generator_matrix=((0, 0, 0),))
@@ -293,9 +297,8 @@ def test_forged_zero_code_distance_is_rejected() -> None:
         "minimum_distance": 2,
     }
 
-    _assert_validation_error_code(
-        lambda: MinimumDistanceResult.model_validate(forged),
-        "code_theory.minimum_distance_replay_mismatch",
+    assert not verify_minimum_distance_result(
+        MinimumDistanceResult.model_validate(forged)
     )
 
 
@@ -307,20 +310,15 @@ def test_dependent_generator_rows_rank_cardinality() -> None:
     assert sum(count for _weight, count in profile.weights) == 2
 
 
-def test_enumeration_budget_charges_kernel_and_replay_passes() -> None:
-    """Admission charges both exhaustive passes of a source-bound call.
-
-    The kernel pass in ``compute_*`` plus the retained-source replay in
-    result validation must jointly fit ``MAX_EXACT_CODEWORD_EVALUATIONS``,
-    so the per-pass envelope stays at half that total.
-    """
+def test_enumeration_budget_charges_the_selected_kernel_path() -> None:
+    """Admission charges the exact enumeration selected by the operation."""
 
     from jacobian.math.code_theory._models import (
         EXACT_ENUMERATION_PASSES,
         MAX_EXACT_CODEWORD_EVALUATIONS,
     )
 
-    assert EXACT_ENUMERATION_PASSES == 2
+    assert EXACT_ENUMERATION_PASSES == 1
 
     per_pass = MAX_EXACT_CODEWORD_EVALUATIONS // EXACT_ENUMERATION_PASSES
     boundary = LinearCodeRequest(field_order=251, generator_matrix=((1,), (0,)))
@@ -330,18 +328,13 @@ def test_enumeration_budget_charges_kernel_and_replay_passes() -> None:
     assert compute_weight_dist(boundary).weights == ((0, 1), (1, 250))
 
     _assert_validation_error_code(
-        lambda: LinearCodeRequest(field_order=41, generator_matrix=((1,),) * 3),
+        lambda: LinearCodeRequest(field_order=251, generator_matrix=((1,),) * 3),
         "code_theory.enumeration_work_exceeded",
     )
 
 
-def test_covering_radius_budget_charges_bfs_and_replay_passes() -> None:
-    """Syndrome-graph admission charges both BFS passes' transitions.
-
-    A full-rank width-24 binary code keeps 65,536 syndrome states and
-    1,572,864 transitions per pass, so both passes fit the transition
-    total; one more column doubles the state space past its per-pass cap.
-    """
+def test_covering_radius_budget_charges_the_selected_bfs_path() -> None:
+    """Syndrome-graph admission charges the operation's one BFS pass."""
 
     from jacobian.math.code_theory._models import (
         MAX_COVERING_RADIUS_STATES_PER_PASS,
@@ -349,7 +342,7 @@ def test_covering_radius_budget_charges_bfs_and_replay_passes() -> None:
         SYNDROME_BFS_PASSES,
     )
 
-    assert SYNDROME_BFS_PASSES == 2
+    assert SYNDROME_BFS_PASSES == 1
 
     identity = tuple(
         tuple(1 if column == row else 0 for column in range(8)) for row in range(8)

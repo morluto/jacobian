@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphical_models._validation import validate_d_separation_input
 from jacobian.math.graphical_models.values import (
     MAX_MODEL_VARS,
     Factor,
@@ -32,16 +33,11 @@ class FactorMultiplyRequest(StrictModel):
 class FactorMultiplyResult(FactorMultiplyRequest):
     factor: Factor
 
-    @model_validator(mode="after")
-    def bind_product(self) -> Self:
-        from jacobian.math.graphical_models.operations import factor_multiply
+    @classmethod
+    def _from_kernel(cls, left: Factor, right: Factor, factor: Factor) -> Self:
+        """Construct trusted output from the owner-local exact kernel."""
 
-        if self.factor != factor_multiply(self.left, self.right):
-            raise PydanticCustomError(
-                "graphical_model.factor_product_mismatch",
-                "factor must be the exact product of the bound operands",
-            )
-        return self
+        return cls.model_construct(left=left, right=right, factor=factor)
 
 
 class FactorMarginalizeRequest(StrictModel):
@@ -63,16 +59,15 @@ class FactorMarginalizeResult(StrictModel):
     variable: Variable
     factor: Factor
 
-    @model_validator(mode="after")
-    def bind_marginal(self) -> Self:
-        from jacobian.math.graphical_models.operations import factor_marginalize
+    @classmethod
+    def _from_kernel(
+        cls, source_factor: Factor, variable: Variable, factor: Factor
+    ) -> Self:
+        """Construct trusted output from the owner-local exact kernel."""
 
-        if self.factor != factor_marginalize(self.source_factor, self.variable):
-            raise PydanticCustomError(
-                "graphical_model.factor_marginal_mismatch",
-                "factor must be the exact bound marginal",
-            )
-        return self
+        return cls.model_construct(
+            source_factor=source_factor, variable=variable, factor=factor
+        )
 
 
 class DSeparationRequest(StrictModel):
@@ -86,10 +81,6 @@ class DSeparationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_dag_and_disjoint_sets(self) -> Self:
-        from jacobian.math.graphical_models.operations import (
-            validate_d_separation_input,
-        )
-
         try:
             validate_d_separation_input(
                 self.variable_count,
@@ -109,23 +100,18 @@ class DSeparationRequest(StrictModel):
 class DSeparationResult(DSeparationRequest):
     d_separated: bool
 
-    @model_validator(mode="after")
-    def bind_decision(self) -> Self:
-        from jacobian.math.graphical_models.operations import d_separation
+    @classmethod
+    def _from_kernel(cls, request: DSeparationRequest, d_separated: bool) -> Self:
+        """Construct trusted output from the owner-local exact kernel."""
 
-        expected = d_separation(
-            self.variable_count,
-            self.edges,
-            self.set_a,
-            self.set_b,
-            self.set_c,
+        return cls.model_construct(
+            variable_count=request.variable_count,
+            edges=request.edges,
+            set_a=request.set_a,
+            set_b=request.set_b,
+            set_c=request.set_c,
+            d_separated=d_separated,
         )
-        if self.d_separated != expected:
-            raise PydanticCustomError(
-                "graphical_model.d_separation_mismatch",
-                "decision must match the bound d-separation instance",
-            )
-        return self
 
 
 __all__ = [

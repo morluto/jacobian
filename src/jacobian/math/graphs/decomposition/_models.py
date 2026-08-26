@@ -225,6 +225,35 @@ class SPQRTreeResult(StrictModel):
         "JACOBIAN_NORMALIZED_FULL_SPQR_V1"
     )
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source_graph: UndirectedGraph,
+        status: Literal["SPQR_TREE", "NOT_BICONNECTED"],
+        witness_kind: Literal["ARTICULATION", "DISCONNECTED", "MINIMUM_SIZE"]
+        | None = None,
+        witness_vertices: tuple[int, ...] = (),
+        nodes: tuple[SPQRSkeleton, ...] = (),
+        tree_edges: tuple[tuple[str, str], ...] = (),
+        virtual_edge_pairs: tuple[tuple[str, str], ...] = (),
+        source_vertex_incidence: tuple[tuple[int, tuple[str, ...]], ...] = (),
+        source_edge_owners: tuple[tuple[tuple[int, int], str, str], ...] = (),
+    ) -> Self:
+        """Construct a result established by the owner-local SPQR kernel."""
+
+        return cls(
+            source_graph=source_graph,
+            status=status,
+            witness_kind=witness_kind,
+            witness_vertices=witness_vertices,
+            nodes=nodes,
+            tree_edges=tree_edges,
+            virtual_edge_pairs=virtual_edge_pairs,
+            source_vertex_incidence=source_vertex_incidence,
+            source_edge_owners=source_edge_owners,
+        )
+
     @model_validator(mode="after")
     def require_closed_branch_shape(self) -> Self:
         if self.status == "NOT_BICONNECTED":
@@ -249,9 +278,4 @@ class SPQRTreeResult(StrictModel):
                 "graph.an_spqr_tree_must_not_carry_a_negative_witness",
                 "an SPQR tree must not carry a negative witness",
             )
-        # Keep source-bound replay at the ordinary deserialization boundary,
-        # not only in the producer. The lazy import avoids a module cycle.
-        from jacobian.math.graphs.decomposition._operations import _validate_spqr_tree
-
-        _validate_spqr_tree(self)
         return self

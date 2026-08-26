@@ -5,11 +5,16 @@ from pydantic import ValidationError
 
 from jacobian.math.finite_semigroups._models import (
     ElementPowerRequest,
+    ElementPowerResult,
     FiniteSemigroup,
     GeneratedSubsemigroupRequest,
+    GreenRelationsResult,
     IdempotentsRequest,
+    IdempotentsResult,
     PowerProfileRequest,
+    PowerProfileResult,
     PrincipalIdealsRequest,
+    PrincipalIdealsResult,
 )
 from jacobian.math.finite_semigroups._operations import (
     compute_element_power,
@@ -17,6 +22,11 @@ from jacobian.math.finite_semigroups._operations import (
     compute_idempotents,
     compute_power_profile,
     compute_principal_ideals,
+    verify_element_power_result,
+    verify_green_relations_result,
+    verify_idempotents_result,
+    verify_power_profile_result,
+    verify_principal_ideals_result,
 )
 
 # Z/3Z as a semigroup under addition mod 3
@@ -439,7 +449,7 @@ class TestGreenRelations:
         assert result.R == (("a",), ("b",))  # discrete
 
     def test_green_relations_result_binds(self) -> None:
-        """GreenRelationsResult validates correctly."""
+        """GreenRelationsResult preserves its bounded structural contract."""
         from jacobian.math.finite_semigroups._models import (
             GreenRelationsRequest,
             GreenRelationsResult,
@@ -461,22 +471,49 @@ class TestGreenRelations:
         assert reconstructed.L == result.L
 
     def test_green_relations_wrong_value_rejected(self) -> None:
-        """GreenRelationsResult rejects incorrect Green relations."""
-        from jacobian.math.finite_semigroups._models import (
-            GreenRelationsRequest,
-            GreenRelationsResult,
-        )
+        """Exact Green-relation replay is opt-in for supplied claims."""
+        from jacobian.math.finite_semigroups._models import GreenRelationsRequest
         from jacobian.math.finite_semigroups._operations import compute_green_relations
 
         sg = FiniteSemigroup(**Z3)
         result = compute_green_relations(GreenRelationsRequest(semigroup=sg))
-        with pytest.raises(ValidationError) as error:
-            GreenRelationsResult(
-                semigroup=sg,
-                L=(("0",), ("1",), ("2",)),  # wrong
-                R=result.R,
-                H=result.H,
-                D=result.D,
-                J=result.J,
+        forged = GreenRelationsResult(
+            semigroup=sg,
+            L=(("0",), ("1",), ("2",)),
+            R=result.R,
+            H=result.H,
+            D=result.D,
+            J=result.J,
+        )
+        assert not verify_green_relations_result(forged)
+
+
+class TestClaimVerifiers:
+    """Kernel-produced results avoid replay; supplied claims can be checked explicitly."""
+
+    def test_forged_bounded_claims_require_explicit_verification(self) -> None:
+        semigroup = FiniteSemigroup(**Z3)
+        assert not verify_power_profile_result(
+            PowerProfileResult(
+                semigroup=semigroup,
+                element="1",
+                powers=("1", "2", "0"),
+                index=1,
+                period=3,
+                idempotent="1",
+                cyclic_subsemigroup=("1", "2", "0"),
             )
-        assert error.value.errors()[0]["type"] == "finite_semigroup.green_l_mismatch"
+        )
+        assert not verify_element_power_result(
+            ElementPowerResult(semigroup=semigroup, element="1", exponent=2, power="0")
+        )
+        assert not verify_idempotents_result(
+            IdempotentsResult(semigroup=semigroup, idempotents=("1",))
+        )
+        assert not verify_principal_ideals_result(
+            PrincipalIdealsResult(
+                semigroup=semigroup,
+                elements=("1",),
+                ideals=(("1",),),
+            )
+        )

@@ -79,11 +79,24 @@ def compute_induced_vertex_subset_pattern_count(
         request.host,
         request.pattern,
     )
-    return InducedVertexSubsetPatternCountResult(
+    return InducedVertexSubsetPatternCountResult._from_kernel(
         host=request.host,
         pattern=request.pattern,
         occurrence_count=format_canonical_integer(occurrence_count),
     )
 
 
-__all__ = ["compute_induced_vertex_subset_pattern_count"]
+def verify_induced_vertex_subset_pattern_count_result(
+    result: InducedVertexSubsetPatternCountResult,
+) -> bool:
+    """Verify an independently supplied count in the admitted graph envelope."""
+
+    return result.occurrence_count == format_canonical_integer(
+        count_induced_vertex_subset_patterns(result.host, result.pattern)
+    )
+
+
+__all__ = [
+    "compute_induced_vertex_subset_pattern_count",
+    "verify_induced_vertex_subset_pattern_count_result",
+]

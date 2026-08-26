@@ -118,47 +118,26 @@ def _first_homomorphism_obstruction(
 
 
 class GraphHomomorphism(StrictModel):
-    """A source-bound complete vertex map that preserves every source edge."""
+    """A source-bound vertex map claimed to preserve every source edge.
+
+    The map's completeness and endpoint membership are structural properties
+    of ``GraphVertexMap``. Edge preservation is checked by the explicit owner
+    verifier when an independently supplied claim needs verification.
+    """
 
     vertex_map: GraphVertexMap
 
-    @model_validator(mode="after")
-    def require_edge_preservation(self) -> Self:
-        if _first_homomorphism_obstruction(self.vertex_map) is not None:
-            raise PydanticCustomError(
-                "graph.a_graph_homomorphism_must_preserve_every_source_",
-                "a graph homomorphism must preserve every source edge",
-            )
-        return self
-
 
 class GraphHomomorphismObstruction(StrictModel):
-    """A source-bound first edge image that is not a target edge."""
+    """A claimed first source-edge image that is not a target edge.
+
+    The explicit owner verifier checks that this is the first actual
+    obstruction for the retained vertex map.
+    """
 
     vertex_map: GraphVertexMap
     source_edge: tuple[str, str]
     image_vertices: tuple[str, str]
-
-    @model_validator(mode="after")
-    def require_first_replayable_obstruction(self) -> Self:
-        expected = _first_homomorphism_obstruction(self.vertex_map)
-        if expected is None:
-            raise PydanticCustomError(
-                "graph.a_homomorphism_has_no_edge_image_obstruction",
-                "a homomorphism has no edge-image obstruction",
-            )
-        source_edge, image_vertices = expected
-        if self.source_edge != source_edge:
-            raise PydanticCustomError(
-                "graph.obstruction_source_edge_first_failing_source_edge",
-                "obstruction source_edge must be the first failing source edge",
-            )
-        if self.image_vertices != image_vertices:
-            raise PydanticCustomError(
-                "graph.obstruction_image_vertices_must_replay_the_submi",
-                "obstruction image_vertices must replay the submitted map",
-            )
-        return self
 
 
 class HomomorphismCheckRequest(StrictModel):
@@ -212,6 +191,20 @@ class HomomorphismCheckResult(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        status: Literal["HOMOMORPHISM", "EDGE_IMAGE_NOT_EDGE"],
+        homomorphism: GraphHomomorphism | None = None,
+        obstruction: GraphHomomorphismObstruction | None = None,
+    ) -> Self:
+        """Construct a result from the trusted one-pass map check."""
+
+        return cls.model_construct(
+            status=status, homomorphism=homomorphism, obstruction=obstruction
+        )
+
 
 # ---------------------------------------------------------------------------
 # Fixed-length cycle decision
@@ -223,14 +216,10 @@ class HomomorphismCheckResult(StrictModel):
 # length so every accepted request terminates inside a tested bound.
 MAX_CYCLE_SEARCH_PATHS = 10_000_000
 
-# A negative decision costs two exhaustive passes: the operation's own search
-# plus the result validator's bounded replay of that decision against the
-# retained sources.  Admission charges each pass at most half the total so a
-# complete negative operation stays inside the advertised budget.
-SEARCH_PASSES_PER_NEGATIVE_DECISION = 2
-_MAX_SEARCH_PATHS_PER_PASS = (
-    MAX_CYCLE_SEARCH_PATHS // SEARCH_PASSES_PER_NEGATIVE_DECISION
-)
+# The kernel performs at most one exhaustive pass.  Result parsing is purely
+# structural; an independently supplied negative claim may instead be checked
+# through the explicit bounded verifier in ``_operations``.
+_MAX_SEARCH_PATHS_PER_PASS = MAX_CYCLE_SEARCH_PATHS
 
 
 def _canonical_max_degree(graph: SimpleUndirectedGraph) -> int:
@@ -288,7 +277,7 @@ class FixedLengthCycleRequest(StrictModel):
                 "graph.fixed_length_cycle_search_exceeds_max_search",
                 "fixed-length cycle search exceeds the "
                 f"{_MAX_SEARCH_PATHS_PER_PASS}-path per-pass budget "
-                f"({MAX_CYCLE_SEARCH_PATHS} including validation replay)",
+                f"({MAX_CYCLE_SEARCH_PATHS}-path work budget)",
             )
         # The result echoes its source graph; reserve output headroom for
         # the envelope and witness labels beyond that echo.
@@ -351,7 +340,7 @@ def _validate_cycle_witness(
             )
 
 
-def _validate_negative_cycle(graph: SimpleUndirectedGraph, length: int) -> None:
+def _require_negative_cycle_domain(graph: SimpleUndirectedGraph, length: int) -> None:
     n = len(graph.vertices)
     if length > n:
         raise PydanticCustomError(
@@ -374,24 +363,15 @@ def _validate_negative_cycle(graph: SimpleUndirectedGraph, length: int) -> None:
             f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
             f"{_MAX_SEARCH_PATHS_PER_PASS}-path request budget",
         )
-    from jacobian.math.graphs.morphisms._operations import find_cycle_of_length
-
-    if find_cycle_of_length(graph.vertices, graph.edges, length) is not None:
-        raise PydanticCustomError(
-            "graph.does_exist_decision_contradicts_retained_which_contains",
-            "a DOES_NOT_EXIST decision contradicts the retained "
-            f"graph, which contains a cycle of length {length}",
-        )
 
 
 class FixedLengthCycleResult(StrictModel):
     """Whether a simple ``k``-cycle exists, with one ordered witness.
 
-    The result retains its source graph so validation can replay the witness
-    vertices and closing edges against it; a negative decision is accepted
-    only inside the bounded request domain and only after replaying the
-    exhaustive search on the retained graph. The witness vertices are
-    canonical string labels from the source graph.
+    The result retains its source graph so parsing can check a positive witness
+    against it.  Negative claims retain the admitted source envelope and can
+    be independently checked through the explicit bounded verifier. The
+    witness vertices are canonical string labels from the source graph.
     """
 
     model_config = ConfigDict(
@@ -421,8 +401,23 @@ class FixedLengthCycleResult(StrictModel):
                     "graph.a_does_not_exist_result_must_not_carry_a_witness",
                     "a DOES_NOT_EXIST result must not carry a witness",
                 )
-            _validate_negative_cycle(self.graph, self.length)
+            _require_negative_cycle_domain(self.graph, self.length)
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: SimpleUndirectedGraph,
+        decision: Literal["EXISTS", "DOES_NOT_EXIST"],
+        length: int,
+        cycle: tuple[str, ...],
+    ) -> Self:
+        """Construct a result from the trusted bounded search kernel."""
+
+        return cls.model_construct(
+            graph=graph, decision=decision, length=length, cycle=cycle
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -483,7 +478,7 @@ class SubgraphPatternFindRequest(StrictModel):
                     "graph.subgraph_pattern_search_exceeds_max_search_paths",
                     "subgraph-pattern search exceeds the "
                     f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment per-pass budget "
-                    f"({MAX_CYCLE_SEARCH_PATHS} including validation replay)",
+                    f"({MAX_CYCLE_SEARCH_PATHS}-assignment work budget)",
                 )
 
         # The result echoes both source graphs; reserve output headroom for
@@ -495,32 +490,6 @@ class SubgraphPatternFindRequest(StrictModel):
             "subgraph-pattern",
         )
         return self
-
-
-def _replay_subgraph_embedding(
-    pattern: SimpleUndirectedGraph, host: SimpleUndirectedGraph
-) -> tuple[int, ...] | None:
-    """Replay a negative search with the same candidate budget as execution."""
-
-    from jacobian.math.graphs.morphisms._operations import (
-        SearchBudgetExceededError,
-        find_subgraph_embedding,
-    )
-
-    try:
-        return find_subgraph_embedding(
-            pattern.vertices,
-            pattern.edges,
-            host.vertices,
-            host.edges,
-            max_candidate_checks=_MAX_SEARCH_PATHS_PER_PASS,
-        )
-    except SearchBudgetExceededError as exc:
-        raise PydanticCustomError(
-            "graph.does_exist_decision_exceeded_retained_source_candidate",
-            "a DOES_NOT_EXIST decision exceeded the retained source "
-            "candidate-check budget during validation replay",
-        ) from exc
 
 
 def _validate_embedding_witness(
@@ -564,7 +533,7 @@ def _validate_embedding_witness(
             )
 
 
-def _validate_negative_embedding(
+def _require_negative_embedding_domain(
     pattern: SimpleUndirectedGraph,
     host: SimpleUndirectedGraph,
 ) -> None:
@@ -586,23 +555,16 @@ def _validate_negative_embedding(
             f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
             f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment request budget",
         )
-    if _replay_subgraph_embedding(pattern, host) is not None:
-        raise PydanticCustomError(
-            "graph.does_exist_decision_contradicts_retained_graphs_which",
-            "a DOES_NOT_EXIST decision contradicts the retained "
-            "graphs, which admit an embedding",
-        )
 
 
 class SubgraphPatternFindResult(StrictModel):
     """Whether a non-induced subgraph embedding exists, with one witness map.
 
-    The result retains both source graphs so validation can replay map
-    length, host bounds, injectivity, and exact edge preservation; a
-    negative decision is accepted only inside the bounded request domain
-    and only after replaying the exhaustive containment search. The
-    witness is ordered by the pattern's vertex order and contains host
-    vertex labels.
+    The result retains both source graphs so parsing can check map length,
+    host bounds, injectivity, and exact edge preservation. A negative claim
+    retains the bounded request domain and can be independently checked
+    through the explicit bounded verifier. The witness is ordered by the
+    pattern's vertex order and contains host vertex labels.
     """
 
     model_config = ConfigDict(
@@ -639,5 +601,20 @@ class SubgraphPatternFindResult(StrictModel):
                     "graph.a_does_not_exist_result_must_not_carry_a_vertex_",
                     "a DOES_NOT_EXIST result must not carry a vertex map",
                 )
-            _validate_negative_embedding(self.pattern, self.host)
+            _require_negative_embedding_domain(self.pattern, self.host)
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        pattern: SimpleUndirectedGraph,
+        host: SimpleUndirectedGraph,
+        decision: Literal["EXISTS", "DOES_NOT_EXIST", "BUDGET_EXCEEDED"],
+        vertex_map: tuple[str, ...],
+    ) -> Self:
+        """Construct a result from the trusted bounded search kernel."""
+
+        return cls.model_construct(
+            pattern=pattern, host=host, decision=decision, vertex_map=vertex_map
+        )

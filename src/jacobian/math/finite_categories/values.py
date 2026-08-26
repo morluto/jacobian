@@ -421,7 +421,12 @@ class ProductMorphismProjection(StrictModel):
 
 
 class FiniteCategoryProduct(StrictModel):
-    """A product category bound to both factors and its pair projections."""
+    """A bounded product-category claim with its pair projections.
+
+    Deserialization checks only the structural envelope.  The product law is
+    available through the owner-local explicit verifier for independently
+    supplied claims; kernel output is created by ``_from_kernel``.
+    """
 
     left: FiniteCategory
     right: FiniteCategory
@@ -433,29 +438,25 @@ class FiniteCategoryProduct(StrictModel):
         max_length=MAX_CATEGORY_MORPHISMS
     )
 
-    @model_validator(mode="after")
-    def bind_product_construction(self) -> Self:
-        from jacobian.math.finite_categories.operations import _product_data
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        left: FiniteCategory,
+        right: FiniteCategory,
+        product: FiniteCategory,
+        object_projections: tuple[ProductObjectProjection, ...],
+        morphism_projections: tuple[ProductMorphismProjection, ...],
+    ) -> Self:
+        """Build a product result from the trusted owner-local kernel."""
 
-        product, object_projections, morphism_projections = _product_data(
-            self.left, self.right
+        return cls(
+            left=left,
+            right=right,
+            product=product,
+            object_projections=object_projections,
+            morphism_projections=morphism_projections,
         )
-        if self.product != product:
-            raise _category_error(
-                "incorrect_product",
-                "product must be the exact componentwise product category",
-            )
-        if self.object_projections != object_projections:
-            raise _category_error(
-                "incorrect_object_projections",
-                "object_projections must be the exact structural pair projections",
-            )
-        if self.morphism_projections != morphism_projections:
-            raise _category_error(
-                "incorrect_morphism_projections",
-                "morphism_projections must be the exact structural pair projections",
-            )
-        return self
 
 
 __all__ = [

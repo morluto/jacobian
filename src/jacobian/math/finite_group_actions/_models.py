@@ -179,8 +179,8 @@ class SubsetCanonicalizationResult(StrictModel):
     action's domain.  The canonical image is the lexicographically least
     transported position tuple.  ``transporter`` is the lexicographically
     least array-form group element sending ``source_subset`` to
-    ``canonical_subset``.  The result is bound to its source by replaying
-    those relations and ``orbit_size * stabilizer_size = |G|``.
+    ``canonical_subset``.  Deserialization checks their local structure only;
+    exact group replay belongs to the explicit owner verifier.
     """
 
     source_subset: ActionBoundSubset = Field(
@@ -217,40 +217,54 @@ class SubsetCanonicalizationResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_subset_canonicalization(self) -> Self:
-        from jacobian.math.finite_group_actions._operations import (
-            _subset_canonicalization_data,
-        )
-
         action = self.source_subset.action
         if self.canonical_subset.action != action:
             raise _validation_error(
                 "canonical_subset_action_mismatch",
                 "canonical_subset must be bound to the source action",
             )
-        canonical, transporter, orbit_size, stabilizer_size = (
-            _subset_canonicalization_data(action, self.source_subset.positions)
-        )
-        if self.canonical_subset.positions != canonical:
+        n = len(action.domain)
+        if len(self.transporter) != n or sorted(self.transporter) != list(range(n)):
             raise _validation_error(
-                "canonical_subset_not_minimal",
-                "canonical_subset must be the lexicographically least orbit image",
+                "transporter_not_permutation",
+                "transporter must be a permutation of the source action domain",
             )
-        if self.transporter != transporter:
+        if (
+            tuple(
+                sorted(
+                    self.transporter[position]
+                    for position in self.source_subset.positions
+                )
+            )
+            != self.canonical_subset.positions
+        ):
             raise _validation_error(
                 "transporter_mismatch",
-                "transporter must be the exact canonical generated-group witness",
+                "transporter must map source_subset to canonical_subset",
             )
-        if self.orbit_size != orbit_size:
+        if self.orbit_size * self.stabilizer_size > MAX_GROUP_ORDER:
             raise _validation_error(
-                "orbit_size_mismatch",
-                "orbit_size must equal the exact subset-orbit size",
-            )
-        if self.stabilizer_size != stabilizer_size:
-            raise _validation_error(
-                "stabilizer_size_mismatch",
-                "stabilizer_size must equal the exact setwise-stabilizer order",
+                "orbit_stabilizer_product_exceeds_bound",
+                "orbit_size * stabilizer_size must stay within the group-order bound",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        source_subset: ActionBoundSubset,
+        canonical_subset: ActionBoundSubset,
+        transporter: tuple[int, ...],
+        orbit_size: int,
+        stabilizer_size: int,
+    ) -> Self:
+        return cls(
+            source_subset=source_subset,
+            canonical_subset=canonical_subset,
+            transporter=transporter,
+            orbit_size=orbit_size,
+            stabilizer_size=stabilizer_size,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -291,44 +305,78 @@ class ElementCyclesResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_element_cycles(self) -> Self:
-        from jacobian.math.finite_group_actions._operations import _element_cycles_data
-
-        permutation, cycles, lengths, cycle_type, fixed, support = _element_cycles_data(
-            self.action, self.element
+        n = len(self.action.domain)
+        if self.element < 0:
+            raise _validation_error("element_negative", "element must be non-negative")
+        if len(self.permutation) != n or sorted(self.permutation) != list(range(n)):
+            raise _validation_error(
+                "permutation_not_permutation",
+                "permutation must be a permutation of the action domain",
+            )
+        flattened = tuple(position for cycle in self.cycles for position in cycle)
+        if (
+            not self.cycles
+            or any(not cycle for cycle in self.cycles)
+            or sorted(flattened) != list(range(n))
+        ):
+            raise _validation_error(
+                "cycles_not_partition", "cycles must partition the action domain"
+            )
+        if any(
+            self.permutation[position] != cycle[(index + 1) % len(cycle)]
+            for cycle in self.cycles
+            for index, position in enumerate(cycle)
+        ):
+            raise _validation_error(
+                "cycles_not_permutation_cycles",
+                "cycles must describe the claimed permutation",
+            )
+        lengths = tuple(sorted((len(cycle) for cycle in self.cycles), reverse=True))
+        if self.cycle_lengths != lengths or self.cycle_type != lengths:
+            raise _validation_error(
+                "cycle_type_mismatch",
+                "cycle lengths and cycle type must match the cycle decomposition",
+            )
+        fixed = tuple(
+            position for position in range(n) if self.permutation[position] == position
         )
-        if self.permutation != permutation:
-            raise _validation_error(
-                "permutation_mismatch",
-                "permutation must be the exact enumerated group element",
-            )
-        if self.cycles != cycles:
-            raise _validation_error(
-                "cycles_mismatch", "cycles must be the exact cycle decomposition"
-            )
-        if self.cycle_lengths != lengths:
-            raise _validation_error(
-                "cycle_lengths_mismatch",
-                "cycle_lengths must match the computed cycle lengths",
-            )
-        if self.cycle_type != cycle_type:
-            raise _validation_error(
-                "cycle_type_mismatch", "cycle_type must be the integer partition of |X|"
-            )
-        if self.fixed_points != fixed:
-            raise _validation_error(
-                "fixed_points_mismatch",
-                "fixed_points must be the exact fixed-point set",
-            )
-        if self.fixed_point_count != len(fixed):
+        if self.fixed_points != fixed or self.fixed_point_count != len(fixed):
             raise _validation_error(
                 "fixed_point_count_mismatch",
-                "fixed_point_count must equal len(fixed_points)",
+                "fixed-point fields must match the claimed permutation",
             )
+        support = tuple(
+            position for position in range(n) if self.permutation[position] != position
+        )
         if self.support != support:
             raise _validation_error(
-                "support_mismatch", "support must be the exact support set"
+                "support_mismatch", "support must match the claimed permutation"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        action: FinitePermutationAction,
+        element: int,
+        permutation: tuple[int, ...],
+        cycles: tuple[tuple[int, ...], ...],
+        cycle_lengths: tuple[int, ...],
+        cycle_type: tuple[int, ...],
+        fixed_points: tuple[int, ...],
+        support: tuple[int, ...],
+    ) -> Self:
+        return cls(
+            action=action,
+            element=element,
+            permutation=permutation,
+            cycles=cycles,
+            cycle_lengths=cycle_lengths,
+            cycle_type=cycle_type,
+            fixed_points=fixed_points,
+            fixed_point_count=len(fixed_points),
+            support=support,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -356,21 +404,58 @@ class CycleIndexResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_cycle_index(self) -> Self:
-        from jacobian.math.finite_group_actions._operations import _cycle_index_data
-
-        order, degree, counts = _cycle_index_data(self.action)
-        if self.group_order != order:
+        if not 1 <= self.group_order <= MAX_GROUP_ORDER:
             raise _validation_error(
-                "group_order_mismatch", "group_order must equal the exact |G|"
+                "group_order_exceeds_bound",
+                "group_order must stay within the group-order bound",
             )
-        if self.degree != degree:
+        if self.degree != len(self.action.domain):
             raise _validation_error("degree_mismatch", "degree must equal |X|")
-        if self.cycle_type_counts != counts:
+        if (
+            not self.cycle_type_counts
+            or tuple(sorted(self.cycle_type_counts)) != self.cycle_type_counts
+        ):
             raise _validation_error(
-                "cycle_type_counts_mismatch",
-                "cycle_type_counts must be the exact cycle-type multiplicity table",
+                "cycle_type_counts_not_canonical",
+                "cycle_type_counts must be a nonempty sorted tuple",
+            )
+        if len({cycle_type for cycle_type, _ in self.cycle_type_counts}) != len(
+            self.cycle_type_counts
+        ):
+            raise _validation_error(
+                "cycle_type_counts_duplicate", "cycle types must be unique"
+            )
+        if any(
+            not cycle_type
+            or any(part < 1 for part in cycle_type)
+            or sum(cycle_type) != self.degree
+            or count < 1
+            for cycle_type, count in self.cycle_type_counts
+        ):
+            raise _validation_error(
+                "cycle_type_counts_invalid",
+                "each cycle type must partition degree with positive count",
+            )
+        if sum(count for _, count in self.cycle_type_counts) != self.group_order:
+            raise _validation_error(
+                "cycle_type_counts_total", "cycle-type counts must total group_order"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        action: FinitePermutationAction,
+        group_order: int,
+        degree: int,
+        cycle_type_counts: tuple[tuple[tuple[int, ...], int], ...],
+    ) -> Self:
+        return cls(
+            action=action,
+            group_order=group_order,
+            degree=degree,
+            cycle_type_counts=cycle_type_counts,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -398,29 +483,49 @@ class BurnsideCountResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_burnside(self) -> Self:
-        from jacobian.math.finite_group_actions._operations import _burnside_data
-
-        order, contributions, orbit_count = _burnside_data(self.action)
-        if self.group_order != order:
+        if not 1 <= self.group_order <= MAX_GROUP_ORDER:
             raise _validation_error(
-                "group_order_mismatch", "group_order must equal the exact |G|"
+                "group_order_exceeds_bound",
+                "group_order must stay within the group-order bound",
             )
-        if self.fixed_point_contributions != contributions:
+        if len(self.fixed_point_contributions) != self.group_order or any(
+            contribution < 0 or contribution > len(self.action.domain)
+            for contribution in self.fixed_point_contributions
+        ):
             raise _validation_error(
-                "fixed_point_contributions_mismatch",
-                "fixed_point_contributions must be the exact |Fix(g)| table",
+                "fixed_point_contributions_invalid",
+                "fixed-point contributions must be bounded and one per group element",
             )
-        if self.fixed_point_sum != sum(contributions):
+        if self.fixed_point_sum != sum(self.fixed_point_contributions):
             raise _validation_error(
                 "fixed_point_sum_mismatch",
                 "fixed_point_sum must equal the sum of contributions",
             )
-        if self.orbit_count != orbit_count:
+        if (
+            self.fixed_point_sum % self.group_order != 0
+            or self.orbit_count != self.fixed_point_sum // self.group_order
+        ):
             raise _validation_error(
                 "orbit_count_mismatch",
-                "orbit_count must equal the exact Burnside orbit count",
+                "orbit_count must be the integral Burnside average",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        action: FinitePermutationAction,
+        group_order: int,
+        fixed_point_contributions: tuple[int, ...],
+        orbit_count: int,
+    ) -> Self:
+        return cls(
+            action=action,
+            group_order=group_order,
+            fixed_point_sum=sum(fixed_point_contributions),
+            orbit_count=orbit_count,
+            fixed_point_contributions=fixed_point_contributions,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -457,13 +562,33 @@ class PolyaInventoryResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_polya(self) -> Self:
-        from jacobian.math.finite_group_actions._operations import _polya_inventory_data
-
-        degree, terms = _polya_inventory_data(self.action, self.colors)
-        if self.degree != degree:
+        if self.degree != len(self.action.domain):
             raise _validation_error("degree_mismatch", "degree must equal |X|")
-        if self.terms != terms:
+        if len(self.terms) > MAX_TERMS or tuple(sorted(self.terms)) != self.terms:
             raise _validation_error(
-                "terms_mismatch", "terms must be the exact Pólya inventory polynomial"
+                "terms_not_canonical", "terms must be a bounded sorted tuple"
+            )
+        if len({monomial for monomial, _ in self.terms}) != len(self.terms):
+            raise _validation_error("terms_duplicate", "monomials must be unique")
+        if any(
+            len(monomial) != self.colors
+            or any(exponent < 0 for exponent in monomial)
+            or sum(monomial) != self.degree
+            or coefficient < 1
+            for monomial, coefficient in self.terms
+        ):
+            raise _validation_error(
+                "terms_invalid",
+                "each term must be a positive coefficient on a degree monomial",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        action: FinitePermutationAction,
+        colors: int,
+        degree: int,
+        terms: tuple[tuple[tuple[int, ...], int], ...],
+    ) -> Self:
+        return cls(action=action, colors=colors, degree=degree, terms=terms)

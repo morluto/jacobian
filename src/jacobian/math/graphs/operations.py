@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from jacobian.math.graphs.values import GraphCompositionInput, SimpleUndirectedGraph
+from jacobian.math.graphs.values import GraphCompositionOperation, SimpleUndirectedGraph
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -88,9 +88,13 @@ def explicit_graph(
     )
 
 
-def compose_graphs(value: GraphCompositionInput) -> SimpleUndirectedGraph:
+def compose_graphs(
+    operation: GraphCompositionOperation,
+    left: SimpleUndirectedGraph,
+    right: SimpleUndirectedGraph | None = None,
+) -> SimpleUndirectedGraph:
     """Apply one composition to immutable graph values through NetworkX."""
 
     from jacobian.math.graphs import _networkx
 
-    return _networkx.compose_graphs(value)
+    return _networkx.compose_graphs(operation, left, right)

@@ -8,6 +8,7 @@ dart IDs; no backend embedding object crosses the boundary.
 
 from __future__ import annotations
 
+from ._face_orbits import face_orbit_data
 from .values import FiniteCombinatorialMap
 
 __all__ = [
@@ -47,25 +48,7 @@ def face_orbits(
     - ``successor``: the dart-successor permutation (``dart -> next dart``)
     - per-component face partition: ``component index -> face indices``
     """
-    n = len(map_.darts)
-    successor: list[int] = [0] * n
-    for dart in range(n):
-        next_around = rotation_successor(map_, dart)
-        successor[dart] = map_.darts[next_around][2]
-    visited = [False] * n
-    walks: list[list[int]] = []
-    face_of_dart: dict[int, int] = {}
-    for start in range(n):
-        if visited[start]:
-            continue
-        walk: list[int] = []
-        current = start
-        while not visited[current]:
-            visited[current] = True
-            face_of_dart[current] = len(walks)
-            walk.append(current)
-            current = successor[current]
-        walks.append(walk)
+    walks, face_of_dart, successor = face_orbit_data(map_)
     comp_of_vertex = connected_components_vertices(map_)
     comp_of_face: dict[int, list[int]] = {}
     for face_index, walk in enumerate(walks):

@@ -32,6 +32,14 @@ def compute_independence_number(
     return _independence_z3.solve_independence_number(request)
 
 
+def verify_independence_result(result: HypergraphIndependenceResult) -> bool:
+    """Verify a separately supplied independence outcome when it is bounded."""
+
+    from jacobian.math.hypergraphs import _independence_z3
+
+    return _independence_z3.verify_independence_result(result)
+
+
 def _canonical_edges(
     hypergraph: FiniteHypergraph,
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
@@ -236,6 +244,19 @@ def compute_parameters(request: ParametersRequest) -> ParametersResult:
     )
 
 
+def verify_parameters_result(result: ParametersResult) -> bool:
+    """Verify an independently supplied basic-parameter profile."""
+
+    return (
+        result.vertex_count,
+        result.edge_count,
+        result.rank,
+        result.corank,
+        result.uniform_size,
+        result.total_incidences,
+    ) == _parameters_data(result.hypergraph)
+
+
 def compute_vertex_degrees(request: VertexDegreesRequest) -> VertexDegreesResult:
     """Compute the vertex-degree map of a finite hypergraph."""
 
@@ -245,6 +266,12 @@ def compute_vertex_degrees(request: VertexDegreesRequest) -> VertexDegreesResult
         degrees=degrees,
         histogram=histogram,
     )
+
+
+def verify_vertex_degrees_result(result: VertexDegreesResult) -> bool:
+    """Verify an independently supplied vertex-degree profile."""
+
+    return (result.degrees, result.histogram) == _vertex_degrees_data(result.hypergraph)
 
 
 def edge_intersections(
@@ -280,11 +307,30 @@ def compute_edge_intersections(
     return edge_intersections(request.hypergraph)
 
 
+def verify_edge_intersections_result(result: EdgeIntersectionsResult) -> bool:
+    """Verify an independently supplied complete edge-intersection profile."""
+
+    return (
+        result.pair_intersections,
+        result.histogram,
+        result.pair_count,
+        result.maximum_intersection_size,
+        result.is_linear,
+        result.first_linearity_violation,
+    ) == _edge_intersections_data(result.hypergraph)
+
+
 def compute_dual(request: DualRequest) -> DualResult:
     """Compute the dual of a finite hypergraph."""
 
     dual = _dual_data(request.hypergraph)
     return DualResult(hypergraph=request.hypergraph, dual=dual)
+
+
+def verify_dual_result(result: DualResult) -> bool:
+    """Verify an independently supplied dual hypergraph."""
+
+    return result.dual == _dual_data(result.hypergraph)
 
 
 def compute_incidence_graph(
@@ -301,6 +347,16 @@ def compute_incidence_graph(
     )
 
 
+def verify_incidence_graph_result(result: IncidenceGraphResult) -> bool:
+    """Verify an independently supplied incidence-graph profile."""
+
+    return (
+        result.vertex_incidence,
+        result.edge_incidence,
+        result.edges,
+    ) == _incidence_graph_data(result.hypergraph)
+
+
 def compute_clique_expansion(
     request: CliqueExpansionRequest,
 ) -> CliqueExpansionResult:
@@ -310,3 +366,9 @@ def compute_clique_expansion(
         hypergraph=request.hypergraph,
         graph=_clique_expansion_graph(request.hypergraph),
     )
+
+
+def verify_clique_expansion_result(result: CliqueExpansionResult) -> bool:
+    """Verify an independently supplied clique-expansion graph."""
+
+    return result.graph == _clique_expansion_graph(result.hypergraph)

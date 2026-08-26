@@ -5,7 +5,7 @@ from jacobian.catalog.models import MathTool
 from jacobian.math.combinatorics.exact_cover import (
     GeneralizedExactCoverRequest,
     GeneralizedExactCoverResult,
-    find_generalized_exact_cover,
+    _find_generalized_exact_cover_request,
 )
 
 GENERALIZED_EXACT_COVER_OPERATION = MathTool(
@@ -19,7 +19,7 @@ GENERALIZED_EXACT_COVER_OPERATION = MathTool(
     ),
     request_type=GeneralizedExactCoverRequest,
     result_type=GeneralizedExactCoverResult,
-    run=find_generalized_exact_cover,
+    run=_find_generalized_exact_cover_request,
     tags=(
         "combinatorics",
         "exact-cover",

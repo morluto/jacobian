@@ -16,6 +16,8 @@ from jacobian.math.finite_group_actions._operations import (
     compute_cycle_index,
     compute_element_cycles,
     compute_polya_inventory,
+    verify_burnside_count_result,
+    verify_cycle_index_result,
 )
 
 
@@ -511,28 +513,28 @@ class TestBounds:
 
 
 class TestFailClosedBinding:
-    def test_wrong_orbit_count_raises(self) -> None:
-        """Constructing a result with a wrong value should fail validation."""
+    def test_wrong_burnside_claim_requires_explicit_replay(self) -> None:
+        """Structural construction does not re-enumerate the source group."""
         from jacobian.math.finite_group_actions._models import BurnsideCountResult
 
         action = _cyclic_c3()
-        with pytest.raises(ValueError, match="orbit_count"):
-            BurnsideCountResult(
-                action=action,
-                group_order=3,
-                fixed_point_sum=3,
-                orbit_count=99,
-                fixed_point_contributions=(3, 0, 0),
-            )
+        claim = BurnsideCountResult(
+            action=action,
+            group_order=3,
+            fixed_point_sum=9,
+            orbit_count=3,
+            fixed_point_contributions=(3, 3, 3),
+        )
+        assert not verify_burnside_count_result(claim)
 
-    def test_wrong_cycle_type_raises(self) -> None:
+    def test_wrong_cycle_index_claim_requires_explicit_replay(self) -> None:
         from jacobian.math.finite_group_actions._models import CycleIndexResult
 
         action = _cyclic_c3()
-        with pytest.raises(ValueError, match="cycle_type_counts"):
-            CycleIndexResult(
-                action=action,
-                group_order=3,
-                degree=3,
-                cycle_type_counts=(((1, 1, 1), 1),),
-            )
+        claim = CycleIndexResult(
+            action=action,
+            group_order=3,
+            degree=3,
+            cycle_type_counts=(((1, 1, 1), 3),),
+        )
+        assert not verify_cycle_index_result(claim)

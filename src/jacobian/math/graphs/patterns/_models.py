@@ -19,10 +19,10 @@ from jacobian.canonical import (
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-# One accepted request performs the exact count once and the source-bound result
-# validator replays it once.  Admission charges both passes before NetworkX sees
-# either graph.
-COUNT_AND_VALIDATION_PASSES = 2
+# One accepted request performs the exact count once.  Independently supplied
+# claims may be checked separately by the owner-local verifier, rather than
+# causing result construction to replay NetworkX.
+COUNT_PASSES = 1
 
 # The subset count separately bounds explicit candidate construction. The
 # total work budget below additionally charges exact isomorphism search. These
@@ -125,9 +125,7 @@ def _require_bounded_request(
         raise PydanticCustomError(
             "graph.induced_pattern_subset_count_candidate_count_exceeds",
             f"induced-pattern subset count {candidate_count:,} exceeds the "
-            f"{MAX_INDUCED_PATTERN_SUBSETS_PER_PASS:,}-candidate per-pass bound "
-            f"({COUNT_AND_VALIDATION_PASSES * MAX_INDUCED_PATTERN_SUBSETS_PER_PASS:,} "
-            "including result-validation replay)",
+            f"{MAX_INDUCED_PATTERN_SUBSETS_PER_PASS:,}-candidate bound",
         )
 
     maximum_count = format_canonical_integer(candidate_count)
@@ -151,7 +149,7 @@ def _require_bounded_request(
         + len(pattern.vertices)
         + len(pattern.edges)
     )
-    total_work = COUNT_AND_VALIDATION_PASSES * (
+    total_work = COUNT_PASSES * (
         source_bytes
         + result_bytes
         + graph_records
@@ -164,7 +162,7 @@ def _require_bounded_request(
             f"induced-pattern exact count requires {total_work:,} work units, "
             f"exceeding the {MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:,}-unit bound "
             "for graph construction, direct host-edge probes, explicit candidate "
-            "scans, VF2++ search, and result-validation replay",
+            "scans, and VF2++ search",
         )
 
 
@@ -183,8 +181,8 @@ class InducedVertexSubsetPatternCountRequest(StrictModel):
                 "C(|V(pattern)|, 2) direct host-edge probes per subset, local "
                 "candidate scans, and a worst-case VF2++ partial-injection state "
                 "bound for every subset. It permits at most 5,000 subsets per pass "
-                "and 64,000,000 total work units across both counting and source-bound "
-                "result-validation passes. The retained result must fit the "
+                "and 64,000,000 total work units for the one exact count. "
+                "The retained result must fit the "
                 "10,485,760-byte canonical output bound. These are conservative "
                 "current-backend limits, not restrictions on the mathematical "
                 "definition."
@@ -214,7 +212,12 @@ class InducedVertexSubsetPatternCountRequest(StrictModel):
 
 
 class InducedVertexSubsetPatternCountResult(StrictModel):
-    """Exact induced-pattern subset count bound to both source graphs."""
+    """Exact induced-pattern subset count bound to both source graphs.
+
+    The trusted count kernel constructs this value.  The explicit owner
+    verifier replays the bounded count only for an independently supplied
+    claim.
+    """
 
     host: SimpleUndirectedGraph
     pattern: SimpleUndirectedGraph
@@ -228,7 +231,7 @@ class InducedVertexSubsetPatternCountResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_count_to_retained_sources(self) -> Self:
+    def require_structural_shape(self) -> Self:
         _require_bounded_request(self.host, self.pattern)
         claimed = parse_canonical_integer(self.occurrence_count)
         if claimed < 0:
@@ -237,18 +240,23 @@ class InducedVertexSubsetPatternCountResult(StrictModel):
                 "occurrence_count must be nonnegative",
             )
 
-        from jacobian.math.graphs.patterns._operations import (
-            count_induced_vertex_subset_patterns,
-        )
-
-        expected = count_induced_vertex_subset_patterns(self.host, self.pattern)
-        if claimed != expected:
-            raise PydanticCustomError(
-                "graph.occurrence_count_does_equal_number_retained_host",
-                "occurrence_count does not equal the number of retained host "
-                "vertex subsets inducing the retained pattern",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        host: SimpleUndirectedGraph,
+        pattern: SimpleUndirectedGraph,
+        occurrence_count: CanonicalInteger,
+    ) -> Self:
+        """Construct a count emitted by the trusted owner-local kernel."""
+
+        return cls.model_construct(
+            host=host,
+            pattern=pattern,
+            occurrence_count=occurrence_count,
+        )
 
 
 __all__ = [

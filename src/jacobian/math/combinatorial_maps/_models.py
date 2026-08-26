@@ -26,8 +26,9 @@ class FacesRequest(StrictModel):
 class FacesResult(StrictModel):
     """The complete face-orbit family of the supplied map.
 
-    The original input map is carried on the result so the bound model can
-    re-run the exact native kernel and verify the face-orbit family.
+    The retained map binds the carrier and result envelope.  An independently
+    supplied face claim is checked by the explicit owner verifier; parsing
+    this wire value never re-enters an operation.
     """
 
     map: FiniteCombinatorialMap
@@ -36,27 +37,52 @@ class FacesResult(StrictModel):
     successor: tuple[int, ...]
 
     @model_validator(mode="after")
-    def bind_faces(self) -> Self:
-        from jacobian.math.combinatorial_maps.operations import face_orbits
-
-        walks, face_of_dart, successor, _ = face_orbits(self.map)
-        expected_walks = tuple(tuple(walk) for walk in walks)
-        if self.face_walks != expected_walks:
+    def require_face_result_shape(self) -> Self:
+        dart_count = len(self.map.darts)
+        if len(self.face_of_dart) != dart_count or len(self.successor) != dart_count:
             raise _validation_error(
-                "face_walks_not_bound", "face_walks must be the exact face-orbit family"
+                "face_result_dart_count",
+                "face assignment and successor must cover the map's darts",
             )
-        n = len(self.map.darts)
-        if self.face_of_dart != tuple(face_of_dart[d] for d in range(n)):
+        if (
+            any(not walk for walk in self.face_walks)
+            or sum(len(walk) for walk in self.face_walks) != dart_count
+        ):
             raise _validation_error(
-                "face_assignment_not_bound",
-                "face_of_dart must be the exact per-dart face assignment",
+                "face_walk_shape",
+                "face walks must be nonempty and have one entry per dart in total",
             )
-        if self.successor != tuple(successor):
+        if any(
+            dart < 0 or dart >= dart_count for walk in self.face_walks for dart in walk
+        ) or any(
+            dart < 0 or dart >= len(self.face_walks) for dart in self.face_of_dart
+        ):
             raise _validation_error(
-                "successor_not_bound",
-                "successor must be the exact dart-successor permutation",
+                "face_result_index_out_of_range",
+                "face-result indices must lie in their declared carriers",
+            )
+        if any(dart < 0 or dart >= dart_count for dart in self.successor):
+            raise _validation_error(
+                "successor_out_of_range",
+                "successor entries must be dart indices",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: FacesRequest,
+        *,
+        face_walks: tuple[tuple[int, ...], ...],
+        face_of_dart: tuple[int, ...],
+        successor: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            map=request.map,
+            face_walks=face_walks,
+            face_of_dart=face_of_dart,
+            successor=successor,
+        )
 
 
 class EulerCharacteristicRequest(StrictModel):
@@ -83,6 +109,12 @@ class EulerCharacteristicResult(StrictModel):
                 )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls, *, per_component: tuple[dict[str, int], ...], total: dict[str, int]
+    ) -> Self:
+        return cls.model_construct(per_component=per_component, total=total)
+
 
 class OrientableGenusRequest(StrictModel):
     """Compute per-component and total orientable genus."""
@@ -96,6 +128,10 @@ class OrientableGenusResult(StrictModel):
     per_component: tuple[int, ...]
     total: int = Field(ge=0)
 
+    @classmethod
+    def _from_kernel(cls, *, per_component: tuple[int, ...], total: int) -> Self:
+        return cls.model_construct(per_component=per_component, total=total)
+
 
 class OrientationReverseRequest(StrictModel):
     """Reverse every local cyclic order of a combinatorial map."""
@@ -106,33 +142,27 @@ class OrientationReverseRequest(StrictModel):
 class OrientationReverseResult(StrictModel):
     """The orientation-reversed map and the induced face bijection.
 
-    The original input map is carried on the result so the bound model can
-    re-run the exact native kernel and verify the reversed map and face
-    bijection.
+    The retained map binds the carrier.  The exact reversal and induced face
+    bijection are checked only by the explicit owner verifier.
     """
 
     map: FiniteCombinatorialMap
     reversed_map: FiniteCombinatorialMap
     face_bijection: dict[int, int]
 
-    @model_validator(mode="after")
-    def bind_orientation_reverse(self) -> Self:
-        from jacobian.math.combinatorial_maps.operations import (
-            orientation_reverse,
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: OrientationReverseRequest,
+        *,
+        reversed_map: FiniteCombinatorialMap,
+        face_bijection: dict[int, int],
+    ) -> Self:
+        return cls.model_construct(
+            map=request.map,
+            reversed_map=reversed_map,
+            face_bijection=face_bijection,
         )
-
-        expected_reversed, expected_bijection = orientation_reverse(self.map)
-        if self.reversed_map != expected_reversed:
-            raise _validation_error(
-                "orientation_reverse_not_bound",
-                "reversed_map must be the exact orientation reversal of the input map",
-            )
-        if self.face_bijection != expected_bijection:
-            raise _validation_error(
-                "face_bijection_not_bound",
-                "face_bijection must be the exact induced face bijection",
-            )
-        return self
 
 
 class ConnectedComponentsRequest(StrictModel):
@@ -148,6 +178,20 @@ class ConnectedComponentsResult(StrictModel):
     dart_component: tuple[int, ...]
     face_component: tuple[int, ...]
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        vertex_component: tuple[int, ...],
+        dart_component: tuple[int, ...],
+        face_component: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            vertex_component=vertex_component,
+            dart_component=dart_component,
+            face_component=face_component,
+        )
+
 
 class DualRequest(StrictModel):
     """Compute the exact embedded dual of a combinatorial map."""
@@ -160,6 +204,12 @@ class DualResult(StrictModel):
 
     dual: FiniteCombinatorialMap
     primal_to_dual: dict[int, int]
+
+    @classmethod
+    def _from_kernel(
+        cls, *, dual: FiniteCombinatorialMap, primal_to_dual: dict[int, int]
+    ) -> Self:
+        return cls.model_construct(dual=dual, primal_to_dual=primal_to_dual)
 
 
 class VertexFaceIncidenceRequest(StrictModel):
@@ -177,6 +227,18 @@ class VertexFaceIncidenceResult(StrictModel):
 
     multiplicity: dict[int, dict[int, int]]
     boolean_incidence: dict[int, tuple[int, ...]]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        multiplicity: dict[int, dict[int, int]],
+        boolean_incidence: dict[int, tuple[int, ...]],
+    ) -> Self:
+        return cls.model_construct(
+            multiplicity=multiplicity,
+            boolean_incidence=boolean_incidence,
+        )
 
 
 __all__ = [

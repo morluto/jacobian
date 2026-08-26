@@ -369,33 +369,66 @@ class GeneralizedExactCoverResult(StrictModel):
         return self
 
 
-def find_generalized_exact_cover(
-    request: GeneralizedExactCoverRequest,
+def _solve_generalized_exact_cover(
+    instance: GeneralizedExactCoverInstance,
+    search_node_limit: int,
 ) -> GeneralizedExactCoverResult:
-    """Return one cover, exact nonexistence, or UNKNOWN at the node limit."""
+    """Run the kernel after its owner has admitted canonical inputs."""
 
     from jacobian.math.combinatorics._exact_cover_kernel import (
         search_generalized_exact_cover,
     )
 
-    search = search_generalized_exact_cover(request.instance, request.search_node_limit)
+    search = search_generalized_exact_cover(instance, search_node_limit)
     if search.status != "FOUND":
         return GeneralizedExactCoverResult(
-            instance=request.instance,
-            search_node_limit=request.search_node_limit,
+            instance=instance,
+            search_node_limit=search_node_limit,
             status=search.status,
         )
 
     selected_row_ids = tuple(
-        sorted(request.instance.rows[index].row_id for index in search.selected_rows)
+        sorted(instance.rows[index].row_id for index in search.selected_rows)
     )
     return GeneralizedExactCoverResult(
-        instance=request.instance,
-        search_node_limit=request.search_node_limit,
+        instance=instance,
+        search_node_limit=search_node_limit,
         status="FOUND",
         selected_row_ids=selected_row_ids,
-        item_multiplicities=_expected_coverage(request.instance, selected_row_ids),
+        item_multiplicities=_expected_coverage(instance, selected_row_ids),
     )
+
+
+def find_generalized_exact_cover(
+    instance: GeneralizedExactCoverInstance,
+    *,
+    search_node_limit: int = MAX_EXACT_COVER_SEARCH_NODES_PER_PASS,
+) -> GeneralizedExactCoverResult:
+    """Return one cover, exact nonexistence, or UNKNOWN for canonical values.
+
+    This is the native Python boundary. Catalog and MCP execution retain their
+    strict wire request model in :func:`_find_generalized_exact_cover_request`.
+    """
+
+    if not isinstance(instance, GeneralizedExactCoverInstance):
+        raise TypeError("instance must be a GeneralizedExactCoverInstance")
+    if type(search_node_limit) is not int:
+        raise TypeError("search_node_limit must be an integer")
+    if not 1 <= search_node_limit <= MAX_EXACT_COVER_SEARCH_NODES_PER_PASS:
+        raise ValueError(
+            "search_node_limit must be between 1 and "
+            f"{MAX_EXACT_COVER_SEARCH_NODES_PER_PASS}"
+        )
+    _require_output_headroom(instance)
+    return _solve_generalized_exact_cover(instance, search_node_limit)
+
+
+def _find_generalized_exact_cover_request(
+    request: GeneralizedExactCoverRequest,
+) -> GeneralizedExactCoverResult:
+    """Catalog adapter for the strict generalized-exact-cover wire request."""
+
+    return _solve_generalized_exact_cover(request.instance, request.search_node_limit)
 
 
 __all__ = [

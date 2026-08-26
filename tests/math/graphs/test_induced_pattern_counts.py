@@ -21,6 +21,7 @@ from jacobian.math.graphs.patterns._models import (
 )
 from jacobian.math.graphs.patterns._operations import (
     compute_induced_vertex_subset_pattern_count,
+    verify_induced_vertex_subset_pattern_count_result,
 )
 from jacobian.math.graphs.patterns._tools import TOOLS
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -237,34 +238,38 @@ def test_small_random_graphs_match_independent_subset_and_permutation_oracle() -
             assert int(_count(host, pattern)) == _brute_force_count(host, pattern)
 
 
-def test_result_rejects_forged_zero_and_source_mutations() -> None:
+def test_explicit_verifier_rejects_forged_counts_and_source_mutations() -> None:
     host = _path(5, "h")
     pattern = _path(4, "p")
 
-    with pytest.raises(ValidationError):
+    assert not verify_induced_vertex_subset_pattern_count_result(
         InducedVertexSubsetPatternCountResult(
             host=host,
             pattern=pattern,
             occurrence_count="0",
         )
-    with pytest.raises(ValidationError):
+    )
+    assert not verify_induced_vertex_subset_pattern_count_result(
         InducedVertexSubsetPatternCountResult(
             host=host,
             pattern=pattern,
             occurrence_count="3",
         )
-    with pytest.raises(ValidationError):
+    )
+    assert not verify_induced_vertex_subset_pattern_count_result(
         InducedVertexSubsetPatternCountResult(
             host=_cycle(4, "c"),
             pattern=pattern,
             occurrence_count="2",
         )
-    with pytest.raises(ValidationError):
+    )
+    assert not verify_induced_vertex_subset_pattern_count_result(
         InducedVertexSubsetPatternCountResult(
             host=host,
             pattern=_cycle(4, "q"),
             occurrence_count="2",
         )
+    )
 
 
 def test_request_accepts_useful_case_near_subset_bound() -> None:
@@ -297,7 +302,7 @@ def test_dense_host_at_subset_bound_avoids_host_filtered_views(
     # C(100, 2) = 4,950, so this dense case exercises the useful candidate
     # boundary without allowing work to depend on the host vertices' degrees.
     assert _count(_complete(100, "h"), _complete(2, "p")) == "4950"
-    assert host_pair_probes == 2 * comb(100, 2)
+    assert host_pair_probes == comb(100, 2)
 
 
 def test_request_rejects_next_graph_order_above_subset_bound() -> None:

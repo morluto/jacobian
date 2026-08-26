@@ -16,8 +16,9 @@ from jacobian.math.finite_categories._operations import (
     compute_category_product,
     compute_category_profile,
     compute_opposite_category,
+    verify_category_profile_claim,
 )
-from jacobian.math.finite_categories.operations import _product_plan
+from jacobian.math.finite_categories._product import _product_plan, verify_product_claim
 
 CATEGORY = {
     "objects": ["A", "B"],
@@ -138,6 +139,15 @@ class TestProfile:
         ids = dict(result.identity_morphisms)
         assert ids.get("A") == "id_A"
         assert ids.get("B") == "id_B"
+
+    def test_explicit_verifier_binds_profile_to_its_source(self) -> None:
+        category = FiniteCategory(**CATEGORY)
+        result = compute_category_profile(category)
+
+        assert verify_category_profile_claim(category, result)
+        assert not verify_category_profile_claim(
+            FiniteCategory(**TERMINAL_CATEGORY), result
+        )
 
 
 class TestOpposite:
@@ -361,7 +371,7 @@ class TestProduct:
         assert result.object_projections == ()
         assert result.morphism_projections == ()
 
-    def test_result_rejects_a_different_valid_category(self) -> None:
+    def test_explicit_verifier_rejects_a_different_valid_category(self) -> None:
         expected = product(
             FiniteCategory(**TERMINAL_CATEGORY),
             FiniteCategory(**TERMINAL_CATEGORY),
@@ -375,18 +385,17 @@ class TestProduct:
             composition=(("id_other", "id_other", "id_other"),),
         )
 
-        with pytest.raises(ValidationError) as error:
-            FiniteCategoryProduct(
-                left=expected.left,
-                right=expected.right,
-                product=different_terminal,
-                object_projections=expected.object_projections,
-                morphism_projections=expected.morphism_projections,
-            )
+        claim = FiniteCategoryProduct(
+            left=expected.left,
+            right=expected.right,
+            product=different_terminal,
+            object_projections=expected.object_projections,
+            morphism_projections=expected.morphism_projections,
+        )
 
-        assert error.value.errors()[0]["type"] == "finite_category.incorrect_product"
+        assert not verify_product_claim(claim)
 
-    def test_result_rejects_forged_pair_projection(self) -> None:
+    def test_explicit_verifier_rejects_forged_pair_projection(self) -> None:
         result = product(
             FiniteCategory(**TERMINAL_CATEGORY),
             FiniteCategory(**TERMINAL_CATEGORY),
@@ -394,13 +403,7 @@ class TestProduct:
         payload = result.model_dump(mode="json")
         payload["object_projections"][0]["left"] = "not_T"
 
-        with pytest.raises(ValidationError) as error:
-            FiniteCategoryProduct.model_validate(payload)
-
-        assert (
-            error.value.errors()[0]["type"]
-            == "finite_category.incorrect_object_projections"
-        )
+        assert not verify_product_claim(FiniteCategoryProduct.model_validate(payload))
 
     def test_object_product_count_is_accepted_at_and_rejected_above_bound(
         self,

@@ -12,7 +12,10 @@ from jacobian.math.hypergraphs._models import (
     HypergraphIndependenceRequest,
     HypergraphIndependenceResult,
 )
-from jacobian.math.hypergraphs._operations import compute_independence_number
+from jacobian.math.hypergraphs._operations import (
+    compute_independence_number,
+    verify_independence_result,
+)
 
 
 def _compute(
@@ -434,33 +437,39 @@ def test_backend_exception_returns_typed_unknown(
     assert result.termination_reason == "SOLVER_ERROR"
 
 
-def test_producer_does_not_repeat_an_established_upper_bound(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian.math.hypergraphs import _independence_z3
-
-    def fail_replay(*_args: object) -> bool:
-        raise AssertionError("producer repeated an established threshold")
-
-    monkeypatch.setattr(_independence_z3, "verify_upper_bound", fail_replay)
+def test_produced_result_satisfies_structural_and_explicit_verification() -> None:
     result = _compute(
         {
             "vertices": ["a", "b", "c"],
             "edges": [["triple", ["a", "b", "c"]]],
         }
     )
-    assert result.status == "EXACT"
-    assert result.lower_bound == result.upper_bound == 2
-
-
-def test_produced_result_satisfies_the_full_independent_validator() -> None:
-    result = _compute(
-        {
-            "vertices": ["a", "b", "c"],
-            "edges": [["triple", ["a", "b", "c"]]],
-        }
+    restored = HypergraphIndependenceResult.model_validate(
+        result.model_dump(mode="json")
     )
-    assert HypergraphIndependenceResult.model_validate(result.model_dump(mode="json"))
+    assert verify_independence_result(restored)
+
+
+def test_forged_structural_upper_bound_requires_explicit_verification() -> None:
+    source = FiniteHypergraph(
+        vertices=["a", "b", "c", "d"],
+        edges=[["ab", ["a", "b"]], ["ac", ["a", "c"]], ["ad", ["a", "d"]]],
+    )
+    result = HypergraphIndependenceResult(
+        hypergraph=source,
+        hypergraph_digest=_compute(source).hypergraph_digest,
+        resource_budget=HypergraphIndependenceBudget(max_solver_calls=3),
+        status="UNKNOWN",
+        independence_number=None,
+        incumbent_vertices=("a",),
+        lower_bound=1,
+        upper_bound=2,
+        solver_calls=3,
+        wall_budget_exhausted=False,
+        termination_reason="SOLVER_UNKNOWN",
+        detail="an independently supplied bounded claim",
+    )
+    assert verify_independence_result(result) is False
 
 
 def test_producer_rejects_infeasible_backend_witness(

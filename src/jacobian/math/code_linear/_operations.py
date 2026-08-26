@@ -111,7 +111,7 @@ def compute_received_word_profile(
     request: ReceivedWordProfileRequest,
 ) -> ReceivedWordProfileResult:
     data = _received_word_profile_data(request)
-    return ReceivedWordProfileResult(
+    return ReceivedWordProfileResult._from_kernel(
         source=request,
         distance_histogram=data.distance_histogram,
         codeword_count=data.codeword_count,
@@ -119,6 +119,20 @@ def compute_received_word_profile(
         maximum_agreement=data.maximum_agreement,
         threshold_match_count=data.threshold_match_count,
         witnesses=data.witnesses,
+    )
+
+
+def verify_received_word_profile_result(result: ReceivedWordProfileResult) -> bool:
+    """Replay an independently supplied profile inside its admitted envelope."""
+
+    expected = _received_word_profile_data(result.source)
+    return (
+        result.distance_histogram == expected.distance_histogram
+        and result.codeword_count == expected.codeword_count
+        and result.minimum_distance == expected.minimum_distance
+        and result.maximum_agreement == expected.maximum_agreement
+        and result.threshold_match_count == expected.threshold_match_count
+        and result.witnesses == expected.witnesses
     )
 
 

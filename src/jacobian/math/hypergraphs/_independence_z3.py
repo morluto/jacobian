@@ -8,14 +8,12 @@ from typing import Any
 import z3  # type: ignore[import-untyped]
 
 from jacobian.math.hypergraphs._models import (
-    _PRODUCER_ESTABLISHED_BOUNDS,
     FiniteHypergraph,
     HypergraphIndependenceRequest,
     HypergraphIndependenceResult,
     HypergraphIndependenceStatus,
     HypergraphIndependenceTermination,
     _greedy_independent_vertices,
-    _hypergraph_digest,
     _independence_upper_bound,
 )
 
@@ -93,28 +91,30 @@ def _result(
     termination_reason: HypergraphIndependenceTermination,
     detail: str,
 ) -> HypergraphIndependenceResult:
-    # This call's own threshold search already established every reported
-    # bound, so construction runs the complete field and model validation and
-    # uses an internal context key to skip only the duplicate upper-bound
-    # solver replay. Independently supplied results never carry that key and
-    # still execute the bounded replay validator.
-    return HypergraphIndependenceResult.model_validate(
-        {
-            "hypergraph": request.hypergraph,
-            "hypergraph_digest": _hypergraph_digest(request.hypergraph),
-            "resource_budget": request.resource_budget,
-            "status": status,
-            "independence_number": independence_number,
-            "incumbent_vertices": incumbent,
-            "lower_bound": len(incumbent),
-            "upper_bound": upper_bound,
-            "solver_calls": solver_calls,
-            "wall_budget_exhausted": wall_budget_exhausted,
-            "termination_reason": termination_reason,
-            "detail": detail,
-            "convention": "MAXIMUM_NO_COMPLETE_HYPEREDGE_VERTEX_SUBSET",
-        },
-        context={_PRODUCER_ESTABLISHED_BOUNDS: True},
+    return HypergraphIndependenceResult._from_kernel(
+        hypergraph=request.hypergraph,
+        resource_budget=request.resource_budget,
+        status=status,
+        independence_number=independence_number,
+        incumbent_vertices=incumbent,
+        upper_bound=upper_bound,
+        solver_calls=solver_calls,
+        wall_budget_exhausted=wall_budget_exhausted,
+        termination_reason=termination_reason,
+        detail=detail,
+    )
+
+
+def verify_independence_result(result: HypergraphIndependenceResult) -> bool:
+    """Independently replay a claimed strict upper bound within its budget."""
+
+    source_upper_bound = _independence_upper_bound(result.hypergraph)
+    if result.upper_bound == source_upper_bound:
+        return True
+    return verify_upper_bound(
+        result.hypergraph,
+        result.upper_bound,
+        result.resource_budget.wall_seconds,
     )
 
 

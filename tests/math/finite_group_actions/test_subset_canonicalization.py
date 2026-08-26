@@ -17,6 +17,7 @@ from jacobian.math.finite_group_actions._models import (
 from jacobian.math.finite_group_actions._operations import (
     _enumerate_group,
     compute_subset_canonicalization,
+    verify_subset_canonicalization_result,
 )
 from jacobian.math.finite_group_actions._tools import TOOLS
 
@@ -406,13 +407,11 @@ def test_result_rejects_canonical_subset_bound_to_a_different_action() -> None:
     ("field", "value", "error_type"),
     [
         ("source_subset", [1], "finite_group_action.transporter_mismatch"),
-        ("canonical_subset", [1], "finite_group_action.canonical_subset_not_minimal"),
+        ("canonical_subset", [1], "finite_group_action.transporter_mismatch"),
         ("transporter", [0, 1, 2], "tuple_type"),
-        ("orbit_size", 2, "finite_group_action.orbit_size_mismatch"),
-        ("stabilizer_size", 2, "finite_group_action.stabilizer_size_mismatch"),
     ],
 )
-def test_result_rejects_independently_forged_source_and_conclusions(
+def test_result_rejects_structurally_inconsistent_source_and_conclusions(
     field: str,
     value: list[int] | int,
     error_type: str,
@@ -430,6 +429,21 @@ def test_result_rejects_independently_forged_source_and_conclusions(
     with pytest.raises(ValidationError) as exc_info:
         SubsetCanonicalizationResult.model_validate(forged)
     _assert_error_type(exc_info.value, error_type)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"), [("orbit_size", 2), ("stabilizer_size", 2)]
+)
+def test_explicit_verifier_rejects_structurally_valid_semantic_claims(
+    field: str, value: int
+) -> None:
+    result = compute_subset_canonicalization(_request(_cyclic_c3(), (2,)))
+    forged = result.model_dump()
+    forged[field] = value
+
+    claim = SubsetCanonicalizationResult.model_validate(forged)
+
+    assert not verify_subset_canonicalization_result(claim)
 
 
 def test_public_declaration_exposes_and_executes_copyable_example() -> None:

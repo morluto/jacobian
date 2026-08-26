@@ -668,18 +668,21 @@ def test_smt_request_rejects_an_indexed_bit_vector_value_beyond_the_digit_budget
         )
 
 
-def test_smt_request_admits_an_indexed_bit_vector_at_the_digit_boundary() -> None:
-    request = SmtSolveRequest(
-        logic=SmtLogic.QF_LIA,
-        smtlib=(
-            "(set-logic QF_LIA)\n"
-            "(declare-const x Int)\n"
-            f"(assert (= x (_ bv{'9' * 4_096} 8)))\n"
-            "(check-sat)\n"
-        ),
-    )
+def test_smt_request_rejects_an_ill_sorted_indexed_bit_vector_equality() -> None:
+    """Lexical digit admission cannot override backend well-sortedness."""
 
-    assert operations._smtlib_structure(request.smtlib).numeral_digits == 4_096
+    with pytest.raises(ValidationError) as error:
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                f"(assert (= x (_ bv{'9' * 4_096} 8)))\n"
+                "(check-sat)\n"
+            ),
+        )
+
+    assert error.value.errors(include_url=False)[0]["type"] == "logic.smtlib_grammar"
 
 
 def test_smt_request_admits_a_bv_named_symbol_outside_index_context_and_solves() -> (
@@ -1062,6 +1065,68 @@ def test_z3_initialization_failure_is_a_typed_unknown(
     assert result.detail is not None
     assert "could not initialize" in result.detail
     assert type(result).model_validate(result.model_dump()) == result
+
+
+def test_smt_request_admission_skips_grammar_rejection_without_the_backend(
+    monkeypatch,
+) -> None:
+    """Backend absence at admission stays the typed execution init outcome."""
+
+    monkeypatch.setitem(sys.modules, "z3", None)
+    admitted = SmtSolveRequest(
+        logic=SmtLogic.QF_LIA,
+        smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+    )
+
+    result = solve_smt(admitted)
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted is None
+    assert result.detail is not None
+    assert "could not initialize" in result.detail
+
+
+def test_smt_request_rejects_malformed_source_as_a_request_error(monkeypatch) -> None:
+    """Malformed SMT-LIB stays caller-correctable instead of solver indeterminacy."""
+
+    import z3
+
+    def refuse_solver(_logic: object) -> object:
+        raise AssertionError("a malformed request reached solver construction")
+
+    monkeypatch.setattr(z3, "SolverFor", refuse_solver)
+    with pytest.raises(ValidationError) as error:
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                "(assert (> y 0))\n"
+                "(check-sat)"
+            ),
+        )
+
+    assert error.value.errors(include_url=False)[0]["type"] == "logic.smtlib_grammar"
+
+
+def test_smt_solver_types_parse_stage_backend_failures_as_unknown(monkeypatch) -> None:
+    """A backend parser failure on an admitted source is execution UNKNOWN."""
+
+    import z3
+
+    def exhausting_parser(_source: str) -> object:
+        raise z3.Z3Exception("parser ran out of memory")
+
+    admitted = SmtSolveRequest(
+        logic=SmtLogic.QF_LIA,
+        smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+    )
+    monkeypatch.setattr(z3, "parse_smt2_string", exhausting_parser)
+    result = solve_smt(admitted)
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted == "memory"
+    assert result.detail == operations._EXHAUSTION_DETAILS["memory"]
 
 
 def test_unknown_projection_maps_every_exhausted_resource() -> None:

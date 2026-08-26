@@ -696,6 +696,28 @@ def _smtlib_structure(source: str) -> _SmtLibStructure:
     return _SmtLibStructure(max_depth, compound_terms, numeral_digits)
 
 
+def _require_parseable_smtlib(source: str) -> None:
+    """Reject source that Z3's SMT-LIB 2 parser cannot read as a request error.
+
+    Admission runs the same non-evaluating backend parse that execution uses,
+    so a schema-admitted request never discovers malformed syntax through an
+    execution exception. Backend absence here is left to execution, where it
+    keeps its typed initialization outcome.
+    """
+
+    try:
+        import z3  # type: ignore[import-untyped]
+    except (ImportError, OSError):
+        return
+    try:
+        z3.parse_smt2_string(source)
+    except z3.Z3Exception as exc:
+        raise _validation_error(
+            "logic.smtlib_grammar",
+            "SMT-LIB input could not be parsed by the declared logic",
+        ) from exc
+
+
 class SmtSolveRequest(StrictModel):
     logic: SmtLogic
     smtlib: str = Field(
@@ -706,7 +728,9 @@ class SmtSolveRequest(StrictModel):
             "and ends with that command. Bounded before parsing: nesting depth at most "
             f"{_MAX_SMTLIB_DEPTH}, compound terms at most {_MAX_SMTLIB_TERMS}, declared "
             f"symbols at most {_MAX_SMTLIB_DECLARATIONS}, and any one numeral, decimal, "
-            f"or indexed bit-vector spelling at most {_MAX_SMTLIB_NUMERAL_DIGITS} digits."
+            f"or indexed bit-vector spelling at most {_MAX_SMTLIB_NUMERAL_DIGITS} digits. "
+            "The source must be well-formed SMT-LIB 2 for the declared logic; malformed "
+            "input is rejected during request validation."
         ),
         examples=[
             "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)"
@@ -777,6 +801,7 @@ class SmtSolveRequest(StrictModel):
                 raise _validation_error(
                     "logic.smtlib_command", f"unsupported SMT-LIB command: {command[0]}"
                 )
+        _require_parseable_smtlib(self.smtlib)
         return self
 
 
@@ -888,7 +913,7 @@ def solve_sat(request: SatSolveRequest) -> SatSolveResult:
     """Solve one bounded canonical CNF through the maintained Z3 Python binding."""
 
     try:
-        import z3  # type: ignore[import-untyped]
+        import z3
     except (ImportError, OSError) as exc:
         return SatSolveResult(
             outcome="UNKNOWN",
@@ -1086,12 +1111,6 @@ def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
 
     try:
         assertions = z3.parse_smt2_string(request.smtlib)
-    except z3.Z3Exception as exc:
-        return SmtSolveResult(
-            outcome="UNKNOWN",
-            detail=f"the Z3 backend could not initialize: {exc}"[:1_024],
-        )
-    try:
         solver = z3.SolverFor(request.logic.value)
         solver.set(**_solver_settings(request.timeout_ms))
         solver.add(assertions)

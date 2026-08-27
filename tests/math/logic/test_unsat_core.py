@@ -1,27 +1,59 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from weakref import ReferenceType, ref
 
 import pytest
-import z3
+import z3  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic import _unsat_core as unsat_core
+from jacobian.math.logic._smt import SmtLogic
 from jacobian.math.logic._unsat_core import (
-    SmtUnsatCoreRequest,
+    SmtUnsatCoreRequest as _SmtUnsatCoreRequest,
+)
+from jacobian.math.logic._unsat_core import (
     SmtUnsatCoreResult,
     compute_smt_unsat_core,
     verify_smt_unsat_core_result,
 )
+from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 
 
 @contextmanager
-def raises_logic_validation():
+def raises_logic_validation() -> Iterator[pytest.ExceptionInfo[ValidationError]]:
     with pytest.raises(ValidationError) as error:
         yield error
     assert error.value.errors()[0]["type"].startswith("logic.")
+
+
+def assert_execution_rejected(request: _SmtUnsatCoreRequest) -> None:
+    """Assert semantic admission fails only inside the bounded Z3 worker."""
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        compute_smt_unsat_core(request)
+    assert error.value.errors()[0]["type"] == "logic.unsat_core_contract"
+
+
+def _core_worker_result(
+    *,
+    stdout: bytes = b'{"kind":"result","outcome":"UNSAT","core_indices":[0,1],"detail":null}',
+    returncode: int | None = 0,
+    stdout_exceeded: bool = False,
+    timed_out: bool = False,
+    cancelled: bool = False,
+) -> BoundedProcessResult:
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=b"",
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=False,
+        timed_out=timed_out,
+        cancelled=cancelled,
+    )
 
 
 CONTRADICTORY_LIA = """\
@@ -34,11 +66,30 @@ CONTRADICTORY_LIA = """\
 """
 
 
+def SmtUnsatCoreRequest(  # noqa: N802 - mirrors the public JSON model in fixtures.
+    *,
+    logic: SmtLogic | str,
+    smtlib: str,
+    timeout_ms: int = 1_000,
+    rlimit: int = 100_000,
+) -> _SmtUnsatCoreRequest:
+    """Build one request from the public JSON-compatible test representation."""
+
+    return _SmtUnsatCoreRequest.model_validate(
+        {
+            "logic": logic,
+            "smtlib": smtlib,
+            "timeout_ms": timeout_ms,
+            "rlimit": rlimit,
+        }
+    )
+
+
 def _request(
     smtlib: str = CONTRADICTORY_LIA,
     *,
     rlimit: int = 100_000,
-) -> SmtUnsatCoreRequest:
+) -> _SmtUnsatCoreRequest:
     return SmtUnsatCoreRequest(
         logic="QF_LIA",
         smtlib=smtlib,
@@ -108,28 +159,91 @@ def test_resource_exhaustion_is_unknown_not_unsat() -> None:
     assert result.detail
 
 
-def test_core_extraction_failure_is_a_typed_unknown(monkeypatch) -> None:
-    def fail_core_extraction(_solver: z3.Solver) -> None:
-        raise z3.Z3Exception("core extraction failed")
+def test_core_worker_bounds_parsing_and_solving_in_one_parent_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded: dict[str, object] = {}
 
-    monkeypatch.setattr(z3.Solver, "unsat_core", fail_core_extraction)
+    def complete_worker(*args: object, **kwargs: object) -> BoundedProcessResult:
+        recorded["args"] = args
+        recorded.update(kwargs)
+        return _core_worker_result()
+
+    monkeypatch.setattr(unsat_core, "run_bounded_process", complete_worker)
+    request = SmtUnsatCoreRequest(
+        logic="QF_LIA", smtlib=CONTRADICTORY_LIA, timeout_ms=2_500
+    )
+
+    result = compute_smt_unsat_core(request)
+
+    assert result.outcome == "UNSAT"
+    assert recorded["timeout_seconds"] == 2.5
+    assert Path(str(recorded["cwd"])).name.startswith("jacobian-unsat-core-")
+    limits = recorded["resource_limits"]
+    assert isinstance(limits, ProcessResourceLimits)
+    assert limits.cpu_seconds == 3
+    assert limits.address_space_bytes == 1_536 * 1024 * 1024
+    assert limits.file_size_bytes == 1_024 * 1_024
+
+
+@pytest.mark.parametrize(
+    ("completed", "detail"),
+    (
+        (_core_worker_result(cancelled=True, returncode=None), "did not establish"),
+        (
+            _core_worker_result(stdout_exceeded=True, returncode=None),
+            "did not establish",
+        ),
+        (_core_worker_result(stdout=b"not JSON"), "did not establish"),
+    ),
+)
+def test_core_worker_failures_never_project_a_math_verdict(
+    monkeypatch: pytest.MonkeyPatch,
+    completed: BoundedProcessResult,
+    detail: str,
+) -> None:
+    monkeypatch.setattr(
+        unsat_core,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: completed,
+    )
 
     result = compute_smt_unsat_core(_request())
 
     assert result.outcome == "UNKNOWN"
     assert result.core_indices == ()
-    assert result.detail == "Z3 could not complete the bounded source check."
+    assert detail in (result.detail or "")
 
 
-def test_kernel_producer_does_not_replay_its_established_core(monkeypatch) -> None:
+def test_core_extraction_failure_is_a_typed_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_core_extraction(_solver: z3.Solver) -> None:
+        raise z3.Z3Exception("core extraction failed")
+
+    monkeypatch.setattr(z3.Solver, "unsat_core", fail_core_extraction)
+
+    response = unsat_core._unsat_core_worker_kernel(_request())
+
+    assert response == {
+        "kind": "result",
+        "outcome": "UNKNOWN",
+        "core_indices": [],
+        "detail": "Z3 could not complete the bounded source check.",
+    }
+
+
+def test_kernel_producer_does_not_replay_its_established_core(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def replay_is_not_part_of_production(*_args: object) -> None:
         pytest.fail("kernel-produced UNSAT core must not run a second replay")
 
     monkeypatch.setattr(unsat_core, "_replay_source", replay_is_not_part_of_production)
-    result = compute_smt_unsat_core(_request())
+    response = unsat_core._unsat_core_worker_kernel(_request())
 
-    assert result.outcome == "UNSAT"
-    assert result.core_indices == (0, 1)
+    assert response["outcome"] == "UNSAT"
+    assert response["core_indices"] == [0, 1]
 
 
 @pytest.mark.parametrize(
@@ -256,40 +370,28 @@ def test_request_rejects_terms_outside_the_declared_fragment(
 ) -> None:
     source = "\n".join((f"(set-logic {logic})", declarations, assertion, "(check-sat)"))
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic=logic, smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic=logic, smtlib=source))
 
 
-def test_retained_validation_error_does_not_retain_a_z3_context(
+def test_request_validation_does_not_parse_with_z3(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    context_refs: list[ReferenceType[z3.Context]] = []
-    parse_assertions = unsat_core._parse_assertions
+    def parser_must_not_run(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("request validation must not parse SMT-LIB with Z3")
 
-    def track_context(
-        smtlib: str,
-        *,
-        context: z3.Context | None = None,
-    ) -> tuple[object, ...]:
-        owned_context = z3.Context() if context is None else context
-        context_refs.append(ref(owned_context))
-        return parse_assertions(smtlib, context=owned_context)
+    monkeypatch.setattr(unsat_core, "_parse_assertions", parser_must_not_run)
 
-    monkeypatch.setattr(unsat_core, "_parse_assertions", track_context)
-    with pytest.raises(ValidationError) as retained_error:
-        SmtUnsatCoreRequest(
-            logic="QF_LIA",
-            smtlib=(
-                "(set-logic QF_LIA)\n"
-                "(declare-const x Int)\n"
-                "(assert (= (* x x) 2))\n"
-                "(check-sat)\n"
-            ),
-        )
+    request = SmtUnsatCoreRequest(
+        logic="QF_LIA",
+        smtlib=(
+            "(set-logic QF_LIA)\n"
+            "(declare-const x Int)\n"
+            "(assert (= (* x x) 2))\n"
+            "(check-sat)\n"
+        ),
+    )
 
-    assert retained_error.value
-    assert context_refs
-    assert all(context_ref() is None for context_ref in context_refs)
+    assert request.assertion_count == 1
 
 
 def test_comments_cannot_impersonate_indexed_assertions_or_execute_text(
@@ -329,11 +431,12 @@ def test_tracking_symbols_do_not_alias_caller_boolean_constants() -> None:
     assert result.core_indices == (1, 2)
 
 
-def test_request_validates_smtlib_syntax_before_execution() -> None:
-    with raises_logic_validation():
+def test_request_defers_smtlib_syntax_to_bounded_execution() -> None:
+    assert_execution_rejected(
         _request(
             "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (+ 1 2))\n(check-sat)\n"
         )
+    )
 
 
 def test_request_bounds_the_number_of_indexed_assertions() -> None:
@@ -372,7 +475,9 @@ def test_request_bounds_source_nesting() -> None:
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(256))
 
 
-def test_core_bounds_reject_before_any_backend_parse(monkeypatch) -> None:
+def test_core_bounds_reject_before_any_backend_parse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Sources outside the core envelope must not reach the Z3 parser.
 
     Each source fits the broader ``smt.solve`` envelope, so only the
@@ -403,7 +508,7 @@ def test_core_bounds_reject_before_any_backend_parse(monkeypatch) -> None:
 
 
 def test_core_admission_defers_parser_resource_failures_to_execution(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A parser resource failure is typed UNKNOWN, not a contract rejection."""
 
@@ -413,10 +518,10 @@ def test_core_admission_defers_parser_resource_failures_to_execution(
     monkeypatch.setattr(z3, "parse_smt2_string", exhausting_parser)
     admitted = SmtUnsatCoreRequest(logic="QF_LIA", smtlib=CONTRADICTORY_LIA)
 
-    result = compute_smt_unsat_core(admitted)
+    response = unsat_core._unsat_core_worker_kernel(admitted)
 
-    assert result.outcome == "UNKNOWN"
-    assert result.core_indices == ()
+    assert response["outcome"] == "UNKNOWN"
+    assert response["core_indices"] == []
 
 
 def test_request_bounds_numeric_coefficient_digits() -> None:
@@ -445,8 +550,7 @@ def test_request_bounds_normalized_closed_coefficient_digits() -> None:
     factor = "9" * 256
     source = f"(set-logic QF_LIA)\n(assert (= (* {factor} {factor}) 0))\n(check-sat)\n"
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
 
 
 def test_request_bounds_nested_product_coefficient_digits() -> None:
@@ -460,8 +564,7 @@ def test_request_bounds_nested_product_coefficient_digits() -> None:
     over = boundary.replace(factor, "9" * 129, 1)
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over))
 
 
 @pytest.mark.parametrize("nesting", (2, 3, 4))
@@ -475,8 +578,7 @@ def test_request_bounds_deeply_nested_coefficient_products(nesting: int) -> None
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
 
 
 def test_request_bounds_outer_factor_against_folded_inner_coefficient() -> None:
@@ -489,8 +591,7 @@ def test_request_bounds_outer_factor_against_folded_inner_coefficient() -> None:
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
 
 
 def test_request_bounds_negated_nested_product_coefficient_digits() -> None:
@@ -504,8 +605,7 @@ def test_request_bounds_negated_nested_product_coefficient_digits() -> None:
     over = boundary.replace(factor, "9" * 129, 1)
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over))
 
 
 @pytest.mark.parametrize(
@@ -539,8 +639,7 @@ def test_request_bounds_nested_coefficients_through_preserving_wrappers(
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic=logic, smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic=logic, smtlib=source))
 
 
 def test_request_bounds_nested_real_coefficient_digits() -> None:
@@ -552,8 +651,7 @@ def test_request_bounds_nested_real_coefficient_digits() -> None:
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 @pytest.mark.parametrize(
@@ -595,8 +693,7 @@ def test_request_bounds_translated_product_coefficient_digits(
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic=logic, smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic=logic, smtlib=source))
 
 
 def test_request_bounds_translated_constant_digits() -> None:
@@ -612,10 +709,11 @@ def test_request_bounds_translated_constant_digits() -> None:
     assert SmtUnsatCoreRequest(
         logic="QF_LIA", smtlib=template.format(constant=boundary_constant)
     )
-    with raises_logic_validation():
+    assert_execution_rejected(
         SmtUnsatCoreRequest(
             logic="QF_LIA", smtlib=template.format(constant=over_constant)
         )
+    )
 
 
 @pytest.mark.parametrize(
@@ -652,8 +750,7 @@ def test_request_bounds_multi_term_affine_sum_coefficient_digits(
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic=logic, smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic=logic, smtlib=source))
 
 
 def test_request_bounds_multi_term_boundary_coefficients() -> None:
@@ -668,8 +765,7 @@ def test_request_bounds_multi_term_boundary_coefficients() -> None:
     over = boundary.replace(factor, "9" * 129, 1)
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over))
 
 
 def test_request_bounds_merged_duplicate_summand_coefficients() -> None:
@@ -684,8 +780,7 @@ def test_request_bounds_merged_duplicate_summand_coefficients() -> None:
     over = boundary.replace(outer, "9" * 128, 1)
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over))
 
 
 @pytest.mark.parametrize(
@@ -708,8 +803,7 @@ def test_request_bounds_exact_integer_division_coefficient_digits(
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
 
 
 def test_request_bounds_integer_division_translated_constant_digits() -> None:
@@ -724,8 +818,9 @@ def test_request_bounds_integer_division_translated_constant_digits() -> None:
     assert SmtUnsatCoreRequest(
         logic="QF_LIA", smtlib=template.format(constant=constant)
     )
-    with raises_logic_validation():
+    assert_execution_rejected(
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=template.format(constant="9" * 256))
+    )
 
 
 def test_request_bounds_arithmetic_ite_branch_coefficient_digits() -> None:
@@ -740,8 +835,7 @@ def test_request_bounds_arithmetic_ite_branch_coefficient_digits() -> None:
     over = boundary.replace(factor, "9" * 129, 1)
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over))
 
 
 @pytest.mark.parametrize(
@@ -767,8 +861,7 @@ def test_request_bounds_scaled_ite_branch_coefficient_digits(
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
 
 
 @pytest.mark.parametrize("nesting", (2, 3))
@@ -783,8 +876,7 @@ def test_request_bounds_deeply_nested_ite_branch_coefficients(nesting: int) -> N
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
 
 
 @pytest.mark.parametrize(
@@ -808,8 +900,7 @@ def test_request_bounds_reciprocal_ite_branch_denominator_digits(
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_request_bounds_ite_branch_digits_when_scalars_cancel_the_height() -> None:
@@ -823,8 +914,7 @@ def test_request_bounds_ite_branch_digits_when_scalars_cancel_the_height() -> No
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_request_bounds_division_of_formless_ite_branch_denominator_digits() -> None:
@@ -837,8 +927,7 @@ def test_request_bounds_division_of_formless_ite_branch_denominator_digits() -> 
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_request_bounds_formless_ite_sum_denominator_digits() -> None:
@@ -853,8 +942,7 @@ def test_request_bounds_formless_ite_sum_denominator_digits() -> None:
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_request_bounds_mixed_denominator_formless_ite_sum_scaling() -> None:
@@ -874,8 +962,7 @@ def test_request_bounds_mixed_denominator_formless_ite_sum_scaling() -> None:
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=scaled_source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=scaled_source))
 
     unscaled_source = (
         "(set-logic QF_LRA)\n"
@@ -904,8 +991,7 @@ def test_request_bounds_opposite_sign_comparison_numerator_digits() -> None:
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_bounded_reciprocal_cancelling_formless_ite_still_admitted() -> None:
@@ -966,8 +1052,7 @@ def test_request_bounds_comparison_of_formless_ite_branch_denominator_digits() -
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_bounded_comparison_of_formless_ite_branches_still_admitted() -> None:
@@ -1002,8 +1087,7 @@ def test_request_bounds_shared_denominator_comparison_numerator_digits() -> None
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_request_bounds_scaled_formless_comparison_lifted_numerators() -> None:
@@ -1020,8 +1104,7 @@ def test_request_bounds_scaled_formless_comparison_lifted_numerators() -> None:
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_request_bounds_scaled_formless_sum_retains_unmatched_coefficients() -> None:
@@ -1043,8 +1126,7 @@ def test_request_bounds_scaled_formless_sum_retains_unmatched_coefficients() -> 
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_bounded_scaled_formless_comparison_still_admitted() -> None:
@@ -1081,8 +1163,7 @@ def test_request_bounds_nested_division_of_formless_ite_denominator_digits() -> 
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_bounded_nested_division_of_formless_ite_still_admitted() -> None:
@@ -1127,8 +1208,7 @@ def test_request_bounds_compared_pairless_chain_denominator_digits() -> None:
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_request_bounds_scaled_formless_ite_nested_division_digits() -> None:
@@ -1145,8 +1225,7 @@ def test_request_bounds_scaled_formless_ite_nested_division_digits() -> None:
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_bounded_scaled_formless_ite_nested_division_still_admitted() -> None:
@@ -1187,8 +1266,7 @@ def test_request_bounds_sum_division_of_formless_ite_denominator_digits() -> Non
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_bounded_sum_division_of_formless_ite_still_admitted() -> None:
@@ -1249,8 +1327,7 @@ def test_request_bounds_shared_denominator_sum_division_digits() -> None:
         "(check-sat)\n"
     )
 
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
 
 def test_bounded_shared_denominator_sum_division_still_admitted() -> None:
@@ -1543,8 +1620,7 @@ def test_request_bounds_parsed_ast_nodes() -> None:
         )
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(2_047))
-    with raises_logic_validation():
-        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(2_048))
+    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(2_048)))
 
 
 def test_unsat_result_requires_a_nonempty_canonical_core() -> None:
@@ -1561,9 +1637,9 @@ def test_unsat_result_requires_a_nonempty_canonical_core() -> None:
 
 
 def test_request_schema_explains_validator_owned_indexing() -> None:
-    schema = SmtUnsatCoreRequest.model_json_schema()
+    schema = _SmtUnsatCoreRequest.model_json_schema()
 
     assert "zero-based index" in schema["description"]
-    assert "does not claim a hard request-local byte limit" in schema["description"]
+    assert "owner-local bounded Z3 worker" in schema["description"]
     assert "Boolean-sorted" in schema["properties"]["logic"]["description"]
     assert schema["examples"]

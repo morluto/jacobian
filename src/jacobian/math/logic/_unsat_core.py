@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import json
+import math
 import re
+import sys
 from fractions import Fraction
 from math import lcm
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, Literal, NamedTuple, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
@@ -12,13 +17,18 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.logic._smt import (
     SmtLogic,
     SmtSolveRequest,
     _is_smtlib_source_diagnostic,
     _tokenize_smtlib,
     _top_level_smtlib_commands,
+)
+from jacobian.process import (
+    ProcessResourceLimits,
+    run_bounded_process,
+    worker_environment,
 )
 
 _MAX_CORE_ASSERTIONS = 512
@@ -27,6 +37,11 @@ _MAX_CORE_NESTING_DEPTH = 256
 _MAX_CORE_NUMERAL_DIGITS = 256
 _MAX_CORE_AST_NODES = 4_096
 _MAX_CORE_RLIMIT = 10_000_000
+_UNSAT_CORE_WORKER = Path(__file__).with_name("_unsat_core_worker.py")
+_UNSAT_CORE_WORKER_OUTPUT_BYTES = 64 * 1024
+_UNSAT_CORE_WORKER_ERROR_BYTES = 16_384
+_UNSAT_CORE_WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
+_UNSAT_CORE_WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 _NUMERAL = re.compile(r"(?:-?[0-9]+(?:\.[0-9]+)?|#x[0-9a-fA-F]+|#b[01]+)")
 _AffineTerms = tuple[tuple[Fraction, Any], ...]
 _AffineForm = tuple[_AffineTerms, Fraction]
@@ -136,14 +151,10 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
     selections, where scaling is validated against every branch's reachable
     coefficient digits, so a numerically smaller branch cannot hide reciprocal
     growth beyond the digit budget).
-    Assertion source order is the public zero-based index. Parsing constructs Z3
-    syntax trees only; it does not evaluate the source as Python or as a host
-    command. Execution performs one tracked check and at most one direct
-    tracked check and at most one direct result-validation replay, each under the
-    supplied deterministic rlimit and timeout safety net.
-    Z3 5.0 exposes only a process-global memory threshold, so this in-process
-    operation does not claim a hard request-local byte limit; fixed source, AST,
-    coefficient, and resource-unit bounds control its admitted memory envelope.
+    Assertion source order is the public zero-based index. Request validation is
+    lexical only: parsing, fragment classification, tracked solving, and optional
+    replay run in the owner-local bounded Z3 worker and never evaluate the source
+    as Python or as a host command.
     """
 
     model_config = ConfigDict(
@@ -207,13 +218,6 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
             raise _logic_error(
                 f"SMT core source may contain at most {_MAX_CORE_ASSERTIONS} source assertions"
             )
-        parsed_error = _parsed_request_error(
-            self.smtlib,
-            assertion_count=self.assertion_count,
-            logic=self.logic,
-        )
-        if parsed_error is not None:
-            raise _logic_error(parsed_error)
         return self
 
 
@@ -1273,6 +1277,16 @@ def _extract_source_core(
         return "UNKNOWN", (), "Z3 could not complete the bounded source check."
 
 
+def _classify_source_for_execution(source: SmtUnsatCoreRequest) -> str | None:
+    """Return one backend-established semantic request error, if any."""
+
+    return _parsed_request_error(
+        source.smtlib,
+        assertion_count=source.assertion_count,
+        logic=source.logic,
+    )
+
+
 def _replay_source(
     source: SmtUnsatCoreRequest,
     selected_indices: tuple[int, ...] | None,
@@ -1297,6 +1311,74 @@ def _replay_source(
         return "UNKNOWN", "Z3 could not complete the bounded source replay."
 
 
+def _unsat_core_worker_kernel(
+    source: SmtUnsatCoreRequest,
+    *,
+    selected_indices: tuple[int, ...] | None = None,
+) -> dict[str, object]:
+    """Run semantic admission plus one owned core or replay kernel in a worker."""
+
+    semantic_error = _classify_source_for_execution(source)
+    if semantic_error is not None:
+        return {"kind": "invalid", "detail": semantic_error}
+    if selected_indices is None:
+        outcome, core_indices, detail = _extract_source_core(source)
+        return {
+            "kind": "result",
+            "outcome": outcome,
+            "core_indices": list(core_indices),
+            "detail": detail,
+        }
+    outcome, detail = _replay_source(source, selected_indices)
+    return {"kind": "replay", "outcome": outcome, "detail": detail}
+
+
+def _run_unsat_core_worker(
+    source: SmtUnsatCoreRequest,
+    *,
+    selected_indices: tuple[int, ...] | None = None,
+) -> dict[str, object] | None:
+    """Execute one semantic core phase in an isolated, bounded Z3 worker."""
+
+    payload: dict[str, object] = {
+        "request": source.model_dump(mode="json"),
+        "selected_indices": list(selected_indices)
+        if selected_indices is not None
+        else None,
+    }
+    try:
+        with TemporaryDirectory(prefix="jacobian-unsat-core-") as worker_directory:
+            completed = run_bounded_process(
+                [sys.executable, str(_UNSAT_CORE_WORKER)],
+                input_bytes=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+                timeout_seconds=source.timeout_ms / 1_000,
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=_UNSAT_CORE_WORKER_OUTPUT_BYTES,
+                stderr_limit=_UNSAT_CORE_WORKER_ERROR_BYTES,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=max(1, math.ceil(source.timeout_ms / 1_000)),
+                    address_space_bytes=_UNSAT_CORE_WORKER_ADDRESS_SPACE_BYTES,
+                    file_size_bytes=_UNSAT_CORE_WORKER_FILE_SIZE_BYTES,
+                ),
+                cwd=worker_directory,
+            )
+    except OSError:
+        return None
+    if (
+        completed.timed_out
+        or completed.cancelled
+        or completed.stdout_exceeded
+        or completed.stderr_exceeded
+        or completed.returncode != 0
+    ):
+        return None
+    try:
+        response = json.loads(completed.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return response if isinstance(response, dict) else None
+
+
 def verify_smt_unsat_core_result(result: SmtUnsatCoreResult) -> bool:
     """Replay one independently supplied non-UNKNOWN source-bound claim.
 
@@ -1308,20 +1390,52 @@ def verify_smt_unsat_core_result(result: SmtUnsatCoreResult) -> bool:
     if result.outcome == "UNKNOWN":
         return True
     selected_indices = result.core_indices if result.outcome == "UNSAT" else None
-    replay, _detail = _replay_source(result.source, selected_indices)
-    return replay == result.outcome
+    response = _run_unsat_core_worker(result.source, selected_indices=selected_indices)
+    return (
+        response is not None
+        and response.get("kind") == "replay"
+        and response.get("outcome") == result.outcome
+    )
 
 
 def compute_smt_unsat_core(request: SmtUnsatCoreRequest) -> SmtUnsatCoreResult:
     """Return a bounded core of source-assertion indices when Z3 proves UNSAT."""
 
-    outcome, core_indices, detail = _extract_source_core(request)
-    return SmtUnsatCoreResult._from_kernel(
-        source=request,
-        outcome=outcome,
-        core_indices=core_indices,
-        detail=detail,
-    )
+    response = _run_unsat_core_worker(request)
+    if response is None:
+        return SmtUnsatCoreResult(
+            source=request,
+            outcome="UNKNOWN",
+            detail="the bounded SMT core worker did not establish an outcome",
+        )
+    detail = response.get("detail")
+    if response.get("kind") == "invalid" and isinstance(detail, str):
+        raise OperationDomainValidationError(
+            location=("smtlib",),
+            code="logic.unsat_core_contract",
+            message=detail[:1_024],
+        )
+    if response.get("kind") != "result":
+        return SmtUnsatCoreResult(
+            source=request,
+            outcome="UNKNOWN",
+            detail="the bounded SMT core worker returned malformed output",
+        )
+    try:
+        return SmtUnsatCoreResult.model_validate(
+            {
+                "source": request,
+                "outcome": response["outcome"],
+                "core_indices": response["core_indices"],
+                "detail": response["detail"],
+            }
+        )
+    except (KeyError, TypeError, ValueError):
+        return SmtUnsatCoreResult(
+            source=request,
+            outcome="UNKNOWN",
+            detail="the bounded SMT core worker returned malformed output",
+        )
 
 
 SMT_UNSAT_CORE_OPERATION = MathTool(

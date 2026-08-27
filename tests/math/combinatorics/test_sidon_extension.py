@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.math.combinatorics._sidon_extension_models import (
+    SidonExtensionCandidateResult,
+    SidonExtensionObstruction,
     SidonExtensionProfileRequest,
+    SidonExtensionProfileResult,
 )
 from jacobian.math.combinatorics._sidon_extension_operations import (
     compute_sidon_extension_profile,
 )
 
 
-def _extension(source: list[str], candidates: list[str]):
+def _extension(source: list[str], candidates: list[str]) -> SidonExtensionProfileResult:
     request = SidonExtensionProfileRequest(
         source_elements=tuple(source),
         candidate_elements=tuple(candidates),
@@ -22,7 +28,7 @@ class TestSidonExtensionProfile:
     def test_basic_fixture(self) -> None:
         """With A={1,2}: candidate 3 fails (diff 1 repeats), candidate 4 succeeds."""
         result = _extension(["1", "2"], ["3", "4"])
-        assert result.admissible == ["4"]
+        assert result.admissible == ("4",)
         assert len(result.rejected) == 1
         assert result.rejected[0].candidate == "3"
         assert not result.rejected[0].is_admissible
@@ -43,8 +49,8 @@ class TestSidonExtensionProfile:
     def test_empty_candidates(self) -> None:
         """No candidates means no admissible and no rejected."""
         result = _extension(["1", "2"], [])
-        assert result.admissible == []
-        assert result.rejected == []
+        assert result.admissible == ()
+        assert result.rejected == ()
 
     def test_obstruction_replays(self) -> None:
         """Each obstruction's pairs must produce the repeated difference."""
@@ -59,17 +65,63 @@ class TestSidonExtensionProfile:
         assert obs.pair_a != obs.pair_b
 
     def test_admissible_candidates_are_sidon(self) -> None:
-        """For every admissible candidate x, A ∪ {x} should be Sidon."""
+        """Every admissible candidate should preserve the Sidon property."""
         result = _extension(["1", "2", "5"], ["3", "4", "10", "20"])
         for x in result.admissible:
             source = [1, 2, 5]
-            union = source + [int(x)]
+            union = [*source, int(x)]
             diffs = []
             for i, a in enumerate(union):
                 for j, b in enumerate(union):
                     if i != j:
                         diffs.append(a - b)
-            assert len(diffs) == len(set(diffs)), f"A ∪ {{{x}}} is not Sidon"
+            assert len(diffs) == len(set(diffs)), (
+                f"adding {x} breaks the Sidon property"
+            )
+
+    def test_candidate_admission_is_not_a_fixed_count(self) -> None:
+        """An empty source admits 1,001 linear-work candidates."""
+        result = _extension([], [str(value) for value in range(1001)])
+        assert len(result.admissible) == 1001
+        assert result.rejected == ()
+
+    def test_result_rejects_an_incomplete_partition(self) -> None:
+        with pytest.raises(ValidationError):
+            SidonExtensionProfileResult(
+                source_elements=("1", "2"),
+                candidate_elements=("3", "4"),
+                admissible=("4",),
+                rejected=(),
+            )
+
+    def test_result_rejects_a_forged_admissible_candidate(self) -> None:
+        with pytest.raises(ValidationError):
+            SidonExtensionProfileResult(
+                source_elements=("1", "2"),
+                candidate_elements=("3",),
+                admissible=("3",),
+                rejected=(),
+            )
+
+    def test_result_rejects_an_unbound_obstruction(self) -> None:
+        with pytest.raises(ValidationError):
+            SidonExtensionProfileResult(
+                source_elements=("1", "2"),
+                candidate_elements=("3",),
+                admissible=(),
+                rejected=(
+                    SidonExtensionCandidateResult(
+                        candidate="3",
+                        is_admissible=False,
+                        obstruction=SidonExtensionObstruction(
+                            candidate="3",
+                            repeated_difference="1",
+                            pair_a=("2", "1"),
+                            pair_b=("4", "3"),
+                        ),
+                    ),
+                ),
+            )
 
     def test_partition_is_complete(self) -> None:
         """Admissible + rejected partition the candidates exactly."""
@@ -87,7 +139,7 @@ class TestSidonExtensionProfile:
         assert len(r1.rejected) == len(r2.rejected)
 
     def test_maximality_check(self) -> None:
-        """For C = {1,...,N} \ A, an empty admissible class means A is maximal."""
+        """For C = {1,...,N} minus A, empty admissibility means A is maximal."""
         # A = {1, 2} is not maximal in [1, 4] since 4 is admissible
         result = _extension(["1", "2"], ["3", "4"])
         assert "4" in result.admissible

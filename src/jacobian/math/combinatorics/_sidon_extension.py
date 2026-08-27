@@ -16,7 +16,7 @@ SIDON_EXTENSION_OPERATION = (
         "Compute Sidon extension profile",
         (
             "Given a source integer set A and a candidate set C disjoint from "
-            "A, partition C into candidates x for which A ∪ {x} is Sidon and "
+            "A, partition C into candidates x for which A plus x is Sidon and "
             "candidates for which it is not, each with a replayable "
             "repeated-difference obstruction."
         ),

@@ -51,7 +51,7 @@ def compute_sidon_extension_profile(
         else:
             admissible.append(x)
 
-    return SidonExtensionProfileResult(
+    return SidonExtensionProfileResult._from_kernel(
         source_elements=request.source_elements,
         candidate_elements=request.candidate_elements,
         admissible=tuple(admissible),

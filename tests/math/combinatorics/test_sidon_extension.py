@@ -2,14 +2,24 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
+from jacobian.math.combinatorics import (
+    _sidon_extension_models as sidon_models,
+)
+from jacobian.math.combinatorics import _sidon_extension_operations as sidon_operations
 from jacobian.math.combinatorics._sidon_extension_models import (
+    MAX_EXTENSION_RESULT_BYTES,
     SidonExtensionCandidateResult,
     SidonExtensionObstruction,
     SidonExtensionProfileRequest,
     SidonExtensionProfileResult,
+    _maximum_result_bytes,
+    verify_sidon_extension_profile_result,
 )
 from jacobian.math.combinatorics._sidon_extension_operations import (
     compute_sidon_extension_profile,
@@ -32,6 +42,7 @@ class TestSidonExtensionProfile:
         assert len(result.rejected) == 1
         assert result.rejected[0].candidate == "3"
         assert not result.rejected[0].is_admissible
+        assert verify_sidon_extension_profile_result(result)
 
     def test_all_candidates_admissible(self) -> None:
         """If candidates are far enough, all should be admissible."""
@@ -85,6 +96,32 @@ class TestSidonExtensionProfile:
         assert len(result.admissible) == 1001
         assert result.rejected == ()
 
+    def test_source_admission_is_derived_from_work(self) -> None:
+        """A 33-element source is admitted when its actual work is small."""
+        source = [str(2**index) for index in range(33)]
+        result = _extension(source, [])
+        assert result.source_elements == tuple(source)
+        assert result.admissible == ()
+        assert result.rejected == ()
+
+    def test_large_rejected_profile_is_rejected_before_materialization(self) -> None:
+        """The arithmetic output bound rejects a large short-candidate request."""
+        candidates = tuple(str(value) for value in range(250_000))
+        with pytest.raises(ValidationError, match="canonical output budget"):
+            SidonExtensionProfileRequest(
+                source_elements=(),
+                candidate_elements=candidates,
+            )
+
+    def test_result_bound_covers_the_actual_canonical_result(self) -> None:
+        result = _extension(["1", "2", "5"], ["3", "4", "10", "20"])
+        actual = len(encode_strict_json(result.model_dump(mode="json")))
+        estimated = _maximum_result_bytes(
+            result.source_elements,
+            result.candidate_elements,
+        )
+        assert actual <= estimated <= MAX_EXTENSION_RESULT_BYTES
+
     def test_result_rejects_an_incomplete_partition(self) -> None:
         with pytest.raises(ValidationError):
             SidonExtensionProfileResult(
@@ -94,14 +131,14 @@ class TestSidonExtensionProfile:
                 rejected=(),
             )
 
-    def test_result_rejects_a_forged_admissible_candidate(self) -> None:
-        with pytest.raises(ValidationError):
-            SidonExtensionProfileResult(
-                source_elements=("1", "2"),
-                candidate_elements=("3",),
-                admissible=("3",),
-                rejected=(),
-            )
+    def test_explicit_verifier_rejects_a_forged_admissible_candidate(self) -> None:
+        result = SidonExtensionProfileResult(
+            source_elements=("1", "2"),
+            candidate_elements=("3",),
+            admissible=("3",),
+            rejected=(),
+        )
+        assert not verify_sidon_extension_profile_result(result)
 
     def test_result_rejects_an_unbound_obstruction(self) -> None:
         with pytest.raises(ValidationError):
@@ -149,3 +186,21 @@ class TestSidonExtensionProfile:
         # 3: differences of {1,2,4,3} = {1-2,1-4,1-3,2-1,2-4,2-3,4-1,4-2,4-3,3-1,3-2,3-4}
         # 1-2=-1, 4-3=1, no. Actually let's check: 2-1=1, 3-2=1 -> repeated! So 3 is rejected.
         assert "3" not in result2.admissible
+
+    def test_kernel_result_construction_does_not_replay_candidate_checks(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = 0
+        real_obstruction = sidon_models._candidate_obstruction
+
+        def counted_obstruction(*args: Any, **kwargs: Any) -> Any:
+            nonlocal calls
+            calls += 1
+            return real_obstruction(*args, **kwargs)
+
+        monkeypatch.setattr(
+            sidon_operations, "_candidate_obstruction", counted_obstruction
+        )
+        monkeypatch.setattr(sidon_models, "_candidate_obstruction", counted_obstruction)
+        _extension(["1", "2"], ["3", "4", "10"])
+        assert calls == 3

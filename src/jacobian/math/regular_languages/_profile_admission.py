@@ -1,10 +1,12 @@
 """Bounded admission for transition-Parikh profiles.
 
 This is intentionally separate from ``_admission``: catalog registration
-imports owner tools, while request parsing must not re-enter those tools.
+imports owner tools, while the operation owner constructs the per-call plan.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.regular_languages.values import (
@@ -24,6 +26,14 @@ _AUTOMATON_BASE_WIRE_BYTES = 256
 _AUTOMATON_TRANSITION_WIRE_BYTES = 128
 _PROFILE_BASE_WIRE_BYTES = 256
 _PROFILE_ENTRY_BASE_WIRE_BYTES = 96
+
+
+@dataclass(frozen=True)
+class TransitionParikhAdmissionPlan:
+    """One admitted transition-profile execution envelope."""
+
+    expected_path_count: int
+    outgoing: tuple[tuple[AutomatonTransition, ...], ...]
 
 
 def _outgoing(
@@ -65,14 +75,13 @@ def _composition_bounds(transition_count: int, path_length: int) -> tuple[int, i
 
 
 def _path_count_and_walk_bound(
-    automaton: FiniteLabeledAutomaton,
+    outgoing: tuple[tuple[AutomatonTransition, ...], ...],
     source_state: int,
     target_state: int,
     path_length: int,
     composition_updates: int,
 ) -> tuple[int, int, int]:
     counts = {source_state: 1}
-    outgoing = _outgoing(automaton)
     updates = 0
     max_layer_paths = 1
     for _ in range(path_length):
@@ -95,13 +104,13 @@ def _path_count_and_walk_bound(
     return counts.get(target_state, 0), updates, max_layer_paths
 
 
-def require_transition_profile_envelope(
+def admit_transition_profile(
     automaton: FiniteLabeledAutomaton,
     source_state: int,
     target_state: int,
     path_length: int,
-) -> int:
-    """Preflight exact work, intermediates, digits, and wire size."""
+) -> TransitionParikhAdmissionPlan:
+    """Admit one exact transition-profile computation and retain its plan."""
 
     if not 0 <= source_state < automaton.state_count:
         raise ValueError("source_state must be in 0..state_count-1")
@@ -114,11 +123,12 @@ def require_transition_profile_envelope(
             "path_length exceeds the transition-Parikh preflight length bound"
         )
     transition_count = len(automaton.transitions)
+    outgoing = _outgoing(automaton)
     composition_cells, composition_updates = _composition_bounds(
         transition_count, path_length
     )
     target_count, walk_updates, max_layer_paths = _path_count_and_walk_bound(
-        automaton, source_state, target_state, path_length, composition_updates
+        outgoing, source_state, target_state, path_length, composition_updates
     )
     updates = min(walk_updates, composition_updates)
     if updates > _MAX_DP_UPDATES:
@@ -170,7 +180,10 @@ def require_transition_profile_envelope(
             "transition-Parikh serialized-result bound exceeded; reduce the "
             "transition axis or profile support"
         )
-    return target_count
+    return TransitionParikhAdmissionPlan(
+        expected_path_count=target_count,
+        outgoing=outgoing,
+    )
 
 
-__all__ = ["require_transition_profile_envelope"]
+__all__ = ["TransitionParikhAdmissionPlan", "admit_transition_profile"]

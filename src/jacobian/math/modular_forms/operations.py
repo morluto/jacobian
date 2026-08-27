@@ -58,7 +58,7 @@ def level_one_named_q_expansion(
     else:
         q_expansion = _series(eisenstein_coefficients(form, truncation_order))
     weight, space_kind, normalization = metadata(form)
-    return LevelOneModularQExpansion(
+    return LevelOneModularQExpansion._from_kernel(
         form=form,
         weight=cast(Literal[4, 6, 12], weight),
         space_kind=space_kind,

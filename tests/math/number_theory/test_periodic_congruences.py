@@ -721,8 +721,8 @@ def test_materialized_period_boundary_is_separate_from_measure() -> None:
         "complement": True,
     }
     assert _measure(measure_only).occupied_count == str(MAX_MATERIALIZED_RESIDUES + 1)
-    with expect_validation("number_theory."):
-        PeriodicCongruenceUnionProfileRequest.model_validate(measure_only)
+    with pytest.raises(ValueError, match="common period"):
+        _profile(measure_only)
 
 
 def test_full_subset_shortcuts_count_and_complement_materialization() -> None:
@@ -742,10 +742,8 @@ def test_full_subset_shortcuts_count_and_complement_materialization() -> None:
     assert empty_complement.occupied_count == "0"
     assert empty_complement.density.as_fraction() == 0
 
-    with expect_validation("number_theory."):
-        PeriodicCongruenceUnionProfileRequest.model_validate(
-            {"subsets": source, "complement": False}
-        )
+    with pytest.raises(ValueError, match="materialized full union"):
+        _profile({"subsets": source, "complement": False})
 
 
 def test_materialized_union_row_bound_is_checked_before_lifting() -> None:
@@ -769,8 +767,8 @@ def test_materialized_union_row_bound_is_checked_before_lifting() -> None:
         ],
         "complement": False,
     }
-    with expect_validation("number_theory."):
-        PeriodicCongruenceUnionProfileRequest.model_validate(rejected_payload)
+    with pytest.raises(ValueError, match="materialized union"):
+        _profile(rejected_payload)
 
 
 def test_profile_accounts_for_retained_source_and_wide_residue_output_bytes() -> None:
@@ -785,8 +783,8 @@ def test_profile_accounts_for_retained_source_and_wide_residue_output_bytes() ->
     }
 
     assert _measure(payload).occupied_count == str(output_rows)
-    with expect_validation("number_theory."):
-        PeriodicCongruenceUnionProfileRequest.model_validate(payload)
+    with pytest.raises(ValueError, match="canonical output budget"):
+        _profile(payload)
 
 
 def test_compressed_intersection_work_boundary_rejects_before_backend() -> None:

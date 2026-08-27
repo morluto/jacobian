@@ -413,8 +413,9 @@ def test_request_rejects_pairwise_convolution_before_expansion() -> None:
         {"a": {(position,) for position in range(convolution_side)}},
     )
 
+    request = CrossedProductMultiplyRequest(left=left, right=right)
     with pytest.raises(ValueError, match=rf"{MAX_CONVOLUTION_PAIRS}-pair"):
-        CrossedProductMultiplyRequest(left=left, right=right)
+        compute_product(request)
 
 
 def test_request_rejects_scalar_work_before_expansion() -> None:
@@ -431,8 +432,9 @@ def test_request_rejects_scalar_work_before_expansion() -> None:
     left = _element(presentation, {"e": support})
     right = _element(presentation, {"a": support})
 
+    request = CrossedProductMultiplyRequest(left=left, right=right)
     with pytest.raises(ValueError, match="scalar-work"):
-        CrossedProductMultiplyRequest(left=left, right=right)
+        compute_product(request)
 
 
 def test_request_rejects_predicted_exponent_growth_before_expansion() -> None:
@@ -441,8 +443,9 @@ def test_request_rejects_predicted_exponent_growth_before_expansion() -> None:
     left = _element(presentation, {"a": {(0, 0)}})
     right = _element(presentation, {"e": {(0, int("9" * 64))}})
 
+    request = CrossedProductMultiplyRequest(left=left, right=right)
     with pytest.raises(ValueError, match="predicted product exponents"):
-        CrossedProductMultiplyRequest(left=left, right=right)
+        compute_product(request)
 
 
 def test_owner_declares_only_the_admitted_atomic_operation() -> None:

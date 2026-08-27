@@ -24,7 +24,6 @@ def _validation_error(code: str, message: str) -> PydanticCustomError:
 
 
 _MAX_PROJECTIVE_POINTS = 4_096
-_MAX_FINITE_MAP_WORK = 1_000_000
 _MAX_DIRECTION_RANK_WORK = 1_000_000
 
 
@@ -129,20 +128,6 @@ class OrbitDistributionRequest(StrictModel):
 
 class FiniteMapTableRequest(StrictModel):
     polynomial_map: FinitePolynomialMap
-
-    @model_validator(mode="after")
-    def require_bounded_enumeration(self) -> Self:
-        work = (
-            self.polynomial_map.domain.order
-            * len(self.polynomial_map.polynomial.coefficients)
-            * self.polynomial_map.domain.degree
-        )
-        if work > _MAX_FINITE_MAP_WORK:
-            raise _validation_error(
-                "finite_field.finite_map_exceeds_operation_work_budget",
-                "finite map exceeds the operation work budget",
-            )
-        return self
 
 
 class FiberPartitionRequest(StrictModel):

@@ -25,8 +25,8 @@ from jacobian.math.hypergraphs._models import (
     ParametersResult,
     VertexDegreesRequest,
     VertexDegreesResult,
+    _admit_edge_intersection_profile,
     _minimum_transversal_search_plan,
-    _require_edge_intersection_preflight,
 )
 
 
@@ -287,7 +287,7 @@ def edge_intersections(
 ) -> EdgeIntersectionsResult:
     """Return every indexed edge-pair intersection and the linearity profile."""
 
-    _require_edge_intersection_preflight(hypergraph)
+    _admit_edge_intersection_profile(hypergraph)
     (
         pair_intersections,
         histogram,
@@ -318,6 +318,7 @@ def compute_edge_intersections(
 def verify_edge_intersections_result(result: EdgeIntersectionsResult) -> bool:
     """Verify an independently supplied complete edge-intersection profile."""
 
+    _admit_edge_intersection_profile(result.hypergraph)
     return (
         result.pair_intersections,
         result.histogram,

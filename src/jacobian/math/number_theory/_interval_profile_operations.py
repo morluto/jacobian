@@ -17,19 +17,27 @@ from __future__ import annotations
 import math
 
 from jacobian.math.number_theory._interval_profile_models import (
+    DivisorCountProfileRequest,
     DivisorCountProfileResult,
     DivisorCountProfileRow,
+    DivisorSumProfileRequest,
     DivisorSumProfileResult,
     DivisorSumProfileRow,
+    EulerTotientProfileRequest,
     EulerTotientProfileResult,
     EulerTotientProfileRow,
+    GreatestPrimeFactorProfileRequest,
     GreatestPrimeFactorProfileResult,
     GreatestPrimeFactorProfileRow,
+    IntervalAdmission,
     IntervalProfileRequest,
+    LeastPrimeFactorProfileRequest,
     LeastPrimeFactorProfileResult,
     LeastPrimeFactorProfileRow,
+    PrimeGapProfileRequest,
     PrimeGapProfileResult,
     PrimeGapProfileRow,
+    SquarefreeProfileRequest,
     SquarefreeProfileResult,
 )
 
@@ -48,10 +56,43 @@ def _simple_sieve(limit: int) -> list[int]:
     return [i for i in range(2, limit + 1) if is_prime[i]]
 
 
+def _require_request_type[T: IntervalProfileRequest](
+    request: IntervalProfileRequest, expected_type: type[T]
+) -> T:
+    """Reject native calls that pair a kernel with another profile envelope."""
+    if not isinstance(request, expected_type):
+        raise TypeError(
+            f"expected {expected_type.__name__}, got {type(request).__name__}"
+        )
+    return request
+
+
+def _segmented_primes(lower_bound: int, upper_bound: int) -> list[int]:
+    """Return primes in a closed interval without sieving below its lower end."""
+    width = upper_bound - lower_bound + 1
+    is_prime = bytearray(b"\x01") * width
+    if lower_bound == 1:
+        is_prime[0] = 0
+
+    for p in _simple_sieve(math.isqrt(upper_bound)):
+        first_multiple = max(
+            p * p,
+            ((lower_bound + p - 1) // p) * p,
+        )
+        for multiple in range(first_multiple, upper_bound + 1, p):
+            is_prime[multiple - lower_bound] = 0
+
+    return [
+        lower_bound + offset
+        for offset, marked_prime in enumerate(is_prime)
+        if marked_prime
+    ]
+
+
 def _segmented_factor_profile_data(
     lower_bound: int, upper_bound: int
 ) -> tuple[list[int], list[int], list[int], list[int], list[int]]:
-    """Factor every interval value by charging only interval multiples."""
+    """Factor every interval value for the additional arithmetic profiles."""
     width = upper_bound - lower_bound + 1
     remaining = list(range(lower_bound, upper_bound + 1))
     divisor_counts = [1] * width
@@ -101,31 +142,19 @@ def _segmented_factor_profile_data(
     )
 
 
-def _segmented_prime_values(lower_bound: int, upper_bound: int) -> list[int]:
-    """Return primes in [lower_bound, upper_bound] without a prefix sieve."""
-    width = upper_bound - lower_bound + 1
-    is_prime = bytearray(b"\x01") * width
-    for value in range(lower_bound, min(upper_bound, 1) + 1):
-        is_prime[value - lower_bound] = 0
-    for prime in _simple_sieve(math.isqrt(upper_bound)):
-        first_multiple = max(
-            prime * prime,
-            ((lower_bound + prime - 1) // prime) * prime,
-        )
-        for value in range(first_multiple, upper_bound + 1, prime):
-            is_prime[value - lower_bound] = 0
-    return [
-        lower_bound + index for index, candidate in enumerate(is_prime) if candidate
-    ]
-
-
 def compute_squarefree_profile(
-    request: IntervalProfileRequest,
+    request: SquarefreeProfileRequest,
 ) -> SquarefreeProfileResult:
     """Partition [L, U] into squarefree and non-squarefree integers."""
-    lo = request.lower_bound
-    hi = request.upper_bound
-    width = hi - lo + 1
+    request = _require_request_type(request, SquarefreeProfileRequest)
+    return _squarefree_profile_kernel(request.admission)
+
+
+def _squarefree_profile_kernel(admission: IntervalAdmission) -> SquarefreeProfileResult:
+    """Run the squarefree kernel using the already validated envelope."""
+    lo = admission.lower_bound
+    hi = admission.upper_bound
+    width = admission.width
 
     # Segmented square sieve: mark n in [lo, hi] as non-squarefree if p^2 | n
     # for some prime p.  We only need primes p with p^2 <= hi.
@@ -160,22 +189,46 @@ def compute_squarefree_profile(
 
 
 def compute_divisor_count_profile(
-    request: IntervalProfileRequest,
+    request: DivisorCountProfileRequest,
 ) -> DivisorCountProfileResult:
     """Compute tau(n) for every n in [L, U]."""
-    lo = request.lower_bound
-    hi = request.upper_bound
-    # Factor only interval values and their multiples; no prefix through U is
-    # materialized.
-    divisor_counts, _, _, _, _ = _segmented_factor_profile_data(lo, hi)
+    request = _require_request_type(request, DivisorCountProfileRequest)
+    return _divisor_count_profile_kernel(request.admission)
+
+
+def _divisor_count_profile_kernel(
+    admission: IntervalAdmission,
+) -> DivisorCountProfileResult:
+    """Run the divisor-count kernel using the already validated envelope."""
+    lo = admission.lower_bound
+    hi = admission.upper_bound
+    width = admission.width
+
+    # Factor each interval value in place.  The base sieve is bounded by
+    # sqrt(hi), while the mutable residuals are bounded by the interval width.
+    primes = _simple_sieve(math.isqrt(hi))
+    residuals = list(range(lo, hi + 1))
+    divisor_counts = [1] * width
+
+    for p in primes:
+        first_multiple = max(p * p, ((lo + p - 1) // p) * p)
+        for offset in range(first_multiple - lo, width, p):
+            residual = residuals[offset]
+            if residual % p != 0:
+                continue
+            exponent = 0
+            while residual % p == 0:
+                residual //= p
+                exponent += 1
+            residuals[offset] = residual
+            divisor_counts[offset] *= exponent + 1
+
     rows: list[DivisorCountProfileRow] = []
-    for i, divisor_count in enumerate(divisor_counts):
-        rows.append(
-            DivisorCountProfileRow(
-                n=lo + i,
-                divisor_count=divisor_count,
-            )
-        )
+    for i in range(width):
+        n = lo + i
+        if residuals[i] > 1:
+            divisor_counts[i] *= 2
+        rows.append(DivisorCountProfileRow(n=n, divisor_count=divisor_counts[i]))
 
     return DivisorCountProfileResult(
         lower_bound=lo,
@@ -185,20 +238,44 @@ def compute_divisor_count_profile(
 
 
 def compute_greatest_prime_factor_profile(
-    request: IntervalProfileRequest,
+    request: GreatestPrimeFactorProfileRequest,
 ) -> GreatestPrimeFactorProfileResult:
     """Compute P+(n) for every n in [L, U]."""
-    lo = request.lower_bound
-    hi = request.upper_bound
-    _, greatest_prime_factors, _, _, _ = _segmented_factor_profile_data(lo, hi)
+    request = _require_request_type(request, GreatestPrimeFactorProfileRequest)
+    return _greatest_prime_factor_profile_kernel(request.admission)
+
+
+def _greatest_prime_factor_profile_kernel(
+    admission: IntervalAdmission,
+) -> GreatestPrimeFactorProfileResult:
+    """Run the greatest-prime-factor kernel using the validated envelope."""
+    lo = admission.lower_bound
+    hi = admission.upper_bound
+    width = admission.width
+
+    primes = _simple_sieve(math.isqrt(hi))
+    residuals = list(range(lo, hi + 1))
+    greatest_prime_factors = [1] * width
+
+    for p in primes:
+        first_multiple = max(p * p, ((lo + p - 1) // p) * p)
+        for offset in range(first_multiple - lo, width, p):
+            residual = residuals[offset]
+            if residual % p != 0:
+                continue
+            greatest_prime_factors[offset] = p
+            while residual % p == 0:
+                residual //= p
+            residuals[offset] = residual
+
     rows: list[GreatestPrimeFactorProfileRow] = []
-    for i, greatest_prime_factor in enumerate(greatest_prime_factors):
-        rows.append(
-            GreatestPrimeFactorProfileRow(
-                n=lo + i,
-                greatest_prime_factor=greatest_prime_factor,
-            )
-        )
+    for i in range(width):
+        n = lo + i
+        if n == 1:
+            rows.append(GreatestPrimeFactorProfileRow(n=1, greatest_prime_factor=1))
+            continue
+        gpf = residuals[i] if residuals[i] > 1 else greatest_prime_factors[i]
+        rows.append(GreatestPrimeFactorProfileRow(n=n, greatest_prime_factor=gpf))
 
     return GreatestPrimeFactorProfileResult(
         lower_bound=lo,
@@ -208,15 +285,20 @@ def compute_greatest_prime_factor_profile(
 
 
 def compute_prime_gap_profile(
-    request: IntervalProfileRequest,
+    request: PrimeGapProfileRequest,
 ) -> PrimeGapProfileResult:
     """Compute consecutive-prime gaps for primes p with L <= p <= U."""
-    lo = request.lower_bound
-    hi = request.upper_bound
+    request = _require_request_type(request, PrimeGapProfileRequest)
+    return _prime_gap_profile_kernel(request.admission)
 
-    # The successor beyond U is queried separately because it is not part of
-    # the interval result and therefore need not be included in the segment.
-    primes_in_interval = _segmented_prime_values(lo, hi)
+
+def _prime_gap_profile_kernel(admission: IntervalAdmission) -> PrimeGapProfileResult:
+    """Run the prime-gap kernel using the already validated envelope."""
+    lo = admission.lower_bound
+    hi = admission.upper_bound
+
+    # Mark only [lo, hi]; the successor beyond hi is queried separately.
+    primes_in_interval = _segmented_primes(lo, hi)
 
     # We need at least 2 primes to form a gap.  If no primes in [lo, hi],
     # return empty.  If exactly one prime in [lo, hi], we need the next
@@ -225,12 +307,13 @@ def compute_prime_gap_profile(
         return PrimeGapProfileResult(lower_bound=lo, upper_bound=hi, rows=())
 
     # Find the successor prime after the last prime in interval
-    last_prime = primes_in_interval[-1]
-    if last_prime <= hi:
-        # Find next prime after hi (or after last_prime, which is <= hi).
+    if primes_in_interval[-1] <= hi:
+        # Find next prime after hi (or after last_prime, which is <= hi)
         from sympy import nextprime
 
         successor = int(nextprime(hi))
+        # Admission charges the proven span of this mandatory search.  Dusart's
+        # bound makes this backend call finite on every admitted request.
         primes_in_interval.append(successor)
     elif len(primes_in_interval) >= 2:
         # The last prime is already > hi (shouldn't happen since we only
@@ -247,62 +330,54 @@ def compute_prime_gap_profile(
     return PrimeGapProfileResult(lower_bound=lo, upper_bound=hi, rows=tuple(rows))
 
 
-__all__ = [
-    "compute_divisor_count_profile",
-    "compute_greatest_prime_factor_profile",
-    "compute_prime_gap_profile",
-    "compute_squarefree_profile",
-]
-
-
 def compute_least_prime_factor_profile(
-    request: IntervalProfileRequest,
+    request: LeastPrimeFactorProfileRequest,
 ) -> LeastPrimeFactorProfileResult:
-    """Compute p(n) (least prime factor) for every n in [L, U]."""
-    lo, hi = request.lower_bound, request.upper_bound
+    """Compute p(n), the least prime factor, for every n in [L, U]."""
+    admission = _require_request_type(request, LeastPrimeFactorProfileRequest).admission
+    lo, hi = admission.lower_bound, admission.upper_bound
     _, _, least_prime_factors, _, _ = _segmented_factor_profile_data(lo, hi)
-    rows = []
-    for i, least_prime_factor in enumerate(least_prime_factors):
-        rows.append(
-            LeastPrimeFactorProfileRow(
-                n=lo + i,
-                least_prime_factor=least_prime_factor,
-            )
-        )
-    return LeastPrimeFactorProfileResult(
-        lower_bound=lo, upper_bound=hi, rows=tuple(rows)
+    rows = tuple(
+        LeastPrimeFactorProfileRow(n=lo + i, least_prime_factor=value)
+        for i, value in enumerate(least_prime_factors)
     )
+    return LeastPrimeFactorProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
 
 
 def compute_euler_totient_profile(
-    request: IntervalProfileRequest,
+    request: EulerTotientProfileRequest,
 ) -> EulerTotientProfileResult:
-    """Compute phi(n) for every n in [L, U]."""
-    lo, hi = request.lower_bound, request.upper_bound
+    """Compute phi(n), Euler's totient, for every n in [L, U]."""
+    admission = _require_request_type(request, EulerTotientProfileRequest).admission
+    lo, hi = admission.lower_bound, admission.upper_bound
     _, _, _, euler_totients, _ = _segmented_factor_profile_data(lo, hi)
-    rows = []
-    for i, euler_totient in enumerate(euler_totients):
-        rows.append(
-            EulerTotientProfileRow(
-                n=lo + i,
-                euler_totient=euler_totient,
-            )
-        )
-    return EulerTotientProfileResult(lower_bound=lo, upper_bound=hi, rows=tuple(rows))
+    rows = tuple(
+        EulerTotientProfileRow(n=lo + i, euler_totient=value)
+        for i, value in enumerate(euler_totients)
+    )
+    return EulerTotientProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
 
 
 def compute_divisor_sum_profile(
-    request: IntervalProfileRequest,
+    request: DivisorSumProfileRequest,
 ) -> DivisorSumProfileResult:
-    """Compute sigma(n) (sum of divisors) for every n in [L, U]."""
-    lo, hi = request.lower_bound, request.upper_bound
+    """Compute sigma(n), the divisor sum, for every n in [L, U]."""
+    admission = _require_request_type(request, DivisorSumProfileRequest).admission
+    lo, hi = admission.lower_bound, admission.upper_bound
     _, _, _, _, divisor_sums = _segmented_factor_profile_data(lo, hi)
-    rows = []
-    for i, divisor_sum in enumerate(divisor_sums):
-        rows.append(
-            DivisorSumProfileRow(
-                n=lo + i,
-                divisor_sum=divisor_sum,
-            )
-        )
-    return DivisorSumProfileResult(lower_bound=lo, upper_bound=hi, rows=tuple(rows))
+    rows = tuple(
+        DivisorSumProfileRow(n=lo + i, divisor_sum=value)
+        for i, value in enumerate(divisor_sums)
+    )
+    return DivisorSumProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
+
+
+__all__ = [
+    "compute_divisor_count_profile",
+    "compute_divisor_sum_profile",
+    "compute_euler_totient_profile",
+    "compute_greatest_prime_factor_profile",
+    "compute_least_prime_factor_profile",
+    "compute_prime_gap_profile",
+    "compute_squarefree_profile",
+]

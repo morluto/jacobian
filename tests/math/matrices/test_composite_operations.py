@@ -11,8 +11,8 @@ from jacobian.math.matrices._operation_models import (
     MatrixKroneckerProductResult,
     MatrixPartialTraceRequest,
     MatrixPartialTraceResult,
+    MatrixPermanentRequest,
     MatrixPermanentResult,
-    SquareRationalMatrixRequest,
 )
 from jacobian.math.matrices._operations import (
     compute_kronecker_product,
@@ -38,37 +38,39 @@ def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
 
 
 def _matrix(entries: list[list[dict[str, str]]]) -> RationalMatrix:
-    return RationalMatrix(entries=tuple(tuple(row) for row in entries))
+    return RationalMatrix.model_validate({"entries": entries})
 
 
-def _sq_request(entries: list[list[dict[str, str]]]) -> SquareRationalMatrixRequest:
-    return SquareRationalMatrixRequest(matrix=_matrix(entries))
+def _permanent_request(entries: list[list[dict[str, str]]]) -> MatrixPermanentRequest:
+    return MatrixPermanentRequest(matrix=_matrix(entries))
 
 
 def test_matrix_permanent_of_two_by_two() -> None:
-    request = _sq_request([[q(1), q(2)], [q(3), q(4)]])
+    request = _permanent_request([[q(1), q(2)], [q(3), q(4)]])
     result = compute_permanent(request)
     assert isinstance(result, MatrixPermanentResult)
     assert result.permanent == _cr(10)
 
 
 def test_matrix_permanent_of_identity() -> None:
-    request = _sq_request([[q(1), q(0)], [q(0), q(1)]])
+    request = _permanent_request([[q(1), q(0)], [q(0), q(1)]])
     assert compute_permanent(request).permanent == _cr(1)
 
 
 def test_matrix_permanent_of_all_ones_two_by_two() -> None:
-    request = _sq_request([[q(1), q(1)], [q(1), q(1)]])
+    request = _permanent_request([[q(1), q(1)], [q(1), q(1)]])
     assert compute_permanent(request).permanent == _cr(2)
 
 
 def test_matrix_permanent_of_three_by_three_all_ones() -> None:
-    request = _sq_request([[q(1), q(1), q(1)], [q(1), q(1), q(1)], [q(1), q(1), q(1)]])
+    request = _permanent_request(
+        [[q(1), q(1), q(1)], [q(1), q(1), q(1)], [q(1), q(1), q(1)]]
+    )
     assert compute_permanent(request).permanent == _cr(6)
 
 
 def test_matrix_permanent_of_rationals() -> None:
-    request = _sq_request([[q(1, 2), q(1)], [q(1), q(1, 2)]])
+    request = _permanent_request([[q(1, 2), q(1)], [q(1), q(1, 2)]])
     assert compute_permanent(request).permanent == _cr(5, 4)
 
 
@@ -76,22 +78,26 @@ def test_matrix_permanent_requires_square() -> None:
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
-        SquareRationalMatrixRequest.model_validate(
-            {"matrix": {"entries": [[q(1), q(2)]]}}
-        )
+        MatrixPermanentRequest.model_validate({"matrix": {"entries": [[q(1), q(2)]]}})
 
 
-def test_square_request_rejects_order_above_the_computation_dimension() -> None:
+def test_permanent_request_rejects_order_above_the_ryser_work_budget() -> None:
     from pydantic import ValidationError
 
-    oversized = RationalMatrix(entries=_identity_entries(MAX_MATRIX_DIMENSION + 1))
-    with pytest.raises(ValidationError):
-        SquareRationalMatrixRequest(matrix=oversized)
+    from jacobian.math.matrices._operation_models import MAX_PERMANENT_MATRIX_ORDER
+
+    oversized = RationalMatrix(
+        entries=_identity_entries(MAX_PERMANENT_MATRIX_ORDER + 1)
+    )
+    with pytest.raises(ValidationError, match="limited to 12 rows and columns"):
+        MatrixPermanentRequest(matrix=oversized)
 
 
-def test_square_request_admits_the_boundary_computation_dimension() -> None:
-    boundary = RationalMatrix(entries=_identity_entries(MAX_MATRIX_DIMENSION))
-    assert SquareRationalMatrixRequest(matrix=boundary).matrix == boundary
+def test_permanent_request_admits_the_ryser_work_boundary() -> None:
+    from jacobian.math.matrices._operation_models import MAX_PERMANENT_MATRIX_ORDER
+
+    boundary = RationalMatrix(entries=_identity_entries(MAX_PERMANENT_MATRIX_ORDER))
+    assert MatrixPermanentRequest(matrix=boundary).matrix == boundary
 
 
 def test_kronecker_request_rejects_operands_above_the_computation_dimension() -> None:

@@ -742,7 +742,8 @@ FINITE_POSET_OPERATIONS: MathTools = (
         title="Compute the antichain profile of a finite poset",
         description=(
             "Return the maximum antichain size, total antichain count, and "
-            "all maximum antichains of a finite poset."
+            "all maximum antichains by enumerating the at most 16,384 subsets "
+            "of a poset with at most 14 elements."
         ),
         request_type=AntichainProfileRequest,
         result_type=AntichainProfileResult,

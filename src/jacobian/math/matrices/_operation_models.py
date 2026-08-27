@@ -19,6 +19,8 @@ from jacobian.math.matrices.values import (
 
 MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 64
+MAX_PERMANENT_RYSER_SUBSETS = 4_096
+MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
 # The canonical dense rational matrix carries determinant inputs through
 # order 64, but Kronecker admission was established only for product axes
 # through order 50. Pin each admitted output axis to that envelope.
@@ -205,6 +207,33 @@ class SquareRationalMatrixRequest(_MatrixRequest):
         _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+        )
+        return self
+
+
+class MatrixPermanentRequest(_MatrixRequest):
+    """One square matrix charged by the exact Ryser subset enumeration."""
+
+    matrix: RationalMatrix
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_PERMANENT_MATRIX_ORDER
+
+    @model_validator(mode="after")
+    def require_ryser_envelope(self) -> Self:
+        order = len(self.matrix.entries)
+        if order != len(self.matrix.entries[0]):
+            raise _validation_error(
+                "budget_exceeded", "permanent computation requires a square matrix"
+            )
+        if (1 << order) > MAX_PERMANENT_RYSER_SUBSETS:
+            raise _validation_error(
+                "budget_exceeded",
+                "permanent computation exceeds the "
+                f"{MAX_PERMANENT_RYSER_SUBSETS}-subset Ryser work budget",
+            )
+        require_matrix_scalar_digits(
+            self.matrix.entries,
+            maximum=MAX_INPUT_SCALAR_DIGITS,
+            label="permanent input",
         )
         return self
 

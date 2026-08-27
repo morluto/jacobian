@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from jacobian.catalog.catalog import Catalog
@@ -9,12 +11,15 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.matrices._operation_models import (
     MAX_DETERMINANT_MATRIX_DIMENSION,
-    MAX_MATRIX_DIMENSION,
+    MAX_PERMANENT_MATRIX_ORDER,
 )
-from jacobian.math.matrices.values import MAX_RATIONAL_MATRIX_ORDER
+from jacobian.math.matrices.values import (
+    MAX_MATRIX_DIMENSION,
+    MAX_RATIONAL_MATRIX_ORDER,
+)
 
 
-def _identity_payload(order: int) -> dict:
+def _identity_payload(order: int) -> dict[str, Any]:
     return {
         "matrix": {
             "entries": [
@@ -28,7 +33,9 @@ def _identity_payload(order: int) -> dict:
     }
 
 
-def _partial_trace_payload(traced_dimension: int, kept_dimension: int) -> dict:
+def _partial_trace_payload(
+    traced_dimension: int, kept_dimension: int
+) -> dict[str, Any]:
     total = traced_dimension * kept_dimension
     payload = _identity_payload(total)
     payload["traced_dimension"] = traced_dimension
@@ -36,7 +43,7 @@ def _partial_trace_payload(traced_dimension: int, kept_dimension: int) -> dict:
     return payload
 
 
-def _oversized_partial_trace_payload() -> dict:
+def _oversized_partial_trace_payload() -> dict[str, Any]:
     """Smallest composite exceeding the computation dimension within the wire order."""
     for total in range(MAX_MATRIX_DIMENSION + 1, MAX_RATIONAL_MATRIX_ORDER + 1):
         for kept_dimension in range(1, total + 1):
@@ -55,33 +62,46 @@ def _oversized_partial_trace_payload() -> dict:
 
 
 @pytest.mark.parametrize(
-    ("operation_id", "payload"),
+    ("operation_id", "payload", "maximum_order"),
     (
         (
             "matrix.characteristic_polynomial.compute",
             _identity_payload(MAX_MATRIX_DIMENSION + 1),
+            MAX_MATRIX_DIMENSION,
         ),
-        ("matrix.permanent.compute", _identity_payload(MAX_MATRIX_DIMENSION + 1)),
-        ("matrix.rank.compute", _identity_payload(MAX_MATRIX_DIMENSION + 1)),
+        (
+            "matrix.permanent.compute",
+            _identity_payload(MAX_MATRIX_DIMENSION + 1),
+            MAX_PERMANENT_MATRIX_ORDER,
+        ),
+        (
+            "matrix.rank.compute",
+            _identity_payload(MAX_MATRIX_DIMENSION + 1),
+            MAX_MATRIX_DIMENSION,
+        ),
         (
             "matrix.normal_form.rref.compute",
             _identity_payload(MAX_MATRIX_DIMENSION + 1),
+            MAX_MATRIX_DIMENSION,
         ),
-        ("matrix.nullspace.compute", _identity_payload(MAX_MATRIX_DIMENSION + 1)),
+        (
+            "matrix.nullspace.compute",
+            _identity_payload(MAX_MATRIX_DIMENSION + 1),
+            MAX_MATRIX_DIMENSION,
+        ),
         (
             "matrix.partial_trace.compute",
             _oversized_partial_trace_payload(),
+            MAX_MATRIX_DIMENSION,
         ),
     ),
 )
 def test_dispatch_rejects_requests_above_the_computation_dimension(
-    operation_id: str, payload: dict
+    operation_id: str, payload: dict[str, Any], maximum_order: int
 ) -> None:
     with pytest.raises(OperationRequestValidationError) as excinfo:
         invoke_operation(operation_id, payload, Catalog.open())
-    assert f"limited to {MAX_MATRIX_DIMENSION} rows and columns" in str(
-        excinfo.value.cause
-    )
+    assert f"limited to {maximum_order} rows and columns" in str(excinfo.value.cause)
 
 
 def test_dispatch_returns_typed_results_at_the_boundary_order() -> None:

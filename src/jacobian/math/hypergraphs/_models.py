@@ -21,7 +21,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 MAX_VERTICES = 100
 MAX_EDGES = 100
 MAX_LABEL_LENGTH = 64
-MAX_SOLVER_CALLS = MAX_VERTICES
+MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS = 16
 
 HypergraphIndependenceStatus = Literal["EXACT", "UNKNOWN"]
 HypergraphIndependenceTermination = Literal[
@@ -230,9 +230,9 @@ class HypergraphIndependenceBudget(StrictModel):
 
     wall_seconds: StrictInt = Field(default=5, ge=1, le=120)
     max_solver_calls: StrictInt = Field(
-        default=MAX_SOLVER_CALLS,
+        default=MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS,
         ge=1,
-        le=MAX_SOLVER_CALLS,
+        le=MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS,
         description=(
             "Maximum monotone cardinality thresholds submitted during search. "
             "Independent validation of an externally supplied result may replay "
@@ -275,7 +275,7 @@ class HypergraphIndependenceResult(StrictModel):
     incumbent_vertices: tuple[str, ...] = Field(max_length=MAX_VERTICES)
     lower_bound: StrictInt = Field(ge=0, le=MAX_VERTICES)
     upper_bound: StrictInt = Field(ge=0, le=MAX_VERTICES)
-    solver_calls: StrictInt = Field(ge=0, le=MAX_SOLVER_CALLS)
+    solver_calls: StrictInt = Field(ge=0, le=MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS)
     wall_budget_exhausted: StrictBool
     termination_reason: HypergraphIndependenceTermination
     detail: str = Field(min_length=1, max_length=1024)

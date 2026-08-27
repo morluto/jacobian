@@ -554,17 +554,22 @@ def require_full_dimensional_extreme_vertices(polytope: RationalVPolytope) -> No
             f"({subset_count} > {MAX_SUPPORT_VERTEX_SUBSETS})"
         )
     orientation_tests = subset_count * (vertex_count - dimension)
-    if orientation_tests > MAX_SUPPORT_ORIENTATION_TESTS:
+    # ``_extreme_point_indices`` also ranks the active facet normals once per
+    # source vertex.  Those exact linear-algebra calls are part of the same
+    # height-sensitive proof, so charge them alongside the side tests.
+    rank_tests = vertex_count
+    extremality_tests = orientation_tests + rank_tests
+    if extremality_tests > MAX_SUPPORT_ORIENTATION_TESTS:
         raise ValueError(
             "V-polytope extremality proof exceeds the orientation-test bound "
-            f"({orientation_tests} > {MAX_SUPPORT_ORIENTATION_TESTS})"
+            f"({extremality_tests} > {MAX_SUPPORT_ORIENTATION_TESTS})"
         )
     component_digits = max(
         max(len(coordinate.num.lstrip("-")), len(coordinate.den.lstrip("-")))
         for vertex in polytope.vertices
         for coordinate in vertex.coordinates
     )
-    height_work = orientation_tests * component_digits**2
+    height_work = extremality_tests * component_digits**2
     if height_work > MAX_EXTREMALITY_HEIGHT_WORK:
         raise ValueError(
             "V-polytope extremality proof exceeds the height-work bound "

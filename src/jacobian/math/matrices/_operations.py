@@ -20,6 +20,7 @@ from jacobian.math.matrices._operation_models import (
     MatrixKroneckerProductResult,
     MatrixPartialTraceRequest,
     MatrixPartialTraceResult,
+    MatrixPermanentRequest,
     MatrixPermanentResult,
     MatrixProductResult,
     MatrixRankRequest,
@@ -224,7 +225,7 @@ def compute_adjugate(request: SquareIntegerMatrixRequest) -> MatrixAdjugateResul
     )
 
 
-def compute_permanent(request: SquareRationalMatrixRequest) -> MatrixPermanentResult:
+def compute_permanent(request: MatrixPermanentRequest) -> MatrixPermanentResult:
     value = matrices.permanent(conversions.rational_matrix_to_sympy(request.matrix))
     return MatrixPermanentResult(
         permanent=conversions.rational_from_sympy(value),

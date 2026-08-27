@@ -21,6 +21,8 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 MAX_POSET_ELEMENTS = 64
 MAX_POSET_RELATIONS = MAX_POSET_ELEMENTS * MAX_POSET_ELEMENTS
 MAX_LINEAR_EXTENSION_ELEMENTS = 20
+MAX_ANTICHAIN_PROFILE_ELEMENTS = 14
+MAX_ANTICHAIN_PROFILE_CANDIDATES = 1 << MAX_ANTICHAIN_PROFILE_ELEMENTS
 
 ElementLabel = Annotated[
     str,
@@ -792,9 +794,20 @@ class IncidenceConvolutionResult(PosetExactResult):
 
 
 class AntichainProfileRequest(StrictModel):
-    """Request the antichain profile (maximal antichains)."""
+    """Request an exact profile within its bounded subset-enumeration envelope."""
 
     poset: FinitePoset
+
+    @model_validator(mode="after")
+    def require_bounded_subset_enumeration(self) -> Self:
+        if len(self.poset.elements) > MAX_ANTICHAIN_PROFILE_ELEMENTS:
+            raise _validation_error(
+                "antichain_profile_elements",
+                "antichain profiles enumerate every subset and accept at most "
+                f"{MAX_ANTICHAIN_PROFILE_ELEMENTS} elements "
+                f"({MAX_ANTICHAIN_PROFILE_CANDIDATES} candidate subsets)",
+            )
+        return self
 
 
 class AntichainProfileResult(PosetExactResult):
@@ -802,11 +815,13 @@ class AntichainProfileResult(PosetExactResult):
     maximum_antichain_size: StrictInt = Field(ge=0, le=MAX_POSET_ELEMENTS)
     antichain_count: StrictInt = Field(ge=1)
     maximum_antichains: tuple[tuple[ElementLabel, ...], ...] = Field(
-        default=(), max_length=MAX_POSET_ELEMENTS
+        default=(), max_length=MAX_ANTICHAIN_PROFILE_CANDIDATES
     )
 
 
 __all__ = [
+    "MAX_ANTICHAIN_PROFILE_CANDIDATES",
+    "MAX_ANTICHAIN_PROFILE_ELEMENTS",
     "MAX_LINEAR_EXTENSION_ELEMENTS",
     "MAX_POSET_ELEMENTS",
     "MAX_POSET_RELATIONS",

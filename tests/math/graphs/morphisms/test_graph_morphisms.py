@@ -29,6 +29,19 @@ def test_catalog_contains_only_audited_operations() -> None:
     }
 
 
+def test_cycle_and_subgraph_metadata_state_the_representation_limit() -> None:
+    """Discovery separates the 64-vertex carrier from search admission."""
+
+    declarations = {tool.operation_id: tool for tool in TOOLS}
+    cycle = declarations["graph.cycle.fixed_length.decide"]
+    subgraph = declarations["graph.subgraph_pattern.find"]
+
+    assert "64 vertices" in cycle.request_type.model_json_schema()["description"]
+    assert "64 vertices" in subgraph.request_type.model_json_schema()["description"]
+    assert "20 vertices" not in cycle.description
+    assert "20 vertices" not in subgraph.description
+
+
 def _vertex_map(
     source_vertices: tuple[str, ...],
     source_edges: tuple[tuple[str, str], ...],

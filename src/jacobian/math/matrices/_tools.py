@@ -16,6 +16,7 @@ from jacobian.math.matrices._operation_models import (
     MatrixKroneckerProductResult,
     MatrixPartialTraceRequest,
     MatrixPartialTraceResult,
+    MatrixPermanentRequest,
     MatrixPermanentResult,
     MatrixProductResult,
     MatrixRankRequest,
@@ -528,8 +529,8 @@ MATRIX_OPERATIONS = (
     matrix_operation(
         "matrix.permanent.compute",
         "Compute an exact matrix permanent",
-        "Compute the permanent (sign-free determinant analogue) of a square rational matrix over QQ through order 64 with SymPy's exact Permanent backend.",
-        SquareRationalMatrixRequest,
+        "Compute the permanent (sign-free determinant analogue) of a square rational matrix over QQ through order 12. The owner charges SymPy's Ryser algorithm against its 4,096-subset budget.",
+        MatrixPermanentRequest,
         MatrixPermanentResult,
         compute_permanent,
         "matrix",

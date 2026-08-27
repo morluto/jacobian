@@ -97,7 +97,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     },
                     "resource_budget": {
                         "wall_seconds": 5,
-                        "max_solver_calls": 100,
+                        "max_solver_calls": 16,
                     },
                 },
             ),

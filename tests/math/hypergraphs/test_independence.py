@@ -8,6 +8,7 @@ import z3  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from jacobian.math.hypergraphs._models import (
+    MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS,
     FiniteHypergraph,
     HypergraphIndependenceBudget,
     HypergraphIndependenceRequest,
@@ -23,7 +24,7 @@ from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 def _compute(
     hypergraph: FiniteHypergraph | dict[str, object],
     *,
-    max_solver_calls: int = 100,
+    max_solver_calls: int = MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS,
 ) -> HypergraphIndependenceResult:
     return compute_independence_number(
         HypergraphIndependenceRequest.model_validate(
@@ -41,7 +42,7 @@ def _compute(
 def _kernel_compute(
     hypergraph: FiniteHypergraph | dict[str, object],
     *,
-    max_solver_calls: int = 100,
+    max_solver_calls: int = MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS,
 ) -> HypergraphIndependenceResult:
     """Exercise Z3 fault injection at its isolated owner-kernel seam."""
 
@@ -92,6 +93,32 @@ def test_rejects_empty_hyperedge_before_solver() -> None:
     with pytest.raises(ValidationError):
         HypergraphIndependenceRequest.model_validate(
             {"hypergraph": {"vertices": ["v"], "edges": [["empty", []]]}}
+        )
+
+
+def test_solver_budget_is_separate_from_the_hypergraph_carrier_limit() -> None:
+    source = {
+        "vertices": [f"v{index}" for index in range(100)],
+        "edges": [],
+    }
+    admitted = HypergraphIndependenceRequest.model_validate(
+        {
+            "hypergraph": source,
+            "resource_budget": {
+                "max_solver_calls": MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS
+            },
+        }
+    )
+
+    assert len(admitted.hypergraph.vertices) == 100
+    with pytest.raises(ValidationError, match="less than or equal to 16"):
+        HypergraphIndependenceRequest.model_validate(
+            {
+                "hypergraph": source,
+                "resource_budget": {
+                    "max_solver_calls": MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS + 1
+                },
+            }
         )
 
 

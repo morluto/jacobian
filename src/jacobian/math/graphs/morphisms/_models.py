@@ -237,7 +237,8 @@ class FixedLengthCycleRequest(StrictModel):
         json_schema_extra={
             "description": (
                 "Decide whether the canonical simple graph contains a simple "
-                "cycle of length `length` (3..20). The request is rejected when "
+                "cycle of length `length` (3..64) in a graph with at most 64 "
+                "vertices. The request is rejected when "
                 "the worst-case exhaustive search would exceed the work budget, "
                 "or when the retained source graph plus witness labels would not "
                 "leave enough canonical-output headroom for the echoed-source "
@@ -251,7 +252,7 @@ class FixedLengthCycleRequest(StrictModel):
     graph: SimpleUndirectedGraph = Field(
         description=(
             "Canonical simple undirected graph. The operation is bounded to "
-            "at most 20 vertices; larger graphs are rejected."
+            "at most 64 vertices; larger graphs are rejected."
         )
     )
     length: int = Field(ge=3, le=MORPHISM_MAX_VERTICES)
@@ -428,7 +429,7 @@ class FixedLengthCycleResult(StrictModel):
 class SubgraphPatternFindRequest(StrictModel):
     """Find an injective edge-preserving embedding of ``pattern`` in ``host``.
 
-    The pattern is capped at 20 vertices (``MORPHISM_MAX_VERTICES``), and the
+    The pattern is capped at 64 vertices (``MORPHISM_MAX_VERTICES``), and the
     request is rejected when the worst-case backtracking work - bounded by the
     falling factorial of host vertices taken pattern-at-a-time times the
     edge-choice branching - would exceed the search budget. Both graphs are
@@ -441,7 +442,7 @@ class SubgraphPatternFindRequest(StrictModel):
                 "Find an injective edge-preserving embedding of `pattern` in "
                 "`host`. Both are canonical `SimpleUndirectedGraph` values so "
                 "callers can pass `explicit_graph` output directly. `pattern` "
-                "must have at most 20 vertices; requests whose worst-case "
+                "must have at most 64 vertices; requests whose worst-case "
                 "assignment search exceeds the per-pass work budget are "
                 "rejected. Runtime candidate scans share that budget and may "
                 "return `BUDGET_EXCEEDED`; the retained sources and result "
@@ -451,7 +452,7 @@ class SubgraphPatternFindRequest(StrictModel):
     )
 
     pattern: SimpleUndirectedGraph = Field(
-        description="Canonical pattern graph with at most 20 vertices."
+        description="Canonical pattern graph with at most 64 vertices."
     )
     host: SimpleUndirectedGraph = Field(description="Canonical host graph.")
 

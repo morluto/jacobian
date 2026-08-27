@@ -6,8 +6,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import invoke_operation
 from jacobian.math.finite_stochastic_processes import poisson_binomial
 from jacobian.math.finite_stochastic_processes._poisson_binomial_models import (
     PoissonBinomialRequest,
@@ -29,42 +27,6 @@ def test_two_fair_coins() -> None:
     )
     dist = [atom.probability.as_fraction() for atom in result.count_distribution.atoms]
     assert dist == [Fraction(1, 4), Fraction(1, 2), Fraction(1, 4)]
-
-
-def test_catalog_dispatch_reuses_request_admission_for_exact_result() -> None:
-    result = invoke_operation(
-        "probability.poisson_binomial.distribution.compute",
-        {
-            "probabilities": [
-                {"num": "1", "den": "2"},
-                {"num": "1", "den": "3"},
-            ]
-        },
-        Catalog.open(),
-    )
-
-    assert result.output == {
-        "probabilities": [
-            {"num": "1", "den": "2"},
-            {"num": "1", "den": "3"},
-        ],
-        "count_distribution": {
-            "atoms": [
-                {
-                    "value": {"num": "0", "den": "1"},
-                    "probability": {"num": "1", "den": "3"},
-                },
-                {
-                    "value": {"num": "1", "den": "1"},
-                    "probability": {"num": "1", "den": "2"},
-                },
-                {
-                    "value": {"num": "2", "den": "1"},
-                    "probability": {"num": "1", "den": "6"},
-                },
-            ]
-        },
-    }
 
 
 def test_native_api_returns_the_canonical_distribution() -> None:

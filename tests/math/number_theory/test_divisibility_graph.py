@@ -56,3 +56,17 @@ def test_rejects_combined_vertex_budget() -> None:
             left_family=[str(value) for value in range(1, 257)],
             right_family=["1"],
         )
+
+
+@pytest.mark.parametrize(
+    ("left_family", "right_family"),
+    ((["2", "2"], ["4"]), (["2"], ["4", "4"])),
+)
+def test_rejects_duplicate_family_values(
+    left_family: list[str], right_family: list[str]
+) -> None:
+    with pytest.raises(ValidationError, match="values must be unique"):
+        DivisibilityIncidenceGraphRequest(
+            left_family=left_family,
+            right_family=right_family,
+        )

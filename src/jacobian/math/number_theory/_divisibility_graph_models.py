@@ -27,11 +27,27 @@ PositiveInteger = Annotated[
 class DivisibilityIncidenceGraphRequest(StrictModel):
     """Two finite positive-integer families whose divisibility incidence graph is constructed."""
 
-    left_family: list[PositiveInteger] = Field(max_length=MAX_FAMILY_SIZE)
-    right_family: list[PositiveInteger] = Field(max_length=MAX_FAMILY_SIZE)
+    left_family: list[PositiveInteger] = Field(
+        max_length=MAX_FAMILY_SIZE,
+        description="Unique positive integers labelling the left vertex family.",
+    )
+    right_family: list[PositiveInteger] = Field(
+        max_length=MAX_FAMILY_SIZE,
+        description="Unique positive integers labelling the right vertex family.",
+    )
 
     @model_validator(mode="after")
     def require_positive_families_and_graph_budget(self) -> Self:
+        if len(set(self.left_family)) != len(self.left_family):
+            raise _validation_error(
+                "duplicate_left_family",
+                "left_family values must be unique",
+            )
+        if len(set(self.right_family)) != len(self.right_family):
+            raise _validation_error(
+                "duplicate_right_family",
+                "right_family values must be unique",
+            )
         vertex_count = len(self.left_family) + len(self.right_family)
         if vertex_count > MAX_TOTAL_FAMILY_SIZE:
             raise _validation_error(

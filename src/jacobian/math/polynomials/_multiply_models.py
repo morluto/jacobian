@@ -14,13 +14,11 @@ from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, strict_json_object_size
 from jacobian.math.polynomials._models import _validation_error
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
-    require_polynomial_budget,
 )
 
-MAX_MULTIPLY_TERMS = 1024
-MAX_MULTIPLY_DEGREE = 1000
 MAX_MULTIPLY_RESULT_TERMS = MAX_POLYNOMIAL_TERMS
 MAX_MULTIPLY_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
@@ -117,16 +115,6 @@ class RationalPolynomialMultiplyRequest(StrictModel):
     def require_matching_rings_and_budget(self) -> Self:
         if self.left.variables != self.right.variables:
             raise _validation_error("polynomials must use the same ordered variables")
-        require_polynomial_budget(
-            self.left,
-            maximum_terms=MAX_MULTIPLY_TERMS,
-            maximum_exponent=MAX_MULTIPLY_DEGREE,
-        )
-        require_polynomial_budget(
-            self.right,
-            maximum_terms=MAX_MULTIPLY_TERMS,
-            maximum_exponent=MAX_MULTIPLY_DEGREE,
-        )
         product_term_work = len(self.left.polynomial.terms) * len(
             self.right.polynomial.terms
         )
@@ -141,17 +129,19 @@ class RationalPolynomialMultiplyRequest(StrictModel):
             )
         maximum_exponents = tuple(
             max(
-                (
-                    term.exponents[index]
-                    for term in (
-                        *self.left.polynomial.terms,
-                        *self.right.polynomial.terms,
-                    )
-                ),
+                (term.exponents[index] for term in self.left.polynomial.terms),
+                default=0,
+            )
+            + max(
+                (term.exponents[index] for term in self.right.polynomial.terms),
                 default=0,
             )
             for index in range(len(self.left.variables))
         )
+        if any(exponent > MAX_POLYNOMIAL_EXPONENT for exponent in maximum_exponents):
+            raise _validation_error(
+                "the polynomial product may exceed the canonical exponent limit"
+            )
         if (
             _result_wire_upper_bound(
                 self.left.variables,

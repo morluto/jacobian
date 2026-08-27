@@ -89,3 +89,50 @@ def test_rejects_serialized_result_budget() -> None:
 
     with pytest.raises(ValidationError, match="serialized result size"):
         RationalPolynomialMultiplyRequest.model_validate({"left": left, "right": right})
+
+
+def test_accepts_product_sensitive_operand_budgets() -> None:
+    coefficient = {"num": "1" + "0" * 256, "den": "1"}
+    left = {
+        "domain": "QQ",
+        "variables": ["x"],
+        "polynomial": {
+            "terms": [
+                {"coefficient": coefficient, "exponents": [exponent]}
+                for exponent in range(2025, 1000, -1)
+            ]
+        },
+    }
+    right = {
+        "domain": "QQ",
+        "variables": ["x"],
+        "polynomial": {
+            "terms": [{"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}]
+        },
+    }
+
+    request = RationalPolynomialMultiplyRequest.model_validate(
+        {"left": left, "right": right}
+    )
+    result = rational_polynomial_multiply(request)
+
+    assert len(result.polynomial.terms) == 1025
+    assert result.polynomial.terms[0].exponents == (2025,)
+    assert result.polynomial.terms[-1].exponents == (1001,)
+    assert result.polynomial.terms[0].coefficient.num == coefficient["num"]
+    assert result.polynomial.terms[0].coefficient.den == coefficient["den"]
+
+
+def test_rejects_product_exponent_overflow() -> None:
+    polynomial = {
+        "domain": "QQ",
+        "variables": ["x"],
+        "polynomial": {
+            "terms": [{"coefficient": {"num": "1", "den": "1"}, "exponents": [20_000]}]
+        },
+    }
+
+    with pytest.raises(ValidationError, match="canonical exponent limit"):
+        RationalPolynomialMultiplyRequest.model_validate(
+            {"left": polynomial, "right": polynomial}
+        )

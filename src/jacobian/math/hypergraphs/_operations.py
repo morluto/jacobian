@@ -480,6 +480,7 @@ def verify_minimum_transversal_result(
 ) -> bool:
     """Verify an independently supplied minimum transversal."""
 
+    MinimumTransversalRequest(hypergraph=result.hypergraph)
     _transversal, cardinality = _minimum_transversal_data(result.hypergraph)
     return result.cardinality == cardinality
 
@@ -538,5 +539,6 @@ def verify_maximum_edge_matching_result(
 ) -> bool:
     """Verify an independently supplied maximum edge matching."""
 
+    MaximumEdgeMatchingRequest(hypergraph=result.hypergraph)
     _matching, count = _maximum_edge_matching_data(result.hypergraph)
     return result.count == count

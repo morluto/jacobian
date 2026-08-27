@@ -174,3 +174,17 @@ class TestMaximumEdgeMatching:
                     "count": 1,
                 }
             )
+
+    def test_verify_rejects_source_outside_search_envelope(self) -> None:
+        vertices = ["a", "b"]
+        edges = [[f"e{i}", ["a"]] for i in range(40)]
+        result = MaximumEdgeMatchingResult.model_validate(
+            {
+                "hypergraph": {"vertices": vertices, "edges": edges},
+                "matching": ["e0"],
+                "count": 1,
+            }
+        )
+
+        with pytest.raises(ValidationError, match="search exceeds"):
+            verify_maximum_edge_matching_result(result)

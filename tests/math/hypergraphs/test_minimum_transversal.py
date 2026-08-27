@@ -198,3 +198,19 @@ class TestMinimumTransversal:
         )
 
         assert verify_minimum_transversal_result(result)
+
+    def test_verify_rejects_source_outside_search_envelope(self) -> None:
+        vertices = [f"v{i}" for i in range(40)]
+        result = MinimumTransversalResult.model_validate(
+            {
+                "hypergraph": {
+                    "vertices": vertices,
+                    "edges": [[f"e{i}", [vertex]] for i, vertex in enumerate(vertices)],
+                },
+                "transversal": vertices,
+                "cardinality": 40,
+            }
+        )
+
+        with pytest.raises(ValidationError, match="search exceeds"):
+            verify_minimum_transversal_result(result)

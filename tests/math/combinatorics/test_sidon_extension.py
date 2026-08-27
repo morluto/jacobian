@@ -104,6 +104,27 @@ class TestSidonExtensionProfile:
         assert result.admissible == ()
         assert result.rejected == ()
 
+    def test_large_source_profile_is_rejected_before_materialization(self) -> None:
+        """The source-profile dictionary has its own bounded storage budget."""
+        # For i > j, the positive difference is
+        # (i-j) * (BASE + i+j).  BASE is larger than every possible cross-term,
+        # so these differences are distinct; adding the common 120-digit
+        # offset keeps the source values at the schema's wide-value boundary.
+        base = 10**10
+        source = tuple(
+            str(10**120 + index * base + index * index) for index in range(2_000)
+        )
+
+        with pytest.raises(ValidationError) as error:
+            SidonExtensionProfileRequest(
+                source_elements=source,
+                candidate_elements=(),
+            )
+
+        assert error.value.errors()[0]["type"] == (
+            "combinatorics.sidon_extension_intermediate_budget"
+        )
+
     def test_large_all_admissible_profile_fits_result_budget(self) -> None:
         """An empty source rules out rejected rows in the result bound."""
         candidates = tuple(str(value) for value in range(250_000))

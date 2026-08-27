@@ -9,6 +9,7 @@ from sympy import factorint, isprime
 from jacobian.math.number_theory._interval_profile_models import (
     MAX_INTERVAL_WIDTH,
     MAX_PROFILE_RESULT_BYTES,
+    MAX_SIEVE_WORK,
     DivisorCountProfileRequest,
     GreatestPrimeFactorProfileRequest,
     IntervalProfileRequest,
@@ -125,6 +126,31 @@ class TestSquarefreeProfile:
             GreatestPrimeFactorProfileRequest(
                 lower_bound=1, upper_bound=MAX_INTERVAL_WIDTH
             )
+
+    def test_narrow_high_intervals_use_work_and_result_budgets(self) -> None:
+        requests = (
+            SquarefreeProfileRequest,
+            DivisorCountProfileRequest,
+            GreatestPrimeFactorProfileRequest,
+            PrimeGapProfileRequest,
+        )
+
+        for request_type in requests:
+            request = request_type(lower_bound=10_000_001, upper_bound=10_000_001)
+            assert request.admission.estimated_work <= MAX_SIEVE_WORK
+            assert request.admission.estimated_result_bytes <= MAX_PROFILE_RESULT_BYTES
+
+    def test_prime_gap_bounds_rows_by_interval_density(self) -> None:
+        request = PrimeGapProfileRequest(
+            lower_bound=9_000_001,
+            upper_bound=10_000_000,
+        )
+
+        assert request.admission.estimated_result_bytes <= MAX_PROFILE_RESULT_BYTES
+
+    def test_work_budget_replaces_fixed_upper_bound(self) -> None:
+        with pytest.raises(ValidationError, match="segmented-sieve work budget"):
+            SquarefreeProfileRequest(lower_bound=10**13, upper_bound=10**13)
 
     def test_prime_square_boundary(self) -> None:
         """4 = 2^2 is the first non-squarefree, 9 = 3^2 is another."""

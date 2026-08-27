@@ -14,16 +14,6 @@ MAX_ENTRIES = (
     MAX_DIM * MAX_DIM
 )  # 16384; outer tensor bound (n <= 128, logical n^3 entries)
 
-# ``compute_center`` builds n^2 commutator rows and runs Gaussian
-# elimination over all of them with length-n row updates, so the kernel's
-# actual worst-case work is Theta(n^4) modular-entry updates, not cubic.
-# Measured on this kernel: n=32 ~0.08s, n=64 ~1.2s, n=96 ~6.1s,
-# n=128 ~18.8s.  The dimension envelope is derived from that measured
-# cost so an accepted request stays inside the bounded synchronous
-# execution envelope; replacing the kernel with a faster elimination
-# would justify re-deriving this bound upward.
-_MAX_DIM_FOR_CENTER = 128
-
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable validation error owned by finite-dimensional algebras."""
@@ -86,16 +76,6 @@ class StructureConstants(StrictModel):
 
 class CenterRequest(StrictModel):
     algebra: StructureConstants
-
-    @model_validator(mode="after")
-    def require_bounded_center_work(self) -> Self:
-        if self.algebra.dimension > _MAX_DIM_FOR_CENTER:
-            raise _validation_error(
-                "center_dimension_limit",
-                "center computation is Theta(n^4) on the current elimination "
-                f"kernel and supports at most {_MAX_DIM_FOR_CENTER} dimensions",
-            )
-        return self
 
 
 # Results

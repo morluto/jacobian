@@ -278,6 +278,25 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct complete exact consecutive-prime gap profile including the boundary successor beyond the interval upper endpoint",
     ),
+    OperationAdmission(
+        "number_theory.integer_interval.prime_coverage_profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete interval profile that a loop of scalar omega calls cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
+        "number_theory.binomial_valuation.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete p-adic valuation profile of binomial coefficients using Kummer theorem that replaces a loop of scalar valuation calls",
+    ),
+    OperationAdmission(
+        "number_theory.gcd_quotient.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete pairwise gcd profile that a loop of scalar gcd calls cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
+        "number_theory.product_divisibility.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete pairwise divisibility profile that a loop of scalar divides checks cannot establish as one source-bound value",
+    ),
 )
-
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

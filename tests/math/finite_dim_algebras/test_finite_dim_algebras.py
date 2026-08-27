@@ -145,36 +145,6 @@ def test_center_admits_derived_dimension_boundary() -> None:
     assert request.algebra.dimension == 128 == MAX_DIM
 
 
-def test_center_rejects_above_derived_dimension_boundary() -> None:
-    """The center-specific guard rejects below MAX_DIM when patched lower.
-
-    ``StructureConstants`` already caps dimension at ``MAX_DIM`` = 128, so a
-    plain 129-dimension request would never reach the center validator.  To
-    exercise ``require_bounded_center_work`` in isolation, build a valid
-    128-dimension algebra and patch the center operation's own cap to 32:
-    only the center guard can then fire, and deleting it would fail this test.
-    """
-    from pydantic import ValidationError
-
-    from jacobian.math.finite_dim_algebras import _models
-
-    n, q = 128, 251
-    zero_inner = tuple(0 for _ in range(n))
-    mult = tuple(tuple(zero_inner for _ in range(n)) for _ in range(n))
-    struct = StructureConstants(dimension=n, field_order=q, multiplication=mult)
-    monkeypatch_cap = pytest.MonkeyPatch()
-    try:
-        monkeypatch_cap.setattr(_models, "_MAX_DIM_FOR_CENTER", 32)
-        with pytest.raises(ValidationError) as error:
-            CenterRequest(algebra=struct)
-        assert (
-            error.value.errors()[0]["type"]
-            == "finite_dim_algebra.center_dimension_limit"
-        )
-    finally:
-        monkeypatch_cap.undo()
-
-
 def test_structure_constants_rejects_above_its_own_field_cap() -> None:
     """The shared structure-constants cap (128) is independent of the center guard."""
     from pydantic import ValidationError

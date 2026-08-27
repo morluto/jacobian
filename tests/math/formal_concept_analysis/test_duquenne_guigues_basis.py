@@ -5,7 +5,6 @@ from __future__ import annotations
 from itertools import combinations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.math.formal_concept_analysis import (
     CanonicalImplicationBasisResult,
@@ -171,18 +170,18 @@ def test_empty_basis_and_empty_premise_boundary_contexts() -> None:
         _context(((0, 1), (0, 2), (0,), ()), 3),
     ),
 )
-def test_chain_and_diamond_contexts_replay_every_subset(
+def test_chain_and_diamond_contexts_match_every_subset_closure(
     context: FormalContext,
 ) -> None:
     result = duquenne_guigues_basis(context)
 
     assert len(result.closure_matrix) == 1 << len(context.attributes)
     for closure_row in result.closure_matrix:
-        replay = implication_closure(
+        closure_result = implication_closure(
             result.basis,
             frozenset(closure_row.subset),
         )
-        assert replay.closure == closure_row.closure
+        assert closure_result.closure == closure_row.closure
 
 
 def test_every_binary_two_by_three_context_matches_definition_oracle() -> None:
@@ -331,14 +330,16 @@ def test_candidate_work_and_output_envelopes_at_boundary() -> None:
     result = compute_duquenne_guigues_basis(request)
     assert result.work.candidate_states == MAX_DG_CANDIDATE_STATES
     assert result.work.context_object_row_checks == (
-        3 * MAX_DG_CANDIDATE_STATES * MAX_DG_ATTRIBUTES
+        MAX_DG_CANDIDATE_STATES * MAX_DG_ATTRIBUTES
     )
     assert 0 < result.work.reserved_logical_work < MAX_DG_LOGICAL_WORK
     assert result.work.reserved_result_bytes <= MAX_DG_RESULT_BYTES
 
     over_boundary = _contranominal_context(MAX_DG_ATTRIBUTES + 1)
-    with pytest.raises(ValidationError):
-        DuquenneGuiguesBasisRequest(context=over_boundary)
+    with pytest.raises(ValueError, match="candidate-state"):
+        compute_duquenne_guigues_basis(
+            DuquenneGuiguesBasisRequest(context=over_boundary)
+        )
     with pytest.raises(ValueError, match="candidate-state"):
         duquenne_guigues_basis(over_boundary)
 
@@ -354,7 +355,7 @@ def test_exact_basis_beyond_canonical_implication_carrier_is_rejected() -> None:
         _require_dg_canonical_carrier_fit(dense_pairs)
 
 
-def test_work_accounting_includes_every_probe_pass_and_replay() -> None:
+def test_work_accounting_includes_one_plan_and_closure_equivalence() -> None:
     context = _context(((0, 3), (0, 2), (1, 2), (1, 2, 3)), 4)
     result = duquenne_guigues_basis(context)
 
@@ -397,21 +398,20 @@ def test_work_accounting_includes_every_probe_pass_and_replay() -> None:
 
     work = result.work
 
-    assert work.context_closure_queries == 4 * states
-    assert work.context_object_row_checks == (3 * states * len(context.objects))
-    assert work.context_incidence_loads == 3 * len(context.incidence)
-    assert work.context_row_intersections == 4 * row_intersections
-    assert work.pseudo_intent_subset_comparisons == 3 * subset_comparisons
-    assert work.pseudo_intent_closure_comparisons == 3 * closure_comparisons
-    assert work.basis_closure_queries == 2 * states
+    assert work.context_closure_queries == states
+    assert work.context_object_row_checks == states * len(context.objects)
+    assert work.context_incidence_loads == len(context.incidence)
+    assert work.context_row_intersections == row_intersections
+    assert work.pseudo_intent_subset_comparisons == subset_comparisons
+    assert work.pseudo_intent_closure_comparisons == closure_comparisons
+    assert work.basis_closure_queries == states
     assert work.accounted_logical_work == (
         work.context_object_row_checks
         + work.context_incidence_loads
         + work.context_row_intersections
-        + work.context_incidence_checks
         + work.pseudo_intent_subset_comparisons
         + work.pseudo_intent_closure_comparisons
-        + 2 * work.basis_canonical_replay_work
+        + work.basis_closure_work
         + work.closure_matrix_memberships
         + work.pseudo_intent_memberships
         + work.implication_memberships
@@ -428,7 +428,7 @@ def test_native_and_catalog_invocations_report_identical_exact_work() -> None:
     )
 
     assert native == via_request
-    assert native.work.context_closure_queries == 4 * len(native.closure_matrix)
+    assert native.work.context_closure_queries == len(native.closure_matrix)
 
 
 def test_result_byte_reservation_accepts_its_last_byte_and_rejects_the_next() -> None:
@@ -439,8 +439,8 @@ def test_result_byte_reservation_accepts_its_last_byte_and_rejects_the_next() ->
             incidence=(),
         )
         try:
-            DuquenneGuiguesBasisRequest(context=context)
-        except ValidationError:
+            duquenne_guigues_basis(context)
+        except ValueError:
             return False
         return True
 

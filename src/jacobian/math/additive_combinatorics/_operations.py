@@ -25,6 +25,7 @@ from jacobian.math.additive_combinatorics._models import (
     SumsetCardinalityRequest,
     SumsetCardinalityResult,
     _multiset_sum_source_values,
+    _require_bounded_cartesian_product,
     _vector_from_ints,
 )
 from jacobian.math.additive_combinatorics._multiset_sum import count_sums
@@ -68,6 +69,7 @@ def compute_representation_profile(
     ordered pairs ``(a, b)`` with ``a`` in ``A`` and ``b`` in ``B`` such that
     ``a + b = x``.  Empty sets produce an empty profile.
     """
+    _require_bounded_cartesian_product(request.left, request.right)
     left = _parse_set(request.left)
     right = _parse_set(request.right)
     counts = _representation_function(left, right)
@@ -152,6 +154,7 @@ def compute_additive_energy(
     Returns the exact additive energy together with its per-sum decomposition
     so that the squared multiplicities are individually inspectable.
     """
+    _require_bounded_cartesian_product(request.left, request.right)
     left = _parse_set(request.left)
     right = _parse_set(request.right)
     counts = _representation_function(left, right)
@@ -171,6 +174,7 @@ def compute_sumset_cardinality(
     request: SumsetCardinalityRequest,
 ) -> SumsetCardinalityResult:
     """Compute ``|A + B|`` (the support cardinality of ``r_{A+B}``)."""
+    _require_bounded_cartesian_product(request.left, request.right)
     left = _parse_set(request.left)
     right = _parse_set(request.right)
     counts = _representation_function(left, right)

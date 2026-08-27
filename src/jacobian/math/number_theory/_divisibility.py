@@ -121,6 +121,7 @@ DIVISIBILITY_OPERATIONS = (
         compute_divisor_sum,
         "number-theory",
         "divisibility",
+        discovery_terms=("aliquot sum", "sum of proper divisors"),
         examples=(
             example("divisor_sum_12", "Sum the positive divisors of 12.", {"n": 12}),
         ),

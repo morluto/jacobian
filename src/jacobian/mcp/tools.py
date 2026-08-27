@@ -60,7 +60,7 @@ def math_find(
         discovery_response = _operation_discovery_response(
             active_catalog,
             query=request.query,
-            domain=request.domain,
+            namespace=request.namespace,
             limit=request.limit,
             cursor=request.cursor,
         )
@@ -68,7 +68,7 @@ def math_find(
     if isinstance(request, OperationBrowseRequest):
         browse_response = _operation_browse_response(
             active_catalog,
-            domain=request.domain,
+            namespace=request.namespace,
             limit=request.limit,
             cursor=request.cursor,
         )

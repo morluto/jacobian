@@ -69,6 +69,13 @@ search, and immutable lookup; `jacobian.dispatch` owns strict invocation;
 exact-scalar helpers contain only behavior genuinely shared by unrelated
 owners.
 
+An immutable declaration may carry a small `discovery_terms` vocabulary of
+reviewed, established names for its exact postcondition. Terms are catalog
+metadata used by deterministic `math.find` ranking; they do not alter the
+canonical title and description, operation ID, request syntax, or mathematical
+claim. This keeps ordinary morphology in the shared lexical normalizer and
+domain terminology with the owner that can review its meaning.
+
 Catalog admission decides publication and is not runtime planning. The
 mathematical owner decides request admission, builds the request-scoped
 execution plan, owns the backend adapter, and constructs the canonical result.

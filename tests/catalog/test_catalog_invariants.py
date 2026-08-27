@@ -7,7 +7,7 @@ import pytest
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDiscoveryRequest
-from jacobian.catalog.search import matches_domain
+from jacobian.catalog.search import matches_namespace
 
 
 def test_catalog_rejects_duplicate_tool_ids() -> None:
@@ -101,7 +101,7 @@ def test_search_browse_and_inspect_results_stay_within_the_public_catalog() -> N
     search = catalog.search(
         OperationDiscoveryRequest(query="finite field factorization", limit=5)
     )
-    browse = catalog.browse(domain="graph", limit=5, cursor=None)
+    browse = catalog.browse(namespace="graph", limit=5, cursor=None)
     inspected = catalog.inspect("integer.compute.extended_gcd")
 
     assert search.matches
@@ -112,7 +112,7 @@ def test_search_browse_and_inspect_results_stay_within_the_public_catalog() -> N
     assert len(browse.operations) <= 5
     assert {operation.operation_id for operation in browse.operations} <= public_ids
     assert browse.total_operations == sum(
-        1 for tool in BUILTIN_TOOLS if matches_domain(tool, "graph")
+        1 for tool in BUILTIN_TOOLS if matches_namespace(tool, "graph")
     )
     assert browse.total_operations >= len(browse.operations)
 

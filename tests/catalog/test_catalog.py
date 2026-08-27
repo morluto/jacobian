@@ -145,6 +145,30 @@ def test_checked_catalog_binding_rejects_result_subclass_extra_fields() -> None:
         invoke_operation("test.binding.subclass", {"value": 1}, Catalog((operation,)))
 
 
+@pytest.mark.parametrize(
+    ("discovery_terms", "message"),
+    (
+        (("inverse totient", "inverse totient"), "must be unique"),
+        ((" ",), "must not be empty"),
+        (tuple(f"term_{index}" for index in range(9)), "at most 8"),
+    ),
+)
+def test_math_tool_keeps_discovery_vocabulary_small_and_reviewable(
+    discovery_terms: tuple[str, ...],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        MathTool(
+            operation_id="test.discovery.terms",
+            title="Test discovery terms",
+            description="Exercise immutable declaration terminology validation.",
+            request_type=_BindingRequest,
+            result_type=_BindingResult,
+            run=lambda _request: _BindingResult(doubled=2),
+            discovery_terms=discovery_terms,
+        )
+
+
 def test_explicit_binary_profile_remains_the_published_code_profile() -> None:
     operation = Catalog.open().operation("code.binary.explicit.profile.compute")
 
@@ -173,21 +197,21 @@ def test_compact_discovery_matches_full_descriptor_discovery() -> None:
         )
 
     expected_browse = browse_operations(
-        descriptors, domain="matrix", limit=2, cursor=None
+        descriptors, namespace="matrix", limit=2, cursor=None
     )
     assert (
-        browse_operations(operations, domain="matrix", limit=2, cursor=None)
+        browse_operations(operations, namespace="matrix", limit=2, cursor=None)
         == expected_browse
     )
     if expected_browse.next_cursor is not None:
         assert browse_operations(
             operations,
-            domain="matrix",
+            namespace="matrix",
             limit=2,
             cursor=expected_browse.next_cursor,
         ) == browse_operations(
             descriptors,
-            domain="matrix",
+            namespace="matrix",
             limit=2,
             cursor=expected_browse.next_cursor,
         )
@@ -204,10 +228,26 @@ def test_search_and_browse_do_not_materialize_descriptors(
     monkeypatch.setattr(catalog_module, "_descriptor", fail_descriptor)
 
     search = catalog.search(OperationDiscoveryRequest(query="matrix", limit=2))
-    browse = catalog.browse(domain="matrix", limit=2, cursor=None)
+    browse = catalog.browse(namespace="matrix", limit=2, cursor=None)
 
     assert search.matches
     assert browse.operations
+
+
+def test_namespace_filters_only_the_primary_operation_id_segment() -> None:
+    catalog = Catalog.open()
+
+    search = catalog.search(
+        OperationDiscoveryRequest(query="polynomial", namespace="polynomial", limit=20)
+    )
+    browse = catalog.browse(namespace="polynomial", limit=20, cursor=None)
+
+    assert search.matches
+    assert browse.operations
+    assert all(match.operation_id.startswith("polynomial.") for match in search.matches)
+    assert all(
+        card.operation_id.startswith("polynomial.") for card in browse.operations
+    )
 
 
 def test_natural_prime_power_query_ranks_factorization_before_prime_navigation() -> (
@@ -265,13 +305,12 @@ def test_catalog_runs_source_bound_powerful_decision() -> None:
     assert result.output["value"] == "12168"
 
 
-def test_search_finds_lattice_hnf_in_matrix_domain() -> None:
+def test_global_search_finds_lattice_hnf() -> None:
     catalog = Catalog.open()
 
     result = catalog.search(
         OperationDiscoveryRequest(
             query="row Hermite normal form",
-            domain="matrix",
             limit=10,
         )
     )
@@ -293,10 +332,10 @@ def test_search_finds_generalized_exact_cover() -> None:
     )
 
 
-def test_browse_includes_lattice_hnf_in_matrix_domain() -> None:
+def test_browse_includes_lattice_hnf_in_its_primary_namespace() -> None:
     catalog = Catalog.open()
 
-    result = catalog.browse(domain="matrix", limit=100, cursor=None)
+    result = catalog.browse(namespace="lattice", limit=100, cursor=None)
 
     assert "lattice.hermite_normal_form.compute" in {
         operation.operation_id for operation in result.operations

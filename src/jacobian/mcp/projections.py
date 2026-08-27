@@ -13,13 +13,13 @@ def _operation_discovery_response(
     catalog: Catalog,
     *,
     query: str,
-    domain: str | None,
+    namespace: str | None,
     limit: int | None,
     cursor: str | None,
 ) -> dict[str, Any]:
     discovery_request = OperationDiscoveryRequest(
         query=query,
-        domain=domain,
+        namespace=namespace,
         limit=limit if limit is not None else 5,
         cursor=cursor,
     )
@@ -34,7 +34,7 @@ def _operation_discovery_response(
                 "message": "The operation discovery cursor is not in this result set.",
                 "hint": (
                     "Restart discovery without a cursor, or reuse the same query, "
-                    "domain and limit that produced "
+                    "namespace and limit that produced "
                     "next_cursor."
                 ),
             },
@@ -49,13 +49,13 @@ def _operation_discovery_response(
 def _operation_browse_response(
     catalog: Catalog,
     *,
-    domain: str | None,
+    namespace: str | None,
     limit: int | None,
     cursor: str | None,
 ) -> dict[str, Any]:
     try:
         browsed = catalog.browse(
-            domain=domain,
+            namespace=namespace,
             limit=limit if limit is not None else 20,
             cursor=cursor,
         )
@@ -67,7 +67,7 @@ def _operation_browse_response(
                 "stage": "operation_discovery",
                 "message": "The operation browse cursor is not in this result set.",
                 "hint": (
-                    "Restart browsing without a cursor, or reuse the same domain "
+                    "Restart browsing without a cursor, or reuse the same namespace "
                     "and limit that produced next_cursor."
                 ),
             },

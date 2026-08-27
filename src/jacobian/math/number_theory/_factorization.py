@@ -85,6 +85,7 @@ def _operation[RequestT: StrictModel, ResultT: StrictModel](
     result_model: type[ResultT],
     implementation: Callable[[RequestT], ResultT],
     tags: tuple[str, ...],
+    discovery_terms: tuple[str, ...] = (),
     examples: tuple[OperationExample, ...] = (),
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
@@ -95,6 +96,7 @@ def _operation[RequestT: StrictModel, ResultT: StrictModel](
         result_type=result_model,
         run=implementation,
         tags=tags,
+        discovery_terms=discovery_terms,
         examples=examples,
     )
 
@@ -152,6 +154,7 @@ FACTORIZATION_OPERATIONS = (
         result_model=DivisorListResult,
         implementation=_compute_divisors,
         tags=("number-theory", "enumeration"),
+        discovery_terms=("proper divisor", "aliquot proper divisor list"),
         examples=(
             example(
                 "divisors_12", "Enumerate the positive divisors of 12.", {"value": "12"}

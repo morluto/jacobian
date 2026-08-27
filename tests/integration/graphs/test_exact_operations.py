@@ -137,7 +137,7 @@ def test_catalog_retires_the_duplicate_and_discovers_independence_number() -> No
     assert retired_operation_id not in {
         operation.operation_id
         for operation in catalog.browse(
-            domain="graph", limit=20, cursor=None
+            namespace="graph", limit=20, cursor=None
         ).operations
     }
     assert retired_operation_id not in {

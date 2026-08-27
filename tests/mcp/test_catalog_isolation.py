@@ -18,7 +18,6 @@ class _Catalog:
             query=request.query,
             matches=(),
             total_matches=0,
-            truncated=False,
         )
 
     def inspect(self, operation_id: str) -> None:
@@ -30,7 +29,6 @@ class _Catalog:
         return OperationBrowseResult(
             operations=(),
             total_operations=0,
-            truncated=False,
         )
 
 

@@ -193,7 +193,11 @@ def factorize_certified(
 # ---------------------------------------------------------------------------
 
 
-def _bounded_direct_factorization(value: int) -> tuple[PrimePower, ...] | None:
+def _bounded_direct_factorization(
+    value: int,
+    *,
+    timeout_seconds: float = _FACTORIZATION_WORKER_TIMEOUT_SECONDS,
+) -> tuple[PrimePower, ...] | None:
     """Factor one admitted nonzero integer in a killable worker.
 
     ``None`` is an operational non-conclusion, never a factor claim.  The
@@ -213,12 +217,12 @@ def _bounded_direct_factorization(value: int) -> tuple[PrimePower, ...] | None:
                 input_bytes=json.dumps(
                     {"value": str(value)}, separators=(",", ":")
                 ).encode(),
-                timeout_seconds=_FACTORIZATION_WORKER_TIMEOUT_SECONDS,
+                timeout_seconds=timeout_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=64 * 1024,
                 stderr_limit=64 * 1024,
                 resource_limits=ProcessResourceLimits(
-                    cpu_seconds=math.ceil(_FACTORIZATION_WORKER_TIMEOUT_SECONDS),
+                    cpu_seconds=math.ceil(timeout_seconds),
                     address_space_bytes=_FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES,
                     file_size_bytes=_FACTORIZATION_WORKER_FILE_SIZE_BYTES,
                 ),

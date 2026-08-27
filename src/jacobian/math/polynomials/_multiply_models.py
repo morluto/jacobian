@@ -34,8 +34,7 @@ def _is_multiplicative_identity(polynomial: RationalPolynomial) -> bool:
 
     return (
         len(polynomial.polynomial.terms) == 1
-        and polynomial.polynomial.terms[0].exponents
-        == (0,) * len(polynomial.variables)
+        and polynomial.polynomial.terms[0].exponents == (0,) * len(polynomial.variables)
         and polynomial.polynomial.terms[0].coefficient.as_fraction() == 1
     )
 

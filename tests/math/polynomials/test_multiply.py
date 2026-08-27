@@ -142,9 +142,7 @@ def test_accepts_identity_product_at_coefficient_boundary(
     operand = {
         "domain": "QQ",
         "variables": ["x"],
-        "polynomial": {
-            "terms": [{"coefficient": coefficient, "exponents": [0]}]
-        },
+        "polynomial": {"terms": [{"coefficient": coefficient, "exponents": [0]}]},
     }
     payload = (
         {"left": identity, "right": operand}

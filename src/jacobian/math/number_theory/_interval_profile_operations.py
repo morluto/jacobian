@@ -17,13 +17,13 @@ from __future__ import annotations
 import math
 
 from jacobian.math.number_theory._interval_profile_models import (
+    MAX_INTERVAL_UPPER_BOUND,
+    MAX_INTERVAL_WIDTH,
     DivisorCountProfileResult,
     DivisorCountProfileRow,
     GreatestPrimeFactorProfileResult,
     GreatestPrimeFactorProfileRow,
     IntervalProfileRequest,
-    MAX_INTERVAL_UPPER_BOUND,
-    MAX_INTERVAL_WIDTH,
     PrimeGapProfileResult,
     PrimeGapProfileRow,
     SquarefreeProfileResult,
@@ -40,6 +40,8 @@ def _require_admitted(request: IntervalProfileRequest) -> None:
         raise ValueError("upper_bound exceeds the maximum supported bound")
     if request.width() > MAX_INTERVAL_WIDTH:
         raise ValueError("interval width exceeds the maximum supported width")
+    if not request.is_admitted():
+        raise ValueError("interval result exceeds the canonical output budget")
 
 
 def _simple_sieve(limit: int) -> list[int]:
@@ -49,11 +51,33 @@ def _simple_sieve(limit: int) -> list[int]:
     is_prime = bytearray(b"\x01") * (limit + 1)
     is_prime[0] = 0
     is_prime[1] = 0
-    for i in range(2, int(math.isqrt(limit)) + 1):
+    for i in range(2, math.isqrt(limit) + 1):
         if is_prime[i]:
             for j in range(i * i, limit + 1, i):
                 is_prime[j] = 0
     return [i for i in range(2, limit + 1) if is_prime[i]]
+
+
+def _segmented_primes(lower_bound: int, upper_bound: int) -> list[int]:
+    """Return primes in a closed interval without sieving below its lower end."""
+    width = upper_bound - lower_bound + 1
+    is_prime = bytearray(b"\x01") * width
+    if lower_bound == 1:
+        is_prime[0] = 0
+
+    for p in _simple_sieve(math.isqrt(upper_bound)):
+        first_multiple = max(
+            p * p,
+            ((lower_bound + p - 1) // p) * p,
+        )
+        for multiple in range(first_multiple, upper_bound + 1, p):
+            is_prime[multiple - lower_bound] = 0
+
+    return [
+        lower_bound + offset
+        for offset, marked_prime in enumerate(is_prime)
+        if marked_prime
+    ]
 
 
 def compute_squarefree_profile(
@@ -90,8 +114,8 @@ def compute_squarefree_profile(
     return SquarefreeProfileResult(
         lower_bound=lo,
         upper_bound=hi,
-        squarefree_values=squarefree_values,
-        nonsquarefree_values=nonsquarefree_values,
+        squarefree_values=tuple(squarefree_values),
+        nonsquarefree_values=tuple(nonsquarefree_values),
         squarefree_count=len(squarefree_values),
         nonsquarefree_count=len(nonsquarefree_values),
     )
@@ -106,51 +130,36 @@ def compute_divisor_count_profile(
     hi = request.upper_bound
     width = hi - lo + 1
 
-    # Use a divisor-count sieve: start with tau=1 for n=1 and tau=0 for n>1
-    # is wrong; instead use the additive divisor sieve.
-    # Initialize: tau[0] = 1 for n=1; we use a segmented sieve approach:
-    # For each prime p, for each multiple of p in [lo, hi], factor out p and
-    # accumulate the exponent.  Then tau(n) = product of (e_i + 1).
-    #
-    # Simpler: use a direct approach with a sieve counting divisors.
-    # Initialize tau(n) for the interval.
-    tau = [0] * width
+    # Factor each interval value in place.  The base sieve is bounded by
+    # sqrt(hi), while the mutable residuals are bounded by the interval width.
+    primes = _simple_sieve(math.isqrt(hi))
+    residuals = list(range(lo, hi + 1))
+    divisor_counts = [1] * width
 
-    # For each integer d from 1 to hi, add 1 to tau(n) for every
-    # multiple of d in [lo, hi].  This is O(hi * log(hi)) which may be too
-    # slow for large hi.  Instead use the segmented approach:
-    # For each n in [lo, hi], compute tau(n) from its factorization via a
-    # smallest-prime-factor sieve.
+    for p in primes:
+        first_multiple = max(p * p, ((lo + p - 1) // p) * p)
+        for offset in range(first_multiple - lo, width, p):
+            residual = residuals[offset]
+            if residual % p != 0:
+                continue
+            exponent = 0
+            while residual % p == 0:
+                residual //= p
+                exponent += 1
+            residuals[offset] = residual
+            divisor_counts[offset] *= exponent + 1
 
-    # SPFs sieve: for each n in [lo, hi], find its smallest prime factor.
-    sqrt_hi = math.isqrt(hi)
-    primes = _simple_sieve(hi)
-
-    # For each n in [lo, hi], factorize it using trial division by primes
-    # (using the fact that if n has a prime factor p > sqrt(n), then n/p
-    # has already been processed).
     rows: list[DivisorCountProfileRow] = []
     for i in range(width):
         n = lo + i
-        m = n
-        tau_n = 1
-        for p in primes:
-            if p * p > m:
-                break
-            if m % p == 0:
-                exp = 0
-                while m % p == 0:
-                    m //= p
-                    exp += 1
-                tau_n *= exp + 1
-        if m > 1:
-            tau_n *= 2
-        rows.append(DivisorCountProfileRow(n=n, divisor_count=tau_n))
+        if residuals[i] > 1:
+            divisor_counts[i] *= 2
+        rows.append(DivisorCountProfileRow(n=n, divisor_count=divisor_counts[i]))
 
     return DivisorCountProfileResult(
         lower_bound=lo,
         upper_bound=hi,
-        rows=rows,
+        rows=tuple(rows),
     )
 
 
@@ -163,7 +172,20 @@ def compute_greatest_prime_factor_profile(
     hi = request.upper_bound
     width = hi - lo + 1
 
-    primes = _simple_sieve(hi)
+    primes = _simple_sieve(math.isqrt(hi))
+    residuals = list(range(lo, hi + 1))
+    greatest_prime_factors = [1] * width
+
+    for p in primes:
+        first_multiple = max(p * p, ((lo + p - 1) // p) * p)
+        for offset in range(first_multiple - lo, width, p):
+            residual = residuals[offset]
+            if residual % p != 0:
+                continue
+            greatest_prime_factors[offset] = p
+            while residual % p == 0:
+                residual //= p
+            residuals[offset] = residual
 
     rows: list[GreatestPrimeFactorProfileRow] = []
     for i in range(width):
@@ -171,26 +193,15 @@ def compute_greatest_prime_factor_profile(
         if n == 1:
             rows.append(GreatestPrimeFactorProfileRow(n=1, greatest_prime_factor=1))
             continue
-        m = n
-        gpf = 1
-        for p in primes:
-            if p * p > m:
-                break
-            if m % p == 0:
-                gpf = p
-                while m % p == 0:
-                    m //= p
-        if m > 1:
-            gpf = m
-        rows.append(
-            GreatestPrimeFactorProfileRow(n=n, greatest_prime_factor=gpf)
-        )
+        gpf = residuals[i] if residuals[i] > 1 else greatest_prime_factors[i]
+        rows.append(GreatestPrimeFactorProfileRow(n=n, greatest_prime_factor=gpf))
 
     return GreatestPrimeFactorProfileResult(
         lower_bound=lo,
         upper_bound=hi,
-        rows=rows,
+        rows=tuple(rows),
     )
+
 
 def compute_prime_gap_profile(
     request: IntervalProfileRequest,
@@ -200,42 +211,17 @@ def compute_prime_gap_profile(
     lo = request.lower_bound
     hi = request.upper_bound
 
-    # We need primes from lo to the next prime after hi.
-    # Use a segmented sieve over [lo, hi + gap_search_range].
-    # For simplicity with the bounded domain, use sympy's nextprime for
-    # the successor and a simple sieve for the interval.
-    primes_in_interval: list[int] = []
-
-    # Sieve primes in [lo, hi]
-    if lo <= 2:
-        sieve_limit = max(hi, 2)
-    else:
-        sieve_limit = hi
-
-    sqrt_limit = math.isqrt(sieve_limit) + 1
-    small_primes = _simple_sieve(sqrt_limit)
-
-    is_prime = bytearray(b"\x01") * (sieve_limit + 1)
-    is_prime[0] = 0
-    is_prime[1] = 0
-    for p in small_primes:
-        for j in range(p * p, sieve_limit + 1, p):
-            is_prime[j] = 0
-    for i in range(max(2, lo), sieve_limit + 1):
-        if is_prime[i]:
-            primes_in_interval.append(i)
+    # Mark only [lo, hi]; the successor beyond hi is queried separately.
+    primes_in_interval = _segmented_primes(lo, hi)
 
     # We need at least 2 primes to form a gap.  If no primes in [lo, hi],
     # return empty.  If exactly one prime in [lo, hi], we need the next
     # prime after hi to form the gap.
     if not primes_in_interval:
-        return PrimeGapProfileResult(
-            lower_bound=lo, upper_bound=hi, rows=[]
-        )
+        return PrimeGapProfileResult(lower_bound=lo, upper_bound=hi, rows=())
 
     # Find the successor prime after the last prime in interval
-    last_prime = primes_in_interval[-1]
-    if last_prime <= hi:
+    if primes_in_interval[-1] <= hi:
         # Find next prime after hi (or after last_prime, which is <= hi)
         from sympy import nextprime
 
@@ -251,15 +237,9 @@ def compute_prime_gap_profile(
         p = primes_in_interval[i]
         q = primes_in_interval[i + 1]
         if p >= lo and p <= hi:
-            rows.append(
-                PrimeGapProfileRow(
-                    lower_prime=p, upper_prime=q, gap=q - p
-                )
-            )
+            rows.append(PrimeGapProfileRow(lower_prime=p, upper_prime=q, gap=q - p))
 
-    return PrimeGapProfileResult(
-        lower_bound=lo, upper_bound=hi, rows=rows
-    )
+    return PrimeGapProfileResult(lower_bound=lo, upper_bound=hi, rows=tuple(rows))
 
 
 __all__ = [

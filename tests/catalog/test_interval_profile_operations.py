@@ -62,7 +62,16 @@ def test_greatest_prime_factor_example_values() -> None:
     )
     output = result.output
     assert [r["greatest_prime_factor"] for r in output["rows"]] == [
-        1, 2, 3, 2, 5, 3, 7, 2, 3, 5
+        1,
+        2,
+        3,
+        2,
+        5,
+        3,
+        7,
+        2,
+        3,
+        5,
     ]
 
 

@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import math
 import pytest
-from sympy import factorint, isprime, nextprime
+from pydantic import ValidationError
+from sympy import factorint, isprime
 
 from jacobian.math.number_theory._interval_profile_models import (
-    DivisorCountProfileResult,
-    GreatestPrimeFactorProfileResult,
-    IntervalProfileRequest,
+    _PROFILE_RESULT_OVERHEAD_BYTES,
+    _PROFILE_ROW_BYTES,
     MAX_INTERVAL_WIDTH,
-    MAX_INTERVAL_UPPER_BOUND,
-    PrimeGapProfileResult,
-    SquarefreeProfileResult,
+    MAX_PROFILE_RESULT_BYTES,
+    IntervalProfileRequest,
 )
 from jacobian.math.number_theory._interval_profile_operations import (
     compute_divisor_count_profile,
@@ -21,7 +19,6 @@ from jacobian.math.number_theory._interval_profile_operations import (
     compute_prime_gap_profile,
     compute_squarefree_profile,
 )
-
 
 # ---------------------------------------------------------------------------
 # Squarefree profile
@@ -39,8 +36,8 @@ class TestSquarefreeProfile:
         result = compute_squarefree_profile(
             IntervalProfileRequest(lower_bound=1, upper_bound=12)
         )
-        assert result.squarefree_values == [1, 2, 3, 5, 6, 7, 10, 11]
-        assert result.nonsquarefree_values == [4, 8, 9, 12]
+        assert list(result.squarefree_values) == [1, 2, 3, 5, 6, 7, 10, 11]
+        assert list(result.nonsquarefree_values) == [4, 8, 9, 12]
         assert result.squarefree_count == 8
         assert result.nonsquarefree_count == 4
 
@@ -48,8 +45,8 @@ class TestSquarefreeProfile:
         result = compute_squarefree_profile(
             IntervalProfileRequest(lower_bound=1, upper_bound=1)
         )
-        assert result.squarefree_values == [1]
-        assert result.nonsquarefree_values == []
+        assert list(result.squarefree_values) == [1]
+        assert list(result.nonsquarefree_values) == []
         assert result.squarefree_count == 1
         assert result.nonsquarefree_count == 0
 
@@ -58,8 +55,15 @@ class TestSquarefreeProfile:
         result = compute_squarefree_profile(
             IntervalProfileRequest(lower_bound=4, upper_bound=4)
         )
-        assert result.squarefree_values == []
-        assert result.nonsquarefree_values == [4]
+        assert list(result.squarefree_values) == []
+        assert list(result.nonsquarefree_values) == [4]
+
+    def test_profile_members_are_immutable(self) -> None:
+        result = compute_squarefree_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=4)
+        )
+        with pytest.raises(AttributeError):
+            result.squarefree_values.append(5)  # type: ignore[attr-defined]
 
     def test_partition_is_exhaustive_and_disjoint(self) -> None:
         lo, hi = 10, 100
@@ -82,8 +86,29 @@ class TestSquarefreeProfile:
         )
         expected_sf = [n for n in range(lo, hi + 1) if _is_squarefree(n)]
         expected_nsf = [n for n in range(lo, hi + 1) if not _is_squarefree(n)]
-        assert result.squarefree_values == expected_sf
-        assert result.nonsquarefree_values == expected_nsf
+        assert list(result.squarefree_values) == expected_sf
+        assert list(result.nonsquarefree_values) == expected_nsf
+
+    def test_request_rejects_reversed_interval(self) -> None:
+        with pytest.raises(ValidationError, match="upper_bound must be >= lower_bound"):
+            IntervalProfileRequest(lower_bound=2, upper_bound=1)
+
+    def test_request_rejects_overwide_interval(self) -> None:
+        with pytest.raises(ValidationError, match="interval width exceeds"):
+            IntervalProfileRequest(
+                lower_bound=1,
+                upper_bound=MAX_INTERVAL_WIDTH + 1,
+            )
+
+    def test_request_rejects_result_over_canonical_budget(self) -> None:
+        max_result_width = (
+            MAX_PROFILE_RESULT_BYTES - _PROFILE_RESULT_OVERHEAD_BYTES
+        ) // _PROFILE_ROW_BYTES
+        with pytest.raises(ValidationError, match="canonical output budget"):
+            IntervalProfileRequest(
+                lower_bound=1,
+                upper_bound=max_result_width + 1,
+            )
 
     def test_prime_square_boundary(self) -> None:
         """4 = 2^2 is the first non-squarefree, 9 = 3^2 is another."""
@@ -108,10 +133,7 @@ class TestSquarefreeProfile:
         r_union = compute_squarefree_profile(
             IntervalProfileRequest(lower_bound=1, upper_bound=20)
         )
-        assert (
-            r1.squarefree_values + r2.squarefree_values
-            == r_union.squarefree_values
-        )
+        assert r1.squarefree_values + r2.squarefree_values == r_union.squarefree_values
         assert (
             r1.nonsquarefree_values + r2.nonsquarefree_values
             == r_union.nonsquarefree_values

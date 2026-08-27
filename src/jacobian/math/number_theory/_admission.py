@@ -319,6 +319,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct complete pairwise divisibility profile that a loop of scalar divides checks cannot establish as one source-bound value",
     ),
     OperationAdmission(
+        "number_theory.divisor_sum_product.preimages.compute",
+        AdmissionDecision.KEEP,
+        "complete exact source-bound fiber of n*sigma(n), using the square-root inequality to avoid caller-side coverage proofs",
+    ),
+    OperationAdmission(
+        "number_theory.integer_interval.p_adic_valuation_profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete interval profile that a loop of scalar valuation calls cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
         "number_theory.translated_prime.representation_profile.compute",
         AdmissionDecision.KEEP,
         "distinct complete interval profile counting translated-prime representations that a loop of scalar prime checks cannot establish as one source-bound value",

@@ -49,6 +49,25 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "SimpleUndirectedGraph: two vertices are adjacent if they share a "
         "hyperedge",
     ),
+    OperationAdmission(
+        "hypergraph.induced_type_profile.compute",
+        AdmissionDecision.KEEP,
+        "complete exact induced uniform type profile: one bounded entry per "
+        "k-subset of vertices with its distinct induced-edge count, a "
+        "source-bound structural fingerprint of the hypergraph",
+    ),
+    OperationAdmission(
+        "hypergraph.minimum_transversal.compute",
+        AdmissionDecision.KEEP,
+        "exact minimum-cardinality transversal (hitting set) of a finite "
+        "hypergraph by bounded exact search",
+    ),
+    OperationAdmission(
+        "hypergraph.maximum_edge_matching.compute",
+        AdmissionDecision.KEEP,
+        "exact maximum-cardinality pairwise-disjoint edge matching of a "
+        "finite hypergraph by bounded exact search",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

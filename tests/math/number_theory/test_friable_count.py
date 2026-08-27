@@ -173,6 +173,7 @@ def test_result_validation_is_structural_and_owner_verifier_rejects_forgery() ->
 
     forged = FriableCountResult(x="100", y="5", count="35")
     assert not verify_friable_count_result(forged)
+    assert not verify_friable_count_result(FriableCountResult(x="-1", y="5", count="0"))
 
 
 def test_owner_verifier_binds_exact_count_to_both_sources() -> None:

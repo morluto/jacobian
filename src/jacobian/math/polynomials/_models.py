@@ -210,6 +210,8 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_factor_records(self) -> Self:
+        if self.reconstructed.variables != self.polynomial.variables:
+            raise _validation_error("reconstructed polynomial must use the source ring")
         multiplicities = tuple(factor.multiplicity for factor in self.factors)
         if multiplicities != tuple(sorted(multiplicities)):
             raise _validation_error(
@@ -293,6 +295,8 @@ class PolynomialFactorizationResult(StrictModel):
             raise _validation_error(
                 "factorization currently supports one variable over QQ"
             )
+        if self.reconstructed.variables != self.polynomial.variables:
+            raise _validation_error("reconstructed polynomial must use the source ring")
         if any(
             factor.factor.variables != self.reconstructed.variables
             for factor in self.factors

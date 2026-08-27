@@ -571,8 +571,13 @@ class FiniteFieldMapResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:
-        for value in self.coefficients:
-            _parse_canonical_integer(value)
+        if not _is_prime(self.prime):
+            raise _validation_error("prime must be a prime number")
+        values = tuple(_parse_canonical_integer(value) for value in self.coefficients)
+        if len(values) > 1 and values[-1] % self.prime == 0:
+            raise _validation_error(
+                "coefficients must omit trailing zeros modulo the prime"
+            )
         self._require_complete_edges()
         cycle_set = self._require_canonical_cycles()
         self._require_tail_evidence(cycle_set)

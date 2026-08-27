@@ -138,5 +138,6 @@ def compute_communicating_classes(
 def _verify_communicating_classes_result(result: CommunicatingClassesResult) -> bool:
     """Replay the SCC relation for an independently supplied bounded result."""
 
-    classes, state_class = _derive_communicating_classes(result.transition_matrix)
+    request = TransitionMatrixRequest(matrix=result.transition_matrix)
+    classes, state_class = _derive_communicating_classes(request.matrix)
     return result.classes == classes and result.state_class == state_class

@@ -330,6 +330,17 @@ class TestFiniteFieldFunctionalGraph:
         assert (
             exc_info.value.errors()[0]["type"] == "arithmetic_dynamics.prime_not_prime"
         )
+        with pytest.raises(ValidationError) as exc_info:
+            FiniteFieldMapResult(
+                prime=4,
+                coefficients=("1",),
+                edges=((0, 0), (1, 1), (2, 2), (3, 3)),
+                cycles=((0,), (1,), (2,), (3,)),
+                tail_lengths=(0, 0, 0, 0),
+            )
+        assert (
+            exc_info.value.errors()[0]["type"] == "arithmetic_dynamics.prime_not_prime"
+        )
 
     def test_noncanonical_integer_coefficients_have_an_owner_code(self) -> None:
         with pytest.raises(ValidationError) as exc_info:

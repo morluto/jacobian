@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from math import isqrt
 
+from pydantic import ValidationError
+
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._friable_models import (
@@ -98,7 +100,10 @@ def compute_friable_count(request: FriableCountRequest) -> FriableCountResult:
 def verify_friable_count_result(result: FriableCountResult) -> bool:
     """Check an independently supplied exact count inside the owner envelope."""
 
-    request = FriableCountRequest(x=result.x, y=result.y)
+    try:
+        request = FriableCountRequest(x=result.x, y=result.y)
+    except ValidationError:
+        return False
     return parse_canonical_integer(result.count) == count_friable(
         parse_canonical_integer(request.x), parse_canonical_integer(request.y)
     )

@@ -215,6 +215,13 @@ def test_factor_results_keep_structural_ring_and_order_checks() -> None:
             factors=tuple(reversed(result.factors)),
             reconstructed=result.reconstructed,
         )
+    with pytest.raises(ValidationError, match="reconstructed polynomial"):
+        PolynomialFactorizationResult(
+            polynomial=result.polynomial,
+            coefficient=result.coefficient,
+            factors=(),
+            reconstructed=_univariate("y", {3: "1", 0: "-1"}),
+        )
     foreign = PolynomialIrreducibleFactor(
         factor=_univariate("y", {1: "1", 0: "-1"}), multiplicity=1
     )

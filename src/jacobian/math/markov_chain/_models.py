@@ -284,6 +284,7 @@ class CommunicatingClassesResult(StrictModel):
 
     @model_validator(mode="after")
     def require_partition_validity(self) -> Self:
+        TransitionMatrixRequest(matrix=self.transition_matrix)
         dimension = len(self.transition_matrix)
         if any(len(row) != dimension for row in self.transition_matrix):
             raise _validation_error(

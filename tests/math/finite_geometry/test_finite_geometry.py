@@ -41,6 +41,7 @@ from jacobian.math.finite_geometry._tools import TOOLS
 
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
+        "finite_geometry.affine_plane.prime_field.construct",
         "finite_geometry.grassmannian.count",
         "finite_geometry.projective_point.canonicalize",
         "finite_geometry.projective_point.equal.decide",

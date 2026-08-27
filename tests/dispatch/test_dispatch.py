@@ -4,10 +4,11 @@ import time
 from typing import cast
 
 import pytest
-from pydantic import ValidationError, field_serializer
+from pydantic import field_serializer
 
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 
 
@@ -119,8 +120,10 @@ def test_dispatch_distinguishes_request_and_result_validation() -> None:
     catalog = _CatalogWithInvalidResult()
     with pytest.raises(OperationRequestValidationError):
         invoke_operation("test.invalid-result", {"value": "bad"}, catalog)  # type: ignore[arg-type]
-    with pytest.raises(ValidationError):
+    with pytest.raises(OperationDomainValidationError) as error:
         invoke_operation("test.invalid-result", {"value": 1}, catalog)  # type: ignore[arg-type]
+    assert error.value.errors()[0]["type"] == "operation.domain_validation"
+    assert "Input should be a valid integer" in error.value.errors()[0]["msg"]
 
 
 def test_dispatch_classifies_noncanonical_json_as_request_validation() -> None:

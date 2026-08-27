@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from pydantic import Field, StrictInt
+from math import comb
+from typing import Self
+
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
@@ -60,6 +64,13 @@ class TriangleProfileRequest(StrictModel):
 
     graph: SimpleUndirectedGraph
 
+    @model_validator(mode="after")
+    def require_bounded_triangle_profile(self) -> Self:
+        maximum_rows = comb(len(self.graph.vertices), 3)
+        if maximum_rows * 64 > CanonicalLimits().max_output_bytes:
+            raise ValueError("triangle profile exceeds the canonical output budget")
+        return self
+
 
 class TriangleProfileRow(StrictModel):
     """One triangle in a triangle profile."""
@@ -71,7 +82,7 @@ class TriangleProfileResult(StrictModel):
     """Complete triangle profile of a finite simple undirected graph."""
 
     source: SimpleUndirectedGraph
-    triangles: list[TriangleProfileRow]
+    triangles: tuple[TriangleProfileRow, ...]
     triangle_count: StrictInt
 
 

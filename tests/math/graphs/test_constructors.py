@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from jacobian.math.graphs.constructors._models import (
     HypercubeGraphRequest,
     KellerGraphRequest,
@@ -137,6 +139,21 @@ class TestTriangleProfile:
         result = compute_triangle_profile(TriangleProfileRequest(graph=graph))
         assert result.triangle_count == 4
         assert len(result.triangles) == 4
+        assert isinstance(result.triangles, tuple)
+
+    def test_dense_graph_is_rejected_by_output_budget(self) -> None:
+        vertices = tuple(f"{index:03d}" for index in range(256))
+        graph = SimpleUndirectedGraph(
+            vertices=vertices,
+            edges=tuple(
+                (vertices[left], vertices[right])
+                for left in range(len(vertices))
+                for right in range(left + 1, len(vertices))
+            ),
+        )
+
+        with pytest.raises(ValueError, match="output budget"):
+            TriangleProfileRequest(graph=graph)
 
     def test_empty_graph(self) -> None:
         """A graph with no edges has no triangles."""

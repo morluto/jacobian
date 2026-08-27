@@ -251,11 +251,11 @@ def discovery_relevance(
         overlap = query_terms & terms
         if overlap:
             score += weight * len(overlap)
-    normalized_query = normalize_discovery_text(query)
+    exact_query = normalize_discovery_text(query)
     normalized_text = normalize_discovery_text(
         f"{operation.operation_id} {operation.title} {operation.description}"
     )
-    if normalized_query and f"-{normalized_query}-" in f"-{normalized_text}-":
+    if exact_query and f"-{exact_query}-" in f"-{normalized_text}-":
         score += 20
     normalized_query = normalize_discovery_terms_text(query)
     normalized_declared_terms = tuple(

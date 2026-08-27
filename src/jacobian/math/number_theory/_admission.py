@@ -259,6 +259,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "complete exact friable count with result-sensitive materialized and generated regimes, avoiding caller-side factorization of every source integer",
     ),
     OperationAdmission(
+        "number_theory.divisibility_incidence_graph.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete bipartite divisibility-incidence graph that a loop of scalar divides checks cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
         "number_theory.integer_interval.squarefree_profile.compute",
         AdmissionDecision.KEEP,
         "distinct complete exact interval profile that a loop of scalar squarefree decisions cannot establish as one source-bound value",

@@ -4,6 +4,9 @@ from jacobian.catalog.models import MathTools
 from jacobian.math.number_theory._additional_ops import ADDITIONAL_NT_OPERATIONS
 from jacobian.math.number_theory._derived import DERIVED_NUMBER_THEORY_OPERATIONS
 from jacobian.math.number_theory._divisibility import DIVISIBILITY_OPERATIONS
+from jacobian.math.number_theory._divisibility_graph import (
+    DIVISIBILITY_GRAPH_OPERATION,
+)
 from jacobian.math.number_theory._divisibility_profiles import (
     DIVISIBILITY_PROFILE_OPERATIONS,
 )
@@ -40,5 +43,6 @@ TOOLS: MathTools = (
     PRIME_SHIFT_OPERATION,
     *INTERVAL_PROFILE_OPERATIONS,
     *ADDITIONAL_NT_OPERATIONS,
+    DIVISIBILITY_GRAPH_OPERATION,
     *DIVISIBILITY_PROFILE_OPERATIONS,
 )

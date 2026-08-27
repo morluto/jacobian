@@ -9,6 +9,7 @@ from jacobian.math.combinatorics._progression_hypergraph import (
     PROGRESSION_HYPERGRAPH_OPERATION,
 )
 from jacobian.math.combinatorics._recurrence import RECURRENCE_OPERATIONS
+from jacobian.math.combinatorics._sidon_extension import SIDON_EXTENSION_OPERATION
 
 __all__ = ["TOOLS"]
 
@@ -18,5 +19,6 @@ TOOLS: MathTools = (
     *RECURRENCE_OPERATIONS,
     *DIFFERENCE_SET_OPERATIONS,
     GENERALIZED_EXACT_COVER_OPERATION,
+    SIDON_EXTENSION_OPERATION[0],
     PROGRESSION_HYPERGRAPH_OPERATION,
 )

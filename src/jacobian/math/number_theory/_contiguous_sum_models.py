@@ -59,7 +59,7 @@ class ContiguousSumWorkerDiagnostic(StrictModel):
 
     failure: ContiguousSumFailureKind
     timeout_layer: ContiguousSumTimeoutLayer
-    elapsed_ms: StrictInt = Field(ge=0, le=(MAX_FACTORING_WORK_SECONDS + 5) * 1000)
+    elapsed_ms: StrictInt = Field(ge=0)
     worker_timeout_ms: StrictInt = Field(ge=0, le=MAX_FACTORING_WORK_SECONDS * 1000)
     budget_seconds: StrictInt = Field(ge=1, le=MAX_FACTORING_WORK_SECONDS)
     returncode: StrictInt | None = Field(default=None, ge=-(2**31), le=(2**32) - 1)

@@ -2,6 +2,7 @@
 
 import pytest
 
+import jacobian.math.number_theory._factorization_kernels as factorization_kernels
 import jacobian.process as process
 from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileRequest,
@@ -59,6 +60,36 @@ def test_timed_out_high_magnitude_profile_is_unknown(
         file_size_bytes=_FACTORIZATION_WORKER_FILE_SIZE_BYTES,
     )
     assert str(recorded["cwd"]).split("/")[-1].startswith("jacobian-direct-factor-")
+
+
+def test_worker_overshoot_retains_full_elapsed_diagnostic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        process,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: BoundedProcessResult(
+            returncode=None,
+            stdout=b"",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=True,
+        ),
+    )
+    clock = iter((100.0, 170.001))
+    monkeypatch.setattr(factorization_kernels, "monotonic", lambda: next(clock))
+
+    result = compute_contiguous_sum_profile(
+        ContiguousSumProfileRequest(
+            lower_bound="1099511627776",
+            upper_bound="1099511627776",
+        )
+    )
+
+    assert result.status == "UNKNOWN"
+    assert result.diagnostic is not None
+    assert result.diagnostic.elapsed_ms == 70_001
 
 
 @pytest.mark.parametrize(

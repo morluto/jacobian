@@ -16,7 +16,6 @@ MAX_PREIMAGE_SOURCE = 3_162  # floor(sqrt(MAX_PREIMAGE_TARGET))
 # interval length times the 2-adic logarithm of the endpoint) in the shared
 # 256-digit canonical integer envelope.
 MAX_INTERVAL_ENDPOINT_DIGITS = 252
-MAX_INTERVAL_PRIME = 1_000_000
 MAX_INTERVAL_PROFILE_ROWS = 1_024
 
 
@@ -101,7 +100,7 @@ class PAdicIntervalProfileRequest(StrictModel):
         examples=["10"],
     )
     prime: BoundedInteger = Field(
-        description=f"Prime p between 2 and {MAX_INTERVAL_PRIME}.",
+        description="Prime p represented by a canonical decimal integer.",
         examples=["2"],
     )
 
@@ -120,10 +119,10 @@ class PAdicIntervalProfileRequest(StrictModel):
                 "p_adic_interval_length_must_be_positive",
                 "length must be positive",
             )
-        if not 2 <= prime <= MAX_INTERVAL_PRIME:
+        if prime < 2:
             raise _validation_error(
-                "p_adic_interval_prime_bound",
-                f"prime must be between 2 and {MAX_INTERVAL_PRIME}",
+                "p_adic_interval_prime_must_be_at_least_two",
+                "prime must be at least two",
             )
         from sympy import isprime
 
@@ -246,7 +245,6 @@ class PAdicIntervalProfileResult(StrictModel):
 
 __all__ = [
     "MAX_INTERVAL_ENDPOINT_DIGITS",
-    "MAX_INTERVAL_PRIME",
     "MAX_INTERVAL_PROFILE_ROWS",
     "MAX_PREIMAGE_SOURCE",
     "MAX_PREIMAGE_TARGET",

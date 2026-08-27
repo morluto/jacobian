@@ -63,6 +63,10 @@ def test_p_adic_profile_interval_boundaries_and_large_prime() -> None:
         PAdicIntervalProfileRequest(start="0", length="10", prime="101")
     )
     assert [(row.valuation, row.count) for row in result.rows] == [(0, "10")]
+    result = compute_p_adic_interval_profile(
+        PAdicIntervalProfileRequest(start="0", length="10", prime="1000003")
+    )
+    assert [(row.valuation, row.count) for row in result.rows] == [(0, "10")]
 
 
 def test_p_adic_profile_rejects_nonprime_and_empty_interval() -> None:

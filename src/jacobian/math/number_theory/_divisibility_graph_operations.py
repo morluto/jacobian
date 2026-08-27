@@ -36,8 +36,8 @@ def compute_divisibility_incidence_graph(
 
     edges.sort()
     return DivisibilityIncidenceGraphResult(
-        left_family=left,
-        right_family=right,
+        left_family=tuple(left),
+        right_family=tuple(right),
         graph=SimpleUndirectedGraph(vertices=vertices, edges=tuple(edges)),
     )
 

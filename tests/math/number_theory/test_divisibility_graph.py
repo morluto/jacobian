@@ -23,6 +23,8 @@ def test_basic() -> None:
     assert ("L1", "R0") in edges
     assert ("L1", "R1") in edges
     assert len(result.graph.edges) == 4
+    assert result.left_family == ("2", "3")
+    assert result.right_family == ("6", "12", "5")
 
 
 def test_no_edges() -> None:

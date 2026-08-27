@@ -2,42 +2,42 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.graphs.values import SimpleUndirectedGraph
-from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS, _validation_error
+from jacobian.math.number_theory._models import BoundedInteger, _validation_error
 
 MAX_FAMILY_SIZE: int = 256
 MAX_TOTAL_FAMILY_SIZE: int = 256
 MAX_GRAPH_EDGES: int = 32_640
 
-PositiveInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=rf"^[1-9][0-9]{{0,{MAX_INTEGER_DIGITS - 1}}}$",
-        max_length=MAX_INTEGER_DIGITS,
-        strict=True,
-    ),
-]
-
 
 class DivisibilityIncidenceGraphRequest(StrictModel):
     """Two finite positive-integer families whose divisibility incidence graph is constructed."""
 
-    left_family: list[PositiveInteger] = Field(
+    left_family: list[BoundedInteger] = Field(
         max_length=MAX_FAMILY_SIZE,
         description="Unique positive integers labelling the left vertex family.",
     )
-    right_family: list[PositiveInteger] = Field(
+    right_family: list[BoundedInteger] = Field(
         max_length=MAX_FAMILY_SIZE,
         description="Unique positive integers labelling the right vertex family.",
     )
 
     @model_validator(mode="after")
     def require_positive_families_and_graph_budget(self) -> Self:
+        if any(
+            parse_canonical_integer(value) <= 0
+            for value in (*self.left_family, *self.right_family)
+        ):
+            raise _validation_error(
+                "non_positive_family",
+                "family values must be positive integers",
+            )
         if len(set(self.left_family)) != len(self.left_family):
             raise _validation_error(
                 "duplicate_left_family",
@@ -65,8 +65,8 @@ class DivisibilityIncidenceGraphRequest(StrictModel):
 class DivisibilityIncidenceGraphResult(StrictModel):
     """Canonical bipartite simple graph with edges for each (l, r) with l | r."""
 
-    left_family: list[PositiveInteger]
-    right_family: list[PositiveInteger]
+    left_family: tuple[BoundedInteger, ...]
+    right_family: tuple[BoundedInteger, ...]
     graph: SimpleUndirectedGraph
 
 
@@ -76,5 +76,4 @@ __all__ = [
     "MAX_TOTAL_FAMILY_SIZE",
     "DivisibilityIncidenceGraphRequest",
     "DivisibilityIncidenceGraphResult",
-    "PositiveInteger",
 ]

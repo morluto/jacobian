@@ -22,6 +22,13 @@ from jacobian.math.finite_stochastic_processes._operations import (
     compute_join,
     compute_sigma_from_observation,
 )
+from jacobian.math.finite_stochastic_processes._poisson_binomial_models import (
+    PoissonBinomialRequest,
+    PoissonBinomialResult,
+)
+from jacobian.math.finite_stochastic_processes._poisson_binomial_operations import (
+    compute_poisson_binomial,
+)
 from jacobian.math.finite_stochastic_processes.values import (
     FiniteRandomVariable,
     FiniteSigmaAlgebra,
@@ -177,6 +184,31 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
 )
 
-TOOLS = FINIT_STOCHASTIC_PROCESS_OPERATIONS
+_POISSON_BINOMIAL_TOOL = MathTool(
+    operation_id="probability.poisson_binomial.distribution.compute",
+    title="Compute exact Poisson-binomial count distribution",
+    description=(
+        "Given independent Bernoulli trials with success probabilities, "
+        "compute the exact probability of exactly k successes for each k."
+    ),
+    request_type=PoissonBinomialRequest,
+    result_type=PoissonBinomialResult,
+    run=compute_poisson_binomial,
+    tags=("probability", "poisson-binomial", "exact"),
+    examples=(
+        example(
+            "poisson_binomial_basic",
+            "Compute the count distribution for two fair coins.",
+            {
+                "probabilities": [
+                    {"num": "1", "den": "2"},
+                    {"num": "1", "den": "2"},
+                ]
+            },
+        ),
+    ),
+)
+
+TOOLS = (*FINIT_STOCHASTIC_PROCESS_OPERATIONS, _POISSON_BINOMIAL_TOOL)
 
 __all__ = ["TOOLS"]

@@ -45,3 +45,47 @@ def test_rejects_product_term_budget() -> None:
         RationalPolynomialMultiplyRequest.model_validate(
             {"left": polynomial, "right": polynomial}
         )
+
+
+def test_rejects_accumulated_coefficient_growth() -> None:
+    coefficient = {"num": "1", "den": "1" + "0" * 255}
+    terms = [
+        {"coefficient": coefficient, "exponents": [index]}
+        for index in range(63, -1, -1)
+    ]
+    polynomial = {
+        "domain": "QQ",
+        "variables": ["x"],
+        "polynomial": {"terms": terms},
+    }
+
+    with pytest.raises(ValidationError, match="coefficient digit limit"):
+        RationalPolynomialMultiplyRequest.model_validate(
+            {"left": polynomial, "right": polynomial}
+        )
+
+
+def test_rejects_serialized_result_budget() -> None:
+    coefficient = {"num": "9" * 256, "den": "1"}
+    left_terms = [
+        {"coefficient": coefficient, "exponents": [0, 0, index]}
+        for index in range(3, -1, -1)
+    ]
+    right_terms = [
+        {"coefficient": coefficient, "exponents": [x, y, 0]}
+        for x in range(31, -1, -1)
+        for y in range(31, -1, -1)
+    ]
+    left = {
+        "domain": "QQ",
+        "variables": ["x", "y", "z"],
+        "polynomial": {"terms": left_terms},
+    }
+    right = {
+        "domain": "QQ",
+        "variables": ["x", "y", "z"],
+        "polynomial": {"terms": right_terms},
+    }
+
+    with pytest.raises(ValidationError, match="serialized result size"):
+        RationalPolynomialMultiplyRequest.model_validate({"left": left, "right": right})

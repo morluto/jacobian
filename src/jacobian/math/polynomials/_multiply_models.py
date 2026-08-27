@@ -6,7 +6,12 @@ from typing import Self
 
 from pydantic import model_validator
 
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    canonical_rational_component_digits,
+)
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits, strict_json_object_size
 from jacobian.math.polynomials._models import _validation_error
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_TERMS,
@@ -17,6 +22,89 @@ from jacobian.math.polynomials.values import (
 MAX_MULTIPLY_TERMS = 1024
 MAX_MULTIPLY_DEGREE = 1000
 MAX_MULTIPLY_RESULT_TERMS = MAX_POLYNOMIAL_TERMS
+MAX_MULTIPLY_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+
+def _json_array_size(item_sizes: tuple[int, ...]) -> int:
+    """Return the encoded size of a JSON array from encoded item sizes."""
+
+    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
+
+
+def _maximum_product_coefficient_digits(
+    left: RationalPolynomial, right: RationalPolynomial
+) -> int:
+    """Bound each collected product coefficient before backend execution.
+
+    A coefficient can collect at most ``min(n, m)`` products.  Putting all
+    product denominators over one common denominator gives a conservative
+    component width of ``k * (left_digits + right_digits)`` plus the decimal
+    width needed to add ``k`` numerators.
+    """
+
+    product_count = min(
+        len(left.polynomial.terms),
+        len(right.polynomial.terms),
+    )
+    if product_count == 0:
+        return 1
+    left_digits = max(
+        (
+            canonical_rational_component_digits(term.coefficient)
+            for term in left.polynomial.terms
+        ),
+        default=1,
+    )
+    right_digits = max(
+        (
+            canonical_rational_component_digits(term.coefficient)
+            for term in right.polynomial.terms
+        ),
+        default=1,
+    )
+    return product_count * (left_digits + right_digits) + len(str(product_count))
+
+
+def _result_wire_upper_bound(
+    variables: tuple[str, ...],
+    *,
+    term_count: int,
+    coefficient_digits: int,
+    maximum_exponents: tuple[int, ...],
+) -> int:
+    """Bound the canonical JSON size of the resulting rational polynomial."""
+
+    # A signed decimal component is at most one sign, ``coefficient_digits``
+    # digits, and two JSON quotes.  Every canonical rational is an object with
+    # both components, including integer-valued coefficients.
+    rational_component_size = coefficient_digits + 3
+    coefficient_size = strict_json_object_size(
+        (
+            ("den", rational_component_size),
+            ("num", rational_component_size),
+        )
+    )
+    exponent_size = _json_array_size(
+        tuple(len(str(exponent)) for exponent in maximum_exponents)
+    )
+    term_size = strict_json_object_size(
+        (
+            ("coefficient", coefficient_size),
+            ("exponents", exponent_size),
+        )
+    )
+    terms_size = _json_array_size((term_size,) * term_count)
+    polynomial_size = strict_json_object_size((("terms", terms_size),))
+    variables_size = _json_array_size(
+        tuple(len(variable.encode("utf-8")) + 2 for variable in variables)
+    )
+    return strict_json_object_size(
+        (
+            ("domain", 4),  # JSON string ``"QQ"``.
+            ("polynomial", polynomial_size),
+            ("variables", variables_size),
+        )
+    )
 
 
 class RationalPolynomialMultiplyRequest(StrictModel):
@@ -46,7 +134,41 @@ class RationalPolynomialMultiplyRequest(StrictModel):
             raise _validation_error(
                 "the polynomial product may exceed the canonical term limit"
             )
+        coefficient_digits = _maximum_product_coefficient_digits(self.left, self.right)
+        if coefficient_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise _validation_error(
+                "the polynomial product may exceed the canonical coefficient digit limit"
+            )
+        maximum_exponents = tuple(
+            max(
+                (
+                    term.exponents[index]
+                    for term in (
+                        *self.left.polynomial.terms,
+                        *self.right.polynomial.terms,
+                    )
+                ),
+                default=0,
+            )
+            for index in range(len(self.left.variables))
+        )
+        if (
+            _result_wire_upper_bound(
+                self.left.variables,
+                term_count=product_term_work,
+                coefficient_digits=coefficient_digits,
+                maximum_exponents=maximum_exponents,
+            )
+            > MAX_MULTIPLY_RESULT_BYTES
+        ):
+            raise _validation_error(
+                "the polynomial product may exceed the canonical serialized result size"
+            )
         return self
 
 
-__all__ = ["MAX_MULTIPLY_RESULT_TERMS", "RationalPolynomialMultiplyRequest"]
+__all__ = [
+    "MAX_MULTIPLY_RESULT_BYTES",
+    "MAX_MULTIPLY_RESULT_TERMS",
+    "RationalPolynomialMultiplyRequest",
+]

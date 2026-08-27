@@ -508,6 +508,23 @@ def test_wheel_result_rejects_component_and_source_mutations() -> None:
         )
 
 
+def test_wheel_consumers_reject_a_structurally_valid_forged_wheel() -> None:
+    wheel = compute_residue_wheel(
+        PrimeTupleResidueWheelRequest(source=TWIN_PRIMES, primes=(2, 3))
+    )
+    forged = wheel.model_dump(mode="json")
+    forged["modulus"] = "0"
+
+    with pytest.raises(ValidationError, match="must equal the compact residue wheel"):
+        PrimeTupleResidueWheelEnumerationRequest.model_validate({"wheel": forged})
+    with pytest.raises(ValidationError, match="must equal the compact residue wheel"):
+        PrimeTupleWheelMembershipRequest.model_validate({"wheel": forged, "value": "5"})
+    with pytest.raises(ValidationError, match="must equal the compact residue wheel"):
+        PrimeTupleIntervalResidueProfileRequest.model_validate(
+            {"wheel": forged, "lower": "0", "upper": "12"}
+        )
+
+
 def test_interval_count_and_enumeration_are_exact_and_aligned() -> None:
     count = compute_interval_count(
         PrimeAffineIntervalCountRequest(

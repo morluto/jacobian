@@ -144,6 +144,7 @@ class PrimeTupleResidueWheelEnumerationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_wheel_enumeration(self) -> Self:
+        _require_verified_residue_wheel(self.wheel)
         local_residue_rows = sum(self.wheel.primes)
         if local_residue_rows > MAX_WHEEL_LOCAL_RESIDUES:
             raise _validation_error(
@@ -244,6 +245,7 @@ class PrimeTupleWheelMembershipRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_value(self) -> Self:
+        _require_verified_residue_wheel(self.wheel)
         if _digits(self.value) > MAX_AFFINE_COMPONENT_DIGITS:
             raise _validation_error(
                 f"membership value must have at most {MAX_AFFINE_COMPONENT_DIGITS} digits"
@@ -317,6 +319,7 @@ class PrimeTupleIntervalResidueProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_survivor_profile(self) -> Self:
+        _require_verified_residue_wheel(self.wheel)
         require_bounded_affine_endpoints(
             self.wheel.source, self.lower, self.upper, label="interval"
         )
@@ -395,6 +398,15 @@ def verify_residue_wheel(result: PrimeTupleResidueWheel) -> bool:
 
     request = PrimeTupleResidueWheelRequest(source=result.source, primes=result.primes)
     return result == compute_residue_wheel(request)
+
+
+def _require_verified_residue_wheel(wheel: PrimeTupleResidueWheel) -> None:
+    """Admit an independently supplied wheel before a consumer trusts it."""
+
+    if not verify_residue_wheel(wheel):
+        raise _validation_error(
+            "wheel must equal the compact residue wheel for its source and primes"
+        )
 
 
 def verify_residue_wheel_enumeration(

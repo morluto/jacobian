@@ -120,10 +120,12 @@ def test_p_adic_profile_admits_large_length_from_exact_valuation_sum() -> None:
 def test_p_adic_profile_schema_exposes_coupled_endpoint_admission() -> None:
     schema = PAdicIntervalProfileRequest.model_json_schema()
     assert "start + length" in schema["description"]
+    assert "decimal_digits(prime)^3" in schema["description"]
     assert schema["endpoint_sum_admission"] == {
         "endpoint": "start + length",
         "max_profile_powers": MAX_INTERVAL_PROFILE_ROWS,
         "max_profile_work_units": MAX_INTERVAL_PROFILE_WORK,
+        "primality_work_units": "decimal_digits(prime)^3",
         "total_valuation_max_digits": MAX_INTEGER_DIGITS,
         "canonical_result_max_bytes": MAX_INTERVAL_PROFILE_RESULT_BYTES,
     }
@@ -137,6 +139,19 @@ def test_p_adic_profile_schema_exposes_coupled_endpoint_admission() -> None:
     )
     assert "coupled endpoint" in operation.examples[0].description
     assert "admission envelope" in operation.examples[0].description
+
+
+def test_p_adic_profile_rejects_primality_work_before_backend_execution() -> None:
+    large_prime = str(2**521 - 1)
+    request = PAdicIntervalProfileRequest(start="0", length="1", prime=large_prime)
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        compute_p_adic_interval_profile(request)
+
+    assert error.value.errors()[0]["type"] == (
+        "number_theory.p_adic_interval_profile_row_bound"
+    )
+    assert "including primality testing" in str(error.value)
 
 
 def test_p_adic_profile_matches_direct_small_interval() -> None:

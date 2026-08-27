@@ -19,12 +19,15 @@ MAX_PREIMAGE_SOURCE = 3_162  # floor(sqrt(MAX_PREIMAGE_TARGET))
 MAX_INTERVAL_PROFILE_ROWS = 1_024
 MAX_INTERVAL_PROFILE_WORK = 3 * MAX_INTERVAL_PROFILE_ROWS
 MAX_INTERVAL_PROFILE_RESULT_BYTES = CanonicalLimits().max_output_bytes
+PRIMALITY_WORK_DIGIT_EXPONENT: int = 3
 
 _P_ADIC_REQUEST_DESCRIPTION = (
     "A prime p and the interval {start + 1, ..., start + length}. Let U = "
     "start + length. Admission evaluates the exact valuation profile for the "
     f"coupled endpoint U, with at most {MAX_INTERVAL_PROFILE_ROWS} visited powers "
-    f"({MAX_INTERVAL_PROFILE_WORK} bounded arithmetic work units), and admits "
+    f"and combined bounded arithmetic work satisfying 3 * power_count + "
+    f"decimal_digits(prime)^{PRIMALITY_WORK_DIGIT_EXPONENT} <= "
+    f"{MAX_INTERVAL_PROFILE_WORK}, and admits "
     f"only when the exact total valuation fits {MAX_INTEGER_DIGITS} canonical "
     "digits and the complete canonical result fits the output envelope. There "
     "is no standalone endpoint digit ceiling: useful endpoints are admitted "
@@ -112,6 +115,7 @@ class PAdicIntervalProfileRequest(StrictModel):
                 "endpoint": "start + length",
                 "max_profile_powers": MAX_INTERVAL_PROFILE_ROWS,
                 "max_profile_work_units": MAX_INTERVAL_PROFILE_WORK,
+                "primality_work_units": f"decimal_digits(prime)^{PRIMALITY_WORK_DIGIT_EXPONENT}",
                 "total_valuation_max_digits": MAX_INTEGER_DIGITS,
                 "canonical_result_max_bytes": MAX_INTERVAL_PROFILE_RESULT_BYTES,
             },
@@ -238,6 +242,7 @@ __all__ = [
     "MAX_INTERVAL_PROFILE_WORK",
     "MAX_PREIMAGE_SOURCE",
     "MAX_PREIMAGE_TARGET",
+    "PRIMALITY_WORK_DIGIT_EXPONENT",
     "DivisorSumProductPreimageRequest",
     "DivisorSumProductPreimageResult",
     "PAdicIntervalProfileRequest",

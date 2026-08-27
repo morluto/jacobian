@@ -18,6 +18,7 @@ from jacobian.math.number_theory._preimage_models import (
     MAX_INTERVAL_PROFILE_RESULT_BYTES,
     MAX_INTERVAL_PROFILE_ROWS,
     MAX_INTERVAL_PROFILE_WORK,
+    PRIMALITY_WORK_DIGIT_EXPONENT,
     DivisorSumProductPreimageRequest,
     DivisorSumProductPreimageResult,
     PAdicIntervalProfileRequest,
@@ -33,6 +34,18 @@ class _PAdicIntervalProfilePlan:
     rows: tuple[tuple[int, int], ...]
     total_valuation: int
     maximum_valuation: int
+
+
+def _primality_work_units(prime: int) -> int:
+    """Conservatively charge digit-dependent primality-test arithmetic."""
+
+    # SymPy's pinned isprime backend uses a bounded number of modular
+    # exponentiation and Lucas-test rounds for inputs above its small-prime
+    # tables. Charging cubically in decimal digit count covers the
+    # digit-dependent integer arithmetic while keeping this operation's
+    # existing work-unit scale. The preflight charge is checked before the
+    # backend call, so an oversized prime never reaches isprime.
+    return int(pow(len(str(prime)), PRIMALITY_WORK_DIGIT_EXPONENT))
 
 
 def _profile_result_payload(
@@ -87,29 +100,21 @@ def _admit_p_adic_interval_profile(
             message="prime must be at least two",
         )
 
-    from sympy import isprime
-
-    if not isprime(prime):
-        raise OperationDomainValidationError(
-            location=("prime",),
-            code="number_theory.p_adic_interval_prime_must_be_prime",
-            message="prime must be prime",
-        )
-
     endpoint = start + length
-    divisible_counts: list[int] = []
+    powers: list[int] = []
     power = 1
-    endpoint_divided_by_prime = endpoint // prime
     while power <= endpoint:
-        divisible_counts.append(endpoint // power - start // power)
-        if power > endpoint_divided_by_prime:
+        powers.append(power)
+        if power > endpoint // prime:
             break
         power *= prime
 
-    power_count = len(divisible_counts)
+    power_count = len(powers)
     # Two interval quotient differences and one power-step charge per visited
-    # power bound the exact integer work used to build the retained profile.
-    work_units = 3 * power_count
+    # power, plus the digit-dependent primality charge, bound the exact
+    # integer work used to build the retained profile.
+    profile_work_units = 3 * power_count
+    work_units = profile_work_units + _primality_work_units(prime)
     if (
         power_count > MAX_INTERVAL_PROFILE_ROWS
         or work_units > MAX_INTERVAL_PROFILE_WORK
@@ -119,9 +124,21 @@ def _admit_p_adic_interval_profile(
             code="number_theory.p_adic_interval_profile_row_bound",
             message=(
                 f"profile needs at most {MAX_INTERVAL_PROFILE_ROWS} visited powers "
-                f"and {MAX_INTERVAL_PROFILE_WORK} arithmetic work units"
+                f"and {MAX_INTERVAL_PROFILE_WORK} combined arithmetic work units, "
+                "including primality testing"
             ),
         )
+
+    from sympy import isprime
+
+    if not isprime(prime):
+        raise OperationDomainValidationError(
+            location=("prime",),
+            code="number_theory.p_adic_interval_prime_must_be_prime",
+            message="prime must be prime",
+        )
+
+    divisible_counts = [endpoint // power - start // power for power in powers]
 
     rows = tuple(
         (valuation, count)

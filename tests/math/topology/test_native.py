@@ -4,6 +4,7 @@ the canonical chain-complex consumers unchanged."""
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import MathTool
 from jacobian.math.chain_complexes._models import (
@@ -75,9 +76,8 @@ def test_producer_result_carries_its_canonical_value() -> None:
 
     payload = result.model_dump()
     payload["canonical_value"]["prime"] = 3
-    restored = type(result).model_validate(payload)
-    assert restored.canonical_value is not None
-    assert simplicial_chain_complex_value(restored).prime == 3
+    with pytest.raises(ValidationError, match="must match retained chain data"):
+        type(result).model_validate(payload)
 
 
 def test_integral_producer_result_admits_no_canonical_value() -> None:

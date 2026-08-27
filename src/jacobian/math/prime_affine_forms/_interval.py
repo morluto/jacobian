@@ -160,7 +160,7 @@ class PrimePatternIntervalCountResult(StrictModel):
 
     @model_validator(mode="after")
     def require_interval_shape(self) -> Self:
-        _, _, interval_size = _parse_interval(self.lower, self.upper)
+        lower, upper, interval_size = _parse_interval(self.lower, self.upper)
         if self.interval_size != interval_size:
             raise _validation_error("interval_size must equal upper-lower+1")
         if self.affine_values_examined != interval_size * self.source.form_count:
@@ -175,6 +175,13 @@ class PrimePatternIntervalCountResult(StrictModel):
             raise _validation_error(
                 "match endpoints must be present if and only if match_count is positive"
             )
+        if self.match_count > interval_size:
+            raise _validation_error("match_count cannot exceed interval_size")
+        if self.first_match is not None and self.last_match is not None:
+            first = parse_canonical_integer(self.first_match)
+            last = parse_canonical_integer(self.last_match)
+            if not lower <= first <= last <= upper:
+                raise _validation_error("match endpoints must lie in interval order")
         return self
 
     @classmethod
@@ -218,7 +225,7 @@ class PrimePatternIntervalEnumerateResult(StrictModel):
         )
         if result_cells > MAX_INTERVAL_ENUMERATION_CELLS:
             raise _validation_error("matches exceed the interval result-cell bound")
-        _, _, interval_size = _parse_interval(self.lower, self.upper)
+        lower, upper, interval_size = _parse_interval(self.lower, self.upper)
         actual = tuple(
             (
                 parse_canonical_integer(match.parameter),
@@ -231,6 +238,14 @@ class PrimePatternIntervalEnumerateResult(StrictModel):
         ) != len(actual):
             raise _validation_error(
                 "matches must be in strictly increasing parameter order"
+            )
+        if any(
+            not lower <= parameter <= upper
+            or len(prime_values) != self.source.form_count
+            for parameter, prime_values in actual
+        ):
+            raise _validation_error(
+                "matches must lie in the interval with one value per affine form"
             )
         if self.interval_size != interval_size:
             raise _validation_error("interval_size must equal upper-lower+1")

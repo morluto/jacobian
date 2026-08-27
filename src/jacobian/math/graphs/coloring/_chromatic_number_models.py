@@ -580,6 +580,23 @@ class ChromaticNumberCertificateCheckResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_result_bounds(self) -> Self:
+        order = len(self.graph.vertices)
+        if order > MAX_CHROMATIC_CERTIFICATE_VERTICES:
+            raise PydanticCustomError(
+                "graph.chromatic_number_certificate_checking_supports_at_most",
+                "chromatic-number certificate checking supports at most "
+                f"{MAX_CHROMATIC_CERTIFICATE_VERTICES} vertices",
+            )
+        if len(self.coloring) != order:
+            raise PydanticCustomError(
+                "graph.coloring_must_assign_one_color_per_graph_vertex",
+                "coloring must assign one color per graph vertex",
+            )
+        if len(self.weights) != order:
+            raise PydanticCustomError(
+                "graph.weights_must_assign_one_exact_rational_per_graph",
+                "weights must assign one exact rational per graph vertex",
+            )
         return self
 
 

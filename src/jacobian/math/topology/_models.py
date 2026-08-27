@@ -706,6 +706,23 @@ class ChainComplexResult(TopologyExactResult):
                 "canonical chain-complex value is only defined for unreduced "
                 "prime-field chains",
             )
+        if self.canonical_value is not None:
+            from jacobian.math.topology._chain_conversion import (
+                canonical_chain_complex_value_from_parts,
+            )
+
+            expected = canonical_chain_complex_value_from_parts(
+                self.coefficient_ring,
+                self.convention,
+                self.prime,
+                self.simplex_bases,
+                self.boundary_matrices,
+            )
+            if self.canonical_value != expected:
+                raise _validation_error(
+                    "topology.require_coherent_chain_contract_6",
+                    "canonical chain-complex value must match retained chain data",
+                )
         return self
 
     @classmethod

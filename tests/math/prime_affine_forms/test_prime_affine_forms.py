@@ -554,10 +554,26 @@ def test_interval_count_and_enumeration_are_exact_and_aligned() -> None:
     with pytest.raises(ValidationError, match="if and only if match_count is positive"):
         PrimePatternIntervalCountResult.model_validate(missing_endpoints)
 
+    impossible_count = count.model_dump(mode="json")
+    impossible_count["lower"] = "3"
+    impossible_count["upper"] = "3"
+    impossible_count["interval_size"] = 1
+    impossible_count["affine_values_examined"] = 2
+    impossible_count["match_count"] = 2
+    impossible_count["first_match"] = "3"
+    impossible_count["last_match"] = "3"
+    with pytest.raises(ValidationError, match="cannot exceed interval_size"):
+        PrimePatternIntervalCountResult.model_validate(impossible_count)
+
     payload = enumeration.model_dump(mode="json")
     payload["matches"][0]["prime_values"][1] = "7"
     forged = PrimePatternIntervalEnumerateResult.model_validate(payload)
     assert not verify_interval_enumerate_result(forged)
+
+    payload = enumeration.model_dump(mode="json")
+    payload["matches"][0]["parameter"] = "-1"
+    with pytest.raises(ValidationError, match="must lie in the interval"):
+        PrimePatternIntervalEnumerateResult.model_validate(payload)
 
 
 def test_wheel_survival_is_not_mislabelled_as_primality() -> None:

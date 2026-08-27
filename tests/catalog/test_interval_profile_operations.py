@@ -2,6 +2,11 @@
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
+from jacobian.math.number_theory._interval_profile_models import (
+    IntervalProfileRowsRequest,
+    PrimeGapProfileRequest,
+    SquarefreeProfileRequest,
+)
 
 
 def test_interval_profile_examples_execute_through_catalog() -> None:
@@ -19,6 +24,23 @@ def test_interval_profile_examples_execute_through_catalog() -> None:
             result = invoke_operation(operation_id, invocation_example.input, catalog)
             validated = operation.result_type.model_validate(result.output)
             assert validated.model_dump(mode="json") == result.output
+
+
+def test_interval_profiles_declare_shape_specific_requests() -> None:
+    catalog = Catalog.open()
+    squarefree = catalog.operation(
+        "number_theory.integer_interval.squarefree_profile.compute"
+    )
+    prime_gap = catalog.operation("number_theory.prime_gap_profile.compute")
+    divisor_count = catalog.operation(
+        "number_theory.integer_interval.divisor_count_profile.compute"
+    )
+    assert squarefree is not None
+    assert prime_gap is not None
+    assert divisor_count is not None
+    assert squarefree.request_type is SquarefreeProfileRequest
+    assert prime_gap.request_type is PrimeGapProfileRequest
+    assert divisor_count.request_type is IntervalProfileRowsRequest
 
 
 def test_squarefree_example_values() -> None:

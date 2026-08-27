@@ -6,9 +6,11 @@ from jacobian.math.number_theory._interval_profile_models import (
     DivisorSumProfileResult,
     EulerTotientProfileResult,
     GreatestPrimeFactorProfileResult,
-    IntervalProfileRequest,
+    IntervalProfileRowsRequest,
     LeastPrimeFactorProfileResult,
+    PrimeGapProfileRequest,
     PrimeGapProfileResult,
+    SquarefreeProfileRequest,
     SquarefreeProfileResult,
 )
 from jacobian.math.number_theory._interval_profile_operations import (
@@ -31,7 +33,7 @@ INTERVAL_PROFILE_OPERATIONS = (
             "exact squarefree and non-squarefree members, retaining ordered "
             "lists and counts for both classes."
         ),
-        IntervalProfileRequest,
+        SquarefreeProfileRequest,
         SquarefreeProfileResult,
         compute_squarefree_profile,
         "number-theory",
@@ -57,7 +59,7 @@ INTERVAL_PROFILE_OPERATIONS = (
             "n in a closed positive interval [L, U], where tau(n) is the "
             "number of positive divisors of n."
         ),
-        IntervalProfileRequest,
+        IntervalProfileRowsRequest,
         DivisorCountProfileResult,
         compute_divisor_count_profile,
         "number-theory",
@@ -83,7 +85,7 @@ INTERVAL_PROFILE_OPERATIONS = (
             "n in a closed positive interval [L, U], where P+(1) = 1 and "
             "P+(n) is the largest prime divisor of n for n >= 2."
         ),
-        IntervalProfileRequest,
+        IntervalProfileRowsRequest,
         GreatestPrimeFactorProfileResult,
         compute_greatest_prime_factor_profile,
         "number-theory",
@@ -110,7 +112,7 @@ INTERVAL_PROFILE_OPERATIONS = (
             "including the successor prime beyond U when needed to complete "
             "the last gap."
         ),
-        IntervalProfileRequest,
+        PrimeGapProfileRequest,
         PrimeGapProfileResult,
         compute_prime_gap_profile,
         "number-theory",
@@ -133,7 +135,7 @@ INTERVAL_PROFILE_OPERATIONS = (
         "number_theory.integer_interval.least_prime_factor_profile.compute",
         "Compute least-prime-factor profile on a bounded interval",
         "Return the complete ordered table (n, p(n)) for every n in [L, U], with p(1)=1.",
-        IntervalProfileRequest,
+        IntervalProfileRowsRequest,
         LeastPrimeFactorProfileResult,
         compute_least_prime_factor_profile,
         "number-theory",
@@ -151,7 +153,7 @@ INTERVAL_PROFILE_OPERATIONS = (
         "number_theory.integer_interval.euler_totient_profile.compute",
         "Compute Euler-totient profile on a bounded interval",
         "Return the complete ordered table (n, phi(n)) for every n in [L, U], with phi(1)=1.",
-        IntervalProfileRequest,
+        IntervalProfileRowsRequest,
         EulerTotientProfileResult,
         compute_euler_totient_profile,
         "number-theory",
@@ -169,7 +171,7 @@ INTERVAL_PROFILE_OPERATIONS = (
         "number_theory.integer_interval.divisor_sum_profile.compute",
         "Compute divisor-sum profile on a bounded interval",
         "Return the complete ordered table (n, sigma(n)) for every n in [L, U], with sigma(1)=1.",
-        IntervalProfileRequest,
+        IntervalProfileRowsRequest,
         DivisorSumProfileResult,
         compute_divisor_sum_profile,
         "number-theory",

@@ -6,8 +6,9 @@ import pytest
 from sympy import factorint, isprime
 
 from jacobian.math.number_theory._interval_profile_models import (
-    MAX_PROFILE_RESULT_BYTES,
     IntervalProfileRequest,
+    IntervalProfileRowsRequest,
+    SquarefreeProfileRequest,
 )
 from jacobian.math.number_theory._interval_profile_operations import (
     compute_divisor_count_profile,
@@ -26,9 +27,8 @@ class TestSquarefreeProfile:
             IntervalProfileRequest(lower_bound=5, upper_bound=3)
 
     def test_request_rejects_result_larger_than_canonical_budget(self) -> None:
-        upper_bound = MAX_PROFILE_RESULT_BYTES // 64 + 1
         with pytest.raises(ValueError, match="canonical output budget"):
-            IntervalProfileRequest(lower_bound=1, upper_bound=upper_bound)
+            IntervalProfileRowsRequest(lower_bound=1, upper_bound=300_000)
 
     def test_small_interval(self) -> None:
         result = compute_squarefree_profile(
@@ -229,3 +229,8 @@ def test_narrow_high_interval_uses_exact_segmented_profiles() -> None:
     assert compute_euler_totient_profile(request).rows[0].euler_totient == 4_000_000
     assert compute_divisor_sum_profile(request).rows[0].divisor_sum == 24_902_280
     assert compute_prime_gap_profile(request).rows == ()
+
+
+def test_compact_squarefree_request_uses_its_result_shape() -> None:
+    request = SquarefreeProfileRequest(lower_bound=1, upper_bound=1_000_000)
+    assert request.width() == 1_000_000

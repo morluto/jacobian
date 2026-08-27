@@ -2,6 +2,7 @@ import networkx as nx
 import pytest
 
 from jacobian.math import graphs
+from jacobian.math.graphs import constructors
 from jacobian.math.graphs.independence import IndependenceNumberRequest
 from jacobian.math.graphs.optimization._independence import (
     INDEPENDENCE_NUMBER_OPERATION,
@@ -90,3 +91,21 @@ def test_exact_public_api_symbols() -> None:
     assert len(graphs.__all__) == len(set(graphs.__all__))
     assert all(not name.startswith("_") for name in graphs.__all__)
     assert all(hasattr(graphs, name) for name in graphs.__all__)
+
+
+def test_constructor_native_surface_excludes_wire_handlers() -> None:
+    """Constructor exports accept mathematical values, not request envelopes."""
+    expected = (
+        "HypercubeGraphResult",
+        "KellerGraphResult",
+        "TriangleProfileResult",
+        "TriangleProfileRow",
+        "compute_triangle_profile",
+        "construct_hypercube_graph",
+        "construct_keller_graph",
+    )
+
+    assert tuple(constructors.__all__) == expected
+    assert all(hasattr(constructors, name) for name in constructors.__all__)
+    assert "HypercubeGraphRequest" not in constructors.__all__
+    assert "_run_triangle_profile" not in constructors.__all__

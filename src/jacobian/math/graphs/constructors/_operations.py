@@ -14,7 +14,7 @@ from jacobian.math.graphs.constructors._models import (
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 
-def construct_hypercube_graph(request: HypercubeGraphRequest) -> HypercubeGraphResult:
+def _run_hypercube_graph(request: HypercubeGraphRequest) -> HypercubeGraphResult:
     """Construct the d-dimensional hypercube graph Q_d.
 
     Vertices are indexed 0..2^d-1. Two vertices are adjacent iff they
@@ -40,7 +40,7 @@ def construct_hypercube_graph(request: HypercubeGraphRequest) -> HypercubeGraphR
     )
 
 
-def construct_keller_graph(request: KellerGraphRequest) -> KellerGraphResult:
+def _run_keller_graph(request: KellerGraphRequest) -> KellerGraphResult:
     """Construct the Keller graph K_d.
 
     Vertices are words in {0,1,2,3}^d indexed 0..4^d-1 in lexicographic
@@ -100,7 +100,7 @@ def _keller_adjacent(wi: tuple[int, ...], wj: tuple[int, ...]) -> bool:
     return has_diff_2_mod_4 and hamming >= 2
 
 
-def compute_triangle_profile(request: TriangleProfileRequest) -> TriangleProfileResult:
+def _run_triangle_profile(request: TriangleProfileRequest) -> TriangleProfileResult:
     """Compute the complete triangle profile of a finite simple undirected graph.
 
     For every unordered triple of vertices, check whether all three edges
@@ -108,42 +108,24 @@ def compute_triangle_profile(request: TriangleProfileRequest) -> TriangleProfile
     of triangles.
     """
     graph = request.graph
-    vertex_list = list(graph.vertices)
-
-    # Build adjacency set
-    adj: dict[str, set[str]] = {v: set() for v in vertex_list}
-    for edge in graph.edges:
-        u, v = edge[0], edge[1]
-        if u in adj and v in adj:
-            adj[u].add(v)
-            adj[v].add(u)
-
-    triangles: list[TriangleProfileRow] = []
-    n = len(vertex_list)
-    for i in range(n):
-        for j in range(i + 1, n):
-            if vertex_list[j] not in adj[vertex_list[i]]:
-                continue
-            for k in range(j + 1, n):
-                if (
-                    vertex_list[k] in adj[vertex_list[i]]
-                    and vertex_list[k] in adj[vertex_list[j]]
-                ):
-                    triangles.append(
-                        TriangleProfileRow(
-                            vertices=(vertex_list[i], vertex_list[j], vertex_list[k])
-                        )
-                    )
+    vertex_list = graph.vertices
+    admission = request.admitted_profile()
+    triangles = tuple(
+        TriangleProfileRow(
+            vertices=(vertex_list[left], vertex_list[middle], vertex_list[right])
+        )
+        for left, middle, right in admission.triangle_indices
+    )
 
     return TriangleProfileResult(
         source=graph,
         triangles=triangles,
-        triangle_count=len(triangles),
+        triangle_count=admission.triangle_count,
     )
 
 
 __all__ = [
-    "compute_triangle_profile",
-    "construct_hypercube_graph",
-    "construct_keller_graph",
+    "_run_hypercube_graph",
+    "_run_keller_graph",
+    "_run_triangle_profile",
 ]

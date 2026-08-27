@@ -14,9 +14,9 @@ from jacobian.math.graphs.constructors._models import (
     TriangleProfileResult,
 )
 from jacobian.math.graphs.constructors._operations import (
-    compute_triangle_profile,
-    construct_hypercube_graph,
-    construct_keller_graph,
+    _run_hypercube_graph,
+    _run_keller_graph,
+    _run_triangle_profile,
 )
 
 
@@ -53,7 +53,7 @@ TOOLS: MathTools = (
         ),
         HypercubeGraphRequest,
         HypercubeGraphResult,
-        construct_hypercube_graph,
+        _run_hypercube_graph,
         "graph",
         "constructor",
         "hypercube",
@@ -76,7 +76,7 @@ TOOLS: MathTools = (
         ),
         KellerGraphRequest,
         KellerGraphResult,
-        construct_keller_graph,
+        _run_keller_graph,
         "graph",
         "constructor",
         "keller",
@@ -97,7 +97,7 @@ TOOLS: MathTools = (
         ),
         TriangleProfileRequest,
         TriangleProfileResult,
-        compute_triangle_profile,
+        _run_triangle_profile,
         "graph",
         "triangle",
         "profile",

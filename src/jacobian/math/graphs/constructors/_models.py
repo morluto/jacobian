@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from math import comb
 from typing import Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, PrivateAttr, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
+from jacobian.math.graphs.constructors._bounds import (
+    TriangleProfileAdmission,
+    admit_triangle_profile,
+)
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
@@ -63,13 +65,21 @@ class TriangleProfileRequest(StrictModel):
     """One finite simple undirected graph whose triangle profile is computed."""
 
     graph: SimpleUndirectedGraph
+    _admission: TriangleProfileAdmission | None = PrivateAttr(default=None)
 
     @model_validator(mode="after")
     def require_bounded_triangle_profile(self) -> Self:
-        maximum_rows = comb(len(self.graph.vertices), 3)
-        if maximum_rows * 64 > CanonicalLimits().max_output_bytes:
-            raise ValueError("triangle profile exceeds the canonical output budget")
+        self._admission = admit_triangle_profile(self.graph)
         return self
+
+    def admitted_profile(self) -> TriangleProfileAdmission:
+        """Return the request's cached exact scan plan."""
+
+        admission = self._admission
+        if admission is None:
+            admission = admit_triangle_profile(self.graph)
+            self._admission = admission
+        return admission
 
 
 class TriangleProfileRow(StrictModel):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Self
 
 from pydantic import model_validator
@@ -20,6 +21,9 @@ from jacobian.math.polynomials.values import (
 )
 
 MAX_MULTIPLY_RESULT_TERMS = MAX_POLYNOMIAL_TERMS
+# Keep backend convolution work bounded independently from the exact result
+# term limit; sparse supports can produce many products that collect together.
+MAX_MULTIPLY_PRODUCT_WORK = 1_000_000
 MAX_MULTIPLY_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
@@ -35,6 +39,15 @@ def _is_multiplicative_identity(polynomial: RationalPolynomial) -> bool:
     return (
         len(polynomial.polynomial.terms) == 1
         and polynomial.polynomial.terms[0].exponents == (0,) * len(polynomial.variables)
+        and polynomial.polynomial.terms[0].coefficient.as_fraction() == 1
+    )
+
+
+def _is_coefficient_one_monomial(polynomial: RationalPolynomial) -> bool:
+    """Return whether multiplication only shifts the other polynomial."""
+
+    return (
+        len(polynomial.polynomial.terms) == 1
         and polynomial.polynomial.terms[0].coefficient.as_fraction() == 1
     )
 
@@ -63,9 +76,9 @@ def _maximum_product_coefficient_digits(
     an identity, so it preserves the other operand's coefficient widths.
     """
 
-    if _is_multiplicative_identity(left):
+    if _is_coefficient_one_monomial(left):
         return _maximum_polynomial_coefficient_digits(right)
-    if _is_multiplicative_identity(right):
+    if _is_coefficient_one_monomial(right):
         return _maximum_polynomial_coefficient_digits(left)
 
     product_count = min(
@@ -134,9 +147,9 @@ class RationalPolynomialMultiplyRequest(StrictModel):
         product_term_work = len(self.left.polynomial.terms) * len(
             self.right.polynomial.terms
         )
-        if product_term_work > MAX_MULTIPLY_RESULT_TERMS:
+        if product_term_work > MAX_MULTIPLY_PRODUCT_WORK:
             raise _validation_error(
-                "the polynomial product may exceed the canonical term limit"
+                "the polynomial product exceeds the bounded convolution work limit"
             )
         coefficient_digits = _maximum_product_coefficient_digits(self.left, self.right)
         if coefficient_digits > MAX_CANONICAL_RATIONAL_DIGITS:
@@ -154,6 +167,12 @@ class RationalPolynomialMultiplyRequest(StrictModel):
             )
             for index in range(len(self.left.variables))
         )
+        support_term_bound = math.prod(exponent + 1 for exponent in maximum_exponents)
+        result_term_bound = min(product_term_work, support_term_bound)
+        if result_term_bound > MAX_MULTIPLY_RESULT_TERMS:
+            raise _validation_error(
+                "the polynomial product may exceed the canonical term limit"
+            )
         if any(exponent > MAX_POLYNOMIAL_EXPONENT for exponent in maximum_exponents):
             raise _validation_error(
                 "the polynomial product may exceed the canonical exponent limit"
@@ -161,7 +180,7 @@ class RationalPolynomialMultiplyRequest(StrictModel):
         if (
             _result_wire_upper_bound(
                 self.left.variables,
-                term_count=product_term_work,
+                term_count=result_term_bound,
                 coefficient_digits=coefficient_digits,
                 maximum_exponents=maximum_exponents,
             )
@@ -174,6 +193,7 @@ class RationalPolynomialMultiplyRequest(StrictModel):
 
 
 __all__ = [
+    "MAX_MULTIPLY_PRODUCT_WORK",
     "MAX_MULTIPLY_RESULT_BYTES",
     "MAX_MULTIPLY_RESULT_TERMS",
     "RationalPolynomialMultiplyRequest",

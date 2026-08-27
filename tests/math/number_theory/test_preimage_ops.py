@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._preimage_models import (
     DivisorSumProductPreimageRequest,
     PAdicIntervalProfileRequest,
@@ -70,10 +71,28 @@ def test_p_adic_profile_interval_boundaries_and_large_prime() -> None:
 
 
 def test_p_adic_profile_rejects_nonprime_and_empty_interval() -> None:
-    with pytest.raises(ValidationError):
-        PAdicIntervalProfileRequest(start="0", length="10", prime="4")
-    with pytest.raises(ValidationError):
-        PAdicIntervalProfileRequest(start="0", length="0", prime="2")
+    nonprime = PAdicIntervalProfileRequest(start="0", length="10", prime="4")
+    with pytest.raises(OperationDomainValidationError) as nonprime_error:
+        compute_p_adic_interval_profile(nonprime)
+    assert nonprime_error.value.errors()[0]["type"] == (
+        "number_theory.p_adic_interval_prime_must_be_prime"
+    )
+
+    empty = PAdicIntervalProfileRequest(start="0", length="0", prime="2")
+    with pytest.raises(OperationDomainValidationError) as empty_error:
+        compute_p_adic_interval_profile(empty)
+    assert empty_error.value.errors()[0]["type"] == (
+        "number_theory.p_adic_interval_length_must_be_positive"
+    )
+
+
+def test_p_adic_profile_rejects_endpoint_overflow_after_strict_parsing() -> None:
+    request = PAdicIntervalProfileRequest(start="9" * 252, length="1", prime="2")
+    with pytest.raises(OperationDomainValidationError) as error:
+        compute_p_adic_interval_profile(request)
+    assert error.value.errors()[0]["type"] == (
+        "number_theory.p_adic_interval_endpoint_digits"
+    )
 
 
 def test_p_adic_profile_matches_direct_small_interval() -> None:

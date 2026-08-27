@@ -104,51 +104,6 @@ class PAdicIntervalProfileRequest(StrictModel):
         examples=["2"],
     )
 
-    @model_validator(mode="after")
-    def require_admitted_interval(self) -> Self:
-        start = parse_canonical_integer(self.start)
-        length = parse_canonical_integer(self.length)
-        prime = parse_canonical_integer(self.prime)
-        if start < 0:
-            raise _validation_error(
-                "p_adic_interval_start_must_be_nonnegative",
-                "start must be nonnegative",
-            )
-        if length < 1:
-            raise _validation_error(
-                "p_adic_interval_length_must_be_positive",
-                "length must be positive",
-            )
-        if prime < 2:
-            raise _validation_error(
-                "p_adic_interval_prime_must_be_at_least_two",
-                "prime must be at least two",
-            )
-        from sympy import isprime
-
-        if not isprime(prime):
-            raise _validation_error(
-                "p_adic_interval_prime_must_be_prime",
-                "prime must be prime",
-            )
-        endpoint = start + length
-        if len(str(endpoint)) > MAX_INTERVAL_ENDPOINT_DIGITS:
-            raise _validation_error(
-                "p_adic_interval_endpoint_digits",
-                f"interval endpoint must have at most {MAX_INTERVAL_ENDPOINT_DIGITS} digits",
-            )
-        power_count = 0
-        power = 1
-        while power <= endpoint:
-            power_count += 1
-            power *= prime
-        if power_count > MAX_INTERVAL_PROFILE_ROWS:
-            raise _validation_error(
-                "p_adic_interval_profile_row_bound",
-                f"profile needs at most {MAX_INTERVAL_PROFILE_ROWS} rows",
-            )
-        return self
-
 
 class PAdicIntervalProfileRow(StrictModel):
     """One nonempty valuation class in an interval histogram."""

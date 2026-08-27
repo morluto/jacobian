@@ -36,7 +36,11 @@ class PolynomialTerm(StrictModel):
 
 
 class UnivariatePolynomial(StrictModel):
-    """A univariate polynomial over QQ as sparse nonzero terms."""
+    """A sparse univariate polynomial with canonical rational terms.
+
+    The real-algebra operations below admit only denominator-one coefficients;
+    this shared wire representation can also express their rational results.
+    """
 
     terms: tuple[PolynomialTerm, ...] = Field(
         min_length=1, max_length=MAX_POLYNOMIAL_TERMS
@@ -72,7 +76,7 @@ def _require_bounded_integer_coefficients(polynomial: UnivariatePolynomial) -> N
 
 
 class SturmChainRequest(StrictModel):
-    """Compute the Sturm chain of a univariate polynomial."""
+    """Compute an ordinary Euclidean Sturm sequence for a bounded integer polynomial."""
 
     polynomial: UnivariatePolynomial
 
@@ -87,7 +91,7 @@ class SturmChainRequest(StrictModel):
 
 
 class RootCountRequest(StrictModel):
-    """Count real roots of a polynomial in an interval [lower, upper]."""
+    """Count roots of a bounded integer polynomial in [lower, upper]."""
 
     polynomial: UnivariatePolynomial
     lower: CanonicalRational
@@ -104,7 +108,7 @@ class RootCountRequest(StrictModel):
 
 
 class SturmChainResult(StrictModel):
-    """The Sturm chain as a list of polynomials."""
+    """The ordinary exact Euclidean Sturm sequence as polynomials."""
 
     chain: tuple[UnivariatePolynomial, ...] = Field(min_length=1)
     degree: int = Field(ge=1, le=MAX_POLYNOMIAL_DEGREE)
@@ -112,8 +116,9 @@ class SturmChainResult(StrictModel):
 
 
 class RootCountResult(StrictModel):
-    """Count of real roots in an interval."""
+    """A source-bound count of distinct real roots in a closed interval."""
 
+    source_polynomial: UnivariatePolynomial
     root_count: int = Field(ge=0)
     lower: CanonicalRational
     upper: CanonicalRational

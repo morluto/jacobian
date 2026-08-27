@@ -91,6 +91,11 @@ class ExtremeStationaryDistribution(StrictModel):
 class StationaryDistributionResult(StrictModel):
     """Extreme points of the finite chain's stationary-distribution simplex."""
 
+    transition_matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        min_length=1, max_length=32
+    )
+    """The source transition matrix whose stationary simplex was computed."""
+
     extreme_distributions: tuple[ExtremeStationaryDistribution, ...] = Field(
         min_length=1
     )
@@ -103,23 +108,27 @@ class StationaryDistributionResult(StrictModel):
     def _from_kernel(
         cls,
         *,
+        transition_matrix: tuple[tuple[CanonicalRational, ...], ...],
         extreme_distributions: tuple[ExtremeStationaryDistribution, ...],
         unique: bool,
     ) -> Self:
         """Construct a family whose stationary equations the kernel solved."""
 
         return cls.model_construct(
+            transition_matrix=transition_matrix,
             extreme_distributions=extreme_distributions,
             unique=unique,
         )
 
     @model_validator(mode="after")
     def bind_stationary_family(self) -> Self:
+        TransitionMatrixRequest(matrix=self.transition_matrix)
+        dimension = len(self.transition_matrix)
         dimensions = {len(item.distribution) for item in self.extreme_distributions}
-        if len(dimensions) != 1:
+        if dimensions != {dimension}:
             raise _validation_error(
                 "stationary_dimension_mismatch",
-                "stationary distributions must share one dimension",
+                "stationary distributions must share the source matrix dimension",
             )
         classes = tuple(item.closed_class for item in self.extreme_distributions)
         if classes != tuple(sorted(classes)) or len(classes) != len(set(classes)):

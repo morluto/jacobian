@@ -57,10 +57,27 @@ def compute_root_count(request: RootCountRequest) -> RootCountResult:
     upper = request.upper.as_fraction()
     count = root_count(terms, lower, upper)
     return RootCountResult(
+        source_polynomial=request.polynomial,
         root_count=count,
         lower=request.lower,
         upper=request.upper,
     )
+
+
+def _verify_root_count_result(result: RootCountResult) -> bool:
+    """Recompute one independently supplied bounded Sturm count."""
+
+    try:
+        expected = compute_root_count(
+            RootCountRequest(
+                polynomial=result.source_polynomial,
+                lower=result.lower,
+                upper=result.upper,
+            )
+        )
+    except ValueError:
+        return False
+    return result == expected
 
 
 def compute_strict_sublevel_measure(

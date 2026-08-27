@@ -13,9 +13,11 @@ from jacobian.math.polynomials.real_algebra._models import (
     UnivariatePolynomial,
 )
 from jacobian.math.polynomials.real_algebra._operations import (
+    _verify_root_count_result,
     compute_root_count,
     compute_sturm_chain,
 )
+from jacobian.math.polynomials.real_algebra._tools import TOOLS
 
 R = CanonicalRational
 
@@ -31,6 +33,18 @@ def _poly(*terms: tuple[str, str, int]) -> UnivariatePolynomial:
 
 def _coefficient_map(poly: UnivariatePolynomial) -> dict[int, Fraction]:
     return {term.exponent: term.coefficient.as_fraction() for term in poly.terms}
+
+
+def test_sturm_metadata_matches_the_integer_euclidean_envelope() -> None:
+    declarations = {tool.operation_id: tool for tool in TOOLS}
+    sturm = declarations["polynomial.sturm_chain.compute"]
+    root_count = declarations["polynomial.root_count.compute"]
+
+    for description in (sturm.description, root_count.description):
+        assert "integer coefficients" in description
+        assert "degree at most 32" in description
+        assert "16 decimal digits" in description
+        assert "subresultant" not in description
 
 
 def test_sturm_chain_cubic_known_answer() -> None:
@@ -66,8 +80,11 @@ def test_root_count_cubic_has_one_real_root() -> None:
             upper=R(num="10", den="1"),
         )
     )
+    assert result.source_polynomial == poly
     assert result.root_count == 1
     assert result.method == "STURM_THEOREM"
+    assert _verify_root_count_result(result)
+    assert not _verify_root_count_result(result.model_copy(update={"root_count": 2}))
 
 
 def test_root_count_x_squared_minus_2() -> None:
@@ -81,6 +98,7 @@ def test_root_count_x_squared_minus_2() -> None:
             upper=R(num="10", den="1"),
         )
     )
+    assert result.source_polynomial == poly
     assert result.root_count == 2
 
     result_pos = compute_root_count(

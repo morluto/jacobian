@@ -6,35 +6,78 @@ import sympy
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.math.real_algebraic import RealAlgebraicOrderValue
-from jacobian.math.root_isolation import compare_algebraic, isolate_real_roots
+from jacobian.math._root_isolation import strict_root_count
+from jacobian.math.real_algebraic import RealAlgebraicOrderValue, RealAlgebraicValue
+from jacobian.math.root_isolation import compare_algebraic
 from jacobian.math.root_isolation._models import (
     AlgebraicCompareRequest,
+    RootIsolationEntry,
     RootIsolationResult,
     UnivariatePolynomialRequest,
 )
 
 
 def compute_root_isolation(request: UnivariatePolynomialRequest) -> RootIsolationResult:
-    isolated = isolate_real_roots(
-        [{"num": c.num, "den": c.den} for c in request.coefficients_descending]
+    source_coefficients = request.normalized_integer_coefficients()
+    variable = sympy.Symbol("x")
+    source = sympy.Poly.from_list(source_coefficients, gens=variable, domain=sympy.ZZ)
+    _unit, factorization = sympy.factor_list(source.as_expr(), variable)
+    factors = tuple(
+        (sympy.Poly(factor, variable, domain=sympy.ZZ), multiplicity)
+        for factor, multiplicity in factorization
     )
-    return RootIsolationResult(
-        roots=tuple(
-            (
-                CanonicalRational(
-                    num=format_canonical_integer(sympy.Rational(lower).p),
-                    den=format_canonical_integer(sympy.Rational(lower).q),
+
+    roots: list[RootIsolationEntry] = []
+    for (lower, upper), _multiplicity in source.intervals():
+        owning_factor, source_multiplicity = next(
+            (factor, exponent)
+            for factor, exponent in factors
+            if strict_root_count(factor, lower, upper) == 1
+        )
+        factor_coefficients = tuple(int(value) for value in owning_factor.all_coeffs())
+        left_roots = int(owning_factor.count_roots(-sympy.oo, lower))
+        if owning_factor.eval(lower) == 0:
+            left_roots -= 1
+        algebraic_value = RealAlgebraicValue(
+            polynomial=tuple(
+                format_canonical_integer(coefficient)
+                for coefficient in factor_coefficients
+            ),
+            real_root_index=left_roots,
+        )
+        roots.append(
+            RootIsolationEntry(
+                isolating_interval=(
+                    CanonicalRational(
+                        num=format_canonical_integer(sympy.Rational(lower).p),
+                        den=format_canonical_integer(sympy.Rational(lower).q),
+                    ),
+                    CanonicalRational(
+                        num=format_canonical_integer(sympy.Rational(upper).p),
+                        den=format_canonical_integer(sympy.Rational(upper).q),
+                    ),
                 ),
-                CanonicalRational(
-                    num=format_canonical_integer(sympy.Rational(upper).p),
-                    den=format_canonical_integer(sympy.Rational(upper).q),
-                ),
+                multiplicity=source_multiplicity,
+                algebraic_value=algebraic_value,
             )
-            for (lower, upper), _multiplicity in isolated
-        ),
-        multiplicities=tuple(multiplicity for _interval, multiplicity in isolated),
+        )
+    return RootIsolationResult._from_kernel(
+        source_coefficients_descending=source_coefficients,
+        roots=tuple(roots),
     )
+
+
+def _verify_root_isolation_result(result: RootIsolationResult) -> bool:
+    """Check an independently supplied isolation ledger inside the request envelope."""
+
+    request = UnivariatePolynomialRequest(
+        coefficients_descending=tuple(
+            CanonicalRational(num=coefficient, den="1")
+            for coefficient in result.source_coefficients_descending
+        )
+    )
+    expected = compute_root_isolation(request)
+    return result == expected
 
 
 def compute_algebraic_compare(

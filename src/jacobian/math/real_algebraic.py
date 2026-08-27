@@ -222,24 +222,25 @@ class RealAlgebraicOrderValue(StrictModel):
         "ORDERED_REAL_ROOT_ISOLATION"
     )
 
-    @model_validator(mode="after")
-    def bind_exact_order(self) -> Self:
-        order, left_interval, right_interval = _order_data(self.left, self.right)
-        if self.order != order:
-            raise _validation_error(
-                "order_replay", "order must match the selected exact real roots"
-            )
-        if self.left_isolating_interval != left_interval:
-            raise _validation_error(
-                "left_interval_replay",
-                "left isolating interval does not match the selected root",
-            )
-        if self.right_isolating_interval != right_interval:
-            raise _validation_error(
-                "right_interval_replay",
-                "right isolating interval does not match the selected root",
-            )
-        return self
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        left: RealAlgebraicValue,
+        right: RealAlgebraicValue,
+        order: RealAlgebraicOrder,
+        left_isolating_interval: RationalIsolatingInterval,
+        right_isolating_interval: RationalIsolatingInterval,
+    ) -> Self:
+        """Construct after the exact common-axis kernel established the order."""
+
+        return cls.model_construct(
+            left=left,
+            right=right,
+            order=order,
+            left_isolating_interval=left_isolating_interval,
+            right_isolating_interval=right_isolating_interval,
+        )
 
 
 def compare_real_algebraic(
@@ -249,13 +250,22 @@ def compare_real_algebraic(
     """Compare two bounded real algebraic values exactly."""
 
     order, left_interval, right_interval = _order_data(left, right)
-    return RealAlgebraicOrderValue(
+    return RealAlgebraicOrderValue._from_kernel(
         left=left,
         right=right,
         order=order,
         left_isolating_interval=left_interval,
         right_isolating_interval=right_interval,
     )
+
+
+def _verify_real_algebraic_order_value(result: RealAlgebraicOrderValue) -> bool:
+    """Recompute one independently supplied exact ordering claim."""
+
+    try:
+        return result == compare_real_algebraic(result.left, result.right)
+    except ValueError:
+        return False
 
 
 __all__ = [

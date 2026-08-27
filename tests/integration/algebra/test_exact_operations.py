@@ -24,6 +24,7 @@ from jacobian.math.root_isolation._models import (
     UnivariatePolynomialRequest,
 )
 from jacobian.math.root_isolation._operations import (
+    _verify_root_isolation_result,
     compute_algebraic_compare,
     compute_root_isolation,
 )
@@ -41,18 +42,36 @@ def _r(value: int) -> CanonicalRational:
     return CanonicalRational(num=str(value), den="1")
 
 
-def test_root_isolation_returns_intervals_aligned_with_multiplicities() -> None:
-    result = compute_root_isolation(
-        UnivariatePolynomialRequest.model_validate(
-            {"coefficients_descending": _quadratic("-2")}
-        )
+def test_root_isolation_returns_source_bound_composable_identities() -> None:
+    request = UnivariatePolynomialRequest.model_validate(
+        {"coefficients_descending": _quadratic("-2")}
     )
+    result = compute_root_isolation(request)
 
-    assert result.multiplicities == (1, 1)
-    assert tuple((left.num, right.num) for left, right in result.roots) == (
+    assert result.source_coefficients_descending == ("1", "0", "-2")
+    assert tuple(
+        (entry.isolating_interval[0].num, entry.isolating_interval[1].num)
+        for entry in result.roots
+    ) == (
         ("-2", "-1"),
         ("1", "2"),
     )
+    assert tuple(entry.algebraic_value.real_root_index for entry in result.roots) == (
+        0,
+        1,
+    )
+    assert type(result).model_validate(result.model_dump(mode="json")) == result
+    assert _verify_root_isolation_result(result)
+
+    forged = result.model_copy(
+        update={
+            "roots": (
+                result.roots[0].model_copy(update={"multiplicity": 2}),
+                result.roots[1],
+            )
+        }
+    )
+    assert not _verify_root_isolation_result(forged)
 
 
 def test_root_isolation_accepts_sympy_singleton_interval_for_a_rational_root() -> None:
@@ -67,10 +86,91 @@ def test_root_isolation_accepts_sympy_singleton_interval_for_a_rational_root() -
         )
     )
 
-    assert tuple(
-        (lower.num, lower.den, upper.num, upper.den) for lower, upper in result.roots
-    ) == (("1", "1", "1", "1"),)
-    assert result.multiplicities == (1,)
+    root = result.roots[0]
+    lower, upper = root.isolating_interval
+    assert (lower.num, lower.den, upper.num, upper.den) == ("1", "1", "1", "1")
+    assert root.multiplicity == 1
+    assert root.algebraic_value.polynomial == ("1", "-1")
+
+
+def test_root_isolation_preserves_factor_identity_and_source_multiplicity() -> None:
+    result = compute_root_isolation(
+        UnivariatePolynomialRequest.model_validate(
+            {
+                "coefficients_descending": [
+                    {"num": "1", "den": "1"},
+                    {"num": "1", "den": "1"},
+                    {"num": "-5", "den": "1"},
+                    {"num": "-1", "den": "1"},
+                    {"num": "8", "den": "1"},
+                    {"num": "-4", "den": "1"},
+                ]
+            }
+        )
+    )
+
+    # (x - 1)^3 (x + 2)^2 has degree five and two distinct real roots.
+    assert tuple(root.multiplicity for root in result.roots) == (2, 3)
+    assert tuple(root.algebraic_value.polynomial for root in result.roots) == (
+        ("1", "2"),
+        ("1", "-1"),
+    )
+    comparison = compute_algebraic_compare(
+        AlgebraicCompareRequest(
+            left=result.roots[0].algebraic_value,
+            right=result.roots[1].algebraic_value,
+        )
+    )
+    assert comparison.order == "LT"
+
+
+def test_root_isolation_keeps_an_empty_source_bound_real_root_family() -> None:
+    result = compute_root_isolation(
+        UnivariatePolynomialRequest.model_validate(
+            {"coefficients_descending": _quadratic("1")}
+        )
+    )
+
+    assert result.source_coefficients_descending == ("1", "0", "1")
+    assert result.roots == ()
+    assert _verify_root_isolation_result(result)
+
+
+def test_root_isolation_normalizes_rational_source_before_identity_projection() -> None:
+    result = compute_root_isolation(
+        UnivariatePolynomialRequest.model_validate(
+            {
+                "coefficients_descending": [
+                    {"num": "2", "den": "1"},
+                    {"num": "-1", "den": "1"},
+                ]
+            }
+        )
+    )
+
+    assert result.source_coefficients_descending == ("2", "-1")
+    assert result.roots[0].algebraic_value.polynomial == ("2", "-1")
+
+
+def test_root_isolation_rejects_sources_outside_the_composable_envelope() -> None:
+    with pytest.raises(ValidationError):
+        UnivariatePolynomialRequest.model_validate(
+            {
+                "coefficients_descending": [
+                    {"num": "1", "den": "1"},
+                    *({"num": "0", "den": "1"} for _ in range(9)),
+                ]
+            }
+        )
+    with pytest.raises(ValidationError):
+        UnivariatePolynomialRequest.model_validate(
+            {
+                "coefficients_descending": [
+                    {"num": "1" + "0" * 996, "den": "1"},
+                    {"num": "1", "den": "1"},
+                ]
+            }
+        )
 
 
 def test_algebraic_comparison_parses_canonical_interval_endpoints() -> None:

@@ -14,6 +14,7 @@ from jacobian.math.markov_chain._models import (
     TransitionMatrixRequest,
 )
 from jacobian.math.markov_chain._operations import (
+    _verify_stationary_distribution_result,
     compute_ergodic_decision,
     compute_stationary_distribution,
 )
@@ -105,6 +106,12 @@ def test_stationary_family_exposes_every_closed_class() -> None:
 
     result = compute_stationary_distribution(request)
 
+    assert result.transition_matrix == request.matrix
+    assert _verify_stationary_distribution_result(result)
+    assert not _verify_stationary_distribution_result(
+        result.model_copy(update={"unique": not result.unique})
+    )
+
     assert result.unique is False
     assert [item.closed_class for item in result.extreme_distributions] == [(1,), (2,)]
     assert [
@@ -147,7 +154,7 @@ def test_native_markov_api_accepts_canonical_fraction_matrices() -> None:
 
 
 def test_stationary_family_solves_each_nonsingleton_closed_class_exactly() -> None:
-    request = TransitionMatrixRequest.model_validate(
+    request = StationaryDistributionRequest.model_validate(
         {
             "matrix": [
                 [

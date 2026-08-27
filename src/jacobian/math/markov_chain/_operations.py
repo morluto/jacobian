@@ -93,6 +93,7 @@ def compute_stationary_distribution(
     )
     extremes = _stationary_distribution_extremes(matrix)
     return StationaryDistributionResult._from_kernel(
+        transition_matrix=request.matrix,
         extreme_distributions=tuple(
             ExtremeStationaryDistribution(
                 closed_class=closed_class,
@@ -107,6 +108,20 @@ def compute_stationary_distribution(
         ),
         unique=len(extremes) == 1,
     )
+
+
+def _verify_stationary_distribution_result(
+    result: StationaryDistributionResult,
+) -> bool:
+    """Recompute a supplied stationary simplex inside its admitted envelope."""
+
+    try:
+        expected = compute_stationary_distribution(
+            StationaryDistributionRequest(matrix=result.transition_matrix)
+        )
+    except ValueError:
+        return False
+    return result == expected
 
 
 def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisionResult:

@@ -44,7 +44,10 @@ ROOT_ISOLATION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ri_operation(
         "polynomial.roots.isolate",
         "Isolate real roots of a univariate polynomial",
-        "Isolate all real roots of a univariate polynomial over QQ using SymPy exact root isolation.",
+        "Normalize one bounded QQ polynomial to a primitive integer source and "
+        "return every distinct real root with its exact multiplicity, disjoint "
+        "rational isolating interval, and directly composable canonical "
+        "algebraic identity.",
         UnivariatePolynomialRequest,
         RootIsolationResult,
         compute_root_isolation,

@@ -48,9 +48,11 @@ def ra_operation[RequestT: StrictModel, ResultT: StrictModel](
 REAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ra_operation(
         "polynomial.sturm_chain.compute",
-        "Compute the Sturm chain of a univariate polynomial",
-        "Compute the exact Sturm subresultant chain of a univariate "
-        "polynomial over QQ using SymPy's sturm function.",
+        "Compute an ordinary exact Sturm sequence",
+        "Compute SymPy's ordinary Euclidean-remainder Sturm sequence for a "
+        "non-constant univariate polynomial with integer coefficients encoded "
+        "as canonical rationals with denominator one. The current envelope is "
+        "degree at most 32 and coefficients of at most 16 decimal digits.",
         SturmChainRequest,
         SturmChainResult,
         compute_sturm_chain,
@@ -77,8 +79,11 @@ REAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ra_operation(
         "polynomial.root_count.compute",
         "Count real roots in an interval via Sturm's theorem",
-        "Count the exact number of real roots of a univariate polynomial "
-        "in the closed interval [lower, upper] using the Sturm theorem.",
+        "Count distinct real roots of a bounded univariate polynomial with "
+        "integer coefficients in the closed interval [lower, upper] using SymPy's "
+        "ordinary exact Sturm sequence. The current envelope is degree at most "
+        "32 and coefficients of at most 16 decimal digits, encoded as canonical "
+        "rationals with denominator one.",
         RootCountRequest,
         RootCountResult,
         compute_root_count,

@@ -548,6 +548,12 @@ def test_interval_count_and_enumeration_are_exact_and_aligned() -> None:
     ) == (("3", ("3", "5")), ("5", ("5", "7")), ("11", ("11", "13")))
     assert count.match_count == len(enumeration.matches)
 
+    missing_endpoints = count.model_dump(mode="json")
+    missing_endpoints["first_match"] = None
+    missing_endpoints["last_match"] = None
+    with pytest.raises(ValidationError, match="if and only if match_count is positive"):
+        PrimePatternIntervalCountResult.model_validate(missing_endpoints)
+
     payload = enumeration.model_dump(mode="json")
     payload["matches"][0]["prime_values"][1] = "7"
     forged = PrimePatternIntervalEnumerateResult.model_validate(payload)

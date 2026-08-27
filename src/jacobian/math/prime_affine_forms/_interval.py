@@ -171,8 +171,10 @@ class PrimePatternIntervalCountResult(StrictModel):
             raise _validation_error(
                 "first_match and last_match must be both present or absent"
             )
-        if self.match_count == 0 and self.first_match is not None:
-            raise _validation_error("an empty match family cannot have endpoints")
+        if (self.match_count == 0) != (self.first_match is None):
+            raise _validation_error(
+                "match endpoints must be present if and only if match_count is positive"
+            )
         return self
 
     @classmethod

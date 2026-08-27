@@ -10,6 +10,7 @@ from jacobian.math.graphs.constructors import (
     construct_hypercube_graph,
     construct_keller_graph,
 )
+from jacobian.math.graphs.constructors._models import TriangleProfileRequest
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -193,6 +194,24 @@ class TestTriangleProfile:
 
         with pytest.raises(ValueError, match=r"labelled rows.*canonical output budget"):
             compute_triangle_profile(graph)
+
+    def test_request_construction_defers_result_admission(self) -> None:
+        """Request parsing does not enumerate K_100's triangle rows."""
+        vertices = tuple(f"{index:03d}" + "x" * 61 for index in range(100))
+        graph = SimpleUndirectedGraph(
+            vertices=vertices,
+            edges=tuple(
+                (vertices[left], vertices[right])
+                for left in range(len(vertices))
+                for right in range(left + 1, len(vertices))
+            ),
+        )
+
+        request = TriangleProfileRequest(graph=graph)
+
+        assert request.graph == graph
+        with pytest.raises(ValueError, match=r"labelled rows.*canonical output budget"):
+            compute_triangle_profile(request.graph)
 
     def test_short_labels_can_admit_the_same_dense_graph(self) -> None:
         """The label-aware bound admits K_100 when its actual rows fit."""

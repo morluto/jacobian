@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import Field, PrivateAttr, StrictInt, model_validator
+from pydantic import Field, StrictInt
 
 from jacobian._models import StrictModel
-from jacobian.math.graphs.constructors._bounds import (
-    TriangleProfileAdmission,
-    admit_triangle_profile,
-)
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
@@ -65,21 +59,6 @@ class TriangleProfileRequest(StrictModel):
     """One finite simple undirected graph whose triangle profile is computed."""
 
     graph: SimpleUndirectedGraph
-    _admission: TriangleProfileAdmission | None = PrivateAttr(default=None)
-
-    @model_validator(mode="after")
-    def require_bounded_triangle_profile(self) -> Self:
-        self._admission = admit_triangle_profile(self.graph)
-        return self
-
-    def admitted_profile(self) -> TriangleProfileAdmission:
-        """Return the request's cached exact scan plan."""
-
-        admission = self._admission
-        if admission is None:
-            admission = admit_triangle_profile(self.graph)
-            self._admission = admission
-        return admission
 
 
 class TriangleProfileRow(StrictModel):

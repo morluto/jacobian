@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.math.graphs.constructors._bounds import admit_triangle_profile
 from jacobian.math.graphs.constructors._models import (
     HypercubeGraphRequest,
     HypercubeGraphResult,
@@ -109,7 +110,7 @@ def _run_triangle_profile(request: TriangleProfileRequest) -> TriangleProfileRes
     """
     graph = request.graph
     vertex_list = graph.vertices
-    admission = request.admitted_profile()
+    admission = admit_triangle_profile(graph)
     triangles = tuple(
         TriangleProfileRow(
             vertices=(vertex_list[left], vertex_list[middle], vertex_list[right])

@@ -18,15 +18,14 @@ operation reports mathematical completeness or uncertainty in its own result.
 
 Public request contracts must make their valid representation visible before a
 backend call. Express constraints that JSON Schema can represent in typed field
-metadata. When a domain invariant needs a Pydantic model validator—such as a
-cross-field relation or canonical term ordering—also provide an explicit field
-or model description and a minimal valid example in the exported schema. The
-Pydantic model is authoritative for the serialized request contract; the
-metadata lets a caller form a valid first request rather than discover the rule
-only through a rejected call. Mathematical and execution semantics belong to
-one domain-owned admission function. A wire model may invoke that shared
-function after parsing, but must not duplicate it or make the native API build a
-wire model just to inherit its checks.
+metadata. When a structural cross-field relation or canonical ordering needs a
+Pydantic model validator, also provide an explicit field or model description
+and a minimal valid example in the exported schema. The Pydantic model is
+authoritative for the serialized request contract; the metadata lets a caller
+form a valid first request rather than discover the rule only through a
+rejected call. Schema and model validation express structural representation
+constraints only. The owner admission function runs after parsing and is shared
+by the kernel and trusted result construction.
 
 Every built-in `MathTool` declaration must publish at least one small valid
 invocation example. An example is part of the public contract: it must validate
@@ -296,8 +295,9 @@ Before declaring the operation, provide tests for:
 - a public-operation assertion that the returned value satisfies its defining
   mathematical invariant or witness, rather than merely parsing or reaching a
   backend; and
-- request validation proving a schema-valid input either returns a typed
-  result or is rejected by the request model—never a host exception.
+- owner-admission evidence proving a schema-valid input either returns a typed
+  result or is rejected before backend execution—never through a backend or
+  host exception.
 
 Apply these adapter and request-boundary rules:
 
@@ -323,7 +323,7 @@ Apply these adapter and request-boundary rules:
   string conversion limit, every adapter must include a test above that limit.
 - For operations with mathematical preconditions such as nonsingularity,
   uniqueness, irreducibility, or nondegeneracy, tests must cover each excluded
-  class and prove rejection occurs during request validation.
+  class and prove the owner rejects it before backend execution.
 
 Before publication, record one owner-local admission decision in the
 mathematical domain's `_admission.py` module. `jacobian.catalog.admission` owns

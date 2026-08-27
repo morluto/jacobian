@@ -17,25 +17,37 @@ DIVISIBILITY_PROFILE_OPERATIONS = (
     number_theory_operation(
         "number_theory.gcd_quotient.profile.compute",
         "Compute gcd-normalized quotient profile on a finite integer family",
-        "For each pair (a, b), compute gcd(a, b) as the normalized quotient relation.",
+        "For each pair (a, b), compute the normalized ratio gcd(a, b) / max(|a|, |b|).",
         GcdQuotientProfileRequest,
         GcdQuotientProfileResult,
         compute_gcd_quotient_profile,
-        "number-theory", "divisibility", "profile",
+        "number-theory",
+        "divisibility",
+        "profile",
         examples=(
-            example("gcd_quotient_basic", "Compute gcd quotients for {6, 10, 15}.", {"elements": ["6", "10", "15"]}),
+            example(
+                "gcd_quotient_basic",
+                "Compute gcd quotients for {6, 10, 15}.",
+                {"elements": ["6", "10", "15"]},
+            ),
         ),
     ),
     number_theory_operation(
         "number_theory.product_divisibility.profile.compute",
         "Compute product-divisibility profile on a finite integer family",
-        "For each pair (a, b), determine if a divides b.",
+        "For each pair (a, b), determine whether a*b divides the product of the family.",
         ProductDivisibilityProfileRequest,
         ProductDivisibilityProfileResult,
         compute_product_divisibility_profile,
-        "number-theory", "divisibility", "profile",
+        "number-theory",
+        "divisibility",
+        "profile",
         examples=(
-            example("product_div_basic", "Compute divisibility for {2, 6, 12}.", {"elements": ["2", "6", "12"]}),
+            example(
+                "product_div_basic",
+                "Compute divisibility for {2, 6, 12}.",
+                {"elements": ["2", "6", "12"]},
+            ),
         ),
     ),
 )

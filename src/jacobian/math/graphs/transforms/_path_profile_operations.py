@@ -29,9 +29,10 @@ def compute_path_profile(request: PathProfileRequest) -> PathProfileResult:
 
     rows: list[PathProfileRow] = []
     for source in vertices:
+        counts = _count_paths_by_endpoint(source, length, adj)
         for target in vertices:
-            count = _count_paths(source, target, length, adj, set())
-            if count > 0:
+            count = counts.get(target, 0)
+            if count:
                 rows.append(
                     PathProfileRow(source=source, target=target, path_count=count)
                 )
@@ -43,22 +44,25 @@ def compute_path_profile(request: PathProfileRequest) -> PathProfileResult:
     )
 
 
-def _count_paths(
-    current: str,
-    target: str,
-    remaining: int,
+def _count_paths_by_endpoint(
+    source: str,
+    length: int,
     adj: dict[str, set[str]],
-    visited: set[str],
-) -> int:
-    """Count simple paths of length `remaining` from current to target."""
-    if remaining == 0:
-        return 1 if current == target else 0
-    visited = visited | {current}
-    total = 0
-    for neighbor in adj.get(current, set()):
-        if neighbor not in visited:
-            total += _count_paths(neighbor, target, remaining - 1, adj, visited)
-    return total
+) -> dict[str, int]:
+    """Count simple paths from one source, grouped by their endpoint."""
+    counts: dict[str, int] = {}
+
+    def visit(current: str, steps_left: int, visited: set[str]) -> None:
+        if steps_left == 0:
+            counts[current] = counts.get(current, 0) + 1
+            return
+        next_visited = visited | {current}
+        for neighbor in adj[current]:
+            if neighbor not in next_visited:
+                visit(neighbor, steps_left - 1, next_visited)
+
+    visit(source, length, set())
+    return counts
 
 
 __all__ = ["compute_path_profile"]

@@ -1,7 +1,11 @@
 """Tests for fixed-length simple path profiles."""
 
+import pytest
+
 from jacobian.math.graphs.transforms._path_profile_models import PathProfileRequest
-from jacobian.math.graphs.transforms._path_profile_operations import compute_path_profile
+from jacobian.math.graphs.transforms._path_profile_operations import (
+    compute_path_profile,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -30,3 +34,16 @@ def test_path_length_2() -> None:
     result = compute_path_profile(PathProfileRequest(graph=graph, path_length=2))
     counts = {(r.source, r.target): r.path_count for r in result.rows}
     assert counts.get(("a", "c")) == 1
+
+
+def test_path_profile_rejects_unbounded_dense_search() -> None:
+    vertices = tuple(sorted(f"v{i}" for i in range(20)))
+    edges = tuple(
+        (vertices[left], vertices[right])
+        for left in range(len(vertices))
+        for right in range(left + 1, len(vertices))
+    )
+    graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
+
+    with pytest.raises(ValueError, match="work budget"):
+        PathProfileRequest(graph=graph, path_length=10)

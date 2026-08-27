@@ -33,7 +33,8 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
         native_symbol="jacobian.math.graphs.graph_power",
-    ),    OperationAdmission(
+    ),
+    OperationAdmission(
         "graph.path_profile.compute",
         AdmissionDecision.KEEP,
         "distinct complete fixed-length simple path count profile by endpoint pair that a loop of scalar path-finding calls cannot establish as one source-bound value",

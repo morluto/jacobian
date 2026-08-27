@@ -142,7 +142,7 @@ TOOLS: MathTools = (
     gt_operation(
         "graph.path_profile.compute",
         "Profile fixed-length simple paths by endpoint",
-        "For each ordered pair of vertices, count simple paths of the given length.",
+        "For each ordered pair of vertices, count simple paths of the given length; the request is bounded by a degree-sensitive search budget.",
         PathProfileRequest,
         PathProfileResult,
         compute_path_profile,

@@ -124,6 +124,29 @@ def test_dispatch_distinguishes_request_and_result_validation() -> None:
         invoke_operation("test.invalid-result", {"value": 1}, catalog)  # type: ignore[arg-type]
 
 
+def test_dispatch_projects_owner_admission_as_an_invalid_request() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        invoke_operation(
+            "topology.simplicial_complex.barycentric_subdivision.compute",
+            {
+                "complex": {
+                    "vertices": list("abcdef"),
+                    "facets": [list("abcdef")],
+                }
+            },
+            Catalog.open(),
+        )
+
+    assert error.value.errors() == (
+        {
+            "loc": (),
+            "type": "operation.domain_validation",
+            "msg": "barycentric subdivision requires at most 31 faces; "
+            "input would produce more than 128 subdivision facets",
+        },
+    )
+
+
 def test_dispatch_classifies_noncanonical_json_as_request_validation() -> None:
     catalog = _CatalogWithInvalidResult()
 

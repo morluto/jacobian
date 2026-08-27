@@ -20,7 +20,11 @@ def main() -> int:
         request = GraphChromaticNumberRequest.model_validate(payload)
         result = _search_chromatic_number_kernel(request)
         sys.stdout.write(
-            json.dumps(result.model_dump(mode="json"), separators=(",", ":"))
+            json.dumps(
+                result.model_dump(mode="json", exclude={"vertices"}),
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
         )
         return 0
     except (TypeError, ValueError, json.JSONDecodeError):

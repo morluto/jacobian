@@ -99,7 +99,9 @@ def _search_chromatic_number(
             completed = run_bounded_process(
                 [sys.executable, str(_CHROMATIC_NUMBER_WORKER)],
                 input_bytes=json.dumps(
-                    request.model_dump(mode="json"), separators=(",", ":")
+                    request.model_dump(mode="json"),
+                    separators=(",", ":"),
+                    ensure_ascii=False,
                 ).encode("utf-8"),
                 timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
@@ -132,17 +134,16 @@ def _search_chromatic_number(
         )
     try:
         result = GraphChromaticNumberOutput.model_validate(
-            json.loads(completed.stdout.decode("utf-8"))
+            {
+                **json.loads(completed.stdout.decode("utf-8")),
+                "vertices": list(request.graph.vertices),
+            }
         )
-        if (
-            result.vertices != request.graph.vertices
-            or result.order != len(request.graph.vertices)
-            or (
-                result.coloring is not None
-                and any(
-                    result.coloring[left] == result.coloring[right]
-                    for left, right in request.graph.edges
-                )
+        if result.order != len(request.graph.vertices) or (
+            result.coloring is not None
+            and any(
+                result.coloring[left] == result.coloring[right]
+                for left, right in request.graph.edges
             )
         ):
             raise ValueError("worker result is not bound to the submitted graph")

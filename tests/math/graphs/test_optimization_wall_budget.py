@@ -87,6 +87,33 @@ def test_chromatic_budget_starts_before_graph_preparation(
     assert result.tested == ()
 
 
+def test_chromatic_worker_projection_is_bound_to_the_submitted_vertices(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = GraphChromaticNumberRequest.model_validate(
+        {"graph": _graph().model_dump(), "resource_budget": {"wall_seconds": 3}}
+    )
+    expected = _chromatic_number._search_chromatic_number_kernel(request)
+
+    monkeypatch.setattr(
+        _chromatic_number,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: BoundedProcessResult(
+            returncode=0,
+            stdout=json.dumps(
+                expected.model_dump(mode="json", exclude={"vertices"}),
+                ensure_ascii=False,
+            ).encode("utf-8"),
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=False,
+        ),
+    )
+
+    assert _chromatic_number._search_chromatic_number(request) == expected
+
+
 @pytest.mark.parametrize(
     "operation_id",
     [

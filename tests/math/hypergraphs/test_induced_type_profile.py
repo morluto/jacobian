@@ -156,8 +156,7 @@ class TestInducedTypeProfile:
                 )
             }
         )
-        with pytest.raises(ValidationError):
-            InducedTypeProfileResult.model_validate(tampered.model_dump())
+        assert not verify_induced_type_profile_result(tampered)
 
     def test_entries_in_lexicographic_order(self) -> None:
         result = _profile(

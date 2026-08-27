@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math.hypergraphs._models import (
     FiniteHypergraph,
     MinimumTransversalRequest,
@@ -46,6 +47,28 @@ class TestMinimumTransversal:
         result = _transversal({"vertices": [f"v{i}" for i in range(21)], "edges": []})
         assert result.transversal == ()
         assert result.cardinality == 0
+
+    def test_request_reserves_retained_source_and_witness_output_bytes(self) -> None:
+        vertices = [f"v{i:03d}" + "😀" * 60 for i in range(256)]
+        edge_member_sets = [
+            (vertices[0], vertices[2 * i + 1], vertices[2 * i + 2]) for i in range(127)
+        ]
+        edge_member_sets.append((vertices[0], vertices[1], vertices[255]))
+        edges = [
+            (f"{i:05d}" + "🚀" * 28, edge_member_sets[i % 128]) for i in range(12_000)
+        ]
+        hypergraph = FiniteHypergraph(vertices=tuple(vertices), edges=tuple(edges))
+
+        source_bytes = len(canonicalize_json(hypergraph.model_dump(mode="json")))
+        assert source_bytes < CanonicalLimits().max_output_bytes
+        with pytest.raises(ValidationError, match="canonical output limit"):
+            MinimumTransversalRequest(hypergraph=hypergraph)
+
+    def test_schema_states_nonempty_hyperedge_precondition(self) -> None:
+        schema = MinimumTransversalRequest.model_json_schema()
+        hypergraph_schema = schema["properties"]["hypergraph"]
+        assert "Every hyperedge must be nonempty" in hypergraph_schema["description"]
+        assert hypergraph_schema["requires_nonempty_hyperedges"] is True
 
     def test_single_edge_requires_one_vertex(self) -> None:
         result = _transversal(

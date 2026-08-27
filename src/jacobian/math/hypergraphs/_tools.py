@@ -258,7 +258,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "hypergraph.minimum_transversal.compute",
         "Compute an exact minimum transversal of a finite hypergraph",
         "Compute a minimum-cardinality transversal (hitting set): a vertex "
-        "set that intersects every hyperedge, found by exact bounded search.",
+        "set that intersects every nonempty hyperedge, found by exact bounded "
+        "search. Empty hyperedges are not admitted.",
         MinimumTransversalRequest,
         MinimumTransversalResult,
         compute_minimum_transversal,
@@ -269,7 +270,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "minimum_transversal_of_4_vertex_hypergraph",
-                "Compute a minimum transversal of a 4-vertex, 3-edge hypergraph.",
+                "Compute a minimum transversal of a 4-vertex, 3-edge hypergraph; "
+                "every hyperedge must be nonempty.",
                 {"hypergraph": _HYPERGRAPH},
             ),
         ),

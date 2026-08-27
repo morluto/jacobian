@@ -1148,19 +1148,6 @@ class InducedTypeProfileResult(StrictModel):
                 "induced type profile entries must list each k-subset of "
                 "vertices exactly once in lexicographic order"
             )
-        edge_sets = tuple(frozenset(members) for _, members in self.hypergraph.edges)
-        for entry, subset in zip(self.entries, expected_subsets, strict=True):
-            subset_set = frozenset(subset)
-            distinct_edges: set[frozenset[str]] = set()
-            for members in edge_sets:
-                induced = members & subset_set
-                if induced:
-                    distinct_edges.add(induced)
-            if entry.induced_edge_count != len(distinct_edges):
-                raise _validation_error(
-                    "induced type profile induced_edge_count must equal the "
-                    "number of distinct nonempty induced edges for its subset"
-                )
         return self
 
 
@@ -1170,6 +1157,7 @@ class InducedTypeProfileResult(StrictModel):
 
 MAX_TRANSVERSAL_RESULT_VERTICES = MAX_VERTICES
 MAX_TRANSVERSAL_SEARCH_WORK = 50_000_000
+MAX_TRANSVERSAL_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 def _minimum_transversal_search_plan(
@@ -1210,6 +1198,29 @@ def _minimum_transversal_search_plan(
     )
 
 
+def _minimum_transversal_result_bytes(
+    hypergraph: FiniteHypergraph,
+    active_vertices: tuple[str, ...],
+) -> int:
+    """Return the exact worst-case canonical size of a transversal result."""
+
+    normalized_active_vertices = tuple(
+        unicodedata.normalize("NFC", vertex) for vertex in active_vertices
+    )
+    source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
+    witness_size = _strict_json_array_size(
+        tuple(_strict_label_wire_bytes(vertex) for vertex in normalized_active_vertices)
+    )
+    cardinality_size = len(encode_strict_json(len(normalized_active_vertices)))
+    return strict_json_object_size(
+        (
+            ("hypergraph", source_size),
+            ("transversal", witness_size),
+            ("cardinality", cardinality_size),
+        )
+    )
+
+
 class MinimumTransversalRequest(StrictModel):
     """Request an exact minimum-cardinality transversal (hitting set).
 
@@ -1222,11 +1233,18 @@ class MinimumTransversalRequest(StrictModel):
 
     hypergraph: FiniteHypergraph = Field(
         description=(
-            "Canonical finite hypergraph. Empty edge families are solved by "
-            "the empty transversal; otherwise the exact active-vertex search "
-            f"must fit {MAX_TRANSVERSAL_SEARCH_WORK} candidate-edge checks."
+            "Canonical finite hypergraph. Every hyperedge must be nonempty. "
+            "Empty edge families are solved by the empty transversal; "
+            "otherwise the exact active-vertex search must fit "
+            f"{MAX_TRANSVERSAL_SEARCH_WORK} candidate-edge checks and the "
+            f"retained-source result must fit {MAX_TRANSVERSAL_RESULT_BYTES} "
+            "canonical bytes."
         ),
-        json_schema_extra={"search_work_bound": MAX_TRANSVERSAL_SEARCH_WORK},
+        json_schema_extra={
+            "search_work_bound": MAX_TRANSVERSAL_SEARCH_WORK,
+            "canonical_result_bytes_bound": MAX_TRANSVERSAL_RESULT_BYTES,
+            "requires_nonempty_hyperedges": True,
+        },
     )
 
     @model_validator(mode="after")
@@ -1235,11 +1253,22 @@ class MinimumTransversalRequest(StrictModel):
             raise _validation_error(
                 "minimum transversal search does not admit empty edges"
             )
-        *_, search_work = _minimum_transversal_search_plan(self.hypergraph)
+        active_vertices, _, _, search_work = _minimum_transversal_search_plan(
+            self.hypergraph
+        )
         if search_work > MAX_TRANSVERSAL_SEARCH_WORK:
             raise _validation_error(
                 "minimum transversal search exceeds the "
                 f"{MAX_TRANSVERSAL_SEARCH_WORK}-check exact search bound"
+            )
+        if (
+            _minimum_transversal_result_bytes(self.hypergraph, active_vertices)
+            > MAX_TRANSVERSAL_RESULT_BYTES
+        ):
+            raise _validation_error(
+                "the minimum transversal result retains its source hypergraph "
+                f"and would exceed the {MAX_TRANSVERSAL_RESULT_BYTES}-byte "
+                "canonical output limit; shorten labels or reduce the edge family"
             )
         return self
 
@@ -1278,12 +1307,6 @@ class MinimumTransversalResult(StrictModel):
         edge_sets = tuple(frozenset(members) for _, members in self.hypergraph.edges)
         if any(not (edge & witness_set) for edge in edge_sets):
             raise _validation_error("transversal must intersect every hyperedge")
-        *_, search_work = _minimum_transversal_search_plan(self.hypergraph)
-        if search_work > MAX_TRANSVERSAL_SEARCH_WORK:
-            raise _validation_error(
-                "minimum transversal search exceeds the "
-                f"{MAX_TRANSVERSAL_SEARCH_WORK}-check exact search bound"
-            )
         return self
 
 

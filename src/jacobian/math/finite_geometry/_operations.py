@@ -12,6 +12,9 @@ from jacobian.math.finite_geometry._models import (
     GrassmannianCountRequest,
     GrassmannianCountResult,
     LinearSubspace,
+    ParallelClass,
+    PrimeFieldAffinePlaneRequest,
+    PrimeFieldAffinePlaneResult,
     ProjectivePointCanonicalizeRequest,
     ProjectivePointCanonicalizeResult,
     ProjectivePointEqualRequest,
@@ -31,6 +34,7 @@ from jacobian.math.finite_geometry.values import (
     ProjectivePoint,
     ProjectivePointSequence,
 )
+from jacobian.math.incidence_structures._models import IncidenceStructure
 
 
 def compute_projective_point_canonicalize(
@@ -240,3 +244,76 @@ def verify_grassmannian_count_result(result: GrassmannianCountResult) -> bool:
         numerator *= result.field_order ** (result.ambient_dimension - index) - 1
         denominator *= result.field_order ** (result.subspace_dimension - index) - 1
     return result.count == format_canonical_integer(numerator // denominator)
+
+
+def compute_prime_field_affine_plane(
+    request: PrimeFieldAffinePlaneRequest,
+) -> PrimeFieldAffinePlaneResult:
+    """Construct the complete affine plane AG(2, q) over a prime field.
+
+    Points are (x, y) in lexicographic order (index = x * q + y).  Lines are
+    enumerated as L_{m,b} = {(x, mx+b mod q) : x in F_q} for each slope m
+    (0..q-1) and intercept b (0..q-1), then vertical lines V_b = {(b, y) :
+    y in F_q} for each b (0..q-1).  Parallel classes partition the line axis
+    into q+1 ordered classes: q slope classes (m=0..q-1) plus the vertical
+    class.
+    """
+    q = request.prime_order
+
+    # Points: (x, y) in lexicographic order, index = x * q + y
+    points = tuple(f"{x},{y}" for x in range(q) for y in range(q))
+
+    # Lines: L_{m,b} for slope m, intercept b, then V_b for vertical b
+    block_ids: list[str] = []
+    blocks: list[tuple[str, ...]] = []
+
+    # Non-vertical lines: L_{m,b}
+    for m in range(q):
+        for b in range(q):
+            line_id = f"L_{m},{b}"
+            block_ids.append(line_id)
+            members = tuple(f"{x},{(m * x + b) % q}" for x in range(q))
+            blocks.append(members)
+
+    # Vertical lines: V_b
+    for b_val in range(q):
+        line_id = f"V_{b_val}"
+        block_ids.append(line_id)
+        members = tuple(f"{b_val},{y}" for y in range(q))
+        blocks.append(members)
+
+    incidence = IncidenceStructure(
+        points=tuple(points),
+        block_ids=tuple(block_ids),
+        blocks=tuple(blocks),
+    )
+
+    # Parallel classes: q slope classes (m=0..q-1), then 1 vertical class
+    parallel_classes: list[ParallelClass] = []
+    line_index = 0
+    for m in range(q):
+        line_ids = tuple(range(line_index, line_index + q))
+        parallel_classes.append(
+            ParallelClass(
+                line_ids=line_ids,
+                label=f"slope_{m}",
+            )
+        )
+        line_index += q
+    # Vertical class
+    vertical_line_ids = tuple(range(line_index, line_index + q))
+    parallel_classes.append(
+        ParallelClass(
+            line_ids=vertical_line_ids,
+            label="vertical",
+        )
+    )
+
+    total_incidences = q * q * (q + 1)
+
+    return PrimeFieldAffinePlaneResult(
+        prime_order=q,
+        incidence=incidence,
+        parallel_classes=tuple(parallel_classes),
+        total_incidences=total_incidences,
+    )

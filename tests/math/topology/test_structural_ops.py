@@ -207,6 +207,14 @@ class TestJoin:
 
 
 class TestBarycentricSubdivision:
+    def test_owner_rejects_subdivision_beyond_its_result_envelope(self) -> None:
+        request = BarycentricSubdivisionRequest(
+            complex={"vertices": tuple("abcdef"), "facets": (tuple("abcdef"),)}
+        )
+
+        with pytest.raises(ValueError, match="at most 31 faces"):
+            compute_barycentric_subdivision(request)
+
     def test_subdivide_edge(self) -> None:
         result = compute_barycentric_subdivision(
             BarycentricSubdivisionRequest(complex=EDGE)

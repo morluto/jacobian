@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields.values import (
     Axis,
     CollisionResult,
@@ -21,6 +22,8 @@ from jacobian.math.finite_fields.values import (
     RankResult,
 )
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+
+_MAX_FINITE_MAP_WORK = 1_000_000
 
 
 def finite_field(
@@ -269,6 +272,17 @@ def evaluate_finite_polynomial(
 def finite_map_table(polynomial_map: FinitePolynomialMap) -> FiniteMapTable:
     """Enumerate a complete finite polynomial-map table in canonical order."""
 
+    work = (
+        polynomial_map.domain.order
+        * len(polynomial_map.polynomial.coefficients)
+        * polynomial_map.domain.degree
+    )
+    if work > _MAX_FINITE_MAP_WORK:
+        raise OperationDomainValidationError(
+            location=("polynomial_map",),
+            code="finite_field.finite_map_exceeds_operation_work_budget",
+            message="finite map exceeds the operation work budget",
+        )
     from jacobian.math.finite_fields import _flint
 
     sources = _field_elements(polynomial_map.domain)

@@ -143,6 +143,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded predicate or candidate check with typed semantics",
     ),
     OperationAdmission(
+        "combinatorics.integer_set.sidon.extension_profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete partition of candidates into admissible and rejected with replayable obstruction witnesses, replacing a caller-side loop of scalar Sidon decisions",
+    ),
+    OperationAdmission(
         "combinatorics.recurrence.linear.evaluate",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
@@ -157,6 +162,10 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "combinatorics.finite_abelian.3term_progression_hypergraph.construct",
+        AdmissionDecision.KEEP,
+        "distinct source-bound hypergraph constructor for 3-term arithmetic progressions in finite cyclic groups",
+    ),
 )
-
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

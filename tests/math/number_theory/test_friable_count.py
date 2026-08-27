@@ -232,7 +232,9 @@ def test_number_theory_native_api_is_explicit() -> None:
 
     assert tuple(number_theory.__all__) == (
         "FriableCountResult",
+        "PrimeShiftProfileResult",
         "count_friable",
+        "prime_shift_profile",
         "ramanujan_sum",
     )
     assert all(hasattr(number_theory, name) for name in number_theory.__all__)

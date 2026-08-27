@@ -16,6 +16,13 @@ from jacobian.math.graphs.transforms._operations import (
     compute_induced_subgraph,
     compute_line_graph,
 )
+from jacobian.math.graphs.transforms._path_profile_models import (
+    PathProfileRequest,
+    PathProfileResult,
+)
+from jacobian.math.graphs.transforms._path_profile_operations import (
+    compute_path_profile,
+)
 
 
 def gt_operation[RequestT: StrictModel, ResultT: StrictModel](
@@ -128,6 +135,30 @@ TOOLS: MathTools = (
                 {
                     "graph": _GRAPH_EXAMPLE["graph"],
                     "vertices": [0, 2],
+                },
+            ),
+        ),
+    ),
+    gt_operation(
+        "graph.path_profile.compute",
+        "Profile fixed-length simple paths by endpoint",
+        "For each ordered pair of vertices, count simple paths of the given length; the request is bounded by a degree-sensitive search budget.",
+        PathProfileRequest,
+        PathProfileResult,
+        compute_path_profile,
+        "graph",
+        "path",
+        "profile",
+        examples=(
+            example(
+                "path_profile_p3_len1",
+                "Count length-1 paths in a path graph P3; path_length must be at most 10.",
+                {
+                    "graph": {
+                        "vertices": ["a", "b", "c"],
+                        "edges": [["a", "b"], ["b", "c"]],
+                    },
+                    "path_length": 1,
                 },
             ),
         ),

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Literal
+from typing import Literal, cast
 
 import pytest
 from pydantic import ValidationError
@@ -18,6 +18,7 @@ from jacobian.math.modular_forms import kernel as level_one_kernel
 from jacobian.math.modular_forms._models import LevelOneNamedQExpansionRequest
 from jacobian.math.modular_forms.kernel import (
     NAMED_LEVEL_ONE_FORMS,
+    NamedLevelOneModularForm,
     divisor_power_sum,
     eisenstein_coefficients,
     metadata,
@@ -25,7 +26,10 @@ from jacobian.math.modular_forms.kernel import (
     require_level_one_replay,
 )
 from jacobian.math.modular_forms.operations import _series, level_one_named_q_expansion
-from jacobian.math.modular_forms.values import LevelOneModularQExpansion
+from jacobian.math.modular_forms.values import (
+    LevelOneModularQExpansion,
+    verify_level_one_q_expansion,
+)
 
 
 def _integers(expansion: LevelOneModularQExpansion) -> tuple[int, ...]:
@@ -113,17 +117,17 @@ def test_eisenstein_prefixes_beyond_the_former_carrier_ceiling_are_admitted() ->
 
 
 def test_requests_above_the_serialized_budget_name_the_controlling_quantity() -> None:
-    with pytest.raises(ValidationError) as error:
-        LevelOneNamedQExpansionRequest(form="E6", truncation_order=1301)
-    assert _validation_type(error) == "modular_forms.serialized_result_bound"
+    request = LevelOneNamedQExpansionRequest(form="E6", truncation_order=1301)
+    with pytest.raises(ValueError, match="serialized result bound"):
+        level_one_named_q_expansion(request.form, request.truncation_order)
     with pytest.raises(ValueError, match="serialized result bound"):
         require_level_one_admission("E4", 1478)
 
 
 def test_delta_above_the_work_budget_names_the_controlling_quantity() -> None:
-    with pytest.raises(ValidationError) as error:
-        LevelOneNamedQExpansionRequest(form="DELTA", truncation_order=601)
-    assert _validation_type(error) == "modular_forms.exact_work_bound"
+    request = LevelOneNamedQExpansionRequest(form="DELTA", truncation_order=601)
+    with pytest.raises(ValueError, match="exact work bound"):
+        level_one_named_q_expansion(request.form, request.truncation_order)
     with pytest.raises(ValueError, match="exact work bound"):
         require_level_one_admission("DELTA", 601)
 
@@ -149,48 +153,53 @@ def test_native_admission_rejects_unknown_forms_before_any_scan(
 
     monkeypatch.setattr(level_one_kernel, "divisor_power_sum", fail)
     with pytest.raises(ValueError, match="form must be one of 'E4', 'E6', or 'DELTA'"):
-        level_one_named_q_expansion(form, 8)
+        level_one_named_q_expansion(cast(NamedLevelOneModularForm, form), 8)
     with pytest.raises(ValueError, match="form must be one of 'E4', 'E6', or 'DELTA'"):
-        require_level_one_admission(form, 8)
+        require_level_one_admission(cast(NamedLevelOneModularForm, form), 8)
     with pytest.raises(ValueError, match="form must be one of 'E4', 'E6', or 'DELTA'"):
-        require_level_one_replay(form, 8)
+        require_level_one_replay(cast(NamedLevelOneModularForm, form), 8)
 
 
 @pytest.mark.parametrize("form", ["E4", "E6", "DELTA"])
-def test_every_closed_family_member_is_admitted_at_order_one(form: str) -> None:
+def test_every_closed_family_member_is_admitted_at_order_one(
+    form: NamedLevelOneModularForm,
+) -> None:
     assert form in NAMED_LEVEL_ONE_FORMS
-    assert require_level_one_admission(form, 1) is None
-    assert require_level_one_replay(form, 1) is None
+    require_level_one_admission(form, 1)
+    require_level_one_replay(form, 1)
 
 
 def test_wire_request_rejects_unknown_form_names() -> None:
     with pytest.raises(ValidationError) as error:
-        LevelOneNamedQExpansionRequest(form="E5", truncation_order=8)
+        LevelOneNamedQExpansionRequest(
+            form=cast(NamedLevelOneModularForm, "E5"), truncation_order=8
+        )
     assert _validation_type(error) == "literal_error"
 
 
-def test_value_rejects_forged_coefficient_during_replay() -> None:
+def test_explicit_verifier_rejects_forged_coefficient() -> None:
     result = level_one_named_q_expansion("E4", 3)
     payload = result.model_dump()
-    q_expansion = payload["q_expansion"]
+    q_expansion = cast(dict[str, object], payload["q_expansion"])
     q_expansion["coefficients"] = (
         {"num": "1", "den": "1"},
         {"num": "241", "den": "1"},
         {"num": "2160", "den": "1"},
     )
-    with pytest.raises(ValidationError) as error:
+    assert not verify_level_one_q_expansion(
         LevelOneModularQExpansion.model_validate(payload)
-    assert _validation_type(error) == "modular_forms.coefficients_mismatch"
+    )
 
 
-def test_value_rejects_forged_coefficient_at_widened_precision() -> None:
+def test_explicit_verifier_rejects_forged_widened_coefficient() -> None:
     payload = level_one_named_q_expansion("E6", 1000).model_dump()
-    coefficients = list(payload["q_expansion"]["coefficients"])
+    q_expansion = cast(dict[str, object], payload["q_expansion"])
+    coefficients = list(cast(tuple[dict[str, str], ...], q_expansion["coefficients"]))
     coefficients[-1] = {"num": str(int(coefficients[-1]["num"]) + 1), "den": "1"}
-    payload["q_expansion"]["coefficients"] = tuple(coefficients)
-    with pytest.raises(ValidationError) as error:
+    q_expansion["coefficients"] = tuple(coefficients)
+    assert not verify_level_one_q_expansion(
         LevelOneModularQExpansion.model_validate(payload)
-    assert _validation_type(error) == "modular_forms.coefficients_mismatch"
+    )
 
 
 def _beyond_budget_e4_payload() -> dict[str, object]:
@@ -204,7 +213,9 @@ def _beyond_budget_e4_payload() -> dict[str, object]:
     }
 
 
-def test_value_replays_exact_expansions_beyond_the_producer_envelope() -> None:
+def test_explicit_verifier_accepts_exact_expansions_beyond_the_producer_envelope() -> (
+    None
+):
     with pytest.raises(ValueError, match="serialized result bound"):
         require_level_one_admission("E4", 1478)
 
@@ -214,28 +225,32 @@ def test_value_replays_exact_expansions_beyond_the_producer_envelope() -> None:
         1477, 3
     )
     assert LevelOneModularQExpansion.model_validate(value.model_dump()) == value
+    assert verify_level_one_q_expansion(value)
 
 
-def test_value_rejects_forged_coefficients_beyond_the_producer_envelope() -> None:
+def test_explicit_verifier_rejects_forged_coefficients_beyond_the_producer_envelope() -> (
+    None
+):
     payload = _beyond_budget_e4_payload()
-    coefficients = list(payload["q_expansion"]["coefficients"])
+    q_expansion = cast(dict[str, object], payload["q_expansion"])
+    coefficients = list(cast(tuple[dict[str, str], ...], q_expansion["coefficients"]))
     coefficients[-1] = {"num": str(int(coefficients[-1]["num"]) + 1), "den": "1"}
-    payload["q_expansion"]["coefficients"] = tuple(coefficients)
-    with pytest.raises(ValidationError) as error:
+    q_expansion["coefficients"] = tuple(coefficients)
+    assert not verify_level_one_q_expansion(
         LevelOneModularQExpansion.model_validate(payload)
-    assert _validation_type(error) == "modular_forms.coefficients_mismatch"
+    )
 
 
 def test_replay_envelope_names_its_own_controlling_quantity() -> None:
-    assert require_level_one_replay("DELTA", 1143) is None
+    require_level_one_replay("DELTA", 1143)
     with pytest.raises(ValueError, match="replay exceeds its exact work bound"):
         require_level_one_replay("DELTA", 1144)
     with pytest.raises(ValueError, match="plain integer"):
         require_level_one_replay("E4", True)
-    assert require_level_one_replay("E4", 20000) is None
+    require_level_one_replay("E4", 20000)
 
 
-def test_e6_replay_never_computes_the_e4_prefix(
+def test_explicit_e6_verifier_never_computes_the_e4_prefix(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     value = level_one_named_q_expansion("E6", 1000)
@@ -253,10 +268,11 @@ def test_e6_replay_never_computes_the_e4_prefix(
         coefficient.as_fraction() for coefficient in value.q_expansion.coefficients
     )
     assert LevelOneModularQExpansion.model_validate(payload) == value
+    assert verify_level_one_q_expansion(value)
     assert requested_forms == ["E6", "E6"]
 
 
-def test_delta_replay_still_builds_both_eisenstein_prefixes(
+def test_explicit_delta_verifier_builds_both_eisenstein_prefixes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     value = level_one_named_q_expansion("DELTA", 40)
@@ -269,4 +285,5 @@ def test_delta_replay_still_builds_both_eisenstein_prefixes(
 
     monkeypatch.setattr(level_one_kernel, "eisenstein_coefficients", spied)
     assert LevelOneModularQExpansion.model_validate(payload) == value
+    assert verify_level_one_q_expansion(value)
     assert requested_forms == ["E4", "E6"]

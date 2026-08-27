@@ -414,15 +414,11 @@ class TestProduct:
         accepted = product(_discrete_category(32, "L"), _discrete_category(32, "R"))
         assert len(accepted.product.objects) == 1_024
 
-        with pytest.raises(ValidationError) as error:
-            CategoryProductRequest(
-                left=_discrete_category(33, "L"),
-                right=_discrete_category(32, "R"),
-            )
-        assert (
-            error.value.errors()[0]["type"]
-            == "finite_category.product_object_count_budget"
+        request = CategoryProductRequest(
+            left=_discrete_category(33, "L"), right=_discrete_category(32, "R")
         )
+        with pytest.raises(ValueError, match="object"):
+            compute_category_product(request)
 
     def test_composable_triple_count_is_accepted_and_rejected_at_boundary(
         self,
@@ -430,27 +426,19 @@ class TestProduct:
         accepted = product(_cyclic_group_category(6), _cyclic_group_category(10))
         assert len(accepted.product.morphisms) == 60
 
-        with pytest.raises(ValidationError) as error:
-            CategoryProductRequest(
-                left=_cyclic_group_category(7),
-                right=_cyclic_group_category(9),
-            )
-        assert (
-            error.value.errors()[0]["type"]
-            == "finite_category.product_composable_triple_budget"
+        request = CategoryProductRequest(
+            left=_cyclic_group_category(7), right=_cyclic_group_category(9)
         )
+        with pytest.raises(ValueError, match="triple"):
+            compute_category_product(request)
 
     def test_wire_preflight_is_result_sensitive_to_identifier_size(self) -> None:
         short = _parallel_arrow_category(50, 4)
         CategoryProductRequest(left=short, right=short)
 
         long = _parallel_arrow_category(50, 64)
-        with pytest.raises(ValidationError) as error:
-            CategoryProductRequest(left=long, right=long)
-        assert (
-            error.value.errors()[0]["type"]
-            == "finite_category.product_wire_size_budget"
-        )
+        with pytest.raises(ValueError, match="wire"):
+            compute_category_product(CategoryProductRequest(left=long, right=long))
 
     def test_identifier_nesting_is_bounded_before_another_product(self) -> None:
         terminal = FiniteCategory(**TERMINAL_CATEGORY)

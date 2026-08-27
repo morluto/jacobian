@@ -3,6 +3,9 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import invoke_operation
 from jacobian.math.topology._models import (
     BarycentricSubdivisionRequest,
     BarycentricSubdivisionResult,
@@ -207,6 +210,36 @@ class TestJoin:
 
 
 class TestBarycentricSubdivision:
+    def test_owner_rejects_subdivision_beyond_its_result_envelope(self) -> None:
+        request = BarycentricSubdivisionRequest(
+            complex={"vertices": tuple("abcdef"), "facets": (tuple("abcdef"),)}
+        )
+
+        with pytest.raises(ValueError, match="at most 31 faces"):
+            compute_barycentric_subdivision(request)
+
+    def test_dispatch_projects_owner_admission_as_an_invalid_request(self) -> None:
+        with pytest.raises(OperationDomainValidationError) as error:
+            invoke_operation(
+                "topology.simplicial_complex.barycentric_subdivision.compute",
+                {
+                    "complex": {
+                        "vertices": list("abcdef"),
+                        "facets": [list("abcdef")],
+                    }
+                },
+                Catalog.open(),
+            )
+
+        assert error.value.errors() == (
+            {
+                "loc": (),
+                "type": "operation.domain_validation",
+                "msg": "barycentric subdivision requires at most 31 faces; "
+                "input would produce more than 128 subdivision facets",
+            },
+        )
+
     def test_subdivide_edge(self) -> None:
         result = compute_barycentric_subdivision(
             BarycentricSubdivisionRequest(complex=EDGE)

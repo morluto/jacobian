@@ -362,18 +362,6 @@ class PeriodicCongruenceUnionProfileRequest(PeriodicCongruenceUnionRequest):
         json_schema_extra=_periodic_request_schema_extra(profile=True)
     )
 
-    @model_validator(mode="after")
-    def require_materializable_profile(self) -> Self:
-        from jacobian.math.number_theory._periodic_kernel import (
-            require_materializable_periodic_source,
-        )
-
-        try:
-            require_materializable_periodic_source(self.normalized_source())
-        except ValueError as error:
-            raise _validation_error("backend_admission", str(error)) from error
-        return self
-
 
 class PeriodicCongruenceUnionMeasureResult(StrictModel):
     """Exact occupied count and density, bound to the normalized union source."""

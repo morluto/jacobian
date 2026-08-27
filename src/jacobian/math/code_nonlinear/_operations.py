@@ -7,7 +7,12 @@ from itertools import combinations
 
 from pydantic import ValidationError
 
-from jacobian.math.code_nonlinear._budget import require_profile_admission
+from jacobian.math.code_nonlinear._budget import (
+    require_constant_weight_admission,
+    require_profile_admission,
+    require_set_system_output_bound,
+    require_word_distance_output_bound,
+)
 from jacobian.math.code_nonlinear._models import (
     BinaryCodeDistanceWitness,
     ConstantWeightProfileRequest,
@@ -98,7 +103,6 @@ def _distance_witness(
 
 
 def _explicit_profile_data(code: ExplicitBinaryCode) -> _ExplicitProfileData:
-    require_profile_admission(code)
     bitsets = tuple(_word_to_bitset(word) for word in code.codewords)
     weight_distribution = [0] * (code.length + 1)
     for word in bitsets:
@@ -137,7 +141,6 @@ def _explicit_profile_data(code: ExplicitBinaryCode) -> _ExplicitProfileData:
 def _constant_weight_profile_data(
     code: ExplicitBinaryCode,
 ) -> _ConstantWeightProfileData:
-    require_profile_admission(code)
     bitsets = tuple(_word_to_bitset(word) for word in code.codewords)
     weight = bitsets[0].bit_count()
     distance_histogram = [0] * (code.length + 1)
@@ -187,8 +190,18 @@ def _constant_weight_code(length: int, weight: int) -> ExplicitBinaryCode:
     return ExplicitBinaryCode(length=length, codewords=tuple(codewords))
 
 
+def _constant_weight(code: ExplicitBinaryCode) -> int:
+    if not code.codewords:
+        raise ValueError("constant-weight profile requires at least one codeword")
+    weight = sum(code.codewords[0])
+    if any(sum(word) != weight for word in code.codewords):
+        raise ValueError("all codewords must have the same Hamming weight")
+    return weight
+
+
 def compute_constant_weight(request: ConstantWeightRequest) -> ConstantWeightResult:
     """Generate the complete constant-weight binary code."""
+    require_constant_weight_admission(request.length, request.weight)
     code = _constant_weight_code(request.length, request.weight)
     return ConstantWeightResult._from_kernel(
         length=request.length, weight=request.weight, code=code
@@ -197,6 +210,7 @@ def compute_constant_weight(request: ConstantWeightRequest) -> ConstantWeightRes
 
 def compute_word_distance(request: WordDistanceRequest) -> WordDistanceResult:
     """Compute the exact Hamming relation between two words."""
+    require_word_distance_output_bound(request.word1, request.word2)
     distance, differing, weight1, weight2, intersection = _word_distance_data(
         request.word1, request.word2
     )
@@ -236,11 +250,12 @@ def compute_constant_weight_profile(
     """Compute distance and intersection profiles of a constant-weight code."""
     code = request.code
     plan = require_profile_admission(code)
+    weight = _constant_weight(code)
     profile = _constant_weight_profile_data(code)
     return ConstantWeightProfileResult._from_kernel(
         source=code,
         length=code.length,
-        weight=sum(code.codewords[0]),
+        weight=weight,
         cardinality=len(code.codewords),
         pair_count=plan.pair_count,
         minimum_distance=profile.minimum_distance,
@@ -255,6 +270,7 @@ def compute_constant_weight_profile(
 def compute_to_set_system(request: ToSetSystemRequest) -> ToSetSystemResult:
     """Map each source word to its coordinate support."""
     code = request.code
+    require_set_system_output_bound(code)
     return ToSetSystemResult._from_kernel(
         source=code,
         length=code.length,
@@ -283,8 +299,8 @@ def _verify_constant_weight_result(result: ConstantWeightResult) -> bool:
     """Verify an independently supplied generated-code claim."""
 
     try:
-        ConstantWeightRequest(length=result.length, weight=result.weight)
-    except ValidationError:
+        require_constant_weight_admission(result.length, result.weight)
+    except ValueError:
         return False
     expected = _constant_weight_code(result.length, result.weight)
     return result.code == expected and result.count == len(expected.codewords)
@@ -295,7 +311,8 @@ def _verify_word_distance_result(result: WordDistanceResult) -> bool:
 
     try:
         WordDistanceRequest(word1=result.word1, word2=result.word2)
-    except ValidationError:
+        require_word_distance_output_bound(result.word1, result.word2)
+    except (ValidationError, ValueError):
         return False
     expected = _word_distance_data(result.word1, result.word2)
     return (
@@ -340,8 +357,8 @@ def _verify_explicit_profile_result(result: ExplicitProfileResult) -> bool:
     """Replay an independently supplied profile inside its admitted envelope."""
 
     try:
-        ExplicitProfileRequest(code=result.source)
-    except ValidationError:
+        require_profile_admission(result.source)
+    except ValueError:
         return False
     expected = _explicit_profile_data(result.source)
     return (
@@ -362,10 +379,11 @@ def _verify_constant_weight_profile_result(result: ConstantWeightProfileResult) 
     """Replay an independently supplied constant-weight profile claim."""
 
     try:
-        ConstantWeightProfileRequest(code=result.source)
-    except ValidationError:
+        require_profile_admission(result.source)
+        weight = _constant_weight(result.source)
+    except ValueError:
         return False
-    if result.weight != sum(result.source.codewords[0]):
+    if result.weight != weight:
         return False
     expected = _constant_weight_profile_data(result.source)
     return (
@@ -386,8 +404,8 @@ def _verify_to_set_system_result(result: ToSetSystemResult) -> bool:
     """Verify an independently supplied source-indexed support claim."""
 
     try:
-        ToSetSystemRequest(code=result.source)
-    except ValidationError:
+        require_set_system_output_bound(result.source)
+    except ValueError:
         return False
     return result.coordinate_axis == tuple(
         range(result.source.length)

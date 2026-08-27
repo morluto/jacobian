@@ -39,11 +39,7 @@ class LevelOneModularQExpansion(StrictModel):
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
-    def require_normalized_replayable_form(self) -> Self:
-        try:
-            require_level_one_replay(self.form, self.q_expansion.truncation_order)
-        except ValueError as exc:
-            raise _validation_error("replay_bound", str(exc)) from exc
+    def require_structural_named_form(self) -> Self:
         weight, space_kind, normalization = metadata(self.form)
         if (
             self.weight != weight
@@ -59,16 +55,41 @@ class LevelOneModularQExpansion(StrictModel):
                 "variable_mismatch",
                 "a modular q-expansion must use the canonical variable q",
             )
-        expected = expected_coefficients(self.form, self.q_expansion.truncation_order)
-        actual = tuple(
-            coefficient.as_fraction() for coefficient in self.q_expansion.coefficients
-        )
-        if actual != expected:
-            raise _validation_error(
-                "coefficients_mismatch",
-                "q-expansion does not match the normalized named form",
-            )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        form: NamedLevelOneModularForm,
+        weight: Literal[4, 6, 12],
+        space_kind: Literal["HOLOMORPHIC", "CUSP"],
+        normalization: str,
+        q_expansion: TruncatedSeries,
+    ) -> Self:
+        """Construct a value after the owner kernel established its coefficients."""
 
-__all__ = ["LevelOneModularQExpansion"]
+        return cls.model_construct(
+            form=form,
+            weight=weight,
+            space_kind=space_kind,
+            normalization=normalization,
+            q_expansion=q_expansion,
+        )
+
+
+def verify_level_one_q_expansion(value: LevelOneModularQExpansion) -> bool:
+    """Boundedly verify an independently supplied named q-expansion."""
+
+    try:
+        require_level_one_replay(value.form, value.q_expansion.truncation_order)
+    except ValueError:
+        return False
+    expected = expected_coefficients(value.form, value.q_expansion.truncation_order)
+    actual = tuple(
+        coefficient.as_fraction() for coefficient in value.q_expansion.coefficients
+    )
+    return actual == expected
+
+
+__all__ = ["LevelOneModularQExpansion", "verify_level_one_q_expansion"]

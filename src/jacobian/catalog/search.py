@@ -51,6 +51,13 @@ _DISCOVERY_INFLECTION_EXCEPTIONS = frozenset(
         "vertices",
     }
 )
+# Protected singulars whose ordinary ``-es`` plurals need an explicit map.
+_DISCOVERY_PLURAL_INFLECTIONS = {
+    "aliases": "alias",
+    "atlases": "atlas",
+    "biases": "bias",
+    "lenses": "lens",
+}
 _DISCOVERY_SINGULAR_SUFFIXES = ("ics", "is", "ous", "ss", "us")
 
 
@@ -193,6 +200,8 @@ def normalize_discovery_terms_text(value: str) -> str:
 def normalize_discovery_term(term: str) -> str:
     """Return one conservative comparison form for a lexical search token."""
 
+    if term in _DISCOVERY_PLURAL_INFLECTIONS:
+        return _DISCOVERY_PLURAL_INFLECTIONS[term]
     if len(term) <= 3 or term in _DISCOVERY_INFLECTION_EXCEPTIONS:
         return term
     if len(term) > 4 and term.endswith("ies"):

@@ -29,6 +29,7 @@ LABEL org.opencontainers.image.source=https://github.com/morluto/jacobian
 LABEL org.opencontainers.image.revision=$JACOBIAN_REVISION
 LABEL org.opencontainers.image.version=$JACOBIAN_VERSION
 LABEL io.jacobian.source-dirty=$JACOBIAN_SOURCE_DIRTY
+ENV JACOBIAN_REVISION=$JACOBIAN_REVISION
 
 WORKDIR /app
 

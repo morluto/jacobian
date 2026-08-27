@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import re
 from math import isqrt, prod
 from time import monotonic
+from typing import Literal
 
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._contiguous_sum_admission import (
@@ -13,10 +16,42 @@ from jacobian.math.number_theory._contiguous_sum_admission import (
 from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileRequest,
     ContiguousSumProfileResult,
+    ContiguousSumWorkerDiagnostic,
 )
 from jacobian.math.number_theory._factorization_kernels import (
+    BoundedFactorizationFailure,
     _bounded_direct_factorization,
 )
+
+_CONTIGUOUS_SUM_OPERATION_VERSION: Literal["1"] = "1"
+_GIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _repository_revision() -> str:
+    """Read the immutable build revision when the runtime provides one."""
+
+    revision = os.environ.get("JACOBIAN_REVISION", "unknown")
+    return revision if _GIT_SHA_PATTERN.fullmatch(revision) else "unknown"
+
+
+def _worker_diagnostic(
+    admission: ContiguousSumProfileAdmission,
+    failure: BoundedFactorizationFailure,
+) -> ContiguousSumWorkerDiagnostic:
+    """Project bounded worker evidence into the public UNKNOWN diagnostic."""
+
+    budget_seconds = admission.factorization_budget_seconds
+    assert budget_seconds is not None
+    return ContiguousSumWorkerDiagnostic(
+        failure=failure.kind,
+        timeout_layer=failure.timeout_layer,
+        elapsed_ms=round(failure.elapsed_seconds * 1_000),
+        worker_timeout_ms=round(failure.timeout_seconds * 1_000),
+        budget_seconds=budget_seconds,
+        returncode=failure.returncode,
+        operation_version=_CONTIGUOUS_SUM_OPERATION_VERSION,
+        repository_revision=_repository_revision(),
+    )
 
 
 def _odd_primes_up_to(limit: int) -> list[int]:
@@ -62,10 +97,17 @@ def _segmented_odd_divisor_counts(
     return tuple(counts)
 
 
-def _factored_odd_divisor_count(value: int, *, timeout_seconds: float) -> int | None:
+def _factored_odd_divisor_count(
+    value: int,
+    *,
+    timeout_seconds: float,
+    failure: list[BoundedFactorizationFailure],
+) -> int | None:
     """Count odd divisors through the bounded factorization worker."""
 
-    factors = _bounded_direct_factorization(value, timeout_seconds=timeout_seconds)
+    factors = _bounded_direct_factorization(
+        value, timeout_seconds=timeout_seconds, failure=failure
+    )
     if factors is None:
         return None
     return prod(
@@ -99,19 +141,34 @@ def compute_contiguous_sum_profile(
         direct_counts: list[int] = []
         assert admission.factorization_budget_seconds is not None
         factorization_deadline = monotonic() + admission.factorization_budget_seconds
+        profile_started = monotonic()
         for n in range(admission.lower_bound, admission.upper_bound + 1):
             remaining = factorization_deadline - monotonic()
+            failures: list[BoundedFactorizationFailure] = []
             if remaining <= 0:
                 count = None
+                failures.append(
+                    BoundedFactorizationFailure(
+                        kind="REQUEST_DEADLINE_EXPIRED",
+                        timeout_layer="REQUEST_DEADLINE",
+                        elapsed_seconds=max(0.0, monotonic() - profile_started),
+                        timeout_seconds=0.0,
+                    )
+                )
             else:
-                count = _factored_odd_divisor_count(n, timeout_seconds=remaining)
+                count = _factored_odd_divisor_count(
+                    n, timeout_seconds=remaining, failure=failures
+                )
             if count is None:
+                assert failures
+                failure = failures[0]
                 return ContiguousSumProfileResult._unknown_from_kernel(
                     admission=admission,
                     detail=(
                         "the bounded factorization worker did not establish "
                         "the complete profile"
                     ),
+                    diagnostic=_worker_diagnostic(admission, failure),
                 )
             direct_counts.append(count)
         counts = tuple(direct_counts)

@@ -8,6 +8,7 @@ from jacobian.math.number_theory._finite_abelian_groups import (
     FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION,
 )
 from jacobian.math.number_theory._friable import FRIABLE_COUNT_OPERATION
+from jacobian.math.number_theory._contiguous_sum import CONTIGUOUS_SUM_OPERATION
 from jacobian.math.number_theory._modular import MODULAR_OPERATIONS
 from jacobian.math.number_theory._modular_identity import MODULAR_IDENTITY_OPERATIONS
 from jacobian.math.number_theory._periodic import PERIODIC_CONGRUENCE_OPERATIONS
@@ -29,4 +30,5 @@ TOOLS: MathTools = (
     FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
     FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION,
     FRIABLE_COUNT_OPERATION,
+    CONTIGUOUS_SUM_OPERATION,
 )

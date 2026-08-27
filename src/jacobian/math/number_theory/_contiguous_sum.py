@@ -1,0 +1,26 @@
+"""Declarations for contiguous-sum representation profiles."""
+
+from jacobian.catalog._examples import example
+from jacobian.math.number_theory._contiguous_sum_models import (
+    ContiguousSumProfileRequest,
+    ContiguousSumProfileResult,
+)
+from jacobian.math.number_theory._contiguous_sum_operations import (
+    compute_contiguous_sum_profile,
+)
+from jacobian.math.number_theory._support import number_theory_operation
+
+CONTIGUOUS_SUM_OPERATION = number_theory_operation(
+    "number_theory.integer_interval.contiguous_sum_profile.compute",
+    "Compute contiguous-sum representation profile on a bounded interval",
+    "For each n in [L, U], count representations as a sum of consecutive positive integers.",
+    ContiguousSumProfileRequest,
+    ContiguousSumProfileResult,
+    compute_contiguous_sum_profile,
+    "number-theory", "arithmetic-function", "interval-profile",
+    examples=(
+        example("contiguous_sum_1_15", "Count contiguous-sum representations for n from 1 to 15.", {"lower_bound": 1, "upper_bound": 15}),
+    ),
+)
+
+__all__ = ["CONTIGUOUS_SUM_OPERATION"]

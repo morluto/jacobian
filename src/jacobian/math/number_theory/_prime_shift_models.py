@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -14,7 +15,6 @@ from jacobian.canonical import (
     strict_json_object_size,
 )
 
-MAX_SHIFT_INPUT_BITS: int = 32
 MAX_SHIFT_INTERVAL_WIDTH: int = 1_000_000
 MAX_SHIFT_RESULT_BYTES: int = CanonicalLimits().max_output_bytes
 MAX_SHIFT_WORK: int = 100_000_000
@@ -47,30 +47,16 @@ def _profile_result_byte_bound(lower_bound: int, upper_bound: int) -> int:
     )
 
 
-def _profile_candidate_work(lower_bound: int, upper_bound: int) -> int:
-    """Conservatively charge the segmented-sieve execution envelope.
+@dataclass(frozen=True, slots=True)
+class _PrimeShiftProfileExecutionPlan:
+    """One admitted profile's complete, request-scoped execution envelope."""
 
-    Each power of two creates one candidate-prime interval. The interval
-    sieve scans its base primes and marks candidate multiples. For 32-bit
-    inputs, the sum of reciprocal integers up to ``sqrt(upper_bound)`` is
-    below 16, so that multiplier bounds all marking work; the base-prime
-    loops and the initial base sieve are charged separately.
-    """
-    candidate_count = 0
-    power_count = 0
-    power = 1
-    while power <= upper_bound - 2:
-        candidate_lower = max(2, lower_bound - power)
-        candidate_upper = upper_bound - power
-        if candidate_lower <= candidate_upper:
-            candidate_count += candidate_upper - candidate_lower + 1
-            power_count += 1
-        power <<= 1
-
-    base_limit = math.isqrt(upper_bound)
-    return _MAX_SHIFT_MARK_WORK_MULTIPLIER * (
-        candidate_count + (power_count + 1) * (base_limit + 1)
-    )
+    lower_bound: int
+    upper_bound: int
+    base_limit: int
+    candidate_intervals: tuple[tuple[int, int, int], ...]
+    candidate_work: int
+    result_bytes: int
 
 
 class PrimeShiftProfileRequest(StrictModel):
@@ -83,18 +69,61 @@ class PrimeShiftProfileRequest(StrictModel):
     def require_valid_interval(self) -> Self:
         if self.upper_bound < self.lower_bound:
             raise ValueError("upper_bound must be >= lower_bound")
-        if self.upper_bound.bit_length() > MAX_SHIFT_INPUT_BITS:
-            raise ValueError("interval endpoints exceed the supported integer size")
         if self.upper_bound - self.lower_bound + 1 > MAX_SHIFT_INTERVAL_WIDTH:
             raise ValueError("interval width exceeds maximum supported width")
-        if (
-            _profile_result_byte_bound(self.lower_bound, self.upper_bound)
-            > MAX_SHIFT_RESULT_BYTES
-        ):
-            raise ValueError("interval result exceeds the canonical output budget")
-        if _profile_candidate_work(self.lower_bound, self.upper_bound) > MAX_SHIFT_WORK:
-            raise ValueError("interval exceeds the translated-prime work budget")
         return self
+
+
+def require_prime_shift_profile_admission(
+    request: PrimeShiftProfileRequest,
+) -> _PrimeShiftProfileExecutionPlan:
+    """Build one exact execution plan after structural request validation.
+
+    The base-prime sieve and every power-specific candidate interval are
+    charged before execution.  The derived base-sieve charge also bounds the
+    endpoint size, so a narrow interval can use larger integers when its
+    actual segmented-sieve work and complete result still fit.
+    """
+    lower_bound = request.lower_bound
+    upper_bound = request.upper_bound
+    result_bytes = _profile_result_byte_bound(lower_bound, upper_bound)
+    if result_bytes > MAX_SHIFT_RESULT_BYTES:
+        raise ValueError("interval result exceeds the canonical output budget")
+
+    maximum_power = upper_bound - 2
+    power_count = maximum_power.bit_length() if maximum_power >= 1 else 0
+    base_work_units = power_count + 1
+    max_base_limit_plus_one = MAX_SHIFT_WORK // (
+        _MAX_SHIFT_MARK_WORK_MULTIPLIER * base_work_units
+    )
+    if max_base_limit_plus_one == 0 or upper_bound >= max_base_limit_plus_one**2:
+        raise ValueError("interval exceeds the translated-prime work budget")
+
+    base_limit = math.isqrt(upper_bound)
+    candidate_intervals: list[tuple[int, int, int]] = []
+    candidate_count = 0
+    power = 1
+    while power <= maximum_power:
+        candidate_lower = max(2, lower_bound - power)
+        candidate_upper = upper_bound - power
+        if candidate_lower <= candidate_upper:
+            candidate_intervals.append((power, candidate_lower, candidate_upper))
+            candidate_count += candidate_upper - candidate_lower + 1
+        power <<= 1
+
+    candidate_work = _MAX_SHIFT_MARK_WORK_MULTIPLIER * (
+        candidate_count + (len(candidate_intervals) + 1) * (base_limit + 1)
+    )
+    if candidate_work > MAX_SHIFT_WORK:
+        raise ValueError("interval exceeds the translated-prime work budget")
+    return _PrimeShiftProfileExecutionPlan(
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        base_limit=base_limit,
+        candidate_intervals=tuple(candidate_intervals),
+        candidate_work=candidate_work,
+        result_bytes=result_bytes,
+    )
 
 
 class PrimeShiftProfileRow(StrictModel):
@@ -111,9 +140,35 @@ class PrimeShiftProfileResult(StrictModel):
     upper_bound: int
     rows: tuple[PrimeShiftProfileRow, ...]
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        request: PrimeShiftProfileRequest,
+        counts: tuple[int, ...],
+        plan: _PrimeShiftProfileExecutionPlan,
+    ) -> Self:
+        """Construct the trusted result from the plan's admitted row axis."""
+        if (
+            request.lower_bound != plan.lower_bound
+            or request.upper_bound != plan.upper_bound
+            or len(counts) != plan.upper_bound - plan.lower_bound + 1
+        ):
+            raise RuntimeError("prime-shift kernel result does not match its plan")
+        return cls.model_construct(
+            lower_bound=plan.lower_bound,
+            upper_bound=plan.upper_bound,
+            rows=tuple(
+                PrimeShiftProfileRow(
+                    n=plan.lower_bound + index,
+                    representation_count=count,
+                )
+                for index, count in enumerate(counts)
+            ),
+        )
+
 
 __all__ = [
-    "MAX_SHIFT_INPUT_BITS",
     "MAX_SHIFT_INTERVAL_WIDTH",
     "MAX_SHIFT_RESULT_BYTES",
     "MAX_SHIFT_WORK",

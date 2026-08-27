@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import math
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._prime_shift_models import (
     PrimeShiftProfileRequest as PrimeShiftRequest,
 )
 from jacobian.math.number_theory._prime_shift_models import (
     PrimeShiftProfileResult,
-    PrimeShiftProfileRow,
+    require_prime_shift_profile_admission,
 )
 
 
@@ -54,28 +55,30 @@ def compute_prime_shift_profile(
     This is the de Polignac-style count: for each prime p and each power of 2
     that satisfies 2^k <= n - p, we count one representation.
     """
-    lo = request.lower_bound
-    hi = request.upper_bound
-    base_primes = _simple_sieve(math.isqrt(hi))
+    try:
+        plan = require_prime_shift_profile_admission(request)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("lower_bound", "upper_bound"),
+            code="number_theory.translated_prime.admission",
+            message=str(exc),
+        ) from exc
 
-    counts = [0] * (hi - lo + 1)
+    base_primes = _simple_sieve(plan.base_limit)
 
-    power = 1  # 2^0 = 1
-    while power <= hi - 2:
-        candidate_lower = max(2, lo - power)
-        candidate_upper = hi - power
-        if candidate_lower <= candidate_upper:
-            flags = _segmented_sieve(candidate_lower, candidate_upper, base_primes)
-            for offset, is_prime in enumerate(flags):
-                if is_prime:
-                    counts[candidate_lower + offset + power - lo] += 1
-        power <<= 1
+    counts = [0] * (plan.upper_bound - plan.lower_bound + 1)
 
-    rows = tuple(
-        PrimeShiftProfileRow(n=lo + i, representation_count=counts[i])
-        for i in range(hi - lo + 1)
+    for power, candidate_lower, candidate_upper in plan.candidate_intervals:
+        flags = _segmented_sieve(candidate_lower, candidate_upper, base_primes)
+        for offset, is_prime in enumerate(flags):
+            if is_prime:
+                counts[candidate_lower + offset + power - plan.lower_bound] += 1
+
+    return PrimeShiftProfileResult._from_kernel(
+        request=request,
+        counts=tuple(counts),
+        plan=plan,
     )
-    return PrimeShiftProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
 
 
 __all__ = ["compute_prime_shift_profile"]

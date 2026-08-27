@@ -2,7 +2,6 @@
 
 from jacobian.catalog._examples import example
 from jacobian.math.number_theory._prime_shift_models import (
-    MAX_SHIFT_INPUT_BITS,
     MAX_SHIFT_RESULT_BYTES,
     MAX_SHIFT_WORK,
     PrimeShiftProfileRequest,
@@ -21,7 +20,8 @@ PRIME_SHIFT_OPERATION = number_theory_operation(
         "prime and k >= 0. Returns the complete ordered profile when its "
         f"canonical JSON is within the {MAX_SHIFT_RESULT_BYTES}-byte output "
         f"budget and its segmented-sieve work is within {MAX_SHIFT_WORK} "
-        f"units; endpoints are limited to {MAX_SHIFT_INPUT_BITS}-bit integers."
+        "units. Endpoint size is admitted by that derived work envelope rather "
+        "than by a fixed scalar cap."
     ),
     PrimeShiftProfileRequest,
     PrimeShiftProfileResult,

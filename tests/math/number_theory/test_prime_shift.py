@@ -2,6 +2,7 @@
 
 import pytest
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._prime_shift_models import PrimeShiftProfileRequest
 from jacobian.math.number_theory._prime_shift_operations import (
     compute_prime_shift_profile,
@@ -52,6 +53,15 @@ def test_admits_narrow_interval_above_legacy_upper_bound() -> None:
     ]
 
 
+def test_admits_singleton_at_2_to_the_32() -> None:
+    result = compute_prime_shift_profile(
+        PrimeShiftProfileRequest(lower_bound=2**32, upper_bound=2**32)
+    )
+
+    assert len(result.rows) == 1
+    assert result.rows[0].n == 2**32
+
+
 def test_result_rows_are_immutable() -> None:
     result = compute_prime_shift_profile(
         PrimeShiftProfileRequest(lower_bound=4, upper_bound=4)
@@ -64,13 +74,17 @@ def test_result_rows_are_immutable() -> None:
 
 
 def test_rejects_interval_that_exceeds_segmented_sieve_work_budget() -> None:
-    with pytest.raises(ValueError, match="work budget"):
-        PrimeShiftProfileRequest(
-            lower_bound=4_000_000_000,
-            upper_bound=4_000_200_000,
-        )
+    request = PrimeShiftProfileRequest(
+        lower_bound=4_000_000_000,
+        upper_bound=4_000_200_000,
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="work budget"):
+        compute_prime_shift_profile(request)
 
 
 def test_rejects_profile_that_exceeds_canonical_output_budget() -> None:
     with pytest.raises(ValueError, match="canonical output budget"):
-        PrimeShiftProfileRequest(lower_bound=9_000_001, upper_bound=10_000_000)
+        compute_prime_shift_profile(
+            PrimeShiftProfileRequest(lower_bound=9_000_001, upper_bound=10_000_000)
+        )

@@ -268,3 +268,86 @@ __all__ = [
     "compute_prime_gap_profile",
     "compute_squarefree_profile",
 ]
+
+
+def compute_least_prime_factor_profile(
+    request: IntervalProfileRequest,
+) -> LeastPrimeFactorProfileResult:
+    """Compute p(n) (least prime factor) for every n in [L, U]."""
+    from jacobian.math.number_theory._interval_profile_models import (
+        LeastPrimeFactorProfileResult,
+        LeastPrimeFactorProfileRow,
+    )
+    lo, hi = request.lower_bound, request.upper_bound
+    primes = _simple_sieve(hi)
+    rows = []
+    for n in range(lo, hi + 1):
+        if n == 1:
+            rows.append(LeastPrimeFactorProfileRow(n=1, least_prime_factor=1))
+            continue
+        m, lpf = n, n
+        for p in primes:
+            if p * p > m:
+                break
+            if m % p == 0:
+                lpf = p
+                break
+        rows.append(LeastPrimeFactorProfileRow(n=n, least_prime_factor=lpf))
+    return LeastPrimeFactorProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
+
+
+def compute_euler_totient_profile(
+    request: IntervalProfileRequest,
+) -> EulerTotientProfileResult:
+    """Compute phi(n) for every n in [L, U]."""
+    from jacobian.math.number_theory._interval_profile_models import (
+        EulerTotientProfileResult,
+        EulerTotientProfileRow,
+    )
+    lo, hi = request.lower_bound, request.upper_bound
+    primes = _simple_sieve(hi)
+    rows = []
+    for n in range(lo, hi + 1):
+        if n == 1:
+            rows.append(EulerTotientProfileRow(n=1, euler_totient=1))
+            continue
+        phi, temp = n, n
+        for p in primes:
+            if p * p > temp:
+                break
+            if temp % p == 0:
+                phi = phi // p * (p - 1)
+                while temp % p == 0:
+                    temp //= p
+        if temp > 1:
+            phi = phi // temp * (temp - 1)
+        rows.append(EulerTotientProfileRow(n=n, euler_totient=phi))
+    return EulerTotientProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
+
+
+def compute_divisor_sum_profile(
+    request: IntervalProfileRequest,
+) -> DivisorSumProfileResult:
+    """Compute sigma(n) (sum of divisors) for every n in [L, U]."""
+    from jacobian.math.number_theory._interval_profile_models import (
+        DivisorSumProfileResult,
+        DivisorSumProfileRow,
+    )
+    lo, hi = request.lower_bound, request.upper_bound
+    primes = _simple_sieve(hi)
+    rows = []
+    for n in range(lo, hi + 1):
+        temp, sigma = n, 1
+        for p in primes:
+            if p * p > temp:
+                break
+            if temp % p == 0:
+                pk = 1
+                while temp % p == 0:
+                    temp //= p
+                    pk *= p
+                sigma *= (pk * p - 1) // (p - 1)
+        if temp > 1:
+            sigma *= temp + 1
+        rows.append(DivisorSumProfileRow(n=n, divisor_sum=sigma))
+    return DivisorSumProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)

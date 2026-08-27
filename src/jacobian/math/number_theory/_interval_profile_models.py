@@ -143,3 +143,36 @@ __all__ = [
     "PrimeGapProfileRow",
     "SquarefreeProfileResult",
 ]
+
+
+class LeastPrimeFactorProfileRow(StrictModel):
+    n: int
+    least_prime_factor: int = Field(ge=1)
+
+
+class LeastPrimeFactorProfileResult(StrictModel):
+    lower_bound: int
+    upper_bound: int
+    rows: list[LeastPrimeFactorProfileRow]
+
+
+class EulerTotientProfileRow(StrictModel):
+    n: int
+    euler_totient: int = Field(ge=1)
+
+
+class EulerTotientProfileResult(StrictModel):
+    lower_bound: int
+    upper_bound: int
+    rows: list[EulerTotientProfileRow]
+
+
+class DivisorSumProfileRow(StrictModel):
+    n: int
+    divisor_sum: int = Field(ge=1)
+
+
+class DivisorSumProfileResult(StrictModel):
+    lower_bound: int
+    upper_bound: int
+    rows: list[DivisorSumProfileRow]

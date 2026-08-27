@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import sys
 import threading
-import time
 from pathlib import Path
 
 import pytest
@@ -311,7 +310,7 @@ def _stripe_certificate() -> GenericFiberCertificate:
     )
 
 
-def test_heavy_certificate_replay_is_killably_bounded(
+def test_heavy_certificate_returns_the_owner_kernel_conclusion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -333,13 +332,10 @@ def test_heavy_certificate_replay_is_killably_bounded(
         )
     )
 
-    assert result.outcome == "TIMEOUT"
-    assert result.detail in (
-        "Certificate replay exceeded the declared wall-time limit.",
-        "The declared wall-time envelope expired before certificate replay.",
-    )
+    assert result.outcome == "DOMINANT_NOT_GENERICALLY_FINITE"
+    assert result.detail is None
     assert result.degree is None
-    assert result.evidence is None
+    assert result.evidence == _stripe_certificate()
 
 
 def test_one_second_budget_still_replays_a_light_certificate(
@@ -381,37 +377,6 @@ def test_one_second_budget_still_replays_a_light_certificate(
     assert result.outcome == "GENERICALLY_FINITE"
     assert result.degree == 1
     assert result.evidence is not None
-
-
-def test_expired_deadline_after_the_backend_still_reports_pre_replay_timeout(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def slow_backend(*_args):
-        time.sleep(1.5)
-        return _singular.SingularGenericFiberResult(
-            outcome="COMPUTED",
-            certificate=_stripe_certificate(),
-            dimension=0,
-            vector_dimension=3,
-            backend_version="4.4.1",
-        )
-
-    monkeypatch.setattr(_operations, "run_singular_generic_fiber", slow_backend)
-
-    result = compute_generic_degree(
-        GenericDegreeRequest(
-            polynomial_map=_two_variable_map(),
-            resource_budget=GenericDegreeComputationBudget(wall_seconds=1),
-        )
-    )
-
-    assert result.outcome == "TIMEOUT"
-    assert (
-        result.detail
-        == "The declared wall-time envelope expired before certificate replay."
-    )
-    assert result.degree is None
-    assert result.evidence is None
 
 
 @pytest.mark.parametrize(

@@ -14,18 +14,19 @@ from jacobian.canonical import CanonicalLimits
 # ---------------------------------------------------------------------------
 #
 # The profiles share one admission shape: a bounded closed interval [L, U]
-# with L >= 1 and U >= L.  The key quantity controlling work and output is
-# the interval width W = U - L + 1 and the upper bound U (for sieving through
-# sqrt(U)).  We cap W at a value that keeps both the sieve and the serialized
-# result within the canonical transport limit.
+# with L >= 1 and U >= L.  The key quantities controlling work and output are
+# the interval width W = U - L + 1 and the upper bound U (for the base sieve
+# through sqrt(U)).  We cap W at a value that keeps the segment and the
+# serialized result within the canonical transport limit.
 #
-# For squarefree/divisor-count/greatest-prime-factor profiles the kernel is a
-# segmented sieve over [L, U] needing primes through floor(sqrt(U)).  The
-# work is O(W log log U) for the sieve plus O(W) for the profile scan.
+# For squarefree and prime-factor profiles the kernels use a segment over
+# [L, U] and a base sieve needing primes through floor(sqrt(U)); they never
+# materialize a prefix sieve through U.  The work is proportional to the
+# segment width and the base sieve plus the interval's prime-factor hits.
 #
-# For prime-gap profiles the kernel is a segmented prime sieve over [L, U+1]
-# (the +1 ensures the successor beyond U is included) needing primes through
-# floor(sqrt(U+1)).  The work is O(W log log U).
+# For prime-gap profiles the kernel marks primes in [L, U] as a segment and
+# queries the successor beyond U separately, needing primes through
+# floor(sqrt(U)).
 
 MAX_INTERVAL_UPPER_BOUND: int = 10_000_000
 MAX_INTERVAL_WIDTH: int = 1_000_000

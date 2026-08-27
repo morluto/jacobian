@@ -212,3 +212,20 @@ class TestDivisorSumProfile:
         )
         for row in result.rows:
             assert row.divisor_sum == int(divisor_sigma(row.n))
+
+
+def test_narrow_high_interval_uses_exact_segmented_profiles() -> None:
+    request = IntervalProfileRequest(
+        lower_bound=10_000_000,
+        upper_bound=10_000_000,
+    )
+
+    assert compute_divisor_count_profile(request).rows[0].divisor_count == 64
+    assert (
+        compute_greatest_prime_factor_profile(request).rows[0].greatest_prime_factor
+        == 5
+    )
+    assert compute_least_prime_factor_profile(request).rows[0].least_prime_factor == 2
+    assert compute_euler_totient_profile(request).rows[0].euler_totient == 4_000_000
+    assert compute_divisor_sum_profile(request).rows[0].divisor_sum == 24_902_280
+    assert compute_prime_gap_profile(request).rows == ()

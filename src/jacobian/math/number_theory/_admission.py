@@ -259,9 +259,9 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "complete exact friable count with result-sensitive materialized and generated regimes, avoiding caller-side factorization of every source integer",
     ),
     OperationAdmission(
-        "number_theory.ksigma.preimage.compute",
+        "number_theory.divisor_sum_product.preimages.compute",
         AdmissionDecision.KEEP,
-        "distinct exact preimage computation for k*sigma(n) that a loop of scalar divisor_sum calls cannot establish as one source-bound value",
+        "complete exact source-bound fiber of n*sigma(n), using the square-root inequality to avoid caller-side coverage proofs",
     ),
     OperationAdmission(
         "number_theory.integer_interval.p_adic_valuation_profile.compute",

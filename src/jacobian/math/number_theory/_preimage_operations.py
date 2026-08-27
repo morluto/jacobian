@@ -1,91 +1,82 @@
-"""Exact kernels for k*sigma(k) preimage and p-adic interval valuation profiles."""
+"""Exact kernels for divisor-sum-product fibers and p-adic profiles."""
 
 from __future__ import annotations
 
-import math
+from math import isqrt
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._preimage_models import (
-    IntervalValuationProfileRequest,
-    IntervalValuationProfileResult,
-    IntervalValuationProfileRow,
-    KSigmaPreimageRequest,
-    KSigmaPreimageResult,
+    DivisorSumProductPreimageRequest,
+    DivisorSumProductPreimageResult,
+    PAdicIntervalProfileRequest,
+    PAdicIntervalProfileResult,
+    PAdicIntervalProfileRow,
 )
 
 
-def _simple_sieve(limit: int) -> list[int]:
-    if limit < 2:
-        return []
-    is_prime = bytearray(b"\x01") * (limit + 1)
-    is_prime[0] = is_prime[1] = 0
-    for i in range(2, math.isqrt(limit) + 1):
-        if is_prime[i]:
-            for j in range(i * i, limit + 1, i):
-                is_prime[j] = 0
-    return [i for i in range(2, limit + 1) if is_prime[i]]
-
-
-def compute_ksigma_preimage(
-    request: KSigmaPreimageRequest,
-) -> KSigmaPreimageResult:
-    """Find all n such that k * sigma(n) = target_value.
-
-    sigma(n) is the sum of divisors of n. We iterate over candidate n values
-    where sigma(n) = target_value / k (if k divides target_value).
-    Uses sympy.divisor_sigma for exact computation.
-    """
+def compute_divisor_sum_product_preimage(
+    request: DivisorSumProductPreimageRequest,
+) -> DivisorSumProductPreimageResult:
+    """Compute every positive n with ``n * sigma(n) == target``."""
     from sympy import divisor_sigma
 
-    target_sigma = request.target_value
-    k = request.k
-
-    # k * sigma(n) = target => sigma(n) = target / k
-    if target_sigma % k != 0:
-        return KSigmaPreimageResult(
-            k=k, target_value=request.target_value, preimages=[]
-        )
-
-    sigma_target = target_sigma // k
-
-    # Iterate candidate n values up to sigma_target (sigma(n) >= n+1 for n >= 2)
-    preimages = []
-    # sigma(n) >= 1 + n for n >= 2, so n <= sigma_target - 1
-    upper = min(sigma_target, 100000)  # bounded search
-    for n in range(1, upper + 1):
-        if int(divisor_sigma(n)) == sigma_target:
-            preimages.append(n)
-
-    return KSigmaPreimageResult(
-        k=k, target_value=request.target_value, preimages=preimages
+    target = parse_canonical_integer(request.target)
+    source_upper_bound = isqrt(target)
+    preimages = tuple(
+        n
+        for n in range(1, source_upper_bound + 1)
+        if n * int(divisor_sigma(n)) == target
+    )
+    return DivisorSumProductPreimageResult._from_kernel(
+        request,
+        preimages=preimages,
     )
 
 
-def compute_interval_valuation_profile(
-    request: IntervalValuationProfileRequest,
-) -> IntervalValuationProfileResult:
-    """Compute v_p(n) for every n in [L, U] where p is prime."""
-    lo = request.lower_bound
-    hi = request.upper_bound
-    p = request.prime
+def compute_p_adic_interval_profile(
+    request: PAdicIntervalProfileRequest,
+) -> PAdicIntervalProfileResult:
+    """Compute the valuation histogram on ``[start + 1, start + length]``."""
+    start = parse_canonical_integer(request.start)
+    length = parse_canonical_integer(request.length)
+    prime = parse_canonical_integer(request.prime)
+    endpoint = start + length
 
-    rows = []
-    for n in range(lo, hi + 1):
-        m = n
-        val = 0
-        while m % p == 0 and m > 0:
-            val += 1
-            m //= p
-        rows.append(IntervalValuationProfileRow(n=n, valuation=val))
+    rows: list[PAdicIntervalProfileRow] = []
+    total_valuation = 0
+    maximum_valuation = 0
+    power = 1
+    valuation = 0
+    while power <= endpoint:
+        next_power = power * prime
+        divisible_at_power = endpoint // power - start // power
+        divisible_at_next_power = (
+            endpoint // next_power - start // next_power
+            if next_power <= endpoint
+            else 0
+        )
+        count = divisible_at_power - divisible_at_next_power
+        if count:
+            rows.append(
+                PAdicIntervalProfileRow(
+                    valuation=valuation,
+                    count=str(count),
+                )
+            )
+            total_valuation += valuation * count
+            maximum_valuation = valuation
+        power = next_power
+        valuation += 1
 
-    return IntervalValuationProfileResult(
-        lower_bound=lo,
-        upper_bound=hi,
-        prime=p,
-        rows=rows,
+    return PAdicIntervalProfileResult._from_kernel(
+        request,
+        rows=tuple(rows),
+        total_valuation=total_valuation,
+        maximum_valuation=maximum_valuation,
     )
 
 
 __all__ = [
-    "compute_interval_valuation_profile",
-    "compute_ksigma_preimage",
+    "compute_divisor_sum_product_preimage",
+    "compute_p_adic_interval_profile",
 ]

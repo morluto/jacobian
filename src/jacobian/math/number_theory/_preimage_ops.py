@@ -1,52 +1,54 @@
-"""Declarations for k*sigma preimage and p-adic interval valuation profiles."""
+"""Declarations for divisor-sum-product fibers and p-adic profiles."""
 
 from jacobian.catalog._examples import example
 from jacobian.math.number_theory._preimage_models import (
-    IntervalValuationProfileRequest,
-    IntervalValuationProfileResult,
-    KSigmaPreimageRequest,
-    KSigmaPreimageResult,
+    DivisorSumProductPreimageRequest,
+    DivisorSumProductPreimageResult,
+    PAdicIntervalProfileRequest,
+    PAdicIntervalProfileResult,
 )
 from jacobian.math.number_theory._preimage_operations import (
-    compute_interval_valuation_profile,
-    compute_ksigma_preimage,
+    compute_divisor_sum_product_preimage,
+    compute_p_adic_interval_profile,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 
 PREIMAGE_OPERATIONS = (
     number_theory_operation(
-        "number_theory.ksigma.preimage.compute",
-        "Compute preimages of k*sigma(n)",
-        "Find all n such that k * sigma(n) = target_value, where sigma is the sum-of-divisors function.",
-        KSigmaPreimageRequest,
-        KSigmaPreimageResult,
-        compute_ksigma_preimage,
+        "number_theory.divisor_sum_product.preimages.compute",
+        "Compute the preimage of n*sigma(n)",
+        "Find all positive n such that n * sigma(n) = target, where sigma is the sum-of-divisors function.",
+        DivisorSumProductPreimageRequest,
+        DivisorSumProductPreimageResult,
+        compute_divisor_sum_product_preimage,
         "number-theory",
         "divisor-function",
         "preimage",
+        "exact",
         examples=(
             example(
-                "ksigma_preimage_basic",
-                "Find n with 1*sigma(n) = 12.",
-                {"k": 1, "target_value": 12},
+                "divisor_sum_product_preimage_336",
+                "Find all n with n*sigma(n) = 336.",
+                {"target": "336"},
             ),
         ),
     ),
     number_theory_operation(
         "number_theory.integer_interval.p_adic_valuation_profile.compute",
-        "Compute p-adic valuation profile on a bounded interval",
-        "For each n in [L, U], compute v_p(n) the p-adic valuation (largest power of p dividing n).",
-        IntervalValuationProfileRequest,
-        IntervalValuationProfileResult,
-        compute_interval_valuation_profile,
+        "Compute a p-adic valuation profile",
+        "For each valuation j, count the integers in [start+1, start+length] with v_p(n) = j.",
+        PAdicIntervalProfileRequest,
+        PAdicIntervalProfileResult,
+        compute_p_adic_interval_profile,
         "number-theory",
         "p-adic",
         "interval-profile",
+        "exact",
         examples=(
             example(
-                "valuation_2_1_10",
-                "Compute v_2(n) for n from 1 to 10.",
-                {"lower_bound": 1, "upper_bound": 10, "prime": 2},
+                "p_adic_profile_2_0_10",
+                "Compute the valuation histogram for 1 through 10 at p=2.",
+                {"start": "0", "length": "10", "prime": "2"},
             ),
         ),
     ),

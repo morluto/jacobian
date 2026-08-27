@@ -3,8 +3,10 @@
 Use `math.find` progressively, then call `math.run` once with the selected
 operation ID and a `payload` matching its request model. The ordinary path is:
 
-1. Search for the mathematical outcome when the operation is unknown. Search
-   ranking is deterministic lexical retrieval, not a recommendation.
+1. Search globally for one atomic mathematical outcome when the operation is
+   unknown. Use a short phrase such as "integer nth root" or "real root
+   isolation", not a complete proof goal. Search ranking is deterministic
+   lexical retrieval, not a recommendation.
 2. Inspect the selected operation before forming an unfamiliar payload. Its
    schemas and examples are authoritative for that installed catalog.
 3. Run exactly that operation with one typed payload.
@@ -14,17 +16,20 @@ For example, search for a small number of matrix operations, then inspect an
 exact candidate:
 
 ```json
-{"request":{"op":"search","query":"exact matrix determinant","domain":"matrix","limit":3}}
+{"request":{"op":"search","query":"matrix determinant","namespace":"matrix","limit":3}}
 ```
 
 ```json
 {"request":{"op":"inspect","operation_id":"matrix.determinant.compute"}}
 ```
 
-Use `browse` instead to map an unfamiliar domain in operation-ID order:
+Use `browse` to map a known primary namespace in operation-ID order. A
+namespace matches only the first segment of an operation ID; tags do not filter
+the result set. Search and browse responses retain `catalog_resource` as the
+explicit fallback for a full catalog export:
 
 ```json
-{"request":{"op":"browse","domain":"matrix","limit":20}}
+{"request":{"op":"browse","namespace":"matrix","limit":20}}
 ```
 
 After inspection, run the selected operation. For example:

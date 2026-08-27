@@ -74,7 +74,12 @@ semantics and types.
   operation gap rather than a discovery, representation, interoperability,
   contract, scale, backend, or reasoning failure.
 - Keep operations composable and domain-owned. Discovery must not prescribe a
-  proof strategy, next step, or stopping rule.
+  proof strategy, caller workflow, next step, or stopping rule. It may state
+  declarative mathematical relationships, alternate terminology, and defining
+  identities when they clarify an operation's actual postcondition, but phrase
+  them as facts about the mathematics rather than instructions for composing
+  calls. For example, "proper-divisor lists omit the input" is allowed, while
+  "callers obtain proper divisors by removing the input" is not.
 - Jacobian is pre-stable. When a request/result contract is broader than the
   implementation, reports a wrong mathematical value, or turns an accepted
   request into a host exception, change the contract rather than preserving the

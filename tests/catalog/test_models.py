@@ -33,15 +33,16 @@ def test_catalog_discovery_text_has_no_arbitrary_character_cap() -> None:
 
     request = OperationDiscoveryRequest(query=long_text)
     descriptor = OperationDescriptor(
-        **{**_descriptor("integer.compute.gcd"), "description": long_text}
+        operation_id="integer.compute.gcd",
+        title="integer.compute.gcd",
+        description=long_text,
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
     )
     match = OperationDiscoveryMatch(
         operation_id="integer.compute.gcd",
         title="Compute gcd",
         description=long_text,
-        relevance_score=0,
-        applicability="NEEDS_MORE_TYPED_REQUIREMENTS",
-        applicability_code="FULL_REQUEST_REQUIRED",
     )
     card = OperationBrowseCard(
         operation_id="integer.compute.gcd",
@@ -63,27 +64,41 @@ def test_discovery_page_metadata_is_bound_to_returned_matches() -> None:
                 "operation_id": "integer.compute.gcd",
                 "title": "Compute gcd",
                 "description": "Compute one exact gcd.",
-                "relevance_score": 12,
-                "applicability": "NEEDS_MORE_TYPED_REQUIREMENTS",
-                "applicability_code": "FULL_REQUEST_REQUIRED",
             }
         ],
         "total_matches": 2,
     }
     with pytest.raises(ValidationError) as error:
         OperationDiscoveryResult.model_validate(
-            {**base, "truncated": True, "next_cursor": None}
-        )
-    assert _error_type(error.value) == "catalog.cursor_state"
-    with pytest.raises(ValidationError) as error:
-        OperationDiscoveryResult.model_validate(
-            {
-                **base,
-                "truncated": True,
-                "next_cursor": "integer.compute.lcm",
-            }
+            {**base, "next_cursor": "integer.compute.lcm"}
         )
     assert _error_type(error.value) == "catalog.cursor_position"
+
+
+@pytest.mark.parametrize(
+    "removed_field",
+    ("relevance_score", "applicability", "applicability_code"),
+)
+def test_discovery_match_rejects_removed_routing_metadata(removed_field: str) -> None:
+    with pytest.raises(ValidationError):
+        OperationDiscoveryMatch.model_validate(
+            {
+                "operation_id": "integer.compute.gcd",
+                "title": "Compute gcd",
+                "description": "Compute one exact gcd.",
+                removed_field: "obsolete",
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "result_type", (OperationDiscoveryResult, OperationBrowseResult)
+)
+def test_discovery_pages_reject_removed_truncation_flag(
+    result_type: type[OperationDiscoveryResult] | type[OperationBrowseResult],
+) -> None:
+    with pytest.raises(ValidationError):
+        result_type.model_validate({"truncated": False})
 
 
 def test_browse_page_metadata_requires_sorted_compact_operation_cards() -> None:
@@ -99,15 +114,19 @@ def test_browse_page_metadata_requires_sorted_compact_operation_cards() -> None:
     }
     with pytest.raises(ValidationError) as error:
         OperationBrowseResult.model_validate(
-            {**base, "truncated": True, "next_cursor": None}
+            {**base, "next_cursor": "integer.compute.lcm"}
         )
-    assert _error_type(error.value) == "catalog.cursor_state"
+    assert _error_type(error.value) == "catalog.cursor_position"
     with pytest.raises(ValidationError) as error:
         OperationBrowseResult.model_validate(
             {
                 **base,
                 "operations": [
-                    *base["operations"],
+                    {
+                        "operation_id": "integer.compute.gcd",
+                        "title": "Compute gcd",
+                        "description": "Compute one exact gcd.",
+                    },
                     {
                         "operation_id": "integer.compute.factorial",
                         "title": "Compute factorial",
@@ -115,7 +134,6 @@ def test_browse_page_metadata_requires_sorted_compact_operation_cards() -> None:
                     },
                 ],
                 "total_operations": 2,
-                "truncated": False,
             }
         )
     assert _error_type(error.value) == "catalog.browse_order"
@@ -132,3 +150,13 @@ def test_catalog_rejects_duplicate_or_nondeterministic_operation_ids() -> None:
             }
         )
     assert _error_type(error.value) == "catalog.operation_order"
+
+
+def test_descriptor_rejects_unbounded_discovery_vocabulary() -> None:
+    with pytest.raises(ValidationError):
+        OperationDescriptor.model_validate(
+            {
+                **_descriptor("integer.compute.gcd"),
+                "discovery_terms": [f"term_{index}" for index in range(9)],
+            }
+        )

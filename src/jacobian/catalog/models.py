@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Self
 
 from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
@@ -21,6 +21,9 @@ OperationId = Annotated[
         strict=True,
     ),
 ]
+
+_MAX_DISCOVERY_TERMS = 8
+_MAX_DISCOVERY_TERM_LENGTH = 96
 
 
 class OperationDomainValidationError(ValueError):
@@ -77,7 +80,7 @@ class OperationDiscoveryRequest(StrictModel):
     """Compact installed-portfolio search, independent of any transport."""
 
     query: str = Field(min_length=1)
-    domain: str | None = Field(
+    namespace: str | None = Field(
         default=None,
         pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$",
     )
@@ -90,9 +93,9 @@ class OperationDiscoveryRequest(StrictModel):
             raise _validation_error(
                 "blank_query", "query must contain a non-whitespace character"
             )
-        if self.domain is not None and not self.domain.strip():
+        if self.namespace is not None and not self.namespace.strip():
             raise _validation_error(
-                "blank_domain", "domain must contain a non-whitespace character"
+                "blank_namespace", "namespace must contain a non-whitespace character"
             )
         return self
 
@@ -104,22 +107,15 @@ class OperationDiscoveryMatch(StrictModel):
     title: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1)
     tags: tuple[str, ...] = ()
-    relevance_score: int = Field(default=0, ge=0, strict=True)
-    applicability: Literal[
-        "INCOMPATIBLE",
-        "NEEDS_MORE_TYPED_REQUIREMENTS",
-    ]
-    applicability_code: Literal["FULL_REQUEST_REQUIRED",]
 
 
 class OperationDiscoveryResult(StrictModel):
     """Deterministically ranked compact installed outcomes."""
 
     query: str
-    domain: str | None = None
+    namespace: str | None = None
     matches: tuple[OperationDiscoveryMatch, ...]
     total_matches: int = Field(ge=0, strict=True)
-    truncated: bool
     next_cursor: OperationId | None = None
 
     @model_validator(mode="after")
@@ -132,10 +128,6 @@ class OperationDiscoveryResult(StrictModel):
         if self.total_matches < len(self.matches):
             raise _validation_error(
                 "match_count", "total_matches cannot be smaller than the returned page"
-            )
-        if self.truncated != (self.next_cursor is not None):
-            raise _validation_error(
-                "cursor_state", "truncated must agree with next_cursor"
             )
         if self.next_cursor is not None and (
             not operation_ids or self.next_cursor != operation_ids[-1]
@@ -158,10 +150,9 @@ class OperationBrowseCard(StrictModel):
 class OperationBrowseResult(StrictModel):
     """One cursor-paged, unranked view of the immutable operation library."""
 
-    domain: str | None = None
+    namespace: str | None = None
     operations: tuple[OperationBrowseCard, ...]
     total_operations: int = Field(ge=0, strict=True)
-    truncated: bool
     next_cursor: OperationId | None = None
 
     @model_validator(mode="after")
@@ -176,10 +167,6 @@ class OperationBrowseResult(StrictModel):
             raise _validation_error(
                 "browse_count",
                 "total_operations cannot be smaller than the returned page",
-            )
-        if self.truncated != (self.next_cursor is not None):
-            raise _validation_error(
-                "cursor_state", "truncated must agree with next_cursor"
             )
         if self.next_cursor is not None and (
             not operation_ids or self.next_cursor != operation_ids[-1]
@@ -201,10 +188,14 @@ class OperationDescriptor(StrictModel):
     output_schema: dict[str, Any]
     read_only: bool = False
     tags: tuple[str, ...] = ()
+    discovery_terms: tuple[str, ...] = Field(
+        default=(), max_length=_MAX_DISCOVERY_TERMS
+    )
     examples: tuple[OperationExample, ...] = ()
 
     @model_validator(mode="after")
     def require_canonical_schemas(self) -> Self:
+        _validate_discovery_terms(self.discovery_terms)
         if len({example.name for example in self.examples}) != len(self.examples):
             raise _validation_error(
                 "duplicate_example_name",
@@ -243,7 +234,12 @@ class OperationCatalogSnapshot(StrictModel):
 
 @dataclass(frozen=True, slots=True)
 class MathTool[RequestT: StrictModel, ResultT: StrictModel]:
-    """One discoverable mathematical function and its public typed contract."""
+    """One immutable mathematical declaration and its public typed contract.
+
+    ``discovery_terms`` contains a small reviewed vocabulary of established
+    names for this exact postcondition.  It is ranking metadata, not a query
+    rewrite language or a promise to accept alternate request syntax.
+    """
 
     operation_id: str
     title: str
@@ -252,6 +248,7 @@ class MathTool[RequestT: StrictModel, ResultT: StrictModel]:
     result_type: type[ResultT]
     run: Callable[[RequestT], ResultT]
     tags: tuple[str, ...] = ()
+    discovery_terms: tuple[str, ...] = ()
     examples: tuple[OperationExample, ...] = ()
 
     def __post_init__(self) -> None:
@@ -263,11 +260,31 @@ class MathTool[RequestT: StrictModel, ResultT: StrictModel]:
             raise ValueError("math tool tags must be unique")
         if any(not tag.strip() for tag in self.tags):
             raise ValueError("math tool tags must not be empty")
+        _validate_discovery_terms(self.discovery_terms)
         if len({example.name for example in self.examples}) != len(self.examples):
             raise ValueError("math tool example names must be unique")
 
 
 type MathTools = tuple[MathTool[Any, Any], ...]
+
+
+def _validate_discovery_terms(terms: tuple[str, ...]) -> None:
+    """Keep declaration-owned terminology small, concrete, and deterministic."""
+
+    if len(terms) > _MAX_DISCOVERY_TERMS:
+        raise ValueError(
+            f"math tools allow at most {_MAX_DISCOVERY_TERMS} discovery terms"
+        )
+    if len(set(terms)) != len(terms):
+        raise ValueError("math tool discovery terms must be unique")
+    if any(not term.strip() for term in terms):
+        raise ValueError("math tool discovery terms must not be empty")
+    if any(len(term) > _MAX_DISCOVERY_TERM_LENGTH for term in terms):
+        raise ValueError(
+            "math tool discovery terms must be at most "
+            f"{_MAX_DISCOVERY_TERM_LENGTH} characters"
+        )
+
 
 __all__ = [
     "MathTool",

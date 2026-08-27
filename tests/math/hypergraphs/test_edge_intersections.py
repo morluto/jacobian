@@ -220,7 +220,7 @@ class TestEdgeIntersectionBinding:
 
 
 class TestEdgeIntersectionPreflight:
-    def test_pair_and_intersection_cell_boundary_is_accepted(self) -> None:
+    def test_near_intersection_cell_boundary_is_accepted(self) -> None:
         vertices = tuple(f"v{i:02}" for i in range(13))
         hypergraph = FiniteHypergraph(
             vertices=vertices,
@@ -231,11 +231,11 @@ class TestEdgeIntersectionPreflight:
             _edge_intersection_preflight_data(hypergraph)
         )
 
-        assert pair_count == MAX_EDGE_PAIR_COUNT == 4_950
+        assert pair_count == 4_950
         assert incidences == 1_300
         assert cells == 64_350 <= MAX_EDGE_INTERSECTION_CELLS
         result = compute_edge_intersections(request)
-        assert result.pair_count == MAX_EDGE_PAIR_COUNT
+        assert result.pair_count == pair_count
         assert (
             sum(entry.intersection_size for entry in result.pair_intersections) == cells
         )
@@ -273,7 +273,7 @@ class TestEdgeIntersectionPreflight:
         request = EdgeIntersectionsRequest(hypergraph=hypergraph)
         result = compute_edge_intersections(request)
 
-        assert pair_count == MAX_EDGE_PAIR_COUNT
+        assert pair_count == 4_950
         assert incidences == 1_400
         assert cells == 100 * (14 * 13 // 2) == 9_100
         assert (
@@ -282,14 +282,17 @@ class TestEdgeIntersectionPreflight:
         actual_bytes = len(encode_strict_json(result.model_dump(mode="json")))
         assert actual_bytes <= estimated_bytes <= MAX_EDGE_INTERSECTION_RESULT_BYTES
 
-    def test_more_than_one_hundred_indexed_edges_is_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            EdgeIntersectionsRequest(
-                hypergraph={
+    def test_more_than_one_hundred_indexed_edges_is_admitted(self) -> None:
+        request = EdgeIntersectionsRequest.model_validate(
+            {
+                "hypergraph": {
                     "vertices": [],
                     "edges": tuple((f"e{i:03}", ()) for i in range(101)),
                 }
-            )
+            }
+        )
+
+        assert len(request.hypergraph.edges) == 101
 
     def test_serialized_output_bound_is_rejected_before_pair_materialization(
         self,

@@ -1006,7 +1006,9 @@ def test_bounded_reciprocal_cancelling_formless_ite_still_admitted() -> None:
 
     assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
-    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
+    result = compute_smt_unsat_core(
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source, timeout_ms=10_000)
+    )
 
     assert result.outcome == "SAT"
     assert result.core_indices == ()

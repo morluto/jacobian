@@ -35,9 +35,10 @@ reporting a gap. A retry should state what changed: budget, backend,
 representation, or deterministic partition.
 
 Use `math.find` progressively: `search` finds a few relevance-ranked candidates,
-`browse` pages compact operation cards in operation-ID order (optionally within a
-domain), and `inspect` supplies the selected operation's exact input/output
-schemas and valid examples.
+`browse` pages compact operation cards in operation-ID order (optionally within
+one exact primary namespace), and `inspect` supplies the selected operation's
+exact input/output schemas and valid examples. Search and browse results retain
+`catalog_resource` as the explicit pointer to the bulk catalog export.
 
 ## Form a payload from an inspected contract
 

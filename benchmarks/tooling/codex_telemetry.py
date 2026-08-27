@@ -540,8 +540,10 @@ def _build_operation_description(
         "query": (
             request.get("query") if isinstance(request.get("query"), str) else None
         ),
-        "domain": (
-            request.get("domain") if isinstance(request.get("domain"), str) else None
+        "namespace": (
+            request.get("namespace")
+            if isinstance(request.get("namespace"), str)
+            else None
         ),
         "operation_id": (
             request.get("operation_id")

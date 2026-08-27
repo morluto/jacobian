@@ -94,7 +94,7 @@ class Catalog:
     def browse(
         self,
         *,
-        domain: str | None,
+        namespace: str | None,
         limit: int,
         cursor: str | None,
     ) -> OperationBrowseResult:
@@ -102,7 +102,7 @@ class Catalog:
 
         return browse_operations(
             tuple(self._operations.values()),
-            domain=domain,
+            namespace=namespace,
             limit=limit,
             cursor=cursor,
         )
@@ -140,6 +140,7 @@ def _descriptor(operation: MathTool[Any, Any]) -> OperationDescriptor:
         output_schema=operation.result_type.model_json_schema(),
         read_only=True,
         tags=operation.tags,
+        discovery_terms=operation.discovery_terms,
         examples=tuple(
             OperationExample(
                 name=example.name,

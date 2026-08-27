@@ -40,7 +40,7 @@ def test_catalog_search_discovers_independent_set_cardinality_distribution() -> 
     result = Catalog.open().search(
         OperationDiscoveryRequest(
             query="count independent vertex sets by cardinality in a tree",
-            domain="graph",
+            namespace="graph",
             limit=10,
         )
     )

@@ -17,6 +17,7 @@ def number_theory_operation[
     result_type: type[ResultT],
     operation: Callable[[RequestT], ResultT],
     *tags: str,
+    discovery_terms: tuple[str, ...] = (),
     examples: tuple[OperationExample, ...] = (),
 ) -> MathTool[RequestT, ResultT]:
     """Declare one number-theory math tool."""
@@ -29,5 +30,6 @@ def number_theory_operation[
         result_type=result_type,
         run=operation,
         tags=tags,
+        discovery_terms=discovery_terms,
         examples=examples,
     )

@@ -77,7 +77,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
                 "request": {
                     "op": "search",
                     "query": "find a graph counterexample",
-                    "domain": "graph",
+                    "namespace": "graph",
                 }
             },
             {
@@ -128,7 +128,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
         {
             "kind": "discovery",
             "query": "find a graph counterexample",
-            "domain": "graph",
+            "namespace": "graph",
             "operation_id": None,
             "match_ids": [
                 "graph.search.atlas",
@@ -138,7 +138,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
         {
             "kind": "operation",
             "query": None,
-            "domain": None,
+            "namespace": None,
             "operation_id": "graph.search.atlas",
             "match_ids": [],
         },

@@ -18,7 +18,7 @@ from jacobian.catalog.models import (
 class OperationSearchRequest(StrictModel):
     op: Literal["search"]
     query: Annotated[str, Field(min_length=1)]
-    domain: Annotated[
+    namespace: Annotated[
         str | None,
         Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$"),
     ] = None
@@ -34,7 +34,7 @@ class OperationSearchRequest(StrictModel):
 
 class OperationBrowseRequest(StrictModel):
     op: Literal["browse"]
-    domain: Annotated[
+    namespace: Annotated[
         str | None,
         Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$"),
     ] = None
@@ -69,20 +69,18 @@ class OperationDiscoveryErrorDetail(StrictModel):
 class OperationSearchResult(StrictModel):
     kind: Literal["discovery"]
     query: str
-    domain: str | None = None
+    namespace: str | None = None
     matches: tuple[OperationDiscoveryMatch, ...]
     total_matches: StrictInt
-    truncated: bool
     next_cursor: str | None = None
     catalog_resource: Literal["operation://catalog"] = "operation://catalog"
 
 
 class OperationBrowseResult(StrictModel):
     kind: Literal["browse"]
-    domain: str | None = None
+    namespace: str | None = None
     operations: tuple[OperationBrowseCard, ...]
     total_operations: StrictInt
-    truncated: bool
     next_cursor: str | None = None
     catalog_resource: Literal["operation://catalog"] = "operation://catalog"
 

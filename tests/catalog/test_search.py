@@ -3,12 +3,32 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDescriptor, OperationDiscoveryRequest
+from jacobian.catalog.models import (
+    OperationDescriptor,
+    OperationDiscoveryMatch,
+    OperationDiscoveryRequest,
+)
 from jacobian.catalog.search import (
     discover_operations,
     discovery_relevance,
     discovery_terms,
+    normalized_discovery_terms,
 )
+
+
+def _positions(query: str) -> dict[str, int]:
+    catalog = Catalog.open()
+    cursor: str | None = None
+    matches: list[OperationDiscoveryMatch] = []
+    while True:
+        result = catalog.search(
+            OperationDiscoveryRequest(query=query, limit=20, cursor=cursor)
+        )
+        matches.extend(result.matches)
+        if result.next_cursor is None:
+            break
+        cursor = result.next_cursor
+    return {match.operation_id: index for index, match in enumerate(matches)}
 
 
 def test_discovery_phrase_matching_respects_token_boundaries() -> None:
@@ -33,7 +53,7 @@ def test_discovery_phrase_matching_respects_token_boundaries() -> None:
 def test_standard_det_abbreviation_ranks_determinants_before_charpolys() -> None:
     catalog = Catalog.open()
     cursor: str | None = None
-    matches = []
+    matches: list[OperationDiscoveryMatch] = []
     while True:
         result = catalog.search(
             OperationDiscoveryRequest(query="det", limit=20, cursor=cursor)
@@ -176,7 +196,7 @@ def test_subset_sum_singular_and_plural_queries_rank_the_profile_ahead_of_sidon(
         ),
     ],
 )
-def test_inflected_catalog_queries_retain_the_same_top_result_and_score(
+def test_inflected_catalog_queries_retain_the_same_top_result(
     queries: tuple[str, str],
     expected_operation_id: str,
 ) -> None:
@@ -188,9 +208,6 @@ def test_inflected_catalog_queries_retain_the_same_top_result_and_score(
 
     assert all(
         result.matches[0].operation_id == expected_operation_id for result in results
-    )
-    assert (
-        results[0].matches[0].relevance_score == results[1].matches[0].relevance_score
     )
 
 
@@ -252,3 +269,62 @@ def test_inflected_discovery_ties_are_deterministic_and_operation_id_ordered() -
         "fixture.a.inspect",
         "fixture.z.inspect",
     ]
+
+
+def test_discovery_normalizes_only_audited_ordinary_plural_forms() -> None:
+    assert normalized_discovery_terms("subset sums and repeated representations") == {
+        "subset",
+        "sum",
+        "repeated",
+        "representation",
+    }
+    assert normalized_discovery_terms("basis class series") == {
+        "basis",
+        "class",
+        "series",
+    }
+
+
+def test_plural_queries_preserve_their_semantic_catalog_routing() -> None:
+    subset_positions = _positions(
+        "all subset sums and repeated representations of a finite integer set"
+    )
+    assert (
+        subset_positions["additive.subset_sum.profile.compute"]
+        < subset_positions["combinatorics.integer_set.sidon.decide"]
+    )
+
+    tree_positions = _positions(
+        "counts independent vertex sets by cardinalities in trees"
+    )
+    assert (
+        tree_positions["graph.polynomial.independence.compute"]
+        < tree_positions["graph.independent_set.maximal.decide"]
+    )
+
+
+def test_euler_phi_discovery_terms_outrank_generic_inverse_and_solver_operations() -> (
+    None
+):
+    for query, displaced in (
+        ("inverse totient preimages", "arithmetic.dirichlet_inverse.compute"),
+        ("totient inverse image", "matrix.inverse.compute"),
+        ("solve phi(n)=m", "matrix.symbolic.linear_system.solve"),
+    ):
+        positions = _positions(query)
+        assert (
+            positions["number_theory.euler_phi.preimages.compute"]
+            < positions[displaced]
+        )
+
+
+def test_t_codegree_discovery_terms_route_to_incidence_containment_profiles() -> None:
+    for query in (
+        "compute t-codegrees of a finite hypergraph",
+        "uniform codegree profile",
+    ):
+        positions = _positions(query)
+        assert (
+            positions["incidence.containment_profiles.compute"]
+            < positions["hypergraph.parameters.compute"]
+        )

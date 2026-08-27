@@ -90,7 +90,7 @@ SAT 和 SMT 操作直接调用 Z3 的 Python 绑定。用 `math.find` 搜索操�
 
 ## 状态
 
-Jacobian 0.14.0 <!-- x-release-please-version --> 仍为预稳定版本。已发布包和操作契约即为受支持的接口，实验性契约可能在后续版本中调整。
+Jacobian 0.15.0 <!-- x-release-please-version --> 仍为预稳定版本。已发布包和操作契约即为受支持的接口，实验性契约可能在后续版本中调整。
 
 ## 文档
 

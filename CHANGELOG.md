@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.15.0](https://github.com/morluto/jacobian/compare/jacobian-v0.14.0...jacobian-v0.15.0) (2026-08-27)
+
+
+### Features
+
+* **devex:** add scoped static handoff ([1b9b90c](https://github.com/morluto/jacobian/commit/1b9b90c770df3a263b91b8643d10405408ac298f))
+* **harbor:** scope verifier support synchronization ([a387207](https://github.com/morluto/jacobian/commit/a387207b44320b2d4d9224dd4ebe898d0f15e587))
+
+
+### Bug Fixes
+
+* **ci:** allow pytest timing plugin dependency ([abb3f4f](https://github.com/morluto/jacobian/commit/abb3f4f9f4bdb657f9568976e6791048f6fe2ece))
+* **ci:** synchronize developer command contract ([4f93a21](https://github.com/morluto/jacobian/commit/4f93a21d043386341b048bca04e10da5abd8dc23))
+* **coherent-configurations:** construct trusted analysis results ([#2705](https://github.com/morluto/jacobian/issues/2705)) ([a2035c0](https://github.com/morluto/jacobian/commit/a2035c02e9141b596cce2193e1a66b02a1420020))
+* **fca:** reuse admitted concept families ([#2695](https://github.com/morluto/jacobian/issues/2695)) ([8fa1ab0](https://github.com/morluto/jacobian/commit/8fa1ab0c7bcd12a05e1b63a33c482d75f7146285))
+* **logic:** type unsat-core initialization failures ([#2721](https://github.com/morluto/jacobian/issues/2721)) ([f784ccd](https://github.com/morluto/jacobian/commit/f784ccdb8cec45a806712d32e2bec72f412346ac))
+* **logic:** verify backend SAT and SMT models ([990eb8a](https://github.com/morluto/jacobian/commit/990eb8a85d989fd2e7e6fe6426368ce24d8f1181))
+* **math:** preflight bounded construction results ([#2750](https://github.com/morluto/jacobian/issues/2750)) ([8883b15](https://github.com/morluto/jacobian/commit/8883b151a0fa696f7ac0692ba94b8da4928d3f37))
+* **mcp:** cancel queued math execution ([ee372b0](https://github.com/morluto/jacobian/commit/ee372b0373bdd84cf0d4989d7e52ffb94365f8db))
+* **mcp:** preserve SDK handling for unexpected faults ([6afa98c](https://github.com/morluto/jacobian/commit/6afa98c3789e6b2c7c592cd95a87713b22bb898c))
+* **mcp:** serialize concurrent math execution ([#2722](https://github.com/morluto/jacobian/issues/2722)) ([23ec0e4](https://github.com/morluto/jacobian/commit/23ec0e447981ea3d00d72ee3609a1110bb62cbd8))
+* **mcp:** wire catalog MCP replay to CI and preserve generic error fix (rebase onto 2722) ([#2724](https://github.com/morluto/jacobian/issues/2724)) ([71fc52c](https://github.com/morluto/jacobian/commit/71fc52c2596960c88e636b6be7ebfcd229ff227c))
+* **number-theory:** remove duplicate integer result model ([783e8aa](https://github.com/morluto/jacobian/commit/783e8aa96c0c36ac3585f3501460bad73db56c4b))
+* **release:** avoid redundant npm tag mutation ([ff9db62](https://github.com/morluto/jacobian/commit/ff9db628bef6898fdd6c103fe36ee3c2d73f4ca7))
+* **symbolic-dynamics:** reuse admitted zeta kernel result ([#2698](https://github.com/morluto/jacobian/issues/2698)) ([d447548](https://github.com/morluto/jacobian/commit/d44754830f58f65d73b551a47650f8f09d40ab3a))
+* **words:** admit the canonical empty word ([#2709](https://github.com/morluto/jacobian/issues/2709)) ([a6bacbf](https://github.com/morluto/jacobian/commit/a6bacbfd9a6db4da701ed866d9d7659ac9d2eb6f))
+
+
+### Documentation
+
+* **agents:** defer validation selection to contributing guide ([bb38d25](https://github.com/morluto/jacobian/commit/bb38d25245117cf0505227da68a50ad6162ecf30))
+* clarify operation execution boundaries ([0a43e42](https://github.com/morluto/jacobian/commit/0a43e4276564a68df54e0a08071edcdc85f3b766))
+* clarify verifier and deadline boundaries ([adaae63](https://github.com/morluto/jacobian/commit/adaae63c63d12fc8ba47328f9dbad0a453f5267d))
+* define concrete transport limits ([f007b65](https://github.com/morluto/jacobian/commit/f007b654f610ba8a5ace14aa63e72e8f535fbf21))
+* **math:** clarify execution time policy ([b25b455](https://github.com/morluto/jacobian/commit/b25b455c65929db41fecdf29a396e103b0db568f))
+* **math:** enforce theorem-bearing operation contracts ([dee3bd4](https://github.com/morluto/jacobian/commit/dee3bd451139d476d2ea4dc4028cd00036912c8e))
+* **math:** harden typed operation boundaries ([21bfb23](https://github.com/morluto/jacobian/commit/21bfb23a2bd40a215248a40ce37151374b3cb60f))
+* **operations:** clarify agent invocation flow ([9e798c4](https://github.com/morluto/jacobian/commit/9e798c4c31cb80f3804121143959a75148aff206))
+* **polynomials:** explain subresultant work bounds ([03f9fbc](https://github.com/morluto/jacobian/commit/03f9fbc763256f416efa2ab042319f16df4d45d1))
+* **skills:** tighten mathematical audit handoffs ([176402b](https://github.com/morluto/jacobian/commit/176402b7062fcf7bfe0b93d67fd3b64a138545ab))
+
 ## [0.14.0](https://github.com/morluto/jacobian/compare/jacobian-v0.13.0...jacobian-v0.14.0) (2026-08-26)
 
 ### ⚠ Breaking Changes

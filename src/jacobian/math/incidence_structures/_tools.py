@@ -131,10 +131,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         discovery_terms=("t-codegree", "codegree profile"),
         examples=(
             example(
-                "triangle_t1",
-                "Compute containment profiles at t=1 for a 3-point, 2-block "
-                "structure; returns per-point multiplicities.",
-                {"incidence": _STRUCTURE, "t": 1},
+                "triangle_pair_codegrees",
+                "Compute the exact t=2 codegrees of all pairs in a 3-point, "
+                "2-block incidence structure, including the zero codegree of "
+                "the pair {p1, p3}.",
+                {"incidence": _STRUCTURE, "t": 2},
             ),
         ),
     ),

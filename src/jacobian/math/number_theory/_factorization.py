@@ -147,8 +147,9 @@ FACTORIZATION_OPERATIONS = (
         operation_id="integer.compute.divisors",
         title="Enumerate positive divisors",
         description=(
-            "Enumerate every positive divisor exactly, or return UNKNOWN when "
-            "the bounded factorization worker cannot establish the enumeration."
+            "Enumerate every positive divisor exactly, including the input's "
+            "absolute value, or return UNKNOWN when the bounded factorization "
+            "worker cannot establish the enumeration."
         ),
         request_model=NonzeroFactorizationRequest,
         result_model=DivisorListResult,

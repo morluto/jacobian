@@ -258,6 +258,26 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "complete exact friable count with result-sensitive materialized and generated regimes, avoiding caller-side factorization of every source integer",
     ),
+    OperationAdmission(
+        "number_theory.integer_interval.squarefree_profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete exact interval profile that a loop of scalar squarefree decisions cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
+        "number_theory.integer_interval.divisor_count_profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete exact interval profile that a loop of scalar divisor_count calls cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
+        "number_theory.integer_interval.greatest_prime_factor_profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete exact interval profile that a loop of scalar factorization calls cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
+        "number_theory.prime_gap_profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete exact consecutive-prime gap profile including the boundary successor beyond the interval upper endpoint",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

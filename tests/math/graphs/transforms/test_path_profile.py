@@ -2,6 +2,7 @@
 
 import pytest
 
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.transforms._path_profile_models import PathProfileRequest
 from jacobian.math.graphs.transforms._path_profile_operations import (
     compute_path_profile,
@@ -47,3 +48,15 @@ def test_path_profile_rejects_unbounded_dense_search() -> None:
 
     with pytest.raises(ValueError, match="work budget"):
         PathProfileRequest(graph=graph, path_length=10)
+
+
+def test_path_profile_result_budget_scales_to_requested_endpoint_pairs() -> None:
+    graph = SimpleUndirectedGraph(vertices=("a" * 64, "b" * 64), edges=())
+
+    request = PathProfileRequest(graph=graph, path_length=0)
+    result = compute_path_profile(request)
+
+    assert len(encode_strict_json(result.model_dump(mode="json"))) <= (
+        CanonicalLimits().max_output_bytes
+    )
+    assert len(result.rows) == 2

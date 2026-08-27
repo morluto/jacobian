@@ -37,6 +37,7 @@ def _path_prefix_work_bound(vertex_count: int, max_degree: int, length: int) -> 
 
 
 def _path_profile_result_bytes(request: PathProfileRequest) -> int:
+    vertex_count = len(request.graph.vertices)
     graph_bytes = len(encode_strict_json(request.graph.model_dump(mode="json")))
     max_label_bytes = max(
         (len(encode_strict_json(label)) for label in request.graph.vertices),
@@ -48,7 +49,7 @@ def _path_profile_result_bytes(request: PathProfileRequest) -> int:
     row_bytes = 2 * max_label_bytes + len(str(max_path_count)) + 32
     return (
         graph_bytes
-        + _MAX_PATH_PROFILE_ROWS * row_bytes
+        + vertex_count * vertex_count * row_bytes
         + _RESULT_ENVELOPE_RESERVE_BYTES
     )
 

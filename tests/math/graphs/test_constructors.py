@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import pytest
-import itertools
-
 from jacobian.math.graphs.constructors._models import (
     HypercubeGraphRequest,
     KellerGraphRequest,
     TriangleProfileRequest,
 )
 from jacobian.math.graphs.constructors._operations import (
+    compute_triangle_profile,
     construct_hypercube_graph,
     construct_keller_graph,
-    compute_triangle_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -39,23 +36,23 @@ class TestHypercubeGraph:
 
     def test_edge_count_formula(self) -> None:
         """Q_d has d * 2^(d-1) edges."""
-        for d in range(0, 7):
+        for d in range(7):
             result = construct_hypercube_graph(HypercubeGraphRequest(dimension=d))
             expected_edges = d * (2 ** (d - 1)) if d > 0 else 0
             assert len(result.graph.edges) == expected_edges
 
     def test_vertex_count_formula(self) -> None:
         """Q_d has 2^d vertices."""
-        for d in range(0, 8):
+        for d in range(8):
             result = construct_hypercube_graph(HypercubeGraphRequest(dimension=d))
-            assert result.graph.vertex_count == 2 ** d
+            assert result.graph.vertex_count == 2**d
 
     def test_adjacency_correctness(self) -> None:
         """Two vertices in Q_d are adjacent iff they differ in exactly one bit."""
         d = 4
         result = construct_hypercube_graph(HypercubeGraphRequest(dimension=d))
         edge_set = set(result.graph.edges)
-        n = 2 ** d
+        n = 2**d
         for i in range(n):
             for j in range(i + 1, n):
                 diff = i ^ j
@@ -96,9 +93,9 @@ class TestKellerGraph:
 
     def test_vertex_count_formula(self) -> None:
         """K_d has 4^d vertices."""
-        for d in range(0, 4):
+        for d in range(4):
             result = construct_keller_graph(KellerGraphRequest(dimension=d))
-            assert result.graph.vertex_count == 4 ** d
+            assert result.graph.vertex_count == 4**d
 
     def test_adjacency_correctness(self) -> None:
         """Two words are adjacent iff they differ by 2 (mod 4) in some coordinate
@@ -106,7 +103,7 @@ class TestKellerGraph:
         d = 3
         result = construct_keller_graph(KellerGraphRequest(dimension=d))
         edge_set = set(result.graph.edges)
-        n = 4 ** d
+        n = 4**d
         for i in range(n):
             for j in range(i + 1, n):
                 wi = _to_word(i, d)
@@ -128,8 +125,14 @@ class TestTriangleProfile:
         """K_4 has 4 triangles."""
         graph = SimpleUndirectedGraph(
             vertices=("a", "b", "c", "d"),
-            edges=(("a", "b"), ("a", "c"), ("a", "d"),
-                   ("b", "c"), ("b", "d"), ("c", "d")),
+            edges=(
+                ("a", "b"),
+                ("a", "c"),
+                ("a", "d"),
+                ("b", "c"),
+                ("b", "d"),
+                ("c", "d"),
+            ),
         )
         result = compute_triangle_profile(TriangleProfileRequest(graph=graph))
         assert result.triangle_count == 4
@@ -166,8 +169,7 @@ class TestTriangleProfile:
         """K_5 has C(5,3) = 10 triangles."""
         vertices = tuple("abcde")
         edges = tuple(
-            (vertices[i], vertices[j])
-            for i in range(5) for j in range(i + 1, 5)
+            (vertices[i], vertices[j]) for i in range(5) for j in range(i + 1, 5)
         )
         graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
         result = compute_triangle_profile(TriangleProfileRequest(graph=graph))
@@ -177,8 +179,14 @@ class TestTriangleProfile:
         """Every triangle's three edges exist in the source graph."""
         graph = SimpleUndirectedGraph(
             vertices=("a", "b", "c", "d"),
-            edges=(("a", "b"), ("a", "c"), ("a", "d"),
-                   ("b", "c"), ("b", "d"), ("c", "d")),
+            edges=(
+                ("a", "b"),
+                ("a", "c"),
+                ("a", "d"),
+                ("b", "c"),
+                ("b", "d"),
+                ("c", "d"),
+            ),
         )
         edge_set = {frozenset(e) for e in graph.edges}
         result = compute_triangle_profile(TriangleProfileRequest(graph=graph))
@@ -192,8 +200,7 @@ class TestTriangleProfile:
         """Triangles sharing an edge should both appear (edge is shared)."""
         graph = SimpleUndirectedGraph(
             vertices=("a", "b", "c", "d"),
-            edges=(("a", "b"), ("a", "c"), ("a", "d"),
-                   ("b", "c"), ("c", "d")),
+            edges=(("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("c", "d")),
         )
         result = compute_triangle_profile(TriangleProfileRequest(graph=graph))
         # Triangles: (a,b,c) and (a,c,d)

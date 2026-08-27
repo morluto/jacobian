@@ -60,7 +60,7 @@ def construct_keller_graph(request: KellerGraphRequest) -> KellerGraphResult:
             ),
         )
 
-    n = 4 ** d
+    n = 4**d
     edges: list[tuple[int, int]] = []
 
     for i in range(n):
@@ -125,7 +125,10 @@ def compute_triangle_profile(request: TriangleProfileRequest) -> TriangleProfile
             if vertex_list[j] not in adj[vertex_list[i]]:
                 continue
             for k in range(j + 1, n):
-                if vertex_list[k] in adj[vertex_list[i]] and vertex_list[k] in adj[vertex_list[j]]:
+                if (
+                    vertex_list[k] in adj[vertex_list[i]]
+                    and vertex_list[k] in adj[vertex_list[j]]
+                ):
                     triangles.append(
                         TriangleProfileRow(
                             vertices=(vertex_list[i], vertex_list[j], vertex_list[k])
@@ -140,7 +143,7 @@ def compute_triangle_profile(request: TriangleProfileRequest) -> TriangleProfile
 
 
 __all__ = [
+    "compute_triangle_profile",
     "construct_hypercube_graph",
     "construct_keller_graph",
-    "compute_triangle_profile",
 ]

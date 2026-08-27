@@ -7,8 +7,6 @@ from pydantic import Field, StrictInt
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
-    MAX_INDEXED_SIMPLE_GRAPH_EDGES,
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
 
@@ -78,12 +76,12 @@ class TriangleProfileResult(StrictModel):
 
 
 __all__ = [
+    "MAX_HYPERCUBE_DIMENSION",
+    "MAX_KELLER_DIMENSION",
     "HypercubeGraphRequest",
     "HypercubeGraphResult",
     "KellerGraphRequest",
     "KellerGraphResult",
-    "MAX_HYPERCUBE_DIMENSION",
-    "MAX_KELLER_DIMENSION",
     "TriangleProfileRequest",
     "TriangleProfileResult",
     "TriangleProfileRow",

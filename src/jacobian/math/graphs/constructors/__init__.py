@@ -9,9 +9,9 @@ from jacobian.math.graphs.constructors._models import (
     TriangleProfileResult,
 )
 from jacobian.math.graphs.constructors._operations import (
+    compute_triangle_profile,
     construct_hypercube_graph,
     construct_keller_graph,
-    compute_triangle_profile,
 )
 
 __all__ = [
@@ -21,7 +21,7 @@ __all__ = [
     "KellerGraphResult",
     "TriangleProfileRequest",
     "TriangleProfileResult",
+    "compute_triangle_profile",
     "construct_hypercube_graph",
     "construct_keller_graph",
-    "compute_triangle_profile",
 ]

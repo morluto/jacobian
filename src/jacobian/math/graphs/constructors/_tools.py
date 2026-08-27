@@ -14,9 +14,9 @@ from jacobian.math.graphs.constructors._models import (
     TriangleProfileResult,
 )
 from jacobian.math.graphs.constructors._operations import (
+    compute_triangle_profile,
     construct_hypercube_graph,
     construct_keller_graph,
-    compute_triangle_profile,
 )
 
 
@@ -109,8 +109,12 @@ TOOLS: MathTools = (
                     "graph": {
                         "vertices": ["a", "b", "c", "d"],
                         "edges": [
-                            ["a", "b"], ["a", "c"], ["a", "d"],
-                            ["b", "c"], ["b", "d"], ["c", "d"],
+                            ["a", "b"],
+                            ["a", "c"],
+                            ["a", "d"],
+                            ["b", "c"],
+                            ["b", "d"],
+                            ["c", "d"],
                         ],
                     },
                 },

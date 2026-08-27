@@ -139,6 +139,17 @@ class TestSidonExtensionProfile:
             MAX_EXTENSION_RESULT_BYTES
         )
 
+    def test_two_element_source_admits_attainable_profile(self) -> None:
+        """A source of two elements can still have an all-admissible profile."""
+        candidates = tuple(str(value) for value in range(3, 100_003))
+        result = _extension(["0", "1"], list(candidates))
+
+        assert result.admissible == candidates
+        assert result.rejected == ()
+        assert len(encode_strict_json(result.model_dump(mode="json"))) <= (
+            MAX_EXTENSION_RESULT_BYTES
+        )
+
     def test_candidate_work_excludes_source_profile_copies(self) -> None:
         """A large source and candidate batch stays within candidate-local work."""
         source = [str(2**index) for index in range(400)]
@@ -237,3 +248,21 @@ class TestSidonExtensionProfile:
         monkeypatch.setattr(sidon_models, "_candidate_obstruction", counted_obstruction)
         _extension(["1", "2"], ["3", "4", "10"])
         assert calls == 3
+
+    def test_kernel_reuses_the_admitted_source_difference_profile(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = 0
+        real_profile = sidon_models._ordered_difference_pairs
+
+        def counted_profile(*args: Any, **kwargs: Any) -> Any:
+            nonlocal calls
+            calls += 1
+            return real_profile(*args, **kwargs)
+
+        monkeypatch.setattr(sidon_models, "_ordered_difference_pairs", counted_profile)
+        monkeypatch.setattr(
+            sidon_operations, "_ordered_difference_pairs", counted_profile
+        )
+        _extension(["1", "2", "5"], ["3", "4"])
+        assert calls == 1

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Self
 
-from pydantic import Field, StrictBool, model_validator
+from pydantic import Field, PrivateAttr, StrictBool, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics._difference_set_models import (
@@ -20,6 +23,17 @@ MAX_EXTENSION_INTERMEDIATE_BYTES = 256 * 1024 * 1024
 _EXTENSION_RESULT_ENVELOPE_BYTES = 4_096
 _PYTHON_DICT_SLOT_BYTES = 64
 _PYTHON_TUPLE_BYTES = 56
+
+_DifferencePair = tuple[int, int]
+_CandidateObstruction = tuple[int, _DifferencePair, _DifferencePair]
+
+
+@dataclass(frozen=True)
+class _SidonExtensionAdmissionPlan:
+    """Request-scoped admission data reused by the owner-local kernel."""
+
+    source_differences: Mapping[int, _DifferencePair]
+    candidate_obstructions: tuple[_CandidateObstruction | None, ...] | None = None
 
 
 def _python_int_storage_bytes(decimal_digits: int) -> int:
@@ -65,7 +79,7 @@ def _require_source_profile_memory_budget(
 
 def _ordered_difference_pairs(
     elements: tuple[AdditiveInteger, ...],
-) -> dict[int, tuple[int, int]]:
+) -> dict[int, _DifferencePair]:
     return {
         int(left) - int(right): (int(left), int(right))
         for left in elements
@@ -85,15 +99,16 @@ def _extension_work_units(source_count: int, candidate_count: int) -> int:
 def _maximum_result_bytes(
     source_elements: tuple[AdditiveInteger, ...],
     candidate_elements: tuple[AdditiveInteger, ...],
+    candidate_obstructions: tuple[_CandidateObstruction | None, ...] | None = None,
 ) -> int:
     """Bound canonical result bytes without constructing a hypothetical profile.
 
     All accepted integer strings contain only ASCII digits and an optional
     minus sign, so their canonical JSON string size is their character length
-    plus two quote bytes.  Every candidate is charged for the larger of its
-    scalar admissible row and its certificate-shaped rejected row.  The
-    rejected-row charge uses the widest accepted element and difference, which
-    is conservative for every possible partition.
+    plus two quote bytes. Without candidate outcomes, every candidate is
+    charged for the larger of its scalar admissible row and its
+    certificate-shaped rejected row. An admitted request-scoped profile may
+    provide the actual candidate outcomes to price the attainable partition.
     """
 
     def string_bytes(character_count: int) -> int:
@@ -116,31 +131,61 @@ def _maximum_result_bytes(
         max((len(value) for value in source_elements), default=0),
         max((len(value) for value in candidate_elements), default=0),
     )
-    pair_bytes = pair_array_bytes(widest_element_length)
-    obstruction_bytes = object_bytes(
-        (
-            ("candidate", string_bytes(widest_element_length)),
+
+    def obstruction_bytes(
+        obstruction: _CandidateObstruction | None,
+        candidate_length: int,
+    ) -> int:
+        if obstruction is None:
+            difference_length = MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH
+            pair_length = widest_element_length
+        else:
+            difference, pair_a, pair_b = obstruction
+            pair_length = max(
+                len(str(pair_a[0])),
+                len(str(pair_a[1])),
+                len(str(pair_b[0])),
+                len(str(pair_b[1])),
+            )
+            difference_length = len(str(difference))
+        return object_bytes(
             (
-                "repeated_difference",
-                string_bytes(MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH),
-            ),
-            ("pair_a", pair_bytes),
-            ("pair_b", pair_bytes),
+                ("candidate", string_bytes(candidate_length)),
+                ("repeated_difference", string_bytes(difference_length)),
+                ("pair_a", pair_array_bytes(pair_length)),
+                ("pair_b", pair_array_bytes(pair_length)),
+            )
         )
-    )
 
     partition_content_bytes = 0
     all_candidates_admissible = len(source_elements) <= 1
-    for candidate in candidate_elements:
+    for index, candidate in enumerate(candidate_elements):
         admissible_bytes = string_bytes(len(candidate))
-        if all_candidates_admissible:
+        if candidate_obstructions is not None:
+            outcome = candidate_obstructions[index]
+            row_bytes = (
+                admissible_bytes
+                if outcome is None
+                else object_bytes(
+                    (
+                        ("candidate", admissible_bytes),
+                        ("is_admissible", len("false")),
+                        (
+                            "obstruction",
+                            obstruction_bytes(outcome, len(candidate)),
+                        ),
+                    )
+                )
+            )
+            partition_content_bytes += row_bytes
+        elif all_candidates_admissible:
             partition_content_bytes += admissible_bytes
         else:
             rejected_bytes = object_bytes(
                 (
                     ("candidate", admissible_bytes),
                     ("is_admissible", len("false")),
-                    ("obstruction", obstruction_bytes),
+                    ("obstruction", obstruction_bytes(None, len(candidate))),
                 )
             )
             partition_content_bytes += max(admissible_bytes, rejected_bytes)
@@ -201,13 +246,14 @@ def _require_extension_work_budget(
 
 def _validate_source_is_sidon(
     source_elements: tuple[AdditiveInteger, ...],
-) -> None:
+) -> dict[int, _DifferencePair]:
     source_pairs = _ordered_difference_pairs(source_elements)
     if len(source_pairs) != len(source_elements) * (len(source_elements) - 1):
         raise _difference_set_validation_error(
             "combinatorics.sidon_invariant",
             "source elements must form a Sidon set",
         )
+    return source_pairs
 
 
 def _validate_obstruction_witness(
@@ -239,6 +285,7 @@ class SidonExtensionProfileRequest(StrictModel):
             "admitted from the exact work and result-size budgets."
         )
     )
+    _admission_plan: _SidonExtensionAdmissionPlan | None = PrivateAttr(default=None)
 
     @model_validator(mode="after")
     def require_unique_and_disjoint(self) -> Self:
@@ -251,16 +298,35 @@ class SidonExtensionProfileRequest(StrictModel):
             len(self.candidate_elements),
         )
         _require_source_profile_memory_budget(self.source_elements)
-        _validate_source_is_sidon(self.source_elements)
+        source_differences = _validate_source_is_sidon(self.source_elements)
         result_bytes = _maximum_result_bytes(
             self.source_elements,
             self.candidate_elements,
         )
+        candidate_obstructions: tuple[_CandidateObstruction | None, ...] | None = None
+        if result_bytes > MAX_EXTENSION_RESULT_BYTES:
+            candidate_obstructions = tuple(
+                _candidate_obstruction(
+                    self.source_elements,
+                    source_differences,
+                    candidate,
+                )
+                for candidate in self.candidate_elements
+            )
+            result_bytes = _maximum_result_bytes(
+                self.source_elements,
+                self.candidate_elements,
+                candidate_obstructions,
+            )
         if result_bytes > MAX_EXTENSION_RESULT_BYTES:
             raise _difference_set_validation_error(
                 "combinatorics.sidon_extension_result_budget",
                 "Sidon extension result exceeds the canonical output budget",
             )
+        self._admission_plan = _SidonExtensionAdmissionPlan(
+            source_differences=MappingProxyType(source_differences),
+            candidate_obstructions=candidate_obstructions,
+        )
         return self
 
 
@@ -453,9 +519,9 @@ def verify_sidon_extension_profile_result(
 
 def _candidate_obstruction(
     source_elements: tuple[AdditiveInteger, ...],
-    source_pairs: dict[int, tuple[int, int]],
+    source_pairs: Mapping[int, _DifferencePair],
     candidate: AdditiveInteger,
-) -> tuple[int, tuple[int, int], tuple[int, int]] | None:
+) -> _CandidateObstruction | None:
     """Find one repeated difference after adding a candidate."""
 
     candidate_value = int(candidate)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from jacobian.math.combinatorics._sidon_extension_models import (
     SidonExtensionCandidateResult,
     SidonExtensionObstruction,
@@ -23,17 +25,27 @@ def compute_sidon_extension_profile(
     """
     candidates = request.candidate_elements
 
-    source_diffs = _ordered_difference_pairs(request.source_elements)
+    admission_plan = request._admission_plan
+    source_diffs: Mapping[int, tuple[int, int]]
+    if admission_plan is None:
+        source_diffs = _ordered_difference_pairs(request.source_elements)
+        candidate_obstructions = None
+    else:
+        source_diffs = admission_plan.source_differences
+        candidate_obstructions = admission_plan.candidate_obstructions
 
     admissible: list[str] = []
     rejected: list[SidonExtensionCandidateResult] = []
 
-    for x in candidates:
-        obstruction_data = _candidate_obstruction(
-            request.source_elements,
-            source_diffs,
-            x,
-        )
+    for index, x in enumerate(candidates):
+        if candidate_obstructions is None:
+            obstruction_data = _candidate_obstruction(
+                request.source_elements,
+                source_diffs,
+                x,
+            )
+        else:
+            obstruction_data = candidate_obstructions[index]
         if obstruction_data is not None:
             difference, pair_a, pair_b = obstruction_data
             rejected.append(

@@ -102,6 +102,16 @@ class TestMaximumEdgeMatching:
         assert result.matching == ("e",)
         assert result.count == 1
 
+    def test_all_empty_edges_above_search_cap_are_admitted(self) -> None:
+        result = _matching(
+            {
+                "vertices": ["a"],
+                "edges": [[f"e{i}", []] for i in range(21)],
+            }
+        )
+        assert result.matching == tuple(f"e{i}" for i in range(21))
+        assert result.count == 21
+
     def test_edge_bound_exceeded(self) -> None:
         edges = [[f"e{i}", [f"v{i}"]] for i in range(21)]
         vertices = [f"v{i}" for i in range(21)]

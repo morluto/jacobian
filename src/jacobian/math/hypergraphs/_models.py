@@ -1315,6 +1315,30 @@ class MinimumTransversalResult(StrictModel):
 # --------------------------------------------------------------------------
 
 MAX_MATCHING_EDGES = 20
+MAX_MATCHING_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+
+def _maximum_edge_matching_result_bytes(
+    hypergraph: FiniteHypergraph,
+    edge_ids: tuple[str, ...],
+) -> int:
+    """Return the exact canonical size of a worst-case matching result."""
+
+    normalized_edge_ids = tuple(
+        unicodedata.normalize("NFC", edge_id) for edge_id in edge_ids
+    )
+    source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
+    matching_size = _strict_json_array_size(
+        tuple(_strict_label_wire_bytes(edge_id) for edge_id in normalized_edge_ids)
+    )
+    count_size = len(encode_strict_json(len(normalized_edge_ids)))
+    return strict_json_object_size(
+        (
+            ("hypergraph", source_size),
+            ("matching", matching_size),
+            ("count", count_size),
+        )
+    )
 
 
 class MaximumEdgeMatchingRequest(StrictModel):
@@ -1322,17 +1346,41 @@ class MaximumEdgeMatchingRequest(StrictModel):
 
     A matching is a set of pairwise-disjoint hyperedges.  The exact bounded
     search enumerates edge subsets by decreasing cardinality and admits at
-    most ``MAX_MATCHING_EDGES`` edges.
+    most ``MAX_MATCHING_EDGES`` edges.  An all-empty edge family is admitted
+    through a trivial presolve, subject to the canonical result-byte bound.
     """
 
-    hypergraph: FiniteHypergraph
+    hypergraph: FiniteHypergraph = Field(
+        description=(
+            "Canonical finite hypergraph. Exact matching search admits at most "
+            f"{MAX_MATCHING_EDGES} edges; an all-empty edge family is solved "
+            "by returning every edge ID and is admitted separately when its "
+            f"retained-source result fits {MAX_MATCHING_RESULT_BYTES} canonical bytes."
+        ),
+        json_schema_extra={
+            "search_edge_bound": MAX_MATCHING_EDGES,
+            "canonical_result_bytes_bound": MAX_MATCHING_RESULT_BYTES,
+            "all_empty_edge_presolve": True,
+        },
+    )
 
     @model_validator(mode="after")
     def require_bounded_search(self) -> Self:
-        if len(self.hypergraph.edges) > MAX_MATCHING_EDGES:
+        edge_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        all_edges_empty = all(not members for _, members in self.hypergraph.edges)
+        if len(edge_ids) > MAX_MATCHING_EDGES and not all_edges_empty:
             raise _validation_error(
                 "maximum edge matching search exceeds the "
                 f"{MAX_MATCHING_EDGES}-edge exact search bound"
+            )
+        if (
+            _maximum_edge_matching_result_bytes(self.hypergraph, edge_ids)
+            > MAX_MATCHING_RESULT_BYTES
+        ):
+            raise _validation_error(
+                "the maximum edge matching result retains its source hypergraph "
+                f"and would exceed the {MAX_MATCHING_RESULT_BYTES}-byte "
+                "canonical output limit; shorten labels or reduce the edge family"
             )
         return self
 
@@ -1346,8 +1394,8 @@ class MaximumEdgeMatchingResult(StrictModel):
     """
 
     hypergraph: FiniteHypergraph
-    matching: tuple[str, ...] = Field(max_length=MAX_MATCHING_EDGES)
-    count: StrictInt = Field(ge=0, le=MAX_MATCHING_EDGES)
+    matching: tuple[str, ...] = Field(max_length=MAX_EDGES)
+    count: StrictInt = Field(ge=0, le=MAX_EDGES)
 
     @model_validator(mode="after")
     def bind_matching(self) -> Self:

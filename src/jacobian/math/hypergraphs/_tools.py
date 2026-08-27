@@ -280,7 +280,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "hypergraph.maximum_edge_matching.compute",
         "Compute an exact maximum edge matching of a finite hypergraph",
         "Compute a maximum-cardinality set of pairwise-disjoint hyperedges "
-        "(matching), found by exact bounded search.",
+        "(matching), found by exact bounded search; an all-empty edge family "
+        "is handled by a trivial presolve.",
         MaximumEdgeMatchingRequest,
         MaximumEdgeMatchingResult,
         compute_maximum_edge_matching,

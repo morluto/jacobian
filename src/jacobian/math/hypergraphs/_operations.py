@@ -498,6 +498,8 @@ def _maximum_edge_matching_data(
     edges = _canonical_edges(hypergraph)
     edge_ids = tuple(edge_id for edge_id, _ in edges)
     edge_sets = tuple(frozenset(members) for _, members in edges)
+    if all(not members for _, members in edges):
+        return edge_ids, len(edge_ids)
     for size in range(len(edges), 0, -1):
         for combo in combinations(range(len(edges)), size):
             picked = [edge_sets[i] for i in combo]

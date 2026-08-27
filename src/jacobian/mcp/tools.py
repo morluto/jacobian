@@ -9,7 +9,7 @@ from typing import Any, Protocol
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
-from mcp.types import INVALID_PARAMS
+from mcp.types import INTERNAL_ERROR, INVALID_PARAMS
 
 from jacobian.catalog.models import OperationId, OperationResult
 from jacobian.dispatch import (
@@ -130,6 +130,15 @@ def math_run(
             code=INVALID_PARAMS,
             message="operation payload failed validation",
             data=data.model_dump(mode="json"),
+        ) from exc
+    except (MCPError, ToolError):
+        raise
+    except Exception as exc:
+        # Keep backend details inside the owner while guaranteeing the SDK
+        # receives a protocol error instead of an unhandled worker failure.
+        raise MCPError(
+            code=INTERNAL_ERROR,
+            message="operation execution failed",
         ) from exc
 
 

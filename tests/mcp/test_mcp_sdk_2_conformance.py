@@ -9,13 +9,15 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from mcp.shared.exceptions import MCPError
 from mcp.types import TextContent, TextResourceContents
 from mcp.types.methods import serialize_server_result
 
 import jacobian.mcp.server as server_module
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationCatalogSnapshot, OperationResult
-from jacobian.mcp.server import create_server
+from jacobian.catalog.models import MathTool, OperationCatalogSnapshot, OperationResult
+from jacobian.mcp.runtime import AppState
+from jacobian.mcp.server import _build_server, create_server
 from jacobian.mcp.tools import math_run
 
 
@@ -96,6 +98,53 @@ def test_math_run_encloses_logarithm_on_a_positive_box() -> None:
             output = result.structured_content["output"]
             assert output["status"] == "ENCLOSED"
             assert output["lower"] is not None and output["upper"] is not None
+
+    asyncio.run(scenario())
+
+
+def test_math_run_projects_unexpected_operation_failures() -> None:
+    """An owner crash must not escape the MCP worker as a TaskGroup failure."""
+
+    from jacobian._models import StrictModel
+    from jacobian.catalog.builtins import BUILTIN_TOOLS
+
+    class Request(StrictModel):
+        value: int
+
+    class Result(StrictModel):
+        value: int
+
+    def crashing_kernel(_request: Request) -> Result:
+        raise RuntimeError("private backend failure")
+
+    operation = MathTool(
+        operation_id="test.mcp.crashing_kernel",
+        title="Crashing kernel sentinel",
+        description="Exercises MCP execution-failure projection.",
+        request_type=Request,
+        result_type=Result,
+        run=crashing_kernel,
+    )
+    server = _build_server(
+        state=AppState(operation_catalog=Catalog((*BUILTIN_TOOLS, operation)))
+    )
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(server, raise_exceptions=True) as client:
+            with pytest.raises(MCPError) as error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "test.mcp.crashing_kernel",
+                        "payload": {"value": 1},
+                    },
+                )
+        assert error.value.code == -32603
+        assert error.value.message == "operation execution failed"
+        assert error.value.data is None
+        assert "private backend failure" not in error.value.message
 
     asyncio.run(scenario())
 

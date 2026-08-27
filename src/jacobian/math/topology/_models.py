@@ -764,20 +764,6 @@ class BarycentricSubdivisionRequest(StrictModel):
 
     complex: SimplicialComplexRequest
 
-    @model_validator(mode="after")
-    def require_barycentric_work_bounds(self) -> Self:
-        closure = face_closure(tuple(tuple(sorted(f)) for f in self.complex.facets))
-        face_count = sum(len(part) for part in closure)
-        if face_count > 31:
-            raise _validation_error(
-                "topology.require_barycentric_work_bounds_1",
-                f"barycentric subdivision requires at most 31 faces (got {face_count}); "
-                "input would produce >128 subdivision facets exceeding result contract",
-            )
-        # Additional check: subdivision of a 5-vertex simplex has 120 facets within 128 limit;
-        # 6-vertex simplex would have 720 >128, so 31 is safe.
-        return self
-
 
 class BarycentricSubdivisionResult(TopologyExactResult):
     """The barycentric subdivision as a facet list."""

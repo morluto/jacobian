@@ -85,23 +85,6 @@ class TransitionParikhProfileRequest(StrictModel):
         description="Exact nonnegative number of transitions in every path.",
     )
 
-    @model_validator(mode="after")
-    def require_complete_bounded_profile(self) -> Self:
-        from jacobian.math.regular_languages._profile_admission import (
-            require_transition_profile_envelope,
-        )
-
-        try:
-            require_transition_profile_envelope(
-                self.automaton,
-                self.source_state,
-                self.target_state,
-                self.path_length,
-            )
-        except ValueError as exc:
-            raise _validation_error("profile_admission_rejected", str(exc)) from exc
-        return self
-
 
 class RunResult(RunRequest):
     """Whether a word was accepted and the final state reached."""

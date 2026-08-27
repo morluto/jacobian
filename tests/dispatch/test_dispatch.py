@@ -10,6 +10,13 @@ from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+from jacobian.math.finite_fields import (
+    element,
+    finite_field,
+    finite_polynomial,
+    finite_polynomial_map,
+)
+from jacobian.math.finite_fields._models import FiniteMapTableRequest
 
 
 class _Request(StrictModel):
@@ -145,6 +152,31 @@ def test_dispatch_projects_owner_admission_as_an_invalid_request() -> None:
             "type": "topology.require_barycentric_work_bounds_1",
             "msg": "barycentric subdivision requires at most 31 faces; "
             "input would produce more than 128 subdivision facets",
+        },
+    )
+
+
+def test_dispatch_projects_finite_map_work_admission_as_an_invalid_request() -> None:
+    presentation = finite_field(2, (1, 1, 0, 1, 1, 0, 0, 0, 1))
+    one = element(presentation, (1,) + (0,) * 7)
+    request = FiniteMapTableRequest(
+        polynomial_map=finite_polynomial_map(
+            finite_polynomial(presentation, (one,) * 512)
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        invoke_operation(
+            "finite_field.polynomial_map.table.compute",
+            request.model_dump(mode="json"),
+            Catalog.open(),
+        )
+
+    assert error.value.errors() == (
+        {
+            "loc": ("polynomial_map",),
+            "type": "finite_field.finite_map_exceeds_operation_work_budget",
+            "msg": "finite map exceeds the operation work budget",
         },
     )
 

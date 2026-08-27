@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields.values import (
     Axis,
     CollisionResult,
@@ -277,7 +278,11 @@ def finite_map_table(polynomial_map: FinitePolynomialMap) -> FiniteMapTable:
         * polynomial_map.domain.degree
     )
     if work > _MAX_FINITE_MAP_WORK:
-        raise ValueError("finite map exceeds the operation work budget")
+        raise OperationDomainValidationError(
+            location=("polynomial_map",),
+            code="finite_field.finite_map_exceeds_operation_work_budget",
+            message="finite map exceeds the operation work budget",
+        )
     from jacobian.math.finite_fields import _flint
 
     sources = _field_elements(polynomial_map.domain)

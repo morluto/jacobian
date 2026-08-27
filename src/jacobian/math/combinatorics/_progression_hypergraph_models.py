@@ -24,7 +24,7 @@ class ProgressionHypergraphResult(StrictModel):
 
 
 __all__ = [
+    "MAX_GROUP_ORDER",
     "ProgressionHypergraphRequest",
     "ProgressionHypergraphResult",
-    "MAX_GROUP_ORDER",
 ]

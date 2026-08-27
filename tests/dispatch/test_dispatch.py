@@ -4,7 +4,7 @@ import time
 from typing import cast
 
 import pytest
-from pydantic import field_serializer
+from pydantic import ValidationError, field_serializer
 
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
@@ -120,9 +120,9 @@ def test_dispatch_distinguishes_request_and_result_validation() -> None:
     catalog = _CatalogWithInvalidResult()
     with pytest.raises(OperationRequestValidationError):
         invoke_operation("test.invalid-result", {"value": "bad"}, catalog)  # type: ignore[arg-type]
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(ValidationError) as error:
         invoke_operation("test.invalid-result", {"value": 1}, catalog)  # type: ignore[arg-type]
-    assert error.value.errors()[0]["type"] == "operation.domain_validation"
+    assert error.value.errors()[0]["type"] == "int_parsing"
     assert "Input should be a valid integer" in error.value.errors()[0]["msg"]
 
 
@@ -141,8 +141,8 @@ def test_dispatch_projects_owner_admission_as_an_invalid_request() -> None:
 
     assert error.value.errors() == (
         {
-            "loc": (),
-            "type": "operation.domain_validation",
+            "loc": ("complex",),
+            "type": "topology.require_barycentric_work_bounds_1",
             "msg": "barycentric subdivision requires at most 31 faces; "
             "input would produce more than 128 subdivision facets",
         },

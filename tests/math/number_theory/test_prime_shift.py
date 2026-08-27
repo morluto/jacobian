@@ -4,10 +4,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_theory._prime_shift_models import (
-    PrimeShiftProfileRequest,
-    PrimeShiftProfileResult,
-)
+from jacobian.math.number_theory import PrimeShiftProfileResult, prime_shift_profile
+from jacobian.math.number_theory._prime_shift_models import PrimeShiftProfileRequest
 from jacobian.math.number_theory._prime_shift_operations import (
     compute_prime_shift_profile,
 )
@@ -36,6 +34,15 @@ def test_small_values() -> None:
     # n=4: 4-1=3(prime), 4-2=2(prime), 4-4=0(not prime) -> 2
     # n=5: 5-1=4(not prime), 5-2=3(prime), 5-4=1(not prime) -> 1
     assert counts == [0, 0, 1, 2, 1]
+
+
+def test_native_api_matches_wire_operation() -> None:
+    request = PrimeShiftProfileRequest(lower_bound=1, upper_bound=20)
+    wire_result = compute_prime_shift_profile(request)
+    native_result = prime_shift_profile(1, 20)
+
+    assert isinstance(native_result, PrimeShiftProfileResult)
+    assert native_result == wire_result
 
 
 def test_single_element() -> None:

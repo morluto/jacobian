@@ -84,8 +84,22 @@ class PrimeShiftProfileRequest(StrictModel):
         return self
 
 
+def _validate_prime_shift_interval(lower_bound: int, upper_bound: int) -> None:
+    """Validate the structural interval shared by wire and native callers."""
+
+    if lower_bound < 1:
+        raise ValueError("lower_bound must be >= 1")
+    if upper_bound < 1:
+        raise ValueError("upper_bound must be >= 1")
+    if upper_bound < lower_bound:
+        raise ValueError("upper_bound must be >= lower_bound")
+    if upper_bound - lower_bound + 1 > MAX_SHIFT_INTERVAL_WIDTH:
+        raise ValueError("interval width exceeds maximum supported width")
+
+
 def require_prime_shift_profile_admission(
-    request: PrimeShiftProfileRequest,
+    lower_bound: int,
+    upper_bound: int,
 ) -> _PrimeShiftProfileExecutionPlan:
     """Build one exact execution plan after structural request validation.
 
@@ -94,8 +108,7 @@ def require_prime_shift_profile_admission(
     endpoint size, so a narrow interval can use larger integers when its
     actual segmented-sieve work and complete result still fit.
     """
-    lower_bound = request.lower_bound
-    upper_bound = request.upper_bound
+    _validate_prime_shift_interval(lower_bound, upper_bound)
     result_bytes = _profile_result_byte_bound(lower_bound, upper_bound)
     if result_bytes > MAX_SHIFT_RESULT_BYTES:
         raise ValueError("interval result exceeds the canonical output budget")
@@ -166,14 +179,15 @@ class PrimeShiftProfileResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        request: PrimeShiftProfileRequest,
+        lower_bound: int,
+        upper_bound: int,
         counts: tuple[int, ...],
         plan: _PrimeShiftProfileExecutionPlan,
     ) -> Self:
         """Construct the trusted result from the plan's admitted row axis."""
         if (
-            request.lower_bound != plan.lower_bound
-            or request.upper_bound != plan.upper_bound
+            lower_bound != plan.lower_bound
+            or upper_bound != plan.upper_bound
             or len(counts) != plan.upper_bound - plan.lower_bound + 1
         ):
             raise RuntimeError("prime-shift kernel result does not match its plan")

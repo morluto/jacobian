@@ -10,7 +10,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.real_algebraic import (
     MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
@@ -46,6 +46,7 @@ class UnivariatePolynomialRequest(StrictModel):
 
         if not isinstance(value, Mapping):
             return value
+        value = canonicalize_json_containers(value)
         coefficients = value.get("coefficients_descending")
         if not isinstance(coefficients, (list, tuple)):
             return value
@@ -68,10 +69,7 @@ class UnivariatePolynomialRequest(StrictModel):
                         f"{MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS}-digit "
                         "factorization envelope",
                     )
-        # Strict JSON arrays arrive as lists while the canonical Python value
-        # is a tuple.  Normalize only this outer sequence before nested strict
-        # rational validation.
-        return {**value, "coefficients_descending": tuple(coefficients)}
+        return value
 
     @model_validator(mode="after")
     def require_nonzero_leading(self) -> Self:

@@ -17,6 +17,12 @@ from jacobian.math.hypergraphs._models import (
     HypergraphIndependenceResult,
     IncidenceGraphRequest,
     IncidenceGraphResult,
+    InducedTypeProfileRequest,
+    InducedTypeProfileResult,
+    MaximumEdgeMatchingRequest,
+    MaximumEdgeMatchingResult,
+    MinimumTransversalRequest,
+    MinimumTransversalResult,
     ParametersRequest,
     ParametersResult,
     VertexDegreesRequest,
@@ -28,6 +34,9 @@ from jacobian.math.hypergraphs._operations import (
     compute_edge_intersections,
     compute_incidence_graph,
     compute_independence_number,
+    compute_induced_type_profile,
+    compute_maximum_edge_matching,
+    compute_minimum_transversal,
     compute_parameters,
     compute_vertex_degrees,
 )
@@ -220,6 +229,70 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "clique_expansion_of_4_vertex_hypergraph",
                 "Compute the 2-section of a 4-vertex, 3-edge hypergraph.",
+                {"hypergraph": _HYPERGRAPH},
+            ),
+        ),
+    ),
+    _op(
+        "hypergraph.induced_type_profile.compute",
+        "Compute the induced uniform type profile of a finite hypergraph",
+        "For each k-subset of the declared vertices, compute the number of "
+        "distinct nonempty edges e \u2229 S that arise when the hypergraph is "
+        "restricted to that subset S, in lexicographic vertex order.",
+        InducedTypeProfileRequest,
+        InducedTypeProfileResult,
+        compute_induced_type_profile,
+        "combinatorics",
+        "hypergraph",
+        "exact",
+        examples=(
+            example(
+                "induced_type_profile_of_4_vertex_hypergraph",
+                "Compute the induced 2-subset type profile of a 4-vertex, "
+                "3-edge hypergraph.",
+                {"hypergraph": _HYPERGRAPH, "subset_size": 2},
+            ),
+        ),
+    ),
+    _op(
+        "hypergraph.minimum_transversal.compute",
+        "Compute an exact minimum transversal of a finite hypergraph",
+        "Compute a minimum-cardinality transversal (hitting set): a vertex "
+        "set that intersects every nonempty hyperedge, found by exact bounded "
+        "search. Empty hyperedges are not admitted.",
+        MinimumTransversalRequest,
+        MinimumTransversalResult,
+        compute_minimum_transversal,
+        "combinatorics",
+        "hypergraph",
+        "optimization",
+        "exact",
+        examples=(
+            example(
+                "minimum_transversal_of_4_vertex_hypergraph",
+                "Compute a minimum transversal of a 4-vertex, 3-edge hypergraph; "
+                "every hyperedge must be nonempty.",
+                {"hypergraph": _HYPERGRAPH},
+            ),
+        ),
+    ),
+    _op(
+        "hypergraph.maximum_edge_matching.compute",
+        "Compute an exact maximum edge matching of a finite hypergraph",
+        "Compute a maximum-cardinality set of pairwise-disjoint hyperedges "
+        "(matching), found by exact bounded search; an all-empty edge family "
+        "is handled by a trivial presolve.",
+        MaximumEdgeMatchingRequest,
+        MaximumEdgeMatchingResult,
+        compute_maximum_edge_matching,
+        "combinatorics",
+        "hypergraph",
+        "optimization",
+        "exact",
+        examples=(
+            example(
+                "maximum_edge_matching_of_4_vertex_hypergraph",
+                "Compute a maximum edge matching of a 4-vertex, 3-edge hypergraph.",
                 {"hypergraph": _HYPERGRAPH},
             ),
         ),

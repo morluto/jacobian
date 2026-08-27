@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import unicodedata
+from dataclasses import dataclass
 from typing import Literal, Self
 
 from pydantic import (
     Field,
+    PrivateAttr,
     StrictBool,
     StrictInt,
     model_validator,
@@ -15,7 +17,13 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import CanonicalLimits, encode_strict_json, sha256_digest
+from jacobian.canonical import (
+    CanonicalLimits,
+    canonicalize_json,
+    encode_strict_json,
+    sha256_digest,
+    strict_json_object_size,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_VERTICES = 256
@@ -120,6 +128,9 @@ def _validation_error(message: str) -> PydanticCustomError:
         ("exact incidence pairs", "incidence_graph"),
         ("NFC-normalized", "nfc_labels"),
         ("2-section", "clique_expansion"),
+        ("induced type profile", "induced_profile"),
+        ("transversal", "transversal"),
+        ("matching", "matching"),
     )
     for fragment, reason in reason_fragments:
         if fragment in message:
@@ -949,3 +960,490 @@ class CliqueExpansionResult(StrictModel):
 
     hypergraph: FiniteHypergraph
     graph: SimpleUndirectedGraph
+
+
+# ---------------------------------------------------------------------------
+# Induced uniform-hypergraph type profiles (#2888)
+# --------------------------------------------------------------------------
+
+MAX_INDUCED_SUBSETS = 4_096
+MAX_INDUCED_SUBSET_SIZE = MAX_VERTICES
+MAX_INDUCED_PROFILE_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _InducedTypeProfileAdmissionPlan:
+    """Request-scoped work and output plan for an induced type profile."""
+
+    expected_subsets: tuple[tuple[str, ...], ...]
+    edge_sets: tuple[frozenset[str], ...]
+    result_bytes: int
+
+
+class InducedTypeProfileRequest(StrictModel):
+    """Request the induced uniform type profile of a finite hypergraph.
+
+    For each k-subset of the declared vertices, the operation reports the
+    number of distinct nonempty induced edges ``e ∩ S`` that arise when the
+    hypergraph is restricted to that subset ``S``.
+    """
+
+    hypergraph: FiniteHypergraph = Field(
+        description=(
+            "Canonical finite hypergraph. Admission accounts for the exact "
+            "UTF-8 label encoding of every returned subset and the retained "
+            "source, in addition to the subset-count bound."
+        ),
+        json_schema_extra={
+            "subset_count_bound": MAX_INDUCED_SUBSETS,
+            "canonical_result_bytes_bound": MAX_INDUCED_PROFILE_RESULT_BYTES,
+        },
+    )
+    subset_size: StrictInt = Field(
+        ge=0,
+        le=MAX_INDUCED_SUBSET_SIZE,
+        description=(
+            "Cardinality ``k`` of each inspected vertex subset.  The "
+            f"complete profile admits at most {MAX_INDUCED_SUBSETS} "
+            "k-subsets."
+        ),
+    )
+    _admission_plan: _InducedTypeProfileAdmissionPlan = PrivateAttr()
+
+    @model_validator(mode="after")
+    def require_bounded_profile(self) -> Self:
+        plan = _induced_type_profile_admission_plan(self.hypergraph, self.subset_size)
+        if plan.result_bytes > MAX_INDUCED_PROFILE_RESULT_BYTES:
+            raise _validation_error(
+                "the induced type profile would exceed the "
+                f"{MAX_INDUCED_PROFILE_RESULT_BYTES}-byte canonical output limit; "
+                "shorten vertex labels or reduce the profile"
+            )
+        self._admission_plan = plan
+        return self
+
+
+def _strict_json_array_size(item_sizes: tuple[int, ...]) -> int:
+    """Return the exact canonical JSON size of an array from item sizes."""
+
+    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
+
+
+def _induced_profile_result_bytes(
+    hypergraph: FiniteHypergraph,
+    expected_subsets: tuple[tuple[str, ...], ...],
+) -> int:
+    """Return a safe serialized-size bound for an induced-profile result.
+
+    The count for each entry is not known until the kernel computes it, so its
+    widest possible value is reserved. Subset labels and the retained source
+    are measured using the same canonical normalization as the transport
+    boundary, rather than a fixed per-entry estimate.
+    """
+
+    subset_size = len(expected_subsets[0])
+    vertex_wire_bytes = {
+        vertex: len(encode_strict_json(unicodedata.normalize("NFC", vertex)))
+        for vertex in hypergraph.vertices
+    }
+    maximum_count = min(len(hypergraph.edges), (1 << subset_size) - 1)
+    count_wire_bytes = len(encode_strict_json(maximum_count))
+    entry_sizes: list[int] = []
+    for subset in expected_subsets:
+        subset_wire_bytes = _strict_json_array_size(
+            tuple(vertex_wire_bytes[vertex] for vertex in subset)
+        )
+        entry_sizes.append(
+            strict_json_object_size(
+                (
+                    ("vertex_subset", subset_wire_bytes),
+                    ("induced_edge_count", count_wire_bytes),
+                )
+            )
+        )
+    entries_size = _strict_json_array_size(tuple(entry_sizes))
+    source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
+    return strict_json_object_size(
+        (
+            ("hypergraph", source_size),
+            ("subset_size", len(encode_strict_json(subset_size))),
+            ("entries", entries_size),
+        )
+    )
+
+
+def _induced_type_profile_admission_plan(
+    hypergraph: FiniteHypergraph,
+    subset_size: int,
+) -> _InducedTypeProfileAdmissionPlan:
+    """Build the complete bounded-work plan once for one profile request."""
+
+    from itertools import combinations
+
+    n = len(hypergraph.vertices)
+    if subset_size > n:
+        raise _validation_error(
+            "induced type profile subset_size exceeds the declared vertex count"
+        )
+    expected_subsets = tuple(
+        tuple(combo) for combo in combinations(sorted(hypergraph.vertices), subset_size)
+    )
+    if len(expected_subsets) > MAX_INDUCED_SUBSETS:
+        raise _validation_error(
+            "induced type profile exceeds the "
+            f"{MAX_INDUCED_SUBSETS}-subset profile bound"
+        )
+    return _InducedTypeProfileAdmissionPlan(
+        expected_subsets=expected_subsets,
+        edge_sets=tuple(frozenset(members) for _, members in hypergraph.edges),
+        result_bytes=_induced_profile_result_bytes(hypergraph, expected_subsets),
+    )
+
+
+class InducedTypeProfileEntry(StrictModel):
+    """One vertex subset and its induced distinct-edge count."""
+
+    vertex_subset: tuple[str, ...] = Field(max_length=MAX_INDUCED_SUBSET_SIZE)
+    induced_edge_count: int = Field(ge=0, le=MAX_EDGES)
+
+    @model_validator(mode="after")
+    def require_canonical_entry(self) -> Self:
+        if self.vertex_subset != tuple(sorted(set(self.vertex_subset))):
+            raise _validation_error(
+                "induced type profile vertex_subset must be distinct and "
+                "lexicographically sorted"
+            )
+        return self
+
+
+class InducedTypeProfileResult(StrictModel):
+    """The complete induced uniform type profile of a finite hypergraph.
+
+    ``entries`` lists one :class:`InducedTypeProfileEntry` per k-subset of the
+    declared vertices, in lexicographic vertex order.  ``induced_edge_count``
+    for a subset ``S`` is the number of distinct nonempty edges ``e ∩ S``
+    arising from the source hypergraph's edges.
+    """
+
+    hypergraph: FiniteHypergraph
+    subset_size: StrictInt = Field(ge=0, le=MAX_INDUCED_SUBSET_SIZE)
+    entries: tuple[InducedTypeProfileEntry, ...] = Field(max_length=MAX_INDUCED_SUBSETS)
+
+    @model_validator(mode="after")
+    def bind_induced_type_profile(self) -> Self:
+        plan = _induced_type_profile_admission_plan(self.hypergraph, self.subset_size)
+        if plan.result_bytes > MAX_INDUCED_PROFILE_RESULT_BYTES:
+            raise _validation_error(
+                "the induced type profile would exceed the "
+                f"{MAX_INDUCED_PROFILE_RESULT_BYTES}-byte canonical output limit; "
+                "shorten vertex labels or reduce the profile"
+            )
+        if (
+            tuple(entry.vertex_subset for entry in self.entries)
+            != plan.expected_subsets
+        ):
+            raise _validation_error(
+                "induced type profile entries must list each k-subset of "
+                "vertices exactly once in lexicographic order"
+            )
+        return self
+
+    @classmethod
+    def _from_admitted_kernel(
+        cls,
+        *,
+        hypergraph: FiniteHypergraph,
+        subset_size: int,
+        entries: tuple[InducedTypeProfileEntry, ...],
+        plan: _InducedTypeProfileAdmissionPlan,
+    ) -> Self:
+        """Construct typed kernel output using its already-admitted plan."""
+
+        if tuple(entry.vertex_subset for entry in entries) != plan.expected_subsets:
+            raise AssertionError(
+                "induced profile kernel output violated its admission plan"
+            )
+        return cls.model_construct(
+            hypergraph=hypergraph,
+            subset_size=subset_size,
+            entries=entries,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Bounded exact minimum vertex transversals (#2876)
+# --------------------------------------------------------------------------
+
+MAX_TRANSVERSAL_RESULT_VERTICES = MAX_VERTICES
+MAX_TRANSVERSAL_SEARCH_WORK = 50_000_000
+MAX_TRANSVERSAL_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+
+def _minimum_transversal_search_plan(
+    hypergraph: FiniteHypergraph,
+) -> tuple[tuple[str, ...], tuple[frozenset[str], ...], int, int]:
+    """Return active vertices, unique edges, search depth, and work bound."""
+
+    from math import comb
+
+    unique_edges: list[frozenset[str]] = []
+    seen_edges: set[frozenset[str]] = set()
+    for _, members in hypergraph.edges:
+        edge = frozenset(members)
+        if edge not in seen_edges:
+            seen_edges.add(edge)
+            unique_edges.append(edge)
+    unique_edges.sort(key=lambda edge: (len(edge), tuple(sorted(edge))))
+    active_labels = set().union(*unique_edges) if unique_edges else set()
+    active_vertices = tuple(
+        vertex for vertex in hypergraph.vertices if vertex in active_labels
+    )
+
+    greedy_witness: set[str] = set()
+    for edge in unique_edges:
+        if not greedy_witness & edge:
+            greedy_witness.add(
+                next(vertex for vertex in active_vertices if vertex in edge)
+            )
+    search_depth = len(greedy_witness)
+    candidate_count = sum(
+        comb(len(active_vertices), size) for size in range(1, search_depth + 1)
+    )
+    return (
+        active_vertices,
+        tuple(unique_edges),
+        search_depth,
+        candidate_count * len(unique_edges),
+    )
+
+
+def _minimum_transversal_result_bytes(
+    hypergraph: FiniteHypergraph,
+    active_vertices: tuple[str, ...],
+) -> int:
+    """Return the exact worst-case canonical size of a transversal result."""
+
+    normalized_active_vertices = tuple(
+        unicodedata.normalize("NFC", vertex) for vertex in active_vertices
+    )
+    source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
+    witness_size = _strict_json_array_size(
+        tuple(_strict_label_wire_bytes(vertex) for vertex in normalized_active_vertices)
+    )
+    cardinality_size = len(encode_strict_json(len(normalized_active_vertices)))
+    return strict_json_object_size(
+        (
+            ("hypergraph", source_size),
+            ("transversal", witness_size),
+            ("cardinality", cardinality_size),
+        )
+    )
+
+
+class MinimumTransversalRequest(StrictModel):
+    """Request an exact minimum-cardinality transversal (hitting set).
+
+    A transversal is a set of vertices that intersects every hyperedge.
+    The exact bounded search ignores carrier vertices absent from every edge,
+    deduplicates the edge family, and enumerates active-vertex subsets by
+    increasing cardinality. Admission bounds the resulting candidate/edge
+    intersection checks by MAX_TRANSVERSAL_SEARCH_WORK.
+    """
+
+    hypergraph: FiniteHypergraph = Field(
+        description=(
+            "Canonical finite hypergraph. Every hyperedge must be nonempty. "
+            "Empty edge families are solved by the empty transversal; "
+            "otherwise the exact active-vertex search must fit "
+            f"{MAX_TRANSVERSAL_SEARCH_WORK} candidate-edge checks and the "
+            f"retained-source result must fit {MAX_TRANSVERSAL_RESULT_BYTES} "
+            "canonical bytes."
+        ),
+        json_schema_extra={
+            "search_work_bound": MAX_TRANSVERSAL_SEARCH_WORK,
+            "canonical_result_bytes_bound": MAX_TRANSVERSAL_RESULT_BYTES,
+            "requires_nonempty_hyperedges": True,
+        },
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_search(self) -> Self:
+        if any(not members for _, members in self.hypergraph.edges):
+            raise _validation_error(
+                "minimum transversal search does not admit empty edges"
+            )
+        active_vertices, _, _, search_work = _minimum_transversal_search_plan(
+            self.hypergraph
+        )
+        if search_work > MAX_TRANSVERSAL_SEARCH_WORK:
+            raise _validation_error(
+                "minimum transversal search exceeds the "
+                f"{MAX_TRANSVERSAL_SEARCH_WORK}-check exact search bound"
+            )
+        if (
+            _minimum_transversal_result_bytes(self.hypergraph, active_vertices)
+            > MAX_TRANSVERSAL_RESULT_BYTES
+        ):
+            raise _validation_error(
+                "the minimum transversal result retains its source hypergraph "
+                f"and would exceed the {MAX_TRANSVERSAL_RESULT_BYTES}-byte "
+                "canonical output limit; shorten labels or reduce the edge family"
+            )
+        return self
+
+
+class MinimumTransversalResult(StrictModel):
+    """An exact minimum-cardinality transversal of a finite hypergraph.
+
+    ``transversal`` is one minimum-cardinality vertex set intersecting every
+    hyperedge, in declared vertex order.  ``cardinality`` is its size.  For a
+    hypergraph with no edges, the empty set is the unique minimum transversal.
+    """
+
+    hypergraph: FiniteHypergraph
+    transversal: tuple[str, ...] = Field(max_length=MAX_TRANSVERSAL_RESULT_VERTICES)
+    cardinality: StrictInt = Field(ge=0, le=MAX_TRANSVERSAL_RESULT_VERTICES)
+
+    @model_validator(mode="after")
+    def bind_transversal(self) -> Self:
+        vertex_set = set(self.hypergraph.vertices)
+        witness_set = set(self.transversal)
+        if len(witness_set) != len(self.transversal):
+            raise _validation_error("transversal vertices must be distinct")
+        if not witness_set <= vertex_set:
+            raise _validation_error(
+                "transversal vertices must be declared source vertices"
+            )
+        expected_order = tuple(
+            vertex for vertex in self.hypergraph.vertices if vertex in witness_set
+        )
+        if self.transversal != expected_order:
+            raise _validation_error(
+                "transversal vertices must be unique and in declared vertex order"
+            )
+        if self.cardinality != len(self.transversal):
+            raise _validation_error("cardinality must equal the transversal size")
+        edge_sets = tuple(frozenset(members) for _, members in self.hypergraph.edges)
+        if any(not (edge & witness_set) for edge in edge_sets):
+            raise _validation_error("transversal must intersect every hyperedge")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Bounded exact maximum edge-matchings (#2875)
+# --------------------------------------------------------------------------
+
+MAX_MATCHING_EDGES = 20
+MAX_MATCHING_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+
+def _maximum_edge_matching_result_bytes(
+    hypergraph: FiniteHypergraph,
+    edge_ids: tuple[str, ...],
+) -> int:
+    """Return the exact canonical size of a worst-case matching result."""
+
+    normalized_edge_ids = tuple(
+        unicodedata.normalize("NFC", edge_id) for edge_id in edge_ids
+    )
+    source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
+    matching_size = _strict_json_array_size(
+        tuple(_strict_label_wire_bytes(edge_id) for edge_id in normalized_edge_ids)
+    )
+    count_size = len(encode_strict_json(len(normalized_edge_ids)))
+    return strict_json_object_size(
+        (
+            ("hypergraph", source_size),
+            ("matching", matching_size),
+            ("count", count_size),
+        )
+    )
+
+
+class MaximumEdgeMatchingRequest(StrictModel):
+    """Request an exact maximum-cardinality edge matching.
+
+    A matching is a set of pairwise-disjoint hyperedges.  The exact bounded
+    search enumerates nonempty edge subsets by decreasing cardinality and
+    admits at most ``MAX_MATCHING_EDGES`` search edges.  Empty edges form a
+    mandatory witness prefix because they are disjoint from every edge,
+    subject to the canonical result-byte bound.
+    """
+
+    hypergraph: FiniteHypergraph = Field(
+        description=(
+            "Canonical finite hypergraph. Exact matching search admits at most "
+            f"{MAX_MATCHING_EDGES} nonempty edges; empty edge IDs are included "
+            "in every matching witness and the result is admitted when its "
+            f"retained-source result fits {MAX_MATCHING_RESULT_BYTES} canonical bytes."
+        ),
+        json_schema_extra={
+            "search_edge_bound": MAX_MATCHING_EDGES,
+            "canonical_result_bytes_bound": MAX_MATCHING_RESULT_BYTES,
+            "empty_edge_witness_prefix": True,
+        },
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_search(self) -> Self:
+        edge_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        nonempty_edge_count = sum(bool(members) for _, members in self.hypergraph.edges)
+        if nonempty_edge_count > MAX_MATCHING_EDGES:
+            raise _validation_error(
+                "maximum edge matching search exceeds the "
+                f"{MAX_MATCHING_EDGES}-edge exact search bound"
+            )
+        if (
+            _maximum_edge_matching_result_bytes(self.hypergraph, edge_ids)
+            > MAX_MATCHING_RESULT_BYTES
+        ):
+            raise _validation_error(
+                "the maximum edge matching result retains its source hypergraph "
+                f"and would exceed the {MAX_MATCHING_RESULT_BYTES}-byte "
+                "canonical output limit; shorten labels or reduce the edge family"
+            )
+        return self
+
+
+class MaximumEdgeMatchingResult(StrictModel):
+    """An exact maximum-cardinality edge matching of a finite hypergraph.
+
+    ``matching`` is one maximum-cardinality set of pairwise-disjoint
+    hyperedge ids, in declared edge order.  ``count`` is its size.  For a
+    hypergraph with no edges, the empty set is the unique maximum matching.
+    """
+
+    hypergraph: FiniteHypergraph
+    matching: tuple[str, ...] = Field(max_length=MAX_EDGES)
+    count: StrictInt = Field(ge=0, le=MAX_EDGES)
+
+    @model_validator(mode="after")
+    def bind_matching(self) -> Self:
+        edge_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        edge_id_set = set(edge_ids)
+        witness_set = set(self.matching)
+        if len(witness_set) != len(self.matching):
+            raise _validation_error("matching edge ids must be distinct")
+        if not witness_set <= edge_id_set:
+            raise _validation_error(
+                "matching edge ids must be declared source edge ids"
+            )
+        expected_order = tuple(
+            edge_id for edge_id in edge_ids if edge_id in witness_set
+        )
+        if self.matching != expected_order:
+            raise _validation_error(
+                "matching edge ids must be unique and in declared edge order"
+            )
+        if self.count != len(self.matching):
+            raise _validation_error("count must equal the matching size")
+        edge_lookup = {
+            edge_id: frozenset(members) for edge_id, members in self.hypergraph.edges
+        }
+        occupied_vertices: set[str] = set()
+        for edge_id in self.matching:
+            members = edge_lookup[edge_id]
+            if occupied_vertices.intersection(members):
+                raise _validation_error("matching edges must be pairwise disjoint")
+            occupied_vertices.update(members)
+        return self

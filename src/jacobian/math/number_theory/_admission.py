@@ -264,6 +264,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct complete interval profile counting contiguous-sum representations that a loop of scalar calls cannot establish as one source-bound value",
     ),
     OperationAdmission(
+        "number_theory.divisibility_incidence_graph.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete bipartite divisibility-incidence graph that a loop of scalar divides checks cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
         "number_theory.integer_interval.squarefree_profile.compute",
         AdmissionDecision.KEEP,
         "distinct complete exact interval profile that a loop of scalar squarefree decisions cannot establish as one source-bound value",
@@ -317,6 +322,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "number_theory.product_divisibility.profile.compute",
         AdmissionDecision.KEEP,
         "distinct complete pairwise divisibility profile that a loop of scalar divides checks cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
+        "number_theory.divisor_sum_product.preimages.compute",
+        AdmissionDecision.KEEP,
+        "complete exact source-bound fiber of n*sigma(n), using the square-root inequality to avoid caller-side coverage proofs",
+    ),
+    OperationAdmission(
+        "number_theory.integer_interval.p_adic_valuation_profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete interval profile that a loop of scalar valuation calls cannot establish as one source-bound value",
     ),
     OperationAdmission(
         "number_theory.translated_prime.representation_profile.compute",

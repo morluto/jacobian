@@ -139,33 +139,33 @@ def _nullary_saturated_with_wide_rows() -> BottomUpTreeAutomaton:
 
 
 class TestRun:
-    def test_accepted_leaf(self):
+    def test_accepted_leaf(self) -> None:
         automaton = _simple_automaton()
         tree = _leaf()
         states = run_tree_automaton(automaton, tree)
         assert states == {0}
 
-    def test_accepted_balanced_tree(self):
+    def test_accepted_balanced_tree(self) -> None:
         automaton = _simple_automaton()
         tree = _node(_leaf(), _leaf())
         states = run_tree_automaton(automaton, tree)
         assert states == {0}
 
-    def test_balanced_tree_state1(self):
+    def test_balanced_tree_state1(self) -> None:
         # With the simple automaton, f(a, a) -> state 0 (balanced)
         automaton = _simple_automaton()
         tree = _node(_leaf(), _leaf())
         states = run_tree_automaton(automaton, tree)
         assert states == {0}
 
-    def test_run_request_accepts(self):
+    def test_run_request_accepts(self) -> None:
         automaton = _simple_automaton()
         tree = _node(_leaf(), _leaf())
         result = compute_tree_run(TreeRunRequest(automaton=automaton, tree=tree))
         assert result.accepted is True
         assert result.root_states == (0,)
 
-    def test_run_request_rejects(self):
+    def test_run_request_rejects(self) -> None:
         # Use automaton where state 1 is final but not state 0
         automaton = BottomUpTreeAutomaton(
             state_count=2,
@@ -188,7 +188,7 @@ class TestRun:
         assert leaf_result.accepted is False
         assert leaf_result.root_states == (1,)
 
-    def test_nondeterministic_run_returns_every_reachable_root_state(self):
+    def test_nondeterministic_run_returns_every_reachable_root_state(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=2,
             arity=(0,),
@@ -212,7 +212,7 @@ class TestRun:
         forged = type(result).model_validate(payload)
         assert not verify_tree_run_result(forged)
 
-    def test_native_run_rejects_invalid_nested_rank(self):
+    def test_native_run_rejects_invalid_nested_rank(self) -> None:
         automaton = _simple_automaton()
         invalid_tree = _node(RankedTree(symbol=1), _leaf())
 
@@ -221,7 +221,7 @@ class TestRun:
 
 
 class TestAcceptedTreeCount:
-    def test_empty_ranked_alphabet_has_exact_empty_language(self):
+    def test_empty_ranked_alphabet_has_exact_empty_language(self) -> None:
         """The canonical empty alphabet has no ground trees of any positive size."""
         automaton = BottomUpTreeAutomaton(
             state_count=2,
@@ -252,21 +252,21 @@ class TestAcceptedTreeCount:
         assert "minItems" not in arity_schema
         assert "empty ranked alphabet" in arity_schema["description"]
 
-    def test_count_size_1(self):
+    def test_count_size_1(self) -> None:
         automaton = _simple_automaton()
         result = compute_accepted_tree_count(
             AcceptedTreeCountRequest(automaton=automaton, tree_size=1)
         )
         assert result.count == "1"
 
-    def test_count_size_3(self):
+    def test_count_size_3(self) -> None:
         automaton = _simple_automaton()
         result = compute_accepted_tree_count(
             AcceptedTreeCountRequest(automaton=automaton, tree_size=3)
         )
         assert result.count == "1"
 
-    def test_nondeterminism_counts_trees_not_accepting_runs(self):
+    def test_nondeterminism_counts_trees_not_accepting_runs(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=3,
             arity=(0, 1),
@@ -281,7 +281,7 @@ class TestAcceptedTreeCount:
 
         assert accepted_tree_count(automaton, 2) == 1
 
-    def test_one_tree_reaching_two_final_states_is_counted_once(self):
+    def test_one_tree_reaching_two_final_states_is_counted_once(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=2,
             arity=(0,),
@@ -294,7 +294,7 @@ class TestAcceptedTreeCount:
 
         assert accepted_tree_count(automaton, 1) == 1
 
-    def test_distinct_nullary_symbols_are_distinct_trees(self):
+    def test_distinct_nullary_symbols_are_distinct_trees(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=1,
             arity=(0, 0),
@@ -307,7 +307,7 @@ class TestAcceptedTreeCount:
 
         assert accepted_tree_count(automaton, 1) == 2
 
-    def test_full_binary_tree_boundary_count_is_complete(self):
+    def test_full_binary_tree_boundary_count_is_complete(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=1,
             arity=(0, 2),
@@ -326,7 +326,7 @@ class TestAcceptedTreeCount:
         assert result.complete is True
         assert result.estimated_work_bound <= 2_000_000
 
-    def test_impossible_binary_tree_size_has_exact_zero_count(self):
+    def test_impossible_binary_tree_size_has_exact_zero_count(self) -> None:
         automaton = _simple_automaton()
 
         result = compute_accepted_tree_count(
@@ -338,7 +338,7 @@ class TestAcceptedTreeCount:
 
 
 class TestReachableStates:
-    def test_native_reachable_state_profile_returns_canonical_value(self):
+    def test_native_reachable_state_profile_returns_canonical_value(self) -> None:
         automaton = _simple_automaton()
 
         profile = reachable_state_profile(automaton)
@@ -356,7 +356,7 @@ class TestReachableStates:
         assert isinstance(result, ReachableStateProfile)
         assert result == profile
 
-    def test_no_nullary_seed_has_an_empty_reachable_profile(self):
+    def test_no_nullary_seed_has_an_empty_reachable_profile(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=2,
             arity=(1,),
@@ -374,7 +374,7 @@ class TestReachableStates:
         assert result.unreachable_states == (0, 1)
         assert result.witnesses == ()
 
-    def test_hyperedge_fixed_point_returns_minimum_witnesses(self):
+    def test_hyperedge_fixed_point_returns_minimum_witnesses(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=5,
             arity=(0, 0, 1, 2),
@@ -404,7 +404,7 @@ class TestReachableStates:
         for state, tree in result.witnesses:
             assert state in run_tree_automaton(automaton, tree)
 
-    def test_reachability_requires_every_hyperedge_child(self):
+    def test_reachability_requires_every_hyperedge_child(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=3,
             arity=(0, 2),
@@ -423,7 +423,7 @@ class TestReachableStates:
         assert result.unreachable_states == (1, 2)
         assert tuple(state for state, _ in result.witnesses) == (0,)
 
-    def test_profile_is_independent_of_transition_wire_order(self):
+    def test_profile_is_independent_of_transition_wire_order(self) -> None:
         transitions = (
             TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
             TreeAutomatonTransition(symbol=1, child_states=(), target_state=1),
@@ -444,7 +444,9 @@ class TestReachableStates:
         assert first_result.unreachable_states == second_result.unreachable_states
         assert first_result.witnesses == second_result.witnesses
 
-    def test_witnesses_choose_minimum_node_count_then_canonical_transition(self):
+    def test_witnesses_choose_minimum_node_count_then_canonical_transition(
+        self,
+    ) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=3,
             arity=(0, 0, 0, 1),
@@ -469,7 +471,7 @@ class TestReachableStates:
         )
         assert tuple(tree.symbol for _, tree in result.witnesses) == (0, 2, 0)
 
-    def test_equal_node_tie_breaks_by_smallest_root_symbol(self):
+    def test_equal_node_tie_breaks_by_smallest_root_symbol(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=2,
             arity=(0, 0),
@@ -494,7 +496,7 @@ class TestReachableStates:
             ReachableStateProfile.model_validate(forged_payload)
         )
 
-    def test_equal_node_tie_breaks_by_smallest_child_state_tuple(self):
+    def test_equal_node_tie_breaks_by_smallest_child_state_tuple(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=3,
             arity=(0, 2),
@@ -517,7 +519,7 @@ class TestReachableStates:
             children=(RankedTree(symbol=0), RankedTree(symbol=0)),
         )
 
-    def test_witness_schema_publishes_canonical_tie_break(self):
+    def test_witness_schema_publishes_canonical_tie_break(self) -> None:
         witnesses_description = ReachableStateProfile.model_json_schema()["properties"][
             "witnesses"
         ]["description"]
@@ -534,7 +536,7 @@ class TestReachableStates:
         assert "lexicographically smallest" in reachability_tool.description
         assert "(symbol, child_states, target_state)" in reachability_tool.description
 
-    def test_result_rejects_forged_reachable_states(self):
+    def test_result_rejects_forged_reachable_states(self) -> None:
         automaton = _simple_automaton()
         result = compute_tree_automaton_reachability(
             TreeAutomatonReachabilityRequest(automaton=automaton)
@@ -546,7 +548,7 @@ class TestReachableStates:
             ReachableStateProfile.model_validate(payload)
         _assert_validation_code(exc, "tree_automata.states_not_disjoint")
 
-    def test_result_binding_replay_rejects_non_minimum_witness(self):
+    def test_result_binding_replay_rejects_non_minimum_witness(self) -> None:
         automaton = _simple_automaton()
         profile = reachable_state_profile(automaton)
         forged_payload = {
@@ -569,7 +571,7 @@ class TestReachableStates:
             ReachableStateProfile.model_validate(forged_payload)
         )
 
-    def test_deserialized_profile_is_structural_and_explicitly_verifiable(self):
+    def test_deserialized_profile_is_structural_and_explicitly_verifiable(self) -> None:
         automaton = _simple_automaton()
         profile = reachable_state_profile(automaton)
 
@@ -579,7 +581,7 @@ class TestReachableStates:
         assert revalidated == profile
         assert verify_reachable_state_profile(revalidated)
 
-    def test_profile_shape_validators_reject_independent_forgeries(self):
+    def test_profile_shape_validators_reject_independent_forgeries(self) -> None:
         automaton = _simple_automaton()
         payload = reachable_state_profile(automaton).model_dump()
 
@@ -607,7 +609,9 @@ class TestReachableStates:
 
 
 class TestValidation:
-    def test_reachability_accepts_large_state_domain_with_compact_witnesses(self):
+    def test_reachability_accepts_large_state_domain_with_compact_witnesses(
+        self,
+    ) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=64,
             arity=(0,),
@@ -625,7 +629,9 @@ class TestValidation:
         assert result.reachable_states == tuple(range(64))
         assert len(result.witnesses) == 64
 
-    def test_nullary_free_child_slot_scans_admit_immediately_stable_profile(self):
+    def test_nullary_free_child_slot_scans_admit_immediately_stable_profile(
+        self,
+    ) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=64,
             arity=(16,),
@@ -656,7 +662,7 @@ class TestValidation:
         assert profile.unreachable_states == tuple(range(64))
         assert profile.witnesses == ()
 
-    def test_nullary_seeded_child_slot_scans_admit_saturated_profile(self):
+    def test_nullary_seeded_child_slot_scans_admit_saturated_profile(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=64,
             arity=(16, 0),
@@ -691,7 +697,9 @@ class TestValidation:
         assert profile.reachable_states == (0,)
         assert profile.unreachable_states == tuple(range(1, 64))
 
-    def test_two_scan_saturation_is_admitted_beyond_constructible_state_count(self):
+    def test_two_scan_saturation_is_admitted_beyond_constructible_state_count(
+        self,
+    ) -> None:
         automaton = _nullary_saturated_with_wide_rows()
 
         _, per_scan_work, scan_rounds = _reachability_price_components(automaton)
@@ -722,7 +730,7 @@ class TestValidation:
         assert isinstance(profile, ReachableStateProfile)
         assert profile.reachable_states == tuple(range(64))
 
-    def test_improvement_lag_stabilizes_within_measured_convergence_bound(self):
+    def test_improvement_lag_stabilizes_within_measured_convergence_bound(self) -> None:
         transitions = [
             TreeAutomatonTransition(symbol=0, child_states=(), target_state=0)
         ]
@@ -757,7 +765,9 @@ class TestValidation:
             ranked_tree_node_count(tree) for _, tree in result.witnesses
         ) == tuple(range(1, 14))
 
-    def test_reachability_rejects_seeded_deep_chain_scans_beyond_work_bound(self):
+    def test_reachability_rejects_seeded_deep_chain_scans_beyond_work_bound(
+        self,
+    ) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=64,
             arity=(16, 1, 0),
@@ -789,7 +799,9 @@ class TestValidation:
             TreeAutomatonReachabilityRequest(automaton=automaton)
         _assert_validation_code(exc, "tree_automata.reachability_work_bound")
 
-    def test_native_profile_prices_measured_convergence_within_shared_envelope(self):
+    def test_native_profile_prices_measured_convergence_within_shared_envelope(
+        self,
+    ) -> None:
         automaton = _seeded_chain_with_padded_rows(16)
 
         _, per_scan_work, scan_rounds = _reachability_price_components(automaton)
@@ -805,7 +817,7 @@ class TestValidation:
             ranked_tree_node_count(tree) for _, tree in profile.witnesses
         ) == tuple(range(1, 17))
 
-    def test_public_request_prices_three_passes_against_shared_envelope(self):
+    def test_public_request_prices_three_passes_against_shared_envelope(self) -> None:
         automaton = _seeded_chain_with_padded_rows(31)
 
         _, per_scan_work, scan_rounds = _reachability_price_components(automaton)
@@ -826,7 +838,7 @@ class TestValidation:
 
     def test_near_envelope_rows_are_priced_exactly_and_admitted_only_when_they_fit(
         self,
-    ):
+    ) -> None:
         """4,096-row chain fixtures straddle the envelope with exact pricing.
 
         Each profile on the public path consumes exactly one priced pass --
@@ -868,7 +880,7 @@ class TestValidation:
         _assert_validation_code(exc, "tree_automata.reachability_work_bound")
 
     @pytest.mark.scale
-    def test_deepest_native_profile_fits_envelope_while_public_rejects(self):
+    def test_deepest_native_profile_fits_envelope_while_public_rejects(self) -> None:
         automaton = _seeded_chain_with_padded_rows(64)
 
         _, per_scan_work, scan_rounds = _reachability_price_components(automaton)
@@ -892,7 +904,7 @@ class TestValidation:
             TreeAutomatonReachabilityRequest(automaton=automaton)
         _assert_validation_code(exc, "tree_automata.reachability_work_bound")
 
-    def test_reachability_schema_publishes_coupled_admission_envelope(self):
+    def test_reachability_schema_publishes_coupled_admission_envelope(self) -> None:
         request_schema = TreeAutomatonReachabilityRequest.model_json_schema()
         result_schema = ReachableStateProfile.model_json_schema()
 
@@ -919,7 +931,9 @@ class TestValidation:
             in witnesses_description
         )
 
-    def test_reachability_rejects_materialized_witnesses_beyond_output_bound(self):
+    def test_reachability_rejects_materialized_witnesses_beyond_output_bound(
+        self,
+    ) -> None:
         transitions = [
             TreeAutomatonTransition(symbol=0, child_states=(), target_state=0)
         ]
@@ -942,7 +956,7 @@ class TestValidation:
             TreeAutomatonReachabilityRequest(automaton=automaton)
         _assert_validation_code(exc, "tree_automata.witness_output_bound")
 
-    def test_arity_mismatch_rejected(self):
+    def test_arity_mismatch_rejected(self) -> None:
         with pytest.raises(ValidationError):
             BottomUpTreeAutomaton(
                 state_count=1,
@@ -955,7 +969,7 @@ class TestValidation:
                 final_states=(0,),
             )
 
-    def test_symbol_out_of_range_rejected(self):
+    def test_symbol_out_of_range_rejected(self) -> None:
         with pytest.raises(ValidationError):
             BottomUpTreeAutomaton(
                 state_count=1,
@@ -966,7 +980,7 @@ class TestValidation:
                 final_states=(0,),
             )
 
-    def test_final_state_out_of_range_rejected(self):
+    def test_final_state_out_of_range_rejected(self) -> None:
         with pytest.raises(ValidationError):
             BottomUpTreeAutomaton(
                 state_count=1,
@@ -975,14 +989,14 @@ class TestValidation:
                 final_states=(5,),
             )
 
-    def test_nested_tree_arity_is_validated_before_execution(self):
+    def test_nested_tree_arity_is_validated_before_execution(self) -> None:
         invalid_tree = _node(RankedTree(symbol=1), _leaf())
 
         with pytest.raises(ValidationError) as exc:
             TreeRunRequest(automaton=_simple_automaton(), tree=invalid_tree)
         _assert_validation_code(exc, "tree_automata.invalid_tree")
 
-    def test_duplicate_transitions_are_rejected(self):
+    def test_duplicate_transitions_are_rejected(self) -> None:
         transition = TreeAutomatonTransition(symbol=0, child_states=(), target_state=0)
 
         with pytest.raises(ValidationError) as exc:
@@ -994,7 +1008,7 @@ class TestValidation:
             )
         _assert_validation_code(exc, "tree_automata.transitions_not_unique")
 
-    def test_duplicate_final_states_are_rejected(self):
+    def test_duplicate_final_states_are_rejected(self) -> None:
         with pytest.raises(ValidationError) as exc:
             BottomUpTreeAutomaton(
                 state_count=1,
@@ -1004,7 +1018,7 @@ class TestValidation:
             )
         _assert_validation_code(exc, "tree_automata.final_states_not_unique")
 
-    def test_count_request_rejects_work_beyond_complete_bound(self):
+    def test_count_request_rejects_work_beyond_complete_bound(self) -> None:
         automaton = BottomUpTreeAutomaton(
             state_count=6,
             arity=(0, 2),

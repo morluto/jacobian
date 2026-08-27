@@ -1,6 +1,9 @@
 """Tests for multivariate polynomial factorization (#2105)."""
 
+from collections.abc import Iterable, Mapping
 from fractions import Fraction
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -21,8 +24,12 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
+type PolynomialTerm = tuple[int, int, tuple[int, ...]]
 
-def _poly(variables, terms):
+
+def _poly(
+    variables: tuple[str, ...], terms: Iterable[PolynomialTerm]
+) -> RationalPolynomial:
     return RationalPolynomial(
         variables=variables,
         polynomial=SparseRationalPolynomial(
@@ -38,21 +45,21 @@ def _poly(variables, terms):
 
 
 class TestMultivariateFactor:
-    def test_simple_factorization(self):
+    def test_simple_factorization(self) -> None:
         """Factor x^2*y - x = x * (x*y - 1) in Q[x,y]."""
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) >= 1
         assert result.reconstructed is not None
 
-    def test_irreducible(self):
+    def test_irreducible(self) -> None:
         """An irreducible polynomial has one factor."""
         poly = _poly(("x", "y"), ((1, 1, (1, 1)), (-1, 1, (0, 0))))
         result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) == 1
         assert result.factors[0].multiplicity == 1
 
-    def test_repeated_factor(self):
+    def test_repeated_factor(self) -> None:
         """(x*y -1)^2 = x^2*y^2 -2*x*y +1 should have multiplicity 2."""
         poly = _poly(("x", "y"), ((1, 1, (2, 2)), (-2, 1, (1, 1)), (1, 1, (0, 0))))
         result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
@@ -60,13 +67,13 @@ class TestMultivariateFactor:
         mults = [f.multiplicity for f in result.factors]
         assert 2 in mults
 
-    def test_trivariate(self):
+    def test_trivariate(self) -> None:
         """Factor x*y*z in Q[x,y,z]."""
         poly = _poly(("x", "y", "z"), ((1, 1, (1, 1, 1)),))
         result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) >= 1
 
-    def test_constant_polynomial(self):
+    def test_constant_polynomial(self) -> None:
         """A constant has zero factors."""
         poly = _poly(("x", "y"), ((5, 1, (0, 0)),))
         result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
@@ -74,14 +81,14 @@ class TestMultivariateFactor:
 
 
 class TestMultivariateFactorResultInvariants:
-    def test_roundtrip_result_validates(self):
+    def test_roundtrip_result_validates(self) -> None:
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
     def test_kernel_result_uses_one_worker_call_until_explicitly_verified(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Construction and deserialization do not replay the producing worker."""
 
         from jacobian.math.polynomials.multivariate import _factor_backend
@@ -89,7 +96,7 @@ class TestMultivariateFactorResultInvariants:
         calls = 0
         original = _factor_backend.run_bounded_factorization
 
-        def counted(*args, **kwargs):
+        def counted(*args: Any, **kwargs: Any) -> Any:
             nonlocal calls
             calls += 1
             return original(*args, **kwargs)
@@ -104,7 +111,7 @@ class TestMultivariateFactorResultInvariants:
         assert _verify_multivariate_factor_result(restored)
         assert calls == 2
 
-    def test_rejects_zero_coefficient_with_zero_reconstruction(self):
+    def test_rejects_zero_coefficient_with_zero_reconstruction(self) -> None:
         """Zero coefficient plus zero reconstruction must not validate."""
         zero = _poly(("x", "y"), ())
         with pytest.raises(ValidationError):
@@ -120,7 +127,7 @@ class TestMultivariateFactorResultInvariants:
                 reconstructed=_poly(("x", "y"), ((3, 2, (1, 1)),)),
             )
 
-    def test_rejects_zero_reconstructed_polynomial(self):
+    def test_rejects_zero_reconstructed_polynomial(self) -> None:
         zero = _poly(("x", "y"), ())
         with pytest.raises(ValidationError):
             MultivariateFactorResult(
@@ -129,7 +136,9 @@ class TestMultivariateFactorResultInvariants:
                 reconstructed=zero,
             )
 
-    def test_structural_result_defers_product_mismatch_to_explicit_verifier(self):
+    def test_structural_result_defers_product_mismatch_to_explicit_verifier(
+        self,
+    ) -> None:
         reconstructed = _poly(("x", "y"), ((1, 1, (2, 0)),))
         wrong_content = MultivariateFactorResult(
             coefficient=CanonicalRational.from_fraction(Fraction(2)),
@@ -144,7 +153,7 @@ class TestMultivariateFactorResultInvariants:
         )
         assert not _verify_multivariate_factor_result(forged)
 
-    def test_factorized_outcome_requires_invariant_markers(self):
+    def test_factorized_outcome_requires_invariant_markers(self) -> None:
         """A FACTORIZED result without the public contract's normalization
         and product-reconstruction literals cannot validate: consumers rely
         on those markers to interpret the decomposition."""
@@ -167,7 +176,7 @@ class TestMultivariateFactorResultInvariants:
 
 
 class TestOutputBudgetOutcome:
-    def test_oversized_irreducible_factor_returns_typed_outcome(self):
+    def test_oversized_irreducible_factor_returns_typed_outcome(self) -> None:
         """(x^64-1)(y^64-1) + z(x-1)(y-1) factors with an irreducible factor
         of 4,097 terms; the request must return the typed budget outcome, not
         a host exception (review counterexample)."""
@@ -191,7 +200,7 @@ class TestOutputBudgetOutcome:
         assert result.reconstructed == poly
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
-    def test_budget_exceeded_claim_requires_explicit_replay(self):
+    def test_budget_exceeded_claim_requires_explicit_replay(self) -> None:
         """An authored OUTPUT_BUDGET_EXCEEDED label on a polynomial whose
         exact factorization fits the output budget must not validate."""
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
@@ -205,7 +214,7 @@ class TestOutputBudgetOutcome:
         )
         assert not _verify_multivariate_factor_result(forged)
 
-    def test_budget_exceeded_cannot_carry_factors(self):
+    def test_budget_exceeded_cannot_carry_factors(self) -> None:
         poly = _poly(("x", "y"), ((2, 1, (2, 1)), (-2, 1, (1, 0))))
         with pytest.raises(ValidationError):
             MultivariateFactorResult(
@@ -222,7 +231,7 @@ class TestOutputBudgetOutcome:
 
 
 class TestAggregateDegreeGate:
-    def test_forged_aggregate_degree_rejected_before_expansion(self):
+    def test_forged_aggregate_degree_rejected_before_expansion(self) -> None:
         """128 linear factors at multiplicity 64 cannot multiply against a
         small reconstruction; the degree gate rejects without expansion."""
         factor = _poly(("x", "y"), ((1, 1, (1, 1)),))
@@ -239,7 +248,9 @@ class TestAggregateDegreeGate:
             )
 
 
-def _sort_key(record):
+def _sort_key(
+    record: MultivariateIrreducibleFactor,
+) -> tuple[int, int, tuple[tuple[tuple[int, ...], str, str], ...]]:
     return (
         record.multiplicity,
         max(
@@ -253,7 +264,7 @@ def _sort_key(record):
 
 
 class TestConversionAndResultLimitAlignment:
-    def test_factor_within_output_budget_validates(self):
+    def test_factor_within_output_budget_validates(self) -> None:
         """(x^23-1)(y^23-1) + z(x-1)(y-1) has an irreducible factor with 530
         terms: above the request envelope yet within the output budget, so
         the result must validate instead of leaking a host exception."""
@@ -278,16 +289,16 @@ class TestConversionAndResultLimitAlignment:
 
 
 class TestBoundedReconstructionReplay:
-    def test_equal_degree_forged_payload_rejected_without_expansion(self):
+    def test_equal_degree_forged_payload_rejected_without_expansion(self) -> None:
         """64 distinct monic linear forms against v0^64 share the aggregate
         degree, so only the no-expansion replay can reject them; it must
         fail on the first inexact division instead of expanding."""
         variables = tuple(f"v{i}" for i in range(8))
 
-        def exponents(assignment):
+        def exponents(assignment: Mapping[str, int]) -> tuple[int, ...]:
             return tuple(assignment.get(variable, 0) for variable in variables)
 
-        records = []
+        records: list[MultivariateIrreducibleFactor] = []
         for index in range(64):
             low, high = sorted((index % 8, (index + 1) % 8))
             linear = _poly(
@@ -308,7 +319,7 @@ class TestBoundedReconstructionReplay:
         )
         assert not _verify_multivariate_factor_result(forged)
 
-    def test_telescoped_geometric_product_replays_boundedly(self):
+    def test_telescoped_geometric_product_replays_boundedly(self) -> None:
         """(x^64-1)(y^64-1)(z^64-1) reconstructs through many geometric-sum
         factors; the division replay must verify it exactly and quickly."""
         poly = _poly(
@@ -329,7 +340,7 @@ class TestBoundedReconstructionReplay:
         assert len(result.factors) > 3
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
-    def test_nonzero_remainder_rejected_as_mismatch(self):
+    def test_nonzero_remainder_rejected_as_mismatch(self) -> None:
         """x^2 + y^2 shares its aggregate degree with (x+y) but division
         leaves a remainder, so the replay must reject it as a mismatch."""
         reconstructed = _poly(("x", "y"), ((1, 1, (2, 0)), (1, 1, (0, 2))))
@@ -344,7 +355,7 @@ class TestBoundedReconstructionReplay:
         )
         assert not _verify_multivariate_factor_result(forged)
 
-    def test_scaled_constant_coefficient_verified(self):
+    def test_scaled_constant_coefficient_verified(self) -> None:
         """coefficient * product must equal reconstructed exactly, including
         rational content placement: 2*(x)*(y) != reconstructed 3*x*y."""
         records = (
@@ -372,7 +383,7 @@ class TestBoundedReconstructionReplay:
 
 
 class TestBudgetOutcomeCoefficientBinding:
-    def test_budget_exceeded_outcome_rejects_altered_coefficient(self):
+    def test_budget_exceeded_outcome_rejects_altered_coefficient(self) -> None:
         """The typed OUTPUT_BUDGET_EXCEEDED outcome carries the exact rational
         content; revalidation must reject any other nonzero coefficient."""
         poly = _poly(
@@ -398,19 +409,23 @@ class TestBudgetOutcomeCoefficientBinding:
                 MultivariateFactorResult.model_validate(dump)
 
 
-def _difference_product_terms(variables, exponent):
+def _difference_product_terms(
+    variables: tuple[str, ...], exponent: int
+) -> list[PolynomialTerm]:
     """Expand prod_i (variable_i**exponent - 1) into descending-lex terms."""
 
-    accumulated = {tuple(0 for _ in variables): Fraction(1)}
+    accumulated: dict[tuple[int, ...], Fraction] = {
+        tuple(0 for _ in variables): Fraction(1)
+    }
     for index in range(len(variables)):
-        shifted = {}
+        shifted: dict[tuple[int, ...], Fraction] = {}
         for exps, coeff in accumulated.items():
             shifted[exps] = shifted.get(exps, Fraction(0)) + coeff
             raised = list(exps)
             raised[index] += exponent
             shifted[tuple(raised)] = shifted.get(tuple(raised), Fraction(0)) - coeff
         accumulated = {exps: coeff for exps, coeff in shifted.items() if coeff != 0}
-    terms = [
+    terms: list[PolynomialTerm] = [
         (coeff.numerator, coeff.denominator, exps)
         for exps, coeff in accumulated.items()
     ]
@@ -419,7 +434,7 @@ def _difference_product_terms(variables, exponent):
 
 
 class TestUniqueFactorizationReplay:
-    def test_paired_cyclotomic_product_returns_typed_result(self):
+    def test_paired_cyclotomic_product_returns_typed_result(self) -> None:
         """prod_{i=1..8} (x_i^12 - 1) is the review counterexample whose
         division replay materialized 32,768-term quotients; the request must
         return the typed FACTORIZED result with all 48 irreducible factors."""
@@ -432,7 +447,7 @@ class TestUniqueFactorizationReplay:
         assert result.reconstructed == poly
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
-    def test_cyclotomic_pair_known_answer(self):
+    def test_cyclotomic_pair_known_answer(self) -> None:
         """(x^12-1)(y^12-1) splits into six cyclotomic factors per variable;
         every factor is monic with multiplicity one and total degrees are
         1, 1, 2, 2, 2, 4 per variable."""
@@ -450,7 +465,7 @@ class TestUniqueFactorizationReplay:
         )
         assert degrees == [1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 4, 4]
 
-    def test_swapped_monic_irreducible_factor_rejected(self):
+    def test_swapped_monic_irreducible_factor_rejected(self) -> None:
         """Replacing one true factor with another monic irreducible of the
         same total degree keeps the canonical envelope but must fail the
         unique-factorization replay."""
@@ -469,20 +484,22 @@ class TestUniqueFactorizationReplay:
         )
         assert not _verify_multivariate_factor_result(forged)
 
-    def test_multiplicity_shift_between_equal_degree_factors_rejected(self):
+    def test_multiplicity_shift_between_equal_degree_factors_rejected(
+        self,
+    ) -> None:
         """Moving multiplicity between equal-degree factors preserves the
         aggregate degree yet changes the decomposition; the replay must
         reject it."""
         poly = _poly(("x", "y"), _difference_product_terms(("x", "y"), 12))
         result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
 
-        def degree_of(record):
+        def degree_of(record: MultivariateIrreducibleFactor) -> int:
             return max(
                 (sum(term.exponents) for term in record.factor.polynomial.terms),
                 default=0,
             )
 
-        by_degree = {}
+        by_degree: dict[int, list[MultivariateIrreducibleFactor]] = {}
         for record in result.factors:
             by_degree.setdefault(degree_of(record), []).append(record)
         victims = by_degree[2]
@@ -506,11 +523,11 @@ class TestUniqueFactorizationReplay:
         assert not _verify_multivariate_factor_result(forged)
 
 
-def _prime_denominator_poly(prime_count):
+def _prime_denominator_poly(prime_count: int) -> RationalPolynomial:
     """Distinct 256-digit prime reciprocals over distinct bivariate monomials."""
     from sympy import nextprime
 
-    primes = []
+    primes: list[int] = []
     candidate = 10**255 + 12345
     for _ in range(prime_count):
         candidate = nextprime(candidate)
@@ -535,7 +552,7 @@ class TestAggregateContentAdmission:
     integer coefficients published as the reconstructed polynomial.
     """
 
-    def test_many_prime_denominators_rejected_before_backend(self):
+    def test_many_prime_denominators_rejected_before_backend(self) -> None:
         """129 distinct 256-digit prime denominators pass every per-term
         budget yet their least common multiple exceeds the canonical
         32,768-digit rational limit, so the operation could never return its
@@ -543,14 +560,14 @@ class TestAggregateContentAdmission:
         with pytest.raises(ValidationError):
             MultivariateFactorRequest(polynomial=_prime_denominator_poly(129))
 
-    def test_content_within_limit_but_primitive_coefficients_rejected(self):
+    def test_content_within_limit_but_primitive_coefficients_rejected(self) -> None:
         """Even with the least common multiple inside the canonical limit,
         clearing denominators can push every primitive coefficient past the
         operation's own 256-digit coefficient budget."""
         with pytest.raises(ValidationError):
             MultivariateFactorRequest(polynomial=_prime_denominator_poly(127))
 
-    def test_small_shared_denominators_still_admitted(self):
+    def test_small_shared_denominators_still_admitted(self) -> None:
         """Ordinary rational coefficients clear to small primitive values
         and remain serviceable end to end."""
         request = MultivariateFactorRequest(
@@ -593,8 +610,8 @@ def _expanded_product(
 
 class TestKillableFactorBackend:
     def test_reviewer_sparse_completing_counterexample_returns_typed_outcome(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """prod_i(x_i^64 - 1) + z*prod_i(x_i - 1) has an irreducible z-linear
         cofactor with 64^7 + 1 expanded terms.  The admitted request must
         return its typed outcome through the bounded worker instead of
@@ -646,7 +663,7 @@ class TestKillableFactorBackend:
         assert elapsed < 30.0
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
-    def test_worker_backend_agrees_with_in_process_factor_list(self):
+    def test_worker_backend_agrees_with_in_process_factor_list(self) -> None:
         """The bounded worker returns the same exact decomposition as an
         in-process ``factor_list`` on ordinary inputs."""
         import json
@@ -685,7 +702,9 @@ class TestKillableFactorBackend:
         assert len(response["factors"]) == 2
         assert response["coefficient"] == [1, 1]
 
-    def test_worker_crash_exit_is_execution_failure(self, monkeypatch):
+    def test_worker_crash_exit_is_execution_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A worker that exits abnormally without parsable output is a
         crash, never an output-capacity conclusion."""
         from jacobian.math.polynomials.multivariate._factor_backend import (
@@ -694,7 +713,7 @@ class TestKillableFactorBackend:
             run_bounded_factorization,
         )
 
-        def fake_run(*_args, **_kwargs):
+        def fake_run(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
             return TestExecutionInterruptionSeparation._fake_completed(
                 returncode=1,
                 stdout=b"<traceback> not json",
@@ -706,7 +725,9 @@ class TestKillableFactorBackend:
             run_bounded_factorization(poly)
         assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
-    def test_signal_death_under_cpu_limit_is_interrupted(self, monkeypatch):
+    def test_signal_death_under_cpu_limit_is_interrupted(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """CPU exhaustion is a deadline-type execution condition: SIGXCPU
         yields the retryable interrupted error, never a capacity status."""
         import signal
@@ -732,7 +753,9 @@ class TestKillableFactorBackend:
             run_bounded_factorization(poly)
         assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
-    def test_malformed_success_payload_is_execution_failure(self, monkeypatch):
+    def test_malformed_success_payload_is_execution_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A syntactically valid ok:true payload with a malformed result
         shape is a worker defect, not an exact decomposition."""
         import json as _json
@@ -754,7 +777,9 @@ class TestKillableFactorBackend:
         with pytest.raises(FactorBackendFailureError, match="malformed"):
             run_bounded_factorization(poly)
 
-    def test_unknown_signal_death_is_execution_failure(self, monkeypatch):
+    def test_unknown_signal_death_is_execution_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """SIGKILL/SIGSEGV-style deaths are not proof of a capacity limit."""
         import signal
 
@@ -766,7 +791,7 @@ class TestKillableFactorBackend:
 
         external_signal = -int(getattr(signal, "SIGSEGV", 11))
 
-        def fake_run(*_args, **_kwargs):
+        def fake_run(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
             return TestExecutionInterruptionSeparation._fake_completed(
                 returncode=external_signal,
                 stdout=b"",
@@ -778,7 +803,7 @@ class TestKillableFactorBackend:
             run_bounded_factorization(poly)
         assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
-    def test_worker_aborts_without_containment_before_factoring(self):
+    def test_worker_aborts_without_containment_before_factoring(self) -> None:
         """A worker that cannot apply its address-space cap exits before
         any allocation-heavy factorization work."""
         import json
@@ -807,7 +832,9 @@ class TestKillableFactorBackend:
         assert response["exhausted"] is False
         assert response["as_limit_applied"] is False
 
-    def test_interrupted_budget_claim_replay_rejected(self, monkeypatch):
+    def test_interrupted_budget_claim_replay_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """An authored OUTPUT_BUDGET_EXCEEDED claim whose verification
         replay is interrupted must be rejected, not authenticated."""
         from jacobian.math.polynomials.multivariate._factor_backend import (
@@ -816,7 +843,7 @@ class TestKillableFactorBackend:
 
         poly = _poly(("x", "y"), ((2, 1, (2, 1)), (-2, 1, (1, 0))))
 
-        def fake_run(*_args, **_kwargs):
+        def fake_run(*_args: Any, **_kwargs: Any) -> None:
             raise FactorBackendInterruptedError("replay stopped")
 
         monkeypatch.setattr(
@@ -835,7 +862,9 @@ class TestKillableFactorBackend:
         )
         assert not _verify_multivariate_factor_result(claim)
 
-    def test_memory_exhausted_budget_claim_replay_rejected(self, monkeypatch):
+    def test_memory_exhausted_budget_claim_replay_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """An authored OUTPUT_BUDGET_EXCEEDED claim whose verification
         replay itself dies on worker memory exhaustion must be rejected,
         not authenticated: an allocation failure under the address-space
@@ -853,7 +882,7 @@ class TestKillableFactorBackend:
             }
         ).encode()
 
-        def fake_run(*_args, **_kwargs):
+        def fake_run(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
             return TestExecutionInterruptionSeparation._fake_completed(
                 returncode=1, stdout=payload
             )
@@ -873,7 +902,9 @@ class TestKillableFactorBackend:
 
 
 class TestSignedBudgetOutcomeContent:
-    def test_negative_source_budget_outcome_matches_content_convention(self):
+    def test_negative_source_budget_outcome_matches_content_convention(
+        self,
+    ) -> None:
         """The oversized-factor branch and result validation share one
         exact-content convention, whatever sign the source carries."""
 
@@ -914,9 +945,8 @@ class TestExecutionInterruptionSeparation:
     (PR #2226 review)."""
 
     @staticmethod
-    def _fake_completed(**overrides):
+    def _fake_completed(**overrides: Any) -> SimpleNamespace:
         import json as _json
-        from types import SimpleNamespace
 
         defaults = {
             "returncode": 0,
@@ -937,7 +967,9 @@ class TestExecutionInterruptionSeparation:
         defaults.update(overrides)
         return SimpleNamespace(**defaults)
 
-    def test_deadline_hit_returns_interrupted_not_budget_exceeded(self, monkeypatch):
+    def test_deadline_hit_returns_interrupted_not_budget_exceeded(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A worker stopped by its deadline yields EXECUTION_FAILED,
         which validates without rerunning any factorization."""
         poly = _poly(("x", "y"), ((1, 1, (60, 60)), (-1, 1, (59, 0))))
@@ -954,7 +986,9 @@ class TestExecutionInterruptionSeparation:
         # reproduce, so validation must not rerun the kernel.
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
-    def test_worker_timeout_raises_distinct_exception(self, monkeypatch):
+    def test_worker_timeout_raises_distinct_exception(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """run_bounded_factorization maps a timed-out worker onto
         FactorBackendInterruptedError rather than ExhaustedError."""
         from jacobian.math.polynomials.multivariate._factor_backend import (
@@ -963,7 +997,7 @@ class TestExecutionInterruptionSeparation:
             run_bounded_factorization,
         )
 
-        def fake_run(*_args, **_kwargs):
+        def fake_run(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
             return self._fake_completed(returncode=-9, timed_out=True)
 
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
@@ -972,7 +1006,9 @@ class TestExecutionInterruptionSeparation:
             run_bounded_factorization(poly)
         assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
-    def test_worker_memory_error_is_execution_interruption(self, monkeypatch):
+    def test_worker_memory_error_is_execution_interruption(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """An allocation failure under the address-space budget is an
         enforcement stop like SIGXCPU: it maps onto
         FactorBackendInterruptedError, never a capacity status."""
@@ -988,7 +1024,7 @@ class TestExecutionInterruptionSeparation:
             {"ok": False, "error": "MemoryError()", "exhausted": True}
         ).encode()
 
-        def fake_run(*_args, **_kwargs):
+        def fake_run(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
             return TestExecutionInterruptionSeparation._fake_completed(
                 returncode=1, stdout=payload
             )
@@ -1000,8 +1036,8 @@ class TestExecutionInterruptionSeparation:
         assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
     def test_worker_memory_error_returns_execution_failed_not_budget_exceeded(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A worker ``MemoryError`` under the address-space cap proves only
         that this run's work envelope was too small; it establishes nothing
         about the exact output size, so multivariate_factor must return the
@@ -1020,7 +1056,7 @@ class TestExecutionInterruptionSeparation:
             }
         ).encode()
 
-        def fake_run(*_args, **_kwargs):
+        def fake_run(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
             return TestExecutionInterruptionSeparation._fake_completed(
                 returncode=1, stdout=payload
             )
@@ -1037,7 +1073,9 @@ class TestExecutionInterruptionSeparation:
         # reproduce, so validation must not rerun the kernel.
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
-    def test_worker_memory_limit_proof_required_without_prlimit(self, monkeypatch):
+    def test_worker_memory_limit_proof_required_without_prlimit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Without prlimit wrapping, a worker that cannot prove its own
         address-space cap fails closed instead of running unbounded."""
         import json as _json
@@ -1049,10 +1087,10 @@ class TestExecutionInterruptionSeparation:
 
         payload = _json.dumps({"ok": True, "as_limit_applied": False}).encode()
 
-        def fake_run(*_args, **_kwargs):
+        def fake_run(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
             return TestExecutionInterruptionSeparation._fake_completed(stdout=payload)
 
-        def fake_which(name):
+        def fake_which(name: str) -> str | None:
             return None if name == "prlimit" else _real_which(name)
 
         import shutil as _shutil
@@ -1064,7 +1102,9 @@ class TestExecutionInterruptionSeparation:
         with pytest.raises(FactorBackendFailureError):
             run_bounded_factorization(poly)
 
-    def test_no_portable_hard_limit_fails_closed(self, monkeypatch):
+    def test_no_portable_hard_limit_fails_closed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A platform with neither prlimit nor POSIX self-limiting is
         rejected before launching an unbounded worker."""
         import os as _os
@@ -1081,7 +1121,7 @@ class TestExecutionInterruptionSeparation:
         with pytest.raises(FactorBackendFailureError):
             run_bounded_factorization(poly)
 
-    def test_forged_interruption_coefficient_rejected(self):
+    def test_forged_interruption_coefficient_rejected(self) -> None:
         """An authored interruption claim must still bind its coefficient
         to the exact content of the restated polynomial."""
         from jacobian._exact import CanonicalRational
@@ -1097,7 +1137,7 @@ class TestExecutionInterruptionSeparation:
                 product_reconstruction=None,
             )
 
-    def test_worker_reports_address_space_flag(self):
+    def test_worker_reports_address_space_flag(self) -> None:
         """The worker response carries its hard-limit proof on success."""
         import json
         import os

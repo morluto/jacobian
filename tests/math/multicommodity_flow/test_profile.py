@@ -8,7 +8,7 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
-from tests.fixtures.accounting import assert_executed_work_is_charged
+from tests.fixtures.accounting import assert_charged_work_parity
 from tests.math.multicommodity_flow._support import multicommodity_validation_error
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
@@ -100,12 +100,16 @@ def test_accepted_calls_charge_every_executed_scan(
     via_request = _run_multicommodity_flow_profile(
         MulticommodityFlowProfileRequest(flow=shared_bottleneck_flow())
     )
-    assert_executed_work_is_charged(charged=1, executed=scans["count"])
+    assert_charged_work_parity(
+        charged={"component_scan": 1}, executed={"component_scan": scans["count"]}
+    )
     assert scans == {"count": 1}
 
     scans.update(count=0)
     native = compute_multicommodity_flow_profile(shared_bottleneck_flow())
-    assert_executed_work_is_charged(charged=1, executed=scans["count"])
+    assert_charged_work_parity(
+        charged={"component_scan": 1}, executed={"component_scan": scans["count"]}
+    )
     assert scans == {"count": 1}
 
     assert native == via_request

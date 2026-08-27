@@ -415,8 +415,9 @@ priced kernel primitives on a representative near-envelope request and assert
 that executed units do not exceed the admission charge. Pair that parity proof
 with an adversarial useful request whose actual work fits, so a stale or
 over-broad estimate cannot survive merely by rejecting it. Use the test-only
-``tests.fixtures.accounting.assert_executed_work_is_charged`` helper; do not
-add a shared production ledger.
+``tests.fixtures.accounting.assert_charged_work_parity`` helper; include every
+instrumented primitive in the owner-local mapping, and do not add a shared
+production ledger.
 
 ### Execution time and deadline composition
 

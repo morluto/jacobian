@@ -5,13 +5,14 @@ from __future__ import annotations
 from math import isqrt, prod
 from time import monotonic
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
+from jacobian.math.number_theory._contiguous_sum_admission import (
+    ContiguousSumProfileAdmission,
+    require_contiguous_sum_profile_admission,
+)
 from jacobian.math.number_theory._contiguous_sum_models import (
-    MAX_FACTORING_WORK_SECONDS,
-    MAX_SEGMENTED_SIEVE_UPPER,
     ContiguousSumProfileRequest,
     ContiguousSumProfileResult,
-    ContiguousSumProfileRow,
 )
 from jacobian.math.number_theory._factorization_kernels import (
     _bounded_direct_factorization,
@@ -33,16 +34,18 @@ def _odd_primes_up_to(limit: int) -> list[int]:
     return [candidate for candidate in range(3, limit + 1, 2) if sieve[candidate]]
 
 
-def _segmented_odd_divisor_counts(lower_bound: int, upper_bound: int) -> list[int]:
+def _segmented_odd_divisor_counts(
+    admission: ContiguousSumProfileAdmission,
+) -> tuple[int, ...]:
     """Count odd divisors over a dense interval without prefix allocation."""
 
-    width = upper_bound - lower_bound + 1
-    residuals = list(range(lower_bound, upper_bound + 1))
+    residuals = list(range(admission.lower_bound, admission.upper_bound + 1))
+    width = admission.width
     counts = [1] * width
-    for prime in _odd_primes_up_to(isqrt(upper_bound)):
-        first_multiple = ((lower_bound + prime - 1) // prime) * prime
-        for multiple in range(first_multiple, upper_bound + 1, prime):
-            index = multiple - lower_bound
+    for prime in _odd_primes_up_to(isqrt(admission.upper_bound)):
+        first_multiple = ((admission.lower_bound + prime - 1) // prime) * prime
+        for multiple in range(first_multiple, admission.upper_bound + 1, prime):
+            index = multiple - admission.lower_bound
             residual = residuals[index]
             exponent = 0
             while residual % prime == 0:
@@ -56,12 +59,10 @@ def _segmented_odd_divisor_counts(lower_bound: int, upper_bound: int) -> list[in
             residual //= 2
         if residual > 1:
             counts[index] *= 2
-    return counts
+    return tuple(counts)
 
 
-def _factored_odd_divisor_count(
-    value: int, *, timeout_seconds: float = MAX_FACTORING_WORK_SECONDS
-) -> int | None:
+def _factored_odd_divisor_count(value: int, *, timeout_seconds: float) -> int | None:
     """Count odd divisors through the bounded factorization worker."""
 
     factors = _bounded_direct_factorization(value, timeout_seconds=timeout_seconds)
@@ -91,43 +92,32 @@ def compute_contiguous_sum_profile(
     Dense intervals use a segmented odd-factor sieve, while high-magnitude
     narrow intervals use the maintained SymPy factorization backend.
     """
-    lo = parse_canonical_integer(request.lower_bound)
-    hi = parse_canonical_integer(request.upper_bound)
-
-    if hi <= MAX_SEGMENTED_SIEVE_UPPER:
-        counts = _segmented_odd_divisor_counts(lo, hi)
+    admission = require_contiguous_sum_profile_admission(request)
+    if admission.regime == "SEGMENTED":
+        counts = _segmented_odd_divisor_counts(admission)
     else:
-        counts = []
-        factorization_deadline = monotonic() + MAX_FACTORING_WORK_SECONDS
-        for n in range(lo, hi + 1):
+        direct_counts: list[int] = []
+        assert admission.factorization_budget_seconds is not None
+        factorization_deadline = monotonic() + admission.factorization_budget_seconds
+        for n in range(admission.lower_bound, admission.upper_bound + 1):
             remaining = factorization_deadline - monotonic()
             if remaining <= 0:
                 count = None
             else:
                 count = _factored_odd_divisor_count(n, timeout_seconds=remaining)
             if count is None:
-                return ContiguousSumProfileResult._unknown(
-                    lower_bound=request.lower_bound,
-                    upper_bound=request.upper_bound,
+                return ContiguousSumProfileResult._unknown_from_kernel(
+                    admission=admission,
                     detail=(
                         "the bounded factorization worker did not establish "
                         "the complete profile"
                     ),
                 )
-            counts.append(count)
-
-    rows = []
-    for n, count in zip(range(lo, hi + 1), counts, strict=True):
-        rows.append(
-            ContiguousSumProfileRow(
-                n=format_canonical_integer(n), representation_count=count
-            )
-        )
-
-    return ContiguousSumProfileResult(
-        lower_bound=request.lower_bound,
-        upper_bound=request.upper_bound,
-        rows=tuple(rows),
+            direct_counts.append(count)
+        counts = tuple(direct_counts)
+    return ContiguousSumProfileResult._complete_from_kernel(
+        admission=admission,
+        counts=tuple(counts),
     )
 
 

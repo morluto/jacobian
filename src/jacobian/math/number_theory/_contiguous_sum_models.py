@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from math import isqrt
-from typing import Annotated, Literal, Self
+from typing import TYPE_CHECKING, Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, StringConstraints, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+
+if TYPE_CHECKING:
+    from jacobian.math.number_theory._contiguous_sum_admission import (
+        ContiguousSumProfileAdmission,
+    )
 
 # The segmented regime stores one residual and one divisor count per requested
 # integer. The high-magnitude regime factors each requested integer directly,
@@ -71,33 +75,6 @@ class ContiguousSumProfileRequest(StrictModel):
         ),
     )
 
-    @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        lower = parse_canonical_integer(self.lower_bound)
-        upper = parse_canonical_integer(self.upper_bound)
-        if lower < 1 or upper < 1:
-            raise ValueError("interval endpoints must be positive")
-        if upper < lower:
-            raise ValueError("upper_bound must be >= lower_bound")
-        width = upper - lower + 1
-        if width > MAX_INTERVAL_WIDTH:
-            raise ValueError("interval width exceeds maximum supported width")
-        upper_digits = len(self.upper_bound)
-        if upper > MAX_SEGMENTED_SIEVE_UPPER:
-            if width > MAX_FACTORING_INTERVAL_WIDTH:
-                raise ValueError(
-                    "high-magnitude intervals exceed the direct-factorization width bound"
-                )
-            estimated_work = width * upper_digits * 1_000
-        else:
-            estimated_work = 3 * isqrt(upper) + width * (upper_digits + 1)
-        if estimated_work > MAX_INTERVAL_WORK:
-            raise ValueError("interval work exceeds the maximum supported budget")
-        estimated_result_bytes = width * (upper_digits + 32)
-        if estimated_result_bytes > MAX_INTERVAL_RESULT_BYTES:
-            raise ValueError("interval result exceeds the maximum supported size")
-        return self
-
 
 class ContiguousSumProfileRow(StrictModel):
     """One (n, count) pair where count is the number of contiguous-sum representations."""
@@ -131,6 +108,52 @@ class ContiguousSumProfileResult(StrictModel):
             upper_bound=upper_bound,
             rows=(),
             detail=detail,
+        )
+
+    @classmethod
+    def _unknown_from_kernel(
+        cls,
+        *,
+        admission: ContiguousSumProfileAdmission,
+        detail: str,
+    ) -> Self:
+        """Build the typed non-conclusion from the admitted execution plan."""
+
+        return cls.model_construct(
+            status="UNKNOWN",
+            lower_bound=format_canonical_integer(admission.lower_bound),
+            upper_bound=format_canonical_integer(admission.upper_bound),
+            rows=(),
+            detail=detail,
+        )
+
+    @classmethod
+    def _complete_from_kernel(
+        cls,
+        *,
+        admission: ContiguousSumProfileAdmission,
+        counts: tuple[int, ...],
+    ) -> Self:
+        """Build a complete profile using the plan that bounded its kernel."""
+
+        if len(counts) != admission.width:
+            raise RuntimeError("contiguous-sum kernel returned the wrong row count")
+        rows = tuple(
+            ContiguousSumProfileRow(
+                n=format_canonical_integer(n), representation_count=count
+            )
+            for n, count in zip(
+                range(admission.lower_bound, admission.upper_bound + 1),
+                counts,
+                strict=True,
+            )
+        )
+        return cls.model_construct(
+            status="COMPLETE",
+            lower_bound=format_canonical_integer(admission.lower_bound),
+            upper_bound=format_canonical_integer(admission.upper_bound),
+            rows=rows,
+            detail=None,
         )
 
     @model_validator(mode="after")

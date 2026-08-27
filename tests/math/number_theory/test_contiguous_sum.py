@@ -4,6 +4,9 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.number_theory._contiguous_sum import CONTIGUOUS_SUM_OPERATION
+from jacobian.math.number_theory._contiguous_sum_admission import (
+    require_contiguous_sum_profile_admission,
+)
 from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileRequest,
     ContiguousSumProfileResult,
@@ -63,6 +66,35 @@ def test_high_magnitude_singleton_does_not_allocate_to_upper_bound() -> None:
         )
     )
     assert result.rows[0].representation_count == 1
+
+
+def test_admission_plan_is_the_single_regime_and_budget_source() -> None:
+    segmented = require_contiguous_sum_profile_admission(
+        ContiguousSumProfileRequest(lower_bound="10", upper_bound="15")
+    )
+    direct = require_contiguous_sum_profile_admission(
+        ContiguousSumProfileRequest(
+            lower_bound="1000000000001", upper_bound="1000000000001"
+        )
+    )
+
+    assert segmented.regime == "SEGMENTED"
+    assert segmented.factorization_budget_seconds is None
+    assert segmented.width == 6
+    assert direct.regime == "DIRECT_FACTORIZATION"
+    assert direct.factorization_budget_seconds == 60
+    assert direct.width == 1
+
+
+def test_high_magnitude_width_is_admitted_at_request_parse_but_rejected_before_kernel() -> (
+    None
+):
+    request = ContiguousSumProfileRequest(
+        lower_bound="1000000000001", upper_bound="1000000000129"
+    )
+
+    with pytest.raises(ValueError, match="direct-factorization width bound"):
+        compute_contiguous_sum_profile(request)
 
 
 def test_large_endpoint_uses_canonical_strings_and_immutable_rows() -> None:

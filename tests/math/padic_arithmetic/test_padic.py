@@ -156,6 +156,22 @@ class TestPAdicRoots:
         with pytest.raises(PydanticCustomError):
             verify_padic_roots_result(PAdicRootsResult.model_validate(forged))
 
+    def test_roots_profile_rejects_out_of_range_structural_entries(self):
+        result = find_padic_roots(
+            PAdicRootsRequest(
+                polynomial=IntegerPolynomial(coefficients=("1", "0", "0", "-1")),
+                prime=5,
+                precision=2,
+            )
+        )
+        forged = result.model_dump()
+        forged["roots"][0]["root"] = 25
+        with pytest.raises(ValidationError) as exc_info:
+            PAdicRootsResult.model_validate(forged)
+        assert (
+            exc_info.value.errors()[0]["type"] == "padic_arithmetic.root_out_of_range"
+        )
+
     def test_multiple_root_lift_rejected(self):
         """f=x^2+5, p=5: r=0 is a multiple root; lifting is refused."""
         poly = IntegerPolynomial(coefficients=("1", "0", "5"))

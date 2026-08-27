@@ -270,8 +270,6 @@ class PAdicRootsResult(StrictModel):
                 "padic_arithmetic.multiple_residue_out_of_range",
                 "multiple residues must lie in 0..p-1",
             )
-        return self
-
         modulus = self.prime**self.precision
         roots = tuple(entry.root for entry in self.roots)
         if any(root >= modulus for root in roots):

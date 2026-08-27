@@ -13,6 +13,7 @@ from jacobian.math.number_theory._interval_profile_models import (
     DivisorCountProfileRequest,
     GreatestPrimeFactorProfileRequest,
     IntervalProfileRequest,
+    IntervalProfileRowsRequest,
     PrimeGapProfileRequest,
     SquarefreeProfileRequest,
     _estimate_prime_gap_work,
@@ -20,7 +21,10 @@ from jacobian.math.number_theory._interval_profile_models import (
 )
 from jacobian.math.number_theory._interval_profile_operations import (
     compute_divisor_count_profile,
+    compute_divisor_sum_profile,
+    compute_euler_totient_profile,
     compute_greatest_prime_factor_profile,
+    compute_least_prime_factor_profile,
     compute_prime_gap_profile,
     compute_squarefree_profile,
 )
@@ -398,3 +402,50 @@ class TestPrimeGapProfile:
             assert row.lower_prime == r_union.rows[i].lower_prime
             assert row.upper_prime == r_union.rows[i].upper_prime
             assert row.gap == r_union.rows[i].gap
+
+
+class TestAdditionalArithmeticProfiles:
+    def test_least_prime_factor(self) -> None:
+        result = compute_least_prime_factor_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=10)
+        )
+        assert [row.least_prime_factor for row in result.rows] == [
+            1,
+            2,
+            3,
+            2,
+            5,
+            2,
+            7,
+            2,
+            3,
+            2,
+        ]
+
+    def test_euler_totient(self) -> None:
+        result = compute_euler_totient_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=10)
+        )
+        assert [row.euler_totient for row in result.rows] == [
+            1,
+            1,
+            2,
+            2,
+            4,
+            2,
+            6,
+            4,
+            6,
+            4,
+        ]
+
+    def test_divisor_sum(self) -> None:
+        result = compute_divisor_sum_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=6)
+        )
+        assert [row.divisor_sum for row in result.rows] == [1, 3, 4, 7, 6, 12]
+
+
+def test_dense_additional_profiles_use_the_shared_row_request() -> None:
+    request = IntervalProfileRowsRequest(lower_bound=1, upper_bound=10)
+    assert request.width() == 10

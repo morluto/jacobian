@@ -14,6 +14,9 @@ _INTERVAL_PROFILE_OPERATION_IDS = (
     "number_theory.integer_interval.divisor_count_profile.compute",
     "number_theory.integer_interval.greatest_prime_factor_profile.compute",
     "number_theory.prime_gap_profile.compute",
+    "number_theory.integer_interval.least_prime_factor_profile.compute",
+    "number_theory.integer_interval.euler_totient_profile.compute",
+    "number_theory.integer_interval.divisor_sum_profile.compute",
 )
 
 

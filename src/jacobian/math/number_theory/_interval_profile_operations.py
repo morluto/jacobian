@@ -19,10 +19,16 @@ import math
 from jacobian.math.number_theory._interval_profile_models import (
     DivisorCountProfileResult,
     DivisorCountProfileRow,
+    DivisorSumProfileResult,
+    DivisorSumProfileRow,
+    EulerTotientProfileResult,
+    EulerTotientProfileRow,
     GreatestPrimeFactorProfileResult,
     GreatestPrimeFactorProfileRow,
     IntervalAdmission,
     IntervalProfileRequest,
+    LeastPrimeFactorProfileResult,
+    LeastPrimeFactorProfileRow,
     PrimeGapProfileResult,
     PrimeGapProfileRow,
     SquarefreeProfileResult,
@@ -63,6 +69,59 @@ def _segmented_primes(lower_bound: int, upper_bound: int) -> list[int]:
         for offset, marked_prime in enumerate(is_prime)
         if marked_prime
     ]
+
+
+def _segmented_factor_profile_data(
+    lower_bound: int, upper_bound: int
+) -> tuple[list[int], list[int], list[int], list[int], list[int]]:
+    """Factor every interval value for the additional arithmetic profiles."""
+    width = upper_bound - lower_bound + 1
+    remaining = list(range(lower_bound, upper_bound + 1))
+    divisor_counts = [1] * width
+    greatest_prime_factors = [1] * width
+    least_prime_factors = [1] * width
+    euler_totients = list(range(lower_bound, upper_bound + 1))
+    divisor_sums = [1] * width
+
+    for prime in _simple_sieve(math.isqrt(upper_bound)):
+        first_multiple = max(
+            prime * prime,
+            ((lower_bound + prime - 1) // prime) * prime,
+        )
+        for value in range(first_multiple, upper_bound + 1, prime):
+            index = value - lower_bound
+            if remaining[index] % prime != 0:
+                continue
+            exponent = 0
+            prime_power = 1
+            while remaining[index] % prime == 0:
+                remaining[index] //= prime
+                prime_power *= prime
+                exponent += 1
+            divisor_counts[index] *= exponent + 1
+            greatest_prime_factors[index] = prime
+            if least_prime_factors[index] == 1:
+                least_prime_factors[index] = prime
+            euler_totients[index] = euler_totients[index] // prime * (prime - 1)
+            divisor_sums[index] *= (prime_power * prime - 1) // (prime - 1)
+
+    for index, cofactor in enumerate(remaining):
+        if cofactor <= 1:
+            continue
+        divisor_counts[index] *= 2
+        greatest_prime_factors[index] = cofactor
+        if least_prime_factors[index] == 1:
+            least_prime_factors[index] = cofactor
+        euler_totients[index] = euler_totients[index] // cofactor * (cofactor - 1)
+        divisor_sums[index] *= cofactor + 1
+
+    return (
+        divisor_counts,
+        greatest_prime_factors,
+        least_prime_factors,
+        euler_totients,
+        divisor_sums,
+    )
 
 
 def compute_squarefree_profile(
@@ -249,9 +308,51 @@ def _prime_gap_profile_kernel(admission: IntervalAdmission) -> PrimeGapProfileRe
     return PrimeGapProfileResult(lower_bound=lo, upper_bound=hi, rows=tuple(rows))
 
 
+def compute_least_prime_factor_profile(
+    request: IntervalProfileRequest,
+) -> LeastPrimeFactorProfileResult:
+    """Compute p(n), the least prime factor, for every n in [L, U]."""
+    lo, hi = request.lower_bound, request.upper_bound
+    _, _, least_prime_factors, _, _ = _segmented_factor_profile_data(lo, hi)
+    rows = tuple(
+        LeastPrimeFactorProfileRow(n=lo + i, least_prime_factor=value)
+        for i, value in enumerate(least_prime_factors)
+    )
+    return LeastPrimeFactorProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
+
+
+def compute_euler_totient_profile(
+    request: IntervalProfileRequest,
+) -> EulerTotientProfileResult:
+    """Compute phi(n), Euler's totient, for every n in [L, U]."""
+    lo, hi = request.lower_bound, request.upper_bound
+    _, _, _, euler_totients, _ = _segmented_factor_profile_data(lo, hi)
+    rows = tuple(
+        EulerTotientProfileRow(n=lo + i, euler_totient=value)
+        for i, value in enumerate(euler_totients)
+    )
+    return EulerTotientProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
+
+
+def compute_divisor_sum_profile(
+    request: IntervalProfileRequest,
+) -> DivisorSumProfileResult:
+    """Compute sigma(n), the divisor sum, for every n in [L, U]."""
+    lo, hi = request.lower_bound, request.upper_bound
+    _, _, _, _, divisor_sums = _segmented_factor_profile_data(lo, hi)
+    rows = tuple(
+        DivisorSumProfileRow(n=lo + i, divisor_sum=value)
+        for i, value in enumerate(divisor_sums)
+    )
+    return DivisorSumProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
+
+
 __all__ = [
     "compute_divisor_count_profile",
+    "compute_divisor_sum_profile",
+    "compute_euler_totient_profile",
     "compute_greatest_prime_factor_profile",
+    "compute_least_prime_factor_profile",
     "compute_prime_gap_profile",
     "compute_squarefree_profile",
 ]

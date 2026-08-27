@@ -241,6 +241,23 @@ class SquarefreeProfileRequest(IntervalProfileRequest):
     _work_estimator: ClassVar[_WORK_ESTIMATOR] = _estimate_squarefree_work
 
 
+class IntervalProfileRowsRequest(IntervalProfileRequest):
+    """Interval request admitted for a dense row-profile result."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Closed positive integer interval [lower_bound, upper_bound]. "
+                f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
+                f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
+                f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
+                "steps. The operation-specific worst-case JSON row estimate must "
+                f"fit within {MAX_PROFILE_RESULT_BYTES:,} bytes."
+            )
+        }
+    )
+
+
 class DivisorCountProfileRequest(IntervalProfileRequest):
     """Interval request admitted for the divisor-count row result."""
 
@@ -386,14 +403,54 @@ __all__ = [
     "DivisorCountProfileRequest",
     "DivisorCountProfileResult",
     "DivisorCountProfileRow",
+    "DivisorSumProfileResult",
+    "DivisorSumProfileRow",
+    "EulerTotientProfileResult",
+    "EulerTotientProfileRow",
     "GreatestPrimeFactorProfileRequest",
     "GreatestPrimeFactorProfileResult",
     "GreatestPrimeFactorProfileRow",
     "IntervalAdmission",
     "IntervalProfileRequest",
+    "IntervalProfileRowsRequest",
+    "LeastPrimeFactorProfileResult",
+    "LeastPrimeFactorProfileRow",
     "PrimeGapProfileRequest",
     "PrimeGapProfileResult",
     "PrimeGapProfileRow",
     "SquarefreeProfileRequest",
     "SquarefreeProfileResult",
 ]
+
+
+class LeastPrimeFactorProfileRow(StrictModel):
+    n: StrictInt
+    least_prime_factor: StrictInt = Field(ge=1)
+
+
+class LeastPrimeFactorProfileResult(StrictModel):
+    lower_bound: StrictInt
+    upper_bound: StrictInt
+    rows: tuple[LeastPrimeFactorProfileRow, ...]
+
+
+class EulerTotientProfileRow(StrictModel):
+    n: StrictInt
+    euler_totient: StrictInt = Field(ge=1)
+
+
+class EulerTotientProfileResult(StrictModel):
+    lower_bound: StrictInt
+    upper_bound: StrictInt
+    rows: tuple[EulerTotientProfileRow, ...]
+
+
+class DivisorSumProfileRow(StrictModel):
+    n: StrictInt
+    divisor_sum: StrictInt = Field(ge=1)
+
+
+class DivisorSumProfileResult(StrictModel):
+    lower_bound: StrictInt
+    upper_bound: StrictInt
+    rows: tuple[DivisorSumProfileRow, ...]

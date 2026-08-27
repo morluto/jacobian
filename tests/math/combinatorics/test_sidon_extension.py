@@ -104,14 +104,26 @@ class TestSidonExtensionProfile:
         assert result.admissible == ()
         assert result.rejected == ()
 
-    def test_large_rejected_profile_is_rejected_before_materialization(self) -> None:
-        """The arithmetic output bound rejects a large short-candidate request."""
+    def test_large_all_admissible_profile_fits_result_budget(self) -> None:
+        """An empty source rules out rejected rows in the result bound."""
         candidates = tuple(str(value) for value in range(250_000))
-        with pytest.raises(ValidationError, match="canonical output budget"):
-            SidonExtensionProfileRequest(
-                source_elements=(),
-                candidate_elements=candidates,
-            )
+        request = SidonExtensionProfileRequest(
+            source_elements=(),
+            candidate_elements=candidates,
+        )
+        result = compute_sidon_extension_profile(request)
+        assert result.admissible == candidates
+        assert result.rejected == ()
+        assert len(encode_strict_json(result.model_dump(mode="json"))) <= (
+            MAX_EXTENSION_RESULT_BYTES
+        )
+
+    def test_candidate_work_excludes_source_profile_copies(self) -> None:
+        """A large source and candidate batch stays within candidate-local work."""
+        source = [str(2**index) for index in range(400)]
+        candidates = [str(-value) for value in range(1, 2_377)]
+        result = _extension(source, candidates)
+        assert len(result.admissible) + len(result.rejected) == len(candidates)
 
     def test_result_bound_covers_the_actual_canonical_result(self) -> None:
         result = _extension(["1", "2", "5"], ["3", "4", "10", "20"])

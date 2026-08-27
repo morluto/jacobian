@@ -31,7 +31,7 @@ def _ordered_difference_pairs(
 
 
 def _extension_work_units(source_count: int, candidate_count: int) -> int:
-    """Price source profiling and candidate checks conservatively."""
+    """Price source profiling and candidate-local difference checks."""
 
     source_pairs = source_count * (source_count - 1)
     per_candidate = 4 * source_count + 16
@@ -86,16 +86,20 @@ def _maximum_result_bytes(
     )
 
     partition_content_bytes = 0
+    all_candidates_admissible = len(source_elements) <= 1
     for candidate in candidate_elements:
         admissible_bytes = string_bytes(len(candidate))
-        rejected_bytes = object_bytes(
-            (
-                ("candidate", admissible_bytes),
-                ("is_admissible", len("false")),
-                ("obstruction", obstruction_bytes),
+        if all_candidates_admissible:
+            partition_content_bytes += admissible_bytes
+        else:
+            rejected_bytes = object_bytes(
+                (
+                    ("candidate", admissible_bytes),
+                    ("is_admissible", len("false")),
+                    ("obstruction", obstruction_bytes),
+                )
             )
-        )
-        partition_content_bytes += max(admissible_bytes, rejected_bytes)
+            partition_content_bytes += max(admissible_bytes, rejected_bytes)
         # The two partition arrays share exactly the candidate count, but this
         # check must stop before a large rejected-profile estimate accumulates.
         if partition_content_bytes > MAX_EXTENSION_RESULT_BYTES:
@@ -409,7 +413,7 @@ def _candidate_obstruction(
     """Find one repeated difference after adding a candidate."""
 
     candidate_value = int(candidate)
-    seen = dict(source_pairs)
+    candidate_pairs: dict[int, tuple[int, int]] = {}
     for source_element in source_elements:
         source_value = int(source_element)
         for pair in (
@@ -417,10 +421,12 @@ def _candidate_obstruction(
             (source_value, candidate_value),
         ):
             difference = pair[0] - pair[1]
-            previous = seen.get(difference)
+            previous = source_pairs.get(difference)
+            if previous is None:
+                previous = candidate_pairs.get(difference)
             if previous is not None:
                 return difference, previous, pair
-            seen[difference] = pair
+            candidate_pairs[difference] = pair
     return None
 
 

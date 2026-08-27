@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import unicodedata
+from dataclasses import dataclass
 from typing import Literal, Self
 
 from pydantic import (
     Field,
+    PrivateAttr,
     StrictBool,
     StrictInt,
     model_validator,
@@ -969,17 +971,13 @@ MAX_INDUCED_SUBSET_SIZE = MAX_VERTICES
 MAX_INDUCED_PROFILE_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
-def _binomial(n: int, k: int) -> int:
-    """Exact binomial coefficient ``C(n, k)`` for small nonnegative integers."""
-    if k < 0 or k > n:
-        return 0
-    if k == 0 or k == n:
-        return 1
-    k = min(k, n - k)
-    result = 1
-    for i in range(k):
-        result = result * (n - i) // (i + 1)
-    return result
+@dataclass(frozen=True, slots=True)
+class _InducedTypeProfileAdmissionPlan:
+    """Request-scoped work and output plan for an induced type profile."""
+
+    expected_subsets: tuple[tuple[str, ...], ...]
+    edge_sets: tuple[frozenset[str], ...]
+    result_bytes: int
 
 
 class InducedTypeProfileRequest(StrictModel):
@@ -1010,28 +1008,18 @@ class InducedTypeProfileRequest(StrictModel):
             "k-subsets."
         ),
     )
+    _admission_plan: _InducedTypeProfileAdmissionPlan = PrivateAttr()
 
     @model_validator(mode="after")
     def require_bounded_profile(self) -> Self:
-        n = len(self.hypergraph.vertices)
-        if self.subset_size > n:
-            raise _validation_error(
-                "induced type profile subset_size exceeds the declared vertex count"
-            )
-        if _binomial(n, self.subset_size) > MAX_INDUCED_SUBSETS:
-            raise _validation_error(
-                "induced type profile exceeds the "
-                f"{MAX_INDUCED_SUBSETS}-subset profile bound"
-            )
-        estimated_result_bytes = _induced_profile_result_bytes(
-            self.hypergraph, self.subset_size
-        )
-        if estimated_result_bytes > MAX_INDUCED_PROFILE_RESULT_BYTES:
+        plan = _induced_type_profile_admission_plan(self.hypergraph, self.subset_size)
+        if plan.result_bytes > MAX_INDUCED_PROFILE_RESULT_BYTES:
             raise _validation_error(
                 "the induced type profile would exceed the "
                 f"{MAX_INDUCED_PROFILE_RESULT_BYTES}-byte canonical output limit; "
                 "shorten vertex labels or reduce the profile"
             )
+        self._admission_plan = plan
         return self
 
 
@@ -1042,7 +1030,8 @@ def _strict_json_array_size(item_sizes: tuple[int, ...]) -> int:
 
 
 def _induced_profile_result_bytes(
-    hypergraph: FiniteHypergraph, subset_size: int
+    hypergraph: FiniteHypergraph,
+    expected_subsets: tuple[tuple[str, ...], ...],
 ) -> int:
     """Return a safe serialized-size bound for an induced-profile result.
 
@@ -1052,20 +1041,19 @@ def _induced_profile_result_bytes(
     boundary, rather than a fixed per-entry estimate.
     """
 
-    from itertools import combinations
-
     normalized_vertices = tuple(
         unicodedata.normalize("NFC", vertex) for vertex in hypergraph.vertices
     )
+    subset_size = len(expected_subsets[0])
     vertex_wire_bytes = {
         vertex: len(encode_strict_json(vertex)) for vertex in normalized_vertices
     }
     maximum_count = min(len(hypergraph.edges), (1 << subset_size) - 1)
     count_wire_bytes = len(encode_strict_json(maximum_count))
     entry_sizes: list[int] = []
-    for combo in combinations(normalized_vertices, subset_size):
+    for subset in expected_subsets:
         subset_wire_bytes = _strict_json_array_size(
-            tuple(vertex_wire_bytes[vertex] for vertex in combo)
+            tuple(vertex_wire_bytes[vertex] for vertex in subset)
         )
         entry_sizes.append(
             strict_json_object_size(
@@ -1083,6 +1071,34 @@ def _induced_profile_result_bytes(
             ("subset_size", len(encode_strict_json(subset_size))),
             ("entries", entries_size),
         )
+    )
+
+
+def _induced_type_profile_admission_plan(
+    hypergraph: FiniteHypergraph,
+    subset_size: int,
+) -> _InducedTypeProfileAdmissionPlan:
+    """Build the complete bounded-work plan once for one profile request."""
+
+    from itertools import combinations
+
+    n = len(hypergraph.vertices)
+    if subset_size > n:
+        raise _validation_error(
+            "induced type profile subset_size exceeds the declared vertex count"
+        )
+    expected_subsets = tuple(
+        tuple(combo) for combo in combinations(sorted(hypergraph.vertices), subset_size)
+    )
+    if len(expected_subsets) > MAX_INDUCED_SUBSETS:
+        raise _validation_error(
+            "induced type profile exceeds the "
+            f"{MAX_INDUCED_SUBSETS}-subset profile bound"
+        )
+    return _InducedTypeProfileAdmissionPlan(
+        expected_subsets=expected_subsets,
+        edge_sets=tuple(frozenset(members) for _, members in hypergraph.edges),
+        result_bytes=_induced_profile_result_bytes(hypergraph, expected_subsets),
     )
 
 
@@ -1117,38 +1133,43 @@ class InducedTypeProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_induced_type_profile(self) -> Self:
-        if self.subset_size > len(self.hypergraph.vertices):
-            raise _validation_error(
-                "induced type profile subset_size exceeds the declared vertex count"
-            )
-        from itertools import combinations
-
-        expected_subsets = tuple(
-            tuple(sorted(combo))
-            for combo in combinations(
-                sorted(self.hypergraph.vertices), self.subset_size
-            )
-        )
-        if len(expected_subsets) > MAX_INDUCED_SUBSETS:
-            raise _validation_error(
-                "induced type profile exceeds the "
-                f"{MAX_INDUCED_SUBSETS}-subset profile bound"
-            )
-        if (
-            _induced_profile_result_bytes(self.hypergraph, self.subset_size)
-            > MAX_INDUCED_PROFILE_RESULT_BYTES
-        ):
+        plan = _induced_type_profile_admission_plan(self.hypergraph, self.subset_size)
+        if plan.result_bytes > MAX_INDUCED_PROFILE_RESULT_BYTES:
             raise _validation_error(
                 "the induced type profile would exceed the "
                 f"{MAX_INDUCED_PROFILE_RESULT_BYTES}-byte canonical output limit; "
                 "shorten vertex labels or reduce the profile"
             )
-        if tuple(entry.vertex_subset for entry in self.entries) != expected_subsets:
+        if (
+            tuple(entry.vertex_subset for entry in self.entries)
+            != plan.expected_subsets
+        ):
             raise _validation_error(
                 "induced type profile entries must list each k-subset of "
                 "vertices exactly once in lexicographic order"
             )
         return self
+
+    @classmethod
+    def _from_admitted_kernel(
+        cls,
+        *,
+        hypergraph: FiniteHypergraph,
+        subset_size: int,
+        entries: tuple[InducedTypeProfileEntry, ...],
+        plan: _InducedTypeProfileAdmissionPlan,
+    ) -> Self:
+        """Construct typed kernel output using its already-admitted plan."""
+
+        if tuple(entry.vertex_subset for entry in entries) != plan.expected_subsets:
+            raise AssertionError(
+                "induced profile kernel output violated its admission plan"
+            )
+        return cls.model_construct(
+            hypergraph=hypergraph,
+            subset_size=subset_size,
+            entries=entries,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1345,30 +1366,31 @@ class MaximumEdgeMatchingRequest(StrictModel):
     """Request an exact maximum-cardinality edge matching.
 
     A matching is a set of pairwise-disjoint hyperedges.  The exact bounded
-    search enumerates edge subsets by decreasing cardinality and admits at
-    most ``MAX_MATCHING_EDGES`` edges.  An all-empty edge family is admitted
-    through a trivial presolve, subject to the canonical result-byte bound.
+    search enumerates nonempty edge subsets by decreasing cardinality and
+    admits at most ``MAX_MATCHING_EDGES`` search edges.  Empty edges form a
+    mandatory witness prefix because they are disjoint from every edge,
+    subject to the canonical result-byte bound.
     """
 
     hypergraph: FiniteHypergraph = Field(
         description=(
             "Canonical finite hypergraph. Exact matching search admits at most "
-            f"{MAX_MATCHING_EDGES} edges; an all-empty edge family is solved "
-            "by returning every edge ID and is admitted separately when its "
+            f"{MAX_MATCHING_EDGES} nonempty edges; empty edge IDs are included "
+            "in every matching witness and the result is admitted when its "
             f"retained-source result fits {MAX_MATCHING_RESULT_BYTES} canonical bytes."
         ),
         json_schema_extra={
             "search_edge_bound": MAX_MATCHING_EDGES,
             "canonical_result_bytes_bound": MAX_MATCHING_RESULT_BYTES,
-            "all_empty_edge_presolve": True,
+            "empty_edge_witness_prefix": True,
         },
     )
 
     @model_validator(mode="after")
     def require_bounded_search(self) -> Self:
         edge_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
-        all_edges_empty = all(not members for _, members in self.hypergraph.edges)
-        if len(edge_ids) > MAX_MATCHING_EDGES and not all_edges_empty:
+        nonempty_edge_count = sum(bool(members) for _, members in self.hypergraph.edges)
+        if nonempty_edge_count > MAX_MATCHING_EDGES:
             raise _validation_error(
                 "maximum edge matching search exceeds the "
                 f"{MAX_MATCHING_EDGES}-edge exact search bound"
@@ -1420,9 +1442,10 @@ class MaximumEdgeMatchingResult(StrictModel):
         edge_lookup = {
             edge_id: frozenset(members) for edge_id, members in self.hypergraph.edges
         }
-        members_list = [edge_lookup[edge_id] for edge_id in self.matching]
-        for i, a in enumerate(members_list):
-            for j in range(i + 1, len(members_list)):
-                if a & members_list[j]:
-                    raise _validation_error("matching edges must be pairwise disjoint")
+        occupied_vertices: set[str] = set()
+        for edge_id in self.matching:
+            members = edge_lookup[edge_id]
+            if occupied_vertices.intersection(members):
+                raise _validation_error("matching edges must be pairwise disjoint")
+            occupied_vertices.update(members)
         return self

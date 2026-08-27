@@ -26,6 +26,8 @@ from jacobian.math.hypergraphs._models import (
     VertexDegreesRequest,
     VertexDegreesResult,
     _admit_edge_intersection_profile,
+    _induced_type_profile_admission_plan,
+    _InducedTypeProfileAdmissionPlan,
     _minimum_transversal_search_plan,
 )
 
@@ -384,8 +386,7 @@ def verify_clique_expansion_result(result: CliqueExpansionResult) -> bool:
 
 
 def _induced_type_profile_data(
-    hypergraph: FiniteHypergraph,
-    subset_size: int,
+    plan: _InducedTypeProfileAdmissionPlan,
 ) -> tuple[tuple[tuple[str, ...], int], ...]:
     """Compute one ``(vertex_subset, induced_edge_count)`` pair per k-subset.
 
@@ -393,15 +394,11 @@ def _induced_type_profile_data(
     is the number of distinct nonempty edges ``e ∩ S`` arising from the source
     hypergraph's edges.  Subsets are emitted in lexicographic vertex order.
     """
-    from itertools import combinations
-
-    edge_sets = tuple(frozenset(members) for _, members in _canonical_edges(hypergraph))
     rows: list[tuple[tuple[str, ...], int]] = []
-    for combo in combinations(sorted(hypergraph.vertices), subset_size):
-        subset = tuple(sorted(combo))
+    for subset in plan.expected_subsets:
         subset_set = frozenset(subset)
         distinct_edges: set[frozenset[str]] = set()
-        for members in edge_sets:
+        for members in plan.edge_sets:
             induced = members & subset_set
             if induced:
                 distinct_edges.add(induced)
@@ -414,15 +411,17 @@ def compute_induced_type_profile(
 ) -> InducedTypeProfileResult:
     """Compute the induced uniform type profile of a finite hypergraph."""
 
-    rows = _induced_type_profile_data(request.hypergraph, request.subset_size)
+    plan = request._admission_plan
+    rows = _induced_type_profile_data(plan)
     entries = tuple(
         InducedTypeProfileEntry(vertex_subset=subset, induced_edge_count=count)
         for subset, count in rows
     )
-    return InducedTypeProfileResult(
+    return InducedTypeProfileResult._from_admitted_kernel(
         hypergraph=request.hypergraph,
         subset_size=request.subset_size,
         entries=entries,
+        plan=plan,
     )
 
 
@@ -431,9 +430,10 @@ def verify_induced_type_profile_result(
 ) -> bool:
     """Verify an independently supplied induced type profile."""
 
+    plan = _induced_type_profile_admission_plan(result.hypergraph, result.subset_size)
     return tuple(
         (entry.vertex_subset, entry.induced_edge_count) for entry in result.entries
-    ) == _induced_type_profile_data(result.hypergraph, result.subset_size)
+    ) == _induced_type_profile_data(plan)
 
 
 def _minimum_transversal_data(
@@ -498,11 +498,14 @@ def _maximum_edge_matching_data(
 
     edges = _canonical_edges(hypergraph)
     edge_ids = tuple(edge_id for edge_id, _ in edges)
-    edge_sets = tuple(frozenset(members) for _, members in edges)
-    if all(not members for _, members in edges):
+    empty_edge_ids = tuple(edge_id for edge_id, members in edges if not members)
+    search_edges = tuple((edge_id, members) for edge_id, members in edges if members)
+    search_edge_ids = tuple(edge_id for edge_id, _ in search_edges)
+    edge_sets = tuple(frozenset(members) for _, members in search_edges)
+    if not search_edges:
         return edge_ids, len(edge_ids)
-    for size in range(len(edges), 0, -1):
-        for combo in combinations(range(len(edges)), size):
+    for size in range(len(search_edges), 0, -1):
+        for combo in combinations(range(len(search_edges)), size):
             picked = [edge_sets[i] for i in combo]
             disjoint = True
             for i in range(len(picked)):
@@ -513,11 +516,12 @@ def _maximum_edge_matching_data(
                 if not disjoint:
                     break
             if disjoint:
-                selected_ids = {edge_ids[i] for i in combo}
+                selected_ids = set(empty_edge_ids)
+                selected_ids.update(search_edge_ids[i] for i in combo)
                 ordered = tuple(
                     edge_id for edge_id in edge_ids if edge_id in selected_ids
                 )
-                return ordered, size
+                return ordered, len(empty_edge_ids) + size
     return (), 0
 
 

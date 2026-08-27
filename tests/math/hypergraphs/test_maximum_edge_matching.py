@@ -112,6 +112,19 @@ class TestMaximumEdgeMatching:
         assert result.matching == tuple(f"e{i}" for i in range(21))
         assert result.count == 21
 
+    def test_empty_edge_prefix_is_presolved_before_search_cap(self) -> None:
+        result = _matching(
+            {
+                "vertices": ["a", "b"],
+                "edges": [
+                    *[[f"empty{i}", []] for i in range(21)],
+                    ["nonempty", ["a"]],
+                ],
+            }
+        )
+        assert result.matching == tuple([f"empty{i}" for i in range(21)] + ["nonempty"])
+        assert result.count == 22
+
     def test_edge_bound_exceeded(self) -> None:
         edges = [[f"e{i}", [f"v{i}"]] for i in range(21)]
         vertices = [f"v{i}" for i in range(21)]

@@ -89,8 +89,41 @@ class TestMinimumTransversal:
                 )
             )
 
-    def test_vertex_bound_exceeded(self) -> None:
-        hg = {"vertices": [f"v{i}" for i in range(21)], "edges": [["e", ["v0"]]]}
+    def test_large_carrier_with_small_active_edge_family_is_admitted(self) -> None:
+        result = _transversal(
+            {
+                "vertices": [f"v{i}" for i in range(256)],
+                "edges": [["e", ["v0"]]],
+            }
+        )
+        assert result.transversal == ("v0",)
+        assert result.cardinality == 1
+
+    def test_duplicate_edges_are_deduplicated_for_search_budget(self) -> None:
+        vertices = [f"v{i}" for i in range(20)]
+        edges = [[f"full-{i}", vertices] for i in range(1000)]
+        edges.extend([[f"single-{i}", [vertex]] for i, vertex in enumerate(vertices)])
+        result = _transversal({"vertices": vertices, "edges": edges})
+        assert result.cardinality == 20
+        assert result.transversal == tuple(vertices)
+
+    def test_active_search_and_result_can_exceed_old_witness_cap(self) -> None:
+        vertices = [f"v{i}" for i in range(21)]
+        result = _transversal(
+            {
+                "vertices": vertices,
+                "edges": [[f"e{i}", [vertex]] for i, vertex in enumerate(vertices)],
+            }
+        )
+        assert result.cardinality == 21
+        assert result.transversal == tuple(vertices)
+
+    def test_search_work_bound_exceeded(self) -> None:
+        vertices = [f"v{i}" for i in range(22)]
+        hg = {
+            "vertices": vertices,
+            "edges": [[f"e{i}", [vertex]] for i, vertex in enumerate(vertices)],
+        }
         with pytest.raises(ValidationError):
             MinimumTransversalRequest(hypergraph=FiniteHypergraph.model_validate(hg))
 

@@ -5,6 +5,7 @@ from itertools import combinations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math.hypergraphs._models import (
     FiniteHypergraph,
     InducedTypeProfileRequest,
@@ -123,6 +124,22 @@ class TestInducedTypeProfile:
             InducedTypeProfileRequest(
                 hypergraph=FiniteHypergraph.model_validate(hg), subset_size=10
             )
+
+    def test_profile_bound_accounts_for_actual_subset_label_bytes(self) -> None:
+        wide_vertices = [f"{index:03d}" + "😀" * 61 for index in range(256)]
+        with pytest.raises(ValidationError, match="canonical output limit"):
+            InducedTypeProfileRequest(
+                hypergraph=FiniteHypergraph(vertices=tuple(wide_vertices), edges=()),
+                subset_size=255,
+            )
+
+        compact = _profile(
+            {"vertices": [f"v{index}" for index in range(256)], "edges": []},
+            255,
+        )
+        assert len(canonicalize_json(compact.model_dump(mode="json"))) <= (
+            CanonicalLimits().max_output_bytes
+        )
 
     def test_verify_round_trip(self) -> None:
         result = _profile(HYPERGRAPH, 3)

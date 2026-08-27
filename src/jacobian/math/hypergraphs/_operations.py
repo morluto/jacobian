@@ -25,6 +25,7 @@ from jacobian.math.hypergraphs._models import (
     ParametersResult,
     VertexDegreesRequest,
     VertexDegreesResult,
+    _minimum_transversal_search_plan,
     _require_edge_intersection_preflight,
 )
 
@@ -445,11 +446,12 @@ def _minimum_transversal_data(
     """
     from itertools import combinations
 
-    vertices = hypergraph.vertices
-    edge_sets = tuple(frozenset(members) for _, members in _canonical_edges(hypergraph))
+    vertices, edge_sets, search_depth, _search_work = _minimum_transversal_search_plan(
+        hypergraph
+    )
     if not edge_sets:
         return (), 0
-    for size in range(1, len(vertices) + 1):
+    for size in range(1, search_depth + 1):
         for combo in combinations(vertices, size):
             candidate = frozenset(combo)
             if all(candidate & edge for edge in edge_sets):

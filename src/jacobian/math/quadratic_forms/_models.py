@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -15,7 +16,6 @@ from jacobian.math.quadratic_forms.values import (
     MAX_QUADRATIC_EVALUATION_TERM_DIGITS,
     RationalCoordinateVector,
     RationalQuadraticForm,
-    evaluate_rational_quadratic_form,
     require_evaluation_budget,
 )
 
@@ -80,25 +80,24 @@ class EvaluationResult(StrictModel):
     @model_validator(mode="after")
     def require_exact_source_bound_evaluation(self) -> Self:
         try:
-            require_evaluation_budget(self.form, self.vector)
             require_bounded_rational(
                 self.value,
                 max_digits=MAX_QUADRATIC_EVALUATION_DIGITS,
                 label="quadratic-form evaluation",
             )
         except ValueError as error:
-            reason = (
-                "support_budget"
-                if "total support" in str(error)
-                else "evaluation_budget"
-            )
-            raise _validation_error(reason, str(error)) from error
-        expected = evaluate_rational_quadratic_form(self.form, self.vector)
-        if self.value.as_fraction() != expected:
-            raise _validation_error(
-                "value_mismatch", "value must equal the exact quadratic-form evaluation"
-            )
+            raise _validation_error("evaluation_budget", str(error)) from error
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: EvaluationRequest, *, value: Fraction) -> Self:
+        """Build one result after the admitted rational kernel established it."""
+
+        return cls(
+            form=request.form,
+            vector=request.vector,
+            value=CanonicalRational.from_fraction(value),
+        )
 
 
 __all__ = ["EvaluationRequest", "EvaluationResult"]

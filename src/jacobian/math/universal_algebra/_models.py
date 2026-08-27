@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -22,13 +22,10 @@ from jacobian.math.universal_algebra.values import (
     FiniteAlgebraHomomorphism,
     FlatTerm,
     UniversalAlgebraAdmissionError,
-    _first_homomorphism_failure,
-    _homomorphism_kernel_and_image,
     require_term_for_algebra,
 )
 
 MAX_ENUMERATION_WORK = 1_000_000
-_HOMOMORPHISM_REPLAY_PASSES = 2
 # The result adds at most 32 source indices in kernel blocks, 32 image indices,
 # six flags/scalars, or one obstruction with two arity-at-most-four tuples and a
 # 64-byte operation ID.  Four KiB conservatively bounds that JSON wrapper over
@@ -217,7 +214,7 @@ class HomomorphismProfileRequest(StrictModel):
                 "Check a complete carrier map between finite algebras with exactly "
                 "matching ordered operation identifiers and arities. Every source "
                 "operation-table cell is checked; the retained-map result is "
-                "rejected before execution when replay work or canonical output "
+                "rejected before execution when that work or canonical output "
                 "would exceed its bound."
             )
         }
@@ -233,10 +230,10 @@ class HomomorphismProfileRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_complete_scan(self) -> Self:
         preservation_cells = sum(len(table) for table in self.carrier_map.source.tables)
-        if preservation_cells * _HOMOMORPHISM_REPLAY_PASSES > MAX_ENUMERATION_WORK:
+        if preservation_cells > MAX_ENUMERATION_WORK:
             raise _validation_error(
                 "homomorphism_work_exceeded",
-                "homomorphism operation-and-replay work exceeds the enumeration budget",
+                "homomorphism operation work exceeds the enumeration budget",
             )
         _require_homomorphism_output_headroom(self.carrier_map)
         return self
@@ -258,9 +255,9 @@ class HomomorphismProfileResult(StrictModel):
     """A checked homomorphism or the first exact preservation obstruction.
 
     The positive branch carries a reusable :class:`FiniteAlgebraHomomorphism`;
-    the negative branch retains the supplied carrier map. Validation replays
-    preservation and reconstructs every positive kernel/image field or every
-    negative obstruction from that retained source.
+    the negative branch retains the supplied carrier map. Parsing checks only
+    branch shape and canonical container structure; the admitted producer
+    establishes preservation, fibers, image, and the first obstruction.
     """
 
     status: Literal["HOMOMORPHISM", "NOT_A_HOMOMORPHISM"]
@@ -277,7 +274,7 @@ class HomomorphismProfileResult(StrictModel):
     method: Literal["DENSE_TABLE_SCAN"] = "DENSE_TABLE_SCAN"
 
     @model_validator(mode="after")
-    def require_source_bound_profile(self) -> Self:
+    def require_structural_profile(self) -> Self:
         if self.status == "HOMOMORPHISM":
             if self.homomorphism is None:
                 raise _validation_error(
@@ -294,39 +291,23 @@ class HomomorphismProfileResult(StrictModel):
                     "positive_flags_missing",
                     "HOMOMORPHISM must carry all map-property flags",
                 )
-            _require_homomorphism_output_headroom(self.homomorphism)
-            expected_kernel, expected_image = _homomorphism_kernel_and_image(
-                self.homomorphism.mapping
-            )
-            if self.kernel_partition != expected_kernel:
-                raise _validation_error(
-                    "kernel_partition_mismatch",
-                    "kernel_partition must be the canonical fibers of the carrier map",
+            _require_partition(self.homomorphism.source, self.kernel_partition)
+            if (
+                tuple(sorted(self.image)) != self.image
+                or len(set(self.image)) != len(self.image)
+                or any(
+                    value < 0 or value >= len(self.homomorphism.target.carrier)
+                    for value in self.image
                 )
-            if self.image != expected_image:
+            ):
                 raise _validation_error(
-                    "image_mismatch", "image must be the sorted carrier-map image"
+                    "image_not_canonical",
+                    "image must be a sorted unique target-carrier sequence",
                 )
-            expected_injective = len(expected_image) == len(
-                self.homomorphism.source.carrier
-            )
-            expected_surjective = len(expected_image) == len(
-                self.homomorphism.target.carrier
-            )
-            if self.injective is not expected_injective:
+            if self.isomorphism is not (self.injective and self.surjective):
                 raise _validation_error(
-                    "injective_mismatch",
-                    "injective must be reconstructed from the kernel",
-                )
-            if self.surjective is not expected_surjective:
-                raise _validation_error(
-                    "surjective_mismatch",
-                    "surjective must be reconstructed from the image",
-                )
-            if self.isomorphism is not (expected_injective and expected_surjective):
-                raise _validation_error(
-                    "isomorphism_mismatch",
-                    "isomorphism must be reconstructed from injectivity and surjectivity",
+                    "isomorphism_flags_mismatch",
+                    "isomorphism must agree with injective and surjective",
                 )
             return self
 
@@ -352,30 +333,17 @@ class HomomorphismProfileResult(StrictModel):
                 "negative_positive_data",
                 "NOT_A_HOMOMORPHISM cannot carry positive map-property data",
             )
-        _require_homomorphism_output_headroom(self.carrier_map)
-        expected = _first_homomorphism_failure(self.carrier_map)
-        if expected is None:
-            raise _validation_error(
-                "negative_map_is_homomorphism",
-                "NOT_A_HOMOMORPHISM source map preserves every basic operation",
-            )
-        expected_obstruction = HomomorphismObstruction(
-            operation=expected.operation,
-            operation_id=self.carrier_map.source.operations[
-                expected.operation
-            ].operation_id,
-            source_arguments=expected.source_arguments,
-            target_arguments=expected.target_arguments,
-            source_output=expected.source_output,
-            mapped_source_output=expected.mapped_source_output,
-            target_output=expected.target_output,
-        )
-        if self.obstruction != expected_obstruction:
-            raise _validation_error(
-                "obstruction_mismatch",
-                "obstruction must be the first exact preservation failure",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(cls, payload: dict[str, object]) -> Self:
+        """Build a profile after the admitted preservation scan established it."""
+
+        data: dict[str, Any] = payload.copy()
+        obstruction = data.get("obstruction")
+        if isinstance(obstruction, dict):
+            data["obstruction"] = HomomorphismObstruction.model_construct(**obstruction)
+        return cls.model_construct(**data)
 
 
 class _PartitionRequest(StrictModel):
@@ -424,8 +392,7 @@ class QuotientRequest(_PartitionRequest):
         if quotient_work > MAX_ENUMERATION_WORK:
             raise _validation_error(
                 "quotient_work_exceeded",
-                "quotient construction and homomorphism replay exceed the "
-                "operation work budget",
+                "quotient construction exceeds the operation work budget",
             )
         try:
             source_bytes = len(encode_strict_json(self.algebra.model_dump(mode="json")))

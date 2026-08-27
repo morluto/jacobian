@@ -86,26 +86,16 @@ class TestRSK:
         assert result.p_tableau.rows == ((1,),)
         assert result.q_tableau.rows == ((1,),)
 
-    @pytest.mark.parametrize(
-        ("field", "replacement"),
-        [
-            ("permutation", [2, 1, 3]),
-            ("p_tableau", {"rows": [[1, 3], [2]]}),
-            ("q_tableau", {"rows": [[1, 3], [2]]}),
-            ("shape", {"parts": [3]}),
-            ("lis_length", 3),
-        ],
-    )
-    def test_result_rejects_independent_source_and_conclusion_mutations(
-        self, field: str, replacement: object
-    ) -> None:
+    def test_result_parsing_retains_only_structural_tableau_checks(self) -> None:
         result = compute_rsk_permutation(RSKPermutationRequest(permutation=(1, 3, 2)))
         payload = result.model_dump(mode="json")
-        payload[field] = replacement
+        payload["permutation"] = [2, 1, 3]
+        assert RSKResult.model_validate(payload).permutation == (2, 1, 3)
+
+        payload["shape"] = {"parts": [3]}
         with pytest.raises(ValidationError) as error:
             RSKResult.model_validate(payload)
         assert error.value.errors()[0]["type"] in {
-            "algebraic_combinatorics.rsk_tableaux_mismatch",
             "algebraic_combinatorics.rsk_shape_mismatch",
             "algebraic_combinatorics.rsk_lengths_mismatch",
         }

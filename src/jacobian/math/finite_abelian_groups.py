@@ -307,15 +307,14 @@ SpectralPairDecisionReason = Literal[
 
 
 class FiniteAbelianSpectralPairResult(StrictModel):
-    """Exact, source-bound decision for a finite-Abelian spectral pair.
+    """Exact decision for a finite-Abelian spectral pair.
 
     The fixed dual pairing is
     ``chi_lambda(a) = exp(2*pi*i*sum(lambda_j*a_j/m_j))``. For an equal-size
     pair, every distinct frequency pair is checked in lexicographic source
     order. The restricted characters all have nonzero norm, so ``|A|``
-    pairwise-orthogonal characters form a basis of ``C^A``. Result validation
-    repeats the exact cyclotomic reductions and binds the decision, first
-    witness, convention, and retained source together.
+    pairwise-orthogonal characters form a basis of ``C^A``. The admitted
+    kernel establishes that conclusion; parsing keeps only branch consistency.
     """
 
     source: FiniteAbelianSpectralPairSource
@@ -327,24 +326,37 @@ class FiniteAbelianSpectralPairResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def replay_exact_decision(self) -> Self:
-        expected = _finite_abelian_spectral_pair_decision_data(self.source)
-        observed = (
-            self.is_spectral,
-            self.reason,
-            self.first_nonorthogonal_pair,
-        )
-        required = (
-            expected.is_spectral,
-            expected.reason,
-            expected.first_nonorthogonal_pair,
-        )
-        if observed != required:
+    def require_branch_consistency(self) -> Self:
+        if self.is_spectral:
+            valid = self.reason == "SPECTRAL" and self.first_nonorthogonal_pair is None
+        elif self.reason == "CARDINALITY_MISMATCH":
+            valid = self.first_nonorthogonal_pair is None
+        else:
+            valid = (
+                self.reason == "NONORTHOGONAL_FREQUENCIES"
+                and self.first_nonorthogonal_pair is not None
+            )
+        if not valid:
             raise _validation_error(
-                "spectral_replay",
-                "spectral-pair result must equal the replayed exact decision",
+                "spectral_branch",
+                "spectral-pair conclusion and witness fields must agree",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        source: FiniteAbelianSpectralPairSource,
+        decision: _SpectralPairDecisionData,
+    ) -> Self:
+        """Build a result after the admitted cyclotomic kernel established it."""
+
+        return cls(
+            source=source,
+            is_spectral=decision.is_spectral,
+            reason=decision.reason,
+            first_nonorthogonal_pair=decision.first_nonorthogonal_pair,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -651,12 +663,7 @@ def decide_finite_abelian_spectral_pair(
     """Decide exact finite-Abelian spectrality under the positive pairing."""
 
     decision = _finite_abelian_spectral_pair_decision_data(source)
-    return FiniteAbelianSpectralPairResult(
-        source=source,
-        is_spectral=decision.is_spectral,
-        reason=decision.reason,
-        first_nonorthogonal_pair=decision.first_nonorthogonal_pair,
-    )
+    return FiniteAbelianSpectralPairResult._from_kernel(source, decision)
 
 
 def _run_finite_abelian_spectral_pair(

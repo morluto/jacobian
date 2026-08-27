@@ -244,7 +244,7 @@ def test_sqrt_touching_zero_is_a_typed_second_derivative_nonconclusion() -> None
     )
 
 
-def test_source_bound_result_round_trips_and_rejects_mutated_partial() -> None:
+def test_source_bound_result_round_trips_without_replaying_mutated_partials() -> None:
     result = _run(
         {"op": "div", "children": [_const(1), _var("x")]},
         (("x", Fraction(1), Fraction(2)),),
@@ -259,8 +259,8 @@ def test_source_bound_result_round_trips_and_rejects_mutated_partial() -> None:
     )
     payload = deepcopy(payload)
     payload["hessian"][0]["enclosure"]["lower"] = {"mantissa": "0", "exponent": 0}
-    with analysis_validation_error():
-        IntervalExpressionSecondJetEnclosureResult.model_validate(payload)
+    parsed = IntervalExpressionSecondJetEnclosureResult.model_validate(payload)
+    assert parsed.model_dump(mode="json") == payload
 
 
 def test_request_strict_json_transport_round_trip() -> None:

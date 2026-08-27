@@ -112,10 +112,8 @@ def compute_rational_conic_parametrization(
         request.point,
         request.parameter,
     )
-    return RationalConicParametrizationResult(
-        source_polynomial=request.polynomial,
-        exceptional_point=request.point,
-        parameter=request.parameter,
+    return RationalConicParametrizationResult._from_kernel(
+        request,
         coordinates=data.coordinates,
         inverse_parameter=data.inverse_parameter,
         finite_parameter_denominator=data.finite_parameter_denominator,

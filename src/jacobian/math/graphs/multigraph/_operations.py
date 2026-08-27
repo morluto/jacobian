@@ -27,7 +27,7 @@ from jacobian.math.graphs.multigraph._models import (
     MultigraphFlowFindRequest,
     MultigraphFlowFindResult,
     MultigraphFlowSearchBudget,
-    VertexDivergence,
+    _compute_divergence_ledger,
     _FlowSearchOutcome,
 )
 from jacobian.math.graphs.multigraph._orientation import oriented_endpoints
@@ -57,44 +57,9 @@ def check_multigraph_flow(
     graph = request.graph
     group = request.group
 
-    # Build per-vertex signed sums.  Outgoing edges contribute ``+value``;
-    # incoming edges contribute ``-value`` (i.e. ``group.negate(value)``).
-    vertex_out: dict[int, list[tuple[int, ...]]] = {
-        v: [] for v in range(graph.vertex_count)
-    }
-    vertex_in: dict[int, list[tuple[int, ...]]] = {
-        v: [] for v in range(graph.vertex_count)
-    }
-    vertex_incident: dict[int, set[str]] = {v: set() for v in range(graph.vertex_count)}
-
-    for assign in request.edge_values:
-        edge = graph.edge_by_id(assign.edge_id)
-        tail, head = oriented_endpoints(edge, assign.orientation)
-        value = group.normalize(assign.value)
-        vertex_out[tail].append(value)
-        vertex_in[head].append(value)
-        vertex_incident[tail].add(assign.edge_id)
-        vertex_incident[head].add(assign.edge_id)
-
-    divergence_ledger: list[VertexDivergence] = []
-    conservation_holds = True
-    for vertex in range(graph.vertex_count):
-        out_sum = group.sum(tuple(vertex_out[vertex]))
-        in_sum = group.sum(tuple(vertex_in[vertex]))
-        # divergence = out_sum - in_sum = out_sum + negate(in_sum)
-        divergence = group.add(out_sum, group.negate(in_sum))
-        holds = group.is_zero(divergence)
-        if not holds:
-            conservation_holds = False
-        incident = sorted(vertex_incident[vertex])
-        divergence_ledger.append(
-            VertexDivergence(
-                vertex=vertex,
-                coordinates=divergence,
-                incident_edge_ids=tuple(incident),
-                conservation_holds=holds,
-            )
-        )
+    divergence_ledger, conservation_holds = _compute_divergence_ledger(
+        graph, group, request.edge_values
+    )
 
     # Identify zero-valued edges
     zero_edge_ids = [
@@ -103,11 +68,11 @@ def check_multigraph_flow(
     zero_edge_ids.sort()
     nowhere_zero = len(zero_edge_ids) == 0
 
-    return MultigraphFlowCheckResult(
+    return MultigraphFlowCheckResult._from_kernel(
         graph=graph,
         group=group,
         edge_flow_records=request.edge_values,
-        divergence_ledger=tuple(divergence_ledger),
+        divergence_ledger=divergence_ledger,
         zero_edge_ids=tuple(zero_edge_ids),
         nowhere_zero=nowhere_zero,
         conservation_holds=conservation_holds,
@@ -138,32 +103,6 @@ def _enumerate_recursive(
         return
     for value in range(moduli[index]):
         _enumerate_recursive(moduli, index + 1, (*current, value), accumulator)
-
-
-def _check_flow_conservation(
-    graph: LooplessMultigraph,
-    group: FiniteAbelianGroup,
-    assignments: list[FlowEdgeAssignment],
-) -> bool:
-    """Return True when the given flow assignments satisfy conservation."""
-    vertex_out: dict[int, list[tuple[int, ...]]] = {
-        v: [] for v in range(graph.vertex_count)
-    }
-    vertex_in: dict[int, list[tuple[int, ...]]] = {
-        v: [] for v in range(graph.vertex_count)
-    }
-    for assign in assignments:
-        edge = graph.edge_by_id(assign.edge_id)
-        tail, head = oriented_endpoints(edge, assign.orientation)
-        value = group.normalize(assign.value)
-        vertex_out[tail].append(value)
-        vertex_in[head].append(value)
-    for vertex in range(graph.vertex_count):
-        out_sum = group.sum(tuple(vertex_out[vertex]))
-        in_sum = group.sum(tuple(vertex_in[vertex]))
-        if not group.is_zero(group.add(out_sum, group.negate(in_sum))):
-            return False
-    return True
 
 
 def _build_edge_choices(
@@ -197,8 +136,6 @@ def _incremental_balances_hold(net: list[list[int]], moduli: tuple[int, ...]) ->
 
 
 def _leaf_found_outcome(
-    graph: LooplessMultigraph,
-    group: FiniteAbelianGroup,
     net: list[list[int]],
     moduli: tuple[int, ...],
     assignments: list[FlowEdgeAssignment],
@@ -206,12 +143,10 @@ def _leaf_found_outcome(
 ) -> _FlowSearchOutcome | None:
     """Evaluate one complete assignment; return the FOUND outcome or None.
 
-    The incremental balances decide candidacy in O(vertices * dimension);
-    the authoritative conservation replay then confirms the witness.
+    Incremental balances are the kernel's conservation computation, so a
+    complete zero balance establishes the witness without rescanning edges.
     """
     if not _incremental_balances_hold(net, moduli):
-        return None
-    if not _check_flow_conservation(graph, group, assignments):
         return None
     return _FlowSearchOutcome(
         status="FOUND",
@@ -279,9 +214,7 @@ def _search_dfs(
             # Complete assignment was already counted when the final edge
             # was pushed; its incremental balances were maintained on the
             # way down, so evaluating conservation is O(vertices * dimension).
-            found = _leaf_found_outcome(
-                graph, group, net, moduli, assignments, states_explored
-            )
+            found = _leaf_found_outcome(net, moduli, assignments, states_explored)
             if found is not None:
                 return found
             # Backtrack from leaf: pop placeholder and last assignment.
@@ -340,8 +273,8 @@ def _search_flow_unbound(
 ) -> _FlowSearchOutcome:
     """Run one bounded flow search and return it without a bound source.
 
-    The returned result carries no ``graph``/``group``/``resource_budget``
-    binding, so source-binding validators can replay it without recursion.
+    The returned value carries no source binding; the public result adds it
+    only after this one admitted search completes.
     """
 
     require_nz = resource_budget.require_nowhere_zero
@@ -383,7 +316,7 @@ def find_multigraph_flow(
     """
 
     inner = _search_flow_unbound(request.graph, request.group, request.resource_budget)
-    return MultigraphFlowFindResult(
+    return MultigraphFlowFindResult._from_kernel(
         graph=request.graph,
         group=request.group,
         resource_budget=request.resource_budget,
@@ -498,7 +431,7 @@ def compute_eulerian_cycles(
         edge_ids = [edge.edge_id for edge in graph.edges]
 
     if not edge_ids:
-        return EulerianCyclesResult(
+        return EulerianCyclesResult._from_kernel(
             graph=graph,
             edge_subset=request.edge_subset,
             cycles=(),
@@ -513,7 +446,7 @@ def compute_eulerian_cycles(
         degree[edge.left] += 1
         degree[edge.right] += 1
     if any(d % 2 != 0 for d in degree.values()):
-        return EulerianCyclesResult(
+        return EulerianCyclesResult._from_kernel(
             graph=graph,
             edge_subset=request.edge_subset,
             cycles=(),
@@ -546,7 +479,7 @@ def compute_eulerian_cycles(
     usage_tuple = tuple((eid, edge_usage[eid]) for eid in sorted(edge_usage))
     covers_all = all(edge_usage[eid] == 1 for eid in edge_ids)
 
-    return EulerianCyclesResult(
+    return EulerianCyclesResult._from_kernel(
         graph=graph,
         edge_subset=request.edge_subset,
         cycles=tuple(all_cycles),
@@ -606,7 +539,7 @@ def check_cycle_multicover(
         (eid, edge_multiplicity[eid]) for eid in sorted(edge_multiplicity)
     )
 
-    return CycleMulticoverResult(
+    return CycleMulticoverResult._from_kernel(
         graph=graph,
         cycles=request.cycles,
         target_multiplicity=k,
@@ -616,3 +549,50 @@ def check_cycle_multicover(
         overcovered_edge_ids=tuple(overcovered),
         is_exact_k_cover=is_exact,
     )
+
+
+def _verify_multigraph_flow_check_result(result: MultigraphFlowCheckResult) -> bool:
+    """Deliberately recompute one independently supplied flow-check claim."""
+    request = MultigraphFlowCheckRequest(
+        graph=result.graph,
+        group=result.group,
+        edge_values=result.edge_flow_records,
+    )
+    return check_multigraph_flow(request) == result
+
+
+def _verify_multigraph_flow_find_result(result: MultigraphFlowFindResult) -> bool:
+    """Deliberately replay one bounded flow-search claim under its own budget."""
+    request = MultigraphFlowFindRequest(
+        graph=result.graph,
+        group=result.group,
+        resource_budget=result.resource_budget,
+    )
+    outcome = _search_flow_unbound(
+        request.graph, request.group, request.resource_budget
+    )
+    return (
+        result.status == outcome.status
+        and result.flow == outcome.flow
+        and result.states_explored == outcome.states_explored
+        and result.termination_reason == outcome.termination_reason
+    )
+
+
+def _verify_eulerian_cycles_result(result: EulerianCyclesResult) -> bool:
+    """Deliberately recompute one independently supplied decomposition claim."""
+    request = EulerianCyclesRequest(
+        graph=result.graph,
+        edge_subset=result.edge_subset,
+    )
+    return compute_eulerian_cycles(request) == result
+
+
+def _verify_cycle_multicover_result(result: CycleMulticoverResult) -> bool:
+    """Deliberately recompute one independently supplied multicover claim."""
+    request = CycleMulticoverRequest(
+        graph=result.graph,
+        cycles=result.cycles,
+        target_multiplicity=result.target_multiplicity,
+    )
+    return check_cycle_multicover(request) == result

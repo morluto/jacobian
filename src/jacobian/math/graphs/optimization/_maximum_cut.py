@@ -314,10 +314,9 @@ class GraphMaximumCutResult(StrictModel):
         Exact optimality is a nonlocal claim.  Replaying it here would make
         ordinary result deserialization execute the exhaustive kernel; callers
         that receive an independently supplied result must opt into
-        :func:`verify_maximum_cut_result` instead.
+        :func:`_verify_maximum_cut_result` instead.
         """
 
-        _require_graph_envelope(self.graph)
         graph_vertices = set(self.graph.vertices)
         left = set(self.left_vertices)
         right = set(self.right_vertices)
@@ -376,7 +375,7 @@ class GraphMaximumCutResult(StrictModel):
         )
 
 
-def verify_maximum_cut_result(result: GraphMaximumCutResult) -> bool:
+def _verify_maximum_cut_result(result: GraphMaximumCutResult) -> bool:
     """Replay one independently supplied exact maximum-cut claim.
 
     The request envelope has already bounded the exhaustive enumeration.  It
@@ -574,9 +573,8 @@ def compute_maximum_cut(request: GraphMaximumCutRequest) -> GraphMaximumCutResul
             class_sides,
         )
 
-    # The producer already has coincident exact backend bounds. Avoid paying a
-    # second complete search inside this call; independently supplied or
-    # deserialized results always execute the exhaustive source-bound replay.
+    # The producer already has coincident exact backend bounds.  Deliberate
+    # verification of an independently supplied claim remains owner-private.
     return GraphMaximumCutResult._from_kernel(
         graph=request.graph,
         left_vertices=left_vertices,
@@ -641,5 +639,4 @@ __all__ = [
     "GraphMaximumCutRequest",
     "GraphMaximumCutResult",
     "compute_maximum_cut",
-    "verify_maximum_cut_result",
 ]

@@ -10,7 +10,6 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import encode_strict_json
-from jacobian.math.geometry.boxes._kernel import box_volume
 from jacobian.math.geometry.boxes.values import RationalAxisAlignedBox
 
 
@@ -22,7 +21,6 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 MAX_BOX_UNION_NONEMPTY_BOXES = 16
 MAX_INTERSECTION_CANDIDATES = (1 << MAX_BOX_UNION_NONEMPTY_BOXES) - 1
-MAX_BOX_UNION_REPLAY_WORK = 4_000_000
 MAX_BOX_UNION_RESULT_BYTES = 8 * 1024 * 1024
 MAX_BOX_UNION_RESULT_RATIONAL_DIGITS = 16_384
 
@@ -196,20 +194,6 @@ class BoxUnionVolumeRequest(StrictModel):
                 "intersection candidates, exceeding the complete "
                 f"{MAX_INTERSECTION_CANDIDATES}-candidate bound",
             )
-        # Two full ledger computations (operation plus result replay), with
-        # lower/upper comparisons, plus per-entry volume validation.
-        replay_work = (
-            6 * dimension * active_box_count * (1 << (active_box_count - 1))
-            if active_box_count
-            else 0
-        )
-        if replay_work > MAX_BOX_UNION_REPLAY_WORK:
-            raise _validation_error(
-                "box_union_exceeds_complete_intersection_replay",
-                "box union exceeds the complete intersection replay work bound "
-                f"({replay_work} > {MAX_BOX_UNION_REPLAY_WORK})",
-            )
-
         endpoint_num, endpoint_den, volume_digits, union_digits = _digit_bounds(
             self.boxes,
             dimension,
@@ -271,11 +255,6 @@ class BoxIntersectionLedgerEntry(StrictModel):
                 "ledger_contains_nonempty_box_intersections",
                 "ledger contains only nonempty box intersections",
             )
-        if self.volume.as_fraction() != box_volume(self.intersection):
-            raise _validation_error(
-                "box_intersection_volume_intervals",
-                "box intersection volume does not match its intervals",
-            )
         return self
 
 
@@ -293,31 +272,55 @@ class BoxUnionVolumeResult(StrictModel):
     union_volume: CanonicalRational
 
     @model_validator(mode="after")
-    def require_complete_source_bound_ledger(self) -> Self:
-        from jacobian.math.geometry.boxes._kernel import complete_intersection_ledger
-
-        expected, expected_union = complete_intersection_ledger(self.source.boxes)
-        if len(self.intersections) != len(expected):
+    def require_structural_ledger(self) -> Self:
+        if any(
+            index >= len(self.source.boxes)
+            for entry in self.intersections
+            for index in entry.box_indices
+        ):
             raise _validation_error(
-                "intersection_ledger_complete_source",
-                "intersection ledger is not complete for its source",
-            )
-        for actual, wanted in zip(self.intersections, expected, strict=True):
-            if (
-                actual.box_indices != wanted.box_indices
-                or actual.intersection != wanted.intersection
-                or actual.volume.as_fraction() != wanted.volume
-            ):
-                raise _validation_error(
-                    "intersection_ledger_source_boxes",
-                    "intersection ledger does not match its source boxes",
-                )
-        if self.union_volume.as_fraction() != expected_union:
-            raise _validation_error(
-                "union_volume_inclusion_exclusion_replay",
-                "union volume does not match inclusion-exclusion replay",
+                "intersection_ledger_source_indices",
+                "intersection ledger indices must refer to retained source boxes",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: BoxUnionVolumeRequest,
+        intersections: tuple[BoxIntersectionLedgerEntry, ...],
+        union_volume: CanonicalRational,
+    ) -> Self:
+        """Construct a result after the owner kernel completed the ledger."""
+
+        return cls.model_construct(
+            source=source,
+            intersections=intersections,
+            union_volume=union_volume,
+        )
+
+
+def _verify_box_union_volume_result(result: BoxUnionVolumeResult) -> bool:
+    """Check one independently supplied source-bound inclusion-exclusion claim."""
+
+    from jacobian.math.geometry.boxes._kernel import complete_intersection_ledger
+
+    try:
+        source = BoxUnionVolumeRequest.model_validate(result.source.model_dump())
+    except ValueError:
+        return False
+    expected, expected_union = complete_intersection_ledger(source.boxes)
+    return (
+        len(result.intersections) == len(expected)
+        and all(
+            actual.box_indices == wanted.box_indices
+            and actual.intersection == wanted.intersection
+            and actual.volume.as_fraction() == wanted.volume
+            for actual, wanted in zip(result.intersections, expected, strict=True)
+        )
+        and result.union_volume.as_fraction() == expected_union
+    )
 
 
 __all__ = [

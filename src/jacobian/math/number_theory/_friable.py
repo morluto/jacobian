@@ -14,7 +14,7 @@ FRIABLE_COUNT_OPERATION = number_theory_operation(
     (
         "Return the exact number Psi(x, y) of positive integers at most x whose "
         "prime factors are all at most the inclusive cutoff y. The result retains "
-        "x and y and replays the count inside the admitted materialized or "
+        "x and y alongside the exact count from the admitted materialized or "
         "generated-search envelope."
     ),
     FriableCountRequest,

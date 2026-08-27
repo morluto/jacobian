@@ -501,30 +501,29 @@ class StrictSublevelMeasureResult(StrictModel):
             )
         return prepared
 
-    @model_validator(mode="after")
-    def require_source_bound_reconstruction(self) -> Self:
-        request = StrictSublevelMeasureRequest(
-            polynomial=self.source_polynomial,
-            threshold=self.threshold,
-            lower=self.lower,
-            upper=self.upper,
-        )
-        from jacobian.math.polynomials.real_algebra._strict_sublevel import (
-            compute_strict_sublevel_payload,
-        )
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: StrictSublevelMeasureRequest,
+        *,
+        components: tuple[StrictSublevelComponent, ...],
+        measure: SourceBoundAlgebraicMeasure,
+    ) -> Self:
+        """Build a result after the admitted exact kernel established it.
 
-        expected = compute_strict_sublevel_payload(request)
-        if self.components != expected.components:
-            raise _validation_error(
-                "component_reconstruction",
-                "strict sublevel components must be the complete source-derived cells",
-            )
-        if self.measure != expected.measure:
-            raise _validation_error(
-                "measure_reconstruction",
-                "strict sublevel measure must reconstruct from the returned components",
-            )
-        return self
+        Public parsing checks the bounded structural representation only.
+        Re-running root isolation to authenticate an independently supplied
+        claim belongs to the owner-private verifier, not result validation.
+        """
+
+        return cls.model_construct(
+            source_polynomial=request.polynomial,
+            threshold=request.threshold,
+            lower=request.lower,
+            upper=request.upper,
+            components=components,
+            measure=measure,
+        )
 
 
 __all__ = [

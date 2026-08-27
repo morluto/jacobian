@@ -223,10 +223,7 @@ class ElementCatenaryDegreeResult(StrictModel):
     @model_validator(mode="after")
     def require_structural_degree(self) -> Self:
         generators = _require_canonical_minimal_axis(self.minimal_generators)
-        value = _require_bounded_value(generators, self.value)
-        _require_materializable_factorizations(
-            generators, value, MAX_GRAPH_FACTORIZATIONS
-        )
+        _require_bounded_value(generators, self.value)
         return self
 
 

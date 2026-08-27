@@ -209,7 +209,7 @@ def _psd_order_kernel(
             vector=tuple(CanonicalRational.from_fraction(value) for value in direction),
             quadratic_value=CanonicalRational.from_fraction(quadratic_value),
         )
-    return PsdOrderResult(
+    return PsdOrderResult._from_kernel(
         left=left,
         right=right,
         difference=difference,

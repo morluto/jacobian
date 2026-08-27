@@ -1,4 +1,4 @@
-"""Orientation resolution shared by multigraph execution and replay."""
+"""Orientation resolution shared by multigraph flow execution helpers."""
 
 from typing import Protocol
 

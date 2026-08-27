@@ -687,7 +687,7 @@ class CanonicalImplicationBasisResult(StrictModel):
         return None
 
 
-def verify_canonical_implication_basis_result(
+def _verify_canonical_implication_basis_result(
     result: CanonicalImplicationBasisResult,
 ) -> None:
     """Independently replay a supplied complete basis within the admitted bound."""
@@ -704,5 +704,4 @@ __all__ = [
     "DGBasisClosureRow",
     "DGBasisWork",
     "PseudoIntent",
-    "verify_canonical_implication_basis_result",
 ]

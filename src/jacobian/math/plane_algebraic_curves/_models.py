@@ -7,12 +7,9 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.math.plane_algebraic_curves._conic import (
-    ConicParametrizationData,
-    validate_rational_conic_request,
-    validate_rational_conic_result_identities,
-)
+from jacobian.math.plane_algebraic_curves._conic import validate_rational_conic_request
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
 from jacobian.math.polynomials.maps._models import VariablePoint
 from jacobian.math.polynomials.values import (
@@ -20,6 +17,7 @@ from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomial,
     require_polynomial_budget,
+    require_sparse_polynomial_budget,
 )
 
 MAX_VARS = 3
@@ -244,24 +242,109 @@ class RationalConicParametrizationResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def replay_defining_identities(self) -> Self:
+    def require_structural_contract(self) -> Self:
+        """Check only bounded wire-shape relations between result fields.
+
+        The admitted line-pencil kernel establishes the parametrization
+        identities. Parsing a serialized result must not reconstruct and replay
+        that computation; callers that deliberately receive an independently
+        supplied claim use the owner-private verifier instead.
+        """
         try:
-            validate_rational_conic_request(
-                self.source_polynomial, self.exceptional_point, self.parameter
-            )
-            validate_rational_conic_result_identities(
+            require_polynomial_budget(
                 self.source_polynomial,
-                self.exceptional_point,
-                self.parameter,
-                ConicParametrizationData(
-                    coordinates=self.coordinates,
-                    inverse_parameter=self.inverse_parameter,
-                    finite_parameter_denominator=self.finite_parameter_denominator,
-                ),
+                maximum_terms=6,
+                maximum_exponent=2,
+                maximum_coefficient_digits=_MAX_COEFFICIENT_DIGITS,
+                label="source conic",
             )
+            require_polynomial_budget(
+                self.finite_parameter_denominator,
+                maximum_terms=3,
+                maximum_exponent=2,
+                maximum_coefficient_digits=_MAX_COEFFICIENT_DIGITS,
+                label="finite-parameter denominator",
+            )
+            for label, function in (
+                ("first parametrization coordinate", self.coordinates[0]),
+                ("second parametrization coordinate", self.coordinates[1]),
+                ("inverse parameter", self.inverse_parameter),
+            ):
+                require_sparse_polynomial_budget(
+                    function.numerator,
+                    maximum_terms=3,
+                    maximum_exponent=2,
+                    maximum_coefficient_digits=_MAX_COEFFICIENT_DIGITS,
+                    label=f"{label} numerator",
+                )
+                require_sparse_polynomial_budget(
+                    function.denominator,
+                    maximum_terms=3,
+                    maximum_exponent=2,
+                    maximum_coefficient_digits=_MAX_COEFFICIENT_DIGITS,
+                    label=f"{label} denominator",
+                )
+            for coordinate in self.exceptional_point.values:
+                require_bounded_rational(
+                    coordinate,
+                    max_digits=_MAX_COEFFICIENT_DIGITS,
+                    label="exceptional point coordinate",
+                )
         except ValueError as exc:
             raise _validation_error_from(exc) from exc
+        if len(self.source_polynomial.variables) != 2:
+            raise _validation_error(
+                "conic_axis_invalid",
+                "rational conic parametrization requires exactly two variables",
+            )
+        if self.exceptional_point.variables != self.source_polynomial.variables:
+            raise _validation_error(
+                "point_axis_mismatch",
+                "conic point must use the polynomial's complete ordered axis",
+            )
+        if self.parameter in self.source_polynomial.variables:
+            raise _validation_error(
+                "parameter_axis_collision",
+                "parameter must be distinct from both conic variables",
+            )
+        if any(
+            coordinate.variables != (self.parameter,) for coordinate in self.coordinates
+        ):
+            raise _validation_error(
+                "coordinate_axis_invalid",
+                "parametrization coordinates must use exactly the parameter axis",
+            )
+        if self.inverse_parameter.variables != self.source_polynomial.variables:
+            raise _validation_error(
+                "inverse_axis_invalid",
+                "inverse parameter must use the source polynomial's ordered axis",
+            )
+        if self.finite_parameter_denominator.variables != (self.parameter,):
+            raise _validation_error(
+                "finite_parameter_axis_invalid",
+                "finite-parameter denominator must use exactly the parameter axis",
+            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: RationalConicParametrizationRequest,
+        *,
+        coordinates: tuple[RationalFunction, RationalFunction],
+        inverse_parameter: RationalFunction,
+        finite_parameter_denominator: RationalPolynomial,
+    ) -> Self:
+        """Build one result after the admitted line-pencil kernel established it."""
+
+        return cls.model_construct(
+            source_polynomial=request.polynomial,
+            exceptional_point=request.point,
+            parameter=request.parameter,
+            coordinates=coordinates,
+            inverse_parameter=inverse_parameter,
+            finite_parameter_denominator=finite_parameter_denominator,
+        )
 
 
 __all__ = [

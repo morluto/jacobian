@@ -128,8 +128,8 @@ def hochschild_homology_groups(
 ) -> tuple[HochschildHomologyGroup, ...]:
     """Pure Hochschild-homology core returning the exact groups for one algebra.
 
-    Kept free of result-model construction so result validation can replay
-    the bounded rank computation without recursion.
+    Kept free of result-model construction so it remains a reusable exact
+    rank computation.
     """
     n = algebra.dimension
 

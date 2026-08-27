@@ -97,13 +97,11 @@ def compute_cycle_multiplier(
     request: CycleMultiplierRequest,
 ) -> CycleMultiplierResult:
     points = tuple(value.as_fraction() for value in request.cycle)
-    return CycleMultiplierResult(
-        source_coefficients=request.coefficients,
+    return CycleMultiplierResult._from_kernel(
+        request,
         multiplier=CanonicalRational.from_fraction(
             cycle_multiplier(_polynomial(request), points)
         ),
-        cycle=request.cycle,
-        period=len(points),
     )
 
 
@@ -112,12 +110,49 @@ def compute_finite_field_map(request: FiniteFieldMapRequest) -> FiniteFieldMapRe
         tuple(int(value) for value in request.coefficients),
         request.prime,
     )
-    return FiniteFieldMapResult(
-        prime=request.prime,
-        coefficients=request.coefficients,
+    return FiniteFieldMapResult._from_kernel(
+        request,
         edges=graph.edges,
         cycles=graph.cycles,
         tail_lengths=graph.tail_lengths,
+    )
+
+
+def verify_cycle_multiplier_result(result: CycleMultiplierResult) -> bool:
+    """Check an independently supplied cycle-multiplier claim."""
+
+    try:
+        request = CycleMultiplierRequest(
+            coefficients=result.source_coefficients,
+            cycle=result.cycle,
+        )
+    except ValueError:
+        return False
+    expected = CanonicalRational.from_fraction(
+        cycle_multiplier(
+            _polynomial(request), tuple(value.as_fraction() for value in request.cycle)
+        )
+    )
+    return result.period == len(request.cycle) and result.multiplier == expected
+
+
+def verify_finite_field_map_result(result: FiniteFieldMapResult) -> bool:
+    """Check an independently supplied complete finite-field graph claim."""
+
+    try:
+        request = FiniteFieldMapRequest(
+            prime=result.prime,
+            coefficients=result.coefficients,
+        )
+    except ValueError:
+        return False
+    expected = finite_field_functional_graph(
+        tuple(int(value) for value in request.coefficients), request.prime
+    )
+    return (
+        result.edges == expected.edges
+        and result.cycles == expected.cycles
+        and result.tail_lengths == expected.tail_lengths
     )
 
 

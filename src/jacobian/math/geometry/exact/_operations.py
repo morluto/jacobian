@@ -142,11 +142,8 @@ def compute_pinned_line_distance_profile(
     multiplicities = tuple(
         (CanonicalRational.from_fraction(d), count) for d, count in sorted(mult.items())
     )
-    return PinnedLineDistanceResult(
-        configuration=config,
-        anchor=request.anchor,
-        dimension=2,
-        point_count=n,
+    return PinnedLineDistanceResult._from_kernel(
+        request,
         lines=entries,
         distance_multiplicities=multiplicities,
     )

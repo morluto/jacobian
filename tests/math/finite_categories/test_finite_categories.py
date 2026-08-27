@@ -18,7 +18,10 @@ from jacobian.math.finite_categories._operations import (
     compute_opposite_category,
     verify_category_profile_claim,
 )
-from jacobian.math.finite_categories._product import _product_plan, verify_product_claim
+from jacobian.math.finite_categories._product import (
+    _product_plan,
+    _verify_product_claim,
+)
 
 CATEGORY = {
     "objects": ["A", "B"],
@@ -393,7 +396,7 @@ class TestProduct:
             morphism_projections=expected.morphism_projections,
         )
 
-        assert not verify_product_claim(claim)
+        assert not _verify_product_claim(claim)
 
     def test_explicit_verifier_rejects_forged_pair_projection(self) -> None:
         result = product(
@@ -403,7 +406,7 @@ class TestProduct:
         payload = result.model_dump(mode="json")
         payload["object_projections"][0]["left"] = "not_T"
 
-        assert not verify_product_claim(FiniteCategoryProduct.model_validate(payload))
+        assert not _verify_product_claim(FiniteCategoryProduct.model_validate(payload))
 
     def test_object_product_count_is_accepted_at_and_rejected_above_bound(
         self,

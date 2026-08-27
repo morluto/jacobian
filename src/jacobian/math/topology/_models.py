@@ -23,7 +23,6 @@ from jacobian._digest import Sha256Digest
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import canonicalize_json
 from jacobian.math.chain_complexes.values import ChainComplexValue
-from jacobian.math.topology._barycentric import barycentric_subdivision
 
 MAX_TOPOLOGY_VERTICES = 64
 MAX_TOPOLOGY_FACETS = 128
@@ -134,45 +133,6 @@ def _all_faces(facets: tuple[Simplex, ...]) -> set[tuple[str, ...]]:
             for subset in combinations(facet, r):
                 faces.add(tuple(sorted(subset)))
     return faces
-
-
-def _require_subdivision_replay(
-    *,
-    source_complex: SimplicialComplexRequest,
-    original_vertices: tuple[str, ...],
-    subdivision_vertices: tuple[str, ...],
-    subdivision_vertex_faces: tuple[tuple[str, ...], ...],
-    num_new_vertices: int,
-    subdivision_facets: tuple[tuple[str, ...], ...],
-) -> None:
-    """Replay the deterministic subdivision against the retained source so
-    every derived field — including the indexed vertex-to-face map — must
-    equal what the kernel produces for this exact labeling.  In particular,
-    swapping entries of ``subdivision_vertex_faces`` while keeping the
-    subdivision complex unchanged cannot validate."""
-
-    faces = sorted(_all_faces(source_complex.facets), key=lambda f: (len(f), f))
-    expected_labels = [f"bv{i}" for i in range(len(faces))]
-    if (
-        list(subdivision_vertices) != expected_labels
-        or list(subdivision_vertex_faces) != faces
-        or num_new_vertices != len(faces)
-    ):
-        raise _validation_error(
-            "topology.require_subdivision_replay_1",
-            "subdivision_vertices and subdivision_vertex_faces must be "
-            "the canonical indexed bijection onto the source complex's "
-            "non-empty faces",
-        )
-    expected = barycentric_subdivision(faces).facets
-    if (
-        tuple(subdivision_facets) != expected
-        or original_vertices != source_complex.vertices
-    ):
-        raise _validation_error(
-            "topology.require_subdivision_replay_2",
-            "subdivision facets do not match the retained source complex",
-        )
 
 
 def _require_request_complex(
@@ -737,28 +697,22 @@ class ChainComplexResult(TopologyExactResult):
                 "topology.require_coherent_chain_contract_4",
                 "boundary-square ledger must cover every adjacent pair",
             )
-        # The canonical value is part of the public result boundary: an
-        # unreduced GF(p) producer result must carry it exactly, and no
-        # other ring or convention admits one.
-        from jacobian.math.topology._chain_conversion import (
-            canonical_chain_complex_value_from_parts,
-        )
-
-        expected_value = canonical_chain_complex_value_from_parts(
-            self.coefficient_ring,
-            self.convention,
-            self.prime,
-            self.simplex_bases,
-            self.boundary_matrices,
-        )
-        if self.canonical_value != expected_value:
+        if self.canonical_value is not None and not (
+            self.coefficient_ring is ChainCoefficientRing.PRIME_FIELD
+            and self.convention is HomologyConvention.UNREDUCED
+        ):
             raise _validation_error(
                 "topology.require_coherent_chain_contract_5",
-                "canonical chain-complex value must be the exact "
-                "unreduced prime-field conversion of the retained "
-                "boundary data",
+                "canonical chain-complex value is only defined for unreduced "
+                "prime-field chains",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build after the chain kernel established all derived fields."""
+
+        return cls(**values)
 
 
 __all__ = [
@@ -821,19 +775,11 @@ class BarycentricSubdivisionResult(TopologyExactResult):
     subdivision_vertex_faces: tuple[tuple[str, ...], ...] = Field(default=())
 
     @model_validator(mode="after")
-    def require_subdivision_canonical(self) -> Self:
-        # Replay must satisfy the subdivision request's work admission, so a
-        # serialized result cannot bypass the bounded source domain (a source
-        # whose exact subdivision exceeds the result contract is impossible
-        # to obtain from the operation).
-        BarycentricSubdivisionRequest(complex=self.complex)
-        # The advertised original dimension must equal the dimension derived
-        # from the retained source complex's facets.
-        source_dimension = max(len(facet) for facet in self.complex.facets) - 1
-        if self.original_dimension != source_dimension:
+    def require_structural_subdivision(self) -> Self:
+        if self.num_new_vertices != len(self.subdivision_vertices):
             raise _validation_error(
                 "topology.require_subdivision_canonical_1",
-                "original_dimension must match the retained source complex",
+                "num_new_vertices must match subdivision_vertices",
             )
         if not self.subdivision_facets:
             if self.subdivision_complex is not None:
@@ -873,15 +819,13 @@ class BarycentricSubdivisionResult(TopologyExactResult):
                         "topology.require_subdivision_canonical_7",
                         f"invalid subdivision vertex label: {label}",
                     )
-        _require_subdivision_replay(
-            source_complex=self.complex,
-            original_vertices=self.original_vertices,
-            subdivision_vertices=self.subdivision_vertices,
-            subdivision_vertex_faces=self.subdivision_vertex_faces,
-            num_new_vertices=self.num_new_vertices,
-            subdivision_facets=self.subdivision_facets,
-        )
         return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build after the admitted subdivision kernel established the result."""
+
+        return cls(**values)
 
 
 class ShellingCheckRequest(StrictModel):
@@ -916,41 +860,14 @@ class ShellingCheckResult(TopologyExactResult):
     failure_reason: str | None = None
 
     @model_validator(mode="after")
-    def require_shelling_binding(self) -> Self:
-        # Apply the request model's permutation requirement before replay: a
-        # partial or duplicated order visits only its own facets and must not
-        # authenticate a decision about facets it omits.
-        if sorted(self.facet_order) != list(range(len(self.complex.facets))):
-            raise _validation_error(
-                "topology.require_shelling_binding_1",
-                "facet_order must be a permutation of facet indices",
-            )
-        # Replay the shelling condition over the retained complex and order so
-        # an authored decision cannot validate independently of its source.
-        from jacobian.math.topology._shelling import evaluate_shelling
-
-        expected_is_shelling, expected_failed_at, expected_reason = evaluate_shelling(
-            self.complex.facets, self.facet_order
-        )
-        if self.is_shelling != expected_is_shelling:
-            raise _validation_error(
-                "topology.require_shelling_binding_2",
-                f"is_shelling {self.is_shelling} does not match replayed "
-                f"decision {expected_is_shelling}",
-            )
-        if self.failed_at != expected_failed_at:
-            raise _validation_error(
-                "topology.require_shelling_binding_3",
-                f"failed_at {self.failed_at} does not match replayed "
-                f"{expected_failed_at}",
-            )
-        if self.failure_reason != expected_reason:
-            raise _validation_error(
-                "topology.require_shelling_binding_4",
-                f"failure_reason {self.failure_reason!r} does not match "
-                f"replayed {expected_reason!r}",
-            )
+    def require_structural_shelling(self) -> Self:
         return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build after the admitted shelling kernel established the decision."""
+
+        return cls(**values)
 
 
 __all__.extend(

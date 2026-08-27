@@ -23,7 +23,7 @@ from jacobian.math.formal_concept_analysis.values import (
     MAX_IMPLICATION_MEMBERSHIPS,
     MAX_IMPLICATIONS,
     ImplicationClosureResult,
-    verify_implication_closure_result,
+    _verify_implication_closure_result,
 )
 
 
@@ -60,7 +60,7 @@ def _brute_force_closure(
 
 
 def _verify_payload(payload: dict[str, object]) -> None:
-    verify_implication_closure_result(ImplicationClosureResult.model_validate(payload))
+    _verify_implication_closure_result(ImplicationClosureResult.model_validate(payload))
 
 
 def test_multi_round_closure_has_replayable_first_lineage() -> None:

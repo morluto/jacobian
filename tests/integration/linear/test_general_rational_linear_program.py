@@ -14,6 +14,7 @@ from tests.support.rationals import rational_payload as q
 from jacobian.math.optimization._general_models import (
     GeneralRationalLinearProgramRequest,
     GeneralRationalLinearProgramResult,
+    _verify_general_rational_linear_program_result,
 )
 from jacobian.math.optimization._tools import TOOLS
 
@@ -72,6 +73,11 @@ def _run(program: dict[str, object]) -> GeneralRationalLinearProgramResult:
 def _fractions(values: object) -> tuple[Fraction, ...]:
     assert values is not None
     return tuple(value.as_fraction() for value in values)
+
+
+def _assert_rejected_by_verifier(result: GeneralRationalLinearProgramResult) -> None:
+    with pytest.raises(ValueError):
+        _verify_general_rational_linear_program_result(result)
 
 
 def test_general_lp_replays_le_ge_and_equality_in_original_coordinates() -> None:
@@ -198,13 +204,14 @@ def test_general_lp_replays_source_farkas_and_free_unbounded_ray() -> None:
     assert _fractions(infeasible.farkas_lower_bounds) == (Fraction(-1),)
     forged_farkas = deepcopy(infeasible.model_dump(mode="json"))
     forged_farkas["farkas_constraints"] = [q(0)]
-    with linear_validation_error():
+    _assert_rejected_by_verifier(
         GeneralRationalLinearProgramResult.model_validate(forged_farkas)
+    )
     assert unbounded.status == "UNBOUNDED"
     assert _fractions(unbounded.recession_direction) == (Fraction(1),)
 
 
-def test_general_lp_rejects_invalid_bound_order_and_replays_mutation_against_source() -> (
+def test_general_lp_rejects_invalid_bound_order_and_verifies_mutation_on_demand() -> (
     None
 ):
     invalid = _program(
@@ -230,8 +237,9 @@ def test_general_lp_rejects_invalid_bound_order_and_replays_mutation_against_sou
     assert isinstance(forged["program"], dict)
     assert isinstance(forged["program"]["constraints"], list)
     forged["program"]["constraints"][0]["rhs"] = q(2)
-    with linear_validation_error():
+    _assert_rejected_by_verifier(
         GeneralRationalLinearProgramResult.model_validate(forged)
+    )
     with linear_validation_error():
         GeneralRationalLinearProgramResult.model_validate(
             {
@@ -350,7 +358,9 @@ def test_general_lp_returns_offset_shifted_optima_within_the_mapped_height_bound
     assert _fractions(result.stationarity_residuals) == (Fraction(),)
 
 
-def test_general_lp_rejects_source_values_taller_than_the_mapped_result_bound() -> None:
+def test_general_lp_verifier_rejects_values_taller_than_the_mapped_result_bound() -> (
+    None
+):
     result = _run(
         _program(
             variables=[_variable("x", q(10000000))],
@@ -361,8 +371,9 @@ def test_general_lp_rejects_source_values_taller_than_the_mapped_result_bound() 
     )
     forged = deepcopy(result.model_dump(mode="json"))
     forged["primal_candidate"] = [{"num": "9" * 400, "den": "1"}]
-    with linear_validation_error():
+    _assert_rejected_by_verifier(
         GeneralRationalLinearProgramResult.model_validate(forged)
+    )
 
 
 def test_general_lp_admits_the_full_one_sided_variable_envelope() -> None:

@@ -26,7 +26,7 @@ def compute_kronecker_product(
 def compute_partial_trace(
     request: SubsystemPartialTraceRequest,
 ) -> SubsystemPartialTraceResult:
-    return SubsystemPartialTraceResult(
+    return SubsystemPartialTraceResult._from_kernel(
         source_matrix=request.matrix,
         traced_factor_labels=request.traced_factor_labels,
         reduced_matrix=_partial_trace_kernel(
@@ -38,6 +38,43 @@ def compute_partial_trace(
 
 def decide_psd_order(request: PsdOrderRequest) -> PsdOrderResult:
     return _psd_order_kernel(request.left, request.right)
+
+
+def _verify_partial_trace_result(result: SubsystemPartialTraceResult) -> bool:
+    """Verify one independently supplied trace claim in the admitted envelope."""
+
+    try:
+        request = SubsystemPartialTraceRequest(
+            matrix=result.source_matrix,
+            traced_factor_labels=result.traced_factor_labels,
+        )
+    except ValueError:
+        return False
+    return (
+        _partial_trace_kernel(request.matrix, request.traced_factor_labels)
+        == result.reduced_matrix
+    )
+
+
+def _verify_psd_order_result(result: PsdOrderResult) -> bool:
+    """Verify one independently supplied PSD-order claim in the admitted envelope."""
+
+    try:
+        request = PsdOrderRequest(left=result.left, right=result.right)
+    except ValueError:
+        return False
+    expected = _psd_order_kernel(request.left, request.right)
+    return (
+        result.difference,
+        result.inertia,
+        result.is_less_or_equal,
+        result.negative_witness,
+    ) == (
+        expected.difference,
+        expected.inertia,
+        expected.is_less_or_equal,
+        expected.negative_witness,
+    )
 
 
 __all__ = [

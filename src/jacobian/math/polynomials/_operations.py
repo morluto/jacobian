@@ -135,7 +135,7 @@ def polynomial_square_free_decomposition(
         )
         for factor, multiplicity in sorted(canonical_factors, key=lambda item: item[1])
     )
-    return PolynomialSquareFreeDecompositionResult(
+    return PolynomialSquareFreeDecompositionResult._from_kernel(
         polynomial=request.polynomial,
         coefficient=rational_from_sympy(coefficient),
         factors=factors,
@@ -176,11 +176,45 @@ def polynomial_factorization(
             key=_irreducible_factor_sort_key,
         )
     )
-    return PolynomialFactorizationResult(
+    return PolynomialFactorizationResult._from_kernel(
         polynomial=request.polynomial,
         coefficient=rational_from_sympy(coefficient),
         factors=factors,
         reconstructed=_result_polynomial(reconstructed, request.polynomial.variables),
+    )
+
+
+def _verify_square_free_decomposition_result(
+    result: PolynomialSquareFreeDecompositionResult,
+) -> bool:
+    """Deliberately recompute one independently supplied square-free claim."""
+
+    try:
+        expected = polynomial_square_free_decomposition(
+            PolynomialSquareFreeRequest(polynomial=result.polynomial)
+        )
+    except (TypeError, ValueError):
+        return False
+    return (
+        result.coefficient == expected.coefficient
+        and result.factors == expected.factors
+        and result.reconstructed == expected.reconstructed
+    )
+
+
+def _verify_factorization_result(result: PolynomialFactorizationResult) -> bool:
+    """Deliberately recompute one independently supplied factorization claim."""
+
+    try:
+        expected = polynomial_factorization(
+            PolynomialFactorRequest(polynomial=result.polynomial)
+        )
+    except (TypeError, ValueError):
+        return False
+    return (
+        result.coefficient == expected.coefficient
+        and result.factors == expected.factors
+        and result.reconstructed == expected.reconstructed
     )
 
 

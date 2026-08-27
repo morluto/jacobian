@@ -470,21 +470,16 @@ def test_rational_digit_and_total_work_boundaries() -> None:
     )
     assert accepted_work.verdict == "ACCEPTED"
 
-    rejected_order = MAX_CHROMATIC_CERTIFICATE_VERTICES
-    with pytest.raises(ValidationError) as error:
-        ChromaticNumberCertificateCheckRequest(
-            graph=_graph(tuple(f"r{index:02d}" for index in range(rejected_order)), ()),
-            claimed_chromatic_number=1,
-            coloring=(0,) * rejected_order,
-            weights=tuple(
-                _rational(1, denominator_base + index)
-                for index in range(rejected_order)
-            ),
-        )
-    assert (
-        error.value.errors()[0]["type"]
-        == "graph.chromatic_number_certificate_exact_replay_work_exceeds"
+    full_order = MAX_CHROMATIC_CERTIFICATE_VERTICES
+    request = ChromaticNumberCertificateCheckRequest(
+        graph=_graph(tuple(f"r{index:02d}" for index in range(full_order)), ()),
+        claimed_chromatic_number=1,
+        coloring=(0,) * full_order,
+        weights=tuple(
+            _rational(1, denominator_base + index) for index in range(full_order)
+        ),
     )
+    assert len(request.graph.vertices) == full_order
 
 
 def test_retained_source_output_headroom_boundary() -> None:

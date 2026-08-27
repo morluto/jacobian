@@ -18,6 +18,7 @@ from jacobian.math.geometry._models import (
     EuclideanConvexPolygonTriangulationResult,
     _echoed_result_envelope_chars,
     _span_term_occurrences,
+    _verify_euclidean_triangulation_claim,
 )
 
 _FLOOR_TERM_CHARS = 2 * (4 * 1 + 1) + 128
@@ -180,7 +181,7 @@ class TestEuclideanTriangulation:
         assert validated.unresolved_comparison.left_split == 2
         assert validated.unresolved_comparison.right_split == 1
 
-    def test_unresolved_result_rejects_forged_expressions(self) -> None:
+    def test_unresolved_claim_verifier_rejects_forged_expressions(self) -> None:
         scale = 10**30
         result = minimum_euclidean_weight_triangulation(
             _request(
@@ -200,8 +201,9 @@ class TestEuclideanTriangulation:
             {"num": "7", "den": "1"}
         ]
 
+        forged = EuclideanConvexPolygonTriangulationResult.model_validate(payload)
         with pytest.raises(ValidationError):
-            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+            _verify_euclidean_triangulation_claim(forged)
 
     def test_unresolved_result_rejects_an_inverted_split_order(self) -> None:
         scale = 10**30
@@ -240,7 +242,7 @@ class TestEuclideanTriangulation:
         with pytest.raises(ValidationError):
             EuclideanConvexPolygonTriangulationResult.model_validate(payload)
 
-    def test_unresolved_claim_on_a_resolvable_recurrence_is_rejected(self) -> None:
+    def test_unresolved_claim_verifier_rejects_a_resolvable_recurrence(self) -> None:
         payload = {
             "status": "COMPARISON_UNRESOLVED",
             "polygon": {
@@ -264,28 +266,32 @@ class TestEuclideanTriangulation:
             },
         }
 
+        forged = EuclideanConvexPolygonTriangulationResult.model_validate(payload)
         with pytest.raises(ValidationError):
-            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+            _verify_euclidean_triangulation_claim(forged)
 
-    def test_certified_result_rejects_a_mutated_diagonal_length(self) -> None:
+    def test_certified_claim_verifier_rejects_a_mutated_diagonal_length(self) -> None:
         result = minimum_euclidean_weight_triangulation(
             _request((_point(0, 0), _point(1, 0), _point(1, 1), _point(0, 1)))
         )
         payload = result.model_dump(mode="json")
         payload["diagonals"][0]["squared_length"] = {"num": "3", "den": "1"}
+        payload["optimum"]["squared_lengths"] = [{"num": "3", "den": "1"}]
 
+        forged = EuclideanConvexPolygonTriangulationResult.model_validate(payload)
         with pytest.raises(ValidationError):
-            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+            _verify_euclidean_triangulation_claim(forged)
 
-    def test_certified_result_rejects_a_mutated_source_polygon(self) -> None:
+    def test_certified_claim_verifier_rejects_a_mutated_source_polygon(self) -> None:
         result = minimum_euclidean_weight_triangulation(
             _request((_point(0, 0), _point(1, 0), _point(1, 1), _point(0, 1)))
         )
         payload = result.model_dump(mode="json")
         payload["polygon"]["points"][3]["y"] = {"num": "2", "den": "1"}
 
+        forged = EuclideanConvexPolygonTriangulationResult.model_validate(payload)
         with pytest.raises(ValidationError):
-            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+            _verify_euclidean_triangulation_claim(forged)
 
     def test_unresolved_root_stops_before_a_cheaper_later_pivot(self) -> None:
         scale = 10**30
@@ -418,10 +424,11 @@ class TestEuclideanTriangulation:
             "optimum": expression(optimum[0, 4]),
         }
 
+        forged = EuclideanConvexPolygonTriangulationResult.model_validate(payload)
         with pytest.raises(ValidationError):
-            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+            _verify_euclidean_triangulation_claim(forged)
 
-    def test_certified_result_rejects_claiming_a_later_equal_pivot(self) -> None:
+    def test_certified_claim_verifier_rejects_a_later_equal_pivot(self) -> None:
         # Both root pivots cost exactly sqrt(2); execution canonically keeps
         # the earlier one, so a certificate claiming the later pivot fails.
         result = minimum_euclidean_weight_triangulation(
@@ -437,8 +444,9 @@ class TestEuclideanTriangulation:
             {"vertices": [0, 2, 3]},
         ]
 
+        forged = EuclideanConvexPolygonTriangulationResult.model_validate(payload)
         with pytest.raises(ValidationError):
-            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+            _verify_euclidean_triangulation_claim(forged)
 
     def test_rejects_a_nonconvex_polygon_before_arb(self) -> None:
         with pytest.raises(ValidationError):

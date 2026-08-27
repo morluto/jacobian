@@ -34,7 +34,6 @@ from jacobian.math.additive_combinatorics._operations import (
 from jacobian.math.additive_combinatorics._subset_sum_residue import (
     MAX_RESIDUE_PROFILE_DP_CELLS,
     MAX_RESIDUE_PROFILE_MODULUS,
-    MAX_RESIDUE_PROFILE_TOTAL_DP_CELLS,
     MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS,
     SubsetSumResidueProfileRequest,
     SubsetSumResidueProfileResult,
@@ -130,8 +129,7 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             "For a bounded indexed integer sequence and one integer target, "
             "return the canonical attaining index subset or establish exact "
             "non-attainment after exhausting the admitted reachable-sum state space. "
-            "The complete call charges admission, computation, and both "
-            "source-binding replays, performing at most "
+            "The complete call charges admission and computation, performing at most "
             f"{MAX_SUBSET_SUM_TOTAL_TRANSITIONS:,} state transitions."
         ),
         SubsetSumTargetRequest,
@@ -360,10 +358,9 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             "return the exact number of permitted index subsets in every residue "
             "class of Z/mZ. Repeated values and zeros remain distinct positions; "
             "the empty-subset convention is explicit. Optional witnesses are "
-            "canonical by minimizing sum(2**i for i in I). Computation and "
-            "source-binding replay visit at most "
-            f"{MAX_RESIDUE_PROFILE_TOTAL_DP_CELLS:,} item-residue cells "
-            f"({MAX_RESIDUE_PROFILE_DP_CELLS:,} per pass), with modulus at most "
+            "canonical by minimizing sum(2**i for i in I). The dense recurrence "
+            f"visits at most {MAX_RESIDUE_PROFILE_DP_CELLS:,} item-residue cells, "
+            "with modulus at most "
             f"{MAX_RESIDUE_PROFILE_MODULUS:,} and at most "
             f"{MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS:,} witness index slots."
         ),

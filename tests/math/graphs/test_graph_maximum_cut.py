@@ -17,8 +17,8 @@ from jacobian.math.graphs.optimization._maximum_cut import (
     MAXIMUM_CUT_RESULT_BYTES,
     GraphMaximumCutRequest,
     GraphMaximumCutResult,
+    _verify_maximum_cut_result,
     compute_maximum_cut,
-    verify_maximum_cut_result,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -283,7 +283,7 @@ def test_feasible_suboptimal_cut_with_forged_exact_bounds_fails_replay() -> None
     forged["lower_bound"] = 2
     forged["upper_bound"] = 2
 
-    assert not verify_maximum_cut_result(GraphMaximumCutResult.model_validate(forged))
+    assert not _verify_maximum_cut_result(GraphMaximumCutResult.model_validate(forged))
 
 
 def test_result_deserialization_never_replays_the_exhaustive_kernel(

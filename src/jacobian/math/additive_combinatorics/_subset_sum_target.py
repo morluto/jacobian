@@ -95,8 +95,7 @@ def _raw_source_item_count(source: object) -> int | None:
             "_raw_source_item_count",
             "subset-sum request exceeds the "
             f"{MAX_SUBSET_SUM_TOTAL_TRANSITIONS:,}-transition complete-call "
-            "bound across admission, computation, and both source-binding "
-            "replays",
+            "bound across admission and computation",
         )
 
     source_wire_bound = 64
@@ -131,14 +130,14 @@ def _require_admitted_work(
     targets with no expansion, and the kernel returns the same decision
     without building any state.
 
-    Otherwise admission replays the same reachable-sum growth the kernel
+    Otherwise admission simulates the same reachable-sum growth the kernel
     performs and stops at the first source prefix whose canonical witness
     resolves the target. A resolved request is bounded only by the work
     through that prefix, because every witness inside a resolving prefix
     carries a strictly smaller incidence mask than any witness of the later
     expansion; the resolving scan itself is charged before its prefix is
     accepted, so the charged work includes every scanned state. A request the
-    prefix replay never resolves must fit the exhaustive reachable-state and
+    prefix simulation never resolves must fit the exhaustive reachable-state and
     transition bounds across the whole source before execution.
 
     The public path performs this scan once for request admission and runs the
@@ -170,8 +169,7 @@ def _require_admitted_work(
                 "_require_admitted_work",
                 "subset-sum request exceeds the "
                 f"{MAX_SUBSET_SUM_TOTAL_TRANSITIONS:,}-transition complete-call "
-                "bound across admission, computation, and both source-binding "
-                "replays",
+                "bound across admission and computation",
             )
         if any(subtotal + value == target for subtotal in states):
             return

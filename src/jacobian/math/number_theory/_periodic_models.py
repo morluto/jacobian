@@ -55,9 +55,7 @@ _PERIODIC_REQUEST_DESCRIPTION = (
     "uses a full-subset shortcut; a period lift when L <= 1,000,000 and "
     "L + W <= 2,000,000; a sparse lift when W <= 65,536; or generalized-CRT "
     "inclusion-exclusion with at most 65,535 retained states and 100,000 merges "
-    "per pass. Every call performs one producer pass and one source-bound "
-    "result replay, so whole-call lift and merge work is at most twice the "
-    "per-pass limit."
+    "per pass. Every call performs one producer pass within that envelope."
 )
 
 
@@ -377,32 +375,6 @@ class PeriodicCongruenceUnionProfileRequest(PeriodicCongruenceUnionRequest):
         return self
 
 
-def _require_measure_binding(
-    common_period: str,
-    occupied_count_text: str,
-    density: CanonicalRational,
-    *,
-    period: int,
-    occupied_count: int,
-) -> None:
-    if common_period != format_canonical_integer(period):
-        raise _validation_error(
-            "common_period_must_be_the_lcm_of_the_source_moduli",
-            "common period must be the lcm of the source moduli",
-        )
-    if occupied_count_text != format_canonical_integer(occupied_count):
-        raise _validation_error(
-            "occupied_count_does_not_match_the_normalized_source",
-            "occupied count does not match the normalized source",
-        )
-    expected_density = CanonicalRational.from_fraction(Fraction(occupied_count, period))
-    if density != expected_density:
-        raise _validation_error(
-            "density_must_equal_occupied_count_common_period",
-            "density must equal occupied_count/common_period",
-        )
-
-
 class PeriodicCongruenceUnionMeasureResult(StrictModel):
     """Exact occupied count and density, bound to the normalized union source."""
 
@@ -418,22 +390,38 @@ class PeriodicCongruenceUnionMeasureResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_measure_to_source(self) -> Self:
-        from jacobian.math.number_theory._periodic_kernel import (
-            common_period,
-            measure_periodic_union,
-        )
-
-        period = common_period(self.source)
-        occupied_count = measure_periodic_union(self.source)
-        _require_measure_binding(
-            self.common_period,
-            self.occupied_count,
-            self.density,
-            period=period,
-            occupied_count=occupied_count,
-        )
+    def require_structural_measure(self) -> Self:
+        period = parse_canonical_integer(self.common_period)
+        occupied_count = parse_canonical_integer(self.occupied_count)
+        if occupied_count > period:
+            raise _validation_error(
+                "occupied_count_exceeds_common_period",
+                "occupied count must not exceed the common period",
+            )
+        if self.density != CanonicalRational.from_fraction(
+            Fraction(occupied_count, period)
+        ):
+            raise _validation_error(
+                "density_must_equal_occupied_count_common_period",
+                "density must equal occupied_count/common_period",
+            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: PeriodicCongruenceUnionSource,
+        common_period: str,
+        occupied_count: str,
+        density: CanonicalRational,
+    ) -> Self:
+        return cls.model_construct(
+            source=source,
+            common_period=common_period,
+            occupied_count=occupied_count,
+            density=density,
+        )
 
 
 class PeriodicCongruenceUnionProfileResult(PeriodicCongruenceUnionMeasureResult):
@@ -447,30 +435,51 @@ class PeriodicCongruenceUnionProfileResult(PeriodicCongruenceUnionMeasureResult)
     )
 
     @model_validator(mode="after")
-    def bind_measure_to_source(self) -> Self:
-        """Override measure replay with one complete profile replay."""
-
-        from jacobian.math.number_theory._periodic_kernel import (
-            common_period,
-            materialize_periodic_union,
-        )
-
-        period = common_period(self.source)
-        expected = materialize_periodic_union(self.source)
-        actual = tuple(map(parse_canonical_integer, self.occupied_residues))
-        _require_measure_binding(
-            self.common_period,
-            self.occupied_count,
-            self.density,
-            period=period,
-            occupied_count=len(expected),
-        )
-        if actual != expected:
+    def require_structural_profile(self) -> Self:
+        period = parse_canonical_integer(self.common_period)
+        occupied_count = parse_canonical_integer(self.occupied_count)
+        residues = tuple(map(parse_canonical_integer, self.occupied_residues))
+        if residues != tuple(sorted(set(residues))):
             raise _validation_error(
-                "occupied_residues_must_be_every_satisfying_residue_in_canonical_order",
-                "occupied residues must be every satisfying residue in canonical order",
+                "occupied_residues_must_be_in_canonical_order",
+                "occupied residues must be strictly increasing",
+            )
+        if any(residue >= period for residue in residues):
+            raise _validation_error(
+                "occupied_residues_must_lie_in_common_period",
+                "occupied residues must lie in [0, common_period)",
+            )
+        if len(residues) != occupied_count:
+            raise _validation_error(
+                "occupied_count_must_match_residue_count",
+                "occupied count must equal the number of materialized residues",
+            )
+        if self.density != CanonicalRational.from_fraction(
+            Fraction(occupied_count, period)
+        ):
+            raise _validation_error(
+                "density_must_equal_occupied_count_common_period",
+                "density must equal occupied_count/common_period",
             )
         return self
+
+    @classmethod
+    def _from_profile_kernel(
+        cls,
+        *,
+        source: PeriodicCongruenceUnionSource,
+        common_period: str,
+        occupied_count: str,
+        density: CanonicalRational,
+        occupied_residues: tuple[str, ...],
+    ) -> Self:
+        return cls.model_construct(
+            source=source,
+            common_period=common_period,
+            occupied_count=occupied_count,
+            density=density,
+            occupied_residues=occupied_residues,
+        )
 
 
 __all__ = [

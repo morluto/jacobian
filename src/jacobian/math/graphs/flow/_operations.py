@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Any
 
 import networkx as nx
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
@@ -152,9 +153,8 @@ def compute_min_cost_flow(request: MinCostFlowRequest) -> MinCostFlowResult:
     try:
         flow_cost_int, flow_dict = nx.network_simplex(g)
     except (nx.NetworkXUnfeasible, nx.NetworkXError):
-        return MinCostFlowResult(
-            graph=request.graph,
-            demands=request.demands,
+        return MinCostFlowResult._from_kernel(
+            request,
             total_cost=_rational(0),
             feasible=False,
             flow_edges=(),
@@ -175,10 +175,19 @@ def compute_min_cost_flow(request: MinCostFlowRequest) -> MinCostFlowResult:
     # over the returned source-unit flows, so the exact public objective
     # divides it by both scales.
     total_cost = Fraction(int(flow_cost_int), flow_scale * cost_scale)
-    return MinCostFlowResult(
-        graph=request.graph,
-        demands=request.demands,
+    return MinCostFlowResult._from_kernel(
+        request,
         total_cost=_rational(total_cost),
         feasible=True,
         flow_edges=tuple(flow_edges),
     )
+
+
+def _verify_min_cost_flow_result(result: MinCostFlowResult) -> bool:
+    """Deliberately recompute one independently supplied min-cost-flow claim."""
+
+    try:
+        request = MinCostFlowRequest(graph=result.graph, demands=result.demands)
+    except ValidationError:
+        return False
+    return compute_min_cost_flow(request) == result

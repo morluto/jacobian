@@ -74,7 +74,7 @@ class PseudomanifoldRequest(StrictModel):
 
 
 class PseudomanifoldResult(TopologyExactResult):
-    """Pseudomanifold decision result bound to its source complex."""
+    """Pseudomanifold decision result produced for one source complex."""
 
     complex: SimplicialComplexRequest
     is_pseudomanifold: bool
@@ -84,47 +84,26 @@ class PseudomanifoldResult(TopologyExactResult):
     obstruction: str | None = None
 
     @model_validator(mode="after")
-    def require_pseudomanifold_binding(self) -> Self:
-        expected = pseudomanifold_decision(self.complex.facets)
-        if (
-            self.dimension != expected.dimension
-            or self.num_facets != expected.num_facets
-        ):
+    def require_branch_consistency(self) -> Self:
+        if not self.is_pseudomanifold and self.is_closed:
             raise _validation_error(
-                "topology.require_pseudomanifold_binding_1",
-                "dimension/num_facets must match source complex",
-            )
-        if self.is_pseudomanifold != expected.is_pseudomanifold:
-            raise _validation_error(
-                "topology.require_pseudomanifold_binding_2",
-                f"is_pseudomanifold {self.is_pseudomanifold} does not match "
-                f"expected {expected.is_pseudomanifold}",
-            )
-        if not expected.is_pseudomanifold:
-            if self.is_closed:
-                raise _validation_error(
-                    "topology.require_pseudomanifold_binding_3",
-                    "non-pseudomanifold cannot be closed",
-                )
-            if self.obstruction != expected.obstruction:
-                raise _validation_error(
-                    "topology.require_pseudomanifold_binding_4",
-                    f"obstruction {self.obstruction!r} does not match replayed "
-                    f"{expected.obstruction!r}",
-                )
-            return self
-        if self.is_closed != expected.is_closed:
-            raise _validation_error(
-                "topology.require_pseudomanifold_binding_5",
-                "is_closed must match codim-1 incidence",
-            )
-        if self.obstruction != expected.obstruction:
-            raise _validation_error(
-                "topology.require_pseudomanifold_binding_6",
-                f"obstruction {self.obstruction!r} does not match expected "
-                f"{expected.obstruction!r}",
+                "topology.require_pseudomanifold_branch_1",
+                "non-pseudomanifold cannot be closed",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: PseudomanifoldRequest, *, decision: _PseudomanifoldDecision
+    ) -> Self:
+        return cls(
+            complex=request.complex,
+            is_pseudomanifold=decision.is_pseudomanifold,
+            is_closed=decision.is_closed,
+            dimension=decision.dimension,
+            num_facets=decision.num_facets,
+            obstruction=decision.obstruction,
+        )
 
 
 __all__ = ["PseudomanifoldRequest", "PseudomanifoldResult", "pseudomanifold_decision"]

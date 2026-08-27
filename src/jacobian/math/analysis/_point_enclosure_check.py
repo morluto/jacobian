@@ -136,10 +136,10 @@ def _log_outcome(
     return "NON_RESULT"
 
 
-def point_enclosure_check_outcome(
+def _verify_point_enclosure(
     request: PointEnclosureCheckRequest,
 ) -> PointEnclosureCheckOutcome:
-    """Replay one structurally admitted enclosure claim deterministically."""
+    """Verify one request-admitted enclosure claim deterministically."""
 
     enclosure = request.enclosure
     if enclosure.lower.compare(enclosure.upper) > 0:
@@ -151,6 +151,3 @@ def point_enclosure_check_outcome(
     if enclosure.function is RealUnaryFunction.SQRT:
         return _sqrt_outcome(argument, claimed_lower, claimed_upper)
     return _log_outcome(argument, claimed_lower, claimed_upper)
-
-
-__all__ = ["point_enclosure_check_outcome"]

@@ -30,11 +30,9 @@ MAX_PRIME_DIGITS = 64
 #:   group_like_scan_work = prime**dimension * (dimension + 1)
 #:       + prime**(dimension-1) * (dimension**3 + 2*dimension**2)
 #:
-#: bind_group_like_to_source replays the identical scan, so one full call
-#: performs at most twice this bound. Measured throughput exceeds 50M
-#: summands/s in the dense regime and 5M units/s in the loop-overhead
-#: dominated one-dimensional regime, keeping an admitted call well under
-#: two seconds.
+#: Measured throughput exceeds 50M summands/s in the dense regime and 5M
+#: units/s in the loop-overhead dominated one-dimensional regime, keeping an
+#: admitted call well under two seconds.
 GROUP_LIKE_SCAN_WORK_BUDGET = 2_000_000
 
 #: Maximum number of structure-constant entries in an admitted comultiplication
@@ -47,7 +45,7 @@ GROUP_LIKE_SCAN_WORK_BUDGET = 2_000_000
 #:     the MAX_PRIME_DIGITS-bounded characteristic;
 #:   - group-like scans remain separately bounded by GROUP_LIKE_SCAN_WORK_BUDGET
 #:     derived work units covering candidates x per-candidate reconstruction
-#:     plus the replay in bind_group_like_to_source.
+#:     for the exhaustive producer scan.
 #: For example the 9-dimensional GF(2) direct-sum coalgebra needs 729 entries
 #: and roughly 2*10**5 scan-work units, well inside both budgets.
 MAX_TENSOR_ENTRIES = 4096
@@ -388,9 +386,7 @@ class GroupLikeElementsRequest(StrictModel):
     The operation enumerates every element of GF(p)^dimension and
     reconstructs each candidate that survives the counit filter, so
     requests are admitted only when group_like_scan_work(prime,
-    dimension) is within the documented scan budget; the retained result
-    replays the same scan, so one full call performs at most twice that
-    work.
+    dimension) is within the documented scan budget.
     """
 
     coalgebra: Coalgebra

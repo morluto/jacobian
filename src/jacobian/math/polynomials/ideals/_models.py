@@ -594,16 +594,6 @@ def _require_computed_minimal_prime_family(
         )
 
 
-def computed_minimal_primes_result(
-    request: IdealMinimalPrimesRequest,
-    components: tuple[RationalPolynomialIdeal, ...] | None,
-    backend_version: str | None,
-) -> IdealMinimalPrimesResult:
-    """Compatibility shim for the operation-local trusted factory."""
-
-    return IdealMinimalPrimesResult._from_kernel(request, components, backend_version)
-
-
 __all__ = [
     "MAX_OUTPUT_GENERATORS",
     "MAX_OUTPUT_TERMS",

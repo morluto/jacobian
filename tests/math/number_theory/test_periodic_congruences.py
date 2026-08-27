@@ -371,7 +371,11 @@ def test_small_profiles_match_exhaustive_membership_replay() -> None:
                 assert result.density.as_fraction() == Fraction(len(expected), 6)
 
 
-def test_measure_result_rejects_independent_source_and_conclusion_mutations() -> None:
+def test_measure_result_is_structural_and_private_verifier_rejects_mutations() -> None:
+    from jacobian.math.number_theory._periodic_operations import (
+        _verify_periodic_congruence_union_measure_result,
+    )
+
     result = _measure(
         {
             "subsets": [{"modulus": "5", "residues": ["0", "2"]}],
@@ -392,11 +396,16 @@ def test_measure_result_rejects_independent_source_and_conclusion_mutations() ->
 
     bad_source = copy.deepcopy(serialized)
     bad_source["source"]["complement"] = True
-    with expect_validation("number_theory."):
+    assert not _verify_periodic_congruence_union_measure_result(
         PeriodicCongruenceUnionMeasureResult.model_validate(bad_source)
+    )
 
 
-def test_profile_result_rejects_omitted_or_forged_residues() -> None:
+def test_profile_private_verifier_rejects_omitted_or_forged_residues() -> None:
+    from jacobian.math.number_theory._periodic_operations import (
+        _verify_periodic_congruence_union_profile_result,
+    )
+
     result = _profile(
         {
             "subsets": [{"modulus": "5", "residues": ["0", "2"]}],
@@ -405,14 +414,21 @@ def test_profile_result_rejects_omitted_or_forged_residues() -> None:
     )
     serialized = result.model_dump(mode="json")
 
-    for residues in (["0"], ["0", "1", "2"]):
+    for residues in (["0", "1"], ["1", "2"]):
         forged = copy.deepcopy(serialized)
         forged["occupied_residues"] = residues
-        with expect_validation("number_theory."):
+        assert not _verify_periodic_congruence_union_profile_result(
             PeriodicCongruenceUnionProfileResult.model_validate(forged)
+        )
 
 
-def test_profile_result_rejects_independent_source_and_measure_mutations() -> None:
+def test_profile_result_is_structural_and_private_verifier_rejects_source_mutation() -> (
+    None
+):
+    from jacobian.math.number_theory._periodic_operations import (
+        _verify_periodic_congruence_union_profile_result,
+    )
+
     result = _profile(
         {
             "subsets": [{"modulus": "5", "residues": ["0", "2"]}],
@@ -423,8 +439,9 @@ def test_profile_result_rejects_independent_source_and_measure_mutations() -> No
 
     bad_source = copy.deepcopy(serialized)
     bad_source["source"]["subsets"][0]["residues"] = ["1", "3"]
-    with expect_validation("number_theory."):
+    assert not _verify_periodic_congruence_union_profile_result(
         PeriodicCongruenceUnionProfileResult.model_validate(bad_source)
+    )
 
     bad_period = copy.deepcopy(serialized)
     bad_period["common_period"] = "6"

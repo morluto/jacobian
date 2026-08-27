@@ -139,12 +139,9 @@ class IntervalExpressionSecondJetEnclosureResult(
 ):
     """A source-bound rigorous value, gradient, and symmetric Hessian enclosure.
 
-    For ``ENCLOSED``, full validation recomputes the canonical jet claim from
-    its expression, axis, and source box.  ``DOMAIN_UNPROVEN`` replays its
-    deterministic first-obstruction evidence.  ``BACKEND_ERROR`` asserts no
-    enclosure conclusion at all, so it is validated structurally: rerunning
-    Arb would reject the operation's own serialized result whenever a
-    transient backend condition does not recur.
+    The producer establishes the enclosure claim. Parsing validates only
+    structural and canonical invariants, including the source axis and the
+    canonical upper-triangular Hessian layout.
     """
 
     status: IntervalExpressionSecondJetEnclosureStatus
@@ -227,18 +224,34 @@ class IntervalExpressionSecondJetEnclosureResult(
             if self.status == "BACKEND_ERROR":
                 return self
 
-        from jacobian.math.analysis._operations import _second_jet_enclosure
-
-        request = IntervalExpressionSecondJetEnclosureRequest.model_construct(
-            expression=self.expression,
-            box=self.box,
-            precision_bits=self.precision_bits,
-        )
-        if self != _second_jet_enclosure(request):
-            raise _validation_error(
-                "second-jet enclosure does not replay from its expression, axis, and source box"
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: IntervalExpressionSecondJetEnclosureRequest,
+        *,
+        status: IntervalExpressionSecondJetEnclosureStatus,
+        detail: str,
+        value: DyadicClosedInterval | None = None,
+        gradient: tuple[FirstPartialEnclosure, ...] = (),
+        hessian: tuple[HessianEntryEnclosure, ...] = (),
+        domain_failure: IntervalExpressionDomainFailure | None = None,
+    ) -> Self:
+        """Build a result after the admitted kernel established its claim."""
+
+        return cls.model_construct(
+            expression=request.expression,
+            box=request.box,
+            precision_bits=request.precision_bits,
+            status=status,
+            value=value,
+            gradient=gradient,
+            hessian=hessian,
+            domain_failure=domain_failure,
+            method="ARB_FORWARD_SECOND_ORDER_JET",
+            detail=detail,
+        )
 
 
 __all__ = [

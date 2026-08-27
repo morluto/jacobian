@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from pydantic import ValidationError
-
 from jacobian._exact import CanonicalRational
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
@@ -207,7 +205,9 @@ def _effective_farkas_bounds(
 def _unknown(
     program: GeneralFormRationalLinearProgram,
 ) -> GeneralRationalLinearProgramResult:
-    return GeneralRationalLinearProgramResult(program=program, status="UNKNOWN")
+    return GeneralRationalLinearProgramResult._from_kernel(
+        program=program, status="UNKNOWN"
+    )
 
 
 def _primal_feasible(
@@ -219,21 +219,18 @@ def _primal_feasible(
     lower_slacks: tuple[CanonicalRational, ...],
     upper_slacks: tuple[CanonicalRational, ...],
 ) -> GeneralRationalLinearProgramResult:
-    """Return only the replayed source point when no dual proof is available."""
+    """Return one kernel-established source-coordinate feasible point."""
 
-    try:
-        return GeneralRationalLinearProgramResult(
-            program=program,
-            status="PRIMAL_FEASIBLE",
-            primal_candidate=point,
-            primal_objective=objective,
-            primal_residuals=residuals,
-            constraint_slacks=constraint_slacks,
-            lower_bound_slacks=lower_slacks,
-            upper_bound_slacks=upper_slacks,
-        )
-    except ValidationError:
-        return _unknown(program)
+    return GeneralRationalLinearProgramResult._from_kernel(
+        program=program,
+        status="PRIMAL_FEASIBLE",
+        primal_candidate=point,
+        primal_objective=objective,
+        primal_residuals=residuals,
+        constraint_slacks=constraint_slacks,
+        lower_bound_slacks=lower_slacks,
+        upper_bound_slacks=upper_slacks,
+    )
 
 
 def _mapped_primal_fields(
@@ -319,16 +316,13 @@ def _map_standard_result(
             and lower_wire is not None
             and upper_wire is not None
         )
-        try:
-            return GeneralRationalLinearProgramResult(
-                program=program,
-                status="INFEASIBLE",
-                farkas_constraints=constraint_wire,
-                farkas_lower_bounds=lower_wire,
-                farkas_upper_bounds=upper_wire,
-            )
-        except ValidationError:
-            return _unknown(program)
+        return GeneralRationalLinearProgramResult._from_kernel(
+            program=program,
+            status="INFEASIBLE",
+            farkas_constraints=constraint_wire,
+            farkas_lower_bounds=lower_wire,
+            farkas_upper_bounds=upper_wire,
+        )
 
     assert standard_result.primal_candidate is not None
     primal = _mapped_primal_fields(
@@ -349,20 +343,17 @@ def _map_standard_result(
         wire_direction = _wire_vector(direction, max_digits=point_max_digits)
         if wire_direction is None:
             return _unknown(program)
-        try:
-            return GeneralRationalLinearProgramResult(
-                program=program,
-                status="UNBOUNDED",
-                primal_candidate=point,
-                primal_objective=objective,
-                primal_residuals=residuals,
-                constraint_slacks=constraint_slacks,
-                lower_bound_slacks=lower_slacks,
-                upper_bound_slacks=upper_slacks,
-                recession_direction=wire_direction,
-            )
-        except ValidationError:
-            return _unknown(program)
+        return GeneralRationalLinearProgramResult._from_kernel(
+            program=program,
+            status="UNBOUNDED",
+            primal_candidate=point,
+            primal_objective=objective,
+            primal_residuals=residuals,
+            constraint_slacks=constraint_slacks,
+            lower_bound_slacks=lower_slacks,
+            upper_bound_slacks=upper_slacks,
+            recession_direction=wire_direction,
+        )
     if standard_result.status == "PRIMAL_FEASIBLE":
         return _primal_feasible(
             program,
@@ -445,32 +436,21 @@ def _map_standard_result(
         and upper_wire is not None
         and stationarity_wire is not None
     )
-    try:
-        return GeneralRationalLinearProgramResult(
-            program=program,
-            status="OPTIMAL",
-            primal_candidate=point,
-            primal_objective=objective,
-            primal_residuals=residuals,
-            constraint_slacks=constraint_slacks,
-            lower_bound_slacks=lower_slacks,
-            upper_bound_slacks=upper_slacks,
-            constraint_dual=constraint_wire,
-            lower_bound_dual=lower_wire,
-            upper_bound_dual=upper_wire,
-            dual_objective=wire_dual_objective,
-            stationarity_residuals=stationarity_wire,
-        )
-    except ValidationError:
-        return _primal_feasible(
-            program,
-            point,
-            objective,
-            residuals,
-            constraint_slacks,
-            lower_slacks,
-            upper_slacks,
-        )
+    return GeneralRationalLinearProgramResult._from_kernel(
+        program=program,
+        status="OPTIMAL",
+        primal_candidate=point,
+        primal_objective=objective,
+        primal_residuals=residuals,
+        constraint_slacks=constraint_slacks,
+        lower_bound_slacks=lower_slacks,
+        upper_bound_slacks=upper_slacks,
+        constraint_dual=constraint_wire,
+        lower_bound_dual=lower_wire,
+        upper_bound_dual=upper_wire,
+        dual_objective=wire_dual_objective,
+        stationarity_residuals=stationarity_wire,
+    )
 
 
 def _general_linear_program(

@@ -96,14 +96,7 @@ def hensel_lift_root(request: HenselRootRequest) -> HenselRootResult:
     lifted = _hensel_lift_root(
         coeffs, request.prime, request.root_mod_p, request.precision
     )
-    return HenselRootResult(
-        polynomial=request.polynomial,
-        lifted_root=lifted,
-        prime=request.prime,
-        root_mod_p=request.root_mod_p,
-        precision=request.precision,
-        is_simple_root=True,
-    )
+    return HenselRootResult._from_kernel(request, lifted)
 
 
 def _poly_mul_exact_mod(
@@ -304,13 +297,8 @@ def find_padic_roots(request: PAdicRootsRequest) -> PAdicRootsResult:
         lifted = _hensel_lift_root(coeffs, p, r, k)
         lifted_roots.append(PAdicRootEntry(root=lifted, root_type="SIMPLE"))
 
-    return PAdicRootsResult(
-        polynomial=request.polynomial,
-        roots=tuple(lifted_roots),
-        prime=p,
-        precision=k,
-        root_count=len(lifted_roots),
-        multiple_residues=tuple(multiple_residues),
+    return PAdicRootsResult._from_kernel(
+        request, tuple(lifted_roots), tuple(multiple_residues)
     )
 
 

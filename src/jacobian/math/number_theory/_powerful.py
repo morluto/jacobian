@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
-from jacobian.math.number_theory._integer_models import PrimePower
 from jacobian.math.number_theory._powerful_kernels import decide_powerful_data
 from jacobian.math.number_theory._powerful_models import (
     PowerfulNumberRequest,
     PowerfulNumberResult,
-    ResidualPerfectPower,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 
@@ -18,25 +16,33 @@ def decide_powerful(request: PowerfulNumberRequest) -> PowerfulNumberResult:
     """Return the exact source-bound powerful-number decision."""
 
     data = decide_powerful_data(parse_canonical_integer(request.value))
-    return PowerfulNumberResult(
-        value=request.value,
-        conclusion=data.conclusion,
-        is_powerful=data.conclusion == "POWERFUL",
-        cutoff=data.cutoff,
-        checked_through=data.checked_through,
-        stripped_factors=tuple(
-            PrimePower(prime=format_canonical_integer(prime), power=exponent)
-            for prime, exponent in data.stripped_factors
-        ),
-        residual=format_canonical_integer(data.residual),
-        residual_perfect_power=(
-            None
-            if data.perfect_power is None
-            else ResidualPerfectPower(
-                base=format_canonical_integer(data.perfect_power[0]),
-                exponent=data.perfect_power[1],
-            )
-        ),
+    return PowerfulNumberResult._from_kernel(request, data=data)
+
+
+def verify_powerful_number_result(result: PowerfulNumberResult) -> bool:
+    """Verify one independently supplied powerful-number decision."""
+
+    expected = decide_powerful_data(parse_canonical_integer(result.value))
+    factors = tuple(
+        (parse_canonical_integer(factor.prime), factor.power)
+        for factor in result.stripped_factors
+    )
+    perfect_power = (
+        None
+        if result.residual_perfect_power is None
+        else (
+            parse_canonical_integer(result.residual_perfect_power.base),
+            result.residual_perfect_power.exponent,
+        )
+    )
+    return (
+        result.conclusion == expected.conclusion
+        and result.is_powerful == (expected.conclusion == "POWERFUL")
+        and result.cutoff == expected.cutoff
+        and result.checked_through == expected.checked_through
+        and factors == expected.stripped_factors
+        and parse_canonical_integer(result.residual) == expected.residual
+        and perfect_power == expected.perfect_power
     )
 
 

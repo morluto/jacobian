@@ -521,15 +521,11 @@ class CycleMultiplierResult(StrictModel):
     complete: Literal[True] = True
 
     @model_validator(mode="after")
-    def bind_period_and_multiplier(self) -> Self:
-        source = parse_polynomial_coefficients(self.source_coefficients)
-        points = tuple(value.as_fraction() for value in self.cycle)
-        if len(set(points)) != len(points) or any(
-            _evaluate(source, point) != points[(index + 1) % len(points)]
-            for index, point in enumerate(points)
-        ):
-            raise _validation_error(
-                "cycle must be a distinct ordered cycle of the bound map"
+    def require_structural_consistency(self) -> Self:
+        parse_polynomial_coefficients(self.source_coefficients)
+        for value in self.cycle:
+            _bounded_fraction(
+                value, max_digits=MAX_COEFFICIENT_DIGITS, label="cycle point"
             )
         if self.period != len(self.cycle):
             raise _validation_error("period must match cycle length")
@@ -539,6 +535,27 @@ class CycleMultiplierResult(StrictModel):
             label="multiplier",
         )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: CycleMultiplierRequest,
+        *,
+        multiplier: CanonicalRational,
+    ) -> Self:
+        """Build a result after the admitted cycle-multiplier kernel ran."""
+
+        require_bounded_rational(
+            multiplier,
+            max_digits=MAX_POLYNOMIAL_OUTPUT_DIGITS,
+            label="multiplier",
+        )
+        return cls(
+            source_coefficients=request.coefficients,
+            multiplier=multiplier,
+            cycle=request.cycle,
+            period=len(request.cycle),
+        )
 
 
 class FiniteFieldMapResult(StrictModel):
@@ -553,27 +570,32 @@ class FiniteFieldMapResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_complete_graph(self) -> Self:
-        if not _is_prime(self.prime):
-            raise _validation_error("prime must be a prime number")
-        coefficients = tuple(
-            _parse_canonical_integer(value) for value in self.coefficients
-        )
-        if len(coefficients) > 1 and coefficients[-1] % self.prime == 0:
-            raise _validation_error(
-                "coefficients must omit trailing zeros modulo the prime"
-            )
+    def require_structural_consistency(self) -> Self:
+        for value in self.coefficients:
+            _parse_canonical_integer(value)
         self._require_complete_edges()
-        if any(
-            target != _evaluate_mod_prime(coefficients, source, self.prime)
-            for source, target in self.edges
-        ):
-            raise _validation_error(
-                "functional graph edges must evaluate the bound polynomial"
-            )
         cycle_set = self._require_canonical_cycles()
         self._require_tail_evidence(cycle_set)
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: FiniteFieldMapRequest,
+        *,
+        edges: tuple[tuple[int, int], ...],
+        cycles: tuple[tuple[int, ...], ...],
+        tail_lengths: tuple[int, ...],
+    ) -> Self:
+        """Build a result after complete graph enumeration established it."""
+
+        return cls(
+            prime=request.prime,
+            coefficients=request.coefficients,
+            edges=edges,
+            cycles=cycles,
+            tail_lengths=tail_lengths,
+        )
 
     def _require_complete_edges(self) -> None:
         if len(self.edges) != self.prime or len(self.tail_lengths) != self.prime:

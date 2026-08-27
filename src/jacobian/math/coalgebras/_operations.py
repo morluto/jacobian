@@ -58,8 +58,8 @@ def _group_like_coefficients(
     Delta(g) = g (x) g modulo p. The request model bounds the derived scan
     work -- candidates times per-candidate reconstruction -- within the
     documented budget, so this scan is exhaustive and deterministic; the
-    result validator replays the identical enumeration. Delta(g) = g (x) g
-    is decided row by row so a mismatching row skips the remaining rows.
+    Delta(g) = g (x) g is decided row by row so a mismatching row skips the
+    remaining rows.
     """
     n = ca.dimension
     p = ca.prime
@@ -118,7 +118,7 @@ def find_group_like_elements(
     )
 
 
-def verify_comultiplication_result(result: ComultiplicationResult) -> bool:
+def _verify_comultiplication_result(result: ComultiplicationResult) -> bool:
     """Verify an independently supplied comultiplication claim."""
     coalgebra = result.coalgebra
     expected = tuple(
@@ -132,7 +132,7 @@ def verify_comultiplication_result(result: ComultiplicationResult) -> bool:
     return result.matrix.entries == expected
 
 
-def verify_counit_result(result: CounitResult) -> bool:
+def _verify_counit_result(result: CounitResult) -> bool:
     """Verify an independently supplied counit claim."""
     return (
         result.value
@@ -140,7 +140,7 @@ def verify_counit_result(result: CounitResult) -> bool:
     )
 
 
-def verify_group_like_elements_result(result: GroupLikeElementsResult) -> bool:
+def _verify_group_like_elements_result(result: GroupLikeElementsResult) -> bool:
     """Verify one exhaustive group-like claim within its admitted scan envelope."""
     from jacobian.math.coalgebras._models import (
         GROUP_LIKE_SCAN_WORK_BUDGET,
@@ -161,7 +161,4 @@ __all__ = [
     "compute_comultiplication",
     "compute_counit",
     "find_group_like_elements",
-    "verify_comultiplication_result",
-    "verify_counit_result",
-    "verify_group_like_elements_result",
 ]

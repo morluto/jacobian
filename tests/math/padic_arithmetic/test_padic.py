@@ -6,6 +6,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import ValidationError
+from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.padic_arithmetic._models import (
@@ -13,9 +14,10 @@ from jacobian.math.padic_arithmetic._models import (
     HenselRootRequest,
     HenselRootResult,
     IntegerPolynomial,
-    PAdicRootEntry,
     PAdicRootsRequest,
     PAdicRootsResult,
+    verify_hensel_root_result,
+    verify_padic_roots_result,
 )
 from jacobian.math.padic_arithmetic._operations import (
     find_padic_roots,
@@ -101,24 +103,8 @@ class TestPAdicRoots:
             HenselRootRequest(polynomial=poly, prime=4, root_mod_p=1, precision=2)
         assert exc_info.value.errors()[0]["type"] == "padic_arithmetic.prime_not_prime"
 
-    def test_result_rejects_composite_modulus(self):
-        """A serialized root set cannot validate against a composite modulus
-        even when its completeness and derivative replay would succeed."""
-        with pytest.raises(ValidationError) as exc_info:
-            PAdicRootsResult(
-                polynomial=IntegerPolynomial(coefficients=("1", "-1")),
-                roots=(PAdicRootEntry(root=1),),
-                prime=4,
-                precision=2,
-                root_count=1,
-            )
-        assert exc_info.value.errors()[0]["type"] == "padic_arithmetic.prime_not_prime"
-
-    def test_result_binds_to_source_polynomial(self):
-        """The exact result retains polynomial and residue and replays them:
-        genuine lifts round-trip through serialization, while forged lifts,
-        wrong residues, detached polynomials, and a False simple flag are
-        rejected at validation."""
+    def test_result_is_structural_and_owner_verifier_binds_source(self):
+        """Parsing retains shape checks; deliberate claim checks stay private."""
         poly = IntegerPolynomial(coefficients=("1", "0", "1"))  # x^2 + 1
         result = hensel_lift_root(
             HenselRootRequest(polynomial=poly, prime=5, root_mod_p=2, precision=4)
@@ -129,28 +115,24 @@ class TestPAdicRoots:
 
         roundtrip = HenselRootResult.model_validate(result.model_dump())
         assert roundtrip == result
+        verify_hensel_root_result(roundtrip)
 
         detached = result.model_dump()
         detached["polynomial"]["coefficients"] = ["1", "0", "2"]
-        with pytest.raises(ValidationError) as exc_info:
-            HenselRootResult.model_validate(detached)
-        assert exc_info.value.errors()[0]["type"] == "padic_arithmetic.root_not_root"
+        with pytest.raises((PydanticCustomError, ValidationError)):
+            verify_hensel_root_result(HenselRootResult.model_validate(detached))
 
         forged = result.model_dump()
         forged["lifted_root"] = (forged["lifted_root"] + 1) % 625
-        with pytest.raises(ValidationError):
-            HenselRootResult.model_validate(forged)
+        with pytest.raises(PydanticCustomError):
+            verify_hensel_root_result(HenselRootResult.model_validate(forged))
 
         wrong_residue = result.model_dump()
         # residue 3 is itself a simple root of x^2+1 mod 5, so only the
         # congruence of the lift to its residue can reject this tampering
         wrong_residue["root_mod_p"] = 3
-        with pytest.raises(ValidationError) as exc_info:
-            HenselRootResult.model_validate(wrong_residue)
-        assert (
-            exc_info.value.errors()[0]["type"]
-            == "padic_arithmetic.lifted_root_wrong_residue"
-        )
+        with pytest.raises(PydanticCustomError):
+            verify_hensel_root_result(HenselRootResult.model_validate(wrong_residue))
 
         not_simple = result.model_dump()
         not_simple["is_simple_root"] = False
@@ -159,6 +141,20 @@ class TestPAdicRoots:
         assert (
             exc_info.value.errors()[0]["type"] == "padic_arithmetic.simple_flag_invalid"
         )
+
+    def test_roots_profile_verifier_rejects_forged_source(self):
+        result = find_padic_roots(
+            PAdicRootsRequest(
+                polynomial=IntegerPolynomial(coefficients=("1", "0", "0", "-1")),
+                prime=7,
+                precision=3,
+            )
+        )
+        verify_padic_roots_result(PAdicRootsResult.model_validate(result.model_dump()))
+        forged = result.model_dump()
+        forged["multiple_residues"] = [0]
+        with pytest.raises(PydanticCustomError):
+            verify_padic_roots_result(PAdicRootsResult.model_validate(forged))
 
     def test_multiple_root_lift_rejected(self):
         """f=x^2+5, p=5: r=0 is a multiple root; lifting is refused."""

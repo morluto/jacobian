@@ -19,7 +19,6 @@ from jacobian.canonical import encode_strict_json
 from jacobian.math.polynomials.interpolation._kernel import (
     divided_difference_coefficients,
     evaluate_newton_form,
-    ordinary_derivative_value,
 )
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
@@ -388,10 +387,10 @@ def _polynomial_coefficients(
 
 
 class HermiteInterpolationResult(StrictModel):
-    """Unique degree-``< M`` interpolant with complete source-bound replay."""
+    """Unique degree-``< M`` interpolant with retained constraint evidence."""
 
     source: OrdinaryDerivativeJetTable = Field(
-        description="Retained source table that binds the polynomial and replay."
+        description="Retained source table that binds the polynomial and evidence."
     )
     polynomial: RationalPolynomial = Field(
         description=(
@@ -431,7 +430,7 @@ class HermiteInterpolationResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_unique_source_bound_interpolant(self) -> Self:
+    def require_structural_shape(self) -> Self:
         multiplicity = _total_multiplicity(self.source)
         if self.total_multiplicity != multiplicity:
             raise _validation_error(
@@ -487,21 +486,6 @@ class HermiteInterpolationResult(StrictModel):
                 "replay must cover every source derivative constraint in "
                 "canonical node/order order"
             )
-        for item in self.replay:
-            computed = ordinary_derivative_value(
-                coefficients,
-                item.node.as_fraction(),
-                item.derivative_order,
-            )
-            if item.computed.as_fraction() != computed:
-                raise _validation_error(
-                    "replay computed value does not match the returned polynomial"
-                )
-            if item.computed.as_fraction() != item.expected.as_fraction():
-                raise _validation_error(
-                    "returned polynomial does not satisfy a source derivative "
-                    "constraint"
-                )
         if (
             len(encode_strict_json(self.model_dump(mode="json")))
             > MAX_HERMITE_RESULT_BYTES
@@ -510,6 +494,28 @@ class HermiteInterpolationResult(StrictModel):
                 "complete Hermite result exceeds the aggregate result bound"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: OrdinaryDerivativeJetTable,
+        polynomial: RationalPolynomial,
+        total_multiplicity: int,
+        degree: int | None,
+        leading_coefficient: CanonicalRational,
+        replay: tuple[HermiteConstraintReplay, ...],
+    ) -> Self:
+        """Build a result from the interpolation kernel's established facts."""
+
+        return cls(
+            source=source,
+            polynomial=polynomial,
+            total_multiplicity=total_multiplicity,
+            degree=degree,
+            leading_coefficient=leading_coefficient,
+            replay=replay,
+        )
 
 
 class InterpolationSamples(StrictModel):

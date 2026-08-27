@@ -5,6 +5,8 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import pairwise
 
+from pydantic import ValidationError
+
 from jacobian._exact import format_canonical_rational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.numerical_semigroups._algorithms import (
@@ -81,11 +83,17 @@ def compute_element_catenary_degree(
     )
 
 
-def verify_element_catenary_degree_result(
+def _verify_element_catenary_degree_result(
     result: ElementCatenaryDegreeResult,
 ) -> bool:
     """Replay the admitted complete factorization family for a supplied claim."""
 
+    try:
+        ElementCatenaryDegreeRequest(
+            generators=result.minimal_generators, value=result.value
+        )
+    except ValidationError:
+        return False
     atoms = tuple(parse_canonical_integer(atom) for atom in result.minimal_generators)
     family = factorizations(atoms, parse_canonical_integer(result.value))
     return result.factorization_count == len(
@@ -93,18 +101,28 @@ def verify_element_catenary_degree_result(
     ) and result.catenary_degree == catenary_degree_from_factorizations(family)
 
 
-def verify_element_delta_set_result(result: ElementDeltaSetResult) -> bool:
+def _verify_element_delta_set_result(result: ElementDeltaSetResult) -> bool:
     """Replay one supplied element delta-set claim within its admitted bounds."""
 
+    try:
+        ElementDeltaSetRequest(generators=result.minimal_generators, value=result.value)
+    except ValidationError:
+        return False
     atoms = tuple(parse_canonical_integer(atom) for atom in result.minimal_generators)
     lengths = factorization_lengths(atoms, parse_canonical_integer(result.value))
     delta_set = tuple(sorted({right - left for left, right in pairwise(lengths)}))
     return result.factorization_lengths == lengths and result.delta_set == delta_set
 
 
-def verify_element_elasticity_result(result: ElementElasticityResult) -> bool:
+def _verify_element_elasticity_result(result: ElementElasticityResult) -> bool:
     """Replay one supplied element elasticity claim within its admitted bounds."""
 
+    try:
+        ElementElasticityRequest(
+            generators=result.minimal_generators, value=result.value
+        )
+    except ValidationError:
+        return False
     atoms = tuple(parse_canonical_integer(atom) for atom in result.minimal_generators)
     minimum, maximum = factorization_length_extrema(
         atoms, parse_canonical_integer(result.value)
@@ -119,6 +137,4 @@ __all__ = [
     "compute_element_catenary_degree",
     "compute_element_delta_set",
     "compute_element_elasticity",
-    "verify_element_delta_set_result",
-    "verify_element_elasticity_result",
 ]

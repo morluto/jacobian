@@ -370,15 +370,15 @@ def test_out_of_range_targets_resolve_before_state_expansion() -> None:
     assert just_inside.status == "NOT_ATTAINED"
 
 
-def test_complete_call_charges_all_four_reachable_state_passes() -> None:
+def test_complete_call_charges_admission_and_kernel_passes() -> None:
     assert (
         MAX_SUBSET_SUM_TOTAL_TRANSITIONS
         == MAX_SUBSET_SUM_COMPLETE_CALL_PASSES * MAX_SUBSET_SUM_TRANSITIONS_PER_PASS
     )
 
     # An in-range exhausting request whose single pass scans 499,500 states
-    # stays admitted: its four charged passes (admission, kernel, and both
-    # source-binding replays) fit the advertised complete-call budget.
+    # stays admitted: its admission and kernel passes fit the advertised
+    # complete-call budget.
     dense = (2,) * 999
     unattained = _operation().run(_request(dense, 3, allow_empty_subset=True))
     assert unattained.status == "NOT_ATTAINED"

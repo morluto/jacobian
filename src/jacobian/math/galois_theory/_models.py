@@ -145,21 +145,6 @@ class FiniteFieldFactor(StrictModel):
     multiplicity: int = Field(ge=1, le=MAX_FACTOR_DEGREE, strict=True)
 
 
-def _multiply_mod(
-    left: tuple[int, ...], right: tuple[int, ...], prime: int
-) -> tuple[int, ...]:
-    result = [0] * (len(left) + len(right) - 1)
-    for left_degree, left_coefficient in enumerate(left):
-        for right_degree, right_coefficient in enumerate(right):
-            result[left_degree + right_degree] = (
-                result[left_degree + right_degree]
-                + left_coefficient * right_coefficient
-            ) % prime
-    while len(result) > 1 and result[-1] == 0:
-        result.pop()
-    return tuple(result)
-
-
 class GaloisFactorResult(StrictModel):
     field_order: int = Field(ge=2, le=MAX_FIELD_ORDER, strict=True)
     source_coefficients: tuple[int, ...] = Field(
@@ -201,8 +186,7 @@ class GaloisFactorResult(StrictModel):
         )
 
     @model_validator(mode="after")
-    def require_reconstruction_certificate(self) -> Self:
-        _require_prime(self.field_order)
+    def require_structural_consistency(self) -> Self:
         _require_factor_residues(self)
         if self.distinct_factor_count != len(self.factors):
             raise _validation_error(
@@ -214,11 +198,6 @@ class GaloisFactorResult(StrictModel):
             raise _validation_error(
                 "factor_count_mismatch",
                 "factor_count must include factor multiplicities",
-            )
-        if _reconstruct_factorization(self) != self.source_coefficients:
-            raise _validation_error(
-                "reconstruction_mismatch",
-                "factorization must reconstruct the source modulo p",
             )
         return self
 
@@ -245,24 +224,6 @@ def _require_factor_residues(result: GaloisFactorResult) -> None:
             raise _validation_error(
                 "factor_not_monic", "finite-field factors must be monic"
             )
-
-
-def _reconstruct_factorization(result: GaloisFactorResult) -> tuple[int, ...]:
-    reconstructed: tuple[int, ...] = (result.unit,)
-    for factor in result.factors:
-        for _ in range(factor.multiplicity):
-            reconstructed = _multiply_mod(
-                reconstructed, factor.coefficients, result.field_order
-            )
-    return reconstructed
-
-
-def _factorization_is_irreducible(result: GaloisFactorResult) -> bool:
-    return (
-        len(result.factors) == 1
-        and result.factors[0].multiplicity == 1
-        and len(result.factors[0].coefficients) == len(result.source_coefficients)
-    )
 
 
 class FrobeniusCycleResult(StrictModel):

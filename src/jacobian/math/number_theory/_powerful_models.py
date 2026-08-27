@@ -1,8 +1,8 @@
-"""Typed contracts and replay validation for powerful-number decisions."""
+"""Typed contracts for bounded powerful-number decisions."""
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
 
@@ -10,9 +10,12 @@ from jacobian._models import StrictModel
 from jacobian.math.number_theory._integer_models import PrimePower
 from jacobian.math.number_theory._models import _validation_error
 
+if TYPE_CHECKING:
+    from jacobian.math.number_theory._powerful_kernels import PowerfulDecisionData
+
 # The kernel derives ``B = ceil(value**(1/5))`` and trial-divides through B.
-# These limits therefore bound both the request and the source-bound result
-# replay without requiring complete factorization.
+# These limits bound that one producer pass without requiring complete
+# factorization.
 MAX_POWERFUL_INTEGER_DIGITS = 25
 MAX_POWERFUL_CUTOFF = 100_000
 MAX_POWERFUL_FACTOR_ENTRIES = 42
@@ -48,7 +51,7 @@ class ResidualPerfectPower(StrictModel):
 
 
 class PowerfulNumberResult(StrictModel):
-    """A source-bound, replayable exact powerful-number decision."""
+    """An exact powerful-number decision from one admitted kernel pass."""
 
     value: PowerfulInteger
     conclusion: Literal[
@@ -82,39 +85,45 @@ class PowerfulNumberResult(StrictModel):
     residual_perfect_power: ResidualPerfectPower | None = None
 
     @model_validator(mode="after")
-    def bind_decision_to_source_by_exact_replay(self) -> PowerfulNumberResult:
-        from jacobian.canonical import parse_canonical_integer
-        from jacobian.math.number_theory._powerful_kernels import (
-            decide_powerful_data,
-        )
-
-        expected = decide_powerful_data(parse_canonical_integer(self.value))
-        factors = tuple(
-            (parse_canonical_integer(factor.prime), factor.power)
-            for factor in self.stripped_factors
-        )
-        perfect_power = (
-            None
-            if self.residual_perfect_power is None
-            else (
-                parse_canonical_integer(self.residual_perfect_power.base),
-                self.residual_perfect_power.exponent,
-            )
-        )
-        if (
-            self.conclusion != expected.conclusion
-            or self.is_powerful != (expected.conclusion == "POWERFUL")
-            or self.cutoff != expected.cutoff
-            or self.checked_through != expected.checked_through
-            or factors != expected.stripped_factors
-            or parse_canonical_integer(self.residual) != expected.residual
-            or perfect_power != expected.perfect_power
-        ):
+    def require_branch_consistency(self) -> Self:
+        if self.is_powerful != (self.conclusion == "POWERFUL"):
             raise _validation_error(
-                "powerful_number_conclusion_or_certificate_does_not_match_exact_replay",
-                "powerful-number conclusion or certificate does not match exact replay",
+                "powerful_number_conclusion_boolean_mismatch",
+                "is_powerful must agree with conclusion",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PowerfulNumberRequest,
+        *,
+        data: PowerfulDecisionData,
+    ) -> Self:
+        """Build one result after the admitted decision kernel established it."""
+
+        from jacobian.canonical import format_canonical_integer
+
+        return cls(
+            value=request.value,
+            conclusion=data.conclusion,
+            is_powerful=data.conclusion == "POWERFUL",
+            cutoff=data.cutoff,
+            checked_through=data.checked_through,
+            stripped_factors=tuple(
+                PrimePower(prime=format_canonical_integer(prime), power=exponent)
+                for prime, exponent in data.stripped_factors
+            ),
+            residual=format_canonical_integer(data.residual),
+            residual_perfect_power=(
+                None
+                if data.perfect_power is None
+                else ResidualPerfectPower(
+                    base=format_canonical_integer(data.perfect_power[0]),
+                    exponent=data.perfect_power[1],
+                )
+            ),
+        )
 
 
 __all__ = [

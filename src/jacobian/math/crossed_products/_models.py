@@ -49,10 +49,6 @@ class CrossedProductMultiplyResult(StrictModel):
             raise _validation_error(
                 "presentation_mismatch", "product must retain the operand presentation"
             )
-        try:
-            require_multiplication_budget(self.left, self.right)
-        except ValueError as exc:
-            raise _validation_error("product_budget_exceeded", str(exc)) from exc
         return self
 
 

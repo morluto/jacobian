@@ -7,6 +7,8 @@ from fractions import Fraction
 from functools import cmp_to_key
 from typing import Any, Literal, cast
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
 from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
@@ -19,6 +21,7 @@ from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
     StrictSublevelComponent,
     StrictSublevelEndpoint,
     StrictSublevelMeasureRequest,
+    StrictSublevelMeasureResult,
 )
 
 
@@ -239,6 +242,25 @@ def compute_strict_sublevel_payload(
     return StrictSublevelPayload(
         components=component_tuple,
         measure=_measure_from_components(component_tuple, roots),
+    )
+
+
+def verify_strict_sublevel_measure_result(result: StrictSublevelMeasureResult) -> bool:
+    """Verify one independently supplied strict-sublevel claim, boundedly."""
+
+    try:
+        request = StrictSublevelMeasureRequest(
+            polynomial=result.source_polynomial,
+            threshold=result.threshold,
+            lower=result.lower,
+            upper=result.upper,
+        )
+    except ValidationError:
+        return False
+
+    expected = compute_strict_sublevel_payload(request)
+    return (
+        result.components == expected.components and result.measure == expected.measure
     )
 
 

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-
 import sympy
 
 from jacobian.math.polynomials._conversions import (
@@ -22,31 +20,13 @@ from jacobian.math.polynomials.maps._models import (
     GenericDegreeResult,
     JacobianResult,
 )
-from jacobian.math.polynomials.maps._replay import (
-    run_bounded_certificate_replay,
-)
 from jacobian.math.polynomials.maps._singular import run_singular_generic_fiber
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
-
-_REPLAY_FAILURE_OUTCOMES: dict[str, tuple[GenericDegreeOutcome, str]] = {
-    "CANCELLED": (
-        "CANCELLED",
-        "Certificate replay was cancelled before producing a result.",
-    ),
-    "TIMEOUT": ("TIMEOUT", "Certificate replay exceeded the declared wall-time limit."),
-    "LIMIT_EXCEEDED": (
-        "BOUND_EXCEEDED",
-        "The generic-fiber certificate replay exceeded the declared computation bound.",
-    ),
-    "INVALID": ("ERROR", "Singular evidence failed source-bound exact replay."),
-    "ERROR": ("ERROR", "The certificate replay worker failed."),
-}
 
 
 def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult:
     """Compute the exact degree of the map's generic scheme-theoretic fiber."""
 
-    deadline = time.monotonic() + request.resource_budget.wall_seconds
     backend = run_singular_generic_fiber(
         request.polynomial_map,
         request.resource_budget,
@@ -82,33 +62,6 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
     else:
         mathematical_outcome = "DOMINANT_NOT_GENERICALLY_FINITE"
         degree = None
-    remaining_seconds = deadline - time.monotonic()
-    if remaining_seconds <= 0:
-        return GenericDegreeResult(
-            outcome="TIMEOUT",
-            source=request.polynomial_map,
-            detail=(
-                "The declared wall-time envelope expired before certificate replay."
-            ),
-        )
-    replay = run_bounded_certificate_replay(
-        request.polynomial_map,
-        backend.certificate,
-        wall_seconds=remaining_seconds,
-    )
-    if replay.status != "COMPUTED":
-        outcome, default_detail = _REPLAY_FAILURE_OUTCOMES[replay.status]
-        return GenericDegreeResult(
-            outcome=outcome,
-            source=request.polynomial_map,
-            detail=replay.detail or default_detail,
-        )
-    if replay.outcome != mathematical_outcome or replay.degree != degree:
-        return GenericDegreeResult(
-            outcome="ERROR",
-            source=request.polynomial_map,
-            detail=("Singular metadata disagree with the exact certificate replay."),
-        )
     return GenericDegreeResult._from_kernel(
         outcome=mathematical_outcome,
         source=request.polynomial_map,

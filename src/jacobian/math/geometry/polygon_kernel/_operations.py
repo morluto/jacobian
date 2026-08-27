@@ -1,4 +1,4 @@
-"""Native exact visibility-kernel operation."""
+"""Native exact visibility-kernel operation and private claim verification."""
 
 from jacobian.math.geometry.polygon_kernel._kernel import compute_kernel_data
 from jacobian.math.geometry.polygon_kernel._models import (
@@ -11,23 +11,32 @@ def compute_visibility_kernel(request: PolygonKernelRequest) -> PolygonKernelRes
     """Reconstruct a simple CCW polygon's closed visibility kernel exactly."""
 
     data = compute_kernel_data(request.polygon)
-    # ``compute_kernel_data`` is the same deterministic replay used by the
-    # result model. Avoid paying the O(n^3) replay twice in the trusted producer;
-    # serialized/authored results still run the complete source-binding check.
-    return PolygonKernelResult.model_construct(
-        polygon=request.polygon,
-        interior_half_plane_convention=data.convention,
-        half_planes=data.half_planes,
-        vertex_turns=data.vertex_turns,
-        reflex_vertex_indices=data.reflex_vertex_indices,
-        kernel_dimension=data.dimension,
-        kernel_boundary=data.boundary,
-        convex_hull=data.convex_hull,
-        polygon_area=data.polygon_area,
-        kernel_area=data.kernel_area,
-        convex_hull_area=data.convex_hull_area,
-        kernel_to_polygon_area_ratio=data.kernel_to_polygon_area_ratio,
-        polygon_to_hull_area_ratio=data.polygon_to_hull_area_ratio,
+    return PolygonKernelResult._from_kernel(request.polygon, data=data)
+
+
+def _verify_polygon_kernel_result(result: PolygonKernelResult) -> bool:
+    """Deliberately recompute one independently supplied kernel claim."""
+
+    try:
+        request = PolygonKernelRequest.model_validate(
+            {"polygon": result.polygon.model_dump(mode="json")}
+        )
+    except (AttributeError, TypeError, ValueError):
+        return False
+    expected = compute_kernel_data(request.polygon)
+    return (
+        result.interior_half_plane_convention == expected.convention
+        and result.half_planes == expected.half_planes
+        and result.vertex_turns == expected.vertex_turns
+        and result.reflex_vertex_indices == expected.reflex_vertex_indices
+        and result.kernel_dimension == expected.dimension
+        and result.kernel_boundary == expected.boundary
+        and result.convex_hull == expected.convex_hull
+        and result.polygon_area == expected.polygon_area
+        and result.kernel_area == expected.kernel_area
+        and result.convex_hull_area == expected.convex_hull_area
+        and result.kernel_to_polygon_area_ratio == expected.kernel_to_polygon_area_ratio
+        and result.polygon_to_hull_area_ratio == expected.polygon_to_hull_area_ratio
     )
 
 

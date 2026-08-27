@@ -169,25 +169,9 @@ class KernelData:
     kernel_to_polygon_area_ratio: CanonicalRational
     polygon_to_hull_area_ratio: CanonicalRational
 
-    def as_tuple(self) -> tuple[object, ...]:
-        return (
-            self.convention,
-            self.half_planes,
-            self.vertex_turns,
-            self.reflex_vertex_indices,
-            self.dimension,
-            self.boundary,
-            self.convex_hull,
-            self.polygon_area,
-            self.kernel_area,
-            self.convex_hull_area,
-            self.kernel_to_polygon_area_ratio,
-            self.polygon_to_hull_area_ratio,
-        )
-
 
 def compute_kernel_data(polygon: KernelPolygon) -> KernelData:
-    """Compute the complete canonical kernel data used by producer and replay."""
+    """Compute the complete canonical kernel data for one admitted polygon."""
 
     half_planes = oriented_half_planes(polygon)
     candidates = _feasible_boundary_intersections(half_planes)

@@ -1,11 +1,11 @@
-"""Exact kernel and replay helpers for smooth rational conics."""
+"""Exact kernel and owner-private verification helpers for smooth rational conics."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
 from math import gcd, lcm
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import sympy
 
@@ -23,6 +23,11 @@ from jacobian.math.polynomials.values import (
     RationalPolynomial,
     require_polynomial_budget,
 )
+
+if TYPE_CHECKING:
+    from jacobian.math.plane_algebraic_curves._models import (
+        RationalConicParametrizationResult,
+    )
 
 MAX_CONIC_TERMS = 6
 MAX_CONIC_INPUT_DIGITS = 128
@@ -606,13 +611,25 @@ def _validate_projective_denominator_locus(
         raise ValueError("projective chart coordinate must use the parameter axis")
 
 
-def validate_rational_conic_result_identities(
-    polynomial: RationalPolynomial,
-    point: VariablePoint,
-    parameter: PolynomialVariable,
-    data: ConicParametrizationData,
+def _verify_rational_conic_parametrization_result(
+    result: RationalConicParametrizationResult,
 ) -> None:
-    """Replay the canonical chart and its defining birational identities."""
+    """Boundedly verify an independently supplied conic parametrization claim.
+
+    This owner-private path is deliberately separate from result parsing.  It
+    re-enters request admission before replaying the canonical construction and
+    its defining identities.
+    """
+
+    polynomial = result.source_polynomial
+    point = result.exceptional_point
+    parameter = result.parameter
+    data = ConicParametrizationData(
+        coordinates=result.coordinates,
+        inverse_parameter=result.inverse_parameter,
+        finite_parameter_denominator=result.finite_parameter_denominator,
+    )
+    validate_rational_conic_request(polynomial, point, parameter)
 
     derivation = _derive_rational_conic_parametrization(polynomial, point, parameter)
     if data != derivation.data:
@@ -673,5 +690,4 @@ __all__ = [
     "ConicParametrizationData",
     "derive_rational_conic_parametrization",
     "validate_rational_conic_request",
-    "validate_rational_conic_result_identities",
 ]

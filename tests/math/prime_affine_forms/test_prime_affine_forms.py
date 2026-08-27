@@ -26,6 +26,7 @@ from jacobian.math.prime_affine_forms._interval import (
     PrimePatternIntervalEnumerateResult,
     compute_interval_count,
     compute_interval_enumerate,
+    verify_interval_enumerate_result,
 )
 from jacobian.math.prime_affine_forms._local_factors import (
     FinitePrimeTupleFactorProduct,
@@ -34,6 +35,8 @@ from jacobian.math.prime_affine_forms._local_factors import (
     PrimeTupleLocalFactorsRequest,
     compute_local_factor,
     compute_local_factors,
+    verify_local_factor_result,
+    verify_local_factors_result,
 )
 from jacobian.math.prime_affine_forms._models import PrimeTupleLocalSummary
 from jacobian.math.prime_affine_forms._operations import (
@@ -49,12 +52,15 @@ from jacobian.math.prime_affine_forms._residue_wheel import (
     PrimeTupleResidueWheelEnumerationRequest,
     PrimeTupleResidueWheelRequest,
     PrimeTupleWheelMembershipRequest,
+    verify_residue_wheel,
+    verify_residue_wheel_enumeration,
 )
 from jacobian.math.prime_affine_forms._tools import TOOLS
 from jacobian.math.prime_affine_forms._translation import (
     PrimeAffineTranslationRequest,
     PrimeAffineTranslationResult,
     compute_translation,
+    verify_translation_result,
 )
 from jacobian.math.prime_affine_forms.values import MAX_AFFINE_AGGREGATE_DIGITS
 
@@ -185,7 +191,9 @@ def test_local_factor_agrees_with_direct_residue_oracle(prime: int) -> None:
     assert result.factor.as_fraction() == expected_factor
 
 
-def test_local_factor_result_rejects_source_and_conclusion_mutations() -> None:
+def test_local_factor_result_round_trips_structurally_and_verifier_rejects_forgery() -> (
+    None
+):
     result = compute_local_factor(
         PrimeTupleLocalFactorRequest(source=TWIN_PRIMES, prime=3)
     )
@@ -193,18 +201,23 @@ def test_local_factor_result_rejects_source_and_conclusion_mutations() -> None:
 
     wrong_factor = deepcopy(payload)
     wrong_factor["factor"] = {"num": "1", "den": "1"}
-    with pytest.raises(ValidationError):
+    assert PrimeTupleLocalFactorResult.model_validate(wrong_factor) != result
+    assert not verify_local_factor_result(
         PrimeTupleLocalFactorResult.model_validate(wrong_factor)
+    )
 
     wrong_source = deepcopy(payload)
     wrong_source["source"]["forms"][1]["constant"] = "4"
-    with pytest.raises(ValidationError):
+    assert not verify_local_factor_result(
         PrimeTupleLocalFactorResult.model_validate(wrong_source)
+    )
 
     wrong_row = deepcopy(payload)
     wrong_row["residue_rows"][1]["vanishing_form_ids"] = []
-    with pytest.raises(ValidationError):
+    assert not verify_local_factor_result(
         PrimeTupleLocalFactorResult.model_validate(wrong_row)
+    )
+    assert PrimeTupleLocalFactorResult.model_validate(payload) == result
 
 
 def test_finite_local_factor_product_and_obstruction() -> None:
@@ -227,8 +240,8 @@ def test_finite_local_factor_product_and_obstruction() -> None:
 
     payload = zero.model_dump(mode="json")
     payload["first_obstructing_prime"] = 2
-    with pytest.raises(ValidationError):
-        FinitePrimeTupleFactorProduct.model_validate(payload)
+    forged = FinitePrimeTupleFactorProduct.model_validate(payload)
+    assert not verify_local_factors_result(forged)
 
 
 def test_local_admissibility_uses_complete_finite_cutoff() -> None:
@@ -317,8 +330,8 @@ def test_translation_preserves_local_factors_and_form_ids() -> None:
 
     payload = translated.model_dump(mode="json")
     payload["translated"]["forms"][0]["constant"] = "2"
-    with pytest.raises(ValidationError):
-        PrimeAffineTranslationResult.model_validate(payload)
+    forged = PrimeAffineTranslationResult.model_validate(payload)
+    assert not verify_translation_result(forged)
 
 
 def test_translation_rejects_translated_tuple_exceeding_aggregate_digit_bound() -> None:
@@ -474,16 +487,18 @@ def test_wheel_result_rejects_component_and_source_mutations() -> None:
 
     wrong_source = deepcopy(payload)
     wrong_source["source"]["forms"][1]["constant"] = "4"
-    with pytest.raises(ValidationError):
-        PrimeTupleResidueWheel.model_validate(wrong_source)
+    forged_wheel = PrimeTupleResidueWheel.model_validate(wrong_source)
+    assert not verify_residue_wheel(forged_wheel)
 
     enumeration = compute_residue_wheel_enumeration(
         PrimeTupleResidueWheelEnumerationRequest(wheel=wheel)
     )
     wrong_component = enumeration.model_dump(mode="json")
     wrong_component["residues"][0]["components"] = [0, 2]
-    with pytest.raises(ValidationError):
-        PrimeTupleResidueWheelEnumeration.model_validate(wrong_component)
+    forged_enumeration = PrimeTupleResidueWheelEnumeration.model_validate(
+        wrong_component
+    )
+    assert not verify_residue_wheel_enumeration(forged_enumeration)
 
     oversized_scalar = deepcopy(payload)
     oversized_scalar["modulus"] = "9" * 4_097
@@ -518,8 +533,8 @@ def test_interval_count_and_enumeration_are_exact_and_aligned() -> None:
 
     payload = enumeration.model_dump(mode="json")
     payload["matches"][0]["prime_values"][1] = "7"
-    with pytest.raises(ValidationError):
-        PrimePatternIntervalEnumerateResult.model_validate(payload)
+    forged = PrimePatternIntervalEnumerateResult.model_validate(payload)
+    assert not verify_interval_enumerate_result(forged)
 
 
 def test_wheel_survival_is_not_mislabelled_as_primality() -> None:
@@ -665,7 +680,7 @@ def test_request_boundaries_reject_before_expansion() -> None:
         )
 
 
-def test_result_validation_reapplies_request_bounds_before_replay() -> None:
+def test_private_verification_reapplies_request_bounds() -> None:
     count = compute_interval_count(
         PrimeAffineIntervalCountRequest(
             source=_tuple(_form("n", 1, 0)), lower="0", upper="10"
@@ -674,7 +689,9 @@ def test_result_validation_reapplies_request_bounds_before_replay() -> None:
     overbound_count = count.model_dump(mode="json")
     overbound_count["upper"] = "100000"
     with pytest.raises(ValidationError):
-        PrimePatternIntervalCountResult.model_validate(overbound_count)
+        interval_contracts.verify_interval_count_result(
+            PrimePatternIntervalCountResult.model_validate(overbound_count)
+        )
 
     wheel = compute_residue_wheel(
         PrimeTupleResidueWheelRequest(source=TWIN_PRIMES, primes=(2, 3))
@@ -682,7 +699,7 @@ def test_result_validation_reapplies_request_bounds_before_replay() -> None:
     overbound_wheel = wheel.model_dump(mode="json")
     overbound_wheel["primes"] = [9_007_199_254_740_993]
     with pytest.raises(ValidationError):
-        PrimeTupleResidueWheel.model_validate(overbound_wheel)
+        verify_residue_wheel(PrimeTupleResidueWheel.model_validate(overbound_wheel))
 
 
 def test_prime_sets_and_interval_relations_are_schema_visible() -> None:

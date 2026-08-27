@@ -10,19 +10,18 @@ from jacobian.math.code_nonlinear.values import (
     ExplicitBinaryCode,
 )
 
-# A normal operation invocation visits every unordered pair once in the kernel
-# and once more when result construction replays the source-bound conclusion.
+# A normal operation invocation visits every unordered pair once in the kernel.
 # The standard A(23,6,10) construction has length 23, minimum distance 6,
-# constant weight 10, and 2992 words, so it uses ``2 * 4,474,536``
+# constant weight 10, and 2992 words, so it uses ``4,474,536``
 # pair-by-chunk units.
 MAX_PROFILE_PAIRS = 5_000_000
-PROFILE_PAIR_PASSES = 2
+PROFILE_PAIR_PASSES = 1
 MAX_PROFILE_BITSET_CHUNK_WORK = 10_000_000
 BITSET_CHUNK_BITS = 30
 
 # Retained sources, dense histograms, and the two compact witnesses must fit
 # below the canonical transport's 10 MiB ceiling.  Four MiB leaves room for
-# the operation envelope and is checked from the source before pair replay.
+# the operation envelope and is checked from the source before the pair scan.
 MAX_CODE_RESULT_BYTES = 4 * 1024 * 1024
 
 # Enumerating every ``length``-bit word of weight ``w`` visits exactly
@@ -149,7 +148,7 @@ def require_profile_admission(code: ExplicitBinaryCode) -> ProfileAdmission:
 
 
 def require_pair_work_admission(code: ExplicitBinaryCode) -> tuple[int, int, int]:
-    """Admit the kernel and source-replay passes before allocating the result."""
+    """Admit the kernel pair scan before allocating the result."""
     cardinality = len(code.codewords)
     pair_count = cardinality * (cardinality - 1) // 2
     if pair_count > MAX_PROFILE_PAIRS:
@@ -164,7 +163,7 @@ def require_pair_work_admission(code: ExplicitBinaryCode) -> tuple[int, int, int
             "explicit profile requires "
             f"{bitset_chunk_work} pair-by-bitset-chunk units "
             f"({pair_count} pairs * {bitset_chunks} chunks * "
-            f"{PROFILE_PAIR_PASSES} kernel/replay passes), exceeding the "
+            f"{PROFILE_PAIR_PASSES} kernel pass), exceeding the "
             f"{MAX_PROFILE_BITSET_CHUNK_WORK}-unit bound"
         )
     return pair_count, bitset_chunks, bitset_chunk_work

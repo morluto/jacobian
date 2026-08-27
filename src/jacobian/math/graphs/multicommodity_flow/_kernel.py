@@ -46,9 +46,8 @@ def profile_components(
     priced row afterwards -- so admission adds no arithmetic pass of its own.
     Request parsing may supply ``admitted``, the scan it already performed
     and validated against, which then serves as this producer pass verbatim;
-    otherwise the pass runs here. Result-model validation calls this same
-    pure kernel without a stash, so its replay always rescans independently
-    and the returned work ledger charges both passes.
+    otherwise the pass runs here. Result parsing performs structural checks
+    only and never re-enters this kernel.
     """
 
     if admitted is None:
@@ -142,7 +141,7 @@ def profile_components(
     comparisons = divergence_cells + edge_cells + scan_comparisons
     per_pass = additions + negations + divisions + comparisons
     work = MulticommodityFlowProfileWork(
-        execution_passes_per_call=2,
+        execution_passes_per_call=1,
         sparse_entries=sparse_entries,
         commodity_vertex_cells=divergence_cells,
         edge_cells=edge_cells,
@@ -150,7 +149,7 @@ def profile_components(
         rational_negations_per_pass=negations,
         rational_divisions_per_pass=divisions,
         exact_comparisons_per_pass=comparisons,
-        logical_steps_per_call=2 * per_pass,
+        logical_steps_per_call=per_pass,
     )
     return (
         divergence_rows,

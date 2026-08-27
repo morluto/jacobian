@@ -25,6 +25,7 @@ from jacobian.math.universal_algebra._models import (
     SubalgebraRequest,
 )
 from jacobian.math.universal_algebra._operations import (
+    _verify_homomorphism_profile_result,
     compute_congruence,
     compute_equation_profile,
     compute_evaluate,
@@ -316,7 +317,7 @@ class TestHomomorphismProfile:
         assert result.obstruction.mapped_source_output == 0
         assert result.obstruction.target_output == 1
 
-    def test_result_validation_rejects_forged_positive_and_negative_data(
+    def test_result_round_trip_is_structural_and_verifier_rejects_forged_claims(
         self,
     ) -> None:
         positive = compute_homomorphism_profile(
@@ -328,12 +329,11 @@ class TestHomomorphismProfile:
                 )
             )
         ).model_dump(mode="json")
+        parsed_positive = HomomorphismProfileResult.model_validate(positive)
+        assert parsed_positive.kernel_partition == ((0, 2), (1, 3))
         positive["kernel_partition"] = [[0, 1], [2, 3]]
-        with pytest.raises(ValidationError) as error:
+        assert not _verify_homomorphism_profile_result(
             HomomorphismProfileResult.model_validate(positive)
-        assert (
-            error.value.errors()[0]["type"]
-            == "universal_algebra.kernel_partition_mismatch"
         )
 
         symbol = (OperationSymbol(operation_id="flip", arity=1),)
@@ -351,13 +351,11 @@ class TestHomomorphismProfile:
             )
         ).model_dump(mode="json")
         negative["obstruction"]["target_output"] = 1
-        with pytest.raises(ValidationError) as error:
+        assert not _verify_homomorphism_profile_result(
             HomomorphismProfileResult.model_validate(negative)
-        assert (
-            error.value.errors()[0]["type"] == "universal_algebra.obstruction_mismatch"
         )
 
-    def test_source_mutation_invalidates_negative_conclusion(self) -> None:
+    def test_verifier_rejects_source_mutation(self) -> None:
         symbol = (OperationSymbol(operation_id="flip", arity=1),)
         payload = compute_homomorphism_profile(
             HomomorphismProfileRequest(
@@ -373,14 +371,38 @@ class TestHomomorphismProfile:
             )
         ).model_dump(mode="json")
         payload["carrier_map"]["target"]["tables"] = [[1, 0]]
-        with pytest.raises(ValidationError) as error:
+        assert not _verify_homomorphism_profile_result(
             HomomorphismProfileResult.model_validate(payload)
-        assert (
-            error.value.errors()[0]["type"]
-            == "universal_algebra.negative_map_is_homomorphism"
         )
 
-    def test_source_mutation_invalidates_positive_homomorphism(self) -> None:
+    def test_verifier_accepts_producer_result_and_producer_scans_once(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import jacobian.math.universal_algebra.operations as operations
+
+        calls = 0
+        original_scan = operations._first_homomorphism_failure
+
+        def observed_scan(carrier_map: FiniteAlgebraCarrierMap):
+            nonlocal calls
+            calls += 1
+            return original_scan(carrier_map)
+
+        monkeypatch.setattr(operations, "_first_homomorphism_failure", observed_scan)
+        result = compute_homomorphism_profile(
+            HomomorphismProfileRequest(
+                carrier_map=FiniteAlgebraCarrierMap(
+                    source=_cyclic_addition_algebra(4),
+                    target=_cyclic_addition_algebra(2),
+                    mapping=(0, 1, 0, 1),
+                )
+            )
+        )
+        assert calls == 1
+        assert _verify_homomorphism_profile_result(result)
+        assert calls == 2
+
+    def test_verifier_rejects_positive_source_mutation(self) -> None:
         payload = compute_homomorphism_profile(
             HomomorphismProfileRequest(
                 carrier_map=FiniteAlgebraCarrierMap(
@@ -391,11 +413,8 @@ class TestHomomorphismProfile:
             )
         ).model_dump(mode="json")
         payload["homomorphism"]["target"]["tables"][0][0] = 1
-        with pytest.raises(ValidationError) as error:
+        assert not _verify_homomorphism_profile_result(
             HomomorphismProfileResult.model_validate(payload)
-        assert (
-            error.value.errors()[0]["type"]
-            == "universal_algebra.operation_not_preserved"
         )
 
     def test_maximum_source_table_budget_is_scanned_completely(self) -> None:
@@ -512,7 +531,7 @@ class TestQuotient:
             == "universal_algebra.quotient_output_exceeded"
         )
 
-    def test_quotient_charges_construction_and_map_replay_work(self) -> None:
+    def test_quotient_charges_construction_work(self) -> None:
         def constant_ternary_algebra(size: int) -> FiniteAlgebra:
             return FiniteAlgebra(
                 carrier=tuple(f"a{index}" for index in range(size)),

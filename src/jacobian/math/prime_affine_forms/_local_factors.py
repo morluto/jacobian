@@ -29,7 +29,6 @@ from jacobian.math.prime_affine_forms._models import (
     PrimeTupleResidueRow,
     _require_prime,
     _require_prime_set,
-    _require_summary,
     _source_character_upper_bound,
     _summary_character_upper_bound,
     _validation_error,
@@ -87,7 +86,7 @@ class PrimeTupleLocalFactorRequest(StrictModel):
         work = 6 * self.source.form_count + 2 * self.prime
         if work > MAX_LOCAL_PROFILE_WORK:
             raise _validation_error(
-                f"local profile and validation need {work} bounded steps, "
+                f"local profile needs {work} bounded steps, "
                 f"exceeding {MAX_LOCAL_PROFILE_WORK}"
             )
         return self
@@ -107,7 +106,7 @@ class PrimeTupleLocalFactorResult(StrictModel):
     factor: CanonicalRational
 
     @model_validator(mode="after")
-    def bind_complete_local_factor(self) -> Self:
+    def require_local_factor_shape(self) -> Self:
         if (
             sum(len(row.vanishing_form_ids) for row in self.residue_rows)
             > self.source.form_count
@@ -115,35 +114,46 @@ class PrimeTupleLocalFactorResult(StrictModel):
             raise _validation_error(
                 "residue incidence count exceeds the source affine-form count"
             )
-        PrimeTupleLocalFactorRequest(source=self.source, prime=self.prime)
-        bad = dict(local_bad_residues(self.source, self.prime))
-        expected_rows = tuple(
-            (residue, bad.get(residue, ())) for residue in range(self.prime)
-        )
-        actual_rows = tuple(
-            (row.residue, row.vanishing_form_ids) for row in self.residue_rows
-        )
-        if actual_rows != expected_rows:
+        if tuple(row.residue for row in self.residue_rows) != tuple(range(self.prime)):
             raise _validation_error(
-                "residue rows must be the complete source-bound partition"
+                "residue rows must be the canonical residue partition"
             )
-        expected_bad = len(bad)
-        expected_valid = self.prime - expected_bad
-        if self.bad_count != expected_bad or self.valid_count != expected_valid:
-            raise _validation_error(
-                "local counts do not match the complete residue rows"
-            )
-        if self.locally_obstructed != (expected_valid == 0):
+        if self.bad_count + self.valid_count != self.prime:
+            raise _validation_error("local counts must partition the prime modulus")
+        if self.locally_obstructed != (self.valid_count == 0):
             raise _validation_error(
                 "local obstruction status must equal valid_count == 0"
             )
-        if self.factor.as_fraction() != local_factor_from_bad_count(
-            self.source.form_count, self.prime, expected_bad
-        ):
-            raise _validation_error(
-                "local factor does not satisfy its defining formula"
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PrimeTupleLocalFactorRequest,
+        *,
+        bad: tuple[tuple[int, tuple[str, ...]], ...],
+    ) -> Self:
+        bad_by_residue = dict(bad)
+        bad_count = len(bad)
+        return cls(
+            source=request.source,
+            prime=request.prime,
+            residue_rows=tuple(
+                PrimeTupleResidueRow(
+                    residue=residue,
+                    vanishing_form_ids=bad_by_residue.get(residue, ()),
+                )
+                for residue in range(request.prime)
+            ),
+            bad_count=bad_count,
+            valid_count=request.prime - bad_count,
+            locally_obstructed=bad_count == request.prime,
+            factor=CanonicalRational.from_fraction(
+                local_factor_from_bad_count(
+                    request.source.form_count, request.prime, bad_count
+                )
+            ),
+        )
 
 
 class PrimeTupleLocalFactorsRequest(StrictModel):
@@ -166,7 +176,7 @@ class PrimeTupleLocalFactorsRequest(StrictModel):
         root_work = 6 * root_cells
         if root_work > MAX_BATCH_ROOT_WORK:
             raise _validation_error(
-                f"local-factor computation and validation need {root_work} root "
+                f"local-factor computation needs {root_work} root "
                 f"steps, exceeding {MAX_BATCH_ROOT_WORK}"
             )
         digit_bounds = tuple(
@@ -215,37 +225,39 @@ class FinitePrimeTupleFactorProduct(StrictModel):
     first_obstructing_prime: StrictInt | None = None
 
     @model_validator(mode="after")
-    def bind_finite_factor_product(self) -> Self:
-        PrimeTupleLocalFactorsRequest(source=self.source, primes=self.primes)
+    def require_finite_product_shape(self) -> Self:
         if tuple(row.summary.prime for row in self.rows) != self.primes:
             raise _validation_error(
                 "local-factor rows must align with the canonical prime set"
             )
-        expected_product = Fraction(1, 1)
-        expected_first: int | None = None
         for row in self.rows:
-            _require_summary(self.source, row.summary)
-            expected_factor = local_factor_from_bad_count(
-                self.source.form_count,
-                row.summary.prime,
-                row.summary.bad_count,
-            )
-            if row.factor.as_fraction() != expected_factor:
-                raise _validation_error(
-                    "local factor row does not satisfy its defining formula"
-                )
-            expected_product *= expected_factor
-            if expected_first is None and row.summary.valid_count == 0:
-                expected_first = row.summary.prime
-        if self.product.as_fraction() != expected_product:
+            if row.summary.bad_count + row.summary.valid_count != row.summary.prime:
+                raise _validation_error("local summary counts must partition its prime")
+        if (
+            self.first_obstructing_prime is not None
+            and self.first_obstructing_prime not in self.primes
+        ):
             raise _validation_error(
-                "finite product must equal the product of every local row"
-            )
-        if self.first_obstructing_prime != expected_first:
-            raise _validation_error(
-                "first obstructing prime does not match the local rows"
+                "first obstructing prime must belong to the canonical prime set"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PrimeTupleLocalFactorsRequest,
+        *,
+        rows: tuple[PrimeTupleLocalFactorRow, ...],
+        product: Fraction,
+        first_obstruction: int | None,
+    ) -> Self:
+        return cls(
+            source=request.source,
+            primes=request.primes,
+            rows=rows,
+            product=CanonicalRational.from_fraction(product),
+            first_obstructing_prime=first_obstruction,
+        )
 
 
 def compute_local_factor(
@@ -253,25 +265,8 @@ def compute_local_factor(
 ) -> PrimeTupleLocalFactorResult:
     """Return one complete local residue partition and exact factor."""
 
-    bad = dict(local_bad_residues(request.source, request.prime))
-    return PrimeTupleLocalFactorResult(
-        source=request.source,
-        prime=request.prime,
-        residue_rows=tuple(
-            PrimeTupleResidueRow(
-                residue=residue,
-                vanishing_form_ids=bad.get(residue, ()),
-            )
-            for residue in range(request.prime)
-        ),
-        bad_count=len(bad),
-        valid_count=request.prime - len(bad),
-        locally_obstructed=len(bad) == request.prime,
-        factor=CanonicalRational.from_fraction(
-            local_factor_from_bad_count(
-                request.source.form_count, request.prime, len(bad)
-            )
-        ),
+    return PrimeTupleLocalFactorResult._from_kernel(
+        request, bad=local_bad_residues(request.source, request.prime)
     )
 
 
@@ -297,13 +292,26 @@ def compute_local_factors(
         product *= factor
         if first_obstruction is None and summary.valid_count == 0:
             first_obstruction = prime
-    return FinitePrimeTupleFactorProduct(
-        source=request.source,
-        primes=request.primes,
+    return FinitePrimeTupleFactorProduct._from_kernel(
+        request,
         rows=tuple(rows),
-        product=CanonicalRational.from_fraction(product),
-        first_obstructing_prime=first_obstruction,
+        product=product,
+        first_obstruction=first_obstruction,
     )
+
+
+def verify_local_factor_result(result: PrimeTupleLocalFactorResult) -> bool:
+    """Verify an independently supplied complete local-factor claim."""
+
+    request = PrimeTupleLocalFactorRequest(source=result.source, prime=result.prime)
+    return result == compute_local_factor(request)
+
+
+def verify_local_factors_result(result: FinitePrimeTupleFactorProduct) -> bool:
+    """Verify an independently supplied finite local-factor product claim."""
+
+    request = PrimeTupleLocalFactorsRequest(source=result.source, primes=result.primes)
+    return result == compute_local_factors(request)
 
 
 __all__ = [

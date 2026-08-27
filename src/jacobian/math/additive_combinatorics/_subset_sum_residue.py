@@ -17,14 +17,11 @@ from jacobian.math.additive_combinatorics.values import (
     indexed_sequence_item_ceiling,
 )
 
-# The dense residue recurrence visits exactly n*m cells per pass.  Ordinary
-# operation construction performs one computation and one source-binding
-# replay, so the separate total below bounds the complete public call.  Counts
-# never exceed 2^n; their bit bound therefore covers every bigint intermediate.
+# The dense residue recurrence visits exactly n*m cells. Counts never exceed
+# 2^n; their bit bound therefore covers every bigint intermediate.
 # The modulus ceiling controls the two dense arrays and required m-entry result
 # even for an empty source.
 MAX_RESIDUE_PROFILE_DP_CELLS = 1_000_000
-MAX_RESIDUE_PROFILE_TOTAL_DP_CELLS = 2 * MAX_RESIDUE_PROFILE_DP_CELLS
 MAX_RESIDUE_PROFILE_MODULUS = 65_536
 MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS = 4_096
 MAX_RESIDUE_PROFILE_ITEMS = MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS - 1
@@ -423,30 +420,51 @@ class SubsetSumResidueProfileResult(StrictModel):
         return prepared
 
     @model_validator(mode="after")
-    def bind_profile_to_source(self) -> Self:
+    def require_structural_shape(self) -> Self:
         if self.include_witnesses != (self.residue_witnesses is not None):
             raise _validation_error(
-                "bind_profile_to_source",
+                "result_shape",
                 "residue_witnesses presence must match include_witnesses",
             )
-        request = SubsetSumResidueProfileRequest(
-            source=self.source,
-            modulus=self.modulus,
-            include_empty_subset=self.include_empty_subset,
-            include_witnesses=self.include_witnesses,
-        )
-        expected_counts, expected_witnesses = _compute_residue_profile(request)
-        if self.residue_counts != expected_counts:
+        if len(self.residue_counts) != self.modulus:
             raise _validation_error(
-                "bind_profile_to_source",
-                "residue counts do not match the retained source",
+                "result_shape",
+                "residue_counts must contain exactly modulus rows",
             )
-        if self.residue_witnesses != expected_witnesses:
-            raise _validation_error(
-                "bind_profile_to_source",
-                "residue witnesses do not match the retained source",
-            )
+        if self.residue_witnesses is not None:
+            if len(self.residue_witnesses) != self.modulus:
+                raise _validation_error(
+                    "result_shape",
+                    "residue_witnesses must contain exactly modulus rows",
+                )
+            item_count = len(self.source.items)
+            for witness in self.residue_witnesses:
+                if witness is not None and any(
+                    index >= item_count for index in witness.indices
+                ):
+                    raise _validation_error(
+                        "result_shape",
+                        "residue witness index lies outside the retained source",
+                    )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: SubsetSumResidueProfileRequest,
+        residue_counts: tuple[ResidueMultiplicity, ...],
+        residue_witnesses: tuple[IndexSubset | None, ...] | None,
+    ) -> Self:
+        """Construct output whose mathematical invariants the kernel established."""
+
+        return cls.model_construct(
+            source=request.source,
+            modulus=request.modulus,
+            include_empty_subset=request.include_empty_subset,
+            include_witnesses=request.include_witnesses,
+            residue_counts=residue_counts,
+            residue_witnesses=residue_witnesses,
+        )
 
 
 def _indices_from_mask(mask: int, item_count: int) -> tuple[int, ...]:
@@ -521,13 +539,29 @@ def compute_subset_sum_residue_profile(
 ) -> SubsetSumResidueProfileResult:
     """Return every exact indexed-subset multiplicity modulo ``m``."""
     residue_counts, residue_witnesses = _compute_residue_profile(request)
-    return SubsetSumResidueProfileResult(
-        source=request.source,
-        modulus=request.modulus,
-        include_empty_subset=request.include_empty_subset,
-        include_witnesses=request.include_witnesses,
+    return SubsetSumResidueProfileResult._from_kernel(
+        request,
         residue_counts=residue_counts,
         residue_witnesses=residue_witnesses,
+    )
+
+
+def _verify_subset_sum_residue_profile(result: SubsetSumResidueProfileResult) -> bool:
+    """Verify an independently supplied residue profile within its envelope."""
+
+    try:
+        request = SubsetSumResidueProfileRequest(
+            source=result.source,
+            modulus=result.modulus,
+            include_empty_subset=result.include_empty_subset,
+            include_witnesses=result.include_witnesses,
+        )
+        expected_counts, expected_witnesses = _compute_residue_profile(request)
+    except ValueError:
+        return False
+    return (
+        result.residue_counts == expected_counts
+        and result.residue_witnesses == expected_witnesses
     )
 
 
@@ -538,7 +572,6 @@ __all__ = [
     "MAX_RESIDUE_PROFILE_MODULUS",
     "MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS",
     "MAX_RESIDUE_PROFILE_RESULT_BYTES",
-    "MAX_RESIDUE_PROFILE_TOTAL_DP_CELLS",
     "MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS",
     "SubsetSumResidueProfileRequest",
     "SubsetSumResidueProfileResult",

@@ -19,18 +19,18 @@ from jacobian.math.integral_binary_quadratic_forms._models import (
     _representation_y_bound,
 )
 from jacobian.math.integral_binary_quadratic_forms._operations import (
+    _verify_check_result,
+    _verify_evaluate_result,
+    _verify_proper_equivalence_result,
+    _verify_reduced_classes_result,
+    _verify_reduced_form_result,
+    _verify_representations_result,
     compute_check,
     compute_evaluate,
     compute_proper_equivalence,
     compute_reduce,
     compute_reduced_classes,
     compute_representations,
-    verify_check_result,
-    verify_evaluate_result,
-    verify_proper_equivalence_result,
-    verify_reduced_classes_result,
-    verify_reduced_form_result,
-    verify_representations_result,
 )
 from jacobian.math.integral_binary_quadratic_forms._tools import TOOLS
 
@@ -90,7 +90,7 @@ class TestCheck:
         result = compute_check(BinaryQuadraticFormCheckRequest(a=1, b=1, c=1))
         forged = result.model_dump(mode="json")
         forged["form"]["b"] = 0
-        assert not verify_check_result(type(result).model_validate(forged))
+        assert not _verify_check_result(type(result).model_validate(forged))
 
 
 class TestEvaluate:
@@ -191,7 +191,7 @@ class TestEvaluate:
         )
         forged = result.model_dump(mode="json")
         forged["x"] = 100_000_000
-        assert not verify_evaluate_result(
+        assert not _verify_evaluate_result(
             BinaryQuadraticFormEvaluateResult.model_validate(forged)
         )
 
@@ -467,18 +467,15 @@ class TestRepresentations:
             exc_info, "integral_binary_quadratic_form.representation_candidate_budget"
         )
 
-    def test_result_replay_reuses_the_preflight_budget(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            BinaryQuadraticFormRepresentationsResult(
-                form=_positive_form(1_000_000, 0, 1),
-                target=1_000_000_000_000,
-                representations=(),
-                count=0,
-                primitive_count=0,
-            )
-        _assert_error_type(
-            exc_info, "integral_binary_quadratic_form.representation_candidate_budget"
+    def test_result_parsing_does_not_repeat_the_representation_admission(self) -> None:
+        result = BinaryQuadraticFormRepresentationsResult(
+            form=_positive_form(1_000_000, 0, 1),
+            target=1_000_000_000_000,
+            representations=(),
+            count=0,
+            primitive_count=0,
         )
+        assert not _verify_representations_result(result)
 
     def test_explicit_representation_verifier_rejects_missing_row(self) -> None:
         result = compute_representations(
@@ -490,7 +487,7 @@ class TestRepresentations:
         forged["representations"] = forged["representations"][1:]
         forged["count"] -= 1
         forged["primitive_count"] -= 1
-        assert not verify_representations_result(type(result).model_validate(forged))
+        assert not _verify_representations_result(type(result).model_validate(forged))
 
 
 class TestCanonicalFormComposition:
@@ -513,12 +510,12 @@ class TestCanonicalFormComposition:
             BinaryQuadraticFormReducedClassesRequest(discriminant=-11)
         )
 
-        assert verify_check_result(checked)
-        assert verify_evaluate_result(evaluated)
-        assert verify_reduced_form_result(reduced)
-        assert verify_proper_equivalence_result(equivalent)
-        assert verify_representations_result(representation_set)
-        assert verify_reduced_classes_result(classes)
+        assert _verify_check_result(checked)
+        assert _verify_evaluate_result(evaluated)
+        assert _verify_reduced_form_result(reduced)
+        assert _verify_proper_equivalence_result(equivalent)
+        assert _verify_representations_result(representation_set)
+        assert _verify_reduced_classes_result(classes)
 
     def test_checked_form_serializes_into_every_form_consumer(self) -> None:
         checked = compute_check(BinaryQuadraticFormCheckRequest(a=5, b=3, c=1))
@@ -572,4 +569,4 @@ class TestCanonicalFormComposition:
         )
         forged = result.model_dump(mode="json")
         forged["reduced_form"]["b"] = -1
-        assert not verify_reduced_form_result(type(result).model_validate(forged))
+        assert not _verify_reduced_form_result(type(result).model_validate(forged))

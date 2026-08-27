@@ -131,10 +131,8 @@ def compute_multivariate_resultant(
     request: MultivariateResultantRequest,
 ) -> MultivariateResultantResult:
     """Compute the resultant of two multivariate polynomials w.r.t. one variable."""
-    return MultivariateResultantResult(
-        left=request.left,
-        right=request.right,
-        elimination_variable=request.elimination_variable,
+    return MultivariateResultantResult._from_kernel(
+        request,
         resultant=_sylvester_resultant_value(request),
     )
 
@@ -182,10 +180,8 @@ def compute_multivariate_subresultant_sequence(
     )
     left_degree = _degree_in_variable(request.left, variable_index)
     right_degree = _degree_in_variable(request.right, variable_index)
-    return MultivariateSubresultantSequenceResult(
-        left=request.left,
-        right=request.right,
-        main_variable=request.main_variable,
+    return MultivariateSubresultantSequenceResult._from_kernel(
+        request,
         source_order=source_order,
         members=members,
         skipped_member_degrees=tuple(
@@ -262,7 +258,7 @@ def _sympy_factor_key(poly: Any) -> _SympyFactorKey:
     )
 
 
-def verify_multivariate_factor_result(result: MultivariateFactorResult) -> bool:
+def _verify_multivariate_factor_result(result: MultivariateFactorResult) -> bool:
     """Verify an independently supplied factorization claim once, boundedly.
 
     Construction of a kernel result never re-enters the worker that produced

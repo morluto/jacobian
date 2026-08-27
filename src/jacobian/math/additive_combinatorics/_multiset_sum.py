@@ -18,8 +18,7 @@ MAX_ELEMENT_DIGITS = 64
 # JSON integer range, because the published schema exposes it as ``maximum``.
 MAX_ARITY_DIGITS = 18
 MAX_ARITY = (1 << 53) - 1
-# The operation enumerates once and source-bound result validation replays once,
-# so an accepted call performs at most twice this many coordinate steps.
+# The operation enumerates each admitted candidate family once.
 MAX_ENUMERATION_WORK = 20_000_000
 
 # A row containing a signed sum of at most MAX_RESULT_DIGITS digits and an

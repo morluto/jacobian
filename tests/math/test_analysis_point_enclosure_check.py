@@ -11,7 +11,6 @@ from jacobian.math.analysis._models import ExactDyadic
 from jacobian.math.analysis._point_enclosure import (
     MAX_POINT_CHECK_DYADIC_EXPONENT,
     MAX_POINT_CHECK_FRACTION_BITS,
-    MAX_POINT_CHECK_FRACTION_UPDATES,
     MAX_POINT_CHECK_LOG_TERMS,
     MAX_POINT_CHECK_OUTPUT_BYTES,
     ArbPointEnclosureRequest,
@@ -413,7 +412,7 @@ def test_fraction_intermediates_fit_the_preflighted_bit_bound_at_the_source_limi
     )
 
 
-def test_result_validation_rejects_forged_verdicts_and_wrong_sources() -> None:
+def test_result_parsing_is_structural_and_checker_verifies_claims() -> None:
     result = _run(
         "LOG",
         "137",
@@ -424,23 +423,44 @@ def test_result_validation_rejects_forged_verdicts_and_wrong_sources() -> None:
 
     forged_verdict = result.model_dump(mode="json")
     forged_verdict["outcome"] = "REJECTED"
-    with analysis_validation_error():
-        PointEnclosureCheckResult.model_validate(forged_verdict)
+    parsed_forged_verdict = PointEnclosureCheckResult.model_validate(forged_verdict)
+    assert parsed_forged_verdict.outcome == "REJECTED"
+    assert (
+        _check_point_enclosure(
+            PointEnclosureCheckRequest(enclosure=parsed_forged_verdict.enclosure)
+        ).outcome
+        == "ACCEPTED"
+    )
 
     tampered_interval = result.model_dump(mode="json")
     tampered_interval["enclosure"]["upper"] = {"mantissa": "1", "exponent": -1}
-    with analysis_validation_error():
-        PointEnclosureCheckResult.model_validate(tampered_interval)
+    parsed_interval = PointEnclosureCheckResult.model_validate(tampered_interval)
+    assert (
+        _check_point_enclosure(
+            PointEnclosureCheckRequest(enclosure=parsed_interval.enclosure)
+        ).outcome
+        == "REJECTED"
+    )
 
     wrong_function = result.model_dump(mode="json")
     wrong_function["enclosure"]["function"] = "SQRT"
-    with analysis_validation_error():
-        PointEnclosureCheckResult.model_validate(wrong_function)
+    parsed_function = PointEnclosureCheckResult.model_validate(wrong_function)
+    assert (
+        _check_point_enclosure(
+            PointEnclosureCheckRequest(enclosure=parsed_function.enclosure)
+        ).outcome
+        == "REJECTED"
+    )
 
     wrong_argument = result.model_dump(mode="json")
     wrong_argument["enclosure"]["argument"] = {"num": "0", "den": "1"}
-    with analysis_validation_error():
-        PointEnclosureCheckResult.model_validate(wrong_argument)
+    parsed_argument = PointEnclosureCheckResult.model_validate(wrong_argument)
+    assert (
+        _check_point_enclosure(
+            PointEnclosureCheckRequest(enclosure=parsed_argument.enclosure)
+        ).outcome
+        == "REJECTED"
+    )
 
     oversized_source = result.model_dump(mode="json")
     oversized_source["enclosure"]["argument"] = {"num": "1" + "0" * 128, "den": "1"}
@@ -566,11 +586,6 @@ def test_request_schema_publishes_work_and_precision_limits() -> None:
     assert (
         schema["point_check_fraction_intermediate_bit_bound"]
         == MAX_POINT_CHECK_FRACTION_BITS
-    )
-    assert (
-        schema["point_check_producer_replay_term_update_bound"]
-        == MAX_POINT_CHECK_FRACTION_UPDATES
-        == 512
     )
     assert schema["point_check_output_byte_bound"] == MAX_POINT_CHECK_OUTPUT_BYTES
     precision_description = enclosure_schema["properties"]["precision_bits"][

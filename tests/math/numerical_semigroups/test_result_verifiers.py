@@ -19,12 +19,12 @@ from jacobian.math.numerical_semigroups._element_invariant_models import (
     ElementElasticityResult,
 )
 from jacobian.math.numerical_semigroups._element_invariant_operations import (
+    _verify_element_catenary_degree_result,
+    _verify_element_delta_set_result,
+    _verify_element_elasticity_result,
     compute_element_catenary_degree,
     compute_element_delta_set,
     compute_element_elasticity,
-    verify_element_catenary_degree_result,
-    verify_element_delta_set_result,
-    verify_element_elasticity_result,
 )
 from jacobian.math.numerical_semigroups._factorization_models import (
     FactorizationComputeRequest,
@@ -35,12 +35,12 @@ from jacobian.math.numerical_semigroups._factorization_models import (
     FactorizationLengthsComputeResult,
 )
 from jacobian.math.numerical_semigroups._factorization_operations import (
+    _verify_factorization_compute_result,
+    _verify_factorization_graph_compute_result,
+    _verify_factorization_lengths_compute_result,
     compute_factorization_graph,
     compute_factorization_lengths,
     compute_factorizations,
-    verify_factorization_compute_result,
-    verify_factorization_graph_compute_result,
-    verify_factorization_lengths_compute_result,
 )
 from jacobian.math.numerical_semigroups._global_invariant_models import (
     BettiElementsRequest,
@@ -80,7 +80,7 @@ def test_factorization_verifier_rejects_forged_complete_family() -> None:
         _forged(result, factorizations=((5, 0),))
     )
 
-    assert not verify_factorization_compute_result(forged)
+    assert not _verify_factorization_compute_result(forged)
 
 
 @pytest.mark.parametrize(
@@ -156,18 +156,52 @@ def test_element_invariant_replay_results_reapply_request_value_envelopes(
         result_type.model_validate(payload)
 
 
-def test_catenary_result_rejects_an_unmaterializable_family_before_replay() -> None:
-    """A supplied claim cannot force the old unbounded factorization replay."""
-
-    with pytest.raises(ValueError, match="exact materialization bound 1000"):
-        ElementCatenaryDegreeResult.model_validate(
+@pytest.mark.parametrize(
+    ("result_type", "payload", "verify"),
+    (
+        (
+            FactorizationComputeResult,
+            {
+                "value": "9990",
+                "minimal_generators": ("6", "10", "14", "15"),
+                "in_semigroup": False,
+                "factorizations": (),
+            },
+            _verify_factorization_compute_result,
+        ),
+        (
+            FactorizationGraphComputeResult,
+            {
+                "value": "9990",
+                "minimal_generators": ("6", "10", "14", "15"),
+                "in_semigroup": False,
+                "factorizations": (),
+                "edges": (),
+                "connected_components": (),
+                "is_connected": True,
+            },
+            _verify_factorization_graph_compute_result,
+        ),
+        (
+            ElementCatenaryDegreeResult,
             {
                 "value": "9990",
                 "minimal_generators": ("6", "10", "14", "15"),
                 "factorization_count": 13_307_204,
                 "catenary_degree": 6,
-            }
-        )
+            },
+            _verify_element_catenary_degree_result,
+        ),
+    ),
+)
+def test_materialization_results_parse_structurally_but_verification_reapplies_admission(
+    result_type: type[Any], payload: dict[str, Any], verify: Any
+) -> None:
+    """Parsing a claim never counts or enumerates its factorization family."""
+
+    result = result_type.model_validate(payload)
+
+    assert not verify(result)
 
 
 @pytest.mark.parametrize(
@@ -235,7 +269,7 @@ def test_factorization_length_verifier_rejects_forged_length_set() -> None:
         _forged(result, lengths=(3,))
     )
 
-    assert not verify_factorization_lengths_compute_result(forged)
+    assert not _verify_factorization_lengths_compute_result(forged)
 
 
 def test_element_invariant_verifiers_reject_forged_claims() -> None:
@@ -263,10 +297,10 @@ def test_element_invariant_verifiers_reject_forged_claims() -> None:
         _forged(catenary, catenary_degree=0)
     )
 
-    assert not verify_element_delta_set_result(forged_delta)
-    assert not verify_element_elasticity_result(forged_elasticity)
-    assert verify_element_catenary_degree_result(catenary)
-    assert not verify_element_catenary_degree_result(forged_catenary)
+    assert not _verify_element_delta_set_result(forged_delta)
+    assert not _verify_element_elasticity_result(forged_elasticity)
+    assert _verify_element_catenary_degree_result(catenary)
+    assert not _verify_element_catenary_degree_result(forged_catenary)
 
 
 def test_factorization_graph_verifier_rejects_forged_edge_set() -> None:
@@ -277,7 +311,7 @@ def test_factorization_graph_verifier_rejects_forged_edge_set() -> None:
         _forged(result, edges=((0, 1),))
     )
 
-    assert not verify_factorization_graph_compute_result(forged)
+    assert not _verify_factorization_graph_compute_result(forged)
 
 
 def test_global_invariant_verifiers_reject_forged_claims() -> None:

@@ -17,6 +17,7 @@ from jacobian.math.arithmetic_dynamics import (
 from jacobian.math.arithmetic_dynamics._models import (
     MAX_FIELD_PRIME,
     CycleMultiplierRequest,
+    CycleMultiplierResult,
     DynatomicPolynomialRequest,
     FiniteFieldMapRequest,
     FiniteFieldMapResult,
@@ -30,6 +31,8 @@ from jacobian.math.arithmetic_dynamics._operations import (
     compute_finite_field_map,
     compute_map_iterate,
     compute_orbit_prefix,
+    verify_cycle_multiplier_result,
+    verify_finite_field_map_result,
 )
 from jacobian.math.arithmetic_dynamics._tools import TOOLS
 
@@ -236,6 +239,16 @@ class TestCycleMultiplier:
             == "arithmetic_dynamics.cycle_points_not_distinct"
         )
 
+    def test_deserialized_cycle_claim_is_structural_not_a_proof(self) -> None:
+        result = compute_cycle_multiplier(
+            CycleMultiplierRequest(coefficients=(_r(1), _r(-1)), cycle=(_r(0), _r(1)))
+        )
+        forged = CycleMultiplierResult.model_validate(
+            {**result.model_dump(mode="json"), "cycle": [_r(0), _r(2)]}
+        )
+
+        assert not verify_cycle_multiplier_result(forged)
+
 
 class TestFiniteFieldFunctionalGraph:
     def test_x_squared_mod_five_has_complete_canonical_graph(self) -> None:
@@ -300,19 +313,16 @@ class TestFiniteFieldFunctionalGraph:
             == "arithmetic_dynamics.cycle_tail_mismatch"
         )
 
-    def test_result_contract_rejects_edges_not_bound_to_polynomial(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            FiniteFieldMapResult(
-                prime=3,
-                coefficients=("0", "0", "1"),
-                edges=((0, 0), (1, 2), (2, 1)),
-                cycles=((0,), (1, 2)),
-                tail_lengths=(0, 0, 0),
-            )
-        assert (
-            exc_info.value.errors()[0]["type"]
-            == "arithmetic_dynamics.functional_graph_edge_mismatch"
+    def test_deserialized_edges_are_structural_not_a_proof(self) -> None:
+        forged = FiniteFieldMapResult(
+            prime=3,
+            coefficients=("0", "0", "1"),
+            edges=((0, 0), (1, 2), (2, 1)),
+            cycles=((0,), (1, 2)),
+            tail_lengths=(0, 0, 0),
         )
+
+        assert not verify_finite_field_map_result(forged)
 
     def test_nonprime_modulus_is_rejected(self) -> None:
         with pytest.raises(ValidationError) as exc_info:

@@ -24,10 +24,6 @@ from jacobian.math.algebraic_combinatorics._models import (
 )
 from jacobian.math.algebraic_combinatorics._rsk import _row_insert
 from jacobian.math.algebraic_combinatorics.values import RSKTableauPair
-from jacobian.math.symmetric_functions.values import (
-    IntegerPartition,
-    StandardYoungTableau,
-)
 from jacobian.math.words.values import FiniteWord
 
 
@@ -64,24 +60,11 @@ def compute_rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
     Q is the recording tableau. The shape gives the partition.
     LIS length = first row length, LDS length = first column length.
     """
-    perm = request.permutation
-
-    p, q = _row_insert(perm)
-    shape = tuple(len(row) for row in p)
-
-    # LIS length = length of first row
-    # LDS length = length of first column (number of rows)
-    lis_length = len(p[0]) if p else 0
-    lds_length = len(p)
-
-    return RSKResult(
-        permutation=perm,
-        p_tableau=StandardYoungTableau(rows=p),
-        q_tableau=StandardYoungTableau(rows=q),
-        shape=IntegerPartition(parts=shape),
-        lis_length=lis_length,
-        lds_length=lds_length,
-        convention=request.convention,
+    insertion_rows, recording_rows = _row_insert(request.permutation)
+    return RSKResult._from_kernel(
+        request,
+        insertion_rows=insertion_rows,
+        recording_rows=recording_rows,
     )
 
 

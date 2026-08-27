@@ -88,9 +88,9 @@ class ConstantWeightRequest(StrictModel):
 class ConstantWeightResult(StrictModel):
     """Complete generated constant-weight code.
 
-    Construction checks the declared structural envelope only.  The owner
-    kernel uses ``_from_kernel``; ``verify_constant_weight_result`` is the
-    explicit bounded check for a claim supplied independently of that kernel.
+    Construction checks the declared structural envelope only. The owner
+    kernel uses ``_from_kernel``; an explicit owner-local verifier checks a
+    claim supplied independently of that kernel.
     """
 
     length: Annotated[int, Field(strict=True, ge=0, le=MAX_EXPLICIT_CODE_LENGTH)]
@@ -100,10 +100,6 @@ class ConstantWeightResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_envelope(self) -> Self:
-        _require_admission(
-            lambda: require_constant_weight_admission(self.length, self.weight),
-            "nonlinear_code.admission_bound",
-        )
         if self.code.length != self.length:
             raise _validation_error(
                 "nonlinear_code.length_mismatch",
@@ -120,7 +116,9 @@ class ConstantWeightResult(StrictModel):
     def _from_kernel(
         cls, *, length: int, weight: int, code: ExplicitBinaryCode
     ) -> Self:
-        return cls(length=length, weight=weight, code=code, count=len(code.codewords))
+        return cls.model_construct(
+            length=length, weight=weight, code=code, count=len(code.codewords)
+        )
 
 
 class WordDistanceRequest(StrictModel):
@@ -172,10 +170,6 @@ class WordDistanceResult(StrictModel):
                 "nonlinear_code.invalid_words",
                 "result words must be nonempty and have equal length",
             )
-        _require_admission(
-            lambda: require_word_distance_output_bound(self.word1, self.word2),
-            "nonlinear_code.admission_bound",
-        )
         if self.distance > len(self.word1):
             raise _validation_error(
                 "nonlinear_code.distance_bound",
@@ -195,7 +189,7 @@ class WordDistanceResult(StrictModel):
         weight2: int,
         support_intersection: int,
     ) -> Self:
-        return cls(
+        return cls.model_construct(
             word1=word1,
             word2=word2,
             distance=distance,
@@ -243,7 +237,7 @@ class ExplicitProfileRequest(StrictModel):
 
 
 class ExplicitProfileResult(StrictModel):
-    """Complete pair and weight profile, replayable from its retained source."""
+    """Complete pair and weight profile bound to its retained source."""
 
     source: ExplicitBinaryCode
     length: ExplicitLength
@@ -262,10 +256,6 @@ class ExplicitProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_profile_relations(self) -> Self:
-        plan = _require_admission(
-            lambda: require_profile_admission(self.source),
-            "nonlinear_code.admission_bound",
-        )
         if self.length != self.source.length:
             raise _validation_error(
                 "nonlinear_code.length_mismatch",
@@ -276,7 +266,7 @@ class ExplicitProfileResult(StrictModel):
                 "nonlinear_code.cardinality_mismatch",
                 "cardinality must equal the retained source cardinality",
             )
-        if self.pair_count != plan.pair_count:
+        if self.pair_count != self.cardinality * (self.cardinality - 1) // 2:
             raise _validation_error(
                 "nonlinear_code.pair_count_mismatch",
                 "pair_count must equal cardinality*(cardinality-1)/2",
@@ -310,7 +300,7 @@ class ExplicitProfileResult(StrictModel):
 
     @classmethod
     def _from_kernel(cls, **kwargs: Any) -> Self:
-        return cls(**kwargs)
+        return cls.model_construct(**kwargs)
 
 
 class ConstantWeightProfileRequest(StrictModel):
@@ -355,27 +345,17 @@ class ConstantWeightProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_profile_relations(self) -> Self:
-        weight = _require_constant_weight(self.source)
-        plan = _require_admission(
-            lambda: require_profile_admission(self.source),
-            "nonlinear_code.admission_bound",
-        )
         if self.length != self.source.length:
             raise _validation_error(
                 "nonlinear_code.length_mismatch",
                 "length must equal the retained source length",
-            )
-        if self.weight != weight:
-            raise _validation_error(
-                "nonlinear_code.weight_mismatch",
-                "weight must equal every retained source word weight",
             )
         if self.cardinality != len(self.source.codewords):
             raise _validation_error(
                 "nonlinear_code.cardinality_mismatch",
                 "cardinality must equal the retained source cardinality",
             )
-        if self.pair_count != plan.pair_count:
+        if self.pair_count != self.cardinality * (self.cardinality - 1) // 2:
             raise _validation_error(
                 "nonlinear_code.pair_count_mismatch",
                 "pair_count must equal cardinality*(cardinality-1)/2",
@@ -407,7 +387,7 @@ class ConstantWeightProfileResult(StrictModel):
 
     @classmethod
     def _from_kernel(cls, **kwargs: Any) -> Self:
-        return cls(**kwargs)
+        return cls.model_construct(**kwargs)
 
 
 class ToSetSystemRequest(StrictModel):
@@ -459,7 +439,7 @@ class ToSetSystemResult(StrictModel):
 
     @classmethod
     def _from_kernel(cls, **kwargs: Any) -> Self:
-        return cls(**kwargs)
+        return cls.model_construct(**kwargs)
 
 
 __all__ = [

@@ -4,7 +4,6 @@ from jacobian.math.polynomials.intervals._kernel import natural_interval_extensi
 from jacobian.math.polynomials.intervals._models import (
     PolynomialBoxEnclosureRequest,
     PolynomialBoxEnclosureResult,
-    polynomial_box_source_digest,
 )
 
 
@@ -13,14 +12,27 @@ def compute_polynomial_box_enclosure(
 ) -> PolynomialBoxEnclosureResult:
     """Return the deterministic natural interval extension on the complete box."""
 
-    # The parsed request already ran the complete admission preflight, and each
-    # value below is produced by the typed kernel. Independently supplied wire
-    # results still replay through PolynomialBoxEnclosureResult.model_validate.
-    return PolynomialBoxEnclosureResult.model_construct(
-        polynomial=request.polynomial,
-        box=request.box,
-        source_digest=polynomial_box_source_digest(request.polynomial, request.box),
+    return PolynomialBoxEnclosureResult._from_kernel(
+        request,
         enclosure=natural_interval_extension(request.polynomial, request.box),
+    )
+
+
+def _verify_polynomial_box_enclosure_result(
+    result: PolynomialBoxEnclosureResult,
+) -> bool:
+    """Check an independently supplied enclosure inside the owner envelope."""
+
+    parsed = PolynomialBoxEnclosureResult.model_validate(
+        result.model_dump(mode="json"),
+    )
+    request = PolynomialBoxEnclosureRequest(
+        polynomial=parsed.polynomial,
+        box=parsed.box,
+    )
+    return parsed.enclosure == natural_interval_extension(
+        request.polynomial,
+        request.box,
     )
 
 

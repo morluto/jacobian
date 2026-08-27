@@ -20,7 +20,6 @@ from jacobian.math.analysis._models import (
 MAX_POINT_CHECK_DYADIC_EXPONENT = 8_192
 MAX_POINT_CHECK_LOG_TERMS = 128
 MAX_POINT_CHECK_FRACTION_BITS = 131_072
-MAX_POINT_CHECK_FRACTION_UPDATES = 4 * MAX_POINT_CHECK_LOG_TERMS
 MAX_POINT_CHECK_OUTPUT_BYTES = 4_096
 
 
@@ -70,7 +69,7 @@ class ClaimedPointEnclosure(StrictModel):
         le=4096,
         description=(
             "Precision metadata retained from the source computation; it does "
-            "not promise that an independent replay resolves the claim at "
+            "not promise that an independent verification resolves the claim at "
             "that precision."
         ),
     )
@@ -120,7 +119,7 @@ def _preflight_point_check_source(data: object) -> object:
 
 
 def _point_check_fraction_bound_bits(argument: CanonicalRational) -> int:
-    """Bound LOG/SQRT intermediates, including claim comparisons and replay."""
+    """Bound LOG/SQRT intermediates, including claim comparisons and verification."""
 
     numerator, denominator = argument.as_integer_ratio()
     source_bits = max(abs(numerator).bit_length(), denominator.bit_length())
@@ -146,13 +145,13 @@ def _point_check_fraction_bound_bits(argument: CanonicalRational) -> int:
 
 
 class PointEnclosureCheckRequest(StrictModel):
-    """Check one claimed LOG or SQRT enclosure by exact independent replay.
+    """Check one claimed LOG or SQRT enclosure by exact independent verification.
 
     The claimed enclosure is one canonical ``ClaimedPointEnclosure`` accepted
     unchanged from its source. Rational components have at most 128 decimal
     digits. Claimed dyadic exponents must lie in -8192..8192; reversed or
     mathematically invalid intervals remain valid claims and produce typed
-    checker outcomes. Only LOG and SQRT claims are admitted. LOG replay uses
+    checker outcomes. Only LOG and SQRT claims are admitted. LOG verification uses
     at most 128 terms per series, about 400 worst-case bits after range
     reduction, so tighter claims can produce NON_RESULT even when their
     retained precision metadata is larger.
@@ -163,9 +162,6 @@ class PointEnclosureCheckRequest(StrictModel):
             "point_check_log_term_bound": MAX_POINT_CHECK_LOG_TERMS,
             "point_check_fraction_intermediate_bit_bound": (
                 MAX_POINT_CHECK_FRACTION_BITS
-            ),
-            "point_check_producer_replay_term_update_bound": (
-                MAX_POINT_CHECK_FRACTION_UPDATES
             ),
             "point_check_output_byte_bound": MAX_POINT_CHECK_OUTPUT_BYTES,
         }
@@ -190,7 +186,7 @@ class PointEnclosureCheckRequest(StrictModel):
             RealUnaryFunction.SQRT,
         ):
             raise _validation_error(
-                "point-enclosure checker replays only LOG and SQRT claims"
+                "point-enclosure checker verifies only LOG and SQRT claims"
             )
         if any(
             abs(endpoint.exponent) > MAX_POINT_CHECK_DYADIC_EXPONENT
@@ -212,7 +208,7 @@ class PointEnclosureCheckRequest(StrictModel):
 
 
 class PointEnclosureCheckResult(StrictModel):
-    """A source-bound checker outcome replayed during result validation.
+    """A source-bound outcome from the owner-private checker.
 
     ACCEPTED means the independently proved interval is contained in the
     claim. REJECTED covers an invalid real-domain or reversed claim, or a claim
@@ -240,18 +236,15 @@ class PointEnclosureCheckResult(StrictModel):
     def preflight_raw_source(cls, data: object) -> object:
         return _preflight_point_check_source(canonicalize_json_containers(data))
 
-    @model_validator(mode="after")
-    def replay_outcome(self) -> Self:
-        from jacobian.math.analysis._point_enclosure_check import (
-            point_enclosure_check_outcome,
-        )
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PointEnclosureCheckRequest,
+        outcome: PointEnclosureCheckOutcome,
+    ) -> Self:
+        """Build an outcome after the admitted checker established it."""
 
-        request = PointEnclosureCheckRequest(enclosure=self.enclosure)
-        if self.outcome != point_enclosure_check_outcome(request):
-            raise _validation_error(
-                "outcome must equal the deterministic enclosure check for the retained source"
-            )
-        return self
+        return cls.model_construct(enclosure=request.enclosure, outcome=outcome)
 
 
 class ArbPointEnclosureResult(ArbPointEnclosureRequest):
@@ -355,22 +348,18 @@ def _point_enclosure(request: ArbPointEnclosureRequest) -> ArbPointEnclosureResu
 def _check_point_enclosure(
     request: PointEnclosureCheckRequest,
 ) -> PointEnclosureCheckResult:
-    """Replay one point-enclosure claim in its owning family."""
+    """Verify one point-enclosure claim in its owning family."""
 
-    from jacobian.math.analysis._point_enclosure_check import (
-        point_enclosure_check_outcome,
-    )
+    from jacobian.math.analysis._point_enclosure_check import _verify_point_enclosure
 
-    return PointEnclosureCheckResult(
-        enclosure=request.enclosure,
-        outcome=point_enclosure_check_outcome(request),
+    return PointEnclosureCheckResult._from_kernel(
+        request, _verify_point_enclosure(request)
     )
 
 
 __all__ = [
     "MAX_POINT_CHECK_DYADIC_EXPONENT",
     "MAX_POINT_CHECK_FRACTION_BITS",
-    "MAX_POINT_CHECK_FRACTION_UPDATES",
     "MAX_POINT_CHECK_LOG_TERMS",
     "MAX_POINT_CHECK_OUTPUT_BYTES",
     "ArbPointEnclosureRequest",

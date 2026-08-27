@@ -14,8 +14,8 @@ from jacobian.math.crossed_products._models import (
     CrossedProductMultiplyResult,
 )
 from jacobian.math.crossed_products._operations import (
+    _verify_product_result,
     compute_product,
-    verify_product_result,
 )
 from jacobian.math.crossed_products._tools import TOOLS
 from jacobian.math.crossed_products.operations import multiply
@@ -300,7 +300,7 @@ def test_wire_result_is_structural_and_explicit_verifier_rejects_mutation() -> N
     payload = result.model_dump(mode="json")
     payload["product"]["terms"][0]["exponents"] = ["1", "0", "0"]
     claim = CrossedProductMultiplyResult.model_validate(payload)
-    assert not verify_product_result(claim)
+    assert not _verify_product_result(claim)
 
 
 def test_compute_product_binds_fresh_kernel_output() -> None:
@@ -310,7 +310,7 @@ def test_compute_product_binds_fresh_kernel_output() -> None:
 
     assert result.product == identity
     assert (result.left, result.right) == (alpha, inverse)
-    assert verify_product_result(result)
+    assert _verify_product_result(result)
 
 
 def test_deserialized_result_can_be_verified_explicitly() -> None:
@@ -322,7 +322,7 @@ def test_deserialized_result_can_be_verified_explicitly() -> None:
     replayed = CrossedProductMultiplyResult.model_validate(payload)
 
     assert replayed.product == identity
-    assert verify_product_result(replayed)
+    assert _verify_product_result(replayed)
 
 
 def test_element_requires_unique_canonical_coset_and_exponent_order() -> None:

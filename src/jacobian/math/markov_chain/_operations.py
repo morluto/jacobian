@@ -92,7 +92,7 @@ def compute_stationary_distribution(
         tuple(value.as_fraction() for value in row) for row in request.matrix
     )
     extremes = _stationary_distribution_extremes(matrix)
-    return StationaryDistributionResult(
+    return StationaryDistributionResult._from_kernel(
         extreme_distributions=tuple(
             ExtremeStationaryDistribution(
                 closed_class=closed_class,
@@ -135,7 +135,7 @@ def compute_communicating_classes(
     )
 
 
-def verify_communicating_classes_result(result: CommunicatingClassesResult) -> bool:
+def _verify_communicating_classes_result(result: CommunicatingClassesResult) -> bool:
     """Replay the SCC relation for an independently supplied bounded result."""
 
     classes, state_class = _derive_communicating_classes(result.transition_matrix)

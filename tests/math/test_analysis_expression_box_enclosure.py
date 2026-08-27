@@ -341,7 +341,7 @@ def test_first_domain_rejection_short_circuits_later_preflight_growth() -> None:
     assert result.domain_failure.node_path == (0,)
 
 
-def test_producer_result_round_trips_through_source_replay() -> None:
+def test_producer_result_round_trips_structurally() -> None:
     result = _run(
         {"op": "exp", "children": [_var("x")]},
         (("x", Fraction(0), Fraction(1)),),
@@ -354,7 +354,7 @@ def test_producer_result_round_trips_through_source_replay() -> None:
 
 
 @pytest.mark.parametrize("mutation", ["expression", "box", "endpoint"])
-def test_source_or_endpoint_mutation_is_rejected_by_replay(mutation: str) -> None:
+def test_source_derived_fields_deserialize_without_replaying(mutation: str) -> None:
     result = _run(
         {"op": "exp", "children": [_var("x")]},
         (("x", Fraction(0), Fraction(1)),),
@@ -367,11 +367,11 @@ def test_source_or_endpoint_mutation_is_rejected_by_replay(mutation: str) -> Non
     else:
         payload["lower"] = {"mantissa": "0", "exponent": 0}
 
-    with analysis_validation_error():
-        IntervalExpressionBoxEnclosureResult.model_validate(payload)
+    parsed = IntervalExpressionBoxEnclosureResult.model_validate(payload)
+    assert parsed != result
 
 
-def test_domain_rejection_is_also_bound_to_its_source() -> None:
+def test_domain_rejection_round_trips_without_replaying_its_source() -> None:
     result = _run(
         {"op": "div", "children": [_const(1), _var("x")]},
         (("x", Fraction(-1), Fraction(1)),),
@@ -388,8 +388,8 @@ def test_domain_rejection_is_also_bound_to_its_source() -> None:
         },
     )
 
-    with analysis_validation_error():
-        IntervalExpressionBoxEnclosureResult.model_validate(payload)
+    parsed = IntervalExpressionBoxEnclosureResult.model_validate(payload)
+    assert parsed != result
 
 
 def test_producer_does_not_pay_a_second_backend_replay(

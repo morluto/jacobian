@@ -399,7 +399,7 @@ def product(left: FiniteCategory, right: FiniteCategory) -> FiniteCategoryProduc
     )
 
 
-def verify_product_claim(result: FiniteCategoryProduct) -> bool:
+def _verify_product_claim(result: FiniteCategoryProduct) -> bool:
     """Check an independently supplied product claim in its admitted envelope."""
 
     try:
@@ -415,4 +415,4 @@ def verify_product_claim(result: FiniteCategoryProduct) -> bool:
     )
 
 
-__all__ = ["product", "verify_product_claim"]
+__all__ = ["product"]

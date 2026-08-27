@@ -26,6 +26,7 @@ from jacobian.math.polynomials.intervals._models import (
     _estimate_growth,
 )
 from jacobian.math.polynomials.intervals._operations import (
+    _verify_polynomial_box_enclosure_result,
     compute_polynomial_box_enclosure,
 )
 from jacobian.math.polynomials.intervals._tools import TOOLS
@@ -258,7 +259,7 @@ def test_reversed_coordinate_interval_is_rejected_before_execution() -> None:
     "mutation",
     ("polynomial", "box", "source_digest", "enclosure"),
 )
-def test_source_bound_result_rejects_independent_forgery(mutation: str) -> None:
+def test_source_bound_result_rejects_invalid_source_binding(mutation: str) -> None:
     result = _enclose(
         _polynomial(("x",), {(1,): 1}),
         _box(("x",), ((1, 2),)),
@@ -273,16 +274,18 @@ def test_source_bound_result_rejects_independent_forgery(mutation: str) -> None:
         payload["box"]["intervals"][0]["upper"] = {"num": "3", "den": "1"}
     elif mutation == "source_digest":
         payload["source_digest"] = "sha256:" + "0" * 64
-    else:
+    elif mutation == "enclosure":
         payload["enclosure"]["upper"] = {"num": "3", "den": "1"}
 
-    with polynomial_validation_error():
-        PolynomialBoxEnclosureResult.model_validate(payload)
+    if mutation == "enclosure":
+        parsed = PolynomialBoxEnclosureResult.model_validate(payload)
+        assert not _verify_polynomial_box_enclosure_result(parsed)
+    else:
+        with polynomial_validation_error():
+            PolynomialBoxEnclosureResult.model_validate(payload)
 
 
-def test_digest_rejects_a_different_polynomial_with_the_same_replayed_interval() -> (
-    None
-):
+def test_digest_rejects_a_different_polynomial_with_the_same_interval() -> None:
     result = _enclose(
         _polynomial(("x",), {(1,): 1}),
         _box(("x",), ((0, 1),)),
@@ -309,7 +312,7 @@ def test_digest_rejects_a_different_box_when_the_polynomial_is_constant() -> Non
         PolynomialBoxEnclosureResult.model_validate(payload)
 
 
-def test_produced_result_replays_after_strict_serialization() -> None:
+def test_produced_result_round_trips_after_strict_serialization() -> None:
     result = _enclose(
         _polynomial(("x",), {(2,): 1, (0,): -2}),
         _box(("x",), ((1, 2),)),
@@ -497,7 +500,7 @@ def test_interval_ordering_at_the_canonical_boundary_is_admitted() -> None:
         )
 
 
-def test_forged_result_interval_ordering_stays_inside_intermediate_bound() -> None:
+def test_structural_result_parse_accepts_canonical_forged_enclosure() -> None:
     result = _enclose(
         _polynomial(("x",), {}),
         _box(("x",), ((0, 0),)),
@@ -505,8 +508,8 @@ def test_forged_result_interval_ordering_stays_inside_intermediate_bound() -> No
     payload = result.model_dump(mode="json")
     payload["enclosure"] = _maximum_canonical_interval_payload()
 
-    with polynomial_validation_error():
-        PolynomialBoxEnclosureResult.model_validate(payload)
+    parsed = PolynomialBoxEnclosureResult.model_validate(payload)
+    assert not _verify_polynomial_box_enclosure_result(parsed)
 
 
 def _digit_rational(

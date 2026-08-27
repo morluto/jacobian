@@ -17,8 +17,8 @@ from jacobian.math.cluster_algebras._models import (
 def _mutation_of(matrix: ExchangeMatrix, k: int) -> ExchangeMatrix:
     """Pure Fomin-Zelevinsky mutation mu_k of one exchange matrix.
 
-    Kept free of result-model construction so result validation can replay
-    the mutation without recursion.
+    Kept free of result-model construction so it remains a reusable mutation
+    kernel.
     """
     n = matrix.n
     old = [list(row) for row in parsed_entries(matrix)]

@@ -111,15 +111,7 @@ class RSKPermutationRequest(StrictModel):
 
 
 class RSKResult(StrictModel):
-    __doc__ = f"""Source-bound canonical tableaux from permutation RSK.
-
-    Construction and result replay each perform at most
-    ``N(N-1)/2 <= {
-        MAX_RSK_PERMUTATION_LENGTH * (MAX_RSK_PERMUTATION_LENGTH - 1) // 2
-    }`` binary row searches, with at most
-    {MAX_RSK_ROW_SEARCH_COMPARISONS} integer comparisons per search for
-    ``N <= {MAX_RSK_PERMUTATION_LENGTH}``.
-    """
+    """Canonical tableaux produced by one admitted permutation-RSK kernel."""
 
     permutation: tuple[StrictInt, ...] = Field(
         min_length=0,
@@ -134,32 +126,42 @@ class RSKResult(StrictModel):
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
 
     @model_validator(mode="after")
-    def replay_permutation_rsk(self) -> Self:
-        from jacobian.math.algebraic_combinatorics._rsk import _row_insert
-
+    def require_structural_consistency(self) -> Self:
         _require_permutation(self.permutation)
-        insertion_rows, recording_rows = _row_insert(self.permutation)
-        expected_p = StandardYoungTableau(rows=insertion_rows)
-        expected_q = StandardYoungTableau(rows=recording_rows)
-        expected_shape = expected_p.shape
-        expected_lis = len(insertion_rows[0]) if insertion_rows else 0
-        expected_lds = len(insertion_rows)
-        if self.p_tableau != expected_p or self.q_tableau != expected_q:
-            raise PydanticCustomError(
-                "algebraic_combinatorics.rsk_tableaux_mismatch",
-                "permutation tableaux do not match exact row insertion",
-            )
-        if self.shape != expected_shape or self.q_tableau.shape != expected_shape:
+        if self.p_tableau.shape != self.shape or self.q_tableau.shape != self.shape:
             raise PydanticCustomError(
                 "algebraic_combinatorics.rsk_shape_mismatch",
-                "permutation tableaux and shape must agree",
+                "tableaux and shape must agree",
             )
+        expected_lis = self.shape.parts[0] if self.shape.parts else 0
+        expected_lds = len(self.shape.parts)
         if self.lis_length != expected_lis or self.lds_length != expected_lds:
             raise PydanticCustomError(
                 "algebraic_combinatorics.rsk_lengths_mismatch",
-                "LIS/LDS lengths do not match the exact RSK shape",
+                "LIS/LDS lengths do not match the tableau shape",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: RSKPermutationRequest,
+        *,
+        insertion_rows: tuple[tuple[int, ...], ...],
+        recording_rows: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        """Build one result after the admitted RSK kernel established it."""
+
+        shape = IntegerPartition(parts=tuple(len(row) for row in insertion_rows))
+        return cls(
+            permutation=request.permutation,
+            p_tableau=StandardYoungTableau(rows=insertion_rows),
+            q_tableau=StandardYoungTableau(rows=recording_rows),
+            shape=shape,
+            lis_length=shape.parts[0] if shape.parts else 0,
+            lds_length=len(shape.parts),
+            convention=request.convention,
+        )
 
 
 class RSKWordRequest(StrictModel):

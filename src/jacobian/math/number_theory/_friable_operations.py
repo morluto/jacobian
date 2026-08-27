@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from math import isqrt
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._friable_models import (
     FriableCountRequest,
@@ -89,10 +89,18 @@ def compute_friable_count(request: FriableCountRequest) -> FriableCountResult:
 
     x = parse_canonical_integer(request.x)
     y = parse_canonical_integer(request.y)
-    return FriableCountResult(
-        x=request.x,
-        y=request.y,
-        count=format_canonical_integer(count_friable(x, y)),
+    return FriableCountResult._from_kernel(
+        request,
+        count=count_friable(x, y),
+    )
+
+
+def verify_friable_count_result(result: FriableCountResult) -> bool:
+    """Check an independently supplied exact count inside the owner envelope."""
+
+    request = FriableCountRequest(x=result.x, y=result.y)
+    return parse_canonical_integer(result.count) == count_friable(
+        parse_canonical_integer(request.x), parse_canonical_integer(request.y)
     )
 
 

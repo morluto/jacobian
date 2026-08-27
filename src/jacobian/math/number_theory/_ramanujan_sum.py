@@ -90,26 +90,20 @@ class RamanujanSumResult(StrictModel):
             )
         return self
 
-    @model_validator(mode="after")
-    def bind_value_to_source(self) -> Self:
-        expected = ramanujan_sum(int(self.modulus), int(self.frequency))
-        if int(self.value) != expected:
-            raise _validation_error(
-                "ramanujan_sum_value_does_not_match_its_source",
-                "Ramanujan-sum value does not match its source",
-            )
-        return self
+    @classmethod
+    def _from_kernel(cls, request: RamanujanSumRequest, *, value: int) -> Self:
+        """Build one result after the admitted sum kernel established its value."""
+
+        return cls(
+            modulus=request.modulus, frequency=request.frequency, value=str(value)
+        )
 
 
 def compute_ramanujan_sum(request: RamanujanSumRequest) -> RamanujanSumResult:
     """Evaluate one admitted exact Ramanujan sum."""
 
     value = ramanujan_sum(int(request.modulus), int(request.frequency))
-    return RamanujanSumResult(
-        modulus=request.modulus,
-        frequency=request.frequency,
-        value=str(value),
-    )
+    return RamanujanSumResult._from_kernel(request, value=value)
 
 
 RAMANUJAN_SUM_OPERATION = number_theory_operation(

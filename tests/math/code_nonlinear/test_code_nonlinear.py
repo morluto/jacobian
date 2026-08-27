@@ -36,16 +36,16 @@ from jacobian.math.code_nonlinear._models import (
     WordDistanceResult,
 )
 from jacobian.math.code_nonlinear._operations import (
+    _verify_constant_weight_profile_result,
+    _verify_constant_weight_result,
+    _verify_explicit_profile_result,
+    _verify_to_set_system_result,
+    _verify_word_distance_result,
     compute_constant_weight,
     compute_constant_weight_profile,
     compute_explicit_profile,
     compute_to_set_system,
     compute_word_distance,
-    verify_constant_weight_profile_result,
-    verify_constant_weight_result,
-    verify_explicit_profile_result,
-    verify_to_set_system_result,
-    verify_word_distance_result,
 )
 from jacobian.math.code_nonlinear.values import (
     MAX_EXPLICIT_CODE_BITS,
@@ -210,7 +210,7 @@ class TestWordDistance:
         payload = result.model_dump(mode="json")
         payload["distance"] = 1
         supplied = type(result).model_validate(payload)
-        assert not verify_word_distance_result(supplied)
+        assert not _verify_word_distance_result(supplied)
 
     def test_contract_version_tracks_the_wire_shape_change(self) -> None:
         from jacobian.math.code_nonlinear._tools import TOOLS
@@ -230,7 +230,7 @@ class TestWordDistance:
         assert result.support_intersection == 0
         replayed = WordDistanceResult.model_validate(result.model_dump(mode="json"))
         assert replayed == result
-        assert verify_word_distance_result(replayed)
+        assert _verify_word_distance_result(replayed)
 
     def test_word_distance_output_bound_covers_the_canonical_result(self) -> None:
         word = [0] * MAX_EXPLICIT_CODE_LENGTH
@@ -254,9 +254,8 @@ class TestWordDistance:
             "weight2": MAX_EXPLICIT_CODE_LENGTH,
             "support_intersection": 0,
         }
-        with pytest.raises(ValidationError) as exc_info:
-            WordDistanceResult.model_validate(payload)
-        assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
+        supplied = WordDistanceResult.model_validate(payload)
+        assert not _verify_word_distance_result(supplied)
 
     def test_differing_coordinate_wire_size_tracks_actual_difference_positions(
         self,
@@ -343,7 +342,7 @@ class TestExplicitProfile:
         )
         replayed = ExplicitProfileResult.model_validate(payload)
         assert replayed.minimum_distance_witness == _witness(source, 1, 2)
-        assert verify_explicit_profile_result(replayed)
+        assert _verify_explicit_profile_result(replayed)
 
     @pytest.mark.parametrize(
         ("path", "replacement"),
@@ -371,7 +370,7 @@ class TestExplicitProfile:
             supplied = ExplicitProfileResult.model_validate(payload)
         except ValidationError:
             return
-        assert not verify_explicit_profile_result(supplied)
+        assert not _verify_explicit_profile_result(supplied)
 
     def test_rejects_one_bit_source_mutation(self) -> None:
         result = compute_explicit_profile(
@@ -380,9 +379,9 @@ class TestExplicitProfile:
         payload = result.model_dump(mode="json")
         payload["source"]["codewords"][1][0] = 1
         supplied = ExplicitProfileResult.model_validate(payload)
-        assert not verify_explicit_profile_result(supplied)
+        assert not _verify_explicit_profile_result(supplied)
 
-    def test_standard_a_23_6_10_2992_profile_replays_completely(self) -> None:
+    def test_standard_a_23_6_10_2992_profile_fits_the_kernel_envelope(self) -> None:
         """The source has length 23, minimum distance 6, and constant weight 10."""
         source = _source_scale_code()
         plan = require_profile_admission(source)
@@ -390,9 +389,9 @@ class TestExplicitProfile:
         assert len(source.codewords) == 2_992
         assert all(sum(word) == 10 for word in source.codewords)
         assert plan.pair_count == 4_474_536
-        assert plan.pair_passes == PROFILE_PAIR_PASSES == 2
+        assert plan.pair_passes == PROFILE_PAIR_PASSES == 1
         assert plan.bitset_chunks == 1
-        assert plan.bitset_chunk_work == 8_949_072
+        assert plan.bitset_chunk_work == 4_474_536
         assert plan.bitset_chunk_work <= MAX_PROFILE_BITSET_CHUNK_WORK
         assert plan.result_wire_upper_bound <= MAX_CODE_RESULT_BYTES
 
@@ -431,7 +430,7 @@ class TestExplicitProfile:
             0,
         )
         assert sum(result.distance_histogram) == 4_474_536
-        assert verify_explicit_profile_result(result)
+        assert _verify_explicit_profile_result(result)
 
 
 class TestConstantWeightProfile:
@@ -510,7 +509,7 @@ class TestConstantWeightProfile:
             supplied = ConstantWeightProfileResult.model_validate(payload)
         except ValidationError:
             return
-        assert not verify_constant_weight_profile_result(supplied)
+        assert not _verify_constant_weight_profile_result(supplied)
 
 
 class TestSetSystemConversion:
@@ -568,7 +567,7 @@ class TestSetSystemConversion:
         else:
             payload["supports"][0][0] = 0
         supplied = ToSetSystemResult.model_validate(payload)
-        assert not verify_to_set_system_result(supplied)
+        assert not _verify_to_set_system_result(supplied)
 
 
 class TestProducerConsumerClosure:
@@ -636,15 +635,15 @@ class TestDerivedAdmissionBoundaries:
 
     def test_bitset_chunk_work_immediate_boundary(self) -> None:
         accepted = ExplicitProfileRequest(
-            code=ExplicitBinaryCode(length=90, codewords=_binary_words(90, 1_826))
+            code=ExplicitBinaryCode(length=90, codewords=_binary_words(90, 2_582))
         )
         plan = require_profile_admission(accepted.code)
-        assert plan.pair_count == 1_666_225
+        assert plan.pair_count == 3_332_071
         assert plan.bitset_chunks == 3
-        assert plan.bitset_chunk_work == 9_997_350
+        assert plan.bitset_chunk_work == 9_996_213
         with pytest.raises(ValidationError) as exc_info:
             ExplicitProfileRequest(
-                code=ExplicitBinaryCode(length=90, codewords=_binary_words(90, 1_827))
+                code=ExplicitBinaryCode(length=90, codewords=_binary_words(90, 2_583))
             )
         assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
 
@@ -783,7 +782,7 @@ class TestCanonicalConsumers:
         serialized = wide.model_dump(mode="json")
         replayed = ConstantWeightResult.model_validate(serialized)
         assert replayed.code == wide.code
-        assert verify_constant_weight_result(replayed)
+        assert _verify_constant_weight_result(replayed)
         axis = compute_constant_weight(
             ConstantWeightRequest(length=MAX_EXPLICIT_CODE_LENGTH, weight=0)
         )

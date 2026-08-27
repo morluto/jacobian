@@ -27,9 +27,8 @@ def compute_residue_wheel(
     request: PrimeTupleResidueWheelRequest,
 ) -> PrimeTupleResidueWheel:
     local_rows = tuple(local_summary(request.source, prime) for prime in request.primes)
-    return PrimeTupleResidueWheel(
-        source=request.source,
-        primes=request.primes,
+    return PrimeTupleResidueWheel._from_kernel(
+        request,
         local_rows=local_rows,
         modulus=format_canonical_integer(wheel_modulus(request.primes)),
         valid_count=format_canonical_integer(
@@ -42,8 +41,8 @@ def compute_residue_wheel_enumeration(
     request: PrimeTupleResidueWheelEnumerationRequest,
 ) -> PrimeTupleResidueWheelEnumeration:
     rows = wheel_rows(request.wheel.source, request.wheel.primes)
-    return PrimeTupleResidueWheelEnumeration(
-        wheel=request.wheel,
+    return PrimeTupleResidueWheelEnumeration._from_kernel(
+        request,
         residues=tuple(
             PrimeTupleWheelResidueRow(
                 residue=format_canonical_integer(residue),
@@ -69,9 +68,8 @@ def compute_wheel_membership(
             first_prime = summary.prime
             form_ids = bad[component]
             break
-    return PrimeTupleWheelMembershipResult(
-        wheel=request.wheel,
-        value=request.value,
+    return PrimeTupleWheelMembershipResult._from_kernel(
+        request,
         canonical_residue=format_canonical_integer(residue),
         components=components,
         is_permitted=first_prime is None,
@@ -97,11 +95,8 @@ def compute_interval_residue_profile(
             for prime, bad in zip(request.wheel.primes, bad_by_prime, strict=True)
         )
     )
-    return PrimeTupleIntervalResidueProfileResult(
-        wheel=request.wheel,
-        lower=request.lower,
-        upper=request.upper,
-        interval_size=upper - lower + 1,
+    return PrimeTupleIntervalResidueProfileResult._from_kernel(
+        request,
         survivors=tuple(format_canonical_integer(value) for value in survivors),
     )
 

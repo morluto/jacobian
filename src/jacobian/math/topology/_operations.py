@@ -216,7 +216,7 @@ def _chain_result(request: ChainComplexRequest) -> ChainComplexResult:
                 product_columns=upper.columns,
             )
         )
-    return ChainComplexResult(
+    return ChainComplexResult._from_kernel(
         complex_digest=complex_.complex_digest,
         coefficient_ring=request.coefficient_ring,
         prime=request.prime,
@@ -243,19 +243,12 @@ def _chain(
 
 def _canonical_chain_complex_value(result: ChainComplexResult) -> ChainComplexValue:
     """The canonical chain-complex value carried by one chain result."""
-    value = canonical_chain_complex_value_from_parts(
-        result.coefficient_ring,
-        result.convention,
-        result.prime,
-        result.simplex_bases,
-        result.boundary_matrices,
-    )
-    if value is None:
+    if result.canonical_value is None:
         raise ValueError(
             "only unreduced prime-field simplicial chain complexes convert "
             "to a canonical chain-complex value"
         )
-    return value
+    return result.canonical_value
 
 
 def _prime_matrix(
@@ -705,7 +698,7 @@ def compute_barycentric_subdivision(
     )
     subdivision = barycentric_subdivision(sorted_faces)
     facets = tuple(sorted(tuple(sorted(facet)) for facet in subdivision.facets))
-    return BarycentricSubdivisionResult(
+    return BarycentricSubdivisionResult._from_kernel(
         original_vertices=request.complex.vertices,
         original_dimension=max(len(facet) - 1 for facet in request.complex.facets),
         subdivision_vertices=subdivision.vertices,
@@ -727,14 +720,7 @@ def compute_pseudomanifold_decision(
     """Decide whether a complex is a pseudomanifold."""
 
     decision = pseudomanifold_decision(request.complex.facets)
-    return PseudomanifoldResult(
-        complex=request.complex,
-        is_pseudomanifold=decision.is_pseudomanifold,
-        is_closed=decision.is_closed,
-        dimension=decision.dimension,
-        num_facets=decision.num_facets,
-        obstruction=decision.obstruction,
-    )
+    return PseudomanifoldResult._from_kernel(request, decision=decision)
 
 
 def compute_shelling_check(request: ShellingCheckRequest) -> ShellingCheckResult:
@@ -743,7 +729,7 @@ def compute_shelling_check(request: ShellingCheckRequest) -> ShellingCheckResult
     is_shelling, failed_at, failure_reason = evaluate_shelling(
         request.complex.facets, request.facet_order
     )
-    return ShellingCheckResult(
+    return ShellingCheckResult._from_kernel(
         complex=request.complex,
         facet_order=request.facet_order,
         is_shelling=is_shelling,

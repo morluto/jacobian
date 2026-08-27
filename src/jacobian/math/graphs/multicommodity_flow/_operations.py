@@ -18,8 +18,7 @@ def compute_multicommodity_flow_profile(
 
     The canonical tensor value carries only representation bounds; this
     execution boundary admits the profile work and result envelope inside
-    its own measured scan, so a native call executes exactly the two
-    charged passes. Parsed MCP requests reuse their parse-time scan instead.
+    its own measured scan. Parsed MCP requests reuse their parse-time scan.
     """
 
     return _profile_result(flow, None)
@@ -37,8 +36,8 @@ def _profile_result(
         congestion,
         work,
     ) = profile_components(flow, admitted)
-    return MulticommodityFlowProfileResult(
-        flow=flow,
+    return MulticommodityFlowProfileResult._from_kernel(
+        flow,
         divergences=divergences,
         edge_profiles=edge_profiles,
         all_demands_routed=all_demands_routed,
@@ -54,8 +53,7 @@ def _run_multicommodity_flow_profile(
     """Run one parsed MCP request through the native profile computation.
 
     Request validation already performed and admitted the operation's single
-    component scan; it is reused here as the producer pass, so execution
-    adds only the independent replay pass.
+    component scan; it is reused directly by the producer.
     """
 
     return _profile_result(request.flow, request._admitted_scan)

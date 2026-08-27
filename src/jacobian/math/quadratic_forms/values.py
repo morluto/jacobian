@@ -245,8 +245,8 @@ def require_evaluation_budget(
 
     The active accounting deliberately ignores annihilated monomials, so it
     says nothing about how much support a request may materialize.
-    Validation, kernel traversal, result replay, and source-bound
-    serialization all visit every stored diagonal coefficient, cross term,
+    Request admission, kernel traversal, and source-bound serialization all
+    visit every stored diagonal coefficient, cross term,
     and coordinate whether or not it contributes, and each stored entry has
     bounded height (per-entry numerator/denominator digit bounds; bounded
     label length).  The total materialized form support,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
+from builtins import ValueError as BuiltinValueError
 from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
@@ -32,12 +33,10 @@ MAX_EXACT_COVER_SECONDARY_ITEMS = MAX_EXACT_COVER_ITEMS
 MAX_EXACT_COVER_ROWS = 4_096
 MAX_EXACT_COVER_INCIDENCES = 65_536
 
-# NO_COVER is replayed by its result validator, so a negative public call makes
-# at most two passes. A million-node adversarial pass is too slow to repeat at
-# the public boundary; 100,000 nodes per pass is a measured conservative
-# execution fallback, independent of the broader 256-item representation bound.
+# A million-node adversarial pass is too slow to repeat at the public boundary;
+# 100,000 nodes per pass is a measured conservative execution fallback,
+# independent of the broader 256-item representation bound.
 MAX_EXACT_COVER_SEARCH_NODES_PER_PASS = 100_000
-MAX_EXACT_COVER_SEARCH_NODES = 2 * MAX_EXACT_COVER_SEARCH_NODES_PER_PASS
 
 ExactCoverSearchStatus = Literal["FOUND", "NO_COVER", "UNKNOWN"]
 
@@ -216,10 +215,8 @@ class GeneralizedExactCoverRequest(StrictModel):
                 "and each secondary item at most once. The bitset Algorithm X "
                 "search visits at most `search_node_limit` partial row families "
                 "per pass. It returns NO_COVER only after exhaustive search; a "
-                "node-limit stop returns UNKNOWN. An exact NO_COVER result is "
-                "replayed during validation, so total negative-case work is at "
-                f"most {MAX_EXACT_COVER_SEARCH_NODES} node visits. UNKNOWN is "
-                "a source-bound non-conclusion and is not replayed."
+                "node-limit stop returns UNKNOWN. UNKNOWN is a source-bound "
+                "non-conclusion rather than a proof of absence."
             )
         }
     )
@@ -305,10 +302,9 @@ class GeneralizedExactCoverResult(StrictModel):
                 "Source-bound generalized exact-cover result. FOUND carries a "
                 "canonical selected-row family and every declared item's "
                 "reconstructed multiplicity. NO_COVER is accepted only after "
-                "the retained instance replays to exhaustive failure. UNKNOWN "
-                "records only that this execution made no mathematical "
-                "conclusion within the retained node limit; it is intentionally "
-                "not tied to a private search-kernel revision."
+                "the producer has exhausted the admitted search. UNKNOWN records "
+                "only that this execution made no mathematical conclusion within "
+                "the retained node limit."
             )
         }
     )
@@ -333,40 +329,78 @@ class GeneralizedExactCoverResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_source_bound_result(self) -> Self:
-        _require_output_headroom(self.instance)
+    def require_result_shape(self) -> Self:
         if self.status == "FOUND":
             if self.selected_row_ids is None or self.item_multiplicities is None:
                 raise ValueError(
                     "a FOUND result must carry selected rows and item multiplicities"
-                )
-            expected = _expected_coverage(self.instance, self.selected_row_ids)
-            if self.item_multiplicities != expected:
-                raise ValueError(
-                    "item multiplicities must reconstruct the selected-row family"
                 )
             return self
 
         if self.selected_row_ids is not None or self.item_multiplicities is not None:
             raise ValueError("only a FOUND result may carry a selected-row family")
 
-        # UNKNOWN carries no mathematical claim. Replaying it would turn a
-        # private branching/kernel choice into durable public semantics and
-        # repeat bounded work merely to validate a non-conclusion.
-        if self.status == "UNKNOWN":
-            return self
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        instance: GeneralizedExactCoverInstance,
+        search_node_limit: int,
+        status: ExactCoverSearchStatus,
+        selected_row_ids: tuple[OpaqueLabel, ...] | None = None,
+        item_multiplicities: tuple[ExactCoverItemMultiplicity, ...] | None = None,
+    ) -> Self:
+        """Construct an admitted, kernel-established result without replay."""
+
+        return cls.model_construct(
+            instance=instance,
+            search_node_limit=search_node_limit,
+            status=status,
+            selected_row_ids=selected_row_ids,
+            item_multiplicities=item_multiplicities,
+        )
+
+
+def _verify_generalized_exact_cover_result(result: GeneralizedExactCoverResult) -> bool:
+    """Replay an independently supplied exact-cover claim in its envelope."""
+
+    try:
+        request = GeneralizedExactCoverRequest(
+            instance=result.instance, search_node_limit=result.search_node_limit
+        )
+        if result.status == "FOUND":
+            if result.selected_row_ids is None or result.item_multiplicities is None:
+                return False
+            if result.item_multiplicities != _expected_coverage(
+                request.instance, result.selected_row_ids
+            ):
+                return False
+        elif (
+            result.selected_row_ids is not None
+            or result.item_multiplicities is not None
+        ):
+            return False
 
         from jacobian.math.combinatorics._exact_cover_kernel import (
             search_generalized_exact_cover,
         )
 
-        replay = search_generalized_exact_cover(self.instance, self.search_node_limit)
-        if replay.status != "NO_COVER":
-            raise ValueError(
-                f"NO_COVER contradicts deterministic replay, which returned "
-                f"{replay.status}"
-            )
-        return self
+        replay = search_generalized_exact_cover(
+            request.instance, request.search_node_limit
+        )
+    except (BuiltinValueError, TypeError):
+        return False
+
+    if replay.status != result.status:
+        return False
+    if result.status != "FOUND":
+        return True
+    assert result.selected_row_ids is not None
+    return result.selected_row_ids == tuple(
+        sorted(request.instance.rows[index].row_id for index in replay.selected_rows)
+    )
 
 
 def _solve_generalized_exact_cover(
@@ -381,7 +415,7 @@ def _solve_generalized_exact_cover(
 
     search = search_generalized_exact_cover(instance, search_node_limit)
     if search.status != "FOUND":
-        return GeneralizedExactCoverResult(
+        return GeneralizedExactCoverResult._from_kernel(
             instance=instance,
             search_node_limit=search_node_limit,
             status=search.status,
@@ -390,7 +424,7 @@ def _solve_generalized_exact_cover(
     selected_row_ids = tuple(
         sorted(instance.rows[index].row_id for index in search.selected_rows)
     )
-    return GeneralizedExactCoverResult(
+    return GeneralizedExactCoverResult._from_kernel(
         instance=instance,
         search_node_limit=search_node_limit,
         status="FOUND",

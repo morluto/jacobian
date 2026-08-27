@@ -534,16 +534,13 @@ def _is_unit_generic_fiber_basis(certificate: GenericFiberCertificate) -> bool:
     )
 
 
-GENERIC_DEGREE_RESULT_REPLAY_WALL_SECONDS = 60
-
-
 class GenericDegreeResult(StrictModel):
     """An exact source-bound generic-fiber conclusion or operational failure.
 
-    The declared outcome must agree with the source and evidence shape. Owner
-    kernels replay their evidence before trusted construction; independently
-    supplied mathematical claims use ``verify_generic_degree_result`` rather
-    than re-entering a process-bound replay during deserialization.
+    The declared outcome must agree with the retained evidence shape.  The
+    producer establishes the mathematical conclusion once; an independently
+    supplied claim may be checked with the owner-private verifier without
+    re-entering a process-bound replay during deserialization.
     """
 
     outcome: GenericDegreeOutcome
@@ -554,7 +551,6 @@ class GenericDegreeResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_outcome(self) -> Self:
-        _require_generic_degree_map_budget(self.source)
         mathematical = {
             "GENERICALLY_FINITE",
             "NOT_DOMINANT",
@@ -607,7 +603,7 @@ class GenericDegreeResult(StrictModel):
         evidence: GenericFiberCertificate | None,
         detail: str | None,
     ) -> Self:
-        """Construct a result after the owner has completed exact replay."""
+        """Construct a result after the owner kernel established the claim."""
 
         return cls.model_construct(
             outcome=outcome,
@@ -618,12 +614,11 @@ class GenericDegreeResult(StrictModel):
         )
 
 
-def verify_generic_degree_result(result: GenericDegreeResult) -> bool:
+def _verify_generic_degree_result(result: GenericDegreeResult) -> bool:
     """Replay one independently supplied exact generic-degree claim.
 
-    This owner-local verifier has a fixed 60-second replay ceiling. Structural
-    result parsing never invokes it, and an unavailable or out-of-envelope
-    replay is not mathematical evidence.
+    Structural result parsing never invokes it.  Re-admission supplies the
+    bounded verification envelope, and an unavailable verdict is not evidence.
     """
 
     mathematical = {
@@ -635,10 +630,14 @@ def verify_generic_degree_result(result: GenericDegreeResult) -> bool:
         return False
     from jacobian.math.polynomials.maps._replay import run_bounded_certificate_replay
 
+    try:
+        request = GenericDegreeRequest(polynomial_map=result.source)
+    except ValueError:
+        return False
     replay = run_bounded_certificate_replay(
-        result.source,
+        request.polynomial_map,
         result.evidence,
-        wall_seconds=GENERIC_DEGREE_RESULT_REPLAY_WALL_SECONDS,
+        wall_seconds=request.resource_budget.wall_seconds,
     )
     return (
         replay.status == "COMPUTED"

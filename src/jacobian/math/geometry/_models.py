@@ -1541,8 +1541,7 @@ class EuclideanConvexPolygonTriangulationResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_status_fields(self) -> Self:
-        points = _require_euclidean_triangulation_envelope(self.polygon)
-        if self.vertex_count != len(points):
+        if self.vertex_count != len(self.polygon.points):
             raise _validation_error(
                 "vertex_count_source_polygon_vertex_count",
                 "vertex_count must equal the source polygon vertex count",
@@ -1588,14 +1587,58 @@ class EuclideanConvexPolygonTriangulationResult(StrictModel):
                     "optimum_expression_list_selected_diagonal_lengths",
                     "optimum expression must list the selected diagonal lengths",
                 )
-            _replay_euclidean_triangulation(self, points)
         else:
             assert self.unresolved_comparison is not None
-            _replay_euclidean_unresolved_comparison(self.unresolved_comparison, points)
+            comparison = self.unresolved_comparison
+            if (
+                comparison.end >= self.vertex_count
+                or comparison.end - comparison.start < 2
+            ):
+                raise _validation_error(
+                    "unresolved_comparison_name_a_nontrivial_dp",
+                    "unresolved comparison must name a nontrivial DP subproblem span",
+                )
+            if not (
+                comparison.start
+                < comparison.right_split
+                < comparison.left_split
+                < comparison.end
+            ):
+                raise _validation_error(
+                    "unresolved_comparison_splits_lie_strictly_inside",
+                    "unresolved comparison splits must lie strictly inside its span "
+                    "with the incumbent split first",
+                )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: EuclideanConvexPolygonTriangulationRequest,
+        *,
+        status: Literal["CERTIFIED_OPTIMUM", "COMPARISON_UNRESOLVED"],
+        diagonals: tuple[EuclideanDiagonal, ...] = (),
+        triangles: tuple[PolygonTriangle, ...] = (),
+        split_table: tuple[EuclideanTriangulationSplitEntry, ...] = (),
+        optimum: EuclideanLengthExpression | None = None,
+        unresolved_comparison: EuclideanComparisonUnresolved | None = None,
+    ) -> Self:
+        """Build a result after the admitted triangulation kernel established it."""
 
-def _replay_euclidean_split_choice(
+        return cls.model_construct(
+            polygon=request.polygon,
+            vertex_count=len(request.polygon.points),
+            comparison_precision_bits=EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS,
+            status=status,
+            diagonals=diagonals,
+            triangles=triangles,
+            split_table=split_table,
+            optimum=optimum,
+            unresolved_comparison=unresolved_comparison,
+        )
+
+
+def _verify_euclidean_split_choice(
     entry: EuclideanTriangulationSplitEntry,
     optimum: dict[tuple[int, int], tuple[Fraction, ...]],
     points: tuple[tuple[Fraction, Fraction], ...],
@@ -1648,7 +1691,7 @@ def _replay_euclidean_split_choice(
         )
 
 
-def _replay_euclidean_triangulation(
+def _verify_euclidean_triangulation_result(
     result: EuclideanConvexPolygonTriangulationResult,
     points: tuple[tuple[Fraction, Fraction], ...],
 ) -> None:
@@ -1677,7 +1720,7 @@ def _replay_euclidean_triangulation(
     }
     splits: dict[tuple[int, int], int] = {}
     for entry in result.split_table:
-        _replay_euclidean_split_choice(entry, optimum, points, count)
+        _verify_euclidean_split_choice(entry, optimum, points, count)
         optimum[entry.start, entry.end] = tuple(
             term.as_fraction() for term in entry.optimum.squared_lengths
         )
@@ -1726,7 +1769,7 @@ def _replay_euclidean_triangulation(
             )
 
 
-def _replay_euclidean_unresolved_comparison(
+def _verify_euclidean_unresolved_comparison(
     comparison: EuclideanComparisonUnresolved,
     points: tuple[tuple[Fraction, Fraction], ...],
 ) -> None:
@@ -1810,6 +1853,22 @@ def _replay_euclidean_unresolved_comparison(
         "unresolved_comparison_occur_during_replayed_recurrence",
         "unresolved comparison must occur during the replayed recurrence",
     )
+
+
+def _verify_euclidean_triangulation_claim(
+    result: EuclideanConvexPolygonTriangulationResult,
+) -> None:
+    """Fail closed when an independently supplied triangulation claim needs proof."""
+
+    request = EuclideanConvexPolygonTriangulationRequest(
+        polygon=EuclideanTriangulationPolygonRequest.model_validate(result.polygon)
+    )
+    points = _require_euclidean_triangulation_envelope(request.polygon)
+    if result.status == "CERTIFIED_OPTIMUM":
+        _verify_euclidean_triangulation_result(result, points)
+        return
+    assert result.unresolved_comparison is not None
+    _verify_euclidean_unresolved_comparison(result.unresolved_comparison, points)
 
 
 # ---------------------------------------------------------------------------

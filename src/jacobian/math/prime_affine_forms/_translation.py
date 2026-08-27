@@ -53,15 +53,13 @@ class PrimeAffineTranslationResult(StrictModel):
     shift: IntervalEndpointInteger
     translated: PrimeAffineTuple
 
-    @model_validator(mode="after")
-    def bind_exact_translation(self) -> PrimeAffineTranslationResult:
-        PrimeAffineTranslationRequest(source=self.source, shift=self.shift)
-        expected = translated_tuple(self.source, parse_canonical_integer(self.shift))
-        if self.translated != expected:
-            raise _validation_error(
-                "translated tuple must equal L_i(n+shift) for every form"
-            )
-        return self
+    @classmethod
+    def _from_kernel(
+        cls, request: PrimeAffineTranslationRequest, *, translated: PrimeAffineTuple
+    ) -> PrimeAffineTranslationResult:
+        """Build after the admitted translation kernel established the tuple."""
+
+        return cls(source=request.source, shift=request.shift, translated=translated)
 
 
 def compute_translation(
@@ -69,13 +67,19 @@ def compute_translation(
 ) -> PrimeAffineTranslationResult:
     """Apply one admitted translation and retain its exact canonical tuple."""
 
-    return PrimeAffineTranslationResult(
-        source=request.source,
-        shift=request.shift,
+    return PrimeAffineTranslationResult._from_kernel(
+        request,
         translated=translated_tuple(
             request.source, parse_canonical_integer(request.shift)
         ),
     )
+
+
+def verify_translation_result(result: PrimeAffineTranslationResult) -> bool:
+    """Verify an independently supplied affine-translation claim."""
+
+    request = PrimeAffineTranslationRequest(source=result.source, shift=result.shift)
+    return result == compute_translation(request)
 
 
 __all__ = [

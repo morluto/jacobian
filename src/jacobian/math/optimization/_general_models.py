@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from fractions import Fraction
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -287,7 +287,7 @@ class GeneralRationalLinearProgramRequest(StrictModel):
 
 
 class GeneralRationalLinearProgramResult(StrictModel):
-    """A source-bound exact outcome for a general-form rational LP.
+    """A canonical exact outcome for a general-form rational LP.
 
     Dual multipliers use the source objective sense.  For minimization, LE
     row and upper-bound multipliers are nonpositive while GE and lower-bound
@@ -340,6 +340,16 @@ class GeneralRationalLinearProgramResult(StrictModel):
         default=None, max_length=MAX_GENERAL_LINEAR_PROGRAM_VARIABLES
     )
 
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build an outcome whose source-derived facts the kernel established.
+
+        Parsing checks representation and field presence only.  It does not
+        rerun normalization or certificate arithmetic.
+        """
+
+        return cls.model_construct(**values)
+
     @model_validator(mode="before")
     @classmethod
     def bound_raw_result(cls, value: object) -> object:
@@ -385,13 +395,8 @@ class GeneralRationalLinearProgramResult(StrictModel):
     def bind_result_to_source(self) -> Self:
         try:
             _require_general_result_shape(self)
-            _require_general_result_heights(self)
-            primal_objective = _replay_general_primal(self)
-            _replay_general_dual(self, primal_objective)
-            _replay_general_farkas(self)
-            _replay_general_recession(self)
         except ValueError as error:
-            raise _validation_error("result_replay", str(error)) from error
+            raise _validation_error("result_shape", str(error)) from error
         return self
 
 
@@ -505,6 +510,19 @@ def _require_general_result_heights(result: GeneralRationalLinearProgramResult) 
         raise ValueError(
             "general linear-program result can exceed the result byte bound"
         )
+
+
+def _verify_general_rational_linear_program_result(
+    result: GeneralRationalLinearProgramResult,
+) -> None:
+    """Deliberately verify an independently supplied general LP claim."""
+
+    _require_general_result_shape(result)
+    _require_general_result_heights(result)
+    primal_objective = _replay_general_primal(result)
+    _replay_general_dual(result, primal_objective)
+    _replay_general_farkas(result)
+    _replay_general_recession(result)
 
 
 def _replay_general_primal(

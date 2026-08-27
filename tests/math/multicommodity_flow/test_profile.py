@@ -24,6 +24,7 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
     _profile_component_digit_bounds,
+    _verify_multicommodity_flow_profile_result,
     derived_profile_digit_budget,
 )
 from jacobian.math.graphs.multicommodity_flow._operations import (
@@ -83,10 +84,8 @@ def test_accepted_calls_charge_every_executed_scan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Request parsing performs the operation's component scan once, admits
-    # work and result envelope from it, and hands it to the producer pass;
-    # the replay rescans independently. A native call runs the same producer
-    # scan itself. Either way an accepted call has two charged arithmetic
-    # scans, and no further scan may escape the admitted work envelope.
+    # work and result envelope from it, then hands it to the producer. A
+    # native call runs that same one charged scan at its execution boundary.
     from jacobian.math.graphs.multicommodity_flow import _models
 
     scans = {"count": 0}
@@ -101,18 +100,18 @@ def test_accepted_calls_charge_every_executed_scan(
     via_request = _run_multicommodity_flow_profile(
         MulticommodityFlowProfileRequest(flow=shared_bottleneck_flow())
     )
-    assert_executed_work_is_charged(charged=2, executed=scans["count"])
-    assert scans == {"count": 2}
+    assert_executed_work_is_charged(charged=1, executed=scans["count"])
+    assert scans == {"count": 1}
 
     scans.update(count=0)
     native = compute_multicommodity_flow_profile(shared_bottleneck_flow())
-    assert_executed_work_is_charged(charged=2, executed=scans["count"])
-    assert scans == {"count": 2}
+    assert_executed_work_is_charged(charged=1, executed=scans["count"])
+    assert scans == {"count": 1}
 
     assert native == via_request
 
 
-def test_exact_shared_bottleneck_profile_replays_its_source() -> None:
+def test_exact_shared_bottleneck_profile_has_its_expected_values() -> None:
     result = compute_multicommodity_flow_profile(shared_bottleneck_flow())
 
     assert result.all_demands_routed is True
@@ -139,8 +138,8 @@ def test_exact_shared_bottleneck_profile_replays_its_source() -> None:
         ("b", 2, Fraction(0)),
         ("b", 3, Fraction(-2)),
     ]
-    # Producer and replay both scan the four sparse entries, four-by-two dense
-    # divergence cells, and three edges; the ledger is exact rather than a cap.
+    # The producer scans the four sparse entries, four-by-two dense divergence
+    # cells, and three edges; the ledger is exact rather than a cap.
     # Every entry shares denominator 1, so the bucket fold performs one
     # fraction addition per nonempty bucket: six touched divergence cells and
     # three edges add nine folds to the twelve numerator additions, plus the
@@ -154,7 +153,7 @@ def test_exact_shared_bottleneck_profile_replays_its_source() -> None:
     assert result.work.rational_negations_per_pass == 2
     assert result.work.rational_divisions_per_pass == 3
     assert result.work.exact_comparisons_per_pass == 8 + 3 * 3
-    assert result.work.logical_steps_per_call == 2 * (24 + 2 + 3 + 17)
+    assert result.work.logical_steps_per_call == 24 + 2 + 3 + 17
 
 
 def test_profile_distinguishes_capacity_and_conservation_failures() -> None:
@@ -209,7 +208,7 @@ def test_zero_capacity_positive_load_has_no_finite_congestion() -> None:
     # and one edge bucket: three fold additions beyond 3*1 + 1.
     assert result.work.rational_divisions_per_pass == 0
     assert result.work.exact_comparisons_per_pass == 2 + 1 + 2
-    assert result.work.logical_steps_per_call == 2 * ((3 + 3 + 1) + 1 + 0 + 5)
+    assert result.work.logical_steps_per_call == (3 + 3 + 1) + 1 + 0 + 5
 
 
 def test_early_divergence_mismatch_still_executes_every_counted_comparison() -> None:
@@ -230,7 +229,7 @@ def test_early_divergence_mismatch_still_executes_every_counted_comparison() -> 
     assert result.work.commodity_vertex_cells == 8
     assert result.work.edge_cells == 3
     assert result.work.exact_comparisons_per_pass == 8 + 3 * 3
-    assert result.work.logical_steps_per_call == 2 * (24 + 2 + 3 + 17)
+    assert result.work.logical_steps_per_call == 24 + 2 + 3 + 17
 
 
 def test_mixed_zero_and_positive_capacities_execute_every_counted_comparison() -> None:
@@ -269,7 +268,7 @@ def test_mixed_zero_and_positive_capacities_execute_every_counted_comparison() -
         assert result.congestion is None
         assert result.work.rational_divisions_per_pass == 0
         assert result.work.exact_comparisons_per_pass == 4 + 3 + (3 + 1)
-        assert result.work.logical_steps_per_call == 2 * ((9 + 7 + 3) + 1 + 0 + 11)
+        assert result.work.logical_steps_per_call == (9 + 7 + 3) + 1 + 0 + 11
 
 
 def test_fractional_split_flow_uses_exact_rational_loads_and_congestion() -> None:
@@ -341,7 +340,7 @@ def test_low_commodity_networks_admit_vertices_up_to_the_cell_budget() -> None:
     assert len(result.divergences) == 33
     assert result.work.commodity_vertex_cells == 33
     assert result.work.exact_comparisons_per_pass == 33 + 3
-    assert result.work.logical_steps_per_call == 2 * ((3 + 3 + 1) + 1 + 1 + 36)
+    assert result.work.logical_steps_per_call == (3 + 3 + 1) + 1 + 1 + 36
 
     # Eight commodities over all 64 FlowGraph vertices reach exactly 512
     # returned cells; a ninth commodity exceeds the dense divergence budget.
@@ -375,8 +374,8 @@ def test_large_exact_scalars_are_admitted_when_derived_digits_stay_bounded() -> 
     # 33-digit slack; operand-derived digit budgets, not a fixed input cap,
     # decide whether such exact scalars are admitted. Even on this one-edge
     # flow the single slack subtraction and the single congestion division
-    # execute exactly once per pass because the kernel reuses the measured
-    # components of the shared derivative scan.
+    # execute once because the kernel reuses the measured components of the
+    # shared derivative scan.
     big_capacity = q(10**32)
     flow = MulticommodityFlow(
         network=FlowGraph(
@@ -397,7 +396,7 @@ def test_large_exact_scalars_are_admitted_when_derived_digits_stay_bounded() -> 
     assert result.work.rational_negations_per_pass == 1
     assert result.work.rational_divisions_per_pass == 1
     assert result.work.exact_comparisons_per_pass == 5
-    assert result.work.logical_steps_per_call == 16
+    assert result.work.logical_steps_per_call == 8
 
 
 def test_operand_digit_budget_bounds_the_canonical_boundary() -> None:
@@ -602,13 +601,13 @@ def test_derived_quantities_admit_edges_without_a_fixed_ceiling() -> None:
     assert result.work.edge_cells == 129
     assert result.work.rational_additions_per_pass == 129
     assert result.work.exact_comparisons_per_pass == 12 + 3 * 129
-    assert result.work.logical_steps_per_call == 2 * (129 + 1 + 129 + 12 + 3 * 129)
+    assert result.work.logical_steps_per_call == 129 + 1 + 129 + 12 + 3 * 129
 
     # The ledger and returned rows inherit FlowGraph's own 512-edge maximum:
     # a full 512-edge network is admitted and accounted exactly.
     full = compute_multicommodity_flow_profile(many_edge_flow(64, 512))
     assert len(full.edge_profiles) == 512
-    assert full.work.logical_steps_per_call == 2 * (512 + 1 + 512 + 64 + 3 * 512)
+    assert full.work.logical_steps_per_call == 512 + 1 + 512 + 64 + 3 * 512
 
     # Eight commodities over the same full 512-edge graph fill the dense
     # divergence budget alongside every edge: 512 cells plus three comparisons
@@ -704,7 +703,7 @@ def test_entry_count_is_bounded_by_distinct_cells_not_a_fixed_ceiling() -> None:
         3 * 129 + unit_fold_additions(flow) + 129
     )
     assert result.work.exact_comparisons_per_pass == 13 + 3 * 129
-    assert result.work.logical_steps_per_call == 2 * (
+    assert result.work.logical_steps_per_call == (
         3 * 129 + unit_fold_additions(flow) + 129 + 1 + 129 + (13 + 3 * 129)
     )
 
@@ -756,7 +755,7 @@ def test_sparse_scan_admits_commodities_over_a_full_edge_graph() -> None:
     assert result.work.rational_negations_per_pass == 5
     assert result.work.rational_divisions_per_pass == 512
     assert result.work.exact_comparisons_per_pass == 120 + 3 * 512
-    assert result.work.logical_steps_per_call == 2 * (512 + 5 + 512 + 120 + 3 * 512)
+    assert result.work.logical_steps_per_call == 512 + 5 + 512 + 120 + 3 * 512
 
 
 def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
@@ -784,7 +783,7 @@ def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
     assert len(unrouted.divergences) == 34
     assert unrouted.work.commodity_vertex_cells == 34
     assert unrouted.work.rational_negations_per_pass == 17
-    assert unrouted.work.logical_steps_per_call == 2 * (1 + 17 + 1 + 34 + 3)
+    assert unrouted.work.logical_steps_per_call == 1 + 17 + 1 + 34 + 3
 
     # Each commodity occupies at least two distinct commodity-vertex cells,
     # so exactly half of the 512-cell divergence budget, 256 commodities, is
@@ -792,7 +791,7 @@ def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
     full = compute_multicommodity_flow_profile(dense_commodities(256))
     assert len(full.divergences) == MAX_COMMODITY_VERTEX_CELLS
     assert full.work.rational_negations_per_pass == 256
-    assert full.work.logical_steps_per_call == 2 * (1 + 256 + 1 + 512 + 3)
+    assert full.work.logical_steps_per_call == 1 + 256 + 1 + 512 + 3
 
     with multicommodity_validation_error():
         dense_commodities(257)
@@ -997,7 +996,7 @@ def test_null_congestion_admits_ratios_the_result_omits() -> None:
     assert result.work.rational_additions_per_pass == 3 * 2 + 6 + 2
     assert result.work.rational_divisions_per_pass == 0
     assert result.work.exact_comparisons_per_pass == 6 + 2 + (2 + 1)
-    assert result.work.logical_steps_per_call == 2 * (14 + 2 + 0 + 11)
+    assert result.work.logical_steps_per_call == 14 + 2 + 0 + 11
 
 
 def test_returned_congestion_ratio_is_still_capped() -> None:
@@ -1287,7 +1286,7 @@ def test_ledger_charges_every_performed_bucket_fold_addition() -> None:
     assert result.work.rational_negations_per_pass == 2
     assert result.work.rational_divisions_per_pass == 4
     assert result.work.exact_comparisons_per_pass == 8 + 3 * 4
-    assert result.work.logical_steps_per_call == 2 * (33 + 2 + 4 + 20)
+    assert result.work.logical_steps_per_call == 33 + 2 + 4 + 20
     # The exact values stay the known answers even though the fold order
     # follows ascending denominator bit length rather than entry order.
     divergence = {
@@ -1412,7 +1411,7 @@ def test_folding_intermediates_cancel_beneath_the_completed_cap() -> None:
     assert result.work.commodity_vertex_cells == 8
     assert result.work.rational_additions_per_pass == 3 * 4 + (8 + 4) + 1
     assert result.work.exact_comparisons_per_pass == 8 + 3
-    assert result.work.logical_steps_per_call == 2 * (25 + 4 + 1 + 11)
+    assert result.work.logical_steps_per_call == 25 + 4 + 1 + 11
 
 
 def test_folds_are_bounded_by_the_intermediate_budget_not_the_component_cap() -> None:
@@ -1515,21 +1514,26 @@ def test_near_cap_coprime_growth_aborts_within_budget_sized_arithmetic() -> None
         compute_multicommodity_flow_profile(near_cap_growth)
 
 
-def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None:
+def test_structural_round_trip_and_private_verifier_rejects_forged_claims() -> None:
     result = compute_multicommodity_flow_profile(shared_bottleneck_flow())
     payload = result.model_dump(mode="json")
 
+    assert MulticommodityFlowProfileResult.model_validate(payload) == result
+
     forged_load = deepcopy(payload)
     forged_load["edge_profiles"][2]["load"] = {"num": "2", "den": "1"}
-    with multicommodity_validation_error():
-        MulticommodityFlowProfileResult.model_validate(forged_load)
+    parsed_load = MulticommodityFlowProfileResult.model_validate(forged_load)
+    with pytest.raises(ValueError, match="must match"):
+        _verify_multicommodity_flow_profile_result(parsed_load)
 
     forged_source = deepcopy(payload)
     forged_source["flow"]["commodities"][1]["demand"] = {"num": "1", "den": "1"}
-    with multicommodity_validation_error():
-        MulticommodityFlowProfileResult.model_validate(forged_source)
+    parsed_source = MulticommodityFlowProfileResult.model_validate(forged_source)
+    with pytest.raises(ValueError, match="must match"):
+        _verify_multicommodity_flow_profile_result(parsed_source)
 
     forged_work = deepcopy(payload)
     forged_work["work"]["logical_steps_per_call"] = 1
-    with multicommodity_validation_error():
-        MulticommodityFlowProfileResult.model_validate(forged_work)
+    parsed_work = MulticommodityFlowProfileResult.model_validate(forged_work)
+    with pytest.raises(ValueError, match="must match"):
+        _verify_multicommodity_flow_profile_result(parsed_work)

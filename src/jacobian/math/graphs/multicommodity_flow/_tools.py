@@ -18,7 +18,7 @@ TOOLS: MathTools = (
             "Compute exact commodity conservation, aggregate edge loads, signed "
             "capacity slacks, capacity feasibility, and congestion for one "
             "canonical sparse rational multicommodity-flow tensor. The result "
-            "retains and replays the complete network, demands, and tensor; it "
+            "retains the complete network, demands, and tensor; it "
             "does not search for a flow or solve an optimization problem."
         ),
         request_type=MulticommodityFlowProfileRequest,

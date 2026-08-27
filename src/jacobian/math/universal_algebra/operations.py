@@ -161,8 +161,10 @@ def homomorphism_profile(carrier_map: FiniteAlgebraCarrierMap) -> dict[str, obje
             },
         }
 
-    homomorphism = FiniteAlgebraHomomorphism.model_validate(
-        carrier_map.model_dump(mode="python")
+    homomorphism = FiniteAlgebraHomomorphism.model_construct(
+        source=carrier_map.source,
+        target=carrier_map.target,
+        mapping=carrier_map.mapping,
     )
     kernel_partition, image = _homomorphism_kernel_and_image(carrier_map.mapping)
     injective = len(image) == len(carrier_map.source.carrier)

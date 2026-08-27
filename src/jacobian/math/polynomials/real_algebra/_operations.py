@@ -67,15 +67,8 @@ def compute_strict_sublevel_measure(
     request: StrictSublevelMeasureRequest,
 ) -> StrictSublevelMeasureResult:
     payload = compute_strict_sublevel_payload(request)
-    # The payload is built entirely from the already validated request and the
-    # exact kernel. External result validation still replays the source once;
-    # the trusted producer must not repeat root isolation merely to accept its
-    # own derived fields.
-    return StrictSublevelMeasureResult.model_construct(
-        source_polynomial=request.polynomial,
-        threshold=request.threshold,
-        lower=request.lower,
-        upper=request.upper,
+    return StrictSublevelMeasureResult._from_kernel(
+        request,
         components=payload.components,
         measure=payload.measure,
     )

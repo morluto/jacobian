@@ -8,10 +8,6 @@ from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.graphs.isomorphism._canonicalization import (
-    apply_colored_graph_relabeling,
-    canonicalize_colored_graph_data,
-)
 from jacobian.math.graphs.isomorphism._canonicalization_bounds import (
     require_admitted_colored_graph_canonicalization,
 )
@@ -126,7 +122,7 @@ class ColoredGraphCanonicalizationRequest(StrictModel):
                 "and edge colors are exact names: a relabeling may move vertices "
                 "only when it preserves every declared color. Requests are "
                 "rejected before enumeration when their color-class permutation "
-                "count, execution-plus-validation replay work, or exact result "
+                "count, execution work, or exact result "
                 "size exceeds the published bound."
             )
         }
@@ -161,9 +157,9 @@ class ColoredGraphCanonicalizationResult(StrictModel):
     positions in increasing exact color-name order; among all relabelings inside
     those classes, the canonical graph has the least sorted sequence of endpoint
     positions and edge-color names. An automorphism tie uses the least target
-    tuple aligned to the source graph's vertex axis. Result validation replays
-    that complete bounded search, then checks that ``relabeling`` reconstructs
-    the returned graph exactly from ``source_graph``.
+    tuple aligned to the source graph's vertex axis. Kernel-produced results
+    establish this canonical form once; parsing retains only the relabeling's
+    structural shape.
     """
 
     source_graph: ColoredUndirectedGraph
@@ -177,8 +173,7 @@ class ColoredGraphCanonicalizationResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_exact_source_bound_canonical_form(self) -> Self:
-        require_admitted_colored_graph_canonicalization(self.source_graph)
+    def require_structural_relabeling(self) -> Self:
         if tuple(item.source_vertex for item in self.relabeling) != (
             self.source_graph.graph.vertices
         ):
@@ -199,28 +194,21 @@ class ColoredGraphCanonicalizationResult(StrictModel):
                 "graph.relabeling_bijection_onto_canonical_vertices",
                 "relabeling must be a bijection onto the canonical graph vertices",
             )
-        if apply_colored_graph_relabeling(self.source_graph, mapping) != (
-            self.canonical_graph
-        ):
-            raise PydanticCustomError(
-                "graph.relabeling_must_reconstruct_the_canonical_colore",
-                "relabeling must reconstruct the canonical colored graph",
-            )
-        expected_graph, expected_relabeling = canonicalize_colored_graph_data(
-            self.source_graph
-        )
-        actual_relabeling = tuple(
-            (item.source_vertex, item.canonical_vertex) for item in self.relabeling
-        )
-        if (
-            self.canonical_graph != expected_graph
-            or actual_relabeling != expected_relabeling
-        ):
-            raise PydanticCustomError(
-                "graph.result_exact_deterministic_colored_canonical_form",
-                "result must be the exact deterministic colored-graph canonical form",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source_graph: ColoredUndirectedGraph,
+        canonical_graph: ColoredUndirectedGraph,
+        relabeling: tuple[GraphRelabelingPair, ...],
+    ) -> Self:
+        return cls.model_construct(
+            source_graph=source_graph,
+            canonical_graph=canonical_graph,
+            relabeling=relabeling,
+        )
 
 
 __all__ = [

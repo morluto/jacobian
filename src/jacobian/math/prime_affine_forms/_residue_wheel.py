@@ -1,8 +1,7 @@
-"""Typed contracts and bounded replay for prime-affine residue wheels."""
+"""Typed contracts and bounded kernels for prime-affine residue wheels."""
 
 from __future__ import annotations
 
-from math import prod
 from typing import Annotated, Self
 
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
@@ -17,12 +16,11 @@ from jacobian.math.affine_forms.values import (
     AffineFormId,
 )
 from jacobian.math.prime_affine_forms._interval import (
-    MAX_INTERVAL_REPLAY_EVALUATIONS,
+    MAX_INTERVAL_EVALUATIONS,
     IntervalEndpointInteger,
     _parse_interval,
     require_bounded_affine_endpoints,
 )
-from jacobian.math.prime_affine_forms._kernel import wheel_modulus
 from jacobian.math.prime_affine_forms._models import (
     MAX_BATCH_PRIME,
     MAX_RESULT_CHARACTER_BUDGET,
@@ -30,7 +28,6 @@ from jacobian.math.prime_affine_forms._models import (
     PrimeTupleLocalSummary,
     _digits,
     _require_prime_set,
-    _require_summary,
     _source_character_upper_bound,
     _summary_character_upper_bound,
     _validation_error,
@@ -75,7 +72,7 @@ class PrimeTupleResidueWheelRequest(StrictModel):
         root_work = 6 * root_cells
         if root_work > MAX_COMPACT_WHEEL_ROOT_WORK:
             raise _validation_error(
-                f"compact wheel computation and validation need {root_work} root "
+                f"compact wheel computation needs {root_work} root "
                 f"steps, exceeding {MAX_COMPACT_WHEEL_ROOT_WORK}"
             )
         modulus_digits = sum(_digits(prime) for prime in self.primes) or 1
@@ -115,25 +112,29 @@ class PrimeTupleResidueWheel(StrictModel):
     valid_count: CompactWheelScalar
 
     @model_validator(mode="after")
-    def bind_compact_crt_wheel(self) -> Self:
-        PrimeTupleResidueWheelRequest(source=self.source, primes=self.primes)
+    def require_compact_wheel_shape(self) -> Self:
         if tuple(row.prime for row in self.local_rows) != self.primes:
             raise _validation_error(
                 "wheel local rows must align with its canonical primes"
             )
-        for row in self.local_rows:
-            _require_summary(self.source, row)
-        expected_modulus = wheel_modulus(self.primes)
-        if parse_canonical_integer(self.modulus) != expected_modulus:
-            raise _validation_error(
-                "wheel modulus must equal the product of its primes"
-            )
-        expected_count = prod((row.valid_count for row in self.local_rows), start=1)
-        if parse_canonical_integer(self.valid_count) != expected_count:
-            raise _validation_error(
-                "wheel valid_count must equal the product of local counts"
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PrimeTupleResidueWheelRequest,
+        *,
+        local_rows: tuple[PrimeTupleLocalSummary, ...],
+        modulus: str,
+        valid_count: str,
+    ) -> Self:
+        return cls(
+            source=request.source,
+            primes=request.primes,
+            local_rows=local_rows,
+            modulus=modulus,
+            valid_count=valid_count,
+        )
 
 
 class PrimeTupleResidueWheelEnumerationRequest(StrictModel):
@@ -162,12 +163,12 @@ class PrimeTupleResidueWheelEnumerationRequest(StrictModel):
                 f"{MAX_WHEEL_RESULT_CELLS}"
             )
         root_cells = self.wheel.source.form_count * len(self.wheel.primes)
-        replay_work = 2 * (
+        enumeration_work = (
             result_count * len(self.wheel.primes) + local_residue_rows + root_cells
         )
-        if replay_work > MAX_WHEEL_ENUMERATION_WORK:
+        if enumeration_work > MAX_WHEEL_ENUMERATION_WORK:
             raise _validation_error(
-                f"wheel enumeration and validation need {replay_work} bounded "
+                f"wheel enumeration needs {enumeration_work} bounded "
                 f"steps, exceeding {MAX_WHEEL_ENUMERATION_WORK}"
             )
         modulus_digits = _digits(self.wheel.modulus)
@@ -194,13 +195,12 @@ class PrimeTupleResidueWheelEnumeration(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_complete_crt_enumeration(self) -> Self:
+    def require_enumeration_shape(self) -> Self:
         result_cells = len(self.residues) + sum(
             len(row.components) for row in self.residues
         )
         if result_cells > MAX_WHEEL_RESULT_CELLS:
             raise _validation_error("wheel rows exceed the explicit result-cell bound")
-        PrimeTupleResidueWheelEnumerationRequest(wheel=self.wheel)
         expected_count = parse_canonical_integer(self.wheel.valid_count)
         if len(self.residues) != expected_count:
             raise _validation_error(
@@ -219,23 +219,21 @@ class PrimeTupleResidueWheelEnumeration(StrictModel):
                 raise _validation_error(
                     "wheel rows do not satisfy the complete CRT reconstruction invariant"
                 )
-            for prime, summary, component in zip(
-                self.wheel.primes,
-                self.wheel.local_rows,
-                row.components,
-                strict=True,
-            ):
-                bad = {item.residue for item in summary.bad_residues}
-                if (
-                    not 0 <= component < prime
-                    or residue % prime != component
-                    or component in bad
-                ):
+            for prime, component in zip(self.wheel.primes, row.components, strict=True):
+                if not 0 <= component < prime:
                     raise _validation_error(
-                        "wheel rows do not satisfy the complete CRT reconstruction "
-                        "invariant"
+                        "wheel components must be within their prime moduli"
                     )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PrimeTupleResidueWheelEnumerationRequest,
+        *,
+        residues: tuple[PrimeTupleWheelResidueRow, ...],
+    ) -> Self:
+        return cls(wheel=request.wheel, residues=residues)
 
 
 class PrimeTupleWheelMembershipRequest(StrictModel):
@@ -275,43 +273,39 @@ class PrimeTupleWheelMembershipResult(StrictModel):
     vanishing_form_ids: tuple[AffineFormId, ...] = Field(max_length=MAX_AFFINE_FORMS)
 
     @model_validator(mode="after")
-    def bind_wheel_membership(self) -> Self:
-        PrimeTupleWheelMembershipRequest(wheel=self.wheel, value=self.value)
-        value = parse_canonical_integer(self.value)
-        modulus = parse_canonical_integer(self.wheel.modulus)
-        expected_residue = value % modulus
-        expected_components = tuple(value % prime for prime in self.wheel.primes)
-        expected_prime: int | None = None
-        expected_form_ids: tuple[str, ...] = ()
-        for summary, component in zip(
-            self.wheel.local_rows, expected_components, strict=True
-        ):
-            bad = {row.residue: row.form_ids for row in summary.bad_residues}
-            if component in bad:
-                expected_prime = summary.prime
-                expected_form_ids = bad[component]
-                break
-        expected_permitted = expected_prime is None
-        if parse_canonical_integer(self.canonical_residue) != expected_residue:
+    def require_membership_shape(self) -> Self:
+        if len(self.components) != len(self.wheel.primes):
             raise _validation_error(
-                "canonical residue does not match the wheel modulus"
+                "wheel membership components must align with wheel primes"
             )
-        if self.components != expected_components:
+        if self.is_permitted != (self.first_excluded_prime is None):
             raise _validation_error(
-                "prime components do not match the supplied integer"
+                "wheel membership permission must agree with first exclusion"
             )
-        if self.is_permitted != expected_permitted:
-            raise _validation_error(
-                "wheel membership does not match the complete residue set"
-            )
-        if (
-            self.first_excluded_prime != expected_prime
-            or self.vanishing_form_ids != expected_form_ids
-        ):
-            raise _validation_error(
-                "first local exclusion does not match the source forms"
-            )
+        if self.is_permitted and self.vanishing_form_ids:
+            raise _validation_error("a permitted member cannot have vanishing form ids")
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PrimeTupleWheelMembershipRequest,
+        *,
+        canonical_residue: str,
+        components: tuple[int, ...],
+        is_permitted: bool,
+        first_excluded_prime: int | None,
+        vanishing_form_ids: tuple[str, ...],
+    ) -> Self:
+        return cls(
+            wheel=request.wheel,
+            value=request.value,
+            canonical_residue=canonical_residue,
+            components=components,
+            is_permitted=is_permitted,
+            first_excluded_prime=first_excluded_prime,
+            vanishing_form_ids=vanishing_form_ids,
+        )
 
 
 class PrimeTupleIntervalResidueProfileRequest(StrictModel):
@@ -332,11 +326,11 @@ class PrimeTupleIntervalResidueProfileRequest(StrictModel):
                 f"wheel interval length {interval_size} exceeds "
                 f"{MAX_WHEEL_INTERVAL_LENGTH}"
             )
-        replay_work = 2 * interval_size * max(1, len(self.wheel.primes))
-        if replay_work > MAX_INTERVAL_REPLAY_EVALUATIONS:
+        membership_checks = interval_size * max(1, len(self.wheel.primes))
+        if membership_checks > MAX_INTERVAL_EVALUATIONS:
             raise _validation_error(
-                f"wheel interval profile and validation need {replay_work} "
-                f"modular checks, exceeding {MAX_INTERVAL_REPLAY_EVALUATIONS}"
+                f"wheel interval profile needs {membership_checks} modular checks, "
+                f"exceeding {MAX_INTERVAL_EVALUATIONS}"
             )
         endpoint_digits = max(_digits(self.lower), _digits(self.upper))
         result_characters = (
@@ -363,31 +357,84 @@ class PrimeTupleIntervalResidueProfileResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_complete_survivor_family(self) -> Self:
-        PrimeTupleIntervalResidueProfileRequest(
-            wheel=self.wheel, lower=self.lower, upper=self.upper
-        )
+    def require_survivor_profile_shape(self) -> Self:
         lower, upper, interval_size = _parse_interval(self.lower, self.upper)
-        bad_by_prime = tuple(
-            {row.residue for row in summary.bad_residues}
-            for summary in self.wheel.local_rows
-        )
-        expected = tuple(
-            value
-            for value in range(lower, upper + 1)
-            if all(
-                value % prime not in bad
-                for prime, bad in zip(self.wheel.primes, bad_by_prime, strict=True)
-            )
-        )
         actual = tuple(parse_canonical_integer(value) for value in self.survivors)
-        if actual != expected:
+        if actual != tuple(sorted(set(actual))) or any(
+            value < lower or value > upper for value in actual
+        ):
             raise _validation_error(
-                "survivors must be the complete local wheel profile"
+                "survivors must be ordered distinct interval values"
             )
         if self.interval_size != interval_size:
             raise _validation_error("interval_size must equal upper-lower+1")
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PrimeTupleIntervalResidueProfileRequest,
+        *,
+        survivors: tuple[str, ...],
+    ) -> Self:
+        lower = parse_canonical_integer(request.lower)
+        upper = parse_canonical_integer(request.upper)
+        return cls(
+            wheel=request.wheel,
+            lower=request.lower,
+            upper=request.upper,
+            interval_size=upper - lower + 1,
+            survivors=survivors,
+        )
+
+
+def verify_residue_wheel(result: PrimeTupleResidueWheel) -> bool:
+    """Verify an independently supplied compact residue-wheel claim."""
+
+    from jacobian.math.prime_affine_forms._operations import compute_residue_wheel
+
+    request = PrimeTupleResidueWheelRequest(source=result.source, primes=result.primes)
+    return result == compute_residue_wheel(request)
+
+
+def verify_residue_wheel_enumeration(
+    result: PrimeTupleResidueWheelEnumeration,
+) -> bool:
+    """Verify an independently supplied explicit residue-wheel enumeration."""
+
+    from jacobian.math.prime_affine_forms._operations import (
+        compute_residue_wheel_enumeration,
+    )
+
+    return result == compute_residue_wheel_enumeration(
+        PrimeTupleResidueWheelEnumerationRequest(wheel=result.wheel)
+    )
+
+
+def verify_wheel_membership_result(result: PrimeTupleWheelMembershipResult) -> bool:
+    """Verify an independently supplied wheel-membership claim."""
+
+    from jacobian.math.prime_affine_forms._operations import compute_wheel_membership
+
+    return result == compute_wheel_membership(
+        PrimeTupleWheelMembershipRequest(wheel=result.wheel, value=result.value)
+    )
+
+
+def verify_interval_residue_profile_result(
+    result: PrimeTupleIntervalResidueProfileResult,
+) -> bool:
+    """Verify an independently supplied complete local survivor profile."""
+
+    from jacobian.math.prime_affine_forms._operations import (
+        compute_interval_residue_profile,
+    )
+
+    return result == compute_interval_residue_profile(
+        PrimeTupleIntervalResidueProfileRequest(
+            wheel=result.wheel, lower=result.lower, upper=result.upper
+        )
+    )
 
 
 __all__ = [

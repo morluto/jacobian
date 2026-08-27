@@ -14,10 +14,10 @@ from jacobian.math.lie_algebra_homology._models import (
     LieHomologyResult,
 )
 from jacobian.math.lie_algebra_homology._operations import (
+    _verify_ce_complex_result,
+    _verify_lie_homology_result,
     compute_chevalley_eilenberg_complex,
     compute_lie_homology,
-    verify_ce_complex_result,
-    verify_lie_homology_result,
 )
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rank
 
@@ -324,7 +324,7 @@ class TestComplexResultBinding:
             prime=result.prime,
         )
         assert replayed == result
-        assert verify_ce_complex_result(replayed)
+        assert _verify_ce_complex_result(replayed)
 
     def test_reviewer_payload_shape_rejected(self):
         """A complex without its source algebra cannot validate."""
@@ -387,7 +387,7 @@ class TestComplexResultBinding:
             differentials=(others[0], broken, others[1]),
             prime=5,
         )
-        assert not verify_ce_complex_result(claimed)
+        assert not _verify_ce_complex_result(claimed)
 
     def test_broken_d_squared_composition_rejected(self):
         """Tampering one d_2 entry must fail the bracket reconstruction.
@@ -419,7 +419,7 @@ class TestComplexResultBinding:
             differentials=(others[0], forged_d2, others[1]),
             prime=5,
         )
-        assert not verify_ce_complex_result(claimed)
+        assert not _verify_ce_complex_result(claimed)
 
     def test_non_residue_entries_rejected(self):
         g = _sl2_gf5()
@@ -445,7 +445,7 @@ class TestComplexResultBinding:
 class TestHomologySourceBinding:
     def test_kernel_homology_verifies(self):
         result = compute_lie_homology(LieHomologyRequest(lie_algebra=_sl2_gf5()))
-        assert verify_lie_homology_result(result)
+        assert _verify_lie_homology_result(result)
 
     def test_forged_groups_require_explicit_verification(self):
         genuine = compute_lie_homology(LieHomologyRequest(lie_algebra=_sl2_gf5()))
@@ -457,7 +457,7 @@ class TestHomologySourceBinding:
             {"degree": 3, "betti": 1, "chain_dimension": 1},
         ]
         claimed = LieHomologyResult.model_validate(payload)
-        assert not verify_lie_homology_result(claimed)
+        assert not _verify_lie_homology_result(claimed)
 
     def test_dimension_mismatch_with_source_rejected(self):
         from pydantic import ValidationError

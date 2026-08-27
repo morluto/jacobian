@@ -22,9 +22,8 @@ def _require_padic_budget(polynomial: IntegerPolynomial) -> None:
     """Bound one admitted polynomial for the p-adic kernels.
 
     Root finding evaluates every residue mod ``p`` against the source
-    polynomial and result replay repeats that sweep, so the work grows
-    linearly in coefficient count; the shared canonical value alone
-    admits far longer inputs than these kernels establish.
+    polynomial, so the work grows linearly in coefficient count; the shared
+    canonical value alone admits far longer inputs than these kernels establish.
     """
     if len(polynomial.coefficients) > _MAX_PADIC_COEFFICIENTS:
         raise _validation_error(
@@ -120,9 +119,9 @@ class HenselRootRequest(StrictModel):
 class HenselRootResult(StrictModel):
     """A p-adic root approximation lifted via Hensel's lemma.
 
-    Retains the source polynomial and the original residue so the lift can
-    be replayed: the residue is a simple root of f mod p, the lifted root
-    reduces to it mod p, and it vanishes modulo p^precision.
+    Retains the source polynomial and the original residue for downstream use.
+    The producer establishes the Hensel-lift invariant; ordinary result parsing
+    checks only the serialized shape.
     """
 
     polynomial: IntegerPolynomial
@@ -133,43 +132,15 @@ class HenselRootResult(StrictModel):
     is_simple_root: bool
 
     @model_validator(mode="after")
-    def require_valid_lifted_root(self) -> Self:
-        p = self.prime
-        modulus = p**self.precision
-        _require_prime(p)
-        _require_padic_budget(self.polynomial)
-        if self.root_mod_p >= p:
+    def require_structural_shape(self) -> Self:
+        if self.root_mod_p >= self.prime:
             raise _validation_error(
                 "padic_arithmetic.root_out_of_range", "root_mod_p must be in 0..p-1"
             )
-        if self.lifted_root >= modulus:
+        if self.lifted_root >= self.prime**self.precision:
             raise _validation_error(
                 "padic_arithmetic.lifted_root_out_of_range",
                 "lifted_root must be in 0..p^k - 1",
-            )
-        coeffs = _kernel_coefficients(self.polynomial)
-        # Replay the defining invariants against the retained source data so
-        # a serialized result cannot detach its lift from its polynomial.
-        if _poly_eval_mod_p(coeffs, self.root_mod_p, p) != 0:
-            raise _validation_error(
-                "padic_arithmetic.root_not_root",
-                "root_mod_p must satisfy f(root_mod_p) = 0 mod p",
-            )
-        if _poly_deriv_mod_p(coeffs, self.root_mod_p, p) % p == 0:
-            raise _validation_error(
-                "padic_arithmetic.root_not_simple",
-                "the lifted residue must be simple: "
-                "f'(root_mod_p) must be nonzero mod p",
-            )
-        if self.lifted_root % p != self.root_mod_p:
-            raise _validation_error(
-                "padic_arithmetic.lifted_root_wrong_residue",
-                "lifted_root must reduce to root_mod_p modulo the prime",
-            )
-        if _poly_eval_mod_p(coeffs, self.lifted_root, modulus) != 0:
-            raise _validation_error(
-                "padic_arithmetic.lifted_root_not_root",
-                "lifted_root must satisfy f(lifted_root) = 0 modulo p^precision",
             )
         if not self.is_simple_root:
             raise _validation_error(
@@ -177,6 +148,17 @@ class HenselRootResult(StrictModel):
                 "only simple roots are lifted, so the flag must hold",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: HenselRootRequest, lifted_root: int) -> Self:
+        return cls.model_construct(
+            polynomial=request.polynomial,
+            lifted_root=lifted_root,
+            prime=request.prime,
+            root_mod_p=request.root_mod_p,
+            precision=request.precision,
+            is_simple_root=True,
+        )
 
 
 class HenselFactorLiftRequest(StrictModel):
@@ -272,8 +254,7 @@ class PAdicRootsResult(StrictModel):
     multiple_residues: tuple[int, ...] = ()
 
     @model_validator(mode="after")
-    def require_consistent_count(self) -> Self:
-        _require_padic_budget(self.polynomial)
+    def require_structural_shape(self) -> Self:
         if self.root_count != len(self.roots):
             raise _validation_error(
                 "padic_arithmetic.root_count_mismatch",
@@ -291,15 +272,7 @@ class PAdicRootsResult(StrictModel):
             )
         return self
 
-    @model_validator(mode="after")
-    def require_source_bound_roots(self) -> Self:
-        p = self.prime
-        k = self.precision
-        # The advertised semantics are p-adic: validate the prime modulus
-        # before replaying the root set against it.
-        _require_prime(p)
-        modulus = p**k
-        coefficients = _kernel_coefficients(self.polynomial)
+        modulus = self.prime**self.precision
         roots = tuple(entry.root for entry in self.roots)
         if any(root >= modulus for root in roots):
             raise _validation_error(
@@ -310,48 +283,72 @@ class PAdicRootsResult(StrictModel):
                 "padic_arithmetic.roots_not_distinct",
                 "roots must be distinct modulo p^k",
             )
-        # Replay every classification against the retained polynomial: each
-        # listed root must be an exact vanishing simple root, and the simple
-        # versus multiple split must be complete over all residues mod p.
-        for root in roots:
-            if _eval_poly_mod(coefficients, root, modulus) != 0:
-                raise _validation_error(
-                    "padic_arithmetic.root_not_root",
-                    "each root must satisfy f(root) = 0 modulo p^precision",
-                )
-            if _eval_poly_deriv_mod(coefficients, root, p) == 0:
-                raise _validation_error(
-                    "padic_arithmetic.root_not_simple",
-                    "each lifted root must be simple modulo p",
-                )
-        simple_residues = [
-            residue
-            for residue in range(p)
-            if _eval_poly_mod(coefficients, residue, p) == 0
-            and _eval_poly_deriv_mod(coefficients, residue, p) != 0
-        ]
-        multiple = [
-            residue
-            for residue in range(p)
-            if _eval_poly_mod(coefficients, residue, p) == 0
-            and _eval_poly_deriv_mod(coefficients, residue, p) == 0
-        ]
-        if sorted({root % p for root in roots}) != simple_residues:
-            raise _validation_error(
-                "padic_arithmetic.simple_residues_mismatch",
-                "roots must cover exactly the simple residues of f modulo p",
-            )
-        if len(roots) != len(simple_residues):
-            raise _validation_error(
-                "padic_arithmetic.simple_root_count_mismatch",
-                "each simple residue lifts to exactly one root",
-            )
-        if sorted(self.multiple_residues) != multiple:
-            raise _validation_error(
-                "padic_arithmetic.multiple_residues_mismatch",
-                "multiple_residues must list every repeated-factor residue of f mod p",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PAdicRootsRequest,
+        roots: tuple[PAdicRootEntry, ...],
+        multiple_residues: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            polynomial=request.polynomial,
+            roots=roots,
+            prime=request.prime,
+            precision=request.precision,
+            root_count=len(roots),
+            multiple_residues=multiple_residues,
+        )
+
+
+def verify_hensel_root_result(result: HenselRootResult) -> None:
+    """Verify an independently supplied Hensel-lift claim."""
+    request = HenselRootRequest(
+        polynomial=result.polynomial,
+        prime=result.prime,
+        root_mod_p=result.root_mod_p,
+        precision=result.precision,
+    )
+    coefficients = _kernel_coefficients(request.polynomial)
+    modulus = request.prime**request.precision
+    if (
+        result.lifted_root % request.prime != request.root_mod_p
+        or _eval_poly_mod(coefficients, result.lifted_root, modulus) != 0
+    ):
+        raise _validation_error(
+            "lifted_root_mismatch", "lifted_root is not the claimed Hensel lift"
+        )
+
+
+def verify_padic_roots_result(result: PAdicRootsResult) -> None:
+    """Verify an independently supplied complete simple-root claim."""
+    request = PAdicRootsRequest(
+        polynomial=result.polynomial, prime=result.prime, precision=result.precision
+    )
+    coefficients = _kernel_coefficients(request.polynomial)
+    roots = tuple(entry.root for entry in result.roots)
+    modulus = request.prime**request.precision
+    simple_residues = [
+        residue
+        for residue in range(request.prime)
+        if _eval_poly_mod(coefficients, residue, request.prime) == 0
+        and _eval_poly_deriv_mod(coefficients, residue, request.prime) != 0
+    ]
+    multiple = [
+        residue
+        for residue in range(request.prime)
+        if _eval_poly_mod(coefficients, residue, request.prime) == 0
+        and _eval_poly_deriv_mod(coefficients, residue, request.prime) == 0
+    ]
+    if (
+        any(_eval_poly_mod(coefficients, root, modulus) != 0 for root in roots)
+        or sorted({root % request.prime for root in roots}) != simple_residues
+        or sorted(result.multiple_residues) != multiple
+    ):
+        raise _validation_error(
+            "root_profile_mismatch", "roots do not match the source polynomial"
+        )
 
 
 __all__ = [

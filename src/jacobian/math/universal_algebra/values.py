@@ -205,20 +205,11 @@ def _homomorphism_kernel_and_image(
 
 
 class FiniteAlgebraHomomorphism(FiniteAlgebraCarrierMap):
-    """A checked carrier map preserving every basic operation exactly."""
+    """A carrier map whose producer has checked operation preservation.
 
-    @model_validator(mode="after")
-    def require_operation_preservation(self) -> Self:
-        failure = _first_homomorphism_failure(self)
-        if failure is not None:
-            operation_id = self.source.operations[failure.operation].operation_id
-            raise _validation_error(
-                "operation_not_preserved",
-                "carrier map does not preserve operation "
-                f"{operation_id!r} at source arguments "
-                f"{failure.source_arguments}",
-            )
-        return self
+    Parsing retains the carrier-map structural contract.  Deliberate
+    verification belongs to the owning operation, not deserialization.
+    """
 
 
 class VariableTerm(StrictModel):

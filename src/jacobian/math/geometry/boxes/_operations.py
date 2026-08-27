@@ -20,7 +20,7 @@ def _union_volume_from_source(
     """Compute the complete ledger for one already-admitted box family."""
 
     records, union_volume = complete_intersection_ledger(source.boxes)
-    return BoxUnionVolumeResult(
+    return BoxUnionVolumeResult._from_kernel(
         source=source,
         intersections=tuple(
             BoxIntersectionLedgerEntry(

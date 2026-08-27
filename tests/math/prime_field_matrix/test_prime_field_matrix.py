@@ -10,6 +10,9 @@ from jacobian.math.prime_field_matrix._models import (
     PrimeFieldRrefResult,
 )
 from jacobian.math.prime_field_matrix._operations import (
+    _verify_nullspace_result,
+    _verify_rank_result,
+    _verify_rref_result,
     compute_nullspace,
     compute_rank,
     compute_rref,
@@ -297,45 +300,38 @@ class TestRequestValidation:
             PrimeFieldMatrixRequest(matrix=canonical)
 
 
-class TestResultReplay:
-    """Serialized results must revalidate only when they match the source."""
+class TestResultStructure:
+    """Parsing checks result structure; deliberate verification checks claims."""
 
-    def test_forged_rank_rejected(self):
+    def test_forged_rank_requires_deliberate_verification(self):
         request = pfm(prime=2, entries=((1, 0), (0, 1)))
-        with pytest.raises(ValidationError) as exc_info:
-            PrimeFieldMatrixRankResult(prime=2, source=request, rank=0)
-        assert_error_type(exc_info, "prime_field_matrix.result.rank_recomputation")
+        result = PrimeFieldMatrixRankResult(prime=2, source=request, rank=0)
+        assert not _verify_rank_result(result)
 
-    def test_forged_rref_rejected(self):
+    def test_forged_rref_requires_deliberate_verification(self):
         from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
         request = pfm(prime=2, entries=((1, 0), (0, 1)))
-        with pytest.raises(ValidationError) as exc_info:
-            PrimeFieldRrefResult(
-                prime=2,
-                source=request,
-                rref_matrix=PrimeFieldMatrix(
-                    prime=2, entries=((0, 0), (0, 0)), columns=2
-                ),
-                pivot_columns=(),
-                rank=0,
-            )
-        assert_error_type(exc_info, "prime_field_matrix.result.rref_recomputation")
+        result = PrimeFieldRrefResult(
+            prime=2,
+            source=request,
+            rref_matrix=PrimeFieldMatrix(prime=2, entries=((0, 0), (0, 0)), columns=2),
+            pivot_columns=(),
+            rank=0,
+        )
+        assert not _verify_rref_result(result)
 
-    def test_forged_nullspace_rejected(self):
+    def test_forged_nullspace_requires_deliberate_verification(self):
         from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
         request = pfm(prime=2, entries=((0, 0),))
-        with pytest.raises(ValidationError) as exc_info:
-            PrimeFieldNullspaceResult(
-                prime=2,
-                source=request,
-                nullspace_matrix=PrimeFieldMatrix(
-                    prime=2, entries=((1, 0),), columns=2
-                ),
-                nullity=0,
-            )
-        assert_error_type(exc_info, "prime_field_matrix.result.nullspace_recomputation")
+        result = PrimeFieldNullspaceResult(
+            prime=2,
+            source=request,
+            nullspace_matrix=PrimeFieldMatrix(prime=2, entries=((1, 0),), columns=2),
+            nullity=1,
+        )
+        assert not _verify_nullspace_result(result)
 
     def test_prime_mismatch_rejected(self):
         request = pfm(prime=2, entries=((1, 0), (0, 1)))
@@ -363,14 +359,40 @@ class TestResultReplay:
             )
         assert_error_type(exc_info, "prime_field_matrix.result.source_prime")
 
-    def test_genuine_results_round_trip(self):
+    def test_genuine_results_round_trip_structurally(self):
         request = pfm(prime=5, entries=((1, 2, 3), (2, 4, 1)))
         rank_result = compute_rank(request)
-        assert rank_result.rank == 1
         rref_result = compute_rref(request)
-        assert rref_result.rank == 1
         ns_result = compute_nullspace(request)
-        assert len(ns_result.nullspace_matrix.entries) == 2
+        assert (
+            PrimeFieldMatrixRankResult.model_validate(rank_result.model_dump())
+            == rank_result
+        )
+        assert (
+            PrimeFieldRrefResult.model_validate(rref_result.model_dump()) == rref_result
+        )
+        assert (
+            PrimeFieldNullspaceResult.model_validate(ns_result.model_dump())
+            == ns_result
+        )
+        assert _verify_rank_result(rank_result)
+        assert _verify_rref_result(rref_result)
+        assert _verify_nullspace_result(ns_result)
+
+    def test_producer_executes_rank_kernel_once(self, monkeypatch: pytest.MonkeyPatch):
+        import jacobian.math.prime_field_matrix._operations as operations
+
+        calls = 0
+        original_rank = operations._rank
+
+        def observed_rank(matrix):
+            nonlocal calls
+            calls += 1
+            return original_rank(matrix)
+
+        monkeypatch.setattr(operations, "_rank", observed_rank)
+        assert compute_rank(pfm(prime=2, entries=((1, 0), (0, 1)))).rank == 2
+        assert calls == 1
 
 
 class TestCanonicalValueComposition:

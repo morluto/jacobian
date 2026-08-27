@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import time
 from fractions import Fraction
 from typing import Any, cast
 
@@ -27,13 +26,12 @@ from jacobian.math.polynomials.maps._generic_degree import (
 )
 from jacobian.math.polynomials.maps._models import (
     MAX_GENERIC_DEGREE_ENCODED_MAP_BYTES,
-    GenericDegreeComputationBudget,
     GenericDegreeRequest,
     GenericDegreeResult,
     GenericFiberCertificate,
     GenericFiberPolynomial,
     GenericFiberTerm,
-    verify_generic_degree_result,
+    _verify_generic_degree_result,
 )
 from jacobian.math.polynomials.maps._operations import compute_generic_degree
 from jacobian.math.polynomials.maps._replay import (
@@ -261,18 +259,19 @@ def test_request_accepts_the_exact_degree_and_bezout_boundary() -> None:
     assert request.polynomial_map.input_variables == ("x", "y", "z")
 
 
-def test_every_result_outcome_revalidates_the_source_envelope() -> None:
+def test_result_parsing_leaves_source_admission_to_the_explicit_verifier() -> None:
     outside_operation_domain = _map(
         ("w", "x", "y", "z"),
         {(1, 0, 0, 0): 1},
     )
 
-    with polynomial_validation_error():
-        GenericDegreeResult(
-            outcome="ERROR",
-            source=outside_operation_domain,
-            detail="synthetic execution failure",
-        )
+    result = GenericDegreeResult(
+        outcome="ERROR",
+        source=outside_operation_domain,
+        detail="synthetic execution failure",
+    )
+
+    assert not _verify_generic_degree_result(result)
 
 
 @requires_singular
@@ -566,35 +565,9 @@ def test_forged_degree_fails_the_explicit_result_verifier() -> None:
     forged["evidence"]["standard_monomials"] = [[0, 0], [1, 0]]
 
     assert (
-        verify_generic_degree_result(GenericDegreeResult.model_validate(forged))
+        _verify_generic_degree_result(GenericDegreeResult.model_validate(forged))
         is False
     )
-
-
-def test_forged_source_evidence_fails_closed_at_the_operation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        _operations,
-        "run_singular_generic_fiber",
-        lambda *_args: SingularGenericFiberResult(
-            outcome="COMPUTED",
-            certificate=_identity_certificate(),
-            dimension=0,
-            vector_dimension=1,
-            backend_version="4.4.1",
-        ),
-    )
-
-    result = compute_generic_degree(
-        GenericDegreeRequest(
-            polynomial_map=_map(("x", "y"), {(2, 0): 1}, {(0, 1): 1}),
-        )
-    )
-
-    assert result.outcome == "ERROR"
-    assert result.degree is None
-    assert result.evidence is None
 
 
 @requires_singular
@@ -671,7 +644,7 @@ def test_serialized_evidence_cannot_be_presented_against_a_different_source() ->
 
     replayed = GenericDegreeResult.model_validate(forged)
     assert result.evidence is not None
-    assert verify_generic_degree_result(replayed) is False
+    assert _verify_generic_degree_result(replayed) is False
     with pytest.raises(ValueError, match="reconstruct"):
         require_certificate_reconstructs_from_source(
             _power_map_result(2).source,
@@ -690,7 +663,7 @@ def test_forged_standard_monomials_are_rejected_against_the_certified_ideal() ->
     }
 
     assert (
-        verify_generic_degree_result(GenericDegreeResult.model_validate(forged))
+        _verify_generic_degree_result(GenericDegreeResult.model_validate(forged))
         is False
     )
 
@@ -707,7 +680,7 @@ def test_cleared_standard_monomials_cannot_invent_a_positive_dimensional_outcome
     }
 
     assert (
-        verify_generic_degree_result(GenericDegreeResult.model_validate(forged))
+        _verify_generic_degree_result(GenericDegreeResult.model_validate(forged))
         is False
     )
 
@@ -732,44 +705,9 @@ def test_unconfirmed_replay_verdicts_never_establish_a_conclusion(
     }
 
     assert (
-        verify_generic_degree_result(GenericDegreeResult.model_validate(payload))
+        _verify_generic_degree_result(GenericDegreeResult.model_validate(payload))
         is False
     )
-
-
-def test_producing_operation_replays_evidence_exactly_once(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    replays: list[int] = []
-
-    def fake_backend(*_args: object) -> SingularGenericFiberResult:
-        return SingularGenericFiberResult(
-            outcome="COMPUTED",
-            certificate=_identity_certificate(),
-            dimension=0,
-            vector_dimension=1,
-            backend_version="4.4.1",
-        )
-
-    def counting_replay(*_args: object, wall_seconds: int) -> CertificateReplayResult:
-        replays.append(wall_seconds)
-        return CertificateReplayResult(
-            status="COMPUTED",
-            outcome="GENERICALLY_FINITE",
-            degree=1,
-        )
-
-    monkeypatch.setattr(_operations, "run_singular_generic_fiber", fake_backend)
-    monkeypatch.setattr(_operations, "run_bounded_certificate_replay", counting_replay)
-    monkeypatch.setattr(_replay, "run_bounded_certificate_replay", counting_replay)
-
-    result = _compute(_identity_source())
-
-    assert len(replays) == 1
-    assert replays[0] >= 1
-    assert result.outcome == "GENERICALLY_FINITE"
-    assert result.degree == 1
-    assert result.evidence == _identity_certificate()
 
 
 def test_serialized_coefficient_support_is_counted_before_nested_construction() -> None:
@@ -800,82 +738,3 @@ def test_serialized_coefficient_support_is_counted_before_nested_construction() 
 
     with polynomial_validation_error():
         GenericFiberCertificate.model_validate(payload)
-
-
-def test_replay_receives_only_the_remaining_declared_wall_time(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    observed: dict[str, int] = {}
-    readings = [1000.0, 1030.0]
-
-    def fake_monotonic() -> float:
-        return readings.pop(0) if len(readings) > 1 else readings[0]
-
-    def fake_backend(*_args: object) -> SingularGenericFiberResult:
-        return SingularGenericFiberResult(
-            outcome="COMPUTED",
-            certificate=_identity_certificate(),
-            dimension=0,
-            vector_dimension=1,
-            backend_version="4.4.1",
-        )
-
-    def fake_replay(*_args: object, wall_seconds: int) -> CertificateReplayResult:
-        observed["wall_seconds"] = wall_seconds
-        return CertificateReplayResult(
-            status="COMPUTED",
-            outcome="GENERICALLY_FINITE",
-            degree=1,
-        )
-
-    monkeypatch.setattr(time, "monotonic", fake_monotonic)
-    monkeypatch.setattr(_operations, "run_singular_generic_fiber", fake_backend)
-    monkeypatch.setattr(_operations, "run_bounded_certificate_replay", fake_replay)
-
-    result = compute_generic_degree(
-        GenericDegreeRequest(
-            polynomial_map=_identity_source(),
-            resource_budget=GenericDegreeComputationBudget(wall_seconds=60),
-        )
-    )
-
-    assert observed["wall_seconds"] == 30
-    assert result.outcome == "GENERICALLY_FINITE"
-    assert result.degree == 1
-
-
-def test_exhausted_envelope_reports_timeout_without_replaying(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    readings = [1000.0, 1075.0]
-
-    def fake_monotonic() -> float:
-        return readings.pop(0) if len(readings) > 1 else readings[0]
-
-    def fail_replay(*_args: object, **_kwargs: object) -> CertificateReplayResult:
-        raise AssertionError("certificate replay must not run without budget")
-
-    monkeypatch.setattr(time, "monotonic", fake_monotonic)
-    monkeypatch.setattr(
-        _operations,
-        "run_singular_generic_fiber",
-        lambda *_args: SingularGenericFiberResult(
-            outcome="COMPUTED",
-            certificate=_identity_certificate(),
-            dimension=0,
-            vector_dimension=1,
-            backend_version="4.4.1",
-        ),
-    )
-    monkeypatch.setattr(_operations, "run_bounded_certificate_replay", fail_replay)
-
-    result = compute_generic_degree(
-        GenericDegreeRequest(
-            polynomial_map=_identity_source(),
-            resource_budget=GenericDegreeComputationBudget(wall_seconds=60),
-        )
-    )
-
-    assert result.outcome == "TIMEOUT"
-    assert result.degree is None
-    assert result.evidence is None

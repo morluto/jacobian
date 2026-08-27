@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import networkx as _nx
+from pydantic import ValidationError
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.numerical_semigroups._algorithms import (
@@ -176,9 +177,15 @@ def compute_factorization_graph(
     )
 
 
-def verify_factorization_compute_result(result: FactorizationComputeResult) -> bool:
+def _verify_factorization_compute_result(result: FactorizationComputeResult) -> bool:
     """Replay one bounded factorization-family claim."""
 
+    try:
+        FactorizationComputeRequest(
+            generators=result.minimal_generators, value=result.value
+        )
+    except ValidationError:
+        return False
     generators = tuple(
         parse_canonical_integer(item) for item in result.minimal_generators
     )
@@ -186,11 +193,17 @@ def verify_factorization_compute_result(result: FactorizationComputeResult) -> b
     return result.in_semigroup == bool(family) and result.factorizations == family
 
 
-def verify_factorization_lengths_compute_result(
+def _verify_factorization_lengths_compute_result(
     result: FactorizationLengthsComputeResult,
 ) -> bool:
     """Replay one bounded factorization-length claim."""
 
+    try:
+        FactorizationLengthsComputeRequest(
+            generators=result.minimal_generators, value=result.value
+        )
+    except ValidationError:
+        return False
     generators = tuple(
         parse_canonical_integer(item) for item in result.minimal_generators
     )
@@ -198,11 +211,17 @@ def verify_factorization_lengths_compute_result(
     return result.in_semigroup == bool(lengths) and result.lengths == lengths
 
 
-def verify_factorization_graph_compute_result(
+def _verify_factorization_graph_compute_result(
     result: FactorizationGraphComputeResult,
 ) -> bool:
     """Replay the family and derived graph for one supplied claim."""
 
+    try:
+        FactorizationGraphComputeRequest(
+            generators=result.minimal_generators, value=result.value
+        )
+    except ValidationError:
+        return False
     generators = tuple(
         parse_canonical_integer(item) for item in result.minimal_generators
     )
@@ -223,7 +242,4 @@ __all__ = [
     "compute_factorization_graph",
     "compute_factorization_lengths",
     "compute_factorizations",
-    "verify_factorization_compute_result",
-    "verify_factorization_graph_compute_result",
-    "verify_factorization_lengths_compute_result",
 ]

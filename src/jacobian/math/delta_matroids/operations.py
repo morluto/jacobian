@@ -21,13 +21,11 @@ def from_feasible_sets(
     require_delta_matroid_admission(system)
     obstruction = first_symmetric_exchange_obstruction(system)
     if obstruction is not None:
-        return DeltaMatroidRecognitionResult(
-            source=system,
-            status="NOT_A_DELTA_MATROID",
+        return DeltaMatroidRecognitionResult._from_kernel(
+            system,
             obstruction=obstruction,
         )
-    return DeltaMatroidRecognitionResult(
-        source=system,
-        status="DELTA_MATROID",
+    return DeltaMatroidRecognitionResult._from_kernel(
+        system,
         delta_matroid=canonical_delta_matroid(system),
     )

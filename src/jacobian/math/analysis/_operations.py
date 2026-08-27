@@ -32,7 +32,6 @@ from jacobian.math.analysis._second_jet import (
     HessianEntryEnclosure,
     IntervalExpressionSecondJetEnclosureRequest,
     IntervalExpressionSecondJetEnclosureResult,
-    IntervalExpressionSecondJetEnclosureStatus,
     _preflight_second_jet_expression,
 )
 
@@ -380,30 +379,6 @@ def _dyadic_closed_interval(value: Any) -> DyadicClosedInterval | None:
     return DyadicClosedInterval(lower=endpoints[0], upper=endpoints[1])
 
 
-def _constructed_second_jet_result(
-    request: IntervalExpressionSecondJetEnclosureRequest,
-    *,
-    status: IntervalExpressionSecondJetEnclosureStatus,
-    detail: str,
-    value: DyadicClosedInterval | None = None,
-    gradient: tuple[FirstPartialEnclosure, ...] = (),
-    hessian: tuple[HessianEntryEnclosure, ...] = (),
-    domain_failure: IntervalExpressionDomainFailure | None = None,
-) -> IntervalExpressionSecondJetEnclosureResult:
-    return IntervalExpressionSecondJetEnclosureResult.model_construct(
-        expression=request.expression,
-        box=request.box,
-        precision_bits=request.precision_bits,
-        status=status,
-        value=value,
-        gradient=gradient,
-        hessian=hessian,
-        domain_failure=domain_failure,
-        method="ARB_FORWARD_SECOND_ORDER_JET",
-        detail=detail,
-    )
-
-
 def _second_jet_enclosure(
     request: IntervalExpressionSecondJetEnclosureRequest,
 ) -> IntervalExpressionSecondJetEnclosureResult:
@@ -411,7 +386,7 @@ def _second_jet_enclosure(
         request.expression, _rational_box_bounds(request.box)
     )
     if isinstance(preflight, IntervalExpressionDomainFailure):
-        return _constructed_second_jet_result(
+        return IntervalExpressionSecondJetEnclosureResult._from_kernel(
             request,
             status="DOMAIN_UNPROVEN",
             domain_failure=preflight,
@@ -435,7 +410,7 @@ def _second_jet_enclosure(
                 request.expression, variables, len(request.box.variables)
             )
             if isinstance(jet, _SecondJetEvaluationFailure):
-                return _constructed_second_jet_result(
+                return IntervalExpressionSecondJetEnclosureResult._from_kernel(
                     request,
                     status="BACKEND_ERROR",
                     detail=(
@@ -452,7 +427,7 @@ def _second_jet_enclosure(
                 for row in jet.hessian
             )
     except (OverflowError, ValueError, ZeroDivisionError):
-        return _constructed_second_jet_result(
+        return IntervalExpressionSecondJetEnclosureResult._from_kernel(
             request,
             status="BACKEND_ERROR",
             detail=(
@@ -466,7 +441,7 @@ def _second_jet_enclosure(
         or any(entry is None for entry in gradient_intervals)
         or any(entry is None for row in hessian_intervals for entry in row)
     ):
-        return _constructed_second_jet_result(
+        return IntervalExpressionSecondJetEnclosureResult._from_kernel(
             request,
             status="BACKEND_ERROR",
             detail=(
@@ -496,7 +471,7 @@ def _second_jet_enclosure(
                     enclosure=enclosure,
                 )
             )
-    return _constructed_second_jet_result(
+    return IntervalExpressionSecondJetEnclosureResult._from_kernel(
         request,
         status="ENCLOSED",
         value=value,
@@ -556,8 +531,8 @@ POINT_ENCLOSURE_OPERATIONS = (
         description=(
             "Independently check one claimed exact-dyadic enclosure of LOG or "
             "SQRT at an exact rational point. The result is ACCEPTED, REJECTED, "
-            "or NON_RESULT and retains the complete claim for deterministic "
-            "replay; LOG replay is capped at 128 exact series terms."
+            "or NON_RESULT and retains the complete claim. LOG verification is "
+            "capped at 128 exact series terms."
         ),
         request_type=PointEnclosureCheckRequest,
         result_type=PointEnclosureCheckResult,

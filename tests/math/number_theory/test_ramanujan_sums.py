@@ -78,19 +78,18 @@ def test_ramanujan_sum_complete_period_orthogonality(
     assert inner_product == expected
 
 
-def test_operation_returns_a_source_bound_exact_result() -> None:
+def test_operation_returns_an_exact_result_without_replaying_it_on_parse() -> None:
     result = RAMANUJAN_SUM_OPERATION.run(
         RamanujanSumRequest(modulus="4", frequency="2")
     )
     assert result == RamanujanSumResult(modulus="4", frequency="2", value="-2")
 
-    for mutation in (
-        {"modulus": "4", "frequency": "1", "value": "-2"},
-        {"modulus": "3", "frequency": "2", "value": "-2"},
-        {"modulus": "4", "frequency": "2", "value": "2"},
-    ):
-        with expect_validation("number_theory."):
-            RamanujanSumResult.model_validate(mutation)
+    assert (
+        RamanujanSumResult.model_validate(
+            {"modulus": "4", "frequency": "1", "value": "-2"}
+        ).value
+        == "-2"
+    )
 
 
 def test_zero_sum_binds_the_canonical_zero_string() -> None:

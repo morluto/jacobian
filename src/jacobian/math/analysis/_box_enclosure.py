@@ -1,4 +1,4 @@
-"""Contracts, admission, replay, and execution for expression box enclosures."""
+"""Contracts, admission, and execution for expression box enclosures."""
 
 from __future__ import annotations
 
@@ -179,14 +179,11 @@ def _evaluate_box_expression(
 
 
 class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest):
-    """A replayable enclosure bound to its expression, axis, and source box.
+    """An enclosure bound structurally to its expression, axis, and source box.
 
     For ``ENCLOSED``, every defined real source-box value lies between the two
-    exact dyadic endpoints. Full validation recomputes that canonical claim.
-    ``DOMAIN_UNPROVEN`` replays its deterministic first-obstruction evidence.
-    ``BACKEND_ERROR`` asserts no enclosure conclusion at all, so it is
-    validated structurally: rerunning Arb would reject the operation's own
-    serialized result whenever a transient backend condition does not recur.
+    exact dyadic endpoints. The producer establishes that claim. Parsing checks
+    only the result's structural and canonical invariants.
     """
 
     status: IntervalExpressionBoxEnclosureStatus
@@ -222,40 +219,32 @@ class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest
             if self.status == "BACKEND_ERROR":
                 return self
 
-        request = IntervalExpressionBoxEnclosureRequest.model_construct(
-            expression=self.expression,
-            box=self.box,
-            precision_bits=self.precision_bits,
-        )
-        if self != _box_expression_enclosure(request):
-            raise _validation_error(
-                "box enclosure does not replay from its expression, axis, and source box"
-            )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: IntervalExpressionBoxEnclosureRequest,
+        *,
+        status: IntervalExpressionBoxEnclosureStatus,
+        detail: str,
+        lower: ExactDyadic | None = None,
+        upper: ExactDyadic | None = None,
+        domain_failure: IntervalExpressionDomainFailure | None = None,
+    ) -> Self:
+        """Build a result after the admitted kernel established its claim."""
 
-def _constructed_box_result(
-    request: IntervalExpressionBoxEnclosureRequest,
-    *,
-    status: IntervalExpressionBoxEnclosureStatus,
-    detail: str,
-    lower: ExactDyadic | None = None,
-    upper: ExactDyadic | None = None,
-    domain_failure: IntervalExpressionDomainFailure | None = None,
-) -> IntervalExpressionBoxEnclosureResult:
-    """Build the producer result without paying a second backend replay."""
-
-    return IntervalExpressionBoxEnclosureResult.model_construct(
-        expression=request.expression,
-        box=request.box,
-        precision_bits=request.precision_bits,
-        status=status,
-        lower=lower,
-        upper=upper,
-        domain_failure=domain_failure,
-        method="ARB_NATURAL_INTERVAL_EXTENSION",
-        detail=detail,
-    )
+        return cls.model_construct(
+            expression=request.expression,
+            box=request.box,
+            precision_bits=request.precision_bits,
+            status=status,
+            lower=lower,
+            upper=upper,
+            domain_failure=domain_failure,
+            method="ARB_NATURAL_INTERVAL_EXTENSION",
+            detail=detail,
+        )
 
 
 def _box_expression_enclosure(
@@ -265,7 +254,7 @@ def _box_expression_enclosure(
         request.expression, _rational_box_bounds(request.box)
     )
     if isinstance(preflight, IntervalExpressionDomainFailure):
-        return _constructed_box_result(
+        return IntervalExpressionBoxEnclosureResult._from_kernel(
             request,
             status="DOMAIN_UNPROVEN",
             domain_failure=preflight,
@@ -287,7 +276,7 @@ def _box_expression_enclosure(
             }
             result = _evaluate_box_expression(request.expression, variables)
             if isinstance(result, IntervalExpressionDomainFailure):
-                return _constructed_box_result(
+                return IntervalExpressionBoxEnclosureResult._from_kernel(
                     request,
                     status="DOMAIN_UNPROVEN",
                     domain_failure=result,
@@ -297,7 +286,7 @@ def _box_expression_enclosure(
                     ),
                 )
             if isinstance(result, _BoxEvaluationFailure) or not result.is_finite():
-                return _constructed_box_result(
+                return IntervalExpressionBoxEnclosureResult._from_kernel(
                     request,
                     status="BACKEND_ERROR",
                     detail=(
@@ -311,7 +300,7 @@ def _box_expression_enclosure(
                 lower_mantissa, lower_exponent, upper_mantissa, upper_exponent
             )
     except (OverflowError, ValueError):
-        return _constructed_box_result(
+        return IntervalExpressionBoxEnclosureResult._from_kernel(
             request,
             status="BACKEND_ERROR",
             detail=(
@@ -321,7 +310,7 @@ def _box_expression_enclosure(
         )
 
     if endpoints is None:
-        return _constructed_box_result(
+        return IntervalExpressionBoxEnclosureResult._from_kernel(
             request,
             status="BACKEND_ERROR",
             detail=(
@@ -329,7 +318,7 @@ def _box_expression_enclosure(
                 "envelope; no enclosure conclusion is available."
             ),
         )
-    return _constructed_box_result(
+    return IntervalExpressionBoxEnclosureResult._from_kernel(
         request,
         status="ENCLOSED",
         lower=endpoints[0],

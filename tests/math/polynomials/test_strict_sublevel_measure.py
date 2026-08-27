@@ -125,7 +125,7 @@ def test_quadratic_measure_retains_exact_irrational_boundary_sum() -> None:
     assert _resolve_measure(result) - reconstructed_length == 0
 
 
-def test_producer_isolates_once_and_external_validation_replays(
+def test_producer_isolates_once_and_result_parsing_stays_structural(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.polynomials.real_algebra._operations as operations
@@ -147,7 +147,7 @@ def test_producer_isolates_once_and_external_validation_replays(
     assert calls == 1
 
     StrictSublevelMeasureResult.model_validate(result.model_dump(mode="json"))
-    assert calls == 2
+    assert calls == 1
 
 
 def test_request_and_result_compose_through_strict_json_transport() -> None:
@@ -440,7 +440,7 @@ def test_small_integer_polynomials_match_sympy_inequality_sets_exhaustively() ->
                 assert simplify(_resolve_measure(result) - expected_set.measure) == 0
 
 
-def test_source_bound_result_rejects_independent_forged_fields() -> None:
+def test_owner_verifier_rejects_independent_forged_fields() -> None:
     result = compute_strict_sublevel_measure(_request(_polynomial((1, 2)), threshold=2))
     payload = result.model_dump(mode="json")
     mutations = []
@@ -470,9 +470,13 @@ def test_source_bound_result_rejects_independent_forged_fields() -> None:
     changed_measure["measure"]["root_terms"][0]["coefficient"] = 1
     mutations.append(changed_measure)
 
+    from jacobian.math.polynomials.real_algebra._strict_sublevel import (
+        verify_strict_sublevel_measure_result,
+    )
+
     for mutation in mutations:
-        with pytest.raises(ValidationError):
-            StrictSublevelMeasureResult.model_validate(mutation)
+        parsed = StrictSublevelMeasureResult.model_validate(mutation)
+        assert not verify_strict_sublevel_measure_result(parsed)
 
 
 def test_measure_root_incidence_rejects_boolean_coefficient() -> None:

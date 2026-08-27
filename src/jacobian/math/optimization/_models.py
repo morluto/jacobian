@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from fractions import Fraction
 from math import comb, factorial
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, ValidationInfo, model_validator
 from pydantic_core import PydanticCustomError
@@ -534,6 +534,17 @@ class RationalLinearProgramResult(StrictModel):
         default=None, max_length=32
     )
 
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build an outcome whose source-derived facts the kernel established.
+
+        Result parsing intentionally does not rerun simplex certificates.  The
+        optimization kernel computes every diagnostic and witness before using
+        this trusted construction path.
+        """
+
+        return cls.model_construct(**values)
+
     @model_validator(mode="before")
     @classmethod
     def bound_raw_result(cls, value: object) -> object:
@@ -597,13 +608,8 @@ class RationalLinearProgramResult(StrictModel):
     def bind_result_to_source(self) -> Self:
         try:
             _require_result_shape(self)
-            _require_result_heights(self)
-            primal_objective = _replay_primal(self)
-            _replay_dual(self, primal_objective)
-            _replay_farkas(self)
-            _replay_recession(self)
         except ValueError as error:
-            raise _validation_error("result_replay", str(error)) from error
+            raise _validation_error("result_shape", str(error)) from error
         return self
 
 
@@ -661,6 +667,22 @@ def _require_result_heights(result: RationalLinearProgramResult) -> None:
             max_digits=result_bound,
             label="rational linear-program result",
         )
+
+
+def _verify_rational_linear_program_result(result: RationalLinearProgramResult) -> None:
+    """Deliberately verify an independently supplied LP claim.
+
+    This owner-private path is intentionally separate from ordinary result
+    parsing.  Callers that need certificate verification must opt into the
+    bounded replay rather than treating deserialization as proof.
+    """
+
+    _require_result_shape(result)
+    _require_result_heights(result)
+    primal_objective = _replay_primal(result)
+    _replay_dual(result, primal_objective)
+    _replay_farkas(result)
+    _replay_recession(result)
 
 
 def _replay_primal(result: RationalLinearProgramResult) -> Fraction | None:

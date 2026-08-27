@@ -197,11 +197,20 @@ def verify_chromatic_number_certificate_check_result(
 ) -> bool:
     """Replay one independently supplied bounded chromatic certificate claim."""
 
+    try:
+        request = ChromaticNumberCertificateCheckRequest(
+            graph=result.graph,
+            claimed_chromatic_number=result.claimed_chromatic_number,
+            coloring=result.coloring,
+            weights=result.weights,
+        )
+    except ValueError:
+        return False
     expected = _evaluate_chromatic_number_certificate(
-        result.graph,
-        result.claimed_chromatic_number,
-        result.coloring,
-        result.weights,
+        request.graph,
+        request.claimed_chromatic_number,
+        request.coloring,
+        request.weights,
     )
     return (
         result.verdict,

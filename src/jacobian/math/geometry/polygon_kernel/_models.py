@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import comb
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -16,6 +16,9 @@ from jacobian.math.geometry._models import (
     RationalPoint2D,
     _is_simple_ring,
 )
+
+if TYPE_CHECKING:
+    from jacobian.math.geometry.polygon_kernel._kernel import KernelData
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -280,30 +283,77 @@ class PolygonKernelResult(StrictModel):
     polygon_to_hull_area_ratio: CanonicalRational
 
     @model_validator(mode="after")
-    def bind_result_to_source_polygon(self) -> Self:
-        from jacobian.math.geometry.polygon_kernel._kernel import compute_kernel_data
-
-        expected = compute_kernel_data(self.polygon)
-        actual = (
-            self.interior_half_plane_convention,
-            self.half_planes,
-            self.vertex_turns,
-            self.reflex_vertex_indices,
-            self.kernel_dimension,
-            self.kernel_boundary,
-            self.convex_hull,
-            self.polygon_area,
-            self.kernel_area,
-            self.convex_hull_area,
-            self.kernel_to_polygon_area_ratio,
-            self.polygon_to_hull_area_ratio,
-        )
-        if actual != expected.as_tuple():
+    def require_structural_consistency(self) -> Self:
+        vertex_count = len(self.polygon.points)
+        if (
+            len(self.half_planes) != vertex_count
+            or len(self.vertex_turns) != vertex_count
+        ):
             raise _validation_error(
-                "visibility_kernel_result_retained_source_polygon",
-                "visibility-kernel result does not match the retained source polygon",
+                "visibility_kernel_result_source_row_count",
+                "visibility-kernel half-planes and turns must have one row per source vertex",
+            )
+        if tuple(row.edge_index for row in self.half_planes) != tuple(
+            range(vertex_count)
+        ):
+            raise _validation_error(
+                "visibility_kernel_result_half_plane_indices",
+                "visibility-kernel half-plane indices must be consecutive source indices",
+            )
+        if tuple(row.vertex_index for row in self.vertex_turns) != tuple(
+            range(vertex_count)
+        ):
+            raise _validation_error(
+                "visibility_kernel_result_turn_indices",
+                "visibility-kernel turn indices must be consecutive source indices",
+            )
+        if self.reflex_vertex_indices != tuple(sorted(set(self.reflex_vertex_indices))):
+            raise _validation_error(
+                "visibility_kernel_result_reflex_indices",
+                "visibility-kernel reflex indices must be distinct and sorted",
+            )
+        if any(
+            index < 0 or index >= vertex_count for index in self.reflex_vertex_indices
+        ):
+            raise _validation_error(
+                "visibility_kernel_result_reflex_indices",
+                "visibility-kernel reflex indices must refer to source vertices",
+            )
+        expected_boundary_size = {
+            "EMPTY": 0,
+            "POINT": 1,
+            "SEGMENT": 2,
+        }.get(self.kernel_dimension)
+        if expected_boundary_size is not None:
+            valid_boundary_size = len(self.kernel_boundary) == expected_boundary_size
+        else:
+            valid_boundary_size = len(self.kernel_boundary) >= 3
+        if not valid_boundary_size:
+            raise _validation_error(
+                "visibility_kernel_result_dimension_boundary",
+                "visibility-kernel dimension must match its boundary cardinality",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, polygon: KernelPolygon, *, data: KernelData) -> Self:
+        """Build a result after the admitted kernel established its values."""
+
+        return cls.model_construct(
+            polygon=polygon,
+            interior_half_plane_convention=data.convention,
+            half_planes=data.half_planes,
+            vertex_turns=data.vertex_turns,
+            reflex_vertex_indices=data.reflex_vertex_indices,
+            kernel_dimension=data.dimension,
+            kernel_boundary=data.boundary,
+            convex_hull=data.convex_hull,
+            polygon_area=data.polygon_area,
+            kernel_area=data.kernel_area,
+            convex_hull_area=data.convex_hull_area,
+            kernel_to_polygon_area_ratio=data.kernel_to_polygon_area_ratio,
+            polygon_to_hull_area_ratio=data.polygon_to_hull_area_ratio,
+        )
 
 
 __all__ = [

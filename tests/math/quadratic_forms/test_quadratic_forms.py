@@ -13,7 +13,10 @@ from jacobian.math.quadratic_forms import (
     evaluate_rational_quadratic_form,
 )
 from jacobian.math.quadratic_forms._models import EvaluationRequest, EvaluationResult
-from jacobian.math.quadratic_forms._operations import evaluate_form
+from jacobian.math.quadratic_forms._operations import (
+    _verify_evaluation_result,
+    evaluate_form,
+)
 from jacobian.math.quadratic_forms._tools import TOOLS
 from jacobian.math.quadratic_forms.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
@@ -149,12 +152,10 @@ def test_cross_terms_are_nonzero_unique_and_canonically_ordered() -> None:
     assert error.value.errors()[0]["type"] == "quadratic_form.cross_term_out_of_range"
 
 
-def test_result_replays_the_source_bound_value() -> None:
-    with pytest.raises(ValidationError) as error:
-        EvaluationResult.model_validate(
-            {"form": _form(), "vector": _vector(), "value": _rational(1)}
-        )
-    assert error.value.errors()[0]["type"] == "quadratic_form.value_mismatch"
+def test_result_parsing_keeps_the_bounded_structural_contract() -> None:
+    assert EvaluationResult.model_validate(
+        {"form": _form(), "vector": _vector(), "value": _rational(1)}
+    ).value.as_fraction() == Fraction(1)
 
 
 def test_digit_bounds_reject_before_exact_arithmetic() -> None:
@@ -340,11 +341,10 @@ def test_total_support_bound_rejects_unbounded_annihilated_support() -> None:
     with pytest.raises(ValidationError) as error:
         EvaluationRequest.model_validate({"form": form, "vector": vector})
     assert error.value.errors()[0]["type"] == "quadratic_form.support_budget"
-    with pytest.raises(ValidationError) as error:
-        EvaluationResult.model_validate(
-            {"form": form, "vector": vector, "value": _rational(0)}
-        )
-    assert error.value.errors()[0]["type"] == "quadratic_form.support_budget"
+    result = EvaluationResult.model_validate(
+        {"form": form, "vector": vector, "value": _rational(0)}
+    )
+    assert not _verify_evaluation_result(result)
 
 
 def test_total_support_admits_the_boundary_and_rejects_one_past_it() -> None:

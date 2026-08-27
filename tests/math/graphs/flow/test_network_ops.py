@@ -1,6 +1,5 @@
 """Tests for network optimization operations."""
 
-import copy
 from collections.abc import Sequence
 from fractions import Fraction
 
@@ -8,15 +7,14 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.graphs.flow import _operations as flow_operations
 from jacobian.math.graphs.flow._models import (
     CostedFlowEdge,
     CostedFlowGraph,
     MinCostFlowRequest,
     MinCostFlowResult,
 )
-from jacobian.math.graphs.flow._operations import (
-    compute_min_cost_flow,
-)
+from jacobian.math.graphs.flow._operations import compute_min_cost_flow
 from jacobian.math.graphs.flow._tools import TOOLS
 
 
@@ -261,7 +259,7 @@ def test_min_cost_flow_mixed_capacity_and_cost_denominators() -> None:
     result = compute_min_cost_flow(MinCostFlowRequest(graph=graph, demands=(-1, 0, 1)))
     assert result.feasible is True
     assert result.total_cost.as_fraction() == Fraction(2, 3) + Fraction(4, 5)
-    # The retained source network replays balances, capacities, and objective.
+    # The retained source network supports downstream composition and explicit checks.
     balance = [Fraction(0)] * 3
     for fe in result.flow_edges:
         balance[fe.source] -= fe.flow.as_fraction()
@@ -297,36 +295,64 @@ def _two_path_graph() -> CostedFlowGraph:
     )
 
 
-def test_min_cost_flow_serialized_result_replays_against_source() -> None:
-    """Serialization round-trips and mutations of any field are rejected."""
+def test_min_cost_flow_parsing_is_structural_and_private_verifier_checks_claim() -> (
+    None
+):
+    """Serialization is structural; deliberate verification rejects forged claims."""
     request = MinCostFlowRequest(graph=_two_path_graph(), demands=(-2, 2, 0))
     result = compute_min_cost_flow(request)
     assert result.feasible is True
     dumped = result.model_dump()
     assert MinCostFlowResult.model_validate(dumped) == result
+    assert flow_operations._verify_min_cost_flow_result(result)
 
-    shrunk = copy.deepcopy(dumped)
-    shrunk["graph"]["edges"][0]["capacity"] = {"num": "1", "den": "1"}
-    with pytest.raises(ValidationError):
-        MinCostFlowResult.model_validate(shrunk)
+    forged_payload = result.model_dump()
+    forged_payload["graph"]["edges"][0]["capacity"] = {
+        "num": "1",
+        "den": "1",
+    }
+    forged = MinCostFlowResult.model_validate(forged_payload)
+    assert not flow_operations._verify_min_cost_flow_result(forged)
 
-    undeclared = copy.deepcopy(dumped)
-    undeclared["flow_edges"] = (
-        *undeclared["flow_edges"],
-        {"source": 1, "target": 0, "flow": {"num": "1", "den": "1"}},
+    forged_payload = result.model_dump()
+    forged_payload["total_cost"] = {"num": "9999", "den": "1"}
+    forged = MinCostFlowResult.model_validate(forged_payload)
+    assert not flow_operations._verify_min_cost_flow_result(forged)
+
+
+def test_min_cost_flow_kernel_runs_once_when_result_is_serialized(monkeypatch) -> None:
+    calls = 0
+    original = flow_operations.nx.network_simplex
+
+    def counted(*args: object, **kwargs: object):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(flow_operations.nx, "network_simplex", counted)
+    result = compute_min_cost_flow(
+        MinCostFlowRequest(graph=_two_path_graph(), demands=(-2, 2, 0))
     )
-    with pytest.raises(ValidationError):
-        MinCostFlowResult.model_validate(undeclared)
+    assert calls == 1
+    assert MinCostFlowResult.model_validate(result.model_dump()) == result
+    assert calls == 1
 
-    rebalanced = copy.deepcopy(dumped)
-    rebalanced["demands"] = [1, -2, 1]
-    with pytest.raises(ValidationError):
-        MinCostFlowResult.model_validate(rebalanced)
 
-    recompensed = copy.deepcopy(dumped)
-    recompensed["total_cost"] = {"num": "9999", "den": "1"}
+def test_min_cost_flow_result_parser_retains_structural_checks() -> None:
+    result = compute_min_cost_flow(
+        MinCostFlowRequest(graph=_two_path_graph(), demands=(-2, 2, 0))
+    )
+    dumped = result.model_dump()
+    shrunk = dict(dumped)
+    shrunk["graph"]["edges"][0]["capacity"] = {"num": "1", "den": "1"}
+    assert MinCostFlowResult.model_validate(shrunk).graph.edges[
+        0
+    ].capacity == CanonicalRational(num="1", den="1")
+
+    malformed = dict(dumped)
+    malformed["demands"] = [0]
     with pytest.raises(ValidationError):
-        MinCostFlowResult.model_validate(recompensed)
+        MinCostFlowResult.model_validate(malformed)
 
 
 def test_min_cost_flow_infeasible_result_carries_no_claim() -> None:

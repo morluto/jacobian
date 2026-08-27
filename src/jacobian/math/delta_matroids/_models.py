@@ -17,8 +17,6 @@ from jacobian.math.delta_matroids.values import (
     DeltaMatroidAdmissionError,
     DeltaMatroidObstruction,
     FiniteDeltaMatroid,
-    canonical_feasible_rows,
-    first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
 )
 from jacobian.math.greedoids.values import FiniteFeasibleSetSystem
@@ -87,52 +85,39 @@ class DeltaMatroidRecognitionResult(StrictModel):
     obstruction: DeltaMatroidObstruction | None = None
 
     @model_validator(mode="after")
-    def bind_result_to_complete_source_replay(self) -> Self:
-        try:
-            require_delta_matroid_admission(self.source)
-        except DeltaMatroidAdmissionError as exc:
-            raise _validation_error(exc.reason, str(exc)) from None
-        expected_obstruction = first_symmetric_exchange_obstruction(self.source)
-        if expected_obstruction is None:
-            if self.status != "DELTA_MATROID":
-                raise _validation_error(
-                    "status_mismatch",
-                    "a valid feasible family must return DELTA_MATROID",
-                )
-            if self.obstruction is not None:
-                raise _validation_error(
-                    "unexpected_obstruction",
-                    "a valid delta-matroid result has no obstruction",
-                )
-            # The declared delta_matroid already passed its own complete
-            # defining-invariant replay during field validation; binding only
-            # has to pin it to the retained source's canonical wire order.
-            if (
-                self.delta_matroid is None
-                or self.delta_matroid.ground != self.source.ground
-                or self.delta_matroid.feasible != canonical_feasible_rows(self.source)
-            ):
-                raise _validation_error(
-                    "canonical_replay_mismatch",
-                    "delta_matroid must equal the canonical replay of the retained source",
-                )
-            return self
-        if self.status != "NOT_A_DELTA_MATROID":
+    def require_branch_consistency(self) -> Self:
+        valid = (
+            self.status == "DELTA_MATROID"
+            and self.delta_matroid is not None
+            and self.obstruction is None
+        ) or (
+            self.status == "NOT_A_DELTA_MATROID"
+            and self.delta_matroid is None
+            and self.obstruction is not None
+        )
+        if not valid:
             raise _validation_error(
-                "status_mismatch",
-                "an exchange obstruction must return NOT_A_DELTA_MATROID",
-            )
-        if self.delta_matroid is not None:
-            raise _validation_error(
-                "unexpected_delta_matroid",
-                "an invalid feasible family must not carry a delta-matroid",
-            )
-        if self.obstruction != expected_obstruction:
-            raise _validation_error(
-                "obstruction_mismatch",
-                "obstruction must equal the first source exchange failure",
+                "status_branch",
+                "status must agree with its retained value or obstruction",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        system: FiniteFeasibleSetSystem,
+        *,
+        delta_matroid: FiniteDeltaMatroid | None = None,
+        obstruction: DeltaMatroidObstruction | None = None,
+    ) -> Self:
+        return cls(
+            source=system,
+            status="DELTA_MATROID"
+            if delta_matroid is not None
+            else "NOT_A_DELTA_MATROID",
+            delta_matroid=delta_matroid,
+            obstruction=obstruction,
+        )
 
 
 __all__ = [

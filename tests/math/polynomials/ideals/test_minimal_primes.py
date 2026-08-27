@@ -15,11 +15,10 @@ from jacobian.math.polynomials.ideals._models import (
     MAX_OUTPUT_TERMS,
     IdealMinimalPrimesRequest,
     IdealMinimalPrimesResult,
-    computed_minimal_primes_result,
 )
 from jacobian.math.polynomials.ideals._operations import (
+    _verify_ideal_minimal_primes_result,
     compute_ideal_minimal_primes,
-    verify_ideal_minimal_primes_result,
 )
 from jacobian.math.polynomials.ideals._singular import SingularMinimalPrimesResult
 from jacobian.math.polynomials.values import (
@@ -159,7 +158,7 @@ def test_result_construction_is_structural_and_explicit_verifier_checks_family(
 
     assert result.components == components
     assert seen == []
-    assert verify_ideal_minimal_primes_result(result)
+    assert _verify_ideal_minimal_primes_result(result)
     assert seen == [(request.ideal, components)]
 
 
@@ -178,7 +177,7 @@ def test_non_verified_verdicts_fail_explicit_verification(
         components=components,
         backend_version="4.4.0",
     )
-    assert not verify_ideal_minimal_primes_result(result)
+    assert not _verify_ideal_minimal_primes_result(result)
 
 
 def test_explicit_verifier_rejects_incomplete_family_by_radical_intersection(
@@ -195,7 +194,7 @@ def test_explicit_verifier_rejects_incomplete_family_by_radical_intersection(
         components=components[:1],
         backend_version="4.4.0",
     )
-    assert not verify_ideal_minimal_primes_result(result)
+    assert not _verify_ideal_minimal_primes_result(result)
 
 
 def test_missing_backend_is_typed_and_makes_no_component_claim(
@@ -338,20 +337,24 @@ def test_trusted_factory_enforces_shape_ring_ordering_and_uniqueness() -> None:
     components = _axes_components()
     foreign_ring = (_ideal(("y", "x"), _poly(("y", "x"), (1, 1, (0, 1)))),)
 
-    computed = computed_minimal_primes_result(request, components, "4.4.0")
+    computed = IdealMinimalPrimesResult._from_kernel(request, components, "4.4.0")
     assert computed.outcome == "COMPUTED"
     assert computed.components == components
     assert computed.backend_version == "4.4.0"
     assert computed.detail is None
 
     with pytest.raises(ValueError, match="ordered ring"):
-        computed_minimal_primes_result(request, foreign_ring, "4.4.0")
+        IdealMinimalPrimesResult._from_kernel(request, foreign_ring, "4.4.0")
     with pytest.raises(ValueError, match="unique and canonically ordered"):
-        computed_minimal_primes_result(request, tuple(reversed(components)), "4.4.0")
+        IdealMinimalPrimesResult._from_kernel(
+            request, tuple(reversed(components)), "4.4.0"
+        )
     with pytest.raises(ValueError, match="unique and canonically ordered"):
-        computed_minimal_primes_result(request, (components[0], components[0]), "4.4.0")
+        IdealMinimalPrimesResult._from_kernel(
+            request, (components[0], components[0]), "4.4.0"
+        )
     with pytest.raises(ValueError, match="requires components and backend version"):
-        computed_minimal_primes_result(request, None, None)
+        IdealMinimalPrimesResult._from_kernel(request, None, None)
 
 
 def test_external_family_must_respect_the_generator_and_term_envelopes() -> None:
@@ -368,7 +371,7 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
             ),
         ),
     )
-    computed = computed_minimal_primes_result(request, wide, "4.4.0")
+    computed = IdealMinimalPrimesResult._from_kernel(request, wide, "4.4.0")
     assert computed.outcome == "COMPUTED"
     assert computed.components == wide
 
@@ -392,7 +395,7 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
     with pytest.raises(
         ValueError, match=rf"{MAX_OUTPUT_GENERATORS}-generator exact-result envelope"
     ):
-        computed_minimal_primes_result(request, over_generators, "4.4.0")
+        IdealMinimalPrimesResult._from_kernel(request, over_generators, "4.4.0")
 
     heavy_terms = tuple(
         sorted(
@@ -408,7 +411,7 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
     with pytest.raises(
         ValueError, match=rf"{MAX_OUTPUT_TERMS}-term exact-result envelope"
     ):
-        computed_minimal_primes_result(request, oversized, "4.4.0")
+        IdealMinimalPrimesResult._from_kernel(request, oversized, "4.4.0")
 
 
 def test_validator_rejects_duplicate_components_before_any_replay(
@@ -971,7 +974,7 @@ def test_forged_well_shaped_family_fails_explicit_verification() -> None:
         components=forged,
         backend_version="4.4.0",
     )
-    assert not verify_ideal_minimal_primes_result(result)
+    assert not _verify_ideal_minimal_primes_result(result)
 
 
 @pytest.mark.skipif(

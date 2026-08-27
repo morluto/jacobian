@@ -72,11 +72,9 @@ def minimum_euclidean_weight_triangulation(
                 order = _compare_euclidean_root_sums(candidate, chosen)
                 if order is None:
                     assert chosen_pivot is not None
-                    return EuclideanConvexPolygonTriangulationResult(
+                    return EuclideanConvexPolygonTriangulationResult._from_kernel(
+                        request,
                         status="COMPARISON_UNRESOLVED",
-                        polygon=request.polygon,
-                        vertex_count=count,
-                        comparison_precision_bits=EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS,
                         unresolved_comparison=EuclideanComparisonUnresolved(
                             start=start,
                             end=end,
@@ -117,11 +115,9 @@ def minimum_euclidean_weight_triangulation(
 
     reconstruct(0, count - 1)
     value = optimum[0, count - 1]
-    return EuclideanConvexPolygonTriangulationResult(
+    return EuclideanConvexPolygonTriangulationResult._from_kernel(
+        request,
         status="CERTIFIED_OPTIMUM",
-        polygon=request.polygon,
-        vertex_count=count,
-        comparison_precision_bits=EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS,
         diagonals=tuple(
             EuclideanDiagonal(
                 first=first,

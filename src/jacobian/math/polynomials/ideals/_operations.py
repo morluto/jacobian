@@ -30,7 +30,6 @@ from jacobian.math.polynomials.ideals._models import (
     IdealRadicalResult,
     IdealSaturationRequest,
     IdealSaturationResult,
-    computed_minimal_primes_result,
 )
 from jacobian.math.polynomials.ideals._singular import (
     run_bounded_stdin_python_kernel,
@@ -488,7 +487,7 @@ def compute_ideal_minimal_primes(
         # uniqueness; externally supplied JSON always runs the model
         # validator's own independent verification.
         try:
-            result = computed_minimal_primes_result(
+            result = IdealMinimalPrimesResult._from_kernel(
                 request=request,
                 components=components,
                 backend_version=backend.backend_version,
@@ -571,7 +570,7 @@ def compute_ideal_minimal_primes(
     )
 
 
-def verify_ideal_minimal_primes_result(result: IdealMinimalPrimesResult) -> bool:
+def _verify_ideal_minimal_primes_result(result: IdealMinimalPrimesResult) -> bool:
     """Independently verify a supplied computed minimal-prime family.
 
     Result construction deliberately performs only structural checks.  This
@@ -662,7 +661,6 @@ __all__ = [
     "compute_ideal_saturation",
     "verify_elimination_ideal_result",
     "verify_groebner_basis_result",
-    "verify_ideal_minimal_primes_result",
     "verify_ideal_normal_form_result",
 ]
 

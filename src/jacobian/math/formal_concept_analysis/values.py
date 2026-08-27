@@ -406,7 +406,7 @@ class ImplicationClosureResult(StrictModel):
         )
 
 
-def verify_implication_closure_result(result: ImplicationClosureResult) -> None:
+def _verify_implication_closure_result(result: ImplicationClosureResult) -> None:
     """Independently replay one supplied closure claim within its carrier bound."""
 
     for name in ("seed", "closure", "added"):
@@ -520,5 +520,4 @@ __all__ = [
     "ImplicationClosureResult",
     "ImplicationClosureWork",
     "ImplicationDerivation",
-    "verify_implication_closure_result",
 ]

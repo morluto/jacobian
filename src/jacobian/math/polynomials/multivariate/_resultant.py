@@ -1,4 +1,4 @@
-"""Contracts and exact replay for multivariate Sylvester resultants."""
+"""Contracts and bounded execution for multivariate Sylvester resultants."""
 
 from __future__ import annotations
 
@@ -185,13 +185,7 @@ def _sylvester_resultant_value(
 
 
 class MultivariateResultantResult(StrictModel):
-    """The exact resultant bound to its source pair.
-
-    Retains both source polynomials and the eliminated variable so
-    validation replays the exact Sylvester determinant instead of trusting
-    an independently authored value.  The replay runs inside the same
-    admitted degree envelope as the producer.
-    """
+    """The exact resultant produced by one admitted Sylvester computation."""
 
     left: RationalPolynomial
     right: RationalPolynomial
@@ -200,18 +194,57 @@ class MultivariateResultantResult(StrictModel):
     convention: Literal["SYLVESTER_DETERMINANT"] = "SYLVESTER_DETERMINANT"
 
     @model_validator(mode="after")
-    def require_source_bound(self) -> Self:
-        request = MultivariateResultantRequest(
-            left=self.left,
-            right=self.right,
-            elimination_variable=self.elimination_variable,
-        )
-        if self.resultant != _sylvester_resultant_value(request):
+    def require_structural_resultant(self) -> Self:
+        _validate_multivariate_pair(self.left, self.right)
+        if self.elimination_variable not in self.left.variables:
             raise _validation_error(
-                "resultant must equal the Sylvester determinant of the "
-                "retained source polynomials"
+                "elimination variable must belong to the declared ring"
+            )
+        remaining_variables = tuple(
+            variable
+            for variable in self.left.variables
+            if variable != self.elimination_variable
+        )
+        if isinstance(self.resultant, MultivariateScalarValue):
+            if remaining_variables:
+                raise _validation_error(
+                    "a multivariate resultant must retain its remaining-variable ring"
+                )
+        elif self.resultant.value.variables != remaining_variables:
+            raise _validation_error(
+                "resultant polynomial must use the remaining declared variables"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: MultivariateResultantRequest,
+        *,
+        resultant: MultivariateInvariantValue,
+    ) -> Self:
+        """Build a result after the admitted Sylvester kernel established it."""
+
+        return cls(
+            left=request.left,
+            right=request.right,
+            elimination_variable=request.elimination_variable,
+            resultant=resultant,
+        )
+
+
+def _verify_multivariate_resultant(result: MultivariateResultantResult) -> bool:
+    """Check an independently supplied source-bound resultant claim."""
+
+    try:
+        request = MultivariateResultantRequest(
+            left=result.left,
+            right=result.right,
+            elimination_variable=result.elimination_variable,
+        )
+        return result.resultant == _sylvester_resultant_value(request)
+    except ValueError:
+        return False
 
 
 __all__ = [

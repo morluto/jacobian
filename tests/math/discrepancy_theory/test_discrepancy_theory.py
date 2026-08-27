@@ -97,6 +97,7 @@ class TestHardConstraintRounding:
             Fraction(-1),
         )
         assert HardConstraintRoundingResult.model_validate(first.model_dump()) == first
+        assert discrepancy_models._verify_hard_constraint_rounding_result(first)
 
     def test_large_active_column_distinguishes_row_only_rounding(self) -> None:
         request = _rounding_request(
@@ -230,17 +231,9 @@ class TestHardConstraintRounding:
         with _validation_code(message):
             HardConstraintRoundingRequest.model_validate(payload)
 
-    @pytest.mark.parametrize(
-        ("mutation", "message"),
-        [
-            ("bit", "discrepancy_theory.rounded_values_break_row_sum"),
-            ("row", "discrepancy_theory.row_ledger_replay_mismatch"),
-            ("column", "discrepancy_theory.column_ledger_replay_mismatch"),
-            ("source", "discrepancy_theory.column_ledger_replay_mismatch"),
-        ],
-    )
-    def test_source_bound_result_rejects_authored_mutations(
-        self, mutation: str, message: str
+    @pytest.mark.parametrize("mutation", ["bit", "row", "column", "source"])
+    def test_structural_result_parsing_does_not_replay_source_claims(
+        self, mutation: str
     ) -> None:
         payload = compute_hard_constraint_rounding(_rounding_request()).model_dump()
         if mutation == "bit":
@@ -255,8 +248,8 @@ class TestHardConstraintRounding:
                 _rational(Fraction(2, 3)),
                 *payload["source"]["values"][2:],
             )
-        with _validation_code(message):
-            HardConstraintRoundingResult.model_validate(payload)
+        parsed = HardConstraintRoundingResult.model_validate(payload)
+        assert not discrepancy_models._verify_hard_constraint_rounding_result(parsed)
 
     def test_exhaustive_small_half_integral_sources_satisfy_defining_invariants(
         self,

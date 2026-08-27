@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import canonical_rational_component_digits
 from jacobian.canonical import encode_strict_json
+from jacobian.math.geometry.polygon_kernel import _operations
 from jacobian.math.geometry.polygon_kernel._kernel import oriented_half_planes
 from jacobian.math.geometry.polygon_kernel._models import (
     MAX_KERNEL_COORDINATE_DIGITS,
@@ -22,6 +23,7 @@ from jacobian.math.geometry.polygon_kernel._models import (
     _estimate_visibility_kernel_result_characters,
 )
 from jacobian.math.geometry.polygon_kernel._operations import (
+    _verify_polygon_kernel_result,
     compute_visibility_kernel,
 )
 
@@ -285,7 +287,7 @@ def test_cyclic_rotation_preserves_kernel_and_scalar_measures() -> None:
     assert rotated.kernel_to_polygon_area_ratio == first.kernel_to_polygon_area_ratio
 
 
-def test_fractional_polygon_round_trips_through_source_bound_validation() -> None:
+def test_fractional_polygon_round_trips_structurally() -> None:
     result = compute_visibility_kernel(
         _request(
             [
@@ -298,14 +300,31 @@ def test_fractional_polygon_round_trips_through_source_bound_validation() -> Non
     )
     replayed = PolygonKernelResult.model_validate_json(result.model_dump_json())
     assert replayed == result
+    assert _verify_polygon_kernel_result(replayed)
     assert replayed.polygon_area.as_fraction() == 4
+
+
+def test_trusted_producer_runs_kernel_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = 0
+    original = _operations.compute_kernel_data
+
+    def counted(polygon: KernelPolygon):
+        nonlocal calls
+        calls += 1
+        return original(polygon)
+
+    monkeypatch.setattr(_operations, "compute_kernel_data", counted)
+    result = compute_visibility_kernel(_request(PUBLISHED_PENTAGON))
+
+    assert calls == 1
+    assert result.kernel_dimension == "POLYGON"
 
 
 @pytest.mark.parametrize(
     "mutation",
     ["source", "half_plane", "kernel", "area", "dimension"],
 )
-def test_result_validation_rejects_independent_mutations(mutation: str) -> None:
+def test_private_verifier_rejects_independent_mutations(mutation: str) -> None:
     result = compute_visibility_kernel(_request(PUBLISHED_PENTAGON))
     payload = deepcopy(result.model_dump(mode="json"))
     if mutation == "source":
@@ -321,8 +340,9 @@ def test_result_validation_rejects_independent_mutations(mutation: str) -> None:
         payload["kernel_area"] = {"num": "113430241", "den": "1"}
     else:
         payload["kernel_dimension"] = "SEGMENT"
-    with pytest.raises(ValidationError):
-        PolygonKernelResult.model_validate(payload)
+        payload["kernel_boundary"] = payload["kernel_boundary"][:2]
+    claim = PolygonKernelResult.model_validate(payload)
+    assert not _verify_polygon_kernel_result(claim)
 
 
 def _parabola_polygon(scale: int = 1) -> list[tuple[int, int]]:

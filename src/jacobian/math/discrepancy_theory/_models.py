@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import itertools
 from fractions import Fraction
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
@@ -290,7 +290,13 @@ class MonitoredColumnLedger(StrictModel):
 
 
 class HardConstraintRoundingResult(StrictModel):
-    """A source-bound binary rounding with replayable hard-row and error ledgers."""
+    """A source-bound binary rounding with hard-row and error ledgers.
+
+    Parsing checks the result's wire shape only.  The floating-rounding kernel
+    establishes preservation and error claims when it produces this value;
+    deliberate validation of an independently supplied claim belongs to the
+    owner-private :func:`_verify_hard_constraint_rounding_result` helper.
+    """
 
     source: HardConstraintRoundingSource
     rounded_values: tuple[RoundedBit, ...] = Field(max_length=MAX_ROUNDING_COORDINATES)
@@ -304,7 +310,7 @@ class HardConstraintRoundingResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def replay_rounding_invariants(self) -> Self:
+    def require_structural_shape(self) -> Self:
         coordinate_count = len(self.source.coordinate_labels)
         if len(self.rounded_values) != coordinate_count:
             raise _validation_error(
@@ -319,79 +325,120 @@ class HardConstraintRoundingResult(StrictModel):
                 "rounded_values_not_binary",
                 "rounded values must be strict binary integers",
             )
-
-        source_values = tuple(value.as_fraction() for value in self.source.values)
-        expected_rows: list[HardConstraintRowLedger] = []
-        for row in self.source.rows:
-            source_sum = sum(
-                (source_values[index] for index in row.coordinates), Fraction()
-            )
-            rounded_sum = sum(self.rounded_values[index] for index in row.coordinates)
-            if source_sum != rounded_sum:
-                raise _validation_error(
-                    "rounded_values_break_row_sum",
-                    "rounded values must preserve every hard row sum",
-                )
-            expected_rows.append(
-                HardConstraintRowLedger(
-                    row_label=row.label,
-                    source_sum=_as_canonical_rational(source_sum),
-                    rounded_sum=rounded_sum,
-                )
-            )
-        if tuple(expected_rows) != self.row_ledger:
+        if len(self.row_ledger) != len(self.source.rows):
             raise _validation_error(
-                "row_ledger_replay_mismatch",
-                "row ledger must replay exactly from source and rounding",
+                "row_ledger_length_mismatch",
+                "row ledger must contain one entry for every hard row",
             )
-
-        incidences = [0] * coordinate_count
-        for column in self.source.columns:
-            for index in column.coordinates:
-                incidences[index] += 1
-        expected_incidence = max(incidences, default=0)
-        expected_bound = 4 * expected_incidence
-        if self.maximum_column_incidence != expected_incidence:
+        if tuple(item.row_label for item in self.row_ledger) != tuple(
+            row.label for row in self.source.rows
+        ):
             raise _validation_error(
-                "maximum_incidence_mismatch",
-                "maximum column incidence must be derived from the source",
+                "row_ledger_labels_mismatch",
+                "row ledger labels must align with the hard-row order",
             )
-        if self.column_error_bound != expected_bound:
+        if len(self.column_ledger) != len(self.source.columns):
             raise _validation_error(
-                "column_error_bound_mismatch",
-                "column error bound must equal four times the incidence",
+                "column_ledger_length_mismatch",
+                "column ledger must contain one entry for every monitored column",
             )
-
-        expected_columns: list[MonitoredColumnLedger] = []
-        for column in self.source.columns:
-            source_sum = sum(
-                (source_values[index] for index in column.coordinates), Fraction()
-            )
-            rounded_sum = sum(
-                self.rounded_values[index] for index in column.coordinates
-            )
-            signed_error = Fraction(rounded_sum) - source_sum
-            absolute_error = abs(signed_error)
-            if absolute_error > expected_bound:
-                raise _validation_error(
-                    "column_error_exceeds_bound",
-                    "monitored column error exceeds the derived 4d bound",
-                )
-            expected_columns.append(
-                MonitoredColumnLedger(
-                    column_label=column.label,
-                    source_sum=_as_canonical_rational(source_sum),
-                    rounded_sum=rounded_sum,
-                    signed_error=_as_canonical_rational(signed_error),
-                    absolute_error=_as_canonical_rational(absolute_error),
-                )
-            )
-        if tuple(expected_columns) != self.column_ledger:
+        if tuple(item.column_label for item in self.column_ledger) != tuple(
+            column.label for column in self.source.columns
+        ):
             raise _validation_error(
-                "column_ledger_replay_mismatch",
-                "column ledger must replay exactly from source and rounding",
+                "column_ledger_labels_mismatch",
+                "column ledger labels must align with the monitored-column order",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build a result after the admitted floating-rounding kernel proved it."""
+
+        return cls.model_construct(**values)
+
+
+def _verify_hard_constraint_rounding_result(
+    result: HardConstraintRoundingResult,
+) -> bool:
+    """Check one independently supplied rounding claim under request admission.
+
+    This deliberately replays the source-derived ledgers and guarantees.  It
+    is private because ordinary result deserialization is not proof checking.
+    """
+
+    try:
+        admitted = HardConstraintRoundingRequest.model_validate(
+            {"source": result.source.model_dump()}
+        )
+    except Exception:  # request admission is fail-closed for supplied claims
+        return False
+    source = admitted.source
+    if len(result.rounded_values) != len(source.coordinate_labels):
+        return False
+    if any(
+        type(value) is not int or value not in (0, 1) for value in result.rounded_values
+    ):
+        return False
+    source_values = tuple(value.as_fraction() for value in source.values)
+    expected_rows = tuple(
+        HardConstraintRowLedger(
+            row_label=row.label,
+            source_sum=_as_canonical_rational(
+                _sum_selected_fractions(list(source_values), row.coordinates)
+            ),
+            rounded_sum=sum(result.rounded_values[index] for index in row.coordinates),
+        )
+        for row in source.rows
+    )
+    if (
+        any(row.source_sum.as_fraction() != row.rounded_sum for row in expected_rows)
+        or result.row_ledger != expected_rows
+    ):
+        return False
+    incidences = [0] * len(source_values)
+    for column in source.columns:
+        for index in column.coordinates:
+            incidences[index] += 1
+    maximum_incidence = max(incidences, default=0)
+    error_bound = 4 * maximum_incidence
+    if (
+        result.maximum_column_incidence != maximum_incidence
+        or result.column_error_bound != error_bound
+    ):
+        return False
+    expected_columns = tuple(
+        MonitoredColumnLedger(
+            column_label=column.label,
+            source_sum=_as_canonical_rational(
+                _sum_selected_fractions(list(source_values), column.coordinates)
+            ),
+            rounded_sum=sum(
+                result.rounded_values[index] for index in column.coordinates
+            ),
+            signed_error=_as_canonical_rational(
+                Fraction(
+                    sum(result.rounded_values[index] for index in column.coordinates)
+                )
+                - _sum_selected_fractions(list(source_values), column.coordinates)
+            ),
+            absolute_error=_as_canonical_rational(
+                abs(
+                    Fraction(
+                        sum(
+                            result.rounded_values[index] for index in column.coordinates
+                        )
+                    )
+                    - _sum_selected_fractions(list(source_values), column.coordinates)
+                )
+            ),
+        )
+        for column in source.columns
+    )
+    return result.column_ledger == expected_columns and all(
+        ledger.absolute_error.as_fraction() <= error_bound
+        for ledger in expected_columns
+    )
 
 
 class FiniteSetSystem(StrictModel):

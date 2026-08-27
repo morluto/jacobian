@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import combinations
 
+from pydantic import ValidationError
+
 from jacobian.math.code_nonlinear._budget import require_profile_admission
 from jacobian.math.code_nonlinear._models import (
     BinaryCodeDistanceWitness,
@@ -18,7 +20,6 @@ from jacobian.math.code_nonlinear._models import (
     ToSetSystemResult,
     WordDistanceRequest,
     WordDistanceResult,
-    _require_constant_weight,
 )
 from jacobian.math.code_nonlinear.values import BinaryWord, ExplicitBinaryCode
 
@@ -278,16 +279,24 @@ def to_set_system(code: ExplicitBinaryCode) -> ToSetSystemResult:
     )
 
 
-def verify_constant_weight_result(result: ConstantWeightResult) -> bool:
+def _verify_constant_weight_result(result: ConstantWeightResult) -> bool:
     """Verify an independently supplied generated-code claim."""
 
+    try:
+        ConstantWeightRequest(length=result.length, weight=result.weight)
+    except ValidationError:
+        return False
     expected = _constant_weight_code(result.length, result.weight)
     return result.code == expected and result.count == len(expected.codewords)
 
 
-def verify_word_distance_result(result: WordDistanceResult) -> bool:
+def _verify_word_distance_result(result: WordDistanceResult) -> bool:
     """Verify an independently supplied exact Hamming-relation claim."""
 
+    try:
+        WordDistanceRequest(word1=result.word1, word2=result.word2)
+    except ValidationError:
+        return False
     expected = _word_distance_data(result.word1, result.word2)
     return (
         result.distance,
@@ -327,9 +336,13 @@ def _verify_extremal_witness(
     )
 
 
-def verify_explicit_profile_result(result: ExplicitProfileResult) -> bool:
+def _verify_explicit_profile_result(result: ExplicitProfileResult) -> bool:
     """Replay an independently supplied profile inside its admitted envelope."""
 
+    try:
+        ExplicitProfileRequest(code=result.source)
+    except ValidationError:
+        return False
     expected = _explicit_profile_data(result.source)
     return (
         result.weight_distribution == expected.weight_distribution
@@ -345,10 +358,14 @@ def verify_explicit_profile_result(result: ExplicitProfileResult) -> bool:
     )
 
 
-def verify_constant_weight_profile_result(result: ConstantWeightProfileResult) -> bool:
+def _verify_constant_weight_profile_result(result: ConstantWeightProfileResult) -> bool:
     """Replay an independently supplied constant-weight profile claim."""
 
-    if _require_constant_weight(result.source) != result.weight:
+    try:
+        ConstantWeightProfileRequest(code=result.source)
+    except ValidationError:
+        return False
+    if result.weight != sum(result.source.codewords[0]):
         return False
     expected = _constant_weight_profile_data(result.source)
     return (
@@ -365,9 +382,13 @@ def verify_constant_weight_profile_result(result: ConstantWeightProfileResult) -
     )
 
 
-def verify_to_set_system_result(result: ToSetSystemResult) -> bool:
+def _verify_to_set_system_result(result: ToSetSystemResult) -> bool:
     """Verify an independently supplied source-indexed support claim."""
 
+    try:
+        ToSetSystemRequest(code=result.source)
+    except ValidationError:
+        return False
     return result.coordinate_axis == tuple(
         range(result.source.length)
     ) and result.supports == tuple(
@@ -383,9 +404,4 @@ __all__ = [
     "compute_to_set_system",
     "compute_word_distance",
     "to_set_system",
-    "verify_constant_weight_profile_result",
-    "verify_constant_weight_result",
-    "verify_explicit_profile_result",
-    "verify_to_set_system_result",
-    "verify_word_distance_result",
 ]

@@ -11,7 +11,6 @@ from pydantic import ValidationError
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.boxes import (
-    BoxIntersectionLedgerEntry,
     BoxUnionVolumeResult,
     RationalAxisAlignedBox,
     RationalClosedInterval,
@@ -20,6 +19,7 @@ from jacobian.math.geometry.boxes import (
 from jacobian.math.geometry.boxes._models import (
     MAX_BOX_UNION_RESULT_BYTES,
     BoxUnionVolumeRequest,
+    _verify_box_union_volume_result,
 )
 from jacobian.math.geometry.boxes.values import MAX_CANONICAL_BOX_DIMENSION
 
@@ -206,61 +206,35 @@ def test_input_order_changes_indices_but_not_union_volume() -> None:
     )
 
 
-def test_result_rejects_wrong_union_volume() -> None:
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda payload: payload.__setitem__("union_volume", {"num": "5", "den": "1"}),
+        lambda payload: payload.__setitem__(
+            "intersections", payload["intersections"][:-1]
+        ),
+        lambda payload: payload["intersections"][3].__setitem__(
+            "intersection", _box((0, 1), (0, 1), (0, 1)).model_dump(mode="json")
+        ),
+    ),
+)
+def test_forged_ledger_claim_fails_the_explicit_verifier(mutate: object) -> None:
     result = compute_box_union_volume(_three_boxes())
     payload = result.model_dump(mode="json")
-    payload["union_volume"] = {"num": "5", "den": "1"}
+    assert callable(mutate)
+    mutate(payload)
+    assert not _verify_box_union_volume_result(
+        BoxUnionVolumeResult.model_validate(payload)
+    )
+
+
+def test_result_rejects_out_of_range_intersection_index() -> None:
+    result = compute_box_union_volume(_three_boxes())
+    payload = result.model_dump(mode="json")
+    payload["intersections"][3]["box_indices"] = [0, 3]
 
     with pytest.raises(ValidationError):
         BoxUnionVolumeResult.model_validate(payload)
-
-
-def test_result_rejects_omitted_intersection() -> None:
-    result = compute_box_union_volume(_three_boxes())
-    payload = result.model_dump(mode="json")
-    payload["intersections"] = payload["intersections"][:-1]
-
-    with pytest.raises(ValidationError):
-        BoxUnionVolumeResult.model_validate(payload)
-
-
-def test_result_rejects_corrupted_intersection() -> None:
-    result = compute_box_union_volume(_three_boxes())
-    payload = result.model_dump(mode="json")
-    payload["intersections"][3]["intersection"] = _box(
-        (0, 1), (0, 1), (0, 1)
-    ).model_dump(mode="json")
-    payload["intersections"][3]["volume"] = {"num": "1", "den": "1"}
-
-    with pytest.raises(ValidationError):
-        BoxUnionVolumeResult.model_validate(payload)
-
-
-def test_result_rejects_intersection_index_mutation() -> None:
-    result = compute_box_union_volume(_three_boxes())
-    payload = result.model_dump(mode="json")
-    payload["intersections"][3]["box_indices"] = [0, 2]
-
-    with pytest.raises(ValidationError):
-        BoxUnionVolumeResult.model_validate(payload)
-
-
-def test_result_rejects_source_mutation() -> None:
-    result = compute_box_union_volume(_three_boxes())
-    payload = result.model_dump(mode="json")
-    payload["source"]["boxes"][0] = _box((0, 1), (0, 1), (0, 1)).model_dump(mode="json")
-
-    with pytest.raises(ValidationError):
-        BoxUnionVolumeResult.model_validate(payload)
-
-
-def test_entry_rejects_volume_not_matching_intersection() -> None:
-    with pytest.raises(ValidationError):
-        BoxIntersectionLedgerEntry(
-            box_indices=(0,),
-            intersection=_box((0, 2)),
-            volume=_rational(3),
-        )
 
 
 def test_native_api_accepts_canonical_box_tuple_without_request_wrapper() -> None:
@@ -355,12 +329,6 @@ def test_endpoint_at_derived_growth_boundary_is_admitted() -> None:
 def test_endpoint_beyond_derived_growth_budget_is_rejected() -> None:
     with pytest.raises(ValidationError):
         BoxUnionVolumeRequest(boxes=(_box((0, Fraction(10**16_377 - 1))),))
-
-
-def test_rejects_complete_replay_work_before_expansion() -> None:
-    box = _box((0, 1), (0, 1))
-    with pytest.raises(ValidationError):
-        BoxUnionVolumeRequest(boxes=(box,) * 16)
 
 
 def test_accepts_immediately_below_small_coordinate_result_boundary() -> None:

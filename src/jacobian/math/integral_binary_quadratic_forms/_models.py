@@ -263,16 +263,11 @@ class BinaryQuadraticFormRepresentation(StrictModel):
     y: int = Field(ge=-MAX_REPRESENTATION_COORDINATE, le=MAX_REPRESENTATION_COORDINATE)
     primitive: bool
 
-    @model_validator(mode="after")
-    def bind_primitiveness(self) -> Self:
-        from math import gcd
+    @classmethod
+    def _from_kernel(cls, *, x: int, y: int, primitive: bool) -> Self:
+        """Construct one representation after the enumeration kernel established it."""
 
-        if self.primitive != (gcd(self.x, self.y) == 1):
-            raise _validation_error(
-                "integral_binary_quadratic_form.primitive_mismatch",
-                "primitive must equal gcd(x, y) == 1",
-            )
-        return self
+        return cls.model_construct(x=x, y=y, primitive=primitive)
 
 
 class BinaryQuadraticFormRepresentationsResult(StrictModel):
@@ -288,7 +283,6 @@ class BinaryQuadraticFormRepresentationsResult(StrictModel):
 
     @model_validator(mode="after")
     def require_result_shape(self) -> Self:
-        _require_representation_budget(self.form, self.target)
         if self.count != len(self.representations):
             raise _validation_error(
                 "integral_binary_quadratic_form.count_mismatch",
@@ -310,7 +304,7 @@ class BinaryQuadraticFormRepresentationsResult(StrictModel):
         representations: tuple[BinaryQuadraticFormRepresentation, ...],
     ) -> Self:
         """Construct a trusted result from the owner-local enumeration kernel."""
-        return cls(
+        return cls.model_construct(
             form=form,
             target=target,
             representations=representations,
@@ -423,7 +417,6 @@ class ReducedClassesResult(StrictModel):
                 "integral_binary_quadratic_form.class_number_mismatch",
                 "class_number must equal the number of classes",
             )
-        _require_reduced_class_search_budget(self.discriminant)
         return self
 
     @classmethod
@@ -434,7 +427,7 @@ class ReducedClassesResult(StrictModel):
         classes: tuple[PrimitivePositiveDefiniteBinaryQuadraticForm, ...],
     ) -> Self:
         """Construct a trusted result from the owner-local class enumerator."""
-        return cls(
+        return cls.model_construct(
             discriminant=discriminant,
             classes=classes,
             class_number=len(classes),

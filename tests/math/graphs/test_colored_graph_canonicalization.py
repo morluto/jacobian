@@ -258,7 +258,13 @@ def test_canonical_equality_agrees_with_networkx_on_all_order_four_graphs() -> N
             )
 
 
-def test_result_rejects_source_conclusion_and_tie_break_mutations() -> None:
+def test_result_round_trip_is_structural_and_private_verifier_rejects_mutations() -> (
+    None
+):
+    from jacobian.math.graphs.isomorphism._operations import (
+        _verify_colored_graph_canonicalization_result,
+    )
+
     source = _graph(
         ("a", "b", "c", "d"),
         (("a", "b"), ("b", "c"), ("c", "d")),
@@ -270,8 +276,9 @@ def test_result_rejects_source_conclusion_and_tie_break_mutations() -> None:
         ["a", "b"],
         ["c", "d"],
     ]
-    with pytest.raises(ValidationError):
+    assert not _verify_colored_graph_canonicalization_result(
         ColoredGraphCanonicalizationResult.model_validate(changed_source)
+    )
 
     changed_graph = result.model_dump(mode="json")
     changed_graph["canonical_graph"]["graph"]["edges"] = [
@@ -279,8 +286,9 @@ def test_result_rejects_source_conclusion_and_tie_break_mutations() -> None:
         ["v00", "v02"],
         ["v00", "v03"],
     ]
-    with pytest.raises(ValidationError):
+    assert not _verify_colored_graph_canonicalization_result(
         ColoredGraphCanonicalizationResult.model_validate(changed_graph)
+    )
 
     changed_tie_break = result.model_dump(mode="json")
     relabeling = changed_tie_break["relabeling"]
@@ -297,8 +305,9 @@ def test_result_rejects_source_conclusion_and_tie_break_mutations() -> None:
             relabeling[right_index]["canonical_vertex"],
             relabeling[left_index]["canonical_vertex"],
         )
-    with pytest.raises(ValidationError):
+    assert not _verify_colored_graph_canonicalization_result(
         ColoredGraphCanonicalizationResult.model_validate(changed_tie_break)
+    )
 
 
 def test_request_admits_by_color_class_size_not_only_vertex_count() -> None:
@@ -525,7 +534,7 @@ def test_schema_explains_alignment_and_work_admission() -> None:
     graph_schema = schema["$defs"]["ColoredUndirectedGraph"]
 
     assert "aligned" in graph_schema["description"]
-    assert "execution-plus-validation replay work" in schema["description"]
+    assert "execution work" in schema["description"]
 
 
 def test_schema_documents_nfc_and_byte_limits_for_color_names() -> None:
@@ -602,11 +611,8 @@ def test_catalog_execution_admits_the_parsed_request_once(
 ) -> None:
     """``math.run`` parses once; the adapter must not readmit the request.
 
-    The result-size preflight runs once per request admission. For an
-    already-parsed request, exactly one further admission may occur inside
-    the catalog run: the result replay's own source-bound revalidation. A
-    second one means the adapter detoured through the validating native
-    wrapper instead of the shared request-accepting implementation.
+    The result-size preflight belongs to request admission; execution does
+    not repeat it while constructing the trusted result.
     """
     parsed = ColoredGraphCanonicalizationRequest(
         colored_graph=_graph(("a", "b"), (("a", "b"),))
@@ -629,5 +635,4 @@ def test_catalog_execution_admits_the_parsed_request_once(
     result = compute_colored_graph_canonicalization(parsed)
 
     assert result == expected
-    assert len(admissions) == 1
-    assert admissions[0] == parsed.colored_graph
+    assert admissions == []

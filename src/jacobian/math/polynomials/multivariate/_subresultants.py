@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 from math import comb, factorial, lcm
 from typing import Any, Literal, Self
 
@@ -36,7 +37,7 @@ SubresultantSourceOrder = Literal["LEFT_RIGHT", "RIGHT_LEFT"]
 
 # Admission follows the actual coefficient-ring expansion. The complete formal
 # sequence is bounded before SymPy enters its pseudo-remainder algorithm. The
-# arithmetic proxy includes production and typed result replay.
+# arithmetic proxy covers one producer pass.
 _MAX_SUBRESULTANT_SEQUENCE_TERMS = 4_096
 _MAX_SUBRESULTANT_COEFFICIENT_SUPPORT = 1_024
 _MAX_SUBRESULTANT_ARITHMETIC_TERM_PAIRS = 8_000_000
@@ -346,16 +347,15 @@ class MultivariatePrincipalSubresultantCoefficient(StrictModel):
 
 
 class MultivariateSubresultantSequenceResult(StrictModel):
-    """Complete nonzero Brown PRS with exact degree and source binding.
+    """Complete nonzero Brown PRS produced by one admitted kernel pass.
 
     The maintained backend omits zero or same-degree PRS values.
     ``skipped_member_degrees`` records main-variable degrees without a distinct
     Brown member.  ``principal_subresultant_coefficients`` separately retains
     every formal scalar subresultant, including canonical zero polynomials, so
     a vanished coefficient is never conflated with a skipped PRS degree.
-    Validation replays the pinned mathematical convention and independently
-    checks the last member against the GCD over the remaining-variable fraction
-    field.
+    Parsing checks that the serialized ledger is structurally coherent; the
+    producer establishes its source-bound claims.
     """
 
     left: RationalPolynomial
@@ -424,98 +424,105 @@ class MultivariateSubresultantSequenceResult(StrictModel):
     zero_members_omitted: Literal[True] = True
 
     @model_validator(mode="after")
-    def replay_source_bound_sequence(self) -> Self:
-        request = MultivariateSubresultantSequenceRequest(
-            left=self.left,
-            right=self.right,
-            main_variable=self.main_variable,
-        )
-        (
-            expected_order,
-            expected_polynomials,
-            expected_principal_coefficients,
-        ) = polynomial_subresultant_sequence(
-            request.left,
-            request.right,
-            request.main_variable,
-            maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
-        )
-        if self.source_order != expected_order:
-            raise _validation_error("source_order does not match main-variable degrees")
-        variable_index = request.left.variables.index(request.main_variable)
-        left_degree = _degree_in_variable(request.left, variable_index)
-        right_degree = _degree_in_variable(request.right, variable_index)
-        expected_resultant_sign = (
-            -1
-            if expected_order == "RIGHT_LEFT" and left_degree * right_degree % 2 == 1
-            else 1
-        )
-        if self.resultant_sign_from_sequence_order != expected_resultant_sign:
-            raise _validation_error(
-                "resultant sign does not match the PRS source order"
-            )
-        actual_polynomials = tuple(member.polynomial for member in self.members)
-        if actual_polynomials != expected_polynomials:
-            raise _validation_error(
-                "members do not replay the exact subresultant sequence"
-            )
-
-        expected_degrees = tuple(
-            _degree_in_variable(polynomial, variable_index)
-            for polynomial in expected_polynomials
-        )
+    def require_structural_sequence(self) -> Self:
+        _validate_multivariate_pair(self.left, self.right)
+        if self.main_variable not in self.left.variables:
+            raise _validation_error("main variable must belong to the declared ring")
+        variable_index = self.left.variables.index(self.main_variable)
+        if any(
+            member.polynomial.variables != self.left.variables
+            for member in self.members
+        ):
+            raise _validation_error("members must belong to the declared source ring")
         actual_degrees = tuple(
             member.degree_in_main_variable for member in self.members
         )
-        if actual_degrees != expected_degrees:
+        polynomial_degrees = tuple(
+            _degree_in_variable(member.polynomial, variable_index)
+            for member in self.members
+        )
+        if actual_degrees != polynomial_degrees:
             raise _validation_error("member degrees do not match their polynomials")
-        greatest_degree = max(expected_degrees)
-        expected_degree_set = set(expected_degrees)
+        if any(later >= earlier for earlier, later in pairwise(actual_degrees[1:])):
+            raise _validation_error("non-source PRS member degrees must decrease")
+        greatest_degree = max(actual_degrees)
+        actual_degree_set = set(actual_degrees)
         expected_absent = tuple(
             degree
             for degree in range(greatest_degree + 1)
-            if degree not in expected_degree_set
+            if degree not in actual_degree_set
         )
         if self.skipped_member_degrees != expected_absent:
             raise _validation_error(
-                "skipped_member_degrees does not match the PRS ledger"
+                "skipped_member_degrees does not match the member-degree ledger"
             )
-        expected_scalar_ledger = tuple(
-            MultivariatePrincipalSubresultantCoefficient(
-                index=index,
-                coefficient=coefficient,
-            )
-            for index, coefficient in enumerate(expected_principal_coefficients)
+        scalar_indices = tuple(
+            coefficient.index
+            for coefficient in self.principal_subresultant_coefficients
         )
-        if self.principal_subresultant_coefficients != expected_scalar_ledger:
+        if scalar_indices != tuple(range(len(scalar_indices))):
             raise _validation_error(
-                "principal subresultant coefficients do not replay the source pair"
+                "principal subresultant coefficient indices must be consecutive"
+            )
+        remaining_variables = tuple(
+            variable
+            for variable in self.left.variables
+            if variable != self.main_variable
+        )
+        if any(
+            coefficient.coefficient.variables != remaining_variables
+            for coefficient in self.principal_subresultant_coefficients
+        ):
+            raise _validation_error(
+                "principal subresultant coefficients must use the remaining ring"
+            )
+        if self.resultant.variables != remaining_variables:
+            raise _validation_error(
+                "resultant must use the remaining declared variables"
             )
         if self.gcd_member_index != len(self.members) - 1:
             raise _validation_error("gcd_member_index must select the final PRS member")
-
-        expected_resultant = polynomial_resultant_in_remaining_ring(
-            request.left,
-            request.right,
-            request.main_variable,
-            maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
-        )
-        if self.resultant != expected_resultant:
-            raise _validation_error("resultant does not match the source pair")
-        expected_gcd_degree, expected_leading_coefficient = fraction_field_gcd_relation(
-            request.left,
-            request.right,
-            request.main_variable,
-            self.members[self.gcd_member_index].polynomial,
-            maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
-        )
-        if self.gcd_degree_in_main_variable != expected_gcd_degree:
+        if self.gcd_degree_in_main_variable != actual_degrees[self.gcd_member_index]:
             raise _validation_error("gcd degree does not match the final PRS member")
-        if self.gcd_member_leading_coefficient != expected_leading_coefficient:
+        if self.gcd_member_leading_coefficient.variables != remaining_variables:
             raise _validation_error(
-                "gcd leading coefficient does not match the final member"
+                "gcd leading coefficient must use the remaining declared variables"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: MultivariateSubresultantSequenceRequest,
+        *,
+        source_order: SubresultantSourceOrder,
+        members: tuple[MultivariateSubresultantMember, ...],
+        skipped_member_degrees: tuple[int, ...],
+        principal_subresultant_coefficients: tuple[
+            MultivariatePrincipalSubresultantCoefficient, ...
+        ],
+        resultant: RationalPolynomial,
+        resultant_sign_from_sequence_order: Literal[-1, 1],
+        gcd_member_index: int,
+        gcd_degree_in_main_variable: int,
+        gcd_member_leading_coefficient: RationalPolynomial,
+    ) -> Self:
+        """Build a result after the admitted Brown kernel established its ledger."""
+
+        return cls(
+            left=request.left,
+            right=request.right,
+            main_variable=request.main_variable,
+            source_order=source_order,
+            members=members,
+            skipped_member_degrees=skipped_member_degrees,
+            principal_subresultant_coefficients=principal_subresultant_coefficients,
+            resultant=resultant,
+            resultant_sign_from_sequence_order=resultant_sign_from_sequence_order,
+            gcd_member_index=gcd_member_index,
+            gcd_degree_in_main_variable=gcd_degree_in_main_variable,
+            gcd_member_leading_coefficient=gcd_member_leading_coefficient,
+        )
 
 
 def _as_univariate_over_polynomial_ring(
@@ -720,6 +727,84 @@ def fraction_field_gcd_relation(
         main_variable,
         maximum_terms=maximum_terms,
     )
+
+
+def _verify_multivariate_subresultant_sequence(
+    result: MultivariateSubresultantSequenceResult,
+) -> bool:
+    """Check an independently supplied source-bound Brown PRS claim.
+
+    Normal parsing deliberately does not invoke this backend work.  The
+    verifier re-enters request admission before replaying every theorem-bearing
+    field, so forged or out-of-envelope claims fail closed.
+    """
+
+    try:
+        request = MultivariateSubresultantSequenceRequest(
+            left=result.left,
+            right=result.right,
+            main_variable=result.main_variable,
+        )
+        source_order, polynomials, principal_coefficients = (
+            polynomial_subresultant_sequence(
+                request.left,
+                request.right,
+                request.main_variable,
+                maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
+            )
+        )
+        variable_index = request.left.variables.index(request.main_variable)
+        left_degree = _degree_in_variable(request.left, variable_index)
+        right_degree = _degree_in_variable(request.right, variable_index)
+        resultant_sign = (
+            -1
+            if source_order == "RIGHT_LEFT" and left_degree * right_degree % 2 == 1
+            else 1
+        )
+        expected_degrees = tuple(
+            _degree_in_variable(polynomial, variable_index)
+            for polynomial in polynomials
+        )
+        expected_absent = tuple(
+            degree
+            for degree in range(max(expected_degrees) + 1)
+            if degree not in set(expected_degrees)
+        )
+        expected_scalars = tuple(
+            MultivariatePrincipalSubresultantCoefficient(
+                index=index,
+                coefficient=coefficient,
+            )
+            for index, coefficient in enumerate(principal_coefficients)
+        )
+        expected_resultant = polynomial_resultant_in_remaining_ring(
+            request.left,
+            request.right,
+            request.main_variable,
+            maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
+        )
+        expected_gcd_degree, expected_leading_coefficient = fraction_field_gcd_relation(
+            request.left,
+            request.right,
+            request.main_variable,
+            result.members[-1].polynomial,
+            maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
+        )
+        return (
+            result.source_order == source_order
+            and tuple(member.polynomial for member in result.members) == polynomials
+            and tuple(member.degree_in_main_variable for member in result.members)
+            == expected_degrees
+            and result.skipped_member_degrees == expected_absent
+            and result.principal_subresultant_coefficients == expected_scalars
+            and result.resultant == expected_resultant
+            and result.resultant_sign_from_sequence_order == resultant_sign
+            and result.gcd_member_index == len(result.members) - 1
+            and result.gcd_degree_in_main_variable == expected_gcd_degree
+            and result.gcd_member_leading_coefficient == expected_leading_coefficient
+        )
+    except ValueError:
+        return False
 
 
 def polynomial_leading_coefficient_in_remaining_ring(

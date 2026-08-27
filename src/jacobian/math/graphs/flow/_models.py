@@ -290,13 +290,12 @@ class FlowEdgeResult(StrictModel):
 
 
 class MinCostFlowResult(StrictModel):
-    """The exact minimum-cost-flow outcome bound to its complete source network.
+    """The exact minimum-cost-flow outcome bound to its source network.
 
-    Retains the source graph and demands so validation replays the defining
-    relations instead of trusting an independently authored claim: every edge
-    flow lies between zero and its source capacity, every node balance equals
-    its source demand, and the objective is the exact cost of the returned
-    source-unit flows.  Infeasibility carries no flow or cost data.
+    The producer establishes feasibility, conservation, capacities, and the
+    objective once. Parsing retains only the result's structural shape;
+    deliberate verification of an independently supplied claim belongs to
+    the flow owner.
     """
 
     graph: CostedFlowGraph
@@ -307,71 +306,39 @@ class MinCostFlowResult(StrictModel):
     convention: Literal["NETWORKX_MIN_COST_FLOW"] = "NETWORKX_MIN_COST_FLOW"
 
     @model_validator(mode="after")
-    def require_source_bound(self) -> Self:
-        from fractions import Fraction
-
+    def require_structural_consistency(self) -> Self:
         if len(self.demands) != self.graph.vertex_count:
             raise PydanticCustomError(
                 "graph.demands_length_must_match_graph_vertex_count",
                 "demands length must match graph.vertex_count",
             )
-        if sum(self.demands) != 0:
+        if not self.feasible and (
+            self.flow_edges or self.total_cost.as_fraction() != 0
+        ):
             raise PydanticCustomError(
-                "graph.demands_must_sum_to_zero", "demands must sum to zero"
-            )
-        if not self.feasible:
-            if self.flow_edges or self.total_cost.as_fraction() != 0:
-                raise PydanticCustomError(
-                    "graph.infeasible_result_carries_no_flow_edges_nonzero",
-                    "an infeasible result carries no flow edges or nonzero cost",
-                )
-            return self
-
-        capacities: dict[tuple[int, int], Fraction] = {}
-        costs: dict[tuple[int, int], Fraction] = {}
-        for edge in self.graph.edges:
-            endpoints = (edge.source, edge.target)
-            capacities[endpoints] = edge.capacity.as_fraction()
-            costs[endpoints] = edge.cost.as_fraction()
-        balance = [Fraction(0)] * self.graph.vertex_count
-        objective = Fraction(0)
-        seen: set[tuple[int, int]] = set()
-        for flow_edge in self.flow_edges:
-            endpoints = (flow_edge.source, flow_edge.target)
-            if endpoints not in capacities:
-                raise PydanticCustomError(
-                    "graph.flow_reported_undeclared_edge_endpoints_endpoints",
-                    f"flow reported on undeclared edge {endpoints[0]}->{endpoints[1]}",
-                )
-            if endpoints in seen:
-                raise PydanticCustomError(
-                    "graph.edge_endpoints_endpoints_reported_more_than_once",
-                    f"edge {endpoints[0]}->{endpoints[1]} reported more than once",
-                )
-            seen.add(endpoints)
-            flow = flow_edge.flow.as_fraction()
-            if not 0 <= flow <= capacities[endpoints]:
-                raise PydanticCustomError(
-                    "graph.flow_flow_edge_endpoints_endpoints_violates_source",
-                    f"flow {flow} on edge {endpoints[0]}->{endpoints[1]} "
-                    f"violates the source capacity {capacities[endpoints]}",
-                )
-            balance[flow_edge.source] -= flow
-            balance[flow_edge.target] += flow
-            objective += costs[endpoints] * flow
-        for node, demand in enumerate(self.demands):
-            if balance[node] != demand:
-                raise PydanticCustomError(
-                    "graph.node_node_balance_balance_node_does_equal",
-                    f"node {node} balance {balance[node]} does not equal "
-                    f"its source demand {demand}",
-                )
-        if objective != self.total_cost.as_fraction():
-            raise PydanticCustomError(
-                "graph.total_cost_does_not_equal_the_cost_of_the_return",
-                "total cost does not equal the cost of the returned flows",
+                "graph.infeasible_result_carries_no_flow_edges_nonzero",
+                "an infeasible result carries no flow edges or nonzero cost",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: MinCostFlowRequest,
+        *,
+        total_cost: CanonicalRational,
+        feasible: bool,
+        flow_edges: tuple[FlowEdgeResult, ...],
+    ) -> Self:
+        """Build one result after the admitted flow kernel established it."""
+
+        return cls.model_construct(
+            graph=request.graph,
+            demands=request.demands,
+            total_cost=total_cost,
+            feasible=feasible,
+            flow_edges=flow_edges,
+        )
 
 
 class CirculationResult(StrictModel):

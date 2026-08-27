@@ -212,7 +212,7 @@ def test_request_rejects_nonpositive_noncanonical_or_nonstring_values(
         ),
     ],
 )
-def test_result_rejects_mutated_source_or_certificate(
+def test_owner_verifier_rejects_mutated_source_or_certificate(
     value: int,
     mutation: PayloadMutation,
 ) -> None:
@@ -220,8 +220,11 @@ def test_result_rejects_mutated_source_or_certificate(
     payload = deepcopy(genuine.model_dump(mode="json"))
     mutation(payload)
 
-    with expect_validation("number_theory."):
+    from jacobian.math.number_theory._powerful import verify_powerful_number_result
+
+    assert not verify_powerful_number_result(
         PowerfulNumberResult.model_validate(payload)
+    )
 
 
 @pytest.mark.exhaustive

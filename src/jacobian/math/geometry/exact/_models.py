@@ -680,16 +680,14 @@ def _validate_pinned_profile_order(
 class PinnedLineDistanceResult(StrictModel):
     """Complete pinned line-distance profile for a point configuration.
 
-    The result retains its source ``configuration`` and ``anchor`` so validation
-    can replay the defining geometry: every pair-spanned line is recomputed
-    canonically from the retained points and its squared distance from the
-    retained anchor is verified.
+    The result retains its source ``configuration`` and ``anchor`` for
+    downstream composition. Parsing checks its canonical wire shape; the
+    producing kernel establishes the geometric profile.
     """
 
     configuration: PinnedLineConfiguration = Field(
         description=(
-            "Source planar point configuration with distinct coordinates; "
-            "retained for result binding and replay."
+            "Source planar point configuration, retained for downstream composition."
         ),
         json_schema_extra={"coordinate_digit_bound": COORDINATE_DIGITS},
     )
@@ -766,42 +764,141 @@ class PinnedLineDistanceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_consistent_profile(self) -> Self:
-        from itertools import combinations
-
-        points, anchor = _pinned_profile_source(
-            self.configuration, self.anchor, self.point_count
-        )
-        expected_lines, expected_distances = _expected_pinned_profile_geometry(
-            points, anchor, self.point_count
-        )
-        expected_pairs = sorted(combinations(range(self.point_count), 2))
-        seen_pairs, multiplicities = _validate_pinned_profile_entries(
-            self.lines, self.point_count, expected_lines, expected_distances
-        )
-        if sorted(seen_pairs) != expected_pairs or len(seen_pairs) != len(
+        if self.dimension != 2 or any(
+            len(point.coordinates) != self.dimension
+            for point in self.configuration.points
+        ):
+            raise _validation_error(
+                "retained_configuration_a_planar_configuration_two",
+                "retained configuration must be a planar configuration "
+                "(exactly two coordinates per point)",
+            )
+        if self.point_count != len(self.configuration.points):
+            raise _validation_error(
+                "point_count_retained_configuration",
+                "point_count must match the retained configuration",
+            )
+        seen_pairs = [pair for entry in self.lines for pair in entry.pairs]
+        if any(
+            not 0 <= first < second < self.point_count for first, second in seen_pairs
+        ):
+            raise _validation_error(
+                "source_pairs_reference_valid_point_indices",
+                "source pairs must reference valid point indices",
+            )
+        expected_pair_count = self.point_count * (self.point_count - 1) // 2
+        if len(seen_pairs) != expected_pair_count or len(seen_pairs) != len(
             set(seen_pairs)
         ):
             raise _validation_error(
                 "lines_cover_set_source_pairs_once",
                 "lines must cover exactly the set of source pairs once",
             )
-        if len(self.lines) != len(expected_lines):
-            raise _validation_error(
-                "lines_correspond_distinct_geometric_lines",
-                "lines must correspond to distinct geometric lines",
-            )
-        _validate_pinned_profile_order(self.lines, expected_lines, expected_distances)
-
-        reconstructed = tuple(
-            (
-                CanonicalRational.from_fraction(d),
-                count,
-            )
-            for d, count in sorted(multiplicities.items())
+        coefficients = tuple(
+            tuple(value.as_fraction() for value in entry.line_coefficients)
+            for entry in self.lines
         )
-        if reconstructed != self.distance_multiplicities:
+        if len(coefficients) != len(set(coefficients)):
+            raise _validation_error(
+                "duplicate_lines_collapsed_entry",
+                "duplicate lines must be collapsed into one entry",
+            )
+        if (
+            tuple(
+                sorted(
+                    self.lines,
+                    key=lambda entry: (
+                        entry.squared_distance.as_fraction(),
+                        tuple(value.as_fraction() for value in entry.line_coefficients),
+                    ),
+                )
+            )
+            != self.lines
+        ):
+            raise _validation_error(
+                "lines_sorted_squared_distance_coefficients",
+                "lines must be sorted by (squared_distance, coefficients)",
+            )
+        if any(count <= 0 for _, count in self.distance_multiplicities):
+            raise _validation_error(
+                "distance_multiplicities_positive",
+                "distance multiplicities must be positive",
+            )
+        distances = tuple(
+            value.as_fraction() for value, _ in self.distance_multiplicities
+        )
+        if distances != tuple(sorted(distances)) or len(distances) != len(
+            set(distances)
+        ):
+            raise _validation_error(
+                "distance_multiplicities_sorted",
+                "distance multiplicities must be sorted by distinct distance",
+            )
+        if sum(count for _, count in self.distance_multiplicities) != len(self.lines):
             raise _validation_error(
                 "distance_multiplicities_partition_lines_sorted",
                 "distance multiplicities must partition the lines and be sorted",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PinnedLineDistanceRequest,
+        *,
+        lines: tuple[PinnedLineEntry, ...],
+        distance_multiplicities: tuple[tuple[CanonicalRational, int], ...],
+    ) -> Self:
+        """Build a result after the admitted profile kernel established it."""
+
+        return cls.model_construct(
+            configuration=request.configuration,
+            anchor=request.anchor,
+            dimension=2,
+            point_count=len(request.configuration.points),
+            lines=lines,
+            distance_multiplicities=distance_multiplicities,
+        )
+
+
+def _verify_pinned_line_distance_claim(result: PinnedLineDistanceResult) -> None:
+    """Fail closed when an independently supplied profile needs verification."""
+
+    request = PinnedLineDistanceRequest(
+        configuration=result.configuration,
+        anchor=result.anchor,
+    )
+    points, anchor = _pinned_profile_source(
+        request.configuration, request.anchor, result.point_count
+    )
+    expected_lines, expected_distances = _expected_pinned_profile_geometry(
+        points, anchor, result.point_count
+    )
+    seen_pairs, multiplicities = _validate_pinned_profile_entries(
+        result.lines, result.point_count, expected_lines, expected_distances
+    )
+    expected_pairs = [
+        (first, second)
+        for first in range(result.point_count)
+        for second in range(first + 1, result.point_count)
+    ]
+    if sorted(seen_pairs) != expected_pairs or len(seen_pairs) != len(set(seen_pairs)):
+        raise _validation_error(
+            "lines_cover_set_source_pairs_once",
+            "lines must cover exactly the set of source pairs once",
+        )
+    if len(result.lines) != len(expected_lines):
+        raise _validation_error(
+            "lines_correspond_distinct_geometric_lines",
+            "lines must correspond to distinct geometric lines",
+        )
+    _validate_pinned_profile_order(result.lines, expected_lines, expected_distances)
+    reconstructed = tuple(
+        (CanonicalRational.from_fraction(distance), count)
+        for distance, count in sorted(multiplicities.items())
+    )
+    if reconstructed != result.distance_multiplicities:
+        raise _validation_error(
+            "distance_multiplicities_partition_lines_sorted",
+            "distance multiplicities must partition the lines and be sorted",
+        )

@@ -5,8 +5,6 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any
 
-from pydantic import ValidationError
-
 from jacobian._exact import CanonicalRational
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
@@ -21,6 +19,7 @@ from jacobian.math.optimization._models import (
     _dual_diagnostics,
     _primal_diagnostics,
     _result_digit_bound,
+    _verify_rational_linear_program_result,
 )
 
 
@@ -307,7 +306,15 @@ def _dual_data(
 def _unknown(
     program: StandardFormRationalLinearProgram,
 ) -> RationalLinearProgramResult:
-    return RationalLinearProgramResult(program=program, status="UNKNOWN")
+    return RationalLinearProgramResult._from_kernel(program=program, status="UNKNOWN")
+
+
+def _verified_kernel_result(**values: object) -> RationalLinearProgramResult:
+    """Construct and check a claim once at the producer boundary."""
+
+    result = RationalLinearProgramResult._from_kernel(**values)
+    _verify_rational_linear_program_result(result)
+    return result
 
 
 def _trivial_infeasibility(
@@ -324,7 +331,7 @@ def _trivial_infeasibility(
             1 if rhs.num.startswith("-") else -1,
             1,
         )
-        return RationalLinearProgramResult(
+        return _verified_kernel_result(
             program=program,
             status="INFEASIBLE",
             farkas_candidate=tuple(witness),
@@ -367,12 +374,10 @@ def _certify_infeasible(
         source_rows=len(program.rhs),
     )
     try:
-        return RationalLinearProgramResult(
-            program=program,
-            status="INFEASIBLE",
-            farkas_candidate=farkas,
+        return _verified_kernel_result(
+            program=program, status="INFEASIBLE", farkas_candidate=farkas
         )
-    except ValidationError:
+    except ValueError:
         return _unknown(program)
 
 
@@ -423,7 +428,7 @@ def _certify_unbounded(
         return _unknown(program)
     primal_objective, primal_residuals = primal_data
     try:
-        return RationalLinearProgramResult(
+        return _verified_kernel_result(
             program=program,
             status="UNBOUNDED",
             primal_candidate=feasible,
@@ -431,7 +436,7 @@ def _certify_unbounded(
             primal_residuals=primal_residuals,
             recession_direction=ray,
         )
-    except ValidationError:
+    except ValueError:
         return _unknown(program)
 
 
@@ -455,15 +460,16 @@ def _positive_result(
     if primal_data is None:
         return _certify_infeasible(program, result_digits=result_digits)
     primal_objective, primal_residuals = primal_data
+    primal_result = RationalLinearProgramResult._from_kernel(
+        program=program,
+        status="PRIMAL_FEASIBLE",
+        primal_candidate=primal,
+        primal_objective=primal_objective,
+        primal_residuals=primal_residuals,
+    )
     try:
-        primal_result = RationalLinearProgramResult(
-            program=program,
-            status="PRIMAL_FEASIBLE",
-            primal_candidate=primal,
-            primal_objective=primal_objective,
-            primal_residuals=primal_residuals,
-        )
-    except ValidationError:
+        _verify_rational_linear_program_result(primal_result)
+    except ValueError:
         return _certify_infeasible(program, result_digits=result_digits)
 
     if not _active_equations(program):
@@ -497,19 +503,21 @@ def _positive_result(
     if dual_data is None:
         return primal_result
     dual_objective, dual_slacks = dual_data
+    optimal_result = RationalLinearProgramResult._from_kernel(
+        program=program,
+        status="OPTIMAL",
+        primal_candidate=primal,
+        primal_objective=primal_objective,
+        primal_residuals=primal_residuals,
+        dual_candidate=dual,
+        dual_objective=dual_objective,
+        dual_slacks=dual_slacks,
+    )
     try:
-        return RationalLinearProgramResult(
-            program=program,
-            status="OPTIMAL",
-            primal_candidate=primal,
-            primal_objective=primal_objective,
-            primal_residuals=primal_residuals,
-            dual_candidate=dual,
-            dual_objective=dual_objective,
-            dual_slacks=dual_slacks,
-        )
-    except ValidationError:
+        _verify_rational_linear_program_result(optimal_result)
+    except ValueError:
         return primal_result
+    return optimal_result
 
 
 def _linear_program(

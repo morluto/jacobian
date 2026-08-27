@@ -185,7 +185,7 @@ def compute_hard_constraint_rounding(
                 absolute_error=CanonicalRational.from_fraction(abs(signed_error)),
             )
         )
-    return HardConstraintRoundingResult(
+    return HardConstraintRoundingResult._from_kernel(
         source=source,
         rounded_values=rounded_values,
         maximum_column_incidence=maximum_incidence,

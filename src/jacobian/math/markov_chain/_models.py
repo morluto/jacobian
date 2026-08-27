@@ -99,6 +99,20 @@ class StationaryDistributionResult(StrictModel):
         "CLOSED_CLASS_EXACT_LINEAR_SYSTEM"
     )
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        extreme_distributions: tuple[ExtremeStationaryDistribution, ...],
+        unique: bool,
+    ) -> Self:
+        """Construct a family whose stationary equations the kernel solved."""
+
+        return cls.model_construct(
+            extreme_distributions=extreme_distributions,
+            unique=unique,
+        )
+
     @model_validator(mode="after")
     def bind_stationary_family(self) -> Self:
         dimensions = {len(item.distribution) for item in self.extreme_distributions}
@@ -275,18 +289,6 @@ class CommunicatingClassesResult(StrictModel):
             raise _validation_error(
                 "decomposition_matrix_not_square", "transition matrix must be square"
             )
-        for row in self.transition_matrix:
-            values = tuple(value.as_fraction() for value in row)
-            if any(value < 0 for value in values):
-                raise _validation_error(
-                    "decomposition_probability_negative",
-                    "transition probabilities must be nonnegative",
-                )
-            if sum(values) != 1:
-                raise _validation_error(
-                    "decomposition_row_not_stochastic",
-                    "each transition row must sum to one",
-                )
         all_states: list[int] = []
         for states, _ in self.classes:
             all_states.extend(states)

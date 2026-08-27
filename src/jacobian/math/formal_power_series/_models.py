@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
@@ -31,14 +30,6 @@ MAX_POWER_EXPONENT = 1_000
 # producer-to-truncate composition stays closed over every representable
 # expansion.
 MAX_TRUNCATE_SOURCE_ORDER = 25_280
-
-# Replaying result validators recompute their defining invariants during
-# deserialization at quadratic or cubic cost in the claimed order.  Every
-# producer of these results emits order equal to its admitted request
-# inputs, which cap at MAX_TRUNCATION_ORDER, so payloads claiming larger
-# orders are outside the representable result envelope and must be
-# rejected before any replay work starts.
-MAX_RESULT_REPLAY_ORDER = MAX_TRUNCATION_ORDER
 
 CoefficientHeight = RationalHeight | None
 
@@ -163,15 +154,6 @@ def _require_height(height: RationalHeight, operation: str) -> None:
         )
 
 
-def _require_replay_order(order: int, operation: str) -> None:
-    if order > MAX_RESULT_REPLAY_ORDER:
-        raise _validation_error(
-            f"{operation}_replay_order",
-            f"{operation} result replay exceeds the "
-            f"{MAX_RESULT_REPLAY_ORDER}-order replay envelope",
-        )
-
-
 def _require_zero_residual(
     coefficients: tuple[CanonicalRational, ...], order: int, operation: str
 ) -> None:
@@ -185,68 +167,6 @@ def _require_zero_residual(
             f"{operation}_residual_nonzero",
             f"{operation} residual must be identically zero",
         )
-
-
-def _fraction_coefficients(series: TruncatedSeries) -> tuple[Fraction, ...]:
-    return tuple(value.as_fraction() for value in series.coefficients)
-
-
-def _convolution_coefficients(
-    left: TruncatedSeries, right: TruncatedSeries
-) -> tuple[Fraction, ...]:
-    if (
-        left.variable != right.variable
-        or left.truncation_order != right.truncation_order
-    ):
-        raise _validation_error(
-            "source_context_mismatch",
-            "source series must share variable and truncation order",
-        )
-    left_values = _fraction_coefficients(left)
-    right_values = _fraction_coefficients(right)
-    return tuple(
-        sum(
-            (
-                left_values[index] * right_values[degree - index]
-                for index in range(degree + 1)
-            ),
-            start=Fraction(0),
-        )
-        for degree in range(left.truncation_order)
-    )
-
-
-def _composition_coefficients(
-    outer: TruncatedSeries, inner: TruncatedSeries
-) -> tuple[Fraction, ...]:
-    if (
-        outer.variable != inner.variable
-        or outer.truncation_order != inner.truncation_order
-    ):
-        raise _validation_error(
-            "source_context_mismatch",
-            "source series must share variable and truncation order",
-        )
-    order = outer.truncation_order
-    outer_values = _fraction_coefficients(outer)
-    inner_values = _fraction_coefficients(inner)
-    power = (Fraction(1), *([Fraction(0)] * (order - 1)))
-    result = [Fraction(0)] * order
-    for outer_degree in range(order):
-        for degree in range(order):
-            result[degree] += outer_values[outer_degree] * power[degree]
-        if outer_degree + 1 < order:
-            power = tuple(
-                sum(
-                    (
-                        power[index] * inner_values[degree - index]
-                        for index in range(degree + 1)
-                    ),
-                    start=Fraction(0),
-                )
-                for degree in range(order)
-            )
-    return tuple(result)
 
 
 def _inverse_height(series: TruncatedSeries) -> RationalHeight:
@@ -735,20 +655,39 @@ class SeriesMultiplyResult(StrictModel):
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
-    def require_exact_convolution_ledger(self) -> Self:
-        _require_replay_order(self.result.truncation_order, "multiplication")
-        expected = _convolution_coefficients(self.left, self.right)
-        if _fraction_coefficients(self.result) != expected:
+    def require_structural_ledger(self) -> Self:
+        if (
+            self.left.variable != self.right.variable
+            or self.left.variable != self.result.variable
+            or self.left.truncation_order != self.right.truncation_order
+            or self.left.truncation_order != self.result.truncation_order
+        ):
             raise _validation_error(
-                "convolution_result_mismatch",
-                "result must equal the source convolution",
+                "source_context_mismatch",
+                "multiplication series must share variable and truncation order",
             )
-        if tuple(value.as_fraction() for value in self.convolution_ledger) != expected:
+        if len(self.convolution_ledger) != self.result.truncation_order:
             raise _validation_error(
-                "convolution_ledger_mismatch",
-                "convolution ledger must equal the source convolution",
+                "convolution_ledger_length",
+                "convolution ledger must contain one coefficient per result degree",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        left: TruncatedSeries,
+        right: TruncatedSeries,
+        result: TruncatedSeries,
+        convolution_ledger: tuple[CanonicalRational, ...],
+    ) -> Self:
+        return cls.model_construct(
+            left=left,
+            right=right,
+            result=result,
+            convolution_ledger=convolution_ledger,
+        )
 
 
 class SeriesScalarMultiplyRequest(StrictModel):
@@ -861,22 +800,35 @@ class SeriesInverseResult(StrictModel):
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
-    def require_inverse_identity(self) -> Self:
-        _require_replay_order(self.result.truncation_order, "inverse")
+    def require_structural_residual(self) -> Self:
+        if (
+            self.source.variable != self.result.variable
+            or self.source.truncation_order != self.result.truncation_order
+        ):
+            raise _validation_error(
+                "source_context_mismatch",
+                "inverse source and result must share variable and truncation order",
+            )
         _require_zero_residual(
             self.residual_coefficients,
             self.result.truncation_order,
             "inverse",
         )
-        product = list(_convolution_coefficients(self.source, self.result))
-        product[0] -= 1
-        residual = tuple(value.as_fraction() for value in self.residual_coefficients)
-        if tuple(product) != residual:
-            raise _validation_error(
-                "inverse_residual_mismatch",
-                "inverse residual must equal source times result minus one",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: TruncatedSeries,
+        result: TruncatedSeries,
+        residual_coefficients: tuple[CanonicalRational, ...],
+    ) -> Self:
+        return cls.model_construct(
+            source=source,
+            result=result,
+            residual_coefficients=residual_coefficients,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -897,26 +849,39 @@ class SeriesDivideResult(StrictModel):
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
-    def require_division_identity(self) -> Self:
-        _require_replay_order(self.quotient.truncation_order, "division")
+    def require_structural_residual(self) -> Self:
+        if (
+            self.numerator.variable != self.denominator.variable
+            or self.numerator.variable != self.quotient.variable
+            or self.numerator.truncation_order != self.denominator.truncation_order
+            or self.numerator.truncation_order != self.quotient.truncation_order
+        ):
+            raise _validation_error(
+                "source_context_mismatch",
+                "division series must share variable and truncation order",
+            )
         _require_zero_residual(
             self.residual_coefficients,
             self.quotient.truncation_order,
             "division",
         )
-        product = _convolution_coefficients(self.denominator, self.quotient)
-        numerator = _fraction_coefficients(self.numerator)
-        expected = tuple(
-            product[index] - numerator[index]
-            for index in range(self.quotient.truncation_order)
-        )
-        residual = tuple(value.as_fraction() for value in self.residual_coefficients)
-        if expected != residual:
-            raise _validation_error(
-                "division_residual_mismatch",
-                "division residual must equal denominator times quotient minus numerator",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        numerator: TruncatedSeries,
+        denominator: TruncatedSeries,
+        quotient: TruncatedSeries,
+        residual_coefficients: tuple[CanonicalRational, ...],
+    ) -> Self:
+        return cls.model_construct(
+            numerator=numerator,
+            denominator=denominator,
+            quotient=quotient,
+            residual_coefficients=residual_coefficients,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1036,33 +1001,35 @@ class SeriesReversionResult(StrictModel):
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
-    def require_zero_residuals(self) -> Self:
+    def require_structural_residuals(self) -> Self:
         order = self.result.truncation_order
-        _require_replay_order(order, "reversion")
+        if (
+            self.source.variable != self.result.variable
+            or self.source.truncation_order != order
+        ):
+            raise _validation_error(
+                "source_context_mismatch",
+                "reversion source and result must share variable and truncation order",
+            )
         _require_zero_residual(self.left_residual, order, "left reversion")
         _require_zero_residual(self.right_residual, order, "right reversion")
-        identity = tuple(Fraction(int(index == 1)) for index in range(order))
-        left = _composition_coefficients(self.source, self.result)
-        right = _composition_coefficients(self.result, self.source)
-        left_residual = tuple(value.as_fraction() for value in self.left_residual)
-        right_residual = tuple(value.as_fraction() for value in self.right_residual)
-        if (
-            tuple(left[index] - identity[index] for index in range(order))
-            != left_residual
-        ):
-            raise _validation_error(
-                "reversion_left_residual_mismatch",
-                "left residual must equal source composed with result minus x",
-            )
-        if (
-            tuple(right[index] - identity[index] for index in range(order))
-            != right_residual
-        ):
-            raise _validation_error(
-                "reversion_right_residual_mismatch",
-                "right residual must equal result composed with source minus x",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: TruncatedSeries,
+        result: TruncatedSeries,
+        left_residual: tuple[CanonicalRational, ...],
+        right_residual: tuple[CanonicalRational, ...],
+    ) -> Self:
+        return cls.model_construct(
+            source=source,
+            result=result,
+            left_residual=left_residual,
+            right_residual=right_residual,
+        )
 
 
 # ---------------------------------------------------------------------------

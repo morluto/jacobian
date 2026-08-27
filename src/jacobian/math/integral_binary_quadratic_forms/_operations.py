@@ -318,7 +318,7 @@ def _enumerate_representations(
             if _evaluate(a, b, c, x, y) != target:
                 raise AssertionError("quadratic discriminant reconstruction failed")
             rows.append(
-                BinaryQuadraticFormRepresentation(
+                BinaryQuadraticFormRepresentation._from_kernel(
                     x=x,
                     y=y,
                     primitive=_gcd(x, y) == 1,
@@ -337,7 +337,7 @@ def compute_representations(
     )
 
 
-def verify_check_result(result: BinaryQuadraticFormCheckResult) -> bool:
+def _verify_check_result(result: BinaryQuadraticFormCheckResult) -> bool:
     """Verify an independently supplied form-domain classification."""
     expected = compute_check(
         BinaryQuadraticFormCheckRequest(a=result.a, b=result.b, c=result.c)
@@ -345,7 +345,7 @@ def verify_check_result(result: BinaryQuadraticFormCheckResult) -> bool:
     return result == expected
 
 
-def verify_evaluate_result(result: BinaryQuadraticFormEvaluateResult) -> bool:
+def _verify_evaluate_result(result: BinaryQuadraticFormEvaluateResult) -> bool:
     """Verify an independently supplied exact form-evaluation claim."""
     try:
         expected = compute_evaluate(
@@ -356,13 +356,13 @@ def verify_evaluate_result(result: BinaryQuadraticFormEvaluateResult) -> bool:
     return result == expected
 
 
-def verify_reduced_form_result(result: ReducedBinaryQuadraticFormResult) -> bool:
+def _verify_reduced_form_result(result: ReducedBinaryQuadraticFormResult) -> bool:
     """Verify an independently supplied Gauss-reduction result."""
     expected = compute_reduce(BinaryQuadraticFormReduceRequest(form=result.form))
     return result == expected
 
 
-def verify_proper_equivalence_result(result: ProperEquivalenceResult) -> bool:
+def _verify_proper_equivalence_result(result: ProperEquivalenceResult) -> bool:
     """Verify an independently supplied proper-equivalence decision and witness."""
     expected = compute_proper_equivalence(
         BinaryQuadraticFormProperEquivRequest(first=result.first, second=result.second)
@@ -370,23 +370,29 @@ def verify_proper_equivalence_result(result: ProperEquivalenceResult) -> bool:
     return result == expected
 
 
-def verify_representations_result(
+def _verify_representations_result(
     result: BinaryQuadraticFormRepresentationsResult,
 ) -> bool:
     """Verify an independently supplied complete representation-set claim."""
-    expected = compute_representations(
-        BinaryQuadraticFormRepresentationsRequest(
-            form=result.form, target=result.target
+    try:
+        expected = compute_representations(
+            BinaryQuadraticFormRepresentationsRequest(
+                form=result.form, target=result.target
+            )
         )
-    )
+    except ValidationError:
+        return False
     return result == expected
 
 
-def verify_reduced_classes_result(result: ReducedClassesResult) -> bool:
+def _verify_reduced_classes_result(result: ReducedClassesResult) -> bool:
     """Verify an independently supplied complete reduced-class enumeration."""
-    expected = compute_reduced_classes(
-        BinaryQuadraticFormReducedClassesRequest(discriminant=result.discriminant)
-    )
+    try:
+        expected = compute_reduced_classes(
+            BinaryQuadraticFormReducedClassesRequest(discriminant=result.discriminant)
+        )
+    except ValidationError:
+        return False
     return result == expected
 
 

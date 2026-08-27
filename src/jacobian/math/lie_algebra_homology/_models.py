@@ -198,7 +198,7 @@ class ChevalleyEilenbergComplexResult(StrictModel):
 
     Kernel-produced results use :meth:`_from_kernel`.  Separately supplied
     complexes are checked only for their source binding, canonical field, and
-    finite chain-complex envelope here; :func:`verify_ce_complex_result` is
+    finite chain-complex envelope here; :func:`_verify_ce_complex_result` is
     the explicit bounded owner verifier for the defining bracket differential.
     """
 
@@ -296,7 +296,7 @@ class LieHomologyGroup(StrictModel):
 class LieHomologyResult(StrictModel):
     """Structurally bounded Lie homology groups with trivial coefficients.
 
-    Exact rank computation belongs to :func:`verify_lie_homology_result`, not
+    Exact rank computation belongs to :func:`_verify_lie_homology_result`, not
     to model validation.
     """
 

@@ -22,10 +22,16 @@ from jacobian.math.optimization._models import (
     RationalLinearProgramRequest,
     RationalLinearProgramResult,
     StandardFormRationalLinearProgram,
+    _verify_rational_linear_program_result,
 )
 from jacobian.math.optimization._tools import TOOLS as OPTIMIZATION_TOOLS
 
 pytestmark = pytest.mark.requires_backend("flint")
+
+
+def _assert_rejected_by_verifier(result: RationalLinearProgramResult) -> None:
+    with pytest.raises(ValueError):
+        _verify_rational_linear_program_result(result)
 
 
 def _system(rhs: list[dict[str, str]]) -> dict[str, object]:
@@ -341,8 +347,9 @@ def test_optimal_result_rejects_source_and_diagnostic_mutations() -> None:
         for key in path[:-1]:
             target = target[key]
         target[path[-1]] = replacement
-        with pytest.raises(ValidationError):
+        _assert_rejected_by_verifier(
             RationalLinearProgramResult.model_validate(mutated)
+        )
 
 
 def test_optimal_result_rejects_matrix_objective_and_variable_order_mutations() -> None:
@@ -379,8 +386,9 @@ def test_optimal_result_rejects_matrix_objective_and_variable_order_mutations() 
     mutations.append(variable_order)
 
     for mutation in mutations:
-        with pytest.raises(ValidationError):
+        _assert_rejected_by_verifier(
             RationalLinearProgramResult.model_validate(mutation)
+        )
 
 
 def test_missing_dual_evidence_remains_primal_feasible(
@@ -468,8 +476,11 @@ def test_negative_results_reject_bare_or_source_mutated_claims() -> None:
     mutations.append(bounded_source)
 
     for mutation in mutations:
-        with pytest.raises(ValidationError):
-            RationalLinearProgramResult.model_validate(mutation)
+        try:
+            parsed = RationalLinearProgramResult.model_validate(mutation)
+        except ValidationError:
+            continue
+        _assert_rejected_by_verifier(parsed)
 
 
 @st.composite

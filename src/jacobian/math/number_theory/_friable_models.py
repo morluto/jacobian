@@ -12,10 +12,9 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._models import BoundedInteger, _validation_error
 
 # Friable counting has two exact, result-sensitive execution regimes. The
-# materialized regime uses one bytearray for primality and one for friability;
-# its work bound covers both the operation and result-validation replay. The
-# generated regime enumerates prime-exponent prefixes only when a conservative
-# prefix-box bound covers both passes.
+# materialized regime uses one bytearray for primality and one for friability.
+# The generated regime enumerates prime-exponent prefixes only when a
+# conservative prefix-box bound covers that one producer pass.
 MAX_FRIABLE_MATERIALIZED_X = 1_000_000
 MAX_FRIABLE_GENERATED_CUTOFF = 10_000
 _MAX_FRIABLE_MATERIALIZED_TOTAL_STEPS = 82_000_000
@@ -72,13 +71,13 @@ def _plan_friable_count(x: int, y: int) -> tuple[_FriableRegime, tuple[int, ...]
     if x == 0 or y <= 1 or y >= x:
         return "DIRECT", ()
 
-    # Each materialized pass marks at most two harmonic series of multiples,
-    # plus one scan. Result validation replays the full exact computation.
+    # The materialized pass marks at most two harmonic series of multiples,
+    # plus one scan.
     per_pass_steps = x * (2 * x.bit_length() + 1)
     materialized_bytes = 2 * (x + 1) + x // 2
     if (
         x <= MAX_FRIABLE_MATERIALIZED_X
-        and 2 * per_pass_steps <= _MAX_FRIABLE_MATERIALIZED_TOTAL_STEPS
+        and per_pass_steps <= _MAX_FRIABLE_MATERIALIZED_TOTAL_STEPS
         and materialized_bytes <= _MAX_FRIABLE_MATERIALIZED_BYTES
     ):
         return "MATERIALIZED", ()
@@ -95,7 +94,7 @@ def _plan_friable_count(x: int, y: int) -> tuple[_FriableRegime, tuple[int, ...]
     for prime in primes:
         prefix_box *= _maximum_exponent(x, prime) + 1
         nodes_per_pass += prefix_box
-        if 2 * nodes_per_pass > _MAX_FRIABLE_GENERATED_TOTAL_NODES:
+        if nodes_per_pass > _MAX_FRIABLE_GENERATED_TOTAL_NODES:
             raise _validation_error(
                 "generated_friable_counting_exceeds_the_search_node_budget",
                 "generated friable counting exceeds the search-node budget",
@@ -139,22 +138,23 @@ class FriableCountResult(StrictModel):
     count: BoundedInteger
 
     @model_validator(mode="after")
-    def bind_exact_count_to_sources(self) -> Self:
-        from jacobian.math.number_theory._friable_operations import count_friable
-
-        x = parse_canonical_integer(self.x)
-        y = parse_canonical_integer(self.y)
+    def require_structural_count(self) -> Self:
         count = parse_canonical_integer(self.count)
         if count < 0:
             raise _validation_error(
                 "friable_count_must_be_nonnegative", "friable count must be nonnegative"
             )
-        if count != count_friable(x, y):
-            raise _validation_error(
-                "friable_count_does_not_match_the_retained_sources",
-                "friable count does not match the retained sources",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: FriableCountRequest, *, count: int) -> Self:
+        """Build one result after the admitted kernel established its count."""
+
+        return cls(
+            x=request.x,
+            y=request.y,
+            count=str(count),
+        )
 
 
 __all__ = [

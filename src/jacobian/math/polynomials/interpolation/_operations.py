@@ -109,7 +109,7 @@ def hermite_interpolation(
         for jet in sorted(table.jets, key=lambda item: item.node.as_fraction())
         for derivative in jet.derivatives
     )
-    return HermiteInterpolationResult(
+    return HermiteInterpolationResult._from_kernel(
         source=table,
         polynomial=polynomial,
         total_multiplicity=len(coefficients),
@@ -119,6 +119,18 @@ def hermite_interpolation(
         ),
         replay=replay,
     )
+
+
+def _verify_hermite_interpolation_result(result: HermiteInterpolationResult) -> bool:
+    """Recompute an independently supplied Hermite claim inside its admission envelope."""
+
+    try:
+        request = HermiteInterpolationRequest.model_validate(
+            {"table": result.source.model_dump(mode="json")}
+        )
+        return hermite_interpolation(request.table) == result
+    except ValueError:
+        return False
 
 
 def compute_hermite_interpolation(

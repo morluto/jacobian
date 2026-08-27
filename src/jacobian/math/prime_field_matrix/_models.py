@@ -95,7 +95,7 @@ def _require_source_prime(self_prime: int, source: PrimeFieldMatrixRequest) -> N
 
 
 class PrimeFieldMatrixRankResult(StrictModel):
-    """Rank of a matrix over GF(p), bound to its source matrix."""
+    """Rank of a matrix over GF(p), retaining its source matrix."""
 
     prime: int = Field(gt=1, le=MAX_PRIME)
     source: PrimeFieldMatrixRequest
@@ -103,25 +103,29 @@ class PrimeFieldMatrixRankResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
-        from jacobian.math.prime_field_linear_algebra import rank as kernel_rank
-
         _require_source_prime(self.prime, self.source)
-        # Replay the conclusion from the retained source: the declared rank
-        # must equal a recomputation, so corrupted results cannot revalidate.
-        if self.rank != kernel_rank(self.source.matrix):
+        if self.rank > min(len(self.source.matrix.entries), self.source.matrix.columns):
             raise _validation_error(
-                "result.rank_recomputation",
-                "rank does not match a recomputation from the source",
+                "result.rank_bound",
+                "rank cannot exceed either source matrix dimension",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, request: PrimeFieldMatrixRequest, *, rank: int) -> Self:
+        """Build a result after the admitted rank kernel established it."""
+
+        return cls.model_construct(
+            source=request, prime=request.matrix.prime, rank=rank
+        )
 
 
 class PrimeFieldRrefResult(StrictModel):
     """Reduced row-echelon form over GF(p) as the canonical matrix value.
 
     ``rref_matrix`` carries the exact reduced form with its pivot columns and
-    rank; it feeds downstream GF(p) consumers unchanged and is replayed
-    against the retained source at validation.
+    rank; it feeds downstream GF(p) consumers unchanged. Parsing checks only
+    its canonical shape; the producer kernel establishes reduced-form facts.
     """
 
     prime: int = Field(gt=1, le=MAX_PRIME)
@@ -132,33 +136,57 @@ class PrimeFieldRrefResult(StrictModel):
 
     @model_validator(mode="after")
     def require_rref_canonical(self) -> Self:
-        from jacobian.math.prime_field_linear_algebra import rref as kernel_rref
-
         _require_source_prime(self.prime, self.source)
-        expected_rows, expected_pivots = kernel_rref(self.source.matrix)
-        if self.rref_matrix.entries != tuple(expected_rows):
-            raise _validation_error(
-                "result.rref_recomputation",
-                "rref_matrix does not match a recomputation from the source",
-            )
         if (
             self.rref_matrix.prime != self.source.matrix.prime
             or self.rref_matrix.columns != self.source.matrix.columns
+            or len(self.rref_matrix.entries) != len(self.source.matrix.entries)
         ):
             raise _validation_error(
                 "result.rref_shape",
-                "rref_matrix must carry the source prime and column axis",
+                "rref_matrix must carry the source shape and prime",
             )
-        if tuple(self.pivot_columns) != tuple(expected_pivots):
+        if any(
+            column < 0 or column >= self.source.matrix.columns
+            for column in self.pivot_columns
+        ) or any(
+            later <= earlier
+            for earlier, later in zip(
+                self.pivot_columns, self.pivot_columns[1:], strict=False
+            )
+        ):
             raise _validation_error(
                 "result.pivot_columns",
-                "pivot_columns must be the exact pivot column sequence",
+                "pivot_columns must be a strictly increasing source-column sequence",
             )
-        if self.rank != len(expected_pivots):
+        if self.rank != len(self.pivot_columns):
             raise _validation_error(
                 "result.rank_pivots", "rank must equal the number of pivot columns"
             )
+        if self.rank > min(len(self.source.matrix.entries), self.source.matrix.columns):
+            raise _validation_error(
+                "result.rank_bound",
+                "rank cannot exceed either source matrix dimension",
+            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PrimeFieldMatrixRequest,
+        *,
+        rref_matrix: PrimeFieldMatrix,
+        pivot_columns: tuple[int, ...],
+    ) -> Self:
+        """Build a result after the admitted RREF kernel established it."""
+
+        return cls.model_construct(
+            source=request,
+            prime=request.matrix.prime,
+            rref_matrix=rref_matrix,
+            pivot_columns=pivot_columns,
+            rank=len(pivot_columns),
+        )
 
 
 class PrimeFieldNullspaceResult(StrictModel):
@@ -176,20 +204,7 @@ class PrimeFieldNullspaceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_nullspace_canonical(self) -> Self:
-        from jacobian.math.prime_field_linear_algebra import (
-            nullspace as kernel_nullspace,
-        )
-
         _require_source_prime(self.prime, self.source)
-        # Replay the conclusion from the retained source: the declared basis
-        # and nullity must equal a full recomputation, which covers the
-        # defining relation, independence, and completeness of the basis.
-        expected_basis = kernel_nullspace(self.source.matrix)
-        if self.nullspace_matrix.entries != tuple(expected_basis):
-            raise _validation_error(
-                "result.nullspace_recomputation",
-                "nullspace_matrix does not match a recomputation from the source",
-            )
         if (
             self.nullspace_matrix.prime != self.source.matrix.prime
             or self.nullspace_matrix.columns != self.source.matrix.columns
@@ -198,11 +213,29 @@ class PrimeFieldNullspaceResult(StrictModel):
                 "result.nullspace_shape",
                 "nullspace_matrix must carry the source prime and column axis",
             )
-        if self.nullity != len(expected_basis):
+        if self.nullity != len(self.nullspace_matrix.entries):
             raise _validation_error(
                 "result.nullity_basis", "nullity must equal the number of basis vectors"
             )
+        if self.nullity > self.source.matrix.columns:
+            raise _validation_error(
+                "result.nullity_bound",
+                "nullity cannot exceed the source column count",
+            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: PrimeFieldMatrixRequest, *, nullspace_matrix: PrimeFieldMatrix
+    ) -> Self:
+        """Build a result after the admitted nullspace kernel established it."""
+
+        return cls.model_construct(
+            source=request,
+            prime=request.matrix.prime,
+            nullspace_matrix=nullspace_matrix,
+            nullity=len(nullspace_matrix.entries),
+        )
 
 
 __all__ = [

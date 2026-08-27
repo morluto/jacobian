@@ -67,8 +67,6 @@ def test_gf_p_chain_result_enters_homology_unchanged() -> None:
 def test_producer_result_carries_its_canonical_value() -> None:
     """The public GF(p) producer exposes the canonical chain-complex
     value on the serialized result boundary itself."""
-    from pydantic import ValidationError
-
     result = _prime_field_chain(_circle(), 2)
     assert result.canonical_value is not None
     assert result.canonical_value == simplicial_chain_complex_value(result)
@@ -77,8 +75,9 @@ def test_producer_result_carries_its_canonical_value() -> None:
 
     payload = result.model_dump()
     payload["canonical_value"]["prime"] = 3
-    with pytest.raises(ValidationError):
-        type(result).model_validate(payload)
+    restored = type(result).model_validate(payload)
+    assert restored.canonical_value is not None
+    assert simplicial_chain_complex_value(restored).prime == 3
 
 
 def test_integral_producer_result_admits_no_canonical_value() -> None:

@@ -23,6 +23,8 @@ from jacobian.math.matrices.subsystems._models import (
     SubsystemPartialTraceResult,
 )
 from jacobian.math.matrices.subsystems._operations import (
+    _verify_partial_trace_result,
+    _verify_psd_order_result,
     compute_kronecker_product,
     compute_partial_trace,
     decide_psd_order,
@@ -147,8 +149,7 @@ def test_partial_trace_binds_the_yz_linearization_canary_to_factor_labels() -> N
     )
     forged = wire.model_dump(mode="python")
     forged["reduced_matrix"] = _matrix([[1, 0], [0, 1]], (z,))
-    with pytest.raises(ValidationError):
-        wire.__class__.model_validate(forged)
+    assert not _verify_partial_trace_result(wire.__class__.model_validate(forged))
 
     differently_bound = _matrix(diagonal, (z, y))
     wrong = partial_trace(differently_bound, ("Y",))
@@ -188,7 +189,9 @@ def test_partial_trace_rejects_unknown_and_repeated_factor_labels() -> None:
         SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("q", "q"))
 
 
-def test_partial_trace_result_replays_exact_entries_and_bounds_forged_sources() -> None:
+def test_partial_trace_result_round_trips_structurally_and_verifies_forged_claims() -> (
+    None
+):
     q = MatrixSubsystem(label="q", dimension=2)
     base = compute_partial_trace(
         SubsystemPartialTraceRequest(
@@ -202,8 +205,9 @@ def test_partial_trace_result_replays_exact_entries_and_bounds_forged_sources() 
 
     forged = base.model_dump(mode="python")
     forged["reduced_matrix"] = _matrix([[1]], ())
-    with pytest.raises(ValidationError):
+    assert not _verify_partial_trace_result(
         SubsystemPartialTraceResult.model_validate(forged)
+    )
 
     beyond_envelope = _matrix(
         [
@@ -214,8 +218,9 @@ def test_partial_trace_result_replays_exact_entries_and_bounds_forged_sources() 
     )
     forged = base.model_dump(mode="python")
     forged["source_matrix"] = beyond_envelope
-    with pytest.raises(ValidationError):
+    assert not _verify_partial_trace_result(
         SubsystemPartialTraceResult.model_validate(forged)
+    )
 
 
 def test_partial_trace_boundary_result_components_round_trip() -> None:
@@ -537,7 +542,7 @@ def test_traced_label_arrays_are_bounded_during_parsing() -> None:
     assert result_schema["properties"]["traced_factor_labels"]["maxItems"] == 4
 
 
-def test_psd_order_is_source_bound_and_returns_a_replayable_negative_witness() -> None:
+def test_psd_order_is_source_bound_and_verifies_forged_claims() -> None:
     q = MatrixSubsystem(label="q", dimension=2)
     zero = _matrix([[0, 0], [0, 0]], (q,))
     positive = _matrix([[1, 0], [0, 2]], (q,))
@@ -556,14 +561,12 @@ def test_psd_order_is_source_bound_and_returns_a_replayable_negative_witness() -
 
     forged = rejected.model_dump(mode="python")
     forged["difference"] = positive
-    with pytest.raises(ValidationError):
-        PsdOrderResult.model_validate(forged)
+    assert not _verify_psd_order_result(PsdOrderResult.model_validate(forged))
     forged = rejected.model_dump(mode="python")
     forged["inertia"] = {"n_positive": 2, "n_negative": 0, "n_zero": 0}
     forged["is_less_or_equal"] = True
     forged["negative_witness"] = None
-    with pytest.raises(ValidationError):
-        PsdOrderResult.model_validate(forged)
+    assert not _verify_psd_order_result(PsdOrderResult.model_validate(forged))
 
 
 def test_psd_order_rejects_same_shape_but_different_subsystem_identity() -> None:
@@ -808,11 +811,7 @@ def test_kronecker_product_admits_asymmetric_operand_digit_growth() -> None:
         )
 
 
-def test_psd_order_result_admits_retained_sources_before_inertia_replay(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian.math.matrices.subsystems import _models
-
+def test_psd_order_result_round_trip_does_not_replay_source_admission() -> None:
     q = MatrixSubsystem(label="q", dimension=2)
     zero = _matrix([[0, 0], [0, 0]], (q,))
     positive = _matrix([[1, 0], [0, 2]], (q,))
@@ -834,17 +833,8 @@ def test_psd_order_result_admits_retained_sources_before_inertia_replay(
     forged["right"] = wide_right
     forged["difference"] = zero
     forged["inertia"] = {"n_positive": 0, "n_negative": 0, "n_zero": 2}
-    replayed: list[object] = []
-    real_inertia = _models.symmetric_inertia
-
-    def counted(matrix: object) -> tuple[int, int, int]:
-        replayed.append(matrix)
-        return real_inertia(matrix)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(_models, "symmetric_inertia", counted)
-    with pytest.raises(ValidationError):
-        PsdOrderResult.model_validate(forged)
-    assert replayed == []
+    structural = PsdOrderResult.model_validate(forged)
+    assert not _verify_psd_order_result(structural)
 
 
 def test_kronecker_product_replays_through_trace_and_psd_order_at_derived_bound() -> (

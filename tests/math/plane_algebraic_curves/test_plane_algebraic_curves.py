@@ -487,7 +487,7 @@ def test_exact_preflight_admits_rational_point_on_hyperbola() -> None:
     )
 
 
-def test_result_rejects_independently_forged_source_point_and_coordinates() -> None:
+def test_result_parses_structurally_and_owner_verifier_rejects_forged_claims() -> None:
     source = _polynomial(
         ("x", "y"),
         (1, (2, 0)),
@@ -497,11 +497,14 @@ def test_result_rejects_independently_forged_source_point_and_coordinates() -> N
     )
     result = _parametrize(source, (_rational(1), _rational(0)))
     payload = result.model_dump(mode="json")
+    assert RationalConicParametrizationResult.model_validate(payload) == result
 
     forged_coordinates = deepcopy(payload)
     forged_coordinates["coordinates"][0] = payload["coordinates"][1]
-    with _raises_code("parametrization_not_canonical"):
-        RationalConicParametrizationResult.model_validate(forged_coordinates)
+    with pytest.raises(ValueError):
+        _conic._verify_rational_conic_parametrization_result(
+            RationalConicParametrizationResult.model_validate(forged_coordinates)
+        )
 
     forged_source = deepcopy(payload)
     forged_source["source_polynomial"] = _polynomial(
@@ -510,28 +513,36 @@ def test_result_rejects_independently_forged_source_point_and_coordinates() -> N
         (1, (0, 2)),
         (-1, (0, 0)),
     ).model_dump(mode="json")
-    with _raises_code("parametrization_not_canonical"):
-        RationalConicParametrizationResult.model_validate(forged_source)
+    with pytest.raises(ValueError):
+        _conic._verify_rational_conic_parametrization_result(
+            RationalConicParametrizationResult.model_validate(forged_source)
+        )
 
     forged_point = deepcopy(payload)
     forged_point["exceptional_point"] = _point(
         source.variables, (_rational(-1), _rational(0))
     ).model_dump(mode="json")
-    with _raises_code("parametrization_not_canonical"):
-        RationalConicParametrizationResult.model_validate(forged_point)
+    with pytest.raises(ValueError):
+        _conic._verify_rational_conic_parametrization_result(
+            RationalConicParametrizationResult.model_validate(forged_point)
+        )
 
     forged_inverse = deepcopy(payload)
     forged_inverse["inverse_parameter"] = payload["coordinates"][0]
-    with _raises_code("parametrization_not_canonical"):
-        RationalConicParametrizationResult.model_validate(forged_inverse)
+    with pytest.raises(ValueError):
+        _conic._verify_rational_conic_parametrization_result(
+            RationalConicParametrizationResult.model_validate(forged_inverse)
+        )
 
     forged_denominator = deepcopy(payload)
     denominator_terms = forged_denominator["finite_parameter_denominator"][
         "polynomial"
     ]["terms"]
     denominator_terms[-1]["coefficient"]["num"] = "-2"
-    with _raises_code("parametrization_not_canonical"):
-        RationalConicParametrizationResult.model_validate(forged_denominator)
+    with pytest.raises(ValueError):
+        _conic._verify_rational_conic_parametrization_result(
+            RationalConicParametrizationResult.model_validate(forged_denominator)
+        )
 
 
 def test_parametrization_schema_guides_cross_field_contract() -> None:

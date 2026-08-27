@@ -16,7 +16,6 @@ from jacobian.canonical import (
     encode_strict_json,
     format_canonical_integer,
 )
-from jacobian.math._exact_linear_algebra import symmetric_inertia
 from jacobian.math.matrices.subsystems.values import (
     MAX_SUBSYSTEM_DIMENSION,
     MAX_SUBSYSTEM_FACTORS,
@@ -93,8 +92,8 @@ def _require_trace_result_envelope(
 ) -> None:
     """Admit one trace whose exact reduced coefficients fit the result bound.
 
-    Both request validation and result replay derive the exact reduced
-    entries first and admit those measured components rather than a
+    Request admission derives the exact reduced entries first and admits
+    those measured components rather than a
     per-input estimate, so an emitted value re-enters its own consumer
     unchanged unless its next exact result genuinely exceeds the bound, and
     a transported or authored source can never drive the common-denominator
@@ -426,13 +425,6 @@ class SubsystemPartialTraceResult(StrictModel):
                 "invariant_mismatch",
                 "traced subsystem labels must follow source factor order",
             )
-        expected_entries = _require_trace_work_envelope(
-            self.source_matrix, self.traced_factor_labels
-        )
-        _require_trace_result_envelope(expected_entries)
-        _require_trace_transport_envelope(
-            self.source_matrix, self.traced_factor_labels, expected_entries
-        )
         expected = tuple(
             factor
             for factor in self.source_matrix.factors
@@ -443,15 +435,23 @@ class SubsystemPartialTraceResult(StrictModel):
                 "shape_mismatch",
                 "partial trace must retain untraced factors in source order",
             )
-        actual_entries = tuple(
-            tuple(entry.as_fraction() for entry in row)
-            for row in self.reduced_matrix.matrix.entries
-        )
-        if actual_entries != expected_entries:
-            raise _validation_error(
-                "shape_mismatch", "partial trace entries must replay against the source"
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source_matrix: FactorizedHermitianMatrix,
+        traced_factor_labels: tuple[str, ...],
+        reduced_matrix: FactorizedHermitianMatrix,
+    ) -> Self:
+        """Construct a result after the owner-local trace kernel established it."""
+
+        return cls.model_construct(
+            source_matrix=source_matrix,
+            traced_factor_labels=traced_factor_labels,
+            reduced_matrix=reduced_matrix,
+        )
 
 
 class PsdInertia(StrictModel):
@@ -543,7 +543,6 @@ class PsdOrderResult(StrictModel):
                 "budget_exceeded",
                 "PSD-order result matrices must share exactly one axis bound",
             )
-        _require_psd_pair_admission(self.left, self.right)
         dimension = len(self.left.matrix.entries)
         if (
             self.inertia.n_positive + self.inertia.n_negative + self.inertia.n_zero
@@ -552,42 +551,6 @@ class PsdOrderResult(StrictModel):
             raise _validation_error(
                 "shape_mismatch",
                 "inertia counts must sum to the source matrix dimension",
-            )
-        expected_difference = tuple(
-            tuple(
-                right.as_fraction() - left.as_fraction()
-                for left, right in zip(left_row, right_row, strict=True)
-            )
-            for left_row, right_row in zip(
-                self.left.matrix.entries,
-                self.right.matrix.entries,
-                strict=True,
-            )
-        )
-        actual_difference = tuple(
-            tuple(entry.as_fraction() for entry in row)
-            for row in self.difference.matrix.entries
-        )
-        if actual_difference != expected_difference:
-            raise _validation_error(
-                "invariant_mismatch",
-                "PSD-order difference must equal right minus left exactly",
-            )
-        expected_inertia = symmetric_inertia(actual_difference)  # type: ignore[arg-type]
-        if (
-            self.inertia.n_positive,
-            self.inertia.n_negative,
-            self.inertia.n_zero,
-        ) != expected_inertia:
-            raise _validation_error(
-                "invariant_mismatch",
-                "PSD-order inertia must replay against the difference",
-            )
-        expected_order = self.inertia.n_negative == 0
-        if self.is_less_or_equal != expected_order:
-            raise _validation_error(
-                "invariant_mismatch",
-                "PSD-order decision must agree with the negative inertia",
             )
         if self.is_less_or_equal and self.negative_witness is not None:
             raise _validation_error(
@@ -598,29 +561,37 @@ class PsdOrderResult(StrictModel):
                 "shape_mismatch",
                 "a non-PSD difference requires a negative quadratic witness",
             )
-        if self.negative_witness is not None:
-            vector = tuple(
-                value.as_fraction() for value in self.negative_witness.vector
+        if (
+            self.negative_witness is not None
+            and len(self.negative_witness.vector) != dimension
+        ):
+            raise _validation_error(
+                "shape_mismatch",
+                "negative witness length must equal the matrix dimension",
             )
-            if len(vector) != dimension:
-                raise _validation_error(
-                    "shape_mismatch",
-                    "negative witness length must equal the matrix dimension",
-                )
-            quadratic_value = sum(
-                (
-                    vector[row] * actual_difference[row][column] * vector[column]
-                    for row in range(dimension)
-                    for column in range(dimension)
-                ),
-                Fraction(0),
-            )
-            if quadratic_value != self.negative_witness.quadratic_value.as_fraction():
-                raise _validation_error(
-                    "budget_exceeded",
-                    "negative witness value must replay against the difference",
-                )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        left: FactorizedHermitianMatrix,
+        right: FactorizedHermitianMatrix,
+        difference: FactorizedHermitianMatrix,
+        inertia: PsdInertia,
+        is_less_or_equal: bool,
+        negative_witness: NegativeQuadraticWitness | None,
+    ) -> Self:
+        """Construct a result after the owner-local PSD kernel established it."""
+
+        return cls.model_construct(
+            left=left,
+            right=right,
+            difference=difference,
+            inertia=inertia,
+            is_less_or_equal=is_less_or_equal,
+            negative_witness=negative_witness,
+        )
 
 
 __all__ = [

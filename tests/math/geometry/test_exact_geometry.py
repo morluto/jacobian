@@ -811,6 +811,7 @@ class TestAggregatePairLedgerBound:
             PinnedLineDistanceRequest,
             PinnedLineDistanceResult,
             PointConfiguration,
+            _verify_pinned_line_distance_claim,
         )
         from jacobian.math.geometry.exact._operations import (
             compute_pinned_line_distance_profile,
@@ -837,6 +838,47 @@ class TestAggregatePairLedgerBound:
             PinnedLineDistanceResult.model_validate(result.model_dump(mode="json"))
             == result
         )
+        _verify_pinned_line_distance_claim(result)
+
+    def test_profile_verifier_rejects_forged_pair_assignment(self):
+        import pytest
+
+        from jacobian.math.geometry.exact._models import (
+            LabelledRationalPoint,
+            PointConfiguration,
+            _verify_pinned_line_distance_claim,
+        )
+        from jacobian.math.geometry.exact._operations import (
+            compute_pinned_line_distance_profile,
+        )
+
+        configuration = PointConfiguration(
+            points=tuple(
+                LabelledRationalPoint(
+                    label=label,
+                    coordinates=(
+                        {"num": str(x), "den": "1"},
+                        {"num": str(y), "den": "1"},
+                    ),
+                )
+                for label, x, y in [("a", 0, 0), ("b", 1, 0), ("c", 0, 1), ("d", 1, 1)]
+            )
+        )
+        result = compute_pinned_line_distance_profile(
+            PinnedLineDistanceRequest(
+                configuration=configuration,
+                anchor=({"num": "0", "den": "1"}, {"num": "0", "den": "1"}),
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["lines"][0]["pairs"], payload["lines"][1]["pairs"] = (
+            payload["lines"][1]["pairs"],
+            payload["lines"][0]["pairs"],
+        )
+        forged = PinnedLineDistanceResult.model_validate(payload)
+
+        with pytest.raises(ValueError):
+            _verify_pinned_line_distance_claim(forged)
 
 
 class TestSortedPairLedger:

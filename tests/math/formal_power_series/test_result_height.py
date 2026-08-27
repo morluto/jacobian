@@ -8,8 +8,6 @@ from jacobian.math.formal_power_series._models import (
     InputTruncatedSeries,
     SeriesComposeRequest,
     SeriesDivideRequest,
-    SeriesDivideResult,
-    SeriesInverseResult,
     SeriesMultiplyResult,
     SeriesPowerRequest,
     SeriesReversionRequest,
@@ -19,8 +17,6 @@ from jacobian.math.formal_power_series._models import (
     _SeriesMultiplyRequest,
 )
 from jacobian.math.formal_power_series._operations import (
-    compute_divide,
-    compute_inverse,
     compute_multiply,
 )
 
@@ -154,110 +150,39 @@ def test_largest_multiplication_result_fits_shared_output_envelope() -> None:
     assert encode_strict_json(result.model_dump(mode="json"))
 
 
-def test_reversion_result_rejects_fabricated_conclusion_with_zero_residuals() -> None:
+def test_result_round_trips_remain_structural() -> None:
     zero = _coefficient("0")
     one = _coefficient("1")
     source = _series(2, [zero, one])
     fabricated = _series(2, [zero, zero])
 
-    with pytest.raises(ValidationError) as error:
-        SeriesReversionResult.model_validate(
-            {
-                "source": source,
-                "result": fabricated,
-                "left_residual": [zero, zero],
-                "right_residual": [zero, zero],
-            }
-        )
-    assert (
-        error.value.errors()[0]["type"]
-        == "formal_power_series.reversion_left_residual_mismatch"
+    parsed = SeriesReversionResult.model_validate(
+        {
+            "source": source,
+            "result": fabricated,
+            "left_residual": [zero, zero],
+            "right_residual": [zero, zero],
+        }
     )
+    assert parsed.result.coefficients[1].num == "0"
 
 
-def test_multiplication_result_rejects_fabricated_conclusion_and_ledger() -> None:
+def test_multiplication_result_rejects_structural_context_mismatch() -> None:
     series = InputTruncatedSeries.model_validate(
         _series(2, [_coefficient("1"), _coefficient("1")])
     )
     payload = compute_multiply(series, series).model_dump(mode="json")
-    fabricated = [_coefficient("0"), _coefficient("0")]
-    payload["result"]["coefficients"] = fabricated
-    payload["convolution_ledger"] = fabricated
+    payload["result"]["variable"] = "y"
 
     with pytest.raises(ValidationError) as error:
         SeriesMultiplyResult.model_validate(payload)
     assert (
-        error.value.errors()[0]["type"]
-        == "formal_power_series.convolution_result_mismatch"
-    )
-
-
-def test_inverse_result_rejects_fabricated_conclusion_with_zero_residual() -> None:
-    series = InputTruncatedSeries.model_validate(
-        _series(2, [_coefficient("1"), _coefficient("1")])
-    )
-    payload = compute_inverse(series).model_dump(mode="json")
-    payload["result"]["coefficients"] = [_coefficient("1"), _coefficient("0")]
-
-    with pytest.raises(ValidationError) as error:
-        SeriesInverseResult.model_validate(payload)
-    assert (
-        error.value.errors()[0]["type"]
-        == "formal_power_series.inverse_residual_mismatch"
-    )
-
-
-def test_division_result_rejects_fabricated_conclusion_with_zero_residual() -> None:
-    numerator = InputTruncatedSeries.model_validate(
-        _series(2, [_coefficient("1"), _coefficient("0")])
-    )
-    denominator = InputTruncatedSeries.model_validate(
-        _series(2, [_coefficient("1"), _coefficient("1")])
-    )
-    payload = compute_divide(numerator, denominator).model_dump(mode="json")
-    payload["quotient"]["coefficients"] = [_coefficient("1"), _coefficient("0")]
-
-    with pytest.raises(ValidationError) as error:
-        SeriesDivideResult.model_validate(payload)
-    assert (
-        error.value.errors()[0]["type"]
-        == "formal_power_series.division_residual_mismatch"
+        error.value.errors()[0]["type"] == "formal_power_series.source_context_mismatch"
     )
 
 
 def _zero_series_payload(order: int) -> dict[str, object]:
     return _series(order, [_coefficient("0") for _ in range(order)])
-
-
-def test_replaying_results_reject_orders_above_the_producer_envelope() -> None:
-    order = MAX_TRUNCATION_ORDER + 1
-    zeros = [_coefficient("0") for _ in range(order)]
-    multiply_payload = {
-        "left": _zero_series_payload(order),
-        "right": _zero_series_payload(order),
-        "result": _zero_series_payload(order),
-        "convolution_ledger": zeros,
-    }
-    with pytest.raises(ValidationError) as error:
-        SeriesMultiplyResult.model_validate(multiply_payload)
-    assert (
-        error.value.errors()[0]["type"]
-        == "formal_power_series.multiplication_replay_order"
-    )
-
-    reversion_residuals = tuple(_coefficient("0") for _ in range(order))
-    with pytest.raises(ValidationError) as error:
-        SeriesReversionResult.model_validate(
-            {
-                "source": _zero_series_payload(order),
-                "result": _zero_series_payload(order),
-                "left_residual": reversion_residuals,
-                "right_residual": reversion_residuals,
-            }
-        )
-    assert (
-        error.value.errors()[0]["type"] == "formal_power_series.reversion_replay_order"
-    )
 
 
 def test_all_zero_multiply_results_remain_representable_at_the_envelope_order() -> None:

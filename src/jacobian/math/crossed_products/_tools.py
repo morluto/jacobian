@@ -30,7 +30,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "caller-supplied finite quotient table, left action Q -> GL_d(Z), and "
             "normalized cocycle. Validate all laws before applying "
             "(u,q)(v,r)=(u+rho(q)v+c(q,r),qr). Q<=16, d<=8, support pairs<=1024, "
-            "and scalar work<=80000; the source-bound result replays both operands. "
+            "and scalar work<=80000. "
             "This uses explicit normal forms, not a finitely presented group word "
             "problem or an invertibility decision."
         ),

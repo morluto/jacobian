@@ -166,19 +166,50 @@ def test_request_rejects_generated_search_above_node_budget() -> None:
         FriableCountRequest(x=str(_MAX_FRIABLE_SOURCE_ABS // 10), y="5")
 
 
-def test_result_rejects_a_nearby_estimate_presented_as_exact() -> None:
-    with expect_validation("number_theory."):
-        FriableCountResult(x="100", y="5", count="35")
+def test_result_validation_is_structural_and_owner_verifier_rejects_forgery() -> None:
+    from jacobian.math.number_theory._friable_operations import (
+        verify_friable_count_result,
+    )
+
+    forged = FriableCountResult(x="100", y="5", count="35")
+    assert not verify_friable_count_result(forged)
 
 
-def test_result_replays_count_and_binds_both_source_fields() -> None:
+def test_owner_verifier_binds_exact_count_to_both_sources() -> None:
+    from jacobian.math.number_theory._friable_operations import (
+        verify_friable_count_result,
+    )
+
     result = compute_friable_count(FriableCountRequest(x="100", y="5"))
     assert result == FriableCountResult(x="100", y="5", count="34")
+    assert verify_friable_count_result(result)
 
-    with expect_validation("number_theory."):
+    assert not verify_friable_count_result(
         FriableCountResult(x="125", y="5", count=result.count)
-    with expect_validation("number_theory."):
+    )
+    assert not verify_friable_count_result(
         FriableCountResult(x="100", y="3", count=result.count)
+    )
+
+
+def test_producer_executes_the_friable_kernel_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.number_theory._friable_operations as operations
+
+    calls = 0
+    original = operations.count_friable
+
+    def observed_count(x: int, y: int) -> int:
+        nonlocal calls
+        calls += 1
+        return original(x, y)
+
+    monkeypatch.setattr(operations, "count_friable", observed_count)
+    result = operations.compute_friable_count(FriableCountRequest(x="100", y="5"))
+
+    assert result.count == "34"
+    assert calls == 1
 
 
 def test_operation_is_discoverable_with_one_executable_example() -> None:

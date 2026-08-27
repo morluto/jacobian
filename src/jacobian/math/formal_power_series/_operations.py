@@ -116,7 +116,7 @@ def compute_multiply(
     a = _series_fractions(left)
     b = _series_fractions(right)
     result = _cauchy_convolve(a, b, n)
-    return SeriesMultiplyResult(
+    return SeriesMultiplyResult._from_kernel(
         left=left,
         right=right,
         result=_series_result(left.variable, n, result),
@@ -191,7 +191,7 @@ def compute_inverse(series: TruncatedSeries) -> SeriesInverseResult:
     # Compute residual A*B - 1
     product = _cauchy_convolve(a, inv, n)
     product[0] -= Fraction(1)
-    return SeriesInverseResult(
+    return SeriesInverseResult._from_kernel(
         source=series,
         result=_series_result(series.variable, n, inv),
         residual_coefficients=tuple(_wire(c) for c in product),
@@ -219,7 +219,7 @@ def compute_divide(
     q = _cauchy_convolve(a, b_inv, n)
     bq = _cauchy_convolve(b, q, n)
     residual = [bq[i] - a[i] for i in range(n)]
-    return SeriesDivideResult(
+    return SeriesDivideResult._from_kernel(
         numerator=numerator,
         denominator=denominator,
         quotient=_series_result(numerator.variable, n, q),
@@ -324,7 +324,7 @@ def compute_reversion(series: TruncatedSeries) -> SeriesReversionResult:
         gf_coeffs[i] - (Fraction(1) if i == 1 else Fraction(0)) for i in range(n)
     ]
 
-    return SeriesReversionResult(
+    return SeriesReversionResult._from_kernel(
         source=series,
         result=_series_result(series.variable, n, g),
         left_residual=tuple(_wire(c) for c in left_residual),

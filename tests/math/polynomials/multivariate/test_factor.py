@@ -12,8 +12,8 @@ from jacobian.math.polynomials.multivariate._factor_models import (
     MultivariateIrreducibleFactor,
 )
 from jacobian.math.polynomials.multivariate._operations import (
+    _verify_multivariate_factor_result,
     multivariate_factor,
-    verify_multivariate_factor_result,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -101,7 +101,7 @@ class TestMultivariateFactorResultInvariants:
         restored = MultivariateFactorResult.model_validate(result.model_dump())
         assert restored == result
         assert calls == 1
-        assert verify_multivariate_factor_result(restored)
+        assert _verify_multivariate_factor_result(restored)
         assert calls == 2
 
     def test_rejects_zero_coefficient_with_zero_reconstruction(self):
@@ -136,13 +136,13 @@ class TestMultivariateFactorResultInvariants:
             factors=(),
             reconstructed=reconstructed,
         )
-        assert not verify_multivariate_factor_result(wrong_content)
+        assert not _verify_multivariate_factor_result(wrong_content)
         forged = MultivariateFactorResult(
             coefficient=CanonicalRational.from_fraction(Fraction(1)),
             factors=(),
             reconstructed=reconstructed,
         )
-        assert not verify_multivariate_factor_result(forged)
+        assert not _verify_multivariate_factor_result(forged)
 
     def test_factorized_outcome_requires_invariant_markers(self):
         """A FACTORIZED result without the public contract's normalization
@@ -203,7 +203,7 @@ class TestOutputBudgetOutcome:
             normalization=None,
             product_reconstruction=None,
         )
-        assert not verify_multivariate_factor_result(forged)
+        assert not _verify_multivariate_factor_result(forged)
 
     def test_budget_exceeded_cannot_carry_factors(self):
         poly = _poly(("x", "y"), ((2, 1, (2, 1)), (-2, 1, (1, 0))))
@@ -306,7 +306,7 @@ class TestBoundedReconstructionReplay:
             factors=tuple(records),
             reconstructed=target,
         )
-        assert not verify_multivariate_factor_result(forged)
+        assert not _verify_multivariate_factor_result(forged)
 
     def test_telescoped_geometric_product_replays_boundedly(self):
         """(x^64-1)(y^64-1)(z^64-1) reconstructs through many geometric-sum
@@ -342,7 +342,7 @@ class TestBoundedReconstructionReplay:
             factors=(factor,),
             reconstructed=reconstructed,
         )
-        assert not verify_multivariate_factor_result(forged)
+        assert not _verify_multivariate_factor_result(forged)
 
     def test_scaled_constant_coefficient_verified(self):
         """coefficient * product must equal reconstructed exactly, including
@@ -361,14 +361,14 @@ class TestBoundedReconstructionReplay:
             factors=records,
             reconstructed=reconstructed,
         )
-        assert not verify_multivariate_factor_result(forged)
+        assert not _verify_multivariate_factor_result(forged)
         accepted = MultivariateFactorResult(
             coefficient=CanonicalRational.from_fraction(Fraction(3)),
             factors=records,
             reconstructed=reconstructed,
         )
         assert accepted.product_reconstruction == "EXACT"
-        assert verify_multivariate_factor_result(accepted)
+        assert _verify_multivariate_factor_result(accepted)
 
 
 class TestBudgetOutcomeCoefficientBinding:
@@ -467,7 +467,7 @@ class TestUniqueFactorizationReplay:
             factors=tuple(records),
             reconstructed=result.reconstructed,
         )
-        assert not verify_multivariate_factor_result(forged)
+        assert not _verify_multivariate_factor_result(forged)
 
     def test_multiplicity_shift_between_equal_degree_factors_rejected(self):
         """Moving multiplicity between equal-degree factors preserves the
@@ -503,7 +503,7 @@ class TestUniqueFactorizationReplay:
             factors=tuple(records),
             reconstructed=result.reconstructed,
         )
-        assert not verify_multivariate_factor_result(forged)
+        assert not _verify_multivariate_factor_result(forged)
 
 
 def _prime_denominator_poly(prime_count):
@@ -833,7 +833,7 @@ class TestKillableFactorBackend:
             normalization=None,
             product_reconstruction=None,
         )
-        assert not verify_multivariate_factor_result(claim)
+        assert not _verify_multivariate_factor_result(claim)
 
     def test_memory_exhausted_budget_claim_replay_rejected(self, monkeypatch):
         """An authored OUTPUT_BUDGET_EXCEEDED claim whose verification
@@ -869,7 +869,7 @@ class TestKillableFactorBackend:
             normalization=None,
             product_reconstruction=None,
         )
-        assert not verify_multivariate_factor_result(claim)
+        assert not _verify_multivariate_factor_result(claim)
 
 
 class TestSignedBudgetOutcomeContent:

@@ -57,9 +57,8 @@ MAX_COMMODITY_VERTEX_CELLS = 512
 # vertices. This envelope belongs to the profile operation, not to the
 # canonical tensor value: request parsing performs the operation's single
 # component scan, admits work and result envelope from it, and hands the
-# measured components to the producer pass, while the replay pass always
-# rescans independently -- so an accepted call executes exactly the two
-# charged passes and the work ledger stays an exact per-call accounting.
+# measured components directly to the producer. The work ledger records that
+# one bounded scan; result parsing does not repeat mathematical execution.
 MAX_PROFILE_RESULT_BYTES = 8 * 1024 * 1024
 _DIVERGENCE_ROW_OVERHEAD_BYTES = 128
 _EDGE_ROW_OVERHEAD_BYTES = 128
@@ -84,8 +83,8 @@ _PROFILE_RESULT_HEADER_BYTES = 1_024
 # otherwise those checks pair every edge either with a zero-capacity load
 # test or with one ratio division plus one running-maximum comparison, and
 # the kernel's own edge loop needs only its load-vs-capacity feasibility
-# test. With the admitted maxima this bounds each pass by 789,760 logical
-# steps; producer plus exact result replay therefore costs at most 1,579,520.
+# test. With the admitted maxima this bounds one profile computation by
+# 789,760 logical steps.
 MAX_SPARSE_FLOW_ENTRIES = (MAX_COMMODITY_VERTEX_CELLS // 2) * MAX_MULTICOMMODITY_EDGES
 MAX_PROFILE_ADDITIONS_PER_PASS = 6 * MAX_SPARSE_FLOW_ENTRIES + MAX_MULTICOMMODITY_EDGES
 MAX_PROFILE_NEGATIONS_PER_PASS = MAX_COMMODITY_VERTEX_CELLS // 2
@@ -93,7 +92,7 @@ MAX_PROFILE_DIVISIONS_PER_PASS = MAX_MULTICOMMODITY_EDGES
 MAX_PROFILE_COMPARISONS_PER_PASS = (
     MAX_COMMODITY_VERTEX_CELLS + 3 * MAX_MULTICOMMODITY_EDGES
 )
-MAX_PROFILE_LOGICAL_STEPS = 2 * (
+MAX_PROFILE_LOGICAL_STEPS = (
     MAX_PROFILE_ADDITIONS_PER_PASS
     + MAX_PROFILE_NEGATIONS_PER_PASS
     + MAX_PROFILE_DIVISIONS_PER_PASS
@@ -469,9 +468,8 @@ class AdmittedProfileScan(NamedTuple):
     """The once-computed components of one measured profile scan.
 
     Request parsing performs this scan, admits work and result envelope
-    from it, and hands it to the producer pass, which otherwise recomputes
-    it; the replay pass always rescans independently. Either way an
-    accepted call executes exactly two arithmetic passes.
+    from it, and hands it directly to the producer. Native calls perform the
+    same scan at their execution boundary.
 
     ``congestion_ratio`` is None exactly when a loaded zero-capacity edge
     makes the public result's congestion null, so no ratio arithmetic ran;
@@ -497,7 +495,7 @@ def measured_profile_components(flow: MulticommodityFlow) -> AdmittedProfileScan
     """Run the single bucketed component scan and derive every priced bound.
 
     The returned slacks and congestion ratio are the same measured components
-    priced into the budget, so one producer or replay pass subtracts each
+    priced into the budget, so the producer subtracts each
     slack exactly once and divides each positive-capacity ratio exactly once
     whenever the result returns a congestion value (and never divides one
     when a loaded zero-capacity edge forces it to be null); the work ledger
@@ -548,8 +546,8 @@ def _require_profile_output_admission(flow: MulticommodityFlow) -> AdmittedProfi
     Request parsing runs this complete mathematical validation so every
     accepted ``math.run`` request reaches the kernel guaranteed admissible,
     and native callers get the same typed rejection before any result
-    construction. The returned scan is reused as the producer pass, so an
-    accepted call executes exactly the two charged passes.
+    construction. The returned scan is reused directly by the producer, so
+    an accepted call executes one charged pass.
     """
 
     _require_profile_source_room(flow)
@@ -611,7 +609,7 @@ def _require_admitted_profile_rows(
 
     The bounds are the ones the kernel's single measured scan already
     produced, so admission prices the result without a second arithmetic
-    pass and the two-pass work ledger stays exact. A null congestion bound
+    pass and the one-pass work ledger stays exact. A null congestion bound
     is the loaded zero-capacity-edge case whose result serializes a null:
     the reserved rational overhead alone covers that field's bytes.
     """
@@ -743,9 +741,9 @@ class EdgeLoadProfile(StrictModel):
 
 
 class MulticommodityFlowProfileWork(StrictModel):
-    """Exact finite accounting for producer and source-bound result replay."""
+    """Exact finite accounting for one bounded profile computation."""
 
-    execution_passes_per_call: int = Field(ge=2, le=2)
+    execution_passes_per_call: int = Field(ge=1, le=1)
     sparse_entries: int = Field(ge=0, le=MAX_SPARSE_FLOW_ENTRIES)
     commodity_vertex_cells: int = Field(ge=1, le=MAX_COMMODITY_VERTEX_CELLS)
     edge_cells: int = Field(ge=1, le=MAX_MULTICOMMODITY_EDGES)
@@ -788,24 +786,75 @@ class MulticommodityFlowProfileResult(StrictModel):
     work: MulticommodityFlowProfileWork
 
     @model_validator(mode="after")
-    def require_exact_source_bound_profile(self) -> Self:
-        from jacobian.math.graphs.multicommodity_flow._kernel import profile_components
-
-        expected = profile_components(self.flow)
-        actual = (
-            self.divergences,
-            self.edge_profiles,
-            self.all_demands_routed,
-            self.capacity_feasible,
-            self.congestion,
-            self.work,
+    def require_structural_profile_rows(self) -> Self:
+        expected_divergence_keys = tuple(
+            (commodity.commodity_id, vertex)
+            for commodity in self.flow.commodities
+            for vertex in range(self.flow.network.vertex_count)
         )
-        if actual != expected:
+        actual_divergence_keys = tuple(
+            (row.commodity_id, row.vertex) for row in self.divergences
+        )
+        if actual_divergence_keys != expected_divergence_keys:
             raise PydanticCustomError(
-                "graph.result_must_match_the_exact_multicommodity_flow_",
-                "result must match the exact multicommodity-flow profile",
+                "graph.profile_divergence_rows_must_match_source_axis",
+                "profile divergence rows must match the source commodity-vertex axis",
+            )
+        expected_edge_keys = tuple(
+            (edge.source, edge.target) for edge in self.flow.network.edges
+        )
+        actual_edge_keys = tuple((row.source, row.target) for row in self.edge_profiles)
+        if actual_edge_keys != expected_edge_keys:
+            raise PydanticCustomError(
+                "graph.profile_edge_rows_must_match_network_edges",
+                "profile edge rows must match the source network edges",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        flow: MulticommodityFlow,
+        *,
+        divergences: tuple[CommodityDivergence, ...],
+        edge_profiles: tuple[EdgeLoadProfile, ...],
+        all_demands_routed: bool,
+        capacity_feasible: bool,
+        congestion: CanonicalRational | None,
+        work: MulticommodityFlowProfileWork,
+    ) -> Self:
+        """Build a result after the admitted profile kernel established it."""
+
+        return cls.model_construct(
+            flow=flow,
+            divergences=divergences,
+            edge_profiles=edge_profiles,
+            all_demands_routed=all_demands_routed,
+            capacity_feasible=capacity_feasible,
+            congestion=congestion,
+            work=work,
+        )
+
+
+def _verify_multicommodity_flow_profile_result(
+    result: MulticommodityFlowProfileResult,
+) -> None:
+    """Recompute one independently supplied profile under normal admission."""
+
+    from jacobian.math.graphs.multicommodity_flow._kernel import profile_components
+
+    request = MulticommodityFlowProfileRequest(flow=result.flow)
+    expected = profile_components(result.flow, request._admitted_scan)
+    actual = (
+        result.divergences,
+        result.edge_profiles,
+        result.all_demands_routed,
+        result.capacity_feasible,
+        result.congestion,
+        result.work,
+    )
+    if actual != expected:
+        raise ValueError("result must match the exact multicommodity-flow profile")
 
 
 __all__ = [

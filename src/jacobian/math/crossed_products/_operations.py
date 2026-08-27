@@ -1,5 +1,7 @@
 """Wire-facing finite-coset crossed-product operations."""
 
+from pydantic import ValidationError
+
 from jacobian.math.crossed_products._models import (
     CrossedProductMultiplyRequest,
     CrossedProductMultiplyResult,
@@ -20,10 +22,14 @@ def compute_product(
     )
 
 
-def verify_product_result(result: CrossedProductMultiplyResult) -> bool:
+def _verify_product_result(result: CrossedProductMultiplyResult) -> bool:
     """Verify an independently supplied product in the admitted envelope."""
 
+    try:
+        CrossedProductMultiplyRequest(left=result.left, right=result.right)
+    except ValidationError:
+        return False
     return result.product == multiply(result.left, result.right)
 
 
-__all__ = ["compute_product", "verify_product_result"]
+__all__ = ["compute_product"]

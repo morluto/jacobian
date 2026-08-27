@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError
+
 if TYPE_CHECKING:
     from sympy.combinatorics.perm_groups import PermutationGroup
 
@@ -59,22 +61,25 @@ def compute_galois_factor(request: GaloisFactorRequest) -> GaloisFactorResult:
     )
 
 
-def verify_galois_factor_result(result: GaloisFactorResult) -> bool:
-    """Replay bounded factor irreducibility for a supplied factorization claim."""
+def _verify_galois_factor_result(result: GaloisFactorResult) -> bool:
+    """Check one independently supplied factorization within request admission.
 
-    from sympy import GF, Poly, Symbol
+    Normal result parsing deliberately checks only wire structure.  This owner-
+    private path is for a caller that deliberately treats supplied result data
+    as a mathematical claim, so it re-enters request admission and compares
+    against one bounded kernel computation.
+    """
 
-    x = Symbol("x")
-    return result.is_irreducible == (
-        len(result.factors) == 1
-        and result.factors[0].multiplicity == 1
-        and len(result.factors[0].coefficients) == len(result.source_coefficients)
-    ) and all(
-        Poly(
-            list(reversed(factor.coefficients)), x, domain=GF(result.field_order)
-        ).is_irreducible
-        for factor in result.factors
-    )
+    try:
+        candidate = GaloisFactorResult.model_validate(result.model_dump())
+        request = GaloisFactorRequest(
+            field_order=candidate.field_order,
+            coefficients=candidate.source_coefficients,
+        )
+        expected = compute_galois_factor(request)
+    except (TypeError, ValidationError, ValueError):
+        return False
+    return candidate == expected
 
 
 def compute_frobenius_cycle(request: FrobeniusCycleRequest) -> FrobeniusCycleResult:

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from itertools import combinations, product
-from typing import Any
 
 import pytest
 from sympy import Poly, Symbol, cyclotomic_poly
@@ -516,15 +514,14 @@ def test_singleton_source_over_the_source_byte_bound_is_rejected_before_lcm() ->
         decide_finite_abelian_spectral_pair(source)
 
 
-def test_forged_witness_elements_beyond_source_rank_are_rejected() -> None:
+def test_forged_witness_elements_remain_structurally_parseable() -> None:
     result = decide_finite_abelian_spectral_pair(
         _source((4,), ((0,), (1,)), ((0,), (1,)))
     )
     payload = result.model_dump(mode="json")
     payload["first_nonorthogonal_pair"]["left_frequency"] = [0] * 200
 
-    with finite_abelian_validation_error():
-        FiniteAbelianSpectralPairResult.model_validate(payload)
+    assert FiniteAbelianSpectralPairResult.model_validate(payload)
 
 
 def test_singleton_beyond_the_former_modulus_ceiling_is_admitted() -> None:
@@ -633,28 +630,27 @@ def test_serialized_source_bytes_reject_oversized_mismatch_sets() -> None:
         decide_finite_abelian_spectral_pair(source)
 
 
-@pytest.mark.parametrize(
-    "mutation",
-    [
-        lambda payload: payload.update(is_spectral=True),
-        lambda payload: payload.update(reason="SPECTRAL"),
-        lambda payload: payload["first_nonorthogonal_pair"].update(
-            remainder_coefficients=["1", "1"]
-        ),
-        lambda payload: payload["source"].update(points=[[0], [2]]),
-    ],
-)
-def test_result_replay_rejects_conclusion_witness_and_source_mutations(
-    mutation: Callable[[dict[str, Any]], None],
-) -> None:
+@pytest.mark.parametrize("field", ("is_spectral", "reason"))
+def test_result_parsing_rejects_inconsistent_branches(field: str) -> None:
     result = decide_finite_abelian_spectral_pair(
         _source((4,), ((0,), (1,)), ((0,), (1,)))
     )
     payload = result.model_dump(mode="json")
-    mutation(payload)
+    payload[field] = True if field == "is_spectral" else "SPECTRAL"
 
     with finite_abelian_validation_error():
         FiniteAbelianSpectralPairResult.model_validate(payload)
+
+
+def test_result_parsing_does_not_replay_witness_or_source() -> None:
+    result = decide_finite_abelian_spectral_pair(
+        _source((4,), ((0,), (1,)), ((0,), (1,)))
+    )
+    payload = result.model_dump(mode="json")
+    payload["first_nonorthogonal_pair"]["remainder_coefficients"] = ["1", "1"]
+    payload["source"]["points"] = [[0], [2]]
+
+    assert FiniteAbelianSpectralPairResult.model_validate(payload)
 
 
 def test_canonical_source_round_trips_unchanged_through_catalog_request() -> None:

@@ -19,10 +19,7 @@ from jacobian.canonical import (
     sha256_digest,
 )
 from jacobian.math.intervals import ClosedRationalInterval, RationalBox
-from jacobian.math.polynomials.intervals._kernel import (
-    natural_interval_extension,
-    term_is_zero_on_box,
-)
+from jacobian.math.polynomials.intervals._kernel import term_is_zero_on_box
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
@@ -329,7 +326,7 @@ class PolynomialBoxEnclosureRequest(StrictModel):
 
 
 class PolynomialBoxEnclosureResult(StrictModel):
-    """A replay-validated enclosure bound to its source polynomial and box."""
+    """An exact enclosure bound to its source polynomial and box."""
 
     polynomial: RationalPolynomial
     box: RationalBox
@@ -337,7 +334,7 @@ class PolynomialBoxEnclosureResult(StrictModel):
     enclosure: ClosedRationalInterval
 
     @model_validator(mode="after")
-    def require_replayable_enclosure(self) -> Self:
+    def require_source_binding(self) -> Self:
         if self.source_digest != polynomial_box_source_digest(
             self.polynomial,
             self.box,
@@ -345,13 +342,26 @@ class PolynomialBoxEnclosureResult(StrictModel):
             raise _validation_error(
                 "source digest does not bind the polynomial and box"
             )
-        _require_enclosure_preflight(self.polynomial, self.box)
-        expected = natural_interval_extension(self.polynomial, self.box)
-        if self.enclosure != expected:
-            raise _validation_error(
-                "enclosure does not match the bounded source replay"
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: PolynomialBoxEnclosureRequest,
+        *,
+        enclosure: ClosedRationalInterval,
+    ) -> Self:
+        """Build one result after the admitted kernel established its enclosure."""
+
+        return cls.model_construct(
+            polynomial=request.polynomial,
+            box=request.box,
+            source_digest=polynomial_box_source_digest(
+                request.polynomial,
+                request.box,
+            ),
+            enclosure=enclosure,
+        )
 
 
 __all__ = [

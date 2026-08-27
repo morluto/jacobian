@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from mcp.shared.exceptions import MCPError
 from mcp.types import TextContent, TextResourceContents
 from mcp.types.methods import serialize_server_result
 
@@ -171,19 +170,19 @@ def test_math_run_projects_unexpected_operation_failures() -> None:
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(server, raise_exceptions=True) as client:
-            with pytest.raises(MCPError) as error:
-                await client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "test.mcp.crashing_kernel",
-                        "payload": {"value": 1},
-                    },
-                )
-        assert error.value.code == -32603
-        assert error.value.message == "operation execution failed"
-        assert error.value.data is None
-        assert "private backend failure" not in error.value.message
+        async with Client(server, raise_exceptions=False) as client:
+            result = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "test.mcp.crashing_kernel",
+                    "payload": {"value": 1},
+                },
+            )
+        assert result.is_error is True
+        assert result.structured_content is None
+        text = result.content[0].text if result.content else ""
+        assert text == "Error executing tool math.run: operation execution failed"
+        assert "private backend failure" not in text
 
     asyncio.run(scenario())
 

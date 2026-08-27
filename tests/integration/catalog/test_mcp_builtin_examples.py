@@ -123,7 +123,7 @@ def test_mcp_unexpected_operation_fault_uses_the_sdk_failure_path() -> None:
             assert result.is_error is True
             assert result.structured_content is None
             text = result.content[0].text if result.content else ""
-            assert text == "Error executing tool math.run"
+            assert text == "Error executing tool math.run: operation execution failed"
             assert len(text) < 5000
 
     asyncio.run(scenario())

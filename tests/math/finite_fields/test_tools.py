@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,
@@ -18,6 +18,7 @@ from jacobian.math.finite_fields import (
     RankResult,
     element,
     finite_field,
+    finite_map_table,
     finite_polynomial,
     finite_polynomial_map,
     projective_line,
@@ -88,15 +89,19 @@ def test_projective_enumeration_refuses_large_output_before_allocation() -> None
 def test_finite_map_table_refuses_excessive_polynomial_work() -> None:
     presentation = finite_field(2, (1, 1, 0, 1, 1, 0, 0, 0, 1))
     one = element(presentation, (1,) + (0,) * 7)
-    with pytest.raises(ValidationError) as error:
-        FiniteMapTableRequest(
-            polynomial_map=finite_polynomial_map(
-                finite_polynomial(presentation, (one,) * 512)
-            )
+    request = FiniteMapTableRequest(
+        polynomial_map=finite_polynomial_map(
+            finite_polynomial(presentation, (one,) * 512)
         )
-    assert (
-        error.value.errors()[0]["type"]
-        == "finite_field.finite_map_exceeds_operation_work_budget"
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        finite_map_table(request.polynomial_map)
+    assert error.value.errors() == (
+        {
+            "loc": ("polynomial_map",),
+            "type": "finite_field.finite_map_exceeds_operation_work_budget",
+            "msg": "finite map exceeds the operation work budget",
+        },
     )
 
 

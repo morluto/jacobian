@@ -22,7 +22,6 @@ from jacobian.math.additive_combinatorics import _multiset_sum
 from jacobian.math.additive_combinatorics._subset_sum_profile import (
     MAX_SUBSET_SUM_DP_TRANSITIONS,
     MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
-    subset_sum_profile_envelope,
 )
 from jacobian.math.additive_combinatorics.values import (
     MAX_SUBSET_SUM_ITEMS,
@@ -464,11 +463,6 @@ class RepresentationProfileRequest(StrictModel):
     left: FiniteIntegerSet
     right: FiniteIntegerSet
 
-    @model_validator(mode="after")
-    def require_bounded_cartesian_product(self) -> Self:
-        _require_bounded_cartesian_product(self.left, self.right)
-        return self
-
 
 class RepresentationProfileEntry(StrictModel):
     """One sum and its representation multiplicity."""
@@ -699,7 +693,7 @@ class SubsetSumProfileRequest(StrictModel):
             "positive_sum-negative_sum+1, product(m_v+1) over distinct "
             f"nonzero values v) must fit {MAX_SUBSET_SUM_PROFILE_ENTRIES:,} "
             f"rows, 4*n*S must not exceed {MAX_SUBSET_SUM_DP_TRANSITIONS:,} "
-            "dictionary transitions across construction and validation replay, "
+            "dictionary transitions during construction, "
             "and the conservative serialized-result estimate must not exceed "
             f"{MAX_SUBSET_SUM_PROFILE_RESULT_BYTES:,} bytes."
         ),
@@ -742,8 +736,15 @@ class SubsetSumProfileRequest(StrictModel):
         return prepared
 
     @model_validator(mode="after")
-    def require_admitted_profile_envelope(self) -> Self:
-        subset_sum_profile_envelope(self.source)
+    def require_bounded_source_shape(self) -> Self:
+        """Keep the declared request container limit for typed callers too."""
+
+        if len(self.source.items) > MAX_SUBSET_SUM_ITEMS:
+            raise _validation_error(
+                "bound_raw_source",
+                "subset-sum profile source exceeds the "
+                f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound",
+            )
         return self
 
 
@@ -760,11 +761,6 @@ class AdditiveEnergyRequest(StrictModel):
 
     left: FiniteIntegerSet
     right: FiniteIntegerSet
-
-    @model_validator(mode="after")
-    def require_bounded_cartesian_product(self) -> Self:
-        _require_bounded_cartesian_product(self.left, self.right)
-        return self
 
 
 class AdditiveEnergyResult(StrictModel):
@@ -813,11 +809,6 @@ class SumsetCardinalityRequest(StrictModel):
 
     left: FiniteIntegerSet
     right: FiniteIntegerSet
-
-    @model_validator(mode="after")
-    def require_bounded_cartesian_product(self) -> Self:
-        _require_bounded_cartesian_product(self.left, self.right)
-        return self
 
 
 class SumsetCardinalityResult(StrictModel):

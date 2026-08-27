@@ -2,20 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import Field, StrictInt, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field, StrictInt
 
 from jacobian._models import StrictModel
-from jacobian.math.modular_forms.kernel import (
-    NamedLevelOneModularForm,
-    require_level_one_admission,
-)
-
-
-def _validation_error(reason: str, message: str) -> PydanticCustomError:
-    return PydanticCustomError(f"modular_forms.{reason}", message)
+from jacobian.math.modular_forms.kernel import NamedLevelOneModularForm
 
 
 class LevelOneNamedQExpansionRequest(StrictModel):
@@ -32,20 +22,6 @@ class LevelOneNamedQExpansionRequest(StrictModel):
             "finite-series arithmetic."
         ),
     )
-
-    @model_validator(mode="after")
-    def require_exact_bounded_prefix(self) -> Self:
-        try:
-            require_level_one_admission(self.form, self.truncation_order)
-        except ValueError as exc:
-            message = str(exc)
-            reason = (
-                "exact_work_bound"
-                if "exact work bound" in message
-                else "serialized_result_bound"
-            )
-            raise _validation_error(reason, message) from exc
-        return self
 
 
 __all__ = ["LevelOneNamedQExpansionRequest"]

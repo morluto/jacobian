@@ -9,7 +9,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.math.algebraic_combinatorics._rsk import require_rsk_word_budget
 from jacobian.math.algebraic_combinatorics.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
     MAX_RSK_WORD_BYTES,
@@ -190,17 +189,6 @@ class RSKWordRequest(StrictModel):
         )
     )
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
-
-    @model_validator(mode="after")
-    def require_complete_budget(self) -> Self:
-        try:
-            require_rsk_word_budget(self.word)
-        except ValueError as error:
-            raise PydanticCustomError(
-                "algebraic_combinatorics.rsk_word_budget",
-                str(error),
-            ) from error
-        return self
 
 
 class RSKInverseWordRequest(StrictModel):

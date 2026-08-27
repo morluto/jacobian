@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Annotated, Any, Self
 
 from pydantic import ConfigDict, Field, model_validator
@@ -10,12 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.code_nonlinear._budget import (
-    MAX_CODE_RESULT_BYTES,
     MAX_PROFILE_PAIRS,
-    require_constant_weight_admission,
-    require_profile_admission,
-    require_set_system_output_bound,
-    require_word_distance_output_bound,
 )
 from jacobian.math.code_nonlinear.values import (
     MAX_EXPLICIT_CODE_LENGTH,
@@ -39,50 +33,11 @@ def _validation_error(code: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(code, message)
 
 
-def _require_admission(action: Callable[[], Any], code: str) -> Any:
-    try:
-        return action()
-    except ValueError as exc:
-        raise _validation_error(code, str(exc)) from exc
-
-
-def _require_result_bound(bound: int, label: str) -> None:
-    if bound > MAX_CODE_RESULT_BYTES:
-        raise _validation_error(
-            "nonlinear_code.result_bound",
-            f"{label} can use up to {bound} canonical JSON bytes, exceeding the "
-            f"{MAX_CODE_RESULT_BYTES}-byte result bound",
-        )
-
-
-def _require_constant_weight(code: ExplicitBinaryCode) -> int:
-    if not code.codewords:
-        raise _validation_error(
-            "nonlinear_code.constant_weight_empty",
-            "constant-weight profile requires at least one codeword",
-        )
-    weight = sum(code.codewords[0])
-    if any(sum(word) != weight for word in code.codewords):
-        raise _validation_error(
-            "nonlinear_code.constant_weight_mismatch",
-            "all codewords must have the same Hamming weight",
-        )
-    return weight
-
-
 class ConstantWeightRequest(StrictModel):
     """Generate all binary words of one bounded length and weight."""
 
     length: Annotated[int, Field(strict=True, ge=0, le=MAX_EXPLICIT_CODE_LENGTH)]
     weight: Annotated[int, Field(strict=True, ge=0, le=MAX_EXPLICIT_CODE_LENGTH)]
-
-    @model_validator(mode="after")
-    def require_valid_weight(self) -> Self:
-        _require_admission(
-            lambda: require_constant_weight_admission(self.length, self.weight),
-            "nonlinear_code.admission_bound",
-        )
-        return self
 
 
 class ConstantWeightResult(StrictModel):
@@ -145,10 +100,6 @@ class WordDistanceRequest(StrictModel):
             raise _validation_error(
                 "nonlinear_code.length_mismatch", "words must have equal length"
             )
-        _require_admission(
-            lambda: require_word_distance_output_bound(self.word1, self.word2),
-            "nonlinear_code.admission_bound",
-        )
         return self
 
 
@@ -226,14 +177,6 @@ class ExplicitProfileRequest(StrictModel):
             "the retained-source result bound before pair enumeration."
         )
     )
-
-    @model_validator(mode="after")
-    def require_bounded_profile(self) -> Self:
-        _require_admission(
-            lambda: require_profile_admission(self.code),
-            "nonlinear_code.admission_bound",
-        )
-        return self
 
 
 class ExplicitProfileResult(StrictModel):
@@ -314,15 +257,6 @@ class ConstantWeightProfileRequest(StrictModel):
         )
     )
 
-    @model_validator(mode="after")
-    def require_valid_constant_weight(self) -> Self:
-        _require_constant_weight(self.code)
-        _require_admission(
-            lambda: require_profile_admission(self.code),
-            "nonlinear_code.admission_bound",
-        )
-        return self
-
 
 class ConstantWeightProfileResult(StrictModel):
     """Distance/intersection profile of a retained constant-weight code."""
@@ -394,14 +328,6 @@ class ToSetSystemRequest(StrictModel):
     """Map one canonical explicit code to its coordinate supports."""
 
     code: ExplicitBinaryCode
-
-    @model_validator(mode="after")
-    def require_bounded_result(self) -> Self:
-        _require_admission(
-            lambda: require_set_system_output_bound(self.code),
-            "nonlinear_code.admission_bound",
-        )
-        return self
 
 
 class ToSetSystemResult(StrictModel):

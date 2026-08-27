@@ -133,6 +133,11 @@ class RSKResult(StrictModel):
                 "algebraic_combinatorics.rsk_shape_mismatch",
                 "tableaux and shape must agree",
             )
+        if sum(self.shape.parts) != len(self.permutation):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_size_mismatch",
+                "tableau shape size must equal permutation length",
+            )
         expected_lis = self.shape.parts[0] if self.shape.parts else 0
         expected_lds = len(self.shape.parts)
         if self.lis_length != expected_lis or self.lds_length != expected_lds:

@@ -471,6 +471,22 @@ class TestShellingCheck:
         )
         assert result.facet_order == (0, 0, 1)
 
+    def test_result_retains_shelling_branch_consistency(self) -> None:
+        with pytest.raises(ValidationError, match="cannot carry failure diagnostics"):
+            ShellingCheckResult(
+                complex=EDGE,
+                facet_order=[0],
+                is_shelling=True,
+                failed_at=0,
+                failure_reason="unexpected",
+            )
+        with pytest.raises(ValidationError, match="requires a valid position"):
+            ShellingCheckResult(
+                complex=EDGE,
+                facet_order=[0],
+                is_shelling=False,
+            )
+
 
 class TestElementaryCollapse:
     def test_collapse_free_vertex_from_edge(self) -> None:

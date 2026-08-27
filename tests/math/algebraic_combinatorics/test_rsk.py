@@ -92,6 +92,12 @@ class TestRSK:
         payload["permutation"] = [2, 1, 3]
         assert RSKResult.model_validate(payload).permutation == (2, 1, 3)
 
+        payload = result.model_dump(mode="json")
+        payload["permutation"] = [1, 2]
+        with pytest.raises(ValidationError, match="size must equal permutation"):
+            RSKResult.model_validate(payload)
+
+        payload = result.model_dump(mode="json")
         payload["shape"] = {"parts": [3]}
         with pytest.raises(ValidationError) as error:
             RSKResult.model_validate(payload)

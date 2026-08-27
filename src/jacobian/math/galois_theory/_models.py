@@ -187,6 +187,7 @@ class GaloisFactorResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:
+        _require_prime(self.field_order)
         _require_factor_residues(self)
         if self.distinct_factor_count != len(self.factors):
             raise _validation_error(

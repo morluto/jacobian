@@ -161,9 +161,8 @@ def test_factorization_result_parses_structurally_and_private_verification_rejec
 
     payload = result.model_dump()
     payload["field_order"] = 4
-    non_prime_field = GaloisFactorResult.model_validate(payload)
-    assert non_prime_field.field_order == 4
-    assert not _verify_galois_factor_result(non_prime_field)
+    with pytest.raises(ValidationError, match="field_order must be prime"):
+        GaloisFactorResult.model_validate(payload)
 
     forged = GaloisFactorResult(
         field_order=3,

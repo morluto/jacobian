@@ -878,6 +878,21 @@ class ShellingCheckResult(TopologyExactResult):
 
     @model_validator(mode="after")
     def require_structural_shelling(self) -> Self:
+        if self.is_shelling:
+            if self.failed_at is not None or self.failure_reason is not None:
+                raise _validation_error(
+                    "topology.require_structural_shelling_1",
+                    "a shelling result cannot carry failure diagnostics",
+                )
+        elif (
+            self.failed_at is None
+            or not 0 <= self.failed_at < len(self.facet_order)
+            or not self.failure_reason
+        ):
+            raise _validation_error(
+                "topology.require_structural_shelling_2",
+                "a failed shelling result requires a valid position and reason",
+            )
         return self
 
     @classmethod

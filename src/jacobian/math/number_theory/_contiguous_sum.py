@@ -23,7 +23,8 @@ CONTIGUOUS_SUM_OPERATION = number_theory_operation(
     examples=(
         example(
             "contiguous_sum_1_15",
-            "Count contiguous-sum representations for n from 1 to 15.",
+            "Count contiguous-sum representations for n from 1 to 15. "
+            "The interval must contain at most 100,000 integers.",
             {"lower_bound": 1, "upper_bound": 15},
         ),
     ),

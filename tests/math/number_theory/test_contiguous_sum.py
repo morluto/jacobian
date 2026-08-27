@@ -1,5 +1,9 @@
 """Tests for contiguous-sum representation profiles."""
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.math.number_theory._contiguous_sum import CONTIGUOUS_SUM_OPERATION
 from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileRequest,
 )
@@ -32,3 +36,34 @@ def test_primes() -> None:
             assert row.representation_count == 2, (
                 f"n={row.n} has {row.representation_count} representations"
             )
+
+
+@pytest.mark.parametrize("value", [True, "1000001"])
+def test_request_endpoints_are_strict_integers(value: object) -> None:
+    with pytest.raises(ValidationError):
+        ContiguousSumProfileRequest.model_validate(
+            {"lower_bound": value, "upper_bound": value}
+        )
+
+
+def test_high_magnitude_singleton_does_not_allocate_to_upper_bound() -> None:
+    result = compute_contiguous_sum_profile(
+        ContiguousSumProfileRequest(
+            lower_bound=1_000_000_000_001,
+            upper_bound=1_000_000_000_001,
+        )
+    )
+    assert result.rows[0].representation_count == 8
+
+
+def test_request_schema_publishes_coupled_bounds() -> None:
+    schema = ContiguousSumProfileRequest.model_json_schema()
+    description = schema["description"]
+    bounds = schema["x-jacobian-bounds"]
+
+    assert "100,000" in description
+    assert "direct factorization" in description
+    assert bounds["max_interval_width"] == 100_000
+    assert CONTIGUOUS_SUM_OPERATION.examples[0].description.endswith(
+        "interval must contain at most 100,000 integers."
+    )

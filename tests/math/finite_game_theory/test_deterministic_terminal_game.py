@@ -19,6 +19,8 @@ from jacobian.math.finite_game_theory import (
     TerminalGameValueClass,
     solve_terminal_game,
 )
+from jacobian.math.finite_game_theory import _operations as operation_adapter
+from jacobian.math.finite_game_theory import operations as terminal_operations
 from jacobian.math.finite_game_theory._models import (
     DeterministicTerminalGameRequest,
 )
@@ -430,6 +432,38 @@ def test_public_request_and_example_return_the_declared_result() -> None:
 
     assert isinstance(result, DeterministicTerminalGameSolution)
     assert result.value_classes[0].payoff.as_fraction() == 1
+
+
+def test_trusted_terminal_game_producers_run_the_minimax_kernel_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    game = _paper_game()
+    request = DeterministicTerminalGameRequest(game=game)
+    calls = 0
+    original = terminal_operations._solve_terminal_game_data
+
+    def counted_native(*args: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original(*args)
+
+    monkeypatch.setattr(
+        terminal_operations, "_solve_terminal_game_data", counted_native
+    )
+    solve_terminal_game(game)
+    assert calls == 1
+
+    calls = 0
+    original_adapter = operation_adapter._solve_terminal_game_data
+
+    def counted_adapter(*args: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original_adapter(*args)
+
+    monkeypatch.setattr(operation_adapter, "_solve_terminal_game_data", counted_adapter)
+    compute_deterministic_terminal_game(request)
+    assert calls == 1
 
 
 def test_native_api_is_explicit() -> None:

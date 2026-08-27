@@ -4,6 +4,12 @@ from typing import Any
 
 import pytest
 
+from jacobian.math.numerical_semigroups import (
+    _element_invariant_operations as element_operations,
+)
+from jacobian.math.numerical_semigroups import (
+    _global_invariant_operations as global_operations,
+)
 from jacobian.math.numerical_semigroups._element_invariant_models import (
     ElementCatenaryDegreeRequest,
     ElementCatenaryDegreeResult,
@@ -148,6 +154,77 @@ def test_element_invariant_replay_results_reapply_request_value_envelopes(
 ) -> None:
     with pytest.raises(ValueError, match="value must be at most"):
         result_type.model_validate(payload)
+
+
+def test_catenary_result_rejects_an_unmaterializable_family_before_replay() -> None:
+    """A supplied claim cannot force the old unbounded factorization replay."""
+
+    with pytest.raises(ValueError, match="exact materialization bound 1000"):
+        ElementCatenaryDegreeResult.model_validate(
+            {
+                "value": "9990",
+                "minimal_generators": ("6", "10", "14", "15"),
+                "factorization_count": 13_307_204,
+                "catenary_degree": 6,
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("operation", "operation_request", "module", "kernel_name"),
+    (
+        (
+            compute_element_delta_set,
+            ElementDeltaSetRequest(generators=("3", "5"), value="15"),
+            element_operations,
+            "factorization_lengths",
+        ),
+        (
+            compute_element_elasticity,
+            ElementElasticityRequest(generators=("3", "5"), value="15"),
+            element_operations,
+            "factorization_length_extrema",
+        ),
+        (
+            compute_element_catenary_degree,
+            ElementCatenaryDegreeRequest(generators=("3", "5"), value="15"),
+            element_operations,
+            "factorizations",
+        ),
+        (
+            compute_betti_elements,
+            BettiElementsRequest(generators=("3", "5")),
+            global_operations,
+            "betti_data",
+        ),
+        (
+            compute_delta_set,
+            DeltaSetRequest(generators=("3", "5")),
+            global_operations,
+            "delta_periodicity_bound",
+        ),
+    ),
+)
+def test_trusted_semigroup_producers_run_each_expensive_kernel_once(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: Any,
+    operation_request: Any,
+    module: Any,
+    kernel_name: str,
+) -> None:
+    original = getattr(module, kernel_name)
+    calls = 0
+
+    def counted(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(module, kernel_name, counted)
+
+    operation(operation_request)
+
+    assert calls == 1
 
 
 def test_factorization_length_verifier_rejects_forged_length_set() -> None:

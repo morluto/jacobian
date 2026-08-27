@@ -18,6 +18,7 @@ from jacobian.math.graphs.optimization._maximum_cut import (
     GraphMaximumCutRequest,
     GraphMaximumCutResult,
     compute_maximum_cut,
+    verify_maximum_cut_result,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -28,12 +29,16 @@ def _graph(
     return SimpleUndirectedGraph(vertices=vertices, edges=edges)
 
 
+def _edge(left: str, right: str) -> tuple[str, str]:
+    return (left, right) if left < right else (right, left)
+
+
 def _cycle(order: int) -> SimpleUndirectedGraph:
     vertices = tuple(f"{index:02d}" for index in range(order))
     edges = tuple(
         sorted(
             {
-                tuple(sorted((vertices[index], vertices[(index + 1) % order])))
+                _edge(vertices[index], vertices[(index + 1) % order])
                 for index in range(order)
             }
         )
@@ -43,7 +48,9 @@ def _cycle(order: int) -> SimpleUndirectedGraph:
 
 def _complete(order: int) -> SimpleUndirectedGraph:
     vertices = tuple(f"{index:02d}" for index in range(order))
-    return _graph(vertices, tuple(combinations(vertices, 2)))
+    return _graph(
+        vertices, tuple((left, right) for left, right in combinations(vertices, 2))
+    )
 
 
 def _c5_blow_up(class_sizes: tuple[int, int, int, int, int]) -> SimpleUndirectedGraph:
@@ -55,7 +62,7 @@ def _c5_blow_up(class_sizes: tuple[int, int, int, int, int]) -> SimpleUndirected
     edges = tuple(
         sorted(
             {
-                tuple(sorted((left, right)))
+                _edge(left, right)
                 for class_index, class_ in enumerate(classes)
                 for left in class_
                 for right in classes[(class_index + 1) % 5]
@@ -178,8 +185,7 @@ def test_every_graph_through_order_six_matches_an_independent_oracle() -> None:
         vertices = tuple(sorted(labels.values()))
         edges = tuple(
             sorted(
-                tuple(sorted((labels[left], labels[right])))
-                for left, right in atlas_graph.edges
+                _edge(labels[left], labels[right]) for left, right in atlas_graph.edges
             )
         )
         graph = _graph(vertices, edges)
@@ -277,8 +283,25 @@ def test_feasible_suboptimal_cut_with_forged_exact_bounds_fails_replay() -> None
     forged["lower_bound"] = 2
     forged["upper_bound"] = 2
 
-    with pytest.raises(ValidationError):
-        GraphMaximumCutResult.model_validate(forged)
+    assert not verify_maximum_cut_result(GraphMaximumCutResult.model_validate(forged))
+
+
+def test_result_deserialization_never_replays_the_exhaustive_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = compute_maximum_cut(GraphMaximumCutRequest(graph=_cycle(5)))
+
+    def forbidden_replay(
+        *_args: object, **_kwargs: object
+    ) -> tuple[int, tuple[bool, ...]]:
+        raise AssertionError("structural result parsing must not replay maximum cut")
+
+    monkeypatch.setattr(
+        _maximum_cut, "_solve_analysis_by_enumeration", forbidden_replay
+    )
+    reparsed = GraphMaximumCutResult.model_validate(result.model_dump(mode="json"))
+
+    assert reparsed == result
 
 
 def test_candidate_boundary_accepts_c21_and_rejects_c23_before_backend() -> None:

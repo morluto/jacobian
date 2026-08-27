@@ -26,6 +26,7 @@ from jacobian.math.discrepancy_theory._models import (
     FiniteSetSystem,
     HardConstraintRoundingRequest,
     HardConstraintRoundingResult,
+    verify_discrepancy_optimum_result,
 )
 from jacobian.math.discrepancy_theory._operations import (
     compute_discrepancy,
@@ -54,11 +55,11 @@ def _rounding_request(
         Fraction(1, 2),
         Fraction(1, 2),
     ),
-    rows: tuple[dict[str, object], ...] = (
+    rows: tuple[object, ...] = (
         {"label": "left", "coordinates": (0, 1)},
         {"label": "right", "coordinates": (2, 3)},
     ),
-    columns: tuple[dict[str, object], ...] = (
+    columns: tuple[object, ...] = (
         {"label": "diagonal", "coordinates": (0, 2)},
         {"label": "off_diagonal", "coordinates": (1, 3)},
     ),
@@ -498,7 +499,7 @@ class TestHardConstraintRounding:
 
 
 class TestDiscrepancyEval:
-    def test_simple_two_element(self):
+    def test_simple_two_element(self) -> None:
         req = DiscrepancyEvalRequest(
             set_system=FiniteSetSystem(ground_set_size=2, sets=((0,), (1,))),
             coloring=(1, -1),
@@ -507,7 +508,7 @@ class TestDiscrepancyEval:
         assert result.signed_sums == (1, -1)
         assert result.max_absolute_imbalance == 1
 
-    def test_empty_family(self):
+    def test_empty_family(self) -> None:
         req = DiscrepancyEvalRequest(
             set_system=FiniteSetSystem(ground_set_size=3, sets=()),
             coloring=(1, 1, 1),
@@ -516,7 +517,7 @@ class TestDiscrepancyEval:
         assert result.signed_sums == ()
         assert result.max_absolute_imbalance == 0
 
-    def test_balanced_coloring(self):
+    def test_balanced_coloring(self) -> None:
         req = DiscrepancyEvalRequest(
             set_system=FiniteSetSystem(ground_set_size=4, sets=((0, 1, 2, 3),)),
             coloring=(1, 1, -1, -1),
@@ -527,7 +528,7 @@ class TestDiscrepancyEval:
 
 
 class TestDiscrepancyOptimum:
-    def test_triangle_system(self):
+    def test_triangle_system(self) -> None:
         req = DiscrepancyOptimumRequest(
             set_system=FiniteSetSystem(
                 ground_set_size=3,
@@ -539,7 +540,7 @@ class TestDiscrepancyOptimum:
         assert result.optimal_discrepancy == 2
         assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
 
-    def test_empty_ground_set(self):
+    def test_empty_ground_set(self) -> None:
         req = DiscrepancyOptimumRequest(
             set_system=FiniteSetSystem(ground_set_size=0, sets=()),
         )
@@ -548,7 +549,7 @@ class TestDiscrepancyOptimum:
         assert result.optimal_discrepancy == 0
         assert result.optimal_coloring == ()
 
-    def test_single_set_optimum(self):
+    def test_single_set_optimum(self) -> None:
         req = DiscrepancyOptimumRequest(
             set_system=FiniteSetSystem(
                 ground_set_size=2,
@@ -559,7 +560,7 @@ class TestDiscrepancyOptimum:
         assert result.status == "OPTIMAL"
         assert result.optimal_discrepancy == 0
 
-    def test_matches_bruteforce_on_small_instances(self):
+    def test_matches_bruteforce_on_small_instances(self) -> None:
         import itertools
         import random
 
@@ -588,7 +589,7 @@ class TestDiscrepancyOptimum:
             assert result.status == "OPTIMAL"
             assert result.optimal_discrepancy == brute
 
-    def test_solver_scale_beyond_bruteforce(self):
+    def test_solver_scale_beyond_bruteforce(self) -> None:
         """A 40-element instance solves in seconds; 2^40 scanning cannot.
 
         Pair sets {2i, 2i+1} admit the alternating coloring with discrepancy
@@ -616,7 +617,7 @@ class TestDiscrepancyOptimum:
         assert replayed == result.optimal_discrepancy
         assert elapsed < 60
 
-    def test_hard_instance_reports_honest_outcome(self):
+    def test_hard_instance_reports_honest_outcome(self) -> None:
         """A genuinely hard instance either proves its optimum or reports
         BUDGET_EXCEEDED; when optimal, the coloring replays exactly."""
         import random
@@ -732,7 +733,7 @@ class TestDiscrepancyOptimum:
         assert result.set_system == req.set_system
         assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
 
-    def test_execution_failed_result_carries_no_claim(self):
+    def test_execution_failed_result_carries_no_claim(self) -> None:
         system = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
         with _validation_code("discrepancy_theory.incomplete_result_carries_claim"):
             DiscrepancyOptimumResult(
@@ -742,7 +743,7 @@ class TestDiscrepancyOptimum:
                 optimal_discrepancy=0,
             )
 
-    def test_budget_exceeded_result_carries_no_claim(self):
+    def test_budget_exceeded_result_carries_no_claim(self) -> None:
         system = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
         with _validation_code("discrepancy_theory.incomplete_result_carries_claim"):
             DiscrepancyOptimumResult(
@@ -752,7 +753,7 @@ class TestDiscrepancyOptimum:
                 optimal_discrepancy=0,
             )
 
-    def test_budget_exceeded_serialization_carries_no_completeness_claim(self):
+    def test_budget_exceeded_serialization_carries_no_completeness_claim(self) -> None:
         result = DiscrepancyOptimumResult.model_validate(
             {
                 "set_system": {"ground_set_size": 2, "sets": [[0, 1]]},
@@ -763,7 +764,7 @@ class TestDiscrepancyOptimum:
         assert result.optimal_coloring == ()
         assert result.optimal_discrepancy is None
 
-    def test_optimal_result_replay_binds_coloring_to_system(self):
+    def test_optimal_result_replay_binds_coloring_to_system(self) -> None:
         system = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
         with _validation_code("discrepancy_theory.optimal_discrepancy_mismatch"):
             DiscrepancyOptimumResult(
@@ -773,7 +774,7 @@ class TestDiscrepancyOptimum:
                 optimal_discrepancy=0,
             )
 
-    def test_forged_nonminimal_optimum_is_rejected(self):
+    def test_forged_nonminimal_optimum_requires_explicit_verification(self) -> None:
         """The witness attains the claimed discrepancy 2, but (1, -1)
         proves the true optimum of the single pair system is 0; only an
         independently re-established lower bound exposes the forgery."""
@@ -783,12 +784,34 @@ class TestDiscrepancyOptimum:
             "optimal_coloring": [1, 1],
             "optimal_discrepancy": 2,
         }
-        with _validation_code("discrepancy_theory.optimality_disproved"):
+        assert not verify_discrepancy_optimum_result(
             DiscrepancyOptimumResult.model_validate(payload)
+        )
+
+    def test_optimum_result_deserialization_does_not_run_the_solver(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        payload = {
+            "set_system": {"ground_set_size": 2, "sets": [[0, 1]]},
+            "status": "OPTIMAL",
+            "optimal_coloring": [1, 1],
+            "optimal_discrepancy": 2,
+        }
+
+        def solver_must_not_run(_system: object, _allowed: int) -> str:
+            raise AssertionError("result deserialization must remain structural")
+
+        monkeypatch.setattr(
+            discrepancy_models, "_feasibility_outcome", solver_must_not_run
+        )
+
+        result = DiscrepancyOptimumResult.model_validate(payload)
+
+        assert result.optimal_discrepancy == 2
 
     def test_zero_optimum_validates_without_a_lower_bound_solve(
         self, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         def fail_if_asked(_system: object, _allowed: int) -> str:
             raise AssertionError("zero lower bound is definitional, not solved")
 
@@ -802,9 +825,9 @@ class TestDiscrepancyOptimum:
         assert result.optimal_discrepancy == 0
         assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
 
-    def test_unestablished_lower_bound_fails_closed(
+    def test_unestablished_lower_bound_fails_closed_in_explicit_verifier(
         self, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         def undecided(_system: object, _allowed: int) -> str:
             return "unknown"
 
@@ -815,8 +838,9 @@ class TestDiscrepancyOptimum:
             "optimal_coloring": [1, 1, 1],
             "optimal_discrepancy": 2,
         }
-        with _validation_code("discrepancy_theory.optimality_unproven"):
+        assert not verify_discrepancy_optimum_result(
             DiscrepancyOptimumResult.model_validate(payload)
+        )
 
     @pytest.mark.parametrize(
         ("proof_outcome", "expected_status"),
@@ -831,7 +855,7 @@ class TestDiscrepancyOptimum:
         proof_outcome: str,
         expected_status: str,
         monkeypatch: pytest.MonkeyPatch,
-    ):
+    ) -> None:
         """A positive incumbent may only become OPTIMAL after the exact Z3
         feasibility check re-establishes the lower bound; any other outcome
         downgrades the result to a claim-free status."""
@@ -860,7 +884,9 @@ class TestDiscrepancyOptimum:
             assert result.optimal_coloring == ()
             assert result.optimal_discrepancy is None
 
-    def test_proving_checker_failure_stays_typed(self, monkeypatch: pytest.MonkeyPatch):
+    def test_proving_checker_failure_stays_typed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A raising proof checker must translate to the claim-free outcome,
         never escape compute_optimal_discrepancy as a host exception."""
 
@@ -883,7 +909,7 @@ class TestDiscrepancyOptimum:
 
     def test_milp_exception_becomes_execution_failed(
         self, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         """scipy.optimize.milp raising instead of returning must surface as
         the typed EXECUTION_FAILED outcome, not a kernel exception."""
 
@@ -910,7 +936,7 @@ class TestDiscrepancyOptimum:
         self,
         blocked_module: str,
         monkeypatch: pytest.MonkeyPatch,
-    ):
+    ) -> None:
         """A NumPy/SciPy ABI or dynamic-loader failure during backend
         initialization must translate to typed EXECUTION_FAILED instead of
         escaping compute_optimal_discrepancy as an ImportError/OSError."""
@@ -930,7 +956,7 @@ class TestDiscrepancyOptimum:
 
     def test_solver_options_carry_node_and_time_budgets(
         self, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         """Branch-and-bound work is capped by node_limit, not wall time alone."""
         from types import SimpleNamespace
 
@@ -957,12 +983,13 @@ class TestDiscrepancyOptimum:
         result = compute_optimal_discrepancy(req)
 
         options = captured["options"]
+        assert isinstance(options, dict)
         assert options["node_limit"] == MAX_OPTIMUM_SOLVER_NODES
         assert options["time_limit"] == MAX_OPTIMUM_SOLVER_MILLISECONDS / 1000
         assert result.status == "OPTIMAL"
         assert result.optimal_discrepancy == 0
 
-    def test_easy_instance_still_proves_bounds_after_bound_check(self):
+    def test_easy_instance_still_proves_bounds_after_bound_check(self) -> None:
         """The bound-checking kernel still reports OPTIMAL with replay."""
         system = FiniteSetSystem(ground_set_size=4, sets=((0, 1), (2, 3)))
         result = compute_optimal_discrepancy(
@@ -976,7 +1003,7 @@ class TestDiscrepancyOptimum:
         )
         assert replayed == result.optimal_discrepancy
 
-    def test_hard_instance_outcome_is_always_honest(self):
+    def test_hard_instance_outcome_is_always_honest(self) -> None:
         """Whatever the budget outcome, an OPTIMAL claim replays exactly and
         BUDGET_EXCEEDED carries no witness — a timed-out incumbent must not
         be labeled optimal."""

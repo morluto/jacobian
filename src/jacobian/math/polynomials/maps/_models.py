@@ -537,42 +537,13 @@ def _is_unit_generic_fiber_basis(certificate: GenericFiberCertificate) -> bool:
 GENERIC_DEGREE_RESULT_REPLAY_WALL_SECONDS = 60
 
 
-def _require_bounded_conclusion_replay(
-    source: RationalPolynomialMap,
-    evidence: GenericFiberCertificate,
-    outcome: GenericDegreeOutcome,
-    degree: int | None,
-) -> None:
-    """Accept a generic-degree conclusion only behind the bounded replay boundary."""
-
-    from jacobian.math.polynomials.maps._replay import run_bounded_certificate_replay
-
-    replay = run_bounded_certificate_replay(
-        source,
-        evidence,
-        wall_seconds=GENERIC_DEGREE_RESULT_REPLAY_WALL_SECONDS,
-    )
-    if replay.status != "COMPUTED":
-        raise _validation_error(
-            "generic-degree evidence failed its bounded source-bound replay"
-        )
-    if replay.outcome != outcome or replay.degree != degree:
-        raise _validation_error(
-            "claimed generic-degree conclusion disagrees with the bounded "
-            "generic-fiber replay"
-        )
-
-
 class GenericDegreeResult(StrictModel):
     """An exact source-bound generic-fiber conclusion or operational failure.
 
-    The declared outcome must agree with the evidence shape, and a killable
-    bounded replay worker must reproduce the conclusion from the source and
-    evidence -- recomputing the standard-monomial complement from the
-    certified leading ideal -- before any mathematical outcome is accepted,
-    so serialized results cannot bind evidence to another source or replace
-    its standard monomials. The producing operation reuses its own worker
-    verdict instead of replaying a second time in this process.
+    The declared outcome must agree with the source and evidence shape. Owner
+    kernels replay their evidence before trusted construction; independently
+    supplied mathematical claims use ``verify_generic_degree_result`` rather
+    than re-entering a process-bound replay during deserialization.
     """
 
     outcome: GenericDegreeOutcome
@@ -624,13 +595,56 @@ class GenericDegreeResult(StrictModel):
                 raise _validation_error(
                     "positive-dimensional outcomes carry a non-unit generic-fiber basis"
                 )
-        _require_bounded_conclusion_replay(
-            self.source,
-            self.evidence,
-            self.outcome,
-            self.degree,
-        )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        outcome: GenericDegreeOutcome,
+        source: RationalPolynomialMap,
+        degree: int | None,
+        evidence: GenericFiberCertificate | None,
+        detail: str | None,
+    ) -> Self:
+        """Construct a result after the owner has completed exact replay."""
+
+        return cls.model_construct(
+            outcome=outcome,
+            source=source,
+            degree=degree,
+            evidence=evidence,
+            detail=detail,
+        )
+
+
+def verify_generic_degree_result(result: GenericDegreeResult) -> bool:
+    """Replay one independently supplied exact generic-degree claim.
+
+    This owner-local verifier has a fixed 60-second replay ceiling. Structural
+    result parsing never invokes it, and an unavailable or out-of-envelope
+    replay is not mathematical evidence.
+    """
+
+    mathematical = {
+        "GENERICALLY_FINITE",
+        "NOT_DOMINANT",
+        "DOMINANT_NOT_GENERICALLY_FINITE",
+    }
+    if result.outcome not in mathematical or result.evidence is None:
+        return False
+    from jacobian.math.polynomials.maps._replay import run_bounded_certificate_replay
+
+    replay = run_bounded_certificate_replay(
+        result.source,
+        result.evidence,
+        wall_seconds=GENERIC_DEGREE_RESULT_REPLAY_WALL_SECONDS,
+    )
+    return (
+        replay.status == "COMPUTED"
+        and replay.outcome == result.outcome
+        and replay.degree == result.degree
+    )
 
 
 __all__ = [

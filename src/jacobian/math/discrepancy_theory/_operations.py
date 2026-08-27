@@ -308,7 +308,7 @@ def compute_optimal_discrepancy(
                 "node_limit": MAX_OPTIMUM_SOLVER_NODES,
             },
         )
-    except Exception:
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError):
         # Backend initialization, program construction, and the solve are one
         # bounded external call: an ABI/loader, native, or raised failure
         # there is transport, not mathematics, so report the typed claim-free
@@ -366,7 +366,7 @@ def _incumbent_outcome(
         outcome = discrepancy_models._feasibility_outcome(
             request.set_system, recomputed - 1
         )
-    except Exception:
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError):
         # An unavailable exact proof cannot back the OPTIMAL claim; report
         # the claim-free outcome instead of escaping the kernel.
         return _budget_exceeded_result(request.set_system)

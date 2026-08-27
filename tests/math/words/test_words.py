@@ -31,6 +31,7 @@ from jacobian.math.words import (
     substitution_dependency_graph,
     substitution_primitivity_profile,
 )
+from jacobian.math.words import _operations as word_operations
 from jacobian.math.words._models import (
     FactorsLengthRequest,
     FactorsLengthResult,
@@ -157,6 +158,43 @@ def test_empty_period_convention_and_result_binding() -> None:
     payload["is_primitive"] = True
     supplied = PeriodsResult.model_validate(payload)
     assert not verify_periods_result(supplied)
+
+
+@pytest.mark.parametrize(
+    ("operation", "operation_request", "kernel_name"),
+    (
+        (
+            compute_factors_length,
+            FactorsLengthRequest(word=_word("abaab"), factor_length=2),
+            "factors_of_length",
+        ),
+        (
+            compute_periods,
+            PeriodsRequest(word=_word("ababab")),
+            "periods",
+        ),
+    ),
+)
+def test_trusted_word_profile_producers_run_the_kernel_once(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: object,
+    operation_request: object,
+    kernel_name: str,
+) -> None:
+    original = getattr(word_operations, kernel_name)
+    calls = 0
+
+    def counted(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(word_operations, kernel_name, counted)
+
+    assert callable(operation)
+    operation(operation_request)
+
+    assert calls == 1
 
 
 def test_fibonacci_incidence_matrix_and_binding() -> None:

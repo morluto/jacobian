@@ -308,8 +308,16 @@ class GraphMaximumCutResult(StrictModel):
     upper_bound: StrictInt = Field(ge=0, le=32_640)
 
     @model_validator(mode="after")
-    def bind_cut_to_source_and_replay_optimality(self) -> Self:
-        analysis = _require_graph_envelope(self.graph)
+    def bind_cut_to_source(self) -> Self:
+        """Validate the linear source-bound witness shape only.
+
+        Exact optimality is a nonlocal claim.  Replaying it here would make
+        ordinary result deserialization execute the exhaustive kernel; callers
+        that receive an independently supplied result must opt into
+        :func:`verify_maximum_cut_result` instead.
+        """
+
+        _require_graph_envelope(self.graph)
         graph_vertices = set(self.graph.vertices)
         left = set(self.left_vertices)
         right = set(self.right_vertices)
@@ -343,12 +351,41 @@ class GraphMaximumCutResult(StrictModel):
         if self.lower_bound != self.cut_value or self.upper_bound != self.cut_value:
             raise ValueError("an exact result requires exact bounds equal to cut value")
 
-        replayed_value, _sides = _solve_analysis_by_enumeration(analysis)
-        if self.cut_value != replayed_value:
-            raise ValueError(
-                "cut value is feasible but not maximum for the retained source graph"
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: SimpleUndirectedGraph,
+        left_vertices: tuple[str, ...],
+        right_vertices: tuple[str, ...],
+        crossing_edges: tuple[tuple[str, str], ...],
+        cut_value: int,
+    ) -> Self:
+        """Construct an exact result after the owner kernel has proved its bounds."""
+
+        return cls.model_construct(
+            graph=graph,
+            left_vertices=left_vertices,
+            right_vertices=right_vertices,
+            crossing_edges=crossing_edges,
+            cut_value=cut_value,
+            lower_bound=cut_value,
+            upper_bound=cut_value,
+        )
+
+
+def verify_maximum_cut_result(result: GraphMaximumCutResult) -> bool:
+    """Replay one independently supplied exact maximum-cut claim.
+
+    The request envelope has already bounded the exhaustive enumeration.  It
+    is deliberately explicit so Pydantic result parsing remains structural.
+    """
+
+    analysis = _require_graph_envelope(result.graph)
+    replayed_value, _sides = _solve_analysis_by_enumeration(analysis)
+    return result.cut_value == replayed_value
 
 
 def _solve_component_by_enumeration(
@@ -540,14 +577,12 @@ def compute_maximum_cut(request: GraphMaximumCutRequest) -> GraphMaximumCutResul
     # The producer already has coincident exact backend bounds. Avoid paying a
     # second complete search inside this call; independently supplied or
     # deserialized results always execute the exhaustive source-bound replay.
-    return GraphMaximumCutResult.model_construct(
+    return GraphMaximumCutResult._from_kernel(
         graph=request.graph,
         left_vertices=left_vertices,
         right_vertices=right_vertices,
         crossing_edges=crossing_edges,
         cut_value=cut_value,
-        lower_bound=cut_value,
-        upper_bound=cut_value,
     )
 
 
@@ -606,4 +641,5 @@ __all__ = [
     "GraphMaximumCutRequest",
     "GraphMaximumCutResult",
     "compute_maximum_cut",
+    "verify_maximum_cut_result",
 ]

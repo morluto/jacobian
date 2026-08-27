@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import json
 import shutil
+import time
 from fractions import Fraction
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import sympy
 from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian._exact import CanonicalRational
-from jacobian.math import _singular as shared_singular
 from jacobian.math.polynomials.maps import (
     RationalPolynomialMap,
     _generic_degree,
@@ -33,6 +33,7 @@ from jacobian.math.polynomials.maps._models import (
     GenericFiberCertificate,
     GenericFiberPolynomial,
     GenericFiberTerm,
+    verify_generic_degree_result,
 )
 from jacobian.math.polynomials.maps._operations import compute_generic_degree
 from jacobian.math.polynomials.maps._replay import (
@@ -188,7 +189,7 @@ def test_operation_is_one_admitted_atomic_generic_fiber_computation() -> None:
 def test_missing_backend_is_operational_unavailability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(shared_singular.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
 
     result = _compute(_map(("x",), {(1,): 1}))
 
@@ -238,7 +239,10 @@ def test_request_bounds_component_and_aggregate_support() -> None:
             polynomial_map=_map(
                 ("x", "y", "z"),
                 *(
-                    dict.fromkeys(monomials[offset : offset + 33], 1)
+                    cast(
+                        dict[tuple[int, ...], int | Fraction],
+                        dict.fromkeys(monomials[offset : offset + 33], 1),
+                    )
                     for offset in (0, 33, 66)
                 ),
             )
@@ -368,8 +372,11 @@ def test_generic_degree_is_invariant_under_linear_coordinate_changes() -> None:
 
 @requires_singular
 @pytest.mark.requires_backend("singular")
+@pytest.mark.exhaustive
+@pytest.mark.timeout(180)
 def test_atlas_weighted_lift_k1_d2_has_generic_degree_three() -> None:
-    # This is the exact crater-map fixture pinned by the issue's Atlas source.
+    # This is a slow exact Singular regression, retained in the dedicated
+    # Singular/exhaustive lane rather than the ordinary math owner lane.
     result = _compute(
         _map(
             ("x", "y", "z"),
@@ -546,7 +553,7 @@ def test_declared_replay_limits_are_consulted_during_replay(
         )
 
 
-def test_forged_degree_is_rejected_by_the_result_contract() -> None:
+def test_forged_degree_fails_the_explicit_result_verifier() -> None:
     result = GenericDegreeResult(
         outcome="GENERICALLY_FINITE",
         source=_identity_source(),
@@ -555,9 +562,13 @@ def test_forged_degree_is_rejected_by_the_result_contract() -> None:
     )
     forged = result.model_dump(mode="json")
     forged["degree"] = 2
+    assert isinstance(forged["evidence"], dict)
+    forged["evidence"]["standard_monomials"] = [[0, 0], [1, 0]]
 
-    with polynomial_validation_error():
-        GenericDegreeResult.model_validate(forged)
+    assert (
+        verify_generic_degree_result(GenericDegreeResult.model_validate(forged))
+        is False
+    )
 
 
 def test_forged_source_evidence_fails_closed_at_the_operation(
@@ -630,13 +641,27 @@ def _power_map_result(power: int) -> GenericDegreeResult:
     )
 
 
-def test_consistent_results_replay_at_the_result_boundary() -> None:
+def test_consistent_results_round_trip_without_replaying_at_deserialization() -> None:
     for power in (2, 3):
         result = _power_map_result(power)
+        assert result.evidence is not None
         require_certificate_reconstructs_from_source(result.source, result.evidence)
         replayed = GenericDegreeResult.model_validate(result.model_dump(mode="json"))
 
         assert replayed == result
+
+
+def test_result_deserialization_does_not_invoke_the_certificate_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = _power_map_result(2)
+
+    def fail_replay(*_args: object, **_kwargs: object) -> CertificateReplayResult:
+        raise AssertionError("result deserialization must remain structural")
+
+    monkeypatch.setattr(_replay, "run_bounded_certificate_replay", fail_replay)
+
+    assert GenericDegreeResult.model_validate(result.model_dump(mode="json")) == result
 
 
 def test_serialized_evidence_cannot_be_presented_against_a_different_source() -> None:
@@ -644,8 +669,9 @@ def test_serialized_evidence_cannot_be_presented_against_a_different_source() ->
     forged = result.model_dump(mode="json")
     forged["source"] = _power_map_result(2).source.model_dump(mode="json")
 
-    with polynomial_validation_error():
-        GenericDegreeResult.model_validate(forged)
+    replayed = GenericDegreeResult.model_validate(forged)
+    assert result.evidence is not None
+    assert verify_generic_degree_result(replayed) is False
     with pytest.raises(ValueError, match="reconstruct"):
         require_certificate_reconstructs_from_source(
             _power_map_result(2).source,
@@ -663,8 +689,10 @@ def test_forged_standard_monomials_are_rejected_against_the_certified_ideal() ->
         "evidence": evidence,
     }
 
-    with polynomial_validation_error():
-        GenericDegreeResult.model_validate(forged)
+    assert (
+        verify_generic_degree_result(GenericDegreeResult.model_validate(forged))
+        is False
+    )
 
 
 def test_cleared_standard_monomials_cannot_invent_a_positive_dimensional_outcome() -> (
@@ -678,8 +706,10 @@ def test_cleared_standard_monomials_cannot_invent_a_positive_dimensional_outcome
         "evidence": evidence,
     }
 
-    with polynomial_validation_error():
-        GenericDegreeResult.model_validate(forged)
+    assert (
+        verify_generic_degree_result(GenericDegreeResult.model_validate(forged))
+        is False
+    )
 
 
 @pytest.mark.parametrize(
@@ -701,8 +731,10 @@ def test_unconfirmed_replay_verdicts_never_establish_a_conclusion(
         "evidence": _power_map_certificate(2).model_dump(mode="json"),
     }
 
-    with polynomial_validation_error():
-        GenericDegreeResult.model_validate(payload)
+    assert (
+        verify_generic_degree_result(GenericDegreeResult.model_validate(payload))
+        is False
+    )
 
 
 def test_producing_operation_replays_evidence_exactly_once(
@@ -796,7 +828,7 @@ def test_replay_receives_only_the_remaining_declared_wall_time(
             degree=1,
         )
 
-    monkeypatch.setattr(_operations.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(time, "monotonic", fake_monotonic)
     monkeypatch.setattr(_operations, "run_singular_generic_fiber", fake_backend)
     monkeypatch.setattr(_operations, "run_bounded_certificate_replay", fake_replay)
 
@@ -823,7 +855,7 @@ def test_exhausted_envelope_reports_timeout_without_replaying(
     def fail_replay(*_args: object, **_kwargs: object) -> CertificateReplayResult:
         raise AssertionError("certificate replay must not run without budget")
 
-    monkeypatch.setattr(_operations.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(time, "monotonic", fake_monotonic)
     monkeypatch.setattr(
         _operations,
         "run_singular_generic_fiber",

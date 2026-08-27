@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.matrices.canonical_forms import _operations as canonical_operations
 from jacobian.math.matrices.canonical_forms import (
     invariant_factors,
     minimal_polynomial,
@@ -88,6 +89,58 @@ def test_nilpotent_jordan_block_minimal_polynomial_is_t_squared() -> None:
     result = compute_minimal_polynomial(req)
     assert _coeffs(result.minimal_polynomial) == [Fraction(0), Fraction(0), Fraction(1)]
     assert result.degree == 2
+
+
+def test_trusted_canonical_form_producers_run_each_kernel_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _diagonal("2", "3")
+    names = (
+        "invariant_factors",
+        "minimal_polynomial",
+        "characteristic_polynomial",
+        "primary_decomposition",
+    )
+    calls = dict.fromkeys(names, 0)
+
+    for name in names:
+        original = getattr(canonical_operations, name)
+
+        def counted(
+            *args: object, _original=original, _name=name, **kwargs: object
+        ) -> object:
+            calls[_name] += 1
+            return _original(*args, **kwargs)
+
+        monkeypatch.setattr(canonical_operations, name, counted)
+
+    compute_minimal_polynomial(request)
+    assert calls == {
+        "invariant_factors": 0,
+        "minimal_polynomial": 1,
+        "characteristic_polynomial": 1,
+        "primary_decomposition": 0,
+    }
+
+    for name in calls:
+        calls[name] = 0
+    compute_rational_canonical_form(request)
+    assert calls == {
+        "invariant_factors": 1,
+        "minimal_polynomial": 1,
+        "characteristic_polynomial": 1,
+        "primary_decomposition": 0,
+    }
+
+    for name in calls:
+        calls[name] = 0
+    compute_primary_decomposition(request)
+    assert calls == {
+        "invariant_factors": 0,
+        "minimal_polynomial": 1,
+        "characteristic_polynomial": 0,
+        "primary_decomposition": 1,
+    }
 
 
 def test_diagonal_distinct_minimal_equals_characteristic() -> None:

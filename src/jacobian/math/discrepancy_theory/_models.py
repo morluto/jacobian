@@ -492,7 +492,9 @@ def _feasibility_outcome(
 
     try:
         import z3  # type: ignore[import-untyped]
-
+    except (ImportError, OSError):
+        return "unknown"
+    try:
         solver = z3.Solver()
         solver.set(timeout=max(1, MAX_OPTIMUM_PROOF_MILLISECONDS))
         bits = [z3.Bool(f"b_{index}") for index in range(n)]
@@ -504,7 +506,7 @@ def _feasibility_outcome(
             solver.add(signed_sum <= allowed)
             solver.add(signed_sum >= -allowed)
         status = solver.check()
-    except Exception:
+    except z3.Z3Exception:
         return "unknown"
     if status == z3.sat:
         return "sat"
@@ -517,11 +519,10 @@ class DiscrepancyOptimumResult(StrictModel):
     """A proven-minimum coloring or an exhausted solver budget.
 
     Source-bound on its set system: ``OPTIMAL`` carries the exact minimum
-    discrepancy and one witnessing coloring. Deserialization replays the
-    witness against the retained system and independently re-establishes
-    the lower bound: zero is definitional, and any positive claimed optimum
-    must be backed by an explicit unsat of the exact feasibility program
-    that asks for a coloring of imbalance at most one less.
+    discrepancy and one witnessing coloring. Deserialization validates only
+    the retained source and the witness's attained discrepancy. Independently
+    supplied optimality claims are replayed by
+    :func:`verify_discrepancy_optimum_result` under its explicit proof budget.
     ``BUDGET_EXCEEDED`` makes no mathematical claim: it carries neither a
     coloring nor a discrepancy value.
     """
@@ -567,28 +568,22 @@ class DiscrepancyOptimumResult(StrictModel):
                 "the reported discrepancy must be the exact maximum imbalance "
                 "of the returned coloring",
             )
-        self._require_lower_bound()
         return self
 
-    def _require_lower_bound(self) -> None:
-        """Re-establish minimality; only a proven lower bound may pass."""
 
-        assert self.optimal_discrepancy is not None
-        if self.optimal_discrepancy == 0:
-            return
-        outcome = _feasibility_outcome(self.set_system, self.optimal_discrepancy - 1)
-        if outcome == "unsat":
-            return
-        if outcome == "sat":
-            raise _validation_error(
-                "optimality_disproved",
-                "a coloring with smaller imbalance exists; the claimed "
-                "optimum is not minimal",
-            )
-        raise _validation_error(
-            "optimality_unproven",
-            "claimed optimality was not established within the replay budget",
-        )
+def verify_discrepancy_optimum_result(result: DiscrepancyOptimumResult) -> bool:
+    """Replay one independently supplied positive optimum within the proof cap."""
+
+    if result.status != "OPTIMAL":
+        return True
+    if result.optimal_discrepancy is None:
+        return False
+    if result.optimal_discrepancy == 0:
+        return True
+    return (
+        _feasibility_outcome(result.set_system, result.optimal_discrepancy - 1)
+        == "unsat"
+    )
 
 
 def _proven_optimal_result(
@@ -598,10 +593,9 @@ def _proven_optimal_result(
 ) -> DiscrepancyOptimumResult:
     """Build a proven-optimal result after one producing incumbent solve.
 
-    Direct construction from the producing solve skips result replay so one
-    declared budget covers all solver work; independently supplied results
-    always validate through ``bind_optimal_coloring``, which replays the
-    witness and re-establishes the lower bound.
+    Direct construction is permitted after the owner kernel has established
+    witness feasibility and the exact lower-bound proof. Independently
+    supplied results use :func:`verify_discrepancy_optimum_result`.
     """
 
     return DiscrepancyOptimumResult.model_construct(
@@ -667,4 +661,5 @@ __all__ = [
     "HardConstraintRowLedger",
     "MonitoredColumn",
     "MonitoredColumnLedger",
+    "verify_discrepancy_optimum_result",
 ]

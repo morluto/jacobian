@@ -14,14 +14,11 @@ from jacobian.math.number_theory._factorization_kernels import (
 
 
 def main() -> int:
-    try:
-        request = CertifiedFactorizationRequest.model_validate(json.load(sys.stdin))
-        response: dict[str, object] = {
-            "ok": True,
-            "result": _factorize_certified_in_process(request).model_dump(mode="json"),
-        }
-    except Exception as exc:
-        response = {"ok": False, "error": type(exc).__name__}
+    request = CertifiedFactorizationRequest.model_validate(json.load(sys.stdin))
+    response: dict[str, object] = {
+        "ok": True,
+        "result": _factorize_certified_in_process(request).model_dump(mode="json"),
+    }
     json.dump(response, sys.stdout, separators=(",", ":"))
     return 0
 

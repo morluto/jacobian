@@ -6,6 +6,7 @@ import json
 import math
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory._certification_models import (
@@ -39,6 +40,9 @@ _CERTIFIED_FACTORIZATION_WORKER = (
 _DIRECT_FACTORIZATION_WORKER = (
     Path(__file__).resolve().with_name("_direct_factorization_worker.py")
 )
+_FACTORIZATION_WORKER_TIMEOUT_SECONDS = 60.0
+_FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
+_FACTORIZATION_WORKER_FILE_SIZE_BYTES = 1024 * 1024
 
 
 def _build_pratt_certificate(prime: int) -> PrattCertificateNode:
@@ -136,17 +140,31 @@ def factorize_certified(
         worker_environment,
     )
 
-    completed = run_bounded_process(
-        [sys.executable, str(_CERTIFIED_FACTORIZATION_WORKER)],
-        input_bytes=json.dumps(
-            {"value": request.value}, separators=(",", ":")
-        ).encode(),
-        timeout_seconds=60.0,
-        environment=worker_environment(locale="C.UTF-8"),
-        stdout_limit=1024 * 1024,
-        stderr_limit=64 * 1024,
-        resource_limits=ProcessResourceLimits(address_space_bytes=1024 * 1024 * 1024),
-    )
+    try:
+        with TemporaryDirectory(
+            prefix="jacobian-certified-factor-"
+        ) as worker_directory:
+            completed = run_bounded_process(
+                [sys.executable, str(_CERTIFIED_FACTORIZATION_WORKER)],
+                input_bytes=json.dumps(
+                    {"value": request.value}, separators=(",", ":")
+                ).encode(),
+                timeout_seconds=_FACTORIZATION_WORKER_TIMEOUT_SECONDS,
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=1024 * 1024,
+                stderr_limit=64 * 1024,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=math.ceil(_FACTORIZATION_WORKER_TIMEOUT_SECONDS),
+                    address_space_bytes=_FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES,
+                    file_size_bytes=_FACTORIZATION_WORKER_FILE_SIZE_BYTES,
+                ),
+                cwd=worker_directory,
+            )
+    except OSError:
+        return CertifiedFactorizationResult._unknown(
+            value=request.value,
+            detail="the bounded factorization worker could not be started",
+        )
     if (
         completed.timed_out
         or completed.cancelled
@@ -188,15 +206,26 @@ def _bounded_direct_factorization(value: int) -> tuple[PrimePower, ...] | None:
         worker_environment,
     )
 
-    completed = run_bounded_process(
-        [sys.executable, str(_DIRECT_FACTORIZATION_WORKER)],
-        input_bytes=json.dumps({"value": str(value)}, separators=(",", ":")).encode(),
-        timeout_seconds=60.0,
-        environment=worker_environment(locale="C.UTF-8"),
-        stdout_limit=64 * 1024,
-        stderr_limit=64 * 1024,
-        resource_limits=ProcessResourceLimits(address_space_bytes=1024 * 1024 * 1024),
-    )
+    try:
+        with TemporaryDirectory(prefix="jacobian-direct-factor-") as worker_directory:
+            completed = run_bounded_process(
+                [sys.executable, str(_DIRECT_FACTORIZATION_WORKER)],
+                input_bytes=json.dumps(
+                    {"value": str(value)}, separators=(",", ":")
+                ).encode(),
+                timeout_seconds=_FACTORIZATION_WORKER_TIMEOUT_SECONDS,
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=64 * 1024,
+                stderr_limit=64 * 1024,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=math.ceil(_FACTORIZATION_WORKER_TIMEOUT_SECONDS),
+                    address_space_bytes=_FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES,
+                    file_size_bytes=_FACTORIZATION_WORKER_FILE_SIZE_BYTES,
+                ),
+                cwd=worker_directory,
+            )
+    except OSError:
+        return None
     if (
         completed.timed_out
         or completed.cancelled

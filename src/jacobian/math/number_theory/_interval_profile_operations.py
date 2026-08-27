@@ -17,31 +17,16 @@ from __future__ import annotations
 import math
 
 from jacobian.math.number_theory._interval_profile_models import (
-    MAX_INTERVAL_UPPER_BOUND,
-    MAX_INTERVAL_WIDTH,
     DivisorCountProfileResult,
     DivisorCountProfileRow,
     GreatestPrimeFactorProfileResult,
     GreatestPrimeFactorProfileRow,
+    IntervalAdmission,
     IntervalProfileRequest,
     PrimeGapProfileResult,
     PrimeGapProfileRow,
     SquarefreeProfileResult,
 )
-
-
-def _require_admitted(request: IntervalProfileRequest) -> None:
-    """Validate the request is within the admission envelope."""
-    if request.lower_bound < 1:
-        raise ValueError("lower_bound must be at least 1")
-    if request.upper_bound < request.lower_bound:
-        raise ValueError("upper_bound must be >= lower_bound")
-    if request.upper_bound > MAX_INTERVAL_UPPER_BOUND:
-        raise ValueError("upper_bound exceeds the maximum supported bound")
-    if request.width() > MAX_INTERVAL_WIDTH:
-        raise ValueError("interval width exceeds the maximum supported width")
-    if not request.is_admitted():
-        raise ValueError("interval result exceeds the canonical output budget")
 
 
 def _simple_sieve(limit: int) -> list[int]:
@@ -84,10 +69,14 @@ def compute_squarefree_profile(
     request: IntervalProfileRequest,
 ) -> SquarefreeProfileResult:
     """Partition [L, U] into squarefree and non-squarefree integers."""
-    _require_admitted(request)
-    lo = request.lower_bound
-    hi = request.upper_bound
-    width = hi - lo + 1
+    return _squarefree_profile_kernel(request.admission)
+
+
+def _squarefree_profile_kernel(admission: IntervalAdmission) -> SquarefreeProfileResult:
+    """Run the squarefree kernel using the already validated envelope."""
+    lo = admission.lower_bound
+    hi = admission.upper_bound
+    width = admission.width
 
     # Segmented square sieve: mark n in [lo, hi] as non-squarefree if p^2 | n
     # for some prime p.  We only need primes p with p^2 <= hi.
@@ -125,10 +114,16 @@ def compute_divisor_count_profile(
     request: IntervalProfileRequest,
 ) -> DivisorCountProfileResult:
     """Compute tau(n) for every n in [L, U]."""
-    _require_admitted(request)
-    lo = request.lower_bound
-    hi = request.upper_bound
-    width = hi - lo + 1
+    return _divisor_count_profile_kernel(request.admission)
+
+
+def _divisor_count_profile_kernel(
+    admission: IntervalAdmission,
+) -> DivisorCountProfileResult:
+    """Run the divisor-count kernel using the already validated envelope."""
+    lo = admission.lower_bound
+    hi = admission.upper_bound
+    width = admission.width
 
     # Factor each interval value in place.  The base sieve is bounded by
     # sqrt(hi), while the mutable residuals are bounded by the interval width.
@@ -167,10 +162,16 @@ def compute_greatest_prime_factor_profile(
     request: IntervalProfileRequest,
 ) -> GreatestPrimeFactorProfileResult:
     """Compute P+(n) for every n in [L, U]."""
-    _require_admitted(request)
-    lo = request.lower_bound
-    hi = request.upper_bound
-    width = hi - lo + 1
+    return _greatest_prime_factor_profile_kernel(request.admission)
+
+
+def _greatest_prime_factor_profile_kernel(
+    admission: IntervalAdmission,
+) -> GreatestPrimeFactorProfileResult:
+    """Run the greatest-prime-factor kernel using the validated envelope."""
+    lo = admission.lower_bound
+    hi = admission.upper_bound
+    width = admission.width
 
     primes = _simple_sieve(math.isqrt(hi))
     residuals = list(range(lo, hi + 1))
@@ -207,9 +208,13 @@ def compute_prime_gap_profile(
     request: IntervalProfileRequest,
 ) -> PrimeGapProfileResult:
     """Compute consecutive-prime gaps for primes p with L <= p <= U."""
-    _require_admitted(request)
-    lo = request.lower_bound
-    hi = request.upper_bound
+    return _prime_gap_profile_kernel(request.admission)
+
+
+def _prime_gap_profile_kernel(admission: IntervalAdmission) -> PrimeGapProfileResult:
+    """Run the prime-gap kernel using the already validated envelope."""
+    lo = admission.lower_bound
+    hi = admission.upper_bound
 
     # Mark only [lo, hi]; the successor beyond hi is queried separately.
     primes_in_interval = _segmented_primes(lo, hi)

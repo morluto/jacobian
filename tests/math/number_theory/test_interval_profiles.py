@@ -7,11 +7,13 @@ from pydantic import ValidationError
 from sympy import factorint, isprime
 
 from jacobian.math.number_theory._interval_profile_models import (
-    _PROFILE_RESULT_OVERHEAD_BYTES,
-    _PROFILE_ROW_BYTES,
     MAX_INTERVAL_WIDTH,
     MAX_PROFILE_RESULT_BYTES,
+    DivisorCountProfileRequest,
+    GreatestPrimeFactorProfileRequest,
     IntervalProfileRequest,
+    PrimeGapProfileRequest,
+    SquarefreeProfileRequest,
 )
 from jacobian.math.number_theory._interval_profile_operations import (
     compute_divisor_count_profile,
@@ -101,13 +103,27 @@ class TestSquarefreeProfile:
             )
 
     def test_request_rejects_result_over_canonical_budget(self) -> None:
-        max_result_width = (
-            MAX_PROFILE_RESULT_BYTES - _PROFILE_RESULT_OVERHEAD_BYTES
-        ) // _PROFILE_ROW_BYTES
         with pytest.raises(ValidationError, match="canonical output budget"):
-            IntervalProfileRequest(
+            DivisorCountProfileRequest(
                 lower_bound=1,
-                upper_bound=max_result_width + 1,
+                upper_bound=MAX_INTERVAL_WIDTH,
+            )
+
+    def test_operation_specific_result_bounds_preserve_sparse_profiles(self) -> None:
+        squarefree = SquarefreeProfileRequest(
+            lower_bound=1, upper_bound=MAX_INTERVAL_WIDTH
+        )
+        prime_gap = PrimeGapProfileRequest(
+            lower_bound=1, upper_bound=MAX_INTERVAL_WIDTH
+        )
+
+        assert squarefree.admission.estimated_result_bytes <= MAX_PROFILE_RESULT_BYTES
+        assert prime_gap.admission.estimated_result_bytes <= MAX_PROFILE_RESULT_BYTES
+        with pytest.raises(ValidationError, match="canonical output budget"):
+            DivisorCountProfileRequest(lower_bound=1, upper_bound=MAX_INTERVAL_WIDTH)
+        with pytest.raises(ValidationError, match="canonical output budget"):
+            GreatestPrimeFactorProfileRequest(
+                lower_bound=1, upper_bound=MAX_INTERVAL_WIDTH
             )
 
     def test_prime_square_boundary(self) -> None:

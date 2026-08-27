@@ -4,16 +4,12 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.finite_geometry._models import (
-    MAX_AFFINE_PLANE_FIELD_ORDER,
-    ParallelClass,
     PrimeFieldAffinePlaneRequest,
-    PrimeFieldAffinePlaneResult,
 )
 from jacobian.math.finite_geometry._operations import (
     compute_prime_field_affine_plane,
 )
 from jacobian.math.finite_geometry._tools import TOOLS
-
 
 # ---------------------------------------------------------------------------
 # Catalog registration
@@ -22,9 +18,7 @@ from jacobian.math.finite_geometry._tools import TOOLS
 
 def test_catalog_contains_affine_plane_operation() -> None:
     operation_ids = {tool.operation_id for tool in TOOLS}
-    assert (
-        "finite_geometry.affine_plane.prime_field.construct" in operation_ids
-    )
+    assert "finite_geometry.affine_plane.prime_field.construct" in operation_ids
 
 
 # ---------------------------------------------------------------------------
@@ -77,9 +71,15 @@ def test_q3_point_ordering() -> None:
         PrimeFieldAffinePlaneRequest(prime_order=3)
     )
     expected = [
-        "0,0", "0,1", "0,2",
-        "1,0", "1,1", "1,2",
-        "2,0", "2,1", "2,2",
+        "0,0",
+        "0,1",
+        "0,2",
+        "1,0",
+        "1,1",
+        "1,2",
+        "2,0",
+        "2,1",
+        "2,2",
     ]
     assert list(result.incidence.points) == expected
 
@@ -96,9 +96,7 @@ def test_every_line_has_q_points() -> None:
             PrimeFieldAffinePlaneRequest(prime_order=q)
         )
         for block in result.incidence.blocks:
-            assert len(block) == q, (
-                f"q={q}: line has {len(block)} points, expected {q}"
-            )
+            assert len(block) == q, f"q={q}: line has {len(block)} points, expected {q}"
 
 
 def test_every_point_on_q_plus_1_lines() -> None:
@@ -107,9 +105,7 @@ def test_every_point_on_q_plus_1_lines() -> None:
         result = compute_prime_field_affine_plane(
             PrimeFieldAffinePlaneRequest(prime_order=q)
         )
-        point_to_count: dict[str, int] = {
-            p: 0 for p in result.incidence.points
-        }
+        point_to_count: dict[str, int] = dict.fromkeys(result.incidence.points, 0)
         for block in result.incidence.blocks:
             for member in block:
                 point_to_count[member] += 1

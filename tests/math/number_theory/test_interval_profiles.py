@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-import math
 import pytest
-from sympy import factorint, isprime, nextprime
+from sympy import factorint, isprime
 
-from jacobian.math.number_theory._interval_profile_models import IntervalProfileRequest
+from jacobian.math.number_theory._interval_profile_models import (
+    MAX_PROFILE_RESULT_BYTES,
+    IntervalProfileRequest,
+)
 from jacobian.math.number_theory._interval_profile_operations import (
     compute_divisor_count_profile,
     compute_divisor_sum_profile,
@@ -19,33 +21,69 @@ from jacobian.math.number_theory._interval_profile_operations import (
 
 
 class TestSquarefreeProfile:
+    def test_request_rejects_reversed_interval(self) -> None:
+        with pytest.raises(ValueError, match="upper_bound must be >= lower_bound"):
+            IntervalProfileRequest(lower_bound=5, upper_bound=3)
+
+    def test_request_rejects_result_larger_than_canonical_budget(self) -> None:
+        upper_bound = MAX_PROFILE_RESULT_BYTES // 64 + 1
+        with pytest.raises(ValueError, match="canonical output budget"):
+            IntervalProfileRequest(lower_bound=1, upper_bound=upper_bound)
+
     def test_small_interval(self) -> None:
-        result = compute_squarefree_profile(IntervalProfileRequest(lower_bound=1, upper_bound=12))
-        assert result.squarefree_values == [1, 2, 3, 5, 6, 7, 10, 11]
-        assert result.nonsquarefree_values == [4, 8, 9, 12]
+        result = compute_squarefree_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=12)
+        )
+        assert list(result.squarefree_values) == [1, 2, 3, 5, 6, 7, 10, 11]
+        assert list(result.nonsquarefree_values) == [4, 8, 9, 12]
         assert result.squarefree_count == 8
         assert result.nonsquarefree_count == 4
 
     def test_partition_exhaustive(self) -> None:
         lo, hi = 10, 100
-        result = compute_squarefree_profile(IntervalProfileRequest(lower_bound=lo, upper_bound=hi))
-        assert sorted(result.squarefree_values + result.nonsquarefree_values) == list(range(lo, hi + 1))
+        result = compute_squarefree_profile(
+            IntervalProfileRequest(lower_bound=lo, upper_bound=hi)
+        )
+        assert sorted(result.squarefree_values + result.nonsquarefree_values) == list(
+            range(lo, hi + 1)
+        )
         assert set(result.squarefree_values) & set(result.nonsquarefree_values) == set()
 
     def test_matches_factorization(self) -> None:
         lo, hi = 1, 200
-        result = compute_squarefree_profile(IntervalProfileRequest(lower_bound=lo, upper_bound=hi))
-        expected_sf = [n for n in range(lo, hi + 1) if all(e == 1 for _, e in factorint(n).items())]
-        assert result.squarefree_values == expected_sf
+        result = compute_squarefree_profile(
+            IntervalProfileRequest(lower_bound=lo, upper_bound=hi)
+        )
+        expected_sf = [
+            n for n in range(lo, hi + 1) if all(e == 1 for _, e in factorint(n).items())
+        ]
+        assert list(result.squarefree_values) == expected_sf
 
 
 class TestDivisorCountProfile:
     def test_small_interval(self) -> None:
-        result = compute_divisor_count_profile(IntervalProfileRequest(lower_bound=1, upper_bound=12))
-        assert [r.divisor_count for r in result.rows] == [1, 2, 2, 3, 2, 4, 2, 4, 3, 4, 2, 6]
+        result = compute_divisor_count_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=12)
+        )
+        assert [r.divisor_count for r in result.rows] == [
+            1,
+            2,
+            2,
+            3,
+            2,
+            4,
+            2,
+            4,
+            3,
+            4,
+            2,
+            6,
+        ]
 
     def test_prime_powers(self) -> None:
-        result = compute_divisor_count_profile(IntervalProfileRequest(lower_bound=1, upper_bound=100))
+        result = compute_divisor_count_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=100)
+        )
         rows = {r.n: r.divisor_count for r in result.rows}
         assert rows[4] == 3
         assert rows[8] == 4
@@ -56,11 +94,26 @@ class TestDivisorCountProfile:
 
 class TestGreatestPrimeFactorProfile:
     def test_small_interval(self) -> None:
-        result = compute_greatest_prime_factor_profile(IntervalProfileRequest(lower_bound=1, upper_bound=10))
-        assert [r.greatest_prime_factor for r in result.rows] == [1, 2, 3, 2, 5, 3, 7, 2, 3, 5]
+        result = compute_greatest_prime_factor_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=10)
+        )
+        assert [r.greatest_prime_factor for r in result.rows] == [
+            1,
+            2,
+            3,
+            2,
+            5,
+            3,
+            7,
+            2,
+            3,
+            5,
+        ]
 
     def test_matches_factorization(self) -> None:
-        result = compute_greatest_prime_factor_profile(IntervalProfileRequest(lower_bound=1, upper_bound=200))
+        result = compute_greatest_prime_factor_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=200)
+        )
         for row in result.rows:
             if row.n == 1:
                 assert row.greatest_prime_factor == 1
@@ -70,7 +123,9 @@ class TestGreatestPrimeFactorProfile:
 
 class TestPrimeGapProfile:
     def test_small_interval(self) -> None:
-        result = compute_prime_gap_profile(IntervalProfileRequest(lower_bound=3, upper_bound=5))
+        result = compute_prime_gap_profile(
+            IntervalProfileRequest(lower_bound=3, upper_bound=5)
+        )
         assert len(result.rows) == 2
         assert result.rows[0].lower_prime == 3
         assert result.rows[0].upper_prime == 5
@@ -80,13 +135,17 @@ class TestPrimeGapProfile:
         assert result.rows[1].gap == 2
 
     def test_successor_beyond_upper(self) -> None:
-        result = compute_prime_gap_profile(IntervalProfileRequest(lower_bound=5, upper_bound=5))
+        result = compute_prime_gap_profile(
+            IntervalProfileRequest(lower_bound=5, upper_bound=5)
+        )
         assert len(result.rows) == 1
         assert result.rows[0].lower_prime == 5
         assert result.rows[0].upper_prime == 7
 
     def test_consecutive_primes(self) -> None:
-        result = compute_prime_gap_profile(IntervalProfileRequest(lower_bound=2, upper_bound=100))
+        result = compute_prime_gap_profile(
+            IntervalProfileRequest(lower_bound=2, upper_bound=100)
+        )
         for row in result.rows:
             assert isprime(row.lower_prime)
             assert isprime(row.upper_prime)
@@ -96,11 +155,26 @@ class TestPrimeGapProfile:
 
 class TestLeastPrimeFactorProfile:
     def test_small_interval(self) -> None:
-        result = compute_least_prime_factor_profile(IntervalProfileRequest(lower_bound=1, upper_bound=10))
-        assert [r.least_prime_factor for r in result.rows] == [1, 2, 3, 2, 5, 2, 7, 2, 3, 2]
+        result = compute_least_prime_factor_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=10)
+        )
+        assert [r.least_prime_factor for r in result.rows] == [
+            1,
+            2,
+            3,
+            2,
+            5,
+            2,
+            7,
+            2,
+            3,
+            2,
+        ]
 
     def test_primes_return_themselves(self) -> None:
-        result = compute_least_prime_factor_profile(IntervalProfileRequest(lower_bound=2, upper_bound=50))
+        result = compute_least_prime_factor_profile(
+            IntervalProfileRequest(lower_bound=2, upper_bound=50)
+        )
         for row in result.rows:
             if isprime(row.n):
                 assert row.least_prime_factor == row.n
@@ -108,23 +182,33 @@ class TestLeastPrimeFactorProfile:
 
 class TestEulerTotientProfile:
     def test_small_interval(self) -> None:
-        result = compute_euler_totient_profile(IntervalProfileRequest(lower_bound=1, upper_bound=10))
+        result = compute_euler_totient_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=10)
+        )
         assert [r.euler_totient for r in result.rows] == [1, 1, 2, 2, 4, 2, 6, 4, 6, 4]
 
     def test_matches_sympy(self) -> None:
         from sympy import totient
-        result = compute_euler_totient_profile(IntervalProfileRequest(lower_bound=1, upper_bound=100))
+
+        result = compute_euler_totient_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=100)
+        )
         for row in result.rows:
             assert row.euler_totient == int(totient(row.n))
 
 
 class TestDivisorSumProfile:
     def test_small_interval(self) -> None:
-        result = compute_divisor_sum_profile(IntervalProfileRequest(lower_bound=1, upper_bound=6))
+        result = compute_divisor_sum_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=6)
+        )
         assert [r.divisor_sum for r in result.rows] == [1, 3, 4, 7, 6, 12]
 
     def test_matches_sympy(self) -> None:
         from sympy import divisor_sigma
-        result = compute_divisor_sum_profile(IntervalProfileRequest(lower_bound=1, upper_bound=100))
+
+        result = compute_divisor_sum_profile(
+            IntervalProfileRequest(lower_bound=1, upper_bound=100)
+        )
         for row in result.rows:
             assert row.divisor_sum == int(divisor_sigma(row.n))

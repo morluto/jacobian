@@ -11,7 +11,6 @@ from sympy import isprime
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import encode_strict_json
-from jacobian.math.incidence_structures._models import IncidenceStructure
 from jacobian.math.finite_geometry.values import (
     MAX_DIM,
     MAX_FIELD_ORDER,
@@ -21,6 +20,7 @@ from jacobian.math.finite_geometry.values import (
     _validate_vector,
     _validation_error,
 )
+from jacobian.math.incidence_structures._models import IncidenceStructure
 
 MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS = 65_536
 # Owner-local serialized-result budget for the complete enumeration reply,

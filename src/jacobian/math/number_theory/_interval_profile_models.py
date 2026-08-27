@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Self
 
-from pydantic import Field, StrictInt, StringConstraints
-from pydantic.json_schema import JsonSchemaValue
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits
@@ -32,13 +31,51 @@ MAX_INTERVAL_UPPER_BOUND: int = 10_000_000
 MAX_INTERVAL_WIDTH: int = 1_000_000
 MAX_SIEVE_WORK: int = 20_000_000
 MAX_PROFILE_RESULT_BYTES: int = CanonicalLimits().max_output_bytes
+# With U <= 10 million, every row/list entry is below 64 canonical bytes;
+# reserve fixed envelope space for the result object and its interval fields.
+_PROFILE_ROW_BYTES: int = 64
+_PROFILE_RESULT_ENVELOPE_BYTES: int = 256
 
 
 class IntervalProfileRequest(StrictModel):
     """A bounded closed interval [L, U] with 1 <= L <= U."""
 
-    lower_bound: StrictInt = Field(ge=1, le=MAX_INTERVAL_UPPER_BOUND)
-    upper_bound: StrictInt = Field(ge=1, le=MAX_INTERVAL_UPPER_BOUND)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "A closed interval with 1 <= lower_bound <= upper_bound. "
+                "The interval width and the complete profile result must fit "
+                "the bounded execution and canonical-output envelope."
+            )
+        }
+    )
+
+    lower_bound: StrictInt = Field(
+        ge=1,
+        le=MAX_INTERVAL_UPPER_BOUND,
+        description="Inclusive lower endpoint of the interval.",
+    )
+    upper_bound: StrictInt = Field(
+        ge=1,
+        le=MAX_INTERVAL_UPPER_BOUND,
+        description=(
+            "Inclusive upper endpoint; it must be at least lower_bound, "
+            "and the complete result must fit the output budget."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_admitted_interval(self) -> Self:
+        if self.upper_bound < self.lower_bound:
+            raise ValueError("upper_bound must be >= lower_bound")
+        if self.width() > MAX_INTERVAL_WIDTH:
+            raise ValueError("interval width exceeds maximum supported width")
+        if (
+            _PROFILE_RESULT_ENVELOPE_BYTES + self.width() * _PROFILE_ROW_BYTES
+            > MAX_PROFILE_RESULT_BYTES
+        ):
+            raise ValueError("interval result exceeds the canonical output budget")
+        return self
 
     def width(self) -> int:
         return self.upper_bound - self.lower_bound + 1
@@ -51,7 +88,10 @@ class IntervalProfileRequest(StrictModel):
             return False
         if self.upper_bound > MAX_INTERVAL_UPPER_BOUND:
             return False
-        return True
+        return (
+            _PROFILE_RESULT_ENVELOPE_BYTES + width * _PROFILE_ROW_BYTES
+            <= MAX_PROFILE_RESULT_BYTES
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -64,8 +104,8 @@ class SquarefreeProfileResult(StrictModel):
 
     lower_bound: StrictInt
     upper_bound: StrictInt
-    squarefree_values: list[StrictInt]
-    nonsquarefree_values: list[StrictInt]
+    squarefree_values: tuple[StrictInt, ...]
+    nonsquarefree_values: tuple[StrictInt, ...]
     squarefree_count: StrictInt
     nonsquarefree_count: StrictInt
 
@@ -87,7 +127,7 @@ class DivisorCountProfileResult(StrictModel):
 
     lower_bound: StrictInt
     upper_bound: StrictInt
-    rows: list[DivisorCountProfileRow]
+    rows: tuple[DivisorCountProfileRow, ...]
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +147,7 @@ class GreatestPrimeFactorProfileResult(StrictModel):
 
     lower_bound: StrictInt
     upper_bound: StrictInt
-    rows: list[GreatestPrimeFactorProfileRow]
+    rows: tuple[GreatestPrimeFactorProfileRow, ...]
 
 
 # ---------------------------------------------------------------------------
@@ -128,17 +168,24 @@ class PrimeGapProfileResult(StrictModel):
 
     lower_bound: StrictInt
     upper_bound: StrictInt
-    rows: list[PrimeGapProfileRow]
+    rows: tuple[PrimeGapProfileRow, ...]
 
 
 __all__ = [
-    "DivisorCountProfileResult",
-    "DivisorCountProfileRow",
-    "GreatestPrimeFactorProfileResult",
-    "GreatestPrimeFactorProfileRow",
     "MAX_INTERVAL_UPPER_BOUND",
     "MAX_INTERVAL_WIDTH",
+    "MAX_PROFILE_RESULT_BYTES",
+    "DivisorCountProfileResult",
+    "DivisorCountProfileRow",
+    "DivisorSumProfileResult",
+    "DivisorSumProfileRow",
+    "EulerTotientProfileResult",
+    "EulerTotientProfileRow",
+    "GreatestPrimeFactorProfileResult",
+    "GreatestPrimeFactorProfileRow",
     "IntervalProfileRequest",
+    "LeastPrimeFactorProfileResult",
+    "LeastPrimeFactorProfileRow",
     "PrimeGapProfileResult",
     "PrimeGapProfileRow",
     "SquarefreeProfileResult",
@@ -153,7 +200,7 @@ class LeastPrimeFactorProfileRow(StrictModel):
 class LeastPrimeFactorProfileResult(StrictModel):
     lower_bound: int
     upper_bound: int
-    rows: list[LeastPrimeFactorProfileRow]
+    rows: tuple[LeastPrimeFactorProfileRow, ...]
 
 
 class EulerTotientProfileRow(StrictModel):
@@ -164,7 +211,7 @@ class EulerTotientProfileRow(StrictModel):
 class EulerTotientProfileResult(StrictModel):
     lower_bound: int
     upper_bound: int
-    rows: list[EulerTotientProfileRow]
+    rows: tuple[EulerTotientProfileRow, ...]
 
 
 class DivisorSumProfileRow(StrictModel):
@@ -175,4 +222,4 @@ class DivisorSumProfileRow(StrictModel):
 class DivisorSumProfileResult(StrictModel):
     lower_bound: int
     upper_bound: int
-    rows: list[DivisorSumProfileRow]
+    rows: tuple[DivisorSumProfileRow, ...]

@@ -126,7 +126,9 @@ def compute_dag_longest_path(request: DagLongestPathRequest) -> DagLongestPathRe
         best_path: list[int] = [v]
         for w in g.successors(v):
             cand_edges, cand_path = longest_from[w]
-            if cand_edges + 1 > best_edges:
+            if cand_edges + 1 > best_edges or (
+                cand_edges + 1 == best_edges and [v, *cand_path] < best_path
+            ):
                 best_edges = cand_edges + 1
                 best_path = [v, *cand_path]
         longest_from[v] = (best_edges, best_path)

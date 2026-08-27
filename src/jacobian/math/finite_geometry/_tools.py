@@ -9,7 +9,6 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_geometry._models import (
     GrassmannianCountRequest,
     GrassmannianCountResult,
-    ParallelClass,
     PrimeFieldAffinePlaneRequest,
     PrimeFieldAffinePlaneResult,
     ProjectivePointCanonicalizeRequest,
@@ -28,8 +27,8 @@ from jacobian.math.finite_geometry._models import (
     SubspaceSpanResult,
 )
 from jacobian.math.finite_geometry._operations import (
-    compute_prime_field_affine_plane,
     compute_grassmannian_count,
+    compute_prime_field_affine_plane,
     compute_projective_point_canonicalize,
     compute_projective_point_equal,
     compute_projective_space_enumerate,

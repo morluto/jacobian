@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.math.incidence_structures._models import IncidenceStructure
 from jacobian.math.finite_geometry._linear import (
     canonical_basis,
     intersection_basis,
@@ -35,6 +34,7 @@ from jacobian.math.finite_geometry.values import (
     ProjectivePoint,
     ProjectivePointSequence,
 )
+from jacobian.math.incidence_structures._models import IncidenceStructure
 
 
 def compute_projective_point_canonicalize(
@@ -272,9 +272,7 @@ def compute_prime_field_affine_plane(
         for b in range(q):
             line_id = f"L_{m},{b}"
             block_ids.append(line_id)
-            members = tuple(
-                f"{x},{(m * x + b) % q}" for x in range(q)
-            )
+            members = tuple(f"{x},{(m * x + b) % q}" for x in range(q))
             blocks.append(members)
 
     # Vertical lines: V_b

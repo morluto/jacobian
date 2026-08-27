@@ -25,9 +25,7 @@ class TestDagLongestPath:
 
     def test_simple_path_graph(self) -> None:
         """A linear chain 0 -> 1 -> 2 -> 3 has longest path of 3 edges."""
-        result = _longest_path(
-            {"vertex_count": 4, "edges": [[0, 1], [1, 2], [2, 3]]}
-        )
+        result = _longest_path({"vertex_count": 4, "edges": [[0, 1], [1, 2], [2, 3]]})
         assert result.status == "ACYCLIC"
         assert result.maximum_edge_count == 3
         assert result.path == (0, 1, 2, 3)
@@ -45,23 +43,27 @@ class TestDagLongestPath:
         assert result.maximum_edge_count == 2
         assert result.path == (0, 1, 3)
 
+    def test_fork_join_tie_is_independent_of_edge_order(self) -> None:
+        """Equal-length suffixes are compared, regardless of insertion order."""
+        result = _longest_path(
+            {"vertex_count": 4, "edges": [[0, 2], [0, 1], [2, 3], [1, 3]]}
+        )
+        assert result.maximum_edge_count == 2
+        assert result.path == (0, 1, 3)
+
     def test_disconnected_components(self) -> None:
         """Two disconnected chains: 0->1 and 2->3->4.
 
         The longest path is in the second component (2 edges).
         """
-        result = _longest_path(
-            {"vertex_count": 5, "edges": [[0, 1], [2, 3], [3, 4]]}
-        )
+        result = _longest_path({"vertex_count": 5, "edges": [[0, 1], [2, 3], [3, 4]]})
         assert result.status == "ACYCLIC"
         assert result.maximum_edge_count == 2
         assert result.path == (2, 3, 4)
 
     def test_cycle_returns_not_applicable(self) -> None:
         """A cyclic graph returns NOT_APPLICABLE."""
-        result = _longest_path(
-            {"vertex_count": 3, "edges": [[0, 1], [1, 2], [2, 0]]}
-        )
+        result = _longest_path({"vertex_count": 3, "edges": [[0, 1], [1, 2], [2, 0]]})
         assert result.status == "NOT_APPLICABLE"
         assert result.maximum_edge_count == 0
         assert result.path == ()

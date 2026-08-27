@@ -27,6 +27,15 @@ def test_basic() -> None:
     assert result.right_family == ("6", "12", "5")
 
 
+def test_request_families_are_immutable() -> None:
+    request = DivisibilityIncidenceGraphRequest(left_family=["2"], right_family=["4"])
+
+    assert request.left_family == ("2",)
+    assert request.right_family == ("4",)
+    with pytest.raises(AttributeError):
+        request.left_family.append("3")
+
+
 def test_no_edges() -> None:
     result = compute_divisibility_incidence_graph(
         DivisibilityIncidenceGraphRequest(left_family=["7"], right_family=["3"])

@@ -19,11 +19,11 @@ MAX_GRAPH_EDGES: int = 32_640
 class DivisibilityIncidenceGraphRequest(StrictModel):
     """Two finite positive-integer families whose divisibility incidence graph is constructed."""
 
-    left_family: list[BoundedInteger] = Field(
+    left_family: tuple[BoundedInteger, ...] = Field(
         max_length=MAX_FAMILY_SIZE,
         description="Unique positive integers labelling the left vertex family.",
     )
-    right_family: list[BoundedInteger] = Field(
+    right_family: tuple[BoundedInteger, ...] = Field(
         max_length=MAX_FAMILY_SIZE,
         description="Unique positive integers labelling the right vertex family.",
     )

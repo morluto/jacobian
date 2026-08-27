@@ -32,10 +32,13 @@ class ContiguousSumProfileAdmission:
     estimated_work: int
     estimated_result_bytes: int
     factorization_budget_seconds: int | None
+    execution_deadline: float | None
 
 
 def require_contiguous_sum_profile_admission(
     request: ContiguousSumProfileRequest,
+    *,
+    started_at: float | None = None,
 ) -> ContiguousSumProfileAdmission:
     """Validate one interval and select the complete bounded kernel regime."""
 
@@ -76,10 +79,14 @@ def require_contiguous_sum_profile_admission(
         regime: ContiguousSumRegime = "DIRECT_FACTORIZATION"
         estimated_work = width * upper_digits * 1_000
         factorization_budget_seconds: int | None = MAX_FACTORING_WORK_SECONDS
+        execution_deadline = (
+            None if started_at is None else started_at + MAX_FACTORING_WORK_SECONDS
+        )
     else:
         regime = "SEGMENTED"
         estimated_work = 3 * isqrt(upper) + width * (upper_digits + 1)
         factorization_budget_seconds = None
+        execution_deadline = None
 
     if estimated_work > MAX_INTERVAL_WORK:
         raise OperationDomainValidationError(
@@ -102,6 +109,7 @@ def require_contiguous_sum_profile_admission(
         estimated_work=estimated_work,
         estimated_result_bytes=estimated_result_bytes,
         factorization_budget_seconds=factorization_budget_seconds,
+        execution_deadline=execution_deadline,
     )
 
 

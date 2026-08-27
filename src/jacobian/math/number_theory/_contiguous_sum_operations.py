@@ -37,6 +37,8 @@ def _repository_revision() -> str:
 def _worker_diagnostic(
     admission: ContiguousSumProfileAdmission,
     failure: BoundedFactorizationFailure,
+    *,
+    elapsed_seconds: float | None = None,
 ) -> ContiguousSumWorkerDiagnostic:
     """Project bounded worker evidence into the public UNKNOWN diagnostic."""
 
@@ -45,7 +47,10 @@ def _worker_diagnostic(
     return ContiguousSumWorkerDiagnostic(
         failure=failure.kind,
         timeout_layer=failure.timeout_layer,
-        elapsed_ms=round(failure.elapsed_seconds * 1_000),
+        elapsed_ms=round(
+            (failure.elapsed_seconds if elapsed_seconds is None else elapsed_seconds)
+            * 1_000
+        ),
         worker_timeout_ms=round(failure.timeout_seconds * 1_000),
         budget_seconds=budget_seconds,
         returncode=failure.returncode,
@@ -134,14 +139,17 @@ def compute_contiguous_sum_profile(
     Dense intervals use a segmented odd-factor sieve, while high-magnitude
     narrow intervals use the maintained SymPy factorization backend.
     """
-    admission = require_contiguous_sum_profile_admission(request)
+    profile_started = monotonic()
+    admission = require_contiguous_sum_profile_admission(
+        request, started_at=profile_started
+    )
     if admission.regime == "SEGMENTED":
         counts = _segmented_odd_divisor_counts(admission)
     else:
         direct_counts: list[int] = []
         assert admission.factorization_budget_seconds is not None
-        factorization_deadline = monotonic() + admission.factorization_budget_seconds
-        profile_started = monotonic()
+        assert admission.execution_deadline is not None
+        factorization_deadline = admission.execution_deadline
         for n in range(admission.lower_bound, admission.upper_bound + 1):
             remaining = factorization_deadline - monotonic()
             failures: list[BoundedFactorizationFailure] = []
@@ -168,14 +176,64 @@ def compute_contiguous_sum_profile(
                         "the bounded factorization worker did not establish "
                         "the complete profile"
                     ),
-                    diagnostic=_worker_diagnostic(admission, failure),
+                    diagnostic=_worker_diagnostic(
+                        admission,
+                        failure,
+                        elapsed_seconds=max(
+                            failure.elapsed_seconds,
+                            monotonic() - profile_started,
+                        ),
+                    ),
                 )
             direct_counts.append(count)
         counts = tuple(direct_counts)
-    return ContiguousSumProfileResult._complete_from_kernel(
+        if monotonic() >= factorization_deadline:
+            failure = BoundedFactorizationFailure(
+                kind="REQUEST_DEADLINE_EXPIRED",
+                timeout_layer="REQUEST_DEADLINE",
+                elapsed_seconds=monotonic() - profile_started,
+                timeout_seconds=0.0,
+            )
+            return ContiguousSumProfileResult._unknown_from_kernel(
+                admission=admission,
+                detail="the request deadline expired before complete-result construction",
+                diagnostic=_worker_diagnostic(admission, failure),
+            )
+    if (
+        admission.execution_deadline is not None
+        and monotonic() >= admission.execution_deadline
+    ):
+        failure = BoundedFactorizationFailure(
+            kind="REQUEST_DEADLINE_EXPIRED",
+            timeout_layer="REQUEST_DEADLINE",
+            elapsed_seconds=monotonic() - profile_started,
+            timeout_seconds=0.0,
+        )
+        return ContiguousSumProfileResult._unknown_from_kernel(
+            admission=admission,
+            detail="the request deadline expired before result construction",
+            diagnostic=_worker_diagnostic(admission, failure),
+        )
+    result = ContiguousSumProfileResult._complete_from_kernel(
         admission=admission,
         counts=tuple(counts),
     )
+    if (
+        admission.execution_deadline is not None
+        and monotonic() >= admission.execution_deadline
+    ):
+        failure = BoundedFactorizationFailure(
+            kind="REQUEST_DEADLINE_EXPIRED",
+            timeout_layer="REQUEST_DEADLINE",
+            elapsed_seconds=monotonic() - profile_started,
+            timeout_seconds=0.0,
+        )
+        return ContiguousSumProfileResult._unknown_from_kernel(
+            admission=admission,
+            detail="the request deadline expired after result construction",
+            diagnostic=_worker_diagnostic(admission, failure),
+        )
+    return result
 
 
 __all__ = ["compute_contiguous_sum_profile"]

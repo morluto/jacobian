@@ -84,6 +84,14 @@ def test_admission_plan_is_the_single_regime_and_budget_source() -> None:
     assert direct.regime == "DIRECT_FACTORIZATION"
     assert direct.factorization_budget_seconds == 60
     assert direct.width == 1
+    started_at = 100.0
+    timed = require_contiguous_sum_profile_admission(
+        ContiguousSumProfileRequest(
+            lower_bound="1000000000001", upper_bound="1000000000001"
+        ),
+        started_at=started_at,
+    )
+    assert timed.execution_deadline == 160.0
 
 
 def test_high_magnitude_width_is_admitted_at_request_parse_but_rejected_before_kernel() -> (

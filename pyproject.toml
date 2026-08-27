@@ -214,8 +214,16 @@ ignore_imports = [
     "jacobian.math.** -> jacobian.catalog.admission",
     # The logic domain launches bounded external solvers via jacobian.process.
     "jacobian.math.logic._sat -> jacobian.process",
+    "jacobian.math.logic._smt -> jacobian.process",
+    "jacobian.math.logic._unsat_core -> jacobian.process",
     # These owners each isolate a bounded, maintained external backend.
     "jacobian.math.graphs.isomorphism._operations -> jacobian.process",
+    "jacobian.math.graphs._independence_z3 -> jacobian.process",
+    "jacobian.math.graphs.coloring._operations -> jacobian.process",
+    "jacobian.math.graphs.optimization._chromatic_number -> jacobian.process",
+    "jacobian.math.graphs.optimization._finite_optimization -> jacobian.process",
+    "jacobian.math.graphs.optimization._invariants -> jacobian.process",
+    "jacobian.math.hypergraphs._independence_z3 -> jacobian.process",
     "jacobian.math.number_field._operations -> jacobian.process",
     "jacobian.math.number_theory._factorization_kernels -> jacobian.process",
     # Private exact-algebra adapters share one bounded Singular process owner.

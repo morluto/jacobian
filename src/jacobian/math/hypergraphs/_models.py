@@ -120,6 +120,9 @@ def _validation_error(message: str) -> PydanticCustomError:
         ("exact incidence pairs", "incidence_graph"),
         ("NFC-normalized", "nfc_labels"),
         ("2-section", "clique_expansion"),
+        ("induced type profile", "induced_profile"),
+        ("transversal", "transversal"),
+        ("matching", "matching"),
     )
     for fragment, reason in reason_fragments:
         if fragment in message:
@@ -972,6 +975,7 @@ class InducedTypeProfileRequest(StrictModel):
     number of distinct nonempty induced edges ``e ∩ S`` that arise when the
     hypergraph is restricted to that subset ``S``.
     """
+
     hypergraph: FiniteHypergraph
     subset_size: StrictInt = Field(
         ge=0,
@@ -1000,8 +1004,9 @@ class InducedTypeProfileRequest(StrictModel):
 
 class InducedTypeProfileEntry(StrictModel):
     """One vertex subset and its induced distinct-edge count."""
+
     vertex_subset: tuple[str, ...] = Field(max_length=MAX_INDUCED_SUBSET_SIZE)
-    induced_edge_count: int = Field(ge=0, le=MAX_INDUCED_SUBSET_SIZE)
+    induced_edge_count: int = Field(ge=0, le=MAX_EDGES)
 
     @model_validator(mode="after")
     def require_canonical_entry(self) -> Self:
@@ -1021,11 +1026,10 @@ class InducedTypeProfileResult(StrictModel):
     for a subset ``S`` is the number of distinct nonempty edges ``e ∩ S``
     arising from the source hypergraph's edges.
     """
+
     hypergraph: FiniteHypergraph
     subset_size: StrictInt = Field(ge=0, le=MAX_INDUCED_SUBSET_SIZE)
-    entries: tuple[InducedTypeProfileEntry, ...] = Field(
-        max_length=MAX_INDUCED_SUBSETS
-    )
+    entries: tuple[InducedTypeProfileEntry, ...] = Field(max_length=MAX_INDUCED_SUBSETS)
 
     @model_validator(mode="after")
     def bind_induced_type_profile(self) -> Self:
@@ -1038,7 +1042,7 @@ class InducedTypeProfileResult(StrictModel):
         expected_subsets = tuple(
             tuple(sorted(combo))
             for combo in combinations(
-                self.hypergraph.vertices, self.subset_size
+                sorted(self.hypergraph.vertices), self.subset_size
             )
         )
         if len(expected_subsets) > MAX_INDUCED_SUBSETS:
@@ -1051,10 +1055,8 @@ class InducedTypeProfileResult(StrictModel):
                 "induced type profile entries must list each k-subset of "
                 "vertices exactly once in lexicographic order"
             )
-        edge_sets = tuple(
-            frozenset(members) for _, members in self.hypergraph.edges
-        )
-        for entry, subset in zip(self.entries, expected_subsets):
+        edge_sets = tuple(frozenset(members) for _, members in self.hypergraph.edges)
+        for entry, subset in zip(self.entries, expected_subsets, strict=True):
             subset_set = frozenset(subset)
             distinct_edges: set[frozenset[str]] = set()
             for members in edge_sets:
@@ -1083,11 +1085,15 @@ class MinimumTransversalRequest(StrictModel):
     The exact bounded search enumerates vertex subsets by increasing
     cardinality and admits at most ``MAX_TRANSVERSAL_VERTICES`` vertices.
     """
+
     hypergraph: FiniteHypergraph
 
     @model_validator(mode="after")
     def require_bounded_search(self) -> Self:
-        if len(self.hypergraph.vertices) > MAX_TRANSVERSAL_VERTICES:
+        if (
+            len(self.hypergraph.vertices) > MAX_TRANSVERSAL_VERTICES
+            and self.hypergraph.edges
+        ):
             raise _validation_error(
                 "minimum transversal search exceeds the "
                 f"{MAX_TRANSVERSAL_VERTICES}-vertex exact search bound"
@@ -1106,6 +1112,7 @@ class MinimumTransversalResult(StrictModel):
     hyperedge, in declared vertex order.  ``cardinality`` is its size.  For a
     hypergraph with no edges, the empty set is the unique minimum transversal.
     """
+
     hypergraph: FiniteHypergraph
     transversal: tuple[str, ...] = Field(max_length=MAX_TRANSVERSAL_VERTICES)
     cardinality: StrictInt = Field(ge=0, le=MAX_TRANSVERSAL_VERTICES)
@@ -1115,9 +1122,7 @@ class MinimumTransversalResult(StrictModel):
         vertex_set = set(self.hypergraph.vertices)
         witness_set = set(self.transversal)
         if len(witness_set) != len(self.transversal):
-            raise _validation_error(
-                "transversal vertices must be distinct"
-            )
+            raise _validation_error("transversal vertices must be distinct")
         if not witness_set <= vertex_set:
             raise _validation_error(
                 "transversal vertices must be declared source vertices"
@@ -1130,16 +1135,10 @@ class MinimumTransversalResult(StrictModel):
                 "transversal vertices must be unique and in declared vertex order"
             )
         if self.cardinality != len(self.transversal):
-            raise _validation_error(
-                "cardinality must equal the transversal size"
-            )
-        edge_sets = tuple(
-            frozenset(members) for _, members in self.hypergraph.edges
-        )
+            raise _validation_error("cardinality must equal the transversal size")
+        edge_sets = tuple(frozenset(members) for _, members in self.hypergraph.edges)
         if any(not (edge & witness_set) for edge in edge_sets):
-            raise _validation_error(
-                "transversal must intersect every hyperedge"
-            )
+            raise _validation_error("transversal must intersect every hyperedge")
         return self
 
 
@@ -1157,6 +1156,7 @@ class MaximumEdgeMatchingRequest(StrictModel):
     search enumerates edge subsets by decreasing cardinality and admits at
     most ``MAX_MATCHING_EDGES`` edges.
     """
+
     hypergraph: FiniteHypergraph
 
     @model_validator(mode="after")
@@ -1165,10 +1165,6 @@ class MaximumEdgeMatchingRequest(StrictModel):
             raise _validation_error(
                 "maximum edge matching search exceeds the "
                 f"{MAX_MATCHING_EDGES}-edge exact search bound"
-            )
-        if any(not members for _, members in self.hypergraph.edges):
-            raise _validation_error(
-                "maximum edge matching search does not admit empty edges"
             )
         return self
 
@@ -1180,6 +1176,7 @@ class MaximumEdgeMatchingResult(StrictModel):
     hyperedge ids, in declared edge order.  ``count`` is its size.  For a
     hypergraph with no edges, the empty set is the unique maximum matching.
     """
+
     hypergraph: FiniteHypergraph
     matching: tuple[str, ...] = Field(max_length=MAX_MATCHING_EDGES)
     count: StrictInt = Field(ge=0, le=MAX_MATCHING_EDGES)
@@ -1211,7 +1208,5 @@ class MaximumEdgeMatchingResult(StrictModel):
         for i, a in enumerate(members_list):
             for j in range(i + 1, len(members_list)):
                 if a & members_list[j]:
-                    raise _validation_error(
-                        "matching edges must be pairwise disjoint"
-                    )
+                    raise _validation_error("matching edges must be pairwise disjoint")
         return self

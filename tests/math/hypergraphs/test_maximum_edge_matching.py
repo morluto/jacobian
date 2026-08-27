@@ -4,15 +4,14 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.hypergraphs._models import (
+    FiniteHypergraph,
     MaximumEdgeMatchingRequest,
     MaximumEdgeMatchingResult,
-    FiniteHypergraph,
 )
 from jacobian.math.hypergraphs._operations import (
     compute_maximum_edge_matching,
     verify_maximum_edge_matching_result,
 )
-
 
 HYPERGRAPH = {
     "vertices": ["a", "b", "c", "d"],
@@ -25,7 +24,9 @@ HYPERGRAPH = {
 
 
 def _matching(source: object) -> MaximumEdgeMatchingResult:
-    return compute_maximum_edge_matching(MaximumEdgeMatchingRequest(hypergraph=source))
+    return compute_maximum_edge_matching(
+        MaximumEdgeMatchingRequest(hypergraph=FiniteHypergraph.model_validate(source))
+    )
 
 
 class TestMaximumEdgeMatching:
@@ -96,20 +97,42 @@ class TestMaximumEdgeMatching:
         )
         assert result.matching == ("e1", "e2")
 
-    def test_empty_edge_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            MaximumEdgeMatchingRequest(
-                hypergraph={"vertices": ["a"], "edges": [["e", []]]}
-            )
+    def test_empty_edge_is_matchable(self) -> None:
+        result = _matching({"vertices": ["a"], "edges": [["e", []]]})
+        assert result.matching == ("e",)
+        assert result.count == 1
 
     def test_edge_bound_exceeded(self) -> None:
         edges = [[f"e{i}", [f"v{i}"]] for i in range(21)]
         vertices = [f"v{i}" for i in range(21)]
         with pytest.raises(ValidationError):
-            MaximumEdgeMatchingRequest(hypergraph={"vertices": vertices, "edges": edges})
+            MaximumEdgeMatchingRequest(
+                hypergraph=FiniteHypergraph.model_validate(
+                    {"vertices": vertices, "edges": edges}
+                )
+            )
 
     def test_verify_round_trip(self) -> None:
         result = _matching(HYPERGRAPH)
+        assert verify_maximum_edge_matching_result(result)
+
+    def test_verify_accepts_tied_maximum_matching(self) -> None:
+        result = MaximumEdgeMatchingResult.model_validate(
+            {
+                "hypergraph": {
+                    "vertices": ["a", "b", "c", "d"],
+                    "edges": [
+                        ["e1", ["a", "b"]],
+                        ["e2", ["c", "d"]],
+                        ["e3", ["a", "c"]],
+                        ["e4", ["b", "d"]],
+                    ],
+                },
+                "matching": ["e3", "e4"],
+                "count": 2,
+            }
+        )
+
         assert verify_maximum_edge_matching_result(result)
 
     def test_rejects_intersecting_matching(self) -> None:

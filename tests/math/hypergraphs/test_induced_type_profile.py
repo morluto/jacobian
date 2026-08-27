@@ -1,18 +1,19 @@
 """Defining-invariant and boundary tests for induced type profiles."""
 
+from itertools import combinations
+
 import pytest
 from pydantic import ValidationError
 
 from jacobian.math.hypergraphs._models import (
+    FiniteHypergraph,
     InducedTypeProfileRequest,
     InducedTypeProfileResult,
-    FiniteHypergraph,
 )
 from jacobian.math.hypergraphs._operations import (
     compute_induced_type_profile,
     verify_induced_type_profile_result,
 )
-
 
 # The Fano-plane-like hypergraph used across the domain.
 HYPERGRAPH = {
@@ -27,7 +28,10 @@ HYPERGRAPH = {
 
 def _profile(source: object, subset_size: int) -> InducedTypeProfileResult:
     return compute_induced_type_profile(
-        InducedTypeProfileRequest(hypergraph=source, subset_size=subset_size)
+        InducedTypeProfileRequest(
+            hypergraph=FiniteHypergraph.model_validate(source),
+            subset_size=subset_size,
+        )
     )
 
 
@@ -42,8 +46,7 @@ class TestInducedTypeProfile:
         # {b,d}: e1∩={b}, e2∩={b,d}, e3∩={d}        -> 3
         # {c,d}: e1∩={c}, e2∩={c,d}, e3∩={d}        -> 3
         assert tuple(
-            (entry.vertex_subset, entry.induced_edge_count)
-            for entry in result.entries
+            (entry.vertex_subset, entry.induced_edge_count) for entry in result.entries
         ) == (
             (("a", "b"), 3),
             (("a", "c"), 3),
@@ -68,6 +71,21 @@ class TestInducedTypeProfile:
         assert entry.vertex_subset == ("a", "b", "c", "d")
         assert entry.induced_edge_count == 3
 
+    def test_induced_edge_count_uses_edge_bound(self) -> None:
+        vertices = [f"v{i}" for i in range(9)]
+        edges = [
+            [f"e{i}", list(subset)]
+            for i, subset in enumerate(
+                subset
+                for size in range(1, len(vertices) + 1)
+                for subset in combinations(vertices, size)
+            )
+        ]
+
+        result = _profile({"vertices": vertices, "edges": edges}, len(vertices))
+
+        assert result.entries[0].induced_edge_count == 2 ** len(vertices) - 1
+
     def test_no_edges_profile_is_all_zero(self) -> None:
         result = _profile({"vertices": ["a", "b", "c"], "edges": []}, 2)
         assert all(entry.induced_edge_count == 0 for entry in result.entries)
@@ -86,18 +104,25 @@ class TestInducedTypeProfile:
             2,
         )
         # For {a,b}: both induce {a,b}, dedup -> 1
-        counts = {entry.vertex_subset: entry.induced_edge_count for entry in result.entries}
+        counts = {
+            entry.vertex_subset: entry.induced_edge_count for entry in result.entries
+        }
         assert counts[("a", "b")] == 1
 
     def test_subset_size_exceeds_vertex_count_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            InducedTypeProfileRequest(hypergraph=HYPERGRAPH, subset_size=5)
+            InducedTypeProfileRequest(
+                hypergraph=FiniteHypergraph.model_validate(HYPERGRAPH),
+                subset_size=5,
+            )
 
     def test_subset_exceeds_profile_bound_rejected(self) -> None:
         # C(20, 10) = 184_756 > 4096 bound
         hg = {"vertices": [f"v{i}" for i in range(20)], "edges": []}
         with pytest.raises(ValidationError):
-            InducedTypeProfileRequest(hypergraph=hg, subset_size=10)
+            InducedTypeProfileRequest(
+                hypergraph=FiniteHypergraph.model_validate(hg), subset_size=10
+            )
 
     def test_verify_round_trip(self) -> None:
         result = _profile(HYPERGRAPH, 3)
@@ -107,14 +132,10 @@ class TestInducedTypeProfile:
         result = _profile(HYPERGRAPH, 2)
         tampered = result.model_copy(
             update={
-                "entries": tuple(
-                    result.entries[:1]
-                    + (
-                        result.entries[1].model_copy(
-                            update={"induced_edge_count": 99}
-                        ),
-                    )
-                    + result.entries[2:]
+                "entries": (
+                    *result.entries[:1],
+                    result.entries[1].model_copy(update={"induced_edge_count": 99}),
+                    *result.entries[2:],
                 )
             }
         )
@@ -130,7 +151,5 @@ class TestInducedTypeProfile:
             2,
         )
         subsets = [entry.vertex_subset for entry in result.entries]
-        # Each subset is internally lexicographically sorted; the subsets
-        # appear in the order produced by combinations over the declared
-        # vertex order: (z,a), (z,m), (a,m) -> sorted: (a,z), (m,z), (a,m).
-        assert subsets == [("a", "z"), ("m", "z"), ("a", "m")]
+        # Both each subset and the complete profile use lexicographic order.
+        assert subsets == [("a", "m"), ("a", "z"), ("m", "z")]

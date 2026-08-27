@@ -4,15 +4,14 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.hypergraphs._models import (
+    FiniteHypergraph,
     MinimumTransversalRequest,
     MinimumTransversalResult,
-    FiniteHypergraph,
 )
 from jacobian.math.hypergraphs._operations import (
     compute_minimum_transversal,
     verify_minimum_transversal_result,
 )
-
 
 HYPERGRAPH = {
     "vertices": ["a", "b", "c", "d"],
@@ -25,7 +24,9 @@ HYPERGRAPH = {
 
 
 def _transversal(source: object) -> MinimumTransversalResult:
-    return compute_minimum_transversal(MinimumTransversalRequest(hypergraph=source))
+    return compute_minimum_transversal(
+        MinimumTransversalRequest(hypergraph=FiniteHypergraph.model_validate(source))
+    )
 
 
 class TestMinimumTransversal:
@@ -38,6 +39,11 @@ class TestMinimumTransversal:
 
     def test_empty_edge_family_empty_transversal(self) -> None:
         result = _transversal({"vertices": ["a", "b"], "edges": []})
+        assert result.transversal == ()
+        assert result.cardinality == 0
+
+    def test_empty_edge_family_above_search_cap_is_admitted(self) -> None:
+        result = _transversal({"vertices": [f"v{i}" for i in range(21)], "edges": []})
         assert result.transversal == ()
         assert result.cardinality == 0
 
@@ -78,13 +84,15 @@ class TestMinimumTransversal:
     def test_empty_edge_rejected(self) -> None:
         with pytest.raises(ValidationError):
             MinimumTransversalRequest(
-                hypergraph={"vertices": ["a"], "edges": [["e", []]]}
+                hypergraph=FiniteHypergraph.model_validate(
+                    {"vertices": ["a"], "edges": [["e", []]]}
+                )
             )
 
     def test_vertex_bound_exceeded(self) -> None:
         hg = {"vertices": [f"v{i}" for i in range(21)], "edges": [["e", ["v0"]]]}
         with pytest.raises(ValidationError):
-            MinimumTransversalRequest(hypergraph=hg)
+            MinimumTransversalRequest(hypergraph=FiniteHypergraph.model_validate(hg))
 
     def test_verify_round_trip(self) -> None:
         result = _transversal(HYPERGRAPH)
@@ -116,4 +124,21 @@ class TestMinimumTransversal:
         # compute function must return the minimum.
         result = _transversal(HYPERGRAPH)
         assert result.cardinality == 2
+        assert verify_minimum_transversal_result(result)
+
+    def test_verify_accepts_tied_minimum_transversal(self) -> None:
+        result = MinimumTransversalResult.model_validate(
+            {
+                "hypergraph": {
+                    "vertices": ["a", "b", "c", "d"],
+                    "edges": [
+                        ["e1", ["a", "b"]],
+                        ["e2", ["c", "d"]],
+                    ],
+                },
+                "transversal": ["b", "c"],
+                "cardinality": 2,
+            }
+        )
+
         assert verify_minimum_transversal_result(result)

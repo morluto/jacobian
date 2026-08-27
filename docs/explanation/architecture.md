@@ -43,13 +43,16 @@ the payload once with that owner's request model, invoke that owner once, and
 project the typed result once. It does not contain domain admission, backend
 logic, result-specific replay, or workflow state.
 
-Result parsing is not mathematical proof. Result models enforce canonical
-syntax, bounded structural shape, and branch consistency, while the admitted
-kernel establishes the mathematical postcondition once before calling its
-private trusted construction path. When an API deliberately accepts an
-independently supplied theorem-bearing claim, its owner provides a named,
-bounded `verify_*` function. That verification is an explicit trust decision;
-it never runs as a side effect of ordinary Pydantic deserialization.
+Jacobian is a typed, bounded tool layer over maintained mathematical libraries.
+For each accepted `math.run` request, the owner computes one semantic admission
+plan, executes one bounded kernel, and constructs the canonical result from
+that trusted work. Request and result models perform only structural
+validation; they do not rerun admission, a backend, enumeration, or a defining
+relation.
+
+A replay is permitted only through a named, bounded owner-local verifier for
+independently supplied theorem-bearing data. It is an explicit trust-boundary
+operation, never a side effect of ordinary execution or deserialization.
 
 Domain values live beside the functions that own their semantics under
 `jacobian.math.<domain>`. HNF, LLL, and Smith-related direct computations call

@@ -23,9 +23,42 @@ _DISCOVERY_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 _DISCOVERY_STOP_WORDS = frozenset(
     {"a", "an", "and", "for", "find", "from", "in", "of", "on", "the", "to", "with"}
 )
-_INFLECTION_EXCLUSIONS = frozenset(
-    {"basis", "bases", "class", "classes", "grass", "series"}
+# Terms whose final ``s`` is not regular plural morphology, plus irregular
+# plurals that the deliberately small suffix rules below would corrupt.
+_DISCOVERY_INFLECTION_EXCEPTIONS = frozenset(
+    {
+        "alias",
+        "always",
+        "atlas",
+        "axes",
+        "bases",
+        "bias",
+        "chaos",
+        "does",
+        "dynamics",
+        "farkas",
+        "guigues",
+        "indices",
+        "lens",
+        "lies",
+        "macwilliams",
+        "matrices",
+        "news",
+        "series",
+        "sims",
+        "simplices",
+        "species",
+        "vertices",
+    }
 )
+# Protected singulars whose ordinary ``-es`` plurals need an explicit map.
+_DISCOVERY_PLURAL_INFLECTIONS = {
+    "aliases": "alias",
+    "atlases": "atlas",
+    "biases": "bias",
+    "lenses": "lens",
+}
+_DISCOVERY_SINGULAR_SUFFIXES = ("ics", "is", "ous", "ss", "us")
 
 
 class SearchableOperation(Protocol):
@@ -154,49 +187,58 @@ def browse_operations(
 
 
 def normalize_discovery_text(value: str) -> str:
-    return "-".join(_normalized_tokens(value))
+    return "-".join(_DISCOVERY_TOKEN_PATTERN.findall(value.casefold()))
 
 
-def normalized_discovery_terms(value: str) -> frozenset[str]:
-    return frozenset(
-        term for term in _normalized_tokens(value) if term not in _DISCOVERY_STOP_WORDS
-    )
-
-
-def token_set(value: str) -> frozenset[str]:
-    """Return the legacy exact lexical terms of one declaration field."""
-
-    return frozenset(_DISCOVERY_TOKEN_PATTERN.findall(value.casefold()))
-
-
-def _normalized_tokens(value: str) -> tuple[str, ...]:
-    return tuple(
-        _normalize_inflection(term)
+def normalize_discovery_terms_text(value: str) -> str:
+    return "-".join(
+        normalize_discovery_term(term)
         for term in _DISCOVERY_TOKEN_PATTERN.findall(value.casefold())
     )
 
 
-def _normalize_inflection(term: str) -> str:
-    """Normalize only audited ordinary plural forms for lexical comparison."""
+def normalize_discovery_term(term: str) -> str:
+    """Return one conservative comparison form for a lexical search token."""
 
-    if term in _INFLECTION_EXCLUSIONS or len(term) < 4:
+    if term in _DISCOVERY_PLURAL_INFLECTIONS:
+        return _DISCOVERY_PLURAL_INFLECTIONS[term]
+    if len(term) <= 3 or term in _DISCOVERY_INFLECTION_EXCEPTIONS:
         return term
-    if term.endswith("ies") and term != "series":
-        return term[:-3] + "y"
-    if term.endswith("s") and not term.endswith(("ss", "is")):
+    if len(term) > 4 and term.endswith("ies"):
+        return f"{term[:-3]}y"
+    if term.endswith(("ches", "shes", "sses", "xes")):
+        return term[:-2]
+    if term.endswith("s") and not term.endswith(_DISCOVERY_SINGULAR_SUFFIXES):
         return term[:-1]
     return term
+
+
+def discovery_terms(query: str) -> frozenset[str]:
+    return frozenset(
+        normalized_term
+        for term in _DISCOVERY_TOKEN_PATTERN.findall(query.casefold())
+        if (normalized_term := normalize_discovery_term(term))
+        not in _DISCOVERY_STOP_WORDS
+    )
+
+
+def normalized_discovery_terms(value: str) -> frozenset[str]:
+    return discovery_terms(value)
+
+
+def token_set(value: str) -> frozenset[str]:
+    return frozenset(
+        normalize_discovery_term(term)
+        for term in _DISCOVERY_TOKEN_PATTERN.findall(value.casefold())
+    )
 
 
 def discovery_relevance(
     operation: SearchableOperation,
     query: str,
 ) -> int:
-    query_terms = frozenset(
-        term for term in token_set(query) if term not in _DISCOVERY_STOP_WORDS
-    )
-    normalized_query_terms = normalized_discovery_terms(query)
-    if not normalized_query_terms:
+    query_terms = discovery_terms(query)
+    if not query_terms:
         return 0
     identifier_terms = token_set(operation.operation_id)
     tag_terms = frozenset(term for tag in operation.tags for term in token_set(tag))
@@ -208,7 +250,6 @@ def discovery_relevance(
     title_terms = token_set(operation.title)
     description_terms = token_set(operation.description)
     score = 0
-    normalized_only = normalized_query_terms - query_terms
     for terms, weight in (
         (identifier_terms, 12),
         (tag_terms, 10),
@@ -219,19 +260,15 @@ def discovery_relevance(
         overlap = query_terms & terms
         if overlap:
             score += weight * len(overlap)
-        normalized_overlap = normalized_only & frozenset(
-            _normalized_tokens(" ".join(terms))
-        )
-        if normalized_overlap:
-            score += max(1, weight // 2) * len(normalized_overlap)
-    normalized_query = normalize_discovery_text(query)
+    exact_query = normalize_discovery_text(query)
     normalized_text = normalize_discovery_text(
         f"{operation.operation_id} {operation.title} {operation.description}"
     )
-    if normalized_query and f"-{normalized_query}-" in f"-{normalized_text}-":
+    if exact_query and f"-{exact_query}-" in f"-{normalized_text}-":
         score += 20
+    normalized_query = normalize_discovery_terms_text(query)
     normalized_declared_terms = tuple(
-        normalize_discovery_text(discovery_term)
+        normalize_discovery_terms_text(discovery_term)
         for discovery_term in operation.discovery_terms
     )
     matching_term_lengths = (

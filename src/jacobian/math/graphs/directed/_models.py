@@ -221,3 +221,46 @@ class AcyclicOrderResult(StrictModel):
                 "cyclic graph must not report a topological order",
             )
         return self
+
+
+class DagLongestPathRequest(StrictModel):
+    graph: DirectedOperationGraph
+
+    @model_validator(mode="after")
+    def require_operation_admission(self) -> Self:
+        _require_directed_operation_admission(self.graph)
+        return self
+
+
+class DagLongestPathResult(StrictModel):
+    status: Literal["ACYCLIC", "NOT_APPLICABLE"]
+    maximum_edge_count: int = Field(default=0, ge=0, strict=True)
+    path: tuple[int, ...] = Field(default=())
+    source: DirectedGraph
+    convention: Literal["JACOBIAN_DAG_LONGEST_PATH"] = "JACOBIAN_DAG_LONGEST_PATH"
+
+    @model_validator(mode="after")
+    def require_consistent_fields(self) -> Self:
+        if self.status == "NOT_APPLICABLE":
+            if self.maximum_edge_count != 0:
+                raise PydanticCustomError(
+                    "graph.dag_longest_path_not_applicable_has_no_edge_count",
+                    "NOT_APPLICABLE status must report zero edge count",
+                )
+            if self.path:
+                raise PydanticCustomError(
+                    "graph.dag_longest_path_not_applicable_has_no_path",
+                    "NOT_APPLICABLE status must not report a path",
+                )
+        else:
+            if not self.path:
+                raise PydanticCustomError(
+                    "graph.dag_longest_path_acyclic_must_report_a_path",
+                    "ACYCLIC status must report a path witness",
+                )
+            if self.maximum_edge_count != len(self.path) - 1:
+                raise PydanticCustomError(
+                    "graph.dag_longest_path_edge_count_must_match_path",
+                    "maximum_edge_count must equal len(path) - 1",
+                )
+        return self

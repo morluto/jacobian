@@ -42,6 +42,35 @@ def test_single_element() -> None:
     assert result.rows[0].representation_count == 2
 
 
+def test_admits_narrow_interval_above_legacy_upper_bound() -> None:
+    result = compute_prime_shift_profile(
+        PrimeShiftProfileRequest(lower_bound=10_000_001, upper_bound=10_000_001)
+    )
+
+    assert [(row.n, row.representation_count) for row in result.rows] == [
+        (10_000_001, 2)
+    ]
+
+
+def test_result_rows_are_immutable() -> None:
+    result = compute_prime_shift_profile(
+        PrimeShiftProfileRequest(lower_bound=4, upper_bound=4)
+    )
+
+    assert isinstance(result.rows, tuple)
+    with pytest.raises(TypeError):
+        result.rows[0] = result.rows[0]  # type: ignore[index]
+    assert not hasattr(result.rows, "append")
+
+
+def test_rejects_interval_that_exceeds_segmented_sieve_work_budget() -> None:
+    with pytest.raises(ValueError, match="work budget"):
+        PrimeShiftProfileRequest(
+            lower_bound=4_000_000_000,
+            upper_bound=4_000_200_000,
+        )
+
+
 def test_rejects_profile_that_exceeds_canonical_output_budget() -> None:
     with pytest.raises(ValueError, match="canonical output budget"):
         PrimeShiftProfileRequest(lower_bound=9_000_001, upper_bound=10_000_000)

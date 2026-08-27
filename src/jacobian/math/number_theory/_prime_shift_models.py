@@ -59,6 +59,19 @@ class _PrimeShiftProfileExecutionPlan:
     result_bytes: int
 
 
+def _validate_prime_shift_interval(lower_bound: int, upper_bound: int) -> None:
+    """Validate the structural interval shared by request and result values."""
+
+    if lower_bound < 1:
+        raise ValueError("lower_bound must be >= 1")
+    if upper_bound < 1:
+        raise ValueError("upper_bound must be >= 1")
+    if upper_bound < lower_bound:
+        raise ValueError("upper_bound must be >= lower_bound")
+    if upper_bound - lower_bound + 1 > MAX_SHIFT_INTERVAL_WIDTH:
+        raise ValueError("interval width exceeds maximum supported width")
+
+
 class PrimeShiftProfileRequest(StrictModel):
     """A bounded closed interval [L, U] for translated-prime representation counting."""
 
@@ -67,10 +80,7 @@ class PrimeShiftProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_interval(self) -> Self:
-        if self.upper_bound < self.lower_bound:
-            raise ValueError("upper_bound must be >= lower_bound")
-        if self.upper_bound - self.lower_bound + 1 > MAX_SHIFT_INTERVAL_WIDTH:
-            raise ValueError("interval width exceeds maximum supported width")
+        _validate_prime_shift_interval(self.lower_bound, self.upper_bound)
         return self
 
 
@@ -138,7 +148,19 @@ class PrimeShiftProfileResult(StrictModel):
 
     lower_bound: int
     upper_bound: int
-    rows: tuple[PrimeShiftProfileRow, ...]
+    rows: tuple[PrimeShiftProfileRow, ...] = Field(max_length=MAX_SHIFT_INTERVAL_WIDTH)
+
+    @model_validator(mode="after")
+    def bind_row_axis(self) -> Self:
+        _validate_prime_shift_interval(self.lower_bound, self.upper_bound)
+        expected_axis = tuple(range(self.lower_bound, self.upper_bound + 1))
+        actual_axis = tuple(row.n for row in self.rows)
+        if actual_axis != expected_axis:
+            raise ValueError(
+                "rows must contain exactly one consecutive n for every value "
+                "in the declared interval"
+            )
+        return self
 
     @classmethod
     def _from_kernel(

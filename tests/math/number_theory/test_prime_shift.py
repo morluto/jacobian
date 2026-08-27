@@ -1,9 +1,13 @@
 """Tests for translated-prime representation profiles."""
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_theory._prime_shift_models import PrimeShiftProfileRequest
+from jacobian.math.number_theory._prime_shift_models import (
+    PrimeShiftProfileRequest,
+    PrimeShiftProfileResult,
+)
 from jacobian.math.number_theory._prime_shift_operations import (
     compute_prime_shift_profile,
 )
@@ -71,6 +75,55 @@ def test_result_rows_are_immutable() -> None:
     with pytest.raises(TypeError):
         result.rows[0] = result.rows[0]  # type: ignore[index]
     assert not hasattr(result.rows, "append")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"lower_bound": 4, "upper_bound": 5, "rows": []},
+        {
+            "lower_bound": 4,
+            "upper_bound": 5,
+            "rows": [
+                {"n": 4, "representation_count": 0},
+                {"n": 4, "representation_count": 0},
+            ],
+        },
+        {
+            "lower_bound": 4,
+            "upper_bound": 5,
+            "rows": [
+                {"n": 5, "representation_count": 0},
+                {"n": 4, "representation_count": 0},
+            ],
+        },
+        {
+            "lower_bound": 4,
+            "upper_bound": 5,
+            "rows": [
+                {"n": 4, "representation_count": 0},
+                {"n": 6, "representation_count": 0},
+            ],
+        },
+        {"lower_bound": 5, "upper_bound": 4, "rows": []},
+    ],
+    ids=["missing", "duplicated", "out-of-order", "outside", "invalid-bounds"],
+)
+def test_deserialized_result_binds_declared_row_axis(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError, match=r"declared interval|upper_bound"):
+        PrimeShiftProfileResult.model_validate(payload)
+
+
+def test_result_axis_round_trips_through_serialization() -> None:
+    result = compute_prime_shift_profile(
+        PrimeShiftProfileRequest(lower_bound=4, upper_bound=5)
+    )
+
+    restored = PrimeShiftProfileResult.model_validate(result.model_dump(mode="json"))
+
+    assert tuple(row.n for row in restored.rows) == (4, 5)
 
 
 def test_rejects_interval_that_exceeds_segmented_sieve_work_budget() -> None:

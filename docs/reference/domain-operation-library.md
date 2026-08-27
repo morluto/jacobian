@@ -231,6 +231,16 @@ computation just to construct its own result. Adapters may reject malformed
 backend data during conversion, but that is integration safety rather than a
 separate mathematical result stage.
 
+Request-model validation is not a second execution-plan layer. A raw
+``mode="before"`` preflight may reject cheap representation facts—such as
+shape, nesting, digit length, or an aggregate source limit—before expensive
+canonicalization. It must not perform full candidate enumeration, invoke a
+solver or backend, or replay the operation's defining relation merely to
+validate a request. After canonicalization, the owner computes one semantic
+admission plan for the invocation and reuses it through the kernel and trusted
+result construction; request validators and operation wrappers must not
+recompute that plan independently.
+
 When result construction needs to bypass semantic replay, expose one private
 owner-local factory such as ``_from_kernel``. It may use trusted construction
 only after the kernel has established every invariant it skips. Pydantic result
@@ -480,6 +490,13 @@ no phase receives a fresh hidden budget. This is an owner-level contract, not a
 generic production ledger. A caller or MCP read timeout must cover the declared
 operation envelope plus bounded transport overhead; a shorter outer timeout may
 abort the call, but it cannot establish an operation result.
+
+The plan includes the semantic admission decision and its derived work,
+intermediate, memory, and exact-output reservations. Compute those quantities
+once after canonicalization and pass or otherwise reuse the owner-local plan;
+do not make a request model, operation wrapper, and trusted result constructor
+independently repeat the same admission probe. A separately supplied result is
+a different trust boundary and may incur an explicit bounded verifier replay.
 
 For a killable subprocess or interactive backend, that envelope begins before
 input spooling, launch, resource setup, and reader/writer startup. It also

@@ -259,6 +259,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "complete exact friable count with result-sensitive materialized and generated regimes, avoiding caller-side factorization of every source integer",
     ),
     OperationAdmission(
+        "number_theory.gcd_quotient.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete pairwise gcd profile that a loop of scalar gcd calls cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
+        "number_theory.product_divisibility.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete pairwise divisibility profile that a loop of scalar divides checks cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
         "number_theory.divisor_sum_product.preimages.compute",
         AdmissionDecision.KEEP,
         "complete exact source-bound fiber of n*sigma(n), using the square-root inequality to avoid caller-side coverage proofs",

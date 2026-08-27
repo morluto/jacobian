@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import math
+import operator
+from typing import SupportsIndex
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._prime_shift_models import (
     PrimeShiftProfileRequest as PrimeShiftRequest,
 )
 from jacobian.math.number_theory._prime_shift_models import (
     PrimeShiftProfileResult,
+    _PrimeShiftProfileExecutionPlan,
     require_prime_shift_profile_admission,
 )
 
@@ -46,6 +51,29 @@ def _segmented_sieve(
     return flags
 
 
+def _compute_prime_shift_profile(
+    plan: _PrimeShiftProfileExecutionPlan,
+) -> PrimeShiftProfileResult:
+    """Run the segmented-sieve kernel for one admitted execution plan."""
+
+    base_limit = plan.base_limit
+    counts = [0] * (plan.upper_bound - plan.lower_bound + 1)
+
+    base_primes = _simple_sieve(base_limit)
+    for power, candidate_lower, candidate_upper in plan.candidate_intervals:
+        flags = _segmented_sieve(candidate_lower, candidate_upper, base_primes)
+        for offset, is_prime in enumerate(flags):
+            if is_prime:
+                counts[candidate_lower + offset + power - plan.lower_bound] += 1
+
+    return PrimeShiftProfileResult._from_kernel(
+        lower_bound=plan.lower_bound,
+        upper_bound=plan.upper_bound,
+        counts=tuple(counts),
+        plan=plan,
+    )
+
+
 def compute_prime_shift_profile(
     request: PrimeShiftRequest,
 ) -> PrimeShiftProfileResult:
@@ -56,7 +84,9 @@ def compute_prime_shift_profile(
     that satisfies 2^k <= n - p, we count one representation.
     """
     try:
-        plan = require_prime_shift_profile_admission(request)
+        plan = require_prime_shift_profile_admission(
+            request.lower_bound, request.upper_bound
+        )
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("lower_bound", "upper_bound"),
@@ -64,21 +94,32 @@ def compute_prime_shift_profile(
             message=str(exc),
         ) from exc
 
-    base_primes = _simple_sieve(plan.base_limit)
-
-    counts = [0] * (plan.upper_bound - plan.lower_bound + 1)
-
-    for power, candidate_lower, candidate_upper in plan.candidate_intervals:
-        flags = _segmented_sieve(candidate_lower, candidate_upper, base_primes)
-        for offset, is_prime in enumerate(flags):
-            if is_prime:
-                counts[candidate_lower + offset + power - plan.lower_bound] += 1
-
-    return PrimeShiftProfileResult._from_kernel(
-        request=request,
-        counts=tuple(counts),
-        plan=plan,
-    )
+    return _compute_prime_shift_profile(plan)
 
 
-__all__ = ["compute_prime_shift_profile"]
+def _as_python_integer(value: SupportsIndex | IntegerValue) -> int:
+    """Return one direct native integer input as a Python integer."""
+
+    if isinstance(value, IntegerValue):
+        return parse_canonical_integer(value.value)
+    return operator.index(value)
+
+
+def prime_shift_profile(
+    lower_bound: SupportsIndex | IntegerValue,
+    upper_bound: SupportsIndex | IntegerValue,
+) -> PrimeShiftProfileResult:
+    """Return the exact translated-prime profile on the closed interval [L, U].
+
+    Native callers provide the interval bounds directly.  The operation uses
+    the same owner admission plan, segmented-sieve kernel, and typed result
+    construction as the MCP adapter.
+    """
+
+    lower = _as_python_integer(lower_bound)
+    upper = _as_python_integer(upper_bound)
+    plan = require_prime_shift_profile_admission(lower, upper)
+    return _compute_prime_shift_profile(plan)
+
+
+__all__ = ["compute_prime_shift_profile", "prime_shift_profile"]

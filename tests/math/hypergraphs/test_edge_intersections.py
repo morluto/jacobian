@@ -33,7 +33,9 @@ NONLINEAR = {
 
 
 def _profile(source: object) -> EdgeIntersectionsResult:
-    return compute_edge_intersections(EdgeIntersectionsRequest(hypergraph=source))
+    return compute_edge_intersections(
+        EdgeIntersectionsRequest.model_validate({"hypergraph": source})
+    )
 
 
 class TestEdgeIntersections:
@@ -245,13 +247,16 @@ class TestEdgeIntersectionPreflight:
     def test_immediately_larger_intersection_cell_family_is_rejected(self) -> None:
         vertices = tuple(f"v{i:02}" for i in range(14))
 
-        with pytest.raises(ValidationError):
-            EdgeIntersectionsRequest(
-                hypergraph={
+        request = EdgeIntersectionsRequest.model_validate(
+            {
+                "hypergraph": {
                     "vertices": vertices,
                     "edges": tuple((f"e{i:03}", vertices) for i in range(100)),
                 }
-            )
+            }
+        )
+        with pytest.raises(ValueError, match="intersection-cell"):
+            compute_edge_intersections(request)
 
     def test_sparse_overlap_family_uses_exact_incidence_cell_count(self) -> None:
         vertices = tuple(f"v{i:03}" for i in range(100))
@@ -302,13 +307,16 @@ class TestEdgeIntersectionPreflight:
         # making the complete 64,350-membership ledger exceed 10 MiB.
         vertices = tuple(chr(codepoint) * 64 for codepoint in range(1, 14))
 
-        with pytest.raises(ValidationError):
-            EdgeIntersectionsRequest(
-                hypergraph={
+        request = EdgeIntersectionsRequest.model_validate(
+            {
+                "hypergraph": {
                     "vertices": vertices,
                     "edges": tuple((f"e{i:03}", vertices) for i in range(100)),
                 }
-            )
+            }
+        )
+        with pytest.raises(ValueError, match="canonical output limit"):
+            compute_edge_intersections(request)
 
     def test_output_bound_preserves_exact_non_normalized_label_bytes(self) -> None:
         # Each 63-code-point label is 189 UTF-8 bytes, but NFC would compose
@@ -320,13 +328,16 @@ class TestEdgeIntersectionPreflight:
             (chr(0x1100 + index) + "\u1161\u11a8") * 21 for index in range(13)
         )
 
-        with pytest.raises(ValidationError):
-            EdgeIntersectionsRequest(
-                hypergraph={
+        request = EdgeIntersectionsRequest.model_validate(
+            {
+                "hypergraph": {
                     "vertices": vertices,
                     "edges": tuple((f"e{i:03}", vertices) for i in range(100)),
                 }
-            )
+            }
+        )
+        with pytest.raises(ValueError, match="canonical output limit"):
+            compute_edge_intersections(request)
 
     def test_schema_exposes_complete_profile_bounds(self) -> None:
         request_schema = EdgeIntersectionsRequest.model_json_schema()

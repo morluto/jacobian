@@ -427,15 +427,15 @@ def test_transition_axis_requires_contiguous_stable_identifiers() -> None:
     )
 
 
-def test_request_rejects_out_of_range_endpoint_before_execution() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        TransitionParikhProfileRequest(
-            automaton=_automaton(1, 0, ()),
-            source_state=1,
-            target_state=0,
-            path_length=0,
-        )
-    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
+def test_owner_rejects_out_of_range_endpoint() -> None:
+    request = TransitionParikhProfileRequest(
+        automaton=_automaton(1, 0, ()),
+        source_state=1,
+        target_state=0,
+        path_length=0,
+    )
+    with pytest.raises(ValueError, match="source_state must be"):
+        compute_transition_parikh_profile(request)
 
 
 def _loop_automaton(
@@ -448,7 +448,7 @@ def _loop_automaton(
     )
 
 
-def test_request_rejects_excessive_dp_work_even_when_target_is_unreachable() -> None:
+def test_owner_rejects_excessive_dp_work_even_when_target_is_unreachable() -> None:
     automaton = _loop_automaton(3, state_count=2)
     TransitionParikhProfileRequest(
         automaton=automaton,
@@ -456,14 +456,14 @@ def test_request_rejects_excessive_dp_work_even_when_target_is_unreachable() -> 
         target_state=1,
         path_length=157,
     )
-    with pytest.raises(ValidationError) as exc_info:
-        TransitionParikhProfileRequest(
-            automaton=automaton,
-            source_state=0,
-            target_state=1,
-            path_length=158,
-        )
-    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
+    request = TransitionParikhProfileRequest(
+        automaton=automaton,
+        source_state=0,
+        target_state=1,
+        path_length=158,
+    )
+    with pytest.raises(ValueError, match="transition-update bound"):
+        compute_transition_parikh_profile(request)
 
 
 def test_request_preflight_scans_only_reachable_outgoing_transitions() -> None:
@@ -482,7 +482,7 @@ def test_request_preflight_scans_only_reachable_outgoing_transitions() -> None:
     )
 
 
-def test_request_rejects_excessive_dense_vector_update_work() -> None:
+def test_owner_rejects_excessive_dense_vector_update_work() -> None:
     automaton = _loop_automaton(11, state_count=2)
     TransitionParikhProfileRequest(
         automaton=automaton,
@@ -490,17 +490,17 @@ def test_request_rejects_excessive_dense_vector_update_work() -> None:
         target_state=1,
         path_length=9,
     )
-    with pytest.raises(ValidationError) as exc_info:
-        TransitionParikhProfileRequest(
-            automaton=automaton,
-            source_state=0,
-            target_state=1,
-            path_length=10,
-        )
-    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
+    request = TransitionParikhProfileRequest(
+        automaton=automaton,
+        source_state=0,
+        target_state=1,
+        path_length=10,
+    )
+    with pytest.raises(ValueError, match="dense-vector update-work bound"):
+        compute_transition_parikh_profile(request)
 
 
-def test_request_rejects_excessive_profile_cell_count() -> None:
+def test_owner_rejects_excessive_profile_cell_count() -> None:
     automaton = _loop_automaton(9)
     TransitionParikhProfileRequest(
         automaton=automaton,
@@ -508,26 +508,26 @@ def test_request_rejects_excessive_profile_cell_count() -> None:
         target_state=0,
         path_length=9,
     )
-    with pytest.raises(ValidationError) as exc_info:
-        TransitionParikhProfileRequest(
-            automaton=automaton,
-            source_state=0,
-            target_state=0,
-            path_length=10,
-        )
-    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
+    request = TransitionParikhProfileRequest(
+        automaton=automaton,
+        source_state=0,
+        target_state=0,
+        path_length=10,
+    )
+    with pytest.raises(ValueError, match="profile-cell bound"):
+        compute_transition_parikh_profile(request)
 
 
-def test_request_rejects_excessive_intermediate_vector_coordinates() -> None:
+def test_owner_rejects_excessive_intermediate_vector_coordinates() -> None:
     automaton = _loop_automaton(159, state_count=2)
-    with pytest.raises(ValidationError) as exc_info:
-        TransitionParikhProfileRequest(
-            automaton=automaton,
-            source_state=0,
-            target_state=1,
-            path_length=2,
-        )
-    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
+    request = TransitionParikhProfileRequest(
+        automaton=automaton,
+        source_state=0,
+        target_state=1,
+        path_length=2,
+    )
+    with pytest.raises(ValueError, match="vector-coordinate bound"):
+        compute_transition_parikh_profile(request)
     TransitionParikhProfileRequest(
         automaton=_loop_automaton(158, state_count=2),
         source_state=0,
@@ -536,7 +536,7 @@ def test_request_rejects_excessive_intermediate_vector_coordinates() -> None:
     )
 
 
-def test_request_rejects_excessive_serialized_result() -> None:
+def test_owner_rejects_excessive_serialized_result() -> None:
     accepted = TransitionParikhProfileRequest(
         automaton=_loop_automaton(129),
         source_state=0,
@@ -548,14 +548,14 @@ def test_request_rejects_excessive_serialized_result() -> None:
     )
     assert len(encoded) <= _MAX_TRANSITION_PROFILE_RESULT_BYTES
 
-    with pytest.raises(ValidationError) as exc_info:
-        TransitionParikhProfileRequest(
-            automaton=_loop_automaton(130),
-            source_state=0,
-            target_state=0,
-            path_length=2,
-        )
-    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
+    request = TransitionParikhProfileRequest(
+        automaton=_loop_automaton(130),
+        source_state=0,
+        target_state=0,
+        path_length=2,
+    )
+    with pytest.raises(ValueError, match="serialized-result bound"):
+        compute_transition_parikh_profile(request)
 
 
 def test_length_bound_keeps_large_degenerate_cases_typed() -> None:

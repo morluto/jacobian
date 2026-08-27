@@ -48,7 +48,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "formal_context.duquenne_guigues_basis.compute",
         AdmissionDecision.KEEP,
-        "complete bounded pseudo-intent family and source-bound canonical implication basis with exhaustive closure-equivalence replay",
+        "complete bounded pseudo-intent family and source-bound canonical implication basis with exhaustive closure equivalence",
     ),
     OperationAdmission(
         "implication_system.closure.compute",

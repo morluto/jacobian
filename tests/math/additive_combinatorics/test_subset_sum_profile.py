@@ -183,21 +183,21 @@ def test_widened_source_contract_admits_beyond_legacy_multiplicity_digits() -> N
     assert len(result.total_subsets) > len(str(1 << 256))
 
 
-def test_profile_work_above_bound_is_rejected_before_execution() -> None:
+def test_profile_work_above_bound_is_rejected_by_owner_execution() -> None:
     items = tuple(1 << exponent for exponent in range(14)) + (0,) * (
         MAX_SUBSET_SUM_ITEMS - 14
     )
 
-    with pytest.raises(ValidationError):
-        _request(*items)
+    with pytest.raises(ValueError, match="DP transitions"):
+        compute_subset_sum_profile(_request(*items))
 
 
-def test_profile_result_above_bound_is_rejected_before_execution() -> None:
+def test_profile_result_above_bound_is_rejected_by_owner_execution() -> None:
     offset = 10 ** (MAX_SUBSET_SUM_ITEM_DIGITS - 1)
     items = tuple(offset + (1 << exponent) for exponent in range(15))
 
-    with pytest.raises(ValidationError):
-        _request(*items)
+    with pytest.raises(ValueError, match="result"):
+        compute_subset_sum_profile(_request(*items))
 
 
 def test_large_accepted_profile_stays_inside_declared_result_budget() -> None:

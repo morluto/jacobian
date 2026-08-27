@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.regular_languages._profile_admission import (
-    require_transition_profile_envelope,
+    TransitionParikhAdmissionPlan,
+    admit_transition_profile,
 )
 from jacobian.math.regular_languages.values import (
     DFA,
@@ -89,30 +90,15 @@ def dfa_transition_carrier(dfa: DFA) -> FiniteLabeledAutomaton:
     )
 
 
-def _outgoing_transitions(
-    automaton: FiniteLabeledAutomaton,
-) -> tuple[tuple[AutomatonTransition, ...], ...]:
-    outgoing: list[list[AutomatonTransition]] = [
-        [] for _ in range(automaton.state_count)
-    ]
-    for transition in automaton.transitions:
-        outgoing[transition.source].append(transition)
-    return tuple(tuple(transitions) for transitions in outgoing)
-
-
 def _transition_parikh_profile_data(
-    automaton: FiniteLabeledAutomaton,
+    plan: TransitionParikhAdmissionPlan,
     source_state: int,
     target_state: int,
     path_length: int,
 ) -> tuple[tuple[tuple[tuple[int, ...], int], ...], int]:
-    """Compute canonical profile entries and an independent total path count."""
+    """Compute canonical profile entries inside one admitted envelope."""
 
-    expected_path_count = require_transition_profile_envelope(
-        automaton, source_state, target_state, path_length
-    )
-    transition_count = len(automaton.transitions)
-    outgoing = _outgoing_transitions(automaton)
+    transition_count = sum(len(transitions) for transitions in plan.outgoing)
     zero_vector = tuple(0 for _ in range(transition_count))
     layer: dict[tuple[int, tuple[int, ...]], int] = {(source_state, zero_vector): 1}
     for _ in range(path_length):
@@ -120,7 +106,7 @@ def _transition_parikh_profile_data(
             break
         next_layer: dict[tuple[int, tuple[int, ...]], int] = {}
         for (state, vector), multiplicity in layer.items():
-            for transition in outgoing[state]:
+            for transition in plan.outgoing[state]:
                 transition_id = transition.transition_id
                 updated = (
                     *vector[:transition_id],
@@ -136,7 +122,7 @@ def _transition_parikh_profile_data(
         if state == target_state
     )
     total_path_count = sum(multiplicity for _, multiplicity in target_entries)
-    if total_path_count != expected_path_count:
+    if total_path_count != plan.expected_path_count:
         raise RuntimeError(
             "transition-Parikh recurrence disagrees with independent path counting"
         )
@@ -151,8 +137,9 @@ def transition_parikh_profile(
 ) -> TransitionParikhProfile:
     """Return the exact transition-use histogram for fixed-endpoint paths."""
 
+    plan = admit_transition_profile(automaton, source_state, target_state, path_length)
     target_entries, total_path_count = _transition_parikh_profile_data(
-        automaton, source_state, target_state, path_length
+        plan, source_state, target_state, path_length
     )
     return TransitionParikhProfile._from_kernel(
         automaton=automaton,

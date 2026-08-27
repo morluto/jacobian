@@ -301,29 +301,25 @@ def test_oversized_enumerations_fail_before_computation() -> None:
         exc_info.value.errors()[0]["type"]
         == "symbolic_dynamics.block_language_work_bound"
     )
-    with pytest.raises(ValidationError) as exc_info:
-        FiniteTypeShiftRequest(
-            shift=ForbiddenBlockShift(
-                alphabet=alphabet,
-                forbidden_blocks=(("a", "a", "a", "a", "a"),),
+    with pytest.raises(ValueError, match="requested block enumeration"):
+        construct_finite_type_shift(
+            FiniteTypeShiftRequest(
+                shift=ForbiddenBlockShift(
+                    alphabet=alphabet,
+                    forbidden_blocks=(("a", "a", "a", "a", "a"),),
+                )
             )
         )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "symbolic_dynamics.block_language_work_bound"
-    )
     ten_symbols = alphabet[:10]
-    with pytest.raises(ValidationError) as exc_info:
-        FiniteTypeShiftRequest(
-            shift=ForbiddenBlockShift(
-                alphabet=ten_symbols,
-                forbidden_blocks=(("a", "a", "a", "a", "a"),),
+    with pytest.raises(ValueError, match="presentation adjacency"):
+        construct_finite_type_shift(
+            FiniteTypeShiftRequest(
+                shift=ForbiddenBlockShift(
+                    alphabet=ten_symbols,
+                    forbidden_blocks=(("a", "a", "a", "a", "a"),),
+                )
             )
         )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "symbolic_dynamics.finite_type_presentation_result_bound"
-    )
     with pytest.raises(ValidationError) as exc_info:
         HigherBlockRequest(
             shift=ForbiddenBlockShift(

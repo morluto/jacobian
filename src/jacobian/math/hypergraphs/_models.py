@@ -558,7 +558,8 @@ def _edge_intersection_preflight_data(
     return pair_count, total_incidences, intersection_cells, estimated_result_bytes
 
 
-def _require_edge_intersection_preflight(hypergraph: FiniteHypergraph) -> None:
+def _admit_edge_intersection_profile(hypergraph: FiniteHypergraph) -> None:
+    """Admit one complete profile before its owner-local kernel runs."""
     (
         pair_count,
         total_incidences,
@@ -610,11 +611,6 @@ class EdgeIntersectionsRequest(StrictModel):
             "canonical_result_bytes_bound": MAX_EDGE_INTERSECTION_RESULT_BYTES,
         },
     )
-
-    @model_validator(mode="after")
-    def require_bounded_complete_profile(self) -> Self:
-        _require_edge_intersection_preflight(self.hypergraph)
-        return self
 
 
 class EdgeIntersectionEntry(StrictModel):
@@ -691,8 +687,19 @@ class EdgeIntersectionsResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_edge_intersections(self) -> Self:
-        _require_edge_intersection_preflight(self.hypergraph)
         edge_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        if len(edge_ids) * (len(edge_ids) - 1) // 2 > MAX_EDGE_PAIR_COUNT:
+            raise _validation_error(
+                f"edge-intersection profile exceeds the {MAX_EDGE_PAIR_COUNT}-pair bound"
+            )
+        if (
+            sum(len(members) for _, members in self.hypergraph.edges)
+            > MAX_TOTAL_INCIDENCES
+        ):
+            raise _validation_error(
+                "edge-intersection source exceeds the "
+                f"{MAX_TOTAL_INCIDENCES}-incidence bound"
+            )
         expected_pairs = tuple(
             (edge_ids[left], edge_ids[right])
             for left in range(len(edge_ids))

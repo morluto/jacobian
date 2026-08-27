@@ -11,6 +11,8 @@ from jacobian.math.graphs.directed._models import (
     AcyclicOrderResult,
     CondensationRequest,
     CondensationResult,
+    DagLongestPathRequest,
+    DagLongestPathResult,
     ReachabilityRequest,
     ReachabilityResult,
     StronglyConnectedComponentsRequest,
@@ -19,6 +21,7 @@ from jacobian.math.graphs.directed._models import (
 from jacobian.math.graphs.directed._operations import (
     compute_acyclic_order,
     compute_condensation,
+    compute_dag_longest_path,
     compute_reachability,
     compute_strongly_connected_components,
 )
@@ -146,6 +149,33 @@ DIRECTED_GRAPH_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "simple_dag_topological_order",
                 "Compute a topological order of a small DAG.",
+                {
+                    "graph": {
+                        "vertex_count": 4,
+                        "edges": [[0, 1], [0, 2], [1, 3], [2, 3]],
+                    },
+                },
+            ),
+        ),
+    ),
+    directed_graph_operation(
+        "graph.directed.dag_longest_path.compute",
+        "Compute the longest directed path in a DAG",
+        "Compute the exact maximum directed simple-path length (number of "
+        "edges) and a canonical path witness in a simple directed acyclic "
+        "graph. Reports NOT_APPLICABLE when the graph contains a cycle.",
+        DagLongestPathRequest,
+        DagLongestPathResult,
+        compute_dag_longest_path,
+        "graph",
+        "directed",
+        "dag",
+        "longest-path",
+        "exact",
+        examples=(
+            example(
+                "simple_dag_longest_path",
+                "Compute the longest path in a small diamond DAG.",
                 {
                     "graph": {
                         "vertex_count": 4,

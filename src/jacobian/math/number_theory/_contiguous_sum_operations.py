@@ -52,7 +52,9 @@ def _segmented_odd_divisor_counts(lower_bound: int, upper_bound: int) -> list[in
                 residuals[index] = residual
                 counts[index] *= exponent + 1
     for index, residual in enumerate(residuals):
-        if residual > 1 and residual % 2:
+        while residual % 2 == 0:
+            residual //= 2
+        if residual > 1:
             counts[index] *= 2
     return counts
 

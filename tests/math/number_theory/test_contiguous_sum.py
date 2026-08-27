@@ -24,6 +24,14 @@ def test_small() -> None:
     assert counts[8] == 3
 
 
+def test_segmented_profile_strips_even_residual_before_counting_odd_divisors() -> None:
+    result = compute_contiguous_sum_profile(
+        ContiguousSumProfileRequest(lower_bound="10", upper_bound="10")
+    )
+
+    assert result.rows[0].representation_count == 2
+
+
 def test_primes() -> None:
     """Primes have exactly 2 representations (as n and as sum of consecutive ints from 1 to some point)."""
     result = compute_contiguous_sum_profile(

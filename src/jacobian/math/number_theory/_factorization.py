@@ -155,6 +155,7 @@ FACTORIZATION_OPERATIONS = (
         result_model=DivisorListResult,
         implementation=_compute_divisors,
         tags=("number-theory", "enumeration"),
+        discovery_terms=("positive divisors",),
         examples=(
             example(
                 "divisors_12", "Enumerate the positive divisors of 12.", {"value": "12"}

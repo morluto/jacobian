@@ -5,7 +5,9 @@ from __future__ import annotations
 import math
 
 from jacobian.math.number_theory._prime_shift_models import (
-    PrimeShiftProfileRequest,
+    PrimeShiftProfileRequest as PrimeShiftRequest,
+)
+from jacobian.math.number_theory._prime_shift_models import (
     PrimeShiftProfileResult,
     PrimeShiftProfileRow,
 )
@@ -16,7 +18,7 @@ def _simple_sieve(limit: int) -> list[int]:
         return []
     is_prime = bytearray(b"\x01") * (limit + 1)
     is_prime[0] = is_prime[1] = 0
-    for i in range(2, int(math.isqrt(limit)) + 1):
+    for i in range(2, math.isqrt(limit) + 1):
         if is_prime[i]:
             for j in range(i * i, limit + 1, i):
                 is_prime[j] = 0
@@ -57,12 +59,6 @@ def compute_prime_shift_profile(
         for i in range(hi - lo + 1)
     ]
     return PrimeShiftProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
-
-
-# Forward reference for type annotation
-from jacobian.math.number_theory._prime_shift_models import (
-    PrimeShiftProfileRequest as PrimeShiftRequest,
-)
 
 
 __all__ = ["compute_prime_shift_profile"]

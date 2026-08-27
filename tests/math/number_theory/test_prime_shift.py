@@ -1,11 +1,17 @@
 """Tests for translated-prime representation profiles."""
 
+import pytest
+
 from jacobian.math.number_theory._prime_shift_models import PrimeShiftProfileRequest
-from jacobian.math.number_theory._prime_shift_operations import compute_prime_shift_profile
+from jacobian.math.number_theory._prime_shift_operations import (
+    compute_prime_shift_profile,
+)
 
 
 def test_basic_interval() -> None:
-    result = compute_prime_shift_profile(PrimeShiftProfileRequest(lower_bound=1, upper_bound=20))
+    result = compute_prime_shift_profile(
+        PrimeShiftProfileRequest(lower_bound=1, upper_bound=20)
+    )
     counts = [r.representation_count for r in result.rows]
     # n=4: 4=2+2, 4=3+1 -> 2 representations
     # n=7: 7=5+2, 7=3+4, 7=2+5? no, 7-2=5 (prime), 7-4=3 (prime), 7-8<0
@@ -15,7 +21,9 @@ def test_basic_interval() -> None:
 
 
 def test_small_values() -> None:
-    result = compute_prime_shift_profile(PrimeShiftProfileRequest(lower_bound=1, upper_bound=5))
+    result = compute_prime_shift_profile(
+        PrimeShiftProfileRequest(lower_bound=1, upper_bound=5)
+    )
     counts = [r.representation_count for r in result.rows]
     # n=1: 1-1=0(not prime) -> 0
     # n=2: 2-1=1(not prime), 2-2=0(not prime) -> 0
@@ -26,7 +34,14 @@ def test_small_values() -> None:
 
 
 def test_single_element() -> None:
-    result = compute_prime_shift_profile(PrimeShiftProfileRequest(lower_bound=4, upper_bound=4))
+    result = compute_prime_shift_profile(
+        PrimeShiftProfileRequest(lower_bound=4, upper_bound=4)
+    )
     assert len(result.rows) == 1
     assert result.rows[0].n == 4
     assert result.rows[0].representation_count == 2
+
+
+def test_rejects_profile_that_exceeds_canonical_output_budget() -> None:
+    with pytest.raises(ValueError, match="canonical output budget"):
+        PrimeShiftProfileRequest(lower_bound=9_000_001, upper_bound=10_000_000)

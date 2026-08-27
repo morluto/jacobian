@@ -102,6 +102,45 @@ def test_math_run_encloses_logarithm_on_a_positive_box() -> None:
     asyncio.run(scenario())
 
 
+def test_math_run_encloses_logarithm_second_jet_on_a_positive_box() -> None:
+    """The parallel Arb enclosure must also cross the MCP boundary as a result."""
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(), raise_exceptions=True) as client:
+            result = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "interval.expression.second_jet_enclosure.compute",
+                    "payload": {
+                        "expression": {
+                            "op": "log",
+                            "children": [{"op": "var", "variable": "x"}],
+                        },
+                        "box": {
+                            "variables": ["x"],
+                            "intervals": [
+                                {
+                                    "lower": {"num": "1", "den": "1"},
+                                    "upper": {"num": "2", "den": "1"},
+                                }
+                            ],
+                        },
+                        "precision_bits": 1024,
+                    },
+                },
+            )
+            assert isinstance(result.structured_content, dict)
+            output = result.structured_content["output"]
+            assert output["status"] == "ENCLOSED"
+            assert output["value"] is not None
+            assert len(output["gradient"]) == 1
+            assert len(output["hessian"]) == 1
+
+    asyncio.run(scenario())
+
+
 def test_math_run_projects_unexpected_operation_failures() -> None:
     """An owner crash must not escape the MCP worker as a TaskGroup failure."""
 

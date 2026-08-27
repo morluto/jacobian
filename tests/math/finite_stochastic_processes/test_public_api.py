@@ -13,6 +13,7 @@ def test_exact_public_api_symbols() -> None:
         "conditional_expectation",
         "doob_martingale",
         "filtration_natural",
+        "poisson_binomial",
         "sigma_algebra_from_observation",
         "sigma_algebra_join",
     )

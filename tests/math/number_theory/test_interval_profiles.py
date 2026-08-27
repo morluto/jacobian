@@ -11,9 +11,12 @@ from jacobian.math.number_theory._interval_profile_models import (
     MAX_PROFILE_RESULT_BYTES,
     MAX_SIEVE_WORK,
     DivisorCountProfileRequest,
+    DivisorSumProfileRequest,
+    EulerTotientProfileRequest,
     GreatestPrimeFactorProfileRequest,
     IntervalProfileRequest,
     IntervalProfileRowsRequest,
+    LeastPrimeFactorProfileRequest,
     PrimeGapProfileRequest,
     SquarefreeProfileRequest,
     _estimate_prime_gap_work,
@@ -43,7 +46,7 @@ def _is_squarefree(n: int) -> bool:
 class TestSquarefreeProfile:
     def test_small_interval(self) -> None:
         result = compute_squarefree_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=12)
+            SquarefreeProfileRequest(lower_bound=1, upper_bound=12)
         )
         assert list(result.squarefree_values) == [1, 2, 3, 5, 6, 7, 10, 11]
         assert list(result.nonsquarefree_values) == [4, 8, 9, 12]
@@ -52,7 +55,7 @@ class TestSquarefreeProfile:
 
     def test_single_element(self) -> None:
         result = compute_squarefree_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=1)
+            SquarefreeProfileRequest(lower_bound=1, upper_bound=1)
         )
         assert list(result.squarefree_values) == [1]
         assert list(result.nonsquarefree_values) == []
@@ -62,14 +65,14 @@ class TestSquarefreeProfile:
     def test_no_squarefree(self) -> None:
         """Interval [4, 4] contains only 4, which is non-squarefree."""
         result = compute_squarefree_profile(
-            IntervalProfileRequest(lower_bound=4, upper_bound=4)
+            SquarefreeProfileRequest(lower_bound=4, upper_bound=4)
         )
         assert list(result.squarefree_values) == []
         assert list(result.nonsquarefree_values) == [4]
 
     def test_profile_members_are_immutable(self) -> None:
         result = compute_squarefree_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=4)
+            SquarefreeProfileRequest(lower_bound=1, upper_bound=4)
         )
         with pytest.raises(AttributeError):
             result.squarefree_values.append(5)  # type: ignore[attr-defined]
@@ -77,7 +80,7 @@ class TestSquarefreeProfile:
     def test_partition_is_exhaustive_and_disjoint(self) -> None:
         lo, hi = 10, 100
         result = compute_squarefree_profile(
-            IntervalProfileRequest(lower_bound=lo, upper_bound=hi)
+            SquarefreeProfileRequest(lower_bound=lo, upper_bound=hi)
         )
         sf = result.squarefree_values
         nsf = result.nonsquarefree_values
@@ -91,7 +94,7 @@ class TestSquarefreeProfile:
     def test_matches_direct_factorization(self) -> None:
         lo, hi = 1, 200
         result = compute_squarefree_profile(
-            IntervalProfileRequest(lower_bound=lo, upper_bound=hi)
+            SquarefreeProfileRequest(lower_bound=lo, upper_bound=hi)
         )
         expected_sf = [n for n in range(lo, hi + 1) if _is_squarefree(n)]
         expected_nsf = [n for n in range(lo, hi + 1) if not _is_squarefree(n)]
@@ -161,6 +164,16 @@ class TestSquarefreeProfile:
         )
         assert _estimate_successor_prime_search_work(request.upper_bound) > 0
 
+    def test_kernels_reject_a_different_operation_admission(self) -> None:
+        sparse_request = SquarefreeProfileRequest(
+            lower_bound=1, upper_bound=MAX_INTERVAL_WIDTH + 1
+        )
+
+        with pytest.raises(
+            TypeError, match="expected GreatestPrimeFactorProfileRequest"
+        ):
+            compute_greatest_prime_factor_profile(sparse_request)  # type: ignore[arg-type]
+
     def test_work_budget_replaces_fixed_upper_bound(self) -> None:
         with pytest.raises(ValidationError, match="segmented-sieve work budget"):
             SquarefreeProfileRequest(lower_bound=10**13, upper_bound=10**13)
@@ -168,7 +181,7 @@ class TestSquarefreeProfile:
     def test_prime_square_boundary(self) -> None:
         """4 = 2^2 is the first non-squarefree, 9 = 3^2 is another."""
         result = compute_squarefree_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=20)
+            SquarefreeProfileRequest(lower_bound=1, upper_bound=20)
         )
         assert 4 in result.nonsquarefree_values
         assert 8 in result.nonsquarefree_values  # 2^3
@@ -180,13 +193,13 @@ class TestSquarefreeProfile:
 
     def test_concatenation_consistency(self) -> None:
         r1 = compute_squarefree_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=10)
+            SquarefreeProfileRequest(lower_bound=1, upper_bound=10)
         )
         r2 = compute_squarefree_profile(
-            IntervalProfileRequest(lower_bound=11, upper_bound=20)
+            SquarefreeProfileRequest(lower_bound=11, upper_bound=20)
         )
         r_union = compute_squarefree_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=20)
+            SquarefreeProfileRequest(lower_bound=1, upper_bound=20)
         )
         assert r1.squarefree_values + r2.squarefree_values == r_union.squarefree_values
         assert (
@@ -203,21 +216,21 @@ class TestSquarefreeProfile:
 class TestDivisorCountProfile:
     def test_small_interval(self) -> None:
         result = compute_divisor_count_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=12)
+            DivisorCountProfileRequest(lower_bound=1, upper_bound=12)
         )
         expected = [1, 2, 2, 3, 2, 4, 2, 4, 3, 4, 2, 6]
         assert [r.divisor_count for r in result.rows] == expected
 
     def test_single_element(self) -> None:
         result = compute_divisor_count_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=1)
+            DivisorCountProfileRequest(lower_bound=1, upper_bound=1)
         )
         assert result.rows[0].n == 1
         assert result.rows[0].divisor_count == 1
 
     def test_primes_have_count_two(self) -> None:
         result = compute_divisor_count_profile(
-            IntervalProfileRequest(lower_bound=2, upper_bound=50)
+            DivisorCountProfileRequest(lower_bound=2, upper_bound=50)
         )
         for row in result.rows:
             if isprime(row.n):
@@ -226,7 +239,7 @@ class TestDivisorCountProfile:
     def test_prime_powers(self) -> None:
         """tau(p^e) = e + 1."""
         result = compute_divisor_count_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=100)
+            DivisorCountProfileRequest(lower_bound=1, upper_bound=100)
         )
         rows = {r.n: r.divisor_count for r in result.rows}
         assert rows[4] == 3  # 2^2
@@ -240,7 +253,7 @@ class TestDivisorCountProfile:
     def test_matches_direct_divisor_enumeration(self) -> None:
         lo, hi = 1, 200
         result = compute_divisor_count_profile(
-            IntervalProfileRequest(lower_bound=lo, upper_bound=hi)
+            DivisorCountProfileRequest(lower_bound=lo, upper_bound=hi)
         )
         for row in result.rows:
             n = row.n
@@ -250,7 +263,7 @@ class TestDivisorCountProfile:
     def test_coverage(self) -> None:
         lo, hi = 5, 50
         result = compute_divisor_count_profile(
-            IntervalProfileRequest(lower_bound=lo, upper_bound=hi)
+            DivisorCountProfileRequest(lower_bound=lo, upper_bound=hi)
         )
         assert [r.n for r in result.rows] == list(range(lo, hi + 1))
 
@@ -263,14 +276,14 @@ class TestDivisorCountProfile:
 class TestGreatestPrimeFactorProfile:
     def test_small_interval(self) -> None:
         result = compute_greatest_prime_factor_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=10)
+            GreatestPrimeFactorProfileRequest(lower_bound=1, upper_bound=10)
         )
         expected = [1, 2, 3, 2, 5, 3, 7, 2, 3, 5]
         assert [r.greatest_prime_factor for r in result.rows] == expected
 
     def test_single_element(self) -> None:
         result = compute_greatest_prime_factor_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=1)
+            GreatestPrimeFactorProfileRequest(lower_bound=1, upper_bound=1)
         )
         assert result.rows[0].n == 1
         assert result.rows[0].greatest_prime_factor == 1
@@ -278,14 +291,14 @@ class TestGreatestPrimeFactorProfile:
     def test_prime_interval(self) -> None:
         """A prime interval returns each integer as its own greatest prime factor."""
         result = compute_greatest_prime_factor_profile(
-            IntervalProfileRequest(lower_bound=2, upper_bound=2)
+            GreatestPrimeFactorProfileRequest(lower_bound=2, upper_bound=2)
         )
         assert result.rows[0].greatest_prime_factor == 2
 
     def test_matches_direct_factorization(self) -> None:
         lo, hi = 1, 200
         result = compute_greatest_prime_factor_profile(
-            IntervalProfileRequest(lower_bound=lo, upper_bound=hi)
+            GreatestPrimeFactorProfileRequest(lower_bound=lo, upper_bound=hi)
         )
         for row in result.rows:
             n = row.n
@@ -298,7 +311,7 @@ class TestGreatestPrimeFactorProfile:
     def test_prime_powers(self) -> None:
         """For p^e, the greatest prime factor is p."""
         result = compute_greatest_prime_factor_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=100)
+            GreatestPrimeFactorProfileRequest(lower_bound=1, upper_bound=100)
         )
         rows = {r.n: r.greatest_prime_factor for r in result.rows}
         assert rows[4] == 2  # 2^2
@@ -310,7 +323,7 @@ class TestGreatestPrimeFactorProfile:
     def test_coverage(self) -> None:
         lo, hi = 5, 50
         result = compute_greatest_prime_factor_profile(
-            IntervalProfileRequest(lower_bound=lo, upper_bound=hi)
+            GreatestPrimeFactorProfileRequest(lower_bound=lo, upper_bound=hi)
         )
         assert [r.n for r in result.rows] == list(range(lo, hi + 1))
 
@@ -323,7 +336,7 @@ class TestGreatestPrimeFactorProfile:
 class TestPrimeGapProfile:
     def test_small_interval(self) -> None:
         result = compute_prime_gap_profile(
-            IntervalProfileRequest(lower_bound=3, upper_bound=5)
+            PrimeGapProfileRequest(lower_bound=3, upper_bound=5)
         )
         assert len(result.rows) == 2
         assert result.rows[0].lower_prime == 3
@@ -336,7 +349,7 @@ class TestPrimeGapProfile:
     def test_single_prime(self) -> None:
         """[2, 2] returns (2, 3, 1)."""
         result = compute_prime_gap_profile(
-            IntervalProfileRequest(lower_bound=2, upper_bound=2)
+            PrimeGapProfileRequest(lower_bound=2, upper_bound=2)
         )
         assert len(result.rows) == 1
         assert result.rows[0].lower_prime == 2
@@ -346,7 +359,7 @@ class TestPrimeGapProfile:
     def test_no_primes(self) -> None:
         """[4, 4] has no primes, so the gap list is empty."""
         result = compute_prime_gap_profile(
-            IntervalProfileRequest(lower_bound=4, upper_bound=4)
+            PrimeGapProfileRequest(lower_bound=4, upper_bound=4)
         )
         assert len(result.rows) == 0
 
@@ -354,7 +367,7 @@ class TestPrimeGapProfile:
         """The final gap whose lower endpoint is in [L, U] must include
         the successor prime beyond U."""
         result = compute_prime_gap_profile(
-            IntervalProfileRequest(lower_bound=5, upper_bound=5)
+            PrimeGapProfileRequest(lower_bound=5, upper_bound=5)
         )
         assert len(result.rows) == 1
         assert result.rows[0].lower_prime == 5
@@ -364,7 +377,7 @@ class TestPrimeGapProfile:
     def test_rows_are_consecutive_primes(self) -> None:
         """Every row consists of two primes with no prime between them."""
         result = compute_prime_gap_profile(
-            IntervalProfileRequest(lower_bound=2, upper_bound=100)
+            PrimeGapProfileRequest(lower_bound=2, upper_bound=100)
         )
         for row in result.rows:
             assert isprime(row.lower_prime)
@@ -379,7 +392,7 @@ class TestPrimeGapProfile:
         """Every row's lower endpoint must be in [L, U]."""
         lo, hi = 10, 50
         result = compute_prime_gap_profile(
-            IntervalProfileRequest(lower_bound=lo, upper_bound=hi)
+            PrimeGapProfileRequest(lower_bound=lo, upper_bound=hi)
         )
         for row in result.rows:
             assert lo <= row.lower_prime <= hi
@@ -387,13 +400,13 @@ class TestPrimeGapProfile:
     def test_concatenation_consistency(self) -> None:
         """Splitting at a prime boundary preserves all rows exactly once."""
         r1 = compute_prime_gap_profile(
-            IntervalProfileRequest(lower_bound=2, upper_bound=20)
+            PrimeGapProfileRequest(lower_bound=2, upper_bound=20)
         )
         r2 = compute_prime_gap_profile(
-            IntervalProfileRequest(lower_bound=23, upper_bound=50)
+            PrimeGapProfileRequest(lower_bound=23, upper_bound=50)
         )
         r_union = compute_prime_gap_profile(
-            IntervalProfileRequest(lower_bound=2, upper_bound=50)
+            PrimeGapProfileRequest(lower_bound=2, upper_bound=50)
         )
         # The union of r1 and r2 rows should equal r_union rows
         all_rows = list(r1.rows) + list(r2.rows)
@@ -407,7 +420,7 @@ class TestPrimeGapProfile:
 class TestAdditionalArithmeticProfiles:
     def test_least_prime_factor(self) -> None:
         result = compute_least_prime_factor_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=10)
+            LeastPrimeFactorProfileRequest(lower_bound=1, upper_bound=10)
         )
         assert [row.least_prime_factor for row in result.rows] == [
             1,
@@ -424,7 +437,7 @@ class TestAdditionalArithmeticProfiles:
 
     def test_euler_totient(self) -> None:
         result = compute_euler_totient_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=10)
+            EulerTotientProfileRequest(lower_bound=1, upper_bound=10)
         )
         assert [row.euler_totient for row in result.rows] == [
             1,
@@ -441,7 +454,7 @@ class TestAdditionalArithmeticProfiles:
 
     def test_divisor_sum(self) -> None:
         result = compute_divisor_sum_profile(
-            IntervalProfileRequest(lower_bound=1, upper_bound=6)
+            DivisorSumProfileRequest(lower_bound=1, upper_bound=6)
         )
         assert [row.divisor_sum for row in result.rows] == [1, 3, 4, 7, 6, 12]
 

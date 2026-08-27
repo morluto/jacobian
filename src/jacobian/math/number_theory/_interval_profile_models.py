@@ -258,7 +258,7 @@ class IntervalProfileRowsRequest(IntervalProfileRequest):
     )
 
 
-class DivisorCountProfileRequest(IntervalProfileRequest):
+class DivisorCountProfileRequest(IntervalProfileRowsRequest):
     """Interval request admitted for the divisor-count row result."""
 
     model_config = ConfigDict(
@@ -276,7 +276,7 @@ class DivisorCountProfileRequest(IntervalProfileRequest):
     )
 
 
-class GreatestPrimeFactorProfileRequest(IntervalProfileRequest):
+class GreatestPrimeFactorProfileRequest(IntervalProfileRowsRequest):
     """Interval request admitted for the greatest-prime-factor rows."""
 
     model_config = ConfigDict(
@@ -316,6 +316,18 @@ class PrimeGapProfileRequest(IntervalProfileRequest):
     _max_width: ClassVar[int | None] = None
     _result_estimator: ClassVar[_RESULT_ESTIMATOR] = _estimate_prime_gap_result_bytes
     _work_estimator: ClassVar[_WORK_ESTIMATOR] = _estimate_prime_gap_work
+
+
+class LeastPrimeFactorProfileRequest(IntervalProfileRowsRequest):
+    """Interval request admitted for least-prime-factor rows."""
+
+
+class EulerTotientProfileRequest(IntervalProfileRowsRequest):
+    """Interval request admitted for Euler-totient rows."""
+
+
+class DivisorSumProfileRequest(IntervalProfileRowsRequest):
+    """Interval request admitted for divisor-sum rows."""
 
 
 # ---------------------------------------------------------------------------
@@ -403,8 +415,10 @@ __all__ = [
     "DivisorCountProfileRequest",
     "DivisorCountProfileResult",
     "DivisorCountProfileRow",
+    "DivisorSumProfileRequest",
     "DivisorSumProfileResult",
     "DivisorSumProfileRow",
+    "EulerTotientProfileRequest",
     "EulerTotientProfileResult",
     "EulerTotientProfileRow",
     "GreatestPrimeFactorProfileRequest",
@@ -413,6 +427,7 @@ __all__ = [
     "IntervalAdmission",
     "IntervalProfileRequest",
     "IntervalProfileRowsRequest",
+    "LeastPrimeFactorProfileRequest",
     "LeastPrimeFactorProfileResult",
     "LeastPrimeFactorProfileRow",
     "PrimeGapProfileRequest",

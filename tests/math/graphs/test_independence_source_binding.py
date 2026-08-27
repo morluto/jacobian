@@ -404,7 +404,10 @@ def test_independence_worker_covers_encoding_solving_and_replay(
         recorded.update(kwargs)
         return BoundedProcessResult(
             returncode=0,
-            stdout=json.dumps(expected.model_dump(mode="json")).encode("utf-8"),
+            stdout=json.dumps(
+                expected.model_dump(mode="json", exclude={"graph"}),
+                ensure_ascii=False,
+            ).encode("utf-8"),
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
@@ -450,7 +453,7 @@ def test_independence_worker_failure_is_not_an_exact_claim(
     assert result.upper_bound == result.order
 
 
-def test_independence_worker_result_must_bind_the_submitted_graph(
+def test_independence_worker_projection_cannot_replace_the_submitted_graph(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = IndependenceNumberRequest(graph=_path_graph())
@@ -463,7 +466,10 @@ def test_independence_worker_result_must_bind_the_submitted_graph(
         "run_bounded_process",
         lambda *_args, **_kwargs: BoundedProcessResult(
             returncode=0,
-            stdout=json.dumps(wrong_result.model_dump(mode="json")).encode("utf-8"),
+            stdout=json.dumps(
+                wrong_result.model_dump(mode="json", exclude={"graph"}),
+                ensure_ascii=False,
+            ).encode("utf-8"),
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,

@@ -36,6 +36,7 @@ def main() -> int:
                         },
                     ),
                     separators=(",", ":"),
+                    ensure_ascii=False,
                 )
             )
             return 0

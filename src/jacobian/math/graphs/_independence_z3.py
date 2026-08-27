@@ -385,6 +385,7 @@ def solve_independence_number_values(
                         "resource_budget": resource_budget.model_dump(mode="json"),
                     },
                     separators=(",", ":"),
+                    ensure_ascii=False,
                 ).encode("utf-8"),
                 timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
@@ -415,10 +416,11 @@ def solve_independence_number_values(
         )
     try:
         result = IndependenceNumberResult.model_validate(
-            json.loads(completed.stdout.decode("utf-8"))
+            {
+                **json.loads(completed.stdout.decode("utf-8")),
+                "graph": graph.model_dump(mode="json"),
+            }
         )
-        if result.graph != graph:
-            raise ValueError("worker result is bound to a different graph")
         return (
             result
             if time.monotonic() < deadline

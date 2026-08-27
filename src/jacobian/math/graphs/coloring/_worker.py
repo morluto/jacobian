@@ -46,7 +46,9 @@ def main() -> int:
             )
         sys.stdout.write(
             json.dumps(
-                {"outcome": outcome, "coloring": coloring}, separators=(",", ":")
+                {"outcome": outcome, "coloring": coloring},
+                separators=(",", ":"),
+                ensure_ascii=False,
             )
         )
         return 0

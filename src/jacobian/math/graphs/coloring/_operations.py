@@ -133,6 +133,7 @@ def _run_coloring_worker(
                         "solver_conflicts": solver_conflicts,
                     },
                     separators=(",", ":"),
+                    ensure_ascii=False,
                 ).encode("utf-8"),
                 timeout_seconds=_COLORING_WORKER_WALL_SECONDS,
                 environment=worker_environment(locale="C.UTF-8"),

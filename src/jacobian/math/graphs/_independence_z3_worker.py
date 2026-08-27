@@ -24,7 +24,11 @@ def main() -> int:
         )
         result = _solve_independence_number_values_kernel(graph, resource_budget)
         sys.stdout.write(
-            json.dumps(result.model_dump(mode="json"), separators=(",", ":"))
+            json.dumps(
+                result.model_dump(mode="json", exclude={"graph"}),
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
         )
         return 0
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):

@@ -316,7 +316,9 @@ def _run_independence_worker(
         ) as directory:
             completed = run_bounded_process(
                 [sys.executable, str(_INDEPENDENCE_WORKER)],
-                input_bytes=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+                input_bytes=json.dumps(
+                    payload, separators=(",", ":"), ensure_ascii=False
+                ).encode("utf-8"),
                 timeout_seconds=timeout_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_WORKER_OUTPUT_BYTES,

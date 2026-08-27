@@ -6,6 +6,9 @@ from jacobian.math.number_theory._divisibility import DIVISIBILITY_OPERATIONS
 from jacobian.math.number_theory._divisibility_graph import (
     DIVISIBILITY_GRAPH_OPERATION,
 )
+from jacobian.math.number_theory._divisibility_profiles import (
+    DIVISIBILITY_PROFILE_OPERATIONS,
+)
 from jacobian.math.number_theory._finite_abelian_groups import (
     FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
     FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION,
@@ -33,4 +36,5 @@ TOOLS: MathTools = (
     FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION,
     FRIABLE_COUNT_OPERATION,
     DIVISIBILITY_GRAPH_OPERATION,
+    *DIVISIBILITY_PROFILE_OPERATIONS,
 )

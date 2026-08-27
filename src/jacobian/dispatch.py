@@ -112,20 +112,7 @@ def _invoke_prepared_operation(
 
     if started is None:
         started = time.monotonic()
-    try:
-        result = prepared.run(prepared.request)
-    except OperationDomainValidationError:
-        raise
-    except ValueError as exc:
-        # Owner-local admission happens after structural parsing.  Preserve a
-        # schema-valid request that exceeds that envelope as an invalid
-        # request at the transport boundary, rather than disguising it as a
-        # host execution failure.
-        raise OperationDomainValidationError(
-            location=(),
-            code="operation.domain_validation",
-            message=str(exc),
-        ) from exc
+    result = prepared.run(prepared.request)
     output = result.model_dump(mode="json")
 
     return OperationResult(

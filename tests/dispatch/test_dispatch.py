@@ -8,7 +8,15 @@ from pydantic import ValidationError, field_serializer
 
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+from jacobian.math.finite_fields import (
+    element,
+    finite_field,
+    finite_polynomial,
+    finite_polynomial_map,
+)
+from jacobian.math.finite_fields._models import FiniteMapTableRequest
 
 
 class _Request(StrictModel):
@@ -119,8 +127,58 @@ def test_dispatch_distinguishes_request_and_result_validation() -> None:
     catalog = _CatalogWithInvalidResult()
     with pytest.raises(OperationRequestValidationError):
         invoke_operation("test.invalid-result", {"value": "bad"}, catalog)  # type: ignore[arg-type]
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as error:
         invoke_operation("test.invalid-result", {"value": 1}, catalog)  # type: ignore[arg-type]
+    assert error.value.errors()[0]["type"] == "int_parsing"
+    assert "Input should be a valid integer" in error.value.errors()[0]["msg"]
+
+
+def test_dispatch_projects_owner_admission_as_an_invalid_request() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        invoke_operation(
+            "topology.simplicial_complex.barycentric_subdivision.compute",
+            {
+                "complex": {
+                    "vertices": list("abcdef"),
+                    "facets": [list("abcdef")],
+                }
+            },
+            Catalog.open(),
+        )
+
+    assert error.value.errors() == (
+        {
+            "loc": ("complex",),
+            "type": "topology.require_barycentric_work_bounds_1",
+            "msg": "barycentric subdivision requires at most 31 faces; "
+            "input would produce more than 128 subdivision facets",
+        },
+    )
+
+
+def test_dispatch_projects_finite_map_work_admission_as_an_invalid_request() -> None:
+    presentation = finite_field(2, (1, 1, 0, 1, 1, 0, 0, 0, 1))
+    one = element(presentation, (1,) + (0,) * 7)
+    request = FiniteMapTableRequest(
+        polynomial_map=finite_polynomial_map(
+            finite_polynomial(presentation, (one,) * 512)
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        invoke_operation(
+            "finite_field.polynomial_map.table.compute",
+            request.model_dump(mode="json"),
+            Catalog.open(),
+        )
+
+    assert error.value.errors() == (
+        {
+            "loc": ("polynomial_map",),
+            "type": "finite_field.finite_map_exceeds_operation_work_budget",
+            "msg": "finite map exceeds the operation work budget",
+        },
+    )
 
 
 def test_dispatch_classifies_noncanonical_json_as_request_validation() -> None:

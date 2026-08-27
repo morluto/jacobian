@@ -15,6 +15,9 @@ from jacobian.math.number_theory._finite_abelian_groups import (
     FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION,
 )
 from jacobian.math.number_theory._friable import FRIABLE_COUNT_OPERATION
+from jacobian.math.number_theory._interval_profiles import (
+    INTERVAL_PROFILE_OPERATIONS,
+)
 from jacobian.math.number_theory._modular import MODULAR_OPERATIONS
 from jacobian.math.number_theory._modular_identity import MODULAR_IDENTITY_OPERATIONS
 from jacobian.math.number_theory._periodic import PERIODIC_CONGRUENCE_OPERATIONS
@@ -36,6 +39,7 @@ TOOLS: MathTools = (
     FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
     FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION,
     FRIABLE_COUNT_OPERATION,
+    *INTERVAL_PROFILE_OPERATIONS,
     *ADDITIONAL_NT_OPERATIONS,
     DIVISIBILITY_GRAPH_OPERATION,
     *DIVISIBILITY_PROFILE_OPERATIONS,

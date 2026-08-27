@@ -80,3 +80,25 @@ def test_timed_out_command_releases_the_validation_lock(
 
     assert result != 0
     assert main(["status"]) == 0
+
+
+def test_run_forwards_pytest_arguments_to_the_locked_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(_worktree(tmp_path))
+    monkeypatch.setenv("PYTEST_ARGS", "--junitxml=pytest.xml")
+
+    result = main(
+        [
+            "run",
+            "--target",
+            "test-scale",
+            "--",
+            sys.executable,
+            "-c",
+            "from pathlib import Path; import os; Path('args').write_text(os.environ['PYTEST_ARGS'])",
+        ]
+    )
+
+    assert result == 0
+    assert (tmp_path / "args").read_text(encoding="utf-8") == "--junitxml=pytest.xml"

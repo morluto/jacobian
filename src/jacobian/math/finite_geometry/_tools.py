@@ -9,6 +9,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_geometry._models import (
     GrassmannianCountRequest,
     GrassmannianCountResult,
+    PrimeFieldAffinePlaneRequest,
+    PrimeFieldAffinePlaneResult,
     ProjectivePointCanonicalizeRequest,
     ProjectivePointCanonicalizeResult,
     ProjectivePointEqualRequest,
@@ -26,6 +28,7 @@ from jacobian.math.finite_geometry._models import (
 )
 from jacobian.math.finite_geometry._operations import (
     compute_grassmannian_count,
+    compute_prime_field_affine_plane,
     compute_projective_point_canonicalize,
     compute_projective_point_equal,
     compute_projective_space_enumerate,
@@ -243,6 +246,26 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "pg_2_3",
                 "Enumerate all points of PG(1, F_2).",
                 {"space": {"field_order": 2, "axis": ["x", "y"]}},
+            ),
+        ),
+    ),
+    _op(
+        "finite_geometry.affine_plane.prime_field.construct",
+        "Construct the prime-field affine plane AG(2, q)",
+        "Construct the complete affine plane AG(2, q) over a prime field: "
+        "q^2 labelled points, q(q+1) labelled lines, exact point-line "
+        "incidences, and q+1 parallel classes partitioning the line axis.",
+        PrimeFieldAffinePlaneRequest,
+        PrimeFieldAffinePlaneResult,
+        compute_prime_field_affine_plane,
+        "finite-geometry",
+        "affine-plane",
+        "exact",
+        examples=(
+            example(
+                "ag_2_2",
+                "Construct the affine plane AG(2, 2).",
+                {"prime_order": 2},
             ),
         ),
     ),

@@ -1,12 +1,12 @@
 """Tests for k*sigma preimage and p-adic interval valuation profiles."""
 
 from jacobian.math.number_theory._preimage_models import (
-    KSigmaPreimageRequest,
     IntervalValuationProfileRequest,
+    KSigmaPreimageRequest,
 )
 from jacobian.math.number_theory._preimage_operations import (
-    compute_ksigma_preimage,
     compute_interval_valuation_profile,
+    compute_ksigma_preimage,
 )
 
 

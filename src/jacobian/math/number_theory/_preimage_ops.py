@@ -2,14 +2,14 @@
 
 from jacobian.catalog._examples import example
 from jacobian.math.number_theory._preimage_models import (
-    KSigmaPreimageRequest,
-    KSigmaPreimageResult,
     IntervalValuationProfileRequest,
     IntervalValuationProfileResult,
+    KSigmaPreimageRequest,
+    KSigmaPreimageResult,
 )
 from jacobian.math.number_theory._preimage_operations import (
-    compute_ksigma_preimage,
     compute_interval_valuation_profile,
+    compute_ksigma_preimage,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 
@@ -21,9 +21,15 @@ PREIMAGE_OPERATIONS = (
         KSigmaPreimageRequest,
         KSigmaPreimageResult,
         compute_ksigma_preimage,
-        "number-theory", "divisor-function", "preimage",
+        "number-theory",
+        "divisor-function",
+        "preimage",
         examples=(
-            example("ksigma_preimage_basic", "Find n with 1*sigma(n) = 12.", {"k": 1, "target_value": 12}),
+            example(
+                "ksigma_preimage_basic",
+                "Find n with 1*sigma(n) = 12.",
+                {"k": 1, "target_value": 12},
+            ),
         ),
     ),
     number_theory_operation(
@@ -33,9 +39,15 @@ PREIMAGE_OPERATIONS = (
         IntervalValuationProfileRequest,
         IntervalValuationProfileResult,
         compute_interval_valuation_profile,
-        "number-theory", "p-adic", "interval-profile",
+        "number-theory",
+        "p-adic",
+        "interval-profile",
         examples=(
-            example("valuation_2_1_10", "Compute v_2(n) for n from 1 to 10.", {"lower_bound": 1, "upper_bound": 10, "prime": 2}),
+            example(
+                "valuation_2_1_10",
+                "Compute v_2(n) for n from 1 to 10.",
+                {"lower_bound": 1, "upper_bound": 10, "prime": 2},
+            ),
         ),
     ),
 )

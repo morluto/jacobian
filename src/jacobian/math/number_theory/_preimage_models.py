@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import Field, model_validator
 from typing import Self
+
+from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
@@ -41,6 +42,7 @@ class IntervalValuationProfileRequest(StrictModel):
         if self.upper_bound - self.lower_bound + 1 > MAX_VALUATION_WIDTH:
             raise ValueError("interval width exceeds maximum supported width")
         from sympy import isprime
+
         if not isprime(self.prime):
             raise ValueError("prime must be a prime number")
         return self
@@ -63,11 +65,11 @@ class IntervalValuationProfileResult(StrictModel):
 
 
 __all__ = [
-    "KSigmaPreimageRequest",
-    "KSigmaPreimageResult",
+    "MAX_VALUATION_UPPER",
+    "MAX_VALUATION_WIDTH",
     "IntervalValuationProfileRequest",
     "IntervalValuationProfileResult",
     "IntervalValuationProfileRow",
-    "MAX_VALUATION_UPPER",
-    "MAX_VALUATION_WIDTH",
+    "KSigmaPreimageRequest",
+    "KSigmaPreimageResult",
 ]

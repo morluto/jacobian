@@ -5,11 +5,11 @@ from __future__ import annotations
 import math
 
 from jacobian.math.number_theory._preimage_models import (
-    KSigmaPreimageRequest,
-    KSigmaPreimageResult,
     IntervalValuationProfileRequest,
     IntervalValuationProfileResult,
     IntervalValuationProfileRow,
+    KSigmaPreimageRequest,
+    KSigmaPreimageResult,
 )
 
 
@@ -18,7 +18,7 @@ def _simple_sieve(limit: int) -> list[int]:
         return []
     is_prime = bytearray(b"\x01") * (limit + 1)
     is_prime[0] = is_prime[1] = 0
-    for i in range(2, int(math.isqrt(limit)) + 1):
+    for i in range(2, math.isqrt(limit) + 1):
         if is_prime[i]:
             for j in range(i * i, limit + 1, i):
                 is_prime[j] = 0
@@ -41,7 +41,9 @@ def compute_ksigma_preimage(
 
     # k * sigma(n) = target => sigma(n) = target / k
     if target_sigma % k != 0:
-        return KSigmaPreimageResult(k=k, target_value=request.target_value, preimages=[])
+        return KSigmaPreimageResult(
+            k=k, target_value=request.target_value, preimages=[]
+        )
 
     sigma_target = target_sigma // k
 
@@ -53,7 +55,9 @@ def compute_ksigma_preimage(
         if int(divisor_sigma(n)) == sigma_target:
             preimages.append(n)
 
-    return KSigmaPreimageResult(k=k, target_value=request.target_value, preimages=preimages)
+    return KSigmaPreimageResult(
+        k=k, target_value=request.target_value, preimages=preimages
+    )
 
 
 def compute_interval_valuation_profile(
@@ -74,11 +78,14 @@ def compute_interval_valuation_profile(
         rows.append(IntervalValuationProfileRow(n=n, valuation=val))
 
     return IntervalValuationProfileResult(
-        lower_bound=lo, upper_bound=hi, prime=p, rows=rows,
+        lower_bound=lo,
+        upper_bound=hi,
+        prime=p,
+        rows=rows,
     )
 
 
 __all__ = [
-    "compute_ksigma_preimage",
     "compute_interval_valuation_profile",
+    "compute_ksigma_preimage",
 ]

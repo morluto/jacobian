@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import (
     SimpleUndirectedGraph,
     simple_undirected_graph_wire_bytes,
@@ -102,10 +103,14 @@ def admit_triangle_profile(graph: SimpleUndirectedGraph) -> TriangleProfileAdmis
     )
     output_limit = CanonicalLimits().max_output_bytes
     if output_bytes > output_limit:
-        raise ValueError(
-            "triangle profile retains its source graph and exact labelled rows "
-            f"({output_bytes:,} bytes), exceeding the {output_limit:,}-byte "
-            "canonical output budget"
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.triangle_profile.output_budget",
+            message=(
+                "triangle profile retains its source graph and exact labelled rows "
+                f"({output_bytes:,} bytes), exceeding the {output_limit:,}-byte "
+                "canonical output budget"
+            ),
         )
 
     work_units = (
@@ -117,10 +122,14 @@ def admit_triangle_profile(graph: SimpleUndirectedGraph) -> TriangleProfileAdmis
         + 3 * triangle_count
     )
     if work_units > MAX_TRIANGLE_PROFILE_WORK_UNITS:
-        raise ValueError(
-            "triangle profile requires "
-            f"{work_units:,} graph-scan and output work units, exceeding the "
-            f"{MAX_TRIANGLE_PROFILE_WORK_UNITS:,}-unit bound"
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.triangle_profile.work_budget",
+            message=(
+                "triangle profile requires "
+                f"{work_units:,} graph-scan and output work units, exceeding the "
+                f"{MAX_TRIANGLE_PROFILE_WORK_UNITS:,}-unit bound"
+            ),
         )
 
     return TriangleProfileAdmission(

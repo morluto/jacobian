@@ -17,6 +17,7 @@ from jacobian.math.finite_fields import (
     finite_polynomial_map,
 )
 from jacobian.math.finite_fields._models import FiniteMapTableRequest
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 class _Request(StrictModel):
@@ -179,6 +180,28 @@ def test_dispatch_projects_finite_map_work_admission_as_an_invalid_request() -> 
             "msg": "finite map exceeds the operation work budget",
         },
     )
+
+
+def test_dispatch_projects_triangle_profile_admission_as_an_invalid_request() -> None:
+    vertices = tuple(f"{index:03d}" + "x" * 61 for index in range(100))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple(
+            (vertices[left], vertices[right])
+            for left in range(len(vertices))
+            for right in range(left + 1, len(vertices))
+        ),
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        invoke_operation(
+            "graph.triangle_profile.compute",
+            {"graph": graph.model_dump(mode="json")},
+            Catalog.open(),
+        )
+
+    assert error.value.errors()[0]["loc"] == ("graph",)
+    assert error.value.errors()[0]["type"] == "graph.triangle_profile.output_budget"
 
 
 def test_dispatch_classifies_noncanonical_json_as_request_validation() -> None:

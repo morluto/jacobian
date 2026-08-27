@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.constructors import (
     compute_triangle_profile,
     construct_hypercube_graph,
     construct_keller_graph,
 )
-from jacobian.math.graphs.constructors._models import TriangleProfileRequest
+from jacobian.math.graphs.constructors._models import (
+    TriangleProfileRequest,
+    TriangleProfileResult,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -149,8 +154,11 @@ class TestTriangleProfile:
             ),
         )
 
-        with pytest.raises(ValueError, match="output budget"):
+        with pytest.raises(OperationDomainValidationError) as caught:
             compute_triangle_profile(graph)
+        error = caught.value.errors()[0]
+        assert error["loc"] == ("graph",)
+        assert error["type"] == "graph.triangle_profile.output_budget"
 
     def test_large_edgeless_graph_is_admitted_by_actual_work(self) -> None:
         """An edgeless graph has no candidate triangle rows to materialize."""
@@ -239,6 +247,24 @@ class TestTriangleProfile:
 
         with pytest.raises(TypeError, match="SimpleUndirectedGraph"):
             compute_triangle_profile({"graph": graph})  # type: ignore[arg-type]
+
+    def test_triangle_count_rejects_negative_values(self) -> None:
+        graph = SimpleUndirectedGraph(vertices=("a", "b", "c"), edges=())
+
+        with pytest.raises(ValidationError) as caught:
+            TriangleProfileResult(source=graph, triangles=(), triangle_count=-1)
+
+        assert caught.value.errors()[0]["type"] == "greater_than_equal"
+
+    def test_triangle_count_must_bind_to_returned_rows(self) -> None:
+        graph = SimpleUndirectedGraph(vertices=("a", "b", "c"), edges=())
+
+        with pytest.raises(ValidationError) as caught:
+            TriangleProfileResult(source=graph, triangles=(), triangle_count=7)
+
+        assert caught.value.errors()[0]["type"] == (
+            "graph.triangle_profile.count_mismatch"
+        )
 
     def test_empty_graph(self) -> None:
         """A graph with no edges has no triangles."""

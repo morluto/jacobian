@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import Field, StrictInt
+from typing import Self
+
+from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
@@ -72,7 +75,16 @@ class TriangleProfileResult(StrictModel):
 
     source: SimpleUndirectedGraph
     triangles: tuple[TriangleProfileRow, ...]
-    triangle_count: StrictInt
+    triangle_count: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def bind_triangle_count(self) -> Self:
+        if self.triangle_count != len(self.triangles):
+            raise PydanticCustomError(
+                "graph.triangle_profile.count_mismatch",
+                "triangle_count must equal the number of returned triangles",
+            )
+        return self
 
 
 __all__ = [

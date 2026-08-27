@@ -25,6 +25,22 @@ operation ID + JSON
   -> MCP/JSON transport projection
 ```
 
+### Runtime ownership rule
+
+Parsing establishes only the canonical request shape and cheap representation
+limits. The owner then computes one semantic admission plan for the invocation.
+That plan contains only facts the kernel or trusted result construction reuses:
+the selected algorithm or backend, derived work and output bounds, and prepared
+finite data. The owner executes exactly one kernel from that plan and constructs
+the result from trusted kernel output.
+
+Request and ordinary result models must not perform semantic admission, call a
+backend, enumerate candidates, or check a defining relation. A wrapper or
+kernel must not recompute an admission quantity already held by the plan.
+
+A named bounded verifier is the only replay path, and only verifies
+independently supplied theorem-bearing data.
+
 The domain function may compose a maintained backend such as SymPy, FLINT,
 NetworkX, or Z3 where that algorithm is relevant. Those backends remain private
 computational engines behind Jacobian's public mathematical contracts.
@@ -44,15 +60,8 @@ project the typed result once. It does not contain domain admission, backend
 logic, result-specific replay, or workflow state.
 
 Jacobian is a typed, bounded tool layer over maintained mathematical libraries.
-For each accepted `math.run` request, the owner computes one semantic admission
-plan, executes one bounded kernel, and constructs the canonical result from
-that trusted work. Request and result models perform only structural
-validation; they do not rerun admission, a backend, enumeration, or a defining
-relation.
-
-A replay is permitted only through a named, bounded owner-local verifier for
-independently supplied theorem-bearing data. It is an explicit trust-boundary
-operation, never a side effect of ordinary execution or deserialization.
+The runtime ownership rule above keeps replay out of ordinary execution and
+deserialization; it remains an explicit trust-boundary operation.
 
 Domain values live beside the functions that own their semantics under
 `jacobian.math.<domain>`. HNF, LLL, and Smith-related direct computations call

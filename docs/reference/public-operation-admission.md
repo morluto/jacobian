@@ -7,6 +7,10 @@ candidate operation belongs in the immutable public catalog. It does not define
 the **request admission** or execution plan for an individual `math.run` call;
 those are owned by the mathematical domain and must account for work,
 intermediates, exact output, and transport representation.
+The [runtime ownership rule](../explanation/architecture.md#runtime-ownership-rule)
+defines how that per-call plan is computed and reused. An owner's
+`_admission.py` is the catalog decision ledger, not a required home for
+request-specific planning.
 
 - Status: Current catalog-maintenance contract
 - Shared admission policy: `src/jacobian/catalog/admission.py`

@@ -257,7 +257,8 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "number_theory.friable.count.compute",
         AdmissionDecision.KEEP,
         "complete exact friable count with result-sensitive materialized and generated regimes, avoiding caller-side factorization of every source integer",
-    ),    OperationAdmission(
+    ),
+    OperationAdmission(
         "number_theory.integer_interval.contiguous_sum_profile.compute",
         AdmissionDecision.KEEP,
         "distinct complete interval profile counting contiguous-sum representations that a loop of scalar calls cannot establish as one source-bound value",

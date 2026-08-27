@@ -17,9 +17,15 @@ CONTIGUOUS_SUM_OPERATION = number_theory_operation(
     ContiguousSumProfileRequest,
     ContiguousSumProfileResult,
     compute_contiguous_sum_profile,
-    "number-theory", "arithmetic-function", "interval-profile",
+    "number-theory",
+    "arithmetic-function",
+    "interval-profile",
     examples=(
-        example("contiguous_sum_1_15", "Count contiguous-sum representations for n from 1 to 15.", {"lower_bound": 1, "upper_bound": 15}),
+        example(
+            "contiguous_sum_1_15",
+            "Count contiguous-sum representations for n from 1 to 15.",
+            {"lower_bound": 1, "upper_bound": 15},
+        ),
     ),
 )
 

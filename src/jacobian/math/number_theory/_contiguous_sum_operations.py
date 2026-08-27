@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileRequest,
     ContiguousSumProfileResult,
@@ -40,13 +38,9 @@ def compute_contiguous_sum_profile(
 
     rows = []
     for n in range(lo, hi + 1):
-        rows.append(
-            ContiguousSumProfileRow(n=n, representation_count=counts[n])
-        )
+        rows.append(ContiguousSumProfileRow(n=n, representation_count=counts[n]))
 
-    return ContiguousSumProfileResult(
-        lower_bound=lo, upper_bound=hi, rows=rows
-    )
+    return ContiguousSumProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
 
 
 __all__ = ["compute_contiguous_sum_profile"]

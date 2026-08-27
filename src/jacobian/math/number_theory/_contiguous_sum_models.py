@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import Field, model_validator
 from typing import Self
+
+from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
@@ -42,9 +43,9 @@ class ContiguousSumProfileResult(StrictModel):
 
 
 __all__ = [
+    "MAX_INTERVAL_UPPER",
+    "MAX_INTERVAL_WIDTH",
     "ContiguousSumProfileRequest",
     "ContiguousSumProfileResult",
     "ContiguousSumProfileRow",
-    "MAX_INTERVAL_UPPER",
-    "MAX_INTERVAL_WIDTH",
 ]

@@ -258,6 +258,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "complete exact friable count with result-sensitive materialized and generated regimes, avoiding caller-side factorization of every source integer",
     ),
+    OperationAdmission(
+        "number_theory.translated_prime.representation_profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete interval profile counting translated-prime representations that a loop of scalar prime checks cannot establish as one source-bound value",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

@@ -1,6 +1,7 @@
 """Tests for network optimization operations."""
 
 import copy
+from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
@@ -28,13 +29,13 @@ def test_catalog_contains_only_audited_operations() -> None:
     }
 
 
-def _make_graph(edges_data):
+def _make_graph(edges_data: Sequence[tuple[int, int, int, int]]) -> CostedFlowGraph:
     edges = tuple(
         CostedFlowEdge(
             source=s,
             target=t,
-            capacity=CanonicalRational(num=c, den="1"),
-            cost=CanonicalRational(num=co, den="1"),
+            capacity=CanonicalRational(num=str(c), den="1"),
+            cost=CanonicalRational(num=str(co), den="1"),
         )
         for s, t, c, co in edges_data
     )
@@ -340,7 +341,7 @@ def test_min_cost_flow_infeasible_result_carries_no_claim() -> None:
 
 def test_min_cost_flow_derived_scale_admission_fails_closed() -> None:
     """Oversized derived LCMs are rejected before backend construction."""
-    primes = []
+    primes: list[int] = []
     candidate = 2
     while len(primes) < 500:
         if all(candidate % p for p in primes if p * p <= candidate):

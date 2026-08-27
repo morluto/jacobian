@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from jacobian.math.graphs.transforms._models import (
     GraphEdge,
+    GraphResult,
     GraphTransformRequest,
     ResultGraphEdge,
     SimpleGraph,
@@ -25,7 +26,7 @@ def _graph(vc: int, edges: list[tuple[int, int]]) -> SimpleGraph:
     )
 
 
-def _result_edges(result) -> frozenset[tuple[int, int]]:
+def _result_edges(result: GraphResult) -> frozenset[tuple[int, int]]:
     return frozenset(
         (e.source, e.target) if e.source < e.target else (e.target, e.source)
         for e in result.edges

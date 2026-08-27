@@ -3,6 +3,7 @@
 from jacobian.math.graphs.polynomials._models import (
     GraphEdge,
     GraphPolynomialRequest,
+    GraphPolynomialResult,
     GraphSpec,
     MatchingPolynomialRequest,
 )
@@ -24,12 +25,12 @@ def _path_graph(n: int) -> GraphSpec:
     return GraphSpec(vertex_count=n, edges=tuple(edges))
 
 
-def _terms_to_dict(result):
+def _terms_to_dict(result: GraphPolynomialResult) -> dict[int, int]:
     return {t.degree: t.coefficient for t in result.terms}
 
 
 class TestTuttePolynomial:
-    def test_cycle_c4(self):
+    def test_cycle_c4(self) -> None:
         req = GraphPolynomialRequest(graph=_cycle_graph(4))
         result = compute_tutte_polynomial(req)
         # T(C4, x, y) = x^3 + x^2 + x + y
@@ -37,7 +38,7 @@ class TestTuttePolynomial:
         assert result.variables == ("x", "y")
         assert d == {(0, 1): 1, (1, 0): 1, (2, 0): 1, (3, 0): 1}
 
-    def test_single_edge(self):
+    def test_single_edge(self) -> None:
         req = GraphPolynomialRequest(
             graph=GraphSpec(vertex_count=2, edges=(GraphEdge(u=0, v=1),))
         )
@@ -48,7 +49,7 @@ class TestTuttePolynomial:
 
 
 class TestChromaticPolynomial:
-    def test_cycle_c3(self):
+    def test_cycle_c3(self) -> None:
         req = GraphPolynomialRequest(graph=_cycle_graph(3))
         result = compute_chromatic_polynomial(req)
         # chi(C3) = x(x-1)(x-2) = x^3 - 3x^2 + 2x
@@ -57,7 +58,7 @@ class TestChromaticPolynomial:
         assert d.get(2) == -3
         assert d.get(1) == 2
 
-    def test_path_p3(self):
+    def test_path_p3(self) -> None:
         req = GraphPolynomialRequest(graph=_path_graph(3))
         result = compute_chromatic_polynomial(req)
         # chi(P3) = x(x-1)^2 = x^3 - 2x^2 + x
@@ -68,7 +69,7 @@ class TestChromaticPolynomial:
 
 
 class TestFlowPolynomial:
-    def test_cycle_c4(self):
+    def test_cycle_c4(self) -> None:
         req = GraphPolynomialRequest(graph=_cycle_graph(4))
         result = compute_flow_polynomial(req)
         # F(C4) = x - 1, from (-1)^{|E|-|V|+k} T(0, 1-x).
@@ -76,7 +77,7 @@ class TestFlowPolynomial:
         assert d.get(1) == 1
         assert d.get(0) == -1
 
-    def test_rejects_graph_beyond_deletion_budget(self):
+    def test_rejects_graph_beyond_deletion_budget(self) -> None:
         import pytest
         from pydantic import ValidationError
 
@@ -86,7 +87,7 @@ class TestFlowPolynomial:
                 graph=GraphSpec(vertex_count=8, edges=edges),
             )
 
-    def test_bridge_is_zero_polynomial(self):
+    def test_bridge_is_zero_polynomial(self) -> None:
         req = GraphPolynomialRequest(
             graph=GraphSpec(vertex_count=2, edges=(GraphEdge(u=0, v=1),))
         )
@@ -95,7 +96,7 @@ class TestFlowPolynomial:
 
 
 class TestMatchingPolynomial:
-    def test_single_edge(self):
+    def test_single_edge(self) -> None:
         req = MatchingPolynomialRequest(
             graph=GraphSpec(vertex_count=2, edges=(GraphEdge(u=0, v=1),))
         )
@@ -105,7 +106,7 @@ class TestMatchingPolynomial:
         assert d.get(2) == 1
         assert d.get(0) == -1
 
-    def test_path_p3(self):
+    def test_path_p3(self) -> None:
         req = MatchingPolynomialRequest(graph=_path_graph(3))
         result = compute_matching_polynomial(req)
         # P3 has edges (0,1) and (1,2)

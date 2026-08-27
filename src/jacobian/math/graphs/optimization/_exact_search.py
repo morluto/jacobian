@@ -173,6 +173,24 @@ def _vertex_model(
     )
 
 
+def _check_after_encoding(
+    solver: Any,
+    *,
+    started: float,
+    budget: GraphOptimizationBudget,
+) -> object:
+    """Charge encoding and solver completion to one operation deadline."""
+
+    import z3
+
+    remaining_ms = _remaining_ms(started, budget.wall_seconds)
+    if remaining_ms <= 0:
+        return z3.unknown
+    solver.set(timeout=max(1, remaining_ms))
+    status = solver.check()
+    return z3.unknown if _remaining_ms(started, budget.wall_seconds) <= 0 else status
+
+
 def solve_domination(
     graph: Any,
     source: ChromaticGraph,
@@ -195,11 +213,10 @@ def solve_domination(
         )
     incumbent = tuple(sorted(vertices))
 
-    def solve(bound: int, timeout_ms: int) -> tuple[object, VertexWitness]:
+    def solve(bound: int, _timeout_ms: int) -> tuple[object, VertexWitness]:
         import z3
 
         solver = z3.Solver()
-        solver.set(timeout=max(1, timeout_ms))
         selected = {
             vertex: z3.Bool(f"dom_{index}") for index, vertex in enumerate(vertices)
         }
@@ -213,8 +230,15 @@ def solve_domination(
         solver.add(
             z3.Sum([z3.If(selected[vertex], 1, 0) for vertex in vertices]) <= bound
         )
-        status = solver.check()
-        return status, _vertex_model(solver, selected) if status == z3.sat else ()
+        status = _check_after_encoding(solver, started=started, budget=budget)
+        if status != z3.sat:
+            return status, ()
+        witness = _vertex_model(solver, selected)
+        return (
+            (z3.unknown, ())
+            if _remaining_ms(started, budget.wall_seconds) <= 0
+            else (status, witness)
+        )
 
     result = _search_thresholds(
         direction="MINIMUM",
@@ -268,11 +292,10 @@ def solve_minimum_maximal_matching(
             used.update(edge)
     incumbent = tuple(greedy_edges)
 
-    def solve(bound: int, timeout_ms: int) -> tuple[object, EdgeWitness]:
+    def solve(bound: int, _timeout_ms: int) -> tuple[object, EdgeWitness]:
         import z3
 
         solver = z3.Solver()
-        solver.set(timeout=max(1, timeout_ms))
         chosen = {edge: z3.Bool(f"match_{index}") for index, edge in enumerate(edges)}
         incident = {
             vertex: tuple(edge for edge in edges if vertex in edge)
@@ -287,7 +310,7 @@ def solve_minimum_maximal_matching(
                 z3.Or(*(chosen[edge] for edge in set(incident[left] + incident[right])))
             )
         solver.add(z3.Sum([z3.If(chosen[edge], 1, 0) for edge in edges]) <= bound)
-        status = solver.check()
+        status = _check_after_encoding(solver, started=started, budget=budget)
         if status != z3.sat:
             return status, ()
         model = solver.model()
@@ -298,7 +321,11 @@ def solve_minimum_maximal_matching(
                 if z3.is_true(model.eval(variable, model_completion=True))
             )
         )
-        return status, witness
+        return (
+            (z3.unknown, ())
+            if _remaining_ms(started, budget.wall_seconds) <= 0
+            else (status, witness)
+        )
 
     result = _search_thresholds(
         direction="MINIMUM",
@@ -367,11 +394,10 @@ def _maximum_vertex_search(
         )
     edges = _canonical_edges(graph)
 
-    def solve(bound: int, timeout_ms: int) -> tuple[object, VertexWitness]:
+    def solve(bound: int, _timeout_ms: int) -> tuple[object, VertexWitness]:
         import z3
 
         solver = z3.Solver()
-        solver.set(timeout=max(1, timeout_ms))
         selected = {
             vertex: z3.Bool(f"sel_{index}") for index, vertex in enumerate(vertices)
         }
@@ -419,8 +445,15 @@ def _maximum_vertex_search(
                     ]
                 )
                 solver.add(cardinality >= 1, selected_edges == cardinality - 1)
-        status = solver.check()
-        return status, _vertex_model(solver, selected) if status == z3.sat else ()
+        status = _check_after_encoding(solver, started=started, budget=budget)
+        if status != z3.sat:
+            return status, ()
+        witness = _vertex_model(solver, selected)
+        return (
+            (z3.unknown, ())
+            if _remaining_ms(started, budget.wall_seconds) <= 0
+            else (status, witness)
+        )
 
     return _search_thresholds(
         direction="MAXIMUM",

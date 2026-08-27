@@ -61,7 +61,8 @@ def _independent_relabel(
     )
     transformed_edges = []
     for edge_index, (left, right) in enumerate(graph.graph.edges):
-        mapped = tuple(sorted((mapping[left], mapping[right])))
+        mapped_left, mapped_right = sorted((mapping[left], mapping[right]))
+        mapped = (mapped_left, mapped_right)
         transformed_edges.append(
             (
                 mapped,
@@ -197,7 +198,10 @@ def _pruefer_tree(sequence: tuple[int, ...]) -> tuple[tuple[str, str], ...]:
     edges.append((remaining[0], remaining[1]))
     labels = ("a", "b", "c", "d")
     return tuple(
-        sorted(tuple(sorted((labels[left], labels[right]))) for left, right in edges)
+        sorted(
+            (min(labels[left], labels[right]), max(labels[left], labels[right]))
+            for left, right in edges
+        )
     )
 
 
@@ -241,12 +245,12 @@ def test_canonical_equality_agrees_with_networkx_on_all_order_four_graphs() -> N
     canonical = tuple(_canonicalize(graph).canonical_graph for graph in graphs)
 
     for left_index, left in enumerate(graphs):
-        nx_left = nx.Graph()
+        nx_left: nx.Graph[str] = nx.Graph()
         nx_left.add_nodes_from(left.graph.vertices)
         nx_left.add_edges_from(left.graph.edges)
         for right_index in range(left_index, len(graphs)):
             right = graphs[right_index]
-            nx_right = nx.Graph()
+            nx_right: nx.Graph[str] = nx.Graph()
             nx_right.add_nodes_from(right.graph.vertices)
             nx_right.add_edges_from(right.graph.edges)
             assert (canonical[left_index] == canonical[right_index]) == (
@@ -441,7 +445,9 @@ def test_request_admits_transport_bounded_dense_results() -> None:
     assert mapping == {label: f"v{index:02d}" for index, label in enumerate(labels)}
 
 
-def test_request_enforces_source_bound_result_byte_boundary(monkeypatch) -> None:
+def test_request_enforces_source_bound_result_byte_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     max_shape = _dense_complete_colored_graph(64)
     assert (
         isomorphism_canonicalization.canonicalization_result_wire_bytes(max_shape)
@@ -591,7 +597,9 @@ def test_catalog_path_and_native_api_agree() -> None:
     )
 
 
-def test_catalog_execution_admits_the_parsed_request_once(monkeypatch) -> None:
+def test_catalog_execution_admits_the_parsed_request_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """``math.run`` parses once; the adapter must not readmit the request.
 
     The result-size preflight runs once per request admission. For an

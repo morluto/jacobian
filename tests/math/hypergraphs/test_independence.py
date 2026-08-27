@@ -1,6 +1,7 @@
 """Contract and mathematical tests for hypergraph independence search."""
 
 from itertools import combinations
+from pathlib import Path
 
 import pytest
 import z3  # type: ignore[import-untyped]
@@ -16,6 +17,7 @@ from jacobian.math.hypergraphs._operations import (
     compute_independence_number,
     verify_independence_result,
 )
+from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 
 
 def _compute(
@@ -24,13 +26,49 @@ def _compute(
     max_solver_calls: int = 100,
 ) -> HypergraphIndependenceResult:
     return compute_independence_number(
-        HypergraphIndependenceRequest(
-            hypergraph=hypergraph,
-            resource_budget=HypergraphIndependenceBudget(
-                wall_seconds=5,
-                max_solver_calls=max_solver_calls,
-            ),
+        HypergraphIndependenceRequest.model_validate(
+            {
+                "hypergraph": hypergraph,
+                "resource_budget": {
+                    "wall_seconds": 5,
+                    "max_solver_calls": max_solver_calls,
+                },
+            }
         )
+    )
+
+
+def _kernel_compute(
+    hypergraph: FiniteHypergraph | dict[str, object],
+    *,
+    max_solver_calls: int = 100,
+) -> HypergraphIndependenceResult:
+    """Exercise Z3 fault injection at its isolated owner-kernel seam."""
+
+    from jacobian.math.hypergraphs import _independence_z3
+
+    request = HypergraphIndependenceRequest.model_validate(
+        {
+            "hypergraph": hypergraph,
+            "resource_budget": {
+                "wall_seconds": 5,
+                "max_solver_calls": max_solver_calls,
+            },
+        }
+    )
+    return _independence_z3._solve_independence_number_kernel(request)
+
+
+def _independence_worker_result(payload: dict[str, object]) -> BoundedProcessResult:
+    import json
+
+    return BoundedProcessResult(
+        returncode=0,
+        stdout=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+        stderr=b"",
+        stdout_exceeded=False,
+        stderr_exceeded=False,
+        timed_out=False,
     )
 
 
@@ -52,20 +90,22 @@ def _brute_force_witness(hypergraph: FiniteHypergraph) -> tuple[str, ...]:
 
 def test_rejects_empty_hyperedge_before_solver() -> None:
     with pytest.raises(ValidationError):
-        HypergraphIndependenceRequest(
-            hypergraph={"vertices": ["v"], "edges": [["empty", []]]}
+        HypergraphIndependenceRequest.model_validate(
+            {"hypergraph": {"vertices": ["v"], "edges": [["empty", []]]}}
         )
 
 
 def test_lone_surrogate_vertex_label_rejected_before_execution() -> None:
     with pytest.raises(ValidationError):
-        HypergraphIndependenceRequest(hypergraph={"vertices": ["\ud800"], "edges": []})
+        HypergraphIndependenceRequest.model_validate(
+            {"hypergraph": {"vertices": ["\ud800"], "edges": []}}
+        )
 
 
 def test_lone_surrogate_edge_id_rejected_before_execution() -> None:
     with pytest.raises(ValidationError):
-        HypergraphIndependenceRequest(
-            hypergraph={"vertices": ["a"], "edges": [["\udbff", ["a"]]]}
+        HypergraphIndependenceRequest.model_validate(
+            {"hypergraph": {"vertices": ["a"], "edges": [["\udbff", ["a"]]]}}
         )
 
 
@@ -79,10 +119,12 @@ def test_astral_plane_label_computes_through_edge_free_special_case() -> None:
 
 def test_full_structural_encoding_boundary_is_admitted() -> None:
     vertices = [f"v{index:03d}" for index in range(100)]
-    request = HypergraphIndependenceRequest(
-        hypergraph={
-            "vertices": vertices,
-            "edges": [[f"e{index:03d}", vertices] for index in range(100)],
+    request = HypergraphIndependenceRequest.model_validate(
+        {
+            "hypergraph": {
+                "vertices": vertices,
+                "edges": [[f"e{index:03d}", vertices] for index in range(100)],
+            }
         }
     )
     assert len(request.hypergraph.vertices) == 100
@@ -91,10 +133,12 @@ def test_full_structural_encoding_boundary_is_admitted() -> None:
 
 def test_vertex_boundary_rejects_immediately_unsupported_input() -> None:
     with pytest.raises(ValidationError):
-        HypergraphIndependenceRequest(
-            hypergraph={
-                "vertices": [f"v{index}" for index in range(101)],
-                "edges": [],
+        HypergraphIndependenceRequest.model_validate(
+            {
+                "hypergraph": {
+                    "vertices": [f"v{index}" for index in range(101)],
+                    "edges": [],
+                }
             }
         )
 
@@ -129,9 +173,8 @@ def test_singleton_edges_forbid_their_vertices() -> None:
 
 
 def test_one_three_edge_differs_from_clique_expansion_independence() -> None:
-    source = FiniteHypergraph(
-        vertices=["a", "b", "c"],
-        edges=[["triple", ["c", "a", "b"]]],
+    source = FiniteHypergraph.model_validate(
+        {"vertices": ["a", "b", "c"], "edges": [["triple", ["c", "a", "b"]]]}
     )
     result = _compute(source)
     assert result.independence_number == 2
@@ -188,14 +231,16 @@ def test_erdos_536_reduced_forbidden_subset_fixture() -> None:
     # 536/numerical_verifier.py:666-699. Vertices are squarefree products
     # through 15; each edge is a triple whose prime supports have equal
     # pairwise unions.
-    source = FiniteHypergraph(
-        vertices=["1", "2", "3", "5", "6", "10", "15"],
-        edges=[
-            ["union-6", ["2", "3", "6"]],
-            ["union-10", ["2", "5", "10"]],
-            ["union-15", ["3", "5", "15"]],
-            ["union-30", ["6", "10", "15"]],
-        ],
+    source = FiniteHypergraph.model_validate(
+        {
+            "vertices": ["1", "2", "3", "5", "6", "10", "15"],
+            "edges": [
+                ["union-6", ["2", "3", "6"]],
+                ["union-10", ["2", "5", "10"]],
+                ["union-15", ["3", "5", "15"]],
+                ["union-30", ["6", "10", "15"]],
+            ],
+        }
     )
     result = _compute(source)
     brute_force = _brute_force_witness(source)
@@ -215,13 +260,15 @@ def test_all_three_vertex_hypergraphs_match_exhaustive_search() -> None:
         for edge in combinations(vertices, width)
     )
     for edge_mask in range(1 << len(possible_edges)):
-        source = FiniteHypergraph(
-            vertices=vertices,
-            edges=[
-                [f"e{index}", edge]
-                for index, edge in enumerate(possible_edges)
-                if edge_mask & (1 << index)
-            ],
+        source = FiniteHypergraph.model_validate(
+            {
+                "vertices": vertices,
+                "edges": [
+                    [f"e{index}", edge]
+                    for index, edge in enumerate(possible_edges)
+                    if edge_mask & (1 << index)
+                ],
+            }
         )
         result = _compute(source)
         assert result.status == "EXACT"
@@ -384,7 +431,7 @@ def test_wall_expiry_returns_unknown_without_a_false_optimum(
     from jacobian.math.hypergraphs import _independence_z3
 
     monkeypatch.setattr(_independence_z3, "_remaining_ms", lambda *_args: 0)
-    result = _compute(
+    result = _kernel_compute(
         {
             "vertices": ["a", "b", "c"],
             "edges": [["triple", ["a", "b", "c"]]],
@@ -398,6 +445,94 @@ def test_wall_expiry_returns_unknown_without_a_false_optimum(
     assert result.wall_budget_exhausted
 
 
+def test_public_independence_path_bounds_the_entire_z3_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.hypergraphs import _independence_z3
+
+    request = HypergraphIndependenceRequest.model_validate(
+        {
+            "hypergraph": {
+                "vertices": ["a", "b", "c"],
+                "edges": [["triple", ["a", "b", "c"]]],
+            },
+            "resource_budget": {"wall_seconds": 3, "max_solver_calls": 5},
+        }
+    )
+    expected = _independence_z3._solve_independence_number_kernel(request)
+    recorded: dict[str, object] = {}
+
+    def complete_worker(*args: object, **kwargs: object) -> BoundedProcessResult:
+        recorded["args"] = args
+        recorded.update(kwargs)
+        return _independence_worker_result(expected.model_dump(mode="json"))
+
+    monkeypatch.setattr(_independence_z3, "run_bounded_process", complete_worker)
+
+    result = compute_independence_number(request)
+
+    assert result == expected
+    assert recorded["timeout_seconds"] == 3
+    assert Path(str(recorded["cwd"])).name.startswith(
+        "jacobian-hypergraph-independence-"
+    )
+    limits = recorded["resource_limits"]
+    assert isinstance(limits, ProcessResourceLimits)
+    assert limits.cpu_seconds == 3
+    assert limits.address_space_bytes == 1_536 * 1024 * 1024
+    assert limits.file_size_bytes == 1_024 * 1_024
+
+
+def test_threshold_encoding_rechecks_the_wall_budget_before_solver_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.hypergraphs import _independence_z3
+
+    class Cardinality:
+        def __ge__(self, _threshold: int) -> object:
+            return object()
+
+    class Solver:
+        def __init__(self) -> None:
+            self.set_called = False
+            self.check_called = False
+
+        def push(self) -> None:
+            return None
+
+        def pop(self) -> None:
+            return None
+
+        def add(self, _constraint: object) -> None:
+            return None
+
+        def set(self, **_settings: int) -> None:
+            self.set_called = True
+
+        def check(self) -> object:
+            self.check_called = True
+            return z3.sat
+
+    monkeypatch.setattr(_independence_z3, "_remaining_ms", lambda *_args: 0)
+    solver = Solver()
+
+    status, witness, detail = _independence_z3._check_threshold(
+        solver,
+        {},
+        Cardinality(),
+        1,
+        started=0.0,
+        wall_seconds=1,
+        vertex_order=(),
+    )
+
+    assert status == z3.unknown
+    assert witness == ()
+    assert "expired during encoding" in detail
+    assert not solver.set_called
+    assert not solver.check_called
+
+
 def test_interrupted_solver_returns_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
     from jacobian.math.hypergraphs import _independence_z3
 
@@ -406,7 +541,7 @@ def test_interrupted_solver_returns_unknown(monkeypatch: pytest.MonkeyPatch) -> 
         "_check_threshold",
         lambda *_args: (z3.unknown, (), "interrupted"),
     )
-    result = _compute(
+    result = _kernel_compute(
         {
             "vertices": ["a", "b", "c"],
             "edges": [["triple", ["a", "b", "c"]]],
@@ -426,7 +561,7 @@ def test_backend_exception_returns_typed_unknown(
         raise z3.Z3Exception("forced backend failure")
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", fail)
-    result = _compute(
+    result = _kernel_compute(
         {
             "vertices": ["a", "b", "c"],
             "edges": [["triple", ["a", "b", "c"]]],
@@ -451,9 +586,15 @@ def test_produced_result_satisfies_structural_and_explicit_verification() -> Non
 
 
 def test_forged_structural_upper_bound_requires_explicit_verification() -> None:
-    source = FiniteHypergraph(
-        vertices=["a", "b", "c", "d"],
-        edges=[["ab", ["a", "b"]], ["ac", ["a", "c"]], ["ad", ["a", "d"]]],
+    source = FiniteHypergraph.model_validate(
+        {
+            "vertices": ["a", "b", "c", "d"],
+            "edges": [
+                ["ab", ["a", "b"]],
+                ["ac", ["a", "c"]],
+                ["ad", ["a", "d"]],
+            ],
+        }
     )
     result = HypergraphIndependenceResult(
         hypergraph=source,
@@ -482,7 +623,7 @@ def test_producer_rejects_infeasible_backend_witness(
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
     with pytest.raises(ValidationError):
-        _compute(
+        _kernel_compute(
             {
                 "vertices": ["a", "b", "c"],
                 "edges": [["triple", ["a", "b", "c"]]],
@@ -499,7 +640,7 @@ def test_producer_rejects_forged_optimum_below_greedy_incumbent(
         return z3.sat, ("a",), ""
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
-    result = _compute(
+    result = _kernel_compute(
         {
             "vertices": ["a", "b", "c"],
             "edges": [["triple", ["a", "b", "c"]]],
@@ -522,7 +663,7 @@ def test_producer_rejects_solver_calls_inconsistent_with_established_bounds(
         return z3.sat, ("b", "c"), ""
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
-    result = _compute(
+    result = _kernel_compute(
         {
             "vertices": ["a", "b", "c", "d"],
             "edges": [
@@ -559,7 +700,7 @@ def test_producer_projects_solver_error_when_witness_misses_threshold(
         return z3.sat, ("c",), ""
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
-    result = _compute(
+    result = _kernel_compute(
         {
             "vertices": ["c", "a", "b"],
             "edges": [["ca", ["c", "a"]], ["cb", ["c", "b"]]],
@@ -578,9 +719,11 @@ def test_producer_projects_solver_error_when_witness_misses_threshold(
 
 
 def test_produced_exact_result_meets_the_queried_threshold() -> None:
-    source = FiniteHypergraph(
-        vertices=["c", "a", "b"],
-        edges=[["ca", ["c", "a"]], ["cb", ["c", "b"]]],
+    source = FiniteHypergraph.model_validate(
+        {
+            "vertices": ["c", "a", "b"],
+            "edges": [["ca", ["c", "a"]], ["cb", ["c", "b"]]],
+        }
     )
     result = _compute(source)
     assert result.status == "EXACT"

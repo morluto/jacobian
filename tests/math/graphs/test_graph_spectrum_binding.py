@@ -231,7 +231,7 @@ def test_spectrum_reconstructs_the_characteristic_polynomial() -> None:
         rational_polynomial_to_sympy(charpoly_result.polynomial).as_expr(), x
     )
 
-    factors = 1
+    factors = x**0
     for value, multiplicity in _adjacency_matrix(path).eigenvals().items():
         factors *= (x - value) ** multiplicity
     claimed = together(factors.expand())

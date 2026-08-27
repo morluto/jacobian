@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import math
+import sys
 import time
 from collections.abc import Callable
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, cast
 
 from jacobian._models import StrictModel
@@ -34,6 +38,17 @@ from jacobian.math.graphs.optimization._models import (
     OptimizationTermination,
 )
 from jacobian.math.graphs.optimization._operations import build_simple_graph
+from jacobian.process import (
+    ProcessResourceLimits,
+    run_bounded_process,
+    worker_environment,
+)
+
+_INVARIANTS_WORKER = Path(__file__).with_name("_invariants_worker.py")
+_WORKER_OUTPUT_BYTES = 64 * 1024
+_WORKER_ERROR_BYTES = 16_384
+_WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
+_WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 
 
 def _computed[
@@ -236,7 +251,7 @@ def _k_core_execute(
     )
 
 
-def _clique_execute(
+def _clique_execute_kernel(
     request: GraphOptimizationRequest,
 ) -> GraphCliqueNumberResult:
     """Compute the clique number via bounded Z3 threshold search."""
@@ -342,6 +357,74 @@ def _clique_execute(
         termination_reason=termination,
         detail="bounded Z3 threshold search seeded by a NetworkX approximation",
     )
+
+
+def _clique_worker_failure(
+    request: GraphOptimizationRequest, detail: str
+) -> GraphCliqueNumberResult:
+    """Return a source-derived unknown result when the isolated worker fails."""
+
+    vertices = tuple(request.graph.vertices)
+    witness = () if not vertices else (min(vertices),)
+    return GraphCliqueNumberResult(
+        status="UNKNOWN",
+        order=len(vertices),
+        optimum_value=None,
+        incumbent_value=len(witness),
+        lower_bound=len(witness),
+        upper_bound=len(vertices),
+        witness_vertices=witness,
+        tested=(),
+        termination_reason="SOLVER_UNKNOWN",
+        detail=detail,
+    )
+
+
+def _clique_execute(
+    request: GraphOptimizationRequest,
+) -> GraphCliqueNumberResult:
+    """Run the complete Z3 clique transaction in a bounded owner worker."""
+
+    try:
+        with TemporaryDirectory(prefix="jacobian-graph-clique-") as directory:
+            completed = run_bounded_process(
+                [sys.executable, str(_INVARIANTS_WORKER)],
+                input_bytes=json.dumps(
+                    request.model_dump(mode="json"), separators=(",", ":")
+                ).encode("utf-8"),
+                timeout_seconds=request.resource_budget.wall_seconds,
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=_WORKER_OUTPUT_BYTES,
+                stderr_limit=_WORKER_ERROR_BYTES,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=max(1, math.ceil(request.resource_budget.wall_seconds)),
+                    address_space_bytes=_WORKER_ADDRESS_SPACE_BYTES,
+                    file_size_bytes=_WORKER_FILE_SIZE_BYTES,
+                ),
+                cwd=directory,
+            )
+    except OSError:
+        return _clique_worker_failure(
+            request, "the bounded clique worker could not be started"
+        )
+    if (
+        completed.timed_out
+        or completed.cancelled
+        or completed.stdout_exceeded
+        or completed.stderr_exceeded
+        or completed.returncode != 0
+    ):
+        return _clique_worker_failure(
+            request, "the bounded clique worker did not establish an outcome"
+        )
+    try:
+        return GraphCliqueNumberResult.model_validate(
+            json.loads(completed.stdout.decode("utf-8"))
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        return _clique_worker_failure(
+            request, "the bounded clique worker returned malformed output"
+        )
 
 
 CLIQUE_NUMBER_OPERATION = MathTool(

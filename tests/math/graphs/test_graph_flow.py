@@ -26,19 +26,21 @@ from jacobian.math.graphs.flow._operations import (
 # ---------------------------------------------------------------------------
 
 
-def _max_flow(graph: dict, source: int, sink: int) -> MaxFlowResult:
+def _max_flow(graph: dict[str, object], source: int, sink: int) -> MaxFlowResult:
     return compute_max_flow(
         MaxFlowRequest.model_validate({"graph": graph, "source": source, "sink": sink})
     )
 
 
-def _min_cut(graph: dict, source: int, sink: int) -> MinCutResult:
+def _min_cut(graph: dict[str, object], source: int, sink: int) -> MinCutResult:
     return compute_min_cut(
         MinCutRequest.model_validate({"graph": graph, "source": source, "sink": sink})
     )
 
 
-def _edge_disjoint(graph: dict, source: int, sink: int) -> EdgeDisjointPathsResult:
+def _edge_disjoint(
+    graph: dict[str, object], source: int, sink: int
+) -> EdgeDisjointPathsResult:
     return compute_edge_disjoint_paths(
         EdgeDisjointPathsRequest.model_validate(
             {"graph": graph, "source": source, "sink": sink}

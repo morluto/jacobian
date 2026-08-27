@@ -16,6 +16,7 @@ from jacobian.math.graphs.isomorphism import (
 )
 from jacobian.math.graphs.symmetry._models import (
     MAX_GRAPH_SYMMETRY_GENERATORS,
+    GraphAutomorphismGenerator,
     GraphEdgeOrbit,
     GraphSymmetryOrbitRequest,
     GraphSymmetryOrbitResult,
@@ -85,7 +86,7 @@ def test_graph_symmetry_request_requires_declared_vertex_order_mapping() -> None
 
 def test_graph_symmetry_request_rejects_color_breaking_generator() -> None:
     payload = _path_request()
-    payload["graph"]["vertex_colors"][2] = "distinguished"  # type: ignore[index]
+    payload["graph"]["vertex_colors"][2] = "distinguished"
 
     with pytest.raises(ValidationError):
         GraphSymmetryOrbitRequest.model_validate(payload)
@@ -348,7 +349,7 @@ def test_graph_symmetry_request_requires_nfc_generator_identifiers() -> None:
 
 def test_graph_symmetry_request_requires_nfc_vertex_colors() -> None:
     payload = _path_request()
-    payload["graph"]["vertex_colors"][0] = "\u0344endpoint"  # type: ignore[index]
+    payload["graph"]["vertex_colors"][0] = "\u0344endpoint"
 
     with pytest.raises(ValidationError):
         GraphSymmetryOrbitRequest.model_validate(payload)
@@ -356,7 +357,7 @@ def test_graph_symmetry_request_requires_nfc_vertex_colors() -> None:
 
 def test_graph_symmetry_request_requires_nfc_edge_colors() -> None:
     payload = _path_request()
-    payload["graph"]["edge_colors"] = ["\u0344" * 64, "\u0344" * 64]  # type: ignore[index]
+    payload["graph"]["edge_colors"] = ["\u0344" * 64, "\u0344" * 64]
 
     with pytest.raises(ValidationError):
         GraphSymmetryOrbitRequest.model_validate(payload)
@@ -402,7 +403,7 @@ def test_graph_symmetry_schema_publishes_nfc_requirement() -> None:
 
 def test_graph_symmetry_request_rejects_non_nfc_color_names() -> None:
     payload = _path_request()
-    payload["graph"]["vertex_colors"] = ["endpo\u0069\u0301nt", "middle", "endpoint"]  # type: ignore[index]
+    payload["graph"]["vertex_colors"] = ["endpo\u0069\u0301nt", "middle", "endpoint"]
 
     with pytest.raises(ValidationError):
         GraphSymmetryOrbitRequest.model_validate(payload)
@@ -422,10 +423,10 @@ def test_canonicalization_result_passes_unchanged_into_symmetry_request() -> Non
     request = GraphSymmetryOrbitRequest(
         graph=canonical,
         generators=(
-            {
-                "generator_id": "reflection",
-                "mapping": (("v00", "v01"), ("v01", "v00"), ("v02", "v02")),
-            },
+            GraphAutomorphismGenerator(
+                generator_id="reflection",
+                mapping=(("v00", "v01"), ("v01", "v00"), ("v02", "v02")),
+            ),
         ),
     )
 

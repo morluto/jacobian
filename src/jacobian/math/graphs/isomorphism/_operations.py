@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from jacobian.math.graphs.isomorphism._canonicalization import (
     canonicalize_colored_graph_data,
@@ -25,6 +27,7 @@ _VF2_WALL_SECONDS = 60.0
 _VF2_STDOUT_LIMIT = 256 * 1024
 _VF2_STDERR_LIMIT = 64 * 1024
 _VF2_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
+_VF2_FILE_SIZE_BYTES = 1024 * 1024
 
 
 def _vertex_mapping(
@@ -56,21 +59,29 @@ def _vertex_mapping(
             "edges": graph_b.edges,
         },
     }
-    completed = run_bounded_process(
-        [sys.executable, str(_VF2_WORKER)],
-        input_bytes=json.dumps(request, separators=(",", ":")).encode("utf-8"),
-        timeout_seconds=_VF2_WALL_SECONDS,
-        environment=worker_environment(locale="C.UTF-8"),
-        stdout_limit=_VF2_STDOUT_LIMIT,
-        stderr_limit=_VF2_STDERR_LIMIT,
-        resource_limits=ProcessResourceLimits(
-            address_space_bytes=_VF2_ADDRESS_SPACE_BYTES,
-        ),
-    )
+    try:
+        with TemporaryDirectory(prefix="jacobian-vf2-") as worker_directory:
+            completed = run_bounded_process(
+                [sys.executable, str(_VF2_WORKER)],
+                input_bytes=json.dumps(request, separators=(",", ":")).encode("utf-8"),
+                timeout_seconds=_VF2_WALL_SECONDS,
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=_VF2_STDOUT_LIMIT,
+                stderr_limit=_VF2_STDERR_LIMIT,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=math.ceil(_VF2_WALL_SECONDS),
+                    address_space_bytes=_VF2_ADDRESS_SPACE_BYTES,
+                    file_size_bytes=_VF2_FILE_SIZE_BYTES,
+                ),
+                cwd=worker_directory,
+            )
+    except OSError as exc:
+        raise RuntimeError("bounded VF2 worker could not be started") from exc
     if (
         completed.timed_out
         or completed.cancelled
         or completed.stdout_exceeded
+        or completed.stderr_exceeded
         or completed.returncode != 0
     ):
         raise RuntimeError("bounded VF2 worker did not establish an outcome")

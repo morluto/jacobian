@@ -22,7 +22,7 @@ def test_graph_input_errors_are_stable() -> None:
     with pytest.raises(ValueError):
         graphs.diameter(nx.Graph([(0, 1), (2, 3)]))
     with pytest.raises(ValueError):
-        graphs.triangle_count(nx.DiGraph([(0, 1)]))  # type: ignore[arg-type]
+        graphs.triangle_count(nx.DiGraph([(0, 1)]))
 
 
 def test_graph_construction_functions_use_immutable_graph_values() -> None:

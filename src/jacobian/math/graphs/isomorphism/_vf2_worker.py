@@ -18,25 +18,26 @@ def _graph(payload: dict[str, Any]) -> nx.Graph[int] | nx.DiGraph[int]:
     return graph
 
 
+def _first_isomorphism_mapping(matcher: Any) -> list[tuple[int, int]] | None:
+    """Return one VF2 witness without first running a separate decision pass."""
+
+    mapping = next(matcher.isomorphisms_iter(), None)
+    return None if mapping is None else sorted(mapping.items())
+
+
 def main() -> int:
-    try:
-        payload = json.load(sys.stdin)
-        graph_a = _graph(payload["graph_a"])
-        graph_b = _graph(payload["graph_b"])
-        matcher: Any
-        if payload["graph_a"]["directed"]:
-            matcher = nx_isomorphism.DiGraphMatcher(graph_a, graph_b)
-        else:
-            matcher = nx_isomorphism.GraphMatcher(graph_a, graph_b)
-        if not matcher.is_isomorphic():
-            response: dict[str, Any] = {"ok": True, "mapping": None}
-        else:
-            response = {
-                "ok": True,
-                "mapping": sorted(next(matcher.isomorphisms_iter()).items()),
-            }
-    except Exception as exc:
-        response = {"ok": False, "error": type(exc).__name__}
+    payload = json.load(sys.stdin)
+    graph_a = _graph(payload["graph_a"])
+    graph_b = _graph(payload["graph_b"])
+    matcher: Any
+    if payload["graph_a"]["directed"]:
+        matcher = nx_isomorphism.DiGraphMatcher(graph_a, graph_b)
+    else:
+        matcher = nx_isomorphism.GraphMatcher(graph_a, graph_b)
+    response: dict[str, Any] = {
+        "ok": True,
+        "mapping": _first_isomorphism_mapping(matcher),
+    }
     json.dump(response, sys.stdout, separators=(",", ":"))
     return 0
 

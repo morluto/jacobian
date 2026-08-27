@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import math
+import sys
 import time
 from collections.abc import Callable
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, cast
 
 from jacobian._models import StrictModel
@@ -27,8 +32,18 @@ from jacobian.math.graphs.optimization._models import (
     GraphOptimizationRequest,
 )
 from jacobian.math.graphs.optimization._operations import build_simple_graph
+from jacobian.process import (
+    ProcessResourceLimits,
+    run_bounded_process,
+    worker_environment,
+)
 
 _WitnessValidator = Callable[[Any, StrictModel], bool]
+_OPTIMIZATION_WORKER = Path(__file__).with_name("_finite_optimization_worker.py")
+_WORKER_OUTPUT_BYTES = 64 * 1024
+_WORKER_ERROR_BYTES = 16_384
+_WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
+_WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 
 
 def _validate_domination(graph: Any, result: StrictModel) -> bool:
@@ -102,7 +117,7 @@ def _valid_witness(graph: Any, result: StrictModel) -> bool:
     return validate(graph, result) if validate else False
 
 
-def _execute[ResultT: StrictModel](
+def _execute_kernel[ResultT: StrictModel](
     request: GraphOptimizationRequest,
     solve: Callable[
         [Any, ChromaticGraph, GraphOptimizationBudget, float],
@@ -114,6 +129,134 @@ def _execute[ResultT: StrictModel](
     result = solve(graph, request.graph, request.resource_budget, started)
     if not _valid_witness(graph, result):
         raise RuntimeError("graph optimization backend returned an invalid witness")
+    return result
+
+
+def _fallback_unknown[ResultT: StrictModel](
+    graph: Any,
+    request: GraphOptimizationRequest,
+    result_type: type[ResultT],
+    detail: str,
+) -> ResultT:
+    """Return a source-derived feasible incumbent without an optimum claim."""
+
+    vertices = tuple(sorted(request.graph.vertices))
+    common: dict[str, object] = {
+        "status": "UNKNOWN",
+        "order": len(vertices),
+        "optimum_value": None,
+        "tested": (),
+        "termination_reason": "SOLVER_UNKNOWN",
+        "detail": detail,
+    }
+    if result_type is GraphDominationMinimumOutput:
+        return result_type.model_validate(
+            {
+                **common,
+                "incumbent_value": len(vertices),
+                "lower_bound": 0 if not vertices else 1,
+                "upper_bound": len(vertices),
+                "witness_vertices": vertices,
+            }
+        )
+    if result_type is GraphMinimumMaximalMatchingOutput:
+        used: set[str] = set()
+        selected: list[tuple[str, str]] = []
+        for left, right in sorted(graph.edges):
+            if left not in used and right not in used:
+                selected.append((left, right) if left < right else (right, left))
+                used.update((left, right))
+        edges = tuple(selected)
+        return result_type.model_validate(
+            {
+                **common,
+                "incumbent_value": len(edges),
+                "lower_bound": 0,
+                "upper_bound": len(edges),
+                "witness_edges": edges,
+            }
+        )
+    witness = () if not vertices else (vertices[0],)
+    return result_type.model_validate(
+        {
+            **common,
+            "incumbent_value": len(witness),
+            "lower_bound": len(witness),
+            "upper_bound": len(vertices),
+            "witness_vertices": witness,
+        }
+    )
+
+
+def _execute[ResultT: StrictModel](
+    operation_id: str,
+    request: GraphOptimizationRequest,
+    solve: Callable[[Any, ChromaticGraph, GraphOptimizationBudget, float], ResultT],
+    result_type: type[ResultT],
+) -> ResultT:
+    """Run one complete graph Z3 operation in its bounded owner worker."""
+
+    graph = cast(Any, build_simple_graph(request.graph))
+    try:
+        with TemporaryDirectory(prefix="jacobian-graph-optimization-") as directory:
+            completed = run_bounded_process(
+                [sys.executable, str(_OPTIMIZATION_WORKER)],
+                input_bytes=json.dumps(
+                    {
+                        "operation_id": operation_id,
+                        "request": request.model_dump(mode="json"),
+                    },
+                    separators=(",", ":"),
+                ).encode("utf-8"),
+                timeout_seconds=request.resource_budget.wall_seconds,
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=_WORKER_OUTPUT_BYTES,
+                stderr_limit=_WORKER_ERROR_BYTES,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=max(1, math.ceil(request.resource_budget.wall_seconds)),
+                    address_space_bytes=_WORKER_ADDRESS_SPACE_BYTES,
+                    file_size_bytes=_WORKER_FILE_SIZE_BYTES,
+                ),
+                cwd=directory,
+            )
+    except OSError:
+        return _fallback_unknown(
+            graph,
+            request,
+            result_type,
+            "the bounded graph optimization worker could not be started",
+        )
+    if (
+        completed.timed_out
+        or completed.cancelled
+        or completed.stdout_exceeded
+        or completed.stderr_exceeded
+        or completed.returncode != 0
+    ):
+        return _fallback_unknown(
+            graph,
+            request,
+            result_type,
+            "the bounded graph optimization worker did not establish an outcome",
+        )
+    try:
+        result = result_type.model_validate(
+            json.loads(completed.stdout.decode("utf-8"))
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        return _fallback_unknown(
+            graph,
+            request,
+            result_type,
+            "the bounded graph optimization worker returned malformed output",
+        )
+    if not _valid_witness(graph, result):
+        return _fallback_unknown(
+            graph,
+            request,
+            result_type,
+            "the bounded graph optimization worker returned an invalid witness",
+        )
     return result
 
 
@@ -132,7 +275,7 @@ def _operation[ResultT: StrictModel](
         description=description,
         request_type=GraphOptimizationRequest,
         result_type=result_type,
-        run=lambda request: _execute(request, solve),
+        run=lambda request: _execute(operation_id, request, solve, result_type),
         tags=("graph", *tags, "bounded", "z3"),
         examples=examples,
     )
@@ -271,3 +414,39 @@ FINITE_GRAPH_OPTIMIZATION_OPERATIONS = (
     INDUCED_TREE_MAXIMUM_OPERATION,
     INDUCED_BIPARTITE_MAXIMUM_OPERATION,
 )
+
+
+def _run_worker_kernel(
+    operation_id: str,
+    request: GraphOptimizationRequest,
+) -> StrictModel:
+    """Build, encode, solve, and validate one graph operation inside its worker."""
+
+    graph = cast(Any, build_simple_graph(request.graph))
+    started = time.monotonic()
+    result: StrictModel
+    if operation_id == "graph.domination.minimum.compute":
+        result = solve_domination(
+            graph, request.graph, request.resource_budget, started
+        )
+    elif operation_id == "graph.matching.maximal.minimum.compute":
+        result = solve_minimum_maximal_matching(
+            graph, request.graph, request.resource_budget, started
+        )
+    elif operation_id == "graph.induced_forest.maximum.compute":
+        result = solve_induced_forest(
+            graph, request.graph, request.resource_budget, started
+        )
+    elif operation_id == "graph.induced_tree.maximum.compute":
+        result = solve_induced_tree(
+            graph, request.graph, request.resource_budget, started
+        )
+    elif operation_id == "graph.induced_bipartite.maximum.compute":
+        result = solve_induced_bipartite(
+            graph, request.graph, request.resource_budget, started
+        )
+    else:
+        raise ValueError("unknown graph optimization operation")
+    if not _valid_witness(graph, result):
+        raise ValueError("graph optimization kernel returned an invalid witness")
+    return result

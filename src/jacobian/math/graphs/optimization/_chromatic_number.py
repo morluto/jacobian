@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import math
+import sys
 import time
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
@@ -14,9 +19,20 @@ from jacobian.math.graphs.optimization._operations import (
     build_simple_graph,
     solve_chromatic_number,
 )
+from jacobian.process import (
+    ProcessResourceLimits,
+    run_bounded_process,
+    worker_environment,
+)
+
+_CHROMATIC_NUMBER_WORKER = Path(__file__).with_name("_chromatic_number_worker.py")
+_WORKER_OUTPUT_BYTES = 64 * 1024
+_WORKER_ERROR_BYTES = 16_384
+_WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
+_WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 
 
-def _search_chromatic_number(
+def _search_chromatic_number_kernel(
     request: GraphChromaticNumberRequest,
 ) -> GraphChromaticNumberOutput:
     """Run bounded k-colorability decisions until exactness or timeout."""
@@ -32,6 +48,85 @@ def _search_chromatic_number(
     )
 
     return output
+
+
+def _chromatic_worker_failure(
+    request: GraphChromaticNumberRequest, detail: str
+) -> GraphChromaticNumberOutput:
+    """Return a source-derived unknown when the bounded worker fails."""
+
+    vertices = request.graph.vertices
+    if not vertices:
+        return GraphChromaticNumberOutput(
+            status="EXACT",
+            vertices=vertices,
+            order=0,
+            chromatic_number=0,
+            lower_bound=0,
+            upper_bound=0,
+            coloring={},
+            solver_status="SPECIAL_CASE",
+            tested=(),
+            detail="the empty graph requires zero colors",
+        )
+    return GraphChromaticNumberOutput(
+        status="UNKNOWN",
+        vertices=vertices,
+        order=len(vertices),
+        lower_bound=2 if request.graph.edges else 1,
+        upper_bound=len(vertices),
+        coloring={vertex: index for index, vertex in enumerate(vertices)},
+        solver_status="UNKNOWN",
+        tested=(),
+        detail=detail,
+    )
+
+
+def _search_chromatic_number(
+    request: GraphChromaticNumberRequest,
+) -> GraphChromaticNumberOutput:
+    """Run the complete Z3 chromatic search in a bounded owner worker."""
+
+    try:
+        with TemporaryDirectory(prefix="jacobian-graph-chromatic-") as directory:
+            completed = run_bounded_process(
+                [sys.executable, str(_CHROMATIC_NUMBER_WORKER)],
+                input_bytes=json.dumps(
+                    request.model_dump(mode="json"), separators=(",", ":")
+                ).encode("utf-8"),
+                timeout_seconds=request.resource_budget.wall_seconds,
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=_WORKER_OUTPUT_BYTES,
+                stderr_limit=_WORKER_ERROR_BYTES,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=max(1, math.ceil(request.resource_budget.wall_seconds)),
+                    address_space_bytes=_WORKER_ADDRESS_SPACE_BYTES,
+                    file_size_bytes=_WORKER_FILE_SIZE_BYTES,
+                ),
+                cwd=directory,
+            )
+    except OSError:
+        return _chromatic_worker_failure(
+            request, "the bounded chromatic-number worker could not be started"
+        )
+    if (
+        completed.timed_out
+        or completed.cancelled
+        or completed.stdout_exceeded
+        or completed.stderr_exceeded
+        or completed.returncode != 0
+    ):
+        return _chromatic_worker_failure(
+            request, "the bounded chromatic-number worker did not establish an outcome"
+        )
+    try:
+        return GraphChromaticNumberOutput.model_validate(
+            json.loads(completed.stdout.decode("utf-8"))
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        return _chromatic_worker_failure(
+            request, "the bounded chromatic-number worker returned malformed output"
+        )
 
 
 CHROMATIC_NUMBER_OPERATION = MathTool(

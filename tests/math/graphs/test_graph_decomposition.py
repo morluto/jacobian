@@ -37,35 +37,39 @@ from jacobian.math.graphs.multigraph._models import LooplessMultigraph, Multigra
 # ---------------------------------------------------------------------------
 
 
-def _block_cut_tree(graph: dict) -> BlockCutTreeResult:
+def _block_cut_tree(graph: dict[str, object]) -> BlockCutTreeResult:
     return compute_block_cut_tree(
         BlockCutTreeRequest.model_validate({"graph": graph}),
     )
 
 
-def _bridge_block_tree(graph: dict) -> BridgeBlockResult:
+def _bridge_block_tree(graph: dict[str, object]) -> BridgeBlockResult:
     return compute_bridge_block_tree(
         BridgeBlockRequest.model_validate({"graph": graph}),
     )
 
 
-def _ear_decomposition(graph: dict) -> EarDecompositionResult:
+def _ear_decomposition(graph: dict[str, object]) -> EarDecompositionResult:
     return compute_ear_decomposition(
         EarDecompositionRequest.model_validate({"graph": graph}),
     )
 
 
-def _biconnected_components(graph: dict) -> BiconnectedComponentsResult:
+def _biconnected_components(
+    graph: dict[str, object],
+) -> BiconnectedComponentsResult:
     return compute_biconnected_components(
         BiconnectedComponentsRequest.model_validate({"graph": graph}),
     )
 
 
-def _spqr_tree(graph: dict):
+def _spqr_tree(graph: dict[str, object]) -> SPQRTreeResult:
     return compute_spqr_tree(SPQRTreeRequest.model_validate({"graph": graph}))
 
 
-def _edges_as_sets(edges: tuple[tuple[int, int], ...]) -> frozenset:
+def _edges_as_sets(
+    edges: tuple[tuple[int, int], ...],
+) -> frozenset[tuple[int, int]]:
     return frozenset((min(u, v), max(u, v)) for u, v in edges)
 
 
@@ -697,7 +701,7 @@ class TestSPQRTree:
                 source_graph=genuine.source_graph,
                 status="SPQR_TREE",
                 nodes=(forged_rigid, forged_bridge),
-                tree_edges=(tuple(sorted(("node:forged", rigid.node_id))),),
+                tree_edges=(("node:forged", rigid.node_id),),
                 virtual_edge_pairs=(("virtual:forged", "virtual:forged-mate"),),
                 source_vertex_incidence=incidence,
                 source_edge_owners=owners,

@@ -34,23 +34,23 @@ from jacobian.math.graphs.directed._operations import (
 # ---------------------------------------------------------------------------
 
 
-def _reachability(graph: dict, source: int) -> ReachabilityResult:
+def _reachability(graph: dict[str, object], source: int) -> ReachabilityResult:
     return compute_reachability(
         ReachabilityRequest.model_validate({"graph": graph, "source": source})
     )
 
 
-def _scc(graph: dict) -> StronglyConnectedComponentsResult:
+def _scc(graph: dict[str, object]) -> StronglyConnectedComponentsResult:
     return compute_strongly_connected_components(
         StronglyConnectedComponentsRequest.model_validate({"graph": graph})
     )
 
 
-def _condensation(graph: dict) -> CondensationResult:
+def _condensation(graph: dict[str, object]) -> CondensationResult:
     return compute_condensation(CondensationRequest.model_validate({"graph": graph}))
 
 
-def _acyclic_order(graph: dict) -> AcyclicOrderResult:
+def _acyclic_order(graph: dict[str, object]) -> AcyclicOrderResult:
     return compute_acyclic_order(AcyclicOrderRequest.model_validate({"graph": graph}))
 
 
@@ -221,7 +221,7 @@ class TestCondensation:
         """A DAG's condensation has one vertex per original vertex. The
         condensation edges, mapped back through the components, must equal
         the original edge set."""
-        edges = [[0, 1], [0, 2], [1, 3], [2, 3]]
+        edges: list[list[int]] = [[0, 1], [0, 2], [1, 3], [2, 3]]
         graph = {"vertex_count": 4, "edges": edges}
         result = _condensation(graph)
         assert result.vertex_count == 4
@@ -241,7 +241,7 @@ class TestCondensation:
         graph = {"vertex_count": 4, "edges": [[0, 1], [1, 2], [2, 0], [2, 3]]}
         result = _condensation(graph)
         # Build the condensation as a NetworkX graph and verify acyclicity.
-        cond = nx.DiGraph()
+        cond: nx.DiGraph[int] = nx.DiGraph()
         cond.add_nodes_from(range(result.vertex_count))
         cond.add_edges_from((e.source, e.target) for e in result.edges)
         assert nx.is_directed_acyclic_graph(cond)
@@ -275,7 +275,8 @@ class TestCondensation:
 
 class TestAcyclicOrder:
     def test_valid_topological_order_for_dag(self) -> None:
-        graph = {"vertex_count": 4, "edges": [[0, 1], [0, 2], [1, 3], [2, 3]]}
+        edges: list[list[int]] = [[0, 1], [0, 2], [1, 3], [2, 3]]
+        graph = {"vertex_count": 4, "edges": edges}
         result = _acyclic_order(graph)
         assert result.acyclic
         order = result.order
@@ -283,7 +284,7 @@ class TestAcyclicOrder:
         assert sorted(order) == [0, 1, 2, 3]
         # The order must respect all edges.
         position = {v: i for i, v in enumerate(order)}
-        assert all(position[u] < position[v] for u, v in graph["edges"])
+        assert all(position[u] < position[v] for u, v in edges)
 
     def test_chain_topological_order(self) -> None:
         graph = {"vertex_count": 3, "edges": [[0, 1], [1, 2]]}
@@ -328,15 +329,19 @@ class TestDirectOperationEnvelope:
 
     def test_published_schemas_advertise_the_operation_envelope(self) -> None:
         for request_type in DIRECT_OPERATION_REQUESTS:
-            graph_schema = request_type.model_json_schema()["properties"]["graph"]
-            assert (
-                graph_schema["properties"]["vertex_count"]["maximum"]
-                == MAX_DIRECTED_OPERATION_VERTICES
-            )
-            assert (
-                graph_schema["properties"]["edges"]["maxItems"]
-                == MAX_DIRECTED_OPERATION_EDGES
-            )
+            schema = request_type.model_json_schema()
+            properties = schema["properties"]
+            assert isinstance(properties, dict)
+            graph_schema = properties["graph"]
+            assert isinstance(graph_schema, dict)
+            graph_properties = graph_schema["properties"]
+            assert isinstance(graph_properties, dict)
+            vertex_count_schema = graph_properties["vertex_count"]
+            edges_schema = graph_properties["edges"]
+            assert isinstance(vertex_count_schema, dict)
+            assert isinstance(edges_schema, dict)
+            assert vertex_count_schema["maximum"] == MAX_DIRECTED_OPERATION_VERTICES
+            assert edges_schema["maxItems"] == MAX_DIRECTED_OPERATION_EDGES
             assert str(MAX_DIRECTED_OPERATION_VERTICES) in graph_schema["description"]
             assert str(MAX_DIRECTED_OPERATION_EDGES) in graph_schema["description"]
 
@@ -356,13 +361,14 @@ class TestDirectOperationEnvelope:
         CondensationRequest.model_validate(edgeless)
         AcyclicOrderRequest.model_validate(edgeless)
 
+        full_envelope_edges = _directed_pairs(MAX_DIRECTED_OPERATION_EDGES)
         full_envelope = {
             "graph": {
                 "vertex_count": MAX_DIRECTED_OPERATION_VERTICES,
-                "edges": _directed_pairs(MAX_DIRECTED_OPERATION_EDGES),
+                "edges": full_envelope_edges,
             }
         }
-        assert len(full_envelope["graph"]["edges"]) == MAX_DIRECTED_OPERATION_EDGES
+        assert len(full_envelope_edges) == MAX_DIRECTED_OPERATION_EDGES
         ReachabilityRequest.model_validate({**full_envelope, "source": 0})
         StronglyConnectedComponentsRequest.model_validate(full_envelope)
         CondensationRequest.model_validate(full_envelope)
@@ -473,7 +479,7 @@ class TestCarrierParseEnvelope:
             for index in range(MAX_DIRECTED_GRAPH_PARSE_EDGES + 1)
         ]
         for request_type in DIRECT_OPERATION_REQUESTS:
-            payload: dict = {"graph": {"vertex_count": 97, "edges": edges}}
+            payload: dict[str, object] = {"graph": {"vertex_count": 97, "edges": edges}}
             if request_type is ReachabilityRequest:
                 payload["source"] = 0
             with pytest.raises(ValidationError) as excinfo:

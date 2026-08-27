@@ -189,7 +189,7 @@ def test_result_rejects_unsorted_or_duplicate_vertices(
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
             vertices=vertices,
-            rows=_complete_rows(list(vertices)),
+            rows=tuple(_complete_rows(list(vertices))),
             connected=True,
         )
 
@@ -202,7 +202,7 @@ def test_result_rejects_missing_rows_and_nonsquare_rows() -> None:
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
             vertices=vertices,
-            rows=_complete_rows(list(vertices))[:2],
+            rows=tuple(_complete_rows(list(vertices))[:2]),
             connected=True,
         )
     with pytest.raises(ValidationError):
@@ -279,6 +279,6 @@ def test_result_rejects_connected_mismatch() -> None:
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
             vertices=("1", "10", "2"),
-            rows=_complete_rows(["1", "10", "2"]),
+            rows=tuple(_complete_rows(["1", "10", "2"])),
             connected=False,
         )

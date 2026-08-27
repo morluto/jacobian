@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
+import json
+import math
+import sys
 import time
 from collections.abc import Iterator
-from typing import Literal
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Any, Literal
 
-import z3  # type: ignore[import-untyped]
-
+from jacobian.canonical import CanonicalLimits
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
     IndependenceNumberRequest,
     IndependenceNumberResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.process import (
+    ProcessResourceLimits,
+    run_bounded_process,
+    worker_environment,
+)
 
 # Independent result verification is deliberately separate from structural
 # Pydantic parsing. Its branch-and-bound search has both a finite node ledger
@@ -22,9 +31,16 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 _EXACT_REPLAY_SEARCH_NODES = 200_000
 _INDEPENDENT_VERIFICATION_WALL_SECONDS = 5
 _MAX_INDEPENDENT_VERIFICATION_WALL_SECONDS = 120
+_INDEPENDENCE_WORKER = Path(__file__).with_name("_independence_z3_worker.py")
+_WORKER_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
+_WORKER_ERROR_BYTES = 16_384
+_WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
+_WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 
 
-def _integer_bound(value: z3.ArithRef, fallback: int) -> int:
+def _integer_bound(value: Any, fallback: int) -> int:
+    import z3  # type: ignore[import-untyped]
+
     return value.as_long() if z3.is_int_value(value) else fallback
 
 
@@ -206,7 +222,7 @@ def solve_independence_number(
     return solve_independence_number_values(request.graph, request.resource_budget)
 
 
-def solve_independence_number_values(
+def _solve_independence_number_values_kernel(
     graph: SimpleUndirectedGraph,
     resource_budget: IndependenceNumberBudget,
 ) -> IndependenceNumberResult:
@@ -248,6 +264,8 @@ def solve_independence_number_values(
             termination_reason="WALL_TIME",
             detail="the wall-clock budget expired after the initial feasible witness",
         )
+
+    import z3
 
     optimizer = z3.Optimize()
     optimizer.set(timeout=max(1, remaining_ms))
@@ -330,3 +348,66 @@ def solve_independence_number_values(
         termination_reason=termination,
         detail="bounded Z3 optimization did not establish an exact optimum",
     )
+
+
+def solve_independence_number_values(
+    graph: SimpleUndirectedGraph,
+    resource_budget: IndependenceNumberBudget,
+) -> IndependenceNumberResult:
+    """Run all Z3 optimization and exact replay in one bounded owner worker."""
+
+    incumbent = () if not graph.vertices else (min(graph.vertices),)
+
+    def fallback(detail: str) -> IndependenceNumberResult:
+        return IndependenceNumberResult._from_kernel(
+            graph=graph,
+            status="UNKNOWN",
+            optimum_value=None,
+            upper_bound=len(graph.vertices),
+            incumbent_vertices=incumbent,
+            termination_reason="SOLVER_UNKNOWN",
+            detail=detail,
+        )
+
+    try:
+        with TemporaryDirectory(prefix="jacobian-graph-independence-") as directory:
+            completed = run_bounded_process(
+                [sys.executable, str(_INDEPENDENCE_WORKER)],
+                input_bytes=json.dumps(
+                    {
+                        "graph": graph.model_dump(mode="json"),
+                        "resource_budget": resource_budget.model_dump(mode="json"),
+                    },
+                    separators=(",", ":"),
+                ).encode("utf-8"),
+                timeout_seconds=resource_budget.wall_seconds,
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=_WORKER_OUTPUT_BYTES,
+                stderr_limit=_WORKER_ERROR_BYTES,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=max(1, math.ceil(resource_budget.wall_seconds)),
+                    address_space_bytes=_WORKER_ADDRESS_SPACE_BYTES,
+                    file_size_bytes=_WORKER_FILE_SIZE_BYTES,
+                ),
+                cwd=directory,
+            )
+    except OSError:
+        return fallback("the bounded graph independence worker could not be started")
+    if (
+        completed.timed_out
+        or completed.cancelled
+        or completed.stdout_exceeded
+        or completed.stderr_exceeded
+        or completed.returncode != 0
+    ):
+        return fallback(
+            "the bounded graph independence worker did not establish an outcome"
+        )
+    try:
+        return IndependenceNumberResult.model_validate(
+            json.loads(completed.stdout.decode("utf-8"))
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        return fallback(
+            "the bounded graph independence worker returned malformed output"
+        )

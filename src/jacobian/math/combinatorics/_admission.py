@@ -157,6 +157,10 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "combinatorics.finite_abelian.3term_progression_hypergraph.construct",
+        AdmissionDecision.KEEP,
+        "distinct source-bound hypergraph constructor for 3-term arithmetic progressions in finite cyclic groups",
+    ),
 )
-
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

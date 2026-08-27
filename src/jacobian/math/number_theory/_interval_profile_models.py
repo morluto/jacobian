@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import math
-from typing import Self
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import ClassVar, Self
 
-from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, PrivateAttr, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
+from jacobian.canonical import CanonicalLimits
 
 # ---------------------------------------------------------------------------
 # Admission envelope
@@ -20,210 +18,316 @@ from jacobian.canonical import (
 #
 # The profiles share one admission shape: a bounded closed interval [L, U]
 # with L >= 1 and U >= L.  The key quantities controlling work and output are
-# the interval width W = U - L + 1 and the upper bound U (for the base sieve
-# through sqrt(U)).  We cap W at a value that keeps the segment and the
-# serialized result within the canonical transport limit.
+# the interval width W = U - L + 1, the base sieve through sqrt(U), and the
+# exact result size.  Each operation supplies its own conservative work and
+# result-size estimator because the public result shapes have different
+# densities.
 #
-# For squarefree and prime-factor profiles the kernels use a segment over
-# [L, U] and a base sieve needing primes through floor(sqrt(U)); they never
-# materialize a prefix sieve through U.  The work is proportional to the
-# segment width and the base sieve plus the interval's prime-factor hits.
+# For squarefree/divisor-count/greatest-prime-factor profiles the kernel is a
+# segmented sieve over [L, U] needing primes through floor(sqrt(U)).
 #
-# For prime-gap profiles the kernel marks primes in [L, U] as a segment and
-# queries the successor beyond U separately, needing primes through
-# floor(sqrt(U)).
+# For prime-gap profiles the kernel is a segmented prime sieve over [L, U],
+# followed by one successor-prime query when the interval contains a prime.
 
-MAX_INTERVAL_UPPER_BOUND: int = 10_000_000
+# JSON integers are exactly represented by the public transport through this
+# bound.  The actual computational envelope is result- and work-sensitive;
+# this is not a mathematical or backend ceiling.
+MAX_INTERVAL_UPPER_BOUND: int = (1 << 53) - 1
+# Dense row profiles retain an explicit materialization bound.  Sparse
+# profiles use their operation-specific work and result estimators instead.
 MAX_INTERVAL_WIDTH: int = 1_000_000
 MAX_SIEVE_WORK: int = 20_000_000
 MAX_PROFILE_RESULT_BYTES: int = CanonicalLimits().max_output_bytes
+_PROFILE_RESULT_OVERHEAD_BYTES: int = 1_024
+_SUCCESSOR_PRIME_BOUND_THRESHOLD: int = 396_738
 
 
-def _json_array_size(item_size: int, count: int) -> int:
-    return 2 + max(count - 1, 0) + count * item_size
+@dataclass(frozen=True, slots=True)
+class IntervalAdmission:
+    """The one validated execution envelope for an interval operation."""
+
+    lower_bound: int
+    upper_bound: int
+    width: int
+    estimated_work: int
+    estimated_result_bytes: int
 
 
-def _interval_work_upper_bound(lower_bound: int, upper_bound: int) -> int:
-    """Bound base-sieve and interval-hit work without a prefix through U."""
+def _interval_prime_count_upper_bound(width: int) -> int:
+    """Return a conservative bound for primes in an interval of ``width``.
 
-    width = upper_bound - lower_bound + 1
+    Brun-Titchmarsh bounds the number of primes in an interval of length
+    ``W`` by ``2W / log(W)`` for W > 1.  The one-per-integer bound remains
+    sharper for short intervals and protects the small-width edge cases.
+    """
+    if width <= 1:
+        return width
+    return min(width, math.ceil(2 * width / math.log(width)) + 1)
+
+
+def _base_sieve_work(upper_bound: int) -> int:
+    """Bound the simple base sieve through ``floor(sqrt(upper_bound))``."""
     root = math.isqrt(upper_bound)
     if root < 2:
-        return width
-    digit_bound = root.bit_length()
-    return root * (digit_bound + 1) + root + width * digit_bound
+        return 0
+    return root * (root.bit_length() + 1) + root
 
 
-def _squarefree_result_upper_bound_bytes(lower_bound: int, upper_bound: int) -> int:
-    """Bound the compact partition result using its two integer arrays."""
-
+def _estimate_squarefree_work(lower_bound: int, upper_bound: int) -> int:
     width = upper_bound - lower_bound + 1
-    integer_size = len(encode_strict_json(upper_bound))
-    # The two arrays partition the interval, so their combined value and
-    # separator cost is bounded by one array's values plus two brackets and
-    # one separator per possible entry.
-    partition_arrays_size = 4 + width + 1 + width * integer_size
-    count_size = len(encode_strict_json(width))
-    return strict_json_object_size(
-        (
-            ("lower_bound", len(encode_strict_json(lower_bound))),
-            ("nonsquarefree_values", partition_arrays_size),
-            ("nonsquarefree_count", count_size),
-            ("squarefree_values", 0),
-            ("squarefree_count", count_size),
-            ("upper_bound", len(encode_strict_json(upper_bound))),
-        )
+    # Marking p^2 multiples costs at most one hit per interval value in total,
+    # plus one first-hit iteration per base prime and one output pass.
+    return _base_sieve_work(upper_bound) + width * 2 + math.isqrt(upper_bound)
+
+
+def _estimate_factor_profile_work(lower_bound: int, upper_bound: int) -> int:
+    width = upper_bound - lower_bound + 1
+    root = math.isqrt(upper_bound)
+    root_bits = max(root.bit_length(), 1)
+    value_bits = max(upper_bound.bit_length(), 1)
+    # The interval multiple scan is bounded by the harmonic sum over base
+    # primes; residual division is bounded by one binary reduction per bit of
+    # the input; the final row construction is one more interval pass.
+    return _base_sieve_work(upper_bound) + root + width * (root_bits + value_bits + 1)
+
+
+def _estimate_prime_gap_work(lower_bound: int, upper_bound: int) -> int:
+    width = upper_bound - lower_bound + 1
+    root = math.isqrt(upper_bound)
+    root_bits = max(root.bit_length(), 1)
+    # Segmented marking is width-sensitive; the final row scan is charged
+    # separately.  The successor query is a variable-length candidate search,
+    # so charge its bounded candidate and primality-test work as well.
+    return (
+        _base_sieve_work(upper_bound)
+        + root
+        + width * (root_bits + 2)
+        + _estimate_successor_prime_search_work(upper_bound)
     )
 
 
-def _row_profile_result_upper_bound_bytes(lower_bound: int, upper_bound: int) -> int:
-    """Bound a row profile using its widest field and safe value envelope."""
+def _successor_prime_search_span(upper_bound: int) -> int:
+    """Return a proven upper bound on the successor-prime search span.
 
-    width = upper_bound - lower_bound + 1
-    row_size = strict_json_object_size(
-        (
-            ("greatest_prime_factor", len(encode_strict_json(upper_bound**2))),
-            ("n", len(encode_strict_json(upper_bound))),
-        )
-    )
-    return strict_json_object_size(
-        (
-            ("lower_bound", len(encode_strict_json(lower_bound))),
-            ("rows", _json_array_size(row_size, width)),
-            ("upper_bound", len(encode_strict_json(upper_bound))),
-        )
-    )
-
-
-def _prime_gap_result_upper_bound_bytes(lower_bound: int, upper_bound: int) -> int:
-    """Bound prime-gap rows using a global prime-count envelope."""
-
-    width = upper_bound - lower_bound + 1
+    Bertrand's postulate gives a span of ``upper_bound`` for small values.
+    For ``upper_bound >= 396_738``, Dusart's explicit bound gives a prime no
+    farther than ``x / (25 log(x)^2)`` after x (2010, Proposition 6.8).
+    """
     if upper_bound < 2:
-        row_count = 0
-    elif upper_bound < 17:
-        row_count = width
-    else:
-        # pi(x) < 2x/log(x) for x >= 2; using pi(U) bounds every prime in
-        # [L,U]. The factor of two also bounds the successor and its gap.
-        row_count = min(width, math.ceil(2 * upper_bound / math.log(upper_bound)))
-    row_size = strict_json_object_size(
-        (
-            ("gap", len(encode_strict_json(2 * upper_bound))),
-            ("lower_prime", len(encode_strict_json(upper_bound))),
-            ("upper_prime", len(encode_strict_json(2 * upper_bound))),
-        )
-    )
-    return strict_json_object_size(
-        (
-            ("lower_bound", len(encode_strict_json(lower_bound))),
-            ("rows", _json_array_size(row_size, row_count)),
-            ("upper_bound", len(encode_strict_json(upper_bound))),
-        )
-    )
+        return 0
+    if upper_bound < _SUCCESSOR_PRIME_BOUND_THRESHOLD:
+        return upper_bound
+    return math.ceil(upper_bound / (25 * math.log(upper_bound) ** 2)) + 1
+
+
+def _estimate_successor_prime_search_work(upper_bound: int) -> int:
+    """Bound candidate stepping and primality testing for ``nextprime``."""
+    span = _successor_prime_search_span(upper_bound)
+    if span == 0:
+        return 0
+    # Charge one candidate-step and one bit-scaled primality-test unit for
+    # every candidate in the proven search span.
+    return span * (max(upper_bound.bit_length(), 1) + 1)
+
+
+def _integer_digits(value: int) -> int:
+    """Return the decimal digit count of a positive integer."""
+    return len(str(value))
+
+
+def _estimate_squarefree_result_bytes(lower_bound: int, upper_bound: int) -> int:
+    width = upper_bound - lower_bound + 1
+    # Every interval integer occurs exactly once across the two value arrays.
+    # One extra byte per value covers its array separator.
+    return _PROFILE_RESULT_OVERHEAD_BYTES + width * (_integer_digits(upper_bound) + 1)
+
+
+def _estimate_divisor_count_result_bytes(lower_bound: int, upper_bound: int) -> int:
+    width = upper_bound - lower_bound + 1
+    digits = _integer_digits(upper_bound)
+    # 24 bytes covers the two field names, punctuation, and an array separator
+    # in addition to the two decimal values.
+    return _PROFILE_RESULT_OVERHEAD_BYTES + width * (2 * digits + 24)
+
+
+def _estimate_greatest_prime_factor_result_bytes(
+    lower_bound: int, upper_bound: int
+) -> int:
+    width = upper_bound - lower_bound + 1
+    digits = _integer_digits(upper_bound)
+    # The longer greatest_prime_factor field needs 32 fixed bytes per row.
+    return _PROFILE_RESULT_OVERHEAD_BYTES + width * (2 * digits + 32)
+
+
+def _estimate_prime_gap_result_bytes(lower_bound: int, upper_bound: int) -> int:
+    width = upper_bound - lower_bound + 1
+    row_count = _interval_prime_count_upper_bound(width)
+    # Bertrand's postulate bounds the successor below 2*U.  39 fixed bytes
+    # cover the three field names, punctuation, and an array separator.
+    digits = _integer_digits(2 * upper_bound)
+    return _PROFILE_RESULT_OVERHEAD_BYTES + row_count * (3 * digits + 39)
+
+
+_RESULT_ESTIMATOR = Callable[[int, int], int]
+_WORK_ESTIMATOR = Callable[[int, int], int]
 
 
 class IntervalProfileRequest(StrictModel):
-    """A bounded closed interval [L, U] with 1 <= L <= U."""
+    """A bounded closed interval [L, U] with an operation-specific result."""
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "description": (
-                "A closed interval with 1 <= lower_bound <= upper_bound. "
-                "The interval width and the complete profile result must fit "
-                "the bounded execution and canonical-output envelope."
-            )
-        }
-    )
+    lower_bound: StrictInt = Field(ge=1, le=MAX_INTERVAL_UPPER_BOUND)
+    upper_bound: StrictInt = Field(ge=1, le=MAX_INTERVAL_UPPER_BOUND)
 
-    lower_bound: StrictInt = Field(
-        ge=1,
-        le=MAX_INTERVAL_UPPER_BOUND,
-        description="Inclusive lower endpoint of the interval.",
+    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = (
+        _estimate_divisor_count_result_bytes
     )
-    upper_bound: StrictInt = Field(
-        ge=1,
-        le=MAX_INTERVAL_UPPER_BOUND,
-        description=(
-            "Inclusive upper endpoint; it must be at least lower_bound, "
-            "and the bounded profile work envelope."
-        ),
-    )
+    _work_estimator: ClassVar[_WORK_ESTIMATOR] = _estimate_factor_profile_work
+    _max_width: ClassVar[int | None] = MAX_INTERVAL_WIDTH
+    _admission: IntervalAdmission = PrivateAttr()
 
     @model_validator(mode="after")
     def require_admitted_interval(self) -> Self:
         if self.upper_bound < self.lower_bound:
             raise ValueError("upper_bound must be >= lower_bound")
-        if self.width() > MAX_INTERVAL_WIDTH:
+        max_width = type(self)._max_width
+        if max_width is not None and self.width() > max_width:
             raise ValueError("interval width exceeds maximum supported width")
-        if (
-            _interval_work_upper_bound(self.lower_bound, self.upper_bound)
-            > MAX_SIEVE_WORK
-        ):
+        estimated_result_bytes = type(self)._result_estimator(
+            self.lower_bound, self.upper_bound
+        )
+        if estimated_result_bytes > MAX_PROFILE_RESULT_BYTES:
+            raise ValueError("interval result exceeds the canonical output budget")
+        estimated_work = type(self)._work_estimator(self.lower_bound, self.upper_bound)
+        if estimated_work > MAX_SIEVE_WORK:
             raise ValueError(
-                "interval exceeds the segmented profile work budget of "
+                "interval exceeds the segmented-sieve work budget of "
                 f"{MAX_SIEVE_WORK} steps"
             )
+        self._admission = IntervalAdmission(
+            lower_bound=self.lower_bound,
+            upper_bound=self.upper_bound,
+            width=self.width(),
+            estimated_work=estimated_work,
+            estimated_result_bytes=estimated_result_bytes,
+        )
         return self
 
     def width(self) -> int:
         return self.upper_bound - self.lower_bound + 1
 
-    def is_admitted(self) -> bool:
-        width = self.width()
-        if width < 1:
-            return False
-        if width > MAX_INTERVAL_WIDTH:
-            return False
-        if self.upper_bound > MAX_INTERVAL_UPPER_BOUND:
-            return False
-        return (
-            _interval_work_upper_bound(self.lower_bound, self.upper_bound)
-            <= MAX_SIEVE_WORK
-        )
+    @property
+    def admission(self) -> IntervalAdmission:
+        """Return the admission decision computed during request validation."""
+        return self._admission
 
 
 class SquarefreeProfileRequest(IntervalProfileRequest):
-    """Interval request admitted against the compact squarefree result."""
+    """Interval request admitted for the two-array squarefree result."""
 
-    @model_validator(mode="after")
-    def require_squarefree_output_admission(self) -> Self:
-        if (
-            _squarefree_result_upper_bound_bytes(self.lower_bound, self.upper_bound)
-            > MAX_PROFILE_RESULT_BYTES
-        ):
-            raise ValueError(
-                "squarefree interval result exceeds the canonical output budget"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Closed positive integer interval [lower_bound, upper_bound]. "
+                f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
+                f"the segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
+                "steps, and the operation-specific worst-case JSON result "
+                f"estimate must fit within {MAX_PROFILE_RESULT_BYTES:,} bytes. "
+                "Squarefree values occur once across the two returned arrays."
             )
-        return self
+        }
+    )
+    _max_width: ClassVar[int | None] = None
+    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = _estimate_squarefree_result_bytes
+    _work_estimator: ClassVar[_WORK_ESTIMATOR] = _estimate_squarefree_work
 
 
 class IntervalProfileRowsRequest(IntervalProfileRequest):
-    """Interval request admitted against a complete row-profile result."""
+    """Interval request admitted for a dense row-profile result."""
 
-    @model_validator(mode="after")
-    def require_row_output_admission(self) -> Self:
-        if (
-            _row_profile_result_upper_bound_bytes(self.lower_bound, self.upper_bound)
-            > MAX_PROFILE_RESULT_BYTES
-        ):
-            raise ValueError("interval row profile exceeds the canonical output budget")
-        return self
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Closed positive integer interval [lower_bound, upper_bound]. "
+                f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
+                f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
+                f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
+                "steps. The operation-specific worst-case JSON row estimate must "
+                f"fit within {MAX_PROFILE_RESULT_BYTES:,} bytes."
+            )
+        }
+    )
+
+
+class DivisorCountProfileRequest(IntervalProfileRowsRequest):
+    """Interval request admitted for the divisor-count row result."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Closed positive integer interval [lower_bound, upper_bound]. "
+                f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
+                f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
+                f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
+                "steps. The operation-specific worst-case JSON row estimate must "
+                f"fit within {MAX_PROFILE_RESULT_BYTES:,} bytes. The result "
+                "contains one (n, divisor_count) row per interval value."
+            )
+        }
+    )
+
+
+class GreatestPrimeFactorProfileRequest(IntervalProfileRowsRequest):
+    """Interval request admitted for the greatest-prime-factor rows."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Closed positive integer interval [lower_bound, upper_bound]. "
+                f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
+                f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
+                f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
+                "steps. The operation-specific worst-case JSON row estimate must "
+                f"fit within {MAX_PROFILE_RESULT_BYTES:,} bytes. The result "
+                "contains one (n, greatest_prime_factor) row per interval value."
+            )
+        }
+    )
+    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = (
+        _estimate_greatest_prime_factor_result_bytes
+    )
 
 
 class PrimeGapProfileRequest(IntervalProfileRequest):
-    """Interval request admitted against the sparse prime-gap result."""
+    """Interval request admitted for the sparse consecutive-prime rows."""
 
-    @model_validator(mode="after")
-    def require_prime_gap_output_admission(self) -> Self:
-        if (
-            _prime_gap_result_upper_bound_bytes(self.lower_bound, self.upper_bound)
-            > MAX_PROFILE_RESULT_BYTES
-        ):
-            raise ValueError(
-                "prime-gap interval result exceeds the canonical output budget"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Closed positive integer interval [lower_bound, upper_bound]. "
+                f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
+                f"the segmented-sieve and bounded successor-prime search work "
+                f"estimate must fit within {MAX_SIEVE_WORK:,} steps. The "
+                "operation-specific worst-case JSON estimate for the primes "
+                "in the requested interval must fit within "
+                f"{MAX_PROFILE_RESULT_BYTES:,} bytes."
             )
-        return self
+        }
+    )
+    _max_width: ClassVar[int | None] = None
+    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = _estimate_prime_gap_result_bytes
+    _work_estimator: ClassVar[_WORK_ESTIMATOR] = _estimate_prime_gap_work
+
+
+class LeastPrimeFactorProfileRequest(IntervalProfileRowsRequest):
+    """Interval request admitted for least-prime-factor rows."""
+
+
+class EulerTotientProfileRequest(IntervalProfileRowsRequest):
+    """Interval request admitted for Euler-totient rows."""
+
+
+class DivisorSumProfileRequest(IntervalProfileRowsRequest):
+    """Interval request admitted for divisor-sum rows."""
 
 
 # ---------------------------------------------------------------------------
@@ -307,16 +411,23 @@ __all__ = [
     "MAX_INTERVAL_UPPER_BOUND",
     "MAX_INTERVAL_WIDTH",
     "MAX_PROFILE_RESULT_BYTES",
+    "MAX_SIEVE_WORK",
+    "DivisorCountProfileRequest",
     "DivisorCountProfileResult",
     "DivisorCountProfileRow",
+    "DivisorSumProfileRequest",
     "DivisorSumProfileResult",
     "DivisorSumProfileRow",
+    "EulerTotientProfileRequest",
     "EulerTotientProfileResult",
     "EulerTotientProfileRow",
+    "GreatestPrimeFactorProfileRequest",
     "GreatestPrimeFactorProfileResult",
     "GreatestPrimeFactorProfileRow",
+    "IntervalAdmission",
     "IntervalProfileRequest",
     "IntervalProfileRowsRequest",
+    "LeastPrimeFactorProfileRequest",
     "LeastPrimeFactorProfileResult",
     "LeastPrimeFactorProfileRow",
     "PrimeGapProfileRequest",
@@ -328,33 +439,33 @@ __all__ = [
 
 
 class LeastPrimeFactorProfileRow(StrictModel):
-    n: int
-    least_prime_factor: int = Field(ge=1)
+    n: StrictInt
+    least_prime_factor: StrictInt = Field(ge=1)
 
 
 class LeastPrimeFactorProfileResult(StrictModel):
-    lower_bound: int
-    upper_bound: int
+    lower_bound: StrictInt
+    upper_bound: StrictInt
     rows: tuple[LeastPrimeFactorProfileRow, ...]
 
 
 class EulerTotientProfileRow(StrictModel):
-    n: int
-    euler_totient: int = Field(ge=1)
+    n: StrictInt
+    euler_totient: StrictInt = Field(ge=1)
 
 
 class EulerTotientProfileResult(StrictModel):
-    lower_bound: int
-    upper_bound: int
+    lower_bound: StrictInt
+    upper_bound: StrictInt
     rows: tuple[EulerTotientProfileRow, ...]
 
 
 class DivisorSumProfileRow(StrictModel):
-    n: int
-    divisor_sum: int = Field(ge=1)
+    n: StrictInt
+    divisor_sum: StrictInt = Field(ge=1)
 
 
 class DivisorSumProfileResult(StrictModel):
-    lower_bound: int
-    upper_bound: int
+    lower_bound: StrictInt
+    upper_bound: StrictInt
     rows: tuple[DivisorSumProfileRow, ...]

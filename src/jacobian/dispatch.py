@@ -46,6 +46,10 @@ class OperationRequestValidationError(ValueError):
         ]
 
 
+class _OperationResolutionError(ValueError):
+    """The immutable catalog has no binding for the requested operation."""
+
+
 @dataclass(frozen=True, slots=True)
 class _PreparedOperation:
     """One request parsed against its selected immutable operation binding."""
@@ -87,7 +91,7 @@ def _prepare_operation(
 
     binding = catalog._binding(operation_id)
     if binding is None:
-        raise ValueError(f"unknown operation: {operation_id}")
+        raise _OperationResolutionError(f"unknown operation: {operation_id}")
     try:
         parsed = parse_operation_input(binding.request_type, payload)
     except (CanonicalizationError, ValidationError) as exc:

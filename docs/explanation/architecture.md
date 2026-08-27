@@ -29,6 +29,28 @@ The domain function may compose a maintained backend such as SymPy, FLINT,
 NetworkX, or Z3 where that algorithm is relevant. Those backends remain private
 computational engines behind Jacobian's public mathematical contracts.
 
+## Transport and mathematical ownership
+
+The MCP Python SDK owns the fixed transport boundary: registration of
+`math.find` and `math.run`, their outer argument and output schemas, protocol
+validation, and structured JSON delivery. Jacobian does not duplicate those
+checks.
+
+`math.run` still needs a small dispatch boundary because its `payload` has an
+operation-specific schema that is known only after its immutable `operation_id`
+is resolved. Dispatch therefore does only this: resolve the declaration, parse
+the payload once with that owner's request model, invoke that owner once, and
+project the typed result once. It does not contain domain admission, backend
+logic, result-specific replay, or workflow state.
+
+Result parsing is not mathematical proof. Result models enforce canonical
+syntax, bounded structural shape, and branch consistency, while the admitted
+kernel establishes the mathematical postcondition once before calling its
+private trusted construction path. When an API deliberately accepts an
+independently supplied theorem-bearing claim, its owner provides a named,
+bounded `verify_*` function. That verification is an explicit trust decision;
+it never runs as a side effect of ordinary Pydantic deserialization.
+
 Domain values live beside the functions that own their semantics under
 `jacobian.math.<domain>`. HNF, LLL, and Smith-related direct computations call
 maintained backends in process; a subprocess is retained only where actual

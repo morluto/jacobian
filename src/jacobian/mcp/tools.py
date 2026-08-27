@@ -16,6 +16,7 @@ from jacobian.dispatch import (
     OperationDomainValidationError,
     OperationRequestValidationError,
     _invoke_prepared_operation,
+    _OperationResolutionError,
     _prepare_operation,
 )
 from jacobian.mcp.models import (
@@ -102,8 +103,6 @@ def math_run(
     """Run one math tool. Role comes from the tool ID."""
     _authorize(ctx)
     catalog = _catalog(ctx)
-    if catalog.operation(operation_id) is None:
-        raise ToolError(f"unknown operation: {operation_id}")
     cancellation = _request_cancellation(ctx)
     if cancellation.is_set():
         raise ToolError("operation cancelled before execution")
@@ -114,7 +113,10 @@ def math_run(
         # reaps only an operation's owned child tree.  Bind it before
         # preparation because owner admission may itself use a child worker.
         with bounded_process_cancellation(cancellation):
-            prepared = _prepare_operation(operation_id, payload, catalog)
+            try:
+                prepared = _prepare_operation(operation_id, payload, catalog)
+            except _OperationResolutionError as exc:
+                raise ToolError(str(exc)) from exc
             if cancellation.is_set():
                 raise ToolError("operation cancelled before execution")
             return _invoke_prepared_operation(prepared, started=started)

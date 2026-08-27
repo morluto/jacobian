@@ -84,19 +84,6 @@ class PrimeShiftProfileRequest(StrictModel):
         return self
 
 
-def _validate_prime_shift_interval(lower_bound: int, upper_bound: int) -> None:
-    """Validate the structural interval shared by wire and native callers."""
-
-    if lower_bound < 1:
-        raise ValueError("lower_bound must be >= 1")
-    if upper_bound < 1:
-        raise ValueError("upper_bound must be >= 1")
-    if upper_bound < lower_bound:
-        raise ValueError("upper_bound must be >= lower_bound")
-    if upper_bound - lower_bound + 1 > MAX_SHIFT_INTERVAL_WIDTH:
-        raise ValueError("interval width exceeds maximum supported width")
-
-
 def require_prime_shift_profile_admission(
     lower_bound: int,
     upper_bound: int,

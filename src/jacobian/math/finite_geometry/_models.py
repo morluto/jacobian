@@ -20,6 +20,7 @@ from jacobian.math.finite_geometry.values import (
     _validate_vector,
     _validation_error,
 )
+from jacobian.math.incidence_structures._models import IncidenceStructure
 
 MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS = 65_536
 # Owner-local serialized-result budget for the complete enumeration reply,
@@ -432,3 +433,108 @@ class ProjectiveSpaceEnumerateResult(StrictModel):
 
     sequence: ProjectivePointSequence
     method: str = "CANONICAL_REPRESENTATIVES"
+
+
+# ---------------------------------------------------------------------------
+# Affine plane AG(2, q) over a prime field
+# ---------------------------------------------------------------------------
+
+#: Maximum prime-field order for which the complete affine plane fits the
+#: reused :class:`IncidenceStructure` transport budget.  ``q = 7`` yields
+#: 49 points and 56 lines, both within the ``IncidenceStructure`` caps of
+#: 100 points and 100 blocks; q = 11 would exceed both.
+MAX_AFFINE_PLANE_FIELD_ORDER = 7
+
+
+class ParallelClass(StrictModel):
+    """One ordered parallel class of affine-plane line indices.
+
+    ``line_ids`` are indices into the ``block_ids`` axis of the enclosing
+    :class:`IncidenceStructure`.  The canonical ordering is slope-class-first
+    then intercept, matching the line enumeration order.
+    """
+
+    line_ids: tuple[int, ...] = Field(min_length=1)
+    label: str = Field(default="", max_length=64)
+
+
+class PrimeFieldAffinePlaneRequest(StrictModel):
+    """Construct the complete affine plane AG(2, q) over a prime field.
+
+    ``prime_order`` is the prime field order q.  The result holds q^2 labelled
+    points, q(q+1) labelled affine lines, exact point-line incidences, and a
+    partition of the line axis into q+1 parallel classes.
+
+    The admitted domain is ``2 <= q <= MAX_AFFINE_PLANE_FIELD_ORDER``; this
+    bound is dictated by the reused :class:`IncidenceStructure` transport
+    budget (at most 100 points and 100 blocks), not by the mathematical
+    construction, which is valid for every prime q.
+    """
+
+    prime_order: int = Field(ge=2, le=MAX_AFFINE_PLANE_FIELD_ORDER)
+
+    @model_validator(mode="after")
+    def require_prime(self) -> Self:
+        if not isprime(self.prime_order):
+            raise _validation_error(
+                "affine_plane_order_not_prime", "prime_order must be prime"
+            )
+        return self
+
+
+class PrimeFieldAffinePlaneResult(StrictModel):
+    """The complete prime-field affine plane AG(2, q).
+
+    The incidence structure reuses :class:`IncidenceStructure` with
+    ``points`` and ``block_ids``/``blocks`` in a stable enumeration order:
+    points (x, y) in lexicographic order (index = x * q + y), lines
+    L_{m,b} = {(x, mx+b mod q) : x in F_q} for each slope m and intercept b,
+    then vertical lines V_b = {(b, y) : y in F_q} for each b.
+    ``parallel_classes`` partitions the line axis into q+1 ordered classes.
+    """
+
+    prime_order: int = Field(ge=2, le=MAX_AFFINE_PLANE_FIELD_ORDER)
+    incidence: IncidenceStructure
+    parallel_classes: tuple[ParallelClass, ...] = Field(min_length=2)
+    total_incidences: int = Field(ge=0)
+    method: str = "MODULAR_ARITHMETIC"
+
+    @model_validator(mode="after")
+    def require_consistency(self) -> Self:
+        q = self.prime_order
+        if not isprime(q):
+            raise _validation_error(
+                "affine_plane_result_not_prime", "prime_order must be prime"
+            )
+        expected_points = q * q
+        if len(self.incidence.points) != expected_points:
+            raise _validation_error(
+                "affine_plane_point_count_mismatch",
+                "affine plane must have exactly q^2 points",
+            )
+        expected_blocks = q * (q + 1)
+        if len(self.incidence.block_ids) != expected_blocks:
+            raise _validation_error(
+                "affine_plane_block_count_mismatch",
+                "affine plane must have exactly q(q+1) lines",
+            )
+        if len(self.parallel_classes) != q + 1:
+            raise _validation_error(
+                "affine_plane_class_count_mismatch",
+                "affine plane must have exactly q+1 parallel classes",
+            )
+        flat_line_ids: list[int] = []
+        for cls_ in self.parallel_classes:
+            flat_line_ids.extend(cls_.line_ids)
+        if flat_line_ids != list(range(expected_blocks)):
+            raise _validation_error(
+                "affine_plane_partition_mismatch",
+                "parallel classes must partition line IDs in order",
+            )
+        expected_incidences = expected_points * (q + 1)
+        if self.total_incidences != expected_incidences:
+            raise _validation_error(
+                "affine_plane_incidence_count_mismatch",
+                "total_incidences must equal q^2 * (q+1)",
+            )
+        return self

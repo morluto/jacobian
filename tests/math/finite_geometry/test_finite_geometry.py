@@ -37,10 +37,18 @@ from jacobian.math.finite_geometry._operations import (
     verify_subspace_compute_result,
 )
 from jacobian.math.finite_geometry._tools import TOOLS
+from jacobian.math.finite_geometry.values import ProjectivePoint
+
+
+def _space(
+    field_order: int, axis: tuple[str, ...]
+) -> finite_geometry.PrimeFieldVectorSpace:
+    return finite_geometry.PrimeFieldVectorSpace(field_order=field_order, axis=axis)
 
 
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
+        "finite_geometry.affine_plane.prime_field.construct",
         "finite_geometry.grassmannian.count",
         "finite_geometry.projective_point.canonicalize",
         "finite_geometry.projective_point.equal.decide",
@@ -54,7 +62,7 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 def test_projective_point_canonicalize_scales_to_one() -> None:
     request = ProjectivePointCanonicalizeRequest(
-        space={"field_order": 5, "axis": ("x", "y")}, vector=(2, 3)
+        space=_space(5, ("x", "y")), vector=(2, 3)
     )
     result = compute_projective_point_canonicalize(request)
     assert result.point.coordinates[0] == 1
@@ -64,17 +72,13 @@ def test_projective_point_canonicalize_scales_to_one() -> None:
 
 def test_projective_point_canonicalize_rejects_zero() -> None:
     with pytest.raises(ValidationError) as error:
-        ProjectivePointCanonicalizeRequest(
-            space={"field_order": 5, "axis": ("x", "y")}, vector=(0, 0)
-        )
+        ProjectivePointCanonicalizeRequest(space=_space(5, ("x", "y")), vector=(0, 0))
     assert error.value.errors()[0]["type"] == "finite_geometry.projective_vector_zero"
 
 
 def test_projective_point_equal_same_point() -> None:
     point = compute_projective_point_canonicalize(
-        ProjectivePointCanonicalizeRequest(
-            space={"field_order": 5, "axis": ("x", "y")}, vector=(2, 3)
-        )
+        ProjectivePointCanonicalizeRequest(space=_space(5, ("x", "y")), vector=(2, 3))
     ).point
     request = ProjectivePointEqualRequest(point_a=point, point_b=point)
     result = compute_projective_point_equal(request)
@@ -82,10 +86,10 @@ def test_projective_point_equal_same_point() -> None:
 
 
 def test_projective_point_equal_different_points() -> None:
-    space = {"field_order": 5, "axis": ("x", "y")}
+    space = _space(5, ("x", "y"))
     request = ProjectivePointEqualRequest(
-        point_a={"space": space, "coordinates": (1, 0)},
-        point_b={"space": space, "coordinates": (0, 1)},
+        point_a=ProjectivePoint(space=space, coordinates=(1, 0)),
+        point_b=ProjectivePoint(space=space, coordinates=(0, 1)),
     )
     result = compute_projective_point_equal(request)
     assert result.equal is False
@@ -95,9 +99,7 @@ def test_projective_point_equal_different_points() -> None:
 def test_projective_point_embeds_into_finite_field_restrict_scalars() -> None:
     """A finite-geometry producer composes through an explicit field extension."""
     geometry_point = compute_projective_point_canonicalize(
-        ProjectivePointCanonicalizeRequest(
-            space={"field_order": 2, "axis": ("x", "y")}, vector=(1, 1)
-        )
+        ProjectivePointCanonicalizeRequest(space=_space(2, ("x", "y")), vector=(1, 1))
     ).point
     presentation = finite_field(2, (1, 1, 1))
     row_axis = Axis(name="coordinate directions", labels=("x", "y"))
@@ -136,9 +138,7 @@ def test_projective_point_embeds_into_finite_field_restrict_scalars() -> None:
 
 def test_projective_point_embedding_requires_explicit_compatible_target() -> None:
     point = compute_projective_point_canonicalize(
-        ProjectivePointCanonicalizeRequest(
-            space={"field_order": 2, "axis": ("x", "y")}, vector=(1, 1)
-        )
+        ProjectivePointCanonicalizeRequest(space=_space(2, ("x", "y")), vector=(1, 1))
     ).point
     target = finite_field(2, (1, 1, 1))
 
@@ -167,7 +167,7 @@ def test_public_api_constructs_and_embeds_without_private_imports() -> None:
         "projective_point",
     ]
 
-    space = finite_geometry.PrimeFieldVectorSpace(field_order=2, axis=("x", "y"))
+    space = _space(2, ("x", "y"))
     point = finite_geometry.projective_point(space, (1, 1))
     assert isinstance(point, finite_geometry.ProjectivePoint)
     assert point.coordinates == (1, 1)
@@ -187,7 +187,7 @@ def test_enumeration_sequence_composes_into_embeddings_directly() -> None:
     """Enumerated points compose into the consumer as typed values, without
     manual reconstruction from coordinate tuples and a parent space."""
     result = compute_projective_space_enumerate(
-        ProjectiveSpaceEnumerateRequest(space={"field_order": 2, "axis": ("x", "y")})
+        ProjectiveSpaceEnumerateRequest(space=_space(2, ("x", "y")))
     )
 
     presentation = finite_field(2, (1, 1, 1))
@@ -211,7 +211,7 @@ def test_enumeration_sequence_composes_into_embeddings_directly() -> None:
 
 def test_subspace_compute_basic() -> None:
     request = SubspaceComputeRequest(
-        space={"field_order": 3, "axis": ("x", "y", "z")},
+        space=_space(3, ("x", "y", "z")),
         vectors=((1, 0, 0), (0, 1, 0)),
     )
     result = compute_subspace_compute(request)
@@ -222,7 +222,7 @@ def test_subspace_compute_basic() -> None:
 def test_subspace_membership_member() -> None:
     subspace = compute_subspace_compute(
         SubspaceComputeRequest(
-            space={"field_order": 3, "axis": ("x", "y", "z")},
+            space=_space(3, ("x", "y", "z")),
             vectors=((1, 0, 0), (0, 1, 0)),
         )
     ).subspace
@@ -233,7 +233,7 @@ def test_subspace_membership_member() -> None:
 
 def test_subspace_membership_nonmember() -> None:
     subspace = LinearSubspace(
-        space={"field_order": 3, "axis": ("x", "y", "z")},
+        space=_space(3, ("x", "y", "z")),
         basis=((1, 0, 0), (0, 1, 0)),
     )
     request = SubspaceMembershipRequest(subspace=subspace, vector=(1, 1, 1))
@@ -243,7 +243,7 @@ def test_subspace_membership_nonmember() -> None:
 
 def test_subspace_span_dependent() -> None:
     request = SubspaceSpanRequest(
-        space={"field_order": 2, "axis": ("x", "y")},
+        space=_space(2, ("x", "y")),
         vectors=((1, 0), (1, 0)),
         subspaces=(),
     )
@@ -252,10 +252,10 @@ def test_subspace_span_dependent() -> None:
 
 
 def test_subspace_intersection_trivial() -> None:
-    space = {"field_order": 2, "axis": ("x", "y")}
+    space = _space(2, ("x", "y"))
     request = SubspaceIntersectionRequest(
-        subspace_a={"space": space, "basis": ((1, 0),)},
-        subspace_b={"space": space, "basis": ((0, 1),)},
+        subspace_a=LinearSubspace(space=space, basis=((1, 0),)),
+        subspace_b=LinearSubspace(space=space, basis=((0, 1),)),
     )
     result = compute_subspace_intersection(request)
     assert result.subspace.dimension == 0
@@ -263,10 +263,10 @@ def test_subspace_intersection_trivial() -> None:
 
 def test_subspace_intersection_identical() -> None:
     """Two identical subspaces should intersect at full dimension."""
-    space = {"field_order": 2, "axis": ("x", "y")}
+    space = _space(2, ("x", "y"))
     request = SubspaceIntersectionRequest(
-        subspace_a={"space": space, "basis": ((1, 0),)},
-        subspace_b={"space": space, "basis": ((1, 0),)},
+        subspace_a=LinearSubspace(space=space, basis=((1, 0),)),
+        subspace_b=LinearSubspace(space=space, basis=((1, 0),)),
     )
     result = compute_subspace_intersection(request)
     assert result.subspace.dimension == 1
@@ -274,10 +274,10 @@ def test_subspace_intersection_identical() -> None:
 
 def test_subspace_intersection_overlapping() -> None:
     """Two planes in F_3^3 meeting in a line."""
-    space = {"field_order": 3, "axis": ("x", "y", "z")}
+    space = _space(3, ("x", "y", "z"))
     request = SubspaceIntersectionRequest(
-        subspace_a={"space": space, "basis": ((1, 0, 0), (0, 1, 0))},
-        subspace_b={"space": space, "basis": ((0, 1, 0), (0, 0, 1))},
+        subspace_a=LinearSubspace(space=space, basis=((1, 0, 0), (0, 1, 0))),
+        subspace_b=LinearSubspace(space=space, basis=((0, 1, 0), (0, 0, 1))),
     )
     result = compute_subspace_intersection(request)
     assert result.subspace.dimension == 1
@@ -286,9 +286,7 @@ def test_subspace_intersection_overlapping() -> None:
 def test_projective_point_equal_reports_scale() -> None:
     """Scale should be the actual scalar relating the two vectors."""
     point = compute_projective_point_canonicalize(
-        ProjectivePointCanonicalizeRequest(
-            space={"field_order": 5, "axis": ("x", "y")}, vector=(2, 3)
-        )
+        ProjectivePointCanonicalizeRequest(space=_space(5, ("x", "y")), vector=(2, 3))
     ).point
     request = ProjectivePointEqualRequest(point_a=point, point_b=point)
     result = compute_projective_point_equal(request)
@@ -327,9 +325,7 @@ def test_grassmannian_count_exact_past_json_integer_range() -> None:
 
 
 def test_projective_space_enumerate_pg1_f2() -> None:
-    request = ProjectiveSpaceEnumerateRequest(
-        space={"field_order": 2, "axis": ("x", "y")}
-    )
+    request = ProjectiveSpaceEnumerateRequest(space=_space(2, ("x", "y")))
     result = compute_projective_space_enumerate(request)
     assert len(result.sequence) == 3
     assert result.sequence.coordinates == ((0, 1), (1, 0), (1, 1))
@@ -344,7 +340,7 @@ def test_enumeration_wire_form_stays_compact_and_typed_natively() -> None:
     """The wire form stores the parent space once plus bare coordinate
     tuples, while native iteration yields parent-bound typed points."""
     result = compute_projective_space_enumerate(
-        ProjectiveSpaceEnumerateRequest(space={"field_order": 3, "axis": ("x", "y")})
+        ProjectiveSpaceEnumerateRequest(space=_space(3, ("x", "y")))
     )
 
     wire = result.model_dump(mode="json")
@@ -359,9 +355,7 @@ def test_enumerate_admission_rejects_results_beyond_the_transport_budget() -> No
     result past admission: the serialized-result bound fires before any
     enumeration runs."""
     with pytest.raises(ValidationError) as error:
-        ProjectiveSpaceEnumerateRequest(
-            space={"field_order": 2, "axis": ("x", "y" * (9 * 1024 * 1024))}
-        )
+        ProjectiveSpaceEnumerateRequest(space=_space(2, ("x", "y" * (9 * 1024 * 1024))))
     assert (
         error.value.errors()[0]["type"]
         == "finite_geometry.projective_enumeration_result_too_large"
@@ -378,7 +372,7 @@ def test_enumerate_admission_estimates_normalized_label_encoding() -> None:
     """
     label = "x" + "\u0344" * (2_600_000)
     with pytest.raises(ValidationError) as error:
-        ProjectiveSpaceEnumerateRequest(space={"field_order": 2, "axis": ("x", label)})
+        ProjectiveSpaceEnumerateRequest(space=_space(2, ("x", label)))
     assert (
         error.value.errors()[0]["type"]
         == "finite_geometry.projective_enumeration_result_too_large"
@@ -389,7 +383,7 @@ def test_enumeration_replay_rejects_unnormalized_representatives() -> None:
     """Sequence coordinates stay bound to the canonical representative
     invariant of the declared parent space."""
     result = compute_projective_space_enumerate(
-        ProjectiveSpaceEnumerateRequest(space={"field_order": 3, "axis": ("x", "y")})
+        ProjectiveSpaceEnumerateRequest(space=_space(3, ("x", "y")))
     )
     assert result.sequence.coordinates == ((0, 1), (1, 0), (1, 1), (1, 2))
 
@@ -409,7 +403,7 @@ def test_enumeration_replay_rejects_unnormalized_representatives() -> None:
 def test_enumeration_sequence_replay_rejects_duplicates_and_wrong_counts() -> None:
     """The sequence value itself certifies uniqueness and completeness."""
     result = compute_projective_space_enumerate(
-        ProjectiveSpaceEnumerateRequest(space={"field_order": 2, "axis": ("x", "y")})
+        ProjectiveSpaceEnumerateRequest(space=_space(2, ("x", "y")))
     )
 
     payload = result.model_dump()
@@ -433,9 +427,7 @@ def test_enumeration_sequence_replay_rejects_duplicates_and_wrong_counts() -> No
 
 def test_request_rejects_nonprime_field() -> None:
     with pytest.raises(ValidationError) as error:
-        ProjectivePointCanonicalizeRequest(
-            space={"field_order": 4, "axis": ("x", "y")}, vector=(1, 2)
-        )
+        ProjectivePointCanonicalizeRequest(space=_space(4, ("x", "y")), vector=(1, 2))
     assert error.value.errors()[0]["type"] == "finite_geometry.field_order_not_prime"
 
 
@@ -454,9 +446,7 @@ def test_canonical_values_compose_and_reject_different_parents() -> None:
         == computed
     )
 
-    other = LinearSubspace(
-        space={"field_order": 5, "axis": ("x", "y")}, basis=((1, 0),)
-    )
+    other = LinearSubspace(space=_space(5, ("x", "y")), basis=((1, 0),))
     with pytest.raises(ValidationError) as error:
         SubspaceIntersectionRequest(subspace_a=computed, subspace_b=other)
     assert (
@@ -466,8 +456,8 @@ def test_canonical_values_compose_and_reject_different_parents() -> None:
 
 
 def test_axis_identity_is_part_of_the_parent() -> None:
-    point_x = {"space": {"field_order": 3, "axis": ("x", "y")}, "coordinates": (1, 0)}
-    point_y = {"space": {"field_order": 3, "axis": ("y", "x")}, "coordinates": (1, 0)}
+    point_x = ProjectivePoint(space=_space(3, ("x", "y")), coordinates=(1, 0))
+    point_y = ProjectivePoint(space=_space(3, ("y", "x")), coordinates=(1, 0))
     with pytest.raises(ValidationError) as error:
         ProjectivePointEqualRequest(point_a=point_x, point_b=point_y)
     assert (
@@ -478,7 +468,7 @@ def test_axis_identity_is_part_of_the_parent() -> None:
 def test_source_bound_results_use_explicit_bounded_verifiers() -> None:
     result = compute_subspace_compute(
         SubspaceComputeRequest(
-            space={"field_order": 3, "axis": ("x", "y")},
+            space=_space(3, ("x", "y")),
             vectors=((1, 0),),
         )
     )

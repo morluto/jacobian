@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import networkx as nx
 import pytest
@@ -24,6 +24,8 @@ from jacobian.math.graphs.optimization._coloring_models import (
     GraphChromaticNumberRequest,
 )
 from jacobian.math.graphs.optimization._models import (
+    GraphDominationMinimumOutput,
+    GraphMinimumMaximalMatchingOutput,
     GraphOptimizationBudget,
     GraphOptimizationRequest,
 )
@@ -86,22 +88,23 @@ def test_chromatic_budget_starts_before_graph_preparation(
 
 
 @pytest.mark.parametrize(
-    "solve_name",
+    "operation_id",
     [
-        "solve_domination",
-        "solve_minimum_maximal_matching",
+        "graph.domination.minimum.compute",
+        "graph.matching.maximal.minimum.compute",
     ],
 )
 def test_finite_searches_do_not_reset_the_operation_timer(
-    monkeypatch: pytest.MonkeyPatch, solve_name: str
+    monkeypatch: pytest.MonkeyPatch, operation_id: str
 ) -> None:
     _expired(monkeypatch, _finite_optimization)
     request = GraphOptimizationRequest(
         graph=_graph(), resource_budget=GraphOptimizationBudget(wall_seconds=1)
     )
 
-    result = _finite_optimization._execute_kernel(
-        request, getattr(_finite_optimization, solve_name)
+    result = cast(
+        GraphDominationMinimumOutput | GraphMinimumMaximalMatchingOutput,
+        _finite_optimization._run_worker_kernel(operation_id, request),
     )
 
     assert result.status == "UNKNOWN"
@@ -137,7 +140,9 @@ def test_graph_optimization_worker_binds_encoding_and_solving_to_one_envelope(
     result = _finite_optimization.DOMINATION_MINIMUM_OPERATION.run(request)
 
     assert result == expected
-    assert recorded["timeout_seconds"] == 3
+    timeout_seconds = recorded["timeout_seconds"]
+    assert isinstance(timeout_seconds, float)
+    assert 0 < timeout_seconds <= 3
     assert Path(str(recorded["cwd"])).name.startswith("jacobian-graph-optimization-")
     limits = recorded["resource_limits"]
     assert isinstance(limits, ProcessResourceLimits)

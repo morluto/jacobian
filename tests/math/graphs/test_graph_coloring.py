@@ -171,7 +171,7 @@ def test_coloring_worker_failure_is_typed_inconclusive_without_a_math_claim(
         )
     )
 
-    assert result.status == "SOLVER_BUDGET_EXCEEDED"
+    assert result.status == "EXECUTION_FAILED"
     assert result.colorable is None
 
 

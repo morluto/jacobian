@@ -87,14 +87,21 @@ def _search_chromatic_number(
 ) -> GraphChromaticNumberOutput:
     """Run the complete Z3 chromatic search in a bounded owner worker."""
 
+    deadline = time.monotonic() + request.resource_budget.wall_seconds
     try:
         with TemporaryDirectory(prefix="jacobian-graph-chromatic-") as directory:
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                return _chromatic_worker_failure(
+                    request,
+                    "the chromatic-number request expired before worker startup",
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_CHROMATIC_NUMBER_WORKER)],
                 input_bytes=json.dumps(
                     request.model_dump(mode="json"), separators=(",", ":")
                 ).encode("utf-8"),
-                timeout_seconds=request.resource_budget.wall_seconds,
+                timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_WORKER_OUTPUT_BYTES,
                 stderr_limit=_WORKER_ERROR_BYTES,
@@ -119,10 +126,29 @@ def _search_chromatic_number(
         return _chromatic_worker_failure(
             request, "the bounded chromatic-number worker did not establish an outcome"
         )
+    if time.monotonic() >= deadline:
+        return _chromatic_worker_failure(
+            request, "the chromatic-number request expired before response validation"
+        )
     try:
-        return GraphChromaticNumberOutput.model_validate(
+        result = GraphChromaticNumberOutput.model_validate(
             json.loads(completed.stdout.decode("utf-8"))
         )
+        if (
+            result.vertices != request.graph.vertices
+            or result.order != len(request.graph.vertices)
+            or (
+                result.coloring is not None
+                and any(
+                    result.coloring[left] == result.coloring[right]
+                    for left, right in request.graph.edges
+                )
+            )
+        ):
+            raise ValueError("worker result is not bound to the submitted graph")
+        if time.monotonic() < deadline:
+            return result
+        raise ValueError("request expired during response validation")
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
         return _chromatic_worker_failure(
             request, "the bounded chromatic-number worker returned malformed output"

@@ -369,8 +369,14 @@ def solve_independence_number_values(
             detail=detail,
         )
 
+    deadline = time.monotonic() + resource_budget.wall_seconds
     try:
         with TemporaryDirectory(prefix="jacobian-graph-independence-") as directory:
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                return fallback(
+                    "the graph independence request expired before worker startup"
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_INDEPENDENCE_WORKER)],
                 input_bytes=json.dumps(
@@ -380,7 +386,7 @@ def solve_independence_number_values(
                     },
                     separators=(",", ":"),
                 ).encode("utf-8"),
-                timeout_seconds=resource_budget.wall_seconds,
+                timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_WORKER_OUTPUT_BYTES,
                 stderr_limit=_WORKER_ERROR_BYTES,
@@ -403,9 +409,22 @@ def solve_independence_number_values(
         return fallback(
             "the bounded graph independence worker did not establish an outcome"
         )
+    if time.monotonic() >= deadline:
+        return fallback(
+            "the graph independence request expired before response validation"
+        )
     try:
-        return IndependenceNumberResult.model_validate(
+        result = IndependenceNumberResult.model_validate(
             json.loads(completed.stdout.decode("utf-8"))
+        )
+        if result.graph != graph:
+            raise ValueError("worker result is bound to a different graph")
+        return (
+            result
+            if time.monotonic() < deadline
+            else fallback(
+                "the graph independence request expired during response validation"
+            )
         )
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
         return fallback(

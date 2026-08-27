@@ -305,7 +305,7 @@ def _solve_independence_number_kernel(
 
 
 def _run_independence_worker(
-    payload: dict[str, object], *, timeout_seconds: int
+    payload: dict[str, object], *, timeout_seconds: float
 ) -> object | None:
     """Run one complete Z3 kernel in an isolated bounded owner process."""
 
@@ -368,9 +368,25 @@ def solve_independence_number(
 
     source_upper_bound = _independence_upper_bound(request.hypergraph)
     incumbent = _greedy_independent_vertices(request.hypergraph)
+    started = time.monotonic()
+    remaining_seconds = (
+        _remaining_ms(started, request.resource_budget.wall_seconds) / 1_000
+    )
+    if remaining_seconds <= 0:
+        return _result(
+            request,
+            status="UNKNOWN",
+            independence_number=None,
+            incumbent=incumbent,
+            upper_bound=source_upper_bound,
+            solver_calls=0,
+            wall_budget_exhausted=True,
+            termination_reason="WALL_TIME",
+            detail="the hypergraph independence request expired before worker startup",
+        )
     response = _run_independence_worker(
         {"kind": "solve", "request": request.model_dump(mode="json")},
-        timeout_seconds=request.resource_budget.wall_seconds,
+        timeout_seconds=remaining_seconds,
     )
     if not isinstance(response, dict):
         return _result(
@@ -384,8 +400,28 @@ def solve_independence_number(
             termination_reason="SOLVER_ERROR",
             detail="the bounded hypergraph independence worker did not establish an outcome",
         )
+    if _remaining_ms(started, request.resource_budget.wall_seconds) <= 0:
+        return _result(
+            request,
+            status="UNKNOWN",
+            independence_number=None,
+            incumbent=incumbent,
+            upper_bound=source_upper_bound,
+            solver_calls=0,
+            wall_budget_exhausted=True,
+            termination_reason="WALL_TIME",
+            detail="the hypergraph independence request expired before response validation",
+        )
     try:
-        return HypergraphIndependenceResult.model_validate(response)
+        result = HypergraphIndependenceResult.model_validate(response)
+        if (
+            result.hypergraph != request.hypergraph
+            or result.resource_budget != request.resource_budget
+        ):
+            raise ValueError("worker result is bound to a different request")
+        if _remaining_ms(started, request.resource_budget.wall_seconds) > 0:
+            return result
+        raise ValueError("request expired during response validation")
     except (TypeError, ValueError):
         return _result(
             request,

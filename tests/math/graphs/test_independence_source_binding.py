@@ -416,7 +416,9 @@ def test_independence_worker_covers_encoding_solving_and_replay(
     result = solve_independence_number(request)
 
     assert result == expected
-    assert recorded["timeout_seconds"] == 3
+    timeout_seconds = recorded["timeout_seconds"]
+    assert isinstance(timeout_seconds, float)
+    assert 0 < timeout_seconds <= 3
     assert Path(str(recorded["cwd"])).name.startswith("jacobian-graph-independence-")
     limits = recorded["resource_limits"]
     assert isinstance(limits, ProcessResourceLimits)
@@ -446,6 +448,33 @@ def test_independence_worker_failure_is_not_an_exact_claim(
     assert result.status == "UNKNOWN"
     assert result.optimum_value is None
     assert result.upper_bound == result.order
+
+
+def test_independence_worker_result_must_bind_the_submitted_graph(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = IndependenceNumberRequest(graph=_path_graph())
+    wrong_graph = SimpleUndirectedGraph(vertices=("x",), edges=())
+    wrong_result = z3_backend._solve_independence_number_values_kernel(
+        wrong_graph, request.resource_budget
+    )
+    monkeypatch.setattr(
+        z3_backend,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: BoundedProcessResult(
+            returncode=0,
+            stdout=json.dumps(wrong_result.model_dump(mode="json")).encode("utf-8"),
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=False,
+        ),
+    )
+
+    result = solve_independence_number(request)
+
+    assert result.status == "UNKNOWN"
+    assert result.graph == request.graph
 
 
 def test_result_headroom_admission_rejects_oversized_echo() -> None:

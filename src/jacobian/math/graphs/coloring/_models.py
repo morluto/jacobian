@@ -212,9 +212,9 @@ class KColorabilityRequest(StrictModel):
         le=MAX_SOLVER_CONFLICT_BUDGET,
         description=(
             "Request-visible SAT work budget: the exact solver is cut off "
-            "after this many conflict clauses; an exhausted budget yields "
-            "the typed SOLVER_BUDGET_EXCEEDED outcome instead of an "
-            "unbounded wait or a negative conclusion."
+            "after this many conflict clauses; that exhaustion yields "
+            "SOLVER_BUDGET_EXCEEDED, while execution failures are reported "
+            "separately without a mathematical conclusion."
         ),
     )
 
@@ -234,7 +234,7 @@ class KColorabilityResult(StrictModel):
         ge=1,
         le=MAX_SOLVER_CONFLICT_BUDGET,
     )
-    status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED"] = "DECIDED"
+    status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"] = "DECIDED"
     colorable: bool | None = None
     coloring: tuple[int, ...] | None = None
     vertex_count: int = Field(ge=0, le=MAX_COLORING_VERTICES)
@@ -246,7 +246,7 @@ class KColorabilityResult(StrictModel):
         graph: IndexedSimpleUndirectedGraph,
         colors: int,
         solver_conflicts: int,
-        status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED"],
+        status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"],
         colorable: bool | None,
         coloring: tuple[int, ...] | None,
     ) -> Self:
@@ -270,7 +270,7 @@ class KColorabilityResult(StrictModel):
                 "graph.vertex_count_must_equal_the_graph_s_vertex_count",
                 "vertex_count must equal the graph's vertex count",
             )
-        if self.status == "SOLVER_BUDGET_EXCEEDED":
+        if self.status in {"SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"}:
             _require_k_colorability_budget_exceeded_shape(self)
             return self
         if self.colorable is None:
@@ -508,9 +508,9 @@ class EdgeKColorabilityRequest(StrictModel):
         le=MAX_SOLVER_CONFLICT_BUDGET,
         description=(
             "Request-visible SAT work budget: the exact solver is cut off "
-            "after this many conflict clauses; an exhausted budget yields "
-            "the typed SOLVER_BUDGET_EXCEEDED outcome instead of an "
-            "unbounded wait or a negative conclusion."
+            "after this many conflict clauses; that exhaustion yields "
+            "SOLVER_BUDGET_EXCEEDED, while execution failures are reported "
+            "separately without a mathematical conclusion."
         ),
     )
 
@@ -530,7 +530,7 @@ class EdgeKColorabilityResult(StrictModel):
         ge=1,
         le=MAX_SOLVER_CONFLICT_BUDGET,
     )
-    status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED"] = "DECIDED"
+    status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"] = "DECIDED"
     colorable: bool | None = None
     coloring: EdgeColoringAssignment | None = None
     edge_count: StrictInt = Field(ge=0, le=MAX_EDGE_COLORING_EDGES)
@@ -542,7 +542,7 @@ class EdgeKColorabilityResult(StrictModel):
         graph: SimpleUndirectedGraph,
         colors: int,
         solver_conflicts: int,
-        status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED"],
+        status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"],
         colorable: bool | None,
         coloring: EdgeColoringAssignment | None,
     ) -> Self:
@@ -566,7 +566,7 @@ class EdgeKColorabilityResult(StrictModel):
                 "graph.edge_count_must_equal_the_number_of_graph_edges",
                 "edge_count must equal the number of graph edges",
             )
-        if self.status == "SOLVER_BUDGET_EXCEEDED":
+        if self.status in {"SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"}:
             _require_budget_exceeded_shape(self)
             return self
         if self.colorable is None:

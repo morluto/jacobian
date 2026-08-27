@@ -7,6 +7,7 @@ import math
 import sys
 import time
 from collections.abc import Callable
+from itertools import combinations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, cast
@@ -385,14 +386,20 @@ def _clique_execute(
 ) -> GraphCliqueNumberResult:
     """Run the complete Z3 clique transaction in a bounded owner worker."""
 
+    deadline = time.monotonic() + request.resource_budget.wall_seconds
     try:
         with TemporaryDirectory(prefix="jacobian-graph-clique-") as directory:
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                return _clique_worker_failure(
+                    request, "the clique request expired before worker startup"
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_INVARIANTS_WORKER)],
                 input_bytes=json.dumps(
                     request.model_dump(mode="json"), separators=(",", ":")
                 ).encode("utf-8"),
-                timeout_seconds=request.resource_budget.wall_seconds,
+                timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_WORKER_OUTPUT_BYTES,
                 stderr_limit=_WORKER_ERROR_BYTES,
@@ -417,10 +424,28 @@ def _clique_execute(
         return _clique_worker_failure(
             request, "the bounded clique worker did not establish an outcome"
         )
+    if time.monotonic() >= deadline:
+        return _clique_worker_failure(
+            request, "the clique request expired before response validation"
+        )
     try:
-        return GraphCliqueNumberResult.model_validate(
+        result = GraphCliqueNumberResult.model_validate(
             json.loads(completed.stdout.decode("utf-8"))
         )
+        source_vertices = set(request.graph.vertices)
+        source_edges = {tuple(sorted(edge)) for edge in request.graph.edges}
+        if (
+            result.order != len(request.graph.vertices)
+            or not set(result.witness_vertices) <= source_vertices
+            or any(
+                tuple(sorted(edge)) not in source_edges
+                for edge in combinations(result.witness_vertices, 2)
+            )
+        ):
+            raise ValueError("worker result is not bound to the submitted graph")
+        if time.monotonic() < deadline:
+            return result
+        raise ValueError("request expired during response validation")
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
         return _clique_worker_failure(
             request, "the bounded clique worker returned malformed output"

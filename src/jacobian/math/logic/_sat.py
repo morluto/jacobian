@@ -8,6 +8,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Annotated, Literal, Self
 
@@ -513,17 +514,30 @@ def _result(request: SatSolveRequest, **values: object) -> SatSolveResult:
     )
 
 
+def _time_exhausted_result(request: SatSolveRequest) -> SatSolveResult:
+    return _result(
+        request,
+        outcome="UNKNOWN",
+        exhausted="time",
+        detail=_EXHAUSTION_DETAILS["time"],
+    )
+
+
 def _run_sat_worker(request: SatSolveRequest) -> SatSolveResult:
     """Project one killable SAT worker invocation onto the public result."""
 
+    deadline = time.monotonic() + (request.timeout_ms / 1_000)
     try:
         with tempfile.TemporaryDirectory(prefix="jacobian-sat-") as worker_directory:
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                return _time_exhausted_result(request)
             completed = run_bounded_process(
                 [sys.executable, str(_SAT_WORKER)],
                 input_bytes=json.dumps(
                     request.model_dump(mode="json"), separators=(",", ":")
                 ).encode("utf-8"),
-                timeout_seconds=request.timeout_ms / 1_000,
+                timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_SAT_WORKER_OUTPUT_BYTES,
                 stderr_limit=_SAT_WORKER_ERROR_BYTES,
@@ -541,12 +555,7 @@ def _run_sat_worker(request: SatSolveRequest) -> SatSolveResult:
             detail="the bounded Z3 worker could not be started",
         )
     if completed.timed_out:
-        return _result(
-            request,
-            outcome="UNKNOWN",
-            exhausted="time",
-            detail=_EXHAUSTION_DETAILS["time"],
-        )
+        return _time_exhausted_result(request)
     if completed.cancelled:
         return _result(
             request, outcome="UNKNOWN", detail="the bounded Z3 worker was cancelled"
@@ -563,12 +572,17 @@ def _run_sat_worker(request: SatSolveRequest) -> SatSolveResult:
             outcome="UNKNOWN",
             detail="the bounded Z3 worker failed before returning a result",
         )
+    if time.monotonic() >= deadline:
+        return _time_exhausted_result(request)
     try:
-        return SatSolveResult.model_validate(
+        result = SatSolveResult.model_validate(
             {
                 "source": request.model_dump(mode="json"),
                 **json.loads(completed.stdout.decode("utf-8")),
             }
+        )
+        return (
+            result if time.monotonic() < deadline else _time_exhausted_result(request)
         )
     except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
         return _result(

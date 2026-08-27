@@ -6,6 +6,7 @@ import json
 import math
 import re
 import sys
+import time
 from enum import StrEnum
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -348,9 +349,9 @@ class SmtSolveResult(StrictModel):
         default=None,
         max_length=_MAX_MODEL_BYTES,
         description=(
-            "Bounded Z3 display projection of the source-verified satisfying model. "
-            "It is provided for inspection, not as a canonical mathematical value or "
-            "an independently verifiable model encoding."
+            "Bounded Z3 display projection of the worker's satisfying model. It is "
+            "provided for inspection, not as a canonical mathematical value or an "
+            "independently verifiable model encoding."
         ),
     )
     exhausted: _UnknownResource | None = Field(default=None)
@@ -527,11 +528,15 @@ def _solve_smt_kernel(
 def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
     """Project one killable worker invocation onto the public typed result."""
 
+    deadline = time.monotonic() + (request.timeout_ms / 1_000)
     try:
         # The isolated worker has no reason to inherit the checkout as its
         # current directory.  Its input arrives only through stdin and its
         # only accepted output is the bounded JSON response on stdout.
         with TemporaryDirectory(prefix="jacobian-smt-") as worker_directory:
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                return _time_exhausted_result(request)
             completed = run_bounded_process(
                 [sys.executable, str(_SMT_WORKER)],
                 input_bytes=json.dumps(
@@ -542,7 +547,7 @@ def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
                     },
                     separators=(",", ":"),
                 ).encode("utf-8"),
-                timeout_seconds=request.timeout_ms / 1_000,
+                timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_SMT_WORKER_OUTPUT_BYTES,
                 stderr_limit=_SMT_WORKER_ERROR_BYTES,
@@ -577,10 +582,15 @@ def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
             outcome="UNKNOWN",
             detail="the bounded Z3 worker failed before returning a result",
         )
+    if time.monotonic() >= deadline:
+        return _time_exhausted_result(request)
     try:
         response = json.loads(completed.stdout.decode("utf-8"))
-        return SmtSolveResult.model_validate(
+        result = SmtSolveResult.model_validate(
             {"source": request.model_dump(mode="json"), **response}
+        )
+        return (
+            result if time.monotonic() < deadline else _time_exhausted_result(request)
         )
     except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
         return _result(

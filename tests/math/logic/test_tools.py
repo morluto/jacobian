@@ -6,6 +6,7 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -1040,7 +1041,9 @@ def test_smt_worker_envelope_covers_encoding_and_solver_work(
 
     assert result.outcome == "UNSAT"
     assert recorded["args"] == ([sys.executable, str(smt._SMT_WORKER)],)
-    assert recorded["timeout_seconds"] == 2.5
+    timeout_seconds = recorded["timeout_seconds"]
+    assert isinstance(timeout_seconds, float)
+    assert 0 < timeout_seconds <= 2.5
     stdout_limit = recorded["stdout_limit"]
     assert isinstance(stdout_limit, int)
     assert stdout_limit >= smt._MAX_MODEL_BYTES
@@ -1071,13 +1074,58 @@ def test_sat_worker_envelope_covers_encoding_and_solver_work(
 
     assert result.outcome == "UNSAT"
     assert recorded["args"] == ([sys.executable, str(sat._SAT_WORKER)],)
-    assert recorded["timeout_seconds"] == 2.5
+    timeout_seconds = recorded["timeout_seconds"]
+    assert isinstance(timeout_seconds, float)
+    assert 0 < timeout_seconds <= 2.5
     assert recorded["resource_limits"] == ProcessResourceLimits(
         cpu_seconds=3,
         address_space_bytes=sat._SAT_WORKER_ADDRESS_SPACE_BYTES,
         file_size_bytes=sat._SAT_WORKER_FILE_SIZE_BYTES,
     )
     assert Path(str(recorded["cwd"])).name.startswith("jacobian-sat-")
+
+
+@pytest.mark.parametrize(
+    ("module", "solve_request", "response"),
+    [
+        (
+            smt,
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib="(set-logic QF_LIA)\n(check-sat)",
+                timeout_ms=2_500,
+            ),
+            _worker_result(),
+        ),
+        (
+            sat,
+            SatSolveRequest(
+                cnf=CanonicalCnf(variables=("x",), clauses=((1,),)), timeout_ms=2_500
+            ),
+            _sat_worker_result(),
+        ),
+    ],
+)
+def test_worker_response_conversion_cannot_outlive_request_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+    module: Any,
+    solve_request: SmtSolveRequest | SatSolveRequest,
+    response: BoundedProcessResult,
+) -> None:
+    clock = iter((0.0, 0.0, 2.6))
+    monkeypatch.setattr(module.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(
+        module, "run_bounded_process", lambda *_args, **_kwargs: response
+    )
+
+    result = (
+        module.solve_smt(solve_request)
+        if module is smt
+        else module.solve_sat(solve_request)
+    )
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted == "time"
 
 
 @pytest.mark.parametrize(

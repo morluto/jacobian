@@ -14,7 +14,6 @@ from typing import Any, cast
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.graphs.optimization._coloring_models import ChromaticGraph
 from jacobian.math.graphs.optimization._exact_search import (
     solve_domination,
     solve_induced_bipartite,
@@ -28,7 +27,6 @@ from jacobian.math.graphs.optimization._models import (
     GraphInducedForestMaximumOutput,
     GraphInducedTreeMaximumOutput,
     GraphMinimumMaximalMatchingOutput,
-    GraphOptimizationBudget,
     GraphOptimizationRequest,
 )
 from jacobian.math.graphs.optimization._operations import build_simple_graph
@@ -117,21 +115,6 @@ def _valid_witness(graph: Any, result: StrictModel) -> bool:
     return validate(graph, result) if validate else False
 
 
-def _execute_kernel[ResultT: StrictModel](
-    request: GraphOptimizationRequest,
-    solve: Callable[
-        [Any, ChromaticGraph, GraphOptimizationBudget, float],
-        ResultT,
-    ],
-) -> ResultT:
-    started = time.monotonic()
-    graph = cast(Any, build_simple_graph(request.graph))
-    result = solve(graph, request.graph, request.resource_budget, started)
-    if not _valid_witness(graph, result):
-        raise RuntimeError("graph optimization backend returned an invalid witness")
-    return result
-
-
 def _fallback_unknown[ResultT: StrictModel](
     graph: Any,
     request: GraphOptimizationRequest,
@@ -191,14 +174,22 @@ def _fallback_unknown[ResultT: StrictModel](
 def _execute[ResultT: StrictModel](
     operation_id: str,
     request: GraphOptimizationRequest,
-    solve: Callable[[Any, ChromaticGraph, GraphOptimizationBudget, float], ResultT],
     result_type: type[ResultT],
 ) -> ResultT:
     """Run one complete graph Z3 operation in its bounded owner worker."""
 
     graph = cast(Any, build_simple_graph(request.graph))
+    deadline = time.monotonic() + request.resource_budget.wall_seconds
     try:
         with TemporaryDirectory(prefix="jacobian-graph-optimization-") as directory:
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                return _fallback_unknown(
+                    graph,
+                    request,
+                    result_type,
+                    "the graph optimization request expired before worker startup",
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_OPTIMIZATION_WORKER)],
                 input_bytes=json.dumps(
@@ -208,7 +199,7 @@ def _execute[ResultT: StrictModel](
                     },
                     separators=(",", ":"),
                 ).encode("utf-8"),
-                timeout_seconds=request.resource_budget.wall_seconds,
+                timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_WORKER_OUTPUT_BYTES,
                 stderr_limit=_WORKER_ERROR_BYTES,
@@ -239,6 +230,13 @@ def _execute[ResultT: StrictModel](
             result_type,
             "the bounded graph optimization worker did not establish an outcome",
         )
+    if time.monotonic() >= deadline:
+        return _fallback_unknown(
+            graph,
+            request,
+            result_type,
+            "the graph optimization request expired before response validation",
+        )
     try:
         result = result_type.model_validate(
             json.loads(completed.stdout.decode("utf-8"))
@@ -250,12 +248,21 @@ def _execute[ResultT: StrictModel](
             result_type,
             "the bounded graph optimization worker returned malformed output",
         )
-    if not _valid_witness(graph, result):
+    if getattr(result, "order", None) != len(
+        request.graph.vertices
+    ) or not _valid_witness(graph, result):
         return _fallback_unknown(
             graph,
             request,
             result_type,
             "the bounded graph optimization worker returned an invalid witness",
+        )
+    if time.monotonic() >= deadline:
+        return _fallback_unknown(
+            graph,
+            request,
+            result_type,
+            "the graph optimization request expired during response validation",
         )
     return result
 
@@ -265,7 +272,6 @@ def _operation[ResultT: StrictModel](
     title: str,
     description: str,
     result_type: type[ResultT],
-    solve: Callable[[Any, ChromaticGraph, GraphOptimizationBudget, float], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
 ) -> MathTool[GraphOptimizationRequest, ResultT]:
@@ -275,7 +281,7 @@ def _operation[ResultT: StrictModel](
         description=description,
         request_type=GraphOptimizationRequest,
         result_type=result_type,
-        run=lambda request: _execute(operation_id, request, solve, result_type),
+        run=lambda request: _execute(operation_id, request, result_type),
         tags=("graph", *tags, "bounded", "z3"),
         examples=examples,
     )
@@ -286,9 +292,6 @@ DOMINATION_MINIMUM_OPERATION = _operation(
     "Minimum dominating set",
     "Compute the domination number and an attaining set within explicit budgets.",
     GraphDominationMinimumOutput,
-    lambda graph, contract, budget, started: solve_domination(
-        graph, contract, budget, started
-    ),
     "domination",
     "minimum",
     examples=(
@@ -311,9 +314,6 @@ MINIMUM_MAXIMAL_MATCHING_OPERATION = _operation(
     "Minimum maximal matching",
     "Compute the saturation number and an attaining maximal matching within explicit budgets.",
     GraphMinimumMaximalMatchingOutput,
-    lambda graph, contract, budget, started: solve_minimum_maximal_matching(
-        graph, contract, budget, started
-    ),
     "matching",
     "saturation_number",
     "minimum",
@@ -337,9 +337,6 @@ INDUCED_FOREST_MAXIMUM_OPERATION = _operation(
     "Maximum induced forest",
     "Compute a maximum-order induced forest and vertex witness within explicit budgets.",
     GraphInducedForestMaximumOutput,
-    lambda graph, contract, budget, started: solve_induced_forest(
-        graph, contract, budget, started
-    ),
     "induced_forest",
     "maximum",
     examples=(
@@ -362,9 +359,6 @@ INDUCED_TREE_MAXIMUM_OPERATION = _operation(
     "Maximum induced tree",
     "Compute a maximum-order induced tree and vertex witness within explicit budgets.",
     GraphInducedTreeMaximumOutput,
-    lambda graph, contract, budget, started: solve_induced_tree(
-        graph, contract, budget, started
-    ),
     "induced_tree",
     "maximum",
     examples=(
@@ -387,9 +381,6 @@ INDUCED_BIPARTITE_MAXIMUM_OPERATION = _operation(
     "Maximum induced bipartite subgraph",
     "Compute a maximum-order induced bipartite subgraph within explicit budgets.",
     GraphInducedBipartiteMaximumOutput,
-    lambda graph, contract, budget, started: solve_induced_bipartite(
-        graph, contract, budget, started
-    ),
     "induced_bipartite",
     "maximum",
     examples=(

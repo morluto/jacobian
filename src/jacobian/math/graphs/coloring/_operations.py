@@ -45,53 +45,72 @@ _WORKER_OUTPUT_BYTES = 64 * 1024
 _WORKER_ERROR_BYTES = 16_384
 _WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
+_ColoringWorkerOutcome = Literal["sat", "unsat", "budget_exceeded", "execution_failed"]
 
 
 def _run_k_colorability_solver_kernel(
     graph: IndexedSimpleUndirectedGraph,
     colors: int,
     solver_conflicts: int,
-) -> tuple[str, tuple[int, ...] | None]:
+) -> tuple[_ColoringWorkerOutcome, tuple[int, ...] | None]:
     """Run the existing bounded vertex-coloring Z3 adapter once."""
 
     import z3  # type: ignore[import-untyped]
 
-    solver = z3.Solver()
-    solver.set("max_conflicts", solver_conflicts)
-    vertex_colors = [z3.Int(f"color_{vertex}") for vertex in range(graph.vertex_count)]
-    solver.add(*(z3.And(color >= 0, color < colors) for color in vertex_colors))
-    solver.add(*(vertex_colors[u] != vertex_colors[v] for u, v in graph.edges))
-    outcome = solver.check()
-    if outcome == z3.sat:
-        model = solver.model()
-        return "sat", tuple(model.eval(color).as_long() for color in vertex_colors)
-    if outcome == z3.unsat:
-        return "unsat", None
-    return "unknown", None
+    try:
+        solver = z3.Solver()
+        solver.set("max_conflicts", solver_conflicts)
+        vertex_colors = [
+            z3.Int(f"color_{vertex}") for vertex in range(graph.vertex_count)
+        ]
+        solver.add(*(z3.And(color >= 0, color < colors) for color in vertex_colors))
+        solver.add(*(vertex_colors[u] != vertex_colors[v] for u, v in graph.edges))
+        outcome = solver.check()
+        if outcome == z3.sat:
+            model = solver.model()
+            return "sat", tuple(model.eval(color).as_long() for color in vertex_colors)
+        if outcome == z3.unsat:
+            return "unsat", None
+        return (
+            "budget_exceeded"
+            if "max-conflicts-reached" in solver.reason_unknown()
+            else "execution_failed",
+            None,
+        )
+    except z3.Z3Exception:
+        return "execution_failed", None
 
 
 def _run_edge_coloring_solver_kernel(
     graph: SimpleUndirectedGraph,
     colors: int,
     solver_conflicts: int,
-) -> tuple[str, tuple[int, ...] | None]:
+) -> tuple[_ColoringWorkerOutcome, tuple[int, ...] | None]:
     """Run the existing bounded edge-coloring Z3 adapter once."""
 
     import z3
 
-    solver = z3.Solver()
-    solver.set("max_conflicts", solver_conflicts)
-    edge_colors = [z3.Int(f"c_{index}") for index in range(len(graph.edges))]
-    solver.add(*(z3.And(color >= 0, color < colors) for color in edge_colors))
-    for first, second in _incident_edge_index_pairs_for_canonical_graph(graph):
-        solver.add(edge_colors[first] != edge_colors[second])
-    outcome = solver.check()
-    if outcome == z3.sat:
-        model = solver.model()
-        return "sat", tuple(model.eval(color).as_long() for color in edge_colors)
-    if outcome == z3.unsat:
-        return "unsat", None
-    return "unknown", None
+    try:
+        solver = z3.Solver()
+        solver.set("max_conflicts", solver_conflicts)
+        edge_colors = [z3.Int(f"c_{index}") for index in range(len(graph.edges))]
+        solver.add(*(z3.And(color >= 0, color < colors) for color in edge_colors))
+        for first, second in _incident_edge_index_pairs_for_canonical_graph(graph):
+            solver.add(edge_colors[first] != edge_colors[second])
+        outcome = solver.check()
+        if outcome == z3.sat:
+            model = solver.model()
+            return "sat", tuple(model.eval(color).as_long() for color in edge_colors)
+        if outcome == z3.unsat:
+            return "unsat", None
+        return (
+            "budget_exceeded"
+            if "max-conflicts-reached" in solver.reason_unknown()
+            else "execution_failed",
+            None,
+        )
+    except z3.Z3Exception:
+        return "execution_failed", None
 
 
 def _run_coloring_worker(
@@ -99,7 +118,7 @@ def _run_coloring_worker(
     graph: IndexedSimpleUndirectedGraph | SimpleUndirectedGraph,
     colors: int,
     solver_conflicts: int,
-) -> tuple[str, tuple[int, ...] | None]:
+) -> tuple[_ColoringWorkerOutcome, tuple[int, ...] | None]:
     """Run one complete coloring solver transaction in an isolated worker."""
 
     try:
@@ -127,7 +146,7 @@ def _run_coloring_worker(
                 cwd=directory,
             )
     except OSError:
-        return "unknown", None
+        return "execution_failed", None
     if (
         completed.timed_out
         or completed.cancelled
@@ -135,12 +154,12 @@ def _run_coloring_worker(
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
-        return "unknown", None
+        return "execution_failed", None
     try:
         payload = json.loads(completed.stdout.decode("utf-8"))
         outcome = payload["outcome"]
         coloring = payload["coloring"]
-        if outcome not in {"sat", "unsat", "unknown"}:
+        if outcome not in {"sat", "unsat", "budget_exceeded", "execution_failed"}:
             raise ValueError("worker returned an invalid solver outcome")
         if coloring is None:
             return outcome, None
@@ -150,7 +169,7 @@ def _run_coloring_worker(
             raise ValueError("worker returned an invalid coloring")
         return outcome, tuple(coloring)
     except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError):
-        return "unknown", None
+        return "execution_failed", None
 
 
 def compute_chromatic_number_certificate_check(
@@ -247,7 +266,11 @@ def compute_k_colorability(request: KColorabilityRequest) -> KColorabilityResult
         graph=request.graph,
         colors=request.colors,
         solver_conflicts=request.solver_conflicts,
-        status="SOLVER_BUDGET_EXCEEDED",
+        status=(
+            "SOLVER_BUDGET_EXCEEDED"
+            if outcome == "budget_exceeded"
+            else "EXECUTION_FAILED"
+        ),
         colorable=None,
         coloring=None,
     )
@@ -262,7 +285,9 @@ def verify_k_colorability_result(result: KColorabilityResult) -> bool:
         "vertex", result.graph, result.colors, result.solver_conflicts
     )
     if result.status == "SOLVER_BUDGET_EXCEEDED":
-        return outcome == "unknown"
+        return outcome == "budget_exceeded"
+    if result.status == "EXECUTION_FAILED":
+        return False
     return outcome == "unsat"
 
 
@@ -348,7 +373,11 @@ def compute_edge_k_colorability(
         graph=request.graph,
         colors=request.colors,
         solver_conflicts=request.solver_conflicts,
-        status="SOLVER_BUDGET_EXCEEDED",
+        status=(
+            "SOLVER_BUDGET_EXCEEDED"
+            if outcome == "budget_exceeded"
+            else "EXECUTION_FAILED"
+        ),
         colorable=None,
         coloring=None,
     )
@@ -363,7 +392,9 @@ def verify_edge_k_colorability_result(result: EdgeKColorabilityResult) -> bool:
         "edge", result.graph, result.colors, result.solver_conflicts
     )
     if result.status == "SOLVER_BUDGET_EXCEEDED":
-        return outcome == "unknown"
+        return outcome == "budget_exceeded"
+    if result.status == "EXECUTION_FAILED":
+        return False
     return outcome == "unsat"
 
 

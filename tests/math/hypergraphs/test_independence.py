@@ -472,7 +472,9 @@ def test_public_independence_path_bounds_the_entire_z3_worker(
     result = compute_independence_number(request)
 
     assert result == expected
-    assert recorded["timeout_seconds"] == 3
+    timeout_seconds = recorded["timeout_seconds"]
+    assert isinstance(timeout_seconds, int | float)
+    assert 0 < timeout_seconds <= 3
     assert Path(str(recorded["cwd"])).name.startswith(
         "jacobian-hypergraph-independence-"
     )
@@ -481,6 +483,38 @@ def test_public_independence_path_bounds_the_entire_z3_worker(
     assert limits.cpu_seconds == 3
     assert limits.address_space_bytes == 1_536 * 1024 * 1024
     assert limits.file_size_bytes == 1_024 * 1_024
+
+
+def test_independence_worker_result_must_bind_the_submitted_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.hypergraphs import _independence_z3
+
+    request = HypergraphIndependenceRequest.model_validate(
+        {
+            "hypergraph": {"vertices": ["a", "b"], "edges": [["pair", ["a", "b"]]]},
+            "resource_budget": {"wall_seconds": 3, "max_solver_calls": 5},
+        }
+    )
+    wrong_request = HypergraphIndependenceRequest.model_validate(
+        {
+            "hypergraph": {"vertices": ["x"], "edges": []},
+            "resource_budget": {"wall_seconds": 3, "max_solver_calls": 5},
+        }
+    )
+    wrong_result = _independence_z3._solve_independence_number_kernel(wrong_request)
+    monkeypatch.setattr(
+        _independence_z3,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: _independence_worker_result(
+            wrong_result.model_dump(mode="json")
+        ),
+    )
+
+    result = compute_independence_number(request)
+
+    assert result.status == "UNKNOWN"
+    assert result.hypergraph == request.hypergraph
 
 
 def test_threshold_encoding_rechecks_the_wall_budget_before_solver_check(

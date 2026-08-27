@@ -120,7 +120,12 @@ def test_public_guidance_does_not_advertise_excluded_operation_ids() -> None:
         for record in OPERATION_ADMISSIONS
         if record.decision is not AdmissionDecision.KEEP
     }
-    exempt_documents = {"public-operation-admission.md"}
+    exempt_documents = {
+        "public-operation-admission.md",
+        # This source-grounded audit records rejected candidates as evidence;
+        # it is not public operation guidance.
+        "erdos-atlas-method-vocabulary-audit.md",
+    }
 
     leaks: dict[str, list[str]] = {}
     for path in sorted(Path("docs").rglob("*.md")):

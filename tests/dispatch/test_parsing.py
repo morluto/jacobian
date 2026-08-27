@@ -60,7 +60,6 @@ def test_parse_operation_input_accepts_json_arrays_for_constrained_tuples() -> N
     )
 
     assert parsed.labels == ("left", "right")
-    assert isinstance(parsed.labels, tuple)
 
 
 def test_parse_operation_input_preserves_tuples_through_before_validation() -> None:

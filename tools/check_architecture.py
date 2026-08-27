@@ -22,6 +22,14 @@ _EXTERNAL_OPERATION_OWNERS = frozenset(
         PurePosixPath("src/jacobian/math/graphs/isomorphism/_operations.py"),
         PurePosixPath("src/jacobian/math/polynomials/ideals/_singular.py"),
         PurePosixPath("src/jacobian/math/logic/_sat.py"),
+        PurePosixPath("src/jacobian/math/logic/_smt.py"),
+        PurePosixPath("src/jacobian/math/logic/_unsat_core.py"),
+        PurePosixPath("src/jacobian/math/hypergraphs/_independence_z3.py"),
+        PurePosixPath("src/jacobian/math/graphs/_independence_z3.py"),
+        PurePosixPath("src/jacobian/math/graphs/coloring/_operations.py"),
+        PurePosixPath("src/jacobian/math/graphs/optimization/_finite_optimization.py"),
+        PurePosixPath("src/jacobian/math/graphs/optimization/_invariants.py"),
+        PurePosixPath("src/jacobian/math/graphs/optimization/_chromatic_number.py"),
         PurePosixPath("src/jacobian/math/number_theory/_factorization_kernels.py"),
         PurePosixPath("src/jacobian/math/number_field/_operations.py"),
         PurePosixPath("src/jacobian/math/polynomials/multivariate/_factor_backend.py"),
@@ -34,6 +42,29 @@ _GENERATED_DIRECTORIES = frozenset(
 _EXEC_FUNCTIONS = frozenset({"execlp", "execv", "execve", "execvp", "execvpe"})
 _EVALUATOR_CAPABLE_FUNCTIONS = frozenset(
     {"eval", "exec", "lambdify", "parse_expr", "sympify"}
+)
+_RESULT_VALIDATOR_KERNEL_CALLS = frozenset(
+    {
+        "Solver",
+        "SolverFor",
+        "_solve_analysis_by_enumeration",
+        "_evaluate_chromatic_number_certificate",
+        "_solve_terminal_game_data",
+        "betti_data",
+        "characteristic_polynomial",
+        "delta_periodicity_bound",
+        "factor_list",
+        "factorization_length_extrema",
+        "factorization_lengths",
+        "factorizations",
+        "factors_of_length",
+        "invariant_factors",
+        "is_irreducible",
+        "minimal_polynomial",
+        "parse_smt2_string",
+        "periods",
+        "primary_decomposition",
+    }
 )
 _RATIONAL_COMPONENTS = frozenset({"denominator", "numerator", "p", "q"})
 _DESCRIPTIVE_RATIONAL_COMPONENTS = frozenset({"denominator", "numerator"})
@@ -463,9 +494,12 @@ def _owner_operation_reentry_violations(
     for node in _walk(tree):
         if isinstance(node, ast.ImportFrom):
             module = _resolve_import_from_module(node, relative)
-            if (module is not None and _is_owner_operation_module(module, owner)) or (module == owner and any(
-                alias.name in {"operations", "_operations"} for alias in node.names
-            )):
+            if (module is not None and _is_owner_operation_module(module, owner)) or (
+                module == owner
+                and any(
+                    alias.name in {"operations", "_operations"} for alias in node.names
+                )
+            ):
                 violations.append(
                     _violation(
                         relative,
@@ -475,7 +509,9 @@ def _owner_operation_reentry_violations(
                     )
                 )
         elif isinstance(node, ast.Import):
-            if any(_is_owner_operation_module(alias.name, owner) for alias in node.names):
+            if any(
+                _is_owner_operation_module(alias.name, owner) for alias in node.names
+            ):
                 violations.append(
                     _violation(
                         relative,
@@ -500,6 +536,72 @@ def _owner_operation_reentry_violations(
                     "contract and value modules must not dynamically import their own operations",
                 )
             )
+    return tuple(violations)
+
+
+def _is_model_validator(function: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Return whether one method is a Pydantic model validator."""
+
+    return any(
+        (isinstance(decorator, ast.Name) and decorator.id == "model_validator")
+        or (
+            isinstance(decorator, ast.Call)
+            and isinstance(decorator.func, ast.Name)
+            and decorator.func.id == "model_validator"
+        )
+        for decorator in function.decorator_list
+    )
+
+
+def _call_name(node: ast.Call) -> str | None:
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr
+    return None
+
+
+def _result_validator_replay_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    """Keep owner kernels and solver APIs out of public result validators.
+
+    Successful producers establish their invariant once and use a private
+    trusted factory.  Independently supplied claims must use an explicit,
+    owner-local verifier with a declared envelope instead of hiding replay in
+    ordinary Pydantic deserialization.  The named set is deliberately narrow:
+    it covers the known expensive kernel/backend entry points without treating
+    cheap structural predicates as architecture violations.
+    """
+
+    if not relative.is_relative_to(PurePosixPath("src/jacobian/math")):
+        return ()
+    if not isinstance(tree, ast.Module):
+        return ()
+    violations: list[Violation] = []
+    for result_class in (
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name.endswith("Result")
+    ):
+        for method in result_class.body:
+            if not isinstance(
+                method, (ast.FunctionDef, ast.AsyncFunctionDef)
+            ) or not _is_model_validator(method):
+                continue
+            for call in (
+                node for node in ast.walk(method) if isinstance(node, ast.Call)
+            ):
+                name = _call_name(call)
+                if name in _RESULT_VALIDATOR_KERNEL_CALLS:
+                    violations.append(
+                        _violation(
+                            relative,
+                            call,
+                            "result-validator-replay",
+                            "result validators must not call owner kernels, backends, or solvers; use an explicit bounded verifier",
+                        )
+                    )
     return tuple(violations)
 
 
@@ -655,6 +757,35 @@ def _native_public_function_targets(
     return tuple(targets.values())
 
 
+def _root_native_export_violations(root: Path) -> tuple[Violation, ...]:
+    """Keep statically imported native domains listed in the root surface."""
+
+    path = _module_path(root, "jacobian.math")
+    if path is None:
+        return ()
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError):
+        return ()
+    exported = set(_literal_string_sequence(tree, "__all__"))
+    imported = {
+        alias.asname or alias.name
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module == "jacobian.math"
+        for alias in node.names
+        if alias.name != "*"
+    }
+    return tuple(
+        _violation(
+            PurePosixPath("src/jacobian/math/__init__.py"),
+            tree,
+            "native-root-export",
+            f"native domain {name!r} is imported but missing from jacobian.math.__all__",
+        )
+        for name in sorted(imported - exported)
+    )
+
+
 def _wire_model_names(root: Path, tree: ast.AST, source_module: str) -> set[str]:
     """Find local bindings that name a Request/Input wire model."""
 
@@ -677,6 +808,14 @@ def _wire_model_names(root: Path, tree: ast.AST, source_module: str) -> set[str]
 def _is_wire_model_reference(node: ast.AST, names: set[str]) -> bool:
     return (isinstance(node, ast.Name) and node.id in names) or (
         isinstance(node, ast.Attribute) and node.attr.endswith(("Request", "Input"))
+    )
+
+
+def _annotation_contains_wire_model(node: ast.AST, names: set[str]) -> bool:
+    """Return whether an annotation names a request/input wire model."""
+
+    return any(
+        _is_wire_model_reference(descendant, names) for descendant in ast.walk(node)
     )
 
 
@@ -716,6 +855,34 @@ def _native_public_boundary_violations(root: Path) -> tuple[Violation, ...]:
         wire_names = _wire_model_names(root, tree, module)
         compute_adapters = _native_compute_adapter_names(root, tree, module)
         for node in _walk(function):
+            if (
+                relative.name == "native.py"
+                and isinstance(node, ast.arg)
+                and node.annotation is not None
+            ):
+                if _annotation_contains_wire_model(node.annotation, wire_names):
+                    violations.append(
+                        _violation(
+                            relative,
+                            node.annotation,
+                            "native-wire-boundary",
+                            "exported native functions must not accept wire Request/Input models",
+                        )
+                    )
+            elif (
+                relative.name == "native.py"
+                and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.returns is not None
+                and _annotation_contains_wire_model(node.returns, wire_names)
+            ):
+                violations.append(
+                    _violation(
+                        relative,
+                        node.returns,
+                        "native-wire-boundary",
+                        "exported native functions must not return wire Request/Input models",
+                    )
+                )
             if not isinstance(node, ast.Call):
                 continue
             constructs_wire = _is_wire_model_reference(node.func, wire_names) or (
@@ -852,6 +1019,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         *_environment_violations(relative, tree),
         *_evaluator_parser_violations(relative, tree),
         *_owner_operation_reentry_violations(relative, tree),
+        *_result_validator_replay_violations(relative, tree),
         *_unsafe_wire_conversion_violations(relative, tree),
         *_rational_output_violations(relative, tree),
     )
@@ -871,6 +1039,7 @@ def check_architecture(root: Path | str = ROOT) -> ArchitectureReport:
                     for violation in _check_file(project_root, path)
                 ),
                 *_native_public_boundary_violations(project_root),
+                *_root_native_export_violations(project_root),
             ),
             key=lambda item: (item.path, item.line or 0, item.code),
         )

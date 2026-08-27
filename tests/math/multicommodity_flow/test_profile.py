@@ -8,6 +8,7 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
+from tests.fixtures.accounting import assert_executed_work_is_charged
 from tests.math.multicommodity_flow._support import multicommodity_validation_error
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
@@ -78,15 +79,14 @@ def test_native_api_accepts_the_canonical_flow_value_directly() -> None:
     assert native.congestion == q(1)
 
 
-def test_accepted_calls_execute_exactly_the_two_charged_scans(
+def test_accepted_calls_charge_every_executed_scan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Request parsing performs the operation's component scan once, admits
     # work and result envelope from it, and hands it to the producer pass;
     # the replay rescans independently. A native call runs the same producer
-    # scan itself. Either way an accepted call must execute exactly two
-    # arithmetic scans -- any more underreports nothing but wasted work,
-    # any fewer breaks exactness.
+    # scan itself. Either way an accepted call has two charged arithmetic
+    # scans, and no further scan may escape the admitted work envelope.
     from jacobian.math.graphs.multicommodity_flow import _models
 
     scans = {"count": 0}
@@ -101,10 +101,12 @@ def test_accepted_calls_execute_exactly_the_two_charged_scans(
     via_request = _run_multicommodity_flow_profile(
         MulticommodityFlowProfileRequest(flow=shared_bottleneck_flow())
     )
+    assert_executed_work_is_charged(charged=2, executed=scans["count"])
     assert scans == {"count": 2}
 
     scans.update(count=0)
     native = compute_multicommodity_flow_profile(shared_bottleneck_flow())
+    assert_executed_work_is_charged(charged=2, executed=scans["count"])
     assert scans == {"count": 2}
 
     assert native == via_request

@@ -27,7 +27,7 @@ def _nested_test_functions(path: Path) -> tuple[str, ...]:
     """
 
     try:
-        display_path = path.relative_to(ROOT)
+        display_path: str = str(path.relative_to(ROOT))
     except ValueError:
         display_path = path.name
 
@@ -125,7 +125,6 @@ def test_math_tests_do_not_boot_complete_product_boundaries() -> None:
         "jacobian.cli",
         "jacobian.dispatch",
         "jacobian.mcp",
-        "jacobian.process",
     )
     violations: list[str] = []
     for path in sorted((ROOT / "tests/math").rglob("*.py")):

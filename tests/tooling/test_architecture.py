@@ -184,6 +184,25 @@ def test_contracts_and_values_cannot_reenter_their_own_operations(
     ]
 
 
+def test_result_validators_cannot_replay_known_owner_kernels(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/_models.py",
+        "class ExampleResult:\n"
+        "    @model_validator(mode='after')\n"
+        "    def replay(self):\n"
+        "        return factorizations((3, 5), 15)\n"
+        "class ExampleRequest:\n"
+        "    @model_validator(mode='after')\n"
+        "    def admission(self):\n"
+        "        return factorizations((3, 5), 15)\n",
+    )
+
+    assert _violations(tmp_path, "result-validator-replay") == [
+        "src/jacobian/math/example/_models.py"
+    ]
+
+
 def test_exported_native_functions_do_not_construct_wire_models(
     tmp_path: Path,
 ) -> None:
@@ -210,6 +229,42 @@ def test_exported_native_functions_do_not_construct_wire_models(
 
     assert _violations(tmp_path, "native-wire-boundary") == [
         "src/jacobian/math/example/native.py"
+    ]
+
+
+def test_exported_native_functions_do_not_annotate_wire_models(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path, "src/jacobian/math/__init__.py", "__all__ = ['example']\n")
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/__init__.py",
+        "from .native import value\n__all__ = ['value']\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/native.py",
+        "from jacobian.math.example._models import ExampleRequest\n"
+        "def value(request: ExampleRequest) -> ExampleRequest:\n"
+        "    return request\n",
+    )
+
+    assert _violations(tmp_path, "native-wire-boundary") == [
+        "src/jacobian/math/example/native.py",
+        "src/jacobian/math/example/native.py",
+    ]
+
+
+def test_imported_native_domain_must_be_in_root_surface(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/math/__init__.py",
+        "from jacobian.math import example\n__all__ = []\n",
+    )
+    _write(tmp_path, "src/jacobian/math/example/__init__.py", "__all__ = []\n")
+
+    assert _violations(tmp_path, "native-root-export") == [
+        "src/jacobian/math/__init__.py"
     ]
 
 

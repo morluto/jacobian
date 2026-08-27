@@ -425,6 +425,14 @@ it is safe for the algorithm, and test both the rejected adversarial case and a
 useful case near the boundary. Do not use a post-hoc output-term cap,
 truncation, sentinel, or host exception as a hidden computational budget.
 
+For every non-trivially priced operation, owner tests must instrument the
+priced kernel primitives on a representative near-envelope request and assert
+that executed units do not exceed the admission charge. Pair that parity proof
+with an adversarial useful request whose actual work fits, so a stale or
+over-broad estimate cannot survive merely by rejecting it. Use the test-only
+``tests.fixtures.accounting.assert_executed_work_is_charged`` helper; do not
+add a shared production ledger.
+
 ### Execution time and deadline composition
 
 Exact mathematical work may legitimately take minutes or longer. Unless an

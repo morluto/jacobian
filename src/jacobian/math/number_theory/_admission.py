@@ -263,6 +263,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct complete interval profile counting contiguous-sum representations that a loop of scalar calls cannot establish as one source-bound value",
     ),
+    OperationAdmission(
+        "number_theory.gcd_quotient.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete pairwise gcd profile that a loop of scalar gcd calls cannot establish as one source-bound value",
+    ),
+    OperationAdmission(
+        "number_theory.product_divisibility.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete pairwise divisibility profile that a loop of scalar divides checks cannot establish as one source-bound value",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

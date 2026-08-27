@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from jacobian.math.polynomials._conversions import (
-    rational_from_sympy,
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
-    symbols_for_variables,
 )
 from jacobian.math.polynomials._multiply_models import RationalPolynomialMultiplyRequest
 from jacobian.math.polynomials.values import RationalPolynomial

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.number_theory._divisibility_graph_models import (
     DivisibilityIncidenceGraphRequest,
     DivisibilityIncidenceGraphResult,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def compute_divisibility_incidence_graph(
@@ -24,21 +24,21 @@ def compute_divisibility_incidence_graph(
     right_labels = [f"R{i}" for i in range(len(right))]
 
     vertices = tuple(left_labels + right_labels)
-    edges = []
+    edges: list[tuple[str, str]] = []
 
-    left_vals = [int(l) for l in left]
+    left_vals = [int(value) for value in left]
     right_vals = [int(r) for r in right]
 
     for i, lv in enumerate(left_vals):
         for j, rv in enumerate(right_vals):
-            if rv != 0 and lv != 0 and rv % lv == 0:
+            if rv % lv == 0:
                 edges.append((f"L{i}", f"R{j}"))
 
     edges.sort()
     return DivisibilityIncidenceGraphResult(
         left_family=left,
         right_family=right,
-        graph=SimpleUndirectedGraph(vertices=vertices, edges=tuple(tuple(e) for e in edges)),
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=tuple(edges)),
     )
 
 

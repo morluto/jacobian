@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
-from pydantic import Field, model_validator
 from typing import Self
 
+from pydantic import model_validator
+
 from jacobian._models import StrictModel
-from jacobian.math.polynomials.values import RationalPolynomial
-from jacobian.math.polynomials._models import _validation_error, require_polynomial_budget
+from jacobian.math.polynomials._models import _validation_error
+from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_TERMS,
+    RationalPolynomial,
+    require_polynomial_budget,
+)
 
 MAX_MULTIPLY_TERMS = 1024
 MAX_MULTIPLY_DEGREE = 1000
+MAX_MULTIPLY_RESULT_TERMS = MAX_POLYNOMIAL_TERMS
 
 
 class RationalPolynomialMultiplyRequest(StrictModel):
@@ -33,7 +39,14 @@ class RationalPolynomialMultiplyRequest(StrictModel):
             maximum_terms=MAX_MULTIPLY_TERMS,
             maximum_exponent=MAX_MULTIPLY_DEGREE,
         )
+        product_term_work = len(self.left.polynomial.terms) * len(
+            self.right.polynomial.terms
+        )
+        if product_term_work > MAX_MULTIPLY_RESULT_TERMS:
+            raise _validation_error(
+                "the polynomial product may exceed the canonical term limit"
+            )
         return self
 
 
-__all__ = ["RationalPolynomialMultiplyRequest"]
+__all__ = ["MAX_MULTIPLY_RESULT_TERMS", "RationalPolynomialMultiplyRequest"]

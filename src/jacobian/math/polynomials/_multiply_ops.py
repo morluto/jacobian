@@ -1,9 +1,9 @@
 """Declarations for rational polynomial multiplication."""
 
 from jacobian.catalog._examples import example
-from jacobian.math.polynomials._elementary import polynomial_operation
 from jacobian.math.polynomials._multiply_models import RationalPolynomialMultiplyRequest
 from jacobian.math.polynomials._multiply_operations import rational_polynomial_multiply
+from jacobian.math.polynomials._support import polynomial_operation
 from jacobian.math.polynomials.values import RationalPolynomial
 
 _C1 = {"num": "1", "den": "1"}

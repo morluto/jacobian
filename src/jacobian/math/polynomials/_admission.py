@@ -104,7 +104,8 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
         native_symbol="jacobian.math.polynomials.divide",
-    ),    OperationAdmission(
+    ),
+    OperationAdmission(
         "polynomial.rational.multiply.compute",
         AdmissionDecision.KEEP,
         "distinct exact product of two bounded rational polynomials that sparse convolution cannot produce without caller reconstruction of like-term collection, zero cancellation, and canonical ordering",

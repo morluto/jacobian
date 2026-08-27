@@ -23,6 +23,35 @@ _DISCOVERY_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 _DISCOVERY_STOP_WORDS = frozenset(
     {"a", "an", "and", "for", "find", "from", "in", "of", "on", "the", "to", "with"}
 )
+# Terms whose final ``s`` is not regular plural morphology, plus irregular
+# plurals that the deliberately small suffix rules below would corrupt.
+_DISCOVERY_INFLECTION_EXCEPTIONS = frozenset(
+    {
+        "alias",
+        "always",
+        "atlas",
+        "axes",
+        "bases",
+        "bias",
+        "chaos",
+        "does",
+        "dynamics",
+        "farkas",
+        "guigues",
+        "indices",
+        "lens",
+        "lies",
+        "macwilliams",
+        "matrices",
+        "news",
+        "series",
+        "sims",
+        "simplices",
+        "species",
+        "vertices",
+    }
+)
+_DISCOVERY_SINGULAR_SUFFIXES = ("ics", "is", "ous", "ss", "us")
 
 
 class SearchableOperation(Protocol):
@@ -151,16 +180,34 @@ def normalize_discovery_text(value: str) -> str:
     return "-".join(_DISCOVERY_TOKEN_PATTERN.findall(value.casefold()))
 
 
+def normalize_discovery_term(term: str) -> str:
+    """Return one conservative comparison form for a lexical search token."""
+
+    if len(term) <= 3 or term in _DISCOVERY_INFLECTION_EXCEPTIONS:
+        return term
+    if len(term) > 4 and term.endswith("ies"):
+        return f"{term[:-3]}y"
+    if term.endswith(("ches", "shes", "sses", "xes")):
+        return term[:-2]
+    if term.endswith("s") and not term.endswith(_DISCOVERY_SINGULAR_SUFFIXES):
+        return term[:-1]
+    return term
+
+
 def discovery_terms(query: str) -> frozenset[str]:
     return frozenset(
-        term
+        normalized_term
         for term in _DISCOVERY_TOKEN_PATTERN.findall(query.casefold())
-        if term not in _DISCOVERY_STOP_WORDS
+        if (normalized_term := normalize_discovery_term(term))
+        not in _DISCOVERY_STOP_WORDS
     )
 
 
 def token_set(value: str) -> frozenset[str]:
-    return frozenset(_DISCOVERY_TOKEN_PATTERN.findall(value.casefold()))
+    return frozenset(
+        normalize_discovery_term(term)
+        for term in _DISCOVERY_TOKEN_PATTERN.findall(value.casefold())
+    )
 
 
 def discovery_relevance(

@@ -62,7 +62,7 @@ class ContiguousSumWorkerDiagnostic(StrictModel):
     elapsed_ms: StrictInt = Field(ge=0, le=(MAX_FACTORING_WORK_SECONDS + 5) * 1000)
     worker_timeout_ms: StrictInt = Field(ge=0, le=MAX_FACTORING_WORK_SECONDS * 1000)
     budget_seconds: StrictInt = Field(ge=1, le=MAX_FACTORING_WORK_SECONDS)
-    returncode: StrictInt | None = Field(default=None, ge=-255, le=255)
+    returncode: StrictInt | None = Field(default=None, ge=-(2**31), le=(2**32) - 1)
     operation_version: Literal["1"] = "1"
     repository_revision: Annotated[
         str,

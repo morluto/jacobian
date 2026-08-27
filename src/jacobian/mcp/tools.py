@@ -11,9 +11,11 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
 from mcp.types import INVALID_PARAMS
 
+from jacobian._execution import request_execution
 from jacobian.catalog.models import OperationId, OperationResult
 from jacobian.dispatch import (
     OperationDomainValidationError,
+    OperationExecutionTimeoutError,
     OperationRequestValidationError,
     _invoke_prepared_operation,
     _OperationResolutionError,
@@ -112,7 +114,7 @@ def math_run(
         # is polled by the shared external-process runner, which kills and
         # reaps only an operation's owned child tree.  Bind it before
         # preparation because owner admission may itself use a child worker.
-        with bounded_process_cancellation(cancellation):
+        with bounded_process_cancellation(cancellation), request_execution(started):
             try:
                 prepared = _prepare_operation(operation_id, payload, catalog)
             except _OperationResolutionError as exc:
@@ -131,6 +133,8 @@ def math_run(
             message="operation payload failed validation",
             data=data.model_dump(mode="json"),
         ) from exc
+    except OperationExecutionTimeoutError as exc:
+        raise ToolError("operation execution deadline expired") from exc
     except (MCPError, ToolError):
         raise
     except Exception as exc:

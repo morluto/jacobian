@@ -4,12 +4,17 @@ import time
 from typing import cast
 
 import pytest
-from pydantic import field_serializer
+from pydantic import field_serializer, model_validator
 
+from jacobian._execution import bind_request_deadline, current_request_execution
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+from jacobian.dispatch import (
+    OperationExecutionTimeoutError,
+    OperationRequestValidationError,
+    invoke_operation,
+)
 
 
 class _Request(StrictModel):
@@ -25,6 +30,42 @@ class _TimedResult(_Result):
     def serialize_value(self, value: int) -> int:
         time.monotonic()
         return value
+
+
+class _EnvelopeRequest(StrictModel):
+    value: int
+
+    @model_validator(mode="after")
+    def require_request_envelope(self) -> _EnvelopeRequest:
+        assert current_request_execution() is not None
+        return self
+
+
+class _EnvelopeResult(_Result):
+    @field_serializer("value")
+    def serialize_value(self, value: int) -> int:
+        time.monotonic()
+        return value
+
+
+class _EnvelopeOperation:
+    operation_id = "test.request-envelope"
+    request_type = _EnvelopeRequest
+
+    @staticmethod
+    def run(request: StrictModel) -> StrictModel:
+        assert isinstance(request, _EnvelopeRequest)
+        execution = current_request_execution()
+        assert execution is not None
+        bind_request_deadline(execution.started_at + 2)
+        return _EnvelopeResult(value=request.value)
+
+
+class _CatalogWithRequestEnvelope:
+    @staticmethod
+    def _binding(operation_id: str) -> _EnvelopeOperation:
+        del operation_id
+        return _EnvelopeOperation()
 
 
 class _InvalidResultOperation:
@@ -168,3 +209,17 @@ def test_runtime_includes_canonical_result_projection(
 
     assert result.output == {"value": 7}
     assert result.runtime_ms == 200
+
+
+def test_dispatch_deadline_covers_parsing_execution_and_serialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = iter((100.0, 101.0, 103.0, 103.0))
+    monkeypatch.setattr(time, "monotonic", lambda: next(clock))
+
+    with pytest.raises(OperationExecutionTimeoutError, match="serialization"):
+        invoke_operation(
+            "test.request-envelope",
+            {"value": 7},
+            cast(Catalog, _CatalogWithRequestEnvelope()),
+        )

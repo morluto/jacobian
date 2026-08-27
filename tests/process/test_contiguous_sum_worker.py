@@ -103,7 +103,7 @@ def test_timed_out_high_magnitude_profile_is_unknown(
         ),
         (
             BoundedProcessResult(
-                returncode=1,
+                returncode=0xC0000005,
                 stdout=b"",
                 stderr=b"",
                 stdout_exceeded=False,

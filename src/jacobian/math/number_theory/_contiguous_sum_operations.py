@@ -8,6 +8,7 @@ from math import isqrt, prod
 from time import monotonic
 from typing import Literal
 
+from jacobian._execution import current_request_execution
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._contiguous_sum_admission import (
     ContiguousSumProfileAdmission,
@@ -139,7 +140,8 @@ def compute_contiguous_sum_profile(
     Dense intervals use a segmented odd-factor sieve, while high-magnitude
     narrow intervals use the maintained SymPy factorization backend.
     """
-    profile_started = monotonic()
+    execution = current_request_execution()
+    profile_started = execution.started_at if execution is not None else monotonic()
     admission = require_contiguous_sum_profile_admission(
         request, started_at=profile_started
     )

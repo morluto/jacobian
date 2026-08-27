@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from math import isqrt
 from typing import Literal
 
+from jacobian._execution import bind_request_deadline
 from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._contiguous_sum_models import (
@@ -82,6 +83,8 @@ def require_contiguous_sum_profile_admission(
         execution_deadline = (
             None if started_at is None else started_at + MAX_FACTORING_WORK_SECONDS
         )
+        if execution_deadline is not None:
+            bind_request_deadline(execution_deadline)
     else:
         regime = "SEGMENTED"
         estimated_work = 3 * isqrt(upper) + width * (upper_digits + 1)

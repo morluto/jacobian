@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from jacobian._execution import current_request_execution, request_execution
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalizationError, encode_strict_json
 from jacobian.catalog.catalog import Catalog
@@ -46,6 +47,10 @@ class OperationRequestValidationError(ValueError):
         ]
 
 
+class OperationExecutionTimeoutError(TimeoutError):
+    """The request-scoped owner envelope expired during dispatch projection."""
+
+
 class _OperationResolutionError(ValueError):
     """The immutable catalog has no binding for the requested operation."""
 
@@ -76,10 +81,11 @@ def invoke_operation(
     """Select, parse, call, and project one typed mathematical operation."""
 
     started = time.monotonic()
-    return _invoke_prepared_operation(
-        _prepare_operation(operation_id, payload, catalog),
-        started=started,
-    )
+    with request_execution(started):
+        return _invoke_prepared_operation(
+            _prepare_operation(operation_id, payload, catalog),
+            started=started,
+        )
 
 
 def _prepare_operation(
@@ -126,7 +132,24 @@ def _invoke_prepared_operation(
             code="operation.domain_validation",
             message=str(exc),
         ) from exc
+    execution = current_request_execution()
+    if (
+        execution is not None
+        and execution.deadline is not None
+        and time.monotonic() >= execution.deadline
+    ):
+        raise OperationExecutionTimeoutError(
+            "request deadline expired before result serialization"
+        )
     output = result.model_dump(mode="json")
+    if (
+        execution is not None
+        and execution.deadline is not None
+        and time.monotonic() >= execution.deadline
+    ):
+        raise OperationExecutionTimeoutError(
+            "request deadline expired during result serialization"
+        )
 
     return OperationResult(
         operation_id=prepared.operation_id,
@@ -137,6 +160,7 @@ def _invoke_prepared_operation(
 
 __all__ = [
     "OperationDomainValidationError",
+    "OperationExecutionTimeoutError",
     "OperationRequestValidationError",
     "invoke_operation",
     "parse_operation_input",

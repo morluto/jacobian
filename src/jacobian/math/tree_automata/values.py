@@ -394,20 +394,9 @@ def reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
 
 
 def reachability_public_path_work_bound(automaton: BottomUpTreeAutomaton) -> int:
-    """Price request-bound evaluation, admission profile, and kernel profile.
+    """Price the single owner-local saturation pass on the public path."""
 
-    A result model no longer replays the kernel.  The public operation thus
-    executes three sorted saturation passes: measuring the request bound,
-    materializing the request's witness envelope, and producing the result.
-    Only the latter two materialize witnesses.
-    """
-
-    sort_work, per_scan_work, scan_rounds = reachability_price_components(automaton)
-    return (
-        3 * sort_work
-        + 3 * scan_rounds * per_scan_work
-        + 2 * 3 * MAX_REACHABILITY_WITNESS_NODES
-    )
+    return reachability_execution_work_bound(automaton)
 
 
 def _transition_key(

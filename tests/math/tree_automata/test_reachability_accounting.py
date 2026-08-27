@@ -30,7 +30,7 @@ def _automaton() -> BottomUpTreeAutomaton:
     )
 
 
-def test_public_reachability_path_charges_each_saturation_pass() -> None:
+def test_public_reachability_path_runs_one_saturation_pass() -> None:
     with patch.object(
         values, "_priced_saturation", wraps=values._priced_saturation
     ) as run:
@@ -40,13 +40,13 @@ def test_public_reachability_path_charges_each_saturation_pass() -> None:
 
     assert result.reachable_states == (0,)
     assert_charged_work_parity(
-        charged={"saturation": 3}, executed={"saturation": run.call_count}
+        charged={"saturation": 1}, executed={"saturation": run.call_count}
     )
 
 
-def test_schema_describes_the_three_priced_passes() -> None:
+def test_schema_describes_the_one_priced_pass() -> None:
     schema = TreeAutomatonReachabilityRequest.model_json_schema()
     description = schema["properties"]["automaton"]["description"]
 
-    assert "three passes" in description
-    assert "four passes" not in description
+    assert "one owner-local saturation pass" in description
+    assert "three passes" not in description

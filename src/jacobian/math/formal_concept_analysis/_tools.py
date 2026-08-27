@@ -212,8 +212,8 @@ FORMAL_CONCEPT_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Return every pseudo-intent and its context closure, the complete "
         "canonical implication system, an exhaustive subset-closure matrix, "
         "explicit source-coordinate binding, and exact work/output accounting. "
-        "The complete producer and independent replay are admitted before "
-        "enumeration; there is no partial-result branch.",
+        "One complete producer plan is admitted before enumeration; there is "
+        "no partial-result branch.",
         DuquenneGuiguesBasisRequest,
         CanonicalImplicationBasisResult,
         compute_duquenne_guigues_basis,

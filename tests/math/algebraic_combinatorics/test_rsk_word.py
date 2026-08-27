@@ -299,8 +299,10 @@ def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
     too_long = FiniteWord.model_construct(
         alphabet=("a",), letters=("a",) * (MAX_RSK_WORD_LENGTH + 1)
     )
-    with pytest.raises(ValidationError):
-        RSKWordRequest(word=too_long)
+    with pytest.raises(
+        ValueError, match=rf"length must not exceed {MAX_RSK_WORD_LENGTH}"
+    ):
+        compute_rsk_word(RSKWordRequest(word=too_long))
     with pytest.raises(
         ValueError, match=rf"length must not exceed {MAX_RSK_WORD_LENGTH}"
     ):

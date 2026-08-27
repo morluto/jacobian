@@ -14,7 +14,6 @@ from jacobian.math.polynomials.values import RationalFunction, RationalPolynomia
 from jacobian.math.symbolic_dynamics._bounds import (
     MAX_ZETA_REPLAY_PERIOD,
     enumeration_size,
-    normalize_forbidden_blocks,
     presentation_memory,
     require_bounded_presentation,
     require_bounded_support,
@@ -49,30 +48,12 @@ def _validation_error_from_message(error: ValueError) -> PydanticCustomError:
 class FiniteTypeShiftRequest(StrictModel):
     shift: ForbiddenBlockShift
 
-    @model_validator(mode="after")
-    def require_bounded_presentation(self) -> Self:
-        memory = presentation_memory(self.shift)
-        try:
-            require_bounded_presentation(self.shift, memory)
-        except ValueError as error:
-            raise _validation_error_from_message(error) from error
-        return self
-
 
 class FiniteTypeShiftResult(FiniteTypeShiftRequest):
     presentation: BlockPresentation
     normalized_forbidden_blocks: tuple[tuple[str, ...], ...]
     complete: Literal[True] = True
     method: Literal["EXACT_DE_BRUIJN_PRESENTATION"] = "EXACT_DE_BRUIJN_PRESENTATION"
-
-    @model_validator(mode="after")
-    def require_normalized_forbidden_blocks(self) -> Self:
-        if self.normalized_forbidden_blocks != normalize_forbidden_blocks(self.shift):
-            raise _validation_error(
-                "finite_type_presentation_not_bound",
-                "normalized forbidden blocks are not bound to the request",
-            )
-        return self
 
 
 class BlockLanguageRequest(StrictModel):
@@ -273,8 +254,8 @@ def _from_kernel_finite_type_shift(
 ) -> FiniteTypeShiftResult:
     """Construct a presentation result from its trusted owner kernel."""
 
-    return FiniteTypeShiftResult(
-        **request.model_dump(),
+    return FiniteTypeShiftResult.model_construct(
+        shift=request.shift,
         presentation=presentation,
         normalized_forbidden_blocks=normalized_forbidden_blocks,
     )

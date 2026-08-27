@@ -8,13 +8,14 @@ import io
 import json
 import math
 import os
+import re
 import sys
 import urllib.parse
 import urllib.request
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parents[2]
 TIMING_SUITES = ("benchmark",)
@@ -22,6 +23,9 @@ MAX_BYTES = 5 * 1024 * 1024
 MAX_ENTRIES = 10_000
 MAX_CANDIDATES = 5
 HTTP_TIMEOUT_SECONDS = 10
+MAX_TIMING_HISTORY_AGE = timedelta(days=30)
+"""Maximum age of a successful main-branch timing baseline."""
+_SOURCE_SHA = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?\Z", re.IGNORECASE)
 
 
 class CrossOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -137,7 +141,7 @@ def download(url: str, token: str) -> bytes:
     )
     opener = urllib.request.build_opener(CrossOriginRedirectHandler())
     with opener.open(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
-        return response.read(MAX_BYTES + 1)
+        return cast(bytes, response.read(MAX_BYTES + 1))
 
 
 def write_durations(path: Path, durations: dict[str, float]) -> None:
@@ -148,6 +152,28 @@ def write_durations(path: Path, durations: dict[str, float]) -> None:
     )
 
 
+def _timestamp(value: Any, label: str) -> datetime:
+    if not isinstance(value, str):
+        raise ValueError(f"{label} must be an RFC3339 timestamp")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"{label} must be an RFC3339 timestamp") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"{label} must include a timezone")
+    return parsed.astimezone(UTC)
+
+
+def _require_recent_timestamp(value: Any, label: str, *, now: datetime) -> None:
+    timestamp = _timestamp(value, label)
+    if timestamp > now:
+        raise ValueError(f"{label} is in the future")
+    if now - timestamp > MAX_TIMING_HISTORY_AGE:
+        raise ValueError(
+            f"{label} exceeds the {MAX_TIMING_HISTORY_AGE.days}-day timing-history age"
+        )
+
+
 def artifact_durations(
     artifact: dict[str, Any],
     *,
@@ -155,13 +181,18 @@ def artifact_durations(
     repository: str,
     token: str,
     suite: str,
+    now: datetime | None = None,
 ) -> dict[str, float] | None:
+    now = now or datetime.now(UTC)
     run = api_json(
         f"{api}/repos/{repository}/actions/runs/{artifact['workflow_run']['id']}",
         token,
     )
     if run.get("head_branch") != "main" or run.get("conclusion") != "success":
         return None
+    _require_recent_timestamp(
+        artifact.get("created_at"), "timing artifact creation", now=now
+    )
 
     archive = download(artifact["archive_download_url"], token)
     if len(archive) > MAX_BYTES:
@@ -180,6 +211,14 @@ def artifact_durations(
         or payload.get("shard_count") != shard_count(suite)
     ):
         raise ValueError("timing artifact metadata is incompatible")
+    _require_recent_timestamp(
+        payload.get("generated_at"), "timing artifact generation", now=now
+    )
+    source_sha = payload.get("source_sha")
+    if not isinstance(source_sha, str) or _SOURCE_SHA.fullmatch(source_sha) is None:
+        raise ValueError("timing artifact source SHA is invalid")
+    if source_sha != run.get("head_sha"):
+        raise ValueError("timing artifact source SHA does not match its workflow run")
     return validate_durations(payload.get("durations"), filename, suite)
 
 
@@ -251,9 +290,7 @@ def merge(
 ) -> None:
     count = shard_count(suite)
     if len(inputs) != count:
-        raise ValueError(
-            f"expected {count} shard timing files, received {len(inputs)}"
-        )
+        raise ValueError(f"expected {count} shard timing files, received {len(inputs)}")
     merged: dict[str, float] = {}
     for path in inputs:
         payload = load_json_bytes(path.read_bytes(), str(path))

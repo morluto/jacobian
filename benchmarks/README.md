@@ -120,7 +120,10 @@ the result validator still requires each selected task exactly once. The
 planner accepts an optional positive-seconds timing file and otherwise falls
 back to equal weights. Successful full runs on `main` publish median per-task
 timings as an artifact and cache; later plans restore that uncommitted history
-automatically.
+automatically. Timing hints older than 30 days (or dated in the future) are
+rejected, so the planner safely returns to equal shard weights until a fresh
+successful `main` run publishes replacement evidence. The merge job also
+uploads a predicted-versus-actual report for every host shard.
 
 Observation results are normalized into content-bound JSON before comparison.
 Correctness, evidence validity, scope, assurance calibration, false

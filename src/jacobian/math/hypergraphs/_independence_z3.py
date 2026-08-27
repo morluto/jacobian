@@ -17,6 +17,7 @@ from jacobian.math.hypergraphs._models import (
     HypergraphIndependenceStatus,
     HypergraphIndependenceTermination,
     _greedy_independent_vertices,
+    _hypergraph_digest,
     _independence_upper_bound,
 )
 from jacobian.process import (
@@ -413,12 +414,17 @@ def solve_independence_number(
             detail="the hypergraph independence request expired before response validation",
         )
     try:
-        result = HypergraphIndependenceResult.model_validate(response)
-        if (
-            result.hypergraph != request.hypergraph
-            or result.resource_budget != request.resource_budget
-        ):
-            raise ValueError("worker result is bound to a different request")
+        # The worker returns only its bounded outcome projection.  Retained
+        # source data belongs to this parent request and must not consume the
+        # worker channel or be trusted from child output.
+        result = HypergraphIndependenceResult.model_validate(
+            {
+                **response,
+                "hypergraph": request.hypergraph.model_dump(mode="json"),
+                "hypergraph_digest": _hypergraph_digest(request.hypergraph),
+                "resource_budget": request.resource_budget.model_dump(mode="json"),
+            }
+        )
         if _remaining_ms(started, request.resource_budget.wall_seconds) > 0:
             return result
         raise ValueError("request expired during response validation")

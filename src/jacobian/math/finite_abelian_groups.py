@@ -114,50 +114,78 @@ class FiniteAbelianGroupFactorizationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_product_group(self) -> Self:
-        FiniteAbelianProductGroup(moduli=self.moduli)
-        if prod(self.moduli) > MAX_FINITE_GROUP_ORDER:
-            raise _validation_error(
-                "factorization_group_order",
-                "finite abelian group exceeds the 4,096-element bound",
-            )
-        if len(self.left) * len(self.right) > MAX_FINITE_GROUP_ORDER:
-            raise _validation_error(
-                "factorization_pair_count",
-                "factor Cartesian product exceeds the 4,096-pair bound",
-            )
-        if any(
-            len(element) != len(self.moduli)
-            for factor in (self.left, self.right)
-            for element in factor
-        ):
-            raise _validation_error(
-                "factorization_element_rank",
-                "every factor element must match the group rank",
-            )
-        if any(
-            abs(coordinate) > MAX_FINITE_GROUP_COORDINATE
-            for factor in (self.left, self.right)
-            for element in factor
-            for coordinate in element
-        ):
-            raise _validation_error(
-                "factorization_coordinate_bound",
-                "factor coordinates exceed the input bound",
-            )
-        for factor in (self.left, self.right):
-            normalized = {
-                tuple(
-                    coordinate % modulus
-                    for coordinate, modulus in zip(element, self.moduli, strict=True)
-                )
-                for element in factor
-            }
-            if len(normalized) != len(factor):
-                raise _validation_error(
-                    "factorization_duplicate_element",
-                    "factor elements must be distinct after normalization",
-                )
+        _require_factorization_admission(
+            FiniteAbelianProductGroup(moduli=self.moduli), self.left, self.right
+        )
         return self
+
+
+def _require_factorization_admission(
+    group: FiniteAbelianProductGroup,
+    left: tuple[tuple[int, ...], ...],
+    right: tuple[tuple[int, ...], ...],
+) -> None:
+    """Apply the exhaustive factorization envelope to canonical native values."""
+
+    if len(group.moduli) > MAX_FINITE_GROUP_RANK:
+        raise _validation_error(
+            "factorization_group_rank",
+            "finite abelian group exceeds the six-axis factorization bound",
+        )
+    if group.order > MAX_FINITE_GROUP_ORDER:
+        raise _validation_error(
+            "factorization_group_order",
+            "finite abelian group exceeds the 4,096-element bound",
+        )
+    if not left or not right:
+        raise _validation_error(
+            "factorization_empty_factor", "factor elements must be nonempty"
+        )
+    if (
+        len(left) > MAX_FINITE_GROUP_FACTOR_SIZE
+        or len(right) > MAX_FINITE_GROUP_FACTOR_SIZE
+    ):
+        raise _validation_error(
+            "factorization_factor_size",
+            "factor elements exceed the 256-element bound",
+        )
+    if len(left) * len(right) > MAX_FINITE_GROUP_ORDER:
+        raise _validation_error(
+            "factorization_pair_count",
+            "factor Cartesian product exceeds the 4,096-pair bound",
+        )
+    if any(
+        len(element) != len(group.moduli)
+        for factor in (left, right)
+        for element in factor
+    ):
+        raise _validation_error(
+            "factorization_element_rank",
+            "every factor element must match the group rank",
+        )
+    if any(
+        abs(coordinate) > MAX_FINITE_GROUP_COORDINATE
+        for factor in (left, right)
+        for element in factor
+        for coordinate in element
+    ):
+        raise _validation_error(
+            "factorization_coordinate_bound",
+            "factor coordinates exceed the input bound",
+        )
+    for factor in (left, right):
+        normalized = {
+            tuple(
+                coordinate % modulus
+                for coordinate, modulus in zip(element, group.moduli, strict=True)
+            )
+            for element in factor
+        }
+        if len(normalized) != len(factor):
+            raise _validation_error(
+                "factorization_duplicate_element",
+                "factor elements must be distinct after normalization",
+            )
 
 
 class FiniteAbelianSpectralPairSource(StrictModel):
@@ -810,11 +838,14 @@ class FiniteAbelianGroupFactorizationResult(StrictModel):
 
 
 def finite_abelian_group_factorization(
-    request: FiniteAbelianGroupFactorizationRequest,
+    group: FiniteAbelianProductGroup,
+    left: tuple[tuple[int, ...], ...],
+    right: tuple[tuple[int, ...], ...],
 ) -> FiniteAbelianGroupFactorizationResult:
-    """Exhaustively test unique representation in a product of cyclic groups."""
+    """Exhaustively test unique representation from canonical group values."""
 
-    moduli = request.moduli
+    _require_factorization_admission(group, left, right)
+    moduli = group.moduli
 
     def normalize(element: tuple[int, ...]) -> tuple[int, ...]:
         return tuple(
@@ -822,13 +853,13 @@ def finite_abelian_group_factorization(
             for coordinate, modulus in zip(element, moduli, strict=True)
         )
 
-    left = tuple(sorted(normalize(element) for element in request.left))
-    right = tuple(sorted(normalize(element) for element in request.right))
+    normalized_left = tuple(sorted(normalize(element) for element in left))
+    normalized_right = tuple(sorted(normalize(element) for element in right))
     representations: dict[
         tuple[int, ...], list[tuple[tuple[int, ...], tuple[int, ...]]]
     ] = {}
-    for left_element in left:
-        for right_element in right:
+    for left_element in normalized_left:
+        for right_element in normalized_right:
             total = tuple(
                 (left_coordinate + right_coordinate) % modulus
                 for left_coordinate, right_coordinate, modulus in zip(
@@ -836,14 +867,14 @@ def finite_abelian_group_factorization(
                 )
             )
             representations.setdefault(total, []).append((left_element, right_element))
-    group = tuple(product(*(range(modulus) for modulus in moduli)))
-    histogram = Counter(len(representations.get(element, ())) for element in group)
+    elements = tuple(product(*(range(modulus) for modulus in moduli)))
+    histogram = Counter(len(representations.get(element, ())) for element in elements)
     first_missing = next(
-        (element for element in group if element not in representations),
+        (element for element in elements if element not in representations),
         None,
     )
     duplicate_element = next(
-        (element for element in group if len(representations.get(element, ())) > 1),
+        (element for element in elements if len(representations.get(element, ())) > 1),
         None,
     )
     duplicate = None
@@ -857,13 +888,15 @@ def finite_abelian_group_factorization(
             other_right=second[1],
         )
     group_order = prod(moduli)
-    exact = len(left) * len(right) == group_order and histogram == {1: group_order}
+    exact = len(normalized_left) * len(
+        normalized_right
+    ) == group_order and histogram == {1: group_order}
     return FiniteAbelianGroupFactorizationResult(
         moduli=moduli,
-        normalized_left=left,
-        normalized_right=right,
+        normalized_left=normalized_left,
+        normalized_right=normalized_right,
         group_order=group_order,
-        pair_count=len(left) * len(right),
+        pair_count=len(normalized_left) * len(normalized_right),
         distinct_sum_count=len(representations),
         representation_histogram=tuple(
             FiniteAbelianRepresentationCount(
@@ -875,6 +908,16 @@ def finite_abelian_group_factorization(
         is_exact_factorization=exact,
         first_missing=None if exact else first_missing,
         first_duplicate=None if exact else duplicate,
+    )
+
+
+def _run_finite_abelian_group_factorization(
+    request: FiniteAbelianGroupFactorizationRequest,
+) -> FiniteAbelianGroupFactorizationResult:
+    """Adapt the catalog request onto the canonical native boundary once."""
+
+    return finite_abelian_group_factorization(
+        FiniteAbelianProductGroup(moduli=request.moduli), request.left, request.right
     )
 
 

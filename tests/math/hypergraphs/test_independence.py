@@ -465,7 +465,12 @@ def test_public_independence_path_bounds_the_entire_z3_worker(
     def complete_worker(*args: object, **kwargs: object) -> BoundedProcessResult:
         recorded["args"] = args
         recorded.update(kwargs)
-        return _independence_worker_result(expected.model_dump(mode="json"))
+        return _independence_worker_result(
+            expected.model_dump(
+                mode="json",
+                exclude={"hypergraph", "hypergraph_digest", "resource_budget"},
+            )
+        )
 
     monkeypatch.setattr(_independence_z3, "run_bounded_process", complete_worker)
 
@@ -485,7 +490,7 @@ def test_public_independence_path_bounds_the_entire_z3_worker(
     assert limits.file_size_bytes == 1_024 * 1_024
 
 
-def test_independence_worker_result_must_bind_the_submitted_request(
+def test_independence_worker_projection_cannot_replace_the_submitted_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from jacobian.math.hypergraphs import _independence_z3
@@ -507,7 +512,10 @@ def test_independence_worker_result_must_bind_the_submitted_request(
         _independence_z3,
         "run_bounded_process",
         lambda *_args, **_kwargs: _independence_worker_result(
-            wrong_result.model_dump(mode="json")
+            wrong_result.model_dump(
+                mode="json",
+                exclude={"hypergraph", "hypergraph_digest", "resource_budget"},
+            )
         ),
     )
 

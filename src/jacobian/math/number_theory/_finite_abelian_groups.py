@@ -8,8 +8,8 @@ from jacobian.math.finite_abelian_groups import (
     FiniteAbelianGroupFactorizationResult,
     FiniteAbelianSpectralPairRequest,
     FiniteAbelianSpectralPairResult,
+    _run_finite_abelian_group_factorization,
     _run_finite_abelian_spectral_pair,
-    finite_abelian_group_factorization,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 
@@ -23,7 +23,7 @@ FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION = number_theory_operation(
     ),
     FiniteAbelianGroupFactorizationRequest,
     FiniteAbelianGroupFactorizationResult,
-    finite_abelian_group_factorization,
+    _run_finite_abelian_group_factorization,
     "number-theory",
     "finite-abelian-group",
     "cyclic-product",

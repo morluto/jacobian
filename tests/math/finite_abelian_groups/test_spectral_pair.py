@@ -20,6 +20,7 @@ from jacobian.math.finite_abelian_groups import (
     FiniteAbelianSpectralPairResult,
     FiniteAbelianSpectralPairSource,
     decide_finite_abelian_spectral_pair,
+    finite_abelian_group_factorization,
 )
 from jacobian.math.number_theory._finite_abelian_groups import (
     FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION,
@@ -381,6 +382,18 @@ def test_group_rank_and_order_boundaries() -> None:
             left=((0, 0),),
             right=((0, 0),),
         )
+
+
+def test_native_factorization_accepts_canonical_group_values() -> None:
+    result = finite_abelian_group_factorization(
+        FiniteAbelianProductGroup(moduli=(2, 2)),
+        ((0, 0), (1, 0)),
+        ((0, 0), (0, 1)),
+    )
+
+    assert result.is_exact_factorization
+    assert result.group_order == 4
+    assert result.pair_count == 4
 
 
 def test_singleton_pair_beyond_the_group_order_cap_is_admitted() -> None:

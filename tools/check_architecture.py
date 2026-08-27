@@ -855,11 +855,7 @@ def _native_public_boundary_violations(root: Path) -> tuple[Violation, ...]:
         wire_names = _wire_model_names(root, tree, module)
         compute_adapters = _native_compute_adapter_names(root, tree, module)
         for node in _walk(function):
-            if (
-                relative.name == "native.py"
-                and isinstance(node, ast.arg)
-                and node.annotation is not None
-            ):
+            if isinstance(node, ast.arg) and node.annotation is not None:
                 if _annotation_contains_wire_model(node.annotation, wire_names):
                     violations.append(
                         _violation(
@@ -870,8 +866,7 @@ def _native_public_boundary_violations(root: Path) -> tuple[Violation, ...]:
                         )
                     )
             elif (
-                relative.name == "native.py"
-                and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
                 and node.returns is not None
                 and _annotation_contains_wire_model(node.returns, wire_names)
             ):

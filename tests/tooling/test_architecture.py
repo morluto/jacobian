@@ -239,19 +239,19 @@ def test_exported_native_functions_do_not_annotate_wire_models(
     _write(
         tmp_path,
         "src/jacobian/math/example/__init__.py",
-        "from .native import value\n__all__ = ['value']\n",
+        "from .api import value\n__all__ = ['value']\n",
     )
     _write(
         tmp_path,
-        "src/jacobian/math/example/native.py",
+        "src/jacobian/math/example/api.py",
         "from jacobian.math.example._models import ExampleRequest\n"
         "def value(request: ExampleRequest) -> ExampleRequest:\n"
         "    return request\n",
     )
 
     assert _violations(tmp_path, "native-wire-boundary") == [
-        "src/jacobian/math/example/native.py",
-        "src/jacobian/math/example/native.py",
+        "src/jacobian/math/example/api.py",
+        "src/jacobian/math/example/api.py",
     ]
 
 

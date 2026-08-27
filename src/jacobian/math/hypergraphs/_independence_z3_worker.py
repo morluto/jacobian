@@ -26,7 +26,17 @@ def main() -> int:
             request = HypergraphIndependenceRequest.model_validate(payload["request"])
             result = _solve_independence_number_kernel(request)
             sys.stdout.write(
-                json.dumps(result.model_dump(mode="json"), separators=(",", ":"))
+                json.dumps(
+                    result.model_dump(
+                        mode="json",
+                        exclude={
+                            "hypergraph",
+                            "hypergraph_digest",
+                            "resource_budget",
+                        },
+                    ),
+                    separators=(",", ":"),
+                )
             )
             return 0
         if kind == "verify":

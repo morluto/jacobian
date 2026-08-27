@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math import prime_field_linear_algebra as prime_field
 from jacobian.math.chain_complexes.values import ChainComplexValue
 from jacobian.math.matrices.certified_snf.operations import (
@@ -696,6 +696,15 @@ def compute_barycentric_subdivision(
     sorted_faces = sorted(
         _all_faces(request.complex.facets), key=lambda face: (len(face), face)
     )
+    if len(sorted_faces) > 31:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.require_barycentric_work_bounds_1",
+            message=(
+                "barycentric subdivision requires at most 31 faces; "
+                "input would produce more than 128 subdivision facets"
+            ),
+        )
     subdivision = barycentric_subdivision(sorted_faces)
     facets = tuple(sorted(tuple(sorted(facet)) for facet in subdivision.facets))
     return BarycentricSubdivisionResult._from_kernel(

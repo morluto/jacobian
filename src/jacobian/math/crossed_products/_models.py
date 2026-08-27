@@ -8,7 +8,6 @@ from pydantic import model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.crossed_products._budget import require_multiplication_budget
 from jacobian.math.crossed_products.values import FiniteCosetCrossedProductElement
 
 
@@ -21,14 +20,6 @@ class CrossedProductMultiplyRequest(StrictModel):
 
     left: FiniteCosetCrossedProductElement
     right: FiniteCosetCrossedProductElement
-
-    @model_validator(mode="after")
-    def require_bounded_product(self) -> Self:
-        try:
-            require_multiplication_budget(self.left, self.right)
-        except ValueError as exc:
-            raise _validation_error("product_budget_exceeded", str(exc)) from exc
-        return self
 
 
 class CrossedProductMultiplyResult(StrictModel):

@@ -17,7 +17,6 @@ from jacobian.math.formal_concept_analysis.basis import (
     MAX_DG_CANDIDATE_STATES,
     MAX_DG_LOGICAL_WORK,
     MAX_DG_RESULT_BYTES,
-    _duquenne_guigues_preflight,
 )
 from jacobian.math.formal_concept_analysis.values import (
     MAX_IMPLICATION_MEMBERSHIPS,
@@ -103,7 +102,7 @@ class DuquenneGuiguesBasisRequest(StrictModel):
                 "basis size, rejects bases beyond the "
                 f"{MAX_IMPLICATIONS}-implication canonical implication-system "
                 f"carrier ({MAX_IMPLICATION_MEMBERSHIPS:,} memberships), and "
-                "reserves producer and independent replay work bounded by "
+                "reserves one producer plan and closure-equivalence pass bounded by "
                 f"{MAX_DG_LOGICAL_WORK:,} logical steps plus a worst-case "
                 f"{MAX_DG_RESULT_BYTES:,}-byte serialized result."
             )
@@ -111,11 +110,6 @@ class DuquenneGuiguesBasisRequest(StrictModel):
     )
 
     context: FormalContext
-
-    @model_validator(mode="after")
-    def require_complete_preflight(self) -> Self:
-        _duquenne_guigues_preflight(self.context)
-        return self
 
 
 class DerivationResult(StrictModel):

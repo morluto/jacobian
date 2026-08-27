@@ -88,12 +88,21 @@ def verify_transition_parikh_profile(
 ) -> bool:
     """Verify one independently supplied transition-Parikh profile claim."""
 
+    from jacobian.math.regular_languages._profile_admission import (
+        admit_transition_profile,
+    )
     from jacobian.math.regular_languages.operations import (
         _transition_parikh_profile_data,
     )
 
-    expected_entries, expected_total = _transition_parikh_profile_data(
+    plan = admit_transition_profile(
         profile.automaton,
+        profile.source_state,
+        profile.target_state,
+        profile.path_length,
+    )
+    expected_entries, expected_total = _transition_parikh_profile_data(
+        plan,
         profile.source_state,
         profile.target_state,
         profile.path_length,

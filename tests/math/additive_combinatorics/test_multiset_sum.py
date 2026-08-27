@@ -29,6 +29,7 @@ from jacobian.math.additive_combinatorics._multiset_sum import (
 )
 from jacobian.math.additive_combinatorics._operations import (
     compute_multiset_sum_representation_profile,
+    compute_representation_profile,
     verify_multiset_sum_representation_profile,
 )
 
@@ -357,8 +358,9 @@ def test_request_rejects_enumeration_above_work_bound() -> None:
 def test_widened_source_axis_preserves_cartesian_pair_bound() -> None:
     left = FiniteIntegerSet(elements=tuple(str(i) for i in range(257)))
     right = FiniteIntegerSet(elements=tuple(str(i) for i in range(256)))
-    with pytest.raises(ValidationError):
-        RepresentationProfileRequest(left=left, right=right)
+    request = RepresentationProfileRequest(left=left, right=right)
+    with pytest.raises(ValueError):
+        compute_representation_profile(request)
 
 
 def test_near_maximal_full_profile_stays_inside_owner_result_budget() -> None:

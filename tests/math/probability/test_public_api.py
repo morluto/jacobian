@@ -13,7 +13,7 @@ def test_exact_public_api_symbols() -> None:
         "AsymmetricLocalLemmaWitness",
         "AsymmetricLocalLemmaWitnessCheckResult",
         "FiniteJointTable",
-        "MutualInformationCertificate",
+        "MutualInformationLogRepresentation",
         "MutualInformationResult",
         "MutualInformationTerm",
         "all_terminal_reliability",

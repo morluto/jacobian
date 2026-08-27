@@ -8,7 +8,7 @@ from math import lcm
 from jacobian.math.probability.values import (
     MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
     FiniteJointTable,
-    MutualInformationCertificate,
+    MutualInformationLogRepresentation,
     MutualInformationResult,
     MutualInformationTerm,
     _rational_base_exponent,
@@ -17,7 +17,7 @@ from jacobian.math.probability.values import (
 
 
 def mutual_information(table: FiniteJointTable) -> MutualInformationResult:
-    """Compute one exact native mutual-information certificate."""
+    """Compute one exact native mutual-information value."""
 
     row_marginals = tuple(sum(row, Fraction()) for row in table.probabilities)
     column_marginals = tuple(
@@ -62,12 +62,14 @@ def mutual_information(table: FiniteJointTable) -> MutualInformationResult:
 
     base_exponent = _rational_base_exponent(product, table.log_base)
     exact_value = None if base_exponent is None else base_exponent / scale
-    return MutualInformationResult(
+    return MutualInformationResult._computed_from_kernel(
         row_marginals=row_marginals,
         column_marginals=column_marginals,
         positive_support=tuple(support),
         log_base=table.log_base,
-        certificate=MutualInformationCertificate(scale=scale, product=product),
+        logarithmic_value=MutualInformationLogRepresentation(
+            scale=scale, product=product
+        ),
         exact_value=exact_value,
         sign="ZERO" if product == 1 else "POSITIVE",
     )
@@ -76,7 +78,7 @@ def mutual_information(table: FiniteJointTable) -> MutualInformationResult:
 __all__ = [
     "MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS",
     "FiniteJointTable",
-    "MutualInformationCertificate",
+    "MutualInformationLogRepresentation",
     "MutualInformationResult",
     "MutualInformationTerm",
     "mutual_information",

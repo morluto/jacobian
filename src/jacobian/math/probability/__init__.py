@@ -13,7 +13,7 @@ from jacobian.math.probability.local_lemma import (
 from jacobian.math.probability.mutual_information import mutual_information
 from jacobian.math.probability.values import (
     FiniteJointTable,
-    MutualInformationCertificate,
+    MutualInformationLogRepresentation,
     MutualInformationResult,
     MutualInformationTerm,
 )
@@ -24,7 +24,7 @@ __all__ = [
     "AsymmetricLocalLemmaWitness",
     "AsymmetricLocalLemmaWitnessCheckResult",
     "FiniteJointTable",
-    "MutualInformationCertificate",
+    "MutualInformationLogRepresentation",
     "MutualInformationResult",
     "MutualInformationTerm",
     "all_terminal_reliability",

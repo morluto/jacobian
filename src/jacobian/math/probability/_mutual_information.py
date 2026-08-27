@@ -165,12 +165,12 @@ def _bound_raw_result_rationals(value: Mapping[str, object]) -> None:
                     ),
                     label=f"positive_support[{index}].{field_name}",
                 )
-    certificate = value.get("log_product_certificate")
-    if isinstance(certificate, Mapping):
+    logarithmic_value = value.get("exact_logarithmic_value")
+    if isinstance(logarithmic_value, Mapping):
         _bound_raw_rational(
-            certificate.get("product"),
+            logarithmic_value.get("product"),
             max_digits=MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
-            label="mutual-information certificate product",
+            label="mutual-information logarithmic value product",
         )
     _bound_raw_rational(
         value.get("exact_value"),
@@ -286,7 +286,7 @@ class FiniteJointLikelihoodRatio(StrictModel):
     likelihood_ratio: CanonicalRational
 
 
-class MutualInformationLogProductCertificate(StrictModel):
+class MutualInformationLogValue(StrictModel):
     """Canonical wire form of ``scale * I = log_base(product)``."""
 
     scale: CanonicalInteger
@@ -299,11 +299,11 @@ class MutualInformationLogProductCertificate(StrictModel):
     def require_positive_scale_and_product(self) -> Self:
         if parse_canonical_integer(self.scale) <= 0:
             raise _validation_error(
-                "mutual-information certificate scale must be positive"
+                "mutual-information logarithmic value scale must be positive"
             )
         if self.product.as_fraction() <= 0:
             raise _validation_error(
-                "mutual-information certificate product must be positive"
+                "mutual-information logarithmic value product must be positive"
             )
         return self
 
@@ -324,7 +324,7 @@ class FiniteJointTableMutualInformationResult(StrictModel):
     column_marginals: FiniteJointColumnMarginals
     positive_support: FiniteJointPositiveSupport
     log_base: StrictInt = Field(ge=2, le=36)
-    log_product_certificate: MutualInformationLogProductCertificate
+    exact_logarithmic_value: MutualInformationLogValue
     exact_value: CanonicalRational | None = None
     sign: Literal["ZERO", "POSITIVE"]
     zero_cell_convention: Literal["ZERO_MASS_TERMS_OMITTED"] = "ZERO_MASS_TERMS_OMITTED"
@@ -350,17 +350,17 @@ class FiniteJointTableMutualInformationResult(StrictModel):
                     f"{field_name} exceeds the bounded result cardinality"
                 )
         _bound_raw_result_rationals(value)
-        certificate = value.get("log_product_certificate")
-        if isinstance(certificate, Mapping):
-            scale = certificate.get("scale")
+        logarithmic_value = value.get("exact_logarithmic_value")
+        if isinstance(logarithmic_value, Mapping):
+            scale = logarithmic_value.get("scale")
             if isinstance(scale, str) and len(scale.lstrip("-")) > 309:
                 raise _validation_error(
-                    "mutual-information certificate scale exceeds the replay bound"
+                    "mutual-information logarithmic value scale exceeds the bound"
                 )
         return value
 
     @model_validator(mode="after")
-    def bind_certificate(self) -> Self:
+    def require_structural_consistency(self) -> Self:
         positions = tuple(
             (term.row_index, term.column_index) for term in self.positive_support
         )
@@ -383,7 +383,7 @@ class FiniteJointTableMutualInformationResult(StrictModel):
                 raise _validation_error(
                     "positive support column marginal is inconsistent"
                 )
-        product = self.log_product_certificate.product.as_fraction()
+        product = self.exact_logarithmic_value.product.as_fraction()
         if self.sign != ("ZERO" if product == 1 else "POSITIVE"):
             raise _validation_error(
                 "mutual-information sign must match the exact product"
@@ -425,9 +425,11 @@ class FiniteJointTableMutualInformationResult(StrictModel):
                 for term in result.positive_support
             ),
             log_base=result.log_base,
-            log_product_certificate=MutualInformationLogProductCertificate(
-                scale=format_canonical_integer(result.certificate.scale),
-                product=CanonicalRational.from_fraction(result.certificate.product),
+            exact_logarithmic_value=MutualInformationLogValue(
+                scale=format_canonical_integer(result.logarithmic_value.scale),
+                product=CanonicalRational.from_fraction(
+                    result.logarithmic_value.product
+                ),
             ),
             exact_value=(
                 None
@@ -448,11 +450,11 @@ def compute_mutual_information(
 
 MUTUAL_INFORMATION_OPERATION = MathTool(
     operation_id="probability.joint.mutual_information.compute",
-    title="Exact finite-table mutual information certificate",
+    title="Compute an exact finite-table mutual information value",
     description=(
         "Compute ordered marginals and every positive-support likelihood "
         "ratio for one bounded normalized rational joint table. Return the "
-        "exact identity scale*I=log_base(product), without floating point."
+        "exact logarithmic value scale*I=log_base(product), without floating point."
     ),
     request_type=FiniteJointTableMutualInformationRequest,
     result_type=FiniteJointTableMutualInformationResult,
@@ -463,7 +465,7 @@ MUTUAL_INFORMATION_OPERATION = MathTool(
         "mutual-information",
         "finite",
         "exact",
-        "certificate",
+        "exact-value",
     ),
     examples=(
         example(

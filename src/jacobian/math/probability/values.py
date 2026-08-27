@@ -149,33 +149,6 @@ def _require_native_result_shape(
         raise TypeError("native column marginals must be Fractions")
 
 
-def _require_native_result_support(
-    row_marginals: tuple[Fraction, ...],
-    column_marginals: tuple[Fraction, ...],
-    positive_support: tuple[MutualInformationTerm, ...],
-) -> None:
-    positions = tuple((term.row_index, term.column_index) for term in positive_support)
-    if positions != tuple(sorted(set(positions))):
-        raise ValueError("positive support must be unique and row-major ordered")
-    row_support = [Fraction() for _ in row_marginals]
-    column_support = [Fraction() for _ in column_marginals]
-    for term in positive_support:
-        if term.row_index >= len(row_marginals):
-            raise ValueError("positive support row index lies outside the table")
-        if term.column_index >= len(column_marginals):
-            raise ValueError("positive support column index lies outside the table")
-        if term.row_marginal != row_marginals[term.row_index]:
-            raise ValueError("positive support row marginal is inconsistent")
-        if term.column_marginal != column_marginals[term.column_index]:
-            raise ValueError("positive support column marginal is inconsistent")
-        row_support[term.row_index] += term.probability
-        column_support[term.column_index] += term.probability
-    if tuple(row_support) != row_marginals:
-        raise ValueError("positive support does not reconstruct row marginals")
-    if tuple(column_support) != column_marginals:
-        raise ValueError("positive support does not reconstruct column marginals")
-
-
 def _small_prime_factorization(value: int) -> dict[int, int]:
     remaining = value
     factors: dict[int, int] = {}
@@ -233,14 +206,14 @@ def _require_bounded_product(
 ) -> None:
     if scale.bit_length() > MAX_MUTUAL_INFORMATION_SCALE_BITS:
         raise ValueError(
-            "mutual-information certificate scale exceeds the replay bound"
+            "mutual-information logarithmic representation scale exceeds the bound"
         )
     power_cost = 0
     for probability, ratio in weighted_ratios:
         scaled_probability = scale * probability
         if scaled_probability.denominator != 1:
             raise ValueError(
-                "mutual-information certificate scale does not clear support masses"
+                "mutual-information logarithmic representation scale does not clear support masses"
             )
         exponent = scaled_probability.numerator
         if ratio == 1:
@@ -250,41 +223,47 @@ def _require_bounded_product(
         )
         if power_cost > MAX_MUTUAL_INFORMATION_POWER_COST_BITS:
             raise ValueError(
-                "mutual-information certificate product exceeds the output-cost bound"
+                "mutual-information logarithmic representation product exceeds the output-cost bound"
             )
 
 
 @dataclass(frozen=True, slots=True)
-class MutualInformationCertificate:
-    """Native exact values satisfying ``scale * I = log_base(product)``."""
+class MutualInformationLogRepresentation:
+    """Exact finite representation of ``scale * I = log_base(product)``."""
 
     scale: int
     product: Fraction
 
     def __post_init__(self) -> None:
         if type(self.scale) is not int or self.scale <= 0:
-            raise ValueError("mutual-information certificate scale must be positive")
+            raise ValueError(
+                "mutual-information logarithmic representation scale must be positive"
+            )
         if self.scale.bit_length() > MAX_MUTUAL_INFORMATION_SCALE_BITS:
             raise ValueError(
-                "mutual-information certificate scale exceeds the replay bound"
+                "mutual-information logarithmic representation scale exceeds the bound"
             )
         if type(self.product) is not Fraction or self.product <= 0:
-            raise ValueError("mutual-information certificate product must be positive")
+            raise ValueError(
+                "mutual-information logarithmic representation product must be positive"
+            )
 
 
 @dataclass(frozen=True, slots=True)
 class MutualInformationResult:
-    """Exact native marginals, support terms, certificate, and optional value."""
+    """Exact native marginals, support terms, log representation, and value."""
 
     row_marginals: tuple[Fraction, ...]
     column_marginals: tuple[Fraction, ...]
     positive_support: tuple[MutualInformationTerm, ...]
     log_base: int
-    certificate: MutualInformationCertificate
+    logarithmic_value: MutualInformationLogRepresentation
     exact_value: Fraction | None
     sign: Literal["ZERO", "POSITIVE"]
 
     def __post_init__(self) -> None:
+        """Check only native representation shape; the producer owns the identity."""
+
         _require_native_result_shape(
             self.row_marginals,
             self.column_marginals,
@@ -292,49 +271,35 @@ class MutualInformationResult:
         )
         if type(self.log_base) is not int or not 2 <= self.log_base <= 36:
             raise ValueError("mutual-information log base must lie from 2 through 36")
-        if sum(self.row_marginals, Fraction()) != 1:
-            raise ValueError("row marginals must sum exactly to one")
-        if sum(self.column_marginals, Fraction()) != 1:
-            raise ValueError("column marginals must sum exactly to one")
-        _require_native_result_support(
-            self.row_marginals,
-            self.column_marginals,
-            self.positive_support,
+
+    @classmethod
+    def _computed_from_kernel(
+        cls,
+        *,
+        row_marginals: tuple[Fraction, ...],
+        column_marginals: tuple[Fraction, ...],
+        positive_support: tuple[MutualInformationTerm, ...],
+        log_base: int,
+        logarithmic_value: MutualInformationLogRepresentation,
+        exact_value: Fraction | None,
+        sign: Literal["ZERO", "POSITIVE"],
+    ) -> MutualInformationResult:
+        """Build the value after the kernel established its exact identity."""
+
+        return cls(
+            row_marginals=row_marginals,
+            column_marginals=column_marginals,
+            positive_support=positive_support,
+            log_base=log_base,
+            logarithmic_value=logarithmic_value,
+            exact_value=exact_value,
+            sign=sign,
         )
-        product = self.certificate.product
-        if product < 1:
-            raise ValueError("mutual-information product contradicts nonnegativity")
-        weighted_ratios = [
-            (term.probability, term.likelihood_ratio) for term in self.positive_support
-        ]
-        _require_bounded_product(self.certificate.scale, weighted_ratios)
-        expected_product = Fraction(1)
-        for probability, ratio in weighted_ratios:
-            scaled_probability = self.certificate.scale * probability
-            if scaled_probability.denominator != 1:
-                raise ValueError(
-                    "mutual-information certificate scale does not clear support masses"
-                )
-            expected_product *= ratio**scaled_probability.numerator
-        if product != expected_product:
-            raise ValueError(
-                "mutual-information certificate product is inconsistent with support"
-            )
-        if self.sign != ("ZERO" if product == 1 else "POSITIVE"):
-            raise ValueError("mutual-information sign must match the exact product")
-        base_exponent = _rational_base_exponent(product, self.log_base)
-        expected_exact = (
-            None if base_exponent is None else base_exponent / self.certificate.scale
-        )
-        if self.exact_value != expected_exact:
-            raise ValueError(
-                "mutual-information exact value must match the certificate"
-            )
 
 
 __all__ = [
     "FiniteJointTable",
-    "MutualInformationCertificate",
+    "MutualInformationLogRepresentation",
     "MutualInformationResult",
     "MutualInformationTerm",
 ]

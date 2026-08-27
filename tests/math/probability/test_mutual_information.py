@@ -91,7 +91,7 @@ def _candidate() -> dict[str, object]:
             }
         ],
         "log_base": 2,
-        "log_product_certificate": {
+        "exact_logarithmic_value": {
             "scale": "1",
             "product": _Q1,
             "identity": "SCALE_TIMES_I_EQUALS_LOG_BASE_OF_PRODUCT",
@@ -130,10 +130,10 @@ def test_candidate_rejects_oversized_rational_components_before_item_parsing() -
         FiniteJointTableMutualInformationResult.model_validate(candidate)
 
 
-def test_candidate_uses_a_separate_certificate_product_bound() -> None:
+def test_candidate_uses_a_separate_logarithmic_value_product_bound() -> None:
     candidate = _candidate()
-    candidate["log_product_certificate"] = {
-        **candidate["log_product_certificate"],
+    candidate["exact_logarithmic_value"] = {
+        "scale": "1",
         "product": {
             "num": "1" + "0" * MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
             "den": "1",

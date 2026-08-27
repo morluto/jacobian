@@ -1041,12 +1041,10 @@ def _induced_profile_result_bytes(
     boundary, rather than a fixed per-entry estimate.
     """
 
-    normalized_vertices = tuple(
-        unicodedata.normalize("NFC", vertex) for vertex in hypergraph.vertices
-    )
     subset_size = len(expected_subsets[0])
     vertex_wire_bytes = {
-        vertex: len(encode_strict_json(vertex)) for vertex in normalized_vertices
+        vertex: len(encode_strict_json(unicodedata.normalize("NFC", vertex)))
+        for vertex in hypergraph.vertices
     }
     maximum_count = min(len(hypergraph.edges), (1 << subset_size) - 1)
     count_wire_bytes = len(encode_strict_json(maximum_count))

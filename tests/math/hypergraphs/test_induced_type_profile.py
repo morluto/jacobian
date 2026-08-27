@@ -92,6 +92,22 @@ class TestInducedTypeProfile:
         assert all(entry.induced_edge_count == 0 for entry in result.entries)
         assert len(result.entries) == 3
 
+    def test_decomposed_vertex_labels_use_original_lookup_keys(self) -> None:
+        decomposed = "e\u0301"
+
+        result = _profile(
+            {
+                "vertices": [decomposed, "b"],
+                "edges": [["e1", [decomposed]]],
+            },
+            1,
+        )
+
+        assert tuple(entry.vertex_subset for entry in result.entries) == (
+            ("b",),
+            (decomposed,),
+        )
+
     def test_deduplication_of_identical_induced_edges(self) -> None:
         # Two edges with identical members collapse to one induced edge.
         result = _profile(

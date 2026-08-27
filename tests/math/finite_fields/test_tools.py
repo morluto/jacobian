@@ -18,6 +18,7 @@ from jacobian.math.finite_fields import (
     RankResult,
     element,
     finite_field,
+    finite_map_table,
     finite_polynomial,
     finite_polynomial_map,
     projective_line,
@@ -88,16 +89,13 @@ def test_projective_enumeration_refuses_large_output_before_allocation() -> None
 def test_finite_map_table_refuses_excessive_polynomial_work() -> None:
     presentation = finite_field(2, (1, 1, 0, 1, 1, 0, 0, 0, 1))
     one = element(presentation, (1,) + (0,) * 7)
-    with pytest.raises(ValidationError) as error:
-        FiniteMapTableRequest(
-            polynomial_map=finite_polynomial_map(
-                finite_polynomial(presentation, (one,) * 512)
-            )
+    request = FiniteMapTableRequest(
+        polynomial_map=finite_polynomial_map(
+            finite_polynomial(presentation, (one,) * 512)
         )
-    assert (
-        error.value.errors()[0]["type"]
-        == "finite_field.finite_map_exceeds_operation_work_budget"
     )
+    with pytest.raises(ValueError, match="operation work budget"):
+        finite_map_table(request.polynomial_map)
 
 
 def test_direction_rank_ledger_refuses_excessive_aggregate_work() -> None:

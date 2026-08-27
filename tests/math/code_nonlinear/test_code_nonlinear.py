@@ -242,9 +242,9 @@ class TestWordDistance:
     def test_all_different_maximal_words_still_exceed_the_result_bound(self) -> None:
         left = [0] * MAX_EXPLICIT_CODE_LENGTH
         right = [1] * MAX_EXPLICIT_CODE_LENGTH
-        with pytest.raises(ValidationError) as exc_info:
-            WordDistanceRequest(word1=left, word2=right)
-        assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
+        request = WordDistanceRequest(word1=left, word2=right)
+        with pytest.raises(ValueError, match="result can use"):
+            compute_word_distance(request)
         payload = {
             "word1": left,
             "word2": right,
@@ -274,9 +274,9 @@ class TestWordDistance:
             MAX_EXPLICIT_CODE_LENGTH - 300_000, MAX_EXPLICIT_CODE_LENGTH
         ):
             high[index] = 1
-        with pytest.raises(ValidationError) as exc_info:
-            WordDistanceRequest(word1=left, word2=high)
-        assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
+        request = WordDistanceRequest(word1=left, word2=high)
+        with pytest.raises(ValueError, match="result can use"):
+            compute_word_distance(request)
 
 
 class TestExplicitProfile:
@@ -480,12 +480,9 @@ class TestConstantWeightProfile:
         assert result.maximum_distance_witness is None
 
     def test_rejects_mixed_weight_source(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            ConstantWeightProfileRequest(code=_code((0, 0, 1, 1), (1, 1, 1, 0)))
-        assert (
-            exc_info.value.errors()[0]["type"]
-            == "nonlinear_code.constant_weight_mismatch"
-        )
+        request = ConstantWeightProfileRequest(code=_code((0, 0, 1, 1), (1, 1, 1, 0)))
+        with pytest.raises(ValueError, match="all codewords"):
+            compute_constant_weight_profile(request)
 
     @pytest.mark.parametrize(
         ("field", "replacement"),
@@ -627,11 +624,11 @@ class TestDerivedAdmissionBoundaries:
         )
         assert require_profile_admission(accepted.code).pair_count == 4_997_541
         assert require_profile_admission(accepted.code).pair_count <= MAX_PROFILE_PAIRS
-        with pytest.raises(ValidationError) as exc_info:
-            ExplicitProfileRequest(
-                code=ExplicitBinaryCode(length=12, codewords=_binary_words(12, 3_163))
-            )
-        assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
+        request = ExplicitProfileRequest(
+            code=ExplicitBinaryCode(length=12, codewords=_binary_words(12, 3_163))
+        )
+        with pytest.raises(ValueError, match="unordered pairs"):
+            compute_explicit_profile(request)
 
     def test_bitset_chunk_work_immediate_boundary(self) -> None:
         accepted = ExplicitProfileRequest(
@@ -641,11 +638,11 @@ class TestDerivedAdmissionBoundaries:
         assert plan.pair_count == 3_332_071
         assert plan.bitset_chunks == 3
         assert plan.bitset_chunk_work == 9_996_213
-        with pytest.raises(ValidationError) as exc_info:
-            ExplicitProfileRequest(
-                code=ExplicitBinaryCode(length=90, codewords=_binary_words(90, 2_583))
-            )
-        assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
+        request = ExplicitProfileRequest(
+            code=ExplicitBinaryCode(length=90, codewords=_binary_words(90, 2_583))
+        )
+        with pytest.raises(ValueError, match="pair-by-bitset-chunk"):
+            compute_explicit_profile(request)
 
     def test_profile_output_size_immediate_boundary(self) -> None:
         accepted_length = 100_770
@@ -660,15 +657,15 @@ class TestDerivedAdmissionBoundaries:
             require_profile_admission(accepted.code).result_wire_upper_bound
             <= MAX_CODE_RESULT_BYTES
         )
-        with pytest.raises(ValidationError) as exc_info:
-            ExplicitProfileRequest(
-                code=_code(
-                    (0,) * (accepted_length + 1),
-                    (1,) * (accepted_length + 1),
-                    length=accepted_length + 1,
-                )
+        request = ExplicitProfileRequest(
+            code=_code(
+                (0,) * (accepted_length + 1),
+                (1,) * (accepted_length + 1),
+                length=accepted_length + 1,
             )
-        assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
+        )
+        with pytest.raises(ValueError, match="canonical JSON bytes"):
+            compute_explicit_profile(request)
 
     @pytest.mark.parametrize("length", [200_000, MAX_EXPLICIT_CODE_LENGTH])
     def test_empty_profile_charges_no_witnesses_and_fits_output_bound(
@@ -708,11 +705,11 @@ class TestDerivedAdmissionBoundaries:
     def test_set_system_output_size_immediate_boundary(self) -> None:
         accepted_length = 275_963
         ToSetSystemRequest(code=_code((1,) * accepted_length, length=accepted_length))
-        with pytest.raises(ValidationError) as exc_info:
-            ToSetSystemRequest(
-                code=_code((1,) * (accepted_length + 1), length=accepted_length + 1)
-            )
-        assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
+        request = ToSetSystemRequest(
+            code=_code((1,) * (accepted_length + 1), length=accepted_length + 1)
+        )
+        with pytest.raises(ValueError, match="canonical JSON bytes"):
+            compute_to_set_system(request)
 
     @pytest.mark.parametrize(
         ("length", "weight", "expected"),
@@ -742,21 +739,21 @@ class TestDerivedAdmissionBoundaries:
         assert "Exceeds the limit" not in message
         assert f"{MAX_EXPLICIT_CODE_LENGTH} coordinates * {weight + 1} words" in message
 
-    def test_constant_weight_request_rejects_at_the_immediate_entry_boundary(
+    def test_constant_weight_owner_rejects_at_the_immediate_entry_boundary(
         self,
     ) -> None:
         ConstantWeightRequest.model_validate({"length": 101, "weight": 2})
-        with pytest.raises(ValidationError) as exc_info:
-            ConstantWeightRequest.model_validate({"length": 102, "weight": 2})
-        assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
-        with pytest.raises(ValidationError) as exc_info:
-            ConstantWeightRequest.model_validate(
-                {
-                    "length": MAX_EXPLICIT_CODE_LENGTH,
-                    "weight": MAX_EXPLICIT_CODE_LENGTH // 2,
-                }
-            )
-        assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
+        request = ConstantWeightRequest.model_validate({"length": 102, "weight": 2})
+        with pytest.raises(ValueError, match="entry bound"):
+            compute_constant_weight(request)
+        request = ConstantWeightRequest.model_validate(
+            {
+                "length": MAX_EXPLICIT_CODE_LENGTH,
+                "weight": MAX_EXPLICIT_CODE_LENGTH // 2,
+            }
+        )
+        with pytest.raises(ValueError, match="entry bound"):
+            compute_constant_weight(request)
 
 
 class TestCanonicalConsumers:
@@ -790,9 +787,9 @@ class TestCanonicalConsumers:
         assert axis.code.codewords == ((0,) * MAX_EXPLICIT_CODE_LENGTH,)
 
     def test_constant_weight_admission_rejects_central_binomial_work(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            ConstantWeightRequest.model_validate({"length": 64, "weight": 32})
-        assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
+        request = ConstantWeightRequest.model_validate({"length": 64, "weight": 32})
+        with pytest.raises(ValueError, match="entry bound"):
+            compute_constant_weight(request)
         properties = ConstantWeightRequest.model_json_schema()["properties"]
         assert properties["length"]["maximum"] == MAX_EXPLICIT_CODE_LENGTH
 

@@ -168,38 +168,14 @@ class TreeAutomatonReachabilityRequest(StrictModel):
             f"nondeterministic bottom-up tree automaton with at most "
             f"{MAX_TA_STATES} states, {MAX_TA_SYMBOLS} ranked symbols, and "
             f"{MAX_TA_TRANSITIONS} unique transitions. "
-            "Requests are additionally rejected when the coupled "
+            "Execution is bounded by the coupled "
             "reachability work envelope (MAX_TREE_AUTOMATON_REACHABILITY_"
-            f"WORK = {MAX_TREE_AUTOMATON_REACHABILITY_WORK:,} units, priced across the three passes behind "
-            "work admission, request admission, and execution "
-            "pass) or the "
+            f"WORK = {MAX_TREE_AUTOMATON_REACHABILITY_WORK:,} units for one owner-local saturation pass) or the "
             "aggregate witness output envelope (MAX_REACHABILITY_WITNESS_"
             f"NODES = {MAX_REACHABILITY_WITNESS_NODES} nodes summed across every reachable state's "
             "minimum witness) is exceeded"
         ),
     )
-
-    @model_validator(mode="after")
-    def require_bounded_witness_profile(self) -> Self:
-        from jacobian.math.tree_automata.values import (
-            reachability_admission_profile,
-            reachability_public_path_work_bound,
-        )
-
-        if reachability_public_path_work_bound(self.automaton) > (
-            MAX_TREE_AUTOMATON_REACHABILITY_WORK
-        ):
-            raise _validation_error(
-                "reachability_work_bound",
-                "tree automaton reachability work bound exceeded",
-            )
-        try:
-            reachability_admission_profile(self.automaton)
-        except ValueError as exc:
-            if "witness output" in str(exc):
-                raise _validation_error("witness_output_bound", str(exc)) from exc
-            raise
-        return self
 
 
 __all__ = [

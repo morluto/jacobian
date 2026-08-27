@@ -1,6 +1,7 @@
 """Exact integer number-theory operations."""
 
 from jacobian.catalog.models import MathTools
+from jacobian.math.number_theory._additional_ops import ADDITIONAL_NT_OPERATIONS
 from jacobian.math.number_theory._derived import DERIVED_NUMBER_THEORY_OPERATIONS
 from jacobian.math.number_theory._divisibility import DIVISIBILITY_OPERATIONS
 from jacobian.math.number_theory._divisibility_profiles import (
@@ -32,5 +33,6 @@ TOOLS: MathTools = (
     FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
     FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION,
     FRIABLE_COUNT_OPERATION,
+    *ADDITIONAL_NT_OPERATIONS,
     *DIVISIBILITY_PROFILE_OPERATIONS,
 )

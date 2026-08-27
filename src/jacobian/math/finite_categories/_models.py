@@ -4,14 +4,9 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from jacobian._models import StrictModel
-from jacobian.math.finite_categories._product import (
-    CategoryProductAdmissionError,
-    _product_error,
-    _product_plan,
-)
 from jacobian.math.finite_categories.values import (
     MAX_CATEGORY_MORPHISMS,
     MAX_CATEGORY_OBJECTS,
@@ -65,14 +60,6 @@ class CategoryProductRequest(StrictModel):
 
     left: FiniteCategory
     right: FiniteCategory
-
-    @model_validator(mode="after")
-    def require_bounded_product(self) -> Self:
-        try:
-            _product_plan(self.left, self.right)
-        except CategoryProductAdmissionError as exc:
-            raise _product_error(exc.reason, str(exc)) from None
-        return self
 
 
 __all__ = [

@@ -696,6 +696,11 @@ def compute_barycentric_subdivision(
     sorted_faces = sorted(
         _all_faces(request.complex.facets), key=lambda face: (len(face), face)
     )
+    if len(sorted_faces) > 31:
+        raise ValueError(
+            "barycentric subdivision requires at most 31 faces; "
+            "input would produce more than 128 subdivision facets"
+        )
     subdivision = barycentric_subdivision(sorted_faces)
     facets = tuple(sorted(tuple(sorted(facet)) for facet in subdivision.facets))
     return BarycentricSubdivisionResult._from_kernel(

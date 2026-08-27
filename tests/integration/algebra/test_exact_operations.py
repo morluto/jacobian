@@ -20,6 +20,7 @@ from jacobian.math.recurrence_solving._operations import (
     compute_find_recurrence,
 )
 from jacobian.math.root_isolation._models import (
+    MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS,
     AlgebraicCompareRequest,
     UnivariatePolynomialRequest,
 )
@@ -168,6 +169,23 @@ def test_root_isolation_rejects_sources_outside_the_composable_envelope() -> Non
                 "coefficients_descending": [
                     {"num": "1" + "0" * 996, "den": "1"},
                     {"num": "1", "den": "1"},
+                ]
+            }
+        )
+
+
+def test_root_isolation_rejects_expanded_normalization_without_decimal_formatting() -> (
+    None
+):
+    """Clearing valid rational denominators must return the intended bound error."""
+
+    base = 10 ** (MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS - 1)
+    with pytest.raises(ValidationError, match="source_coefficient_bound"):
+        UnivariatePolynomialRequest.model_validate(
+            {
+                "coefficients_descending": [
+                    {"num": str(base + 1), "den": str(base - 1)},
+                    {"num": "1", "den": str(base + 4)},
                 ]
             }
         )

@@ -22,6 +22,9 @@ from jacobian.math.real_algebraic import (
 # irreducible factor within the shared 1,000-digit algebraic-value envelope:
 # the Landau--Mignotte bound contributes fewer than four decimal digits.
 MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS = MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS - 4
+_MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_MAGNITUDE = (
+    10**MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -103,7 +106,7 @@ class UnivariatePolynomialRequest(StrictModel):
         if normalized[0] < 0:
             normalized = tuple(-coefficient for coefficient in normalized)
         if any(
-            len(str(abs(coefficient))) > MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS
+            abs(coefficient) >= _MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_MAGNITUDE
             for coefficient in normalized
         ):
             raise _validation_error(

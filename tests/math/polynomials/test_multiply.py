@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.math.polynomials._multiply_models import RationalPolynomialMultiplyRequest
 from jacobian.math.polynomials._multiply_operations import rational_polynomial_multiply
 
@@ -121,6 +122,40 @@ def test_accepts_product_sensitive_operand_budgets() -> None:
     assert result.polynomial.terms[-1].exponents == (1001,)
     assert result.polynomial.terms[0].coefficient.num == coefficient["num"]
     assert result.polynomial.terms[0].coefficient.den == coefficient["den"]
+
+
+@pytest.mark.parametrize("identity_on_left", [True, False])
+def test_accepts_identity_product_at_coefficient_boundary(
+    identity_on_left: bool,
+) -> None:
+    coefficient = {
+        "num": "1" + "0" * (MAX_CANONICAL_RATIONAL_DIGITS - 1),
+        "den": "1",
+    }
+    identity = {
+        "domain": "QQ",
+        "variables": ["x"],
+        "polynomial": {
+            "terms": [{"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}]
+        },
+    }
+    operand = {
+        "domain": "QQ",
+        "variables": ["x"],
+        "polynomial": {
+            "terms": [{"coefficient": coefficient, "exponents": [0]}]
+        },
+    }
+    payload = (
+        {"left": identity, "right": operand}
+        if identity_on_left
+        else {"left": operand, "right": identity}
+    )
+
+    request = RationalPolynomialMultiplyRequest.model_validate(payload)
+    result = rational_polynomial_multiply(request)
+
+    assert result == request.right if identity_on_left else result == request.left
 
 
 def test_rejects_product_exponent_overflow() -> None:

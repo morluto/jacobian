@@ -29,6 +29,29 @@ def _json_array_size(item_sizes: tuple[int, ...]) -> int:
     return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
 
 
+def _is_multiplicative_identity(polynomial: RationalPolynomial) -> bool:
+    """Return whether a polynomial is the exact unit of its declared ring."""
+
+    return (
+        len(polynomial.polynomial.terms) == 1
+        and polynomial.polynomial.terms[0].exponents
+        == (0,) * len(polynomial.variables)
+        and polynomial.polynomial.terms[0].coefficient.as_fraction() == 1
+    )
+
+
+def _maximum_polynomial_coefficient_digits(polynomial: RationalPolynomial) -> int:
+    """Return the greatest canonical coefficient-component width in a polynomial."""
+
+    return max(
+        (
+            canonical_rational_component_digits(term.coefficient)
+            for term in polynomial.polynomial.terms
+        ),
+        default=1,
+    )
+
+
 def _maximum_product_coefficient_digits(
     left: RationalPolynomial, right: RationalPolynomial
 ) -> int:
@@ -37,8 +60,14 @@ def _maximum_product_coefficient_digits(
     A coefficient can collect at most ``min(n, m)`` products.  Putting all
     product denominators over one common denominator gives a conservative
     component width of ``k * (left_digits + right_digits)`` plus the decimal
-    width needed to add ``k`` numerators.
+    width needed to add ``k`` numerators.  Multiplication by the exact unit is
+    an identity, so it preserves the other operand's coefficient widths.
     """
+
+    if _is_multiplicative_identity(left):
+        return _maximum_polynomial_coefficient_digits(right)
+    if _is_multiplicative_identity(right):
+        return _maximum_polynomial_coefficient_digits(left)
 
     product_count = min(
         len(left.polynomial.terms),
@@ -46,20 +75,8 @@ def _maximum_product_coefficient_digits(
     )
     if product_count == 0:
         return 1
-    left_digits = max(
-        (
-            canonical_rational_component_digits(term.coefficient)
-            for term in left.polynomial.terms
-        ),
-        default=1,
-    )
-    right_digits = max(
-        (
-            canonical_rational_component_digits(term.coefficient)
-            for term in right.polynomial.terms
-        ),
-        default=1,
-    )
+    left_digits = _maximum_polynomial_coefficient_digits(left)
+    right_digits = _maximum_polynomial_coefficient_digits(right)
     return product_count * (left_digits + right_digits) + len(str(product_count))
 
 

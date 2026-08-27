@@ -16,9 +16,15 @@ MAX_FAMILY_SIZE: int = 100
 
 
 class GcdQuotientProfileRequest(StrictModel):
-    """A finite integer family for gcd-normalized quotient profiling."""
+    """A finite family of positive integers for gcd-normalized profiling."""
 
-    elements: tuple[BoundedInteger, ...] = Field(max_length=MAX_FAMILY_SIZE)
+    elements: tuple[BoundedInteger, ...] = Field(
+        max_length=MAX_FAMILY_SIZE,
+        description=(
+            "Finite family of at most 100 positive integers; every element is "
+            "strictly greater than zero. Zero and negative integers are invalid."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_positive_elements(self) -> Self:
@@ -50,9 +56,15 @@ class GcdQuotientProfileResult(StrictModel):
 
 
 class ProductDivisibilityProfileRequest(StrictModel):
-    """A finite integer family for product-divisibility profiling."""
+    """A finite family of positive integers for product-divisibility profiling."""
 
-    elements: tuple[BoundedInteger, ...] = Field(max_length=MAX_FAMILY_SIZE)
+    elements: tuple[BoundedInteger, ...] = Field(
+        max_length=MAX_FAMILY_SIZE,
+        description=(
+            "Finite family of at most 100 positive integers; every element is "
+            "strictly greater than zero. Zero and negative integers are invalid."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_positive_elements(self) -> Self:

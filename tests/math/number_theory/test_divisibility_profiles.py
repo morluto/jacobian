@@ -48,3 +48,24 @@ def test_profile_requests_reject_nonpositive_elements() -> None:
         GcdQuotientProfileRequest(elements=("0",))
     with pytest.raises(ValidationError, match="must be positive"):
         ProductDivisibilityProfileRequest(elements=("-2",))
+
+
+def test_profile_declarations_publish_positive_integer_domain() -> None:
+    from jacobian.math.number_theory._divisibility_profiles import (
+        DIVISIBILITY_PROFILE_OPERATIONS,
+    )
+
+    schemas = [
+        GcdQuotientProfileRequest.model_json_schema(),
+        ProductDivisibilityProfileRequest.model_json_schema(),
+    ]
+    for schema in schemas:
+        description = schema["properties"]["elements"]["description"]
+        assert "positive integers" in description
+        assert "Zero and negative integers are invalid" in description
+
+    for operation in DIVISIBILITY_PROFILE_OPERATIONS:
+        assert "positive integers" in operation.description
+        assert "Zero and negative integers are outside the request domain" in (
+            operation.description
+        )

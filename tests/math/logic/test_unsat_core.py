@@ -1619,8 +1619,12 @@ def test_request_bounds_parsed_ast_nodes() -> None:
             "(check-sat)\n"
         )
 
-    assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(2_047))
-    assert_execution_rejected(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(2_048)))
+    assert SmtUnsatCoreRequest(
+        logic="QF_LIA", smtlib=source(2_047), timeout_ms=5_000
+    )
+    assert_execution_rejected(
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(2_048), timeout_ms=5_000)
+    )
 
 
 def test_unsat_result_requires_a_nonempty_canonical_core() -> None:

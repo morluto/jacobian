@@ -737,7 +737,11 @@ def test_smt_request_admits_a_large_shallow_formula_and_still_solves() -> None:
         + ["(assert (= x (+ 1 1)))"] * 5_000
     )
     result = solve_smt(
-        SmtSolveRequest(logic=SmtLogic.QF_LIA, smtlib=assertions + "\n(check-sat)")
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=assertions + "\n(check-sat)",
+            timeout_ms=10_000,
+        )
     )
 
     assert result.outcome == "SAT"

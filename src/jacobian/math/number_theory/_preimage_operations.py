@@ -5,11 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import isqrt
 
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+    parse_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
 from jacobian.math.number_theory._preimage_models import (
-    MAX_INTERVAL_ENDPOINT_DIGITS,
+    MAX_INTERVAL_PROFILE_RESULT_BYTES,
     MAX_INTERVAL_PROFILE_ROWS,
+    MAX_INTERVAL_PROFILE_WORK,
     DivisorSumProductPreimageRequest,
     DivisorSumProductPreimageResult,
     PAdicIntervalProfileRequest,
@@ -20,13 +28,36 @@ from jacobian.math.number_theory._preimage_models import (
 
 @dataclass(frozen=True, slots=True)
 class _PAdicIntervalProfilePlan:
-    """One semantically admitted profile request for the kernel."""
+    """One exact profile and its derived result data for the kernel."""
 
-    start: int
-    length: int
-    prime: int
-    endpoint: int
-    powers: tuple[int, ...]
+    rows: tuple[tuple[int, int], ...]
+    total_valuation: int
+    maximum_valuation: int
+
+
+def _profile_result_payload(
+    request: PAdicIntervalProfileRequest,
+    *,
+    rows: tuple[tuple[int, int], ...],
+    total_valuation: int,
+    maximum_valuation: int,
+) -> dict[str, object]:
+    """Build the canonical payload whose size is part of request admission."""
+
+    return {
+        "start": request.start,
+        "length": request.length,
+        "prime": request.prime,
+        "rows": [
+            {
+                "valuation": valuation,
+                "count": format_canonical_integer(count),
+            }
+            for valuation, count in rows
+        ],
+        "total_valuation": format_canonical_integer(total_valuation),
+        "maximum_valuation": maximum_valuation,
+    }
 
 
 def _admit_p_adic_interval_profile(
@@ -66,33 +97,93 @@ def _admit_p_adic_interval_profile(
         )
 
     endpoint = start + length
-    if len(str(endpoint)) > MAX_INTERVAL_ENDPOINT_DIGITS:
-        raise OperationDomainValidationError(
-            location=("length",),
-            code="number_theory.p_adic_interval_endpoint_digits",
-            message=(
-                "interval endpoint must have at most "
-                f"{MAX_INTERVAL_ENDPOINT_DIGITS} digits"
-            ),
-        )
-
-    powers: list[int] = []
+    divisible_counts: list[int] = []
     power = 1
+    endpoint_divided_by_prime = endpoint // prime
     while power <= endpoint:
-        powers.append(power)
+        divisible_counts.append(endpoint // power - start // power)
+        if power > endpoint_divided_by_prime:
+            break
         power *= prime
-    if len(powers) > MAX_INTERVAL_PROFILE_ROWS:
+
+    power_count = len(divisible_counts)
+    # Two interval quotient differences and one power-step charge per visited
+    # power bound the exact integer work used to build the retained profile.
+    work_units = 3 * power_count
+    if (
+        power_count > MAX_INTERVAL_PROFILE_ROWS
+        or work_units > MAX_INTERVAL_PROFILE_WORK
+    ):
         raise OperationDomainValidationError(
             location=("length",),
             code="number_theory.p_adic_interval_profile_row_bound",
-            message=f"profile needs at most {MAX_INTERVAL_PROFILE_ROWS} rows",
+            message=(
+                f"profile needs at most {MAX_INTERVAL_PROFILE_ROWS} visited powers "
+                f"and {MAX_INTERVAL_PROFILE_WORK} arithmetic work units"
+            ),
         )
+
+    rows = tuple(
+        (valuation, count)
+        for valuation, (current, following) in enumerate(
+            zip(
+                divisible_counts,
+                (*divisible_counts[1:], 0),
+                strict=True,
+            )
+        )
+        if (count := current - following)
+    )
+    total_valuation = sum(valuation * count for valuation, count in rows)
+    if len(format_canonical_integer(total_valuation)) > MAX_INTEGER_DIGITS:
+        raise OperationDomainValidationError(
+            location=("length",),
+            code="number_theory.p_adic_interval_total_valuation_digits",
+            message=(
+                "exact total valuation must fit the "
+                f"{MAX_INTEGER_DIGITS}-digit canonical integer bound"
+            ),
+        )
+
+    maximum_valuation = rows[-1][0] if rows else 0
+    payload = _profile_result_payload(
+        request,
+        rows=rows,
+        total_valuation=total_valuation,
+        maximum_valuation=maximum_valuation,
+    )
+    try:
+        result_bytes = len(
+            encode_strict_json(
+                payload,
+                limits=CanonicalLimits(
+                    max_output_bytes=MAX_INTERVAL_PROFILE_RESULT_BYTES
+                ),
+            )
+        )
+    except CanonicalizationError as exc:
+        raise OperationDomainValidationError(
+            location=("length",),
+            code="number_theory.p_adic_interval_result_bytes",
+            message=(
+                "exact profile result must fit the "
+                f"{MAX_INTERVAL_PROFILE_RESULT_BYTES}-byte canonical output bound"
+            ),
+        ) from exc
+    if result_bytes > MAX_INTERVAL_PROFILE_RESULT_BYTES:
+        raise OperationDomainValidationError(
+            location=("length",),
+            code="number_theory.p_adic_interval_result_bytes",
+            message=(
+                "exact profile result must fit the "
+                f"{MAX_INTERVAL_PROFILE_RESULT_BYTES}-byte canonical output bound"
+            ),
+        )
+
     return _PAdicIntervalProfilePlan(
-        start=start,
-        length=length,
-        prime=prime,
-        endpoint=endpoint,
-        powers=tuple(powers),
+        rows=rows,
+        total_valuation=total_valuation,
+        maximum_valuation=maximum_valuation,
     )
 
 
@@ -121,33 +212,17 @@ def compute_p_adic_interval_profile(
     """Compute the valuation histogram on ``[start + 1, start + length]``."""
     plan = _admit_p_adic_interval_profile(request)
 
-    rows: list[PAdicIntervalProfileRow] = []
-    total_valuation = 0
-    maximum_valuation = 0
-    for valuation, power in enumerate(plan.powers):
-        next_power = (
-            plan.powers[valuation + 1]
-            if valuation + 1 < len(plan.powers)
-            else plan.endpoint + 1
-        )
-        divisible_at_power = plan.endpoint // power - plan.start // power
-        divisible_at_next_power = plan.endpoint // next_power - plan.start // next_power
-        count = divisible_at_power - divisible_at_next_power
-        if count:
-            rows.append(
-                PAdicIntervalProfileRow(
-                    valuation=valuation,
-                    count=str(count),
-                )
-            )
-            total_valuation += valuation * count
-            maximum_valuation = valuation
-
     return PAdicIntervalProfileResult._from_kernel(
         request,
-        rows=tuple(rows),
-        total_valuation=total_valuation,
-        maximum_valuation=maximum_valuation,
+        rows=tuple(
+            PAdicIntervalProfileRow(
+                valuation=valuation,
+                count=format_canonical_integer(count),
+            )
+            for valuation, count in plan.rows
+        ),
+        total_valuation=plan.total_valuation,
+        maximum_valuation=plan.maximum_valuation,
     )
 
 

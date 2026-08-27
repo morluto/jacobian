@@ -47,7 +47,9 @@ PREIMAGE_OPERATIONS = (
         examples=(
             example(
                 "p_adic_profile_2_0_10",
-                "Compute the valuation histogram for 1 through 10 at p=2.",
+                "Compute the valuation histogram for 1 through 10 at p=2; "
+                "the coupled endpoint start + length and its exact sum, work, "
+                "and canonical result all fit the admission envelope.",
                 {"start": "0", "length": "10", "prime": "2"},
             ),
         ),

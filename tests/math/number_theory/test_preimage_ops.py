@@ -3,8 +3,13 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
 from jacobian.math.number_theory._preimage_models import (
+    MAX_INTERVAL_PROFILE_RESULT_BYTES,
+    MAX_INTERVAL_PROFILE_ROWS,
+    MAX_INTERVAL_PROFILE_WORK,
     DivisorSumProductPreimageRequest,
     PAdicIntervalProfileRequest,
 )
@@ -12,6 +17,7 @@ from jacobian.math.number_theory._preimage_operations import (
     compute_divisor_sum_product_preimage,
     compute_p_adic_interval_profile,
 )
+from jacobian.math.number_theory._preimage_ops import PREIMAGE_OPERATIONS
 
 
 def test_divisor_sum_product_preimage_collision_is_complete() -> None:
@@ -86,13 +92,51 @@ def test_p_adic_profile_rejects_nonprime_and_empty_interval() -> None:
     )
 
 
-def test_p_adic_profile_rejects_endpoint_overflow_after_strict_parsing() -> None:
-    request = PAdicIntervalProfileRequest(start="9" * 252, length="1", prime="2")
-    with pytest.raises(OperationDomainValidationError) as error:
-        compute_p_adic_interval_profile(request)
-    assert error.value.errors()[0]["type"] == (
-        "number_theory.p_adic_interval_endpoint_digits"
+def test_p_adic_profile_admits_large_endpoint_when_exact_result_is_small() -> None:
+    result = compute_p_adic_interval_profile(
+        PAdicIntervalProfileRequest(start="9" * 256, length="1", prime="2")
     )
+    assert [(row.valuation, row.count) for row in result.rows] == [(256, "1")]
+    assert result.total_valuation == "256"
+    assert len(canonicalize_json(result.model_dump(mode="json"))) <= (
+        CanonicalLimits().max_output_bytes
+    )
+
+
+def test_p_adic_profile_admits_large_length_from_exact_valuation_sum() -> None:
+    length = 10**252
+    result = compute_p_adic_interval_profile(
+        PAdicIntervalProfileRequest(
+            start="0",
+            length="1" + "0" * 252,
+            prime="2",
+        )
+    )
+    assert int(result.total_valuation) == length - length.bit_count()
+    assert len(result.total_valuation) <= MAX_INTEGER_DIGITS
+    assert len(result.rows) <= MAX_INTERVAL_PROFILE_ROWS
+
+
+def test_p_adic_profile_schema_exposes_coupled_endpoint_admission() -> None:
+    schema = PAdicIntervalProfileRequest.model_json_schema()
+    assert "start + length" in schema["description"]
+    assert schema["endpoint_sum_admission"] == {
+        "endpoint": "start + length",
+        "max_profile_powers": MAX_INTERVAL_PROFILE_ROWS,
+        "max_profile_work_units": MAX_INTERVAL_PROFILE_WORK,
+        "total_valuation_max_digits": MAX_INTEGER_DIGITS,
+        "canonical_result_max_bytes": MAX_INTERVAL_PROFILE_RESULT_BYTES,
+    }
+    assert "start + length" in schema["properties"]["length"]["description"]
+
+    operation = next(
+        operation
+        for operation in PREIMAGE_OPERATIONS
+        if operation.operation_id
+        == "number_theory.integer_interval.p_adic_valuation_profile.compute"
+    )
+    assert "coupled endpoint" in operation.examples[0].description
+    assert "admission envelope" in operation.examples[0].description
 
 
 def test_p_adic_profile_matches_direct_small_interval() -> None:

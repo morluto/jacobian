@@ -4,19 +4,32 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
-from jacobian.math.number_theory._models import BoundedInteger, _validation_error
+from jacobian.canonical import CanonicalLimits, parse_canonical_integer
+from jacobian.math.number_theory._models import (
+    MAX_INTEGER_DIGITS,
+    BoundedInteger,
+    _validation_error,
+)
 
 MAX_PREIMAGE_TARGET = 10_000_000
 MAX_PREIMAGE_SOURCE = 3_162  # floor(sqrt(MAX_PREIMAGE_TARGET))
-# A 252-digit endpoint leaves room for the exact total valuation (at most the
-# interval length times the 2-adic logarithm of the endpoint) in the shared
-# 256-digit canonical integer envelope.
-MAX_INTERVAL_ENDPOINT_DIGITS = 252
 MAX_INTERVAL_PROFILE_ROWS = 1_024
+MAX_INTERVAL_PROFILE_WORK = 3 * MAX_INTERVAL_PROFILE_ROWS
+MAX_INTERVAL_PROFILE_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+_P_ADIC_REQUEST_DESCRIPTION = (
+    "A prime p and the interval {start + 1, ..., start + length}. Let U = "
+    "start + length. Admission evaluates the exact valuation profile for the "
+    f"coupled endpoint U, with at most {MAX_INTERVAL_PROFILE_ROWS} visited powers "
+    f"({MAX_INTERVAL_PROFILE_WORK} bounded arithmetic work units), and admits "
+    f"only when the exact total valuation fits {MAX_INTEGER_DIGITS} canonical "
+    "digits and the complete canonical result fits the output envelope. There "
+    "is no standalone endpoint digit ceiling: useful endpoints are admitted "
+    "when their exact sum, work, and result fit these bounds."
+)
 
 
 class DivisorSumProductPreimageRequest(StrictModel):
@@ -89,14 +102,35 @@ class DivisorSumProductPreimageResult(StrictModel):
 
 
 class PAdicIntervalProfileRequest(StrictModel):
-    """A prime and the interval ``{start + 1, ..., start + length}``."""
+    """A prime and one exactly admitted interval valuation profile."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": _P_ADIC_REQUEST_DESCRIPTION,
+            "examples": [{"start": "0", "length": "10", "prime": "2"}],
+            "endpoint_sum_admission": {
+                "endpoint": "start + length",
+                "max_profile_powers": MAX_INTERVAL_PROFILE_ROWS,
+                "max_profile_work_units": MAX_INTERVAL_PROFILE_WORK,
+                "total_valuation_max_digits": MAX_INTEGER_DIGITS,
+                "canonical_result_max_bytes": MAX_INTERVAL_PROFILE_RESULT_BYTES,
+            },
+        }
+    )
 
     start: BoundedInteger = Field(
-        description="Nonnegative canonical interval start m.",
+        description=(
+            "Nonnegative canonical interval start m. The coupled endpoint "
+            "start + length is admitted from the exact profile bounds."
+        ),
         examples=["0"],
     )
     length: BoundedInteger = Field(
-        description="Positive canonical interval length k.",
+        description=(
+            "Positive canonical interval length k. Together with start, its "
+            "endpoint U = start + length must fit the exact valuation-sum, "
+            "profile-work, and canonical-result bounds described above."
+        ),
         examples=["10"],
     )
     prime: BoundedInteger = Field(
@@ -199,8 +233,9 @@ class PAdicIntervalProfileResult(StrictModel):
 
 
 __all__ = [
-    "MAX_INTERVAL_ENDPOINT_DIGITS",
+    "MAX_INTERVAL_PROFILE_RESULT_BYTES",
     "MAX_INTERVAL_PROFILE_ROWS",
+    "MAX_INTERVAL_PROFILE_WORK",
     "MAX_PREIMAGE_SOURCE",
     "MAX_PREIMAGE_TARGET",
     "DivisorSumProductPreimageRequest",

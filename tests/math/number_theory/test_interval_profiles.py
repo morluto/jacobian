@@ -15,6 +15,8 @@ from jacobian.math.number_theory._interval_profile_models import (
     IntervalProfileRequest,
     PrimeGapProfileRequest,
     SquarefreeProfileRequest,
+    _estimate_prime_gap_work,
+    _estimate_successor_prime_search_work,
 )
 from jacobian.math.number_theory._interval_profile_operations import (
     compute_divisor_count_profile,
@@ -111,13 +113,12 @@ class TestSquarefreeProfile:
             )
 
     def test_operation_specific_result_bounds_preserve_sparse_profiles(self) -> None:
-        squarefree = SquarefreeProfileRequest(
-            lower_bound=1, upper_bound=MAX_INTERVAL_WIDTH
-        )
-        prime_gap = PrimeGapProfileRequest(
-            lower_bound=1, upper_bound=MAX_INTERVAL_WIDTH
-        )
+        sparse_width = MAX_INTERVAL_WIDTH + 1
+        squarefree = SquarefreeProfileRequest(lower_bound=1, upper_bound=sparse_width)
+        prime_gap = PrimeGapProfileRequest(lower_bound=1, upper_bound=sparse_width)
 
+        assert squarefree.width() == sparse_width
+        assert prime_gap.width() == sparse_width
         assert squarefree.admission.estimated_result_bytes <= MAX_PROFILE_RESULT_BYTES
         assert prime_gap.admission.estimated_result_bytes <= MAX_PROFILE_RESULT_BYTES
         with pytest.raises(ValidationError, match="canonical output budget"):
@@ -147,6 +148,14 @@ class TestSquarefreeProfile:
         )
 
         assert request.admission.estimated_result_bytes <= MAX_PROFILE_RESULT_BYTES
+
+    def test_prime_gap_work_charges_successor_search(self) -> None:
+        request = PrimeGapProfileRequest(lower_bound=1, upper_bound=1_000_001)
+
+        assert request.admission.estimated_work == _estimate_prime_gap_work(
+            request.lower_bound, request.upper_bound
+        )
+        assert _estimate_successor_prime_search_work(request.upper_bound) > 0
 
     def test_work_budget_replaces_fixed_upper_bound(self) -> None:
         with pytest.raises(ValidationError, match="segmented-sieve work budget"):

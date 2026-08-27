@@ -33,10 +33,13 @@ from jacobian.canonical import CanonicalLimits
 # bound.  The actual computational envelope is result- and work-sensitive;
 # this is not a mathematical or backend ceiling.
 MAX_INTERVAL_UPPER_BOUND: int = (1 << 53) - 1
+# Dense row profiles retain an explicit materialization bound.  Sparse
+# profiles use their operation-specific work and result estimators instead.
 MAX_INTERVAL_WIDTH: int = 1_000_000
 MAX_SIEVE_WORK: int = 20_000_000
 MAX_PROFILE_RESULT_BYTES: int = CanonicalLimits().max_output_bytes
 _PROFILE_RESULT_OVERHEAD_BYTES: int = 1_024
+_SUCCESSOR_PRIME_BOUND_THRESHOLD: int = 396_738
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,8 +96,38 @@ def _estimate_prime_gap_work(lower_bound: int, upper_bound: int) -> int:
     root = math.isqrt(upper_bound)
     root_bits = max(root.bit_length(), 1)
     # Segmented marking is width-sensitive; the final row scan is charged
-    # separately.  The successor query is a single bounded-prime operation.
-    return _base_sieve_work(upper_bound) + root + width * (root_bits + 2)
+    # separately.  The successor query is a variable-length candidate search,
+    # so charge its bounded candidate and primality-test work as well.
+    return (
+        _base_sieve_work(upper_bound)
+        + root
+        + width * (root_bits + 2)
+        + _estimate_successor_prime_search_work(upper_bound)
+    )
+
+
+def _successor_prime_search_span(upper_bound: int) -> int:
+    """Return a proven upper bound on the successor-prime search span.
+
+    Bertrand's postulate gives a span of ``upper_bound`` for small values.
+    For ``upper_bound >= 396_738``, Dusart's explicit bound gives a prime no
+    farther than ``x / (25 log(x)^2)`` after x (2010, Proposition 6.8).
+    """
+    if upper_bound < 2:
+        return 0
+    if upper_bound < _SUCCESSOR_PRIME_BOUND_THRESHOLD:
+        return upper_bound
+    return math.ceil(upper_bound / (25 * math.log(upper_bound) ** 2)) + 1
+
+
+def _estimate_successor_prime_search_work(upper_bound: int) -> int:
+    """Bound candidate stepping and primality testing for ``nextprime``."""
+    span = _successor_prime_search_span(upper_bound)
+    if span == 0:
+        return 0
+    # Charge one candidate-step and one bit-scaled primality-test unit for
+    # every candidate in the proven search span.
+    return span * (max(upper_bound.bit_length(), 1) + 1)
 
 
 def _integer_digits(value: int) -> int:
@@ -149,13 +182,15 @@ class IntervalProfileRequest(StrictModel):
         _estimate_divisor_count_result_bytes
     )
     _work_estimator: ClassVar[_WORK_ESTIMATOR] = _estimate_factor_profile_work
+    _max_width: ClassVar[int | None] = MAX_INTERVAL_WIDTH
     _admission: IntervalAdmission = PrivateAttr()
 
     @model_validator(mode="after")
     def require_admitted_interval(self) -> Self:
         if self.upper_bound < self.lower_bound:
             raise ValueError("upper_bound must be >= lower_bound")
-        if self.width() > MAX_INTERVAL_WIDTH:
+        max_width = type(self)._max_width
+        if max_width is not None and self.width() > max_width:
             raise ValueError("interval width exceeds maximum supported width")
         estimated_result_bytes = type(self)._result_estimator(
             self.lower_bound, self.upper_bound
@@ -194,14 +229,14 @@ class SquarefreeProfileRequest(IntervalProfileRequest):
             "description": (
                 "Closed positive integer interval [lower_bound, upper_bound]. "
                 f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
-                f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
-                f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
-                "steps. The operation-specific worst-case JSON result estimate "
-                f"must fit within {MAX_PROFILE_RESULT_BYTES:,} bytes. Squarefree "
-                "values occur once across the two returned arrays."
+                f"the segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
+                "steps, and the operation-specific worst-case JSON result "
+                f"estimate must fit within {MAX_PROFILE_RESULT_BYTES:,} bytes. "
+                "Squarefree values occur once across the two returned arrays."
             )
         }
     )
+    _max_width: ClassVar[int | None] = None
     _result_estimator: ClassVar[_RESULT_ESTIMATOR] = _estimate_squarefree_result_bytes
     _work_estimator: ClassVar[_WORK_ESTIMATOR] = _estimate_squarefree_work
 
@@ -253,15 +288,15 @@ class PrimeGapProfileRequest(IntervalProfileRequest):
             "description": (
                 "Closed positive integer interval [lower_bound, upper_bound]. "
                 f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
-                f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
-                f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
-                "steps. The "
+                f"the segmented-sieve and bounded successor-prime search work "
+                f"estimate must fit within {MAX_SIEVE_WORK:,} steps. The "
                 "operation-specific worst-case JSON estimate for the primes "
                 "in the requested interval must fit within "
                 f"{MAX_PROFILE_RESULT_BYTES:,} bytes."
             )
         }
     )
+    _max_width: ClassVar[int | None] = None
     _result_estimator: ClassVar[_RESULT_ESTIMATOR] = _estimate_prime_gap_result_bytes
     _work_estimator: ClassVar[_WORK_ESTIMATOR] = _estimate_prime_gap_work
 

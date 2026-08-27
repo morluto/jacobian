@@ -231,6 +231,8 @@ def _prime_gap_profile_kernel(admission: IntervalAdmission) -> PrimeGapProfileRe
         from sympy import nextprime
 
         successor = int(nextprime(hi))
+        # Admission charges the proven span of this mandatory search.  Dusart's
+        # bound makes this backend call finite on every admitted request.
         primes_in_interval.append(successor)
     elif len(primes_in_interval) >= 2:
         # The last prime is already > hi (shouldn't happen since we only

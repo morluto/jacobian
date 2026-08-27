@@ -102,8 +102,18 @@ def test_interval_profile_schemas_publish_coupled_admission_limits() -> None:
         operation = catalog.operation(operation_id)
         assert operation is not None
         description = operation.request_type.model_json_schema()["description"]
-        assert f"{MAX_INTERVAL_WIDTH:,}" in description
         assert f"{MAX_PROFILE_RESULT_BYTES:,}" in description
+
+    for operation_id in (
+        "number_theory.integer_interval.divisor_count_profile.compute",
+        "number_theory.integer_interval.greatest_prime_factor_profile.compute",
+    ):
+        operation = catalog.operation(operation_id)
+        assert operation is not None
+        assert (
+            f"{MAX_INTERVAL_WIDTH:,}"
+            in operation.request_type.model_json_schema()["description"]
+        )
 
 
 def test_row_profile_rejection_is_request_validation_at_the_catalog_boundary() -> None:

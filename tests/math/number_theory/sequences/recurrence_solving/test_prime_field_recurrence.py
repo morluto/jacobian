@@ -13,7 +13,7 @@ from jacobian.math.number_theory.sequences.recurrence_solving._models import (
     PrimeFieldRecurrenceFindRequest,
     PrimeFieldRecurrenceFindResult,
 )
-from jacobian.math.number_theory.sequences.recurrence_solving._operations import (
+from jacobian.math.number_theory.sequences.recurrence_solving._tools import (
     compute_prime_field_find_recurrence,
 )
 from jacobian.math.number_theory.sequences.recurrence_solving.operations import (

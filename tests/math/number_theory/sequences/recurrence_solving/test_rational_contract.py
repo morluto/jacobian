@@ -6,7 +6,7 @@ from jacobian.math.number_theory.sequences.recurrence_solving._models import (
     RecurrenceFindRequest,
     RecurrenceFindResult,
 )
-from jacobian.math.number_theory.sequences.recurrence_solving._operations import (
+from jacobian.math.number_theory.sequences.recurrence_solving._tools import (
     compute_closed_form,
     compute_find_recurrence,
 )

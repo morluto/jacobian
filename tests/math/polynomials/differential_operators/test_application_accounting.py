@@ -11,7 +11,7 @@ from jacobian.math.polynomials.differential_operators._bounds import (
 from jacobian.math.polynomials.differential_operators._models import (
     DifferentialOperatorApplyRequest,
 )
-from jacobian.math.polynomials.differential_operators._operations import (
+from jacobian.math.polynomials.differential_operators._tools import (
     compute_differential_operator_application,
 )
 from jacobian.math.polynomials.differential_operators.values import (

@@ -28,10 +28,10 @@ from jacobian.math.polynomials.differential_operators._models import (
     DifferentialOperatorApplyRequest,
     DifferentialOperatorApplyResult,
 )
-from jacobian.math.polynomials.differential_operators._operations import (
+from jacobian.math.polynomials.differential_operators._tools import (
+    TOOLS,
     compute_differential_operator_application,
 )
-from jacobian.math.polynomials.differential_operators._tools import TOOLS
 from jacobian.math.polynomials.differential_operators.operations import (
     apply_constant_coefficient_differential_operator,
 )

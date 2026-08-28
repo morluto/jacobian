@@ -1,9 +1,9 @@
 """Cross-owner composition for exact differential-operator output."""
 
-from jacobian.math.polynomials.differential_operators._operations import (
+from jacobian.math.polynomials.differential_operators._tools import (
+    TOOLS,
     compute_differential_operator_application,
 )
-from jacobian.math.polynomials.differential_operators._tools import TOOLS
 from jacobian.math.polynomials.vector_calculus._models import ScalarFieldRequest
 
 

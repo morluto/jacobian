@@ -5,7 +5,14 @@ from typing import Any
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
+from jacobian.math.number_theory.sequences.recurrence_solving import (
+    operations as native,
+)
 from jacobian.math.number_theory.sequences.recurrence_solving._models import (
     ClosedFormRequest,
     ClosedFormResult,
@@ -14,11 +21,50 @@ from jacobian.math.number_theory.sequences.recurrence_solving._models import (
     RecurrenceFindRequest,
     RecurrenceFindResult,
 )
-from jacobian.math.number_theory.sequences.recurrence_solving._operations import (
-    compute_closed_form,
-    compute_find_recurrence,
-    compute_prime_field_find_recurrence,
-)
+
+
+def _run_admitted[ResultT](operation: Callable[[], ResultT], *, location: tuple[str, ...]) -> ResultT:
+    try:
+        return operation()
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=location,
+            code="recurrence_solving.invalid_domain",
+            message=str(exc),
+        ) from exc
+
+
+def compute_find_recurrence(request: RecurrenceFindRequest) -> RecurrenceFindResult:
+    result = _run_admitted(
+        lambda: native.find_recurrence(request.sequence), location=("sequence",)
+    )
+    return RecurrenceFindResult._from_kernel(
+        coefficients=result.coefficients,
+        order=result.order,
+        status=result.status,
+    )
+
+
+def compute_closed_form(request: ClosedFormRequest) -> ClosedFormResult:
+    result = _run_admitted(
+        lambda: native.closed_form(
+            request.characteristic_coefficients,
+            request.initial_values,
+        ),
+        location=("characteristic_coefficients", "initial_values"),
+    )
+    return ClosedFormResult._from_kernel(expression=result.expression)
+
+
+def compute_prime_field_find_recurrence(
+    request: PrimeFieldRecurrenceFindRequest,
+) -> PrimeFieldRecurrenceFindResult:
+    """Find the minimal LFSR over ``GF(p)`` via Berlekamp-Massey."""
+    rec = native.berlekamp_massey(list(request.sequence), request.prime)
+    return PrimeFieldRecurrenceFindResult._from_kernel(
+        sequence=request.sequence,
+        recurrence=rec,
+    )
 
 
 def rs_operation[RequestT: StrictModel, ResultT: StrictModel](

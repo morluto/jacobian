@@ -14,10 +14,10 @@ from jacobian.math.polynomials._conversions import (
 from jacobian.math.polynomials.rational_functions._models import (
     HermiteReductionRequest,
 )
-from jacobian.math.polynomials.rational_functions._operations import (
+from jacobian.math.polynomials.rational_functions._tools import (
+    TOOLS,
     compute_hermite_reduction,
 )
-from jacobian.math.polynomials.rational_functions._tools import TOOLS
 
 x = Symbol("x")
 

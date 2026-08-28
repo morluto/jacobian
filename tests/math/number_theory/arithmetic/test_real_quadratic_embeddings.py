@@ -12,7 +12,7 @@ from jacobian.math.number_theory.algebraic_numbers import quadratic as real_quad
 from jacobian.math.number_theory.algebraic_numbers._models import (
     AlgebraicMultiplicationRequest,
 )
-from jacobian.math.number_theory.algebraic_numbers._operations import (
+from jacobian.math.number_theory.algebraic_numbers._tools import (
     compute_algebraic_multiply,
 )
 from jacobian.math.number_theory.algebraic_numbers.quadratic import (

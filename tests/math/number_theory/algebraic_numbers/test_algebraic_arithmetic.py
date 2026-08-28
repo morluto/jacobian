@@ -7,17 +7,21 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.algebraic_numbers import (
+    add_quadratic,
+    multiply_quadratic,
+)
 from jacobian.math.number_theory.algebraic_numbers._models import (
     _MAX_RESULT_DIGITS,
     AlgebraicAdditionRequest,
     AlgebraicArithmeticRequest,
     AlgebraicMultiplicationRequest,
 )
-from jacobian.math.number_theory.algebraic_numbers._operations import (
+from jacobian.math.number_theory.algebraic_numbers._tools import (
+    TOOLS,
     compute_algebraic_add,
     compute_algebraic_multiply,
 )
-from jacobian.math.number_theory.algebraic_numbers._tools import TOOLS
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
 
 
@@ -61,6 +65,7 @@ def test_addition_is_component_wise() -> None:
     assert result.rational_part.as_fraction() == 4
     assert result.radical_coefficient.as_fraction() == 3
     assert result.radicand == 2
+    assert add_quadratic(_element(1, 1, 2), _element(3, 2, 2)) == result
 
 
 def test_addition_commutativity() -> None:
@@ -81,6 +86,7 @@ def test_multiplication_distributes_over_addition() -> None:
     result = compute_algebraic_multiply(_mul_req((1, 1, 2), (1, -1, 2)))
     assert result.rational_part.as_fraction() == -1
     assert result.radical_coefficient.as_fraction() == 0
+    assert multiply_quadratic(_element(1, 1, 2), _element(1, -1, 2)) == result
 
 
 def test_multiplication_commutativity() -> None:

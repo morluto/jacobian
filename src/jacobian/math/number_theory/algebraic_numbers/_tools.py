@@ -11,11 +11,23 @@ from jacobian.math.number_theory.algebraic_numbers._models import (
     AlgebraicAdditionRequest,
     AlgebraicMultiplicationRequest,
 )
-from jacobian.math.number_theory.algebraic_numbers._operations import (
-    compute_algebraic_add,
-    compute_algebraic_multiply,
+from jacobian.math.number_theory.algebraic_numbers.operations import (
+    add_quadratic,
+    multiply_quadratic,
 )
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
+
+
+def compute_algebraic_add(
+    request: AlgebraicAdditionRequest,
+) -> RealQuadraticValue:
+    return add_quadratic(request.left, request.right)
+
+
+def compute_algebraic_multiply(
+    request: AlgebraicMultiplicationRequest,
+) -> RealQuadraticValue:
+    return multiply_quadratic(request.left, request.right)
 
 
 def _an_op[RequestT: StrictModel, ResultT: StrictModel](

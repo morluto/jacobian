@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.symmetric_functions._models import (
+    _MAX_POINT_COORDINATE_ABS,
+    _MAX_SCHUR_PARTITION_LENGTH,
     IntegerPartition,
     PartitionConjugateResult,
     PartitionRequest,
@@ -12,18 +17,23 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
 )
 
 
-def compute_partition_conjugate(request: PartitionRequest) -> PartitionConjugateResult:
+def partition_conjugate(partition: IntegerPartition) -> IntegerPartition:
     """Compute the conjugate (transpose) of an integer partition."""
 
-    parts = request.partition.parts
+    parts = partition.parts
     if not parts:
-        return PartitionConjugateResult(conjugate=IntegerPartition(parts=()))
+        return IntegerPartition(parts=())
     max_part = parts[0]
     conjugate = tuple(sum(1 for p in parts if p >= i) for i in range(1, max_part + 1))
-    return PartitionConjugateResult(conjugate=IntegerPartition(parts=conjugate))
+    return IntegerPartition(parts=conjugate)
 
 
-def _complete_homogeneous(variables: list[int], k: int) -> int:
+def compute_partition_conjugate(request: PartitionRequest) -> PartitionConjugateResult:
+    """Project a wire request onto the native partition-conjugation operation."""
+    return PartitionConjugateResult(conjugate=partition_conjugate(request.partition))
+
+
+def _complete_homogeneous(variables: Sequence[int], k: int) -> int:
     """Compute the complete homogeneous symmetric polynomial h_k at a point.
 
     Uses the recurrence h_k(x_1,...,x_n) = h_k(x_1,...,x_{n-1}) + x_n * h_{k-1}(x_1,...,x_n),
@@ -42,19 +52,39 @@ def _complete_homogeneous(variables: list[int], k: int) -> int:
     return dp[k]
 
 
-def compute_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionResult:
+def schur_evaluation(
+    partition: IntegerPartition,
+    point: tuple[int, ...],
+) -> SchurExpansionResult:
     """Evaluate a Schur function s_lambda at a point using the Jacobi-Trudi formula.
 
     s_lambda = det(h_{lambda_i - i + j}) where h_k is the complete homogeneous
     symmetric polynomial of degree k, and indices i, j range over the partition length.
     """
 
-    partition = list(request.partition.parts)
-    n = len(partition)
-    if not partition:
-        return SchurExpansionResult(value=format_canonical_integer(1))
+    if len(partition.parts) > _MAX_SCHUR_PARTITION_LENGTH:
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="symmetric_function.schur_partition_length_exceeded",
+            message=(
+                "Schur evaluation partition length must not exceed "
+                f"{_MAX_SCHUR_PARTITION_LENGTH}"
+            ),
+        )
+    if not 1 <= len(point) <= 20 or any(
+        type(value) is not int or abs(value) > _MAX_POINT_COORDINATE_ABS
+        for value in point
+    ):
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="symmetric_function.schur_point_bounded",
+            message="point must contain 1..20 bounded integer coordinates",
+        )
 
-    point = list(request.point)
+    parts = list(partition.parts)
+    n = len(parts)
+    if not parts:
+        return SchurExpansionResult(value=format_canonical_integer(1))
 
     def h(k: int) -> int:
         if k < 0:
@@ -65,10 +95,15 @@ def compute_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionRe
     matrix: list[list[int]] = [[0] * size for _ in range(size)]
     for i in range(size):
         for j in range(size):
-            matrix[i][j] = h(partition[i] - (i + 1) + (j + 1))
+            matrix[i][j] = h(parts[i] - (i + 1) + (j + 1))
 
     result = _determinant(matrix)
     return SchurExpansionResult(value=format_canonical_integer(result))
+
+
+def compute_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionResult:
+    """Project a wire request onto the native Schur-evaluation operation."""
+    return schur_evaluation(request.partition, request.point)
 
 
 def _determinant(matrix: list[list[int]]) -> int:
@@ -89,4 +124,6 @@ def _determinant(matrix: list[list[int]]) -> int:
 __all__ = [
     "compute_partition_conjugate",
     "compute_schur_evaluation",
+    "partition_conjugate",
+    "schur_evaluation",
 ]

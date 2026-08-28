@@ -11,16 +11,19 @@ from jacobian.math.analysis.convex._models import (
     AffinePiece,
     MaxAffineEvalRequest,
     MaxAffineEvalResult,
+    MaxAffineFunction,
     MaxAffineSubdifferentialRequest,
     MaxAffineSubdifferentialResult,
+    RationalPoint,
 )
 
 
 def _admit_point(
-    request: MaxAffineEvalRequest | MaxAffineSubdifferentialRequest,
+    function: MaxAffineFunction,
+    point: RationalPoint,
 ) -> None:
-    dimension = len(request.function.pieces[0].coefficients)
-    if len(request.point.coordinates) != dimension:
+    dimension = len(function.pieces[0].coefficients)
+    if len(point.coordinates) != dimension:
         raise OperationDomainValidationError(
             location=("point",),
             code="convex_analysis.point_dimension_mismatch",
@@ -36,17 +39,18 @@ def _evaluate_piece(piece: AffinePiece, point_coords: Any) -> Fraction:
     return value
 
 
-def compute_max_affine_evaluation(
-    request: MaxAffineEvalRequest,
+def max_affine_evaluation(
+    function: MaxAffineFunction,
+    point: RationalPoint,
 ) -> MaxAffineEvalResult:
     """Evaluate f(x) = max_i { <a_i, x> + b_i } and identify active pieces."""
-    _admit_point(request)
-    point_coords = request.point.coordinates
+    _admit_point(function, point)
+    point_coords = point.coordinates
     values = []
     active_pieces = []
     max_value = None
 
-    for piece in request.function.pieces:
+    for piece in function.pieces:
         v = _evaluate_piece(piece, point_coords)
         values.append((piece.piece_id, v))
         if max_value is None or v > max_value:
@@ -64,8 +68,9 @@ def compute_max_affine_evaluation(
     )
 
 
-def compute_subdifferential(
-    request: MaxAffineSubdifferentialRequest,
+def max_affine_subdifferential(
+    function: MaxAffineFunction,
+    point: RationalPoint,
 ) -> MaxAffineSubdifferentialResult:
     """Compute the subdifferential at a point.
 
@@ -73,12 +78,12 @@ def compute_subdifferential(
     of the gradients of all active pieces. Here we return the gradients
     (coefficient vectors) of all active pieces.
     """
-    _admit_point(request)
-    point_coords = request.point.coordinates
+    _admit_point(function, point)
+    point_coords = point.coordinates
     max_value = None
     active_gradients = []
 
-    for piece in request.function.pieces:
+    for piece in function.pieces:
         v = _evaluate_piece(piece, point_coords)
         if max_value is None or v > max_value:
             max_value = v
@@ -90,4 +95,23 @@ def compute_subdifferential(
     return MaxAffineSubdifferentialResult(active_gradients=active_grads)
 
 
-__all__ = ["compute_max_affine_evaluation", "compute_subdifferential"]
+def compute_max_affine_evaluation(
+    request: MaxAffineEvalRequest,
+) -> MaxAffineEvalResult:
+    """Project a wire request onto the native max-affine operation."""
+    return max_affine_evaluation(request.function, request.point)
+
+
+def compute_subdifferential(
+    request: MaxAffineSubdifferentialRequest,
+) -> MaxAffineSubdifferentialResult:
+    """Project a wire request onto the native subdifferential operation."""
+    return max_affine_subdifferential(request.function, request.point)
+
+
+__all__ = [
+    "compute_max_affine_evaluation",
+    "compute_subdifferential",
+    "max_affine_evaluation",
+    "max_affine_subdifferential",
+]

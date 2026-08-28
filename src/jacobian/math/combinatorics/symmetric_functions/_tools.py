@@ -10,7 +10,7 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     SchurExpansionRequest,
     SchurExpansionResult,
 )
-from jacobian.math.combinatorics.symmetric_functions._operations import (
+from jacobian.math.combinatorics.symmetric_functions.operations import (
     compute_schur_evaluation,
 )
 

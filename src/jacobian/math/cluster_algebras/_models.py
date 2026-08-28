@@ -210,16 +210,17 @@ class SeedMutationResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: SeedMutationRequest,
+        source_exchange_matrix: ExchangeMatrix,
+        mutation_index: int,
         *,
         exchange_matrix: ExchangeMatrix,
     ) -> Self:
         """Construct a result emitted by the owner-local mutation kernel."""
 
         return cls.model_construct(
-            source_exchange_matrix=request.exchange_matrix,
+            source_exchange_matrix=source_exchange_matrix,
             exchange_matrix=exchange_matrix,
-            mutation_index=request.mutation_index,
+            mutation_index=mutation_index,
         )
 
 
@@ -259,12 +260,12 @@ class GVectorResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, request: GVectorRequest) -> Self:
+    def _from_kernel(cls, exchange_matrix: ExchangeMatrix) -> Self:
         """Construct initial-seed g-vectors emitted by the owner-local kernel."""
 
         return cls.model_construct(
-            exchange_matrix=request.exchange_matrix,
-            g_matrix=_identity_matrix(request.exchange_matrix.n),
+            exchange_matrix=exchange_matrix,
+            g_matrix=_identity_matrix(exchange_matrix.n),
             convention="FOMIN_ZELEVINSKY",
         )
 

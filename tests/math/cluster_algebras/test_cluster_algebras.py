@@ -16,9 +16,13 @@ from jacobian.math.cluster_algebras._models import (
     SeedMutationRequest,
     SeedMutationResult,
 )
-from jacobian.math.cluster_algebras._operations import (
+from jacobian.math.cluster_algebras.operations import (
     compute_g_vectors,
-    mutate_seed,
+    compute_seed_mutation,
+    g_vectors,
+)
+from jacobian.math.cluster_algebras.operations import (
+    mutate_seed as native_mutate_seed,
 )
 
 
@@ -48,22 +52,28 @@ class TestSeedMutation:
     def test_a2_mutation_at_0(self) -> None:
         """Mutate the A2 seed at index 0."""
         b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
-        result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=0))
+        result = compute_seed_mutation(
+            SeedMutationRequest(exchange_matrix=b, mutation_index=0)
+        )
         assert result.exchange_matrix.entries[0][1] == "-1"
         assert result.exchange_matrix.entries[1][0] == "1"
 
     def test_a2_mutation_at_1(self) -> None:
         """Mutate the A2 seed at index 1."""
         b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
-        result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=1))
+        result = compute_seed_mutation(
+            SeedMutationRequest(exchange_matrix=b, mutation_index=1)
+        )
         assert result.exchange_matrix.entries[0][1] == "-1"
         assert result.exchange_matrix.entries[1][0] == "1"
 
     def test_mutation_involutive(self) -> None:
         """Double mutation at the same index returns to the original."""
         b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
-        result1 = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=0))
-        result2 = mutate_seed(
+        result1 = compute_seed_mutation(
+            SeedMutationRequest(exchange_matrix=b, mutation_index=0)
+        )
+        result2 = compute_seed_mutation(
             SeedMutationRequest(
                 exchange_matrix=result1.exchange_matrix, mutation_index=0
             )
@@ -81,7 +91,9 @@ class TestSeedMutation:
             ),
             (str(1), str(1), str(1)),
         )
-        result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=1))
+        result = compute_seed_mutation(
+            SeedMutationRequest(exchange_matrix=b, mutation_index=1)
+        )
         # The mutated matrix should still be skew-symmetric
         new = ientries(result.exchange_matrix)
         for i in range(3):
@@ -92,7 +104,7 @@ class TestSeedMutation:
         b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
         request = SeedMutationRequest(exchange_matrix=b, mutation_index=2)
         with pytest.raises(OperationDomainValidationError) as caught:
-            mutate_seed(request)
+            compute_seed_mutation(request)
         assert caught.value.errors()[0]["loc"] == ("mutation_index",)
         assert caught.value.errors()[0]["type"] == "cluster_algebra.mutation_index"
 
@@ -112,6 +124,16 @@ class TestSeedMutation:
             em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(-1)))
 
 
+def test_native_surface_accepts_exchange_matrix_value() -> None:
+    matrix = em(2, ((0, 1), (-1, 0)), (1, 1))
+
+    assert native_mutate_seed(matrix, 0).exchange_matrix.entries == (
+        ("0", "-1"),
+        ("1", "0"),
+    )
+    assert g_vectors(matrix).g_matrix == ((1, 0), (0, 1))
+
+
 class TestCoefficientBounds:
     """Admitted seeds derive their mutation budget from their own entries."""
 
@@ -127,7 +149,9 @@ class TestCoefficientBounds:
             ),
             (str(1), str(1), str(1)),
         )
-        result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=1))
+        result = compute_seed_mutation(
+            SeedMutationRequest(exchange_matrix=b, mutation_index=1)
+        )
         assert (
             abs(parse_canonical_integer(result.exchange_matrix.entries[0][2]))
             == edge * edge
@@ -135,7 +159,7 @@ class TestCoefficientBounds:
         composed = SeedMutationRequest(
             exchange_matrix=result.exchange_matrix, mutation_index=1
         )
-        assert ientries(mutate_seed(composed).exchange_matrix) == ientries(b)
+        assert ientries(compute_seed_mutation(composed).exchange_matrix) == ientries(b)
 
     def test_involutive_mutation_near_ceiling_admitted(self) -> None:
         # b01=10**64, b12=6*10**64, b02=10**128 mutates to b'02=7*10**128;
@@ -151,11 +175,13 @@ class TestCoefficientBounds:
             ),
             (str(1), str(1), str(1)),
         )
-        once = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=1))
+        once = compute_seed_mutation(
+            SeedMutationRequest(exchange_matrix=b, mutation_index=1)
+        )
         assert (
             parse_canonical_integer(once.exchange_matrix.entries[0][2]) == 7 * 10**128
         )
-        involuted = mutate_seed(
+        involuted = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=once.exchange_matrix, mutation_index=1)
         )
         assert ientries(involuted.exchange_matrix) == ientries(b)
@@ -173,14 +199,16 @@ class TestCoefficientBounds:
         )
         request = SeedMutationRequest(exchange_matrix=b, mutation_index=1)
         with pytest.raises(OperationDomainValidationError) as caught:
-            mutate_seed(request)
+            compute_seed_mutation(request)
         assert caught.value.errors()[0]["loc"] == ("exchange_matrix",)
         assert caught.value.errors()[0]["type"] == "cluster_algebra.mutation_bounded"
 
     def test_request_accepts_large_entries_under_negation_only_mutation(self) -> None:
         edge = 10**129 - 1
         b = em(2, ((str(0), str(edge)), (str(-edge), str(0))), (str(1), str(1)))
-        result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=0))
+        result = compute_seed_mutation(
+            SeedMutationRequest(exchange_matrix=b, mutation_index=0)
+        )
         assert ientries(result.exchange_matrix) == ((0, -edge), (edge, 0))
 
     def test_mutation_near_bound_stays_within_result_ceiling(self) -> None:
@@ -196,7 +224,9 @@ class TestCoefficientBounds:
             ),
             (str(1), str(1), str(1)),
         )
-        result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=1))
+        result = compute_seed_mutation(
+            SeedMutationRequest(exchange_matrix=b, mutation_index=1)
+        )
         mutated = parse_canonical_integer(result.exchange_matrix.entries[0][2])
         assert abs(mutated) == edge * edge
         assert len(str(abs(mutated))) <= 129
@@ -231,7 +261,9 @@ class TestCoefficientBounds:
         # rank cap: 289 trivial updates returning a small exact matrix.
         n = 17
         b = em(n, tuple((0,) * n for _ in range(n)), (1,) * n)
-        result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=0))
+        result = compute_seed_mutation(
+            SeedMutationRequest(exchange_matrix=b, mutation_index=0)
+        )
         assert ientries(result.exchange_matrix) == tuple((0,) * n for _ in range(n))
 
     def test_zero_matrix_beyond_cell_budget_rejected(self) -> None:
@@ -344,7 +376,9 @@ class TestCanonicalTransport:
             ((0, n, 0), (-n, 0, n), (0, -n, 0)),
             (1, 1, 1),
         )
-        result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=1))
+        result = compute_seed_mutation(
+            SeedMutationRequest(exchange_matrix=b, mutation_index=1)
+        )
         payload = result.model_dump()
         assert payload["exchange_matrix"]["entries"][0][2] == str(n * n)
         assert SeedMutationResult.model_validate(payload) == result

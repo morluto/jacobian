@@ -17,17 +17,17 @@ from jacobian.math.cluster_algebras._models import (
 )
 
 
-def _admit_mutation(request: SeedMutationRequest) -> None:
+def _admit_mutation(exchange_matrix: ExchangeMatrix, mutation_index: int) -> None:
     """Expose mutation-growth admission as a typed domain failure."""
 
-    if request.mutation_index >= request.exchange_matrix.n:
+    if type(mutation_index) is not int or not 0 <= mutation_index < exchange_matrix.n:
         raise OperationDomainValidationError(
             location=("mutation_index",),
             code="cluster_algebra.mutation_index",
             message="mutation_index must be in 0..n-1",
         )
     try:
-        _require_mutatable(request.exchange_matrix, request.mutation_index)
+        _require_mutatable(exchange_matrix, mutation_index)
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("exchange_matrix",), code=exc.type, message=exc.message()
@@ -67,7 +67,10 @@ def _mutation_of(matrix: ExchangeMatrix, k: int) -> ExchangeMatrix:
     )
 
 
-def mutate_seed(request: SeedMutationRequest) -> SeedMutationResult:
+def mutate_seed(
+    exchange_matrix: ExchangeMatrix,
+    mutation_index: int,
+) -> SeedMutationResult:
     """Apply the Fomin-Zelevinsky mutation mu_k to the exchange matrix.
 
     The mutation at index k transforms the exchange matrix B as follows:
@@ -80,22 +83,35 @@ def mutate_seed(request: SeedMutationRequest) -> SeedMutationResult:
     b'_{ij} = -sgn(i-k) * sgn(j-k) * b_{ij}  if i=k or j=k
     b'_{ij} = b_{ij} + max(0, b_{ik}) * max(0, b_{kj}) + min(0, b_{ik}) * min(0, b_{kj})  otherwise
     """
-    _admit_mutation(request)
+    _admit_mutation(exchange_matrix, mutation_index)
     return SeedMutationResult._from_kernel(
-        request,
-        exchange_matrix=_mutation_of(request.exchange_matrix, request.mutation_index),
+        exchange_matrix,
+        mutation_index,
+        exchange_matrix=_mutation_of(exchange_matrix, mutation_index),
     )
 
 
-def compute_g_vectors(request: GVectorRequest) -> GVectorResult:
+def g_vectors(exchange_matrix: ExchangeMatrix) -> GVectorResult:
     """Compute the g-vector matrix for principal coefficients.
 
     For the initial seed, the g-vector matrix is the identity matrix.
     """
-    return GVectorResult._from_kernel(request)
+    return GVectorResult._from_kernel(exchange_matrix)
+
+
+def compute_seed_mutation(request: SeedMutationRequest) -> SeedMutationResult:
+    """Project a wire request onto the native seed-mutation operation."""
+    return mutate_seed(request.exchange_matrix, request.mutation_index)
+
+
+def compute_g_vectors(request: GVectorRequest) -> GVectorResult:
+    """Project a wire request onto the native g-vector operation."""
+    return g_vectors(request.exchange_matrix)
 
 
 __all__ = [
     "compute_g_vectors",
+    "compute_seed_mutation",
+    "g_vectors",
     "mutate_seed",
 ]

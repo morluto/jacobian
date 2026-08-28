@@ -12,7 +12,7 @@ from jacobian.math.analysis.convex._models import (
     MaxAffineSubdifferentialRequest,
     MaxAffineSubdifferentialResult,
 )
-from jacobian.math.analysis.convex._operations import (
+from jacobian.math.analysis.convex.operations import (
     compute_max_affine_evaluation,
     compute_subdifferential,
 )

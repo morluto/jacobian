@@ -22,6 +22,8 @@ def test_symmetric_function_public_values_have_one_canonical_identity() -> None:
         "IntegerPartition",
         "SemistandardYoungTableau",
         "StandardYoungTableau",
+        "partition_conjugate",
+        "schur_evaluation",
     )
 
 

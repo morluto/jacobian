@@ -12,9 +12,9 @@ from jacobian.math.cluster_algebras._models import (
     SeedMutationRequest,
     SeedMutationResult,
 )
-from jacobian.math.cluster_algebras._operations import (
+from jacobian.math.cluster_algebras.operations import (
     compute_g_vectors,
-    mutate_seed,
+    compute_seed_mutation,
 )
 
 
@@ -73,7 +73,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "(no change when signs differ).",
         SeedMutationRequest,
         SeedMutationResult,
-        mutate_seed,
+        compute_seed_mutation,
         "cluster-algebra",
         "mutation",
         "exact",

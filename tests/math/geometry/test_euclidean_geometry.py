@@ -32,6 +32,11 @@ from jacobian.math.geometry.euclidean._operations import (
     compute_segment_ratio,
     compute_triangle_similarity,
 )
+from jacobian.math.geometry.euclidean.operations import (
+    angles_equal,
+    squared_segment_ratio,
+    triangles_similar,
+)
 
 
 def _pt(x: int, y: int) -> RationalPoint2D:
@@ -103,14 +108,26 @@ class TestSegmentRatio:
         assert result.squared_ratio == "4"
 
     def test_rejects_zero_second_segment(self) -> None:
-        import pytest
-        from pydantic import ValidationError
+        request = SegmentRatioRequest(
+            segment1=(_pt(0, 0), _pt(1, 0)),
+            segment2=(_pt(0, 0), _pt(0, 0)),
+        )
+        with pytest.raises(OperationDomainValidationError) as caught:
+            compute_segment_ratio(request)
+        assert caught.value.errors()[0]["loc"] == ("second",)
+        assert caught.value.errors()[0]["type"] == "geometry.second_segment_nonzero"
 
-        with pytest.raises(ValidationError):
-            SegmentRatioRequest(
-                segment1=(_pt(0, 0), _pt(1, 0)),
-                segment2=(_pt(0, 0), _pt(0, 0)),
-            )
+    def test_native_ratio_matches_wire_projection(self) -> None:
+        first = (_pt(0, 0), _pt(2, 0))
+        second = (_pt(0, 0), _pt(0, 1))
+
+        assert squared_segment_ratio(first, second) == 4
+        assert (
+            compute_segment_ratio(
+                SegmentRatioRequest(segment1=first, segment2=second)
+            ).squared_ratio
+            == "4"
+        )
 
 
 class TestRationalWeightTriangulation:
@@ -584,18 +601,29 @@ class TestAngleEquality:
         assert result.equal is False
 
     def test_rejects_zero_length_ray(self) -> None:
-        import pytest
-        from pydantic import ValidationError
+        request = AngleEqualityRequest(
+            vertex1=_pt(0, 0),
+            ray1_a=_pt(0, 0),
+            ray1_b=_pt(0, 1),
+            vertex2=_pt(0, 0),
+            ray2_a=_pt(1, 0),
+            ray2_b=_pt(0, 1),
+        )
+        with pytest.raises(OperationDomainValidationError) as caught:
+            compute_angle_equality(request)
+        assert caught.value.errors()[0]["loc"] == ("rays",)
+        assert caught.value.errors()[0]["type"] == "geometry.angle_rays_nonzero"
 
-        with pytest.raises(ValidationError):
-            AngleEqualityRequest(
-                vertex1=_pt(0, 0),
-                ray1_a=_pt(0, 0),
-                ray1_b=_pt(0, 1),
-                vertex2=_pt(0, 0),
-                ray2_a=_pt(1, 0),
-                ray2_b=_pt(0, 1),
-            )
+    def test_native_predicate_matches_wire_projection(self) -> None:
+        arguments = (
+            _pt(0, 0),
+            _pt(1, 0),
+            _pt(0, 1),
+            _pt(0, 0),
+            _pt(0, 1),
+            _pt(-1, 0),
+        )
+        assert angles_equal(*arguments) is True
 
 
 class TestTriangleSimilarity:
@@ -614,3 +642,9 @@ class TestTriangleSimilarity:
         )
         result = compute_triangle_similarity(req)
         assert result.similar is False
+
+    def test_native_predicate_matches_wire_projection(self) -> None:
+        first = Triangle(a=_pt(0, 0), b=_pt(1, 0), c=_pt(0, 1))
+        second = Triangle(a=_pt(0, 0), b=_pt(3, 0), c=_pt(0, 3))
+
+        assert triangles_similar(first, second) is True

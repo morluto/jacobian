@@ -45,18 +45,6 @@ class SegmentRatioRequest(StrictModel):
     segment1: tuple[RationalPoint2D, RationalPoint2D]
     segment2: tuple[RationalPoint2D, RationalPoint2D]
 
-    @model_validator(mode="after")
-    def require_nonzero_second_segment(self) -> Self:
-        start, end = self.segment2
-        if (
-            start.x.as_fraction() == end.x.as_fraction()
-            and start.y.as_fraction() == end.y.as_fraction()
-        ):
-            raise _validation_error(
-                "second_segment_nonzero", "second segment must be nonzero"
-            )
-        return self
-
 
 class SegmentRatioResult(StrictModel):
     """Ratio of squared lengths and whether it matches a target."""
@@ -75,22 +63,6 @@ class AngleEqualityRequest(StrictModel):
     vertex2: RationalPoint2D
     ray2_a: RationalPoint2D
     ray2_b: RationalPoint2D
-
-    @model_validator(mode="after")
-    def require_nonzero_rays(self) -> Self:
-        for vertex, first, second in (
-            (self.vertex1, self.ray1_a, self.ray1_b),
-            (self.vertex2, self.ray2_a, self.ray2_b),
-        ):
-            for endpoint in (first, second):
-                if (
-                    endpoint.x.as_fraction() == vertex.x.as_fraction()
-                    and endpoint.y.as_fraction() == vertex.y.as_fraction()
-                ):
-                    raise _validation_error(
-                        "angle_rays_nonzero", "angle rays must be nonzero"
-                    )
-        return self
 
 
 class AngleEqualityResult(StrictModel):

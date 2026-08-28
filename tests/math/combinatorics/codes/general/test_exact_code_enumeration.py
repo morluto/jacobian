@@ -5,6 +5,7 @@ from collections.abc import Callable
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes.general import minimum_distance
 from jacobian.math.combinatorics.codes.general._models import (
     CoveringRadiusRequest,
@@ -24,7 +25,7 @@ def _assert_validation_error_code(factory: Callable[[], object], code: str) -> N
 
 
 def _assert_operation_error(factory: Callable[[], object], code: str) -> None:
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         factory()
     assert exc_info.value.errors()[0]["type"] == code
 
@@ -60,7 +61,7 @@ def test_code_contract_rejects_nonprime_fields_and_unbounded_enumeration() -> No
 def test_native_code_api_enforces_the_prime_field_contract() -> None:
     assert minimum_distance(((1, 1),), 2) == 2
 
-    _assert_validation_error_code(
+    _assert_operation_error(
         lambda: minimum_distance(((1,),), 4), "code_theory.field_order_not_prime"
     )
 
@@ -69,15 +70,14 @@ def test_zero_code_uses_length_convention_for_minimum_distance() -> None:
     assert minimum_distance(((0, 0, 0, 0),), 2) == 4
 
 
-@pytest.mark.parametrize("generator_matrix", [(), ((1, 0), (1,))])
-def test_native_code_api_rejects_invalid_generator_shapes(
-    generator_matrix: tuple[tuple[int, ...], ...],
-) -> None:
-    expected = (
-        "too_short" if not generator_matrix else "code_theory.generator_rows_unequal"
-    )
-    _assert_validation_error_code(
-        lambda: minimum_distance(generator_matrix, 2), expected
+def test_native_code_api_rejects_empty_generator_matrix_structurally() -> None:
+    _assert_validation_error_code(lambda: minimum_distance((), 2), "too_short")
+
+
+def test_native_code_api_rejects_unequal_rows_semantically() -> None:
+    _assert_operation_error(
+        lambda: minimum_distance(((1, 0), (1,)), 2),
+        "code_theory.generator_rows_unequal",
     )
 
 
@@ -90,7 +90,6 @@ def test_binary_repetition_code_length_three_has_covering_radius_one() -> None:
     result = compute_covering_radius(request)
 
     assert result.covering_radius == 1
-    assert result.method == "SYNDROME_BFS"
 
 
 def test_binary_repetition_code_length_four_has_covering_radius_two() -> None:
@@ -250,10 +249,7 @@ def test_structural_models_accept_bounded_claims() -> None:
     )
 
     request = _linear_request()
-    base = {
-        "request": request.model_dump(),
-        "method": "EXACT_ENUMERATION",
-    }
+    base = {"request": request.model_dump()}
 
     wrong_distance = MinimumDistanceResult.model_validate(
         dict(base, minimum_distance=1)

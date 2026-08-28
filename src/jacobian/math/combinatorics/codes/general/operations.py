@@ -6,6 +6,20 @@ from collections import deque
 from collections.abc import Iterator
 from itertools import product
 
+from sympy import isprime
+
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.codes.general._models import (
+    EXACT_ENUMERATION_PASSES,
+    MAX_COVERING_RADIUS_STATES_PER_PASS,
+    MAX_COVERING_RADIUS_TRANSITIONS,
+    MAX_EXACT_CODEWORD_EVALUATIONS,
+    SYNDROME_BFS_PASSES,
+    CoveringRadiusRequest,
+    LinearCodeRequest,
+    _matrix_rank_mod_prime,
+)
+
 __all__ = [
     "GeneratorMatrix",
     "covering_radius",
@@ -15,6 +29,51 @@ __all__ = [
 
 
 GeneratorMatrix = tuple[tuple[int, ...], ...]
+
+
+def _admit_prime_field_matrix(
+    field_order: int,
+    generator_matrix: GeneratorMatrix,
+) -> int:
+    if not isprime(field_order):
+        raise OperationDomainValidationError(
+            location=("field_order",),
+            code="code_theory.field_order_not_prime",
+            message="field_order must be prime for this prime-field operation",
+        )
+    width = len(generator_matrix[0])
+    if width == 0 or width > 256:
+        raise OperationDomainValidationError(
+            location=("generator_matrix",),
+            code="code_theory.generator_width_out_of_bounds",
+            message="generator rows must have between one and 256 entries",
+        )
+    if any(len(row) != width for row in generator_matrix):
+        raise OperationDomainValidationError(
+            location=("generator_matrix",),
+            code="code_theory.generator_rows_unequal",
+            message="generator matrix rows must have equal length",
+        )
+    if any(not 0 <= entry < field_order for row in generator_matrix for entry in row):
+        raise OperationDomainValidationError(
+            location=("generator_matrix",),
+            code="code_theory.generator_entry_not_canonical",
+            message="generator entries must be canonical field residues",
+        )
+    return width
+
+
+def _admit_enumeration(request: LinearCodeRequest) -> None:
+    _admit_prime_field_matrix(request.field_order, request.generator_matrix)
+    if (
+        EXACT_ENUMERATION_PASSES * request.field_order ** len(request.generator_matrix)
+        > MAX_EXACT_CODEWORD_EVALUATIONS
+    ):
+        raise OperationDomainValidationError(
+            location=("generator_matrix",),
+            code="code_theory.enumeration_work_exceeded",
+            message="generator matrix exceeds the exact enumeration bound",
+        )
 
 
 def _codewords(
@@ -41,11 +100,10 @@ def minimum_distance(generator_matrix: GeneratorMatrix, field_order: int) -> int
     For the zero code (rank 0) no nonzero codeword exists; the code
     length is returned by the empty-code convention.
     """
-    from jacobian.math.combinatorics.codes.general._models import LinearCodeRequest
-
     request = LinearCodeRequest(
         generator_matrix=generator_matrix, field_order=field_order
     )
+    _admit_enumeration(request)
     min_dist = float("inf")
     for codeword in _codewords(request.generator_matrix, request.field_order):
         weight = sum(1 for c in codeword if c != 0)
@@ -59,11 +117,10 @@ def weight_distribution(
 ) -> list[tuple[int, int]]:
     from collections import Counter
 
-    from jacobian.math.combinatorics.codes.general._models import LinearCodeRequest
-
     request = LinearCodeRequest(
         generator_matrix=generator_matrix, field_order=field_order
     )
+    _admit_enumeration(request)
 
     weights: Counter[int] = Counter()
     for codeword in _codewords(request.generator_matrix, request.field_order):
@@ -130,11 +187,28 @@ def covering_radius(generator_matrix: GeneratorMatrix, field_order: int) -> int:
     Therefore graph distance from the zero syndrome is minimum coset-leader
     weight, and the maximum distance is the covering radius.
     """
-    from jacobian.math.combinatorics.codes.general._models import CoveringRadiusRequest
-
     request = CoveringRadiusRequest(
         generator_matrix=generator_matrix, field_order=field_order
     )
+    width = _admit_prime_field_matrix(request.field_order, request.generator_matrix)
+    rank = _matrix_rank_mod_prime(request.generator_matrix, request.field_order)
+    state_count = request.field_order ** (width - rank)
+    if state_count > MAX_COVERING_RADIUS_STATES_PER_PASS:
+        raise OperationDomainValidationError(
+            location=("generator_matrix",),
+            code="code_theory.syndrome_state_bound_exceeded",
+            message="syndrome space exceeds the exact state bound",
+        )
+    move_count_bound = min(width * (request.field_order - 1), max(state_count - 1, 0))
+    if (
+        SYNDROME_BFS_PASSES * state_count * move_count_bound
+        > MAX_COVERING_RADIUS_TRANSITIONS
+    ):
+        raise OperationDomainValidationError(
+            location=("generator_matrix",),
+            code="code_theory.syndrome_transition_bound_exceeded",
+            message="syndrome graph exceeds the exact transition bound",
+        )
     check_rows = _parity_check_matrix(
         request.generator_matrix,
         request.field_order,

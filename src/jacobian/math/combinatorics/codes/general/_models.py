@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -25,36 +25,6 @@ _WeightCount = Annotated[
 
 def _error(code: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(code, message)
-
-
-def _validate_prime_field_matrix(
-    field_order: int,
-    generator_matrix: tuple[tuple[int, ...], ...],
-) -> int:
-    from sympy import isprime
-
-    if not isprime(field_order):
-        raise _error(
-            "code_theory.field_order_not_prime",
-            "field_order must be prime for this prime-field operation",
-        )
-    width = len(generator_matrix[0])
-    if width == 0 or width > 256:
-        raise _error(
-            "code_theory.generator_width_out_of_bounds",
-            "generator rows must have between one and 256 entries",
-        )
-    if any(len(row) != width for row in generator_matrix):
-        raise _error(
-            "code_theory.generator_rows_unequal",
-            "generator matrix rows must have equal length",
-        )
-    if any(not 0 <= entry < field_order for row in generator_matrix for entry in row):
-        raise _error(
-            "code_theory.generator_entry_not_canonical",
-            "generator entries must be canonical field residues",
-        )
-    return width
 
 
 def _matrix_rank_mod_prime(
@@ -101,11 +71,6 @@ class LinearCodeRequest(StrictModel):
     field_order: int = Field(ge=2, le=251)
     generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=8)
 
-    @model_validator(mode="after")
-    def require_bounded_prime_field_matrix(self) -> Self:
-        _validate_prime_field_matrix(self.field_order, self.generator_matrix)
-        return self
-
 
 class MinimumDistanceResult(StrictModel):
     """An exact minimum-distance claim in its canonical source coordinates.
@@ -116,7 +81,6 @@ class MinimumDistanceResult(StrictModel):
 
     request: LinearCodeRequest
     minimum_distance: int = Field(ge=0, le=256)
-    method: Literal["EXACT_ENUMERATION"] = "EXACT_ENUMERATION"
 
     @model_validator(mode="after")
     def require_bounded_distance(self) -> Self:
@@ -146,7 +110,6 @@ class WeightDistributionResult(StrictModel):
         min_length=1,
         max_length=257,
     )
-    method: Literal["EXACT_ENUMERATION"] = "EXACT_ENUMERATION"
 
     @model_validator(mode="after")
     def require_structural_weight_rows(self) -> Self:
@@ -181,11 +144,6 @@ class CoveringRadiusRequest(StrictModel):
     field_order: int = Field(ge=2, le=251)
     generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=8)
 
-    @model_validator(mode="after")
-    def require_prime_field_matrix(self) -> Self:
-        _validate_prime_field_matrix(self.field_order, self.generator_matrix)
-        return self
-
 
 class CoveringRadiusResult(StrictModel):
     """An exact covering-radius claim in canonical source coordinates.
@@ -195,7 +153,6 @@ class CoveringRadiusResult(StrictModel):
 
     request: CoveringRadiusRequest
     covering_radius: int = Field(ge=0, le=256)
-    method: Literal["SYNDROME_BFS"] = "SYNDROME_BFS"
 
     @model_validator(mode="after")
     def require_bounded_radius(self) -> Self:

@@ -18,7 +18,13 @@ def test_exact_public_api_symbols() -> None:
         "MutualInformationTerm",
         "all_terminal_reliability",
         "check_asymmetric_local_lemma_witness",
+        "condition",
+        "convolution",
+        "event_probability",
+        "gaussian_polynomial_moment",
         "mutual_information",
+        "pushforward",
+        "raw_moment",
     )
     assert tuple(probability.__all__) == expected
     assert len(probability.__all__) == len(set(probability.__all__))

@@ -143,10 +143,7 @@ def test_result_distribution_round_trips_into_finite_raw_moment() -> None:
     )
     restored = type(result).model_validate_json(result.model_dump_json())
 
-    from jacobian.math.probability._distribution import FiniteRawMomentRequest
-    from jacobian.math.probability._operations import _raw_moment
+    from jacobian.math.probability.operations import raw_moment
 
-    moment = _raw_moment(
-        FiniteRawMomentRequest(atoms=restored.count_distribution.atoms, order=1)
-    )
+    moment = raw_moment(restored.count_distribution.atoms, 1)
     assert moment.moment.as_fraction() == Fraction(5, 6)

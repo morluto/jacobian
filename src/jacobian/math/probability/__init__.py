@@ -11,6 +11,14 @@ from jacobian.math.probability.local_lemma import (
     check_asymmetric_local_lemma_witness,
 )
 from jacobian.math.probability.mutual_information import mutual_information
+from jacobian.math.probability.operations import (
+    condition,
+    convolution,
+    event_probability,
+    gaussian_polynomial_moment,
+    pushforward,
+    raw_moment,
+)
 from jacobian.math.probability.values import (
     FiniteJointTable,
     MutualInformationLogRepresentation,
@@ -29,5 +37,11 @@ __all__ = [
     "MutualInformationTerm",
     "all_terminal_reliability",
     "check_asymmetric_local_lemma_witness",
+    "condition",
+    "convolution",
+    "event_probability",
+    "gaussian_polynomial_moment",
     "mutual_information",
+    "pushforward",
+    "raw_moment",
 ]

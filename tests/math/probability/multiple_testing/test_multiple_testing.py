@@ -6,9 +6,9 @@ from jacobian.math.probability.multiple_testing._models import (
     FDPRequest,
     HypothesisSpec,
 )
-from jacobian.math.probability.multiple_testing._operations import (
-    compute_bh_step_up,
-    compute_fdp,
+from jacobian.math.probability.multiple_testing.operations import (
+    bh_step_up,
+    false_discovery_proportion,
 )
 
 
@@ -28,7 +28,7 @@ class TestBHStepUp:
             ),
             level=CanonicalRational(num="1", den="20"),
         )
-        result = compute_bh_step_up(req)
+        result = bh_step_up(req.hypotheses, req.level)
         assert result.critical_index == 3
         assert len(result.rejected) == 3
 
@@ -47,7 +47,7 @@ class TestBHStepUp:
             ),
             level=CanonicalRational(num="1", den="20"),
         )
-        result = compute_bh_step_up(req)
+        result = bh_step_up(req.hypotheses, req.level)
         assert result.critical_index == 1
         assert len(result.rejected) == 1
 
@@ -55,14 +55,14 @@ class TestBHStepUp:
 class TestFDP:
     def test_simple(self) -> None:
         req = FDPRequest(rejected_ids=("h1", "h2"), true_null_ids=("h2", "h3"))
-        result = compute_fdp(req)
+        result = false_discovery_proportion(req.rejected_ids, req.true_null_ids)
         assert result.false_discoveries == 1
         assert result.total_rejections == 2
         assert result.fdp == "1/2"
 
     def test_no_rejections(self) -> None:
         req = FDPRequest(rejected_ids=(), true_null_ids=("h1",))
-        result = compute_fdp(req)
+        result = false_discovery_proportion(req.rejected_ids, req.true_null_ids)
         assert result.fdp == "0"
 
     def test_rejects_out_of_range_p_value_and_level(self) -> None:

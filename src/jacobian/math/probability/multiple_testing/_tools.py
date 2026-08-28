@@ -6,16 +6,23 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.probability.multiple_testing import operations as native
 from jacobian.math.probability.multiple_testing._models import (
     BHStepUpRequest,
     BHStepUpResult,
     FDPRequest,
     FDPResult,
 )
-from jacobian.math.probability.multiple_testing._operations import (
-    compute_bh_step_up,
-    compute_fdp,
-)
+
+
+def compute_bh_step_up(request: BHStepUpRequest) -> BHStepUpResult:
+    return native.bh_step_up(request.hypotheses, request.level)
+
+
+def compute_fdp(request: FDPRequest) -> FDPResult:
+    return native.false_discovery_proportion(
+        request.rejected_ids, request.true_null_ids
+    )
 
 
 def _op[

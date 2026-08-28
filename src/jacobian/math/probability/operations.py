@@ -1,4 +1,4 @@
-"""Exact finite probability operations."""
+"""Exact native operations for finite rational probability."""
 
 from __future__ import annotations
 
@@ -7,48 +7,35 @@ from typing import Any
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools, OperationDomainValidationError
-from jacobian.math.probability._directed_bond_reliability import (
-    DIRECTED_BOND_CONNECTION_PROBABILITY_OPERATION,
-)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability._distribution import (
     MAX_FINITE_CONVOLUTION_PAIRS,
     MAX_FINITE_DISTRIBUTION_ATOMS,
     FiniteConditionalContribution,
-    FiniteConditionRequest,
     FiniteConditionResult,
     FiniteConvolutionContribution,
-    FiniteConvolutionRequest,
     FiniteConvolutionResult,
     FiniteDistributionAtom,
     FiniteEventProbabilityResult,
-    FiniteEventRequest,
     FinitePushforwardContribution,
-    FinitePushforwardRequest,
+    FinitePushforwardMapEntry,
     FinitePushforwardResult,
     FiniteRationalDistribution,
     FiniteRawMomentContribution,
-    FiniteRawMomentRequest,
     FiniteRawMomentResult,
     require_input_distribution,
 )
 from jacobian.math.probability._gaussian import (
     GAUSSIAN_RESULT_DIGIT_SAFETY_MARGIN,
     MAX_GAUSSIAN_EXPANSION_PATHS,
+    MAX_GAUSSIAN_MOMENT_ORDER,
     MAX_GAUSSIAN_RESULT_RATIONAL_DIGITS,
     ExactComplexRational,
     GaussianMomentContraction,
-    GaussianPolynomialMomentRequest,
+    GaussianPolynomial,
     GaussianPolynomialMomentResult,
 )
-from jacobian.math.probability._gaussian_inputs import (
-    CanonicalGaussianPolynomialMomentRequest,
-)
 from jacobian.math.probability._gaussian_moments import gaussian_univariate_moment
-from jacobian.math.probability._graph_connection_probability import (
-    GRAPH_CONNECTION_PROBABILITY_OPERATION,
-)
 from jacobian.math.probability._models import (
     MAX_INPUT_RATIONAL_DIGITS,
     MAX_RESULT_RATIONAL_DIGITS,
@@ -88,15 +75,20 @@ def _admit_distribution(
         ) from exc
 
 
-def _admit_event(request: FiniteEventRequest, *, require_positive: bool) -> None:
+def _admit_event(
+    distribution: FiniteRationalDistribution,
+    event_values: tuple[CanonicalRational, ...],
+    *,
+    require_positive: bool,
+) -> None:
     support = set(
-        _admit_distribution(request.distribution.atoms, require_canonical=True)
+        _admit_distribution(distribution.atoms, require_canonical=True)
     )
     try:
         event = _require_strictly_increasing(
-            request.event_values, label="finite event values"
+            event_values, label="finite event values"
         )
-        for value in request.event_values:
+        for value in event_values:
             require_bounded_rational(
                 value,
                 max_digits=MAX_INPUT_RATIONAL_DIGITS,
@@ -108,7 +100,7 @@ def _admit_event(request: FiniteEventRequest, *, require_positive: bool) -> None
         event_mass = sum(
             (
                 atom.probability.as_fraction()
-                for atom in request.distribution.atoms
+                for atom in distribution.atoms
                 if atom.value.as_fraction() in selected
             ),
             start=Fraction(),
@@ -128,18 +120,21 @@ def _admit_event(request: FiniteEventRequest, *, require_positive: bool) -> None
         ) from exc
 
 
-def _admit_pushforward(request: FinitePushforwardRequest) -> None:
+def _admit_pushforward(
+    distribution: FiniteRationalDistribution,
+    mapping: tuple[FinitePushforwardMapEntry, ...],
+) -> None:
     source_values = _admit_distribution(
-        request.distribution.atoms, require_canonical=True
+        distribution.atoms, require_canonical=True
     )
     try:
-        mapping_sources = tuple(item.source.as_fraction() for item in request.mapping)
+        mapping_sources = tuple(item.source.as_fraction() for item in mapping)
         if mapping_sources != source_values:
             raise ValueError(
                 "pushforward mapping must cover each source atom in canonical order"
             )
         aggregated: dict[Fraction, Fraction] = {}
-        for atom, item in zip(request.distribution.atoms, request.mapping, strict=True):
+        for atom, item in zip(distribution.atoms, mapping, strict=True):
             require_bounded_rational(
                 item.source,
                 max_digits=MAX_INPUT_RATIONAL_DIGITS,
@@ -173,11 +168,14 @@ def _admit_pushforward(request: FinitePushforwardRequest) -> None:
         ) from exc
 
 
-def _admit_convolution(request: FiniteConvolutionRequest) -> None:
-    _admit_distribution(request.left.atoms, require_canonical=True)
-    _admit_distribution(request.right.atoms, require_canonical=True)
+def _admit_convolution(
+    left: FiniteRationalDistribution,
+    right: FiniteRationalDistribution,
+) -> None:
+    _admit_distribution(left.atoms, require_canonical=True)
+    _admit_distribution(right.atoms, require_canonical=True)
     if (
-        len(request.left.atoms) * len(request.right.atoms)
+        len(left.atoms) * len(right.atoms)
         > MAX_FINITE_CONVOLUTION_PAIRS
     ):
         raise OperationDomainValidationError(
@@ -189,11 +187,12 @@ def _admit_convolution(request: FiniteConvolutionRequest) -> None:
         )
     try:
         aggregated: dict[Fraction, Fraction] = {}
-        for left in request.left.atoms:
-            for right in request.right.atoms:
-                value = left.value.as_fraction() + right.value.as_fraction()
+        for left_atom in left.atoms:
+            for right_atom in right.atoms:
+                value = left_atom.value.as_fraction() + right_atom.value.as_fraction()
                 probability = (
-                    left.probability.as_fraction() * right.probability.as_fraction()
+                    left_atom.probability.as_fraction()
+                    * right_atom.probability.as_fraction()
                 )
                 aggregated[value] = aggregated.get(value, Fraction()) + probability
         if len(aggregated) > MAX_FINITE_DISTRIBUTION_ATOMS:
@@ -218,10 +217,15 @@ def _admit_convolution(request: FiniteConvolutionRequest) -> None:
 
 
 def _admit_gaussian_polynomial_moment(
-    request: GaussianPolynomialMomentRequest,
+    polynomial: GaussianPolynomial, order: int
 ) -> int:
     """Admit the complete expansion and exact-result envelope."""
-    expansion_paths: int = len(request.polynomial.terms) ** int(request.order)
+    if type(order) is not int or not 0 <= order <= MAX_GAUSSIAN_MOMENT_ORDER:
+        raise ValueError(
+            "Gaussian moment order must be between 0 and "
+            f"{MAX_GAUSSIAN_MOMENT_ORDER}"
+        )
+    expansion_paths: int = len(polynomial.terms) ** order
     if expansion_paths > MAX_GAUSSIAN_EXPANSION_PATHS:
         raise OperationDomainValidationError(
             location=("polynomial", "order"),
@@ -233,7 +237,7 @@ def _admit_gaussian_polynomial_moment(
         )
     components = tuple(
         component
-        for term in request.polynomial.terms
+        for term in polynomial.terms
         for component in (term.coefficient.real, term.coefficient.imaginary)
     )
     distinct_denominator_digits = sum(
@@ -243,7 +247,7 @@ def _admit_gaussian_polynomial_moment(
         len(component.num.lstrip("-")) for component in components
     )
     result_digit_bound = (
-        request.order * (distinct_denominator_digits + maximum_numerator_digits)
+        order * (distinct_denominator_digits + maximum_numerator_digits)
         + len(str(max(1, expansion_paths)))
         + GAUSSIAN_RESULT_DIGIT_SAFETY_MARGIN
     )
@@ -274,18 +278,20 @@ def _distribution(values: dict[Fraction, Any]) -> FiniteRationalDistribution:
     )
 
 
-def _raw_moment(
-    request: FiniteRawMomentRequest,
+def raw_moment(
+    atoms: tuple[FiniteDistributionAtom, ...], order: int
 ) -> FiniteRawMomentResult:
     from flint import fmpq
 
-    _admit_distribution(request.atoms, require_canonical=False)
+    if type(order) is not int or not 0 <= order <= 128:
+        raise ValueError("raw moment order must be between 0 and 128")
+    _admit_distribution(atoms, require_canonical=False)
     contributions: list[FiniteRawMomentContribution] = []
     total = fmpq(0)
-    for atom in request.atoms:
+    for atom in atoms:
         value = _fmpq(atom.value)
         probability = _fmpq(atom.probability)
-        powered = value**request.order
+        powered = value**order
         contribution = probability * powered
         total += contribution
         contributions.append(
@@ -297,22 +303,23 @@ def _raw_moment(
             )
         )
     return FiniteRawMomentResult._from_kernel(
-        order=request.order,
+        order=order,
         moment=_wire(total),
         contributions=tuple(contributions),
     )
 
 
-def _event_probability(
-    request: FiniteEventRequest,
+def event_probability(
+    distribution: FiniteRationalDistribution,
+    event_values: tuple[CanonicalRational, ...],
 ) -> FiniteEventProbabilityResult:
     from flint import fmpq
 
-    _admit_event(request, require_positive=False)
-    selected_values = {value.as_fraction() for value in request.event_values}
+    _admit_event(distribution, event_values, require_positive=False)
+    selected_values = {value.as_fraction() for value in event_values}
     selected = tuple(
         atom
-        for atom in request.distribution.atoms
+        for atom in distribution.atoms
         if atom.value.as_fraction() in selected_values
     )
     total = fmpq(0)
@@ -324,16 +331,17 @@ def _event_probability(
     )
 
 
-def _condition(
-    request: FiniteConditionRequest,
+def condition(
+    distribution: FiniteRationalDistribution,
+    event_values: tuple[CanonicalRational, ...],
 ) -> FiniteConditionResult:
     from flint import fmpq
 
-    _admit_event(request, require_positive=True)
-    selected_values = {value.as_fraction() for value in request.event_values}
+    _admit_event(distribution, event_values, require_positive=True)
+    selected_values = {value.as_fraction() for value in event_values}
     selected = tuple(
         atom
-        for atom in request.distribution.atoms
+        for atom in distribution.atoms
         if atom.value.as_fraction() in selected_values
     )
     event_probability = fmpq(0)
@@ -362,26 +370,27 @@ def _condition(
     )
 
 
-def _pushforward(
-    request: FinitePushforwardRequest,
+def pushforward(
+    distribution: FiniteRationalDistribution,
+    mapping: tuple[FinitePushforwardMapEntry, ...],
 ) -> FinitePushforwardResult:
     from flint import fmpq
 
-    _admit_pushforward(request)
+    _admit_pushforward(distribution, mapping)
     aggregated: dict[Fraction, Any] = {}
     contributions: list[FinitePushforwardContribution] = []
-    for atom, mapping in zip(
-        request.distribution.atoms,
-        request.mapping,
+    for atom, mapping_entry in zip(
+        distribution.atoms,
+        mapping,
         strict=True,
     ):
-        target = mapping.target.as_fraction()
+        target = mapping_entry.target.as_fraction()
         probability = _fmpq(atom.probability)
         aggregated[target] = aggregated.get(target, fmpq(0)) + probability
         contributions.append(
             FinitePushforwardContribution(
                 source=atom.value,
-                target=mapping.target,
+                target=mapping_entry.target,
                 probability=atom.probability,
             )
         )
@@ -391,23 +400,24 @@ def _pushforward(
     )
 
 
-def _convolution(
-    request: FiniteConvolutionRequest,
+def convolution(
+    left: FiniteRationalDistribution,
+    right: FiniteRationalDistribution,
 ) -> FiniteConvolutionResult:
     from flint import fmpq
 
-    _admit_convolution(request)
+    _admit_convolution(left, right)
     aggregated: dict[Fraction, Any] = {}
     contributions: list[FiniteConvolutionContribution] = []
-    for left in request.left.atoms:
-        for right in request.right.atoms:
-            sum_value = left.value.as_fraction() + right.value.as_fraction()
-            probability = _fmpq(left.probability) * _fmpq(right.probability)
+    for left_atom in left.atoms:
+        for right_atom in right.atoms:
+            sum_value = left_atom.value.as_fraction() + right_atom.value.as_fraction()
+            probability = _fmpq(left_atom.probability) * _fmpq(right_atom.probability)
             aggregated[sum_value] = aggregated.get(sum_value, fmpq(0)) + probability
             contributions.append(
                 FiniteConvolutionContribution(
-                    left_value=left.value,
-                    right_value=right.value,
+                    left_value=left_atom.value,
+                    right_value=right_atom.value,
                     sum_value=CanonicalRational(
                         num=format_canonical_integer(sum_value.numerator),
                         den=format_canonical_integer(sum_value.denominator),
@@ -421,15 +431,15 @@ def _convolution(
     )
 
 
-def _gaussian_polynomial_moment(
-    request: GaussianPolynomialMomentRequest,
+def gaussian_polynomial_moment(
+    polynomial: GaussianPolynomial, order: int
 ) -> GaussianPolynomialMomentResult:
     from flint import fmpq, fmpq_mpoly_ctx
 
-    expansion_paths = _admit_gaussian_polynomial_moment(request)
+    expansion_paths = _admit_gaussian_polynomial_moment(polynomial, order)
     zero = fmpq(0)
     one = fmpq(1)
-    dimension = request.polynomial.variable_count
+    dimension = polynomial.variable_count
 
     # Power the complex-coefficient polynomial via FLINT fmpq_mpoly binary
     # exponentiation.  A complex coefficient (a + b i) is represented as a
@@ -441,13 +451,13 @@ def _gaussian_polynomial_moment(
     real_base = ctx.from_dict(
         {
             term.exponents: _fmpq(term.coefficient.real)
-            for term in request.polynomial.terms
+            for term in polynomial.terms
         }
     )
     imag_base = ctx.from_dict(
         {
             term.exponents: _fmpq(term.coefficient.imaginary)
-            for term in request.polynomial.terms
+            for term in polynomial.terms
         }
     )
 
@@ -465,9 +475,9 @@ def _gaussian_polynomial_moment(
     constant_one = ctx.from_dict({(0,) * dimension: one})
     constant_zero = ctx.from_dict({})
     powered: tuple[Any, Any] = (constant_one, constant_zero)
-    if request.order > 0:
+    if order > 0:
         powered = (real_base, imag_base)
-        remaining = request.order - 1
+        remaining = order - 1
         while remaining:
             if remaining & 1:
                 powered = _complex_poly_multiply(powered, (real_base, imag_base))
@@ -517,7 +527,7 @@ def _gaussian_polynomial_moment(
         )
 
     return GaussianPolynomialMomentResult._from_kernel(
-        order=request.order,
+        order=order,
         moment=_complex_wire(total),
         expansion_path_count=expansion_paths,
         expanded_monomial_count=len(contractions),
@@ -525,281 +535,11 @@ def _gaussian_polynomial_moment(
     )
 
 
-_FAIR_BIT = {
-    "atoms": [
-        {
-            "value": {"num": "0", "den": "1"},
-            "probability": {"num": "1", "den": "2"},
-        },
-        {
-            "value": {"num": "1", "den": "1"},
-            "probability": {"num": "1", "den": "2"},
-        },
-    ],
-}
-
-_FAIR_DIE_3 = {
-    "atoms": [
-        {
-            "value": {"num": "0", "den": "1"},
-            "probability": {"num": "1", "den": "3"},
-        },
-        {
-            "value": {"num": "1", "den": "1"},
-            "probability": {"num": "1", "den": "3"},
-        },
-        {
-            "value": {"num": "2", "den": "1"},
-            "probability": {"num": "1", "den": "3"},
-        },
-    ],
-}
-
-FINITE_PROBABILITY_OPERATIONS = (
-    MathTool(
-        operation_id="probability.finite_distribution.event_probability.compute",
-        title="Exact finite-event probability",
-        description=(
-            "Compute the exact probability of a finite event selected from a "
-            "canonical finite rational distribution, retaining the selected atoms."
-        ),
-        request_type=FiniteEventRequest,
-        result_type=FiniteEventProbabilityResult,
-        run=_event_probability,
-        tags=("probability", "event", "finite", "exact", "python-flint"),
-        examples=(
-            example(
-                "fair_bit_event",
-                "Compute the probability that a fair bit equals one.",
-                {
-                    "distribution": _FAIR_BIT,
-                    "event_values": [{"num": "1", "den": "1"}],
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="probability.finite_distribution.raw_moment.compute",
-        title="Exact finite-distribution raw moment",
-        description=(
-            "Compute one bounded raw moment of a normalized finite exact "
-            "rational distribution, preserving every atom contribution. "
-            "Order one is the distribution's exact expectation or expected value."
-        ),
-        request_type=FiniteRawMomentRequest,
-        result_type=FiniteRawMomentResult,
-        run=_raw_moment,
-        tags=(
-            "probability",
-            "moment",
-            "expectation",
-            "expected-value",
-            "discrete-random-variable",
-            "finite",
-            "exact",
-            "python-flint",
-        ),
-        examples=(
-            example(
-                "fair_bit_second_moment",
-                "Compute the second raw moment of a fair distribution on 0 and 1.",
-                {
-                    "atoms": _FAIR_BIT["atoms"],
-                    "order": 2,
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="probability.finite_distribution.condition.compute",
-        title="Condition an exact finite distribution",
-        description=(
-            "Normalize one explicit positive-mass event of a canonical finite "
-            "rational distribution, preserving each source contribution."
-        ),
-        request_type=FiniteConditionRequest,
-        result_type=FiniteConditionResult,
-        run=_condition,
-        tags=("probability", "conditioning", "finite", "exact", "python-flint"),
-        examples=(
-            example(
-                "fair_bit_given_one",
-                "Condition a fair bit on the positive-mass event that it equals one.",
-                {
-                    "distribution": _FAIR_BIT,
-                    "event_values": [{"num": "1", "den": "1"}],
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="probability.finite_distribution.pushforward.compute",
-        title="Push forward an exact finite distribution",
-        description=(
-            "Apply one explicit total rational lookup map and exactly aggregate "
-            "all source masses with the same target."
-        ),
-        request_type=FinitePushforwardRequest,
-        result_type=FinitePushforwardResult,
-        run=_pushforward,
-        tags=("probability", "pushforward", "finite", "exact", "python-flint"),
-        examples=(
-            example(
-                "collapse_fair_bit",
-                "Map both atoms of a fair bit to one exact target.",
-                {
-                    "distribution": _FAIR_BIT,
-                    "mapping": [
-                        {
-                            "source": {"num": "0", "den": "1"},
-                            "target": {"num": "0", "den": "1"},
-                        },
-                        {
-                            "source": {"num": "1", "den": "1"},
-                            "target": {"num": "0", "den": "1"},
-                        },
-                    ],
-                },
-            ),
-            example(
-                "fair_die_pair_merge",
-                "Push forward a fair die by merging atoms; mapping sources must cover distribution atoms in canonical order.",
-                {
-                    "distribution": _FAIR_DIE_3,
-                    "mapping": [
-                        {
-                            "source": {"num": "0", "den": "1"},
-                            "target": {"num": "0", "den": "1"},
-                        },
-                        {
-                            "source": {"num": "1", "den": "1"},
-                            "target": {"num": "1", "den": "2"},
-                        },
-                        {
-                            "source": {"num": "2", "den": "1"},
-                            "target": {"num": "1", "den": "2"},
-                        },
-                    ],
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="probability.finite_distribution.convolution.compute",
-        title="Convolve two exact finite distributions",
-        description=(
-            "Compute the bounded product-measure distribution of the sum of "
-            "two independent finite rational random variables."
-        ),
-        request_type=FiniteConvolutionRequest,
-        result_type=FiniteConvolutionResult,
-        run=_convolution,
-        tags=(
-            "probability",
-            "convolution",
-            "independence",
-            "finite",
-            "exact",
-            "python-flint",
-        ),
-        examples=(
-            example(
-                "two_fair_bits",
-                "Compute the exact distribution of the sum of two fair bits.",
-                {"left": _FAIR_BIT, "right": _FAIR_BIT},
-            ),
-            example(
-                "die_plus_bit",
-                "Convolve a fair die with a fair bit; pair product and aggregated atoms have bounded limits.",
-                {"left": _FAIR_DIE_3, "right": _FAIR_BIT},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="probability.gaussian_polynomial.moment.compute",
-        title="Exact bounded Gaussian polynomial moment",
-        description=(
-            "Compute one fixed-order exact moment of a bounded sparse complex-"
-            "rational polynomial in independent standard real Gaussian variables, "
-            "preserving the complete coefficient-contraction ledger. This does not "
-            "establish an identity for every order."
-        ),
-        request_type=CanonicalGaussianPolynomialMomentRequest,
-        result_type=GaussianPolynomialMomentResult,
-        run=_gaussian_polynomial_moment,
-        tags=(
-            "probability",
-            "Gaussian",
-            "polynomial",
-            "moment",
-            "Wick",
-            "Isserlis",
-            "exact",
-            "bounded",
-            "python-flint",
-        ),
-        examples=(
-            example(
-                "sum_of_two_gaussians_second_moment",
-                "Compute E[(X_1 + X_2)^2] for independent standard real Gaussians.",
-                {
-                    "polynomial": {
-                        "variable_count": 2,
-                        "terms": [
-                            {
-                                "coefficient": {
-                                    "real": {"num": "1", "den": "1"},
-                                    "imaginary": {"num": "0", "den": "1"},
-                                },
-                                "exponents": [0, 1],
-                            },
-                            {
-                                "coefficient": {
-                                    "real": {"num": "1", "den": "1"},
-                                    "imaginary": {"num": "0", "den": "1"},
-                                },
-                                "exponents": [1, 0],
-                            },
-                        ],
-                    },
-                    "order": 2,
-                },
-            ),
-        ),
-    ),
-    GRAPH_CONNECTION_PROBABILITY_OPERATION,
-    DIRECTED_BOND_CONNECTION_PROBABILITY_OPERATION,
-)
-
-__all__ = ["FINITE_PROBABILITY_OPERATIONS", "finite_probability_operations"]
-
-
-def finite_probability_operations() -> MathTools:
-    from dataclasses import replace
-
-    from jacobian.math.probability._all_terminal_reliability import (
-        ALL_TERMINAL_RELIABILITY_OPERATION,
-    )
-    from jacobian.math.probability._gaussian_inputs import (
-        CanonicalGaussianPolynomialMomentRequest,
-    )
-    from jacobian.math.probability._mutual_information import (
-        MUTUAL_INFORMATION_OPERATION,
-    )
-
-    def _with_canonical_gaussian_input(operation: Any) -> Any:
-        if operation.operation_id != "probability.gaussian_polynomial.moment.compute":
-            return operation
-        return replace(
-            operation,
-            request_type=CanonicalGaussianPolynomialMomentRequest,
-        )
-
-    return (
-        MUTUAL_INFORMATION_OPERATION,
-        *(
-            _with_canonical_gaussian_input(operation)
-            for operation in FINITE_PROBABILITY_OPERATIONS
-        ),
-        ALL_TERMINAL_RELIABILITY_OPERATION,
-    )
+__all__ = [
+    "condition",
+    "convolution",
+    "event_probability",
+    "gaussian_polynomial_moment",
+    "pushforward",
+    "raw_moment",
+]

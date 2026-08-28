@@ -15,7 +15,7 @@ from jacobian.math.probability._gaussian import (
 from jacobian.math.probability._gaussian_inputs import (
     CanonicalGaussianPolynomialMomentRequest,
 )
-from jacobian.math.probability._operations import finite_probability_operations
+from jacobian.math.probability._tools import finite_probability_operations
 
 
 def _operation():

@@ -18,7 +18,7 @@ from jacobian.math.combinatorics.greedoids._models import (
     RecognizeRequest,
     RecognizeResult,
 )
-from jacobian.math.combinatorics.greedoids._operations import (
+from jacobian.math.combinatorics.greedoids.operations import (
     compute_bases,
     compute_basic_word_profile,
     compute_convex_geometry,

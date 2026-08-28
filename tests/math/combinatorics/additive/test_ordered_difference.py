@@ -11,7 +11,7 @@ from jacobian.math.combinatorics.additive._models import (
     OrderedDifferenceProfileRequest,
     OrderedDifferenceProfileResult,
 )
-from jacobian.math.combinatorics.additive._operations import (
+from jacobian.math.combinatorics.additive.operations import (
     compute_ordered_difference_profile,
 )
 

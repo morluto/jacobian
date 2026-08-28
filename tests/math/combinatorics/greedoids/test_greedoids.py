@@ -19,14 +19,14 @@ from jacobian.math.combinatorics.greedoids._models import (
     RankResult,
     RecognizeRequest,
 )
-from jacobian.math.combinatorics.greedoids._operations import (
+from jacobian.math.combinatorics.greedoids._tools import TOOLS
+from jacobian.math.combinatorics.greedoids.operations import (
     compute_bases,
     compute_basic_word_profile,
     compute_convex_geometry,
     compute_rank,
     compute_recognize,
 )
-from jacobian.math.combinatorics.greedoids._tools import TOOLS
 
 # ---------------------------------------------------------------------------
 # Helpers

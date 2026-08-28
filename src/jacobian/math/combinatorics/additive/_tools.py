@@ -22,15 +22,6 @@ from jacobian.math.combinatorics.additive._models import (
     SumsetCardinalityRequest,
     SumsetCardinalityResult,
 )
-from jacobian.math.combinatorics.additive._operations import (
-    compute_additive_energy,
-    compute_multiset_sum_representation_profile,
-    compute_ordered_difference_profile,
-    compute_representation_profile,
-    compute_subset_sum_profile,
-    compute_sumset_cardinality,
-    decide_direct_sum_predicate,
-)
 from jacobian.math.combinatorics.additive._subset_sum_profile import (
     MAX_SUBSET_SUM_DP_TRANSITIONS,
     MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
@@ -48,6 +39,15 @@ from jacobian.math.combinatorics.additive._subset_sum_target import (
     SubsetSumTargetRequest,
     SubsetSumTargetResult,
     solve_subset_sum_target_request,
+)
+from jacobian.math.combinatorics.additive.operations import (
+    compute_additive_energy,
+    compute_multiset_sum_representation_profile,
+    compute_ordered_difference_profile,
+    compute_representation_profile,
+    compute_subset_sum_profile,
+    compute_sumset_cardinality,
+    decide_direct_sum_predicate,
 )
 from jacobian.math.combinatorics.additive.values import (
     MAX_SUBSET_SUM_ITEM_DIGITS,

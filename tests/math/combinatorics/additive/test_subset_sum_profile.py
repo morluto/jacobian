@@ -21,12 +21,12 @@ from jacobian.math.combinatorics.additive import (
     subset_sum_profile,
 )
 from jacobian.math.combinatorics.additive._models import SubsetSumProfileRequest
-from jacobian.math.combinatorics.additive._operations import compute_subset_sum_profile
 from jacobian.math.combinatorics.additive._subset_sum_profile import (
     MAX_SUBSET_SUM_DP_TRANSITIONS,
     MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
     subset_sum_profile_envelope,
 )
+from jacobian.math.combinatorics.additive.operations import compute_subset_sum_profile
 from jacobian.math.combinatorics.additive.values import (
     MAX_INDEXED_INTEGER_SEQUENCE_ITEMS,
     MAX_SUBSET_SUM_ITEM_DIGITS,

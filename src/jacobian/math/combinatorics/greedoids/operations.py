@@ -9,9 +9,18 @@ expansion.
 
 from __future__ import annotations
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.greedoids._models import (
+    BasesRequest,
+    BasesResult,
+    BasicWordProfileRequest,
     BasicWordProfileResult,
+    ConvexGeometryRequest,
     ConvexGeometryResult,
+    GreedoidAdmissionError,
+    RankRequest,
+    RankResult,
+    RecognizeRequest,
     RecognizeResult,
     require_bounded_carrier,
 )
@@ -88,6 +97,11 @@ def recognize(
     sample of exchange pairs cannot return ``GREEDOID``.
     """
     require_bounded_carrier(system)
+    return _recognize_unchecked(system)
+
+
+def _recognize_unchecked(system: FiniteFeasibleSetSystem) -> RecognizeResult:
+    """Recognize after the caller has admitted the finite carrier."""
     index = system.feasible_index()
     n = len(system.ground)
     if () not in index:
@@ -135,6 +149,11 @@ def _require_antimatroid(system: FiniteFeasibleSetSystem) -> None:
 def union_closed(system: FiniteFeasibleSetSystem) -> bool:
     """Return whether the feasible family is closed under pairwise union."""
     require_bounded_carrier(system)
+    return _union_closed_unchecked(system)
+
+
+def _union_closed_unchecked(system: FiniteFeasibleSetSystem) -> bool:
+    """Check union closure after the caller has admitted the carrier."""
     feasible_sets = _feasible_sets(system)
     index = system.feasible_index()
     for i, a in enumerate(feasible_sets):
@@ -300,6 +319,104 @@ def _antimatroid_to_convex_geometry_unchecked(
     )
 
 
+def _reject(reason: str, message: str, *location: str) -> None:
+    raise OperationDomainValidationError(
+        location=location, code=f"greedoid.{reason}", message=message
+    )
+
+
+def _admit_system(
+    request: RecognizeRequest | BasicWordProfileRequest | ConvexGeometryRequest,
+) -> None:
+    try:
+        require_bounded_carrier(request.system)
+    except GreedoidAdmissionError as exc:
+        _reject(exc.reason, str(exc), "system")
+
+
+def _admit_subset(request: RankRequest | BasesRequest) -> None:
+    try:
+        require_bounded_carrier(request.system)
+    except GreedoidAdmissionError as exc:
+        _reject(exc.reason, str(exc), "system")
+    if request.subset is None:
+        return
+    if len(set(request.subset)) != len(request.subset):
+        _reject("subset_duplicate", "subset must not contain duplicates", "subset")
+    if any(not 0 <= index < len(request.system.ground) for index in request.subset):
+        _reject(
+            "subset_index_out_of_range", "subset indices must be in range", "subset"
+        )
+
+
+def _recognized(system: FiniteFeasibleSetSystem) -> RecognizeResult:
+    return _recognize_unchecked(system)
+
+
+def compute_recognize(request: RecognizeRequest) -> RecognizeResult:
+    _admit_system(request)
+    return _recognized(request.system)
+
+
+def compute_rank(request: RankRequest) -> RankResult:
+    _admit_subset(request)
+    recognized = _recognized(request.system)
+    if recognized.status != "GREEDOID":
+        return RankResult(
+            status="NOT_A_GREEDOID",
+            obstruction=recognized.obstruction,
+            subset=request.subset,
+        )
+    subset = None if request.subset is None else frozenset(request.subset)
+    return RankResult(rank=_rank_unchecked(request.system, subset), subset=request.subset)
+
+
+def compute_bases(request: BasesRequest) -> BasesResult:
+    _admit_subset(request)
+    recognized = _recognized(request.system)
+    if recognized.status != "GREEDOID":
+        return BasesResult(
+            status="NOT_A_GREEDOID", bases=(), obstruction=recognized.obstruction
+        )
+    subset = None if request.subset is None else frozenset(request.subset)
+    rank_value, basis_list = _bases_unchecked(request.system, subset)
+    return BasesResult(
+        rank=rank_value,
+        bases=tuple(tuple(sorted(basis)) for basis in basis_list),
+    )
+
+
+def compute_basic_word_profile(
+    request: BasicWordProfileRequest,
+) -> BasicWordProfileResult:
+    _admit_system(request)
+    recognized = _recognized(request.system)
+    if recognized.status != "GREEDOID":
+        return BasicWordProfileResult(
+            status="NOT_A_BASIC_WORD", obstruction="not_a_greedoid"
+        )
+    return _basic_word_profile_unchecked(request.system, request.word)
+
+
+def compute_convex_geometry(
+    request: ConvexGeometryRequest,
+) -> ConvexGeometryResult:
+    _admit_system(request)
+    recognized = _recognized(request.system)
+    if recognized.status != "GREEDOID":
+        return ConvexGeometryResult(
+            status="NOT_AN_ANTIMATROID", obstruction=recognized.obstruction
+        )
+    full_ground = tuple(range(len(request.system.ground)))
+    if full_ground not in request.system.feasible_index() or not _union_closed_unchecked(
+        request.system
+    ):
+        return ConvexGeometryResult(
+            status="NOT_AN_ANTIMATROID", obstruction="not_full_support_or_union_closed"
+        )
+    return _antimatroid_to_convex_geometry_unchecked(request.system)
+
+
 def convex_geometry_to_antimatroid(
     closed_family: list[tuple[int, ...]], n: int
 ) -> list[tuple[int, ...]]:
@@ -310,3 +427,12 @@ def convex_geometry_to_antimatroid(
     """
     ground_set = frozenset(range(n))
     return [tuple(sorted(ground_set - frozenset(c))) for c in closed_family]
+
+
+__all__ += [
+    "compute_bases",
+    "compute_basic_word_profile",
+    "compute_convex_geometry",
+    "compute_rank",
+    "compute_recognize",
+]

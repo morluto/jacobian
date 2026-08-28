@@ -26,7 +26,7 @@ from jacobian.math.combinatorics.additive._multiset_sum import (
     RESULT_BUDGET_BYTES,
     _bar_position_tuples,
 )
-from jacobian.math.combinatorics.additive._operations import (
+from jacobian.math.combinatorics.additive.operations import (
     compute_multiset_sum_representation_profile,
     compute_representation_profile,
 )

@@ -16,7 +16,7 @@ from jacobian.math.combinatorics.additive._models import (
     SumsetCardinalityRequest,
     _direct_sum_predicate_result_upper_bound,
 )
-from jacobian.math.combinatorics.additive._operations import (
+from jacobian.math.combinatorics.additive.operations import (
     compute_additive_energy,
     compute_representation_profile,
     compute_sumset_cardinality,

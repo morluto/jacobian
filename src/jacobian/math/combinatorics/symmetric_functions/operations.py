@@ -10,9 +10,6 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     _MAX_POINT_COORDINATE_ABS,
     _MAX_SCHUR_PARTITION_LENGTH,
     IntegerPartition,
-    PartitionConjugateResult,
-    PartitionRequest,
-    SchurExpansionRequest,
     SchurExpansionResult,
 )
 
@@ -26,11 +23,6 @@ def partition_conjugate(partition: IntegerPartition) -> IntegerPartition:
     max_part = parts[0]
     conjugate = tuple(sum(1 for p in parts if p >= i) for i in range(1, max_part + 1))
     return IntegerPartition(parts=conjugate)
-
-
-def compute_partition_conjugate(request: PartitionRequest) -> PartitionConjugateResult:
-    """Project a wire request onto the native partition-conjugation operation."""
-    return PartitionConjugateResult(conjugate=partition_conjugate(request.partition))
 
 
 def _complete_homogeneous(variables: Sequence[int], k: int) -> int:
@@ -101,11 +93,6 @@ def schur_evaluation(
     return SchurExpansionResult(value=format_canonical_integer(result))
 
 
-def compute_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionResult:
-    """Project a wire request onto the native Schur-evaluation operation."""
-    return schur_evaluation(request.partition, request.point)
-
-
 def _determinant(matrix: list[list[int]]) -> int:
     """Compute the determinant of a square integer matrix via SymPy."""
 
@@ -122,8 +109,6 @@ def _determinant(matrix: list[list[int]]) -> int:
 
 
 __all__ = [
-    "compute_partition_conjugate",
-    "compute_schur_evaluation",
     "partition_conjugate",
     "schur_evaluation",
 ]

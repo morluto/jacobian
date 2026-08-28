@@ -8,19 +8,26 @@ from pydantic import ValidationError
 from jacobian.math.combinatorics.symmetric_functions._models import (
     _MAX_SCHUR_PARTITION_LENGTH,
     IntegerPartition,
+    PartitionConjugateResult,
     PartitionRequest,
     SchurExpansionRequest,
 )
 from jacobian.math.combinatorics.symmetric_functions._tools import TOOLS
 from jacobian.math.combinatorics.symmetric_functions.operations import (
-    compute_partition_conjugate,
-    compute_schur_evaluation,
     partition_conjugate,
     schur_evaluation,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     MAX_PARTITION_SIZE,
 )
+
+
+def compute_partition_conjugate(request: PartitionRequest) -> PartitionConjugateResult:
+    return PartitionConjugateResult(conjugate=partition_conjugate(request.partition))
+
+
+def compute_schur_evaluation(request: SchurExpansionRequest):
+    return schur_evaluation(request.partition, request.point)
 
 
 def test_operations_in_catalog() -> None:

@@ -10,9 +10,11 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     SchurExpansionRequest,
     SchurExpansionResult,
 )
-from jacobian.math.combinatorics.symmetric_functions.operations import (
-    compute_schur_evaluation,
-)
+from jacobian.math.combinatorics.symmetric_functions.operations import schur_evaluation
+
+
+def _run_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionResult:
+    return schur_evaluation(request.partition, request.point)
 
 
 def sf_op[RequestT: StrictModel, ResultT: StrictModel](
@@ -45,7 +47,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "integer point using the Jacobi-Trudi determinant formula.",
         SchurExpansionRequest,
         SchurExpansionResult,
-        compute_schur_evaluation,
+        _run_schur_evaluation,
         "symmetric-function",
         "schur",
         "exact",

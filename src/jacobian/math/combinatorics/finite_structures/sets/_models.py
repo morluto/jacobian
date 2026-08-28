@@ -11,9 +11,9 @@ from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, parse_canonical_integer
 
-_MAX_SET_SIZE = 50_000
-_MAX_BINARY_SET_RESULT_SIZE = 2 * _MAX_SET_SIZE
-_MAX_COVERAGE_VALUES = 2 * _MAX_SET_SIZE
+MAX_FINITE_SET_OPERAND_ELEMENTS = 50_000
+MAX_FINITE_INTEGER_SET_ELEMENTS = 2 * MAX_FINITE_SET_OPERAND_ELEMENTS
+MAX_FINITE_SET_COVERAGE_VALUES = MAX_FINITE_INTEGER_SET_ELEMENTS
 _MAX_FINITE_SET_WIRE_BYTES = CanonicalLimits().max_output_bytes // 2
 
 
@@ -24,7 +24,9 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 class FiniteIntegerSet(StrictModel):
     """One finite set of canonical integers, possibly empty."""
 
-    elements: tuple[CanonicalInteger, ...] = Field(max_length=_MAX_SET_SIZE)
+    elements: tuple[CanonicalInteger, ...] = Field(
+        max_length=MAX_FINITE_INTEGER_SET_ELEMENTS
+    )
 
     @model_validator(mode="after")
     def require_unique_elements(self) -> Self:
@@ -54,16 +56,24 @@ class FiniteSetCoverageRequest(StrictModel):
     """A finite integer scope and a bounded sequence intended to cover it once."""
 
     scope: FiniteIntegerSet
-    values: tuple[CanonicalInteger, ...] = Field(max_length=_MAX_COVERAGE_VALUES)
+    values: tuple[CanonicalInteger, ...] = Field(
+        max_length=MAX_FINITE_SET_COVERAGE_VALUES
+    )
 
 
 class FiniteSetCoverageResult(StrictModel):
     """Exact diagnostics for a bounded exactly-once finite-set cover."""
 
     holds: bool
-    missing: tuple[CanonicalInteger, ...] = Field(max_length=_MAX_SET_SIZE)
-    duplicates: tuple[CanonicalInteger, ...] = Field(max_length=_MAX_COVERAGE_VALUES)
-    outside: tuple[CanonicalInteger, ...] = Field(max_length=_MAX_COVERAGE_VALUES)
+    missing: tuple[CanonicalInteger, ...] = Field(
+        max_length=MAX_FINITE_INTEGER_SET_ELEMENTS
+    )
+    duplicates: tuple[CanonicalInteger, ...] = Field(
+        max_length=MAX_FINITE_SET_COVERAGE_VALUES
+    )
+    outside: tuple[CanonicalInteger, ...] = Field(
+        max_length=MAX_FINITE_SET_COVERAGE_VALUES
+    )
 
     @model_validator(mode="after")
     def require_canonical_diagnostics(self) -> Self:
@@ -86,7 +96,7 @@ class FiniteSetElementListResult(StrictModel):
     """Sorted distinct integers produced by a binary set operation."""
 
     elements: tuple[CanonicalInteger, ...] = Field(
-        max_length=_MAX_BINARY_SET_RESULT_SIZE
+        max_length=MAX_FINITE_INTEGER_SET_ELEMENTS
     )
 
     @model_validator(mode="after")
@@ -106,7 +116,7 @@ class FiniteSetElementListResult(StrictModel):
 class FiniteSetCardinalityResult(StrictModel):
     """Number of distinct elements in one finite set."""
 
-    cardinality: int = Field(ge=0, le=_MAX_BINARY_SET_RESULT_SIZE)
+    cardinality: int = Field(ge=0, le=MAX_FINITE_INTEGER_SET_ELEMENTS)
 
 
 class FiniteSetBooleanResult(StrictModel):

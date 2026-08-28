@@ -30,6 +30,9 @@ from jacobian.math.combinatorics.additive._operations import (
     compute_multiset_sum_representation_profile,
     compute_representation_profile,
 )
+from jacobian.math.combinatorics.finite_structures.sets._models import (
+    MAX_FINITE_INTEGER_SET_ELEMENTS,
+)
 
 
 def _request(
@@ -157,7 +160,10 @@ def test_request_rejects_oversized_source_integer_before_parsing() -> None:
 def test_request_schema_exposes_collection_and_scalar_bounds() -> None:
     schema = MultisetSumRepresentationProfileRequest.model_json_schema()
     source_schema = schema["$defs"]["FiniteIntegerSet"]
-    assert source_schema["properties"]["elements"]["maxItems"] == 50_000
+    assert (
+        source_schema["properties"]["elements"]["maxItems"]
+        == MAX_FINITE_INTEGER_SET_ELEMENTS
+    )
     assert schema["properties"]["arity"]["maximum"] == MAX_ARITY
     window_schema = schema["$defs"]["MultisetSumWindow"]
     assert window_schema["properties"]["lower"]["maxLength"] == MAX_INTEGER_LENGTH

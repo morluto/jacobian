@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
+from jacobian.catalog.models import OperationDomainValidationError
+
 __all__ = ["walsh_hadamard_transform"]
 
 
-def walsh_hadamard_transform(truth_table: list[int]) -> list[int]:
+def walsh_hadamard_transform(truth_table: Sequence[int]) -> list[int]:
     """Return the exact Boolean Walsh spectrum of a Boolean function's truth table.
 
     The truth table is a list of ``0``/``1`` values whose length is a positive
@@ -24,11 +28,23 @@ def walsh_hadamard_transform(truth_table: list[int]) -> list[int]:
     from sympy.discrete.transforms import fwht
 
     if not truth_table:
-        raise ValueError("truth table must not be empty")
+        raise OperationDomainValidationError(
+            location=("truth_table",),
+            code="boolean.fourier.walsh_transform.nonempty",
+            message="truth table must not be empty",
+        )
     n = len(truth_table)
     if n & (n - 1) != 0:
-        raise ValueError("truth table length must be a power of two")
+        raise OperationDomainValidationError(
+            location=("truth_table",),
+            code="boolean.fourier.walsh_transform.power_of_two",
+            message="truth table length must be a power of two",
+        )
     if any(value not in (0, 1) for value in truth_table):
-        raise ValueError("truth table entries must be 0 or 1")
+        raise OperationDomainValidationError(
+            location=("truth_table",),
+            code="boolean.fourier.walsh_transform.boolean_entries",
+            message="truth table entries must be 0 or 1",
+        )
     sign_vector = [1 - 2 * bit for bit in truth_table]
     return [int(coefficient) for coefficient in fwht(sign_vector)]

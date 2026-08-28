@@ -3,13 +3,24 @@
 from collections.abc import Callable
 
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.analysis.boolean._models import (
     BooleanTruthTableRequest,
     BooleanWalshTransformResult,
 )
-from jacobian.math.analysis.boolean._operations import compute_walsh_hadamard_transform
+from jacobian.math.analysis.boolean.operations import walsh_hadamard_transform
+
+
+def _walsh_hadamard_transform(
+    request: BooleanTruthTableRequest,
+) -> BooleanWalshTransformResult:
+    spectrum = walsh_hadamard_transform(request.truth_table)
+    return BooleanWalshTransformResult(
+        spectrum=tuple(format_canonical_integer(value) for value in spectrum),
+        variable_count=len(request.truth_table).bit_length() - 1,
+    )
 
 
 def boolean_operation[
@@ -47,7 +58,7 @@ TOOLS = (
         "(little-endian) order. No floating-point arithmetic is involved.",
         BooleanTruthTableRequest,
         BooleanWalshTransformResult,
-        compute_walsh_hadamard_transform,
+        _walsh_hadamard_transform,
         "boolean",
         "walsh",
         "fourier",

@@ -15,7 +15,7 @@ from jacobian.math.matrices.analysis._models import (
     RationalSpectrumClaimRequest,
     RationalSpectrumClaimResult,
 )
-from jacobian.math.matrices.analysis._operations import (
+from jacobian.math.matrices.analysis.operations import (
     check_rational_spectrum_claim,
 )
 

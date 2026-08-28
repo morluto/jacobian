@@ -12,7 +12,7 @@ from jacobian.math.matrices.rational_linear._models import (
     LinearRationalInconsistencyFindRequest,
     LinearRationalSolutionFindRequest,
 )
-from jacobian.math.matrices.rational_linear._operations import (
+from jacobian.math.matrices.rational_linear._tools import (
     compute_rational_inconsistency,
     compute_rational_solution,
 )

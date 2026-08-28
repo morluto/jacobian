@@ -12,7 +12,7 @@ from jacobian.math.matrices.finite_fields._models import (
     PrimeFieldNullspaceResult,
     PrimeFieldRrefResult,
 )
-from jacobian.math.matrices.finite_fields._operations import (
+from jacobian.math.matrices.finite_fields._tools import (
     compute_nullspace,
     compute_rank,
     compute_rref,
@@ -340,19 +340,17 @@ class TestResultStructure:
     def test_producer_executes_rank_kernel_once(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import jacobian.math.matrices.finite_fields._operations as operations
+        import jacobian.math.matrices.finite_fields.operations as operations
 
         calls = 0
-        original_rank = cast(
-            Callable[[PrimeFieldMatrix], int], operations.__dict__["_rank"]
-        )
+        original_rank = cast(Callable[[PrimeFieldMatrix], int], operations.matrix_rank)
 
         def observed_rank(matrix: PrimeFieldMatrix) -> int:
             nonlocal calls
             calls += 1
             return original_rank(matrix)
 
-        monkeypatch.setattr(operations, "_rank", observed_rank)
+        monkeypatch.setattr(operations, "matrix_rank", observed_rank)
         assert compute_rank(pfm(prime=2, entries=((1, 0), (0, 1)))).rank == 2
         assert calls == 1
 

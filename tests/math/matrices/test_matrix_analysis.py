@@ -15,7 +15,7 @@ from jacobian.math.matrices.analysis._models import (
     MatrixEntry,
     SymmetricMatrixRequest,
 )
-from jacobian.math.matrices.analysis._operations import (
+from jacobian.math.matrices.analysis.operations import (
     check_farkas_certificate,
     compute_inertia,
 )

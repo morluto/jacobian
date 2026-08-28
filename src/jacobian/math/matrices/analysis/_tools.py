@@ -14,7 +14,7 @@ from jacobian.math.matrices.analysis._models import (
     RationalSpectrumClaimResult,
     SymmetricMatrixRequest,
 )
-from jacobian.math.matrices.analysis._operations import (
+from jacobian.math.matrices.analysis.operations import (
     check_farkas_certificate,
     check_rational_spectrum_claim,
     compute_inertia,

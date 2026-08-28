@@ -6,17 +6,45 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.matrices.finite_fields import operations as native
 from jacobian.math.matrices.finite_fields._models import (
     PrimeFieldMatrixRankResult,
     PrimeFieldMatrixRequest,
     PrimeFieldNullspaceResult,
     PrimeFieldRrefResult,
 )
-from jacobian.math.matrices.finite_fields._operations import (
-    compute_nullspace,
-    compute_rank,
-    compute_rref,
-)
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+
+
+def compute_rank(request: PrimeFieldMatrixRequest) -> PrimeFieldMatrixRankResult:
+    return PrimeFieldMatrixRankResult._from_kernel(
+        request, rank=native.matrix_rank(request.matrix)
+    )
+
+
+def compute_rref(request: PrimeFieldMatrixRequest) -> PrimeFieldRrefResult:
+    rref_rows, pivot_columns = native.matrix_rref(request.matrix)
+    return PrimeFieldRrefResult._from_kernel(
+        request,
+        rref_matrix=PrimeFieldMatrix(
+            prime=request.matrix.prime,
+            entries=tuple(rref_rows),
+            columns=request.matrix.columns,
+        ),
+        pivot_columns=pivot_columns,
+    )
+
+
+def compute_nullspace(request: PrimeFieldMatrixRequest) -> PrimeFieldNullspaceResult:
+    basis = native.matrix_nullspace(request.matrix)
+    return PrimeFieldNullspaceResult._from_kernel(
+        request,
+        nullspace_matrix=PrimeFieldMatrix(
+            prime=request.matrix.prime,
+            entries=tuple(basis),
+            columns=request.matrix.columns,
+        ),
+    )
 
 
 def _op[

@@ -1,6 +1,6 @@
-"""Finite integer-sequence values and native operations."""
+"""Native exact operations on finite integer sequences."""
 
-from jacobian.math.number_theory.sequences.core.operations import (
+from jacobian.math.number_theory.sequences.core._operations import (
     decide_arithmetic,
     decide_geometric,
     decide_nondecreasing,
@@ -31,10 +31,8 @@ from jacobian.math.number_theory.sequences.core.operations import (
     sorted_unique,
     zero_indices,
 )
-from jacobian.math.number_theory.sequences.core.values import IntegerSequence
 
 __all__ = [
-    "IntegerSequence",
     "decide_arithmetic",
     "decide_geometric",
     "decide_nondecreasing",

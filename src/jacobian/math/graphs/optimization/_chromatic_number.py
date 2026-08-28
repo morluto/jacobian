@@ -11,13 +11,13 @@ from tempfile import TemporaryDirectory
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
+from jacobian.math.graphs.optimization._chromatic_kernel import (
+    build_simple_graph,
+    solve_chromatic_number,
+)
 from jacobian.math.graphs.optimization._coloring_models import (
     GraphChromaticNumberOutput,
     GraphChromaticNumberRequest,
-)
-from jacobian.math.graphs.optimization._operations import (
-    build_simple_graph,
-    solve_chromatic_number,
 )
 from jacobian.process import (
     ProcessResourceLimits,

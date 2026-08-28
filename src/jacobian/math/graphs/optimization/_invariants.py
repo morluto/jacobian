@@ -20,6 +20,7 @@ from jacobian.catalog.models import (
     OperationExample,
 )
 from jacobian.math.graphs.optimization._budget import remaining_ms as _remaining_ms
+from jacobian.math.graphs.optimization._chromatic_kernel import build_simple_graph
 from jacobian.math.graphs.optimization._invariant_models import (
     GraphCliqueNumberResult,
     GraphCoreRequest,
@@ -42,7 +43,6 @@ from jacobian.math.graphs.optimization._models import (
     OptimizationSearchStep,
     OptimizationTermination,
 )
-from jacobian.math.graphs.optimization._operations import build_simple_graph
 from jacobian.process import (
     ProcessResourceLimits,
     run_bounded_process,

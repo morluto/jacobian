@@ -6,12 +6,12 @@ from typing import Any, cast
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
+from jacobian.math.graphs.optimization._chromatic_kernel import build_simple_graph
 from jacobian.math.graphs.optimization._distance_models import (
     GraphDistanceMatrixRequest,
     GraphDistanceMatrixResult,
     GraphDistanceRow,
 )
-from jacobian.math.graphs.optimization._operations import build_simple_graph
 
 
 def compute_distance_matrix(

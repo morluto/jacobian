@@ -1,4 +1,4 @@
-"""NetworkX and Z3 composition for bounded graph optimization."""
+"""NetworkX conversion and Z3 kernels for bounded graph optimization."""
 
 from __future__ import annotations
 

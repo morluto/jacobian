@@ -18,6 +18,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationExample,
 )
+from jacobian.math.graphs.optimization._chromatic_kernel import build_simple_graph
 from jacobian.math.graphs.optimization._exact_search import (
     solve_domination,
     solve_induced_bipartite,
@@ -33,7 +34,6 @@ from jacobian.math.graphs.optimization._models import (
     GraphMinimumMaximalMatchingOutput,
     GraphOptimizationRequest,
 )
-from jacobian.math.graphs.optimization._operations import build_simple_graph
 from jacobian.process import (
     ProcessResourceLimits,
     run_bounded_process,

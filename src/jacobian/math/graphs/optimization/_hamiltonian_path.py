@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, cast
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.math.graphs.optimization._chromatic_kernel import build_simple_graph
 from jacobian.math.graphs.optimization._models import (
     GraphHamiltonianPathRequest,
     GraphHamiltonianPathResult,
 )
-from jacobian.math.graphs.optimization._operations import build_simple_graph
 
 if TYPE_CHECKING:
     import networkx as nx

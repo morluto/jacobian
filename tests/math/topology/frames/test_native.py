@@ -1,0 +1,56 @@
+"""Native finite-frame API and wire/native parity tests."""
+
+import pytest
+
+from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import invoke_operation
+from jacobian.math.topology.frames import VectorFamily, coherence, frame_potential, gram
+from jacobian.math.topology.frames._models import (
+    CoherenceRequest,
+    FiniteFrameRequest,
+)
+from jacobian.math.topology.frames._operations import (
+    compute_coherence,
+    compute_frame_potential,
+)
+
+
+def test_native_gram_and_potential_match_wire_adapters() -> None:
+    family = VectorFamily(vectors=((1, 1), (1, 0), (0, 1)))
+
+    assert gram(family).gram == ((2, 1, 1), (1, 1, 0), (1, 0, 1))
+    assert frame_potential(family).potential == compute_frame_potential(
+        FiniteFrameRequest(vectors=family.vectors)
+    ).potential
+
+
+def test_native_coherence_matches_wire_adapter() -> None:
+    family = VectorFamily(vectors=((1, 1), (1, 0), (0, 1)))
+
+    native = coherence(family)
+    wire = compute_coherence(CoherenceRequest(vectors=family.vectors))
+
+    assert native.model_dump() == wire.model_dump()
+
+
+def test_frame_tools_are_discoverable_and_dispatch_matches_native() -> None:
+    catalog = Catalog.open()
+    descriptor = catalog.inspect("frame.gram.compute")
+    assert descriptor is not None
+
+    dispatched = invoke_operation(
+        "frame.gram.compute", {"vectors": [[1, 1], [1, 0], [0, 1]]}, catalog
+    )
+    assert dispatched.output == gram(
+        VectorFamily(vectors=((1, 1), (1, 0), (0, 1)))
+    ).model_dump(mode="json")
+
+
+@pytest.mark.parametrize("operation", [coherence, frame_potential])
+def test_native_frame_operations_keep_semantic_admission(
+    operation,
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        operation(VectorFamily(vectors=((1, 0), (2, 0))))
+    assert error.value.errors()[0]["type"] == "frames.frame_does_not_span"

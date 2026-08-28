@@ -4,51 +4,26 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
-from jacobian._models import StrictModel
-
-MAX_VECTORS, MAX_DIM, MAX_VALUE = 32, 16, 1000
-
-
-def _validation_error(reason: str, message: str) -> PydanticCustomError:
-    """Build a stable validation error owned by frame contracts."""
-
-    return PydanticCustomError(f"frames.{reason}", message)
+from jacobian.math.topology.frames.values import (
+    MAX_DIM,
+    MAX_VALUE,
+    MAX_VECTORS,
+    VectorFamily,
+)
 
 
-class VectorFamilyRequest(StrictModel):
+class VectorFamilyRequest(VectorFamily):
     """A bounded family in the standard ordered coordinate space."""
 
-    vectors: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_VECTORS)
-
-    @model_validator(mode="after")
-    def require_rectangular_family(self) -> Self:
-        dimension = len(self.vectors[0])
-        if not 1 <= dimension <= MAX_DIM:
-            raise _validation_error(
-                "vector_dimension_out_of_range",
-                f"vector dimension must be between 1 and {MAX_DIM}",
-            )
-        if any(len(vector) != dimension for vector in self.vectors):
-            raise _validation_error(
-                "vector_dimension_mismatch", "all vectors must have equal dimension"
-            )
-        if any(abs(entry) > MAX_VALUE for vector in self.vectors for entry in vector):
-            raise _validation_error(
-                "vector_entry_out_of_range", "vector entries must be bounded"
-            )
-        return self
-
-
 class FiniteFrameRequest(VectorFamilyRequest):
-    """A vector family spanning its full standard ambient space."""
+    """Wire request for an operation whose input must span its ambient space."""
 
 
 class CoherenceRequest(FiniteFrameRequest):
-    """A finite frame whose normalized pairwise coherence is requested."""
+    """Wire request for the normalized pairwise coherence operation."""
 
 
 class GramResult(VectorFamilyRequest):
@@ -102,6 +77,9 @@ class FramePotentialResult(FiniteFrameRequest):
 
 
 __all__ = [
+    "MAX_DIM",
+    "MAX_VALUE",
+    "MAX_VECTORS",
     "CoherenceRequest",
     "CoherenceResult",
     "FiniteFrameRequest",

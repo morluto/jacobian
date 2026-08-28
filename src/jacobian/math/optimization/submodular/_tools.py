@@ -9,12 +9,15 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.optimization.submodular._models import (
     MonotonicityCheckRequest,
     MonotonicityCheckResult,
+    SetFunctionEvalRequest,
+    SetFunctionEvalResult,
     SubmodularityCheckRequest,
     SubmodularityCheckResult,
 )
 from jacobian.math.optimization.submodular._operations import (
     check_monotonicity,
     check_submodularity,
+    evaluate_set_function,
 )
 
 
@@ -44,6 +47,36 @@ def _op[
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "combinatorics.set_function.evaluate",
+        "Evaluate a finite set function",
+        "Look up the exact value of a finite set function at a specified "
+        "subset. The result reports whether that subset is present in the "
+        "complete table.",
+        SetFunctionEvalRequest,
+        SetFunctionEvalResult,
+        evaluate_set_function,
+        "combinatorics",
+        "set-function",
+        "evaluation",
+        "exact",
+        examples=(
+            example(
+                "evaluate_singleton",
+                "Evaluate a two-element set function at the singleton {0}.",
+                {
+                    "function": {
+                        "ground_set_size": 1,
+                        "entries": [
+                            {"subset": [], "value": {"num": "0", "den": "1"}},
+                            {"subset": [0], "value": {"num": "1", "den": "1"}},
+                        ],
+                    },
+                    "subset": [0],
+                },
+            ),
+        ),
+    ),
     _op(
         "combinatorics.set_function.monotonicity",
         "Check monotonicity of a set function",

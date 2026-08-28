@@ -7,12 +7,15 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.metric_spaces._models import (
+    BallRequest,
+    BallResult,
     GromovHyperbolicityRequest,
     GromovHyperbolicityResult,
     MetricProfileRequest,
     MetricProfileResult,
 )
 from jacobian.math.geometry.metric_spaces._operations import (
+    compute_ball,
     compute_gromov_hyperbolicity,
     compute_metric_profile,
 )
@@ -66,6 +69,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "path_graph",
                 "Profile of a path metric space with 3 points.",
                 _METRIC_SPACE,
+            ),
+        ),
+    ),
+    fms_operation(
+        "metric_space.ball.compute",
+        "Compute the ball of a given radius centered at a point",
+        "Return the set of all points within the given radius of a specified "
+        "center point in a finite metric space.",
+        BallRequest,
+        BallResult,
+        compute_ball,
+        "metric",
+        "ball",
+        "exact",
+        examples=(
+            example(
+                "ball_1",
+                "Ball of radius 1 centered at point 0 in a 3-point space.",
+                {
+                    "metric_space": _METRIC_SPACE["metric_space"],
+                    "center": 0,
+                    "radius": 1,
+                },
             ),
         ),
     ),

@@ -7,13 +7,19 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.maps._models import (
+    CompositionRequest,
+    CompositionResult,
+    EvalRequest,
+    EvalResult,
     GenericDegreeRequest,
     GenericDegreeResult,
     JacobianResult,
 )
 from jacobian.math.polynomials.maps._operations import (
+    compose_polynomials,
     compute_generic_degree,
     compute_jacobian,
+    evaluate_polynomial,
 )
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
 
@@ -111,6 +117,37 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     _op(
+        "polynomial.map.evaluate",
+        "Evaluate a polynomial at a rational point",
+        "Evaluate a canonical rational polynomial at a complete ordered "
+        "rational point.",
+        EvalRequest,
+        EvalResult,
+        evaluate_polynomial,
+        "polynomial",
+        "evaluation",
+        "exact",
+        examples=(
+            example(
+                "simple_eval",
+                "Evaluate x^2 + 2y at x=3, y=1.",
+                {
+                    "polynomial": _bivariate_polynomial(
+                        (1, (2, 0)),
+                        (2, (0, 1)),
+                    ),
+                    "point": {
+                        "variables": ["x", "y"],
+                        "values": [
+                            {"num": "3", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    _op(
         "polynomial.map.jacobian",
         "Compute the Jacobian matrix of a polynomial map",
         "Compute the row-major Jacobian matrix of a canonical polynomial map.",
@@ -131,6 +168,30 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         _bivariate_polynomial((1, (2, 0))),
                         _bivariate_polynomial((1, (0, 2))),
                     ],
+                },
+            ),
+        ),
+    ),
+    _op(
+        "polynomial.map.compose",
+        "Compose two univariate polynomials",
+        "Compute the exact composition of two bounded univariate canonical "
+        "rational polynomials.",
+        CompositionRequest,
+        CompositionResult,
+        compose_polynomials,
+        "polynomial",
+        "composition",
+        "exact",
+        examples=(
+            example(
+                "simple_compose",
+                "Compose x^2 with x+1.",
+                {
+                    "outer": _polynomial("x", (1, 2)),
+                    "inner": _polynomial("x", (1, 1), (1, 0)),
+                    "inner_variable": "x",
+                    "outer_variable": "x",
                 },
             ),
         ),

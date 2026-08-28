@@ -1,6 +1,6 @@
 """Exact polynomial support geometry over canonical polynomial values."""
 
-from jacobian.math.polynomials.support_geometry.native import (
+from jacobian.math.polynomials.support_geometry.operations import (
     exponent_support,
     initial_form,
     newton_polytope,

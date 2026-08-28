@@ -31,6 +31,13 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
+__all__ = [
+    "exponent_support",
+    "initial_form",
+    "newton_polytope",
+    "weight_profile",
+]
+
 
 def _run_admission(
     admission: Callable[[], None], *, location: tuple[str | int, ...]
@@ -464,44 +471,67 @@ def compute_newton_polytope(request: NewtonPolytopeRequest) -> NewtonPolytope:
     return newton_polytope_from_polynomial(request.polynomial)
 
 
-def compute_weight_profile(request: WeightProfileRequest) -> PolynomialWeightProfile:
-    """Compute the weight profile of a polynomial's support."""
-    _admit_weighted_polynomial(
-        request.polynomial, request.weight, label="weight-profile"
-    )
+def exponent_support(polynomial: RationalPolynomial) -> PolynomialSupport:
+    """Return the exponent support of one canonical polynomial."""
+
+    return support_from_polynomial(polynomial)
+
+
+def newton_polytope(polynomial: RationalPolynomial) -> NewtonPolytope:
+    """Return the Newton polytope of one canonical polynomial."""
+
+    return newton_polytope_from_polynomial(polynomial)
+
+
+def weight_profile(
+    polynomial: RationalPolynomial, weight: tuple[int, ...]
+) -> PolynomialWeightProfile:
+    """Return the admitted weight profile of a canonical polynomial."""
+
+    _admit_weighted_polynomial(polynomial, weight, label="weight-profile")
     minimum_weight, minimizing, weight_layers = _compute_weight_layers(
-        request.polynomial, request.weight
+        polynomial, weight
     )
     return PolynomialWeightProfile._from_kernel(
-        polynomial=request.polynomial,
-        weight=request.weight,
+        polynomial=polynomial,
+        weight=weight,
         minimum_weight=minimum_weight,
         minimizing_exponents=minimizing,
         weight_layers=weight_layers,
     )
 
 
-def compute_initial_form(request: InitialFormRequest) -> PolynomialFaceData:
-    """Compute the initial form of a polynomial under a weight vector."""
-    source = request.polynomial
-    _admit_weighted_polynomial(source, request.weight, label="initial-form")
-    face_terms = _initial_form_terms(source, request.weight)
+def compute_weight_profile(request: WeightProfileRequest) -> PolynomialWeightProfile:
+    """Compute the weight profile of a polynomial's support."""
+    return weight_profile(request.polynomial, request.weight)
 
-    initial_form = RationalPolynomial(
-        variables=source.variables,
+
+def initial_form(
+    polynomial: RationalPolynomial, weight: tuple[int, ...]
+) -> PolynomialFaceData:
+    """Return the admitted initial form under an integer weight."""
+
+    _admit_weighted_polynomial(polynomial, weight, label="initial-form")
+    face_terms = _initial_form_terms(polynomial, weight)
+    value = RationalPolynomial(
+        variables=polynomial.variables,
         polynomial=SparseRationalPolynomial(
             terms=tuple(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational.from_fraction(c),
-                    exponents=e,
+                    coefficient=CanonicalRational.from_fraction(coefficient),
+                    exponents=exponents,
                 )
-                for c, e in face_terms
+                for coefficient, exponents in face_terms
             )
         ),
     )
-
     return PolynomialFaceData._from_kernel(
-        polynomial=source,
-        weight=request.weight,
-        initial_form=initial_form,
+        polynomial=polynomial,
+        weight=weight,
+        initial_form=value,
     )
+
+
+def compute_initial_form(request: InitialFormRequest) -> PolynomialFaceData:
+    """Compute the initial form of a polynomial under a weight vector."""
+    return initial_form(request.polynomial, request.weight)

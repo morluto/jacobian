@@ -12,10 +12,32 @@ from jacobian.math.topology.cohomology.operations._models import (
     SteenrodSquareRequest,
     SteenrodSquareResult,
 )
-from jacobian.math.topology.cohomology.operations._operations import (
-    compute_bockstein,
-    compute_steenrod_square,
+from jacobian.math.topology.cohomology.operations.operations import (
+    bockstein,
+    steenrod_square,
 )
+
+
+def _run_steenrod_square(request: SteenrodSquareRequest) -> SteenrodSquareResult:
+    return steenrod_square(
+        request.cochain_degree,
+        request.simplex_values,
+        request.simplex_coefficients,
+        request.square_degree,
+        request.ambient_simplices,
+        request.ambient_complex,
+    )
+
+
+def _run_bockstein(request: BocksteinRequest) -> BocksteinResult:
+    return bockstein(
+        request.prime,
+        request.cochain_degree,
+        request.simplex_values,
+        request.simplex_coefficients,
+        request.ambient_simplices,
+        request.ambient_complex,
+    )
 
 
 def cohomology_operation[
@@ -74,7 +96,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "ambient to locate targets.",
         SteenrodSquareRequest,
         SteenrodSquareResult,
-        compute_steenrod_square,
+        _run_steenrod_square,
         "cohomology",
         "steenrod",
         "exact",
@@ -93,7 +115,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "over Z/p. Nonzero cocycles are rejected as unsupported by this operation.",
         BocksteinRequest,
         BocksteinResult,
-        compute_bockstein,
+        _run_bockstein,
         "cohomology",
         "bockstein",
         "exact",

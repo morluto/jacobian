@@ -1,5 +1,8 @@
 """Cohomology operations."""
 
-from jacobian.math.topology.cohomology.operations._operations import compute_bockstein
+from jacobian.math.topology.cohomology.operations.operations import (
+    bockstein,
+    steenrod_square,
+)
 
-__all__ = ["compute_bockstein"]
+__all__ = ["bockstein", "steenrod_square"]

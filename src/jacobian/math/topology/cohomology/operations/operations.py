@@ -7,12 +7,11 @@ from collections.abc import Callable
 from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.topology._models import FiniteSimplicialComplex
 from jacobian.math.topology.cohomology.operations._models import (
     MAX_AMBIENT_SIMPLEX_VERTICES,
     MAX_RESULT_COCHAIN_DEGREE,
-    BocksteinRequest,
     BocksteinResult,
-    SteenrodSquareRequest,
     SteenrodSquareResult,
     _effective_ambient,
     _validate_simplex_entries,
@@ -128,28 +127,35 @@ def _is_zero_mod_prime_cochain(
     return not any(value != 0 for value in merged.values())
 
 
-def _admit_steenrod_square(request: SteenrodSquareRequest) -> None:
+def _admit_steenrod_square(
+    cochain_degree: int,
+    simplex_values: tuple[tuple[int, ...], ...],
+    simplex_coefficients: tuple[int, ...],
+    square_degree: int,
+    ambient_simplices: tuple[tuple[int, ...], ...],
+    ambient_complex: FiniteSimplicialComplex | None,
+) -> None:
     """Admit one exact Steenrod-square invocation and verify its cocycle."""
 
     def admission() -> None:
-        result_degree = request.cochain_degree + request.square_degree
+        result_degree = cochain_degree + square_degree
         if result_degree > MAX_RESULT_COCHAIN_DEGREE:
             raise _validation_error(
                 "result_degree_bound",
-                f"Sq^{request.square_degree} of a degree-{request.cochain_degree} "
+                f"Sq^{square_degree} of a degree-{cochain_degree} "
                 f"cochain returns degree {result_degree}, above the "
                 f"{MAX_RESULT_COCHAIN_DEGREE}-degree exact-result budget",
             )
-        if 0 < request.square_degree < request.cochain_degree:
+        if 0 < square_degree < cochain_degree:
             raise _validation_error(
                 "intermediate_square_unsupported",
                 "intermediate Steenrod squares 0<k<deg require cup-i products "
                 "and are not supported",
             )
-        effective_ambient = _effective_ambient_for_request(request)
+        effective_ambient = _effective_ambient(ambient_simplices, ambient_complex)
         if (
             not _is_zero_mod2_cochain(
-                request.simplex_values, request.simplex_coefficients
+                simplex_values, simplex_coefficients
             )
             and not effective_ambient
         ):
@@ -160,8 +166,8 @@ def _admit_steenrod_square(request: SteenrodSquareRequest) -> None:
                 "complex; supply ambient_simplices or ambient_complex",
             )
         if (
-            request.square_degree == request.cochain_degree
-            and request.cochain_degree >= 1
+            square_degree == cochain_degree
+            and cochain_degree >= 1
             and not effective_ambient
         ):
             raise _validation_error(
@@ -171,39 +177,46 @@ def _admit_steenrod_square(request: SteenrodSquareRequest) -> None:
             )
         if effective_ambient:
             _validate_ambient_complex(
-                request.cochain_degree,
-                request.simplex_values,
-                request.simplex_coefficients,
+                cochain_degree,
+                simplex_values,
+                simplex_coefficients,
                 effective_ambient,
             )
 
     _run_admission(admission)
 
 
-def _admit_bockstein(request: BocksteinRequest) -> None:
+def _admit_bockstein(
+    prime: int,
+    cochain_degree: int,
+    simplex_values: tuple[tuple[int, ...], ...],
+    simplex_coefficients: tuple[int, ...],
+    ambient_simplices: tuple[tuple[int, ...], ...],
+    ambient_complex: FiniteSimplicialComplex | None,
+) -> None:
     """Admit the supported zero-cocycle Bockstein branch."""
 
     def admission() -> None:
         from sympy import isprime
 
-        if not isprime(request.prime):
+        if not isprime(prime):
             raise _validation_error("prime_not_prime", "prime must be a prime integer")
         if not _is_zero_mod_prime_cochain(
-            request.simplex_values,
-            request.simplex_coefficients,
-            request.prime,
+            simplex_values,
+            simplex_coefficients,
+            prime,
         ):
             raise _validation_error(
                 "nonzero_bockstein_unsupported",
                 "non-zero Bockstein requires the ambient simplicial complex; "
                 "unsupported in this bounded operation",
             )
-        effective_ambient = _effective_ambient_for_request(request)
+        effective_ambient = _effective_ambient(ambient_simplices, ambient_complex)
         if effective_ambient:
             _validate_ambient_complex(
-                request.cochain_degree,
-                request.simplex_values,
-                request.simplex_coefficients,
+                cochain_degree,
+                simplex_values,
+                simplex_coefficients,
                 effective_ambient,
             )
 
@@ -366,16 +379,14 @@ def steenrod_square_fields(
     )
 
 
-def _effective_ambient_for_request(
-    request: SteenrodSquareRequest | BocksteinRequest,
-) -> tuple[tuple[int, ...], ...]:
-    """Return the integer ambient set for a request."""
-    # Import here to avoid circular import at module load.
-
-    return _effective_ambient(request.ambient_simplices, request.ambient_complex)
-
-
-def compute_steenrod_square(request: SteenrodSquareRequest) -> SteenrodSquareResult:
+def steenrod_square(
+    cochain_degree: int,
+    simplex_values: tuple[tuple[int, ...], ...],
+    simplex_coefficients: tuple[int, ...],
+    square_degree: int,
+    ambient_simplices: tuple[tuple[int, ...], ...] = (),
+    ambient_complex: FiniteSimplicialComplex | None = None,
+) -> SteenrodSquareResult:
     """Compute the Steenrod square Sq^k(x) for a cocycle x over GF(2).
 
     Sq^k(x) is nonzero only when 0 <= k <= deg(x).
@@ -389,22 +400,34 @@ def compute_steenrod_square(request: SteenrodSquareRequest) -> SteenrodSquareRes
     - Sq^k(x) = 0 for k > n (instability)
     - Sq^k(x) for 0 < k < n requires the cup-i product structure
     """
-    _admit_steenrod_square(request)
-    effective = _effective_ambient_for_request(request)
+    _admit_steenrod_square(
+        cochain_degree,
+        simplex_values,
+        simplex_coefficients,
+        square_degree,
+        ambient_simplices,
+        ambient_complex,
+    )
+    effective = _effective_ambient(ambient_simplices, ambient_complex)
     (
         result_degree,
         result_simplex_values,
         result_simplex_coefficients,
         is_zero,
     ) = steenrod_square_fields(
-        request.cochain_degree,
-        request.simplex_values,
-        request.simplex_coefficients,
-        request.square_degree,
+        cochain_degree,
+        simplex_values,
+        simplex_coefficients,
+        square_degree,
         effective,
     )
     return SteenrodSquareResult._from_kernel(
-        request,
+        cochain_degree,
+        simplex_values,
+        simplex_coefficients,
+        square_degree,
+        ambient_simplices,
+        ambient_complex,
         result_degree,
         result_simplex_values,
         result_simplex_coefficients,
@@ -444,7 +467,14 @@ def bockstein_fields(
     )
 
 
-def compute_bockstein(request: BocksteinRequest) -> BocksteinResult:
+def bockstein(
+    prime: int,
+    cochain_degree: int,
+    simplex_values: tuple[tuple[int, ...], ...],
+    simplex_coefficients: tuple[int, ...],
+    ambient_simplices: tuple[tuple[int, ...], ...] = (),
+    ambient_complex: FiniteSimplicialComplex | None = None,
+) -> BocksteinResult:
     """Compute the Bockstein homomorphism beta: H^n(Z/p) -> H^{n+1}(Z/p).
 
     For the short exact sequence 0 -> Z/p -> Z/p^2 -> Z/p -> 0,
@@ -455,20 +485,32 @@ def compute_bockstein(request: BocksteinRequest) -> BocksteinResult:
     the Bockstein is provably zero. Non-zero inputs are rejected at the
     request boundary as unsupported.
     """
-    _admit_bockstein(request)
+    _admit_bockstein(
+        prime,
+        cochain_degree,
+        simplex_values,
+        simplex_coefficients,
+        ambient_simplices,
+        ambient_complex,
+    )
     (
         result_degree,
         result_simplex_values,
         result_simplex_coefficients,
         is_zero,
     ) = bockstein_fields(
-        request.prime,
-        request.cochain_degree,
-        request.simplex_coefficients,
-        request.simplex_values,
+        prime,
+        cochain_degree,
+        simplex_coefficients,
+        simplex_values,
     )
     return BocksteinResult._from_kernel(
-        request,
+        prime,
+        cochain_degree,
+        simplex_values,
+        simplex_coefficients,
+        ambient_simplices,
+        ambient_complex,
         result_degree,
         result_simplex_values,
         result_simplex_coefficients,
@@ -477,8 +519,8 @@ def compute_bockstein(request: BocksteinRequest) -> BocksteinResult:
 
 
 __all__ = [
+    "bockstein",
     "bockstein_fields",
-    "compute_bockstein",
-    "compute_steenrod_square",
+    "steenrod_square",
     "steenrod_square_fields",
 ]

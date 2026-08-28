@@ -319,7 +319,12 @@ class SteenrodSquareResult(SteenrodSquareRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: SteenrodSquareRequest,
+        cochain_degree: int,
+        simplex_values: tuple[tuple[int, ...], ...],
+        simplex_coefficients: tuple[int, ...],
+        square_degree: int,
+        ambient_simplices: tuple[tuple[int, ...], ...],
+        ambient_complex: FiniteSimplicialComplex | None,
         result_degree: int,
         result_simplex_values: tuple[tuple[int, ...], ...],
         result_simplex_coefficients: tuple[int, ...],
@@ -328,12 +333,12 @@ class SteenrodSquareResult(SteenrodSquareRequest):
         """Construct a trusted result emitted by the owner-local kernel."""
 
         return cls.model_construct(
-            cochain_degree=request.cochain_degree,
-            simplex_values=request.simplex_values,
-            simplex_coefficients=request.simplex_coefficients,
-            square_degree=request.square_degree,
-            ambient_simplices=request.ambient_simplices,
-            ambient_complex=request.ambient_complex,
+            cochain_degree=cochain_degree,
+            simplex_values=simplex_values,
+            simplex_coefficients=simplex_coefficients,
+            square_degree=square_degree,
+            ambient_simplices=ambient_simplices,
+            ambient_complex=ambient_complex,
             result_degree=result_degree,
             result_simplex_values=result_simplex_values,
             result_simplex_coefficients=result_simplex_coefficients,
@@ -421,7 +426,12 @@ class BocksteinResult(BocksteinRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: BocksteinRequest,
+        prime: int,
+        cochain_degree: int,
+        simplex_values: tuple[tuple[int, ...], ...],
+        simplex_coefficients: tuple[int, ...],
+        ambient_simplices: tuple[tuple[int, ...], ...],
+        ambient_complex: FiniteSimplicialComplex | None,
         result_degree: int,
         result_simplex_values: tuple[tuple[int, ...], ...],
         result_simplex_coefficients: tuple[int, ...],
@@ -430,12 +440,12 @@ class BocksteinResult(BocksteinRequest):
         """Construct a trusted result emitted by the owner-local kernel."""
 
         return cls.model_construct(
-            prime=request.prime,
-            cochain_degree=request.cochain_degree,
-            simplex_values=request.simplex_values,
-            simplex_coefficients=request.simplex_coefficients,
-            ambient_simplices=request.ambient_simplices,
-            ambient_complex=request.ambient_complex,
+            prime=prime,
+            cochain_degree=cochain_degree,
+            simplex_values=simplex_values,
+            simplex_coefficients=simplex_coefficients,
+            ambient_simplices=ambient_simplices,
+            ambient_complex=ambient_complex,
             result_degree=result_degree,
             result_simplex_values=result_simplex_values,
             result_simplex_coefficients=result_simplex_coefficients,

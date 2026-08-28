@@ -11,10 +11,32 @@ from jacobian.math.topology.cohomology.operations._models import (
     BocksteinResult,
     SteenrodSquareRequest,
 )
-from jacobian.math.topology.cohomology.operations._operations import (
-    compute_bockstein,
-    compute_steenrod_square,
+from jacobian.math.topology.cohomology.operations.operations import (
+    bockstein,
+    steenrod_square,
 )
+
+
+def compute_steenrod_square(request: SteenrodSquareRequest):
+    return steenrod_square(
+        request.cochain_degree,
+        request.simplex_values,
+        request.simplex_coefficients,
+        request.square_degree,
+        request.ambient_simplices,
+        request.ambient_complex,
+    )
+
+
+def compute_bockstein(request: BocksteinRequest):
+    return bockstein(
+        request.prime,
+        request.cochain_degree,
+        request.simplex_values,
+        request.simplex_coefficients,
+        request.ambient_simplices,
+        request.ambient_complex,
+    )
 
 
 def _assert_error_code(
@@ -601,5 +623,5 @@ class TestCatalogPublication:
     def test_bockstein_native_symbol_is_supported(self) -> None:
         import jacobian.math.topology.cohomology.operations as public_module
 
-        assert "compute_bockstein" in public_module.__all__
-        assert callable(public_module.compute_bockstein)
+        assert "bockstein" in public_module.__all__
+        assert callable(public_module.bockstein)

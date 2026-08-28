@@ -12,7 +12,7 @@ from jacobian.math.number_theory.algebraic_numbers.root_isolation._models import
     RootIsolationResult,
     UnivariatePolynomialRequest,
 )
-from jacobian.math.number_theory.algebraic_numbers.root_isolation._operations import (
+from jacobian.math.number_theory.algebraic_numbers.root_isolation._sympy import (
     compute_algebraic_compare,
     compute_root_isolation,
 )

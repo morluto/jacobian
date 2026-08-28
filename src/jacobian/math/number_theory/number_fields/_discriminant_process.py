@@ -1,4 +1,4 @@
-"""Domain-owned number field operations."""
+"""Killable process boundary for exact number-field discriminants."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Domain-owned root isolation operations."""
+"""SymPy-backed root isolation and comparison projection."""
 
 from __future__ import annotations
 

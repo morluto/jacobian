@@ -6,12 +6,12 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.number_theory.number_fields._discriminant_process import (
+    compute_nf_discriminant,
+)
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldDiscriminantResult,
     NumberFieldRequest,
-)
-from jacobian.math.number_theory.number_fields._operations import (
-    compute_nf_discriminant,
 )
 
 

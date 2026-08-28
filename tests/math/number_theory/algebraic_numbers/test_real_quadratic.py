@@ -11,11 +11,14 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool
 from jacobian.math.number_theory.algebraic_numbers.quadratic import (
+    RealQuadraticEmbeddingProfile,
     RealQuadraticOrderValue,
     RealQuadraticValue,
+    real_quadratic_embeddings,
     real_quadratic_order,
 )
 from jacobian.math.number_theory.arithmetic._real_quadratic import (
+    RealQuadraticEmbeddingRequest,
     RealQuadraticOrderRequest,
 )
 
@@ -95,7 +98,7 @@ def test_native_order_api_retains_shared_field_admission() -> None:
         )
 
 
-def test_order_declaration_projects_its_wire_request_to_the_native_kernel() -> None:
+def test_declarations_project_wire_requests_to_native_kernels() -> None:
     from jacobian.math.number_theory.arithmetic._real_quadratic import (
         REAL_QUADRATIC_OPERATIONS,
     )
@@ -109,3 +112,17 @@ def test_order_declaration_projects_its_wire_request_to_the_native_kernel() -> N
     result = order_tool.run(RealQuadraticOrderRequest(left=left, right=right))
 
     assert result == real_quadratic_order(left, right)
+
+    element = RealQuadraticValue(
+        rational_part=CanonicalRational(num="1", den="1"),
+        radical_coefficient=CanonicalRational(num="1", den="1"),
+        radicand=2,
+    )
+    embedding_tool = cast(
+        MathTool[RealQuadraticEmbeddingRequest, RealQuadraticEmbeddingProfile],
+        tools["arithmetic.real_quadratic.embeddings.compute"],
+    )
+    embedding_result = embedding_tool.run(
+        RealQuadraticEmbeddingRequest(element=element)
+    )
+    assert embedding_result == real_quadratic_embeddings(element)

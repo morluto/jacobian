@@ -6,7 +6,7 @@ from jacobian.math.dynamics.arithmetic._models import (
     DynatomicPolynomialRequest,
     MapIterateRequest,
 )
-from jacobian.math.dynamics.arithmetic._operations import (
+from jacobian.math.dynamics.arithmetic.operations import (
     compute_dynatomic_polynomial,
     compute_map_iterate,
 )

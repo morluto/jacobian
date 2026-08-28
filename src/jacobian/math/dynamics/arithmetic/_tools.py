@@ -18,7 +18,7 @@ from jacobian.math.dynamics.arithmetic._models import (
     OrbitPrefixRequest,
     OrbitPrefixResult,
 )
-from jacobian.math.dynamics.arithmetic._operations import (
+from jacobian.math.dynamics.arithmetic.operations import (
     compute_cycle_multiplier,
     compute_dynatomic_polynomial,
     compute_finite_field_map,

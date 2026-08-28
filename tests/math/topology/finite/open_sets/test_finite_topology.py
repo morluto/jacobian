@@ -25,13 +25,13 @@ from jacobian.math.topology.finite.open_sets._models import (
     ContinuityRequest,
     SpecializationPreorderRequest,
 )
-from jacobian.math.topology.finite.open_sets._operations import (
+from jacobian.math.topology.finite.open_sets._tools import (
+    TOOLS,
     compute_beat_points,
     compute_connected_components,
     compute_continuity,
     compute_specialization_preorder,
 )
-from jacobian.math.topology.finite.open_sets._tools import TOOLS
 
 
 def _sierpinski() -> FiniteTopology:

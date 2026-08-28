@@ -13,6 +13,7 @@ from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
+from jacobian.math.polynomials.intervals import polynomial_box_enclosure
 from jacobian.math.polynomials.intervals._models import (
     MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS,
     MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS,
@@ -27,10 +28,10 @@ from jacobian.math.polynomials.intervals._models import (
     PolynomialBoxEnclosureResult,
     _estimate_growth,
 )
-from jacobian.math.polynomials.intervals._operations import (
+from jacobian.math.polynomials.intervals._tools import (
+    TOOLS,
     compute_polynomial_box_enclosure,
 )
-from jacobian.math.polynomials.intervals._tools import TOOLS
 from jacobian.math.polynomials.maps._operations import compute_jacobian
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
 from jacobian.math.polynomials.values import (
@@ -99,6 +100,15 @@ def _evaluate_at(
             value *= coordinate**exponent
         total += value
     return total
+
+
+def test_native_operation_matches_catalog_projection() -> None:
+    polynomial = _polynomial(("x",), {(2,): 1, (0,): -1})
+    box = _box(("x",), ((0, 2),))
+
+    assert polynomial_box_enclosure(polynomial, box) == _enclose(
+        polynomial, box
+    ).enclosure
 
 
 def test_affine_and_multilinear_corner_extrema_are_enclosed_exactly() -> None:

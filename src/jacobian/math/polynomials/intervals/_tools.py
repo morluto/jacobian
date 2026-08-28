@@ -9,9 +9,16 @@ from jacobian.math.polynomials.intervals._models import (
     PolynomialBoxEnclosureRequest,
     PolynomialBoxEnclosureResult,
 )
-from jacobian.math.polynomials.intervals._operations import (
-    compute_polynomial_box_enclosure,
-)
+from jacobian.math.polynomials.intervals.operations import polynomial_box_enclosure
+
+
+def compute_polynomial_box_enclosure(
+    request: PolynomialBoxEnclosureRequest,
+) -> PolynomialBoxEnclosureResult:
+    return PolynomialBoxEnclosureResult._from_kernel(
+        request,
+        enclosure=polynomial_box_enclosure(request.polynomial, request.box),
+    )
 
 
 def _rational(numerator: int, denominator: int = 1) -> dict[str, str]:

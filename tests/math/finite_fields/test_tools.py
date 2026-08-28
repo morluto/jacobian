@@ -34,9 +34,14 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         "finite_field.projective_line.enumerate",
         "finite_field.restrict_scalars.compute",
         "finite_field.linear_map.rank.compute",
+        "finite_field.direction_rank_ledger.compute",
+        "finite_field.orbit_distribution.compute",
         "finite_field.polynomial_map.table.compute",
+        "finite_field.polynomial_map.fibers.compute",
+        "finite_field.polynomial_map.collision.analyze",
+        "finite_field.polynomial_map.permutation.analyze",
     )
-    projective, restrict_operation, rank_operation, table = bundle
+    projective, restrict_operation, rank_operation, _, _, table, _, _, _ = bundle
     for operation in bundle:
         assert isinstance(operation, MathTool)
         assert not hasattr(operation, "provider_binding")

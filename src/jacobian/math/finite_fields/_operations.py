@@ -3,18 +3,33 @@
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
 from jacobian.math.finite_fields import (
+    CollisionResult,
+    DirectionRankLedger,
+    FiberPartition,
     FiniteLinearMap,
     FiniteMapTable,
+    OrbitDistribution,
+    PermutationResult,
     ProjectiveLine,
     RankResult,
+    analyze_collisions,
+    analyze_permutation,
+    direction_rank_ledger,
+    fiber_partition,
     finite_map_table,
     linear_map_rank,
+    orbit_distribution,
     projective_line,
     restrict_scalars,
 )
 from jacobian.math.finite_fields._models import (
+    CollisionRequest,
+    DirectionRankLedgerRequest,
+    FiberPartitionRequest,
     FiniteMapTableRequest,
     LinearMapRankRequest,
+    OrbitDistributionRequest,
+    PermutationRequest,
     ProjectiveLineRequest,
     RestrictScalarsRequest,
 )
@@ -119,8 +134,28 @@ def _rank(request: LinearMapRankRequest) -> RankResult:
     return linear_map_rank(request.subspace, request.direction)
 
 
+def _ledger(request: DirectionRankLedgerRequest) -> DirectionRankLedger:
+    return direction_rank_ledger(request.subspace, request.directions)
+
+
+def _orbit_distribution(request: OrbitDistributionRequest) -> OrbitDistribution:
+    return orbit_distribution(request.ledger)
+
+
 def _finite_map_table(request: FiniteMapTableRequest) -> FiniteMapTable:
     return finite_map_table(request.polynomial_map)
+
+
+def _fiber_partition(request: FiberPartitionRequest) -> FiberPartition:
+    return fiber_partition(request.table)
+
+
+def _analyze_collisions(request: CollisionRequest) -> CollisionResult:
+    return analyze_collisions(request.table)
+
+
+def _analyze_permutation(request: PermutationRequest) -> PermutationResult:
+    return analyze_permutation(request.table)
 
 
 def finite_field_operations() -> MathTools:
@@ -188,11 +223,96 @@ def finite_field_operations() -> MathTools:
             ),
         ),
     )
+    ledger_operation = MathTool(
+        operation_id="finite_field.direction_rank_ledger.compute",
+        request_type=DirectionRankLedgerRequest,
+        result_type=DirectionRankLedger,
+        run=_ledger,
+        title="Compute ranks for a complete finite projective line",
+        description="Return every supplied direction with its restricted map and rank.",
+        tags=("finite-field", "rank", "exact"),
+        examples=(
+            example(
+                "complete_projective_line",
+                "Compute ranks for every direction on a GF(4) projective line.",
+                {"subspace": _SUBSPACE, "directions": _PROJECTIVE_LINE},
+            ),
+        ),
+    )
+    orbit_operation = MathTool(
+        operation_id="finite_field.orbit_distribution.compute",
+        request_type=OrbitDistributionRequest,
+        result_type=OrbitDistribution,
+        run=_orbit_distribution,
+        title="Aggregate a complete direction-rank ledger",
+        description="Return exact orbit-size counts bound to the full ledger.",
+        tags=("finite-field", "orbit", "exact"),
+        examples=(
+            example(
+                "complete_rank_ledger",
+                "Aggregate a complete GF(4) direction-rank ledger.",
+                {"ledger": _LEDGER},
+            ),
+        ),
+    )
+    fiber_operation = MathTool(
+        operation_id="finite_field.polynomial_map.fibers.compute",
+        request_type=FiberPartitionRequest,
+        result_type=FiberPartition,
+        run=_fiber_partition,
+        title="Partition a finite polynomial map into fibers",
+        description="Return every nonempty fiber bound to the exact map table.",
+        tags=("finite-field", "polynomial", "fibers", "exact"),
+        examples=(
+            example(
+                "cubic_map_table",
+                "Partition the table of x^3 over GF(4) into nonempty fibers.",
+                {"table": _TABLE},
+            ),
+        ),
+    )
+    collision_operation = MathTool(
+        operation_id="finite_field.polynomial_map.collision.analyze",
+        request_type=CollisionRequest,
+        result_type=CollisionResult,
+        run=_analyze_collisions,
+        title="Analyze finite polynomial-map collisions",
+        description="Return a collision or an exact injectivity result.",
+        tags=("finite-field", "polynomial", "collision", "exact"),
+        examples=(
+            example(
+                "cubic_map_table",
+                "Find a collision in the table of x^3 over GF(4).",
+                {"table": _TABLE},
+            ),
+        ),
+    )
+    permutation_operation = MathTool(
+        operation_id="finite_field.polynomial_map.permutation.analyze",
+        request_type=PermutationRequest,
+        result_type=PermutationResult,
+        run=_analyze_permutation,
+        title="Analyze a finite polynomial permutation",
+        description="Return an inverse table or an exact non-permutation result.",
+        tags=("finite-field", "polynomial", "permutation", "exact"),
+        examples=(
+            example(
+                "cubic_map_table",
+                "Determine whether x^3 permutes GF(4).",
+                {"table": _TABLE},
+            ),
+        ),
+    )
     return (
         projective_line_operation,
         restrict_operation,
         rank_operation,
+        ledger_operation,
+        orbit_operation,
         table_operation,
+        fiber_operation,
+        collision_operation,
+        permutation_operation,
     )
 
 

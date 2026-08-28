@@ -9,12 +9,12 @@ from jacobian.math.geometry._models import (
     PointQuadrupleRequest,
     PointSetRequest,
 )
-from jacobian.math.geometry._operations import (
+from jacobian.math.geometry._support import geometry_operation
+from jacobian.math.geometry._tools import (
     circle_inversion,
     concyclic,
     convex_hull_points,
 )
-from jacobian.math.geometry._support import geometry_operation
 
 POINT_OPERATIONS = (
     geometry_operation(

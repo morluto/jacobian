@@ -7,11 +7,11 @@ from jacobian.math.geometry._models import (
     GeneralPositionRequest,
     GeneralPositionResult,
 )
-from jacobian.math.geometry._operations import (
+from jacobian.math.geometry._support import geometry_operation
+from jacobian.math.geometry._tools import (
     circumradius_profile,
     general_position_search,
 )
-from jacobian.math.geometry._support import geometry_operation
 
 CONFIGURATION_OPERATIONS = (
     geometry_operation(

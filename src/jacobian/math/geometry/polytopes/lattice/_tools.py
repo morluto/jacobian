@@ -12,10 +12,32 @@ from jacobian.math.geometry.polytopes.lattice._models import (
     EnumerateLatticePointsResult,
     LatticePolytopeRequest,
 )
-from jacobian.math.geometry.polytopes.lattice._operations import (
-    count_lattice_points,
-    enumerate_lattice_points,
+from jacobian.math.geometry.polytopes.lattice.operations import (
+    count_lattice_points as native_count_lattice_points,
 )
+from jacobian.math.geometry.polytopes.lattice.operations import (
+    enumerate_lattice_points as native_enumerate_lattice_points,
+)
+
+
+def enumerate_lattice_points(
+    request: EnumerateLatticePointsRequest,
+) -> EnumerateLatticePointsResult:
+    """Unpack a request and project the native lattice enumeration."""
+    return native_enumerate_lattice_points(
+        request.vertices,
+        request.halfspaces,
+        request.dimension_bound,
+    )
+
+
+def count_lattice_points(request: LatticePolytopeRequest) -> CountLatticePointsResult:
+    """Unpack a request and project the native lattice count."""
+    return native_count_lattice_points(
+        request.vertices,
+        request.halfspaces,
+        request.dimension_bound,
+    )
 
 
 def _op[

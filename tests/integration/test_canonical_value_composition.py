@@ -8,11 +8,11 @@ from typing import Any
 
 from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.polytopes._models import PolytopeVolumeRequest
-from jacobian.math.geometry.polytopes._operations import (
+from jacobian.math.geometry.polytopes._tools import (
+    TOOLS,
     compute_polytope_support,
     compute_polytope_volume,
 )
-from jacobian.math.geometry.polytopes._tools import TOOLS
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountRequest,
     TreeAutomatonReachabilityRequest,

@@ -13,12 +13,39 @@ from jacobian.math.geometry.polytopes._models import (
     PolytopeSupportResult,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
+    RationalVPolytope,
 )
-from jacobian.math.geometry.polytopes._operations import (
-    compute_facet_incidence,
-    compute_polytope_support,
-    compute_polytope_volume,
+from jacobian.math.geometry.polytopes.operations import (
+    facet_incidence,
+    polytope_support,
+    polytope_volume,
 )
+from jacobian.math.geometry.polytopes.values import Vertex
+
+
+def compute_polytope_support(request: PolytopeSupportRequest) -> PolytopeSupportResult:
+    """Unpack a request and project the native support result."""
+    return polytope_support(request.polytope, request.covector)
+
+
+def compute_facet_incidence(request: FacetIncidenceRequest) -> FacetIncidenceResult:
+    """Unpack a request and project the native facet profile."""
+    vertices = request.vertices
+    if isinstance(vertices, RationalVPolytope):
+        vertices = tuple(Vertex(coordinates=vertex.coordinates) for vertex in vertices.vertices)
+    return facet_incidence(vertices, request.dimension_bound)
+
+
+def compute_polytope_volume(request: PolytopeVolumeRequest) -> PolytopeVolumeResult:
+    """Unpack a request and project the native volume result."""
+    vertices = request.vertices
+    if isinstance(vertices, RationalVPolytope):
+        vertices = tuple(Vertex(coordinates=vertex.coordinates) for vertex in vertices.vertices)
+    return polytope_volume(
+        vertices,
+        request.halfspaces,
+        request.dimension_bound,
+    )
 
 
 def _op[

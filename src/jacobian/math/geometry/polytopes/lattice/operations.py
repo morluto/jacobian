@@ -53,9 +53,8 @@ from jacobian.math.geometry.polytopes.lattice._models import (
     CountLatticePointsResult,
     EnumerateLatticePointsResult,
     LatticePoint,
-    LatticePolytopeRequest,
 )
-from jacobian.math.geometry.polytopes.values import Vertex
+from jacobian.math.geometry.polytopes.values import Halfspace, Vertex
 
 __all__ = ["count_lattice_points", "enumerate_lattice_points"]
 
@@ -215,7 +214,9 @@ def _h_system_feasible(
 
 
 def _facets_and_box(  # noqa: C901
-    request: LatticePolytopeRequest,
+    vertices: tuple[Vertex, ...] | None,
+    halfspaces: tuple[Halfspace, ...] | None,
+    dimension_bound: int,
 ) -> AdmittedGeometry:
     """Build the integer facet inequalities and the integer bounding box.
 
@@ -227,22 +228,26 @@ def _facets_and_box(  # noqa: C901
     boxes) whose scan is exactly empty.
     """
     facets: list[tuple[tuple[int, ...], int]] = []
-    if request.halfspaces is not None:
-        halfspaces = [
+    if halfspaces is not None:
+        normalized_input = [
             (
                 [c.as_fraction() for c in hs.coefficients],
                 hs.offset.as_fraction(),
             )
-            for hs in request.halfspaces
+            for hs in halfspaces
         ]
-        d = request.dimension()
+        d = len(normalized_input[0][0])
+        if d > dimension_bound:
+            raise LatticePolytopeAdmissionError(
+                f"dimension {d} exceeds the dimension bound {dimension_bound}"
+            )
         # Normalize and deduplicate before any geometry routine: vertex
         # enumeration and the recession-cone test each cost combinations
         # over the row count, so repeated or positively rescaled
         # inequalities must collapse onto their primitive form before
         # either runs.  Positive scaling preserves every inequality, so
         # this cannot change the polyhedron or any derived value.
-        facets = _dedupe_normalized_halfspaces(halfspaces)
+        facets = _dedupe_normalized_halfspaces(normalized_input)
         deduped = [
             ([Fraction(a) for a in coeffs], Fraction(rhs)) for coeffs, rhs in facets
         ]
@@ -286,9 +291,13 @@ def _facets_and_box(  # noqa: C901
             # empty box scans no candidate at all.
             return [], [0] * d, [-1] * d, d
     else:
-        d = request.dimension()
-        assert request.vertices is not None
-        vertex_models: tuple[Vertex, ...] = request.vertices
+        assert vertices is not None
+        vertex_models = vertices
+        d = len(vertex_models[0].coordinates)
+        if d > dimension_bound:
+            raise LatticePolytopeAdmissionError(
+                f"dimension {d} exceeds the dimension bound {dimension_bound}"
+            )
         verts = [[c.as_fraction() for c in v.coordinates] for v in vertex_models]
         # Facet-combination budget: C(n,d) subsets of vertices define candidate
         # hyperplanes. For n=64,d=4 this is 635k; larger would be unbounded work.
@@ -447,7 +456,9 @@ def _require_enumeration_output_budget(
 
 
 def enumerate_lattice_points(
-    request: LatticePolytopeRequest,
+    vertices: tuple[Vertex, ...] | None,
+    halfspaces: tuple[Halfspace, ...] | None,
+    dimension_bound: int,
 ) -> EnumerateLatticePointsResult:
     """Enumerate every lattice point inside a bounded rational polytope.
 
@@ -456,9 +467,9 @@ def enumerate_lattice_points(
     produce the enumeration; request parsing remains structural.
     """
     representation: Literal["vertices", "halfspaces"] = (
-        "vertices" if request.vertices is not None else "halfspaces"
+        "vertices" if vertices is not None else "halfspaces"
     )
-    facets, lo, hi, d = _facets_and_box(request)
+    facets, lo, hi, d = _facets_and_box(vertices, halfspaces, dimension_bound)
     points, count = _scan_box(facets, lo, hi, d, collect=True)
     _require_enumeration_output_budget(lo=lo, hi=hi, d=d, count=count)
     return EnumerateLatticePointsResult._from_kernel(
@@ -469,14 +480,16 @@ def enumerate_lattice_points(
 
 
 def count_lattice_points(
-    request: LatticePolytopeRequest,
+    vertices: tuple[Vertex, ...] | None,
+    halfspaces: tuple[Halfspace, ...] | None,
+    dimension_bound: int,
 ) -> CountLatticePointsResult:
     """Count the lattice points inside a bounded rational polytope."""
     representation: Literal["vertices", "halfspaces"] = (
-        "vertices" if request.vertices is not None else "halfspaces"
+        "vertices" if vertices is not None else "halfspaces"
     )
     try:
-        facets, lo, hi, d = _facets_and_box(request)
+        facets, lo, hi, d = _facets_and_box(vertices, halfspaces, dimension_bound)
     except LatticePolytopeAdmissionError as exc:
         raise OperationDomainValidationError(
             location=("vertices", "halfspaces"),

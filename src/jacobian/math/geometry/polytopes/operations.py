@@ -24,6 +24,7 @@ polygon fan). This is exact and bounded for the small dimensions
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from fractions import Fraction
 from itertools import combinations
 from typing import Literal
@@ -32,10 +33,13 @@ from pydantic_core import PydanticCustomError
 from sympy import Matrix, Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.polytopes._models import (
+    COORDINATE_DIGITS,
     MAX_BOUNDEDNESS_COMBINATIONS,
     MAX_COMPUTED_FACETS,
+    MAX_DIMENSION,
     MAX_EXTREMALITY_HEIGHT_WORK,
     MAX_FACET_COORDINATE_DIGITS,
     MAX_FACET_INCIDENCES,
@@ -43,17 +47,17 @@ from jacobian.math.geometry.polytopes._models import (
     MAX_HULL_SUBFACETS,
     MAX_SUPPORT_ORIENTATION_TESTS,
     MAX_SUPPORT_VERTEX_SUBSETS,
-    FacetIncidenceRequest,
+    MAX_VERTICES,
     FacetIncidenceResult,
     PolytopeAdmissionError,
-    PolytopeSupportRequest,
     PolytopeSupportResult,
-    PolytopeVolumeRequest,
     PolytopeVolumeResult,
     PrimitiveFacet,
     RationalCovector,
     RationalPolytopeVertex,
     RationalVPolytope,
+    _canonical_v_polytope_vertices,
+    _prepare_volume_components,
     _validate_halfspaces,
     _validate_vertices,
 )
@@ -216,19 +220,17 @@ def _computed_facets_from_vertices(
     return facets
 
 
-def compute_facet_incidence(
-    request: FacetIncidenceRequest,
+def facet_incidence(
+    vertices: tuple[Vertex, ...], dimension_bound: int
 ) -> FacetIncidenceResult:
     """Compute the complete canonical facet-incidence profile of ``conv(V)``."""
 
-    vertices = request.vertices
-    assert isinstance(vertices, tuple)  # projected by the request validator
     dimension = len(vertices[0].coordinates)
     try:
-        if dimension > request.dimension_bound:
+        if dimension > dimension_bound:
             raise ValueError(
                 f"dimension {dimension} exceeds the dimension bound "
-                f"{request.dimension_bound}"
+                f"{dimension_bound}"
             )
         if any(len(vertex.coordinates) != dimension for vertex in vertices):
             raise ValueError("all vertices must share one dimension")
@@ -826,14 +828,6 @@ def _vertices_from_h_representation(
     return result
 
 
-def compute_polytope_support(
-    request: PolytopeSupportRequest,
-) -> PolytopeSupportResult:
-    """Compute one exact support value and the complete exposed vertex face."""
-
-    return polytope_support(request.polytope, request.covector)
-
-
 def polytope_support(
     polytope: RationalVPolytope,
     covector: RationalCovector,
@@ -864,8 +858,10 @@ def polytope_support(
     )
 
 
-def compute_polytope_volume(
-    request: PolytopeVolumeRequest,
+def polytope_volume(
+    vertices: tuple[Vertex, ...] | None,
+    halfspaces: tuple[Halfspace, ...] | None,
+    dimension_bound: int,
 ) -> PolytopeVolumeResult:
     """Compute the exact rational volume of a bounded rational polytope.
 
@@ -885,20 +881,18 @@ def compute_polytope_volume(
     representation: Literal["vertices", "halfspaces"]
     location: tuple[str, ...]
     try:
-        if request.vertices is not None:
+        if vertices is not None:
             representation = "vertices"
             location = ("vertices",)
-            vertices = request.vertices
-            assert isinstance(vertices, tuple)  # projected by the request validator
             prepared, dim, triangulation = _validate_vertices(
-                vertices, request.dimension_bound
+                vertices, dimension_bound
             )
         else:
+            assert halfspaces is not None
             representation = "halfspaces"
             location = ("halfspaces",)
-            assert request.halfspaces is not None
             prepared, dim, triangulation = _validate_halfspaces(
-                request.halfspaces, request.dimension_bound
+                halfspaces, dimension_bound
             )
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
@@ -923,53 +917,60 @@ def compute_polytope_volume(
 
 
 def convex_hull_volume(
-    vertices: tuple[tuple[Fraction, ...], ...],
-) -> tuple[CanonicalRational, int]:
+    vertices: RationalVPolytope | tuple[Sequence[Fraction], ...],
+) -> CanonicalRational:
     """Return the exact rational volume of the convex hull of rational points.
 
     This is the native domain kernel: it accepts mathematical values — a
     tuple of rational coordinate tuples in a consistent ambient dimension
-    (at least one point) — and returns the canonical exact volume together
-    with the ambient dimension.  Degenerate inputs of fewer than ``dim + 1``
+    (at least one point) — and returns the canonical exact volume.  Degenerate
+    inputs of fewer than ``dim + 1``
     distinct affinely independent points have exact volume zero.  Raises
     ``ValueError`` when the hull enumeration exceeds the combinatorial work
     bound or the input does not describe one consistent dimension.
     """
 
-    if not vertices:
-        raise ValueError("`vertices` must be non-empty")
-    dim = len(vertices[0])
-    if any(len(vertex) != dim for vertex in vertices):
-        raise ValueError("all vertices must share one dimension")
-    points: list[list[Rational]] = [
-        [Rational(fraction.numerator, fraction.denominator) for fraction in vertex]
-        for vertex in vertices
+    if isinstance(vertices, RationalVPolytope):
+        normalized = tuple(
+            tuple(Fraction(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates)
+            for vertex in _canonical_v_polytope_vertices(vertices)
+        )
+    else:
+        if not vertices:
+            raise ValueError("`vertices` must be non-empty")
+        if any(len(vertex) != len(vertices[0]) for vertex in vertices):
+            raise ValueError("all vertices must share one dimension")
+        normalized = tuple(tuple(Fraction(coordinate) for coordinate in vertex) for vertex in vertices)
+
+    dim = len(normalized[0])
+    if not 1 <= dim <= MAX_DIMENSION:
+        raise ValueError(
+            f"ambient dimension {dim} exceeds the {MAX_DIMENSION}-dimension bound"
+        )
+    if len(normalized) > MAX_VERTICES:
+        raise ValueError(f"`vertices` exceeds the {MAX_VERTICES}-vertex bound")
+    for vertex in normalized:
+        for coordinate in vertex:
+            numerator_digits = len(format_canonical_integer(abs(coordinate.numerator)))
+            denominator_digits = len(format_canonical_integer(coordinate.denominator))
+            if max(numerator_digits, denominator_digits) > COORDINATE_DIGITS:
+                raise ValueError(
+                    f"vertex coordinate exceeds the {COORDINATE_DIGITS}-digit bound"
+                )
+
+    prepared, triangulation = _prepare_volume_components(normalized, dim)
+    exact_points = [
+        [Rational(value.numerator, value.denominator) for value in point]
+        for point in prepared
     ]
-    n = len(points)
-    if n < dim + 1:
-        return CanonicalRational.from_integer_ratio(0, 1), dim
-
-    # Deduplicate coincident vertices.
-    seen: set[tuple[Rational, ...]] = set()
-    unique_vertices: list[list[Rational]] = []
-    for vertex in points:
-        key = tuple(vertex)
-        if key not in seen:
-            seen.add(key)
-            unique_vertices.append(vertex)
-
-    if len(unique_vertices) < dim + 1:
-        return CanonicalRational.from_integer_ratio(0, 1), dim
-
-    # Delegate redundant-vertex filtering to ``_polytope_volume``; the outer
-    # call was previously duplicated and is removed to avoid double exact
-    # work near the ``MAX_HULL_SUBFACETS`` ceiling.
-    volume = _polytope_volume(unique_vertices, dim)
-    return _canonical_rational(volume), dim
+    return _canonical_rational(
+        _polytope_volume_from_prepared(exact_points, dim, triangulation)
+    )
 
 
 __all__ = [
-    "compute_facet_incidence",
-    "compute_polytope_volume",
     "convex_hull_volume",
+    "facet_incidence",
+    "polytope_support",
+    "polytope_volume",
 ]

@@ -12,7 +12,7 @@ from jacobian.math.geometry._models import (
     GeometryPointResult,
     RationalPoint2D,
 )
-from jacobian.math.geometry._operations import circle_inversion
+from jacobian.math.geometry._tools import circle_inversion
 
 
 def _pt(x: int | str, y: int | str) -> RationalPoint2D:

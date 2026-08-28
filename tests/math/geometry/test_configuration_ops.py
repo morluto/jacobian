@@ -11,7 +11,7 @@ from jacobian.math.geometry._models import (
     GeneralPositionRequest,
     RationalPoint2D,
 )
-from jacobian.math.geometry._operations import (
+from jacobian.math.geometry._tools import (
     circumradius_profile,
     general_position_search,
 )

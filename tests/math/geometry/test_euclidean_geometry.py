@@ -18,7 +18,7 @@ from jacobian.math.geometry._models import (
 from jacobian.math.geometry._models import (
     RationalPoint2D as GeometryRationalPoint2D,
 )
-from jacobian.math.geometry._operations import circumcircle, classify_polygon_point
+from jacobian.math.geometry._tools import circumcircle, classify_polygon_point
 from jacobian.math.geometry._triangulation import minimum_weight_triangulation
 from jacobian.math.geometry.euclidean._models import (
     AngleEqualityRequest,

@@ -5,8 +5,8 @@ from jacobian.math.geometry._models import (
     SegmentIntersectionRequest,
     SegmentIntersectionResult,
 )
-from jacobian.math.geometry._operations import segment_intersection
 from jacobian.math.geometry._support import geometry_operation
+from jacobian.math.geometry._tools import segment_intersection
 
 SEGMENT_OPERATIONS = (
     geometry_operation(

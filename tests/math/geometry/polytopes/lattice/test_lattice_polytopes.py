@@ -19,11 +19,11 @@ from jacobian.math.geometry.polytopes.lattice._models import (
     EnumerateLatticePointsRequest,
     LatticePolytopeRequest,
 )
-from jacobian.math.geometry.polytopes.lattice._operations import (
-    LatticePointBudgetError,
+from jacobian.math.geometry.polytopes.lattice._tools import (
     count_lattice_points,
     enumerate_lattice_points,
 )
+from jacobian.math.geometry.polytopes.lattice.operations import LatticePointBudgetError
 
 
 def _cr(num: str, den: str = "1") -> CanonicalRational:
@@ -316,7 +316,7 @@ class TestMembershipWorkBudget:
     def test_normalization_merges_equivalent_halfspaces(self) -> None:
         from fractions import Fraction
 
-        from jacobian.math.geometry.polytopes.lattice._operations import (
+        from jacobian.math.geometry.polytopes.lattice.operations import (
             _dedupe_normalized_halfspaces,
         )
 
@@ -878,7 +878,7 @@ class TestEnumerationResultPointCap:
 class TestReviewRegressions:
     def test_infeasible_but_bounded_h_system_admitted_as_empty(self) -> None:
         """x<=0 and -x<=-1 is empty (bounded); normals span only one axis."""
-        from jacobian.math.geometry.polytopes.lattice._operations import _facets_and_box
+        from jacobian.math.geometry.polytopes.lattice.operations import _facets_and_box
 
         request = LatticePolytopeRequest(
             halfspaces=(
@@ -886,7 +886,11 @@ class TestReviewRegressions:
                 _hs((("-1", "1"), ("0", "1")), ("-1", "1")),
             )
         )
-        geometry = _facets_and_box(request)
+        geometry = _facets_and_box(
+            request.vertices,
+            request.halfspaces,
+            request.dimension_bound,
+        )
         # The canonical empty box: per-axis [0, -1] scanning no candidate.
         assert geometry[2] == [-1, -1]
 
@@ -1146,10 +1150,12 @@ class TestThirdWaveRegressions:
         """The reviewer's [0,1]^4 with every side repeated eight times:
         vertex enumeration and the recession-cone test see the 8 distinct
         primitive rows, not the 32 raw ones."""
-        from jacobian.math.geometry.polytopes.lattice import _operations
+        from jacobian.math.geometry.polytopes.lattice import (
+            operations as native_operations,
+        )
 
         seen_sizes: list[int] = []
-        original = _operations._vertices_from_h_representation
+        original = native_operations._vertices_from_h_representation
 
         def counting(
             halfspaces: list[tuple[list[Rational], Rational]],
@@ -1157,7 +1163,7 @@ class TestThirdWaveRegressions:
             seen_sizes.append(len(halfspaces))
             return original(halfspaces)
 
-        monkeypatch.setattr(_operations, "_vertices_from_h_representation", counting)
+        monkeypatch.setattr(native_operations, "_vertices_from_h_representation", counting)
         request = LatticePolytopeRequest(halfspaces=UNIT_SQUARE_4D_SIDES * 4)
         assert request.halfspaces is not None
         assert len(request.halfspaces) == 32
@@ -1170,10 +1176,12 @@ class TestThirdWaveRegressions:
     ) -> None:
         """Positive rescalings of the same inequality collapse onto the
         primitive row before any geometry routine runs."""
-        from jacobian.math.geometry.polytopes.lattice import _operations
+        from jacobian.math.geometry.polytopes.lattice import (
+            operations as native_operations,
+        )
 
         seen_sizes: list[int] = []
-        original = _operations._vertices_from_h_representation
+        original = native_operations._vertices_from_h_representation
 
         def counting(
             halfspaces: list[tuple[list[Rational], Rational]],
@@ -1181,7 +1189,7 @@ class TestThirdWaveRegressions:
             seen_sizes.append(len(halfspaces))
             return original(halfspaces)
 
-        monkeypatch.setattr(_operations, "_vertices_from_h_representation", counting)
+        monkeypatch.setattr(native_operations, "_vertices_from_h_representation", counting)
         # Full square plus positive rescalings of two of its sides:
         # 6 raw rows collapse onto the 4 primitive constraints.
         sides = (

@@ -12,15 +12,11 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry._models import (
     INVERSION_ADMISSION_DIGITS,
     MAX_COORDINATE_DIGITS,
-    CircleInversionRequest,
-    CircumcircleRequest,
-    CircumradiusProfileRequest,
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
     ClosedSegment2D,
     CollinearTripleWitness,
     ConcyclicQuadrupleWitness,
-    GeneralPositionRequest,
     GeneralPositionResult,
     GeometryBooleanResult,
     GeometryCircleResult,
@@ -29,21 +25,12 @@ from jacobian.math.geometry._models import (
     GeometryOrientationResult,
     GeometryPointResult,
     GeometryRationalResult,
-    LinePairRequest,
     LineRequest,
-    PointLineRequest,
-    PointPairRequest,
-    PointQuadrupleRequest,
-    PointSetRequest,
-    PointTripleRequest,
     PolygonIntersectionWitness,
     PolygonPointClassificationResult,
-    PolygonRequest,
     RationalPoint2D,
-    SegmentIntersectionRequest,
     SegmentIntersectionResult,
     SimplePolygonDecisionResult,
-    SimplePolygonPointRequest,
     _inverted_components_within_bound,
     _is_simple_ring,
     _point_key,
@@ -54,7 +41,26 @@ from jacobian.math.geometry._models import (
 )
 from jacobian.math.geometry._predicates import are_collinear, determinant4
 
-Compute = Callable[[LinePairRequest], GeometryBooleanResult]
+__all__ = [
+    "centroid",
+    "circle_inversion",
+    "circumcircle",
+    "circumradius_profile",
+    "classify_polygon_point",
+    "collinear",
+    "concyclic",
+    "convex_hull_points",
+    "general_position_search",
+    "line_intersection",
+    "line_predicate",
+    "midpoint",
+    "orientation",
+    "projection",
+    "segment_intersection",
+    "signed_area",
+    "simple_polygon",
+    "squared_distance",
+]
 
 
 def _reject_geometry_domain(
@@ -63,14 +69,16 @@ def _reject_geometry_domain(
     raise OperationDomainValidationError(location=location, code=code, message=message)
 
 
-def _admit_inversion(request: CircleInversionRequest) -> None:
-    if request.power.as_fraction() <= 0:
+def _admit_inversion(
+    center: RationalPoint2D, power: CanonicalRational, point: RationalPoint2D
+) -> None:
+    if power.as_fraction() <= 0:
         _reject_geometry_domain(
             location=("power",),
             code="geometry.inversion_power_must_be_positive",
             message="inversion power must be a positive rational",
         )
-    if request.point == request.center:
+    if point == center:
         _reject_geometry_domain(
             location=("point",),
             code="geometry.inversion_point_must_differ_from_center",
@@ -78,11 +86,11 @@ def _admit_inversion(request: CircleInversionRequest) -> None:
         )
 
     for value, location, label in (
-        (request.center.x, ("center", "x"), "inversion center x"),
-        (request.center.y, ("center", "y"), "inversion center y"),
-        (request.power, ("power",), "inversion power"),
-        (request.point.x, ("point", "x"), "point x"),
-        (request.point.y, ("point", "y"), "point y"),
+        (center.x, ("center", "x"), "inversion center x"),
+        (center.y, ("center", "y"), "inversion center y"),
+        (power, ("power",), "inversion power"),
+        (point.x, ("point", "x"), "point x"),
+        (point.y, ("point", "y"), "point y"),
     ):
         try:
             _require_inversion_admission_bound(value, label)
@@ -94,9 +102,9 @@ def _admit_inversion(request: CircleInversionRequest) -> None:
             )
 
     if not _inverted_components_within_bound(
-        request.center,
-        request.power,
-        request.point,
+        center,
+        power,
+        point,
         INVERSION_ADMISSION_DIGITS,
     ):
         _reject_geometry_domain(
@@ -146,8 +154,7 @@ def _admit_configuration(
         _reject_geometry_domain(location=("points",), code=code, message=str(exc))
 
 
-def _admit_circumcircle(request: CircumcircleRequest) -> None:
-    points = (request.first, request.second, request.third)
+def _admit_circumcircle(points: tuple[RationalPoint2D, RationalPoint2D, RationalPoint2D]) -> None:
     keys = tuple(_point_key(point) for point in points)
     if len(set(keys)) != len(keys):
         _reject_geometry_domain(
@@ -163,8 +170,10 @@ def _admit_circumcircle(request: CircumcircleRequest) -> None:
         )
 
 
-def _admit_simple_polygon_point(request: SimplePolygonPointRequest) -> None:
-    if not _is_simple_ring(request.polygon.points):
+def _admit_simple_polygon_point(
+    points: tuple[RationalPoint2D, ...],
+) -> None:
+    if not _is_simple_ring(points):
         _reject_geometry_domain(
             location=("polygon", "points"),
             code="geometry.point_classification_requires_a_simple_polygon",
@@ -241,36 +250,34 @@ def _on_segment(point: Any, start: Any, end: Any) -> bool:
     )
 
 
-def _pair_points(request: PointPairRequest) -> tuple[Any, Any]:
-    pair = request
-    return _point(pair.first), _point(pair.second)
-
-
 def _line(value: LineRequest) -> Any:
     from sympy.geometry import Line2D
 
     return Line2D(_point(value.first), _point(value.second))
 
 
-def squared_distance(request: PointPairRequest) -> GeometryRationalResult:
-    first, second = _pair_points(request)
+def squared_distance(
+    first_point: RationalPoint2D, second_point: RationalPoint2D
+) -> GeometryRationalResult:
+    first, second = _point(first_point), _point(second_point)
     return GeometryRationalResult(value=_wire_rational(first.distance(second) ** 2))
 
 
-def midpoint(request: PointPairRequest) -> GeometryPointResult:
-    first, second = _pair_points(request)
+def midpoint(
+    first_point: RationalPoint2D, second_point: RationalPoint2D
+) -> GeometryPointResult:
+    first, second = _point(first_point), _point(second_point)
     return GeometryPointResult(point=_wire_point(first.midpoint(second)))
 
 
 def segment_intersection(
-    request: SegmentIntersectionRequest,
+    first_segment: ClosedSegment2D, second_segment: ClosedSegment2D
 ) -> SegmentIntersectionResult:
     import sympy
     from sympy.geometry import Point2D
 
-    pair = request
-    first_start, first_end = _closed_segment(pair.first)
-    second_start, second_end = _closed_segment(pair.second)
+    first_start, first_end = _closed_segment(first_segment)
+    second_start, second_end = _closed_segment(second_segment)
     first_degenerate = first_start == first_end
     second_degenerate = second_start == second_end
     if first_degenerate or second_degenerate:
@@ -343,50 +350,53 @@ def segment_intersection(
     )
 
 
-def collinear(request: PointTripleRequest) -> GeometryBooleanResult:
+def collinear(
+    first_point: RationalPoint2D,
+    second_point: RationalPoint2D,
+    third_point: RationalPoint2D,
+) -> GeometryBooleanResult:
     from sympy.geometry import Point2D
 
-    triple = request
     return GeometryBooleanResult(
         holds=Point2D.is_collinear(
-            _point(triple.first),
-            _point(triple.second),
-            _point(triple.third),
+            _point(first_point), _point(second_point), _point(third_point)
         )
     )
 
 
-def concyclic(request: PointQuadrupleRequest) -> GeometryBooleanResult:
+def concyclic(
+    first_point: RationalPoint2D,
+    second_point: RationalPoint2D,
+    third_point: RationalPoint2D,
+    fourth_point: RationalPoint2D,
+) -> GeometryBooleanResult:
     from sympy.geometry import Point2D
 
-    points = request
     return GeometryBooleanResult(
         holds=Point2D.is_concyclic(
-            _point(points.first),
-            _point(points.second),
-            _point(points.third),
-            _point(points.fourth),
+            _point(first_point), _point(second_point),
+            _point(third_point), _point(fourth_point),
         )
     )
 
 
 def line_predicate(
     predicate: Callable[[Any, Any], bool],
-) -> Compute:
-    def compute(request: LinePairRequest) -> GeometryBooleanResult:
-        pair = request
+) -> Callable[[LineRequest, LineRequest], GeometryBooleanResult]:
+    def compute(first_line: LineRequest, second_line: LineRequest) -> GeometryBooleanResult:
         return GeometryBooleanResult(
-            holds=predicate(_line(pair.first_line), _line(pair.second_line))
+            holds=predicate(_line(first_line), _line(second_line))
         )
 
     return compute
 
 
-def line_intersection(request: LinePairRequest) -> GeometryLineIntersectionResult:
+def line_intersection(
+    first_line: LineRequest, second_line: LineRequest
+) -> GeometryLineIntersectionResult:
     from sympy.geometry import Point2D
 
-    pair = request
-    first, second = _line(pair.first_line), _line(pair.second_line)
+    first, second = _line(first_line), _line(second_line)
     if first.equals(second):
         return GeometryLineIntersectionResult(status="COINCIDENT")
     intersections = first.intersection(second)
@@ -398,24 +408,24 @@ def line_intersection(request: LinePairRequest) -> GeometryLineIntersectionResul
     return GeometryLineIntersectionResult(status="POINT", point=_wire_point(point))
 
 
-def projection(request: PointLineRequest) -> GeometryPointResult:
+def projection(point_value: RationalPoint2D, line_value: LineRequest) -> GeometryPointResult:
     from sympy.geometry import Point2D
 
-    value = request
-    projected = _line(value.line).projection(_point(value.point))
+    projected = _line(line_value).projection(_point(point_value))
     if not isinstance(projected, Point2D):
         raise ValueError("line projection did not produce one exact point")
     return GeometryPointResult(point=_wire_point(projected))
 
 
-def orientation(request: PointTripleRequest) -> GeometryOrientationResult:
+def orientation(
+    first_point: RationalPoint2D,
+    second_point: RationalPoint2D,
+    third_point: RationalPoint2D,
+) -> GeometryOrientationResult:
     import sympy
 
-    triple = request
     first, second, third = (
-        _point(triple.first),
-        _point(triple.second),
-        _point(triple.third),
+        _point(first_point), _point(second_point), _point(third_point),
     )
     determinant = (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (
         third.x - first.x
@@ -425,11 +435,14 @@ def orientation(request: PointTripleRequest) -> GeometryOrientationResult:
     )
 
 
-def centroid(request: PointTripleRequest) -> GeometryPointResult:
+def centroid(
+    first_point: RationalPoint2D,
+    second_point: RationalPoint2D,
+    third_point: RationalPoint2D,
+) -> GeometryPointResult:
     from sympy.geometry import Point2D
 
-    triple = request
-    points = [_point(triple.first), _point(triple.second), _point(triple.third)]
+    points = [_point(first_point), _point(second_point), _point(third_point)]
     return GeometryPointResult(
         point=_wire_point(
             Point2D(
@@ -440,12 +453,15 @@ def centroid(request: PointTripleRequest) -> GeometryPointResult:
     )
 
 
-def circumcircle(request: CircumcircleRequest) -> GeometryCircleResult:
+def circumcircle(
+    first_point: RationalPoint2D,
+    second_point: RationalPoint2D,
+    third_point: RationalPoint2D,
+) -> GeometryCircleResult:
     from sympy.geometry import Circle
 
-    _admit_circumcircle(request)
-    triple = request
-    points = [_point(triple.first), _point(triple.second), _point(triple.third)]
+    _admit_circumcircle((first_point, second_point, third_point))
+    points = [_point(first_point), _point(second_point), _point(third_point)]
     circle = Circle(*points)
     return GeometryCircleResult(
         center=_wire_point(circle.center),
@@ -453,37 +469,30 @@ def circumcircle(request: CircumcircleRequest) -> GeometryCircleResult:
     )
 
 
-def signed_area(request: PolygonRequest) -> GeometryRationalResult:
-    from fractions import Fraction
-
-    polygon = request
-    points = [_point(point) for point in polygon.points]
+def signed_area(points: tuple[RationalPoint2D, ...]) -> GeometryRationalResult:
+    fraction_points = _points_to_fractions(points)
     # Shoelace formula: works for any polygon including degenerate/collinear ones.
     total = Fraction(0)
-    for index, current in enumerate(points):
-        following = points[(index + 1) % len(points)]
-        total += Fraction(current.x * following.y - current.y * following.x)
+    for index, current in enumerate(fraction_points):
+        following = fraction_points[(index + 1) % len(fraction_points)]
+        total += current[0] * following[1] - current[1] * following[0]
     return GeometryRationalResult(value=_wire_rational(total / 2))
 
 
-def simple_polygon(request: PolygonRequest) -> SimplePolygonDecisionResult:
-    polygon = request
-    points = polygon.points
+def simple_polygon(points: tuple[RationalPoint2D, ...]) -> SimplePolygonDecisionResult:
     checked = 0
     for first in range(len(points)):
         for second in range(first + 1, len(points)):
             checked += 1
             intersection = segment_intersection(
-                SegmentIntersectionRequest(
-                    first=ClosedSegment2D(
+                    ClosedSegment2D(
                         start=points[first],
                         end=points[(first + 1) % len(points)],
                     ),
-                    second=ClosedSegment2D(
+                    ClosedSegment2D(
                         start=points[second],
                         end=points[(second + 1) % len(points)],
-                    ),
-                )
+                    )
             )
             adjacent = (first - second) % len(points) in {1, len(points) - 1}
             shared = (
@@ -515,18 +524,18 @@ def simple_polygon(request: PolygonRequest) -> SimplePolygonDecisionResult:
 
 
 def classify_polygon_point(
-    request: SimplePolygonPointRequest,
+    point_value: RationalPoint2D,
+    polygon_points: tuple[RationalPoint2D, ...],
 ) -> PolygonPointClassificationResult:
     from sympy.geometry import Polygon
 
-    _admit_simple_polygon_point(request)
-    value = request
-    point = _point(value.point)
-    points = tuple(_point(item) for item in value.polygon.points)
+    _admit_simple_polygon_point(polygon_points)
+    point = _point(point_value)
+    points = tuple(_point(item) for item in polygon_points)
     for index, start in enumerate(points):
         if _on_segment(point, start, points[(index + 1) % len(points)]):
             return PolygonPointClassificationResult(
-                polygon_vertex_count=len(points),
+            polygon_vertex_count=len(points),
                 classification="BOUNDARY",
                 boundary_edge_index=index,
             )
@@ -537,12 +546,13 @@ def classify_polygon_point(
     )
 
 
-def convex_hull_points(request: PointSetRequest) -> GeometryConvexHullResult:
+def convex_hull_points(
+    point_values: tuple[RationalPoint2D, ...],
+) -> GeometryConvexHullResult:
     from sympy.geometry import Line2D, Point2D, Polygon, Segment2D
     from sympy.geometry.util import convex_hull
 
-    point_set = request
-    hull = convex_hull(*(_point(point) for point in point_set.points))
+    hull = convex_hull(*(_point(point) for point in point_values))
     if isinstance(hull, Point2D):
         points = (hull,)
     elif isinstance(hull, (Line2D, Segment2D)):
@@ -557,21 +567,23 @@ def convex_hull_points(request: PointSetRequest) -> GeometryConvexHullResult:
     return GeometryConvexHullResult(points=_canonical_points(points))
 
 
-def circle_inversion(request: CircleInversionRequest) -> GeometryPointResult:
+def circle_inversion(
+    center: RationalPoint2D,
+    power: CanonicalRational,
+    point: RationalPoint2D,
+) -> GeometryPointResult:
     """Invert one rational planar point in a circle.
 
     Returns ``I_{c,s}(p) = c + (s / ||p - c||^2) * (p - c)`` exactly over the
     rationals, where ``c`` is the center and ``s`` is the positive squared
     inversion radius.  The request ``p == c`` is rejected before division.
     """
-    _admit_inversion(request)
-    center = request.center
-    point = request.point
-    power = request.power.as_fraction()
+    _admit_inversion(center, power, point)
+    power_value = power.as_fraction()
     dx = point.x.as_fraction() - center.x.as_fraction()
     dy = point.y.as_fraction() - center.y.as_fraction()
     norm_squared = dx * dx + dy * dy
-    scale = power / norm_squared
+    scale = power_value / norm_squared
     inverted = RationalPoint2D(
         x=CanonicalRational.from_fraction(center.x.as_fraction() + scale * dx),
         y=CanonicalRational.from_fraction(center.y.as_fraction() + scale * dy),
@@ -590,12 +602,14 @@ def _points_to_fractions(
     return [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
 
 
-def general_position_search(request: GeneralPositionRequest) -> GeneralPositionResult:
+def general_position_search(
+    points: tuple[RationalPoint2D, ...],
+) -> GeneralPositionResult:
     """Find all collinear triples and concyclic quadruples in a point configuration."""
     from itertools import combinations
 
-    _admit_configuration(request.points, output_bound=False)
-    pts = _points_to_fractions(request.points)
+    _admit_configuration(points, output_bound=False)
+    pts = _points_to_fractions(points)
     n = len(pts)
 
     collinear_triples: list[CollinearTripleWitness] = []
@@ -628,21 +642,21 @@ def general_position_search(request: GeneralPositionRequest) -> GeneralPositionR
             concyclic_quadruples.append(ConcyclicQuadrupleWitness(indices=(i, j, k, m)))
 
     return GeneralPositionResult._from_kernel(
-        points=request.points,
+        points=points,
         collinear_triples=tuple(collinear_triples),
         concyclic_quadruples=tuple(concyclic_quadruples),
     )
 
 
 def circumradius_profile(
-    request: CircumradiusProfileRequest,
+    points: tuple[RationalPoint2D, ...],
 ) -> CircumradiusProfileResult:
     """Compute circumradius squared for every unordered triple in a configuration."""
     from fractions import Fraction
     from itertools import combinations
 
-    _admit_configuration(request.points, output_bound=True)
-    pts = _points_to_fractions(request.points)
+    _admit_configuration(points, output_bound=True)
+    pts = _points_to_fractions(points)
     n = len(pts)
 
     entries: list[CircumradiusTripleEntry] = []
@@ -675,6 +689,6 @@ def circumradius_profile(
     # Ensure deterministic lexicographic order (combinations already yields sorted).
     entries.sort(key=lambda e: e.indices)
     return CircumradiusProfileResult._from_kernel(
-        points=request.points,
+        points=points,
         entries=tuple(entries),
     )

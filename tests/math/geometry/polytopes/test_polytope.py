@@ -13,7 +13,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.polytopes import Halfspace, Vertex
-from jacobian.math.geometry.polytopes import _operations as polytope_operations
+from jacobian.math.geometry.polytopes import operations as polytope_operations
 from jacobian.math.geometry.polytopes._models import (
     MAX_COMPUTED_FACETS,
     MAX_DIMENSION,
@@ -34,7 +34,7 @@ from jacobian.math.geometry.polytopes._models import (
     RationalPolytopeVertex,
     RationalVPolytope,
 )
-from jacobian.math.geometry.polytopes._operations import (
+from jacobian.math.geometry.polytopes._tools import (
     compute_facet_incidence,
     compute_polytope_support,
     compute_polytope_volume,
@@ -405,7 +405,7 @@ class TestFacetIncidence:
         -- 64*C(21,7) = 7441920 tests -- would reject a request whose real
         work fits the published side-test budget purely because of its
         padding representation."""
-        from jacobian.math.geometry.polytopes._operations import (
+        from jacobian.math.geometry.polytopes.operations import (
             _require_facet_preflight,
         )
 
@@ -439,7 +439,7 @@ class TestFacetIncidence:
         executes exactly 10*C(10,2) = 450. The full request-validate ->
         execute -> replay path must admit the padded request and bind
         duplicate positions to their incident facets."""
-        import jacobian.math.geometry.polytopes._operations as operations
+        import jacobian.math.geometry.polytopes.operations as operations
 
         square = (
             _v((0, 1), (0, 1)),
@@ -1410,7 +1410,7 @@ class TestHalfspaceDuplicateRowAdmission:
         """Rows identical up to a positive factor collapse onto their first
         occurrence; a different offset or a sign-flipped normal imposes a
         different inequality and is kept."""
-        from jacobian.math.geometry.polytopes._operations import (
+        from jacobian.math.geometry.polytopes.operations import (
             _deduplicate_halfspaces,
         )
 

@@ -9,11 +9,11 @@ from sympy import Rational
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.polytopes import Halfspace, _rational_geometry
-from jacobian.math.geometry.polytopes import _operations as polytope_operations
+from jacobian.math.geometry.polytopes import operations as polytope_operations
 from jacobian.math.geometry.polytopes._rational_geometry import (
     RecessionConeComputationError,
 )
-from jacobian.math.geometry.polytopes.lattice import _operations as lattice_operations
+from jacobian.math.geometry.polytopes.lattice import operations as lattice_operations
 
 
 def _rational(value: int) -> CanonicalRational:

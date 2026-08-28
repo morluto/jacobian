@@ -15,7 +15,7 @@ from jacobian.math.geometry.polytopes._models import (
     RationalPolytopeVertex,
     RationalVPolytope,
 )
-from jacobian.math.geometry.polytopes._operations import (
+from jacobian.math.geometry.polytopes.operations import (
     require_full_dimensional_extreme_vertices,
 )
 

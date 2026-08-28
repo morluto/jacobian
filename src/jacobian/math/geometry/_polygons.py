@@ -15,11 +15,11 @@ from jacobian.math.geometry._models import (
     SimplePolygonDecisionResult,
     SimplePolygonPointRequest,
 )
-from jacobian.math.geometry._operations import (
+from jacobian.math.geometry._support import geometry_operation
+from jacobian.math.geometry._tools import (
     classify_polygon_point,
     simple_polygon,
 )
-from jacobian.math.geometry._support import geometry_operation
 from jacobian.math.geometry._triangulation import minimum_weight_triangulation
 
 _UNIT_SQUARE = [

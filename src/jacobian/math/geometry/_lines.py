@@ -7,11 +7,11 @@ from jacobian.math.geometry._models import (
     LinePairRequest,
     PointLineRequest,
 )
-from jacobian.math.geometry._operations import (
+from jacobian.math.geometry._support import geometry_operation
+from jacobian.math.geometry._tools import (
     line_intersection,
     projection,
 )
-from jacobian.math.geometry._support import geometry_operation
 
 LINE_OPERATIONS = (
     geometry_operation(

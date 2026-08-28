@@ -9,10 +9,9 @@ from typing import Literal
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry._models import (
     GeometryConvexHullResult,
-    PointSetRequest,
     RationalPoint2D,
 )
-from jacobian.math.geometry._operations import convex_hull_points
+from jacobian.math.geometry.operations import convex_hull_points
 from jacobian.math.geometry.polygon_kernel._models import (
     KernelBoundaryIntersection,
     KernelPolygon,
@@ -97,7 +96,7 @@ def _canonical_hull(
     wire_points = tuple(_wire_point(point) for point in points)
     if len(wire_points) <= 1:
         return wire_points
-    return convex_hull_points(PointSetRequest(points=wire_points)).points
+    return convex_hull_points(wire_points).points
 
 
 def polygon_signed_area(points: tuple[RationalPoint2D, ...]) -> Fraction:
@@ -189,7 +188,7 @@ def compute_kernel_data(
         else "POLYGON"
     )
     turns = _turns(polygon)
-    source_hull = convex_hull_points(PointSetRequest(points=polygon.points))
+    source_hull = convex_hull_points(polygon.points)
     polygon_area = polygon_signed_area(polygon.points)
     kernel_area = polygon_signed_area(kernel_points)
     hull_area = polygon_signed_area(source_hull.points)

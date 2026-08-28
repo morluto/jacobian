@@ -5,8 +5,8 @@ from jacobian.math.geometry._models import (
     CircumcircleRequest,
     GeometryCircleResult,
 )
-from jacobian.math.geometry._operations import circumcircle
 from jacobian.math.geometry._support import geometry_operation
+from jacobian.math.geometry._tools import circumcircle
 
 TRIANGLE_OPERATIONS = (
     geometry_operation(

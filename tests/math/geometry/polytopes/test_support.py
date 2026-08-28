@@ -17,17 +17,19 @@ from jacobian.math.geometry.polytopes import (
     RationalVPolytope,
     polytope_support,
 )
-from jacobian.math.geometry.polytopes import _operations as polytope_operations
+from jacobian.math.geometry.polytopes import operations as polytope_operations
 from jacobian.math.geometry.polytopes._models import (
     MAX_EXTREMALITY_HEIGHT_WORK,
     MAX_SUPPORT_COMPONENT_DIGITS,
     PolytopeSupportRequest,
 )
-from jacobian.math.geometry.polytopes._operations import (
+from jacobian.math.geometry.polytopes._tools import (
+    TOOLS,
     compute_polytope_support,
+)
+from jacobian.math.geometry.polytopes.operations import (
     require_full_dimensional_extreme_vertices,
 )
-from jacobian.math.geometry.polytopes._tools import TOOLS
 
 
 def _rational(value: int) -> CanonicalRational:

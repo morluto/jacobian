@@ -799,12 +799,69 @@ def _solve_linear_system(
     return [aug[i][n] / aug[i][i] for i in range(n)]
 
 
+def hankel_matrix(prefix: MomentFunctionalPrefix, order: int) -> HankelMomentMatrix:
+    """Return the admitted exact Hankel matrix of one moment prefix."""
+
+    require_hankel_matrix_admission(prefix, order, shifted=False)
+    return hankel_matrix_from_prefix(prefix, order, shifted=False)
+
+
+def shifted_hankel_matrix(
+    prefix: MomentFunctionalPrefix, order: int
+) -> HankelMomentMatrix:
+    """Return the admitted exact shifted Hankel matrix of one moment prefix."""
+
+    require_hankel_matrix_admission(prefix, order, shifted=True)
+    return hankel_matrix_from_prefix(prefix, order, shifted=True)
+
+
+def orthogonal_polynomials(
+    prefix: MomentFunctionalPrefix, max_degree: int
+) -> OrthogonalPolynomialFamily:
+    """Return the admitted monic orthogonal family through ``max_degree``."""
+
+    _require_gram_schmidt_admission(prefix, max_degree)
+    moments = [moment.as_fraction() for moment in prefix.moments]
+    return orthogonal_polynomials_from_moments(moments, max_degree, prefix.variable)
+
+
+def recurrence_coefficients(
+    family: OrthogonalPolynomialFamily,
+) -> ThreeTermRecurrence:
+    """Return exact three-term recurrence coefficients for one family."""
+
+    return recurrence_coefficients_from_family(family)
+
+
+def christoffel_darboux_kernel(
+    family: OrthogonalPolynomialFamily, degree: int
+) -> ChristoffelDarbouxKernel:
+    """Return the exact Christoffel-Darboux kernel through ``degree``."""
+
+    return christoffel_darboux_kernel_from_family(family, degree)
+
+
+def jacobi_matrix(family: OrthogonalPolynomialFamily) -> JacobiMatrix:
+    """Return the admitted finite Jacobi matrix of one orthogonal family."""
+
+    require_jacobi_matrix_admission(family)
+    return jacobi_matrix_from_family(family)
+
+
+def gaussian_quadrature_rule(
+    prefix: MomentFunctionalPrefix, order: int
+) -> GaussianQuadratureRule:
+    """Return the admitted exact Gaussian quadrature rule of one moment prefix."""
+
+    return gaussian_quadrature_rule_from_prefix(prefix, order)
+
+
 __all__ = [
-    "compute_christoffel_darboux",
-    "compute_gaussian_quadrature",
-    "compute_hankel_matrix",
-    "compute_jacobi_matrix",
-    "compute_orthogonal_polynomials",
-    "compute_recurrence",
-    "compute_shifted_hankel",
+    "christoffel_darboux_kernel",
+    "gaussian_quadrature_rule",
+    "hankel_matrix",
+    "jacobi_matrix",
+    "orthogonal_polynomials",
+    "recurrence_coefficients",
+    "shifted_hankel_matrix",
 ]

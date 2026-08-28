@@ -1,6 +1,6 @@
 """Exact moment-functional and orthogonal-polynomial algebra."""
 
-from jacobian.math.analysis.orthogonal_polynomials.native import (
+from jacobian.math.analysis.orthogonal_polynomials.operations import (
     christoffel_darboux_kernel,
     gaussian_quadrature_rule,
     hankel_matrix,

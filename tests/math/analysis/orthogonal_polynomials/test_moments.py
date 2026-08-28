@@ -1215,7 +1215,7 @@ class TestNativeAdmission:
     def test_native_short_prefix_rejected_before_kernel(self) -> None:
         """The native surface applies the shared moment-count admission so
         it cannot fabricate omitted moments as zeros."""
-        from jacobian.math.analysis.orthogonal_polynomials import native
+        from jacobian.math.analysis.orthogonal_polynomials import operations
 
         prefix = _prefix(
             (
@@ -1224,12 +1224,12 @@ class TestNativeAdmission:
             )
         )
         with pytest.raises(ValueError, match="need at least 3 moments"):
-            native.orthogonal_polynomials(prefix, max_degree=1)
+            operations.orthogonal_polynomials(prefix, max_degree=1)
 
     def test_native_over_tall_prefix_rejected_by_height_gate(self) -> None:
         """The native surface enforces the same conservative height bound
         as the wire request."""
-        from jacobian.math.analysis.orthogonal_polynomials import native
+        from jacobian.math.analysis.orthogonal_polynomials import operations
 
         prefix = _prefix(
             (
@@ -1239,14 +1239,14 @@ class TestNativeAdmission:
             )
         )
         with pytest.raises(ValueError, match="conservative"):
-            native.orthogonal_polynomials(prefix, max_degree=1)
+            operations.orthogonal_polynomials(prefix, max_degree=1)
 
     def test_native_recurrence_rejects_zero_norm_family(self) -> None:
         """The reviewer's counterexample: the canonical non-quasi-definite
         family p_0=1,h_0=0; p_1=x,h_1=0 is authorable as a value, and the
         native recurrence wrapper must reject it with the shared admission
         error instead of leaking ZeroDivisionError from the norm division."""
-        from jacobian.math.analysis.orthogonal_polynomials import native
+        from jacobian.math.analysis.orthogonal_polynomials import operations
         from jacobian.math.analysis.orthogonal_polynomials.values import (
             OrthogonalPolynomialFamily,
             OrthogonalPolynomialTerm,
@@ -1268,14 +1268,14 @@ class TestNativeAdmission:
             is_positive_definite=False,
         )
         with pytest.raises(ValueError, match="non-terminal"):
-            native.recurrence_coefficients(family)
+            operations.recurrence_coefficients(family)
 
     def test_native_recurrence_admits_terminal_zero_norm(self) -> None:
         """The reviewer's follow-up: with h_0 = 2, h_1 = 0 the recurrence
         stays exactly defined (alpha_0 from p_0,p_1; beta_1 = h_1/h_0 = 0;
         nothing divides by the terminal norm), so the native surface must
         return the typed value instead of rejecting a valid computation."""
-        from jacobian.math.analysis.orthogonal_polynomials import native
+        from jacobian.math.analysis.orthogonal_polynomials import operations
         from jacobian.math.analysis.orthogonal_polynomials.values import (
             OrthogonalPolynomialFamily,
             OrthogonalPolynomialTerm,
@@ -1301,7 +1301,7 @@ class TestNativeAdmission:
             is_quasi_definite=False,
             is_positive_definite=False,
         )
-        result = native.recurrence_coefficients(family)
+        result = operations.recurrence_coefficients(family)
         assert [a.as_fraction() for a in result.alpha] == [Fraction(0)]
         assert [b.as_fraction() for b in result.beta] == [Fraction(0), Fraction(0)]
         wire = compute_recurrence(RecurrenceRequest(family=family))
@@ -1310,10 +1310,10 @@ class TestNativeAdmission:
     def test_native_recurrence_matches_wire_result(self) -> None:
         """For an admitted quasi-definite family the direct native call and
         the wire request produce identical typed recurrence values."""
-        from jacobian.math.analysis.orthogonal_polynomials import native
+        from jacobian.math.analysis.orthogonal_polynomials import operations
 
-        family = native.orthogonal_polynomials(_prefix(_moments_uniform(7)), 3)
-        rec_native = native.recurrence_coefficients(family)
+        family = operations.orthogonal_polynomials(_prefix(_moments_uniform(7)), 3)
+        rec_native = operations.recurrence_coefficients(family)
         rec_wire = compute_recurrence(RecurrenceRequest(family=family))
         assert rec_native == rec_wire
         assert int(rec_wire.beta[1].num) == 1

@@ -52,16 +52,6 @@ class ConstructChainComplexRequest(StrictModel):
         )
     )
 
-    @model_validator(mode="after")
-    def require_consistent_dimensions(self) -> Self:
-        if len(self.basis_sizes) != len(self.differential_matrices) + 1:
-            raise _validation_error(
-                "basis_differential_count_mismatch",
-                "need one more basis size than differential matrices",
-            )
-        return self
-
-
 class VerifyDifferentialRequest(StrictModel):
     """Verify that d^2 = 0 for a chain complex."""
 

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from pydantic import ValidationError
+
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.chain_complexes._models import (
     ComputeHomologyRequest,
     ConstructChainComplexRequest,
@@ -409,21 +412,37 @@ def construct_chain_complex(request: ConstructChainComplexRequest) -> ChainCompl
     degree_min = 0
     degree_max = n - 1
 
-    value = ChainComplexValue(
-        coefficient_field=request.coefficient_field,
-        prime=request.prime,
-        degree_min=degree_min,
-        degree_max=degree_max,
-        basis_sizes=basis_sizes,
-        differential_matrices=request.differential_matrices,
-    )
-    _require_square_zero(
-        _parsed_differentials(value, value.prime),
-        value.prime,
-        label="constructed",
-        group_columns=list(value.basis_sizes),
-        degree_min=value.degree_min,
-    )
+    try:
+        value = ChainComplexValue(
+            coefficient_field=request.coefficient_field,
+            prime=request.prime,
+            degree_min=degree_min,
+            degree_max=degree_max,
+            basis_sizes=basis_sizes,
+            differential_matrices=request.differential_matrices,
+        )
+    except ValidationError as exc:
+        error = exc.errors(include_url=False, include_context=False)[0]
+        location = tuple(error.get("loc", ())) or ("differential_matrices",)
+        raise OperationDomainValidationError(
+            location=location,
+            code=str(error["type"]),
+            message=str(error["msg"]),
+        ) from exc
+    try:
+        _require_square_zero(
+            _parsed_differentials(value, value.prime),
+            value.prime,
+            label="constructed",
+            group_columns=list(value.basis_sizes),
+            degree_min=value.degree_min,
+        )
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("differential_matrices",),
+            code="chain_complex.differential_not_square_zero",
+            message=str(exc),
+        ) from exc
     return value
 
 

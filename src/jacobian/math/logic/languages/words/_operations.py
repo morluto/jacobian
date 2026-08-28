@@ -46,7 +46,11 @@ def _admit[T](
 
 
 def compute_factors_length(request: FactorsLengthRequest) -> FactorsLengthResult:
-    analysis = factors_of_length(request.word, request.factor_length)
+    analysis = _admit(
+        lambda: factors_of_length(request.word, request.factor_length),
+        location=("factor_length",),
+        code="word.factor_length_out_of_range",
+    )
     return FactorsLengthResult._from_kernel(
         request, factors=analysis.factors, occurrences=analysis.occurrences
     )

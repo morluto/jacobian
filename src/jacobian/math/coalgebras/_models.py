@@ -226,14 +226,6 @@ class ComultiplicationRequest(StrictModel):
     coalgebra: Coalgebra
     element_index: int = Field(ge=0)
 
-    @model_validator(mode="after")
-    def require_valid_index(self) -> Self:
-        if self.element_index >= self.coalgebra.dimension:
-            raise _validation_error(
-                "element_index_out_of_range", "element_index must be in 0..dimension-1"
-            )
-        return self
-
 
 class ComultiplicationResult(StrictModel):
     """The comultiplication Delta(c_i) as a canonical prime-field matrix."""

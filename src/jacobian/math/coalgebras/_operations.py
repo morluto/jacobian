@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from itertools import product
 
+from pydantic_core import PydanticCustomError
+
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.coalgebras._models import (
     GROUP_LIKE_SCAN_WORK_BUDGET,
@@ -21,6 +23,27 @@ from jacobian.math.coalgebras._models import (
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
+def _admit_coalgebra(coalgebra: Coalgebra) -> None:
+    """Translate owner admission diagnostics to the execution contract."""
+    try:
+        require_coalgebra_admission(coalgebra)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("coalgebra",),
+            code=exc.type,
+            message=str(exc),
+        ) from exc
+
+
+def _admit_element_index(request: ComultiplicationRequest) -> None:
+    if request.element_index >= request.coalgebra.dimension:
+        raise OperationDomainValidationError(
+            location=("element_index",),
+            code="coalgebra.element_index_out_of_range",
+            message="element_index must be in 0..dimension-1",
+        )
+
+
 def compute_comultiplication(
     request: ComultiplicationRequest,
 ) -> ComultiplicationResult:
@@ -29,7 +52,8 @@ def compute_comultiplication(
     Returns the comultiplication as a dimension x dimension matrix of coefficients
     over GF(p), where entry (j, k) is the coefficient of c_j ⊗ c_k.
     """
-    require_coalgebra_admission(request.coalgebra)
+    _admit_element_index(request)
+    _admit_coalgebra(request.coalgebra)
     ca = request.coalgebra
     i = request.element_index
     n = ca.dimension
@@ -47,7 +71,13 @@ def compute_comultiplication(
 
 def compute_counit(request: CounitRequest) -> CounitResult:
     """Compute epsilon(c_i) for a basis element of a coalgebra."""
-    require_coalgebra_admission(request.coalgebra)
+    _admit_coalgebra(request.coalgebra)
+    if request.element_index >= request.coalgebra.dimension:
+        raise OperationDomainValidationError(
+            location=("element_index",),
+            code="coalgebra.element_index_out_of_range",
+            message="element_index must be in 0..dimension-1",
+        )
     ca = request.coalgebra
     i = request.element_index
     p = ca.prime
@@ -115,7 +145,7 @@ def find_group_like_elements(
     reconstruction -- fits the documented budget, so this scan is
     exhaustive and the result lists every group-like element.
     """
-    require_coalgebra_admission(request.coalgebra)
+    _admit_coalgebra(request.coalgebra)
     work = group_like_scan_work(request.coalgebra.prime, request.coalgebra.dimension)
     if work > GROUP_LIKE_SCAN_WORK_BUDGET:
         raise OperationDomainValidationError(

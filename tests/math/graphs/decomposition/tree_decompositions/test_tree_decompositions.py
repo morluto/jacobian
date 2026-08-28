@@ -16,7 +16,8 @@ from jacobian.math.graphs.decomposition.tree_decompositions._models import (
     VertexOccurrencesRequest,
     WidthRequest,
 )
-from jacobian.math.graphs.decomposition.tree_decompositions._operations import (
+from jacobian.math.graphs.decomposition.tree_decompositions._tools import (
+    TOOLS,
     compute_adhesions,
     compute_bag_intersection_graph,
     compute_reroot,
@@ -24,7 +25,6 @@ from jacobian.math.graphs.decomposition.tree_decompositions._operations import (
     compute_vertex_occurrences,
     compute_width,
 )
-from jacobian.math.graphs.decomposition.tree_decompositions._tools import TOOLS
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 # ---------------------------------------------------------------------------

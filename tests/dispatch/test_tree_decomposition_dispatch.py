@@ -12,7 +12,7 @@ from jacobian.dispatch import (
     parse_operation_input,
 )
 from jacobian.math.graphs.decomposition.tree_decompositions._models import RerootRequest
-from jacobian.math.graphs.decomposition.tree_decompositions._operations import (
+from jacobian.math.graphs.decomposition.tree_decompositions._tools import (
     compute_reroot,
 )
 

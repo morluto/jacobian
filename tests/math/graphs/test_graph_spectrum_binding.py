@@ -12,7 +12,7 @@ from jacobian.math.graphs.spectra._models import (
     GraphSpectrumRequest,
     GraphSpectrumResult,
 )
-from jacobian.math.graphs.spectra._operations import (
+from jacobian.math.graphs.spectra._tools import (
     compute_adjacency_spectrum,
     compute_laplacian_spectrum,
 )
@@ -173,7 +173,7 @@ def test_spectrum_reconstructs_the_characteristic_polynomial() -> None:
 
     from sympy import Poly, symbols, sympify, together
 
-    from jacobian.math.graphs.spectra._operations import (
+    from jacobian.math.graphs.spectra._tools import (
         compute_adjacency_characteristic_polynomial,
     )
     from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy

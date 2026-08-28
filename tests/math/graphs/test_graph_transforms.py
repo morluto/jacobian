@@ -9,7 +9,7 @@ from jacobian.math.graphs.transforms._models import (
     ResultGraphEdge,
     SubgraphRequest,
 )
-from jacobian.math.graphs.transforms._operations import (
+from jacobian.math.graphs.transforms._tools import (
     compute_complement,
     compute_graph_power,
     compute_induced_subgraph,

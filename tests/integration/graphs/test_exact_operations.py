@@ -18,7 +18,7 @@ from jacobian.math.graphs.flows._models import MaxFlowRequest
 from jacobian.math.graphs.flows._operations import compute_max_flow
 from jacobian.math.graphs.independence import independence_number
 from jacobian.math.graphs.spectra._models import GraphSpectrumRequest
-from jacobian.math.graphs.spectra._operations import compute_laplacian_spectrum
+from jacobian.math.graphs.spectra._tools import compute_laplacian_spectrum
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 

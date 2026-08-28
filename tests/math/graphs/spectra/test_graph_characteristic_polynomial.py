@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.graphs.spectra import _operations as spectral_operations
+from jacobian.math.graphs.spectra import _tools as spectral_operations
 from jacobian.math.graphs.spectra import (
     adjacency_characteristic_polynomial,
     laplacian_characteristic_polynomial,
@@ -17,11 +17,11 @@ from jacobian.math.graphs.spectra._models import (
     GraphCharacteristicPolynomialResult,
     GraphSpectrumRequest,
 )
-from jacobian.math.graphs.spectra._operations import (
+from jacobian.math.graphs.spectra._tools import (
+    TOOLS,
     compute_adjacency_characteristic_polynomial,
     compute_laplacian_characteristic_polynomial,
 )
-from jacobian.math.graphs.spectra._tools import TOOLS
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.polynomials._elementary_operations import (
     rational_polynomial_derivative,

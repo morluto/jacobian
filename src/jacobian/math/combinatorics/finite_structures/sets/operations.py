@@ -23,7 +23,7 @@ def _canonical(values: set[int]) -> tuple[CanonicalInteger, ...]:
     return tuple(format_canonical_integer(value) for value in sorted(values))
 
 
-def _bounded_result(values: set[int]) -> FiniteIntegerSet:
+def _require_bounded_result(values: set[int]) -> None:
     if len(values) > MAX_FINITE_INTEGER_SET_ELEMENTS:
         raise OperationDomainValidationError(
             location=("left", "right"),
@@ -33,6 +33,10 @@ def _bounded_result(values: set[int]) -> FiniteIntegerSet:
                 f"{MAX_FINITE_INTEGER_SET_ELEMENTS}-element exact-result bound"
             ),
         )
+
+
+def _bounded_result(values: set[int]) -> FiniteIntegerSet:
+    _require_bounded_result(values)
     return FiniteIntegerSet(elements=_canonical(values))
 
 
@@ -130,7 +134,9 @@ def intersection_cardinality(left: FiniteIntegerSet, right: FiniteIntegerSet) ->
 def union_cardinality(left: FiniteIntegerSet, right: FiniteIntegerSet) -> int:
     """Return the cardinality of the union."""
 
-    return len(_integers(left) | _integers(right))
+    union = _integers(left) | _integers(right)
+    _require_bounded_result(union)
+    return len(union)
 
 
 __all__ = [

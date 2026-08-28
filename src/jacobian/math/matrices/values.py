@@ -16,7 +16,7 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
-from jacobian.math.real_quadratic import RealQuadraticValue
+from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
 
 MAX_MATRIX_DIMENSION = 32
 # The canonical dense rational matrix retains exact sources for analysis

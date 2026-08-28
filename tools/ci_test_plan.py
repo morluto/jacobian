@@ -51,7 +51,7 @@ _PUBLIC_MATH_FILES = frozenset(
 )
 _PYTHON_LANES = ("dispatch", "cli", "tooling", "integration")
 _BOUNDARY_LANES = ("process", "mcp")
-_SCALE_MATH_OWNERS = frozenset({"lattice_polytopes"})
+_SCALE_TEST_PREFIXES = ("tests/math/geometry/polytopes/lattice/",)
 _FULL_MATH_SHARD_COUNT = 4
 
 
@@ -120,17 +120,31 @@ def _is_shared(path: str) -> bool:
     return path in _SHARED_PATHS or path.startswith(_SHARED_PREFIXES)
 
 
-def _math_owner_tests(owner: str, repository: Path) -> tuple[str, ...] | None:
+def _math_owner_tests(source_path: str, repository: Path) -> tuple[str, ...] | None:
     root = repository / "tests" / "math"
-    paths: list[str] = []
-    owner_root = root / owner
-    if owner_root.exists():
-        paths.append(owner_root.relative_to(repository).as_posix())
-    paths.extend(
+    relative = PurePosixPath(source_path).relative_to("src/jacobian/math")
+    package_parts = relative.parts[:-1]
+    for depth in range(len(package_parts), 0, -1):
+        owner_root = root.joinpath(*package_parts[:depth])
+        if owner_root.exists():
+            return (owner_root.relative_to(repository).as_posix(),)
+
+    if not package_parts:
+        return None
+    owner = package_parts[0]
+    paths = tuple(
         path.relative_to(repository).as_posix()
         for path in sorted(root.glob(f"test_{owner}*.py"))
     )
-    return tuple(dict.fromkeys(paths)) or None
+    return paths or None
+
+
+def _includes_scale_tests(paths: tuple[str, ...]) -> bool:
+    return any(
+        path == prefix.removesuffix("/") or path.startswith(prefix)
+        for path in paths
+        for prefix in _SCALE_TEST_PREFIXES
+    )
 
 
 def _math_test_change(path: str) -> tuple[str, ...] | None:
@@ -167,9 +181,7 @@ def _math_shards(*, run_math: bool, full_suite: bool) -> tuple[MathShard, ...]:
 
 def _classify_math_path(path: str, repository: Path) -> PathDecision:
     if path.startswith("src/jacobian/math/"):
-        parts = PurePosixPath(path).parts
-        owner = parts[3] if len(parts) > 3 else ""
-        selected = _math_owner_tests(owner, repository) if owner else None
+        selected = _math_owner_tests(path, repository)
         if selected is None:
             return _complete_decision(f"math owner has no explicit test root: {path}")
         public_contract = _is_public_math_path(path)
@@ -177,7 +189,7 @@ def _classify_math_path(path: str, repository: Path) -> PathDecision:
             math_tests=selected,
             run_catalog=public_contract,
             run_catalog_examples=public_contract,
-            run_scale=owner in _SCALE_MATH_OWNERS,
+            run_scale=_includes_scale_tests(selected),
         )
     return PathDecision()
 
@@ -191,7 +203,7 @@ def _classify_test_path(path: str) -> PathDecision | None:
             )
         return PathDecision(
             math_tests=selected,
-            run_scale="tests/math/lattice_polytopes/" in path,
+            run_scale=_includes_scale_tests((path,)),
         )
     if path.startswith("tests/catalog/"):
         return PathDecision(run_catalog=True)

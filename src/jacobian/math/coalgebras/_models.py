@@ -8,7 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 #: Decimal digit budget for an admitted field characteristic. The digit
 #: length, not a magnitude ceiling, is what bounds the admitted work:

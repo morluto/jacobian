@@ -9,7 +9,7 @@ from jacobian.math.analysis._models import (
     MAX_DYADIC_EXPONENT,
     ExactDyadic,
 )
-from jacobian.math.intervals import ClosedRationalInterval
+from jacobian.math.analysis.intervals import ClosedRationalInterval
 
 
 def dyadic_endpoints(

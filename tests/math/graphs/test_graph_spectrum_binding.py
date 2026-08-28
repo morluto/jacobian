@@ -7,11 +7,11 @@ import copy
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.graphs.spectral._models import (
+from jacobian.math.graphs.spectra._models import (
     GraphSpectrumRequest,
     GraphSpectrumResult,
 )
-from jacobian.math.graphs.spectral._operations import (
+from jacobian.math.graphs.spectra._operations import (
     compute_adjacency_spectrum,
     compute_laplacian_spectrum,
 )
@@ -158,7 +158,7 @@ def test_v2_spectrum_operations_are_readmitted_with_source_bound_rationale() -> 
     """The materially changed v2 contracts carry fresh owner-local decisions."""
 
     from jacobian.catalog.admission import AdmissionDecision
-    from jacobian.math.graphs.spectral._admission import ADMISSIONS
+    from jacobian.math.graphs.spectra._admission import ADMISSIONS
 
     records = {
         record.operation_id: record
@@ -185,7 +185,7 @@ def test_spectrum_reconstructs_the_characteristic_polynomial() -> None:
 
     from sympy import Poly, symbols, sympify, together
 
-    from jacobian.math.graphs.spectral._operations import (
+    from jacobian.math.graphs.spectra._operations import (
         compute_adjacency_characteristic_polynomial,
     )
     from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy

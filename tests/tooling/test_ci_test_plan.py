@@ -40,10 +40,10 @@ def _plan(paths: list[str], *, event: str = "pull_request") -> TestPlan:
 
 
 def test_model_change_selects_its_math_owner_and_public_contract_evidence() -> None:
-    plan = _plan(["src/jacobian/math/code_theory/_models.py"])
+    plan = _plan(["src/jacobian/math/combinatorics/codes/general/_models.py"])
 
     assert plan.run_math is True
-    assert plan.math_tests == ("tests/math/code_theory",)
+    assert plan.math_tests == ("tests/math/combinatorics/codes/general",)
     assert plan.run_catalog is True
     assert plan.run_catalog_examples is True
     assert plan.run_scale is False
@@ -81,10 +81,10 @@ def test_structural_topology_contract_change_selects_public_contract_evidence() 
 def test_prime_affine_interval_contract_change_selects_public_contract_evidence() -> (
     None
 ):
-    plan = _plan(["src/jacobian/math/prime_affine_forms/_interval.py"])
+    plan = _plan(["src/jacobian/math/number_theory/prime_affine_forms/_interval.py"])
 
     assert plan.run_math is True
-    assert plan.math_tests == ("tests/math/prime_affine_forms",)
+    assert plan.math_tests == ("tests/math/number_theory/prime_affine_forms",)
     assert plan.run_catalog is True
     assert plan.run_catalog_examples is True
 
@@ -102,7 +102,7 @@ def test_logic_solver_contract_change_selects_public_contract_evidence(
 
 
 def test_public_operation_kernel_selects_catalog_examples() -> None:
-    plan = _plan(["src/jacobian/math/code_theory/_dual_operations.py"])
+    plan = _plan(["src/jacobian/math/combinatorics/codes/general/_dual_operations.py"])
 
     assert plan.run_math is True
     assert plan.run_catalog is True
@@ -117,10 +117,12 @@ def test_partitioned_operation_modules_select_catalog_examples() -> None:
         "_element_invariant_operations.py",
         "_global_invariant_operations.py",
     ):
-        plan = _plan([f"src/jacobian/math/numerical_semigroups/{filename}"])
+        plan = _plan(
+            [f"src/jacobian/math/number_theory/numerical_semigroups/{filename}"]
+        )
 
         assert plan.run_math is True
-        assert plan.math_tests == ("tests/math/numerical_semigroups",)
+        assert plan.math_tests == ("tests/math/number_theory/numerical_semigroups",)
         assert plan.run_catalog is True
         assert plan.run_catalog_examples is True
 
@@ -133,7 +135,7 @@ def test_nested_math_owner_selects_its_top_level_test_root() -> None:
 
 
 def test_math_test_change_runs_only_the_changed_test() -> None:
-    path = "tests/math/code_theory/test_exact_code_enumeration.py"
+    path = "tests/math/combinatorics/codes/general/test_exact_code_enumeration.py"
     plan = _plan([path])
 
     assert plan.run_math is True

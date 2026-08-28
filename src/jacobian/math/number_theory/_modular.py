@@ -1,7 +1,6 @@
 """Modular-owned exact number-theory operations."""
 
 from jacobian.catalog._examples import example
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._discrete_logarithm import (
     DISCRETE_LOGARITHM_OPERATION,
 )
@@ -30,6 +29,7 @@ from jacobian.math.number_theory._modular_operations import (
 from jacobian.math.number_theory._support import (
     number_theory_operation,
 )
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 MODULAR_OPERATIONS = (
     number_theory_operation(

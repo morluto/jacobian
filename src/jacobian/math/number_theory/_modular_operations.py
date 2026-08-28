@@ -7,8 +7,6 @@ from itertools import product
 from typing import Literal, cast
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.arithmetic.values import IntegerValue
-from jacobian.math.modular_polynomials import NormalizedModularPolynomialTerm
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
 from jacobian.math.number_theory._modular_basic_models import (
     MAX_CRT_COMBINED_MODULUS,
@@ -29,6 +27,10 @@ from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueImageResult,
     ModularPolynomialResidueTableRow,
     ModularPolynomialResidueWitness,
+)
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
+from jacobian.math.number_theory.modular_polynomials import (
+    NormalizedModularPolynomialTerm,
 )
 
 

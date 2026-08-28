@@ -23,8 +23,8 @@ from jacobian.math.matrices.quadratic_spectral.values import (
     SpectrumKind,
 )
 from jacobian.math.matrices.values import RealQuadraticMatrix
-from jacobian.math.real_algebraic import RealAlgebraicValue
-from jacobian.math.real_quadratic import RealQuadraticValue
+from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
+from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 
 if TYPE_CHECKING:
     from flint import arb

@@ -21,7 +21,7 @@ from jacobian.math.geometry.exact._operations import (
     compute_distance_graph,
     compute_distance_profile,
 )
-from jacobian.math.graphs.spectral._models import GraphSpectrumRequest
+from jacobian.math.graphs.spectra._models import GraphSpectrumRequest
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 type Scalar = int | Fraction

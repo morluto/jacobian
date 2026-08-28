@@ -8,7 +8,7 @@ from jsonschema.validators import Draft202012Validator
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
-from jacobian.math.matroids._models import MAX_GROUND_SIZE
+from jacobian.math.combinatorics.matroids._models import MAX_GROUND_SIZE
 
 
 def test_closure_schema_and_dispatch_share_subset_contract() -> None:

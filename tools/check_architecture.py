@@ -24,16 +24,23 @@ _EXTERNAL_OPERATION_OWNERS = frozenset(
         PurePosixPath("src/jacobian/math/logic/_sat.py"),
         PurePosixPath("src/jacobian/math/logic/_smt.py"),
         PurePosixPath("src/jacobian/math/logic/_unsat_core.py"),
-        PurePosixPath("src/jacobian/math/hypergraphs/_independence_z3.py"),
+        PurePosixPath(
+            "src/jacobian/math/combinatorics/finite_structures/"
+            "hypergraphs/_independence_z3.py"
+        ),
         PurePosixPath("src/jacobian/math/graphs/_independence_z3.py"),
         PurePosixPath("src/jacobian/math/graphs/coloring/_operations.py"),
         PurePosixPath("src/jacobian/math/graphs/optimization/_finite_optimization.py"),
         PurePosixPath("src/jacobian/math/graphs/optimization/_invariants.py"),
         PurePosixPath("src/jacobian/math/graphs/optimization/_chromatic_number.py"),
         PurePosixPath("src/jacobian/math/graphs/optimization/_maximum_cut_process.py"),
-        PurePosixPath("src/jacobian/math/discrepancy_theory/_optimum_process.py"),
+        PurePosixPath(
+            "src/jacobian/math/combinatorics/discrepancy/_optimum_process.py"
+        ),
         PurePosixPath("src/jacobian/math/number_theory/_factorization_kernels.py"),
-        PurePosixPath("src/jacobian/math/number_field/_operations.py"),
+        PurePosixPath(
+            "src/jacobian/math/number_theory/number_fields/_operations.py"
+        ),
         PurePosixPath("src/jacobian/math/polynomials/multivariate/_factor_backend.py"),
         PurePosixPath("src/jacobian/math/polynomials/maps/_replay.py"),
     }

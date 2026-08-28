@@ -12,8 +12,10 @@ from jacobian.dispatch import (
     invoke_operation,
     parse_operation_input,
 )
-from jacobian.math.graphs.tree_decompositions._models import RerootRequest
-from jacobian.math.graphs.tree_decompositions._operations import compute_reroot
+from jacobian.math.graphs.decomposition.tree_decompositions._models import RerootRequest
+from jacobian.math.graphs.decomposition.tree_decompositions._operations import (
+    compute_reroot,
+)
 
 
 def _path_decomposition(*, node_count: int, label_suffix: str) -> dict[str, object]:

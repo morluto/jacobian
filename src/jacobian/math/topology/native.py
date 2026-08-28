@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from jacobian.math.chain_complexes.values import ChainComplexValue
 from jacobian.math.topology._models import ChainComplexResult
+from jacobian.math.topology.chain_complexes.values import ChainComplexValue
 
 __all__ = ["simplicial_chain_complex_value"]
 

@@ -6,7 +6,9 @@ from jacobian.math.combinatorics._progression_hypergraph_models import (
     ProgressionHypergraphRequest,
     ProgressionHypergraphResult,
 )
-from jacobian.math.hypergraphs._models import FiniteHypergraph
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    FiniteHypergraph,
+)
 
 
 def construct_3term_progression_hypergraph(

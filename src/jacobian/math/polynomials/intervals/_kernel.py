@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.intervals import ClosedRationalInterval, RationalBox
+from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,

@@ -8,12 +8,12 @@ from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._friable_models import (
     FriableCountRequest,
     FriableCountResult,
     _plan_friable_count,
 )
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
 def _count_materialized(x: int, y: int) -> int:

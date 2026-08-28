@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._integer_models import (
     BooleanResult,
     NonnegativeIntegerRequest,
@@ -14,6 +13,7 @@ from jacobian.math.number_theory._prime_models import (
     PrimorialRequest,
     PrimorialResult,
 )
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
 def decide_prime(request: PrimalityRequest) -> BooleanResult:

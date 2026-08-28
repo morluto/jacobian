@@ -165,7 +165,7 @@ subjects such as matrices, graphs, polynomials, probability, and number theory
 over vague umbrellas that would contain much of the library. Keep the top level
 free of ticket-shaped feature packages, backend names, and workflow groupings.
 
-The target first-level taxonomy is deliberately restrained:
+The first-level taxonomy is deliberately restrained:
 
 ```text
 jacobian.math
@@ -176,12 +176,10 @@ jacobian.math
   optimization        dynamics             logic
 ```
 
-This list is the package-migration target, not a claim that every current
-package has already been folded. A subject may remain first-level only when it
-cannot be represented honestly as a mathematical subdivision of one of these
-owners; do not force an independent subject into an inaccurate parent merely
-to reduce the directory count. Record that exception here when it becomes a
-durable part of the public taxonomy.
+Independent subjects that do not fit those owners honestly remain explicit:
+`cluster_algebras`, `coalgebras`, `crossed_products`, `finite_categories`,
+`finite_dim_algebras`, `finite_semigroups`, and `universal_algebra`. Do not
+force them into an inaccurate parent merely to reduce the directory count.
 
 Decide by evidence, in this order:
 

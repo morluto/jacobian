@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from jacobian.math.chain_complexes.values import (
-    MAX_BASIS_SIZE,
-    MAX_MATRIX_CELLS,
-    ChainComplexValue,
-    CoefficientField,
-)
 from jacobian.math.topology._models import (
     ChainCoefficientRing,
     HomologyConvention,
     SimplexBasis,
     SparseBoundaryMatrix,
+)
+from jacobian.math.topology.chain_complexes.values import (
+    MAX_BASIS_SIZE,
+    MAX_MATRIX_CELLS,
+    ChainComplexValue,
+    CoefficientField,
 )
 
 

@@ -10,7 +10,7 @@ from jacobian.math import matrices
 
 def test_orphan_combinatorial_matrix_models_are_not_importable() -> None:
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("jacobian.math.matrices.combinatorial._models")
+        importlib.import_module("jacobian.math.combinatorial_matrices._models")
 
 
 def test_exact_matrix_operations() -> None:

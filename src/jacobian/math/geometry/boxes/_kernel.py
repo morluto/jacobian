@@ -7,8 +7,8 @@ from fractions import Fraction
 from itertools import combinations
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.analysis.intervals import ClosedRationalInterval
 from jacobian.math.geometry.boxes.values import RationalAxisAlignedBox
-from jacobian.math.intervals import ClosedRationalInterval
 
 
 @dataclass(frozen=True, slots=True)

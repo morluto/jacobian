@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from jacobian.catalog._examples import example
-from jacobian.math.finite_abelian_groups import (
+from jacobian.math.groups.finite_abelian import (
     FiniteAbelianGroupFactorizationRequest,
     FiniteAbelianGroupFactorizationResult,
     FiniteAbelianSpectralPairRequest,

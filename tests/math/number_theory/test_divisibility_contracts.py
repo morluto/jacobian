@@ -5,8 +5,6 @@ from typing import Any
 import pytest
 
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
-from jacobian.math.arithmetic.operations import absolute_value
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._divisibility import DIVISIBILITY_OPERATIONS
 from jacobian.math.number_theory._divisibility_models import (
     DivisibilityRequest,
@@ -19,6 +17,8 @@ from jacobian.math.number_theory._divisibility_operations import (
     compute_valuation,
     decide_divides,
 )
+from jacobian.math.number_theory.arithmetic.operations import absolute_value
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
 def _operation(operation_id: str) -> MathTool[Any, Any]:

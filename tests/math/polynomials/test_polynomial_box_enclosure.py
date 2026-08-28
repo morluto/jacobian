@@ -12,7 +12,7 @@ from tests.math.polynomials._support import polynomial_validation_error
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.intervals import ClosedRationalInterval, RationalBox
+from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.polynomials.intervals._models import (
     MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS,
     MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS,

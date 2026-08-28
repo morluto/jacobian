@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import SupportsIndex
 
 from jacobian.canonical import parse_canonical_integer
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 __all__ = ["ramanujan_sum"]
 

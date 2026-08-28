@@ -9,7 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import RealQuadraticMatrix
-from jacobian.math.real_algebraic import RealAlgebraicValue
+from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 
 SpectrumKind = Literal["SYMMETRIC_EIGENVALUES", "SINGULAR_VALUES"]
 Definiteness = Literal[

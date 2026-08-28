@@ -8,15 +8,6 @@ from typing import Any, Literal, overload
 import pytest
 
 from jacobian.catalog.models import MathTool
-from jacobian.math.chain_complexes._models import (
-    ComputeHomologyRequest,
-    TensorProductRequest,
-)
-from jacobian.math.chain_complexes.operations import (
-    compute_homology,
-    compute_tensor_product,
-)
-from jacobian.math.chain_complexes.values import CoefficientField
 from jacobian.math.topology._homology import (
     SimplicialHomologyRequest,
     SimplicialHomologyResult,
@@ -31,6 +22,15 @@ from jacobian.math.topology._models import (
     SimplicialComplexRequest,
 )
 from jacobian.math.topology._tools import TOOLS
+from jacobian.math.topology.chain_complexes._models import (
+    ComputeHomologyRequest,
+    TensorProductRequest,
+)
+from jacobian.math.topology.chain_complexes.operations import (
+    compute_homology,
+    compute_tensor_product,
+)
+from jacobian.math.topology.chain_complexes.values import CoefficientField
 from jacobian.math.topology.native import simplicial_chain_complex_value
 
 
@@ -134,7 +134,7 @@ def test_converted_profile_matches_topology_homology_producer() -> None:
 
 def test_serialized_value_round_trips_into_consumers() -> None:
     """The converted value survives serialization and keeps composing."""
-    from jacobian.math.chain_complexes.values import ChainComplexValue
+    from jacobian.math.topology.chain_complexes.values import ChainComplexValue
 
     payload = simplicial_chain_complex_value(_prime_field_chain(_circle(), 2))
     value = ChainComplexValue.model_validate(payload.model_dump())
@@ -187,7 +187,7 @@ def test_oversized_simplicial_groups_stay_outside_the_canonical_domain() -> None
     """A GF(p) request whose groups exceed the canonical value's basis
     bound is rejected at admission: every accepted producer result must
     carry its canonical chain-complex value."""
-    from jacobian.math.chain_complexes.values import MAX_BASIS_SIZE
+    from jacobian.math.topology.chain_complexes.values import MAX_BASIS_SIZE
 
     labels = tuple(f"v{i}" for i in range(12))
     facets = tuple((labels[a], labels[b]) for a in range(12) for b in range(a + 1, 12))

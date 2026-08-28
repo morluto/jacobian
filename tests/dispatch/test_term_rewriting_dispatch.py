@@ -8,12 +8,12 @@ from tests.dispatch._support import dispatch_validation_error
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation, parse_operation_input
-from jacobian.math.term_rewriting._models import (
+from jacobian.math.logic.term_rewriting._models import (
     CriticalPairsRequest,
     CriticalPairsResult,
 )
-from jacobian.math.term_rewriting._operations import compute_critical_pairs
-from jacobian.math.term_rewriting.values import MAX_VARIABLE_LABEL, Term
+from jacobian.math.logic.term_rewriting._operations import compute_critical_pairs
+from jacobian.math.logic.term_rewriting.values import MAX_VARIABLE_LABEL, Term
 
 
 def _var(symbol: int) -> Term:

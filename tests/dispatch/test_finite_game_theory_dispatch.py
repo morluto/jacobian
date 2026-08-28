@@ -6,8 +6,8 @@ from jsonschema.validators import Draft202012Validator
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
-from jacobian.math.finite_game_theory._models import MAX_EXACT_EQUILIBRIUM_WORK
-from jacobian.math.finite_game_theory._tools import TOOLS
+from jacobian.math.logic.games.finite._models import MAX_EXACT_EQUILIBRIUM_WORK
+from jacobian.math.logic.games.finite._tools import TOOLS
 
 
 def _small_game() -> dict[str, object]:

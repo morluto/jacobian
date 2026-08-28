@@ -1,0 +1,1 @@
+"""Quadratic-form arithmetic."""

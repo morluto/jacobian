@@ -6,12 +6,12 @@ from jsonschema.validators import Draft202012Validator
 from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation, parse_operation_input
-from jacobian.math.finite_geometry._models import (
+from jacobian.math.geometry.finite._models import (
     MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES,
     MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS,
     GrassmannianCountRequest,
 )
-from jacobian.math.finite_geometry._operations import compute_grassmannian_count
+from jacobian.math.geometry.finite._operations import compute_grassmannian_count
 
 
 def test_dispatch_round_trips_an_exact_count_past_the_json_integer_range() -> None:

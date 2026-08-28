@@ -8,13 +8,7 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math import modular_polynomials
-from jacobian.math.modular_polynomials import (
-    _INTEGER,
-    ModularPolynomialTerm,
-    NormalizedModularPolynomialTerm,
-    modular_polynomial_identity,
-)
+from jacobian.math.number_theory import modular_polynomials
 from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
@@ -23,6 +17,12 @@ from jacobian.math.number_theory._modular_models import (
 from jacobian.math.number_theory._modular_operations import (
     compute_modular_polynomial_residue_assignments,
     compute_modular_polynomial_residue_image,
+)
+from jacobian.math.number_theory.modular_polynomials import (
+    _INTEGER,
+    ModularPolynomialTerm,
+    NormalizedModularPolynomialTerm,
+    modular_polynomial_identity,
 )
 
 

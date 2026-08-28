@@ -16,18 +16,18 @@ from pydantic import (
 from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
-from jacobian.math.modular_polynomials import (
-    _INTEGER as _TERM_INTEGER,
-)
-from jacobian.math.modular_polynomials import (
-    ModularPolynomialTerm as _ModularPolynomialTerm,
-)
-from jacobian.math.modular_polynomials import (
-    NormalizedModularPolynomialTerm as _NormalizedModularPolynomialTerm,
-)
 from jacobian.math.number_theory._models import (
     MAX_INTEGER_DIGITS,
     _validation_error,
+)
+from jacobian.math.number_theory.modular_polynomials import (
+    _INTEGER as _TERM_INTEGER,
+)
+from jacobian.math.number_theory.modular_polynomials import (
+    ModularPolynomialTerm as _ModularPolynomialTerm,
+)
+from jacobian.math.number_theory.modular_polynomials import (
+    NormalizedModularPolynomialTerm as _NormalizedModularPolynomialTerm,
 )
 
 _MAX_RESIDUE_VARIABLES = 6

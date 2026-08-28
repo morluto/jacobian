@@ -6,7 +6,7 @@ import pytest
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
-from jacobian.math.root_systems._models import (
+from jacobian.math.groups.root_systems._models import (
     MAX_RANK,
     MAX_REFLECTION_COORDINATE,
 )

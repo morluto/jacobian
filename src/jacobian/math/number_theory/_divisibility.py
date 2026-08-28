@@ -1,7 +1,6 @@
 """Divisibility-owned exact number-theory operations."""
 
 from jacobian.catalog._examples import example
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._divisibility_models import (
     DivisibilityRequest,
     ExtendedGcdResult,
@@ -34,6 +33,7 @@ from jacobian.math.number_theory._integer_models import (
 from jacobian.math.number_theory._support import (
     number_theory_operation,
 )
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 DIVISIBILITY_OPERATIONS = (
     *FACTORIZATION_OPERATIONS,

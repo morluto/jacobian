@@ -285,7 +285,9 @@ class TestSourceBoundResults:
     def test_forged_comultiplication_coefficients_remain_structurally_parseable(
         self,
     ) -> None:
-        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+        from jacobian.math.matrices.finite_fields.linear_algebra import (
+            PrimeFieldMatrix,
+        )
 
         ca = self._two_dim_coalgebra()
         claimed = ComultiplicationResult(

@@ -11,7 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError, OperationExample
-from jacobian.math.arithmetic import primitive_integer_vector
+from jacobian.math.number_theory.arithmetic import primitive_integer_vector
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
     rational_polynomial_from_sympy,

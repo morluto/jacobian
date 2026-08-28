@@ -7,32 +7,32 @@ from fractions import Fraction
 from typing import Any
 
 from jacobian.canonical import encode_strict_json
-from jacobian.math.formal_power_series._models import (
-    SeriesFromPolynomialRequest,
-    SeriesTruncateRequest,
+from jacobian.math.geometry.polytopes._models import PolytopeVolumeRequest
+from jacobian.math.geometry.polytopes._operations import (
+    compute_polytope_support,
+    compute_polytope_volume,
 )
-from jacobian.math.formal_power_series._operations import (
-    compute_from_polynomial,
-    compute_truncate,
+from jacobian.math.geometry.polytopes._tools import TOOLS
+from jacobian.math.logic.automata.tree._models import (
+    AcceptedTreeCountRequest,
+    TreeAutomatonReachabilityRequest,
+)
+from jacobian.math.logic.automata.tree._operations import (
+    compute_accepted_tree_count,
+    compute_tree_automaton_reachability,
 )
 from jacobian.math.matrices._operation_models import (
     MatrixDeterminantRequest,
     RationalMatrixProductRequest,
 )
 from jacobian.math.matrices._operations import compute_determinant, compute_product
-from jacobian.math.polytope._models import PolytopeVolumeRequest
-from jacobian.math.polytope._operations import (
-    compute_polytope_support,
-    compute_polytope_volume,
+from jacobian.math.polynomials.series._models import (
+    SeriesFromPolynomialRequest,
+    SeriesTruncateRequest,
 )
-from jacobian.math.polytope._tools import TOOLS
-from jacobian.math.tree_automata._models import (
-    AcceptedTreeCountRequest,
-    TreeAutomatonReachabilityRequest,
-)
-from jacobian.math.tree_automata._operations import (
-    compute_accepted_tree_count,
-    compute_tree_automaton_reachability,
+from jacobian.math.polynomials.series._operations import (
+    compute_from_polynomial,
+    compute_truncate,
 )
 
 

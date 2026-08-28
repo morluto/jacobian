@@ -18,7 +18,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.math.intervals import ClosedRationalInterval
+from jacobian.math.analysis.intervals import ClosedRationalInterval
 
 
 def _validation_error(message: str) -> PydanticCustomError:

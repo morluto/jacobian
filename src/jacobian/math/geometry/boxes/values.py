@@ -8,7 +8,7 @@ from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.intervals import ClosedRationalInterval
+from jacobian.math.analysis.intervals import ClosedRationalInterval
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

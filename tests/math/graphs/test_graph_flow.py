@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.flow._models import (
+from jacobian.math.graphs.flows._models import (
     EdgeDisjointPathsRequest,
     EdgeDisjointPathsResult,
     MaxFlowRequest,
@@ -16,7 +16,7 @@ from jacobian.math.graphs.flow._models import (
     MinCutRequest,
     MinCutResult,
 )
-from jacobian.math.graphs.flow._operations import (
+from jacobian.math.graphs.flows._operations import (
     compute_edge_disjoint_paths,
     compute_max_flow,
     compute_min_cut,

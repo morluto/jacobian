@@ -10,7 +10,6 @@ import pytest
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
-from jacobian.math.modular_polynomials import ModularPolynomialTerm
 from jacobian.math.number_theory._direct_factorization_models import (
     FactorizationRequest,
 )
@@ -42,6 +41,7 @@ from jacobian.math.number_theory._ramanujan_sum import (
     RamanujanSumRequest,
     compute_ramanujan_sum,
 )
+from jacobian.math.number_theory.modular_polynomials import ModularPolynomialTerm
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,41 @@
+"""Exact public API contract for jacobian.math.combinatorics.posets.formal_concepts."""
+
+from __future__ import annotations
+
+from jacobian.math.combinatorics.posets import (
+    formal_concepts as formal_concept_analysis,
+)
+
+
+def test_exact_public_api_symbols() -> None:
+    expected = (
+        "AttributeImplication",
+        "CanonicalImplicationBasisResult",
+        "DGBasisClosureRow",
+        "DGBasisWork",
+        "FiniteAttributeImplicationSystem",
+        "FormalContext",
+        "ImplicationClosureResult",
+        "ImplicationClosureWork",
+        "ImplicationDerivation",
+        "PseudoIntent",
+        "attribute_closure",
+        "attribute_derivation",
+        "concept_from_attributes",
+        "concept_from_objects",
+        "concept_lattice",
+        "duquenne_guigues_basis",
+        "enumerate_concepts",
+        "implication_closure",
+        "object_closure",
+        "object_derivation",
+    )
+    assert tuple(formal_concept_analysis.__all__) == expected
+    assert len(formal_concept_analysis.__all__) == len(
+        set(formal_concept_analysis.__all__)
+    )
+    assert all(not name.startswith("_") for name in formal_concept_analysis.__all__)
+    assert all(
+        hasattr(formal_concept_analysis, name)
+        for name in formal_concept_analysis.__all__
+    )

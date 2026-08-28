@@ -21,8 +21,8 @@ from jacobian.math.matrices.quadratic_spectral._models import (
 )
 from jacobian.math.matrices.quadratic_spectral._tools import TOOLS
 from jacobian.math.matrices.values import RealQuadraticMatrix
-from jacobian.math.real_algebraic import compare_real_algebraic
-from jacobian.math.real_quadratic import RealQuadraticValue
+from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
+from jacobian.math.number_theory.algebraic_numbers.real import compare_real_algebraic
 
 
 def _q(

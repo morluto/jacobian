@@ -1,0 +1,313 @@
+"""Tests for exact graph characteristic-polynomial operations."""
+
+from collections.abc import Callable
+from fractions import Fraction
+from typing import Any
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian._exact import CanonicalRational
+from jacobian.math.graphs.spectra import _operations as spectral_operations
+from jacobian.math.graphs.spectra import (
+    adjacency_characteristic_polynomial,
+    laplacian_characteristic_polynomial,
+)
+from jacobian.math.graphs.spectra._models import (
+    GraphCharacteristicPolynomialResult,
+    GraphSpectrumRequest,
+)
+from jacobian.math.graphs.spectra._operations import (
+    compute_adjacency_characteristic_polynomial,
+    compute_laplacian_characteristic_polynomial,
+)
+from jacobian.math.graphs.spectra._tools import TOOLS
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+from jacobian.math.polynomials._elementary_operations import (
+    rational_polynomial_derivative,
+)
+from jacobian.math.polynomials._models import RationalPolynomialRequest
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
+
+
+def _graph(edges: list[list[int]], vc: int) -> IndexedSimpleUndirectedGraph:
+    return IndexedSimpleUndirectedGraph(
+        vertex_count=vc, edges=tuple((edge[0], edge[1]) for edge in edges)
+    )
+
+
+def _request(edges: list[list[int]], vc: int) -> GraphSpectrumRequest:
+    return GraphSpectrumRequest(graph=_graph(edges, vc))
+
+
+def _coeffs(polynomial: RationalPolynomial) -> list[Fraction]:
+    """Return dense increasing-degree coefficients including implicit zeros."""
+    terms = {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in polynomial.polynomial.terms
+    }
+    top = max(terms) if terms else 0
+    return [terms.get(degree, Fraction(0)) for degree in range(top + 1)]
+
+
+def _exponents(polynomial: RationalPolynomial) -> tuple[int, ...]:
+    return tuple(term.exponents[0] for term in polynomial.polynomial.terms)
+
+
+def _univariate_polynomial(coefficients: dict[int, str]) -> RationalPolynomial:
+    """Build a canonical univariate polynomial from {degree: numerator}."""
+    return RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=numerator, den="1"),
+                    exponents=(degree,),
+                )
+                for degree, numerator in sorted(coefficients.items(), reverse=True)
+            )
+        ),
+    )
+
+
+def _charpoly_payload(polynomial: RationalPolynomial) -> dict[str, Any]:
+    """Serialize a result payload bound to the P3 adjacency source."""
+    return {
+        "graph": IndexedSimpleUndirectedGraph(
+            vertex_count=3, edges=((0, 1), (1, 2))
+        ).model_dump(),
+        "convention": "ADJACENCY",
+        "polynomial": polynomial.model_dump(),
+    }
+
+
+class TestAdjacencyCharacteristicPolynomial:
+    def test_path_p3(self) -> None:
+        # P3 adjacency eigenvalues: 0, sqrt(2), -sqrt(2) -> charpoly x(x^2-2) = x^3 - 2x.
+        result = compute_adjacency_characteristic_polynomial(
+            _request([[0, 1], [1, 2]], 3)
+        )
+        assert _coeffs(result.polynomial) == [
+            Fraction(0),
+            Fraction(-2),
+            Fraction(0),
+            Fraction(1),
+        ]
+        assert result.convention == "ADJACENCY"
+
+    def test_edge_k2(self) -> None:
+        # K2 adjacency: [[0,1],[1,0]] eigenvalues 1,-1 -> charpoly x^2 - 1.
+        result = compute_adjacency_characteristic_polynomial(_request([[0, 1]], 2))
+        assert _coeffs(result.polynomial) == [Fraction(-1), Fraction(0), Fraction(1)]
+
+    def test_isolated_vertex(self) -> None:
+        # One isolated vertex: adjacency matrix [0] -> charpoly x.
+        result = compute_adjacency_characteristic_polynomial(_request([], 1))
+        assert _coeffs(result.polynomial) == [Fraction(0), Fraction(1)]
+
+    def test_null_graph(self) -> None:
+        # The 0x0 matrix has det(xI - A) equal to the empty product 1.
+        result = compute_adjacency_characteristic_polynomial(_request([], 0))
+        assert _coeffs(result.polynomial) == [Fraction(1)]
+        laplacian = compute_laplacian_characteristic_polynomial(_request([], 0))
+        assert _coeffs(laplacian.polynomial) == [Fraction(1)]
+
+    def test_result_is_monic(self) -> None:
+        result = compute_adjacency_characteristic_polynomial(
+            _request([[0, 1], [1, 2], [0, 2]], 3)
+        )
+        top = max(term.exponents[0] for term in result.polynomial.polynomial.terms)
+        leading = next(
+            term
+            for term in result.polynomial.polynomial.terms
+            if term.exponents[0] == top
+        )
+        assert leading.coefficient.as_fraction() == 1
+
+    def test_result_binds_source_graph(self) -> None:
+        request = _request([[0, 1], [1, 2]], 3)
+        result = compute_adjacency_characteristic_polynomial(request)
+        assert result.graph == request.graph
+
+
+class TestLaplacianCharacteristicPolynomial:
+    def test_path_p3(self) -> None:
+        # P3 Laplacian eigenvalues 0,1,3 -> charpoly x(x-1)(x-3) = x^3 - 4x^2 + 3x.
+        result = compute_laplacian_characteristic_polynomial(
+            _request([[0, 1], [1, 2]], 3)
+        )
+        assert _coeffs(result.polynomial) == [
+            Fraction(0),
+            Fraction(3),
+            Fraction(-4),
+            Fraction(1),
+        ]
+        assert result.convention == "LAPLACIAN"
+
+    def test_laplacian_has_zero_root(self) -> None:
+        # The Laplacian of any graph has a zero eigenvalue, so the constant term is 0.
+        result = compute_laplacian_characteristic_polynomial(
+            _request([[0, 1], [1, 2], [0, 2]], 3)
+        )
+        constant = next(
+            (
+                term
+                for term in result.polynomial.polynomial.terms
+                if term.exponents[0] == 0
+            ),
+            None,
+        )
+        assert constant is None
+
+    def test_result_is_monic(self) -> None:
+        result = compute_laplacian_characteristic_polynomial(_request([[0, 1]], 2))
+        top = max(term.exponents[0] for term in result.polynomial.polynomial.terms)
+        leading = next(
+            term
+            for term in result.polynomial.polynomial.terms
+            if term.exponents[0] == top
+        )
+        assert leading.coefficient.as_fraction() == 1
+
+
+@pytest.mark.parametrize(
+    ("operation", "kernel_name"),
+    (
+        (
+            compute_adjacency_characteristic_polynomial,
+            "adjacency_characteristic_polynomial",
+        ),
+        (
+            compute_laplacian_characteristic_polynomial,
+            "laplacian_characteristic_polynomial",
+        ),
+    ),
+)
+def test_trusted_characteristic_polynomial_producers_run_the_kernel_once(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: Callable[[GraphSpectrumRequest], GraphCharacteristicPolynomialResult],
+    kernel_name: str,
+) -> None:
+    original = getattr(spectral_operations, kernel_name)
+    calls = 0
+
+    def counted(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(spectral_operations, kernel_name, counted)
+
+    assert callable(operation)
+    operation(_request([[0, 1], [1, 2]], 3))
+
+    assert calls == 1
+
+
+def test_replay_rejects_more_terms_than_any_admitted_charpoly_has() -> None:
+    # A degree-32 univariate characteristic polynomial has at most 33 nonzero
+    # terms, so a 34-term value is rejected before any backend conversion.
+    oversized = _univariate_polynomial(dict.fromkeys(range(34), "2"))
+    with pytest.raises(ValidationError):
+        GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(oversized))
+
+
+def test_replay_rejects_exponents_beyond_the_32_vertex_degree_bound() -> None:
+    beyond = _univariate_polynomial({32: "1", 40: "1"})
+    with pytest.raises(ValidationError):
+        GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(beyond))
+
+
+def test_replay_rejects_coefficients_beyond_the_charpoly_digit_budget() -> None:
+    huge = _univariate_polynomial({3: "9" * 129})
+    with pytest.raises(ValidationError):
+        GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(huge))
+
+
+def test_maximal_path_round_trips_through_serialization() -> None:
+    # Degree exactly 32 exercises the replay degree bound from above.
+    graph = IndexedSimpleUndirectedGraph(
+        vertex_count=32, edges=tuple((i, i + 1) for i in range(31))
+    )
+    polynomial = adjacency_characteristic_polynomial(graph)
+    restored = GraphCharacteristicPolynomialResult.model_validate(
+        GraphCharacteristicPolynomialResult(
+            graph=graph,
+            convention="ADJACENCY",
+            polynomial=polynomial,
+        ).model_dump(mode="json")
+    )
+    assert restored.polynomial == polynomial
+    assert max(_exponents(restored.polynomial)) == 32
+
+
+def test_native_adjacency_returns_canonical_polynomial() -> None:
+    polynomial = adjacency_characteristic_polynomial(_graph([[0, 1], [1, 2]], 3))
+    assert type(polynomial) is RationalPolynomial
+    assert polynomial.variables == ("x",)
+    assert _exponents(polynomial) == (3, 1)
+    assert _coeffs(polynomial) == [Fraction(0), Fraction(-2), Fraction(0), Fraction(1)]
+
+
+def test_native_laplacian_returns_canonical_polynomial() -> None:
+    polynomial = laplacian_characteristic_polynomial(_graph([[0, 1], [1, 2]], 3))
+    assert type(polynomial) is RationalPolynomial
+    assert _exponents(polynomial) == (3, 2, 1)
+    assert _coeffs(polynomial) == [Fraction(0), Fraction(3), Fraction(-4), Fraction(1)]
+
+
+def test_native_polynomial_is_accepted_unchanged_by_a_polynomial_consumer() -> None:
+    polynomial = adjacency_characteristic_polynomial(_graph([[0, 1], [1, 2]], 3))
+    request = RationalPolynomialRequest(polynomial=polynomial)
+    assert request.polynomial is polynomial
+
+    serialized = RationalPolynomialRequest.model_validate(
+        {"polynomial": polynomial.model_dump(mode="json")}
+    )
+    derivative = rational_polynomial_derivative(request).derivative
+    assert rational_polynomial_derivative(serialized).derivative == derivative
+    assert _coeffs(derivative) == [Fraction(-2), Fraction(0), Fraction(3)]
+
+
+def test_native_isolated_vertex_composes_without_reshaping() -> None:
+    polynomial = adjacency_characteristic_polynomial(_graph([], 1))
+    request = RationalPolynomialRequest(polynomial=polynomial)
+    assert request.polynomial is polynomial
+    assert _coeffs(rational_polynomial_derivative(request).derivative) == [Fraction(1)]
+
+
+def test_catalog_result_round_trips_source_binding() -> None:
+    request = _request([[0, 1], [1, 2]], 3)
+    result = compute_adjacency_characteristic_polynomial(request)
+    restored = GraphCharacteristicPolynomialResult.model_validate(
+        result.model_dump(mode="json")
+    )
+    assert restored == result
+    assert restored.graph == request.graph
+    assert restored.convention == "ADJACENCY"
+    assert restored.polynomial == adjacency_characteristic_polynomial(request.graph)
+
+
+def test_serialized_native_terms_use_descending_exponent_order() -> None:
+    polynomial = laplacian_characteristic_polynomial(_graph([[0, 1], [1, 2]], 3))
+    payload = polynomial.model_dump(mode="json")
+    exponents = [tuple(term["exponents"]) for term in payload["polynomial"]["terms"]]
+    assert exponents == [(3,), (2,), (1,)]
+    assert exponents == sorted(exponents, reverse=True)
+
+
+def test_discovery_names_canonical_sparse_polynomial() -> None:
+    for operation_id in (
+        "graph.spectrum.adjacency.characteristic_polynomial.compute",
+        "graph.spectrum.laplacian.characteristic_polynomial.compute",
+    ):
+        description = next(
+            tool.description for tool in TOOLS if tool.operation_id == operation_id
+        )
+        assert "increasing-degree" not in description
+        assert "canonical sparse RationalPolynomial" in description
+        assert "descending exponent order" in description

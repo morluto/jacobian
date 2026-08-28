@@ -15,11 +15,11 @@ from jacobian.math.graphs.coloring._models import (
 from jacobian.math.graphs.coloring._operations import (
     compute_k_colorability,
 )
-from jacobian.math.graphs.flow._models import MaxFlowRequest
-from jacobian.math.graphs.flow._operations import compute_max_flow
+from jacobian.math.graphs.flows._models import MaxFlowRequest
+from jacobian.math.graphs.flows._operations import compute_max_flow
 from jacobian.math.graphs.independence import independence_number
-from jacobian.math.graphs.spectral._models import GraphSpectrumRequest
-from jacobian.math.graphs.spectral._operations import compute_laplacian_spectrum
+from jacobian.math.graphs.spectra._models import GraphSpectrumRequest
+from jacobian.math.graphs.spectra._operations import compute_laplacian_spectrum
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -107,7 +107,7 @@ def test_spectral_contract_rejects_non_simple_graphs() -> None:
 
 
 def test_native_spectral_api_requires_a_validated_simple_graph() -> None:
-    from jacobian.math.graphs.spectral import (
+    from jacobian.math.graphs.spectra import (
         adjacency_spectrum,
         laplacian_spectrum,
     )

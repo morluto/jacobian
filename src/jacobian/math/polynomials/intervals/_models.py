@@ -18,7 +18,7 @@ from jacobian.canonical import (
     format_canonical_integer,
     sha256_digest,
 )
-from jacobian.math.intervals import ClosedRationalInterval, RationalBox
+from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.polynomials.intervals._kernel import term_is_zero_on_box
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,

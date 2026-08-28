@@ -8,25 +8,27 @@ from tests.integration.algebra._support import algebra_validation_error
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_field import ring_of_integers
-from jacobian.math.number_field._models import NumberFieldRequest
-from jacobian.math.number_field._operations import compute_nf_discriminant
-from jacobian.math.recurrence_solving._models import (
-    ClosedFormRequest,
-    RecurrenceFindRequest,
-)
-from jacobian.math.recurrence_solving._operations import (
-    compute_closed_form,
-    compute_find_recurrence,
-)
-from jacobian.math.root_isolation._models import (
+from jacobian.math.number_theory.algebraic_numbers.root_isolation._models import (
     MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS,
     AlgebraicCompareRequest,
     UnivariatePolynomialRequest,
 )
-from jacobian.math.root_isolation._operations import (
+from jacobian.math.number_theory.algebraic_numbers.root_isolation._operations import (
     compute_algebraic_compare,
     compute_root_isolation,
+)
+from jacobian.math.number_theory.number_fields import ring_of_integers
+from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
+from jacobian.math.number_theory.number_fields._operations import (
+    compute_nf_discriminant,
+)
+from jacobian.math.number_theory.sequences.recurrence_solving._models import (
+    ClosedFormRequest,
+    RecurrenceFindRequest,
+)
+from jacobian.math.number_theory.sequences.recurrence_solving._operations import (
+    compute_closed_form,
+    compute_find_recurrence,
 )
 
 
@@ -304,7 +306,10 @@ def test_recurrence_finder_solves_for_coefficients() -> None:
 
 
 def test_native_recurrence_api_enforces_the_sequence_contract() -> None:
-    from jacobian.math.recurrence_solving import closed_form, find_recurrence
+    from jacobian.math.number_theory.sequences.recurrence_solving import (
+        closed_form,
+        find_recurrence,
+    )
 
     recurrence = find_recurrence(tuple(_r(value) for value in (3, 6, 12, 24)))
     assert recurrence.status == "FOUND"

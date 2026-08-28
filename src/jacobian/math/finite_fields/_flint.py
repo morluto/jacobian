@@ -8,7 +8,7 @@ from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
     FiniteFieldPresentation,
 )
-from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
 def context(presentation: FiniteFieldPresentation) -> Any:

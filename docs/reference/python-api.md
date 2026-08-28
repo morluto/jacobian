@@ -8,7 +8,8 @@ from fractions import Fraction
 
 import sympy
 
-from jacobian.math import arithmetic, matrices, polynomials
+from jacobian.math import matrices, polynomials
+from jacobian.math.number_theory import arithmetic
 
 half = arithmetic.sum_rationals(Fraction(1, 3), Fraction(1, 6))
 matrix = sympy.Matrix([[1, 2], [3, 4]])

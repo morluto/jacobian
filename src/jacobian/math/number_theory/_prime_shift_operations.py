@@ -8,7 +8,6 @@ from typing import SupportsIndex
 
 from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._prime_shift_models import (
     PrimeShiftProfileRequest as PrimeShiftRequest,
 )
@@ -17,6 +16,7 @@ from jacobian.math.number_theory._prime_shift_models import (
     _PrimeShiftProfileExecutionPlan,
     require_prime_shift_profile_admission,
 )
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
 def _simple_sieve(limit: int) -> tuple[int, ...]:

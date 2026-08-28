@@ -1,0 +1,756 @@
+"""Typed wire contracts for linear code structural operations."""
+
+from __future__ import annotations
+
+from math import comb
+from typing import Annotated, Literal, Self
+
+from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
+
+from jacobian._models import StrictModel
+from jacobian.math._labels import OpaqueLabel
+from jacobian.math.combinatorics.codes.linear.values import (
+    MAX_LINEAR_CODE_DIMENSION,
+    MAX_LINEAR_CODE_LENGTH,
+    PrimeFieldLinearEncoder,
+)
+
+MAX_CODEWORDS = 16384  # binary k=14 (2^14), ternary k=8 (3^8=6561); mainly for equal.decide witness enumeration
+MAX_RECEIVED_PROFILE_EXECUTION_WORK = 3_000_000
+MAX_RECEIVED_PROFILE_WITNESS_CELLS = 65_536
+
+
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"code_linear.{code}", message)
+
+
+def _max_codewords_within_execution_work(execution_work_bound: int) -> int:
+    """Largest encoder image admitted by the exact execution-work bound."""
+
+    best = 1
+    for order in range(2, 252):
+        if any(order % divisor == 0 for divisor in range(2, int(order**0.5) + 1)):
+            continue
+        for dimension in range(1, MAX_LINEAR_CODE_DIMENSION + 1):
+            count = order**dimension
+            # Full rank forces length >= dimension, so the work product is
+            # minimized at length == dimension; larger lengths reject sooner.
+            if 2 * count * dimension * (dimension + 1) > execution_work_bound:
+                break
+            if count > best:
+                best = count
+    return best
+
+
+# Derived from the execution-work bound over primes <= 251: every admitted
+# encoder image satisfies codeword_count <= this constant.
+MAX_RECEIVED_PROFILE_CODEWORDS = _max_codewords_within_execution_work(
+    MAX_RECEIVED_PROFILE_EXECUTION_WORK
+)
+
+_FieldElement = Annotated[StrictInt, Field(ge=0, le=250)]
+_HistogramCount = Annotated[
+    StrictInt,
+    Field(ge=0, le=MAX_RECEIVED_PROFILE_CODEWORDS),
+]
+
+
+class ReceivedWordThreshold(StrictModel):
+    """One exact integer threshold on distance or coordinate agreement."""
+
+    metric: Literal["DISTANCE", "AGREEMENT"]
+    comparison: Literal["LT", "LE", "GT", "GE"]
+    value: StrictInt = Field(ge=0, le=MAX_LINEAR_CODE_LENGTH)
+
+
+def _threshold_matches_distance(
+    threshold: ReceivedWordThreshold,
+    *,
+    distance: int,
+    length: int,
+) -> bool:
+    observed = distance if threshold.metric == "DISTANCE" else length - distance
+    if threshold.comparison == "LT":
+        return observed < threshold.value
+    if threshold.comparison == "LE":
+        return observed <= threshold.value
+    if threshold.comparison == "GT":
+        return observed > threshold.value
+    return observed >= threshold.value
+
+
+class ReceivedWordProfileRequest(StrictModel):
+    """Profile one received word against every word of a linear encoder."""
+
+    encoder: PrimeFieldLinearEncoder
+    received_word: tuple[_FieldElement, ...] = Field(
+        max_length=MAX_LINEAR_CODE_LENGTH,
+        description=(
+            "Canonical GF(p) residues on the encoder's ordered coordinate axis; "
+            "the empty word is valid exactly for a length-zero encoder."
+        ),
+    )
+    threshold: ReceivedWordThreshold | None = Field(
+        default=None,
+        description=(
+            "Optional exact distance/agreement threshold. Omit it only with "
+            "witness_mode NONE; COUNT, FIRST, and ALL require it."
+        ),
+    )
+    witness_mode: Literal["NONE", "COUNT", "FIRST", "ALL"] = Field(
+        default="NONE",
+        description=(
+            "Threshold evidence to return: NONE without a threshold, COUNT "
+            "only, FIRST in lexicographic message order, or every match."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_aligned_bounded_profile(self) -> Self:
+        if len(self.received_word) != len(self.encoder.coordinate_axis):
+            raise _validation_error(
+                "received_word_must_match_the_encoder_coordinate_axis",
+                "received word must match the encoder coordinate axis",
+            )
+        if any(value >= self.encoder.field_order for value in self.received_word):
+            raise _validation_error(
+                "received_word_entries_must_be_canonical_field_residues",
+                "received-word entries must be canonical field residues",
+            )
+        if self.threshold is None and self.witness_mode != "NONE":
+            raise _validation_error(
+                "a_witness_mode_requires_an_exact_threshold",
+                "a witness mode requires an exact threshold",
+            )
+        if self.threshold is not None:
+            if self.witness_mode == "NONE":
+                raise _validation_error(
+                    "a_threshold_requires_count_first_or_all_mode",
+                    "a threshold requires COUNT, FIRST, or ALL mode",
+                )
+            if self.threshold.value > len(self.encoder.coordinate_axis):
+                raise _validation_error(
+                    "threshold_value_cannot_exceed_the_code_length",
+                    "threshold value cannot exceed the code length",
+                )
+
+        return self
+
+    @property
+    def maximum_witness_cells(self) -> int:
+        """Return the worst-case integer cells in a complete witness result."""
+
+        threshold = self.threshold
+        if threshold is None:
+            return 0
+        row_width = (
+            len(self.encoder.message_axis) + len(self.encoder.coordinate_axis) + 2
+        )
+        length = len(self.encoder.coordinate_axis)
+        field_order = int(self.encoder.field_order)
+        ambient_match_count: int = sum(
+            comb(length, distance) * (field_order - 1) ** distance
+            for distance in range(length + 1)
+            if _threshold_matches_distance(
+                threshold,
+                distance=distance,
+                length=length,
+            )
+        )
+        return min(self.encoder.codeword_count, ambient_match_count) * row_width
+
+    @property
+    def profile_execution_work(self) -> int:
+        """Bound kernel construction and comparison work."""
+
+        dimension = len(self.encoder.message_axis)
+        length = len(self.encoder.coordinate_axis)
+        return 2 * self.encoder.codeword_count * length * (dimension + 1)
+
+
+class ReceivedWordWitness(StrictModel):
+    """One source-replayable message, codeword, and Hamming relation."""
+
+    message: tuple[_FieldElement, ...] = Field(max_length=MAX_LINEAR_CODE_DIMENSION)
+    codeword: tuple[_FieldElement, ...] = Field(
+        max_length=MAX_LINEAR_CODE_LENGTH,
+    )
+    distance: StrictInt = Field(ge=0, le=MAX_LINEAR_CODE_LENGTH)
+    agreement: StrictInt = Field(ge=0, le=MAX_LINEAR_CODE_LENGTH)
+
+
+class ReceivedWordProfileResult(StrictModel):
+    """A bounded received-word profile in the request's canonical coordinates.
+
+    Construction checks only the result's own shape and declared relations;
+    the defining profile computation belongs to the producer operation.
+    """
+
+    source: ReceivedWordProfileRequest
+    distance_histogram: tuple[_HistogramCount, ...] = Field(
+        min_length=1,
+        max_length=MAX_LINEAR_CODE_LENGTH + 1,
+        description=(
+            "Dense histogram indexed by Hamming distance; agreement a is the "
+            "entry at distance code_length - a."
+        ),
+    )
+    codeword_count: StrictInt = Field(ge=1, le=MAX_RECEIVED_PROFILE_CODEWORDS)
+    minimum_distance: StrictInt = Field(
+        ge=0,
+        le=MAX_LINEAR_CODE_LENGTH,
+        description="Minimum Hamming distance from the received word to the code.",
+    )
+    maximum_agreement: StrictInt = Field(
+        ge=0,
+        le=MAX_LINEAR_CODE_LENGTH,
+        description="Maximum coordinate agreement with the received word.",
+    )
+    threshold_match_count: StrictInt | None = Field(
+        default=None,
+        ge=0,
+        le=MAX_RECEIVED_PROFILE_CODEWORDS,
+    )
+    witnesses: tuple[ReceivedWordWitness, ...] = Field(
+        default=(),
+        max_length=MAX_RECEIVED_PROFILE_CODEWORDS,
+    )
+
+    @model_validator(mode="after")
+    def require_structural_profile_relations(self) -> Self:
+        length = len(self.source.encoder.coordinate_axis)
+        dimension = len(self.source.encoder.message_axis)
+        field_order = self.source.encoder.field_order
+        if len(self.distance_histogram) != length + 1:
+            raise _validation_error(
+                "distance_histogram_must_cover_every_possible_distance",
+                "distance histogram must have one entry for every distance",
+            )
+        if sum(self.distance_histogram) != self.codeword_count:
+            raise _validation_error(
+                "codeword_count_must_equal_the_histogram_total",
+                "codeword count must equal the histogram total",
+            )
+        if self.maximum_agreement != length - self.minimum_distance:
+            raise _validation_error(
+                "maximum_agreement_must_complement_minimum_distance",
+                "maximum agreement must complement minimum distance",
+            )
+        threshold = self.source.threshold
+        if threshold is None:
+            if self.threshold_match_count is not None or self.witnesses:
+                raise _validation_error(
+                    "profile_without_threshold_cannot_contain_threshold_evidence",
+                    "a profile without a threshold cannot contain threshold evidence",
+                )
+            return self
+        if self.threshold_match_count is None:
+            raise _validation_error(
+                "threshold_profile_must_report_a_match_count",
+                "a threshold profile must report a match count",
+            )
+        if self.source.witness_mode == "COUNT" and self.witnesses:
+            raise _validation_error(
+                "count_mode_cannot_contain_witnesses",
+                "COUNT mode cannot contain witnesses",
+            )
+        if self.source.witness_mode == "FIRST" and len(self.witnesses) > 1:
+            raise _validation_error(
+                "first_mode_can_contain_at_most_one_witness",
+                "FIRST mode can contain at most one witness",
+            )
+        if len(self.witnesses) > self.threshold_match_count:
+            raise _validation_error(
+                "witnesses_cannot_exceed_the_threshold_match_count",
+                "witnesses cannot exceed the threshold match count",
+            )
+        for witness in self.witnesses:
+            if len(witness.message) != dimension or len(witness.codeword) != length:
+                raise _validation_error(
+                    "witness_axes_must_match_the_source_encoder",
+                    "witness axes must match the source encoder",
+                )
+            if any(value >= field_order for value in witness.message) or any(
+                value >= field_order for value in witness.codeword
+            ):
+                raise _validation_error(
+                    "witness_entries_must_be_canonical_field_residues",
+                    "witness entries must be canonical field residues",
+                )
+            if witness.agreement != length - witness.distance:
+                raise _validation_error(
+                    "witness_agreement_must_complement_its_distance",
+                    "witness agreement must complement its distance",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: ReceivedWordProfileRequest,
+        distance_histogram: tuple[int, ...],
+        codeword_count: int,
+        minimum_distance: int,
+        maximum_agreement: int,
+        threshold_match_count: int | None,
+        witnesses: tuple[ReceivedWordWitness, ...],
+    ) -> Self:
+        """Build a profile produced by the owner-local enumeration kernel."""
+
+        return cls(
+            source=source,
+            distance_histogram=distance_histogram,
+            codeword_count=codeword_count,
+            minimum_distance=minimum_distance,
+            maximum_agreement=maximum_agreement,
+            threshold_match_count=threshold_match_count,
+            witnesses=witnesses,
+        )
+
+
+def _validate_prime_matrix(
+    field_order: int,
+    generator_matrix: tuple[tuple[int, ...], ...],
+) -> int:
+    from sympy import isprime
+
+    if not isprime(field_order):
+        raise _validation_error(
+            "field_order_must_be_prime", "field_order must be prime"
+        )
+    width = len(generator_matrix[0])
+    if width == 0 or width > MAX_LINEAR_CODE_LENGTH:
+        raise _validation_error(
+            "generator_rows_length",
+            f"generator rows must have between 1 and {MAX_LINEAR_CODE_LENGTH} entries",
+        )
+    if any(len(row) != width for row in generator_matrix):
+        raise _validation_error(
+            "generator_matrix_rows_must_have_equal_length",
+            "generator matrix rows must have equal length",
+        )
+    if any(not 0 <= entry < field_order for row in generator_matrix for entry in row):
+        raise _validation_error(
+            "generator_entries_must_be_canonical_field_residues",
+            "generator entries must be canonical field residues",
+        )
+    return width
+
+
+def _validate_coordinate_axis(
+    coordinate_axis: tuple[OpaqueLabel, ...],
+    *,
+    width: int,
+) -> None:
+    if len(coordinate_axis) != width:
+        raise _validation_error(
+            "coordinate_axis_must_match_the_generator_matrix_columns",
+            "coordinate axis must match the generator-matrix columns",
+        )
+    if len(set(coordinate_axis)) != len(coordinate_axis):
+        raise _validation_error(
+            "coordinate_axis_labels_must_be_unique",
+            "coordinate-axis labels must be unique",
+        )
+
+
+class GeneratorMatrixRequest(StrictModel):
+    """A linear code given by a generator matrix over a bounded prime field."""
+
+    field_order: int = Field(ge=2, le=251)
+    generator_matrix: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_LINEAR_CODE_DIMENSION
+    )
+    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_LINEAR_CODE_LENGTH,
+        description=(
+            "Ordered unique labels for generator-matrix columns; code-producing "
+            "results preserve these labels."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_prime_matrix(self) -> Self:
+        width = _validate_prime_matrix(self.field_order, self.generator_matrix)
+        _validate_coordinate_axis(self.coordinate_axis, width=width)
+        return self
+
+
+class DualCodeRequest(StrictModel):
+    """Compute the dual code of a canonical linear encoder."""
+
+    encoder: PrimeFieldLinearEncoder
+
+
+class ParityCheckRequest(StrictModel):
+    """A canonical linear encoder for computing a parity-check."""
+
+    encoder: PrimeFieldLinearEncoder
+
+
+class CodewordCheckRequest(StrictModel):
+    """Check whether a word is a codeword of a canonical linear encoder."""
+
+    encoder: PrimeFieldLinearEncoder
+    word: tuple[_FieldElement, ...] = Field(
+        max_length=MAX_LINEAR_CODE_LENGTH,
+        description=(
+            "Canonical GF(p) residues on the encoder's ordered coordinate axis; "
+            "the empty word is valid exactly for a length-zero encoder."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_aligned_canonical_word(self) -> Self:
+        if len(self.word) != len(self.encoder.coordinate_axis):
+            raise _validation_error(
+                "word_length_must_match_the_encoder_coordinate_axis",
+                "word length must match the encoder coordinate axis",
+            )
+        if any(value >= self.encoder.field_order for value in self.word):
+            raise _validation_error(
+                "word_entries_must_be_canonical_field_residues",
+                "word entries must be canonical field residues",
+            )
+        return self
+
+
+class ParityCheckMatrix(StrictModel):
+    """A prime-field matrix retaining its ordered column axis when it has no rows."""
+
+    field_order: int = Field(ge=2, le=251)
+    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
+        max_length=MAX_LINEAR_CODE_LENGTH,
+        description=(
+            "Ordered unique labels for matrix columns; syndrome words must "
+            "present this same ordered axis."
+        ),
+    )
+    rows: tuple[tuple[int, ...], ...] = Field(max_length=MAX_LINEAR_CODE_LENGTH)
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        from sympy import isprime
+
+        if not isprime(self.field_order):
+            raise _validation_error(
+                "field_order_must_be_prime", "field_order must be prime"
+            )
+        if len(set(self.coordinate_axis)) != len(self.coordinate_axis):
+            raise _validation_error(
+                "coordinate_axis_labels_must_be_unique",
+                "coordinate-axis labels must be unique",
+            )
+        if any(len(row) != len(self.coordinate_axis) for row in self.rows):
+            raise _validation_error(
+                "parity_check_rows_must_match_the_column_axis",
+                "parity-check rows must match the column axis",
+            )
+        if any(not 0 <= value < self.field_order for row in self.rows for value in row):
+            raise _validation_error(
+                "parity_check_entries_must_be_canonical_field_residues",
+                "parity-check entries must be canonical field residues",
+            )
+        return self
+
+
+class SyndromeRequest(StrictModel):
+    """Compute the syndrome of a word under a parity-check matrix."""
+
+    parity_check: ParityCheckMatrix
+    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
+        max_length=MAX_LINEAR_CODE_LENGTH,
+        description=(
+            "Ordered labels of the word's coordinates; must equal the "
+            "parity-check column axis so word entries cannot align to the "
+            "wrong columns."
+        ),
+    )
+    word: tuple[int, ...] = Field(max_length=MAX_LINEAR_CODE_LENGTH)
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        if self.coordinate_axis != self.parity_check.coordinate_axis:
+            raise _validation_error(
+                "word_axis_must_match_the_parity_check_column_axis",
+                "word axis must match the parity-check column axis",
+            )
+        if len(self.word) != len(self.coordinate_axis):
+            raise _validation_error(
+                "word_length_must_match_code_length",
+                "word length must match code length",
+            )
+        if any(not 0 <= v < self.parity_check.field_order for v in self.word):
+            raise _validation_error(
+                "word_entries_must_be_canonical_field_residues",
+                "word entries must be canonical field residues",
+            )
+        return self
+
+
+class CodeEqualRequest(StrictModel):
+    """Check whether two canonical encoders define the same code."""
+
+    encoder_a: PrimeFieldLinearEncoder
+    encoder_b: PrimeFieldLinearEncoder
+
+    @model_validator(mode="after")
+    def require_comparable_encoders(self) -> Self:
+        if self.encoder_a.field_order != self.encoder_b.field_order:
+            raise _validation_error(
+                "encoders_must_share_one_prime_field_order",
+                "encoders must share one prime field order",
+            )
+        if self.encoder_a.coordinate_axis != self.encoder_b.coordinate_axis:
+            raise _validation_error(
+                "encoders_must_share_one_ordered_coordinate_axis",
+                "encoders must share one ordered coordinate axis",
+            )
+        return self
+
+
+class MacWilliamsRequest(StrictModel):
+    """Primal weight distribution for MacWilliams transform."""
+
+    field_order: int = Field(ge=2, le=251)
+    code_cardinality: int = Field(ge=1)
+    length: int = Field(ge=1, le=MAX_LINEAR_CODE_LENGTH)
+    weights: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_LINEAR_CODE_LENGTH + 1
+    )
+
+    @model_validator(mode="after")
+    def require_valid_distribution(self) -> Self:
+        if len(self.weights) != self.length + 1:
+            raise _validation_error(
+                "weights_must_have_length_1_entries",
+                "weights must have length + 1 entries",
+            )
+        if any(w < 0 for w in self.weights):
+            raise _validation_error(
+                "weight_counts_must_be_non_negative",
+                "weight counts must be non-negative",
+            )
+        if self.weights[0] != 1:
+            raise _validation_error(
+                "first_weight_count_must_be_1_zero_codeword",
+                "first weight count must be 1 (zero codeword)",
+            )
+        if sum(self.weights) != self.code_cardinality:
+            raise _validation_error(
+                "weight_counts_must_sum_to_code_cardinality",
+                "weight counts must sum to code cardinality",
+            )
+        return self
+
+
+def _require_selected_coordinate(
+    encoder: PrimeFieldLinearEncoder,
+    coordinate: int,
+) -> None:
+    if not encoder.coordinate_axis:
+        raise _validation_error(
+            "encoder_must_have_at_least_one_coordinate_to_select",
+            "encoder must have at least one coordinate to select",
+        )
+    if coordinate >= len(encoder.coordinate_axis):
+        raise _validation_error(
+            "coordinate_index_out_of_range", "coordinate index out of range"
+        )
+
+
+class PunctureRequest(StrictModel):
+    """Puncture a linear code by deleting one coordinate."""
+
+    encoder: PrimeFieldLinearEncoder
+    coordinate: int = Field(
+        ge=0,
+        description=(
+            "Zero-based index into encoder.coordinate_axis identifying the "
+            "single coordinate to delete."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_valid_request(self) -> Self:
+        _require_selected_coordinate(self.encoder, self.coordinate)
+        return self
+
+
+class ShortenRequest(StrictModel):
+    """Shorten a linear code by fixing one coordinate to zero and puncturing it."""
+
+    encoder: PrimeFieldLinearEncoder
+    coordinate: int = Field(
+        ge=0,
+        description=(
+            "Zero-based index into encoder.coordinate_axis identifying the "
+            "single coordinate to fix and delete."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_valid_request(self) -> Self:
+        _require_selected_coordinate(self.encoder, self.coordinate)
+        return self
+
+
+# Results
+
+
+class FromGeneratorResult(StrictModel):
+    """A canonical encoder with summaries derived from that encoder."""
+
+    encoder: PrimeFieldLinearEncoder
+    dimension: int = Field(ge=0)
+    length: int = Field(ge=0)
+    cardinality: int = Field(ge=1)
+    method: str = "RREF"
+
+    @model_validator(mode="after")
+    def require_consistent_summaries(self) -> Self:
+        if self.dimension != len(self.encoder.message_axis):
+            raise _validation_error(
+                "dimension_must_match_the_encoder_message_axis",
+                "dimension must match the encoder message axis",
+            )
+        if self.length != len(self.encoder.coordinate_axis):
+            raise _validation_error(
+                "length_must_match_the_encoder_coordinate_axis",
+                "length must match the encoder coordinate axis",
+            )
+        if self.cardinality != self.encoder.codeword_count:
+            raise _validation_error(
+                "cardinality_must_match_the_encoder_image",
+                "cardinality must match the encoder image",
+            )
+        return self
+
+
+class DualCodeResult(StrictModel):
+    """A canonical dual encoder and its matching parity-check matrix."""
+
+    encoder: PrimeFieldLinearEncoder
+    parity_check: ParityCheckMatrix
+    dimension: int = Field(ge=0)
+    dual_dimension: int = Field(ge=0)
+    length: int = Field(ge=0)
+    method: str = "NULLSPACE"
+
+    @model_validator(mode="after")
+    def require_consistent_dual(self) -> Self:
+        if self.dual_dimension != len(self.encoder.message_axis):
+            raise _validation_error(
+                "dual_dimension_must_match_the_encoder_message_axis",
+                "dual dimension must match the encoder message axis",
+            )
+        if self.length != len(self.encoder.coordinate_axis):
+            raise _validation_error(
+                "length_must_match_the_encoder_coordinate_axis",
+                "length must match the encoder coordinate axis",
+            )
+        if self.dimension + self.dual_dimension != self.length:
+            raise _validation_error(
+                "primal_and_dual_dimensions_must_sum_to_the_code_length",
+                "primal and dual dimensions must sum to the code length",
+            )
+        if self.parity_check.field_order != self.encoder.field_order:
+            raise _validation_error(
+                "parity_check_field_must_match_the_dual_encoder",
+                "parity-check field must match the dual encoder",
+            )
+        if self.parity_check.coordinate_axis != self.encoder.coordinate_axis:
+            raise _validation_error(
+                "parity_check_must_preserve_the_dual_coordinate_axis",
+                "parity-check must preserve the dual coordinate axis",
+            )
+        if self.parity_check.rows != self.encoder.generator_matrix:
+            raise _validation_error(
+                "parity_check_rows_must_match_the_dual_encoder",
+                "parity-check rows must match the dual encoder",
+            )
+        return self
+
+
+class ParityCheckResult(StrictModel):
+    parity_check: ParityCheckMatrix
+    dimension: int = Field(ge=0)
+    rank_h: int = Field(ge=0)
+    length: int = Field(ge=0)
+    method: str = "NULLSPACE"
+
+
+class CodewordCheckResult(StrictModel):
+    is_member: bool
+    hamming_weight: int = Field(ge=0)
+    coefficients: tuple[int, ...] = ()
+    syndrome: tuple[int, ...] = ()
+    method: str = "RREF_MEMBERSHIP"
+
+
+class SyndromeResult(StrictModel):
+    syndrome: tuple[int, ...]
+    is_member: bool
+    method: str = "MATRIX_VECTOR_PRODUCT"
+
+
+class CodeEqualResult(StrictModel):
+    equal: bool
+    dimension_a: int = Field(ge=0)
+    dimension_b: int = Field(ge=0)
+    witness_word: tuple[int, ...] | None = None
+    method: str = "MUTUAL_ROW_SPACE_CONTAINMENT"
+
+
+class MacWilliamsResult(StrictModel):
+    dual_weights: tuple[int, ...]
+    method: str = "MACWILLIAMS_IDENTITY"
+
+
+class PunctureResult(StrictModel):
+    """A canonical punctured encoder with derived dimension and length."""
+
+    encoder: PrimeFieldLinearEncoder
+    dimension: int = Field(ge=0)
+    length: int = Field(ge=0)
+    method: str = "PUNCTURE"
+
+    @model_validator(mode="after")
+    def require_consistent_summaries(self) -> Self:
+        if self.dimension != len(self.encoder.message_axis):
+            raise _validation_error(
+                "dimension_must_match_the_encoder_message_axis",
+                "dimension must match the encoder message axis",
+            )
+        if self.length != len(self.encoder.coordinate_axis):
+            raise _validation_error(
+                "length_must_match_the_encoder_coordinate_axis",
+                "length must match the encoder coordinate axis",
+            )
+        return self
+
+
+class ShortenResult(StrictModel):
+    """A canonical shortened encoder with derived dimension and length."""
+
+    encoder: PrimeFieldLinearEncoder
+    dimension: int = Field(ge=0)
+    length: int = Field(ge=0)
+    method: str = "SHORTEN"
+
+    @model_validator(mode="after")
+    def require_consistent_summaries(self) -> Self:
+        if self.dimension != len(self.encoder.message_axis):
+            raise _validation_error(
+                "dimension_must_match_the_encoder_message_axis",
+                "dimension must match the encoder message axis",
+            )
+        if self.length != len(self.encoder.coordinate_axis):
+            raise _validation_error(
+                "length_must_match_the_encoder_coordinate_axis",
+                "length must match the encoder coordinate axis",
+            )
+        return self

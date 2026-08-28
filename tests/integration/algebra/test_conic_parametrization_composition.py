@@ -1,16 +1,16 @@
 """Cross-owner composition for rational conic coordinate functions."""
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.geometry.algebraic_curves._models import (
+    RationalConicParametrizationRequest,
+)
+from jacobian.math.geometry.algebraic_curves._operations import (
+    compute_rational_conic_parametrization,
+)
 from jacobian.math.matrices.symbolic._models import (
     SymbolicDeterminantRequest,
 )
 from jacobian.math.matrices.symbolic._operations import compute_symbolic_determinant
-from jacobian.math.plane_algebraic_curves._models import (
-    RationalConicParametrizationRequest,
-)
-from jacobian.math.plane_algebraic_curves._operations import (
-    compute_rational_conic_parametrization,
-)
 from jacobian.math.polynomials.maps._models import EvalRequest, VariablePoint
 from jacobian.math.polynomials.maps._operations import evaluate_polynomial
 from jacobian.math.polynomials.values import (

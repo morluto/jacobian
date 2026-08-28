@@ -1,12 +1,12 @@
 """Typed formal modular-polynomial identity operation."""
 
 from jacobian.catalog._examples import example
-from jacobian.math.modular_polynomials import (
+from jacobian.math.number_theory._support import number_theory_operation
+from jacobian.math.number_theory.modular_polynomials import (
     ModularPolynomialIdentityRequest,
     ModularPolynomialIdentityValue,
     _modular_polynomial_identity_request,
 )
-from jacobian.math.number_theory._support import number_theory_operation
 
 MODULAR_IDENTITY_OPERATIONS = (
     number_theory_operation(

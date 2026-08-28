@@ -7,9 +7,6 @@ from jacobian.math.graphs.isomorphism import _operations as isomorphism_operatio
 from jacobian.math.graphs.isomorphism._models import GraphIsomorphismRequest
 from jacobian.math.graphs.isomorphism._operations import decide_graph_isomorphism
 from jacobian.math.graphs.isomorphism._vf2_worker import _first_isomorphism_mapping
-from jacobian.math.number_field import _operations as number_field_operations
-from jacobian.math.number_field._models import NumberFieldRequest
-from jacobian.math.number_field._operations import compute_nf_discriminant
 from jacobian.math.number_theory._certification_models import (
     CertifiedFactorizationRequest,
 )
@@ -22,6 +19,13 @@ from jacobian.math.number_theory._factorization_kernels import (
     enumerate_divisors,
     factorize_certified,
     factorize_primes,
+)
+from jacobian.math.number_theory.number_fields import (
+    _operations as number_field_operations,
+)
+from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
+from jacobian.math.number_theory.number_fields._operations import (
+    compute_nf_discriminant,
 )
 from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 

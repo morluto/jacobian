@@ -12,7 +12,7 @@ from jacobian.math.finite_fields import (
     FiniteLinearMap,
     ProjectivePoint,
 )
-from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
 def _presentation(*, generator: str = "a") -> FiniteFieldPresentation:

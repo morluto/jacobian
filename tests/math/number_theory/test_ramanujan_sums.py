@@ -9,8 +9,6 @@ from tests.math.number_theory._validation import expect_validation
 
 from jacobian._exact import CanonicalInteger
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.arithmetic import absolute_value
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory import ramanujan_sum
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
 from jacobian.math.number_theory._ramanujan_sum import (
@@ -18,6 +16,8 @@ from jacobian.math.number_theory._ramanujan_sum import (
     RamanujanSumRequest,
     RamanujanSumResult,
 )
+from jacobian.math.number_theory.arithmetic import absolute_value
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 from jacobian.math.number_theory.ramanujan_sums import _MAX_MODULUS_DIGITS
 
 

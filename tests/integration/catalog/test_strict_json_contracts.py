@@ -2,8 +2,11 @@
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
-from jacobian.math.petri_nets.values import MAX_PETRI_ARC_WEIGHT, MAX_PETRI_MARKING
-from jacobian.math.quadratic_forms.values import (
+from jacobian.math.logic.automata.petri_nets.values import (
+    MAX_PETRI_ARC_WEIGHT,
+    MAX_PETRI_MARKING,
+)
+from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
     MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS,
 )

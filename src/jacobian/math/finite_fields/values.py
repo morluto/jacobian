@@ -10,7 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import sha256_digest
-from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rank
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix, rank
 
 _MAX_FIELD_ORDER = 65536
 _MIN_MODULUS_COEFFICIENTS = 3

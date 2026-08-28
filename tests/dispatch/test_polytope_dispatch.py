@@ -8,7 +8,7 @@ import pytest
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
-from jacobian.math.polytope._models import MAX_COMPUTED_FACETS
+from jacobian.math.geometry.polytopes._models import MAX_COMPUTED_FACETS
 
 
 def _cyclic_facet_count(vertices: int, dimension: int) -> int:

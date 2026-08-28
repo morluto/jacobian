@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._divisibility_models import (
     DivisibilityRequest,
     ExtendedGcdResult,
@@ -17,6 +16,7 @@ from jacobian.math.number_theory._integer_models import (
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
 )
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
 def _domain_error(location: tuple[str | int, ...], code: str, message: str) -> None:

@@ -11,7 +11,6 @@ from pydantic_core import PydanticCustomError
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
-from jacobian.math.arithmetic import primitive_integer_vector
 from jacobian.math.geometry.projective._models import (
     NormalizedProjectiveLine,
     ProjectiveArrangementFlat,
@@ -23,6 +22,7 @@ from jacobian.math.geometry.projective.values import (
     PrimitiveProjectiveTriple,
     _primitive_integer_triple,
 )
+from jacobian.math.number_theory.arithmetic import primitive_integer_vector
 
 
 def _primitive(values: tuple[Fraction, Fraction, Fraction]) -> tuple[int, int, int]:

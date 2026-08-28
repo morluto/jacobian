@@ -26,7 +26,7 @@ from jacobian.math.finite_fields.values import (
     RankResult,
     _direction_rank_work,
 )
-from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 _MAX_FINITE_MAP_WORK = 1_000_000
 

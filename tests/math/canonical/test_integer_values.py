@@ -2,10 +2,10 @@
 
 from fractions import Fraction
 
-from jacobian.math import arithmetic
-from jacobian.math.arithmetic._operations import decimal_digit_sum
-from jacobian.math.arithmetic.values import IntegerValue
+from jacobian.math.number_theory import arithmetic
 from jacobian.math.number_theory._divisibility_operations import decide_even
+from jacobian.math.number_theory.arithmetic._operations import decimal_digit_sum
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
 def test_public_native_functions_compose_through_the_shared_integer_value() -> None:

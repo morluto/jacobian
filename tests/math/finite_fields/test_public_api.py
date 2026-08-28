@@ -21,7 +21,7 @@ from jacobian.math.finite_fields import (
     restrict_scalars,
 )
 from jacobian.math.finite_fields._tools import TOOLS
-from jacobian.math.prime_field_linear_algebra import rank
+from jacobian.math.matrices.finite_fields.linear_algebra import rank
 
 pytestmark = pytest.mark.requires_backend("flint")
 

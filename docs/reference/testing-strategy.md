@@ -246,7 +246,7 @@ main raises the bound — even on an unrelated open branch. Instead, import the
 constant and interpolate:
 
 ```python
-from jacobian.math.diophantine_approximation._models import (
+from jacobian.math.number_theory.diophantine_approximation._models import (
     _convergent_component_digit_cap,
 )
 

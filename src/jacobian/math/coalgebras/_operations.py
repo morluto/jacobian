@@ -18,7 +18,7 @@ from jacobian.math.coalgebras._models import (
     group_like_scan_work,
     require_coalgebra_admission,
 )
-from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
 def compute_comultiplication(

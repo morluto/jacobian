@@ -8,8 +8,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.arithmetic import absolute_value
-from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory import FriableCountResult, count_friable
 from jacobian.math.number_theory._friable_models import (
     _MAX_FRIABLE_SOURCE_ABS,
@@ -19,6 +17,8 @@ from jacobian.math.number_theory._friable_models import (
     FriableCountRequest,
 )
 from jacobian.math.number_theory._friable_operations import compute_friable_count
+from jacobian.math.number_theory.arithmetic import absolute_value
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
 def _prime_factors(value: int) -> Iterator[int]:

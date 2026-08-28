@@ -29,13 +29,13 @@ def test_public_math_contract_selects_scoped_static_and_catalog_evidence() -> No
         event="pull_request",
         base_revision="a" * 40,
         head_revision="b" * 40,
-        changed_paths=["src/jacobian/math/code_theory/_models.py"],
+        changed_paths=["src/jacobian/math/combinatorics/codes/general/_models.py"],
         repository=ROOT,
     )
 
     commands = runner.commands_for_plan(
         plan,
-        paths=["src/jacobian/math/code_theory/_models.py"],
+        paths=["src/jacobian/math/combinatorics/codes/general/_models.py"],
         repository=ROOT,
     )
 
@@ -43,14 +43,14 @@ def test_public_math_contract_selects_scoped_static_and_catalog_evidence() -> No
         (
             "make",
             "lint-scoped",
-            "PATHS=src/jacobian/math/code_theory/_models.py",
+            "PATHS=src/jacobian/math/combinatorics/codes/general/_models.py",
         ),
         (
             "make",
             "typecheck-scoped",
-            "PATHS=src/jacobian/math/code_theory/_models.py",
+            "PATHS=src/jacobian/math/combinatorics/codes/general/_models.py",
         ),
-        ("make", "test-math", "TESTS=tests/math/code_theory"),
+        ("make", "test-math", "TESTS=tests/math/combinatorics/codes/general"),
         ("make", "test-catalog"),
         ("make", "test-integration", "TESTS=tests/integration/catalog/"),
     )

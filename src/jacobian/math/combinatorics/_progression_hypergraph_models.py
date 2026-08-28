@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import Field
 
 from jacobian._models import StrictModel
-from jacobian.math.hypergraphs._models import (
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
     MAX_TOTAL_INCIDENCES,
     MAX_VERTICES,

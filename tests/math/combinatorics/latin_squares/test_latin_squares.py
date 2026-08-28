@@ -4,19 +4,19 @@ import pytest
 from pydantic import ValidationError
 from typing_extensions import TypedDict
 
-from jacobian.math.combinatorics.latin_squares._models import (
+from jacobian.math.combinatorics.designs.latin_squares._models import (
     LatinSquare,
     LatinSquareCandidate,
     LatinSquareRequest,
     OrthogonalityRequest,
     TransposeRequest,
 )
-from jacobian.math.combinatorics.latin_squares._operations import (
+from jacobian.math.combinatorics.designs.latin_squares._operations import (
     compute_latin_square_check,
     compute_latin_square_transpose,
     compute_orthogonality,
 )
-from jacobian.math.combinatorics.latin_squares._tools import TOOLS
+from jacobian.math.combinatorics.designs.latin_squares._tools import TOOLS
 
 
 class _RawSquare(TypedDict):

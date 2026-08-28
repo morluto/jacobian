@@ -22,7 +22,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._digest import Sha256Digest
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import canonicalize_json
-from jacobian.math.chain_complexes.values import ChainComplexValue
+from jacobian.math.topology.chain_complexes.values import ChainComplexValue
 
 MAX_TOPOLOGY_VERTICES = 64
 MAX_TOPOLOGY_FACETS = 128
@@ -493,7 +493,7 @@ def _require_canonical_conversion_bounds(complex_: FiniteSimplicialComplex) -> N
     differential, so admission must check the same sum rather than each
     boundary product separately.
     """
-    from jacobian.math.chain_complexes.values import (
+    from jacobian.math.topology.chain_complexes.values import (
         MAX_BASIS_SIZE,
         MAX_MATRIX_CELLS,
     )

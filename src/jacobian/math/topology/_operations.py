@@ -7,8 +7,6 @@ from itertools import pairwise
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
-from jacobian.math import prime_field_linear_algebra as prime_field
-from jacobian.math.chain_complexes.values import ChainComplexValue
 from jacobian.math.matrices.certified_snf.operations import (
     certificate_from_reduction,
     inverse_unimodular,
@@ -18,6 +16,7 @@ from jacobian.math.matrices.certified_snf.operations import (
     smith_reduce,
 )
 from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
+from jacobian.math.matrices.finite_fields import linear_algebra as prime_field
 from jacobian.math.topology._barycentric import barycentric_subdivision
 from jacobian.math.topology._chain_conversion import (
     canonical_chain_complex_value_from_parts,
@@ -69,6 +68,7 @@ from jacobian.math.topology._pseudomanifold import (
 )
 from jacobian.math.topology._request_admission import require_complex_admission
 from jacobian.math.topology._shelling import evaluate_shelling
+from jacobian.math.topology.chain_complexes.values import ChainComplexValue
 
 
 def _admit_chain_request(request: ChainComplexRequest) -> None:

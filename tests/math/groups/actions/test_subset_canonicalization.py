@@ -15,11 +15,15 @@ from jacobian.math.groups.actions._models import (
     SubsetCanonicalizationRequest,
     SubsetCanonicalizationResult,
 )
-from jacobian.math.groups.actions._operations import (
-    _enumerate_group,
-    compute_subset_canonicalization,
-)
 from jacobian.math.groups.actions._tools import TOOLS
+from jacobian.math.groups.actions.operations import (
+    _enumerate_group,
+    subset_canonicalization,
+)
+
+
+def _run_subset(request: SubsetCanonicalizationRequest) -> SubsetCanonicalizationResult:
+    return subset_canonicalization(request.subset)
 
 
 def _cyclic_c3(
@@ -106,7 +110,7 @@ def _sympy_oracle(
 
 
 def test_cyclic_action_canonicalizes_singleton_with_transporter() -> None:
-    result = compute_subset_canonicalization(_request(_cyclic_c3(), (2,)))
+    result = _run_subset(_request(_cyclic_c3(), (2,)))
 
     assert result.canonical_subset.positions == (0,)
     assert tuple(
@@ -123,7 +127,7 @@ def test_every_small_subset_agrees_with_independent_sympy_enumeration(
 ) -> None:
     for size in range(len(action.domain) + 1):
         for subset in combinations(range(len(action.domain)), size):
-            result = compute_subset_canonicalization(_request(action, subset))
+            result = _run_subset(_request(action, subset))
             assert (
                 result.canonical_subset.positions,
                 result.transporter,
@@ -145,8 +149,8 @@ def test_generator_reordering_preserves_canonical_result_and_transporter() -> No
         generators=tuple(reversed(first.generators)),
     )
 
-    first_result = compute_subset_canonicalization(_request(first, (2,)))
-    second_result = compute_subset_canonicalization(_request(second, (2,)))
+    first_result = _run_subset(_request(first, (2,)))
+    second_result = _run_subset(_request(second, (2,)))
 
     assert _mathematical_payload(first_result) == _mathematical_payload(second_result)
 
@@ -155,8 +159,8 @@ def test_position_preserving_domain_relabelling_preserves_result() -> None:
     first = _symmetric_s3(("z", "a", "m"))
     relabelled = _symmetric_s3(("triangle", "edge", "witness"))
 
-    first_result = compute_subset_canonicalization(_request(first, (1,)))
-    relabelled_result = compute_subset_canonicalization(_request(relabelled, (1,)))
+    first_result = _run_subset(_request(first, (1,)))
+    relabelled_result = _run_subset(_request(relabelled, (1,)))
 
     assert first_result.canonical_subset.positions == (0,)
     assert first.domain[first_result.canonical_subset.positions[0]] == "z"
@@ -171,7 +175,7 @@ def test_empty_and_full_subsets_have_the_whole_group_as_stabilizer(
     subset: tuple[int, ...],
 ) -> None:
     action = _dihedral_d4()
-    result = compute_subset_canonicalization(_request(action, subset))
+    result = _run_subset(_request(action, subset))
 
     assert result.source_subset.positions == subset
     assert result.canonical_subset.positions == subset
@@ -181,7 +185,7 @@ def test_empty_and_full_subsets_have_the_whole_group_as_stabilizer(
 
 
 def test_fixed_nontrivial_subset_reports_its_setwise_stabilizer() -> None:
-    result = compute_subset_canonicalization(_request(_dihedral_d4(), (0, 2)))
+    result = _run_subset(_request(_dihedral_d4(), (0, 2)))
 
     assert result.canonical_subset.positions == (0, 2)
     assert result.orbit_size == 2
@@ -234,7 +238,7 @@ def test_request_rejects_group_immediately_above_enumeration_bound() -> None:
         OperationDomainValidationError,
         match=rf"group order exceeds.*{MAX_GROUP_ORDER}",
     ) as error:
-        compute_subset_canonicalization(request)
+        _run_subset(request)
     assert error.value.errors()[0]["loc"] == ("action",)
     assert error.value.errors()[0]["type"] == (
         "finite_group_action.group_order_exceeds_bound"
@@ -246,7 +250,7 @@ def test_domain_and_subset_boundary_of_fifty_positions_is_accepted() -> None:
         domain=tuple(f"p{position}" for position in range(50)),
         generators=(tuple(range(50)),),
     )
-    result = compute_subset_canonicalization(
+    result = _run_subset(
         _request(action, tuple(reversed(range(50))))
     )
 
@@ -269,7 +273,7 @@ def test_generator_representation_boundary_is_explicit() -> None:
         generators=(identity,) * 50,
     )
     assert len(accepted.generators) == 50
-    result = compute_subset_canonicalization(_request(accepted, (2, 0)))
+    result = _run_subset(_request(accepted, (2, 0)))
     assert result.canonical_subset.positions == (0, 2)
     assert result.orbit_size == result.stabilizer_size == 1
 
@@ -309,7 +313,7 @@ def test_s6_function_graph_use_case_at_group_order_boundary() -> None:
         source * 6 + destination for source, destination in enumerate(function)
     )
 
-    result = compute_subset_canonicalization(_request(action, source_graph))
+    result = _run_subset(_request(action, source_graph))
 
     canonical_pairs = tuple(
         divmod(position, 6) for position in result.canonical_subset.positions
@@ -325,7 +329,7 @@ def test_s6_function_graph_use_case_at_group_order_boundary() -> None:
 
 
 def test_canonical_subset_serializes_unchanged_into_the_next_request() -> None:
-    first = compute_subset_canonicalization(_request(_dihedral_d4(), (2, 1)))
+    first = _run_subset(_request(_dihedral_d4(), (2, 1)))
     dumped = first.model_dump()
 
     # One canonical value passes through: the dumped canonical subset already
@@ -333,7 +337,7 @@ def test_canonical_subset_serializes_unchanged_into_the_next_request() -> None:
     request = SubsetCanonicalizationRequest.model_validate(
         {"subset": dumped["canonical_subset"]}
     )
-    second = compute_subset_canonicalization(request)
+    second = _run_subset(request)
 
     assert request.subset == first.canonical_subset
     assert request.subset.action == first.source_subset.action
@@ -375,7 +379,7 @@ def test_same_positions_under_different_actions_are_different_values() -> None:
 def test_positions_valid_only_under_the_original_action_rejected_under_another() -> (
     None
 ):
-    first = compute_subset_canonicalization(_request(_dihedral_d4(), (0, 1, 2, 3)))
+    first = _run_subset(_request(_dihedral_d4(), (0, 1, 2, 3)))
     positions = first.canonical_subset.positions
     assert positions == (0, 1, 2, 3)
 
@@ -393,7 +397,7 @@ def test_positions_valid_only_under_the_original_action_rejected_under_another()
 
 
 def test_result_rejects_canonical_subset_bound_to_a_different_action() -> None:
-    result = compute_subset_canonicalization(_request(_cyclic_c3(), (2,)))
+    result = _run_subset(_request(_cyclic_c3(), (2,)))
     forged = result.model_dump()
     other_action = _symmetric_s3()
     forged["canonical_subset"] = {
@@ -421,7 +425,7 @@ def test_result_rejects_structurally_inconsistent_source_and_conclusions(
     value: list[int] | int,
     error_type: str,
 ) -> None:
-    result = compute_subset_canonicalization(_request(_cyclic_c3(), (2,)))
+    result = _run_subset(_request(_cyclic_c3(), (2,)))
     forged = result.model_dump()
     if isinstance(value, list):
         forged[field] = {
@@ -442,7 +446,7 @@ def test_result_rejects_structurally_inconsistent_source_and_conclusions(
 def test_result_model_accepts_structurally_valid_semantic_claims(
     field: str, value: int
 ) -> None:
-    result = compute_subset_canonicalization(_request(_cyclic_c3(), (2,)))
+    result = _run_subset(_request(_cyclic_c3(), (2,)))
     forged = result.model_dump()
     forged[field] = value
 

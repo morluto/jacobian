@@ -19,13 +19,33 @@ from jacobian.math.groups.actions._models import (
     SubsetCanonicalizationRequest,
     SubsetCanonicalizationResult,
 )
-from jacobian.math.groups.actions._operations import (
-    compute_burnside_count,
-    compute_cycle_index,
-    compute_element_cycles,
-    compute_polya_inventory,
-    compute_subset_canonicalization,
+from jacobian.math.groups.actions.operations import (
+    burnside_count,
+    cycle_index,
+    element_cycles,
+    polya_inventory,
+    subset_canonicalization,
 )
+
+
+def _element_cycles(request: ElementCyclesRequest) -> ElementCyclesResult:
+    return element_cycles(request.action, request.element)
+
+
+def _subset(request: SubsetCanonicalizationRequest) -> SubsetCanonicalizationResult:
+    return subset_canonicalization(request.subset)
+
+
+def _cycle_index(request: CycleIndexRequest) -> CycleIndexResult:
+    return cycle_index(request.action)
+
+
+def _burnside(request: BurnsideCountRequest) -> BurnsideCountResult:
+    return burnside_count(request.action)
+
+
+def _polya(request: PolyaInventoryRequest) -> PolyaInventoryResult:
+    return polya_inventory(request.action, request.colors)
 
 
 def _op[
@@ -71,7 +91,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "and count, and support set.",
         ElementCyclesRequest,
         ElementCyclesResult,
-        compute_element_cycles,
+        _element_cycles,
         "algebra",
         "group",
         "permutation",
@@ -98,7 +118,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "subset-orbit and setwise-stabilizer sizes.",
         SubsetCanonicalizationRequest,
         SubsetCanonicalizationResult,
-        compute_subset_canonicalization,
+        _subset,
         "algebra",
         "group",
         "permutation",
@@ -131,7 +151,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "exact cycle-type multiplicity table.",
         CycleIndexRequest,
         CycleIndexResult,
-        compute_cycle_index,
+        _cycle_index,
         "algebra",
         "group",
         "permutation",
@@ -155,7 +175,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "per-element fixed-point contribution table.",
         BurnsideCountRequest,
         BurnsideCountResult,
-        compute_burnside_count,
+        _burnside,
         "algebra",
         "group",
         "permutation",
@@ -179,7 +199,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "colour-multiplicity monomial to its orbit count.",
         PolyaInventoryRequest,
         PolyaInventoryResult,
-        compute_polya_inventory,
+        _polya,
         "algebra",
         "group",
         "permutation",

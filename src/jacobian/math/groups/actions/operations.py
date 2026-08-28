@@ -6,16 +6,11 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.actions._models import (
     MAX_GROUP_ORDER,
     ActionBoundSubset,
-    BurnsideCountRequest,
     BurnsideCountResult,
-    CycleIndexRequest,
     CycleIndexResult,
-    ElementCyclesRequest,
     ElementCyclesResult,
     FinitePermutationAction,
-    PolyaInventoryRequest,
     PolyaInventoryResult,
-    SubsetCanonicalizationRequest,
     SubsetCanonicalizationResult,
 )
 
@@ -256,16 +251,16 @@ def _polya_inventory_data(
     return degree, tuple(terms)
 
 
-def compute_element_cycles(
-    request: ElementCyclesRequest,
+def element_cycles(
+    action: FinitePermutationAction, element: int
 ) -> ElementCyclesResult:
     """Compute the cycle decomposition of one group element."""
     perm, cycles, lengths, cycle_type, fixed, support = _element_cycles_data(
-        request.action, request.element
+        action, element
     )
     return ElementCyclesResult._from_kernel(
-        request.action,
-        request.element,
+        action,
+        element,
         perm,
         cycles,
         lengths,
@@ -275,16 +270,16 @@ def compute_element_cycles(
     )
 
 
-def compute_subset_canonicalization(
-    request: SubsetCanonicalizationRequest,
+def subset_canonicalization(
+    subset: ActionBoundSubset,
 ) -> SubsetCanonicalizationResult:
     """Canonicalize one action-bound subset under its permutation action."""
-    action = request.subset.action
+    action = subset.action
     canonical, transporter, orbit_size, stabilizer_size = _subset_canonicalization_data(
-        action, request.subset.positions
+        action, subset.positions
     )
     return SubsetCanonicalizationResult._from_kernel(
-        request.subset,
+        subset,
         ActionBoundSubset(action=action, positions=canonical),
         transporter,
         orbit_size,
@@ -292,32 +287,34 @@ def compute_subset_canonicalization(
     )
 
 
-def compute_cycle_index(request: CycleIndexRequest) -> CycleIndexResult:
+def cycle_index(action: FinitePermutationAction) -> CycleIndexResult:
     """Compute the cycle-index polynomial of the action."""
-    group_order, degree, counts = _cycle_index_data(request.action)
-    return CycleIndexResult._from_kernel(request.action, group_order, degree, counts)
+    group_order, degree, counts = _cycle_index_data(action)
+    return CycleIndexResult._from_kernel(action, group_order, degree, counts)
 
 
-def compute_burnside_count(request: BurnsideCountRequest) -> BurnsideCountResult:
+def burnside_count(action: FinitePermutationAction) -> BurnsideCountResult:
     """Compute the number of orbits under the action via Burnside's lemma."""
-    group_order, contributions, orbit_count = _burnside_data(request.action)
+    group_order, contributions, orbit_count = _burnside_data(action)
     return BurnsideCountResult._from_kernel(
-        request.action, group_order, contributions, orbit_count
+        action, group_order, contributions, orbit_count
     )
 
 
-def compute_polya_inventory(request: PolyaInventoryRequest) -> PolyaInventoryResult:
+def polya_inventory(
+    action: FinitePermutationAction, colors: int
+) -> PolyaInventoryResult:
     """Compute the Pólya enumeration inventory polynomial."""
-    degree, terms = _polya_inventory_data(request.action, request.colors)
+    degree, terms = _polya_inventory_data(action, colors)
     return PolyaInventoryResult._from_kernel(
-        request.action, request.colors, degree, terms
+        action, colors, degree, terms
     )
 
 
 __all__ = [
-    "compute_burnside_count",
-    "compute_cycle_index",
-    "compute_element_cycles",
-    "compute_polya_inventory",
-    "compute_subset_canonicalization",
+    "burnside_count",
+    "cycle_index",
+    "element_cycles",
+    "polya_inventory",
+    "subset_canonicalization",
 ]

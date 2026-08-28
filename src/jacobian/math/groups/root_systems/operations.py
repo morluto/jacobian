@@ -5,14 +5,17 @@ from __future__ import annotations
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._cartan import (
     connected_components,
-    simple_reflection,
 )
 from jacobian.math.groups.root_systems._cartan import (
     positive_roots as enumerate_positive_roots,
 )
+from jacobian.math.groups.root_systems._cartan import (
+    simple_reflection as _simple_reflection_kernel,
+)
 from jacobian.math.groups.root_systems._models import (
     MAX_POSITIVE_ROOTS,
     MAX_RANK,
+    MAX_REFLECTION_COORDINATE,
     CartanMatrixRequest,
     PositiveRootsResult,
     RootComponentData,
@@ -83,21 +86,15 @@ def _admit_cartan_finite_type(matrix: tuple[tuple[int, ...], ...]) -> None:
         ) from error
 
 
-def compute_positive_roots(request: CartanMatrixRequest) -> PositiveRootsResult:
-    """Compute all positive roots of a root system from its Cartan matrix."""
-    _admit_cartan_finite_type(request.matrix)
-    all_positive = enumerate_positive_roots(request.matrix)
-    return PositiveRootsResult._from_kernel(request, all_positive)
-
-
-def compute_root_system_data(request: CartanMatrixRequest) -> RootSystemDataResult:
-    """Compute complete root system data from a Cartan matrix."""
-    _admit_cartan_finite_type(request.matrix)
-    n = len(request.matrix)
+def root_system_data(matrix: tuple[tuple[int, ...], ...]) -> RootSystemDataResult:
+    """Compute complete root-system data from a canonical Cartan matrix."""
+    _admit_cartan_finite_type(matrix)
+    request = CartanMatrixRequest.model_construct(matrix=matrix)
+    n = len(matrix)
     simple_roots = tuple(tuple(int(i == j) for j in range(n)) for i in range(n))
-    roots = enumerate_positive_roots(request.matrix)
+    roots = enumerate_positive_roots(matrix)
     components: list[RootComponentData] = []
-    for indices in connected_components(request.matrix):
+    for indices in connected_components(matrix):
         component_roots = tuple(
             root
             for root in roots
@@ -123,6 +120,14 @@ def compute_root_system_data(request: CartanMatrixRequest) -> RootSystemDataResu
         simple_roots=simple_roots,
         components=tuple(components),
     )
+
+
+def positive_roots(matrix: tuple[tuple[int, ...], ...]) -> PositiveRootsResult:
+    """Compute all positive roots of a root system from its Cartan matrix."""
+    _admit_cartan_finite_type(matrix)
+    request = CartanMatrixRequest.model_construct(matrix=matrix)
+    all_positive = enumerate_positive_roots(matrix)
+    return PositiveRootsResult._from_kernel(request, all_positive)
 
 
 def _apply_reflection(
@@ -160,44 +165,82 @@ def _weyl_group_order(matrix: tuple[tuple[int, ...], ...]) -> int:
     generators = []
     for simple_index in range(len(matrix)):
         images = tuple(
-            root_index[simple_reflection(root, simple_index, matrix)] for root in roots
+            root_index[_simple_reflection_kernel(root, simple_index, matrix)]
+            for root in roots
         )
         generators.append(Permutation(images))
     return int(PermutationGroup(*generators).order())
 
 
-def compute_simple_reflection(
-    request: SimpleReflectionRequest,
+def simple_reflection(
+    matrix: tuple[tuple[int, ...], ...],
+    vector: tuple[int, ...],
+    simple_index: int,
 ) -> SimpleReflectionResult:
     """Apply a simple reflection to a root lattice vector."""
-    _admit_cartan_finite_type(request.matrix)
-    rank = len(request.matrix)
-    if request.simple_index >= rank:
+    _admit_cartan_finite_type(matrix)
+    rank = len(matrix)
+    if type(simple_index) is not int or simple_index < 0 or simple_index >= rank:
         raise OperationDomainValidationError(
             location=("simple_index",),
             code="root_system.simple_index_out_of_range",
             message="simple_index out of range",
         )
-    if len(request.vector) != rank:
+    if len(vector) != rank:
         raise OperationDomainValidationError(
             location=("vector",),
             code="root_system.vector_length_mismatch",
             message="vector length must match rank",
         )
+    if any(
+        type(coordinate) is not int or abs(coordinate) > MAX_REFLECTION_COORDINATE
+        for coordinate in vector
+    ):
+        raise OperationDomainValidationError(
+            location=("vector",),
+            code="root_system.vector_coordinate_out_of_range",
+            message="vector coordinates exceed the bounded root-lattice axis",
+        )
     reflected = tuple(
         _apply_reflection(
-            [list(row) for row in request.matrix],
-            list(request.vector),
-            request.simple_index,
+            [list(row) for row in matrix],
+            list(vector),
+            simple_index,
         )
+    )
+    request = SimpleReflectionRequest.model_construct(
+        matrix=matrix, vector=vector, simple_index=simple_index
     )
     return SimpleReflectionResult._from_kernel(request, reflected)
 
 
-def compute_weyl_group_order(request: CartanMatrixRequest) -> WeylGroupOrderResult:
+def weyl_group_order(matrix: tuple[tuple[int, ...], ...]) -> WeylGroupOrderResult:
     """Compute the exact order of a finite Weyl group without enumeration."""
-    _admit_cartan_finite_type(request.matrix)
-    return WeylGroupOrderResult._from_kernel(request, _weyl_group_order(request.matrix))
+    _admit_cartan_finite_type(matrix)
+    request = CartanMatrixRequest.model_construct(matrix=matrix)
+    return WeylGroupOrderResult._from_kernel(request, _weyl_group_order(matrix))
+
+
+def compute_positive_roots(request: CartanMatrixRequest) -> PositiveRootsResult:
+    """Project a wire request onto the native positive-roots operation."""
+    return positive_roots(request.matrix)
+
+
+def compute_root_system_data(request: CartanMatrixRequest) -> RootSystemDataResult:
+    """Project a wire request onto the native root-system operation."""
+    return root_system_data(request.matrix)
+
+
+def compute_simple_reflection(
+    request: SimpleReflectionRequest,
+) -> SimpleReflectionResult:
+    """Project a wire request onto the native simple-reflection operation."""
+    return simple_reflection(request.matrix, request.vector, request.simple_index)
+
+
+def compute_weyl_group_order(request: CartanMatrixRequest) -> WeylGroupOrderResult:
+    """Project a wire request onto the native Weyl-group operation."""
+    return weyl_group_order(request.matrix)
 
 
 __all__ = [
@@ -205,4 +248,8 @@ __all__ = [
     "compute_root_system_data",
     "compute_simple_reflection",
     "compute_weyl_group_order",
+    "positive_roots",
+    "root_system_data",
+    "simple_reflection",
+    "weyl_group_order",
 ]

@@ -14,6 +14,7 @@ from jacobian.math.groups.cohomology._models import (
     MAX_COCHAIN_DEGREE,
     MAX_COCHAIN_TENSOR_ELEMENTS,
     MAX_GROUP_ORDER,
+    MAX_PRIME,
     CohomologyGroup,
     GroupCohomologyRequest,
     GroupCohomologyResult,
@@ -35,11 +36,29 @@ def _admitted_max_degree(order: int) -> int:
 def _admit_request(request: GroupCohomologyRequest) -> list[tuple[int, ...]]:
     from sympy import isprime
 
+    if type(request.prime) is not int or request.prime < 2 or request.prime > MAX_PRIME:
+        raise OperationDomainValidationError(
+            location=("prime",),
+            code="group_cohomology.prime_out_of_range",
+            message=f"prime must be an integer between 2 and {MAX_PRIME}",
+        )
     if not isprime(request.prime):
         raise OperationDomainValidationError(
             location=("prime",),
             code="group_cohomology.prime_not_prime",
             message="prime must be a prime integer",
+        )
+    if (
+        type(request.max_degree) is not int
+        or request.max_degree < 0
+        or request.max_degree > MAX_COCHAIN_DEGREE
+    ):
+        raise OperationDomainValidationError(
+            location=("max_degree",),
+            code="group_cohomology.max_degree_out_of_range",
+            message=(
+                f"max_degree must be an integer between 0 and {MAX_COCHAIN_DEGREE}"
+            ),
         )
     elements = _enumerate_group_elements(request.group)
     order = len(elements)
@@ -177,7 +196,11 @@ def _cohomology_profile(
     return tuple(groups), group_order
 
 
-def compute_group_cohomology(request: GroupCohomologyRequest) -> GroupCohomologyResult:
+def group_cohomology(
+    group: PermutationGroup,
+    prime: int,
+    max_degree: int,
+) -> GroupCohomologyResult:
     """Compute H^n(G, GF(p)) with trivial action via the exact unnormalized
     inhomogeneous bar complex.
 
@@ -186,9 +209,17 @@ def compute_group_cohomology(request: GroupCohomologyRequest) -> GroupCohomology
     coboundaries are materialized exactly; each ``betti`` number is
     dim ker(delta^n) - rank(im(delta^{n-1})) = dim H^n(G, GF(p)).
     """
+    request = GroupCohomologyRequest.model_construct(
+        group=group, prime=prime, max_degree=max_degree
+    )
     elements = _admit_request(request)
     groups, group_order = _cohomology_profile(request, elements)
     return GroupCohomologyResult._from_kernel(request, groups, group_order)
 
 
-__all__ = ["compute_group_cohomology"]
+def compute_group_cohomology(request: GroupCohomologyRequest) -> GroupCohomologyResult:
+    """Project a wire request onto the native group-cohomology operation."""
+    return group_cohomology(request.group, request.prime, request.max_degree)
+
+
+__all__ = ["compute_group_cohomology", "group_cohomology"]

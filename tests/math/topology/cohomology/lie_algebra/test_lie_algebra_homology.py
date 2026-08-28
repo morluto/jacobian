@@ -14,9 +14,11 @@ from jacobian.math.topology.cohomology.lie_algebra._models import (
     LieHomologyRequest,
     LieHomologyResult,
 )
-from jacobian.math.topology.cohomology.lie_algebra._operations import (
+from jacobian.math.topology.cohomology.lie_algebra.operations import (
+    chevalley_eilenberg_complex,
     compute_chevalley_eilenberg_complex,
     compute_lie_homology,
+    lie_homology,
 )
 
 
@@ -68,6 +70,15 @@ class TestChevalleyEilenbergComplex:
         )
         assert result.dimension == 2
         assert result.group_dimensions == (1, 2, 1)
+
+    def test_native_surface_accepts_canonical_lie_algebra_value(self) -> None:
+        g = LieAlgebra(
+            prime=2,
+            dimension=1,
+            structure_constants=(((0,),),),
+        )
+        assert chevalley_eilenberg_complex(g).lie_algebra is g
+        assert tuple(group.betti for group in lie_homology(g).groups) == (1, 1)
 
     def test_3d_abelian(self) -> None:
         """CE complex of a 3D abelian Lie algebra."""

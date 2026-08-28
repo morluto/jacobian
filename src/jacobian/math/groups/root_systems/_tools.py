@@ -14,7 +14,7 @@ from jacobian.math.groups.root_systems._models import (
     SimpleReflectionResult,
     WeylGroupOrderResult,
 )
-from jacobian.math.groups.root_systems._operations import (
+from jacobian.math.groups.root_systems.operations import (
     compute_root_system_data,
     compute_simple_reflection,
     compute_weyl_group_order,

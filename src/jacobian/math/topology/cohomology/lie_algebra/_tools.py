@@ -12,7 +12,7 @@ from jacobian.math.topology.cohomology.lie_algebra._models import (
     LieHomologyRequest,
     LieHomologyResult,
 )
-from jacobian.math.topology.cohomology.lie_algebra._operations import (
+from jacobian.math.topology.cohomology.lie_algebra.operations import (
     compute_chevalley_eilenberg_complex,
     compute_lie_homology,
 )

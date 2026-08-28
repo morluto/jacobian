@@ -13,7 +13,10 @@ from jacobian.math.groups.cohomology._models import (
     GroupCohomologyRequest,
     GroupCohomologyResult,
 )
-from jacobian.math.groups.cohomology._operations import compute_group_cohomology
+from jacobian.math.groups.cohomology.operations import (
+    compute_group_cohomology,
+    group_cohomology,
+)
 
 
 class TestGroupCohomology:
@@ -28,6 +31,12 @@ class TestGroupCohomology:
         )
         result = compute_group_cohomology(req)
         assert result.groups[0].betti == 1
+
+    def test_native_surface_accepts_canonical_group_value(self) -> None:
+        group = PermutationGroup(degree=2, generators=((1, 0),))
+        result = group_cohomology(group, 2, 2)
+        assert result.request.group is group
+        assert result.group_order == 2
 
     def test_group_order(self) -> None:
         """The result should report the group order."""

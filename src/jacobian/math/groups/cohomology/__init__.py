@@ -1,3 +1,5 @@
 """Group cohomology operations."""
 
-__all__: list[str] = []
+from jacobian.math.groups.cohomology.operations import group_cohomology
+
+__all__ = ["group_cohomology"]

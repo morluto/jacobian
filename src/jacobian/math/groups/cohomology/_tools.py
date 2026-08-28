@@ -10,7 +10,7 @@ from jacobian.math.groups.cohomology._models import (
     GroupCohomologyRequest,
     GroupCohomologyResult,
 )
-from jacobian.math.groups.cohomology._operations import compute_group_cohomology
+from jacobian.math.groups.cohomology.operations import compute_group_cohomology
 
 
 def group_cohomology_operation[

@@ -89,8 +89,8 @@ def _ce_differentials(
     return tuple(differentials)
 
 
-def compute_chevalley_eilenberg_complex(
-    request: ChevalleyEilenbergComplexRequest,
+def chevalley_eilenberg_complex(
+    lie_algebra: LieAlgebra,
 ) -> ChevalleyEilenbergComplexResult:
     """Compute the Chevalley-Eilenberg chain complex for a Lie algebra with trivial coefficients.
 
@@ -106,11 +106,10 @@ def compute_chevalley_eilenberg_complex(
     the chain complex is purely determined by the Lie bracket structure
     constants, which the request model validates as a Lie algebra.
     """
-    g = request.lie_algebra
     return ChevalleyEilenbergComplexResult._from_kernel(
-        g,
-        _chain_group_dimensions(g.dimension),
-        _ce_differentials(g),
+        lie_algebra,
+        _chain_group_dimensions(lie_algebra.dimension),
+        _ce_differentials(lie_algebra),
     )
 
 
@@ -147,21 +146,33 @@ def lie_homology_groups(lie_algebra: LieAlgebra) -> tuple[LieHomologyGroup, ...]
     return tuple(groups)
 
 
-def compute_lie_homology(request: LieHomologyRequest) -> LieHomologyResult:
+def lie_homology(lie_algebra: LieAlgebra) -> LieHomologyResult:
     """Compute Lie algebra homology with trivial coefficients.
 
     H_p(g, K) = ker(d_p) / im(d_{p+1})
     betti_p = dim(C_p) - rank(d_p) - rank(d_{p+1})
     """
-    g = request.lie_algebra
-
     return LieHomologyResult._from_kernel(
-        g,
-        lie_homology_groups(g),
+        lie_algebra,
+        lie_homology_groups(lie_algebra),
     )
 
 
+def compute_chevalley_eilenberg_complex(
+    request: ChevalleyEilenbergComplexRequest,
+) -> ChevalleyEilenbergComplexResult:
+    """Project a wire request onto the native CE-complex operation."""
+    return chevalley_eilenberg_complex(request.lie_algebra)
+
+
+def compute_lie_homology(request: LieHomologyRequest) -> LieHomologyResult:
+    """Project a wire request onto the native Lie-homology operation."""
+    return lie_homology(request.lie_algebra)
+
+
 __all__ = [
+    "chevalley_eilenberg_complex",
     "compute_chevalley_eilenberg_complex",
     "compute_lie_homology",
+    "lie_homology",
 ]

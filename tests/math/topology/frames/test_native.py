@@ -1,5 +1,7 @@
 """Native finite-frame API and wire/native parity tests."""
 
+from collections.abc import Callable
+
 import pytest
 
 from jacobian.catalog.catalog import Catalog
@@ -50,7 +52,7 @@ def test_frame_tools_are_discoverable_and_dispatch_matches_native() -> None:
 
 @pytest.mark.parametrize("operation", [coherence, frame_potential])
 def test_native_frame_operations_keep_semantic_admission(
-    operation,
+    operation: Callable[[VectorFamily], object],
 ) -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         operation(VectorFamily(vectors=((1, 0), (2, 0))))

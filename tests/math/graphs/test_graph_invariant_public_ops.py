@@ -1,9 +1,12 @@
+from typing import Any
+
+from jacobian.catalog.models import MathTool
 from jacobian.math.graphs.optimization._invariants import (
     EXACT_GRAPH_INVARIANT_OPERATIONS,
 )
 
 
-def _operation(operation_id: str):
+def _operation(operation_id: str) -> MathTool[Any, Any]:
     return next(
         operation
         for operation in EXACT_GRAPH_INVARIANT_OPERATIONS

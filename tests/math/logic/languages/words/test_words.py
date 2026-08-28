@@ -108,7 +108,6 @@ def test_factor_result_is_complete_and_bound_to_the_request() -> None:
     assert result.multiplicities == (2, 1, 1)
     assert result.first_occurrence == (0, 1, 2)
     assert result.distinct_count == 3
-    assert result.complete is True
 
     payload = result.model_dump()
     payload["factors"] = (("b", "b"), *payload["factors"][1:])
@@ -232,7 +231,6 @@ def test_fibonacci_dependency_graph_retains_positions_and_source() -> None:
         ("0", "1", 1, (1,)),
         ("1", "0", 1, (0,)),
     )
-    assert result.complete is True
 
     payload = result.model_dump()
     payload["graph"]["edges"] = payload["graph"]["edges"][:-1]

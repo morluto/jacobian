@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import ceil, log10
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -175,7 +175,6 @@ class SOSDecompositionCheckResult(StrictModel):
     polynomial: RationalPolynomial
     summands: tuple[RationalPolynomial, ...] = Field(max_length=64)
     computed_sum: RationalPolynomial
-    method: Literal["EXACT_COEFFICIENT_IDENTITY"] = "EXACT_COEFFICIENT_IDENTITY"
 
     @model_validator(mode="after")
     def bind_sos(self) -> Self:
@@ -206,7 +205,6 @@ class SOSDecompositionCheckResult(StrictModel):
             polynomial=polynomial,
             summands=summands,
             computed_sum=computed_sum,
-            method="EXACT_COEFFICIENT_IDENTITY",
         )
 
 
@@ -262,7 +260,6 @@ class GramCertificateResult(StrictModel):
         min_length=1, max_length=MAX_GRAM_DIMENSION
     )
     gram_matrix: RationalMatrix
-    method: Literal["EXACT_RATIONAL_ARITHMETIC"] = "EXACT_RATIONAL_ARITHMETIC"
 
     @model_validator(mode="after")
     def bind_invariants(self) -> Self:
@@ -295,7 +292,6 @@ class GramCertificateResult(StrictModel):
             polynomial=polynomial,
             monomial_basis=monomial_basis,
             gram_matrix=gram_matrix,
-            method="EXACT_RATIONAL_ARITHMETIC",
         )
 
 

@@ -71,15 +71,12 @@ class HyperplaneArrangementResult(StrictModel):
     hyperplane_count: int = Field(ge=1)
     ambient_dimension: int = Field(ge=1)
     is_central: bool
-    method: str = "ARRANGEMENT_CONSTRUCTION"
 
 
 class CharacteristicPolynomialResult(StrictModel):
     coefficients: tuple[str, ...]
     degree: int = Field(ge=0)
-    method: str = "SYMPY_CHARACTERISTIC_POLYNOMIAL"
 
 
 class ChamberCountResult(StrictModel):
     chamber_count: int = Field(ge=1)
-    method: str = "EXACT_FORMULA"

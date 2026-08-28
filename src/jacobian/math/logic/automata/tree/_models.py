@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -41,8 +41,6 @@ class TreeRunResult(TreeRunRequest):
     root_states: tuple[int, ...] = Field(max_length=64)
     state_chart: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]
     node_count: int = Field(ge=1, le=4096)
-    complete: Literal[True] = True
-    method: Literal["BOTTOM_UP_REACHABLE_STATE_SETS"] = "BOTTOM_UP_REACHABLE_STATE_SETS"
 
     @model_validator(mode="after")
     def require_canonical_root_states(self) -> Self:
@@ -91,10 +89,6 @@ class AcceptedTreeCountResult(AcceptedTreeCountRequest):
 
     tree_size: int = Field(ge=1, le=100)
     count: CanonicalInteger
-    complete: Literal[True] = True
-    method: Literal["ON_THE_FLY_SUBSET_DYNAMIC_PROGRAMMING"] = (
-        "ON_THE_FLY_SUBSET_DYNAMIC_PROGRAMMING"
-    )
     estimated_work_bound: int = Field(ge=0, le=2_000_000)
 
     @model_validator(mode="after")

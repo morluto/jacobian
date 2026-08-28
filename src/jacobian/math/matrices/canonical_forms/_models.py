@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from math import gcd
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -1352,7 +1352,6 @@ class MatrixPolynomialEvaluationResult(StrictModel):
         ge=0,
         le=MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS // MATRIX_POLYNOMIAL_EVALUATION_PASSES,
     )
-    method: Literal["HORNER_OVER_QQ"] = "HORNER_OVER_QQ"
 
     @model_validator(mode="after")
     def require_structural_accounting(self) -> Self:
@@ -1436,7 +1435,6 @@ class MinimalPolynomialResult(StrictModel):
     minimal_polynomial: MonicPolynomial
     characteristic_polynomial: MonicPolynomial
     degree: int = Field(ge=1, le=MAX_CANONICAL_FORM_DIMENSION)
-    method: Literal["KRYLOV_NULLSPACE"] = "KRYLOV_NULLSPACE"
 
     @model_validator(mode="after")
     def require_structural_metadata(self) -> Self:
@@ -1488,7 +1486,6 @@ class RationalCanonicalFormResult(StrictModel):
     characteristic_polynomial: MonicPolynomial
     minimal_polynomial: MonicPolynomial
     total_block_size: int = Field(ge=1, le=MAX_CANONICAL_FORM_DIMENSION)
-    method: Literal["SMITH_NORMAL_FORM"] = "SMITH_NORMAL_FORM"
 
     @model_validator(mode="after")
     def require_structural_metadata(self) -> Self:
@@ -1542,7 +1539,6 @@ class PrimaryDecompositionResult(StrictModel):
     matrix: SquareMatrixRequest
     components: tuple[MonicPolynomial, ...] = Field(min_length=1)
     minimal_polynomial: MonicPolynomial
-    method: Literal["FACTOR_LCM"] = "FACTOR_LCM"
 
     @model_validator(mode="after")
     def require_structural_metadata(self) -> Self:

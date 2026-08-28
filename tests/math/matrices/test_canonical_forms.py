@@ -330,16 +330,6 @@ def test_characteristic_equals_product_of_invariant_factors() -> None:
     ]
 
 
-def test_method_tags() -> None:
-    req = _mat(
-        (_pair("0", "1"), _pair("1", "1")),
-        (_pair("0", "1"), _pair("0", "1")),
-    )
-    assert compute_minimal_polynomial(req).method == "KRYLOV_NULLSPACE"
-    assert compute_rational_canonical_form(req).method == "SMITH_NORMAL_FORM"
-    assert compute_primary_decomposition(req).method == "FACTOR_LCM"
-
-
 def test_smith_normal_form_path_handles_larger_matrices() -> None:
     """A 6x6 diagonal matrix uses the maintained Smith form, not minor enumeration."""
     req = _diagonal("2", "3", "5", "7", "11", "13")

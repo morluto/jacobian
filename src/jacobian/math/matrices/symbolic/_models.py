@@ -905,7 +905,6 @@ class SymbolicDeterminantResult(StrictModel):
     """The exact determinant in the matrix's rational-function field."""
 
     determinant: RationalFunction
-    method: Literal["SYMPY_BAREISS"] = "SYMPY_BAREISS"
 
 
 class SymbolicRankResult(StrictModel):
@@ -913,7 +912,6 @@ class SymbolicRankResult(StrictModel):
 
     rank: int = Field(ge=0, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
     pivot_columns: tuple[int, ...] = Field(max_length=MAX_SYMBOLIC_MATRIX_DIMENSION)
-    method: Literal["EXACT_SYMBOLIC_ROW_REDUCTION"] = "EXACT_SYMBOLIC_ROW_REDUCTION"
 
 
 class SymbolicCharacteristicPolynomialResult(StrictModel):
@@ -956,7 +954,6 @@ class SymbolicEigenvaluesResult(StrictModel):
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION + 1,
     )
     degree: int | None = Field(default=None, ge=1, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
-    convention: Literal["SYMPY_EIGENVALS"] = "SYMPY_EIGENVALS"
 
     @model_validator(mode="after")
     def require_representation_consistency(self) -> Self:

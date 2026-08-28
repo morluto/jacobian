@@ -358,7 +358,6 @@ IdealExecutionOutcome = Literal[
 class IdealRadicalResult(StrictModel):
     outcome: IdealExecutionOutcome
     radical: RationalPolynomialIdeal | None = None
-    method: Literal["SINGULAR_RADICAL"] = "SINGULAR_RADICAL"
     backend_version: str | None = None
     detail: str | None = None
 
@@ -382,13 +381,11 @@ class IdealRadicalResult(StrictModel):
 
 class IdealRadicalMembershipResult(StrictModel):
     in_radical: bool
-    method: Literal["RABINOWITSCH"] = "RABINOWITSCH"
 
 
 class IdealQuotientResult(StrictModel):
     outcome: IdealExecutionOutcome
     quotient: RationalPolynomialIdeal | None = None
-    method: Literal["SINGULAR_QUOTIENT"] = "SINGULAR_QUOTIENT"
     backend_version: str | None = None
     detail: str | None = None
 
@@ -413,7 +410,6 @@ class IdealQuotientResult(StrictModel):
 class IdealSaturationResult(StrictModel):
     outcome: IdealExecutionOutcome
     saturation: RationalPolynomialIdeal | None = None
-    method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
     backend_version: str | None = None
     detail: str | None = None
 
@@ -471,7 +467,6 @@ class IdealMinimalPrimesResult(StrictModel):
     request: IdealMinimalPrimesRequest
     outcome: IdealExecutionOutcome
     components: tuple[RationalPolynomialIdeal, ...] | None = None
-    method: Literal["SINGULAR_MIN_ASS_GTZ"] = "SINGULAR_MIN_ASS_GTZ"
     backend_version: str | None = None
     detail: str | None = None
 
@@ -602,7 +597,6 @@ class GroebnerBasisResult(StrictModel):
     generator_count: StrictInt = Field(default=0, ge=0, le=MAX_OUTPUT_GENERATORS)
     monomial_order: Literal["lex", "grlex", "grevlex"]
     detail: str | None = None
-    backend: Literal["SYMPY"] = "SYMPY"
 
     @model_validator(mode="after")
     def require_outcome_shape(self) -> Self:
@@ -810,7 +804,6 @@ class EliminationIdealResult(StrictModel):
     outcome: EliminationExecutionOutcome = "COMPUTED"
     elimination_ideal: RationalPolynomialIdeal | None = None
     eliminated_variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
-    backend: Literal["SYMPY"] = "SYMPY"
     detail: str | None = None
 
     @model_validator(mode="after")

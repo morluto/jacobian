@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -112,7 +112,6 @@ class SturmChainResult(StrictModel):
 
     chain: tuple[UnivariatePolynomial, ...] = Field(min_length=1)
     degree: int = Field(ge=1, le=MAX_POLYNOMIAL_DEGREE)
-    method: Literal["SYMPY_STURM"] = "SYMPY_STURM"
 
 
 class RootCountResult(StrictModel):
@@ -122,7 +121,6 @@ class RootCountResult(StrictModel):
     root_count: int = Field(ge=0)
     lower: CanonicalRational
     upper: CanonicalRational
-    method: Literal["STURM_THEOREM"] = "STURM_THEOREM"
 
 
 __all__ = [

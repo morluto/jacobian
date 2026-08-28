@@ -84,7 +84,6 @@ class GroupOrderResult(StrictModel):
     """The exact order of a finite permutation group."""
 
     order: CanonicalInteger
-    method: Literal["SYMPY_SCHREIER_SIMS"] = "SYMPY_SCHREIER_SIMS"
 
 
 class GroupElementOrderRequest(StrictModel):
@@ -213,7 +212,6 @@ class GroupConjugacyClassesResult(StrictModel):
         min_length=1,
         max_length=MAX_CONJUGACY_CLASSES_GROUP_ORDER,
     )
-    method: Literal["SYMPY_CONJUGACY_CLASSES"] = "SYMPY_CONJUGACY_CLASSES"
 
     @model_validator(mode="after")
     def require_conjugacy_class_partition(self) -> Self:
@@ -223,7 +221,7 @@ class GroupConjugacyClassesResult(StrictModel):
 
     @classmethod
     def _from_kernel(cls, classes: tuple[ConjugacyClass, ...]) -> Self:
-        return cls.model_construct(classes=classes, method="SYMPY_CONJUGACY_CLASSES")
+        return cls.model_construct(classes=classes)
 
 
 def _require_canonical_partition(
@@ -430,7 +428,6 @@ class GroupStabilizerResult(StrictModel):
             "without reshaping or synthesizing an identity."
         )
     )
-    method: Literal["SYMPY_STABILIZER"] = "SYMPY_STABILIZER"
 
     @model_validator(mode="after")
     def require_valid_stabilizer(self) -> Self:
@@ -509,7 +506,6 @@ class GroupSubgroupLatticeResult(StrictModel):
     )
     subgroups: tuple[SubgroupEntry, ...] | None = None
     subgroup_count: int = Field(default=0, ge=0)
-    method: Literal["SYMPY_SUBGROUPS"] = "SYMPY_SUBGROUPS"
     detail: str | None = None
 
     @model_validator(mode="before")

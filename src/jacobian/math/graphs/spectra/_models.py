@@ -77,7 +77,6 @@ class GraphSpectrumResult(StrictModel):
     matrix_convention: Literal["ADJACENCY", "LAPLACIAN"]
     eigenvalues: tuple[str, ...]
     multiplicities: tuple[int, ...]
-    convention: Literal["SYMPY_EIGENVALS"] = "SYMPY_EIGENVALS"
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:

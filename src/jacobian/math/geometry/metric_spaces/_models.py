@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -105,7 +105,6 @@ class MetricProfileResult(StrictModel):
     eccentricities: tuple[EccentricityResult, ...] = Field(min_length=2)
     centers: tuple[int, ...] = Field(min_length=1)
     periphery: tuple[int, ...] = Field(min_length=0)
-    method: Literal["DIRECT_DISTANCE_MATRIX_SCAN"] = "DIRECT_DISTANCE_MATRIX_SCAN"
 
 
 class BallRequest(StrictModel):
@@ -131,7 +130,6 @@ class BallResult(StrictModel):
     center: int = Field(ge=0, le=MAX_POINTS - 1)
     radius: int = Field(ge=0, le=MAX_DISTANCE)
     points: tuple[int, ...] = Field(min_length=1)
-    method: Literal["DIRECT_SCAN"] = "DIRECT_SCAN"
 
 
 class GromovHyperbolicityRequest(StrictModel):
@@ -144,4 +142,3 @@ class GromovHyperbolicityResult(StrictModel):
     """The four-point Gromov hyperbolicity (max delta over all quadruples)."""
 
     hyperbolicity: CanonicalRational
-    method: Literal["FOUR_POINT_BRUTE_FORCE"] = "FOUR_POINT_BRUTE_FORCE"

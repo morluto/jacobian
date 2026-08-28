@@ -79,14 +79,11 @@ class FirstSetsRequest(StrictModel):
 
 class SymbolProfilesResult(StrictModel):
     nullable: tuple[bool, ...]
-    method: str = "FIXED_POINT_ITERATION"
 
 
 class DependencyGraphResult(StrictModel):
     edges: tuple[tuple[str, str], ...]
-    method: str = "RULE_BODY_DEPENDENCY"
 
 
 class FirstSetsResult(StrictModel):
     first_sets: tuple[tuple[str, ...], ...]
-    method: str = "FIXED_POINT_ITERATION"

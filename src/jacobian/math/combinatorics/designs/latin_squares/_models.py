@@ -105,15 +105,12 @@ class OrthogonalityRequest(StrictModel):
 
 class LatinSquareCheckResult(StrictModel):
     is_latin: bool
-    method: str = "ROW_COLUMN_SYMBOL_UNIQUENESS"
 
 
 class OrthogonalityResult(StrictModel):
     is_orthogonal: bool
     pair_count: int = Field(ge=0)
-    method: str = "ORDERED_PAIR_UNIQUENESS"
 
 
 class LatinSquareTransposeResult(StrictModel):
     transposed: tuple[tuple[int, ...], ...]
-    method: str = "MATRIX_TRANSPOSE"

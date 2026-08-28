@@ -109,7 +109,6 @@ class GaloisFactorResult(StrictModel):
     distinct_factor_count: int = Field(ge=1, le=MAX_FACTOR_DEGREE, strict=True)
     factor_count: int = Field(ge=1, le=MAX_FACTOR_DEGREE, strict=True)
     is_irreducible: bool
-    method: str = "SYMPY_FACTOR_MOD_P"
 
     @classmethod
     def _from_kernel(
@@ -181,7 +180,6 @@ class FrobeniusCycleResult(StrictModel):
     cycle_type: tuple[PositiveFactorDegree, ...]
     degree: int = Field(ge=1, le=MAX_FACTOR_DEGREE, strict=True)
     is_irreducible: bool
-    method: str = "FACTOR_DEGREE_SUMMARY"
 
     @model_validator(mode="after")
     def require_canonical_partition(self) -> Self:
@@ -236,7 +234,6 @@ class GaloisGroupResult(StrictModel):
     order: int = Field(ge=1)
     degree: int = Field(ge=1, le=MAX_GALOIS_GROUP_DEGREE)
     is_solvable: bool
-    method: str = "SYMPY_GALOIS_GROUP"
 
     @classmethod
     def _from_kernel(
@@ -271,7 +268,6 @@ class GaloisGroupResult(StrictModel):
 class SolvableResult(StrictModel):
     solvable_by_radicals: bool
     group: FinitePermutationGroup
-    method: str = "GALOIS_GROUP_SOLVABILITY"
 
     @classmethod
     def _from_kernel(

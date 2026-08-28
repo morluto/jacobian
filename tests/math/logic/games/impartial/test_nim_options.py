@@ -48,7 +48,6 @@ def test_nim_options_deduplicate_equal_heaps_and_retain_all_source_indices() -> 
     )
     assert result.raw_candidate_count == 4
     assert result.distinct_option_count == 3
-    assert result.complete is True
 
 
 @pytest.mark.parametrize("heaps", ((), (0,), (0, 0, 0)))

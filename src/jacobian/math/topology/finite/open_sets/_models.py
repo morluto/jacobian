@@ -93,10 +93,6 @@ class SpecializationPreorderResult(SpecializationPreorderRequest):
     orientation: Literal["RELATION_X_Y_MEANS_X_IN_CLOSURE_OF_SINGLETON_Y"] = (
         "RELATION_X_Y_MEANS_X_IN_CLOSURE_OF_SINGLETON_Y"
     )
-    complete: Literal[True] = True
-    method: Literal["EXACT_OPEN_NEIGHBORHOOD_CONTAINMENT"] = (
-        "EXACT_OPEN_NEIGHBORHOOD_CONTAINMENT"
-    )
 
     @model_validator(mode="after")
     def require_relation_shape(self) -> Self:
@@ -120,8 +116,6 @@ class SpecializationPreorderResult(SpecializationPreorderRequest):
             topology=request.topology,
             relation=relation,
             orientation="RELATION_X_Y_MEANS_X_IN_CLOSURE_OF_SINGLETON_Y",
-            complete=True,
-            method="EXACT_OPEN_NEIGHBORHOOD_CONTAINMENT",
         )
 
 
@@ -132,10 +126,6 @@ class ConnectedComponentsRequest(StrictModel):
 class ConnectedComponentsResult(ConnectedComponentsRequest):
     components: tuple[tuple[int, ...], ...]
     component_count: int = Field(ge=1)
-    complete: Literal[True] = True
-    method: Literal["UNDIRECTED_SPECIALIZATION_COMPARABILITY"] = (
-        "UNDIRECTED_SPECIALIZATION_COMPARABILITY"
-    )
 
     @model_validator(mode="after")
     def require_component_partition_shape(self) -> Self:
@@ -173,8 +163,6 @@ class ConnectedComponentsResult(ConnectedComponentsRequest):
             topology=request.topology,
             components=components,
             component_count=len(components),
-            complete=True,
-            method="UNDIRECTED_SPECIALIZATION_COMPARABILITY",
         )
 
 
@@ -202,7 +190,6 @@ class ContinuityResult(ContinuityRequest):
     is_continuous: bool
     violating_open_set: tuple[int, ...] | None
     violating_preimage: tuple[int, ...] | None
-    method: Literal["EXACT_OPEN_SET_PREIMAGE_CHECK"] = "EXACT_OPEN_SET_PREIMAGE_CHECK"
 
     @model_validator(mode="after")
     def require_witness_shape(self) -> Self:
@@ -249,7 +236,6 @@ class ContinuityResult(ContinuityRequest):
             is_continuous=is_continuous,
             violating_open_set=violating_open_set,
             violating_preimage=violating_preimage,
-            method="EXACT_OPEN_SET_PREIMAGE_CHECK",
         )
 
 
@@ -260,11 +246,9 @@ class BeatPointsRequest(StrictModel):
 class BeatPointsResult(BeatPointsRequest):
     down_beat_points: tuple[BeatPointWitness, ...]
     up_beat_points: tuple[BeatPointWitness, ...]
-    complete: Literal[True] = True
     convention: Literal["STRICT_SPECIALIZATION_ORDER_WITH_EXTREMUM_WITNESS"] = (
         "STRICT_SPECIALIZATION_ORDER_WITH_EXTREMUM_WITNESS"
     )
-    method: Literal["EXACT_STRICT_ORDER_EXTREMA"] = "EXACT_STRICT_ORDER_EXTREMA"
 
     @model_validator(mode="after")
     def require_witness_shape(self) -> Self:
@@ -302,9 +286,7 @@ class BeatPointsResult(BeatPointsRequest):
             topology=request.topology,
             down_beat_points=down_beat_points,
             up_beat_points=up_beat_points,
-            complete=True,
             convention="STRICT_SPECIALIZATION_ORDER_WITH_EXTREMUM_WITNESS",
-            method="EXACT_STRICT_ORDER_EXTREMA",
         )
 
 

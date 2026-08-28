@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -64,7 +64,6 @@ class HookLengthResult(StrictModel):
 
     hooks: tuple[tuple[int, ...], ...]
     total_product: CanonicalInteger = Field(description="Product of all hook lengths.")
-    method: Literal["HOOK_FORMULA"] = "HOOK_FORMULA"
 
 
 class StandardYoungTableauCountResult(StrictModel):
@@ -72,14 +71,12 @@ class StandardYoungTableauCountResult(StrictModel):
 
     count: CanonicalInteger = Field(description="Number of standard Young tableaux.")
     n: int = Field(ge=0, le=MAX_CANONICAL_PARTITION_SIZE)
-    method: Literal["HOOK_LENGTH_FORMULA"] = "HOOK_LENGTH_FORMULA"
 
 
 class ConjugatePartitionResult(StrictModel):
     """The conjugate (transpose) partition."""
 
     conjugate: IntegerPartition
-    method: Literal["FERRERS_TRANSPOSE"] = "FERRERS_TRANSPOSE"
 
 
 # ---------------------------------------------------------------------------

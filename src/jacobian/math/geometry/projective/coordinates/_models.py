@@ -76,13 +76,11 @@ class ChartTransitionRequest(StrictModel):
 class RationalPointConstructResult(StrictModel):
     point: RationalProjectivePoint
     scale: CanonicalRational
-    method: str = "FIRST_NONZERO_SCALE"
 
 
 class StandardChartResult(StrictModel):
     affine_point: tuple[CanonicalRational, ...]
     chart_index: int = Field(ge=0)
-    method: str = "DEHOMOGENIZATION"
 
 
 class ChartTransitionResult(StrictModel):
@@ -91,7 +89,6 @@ class ChartTransitionResult(StrictModel):
     chart_i: int = Field(ge=0)
     chart_j: int = Field(ge=0)
     projective_dimension: int = Field(ge=0, le=MAX_DIM)
-    method: str = "CHART_TRANSITION"
 
     @model_validator(mode="after")
     def require_status_consistency(self) -> Self:

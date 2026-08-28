@@ -34,7 +34,6 @@ class LevelOneModularQExpansion(StrictModel):
     coefficient_domain: Literal["QQ"] = "QQ"
     normalization: str = Field(min_length=1, max_length=96)
     q_expansion: TruncatedSeries
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
     def require_structural_named_form(self) -> Self:

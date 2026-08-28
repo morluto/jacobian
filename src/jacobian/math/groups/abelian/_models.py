@@ -197,31 +197,25 @@ class PresentationNormalizeResult(StrictModel):
     invariant_factors: tuple[int, ...]
     order: int = Field(ge=1)
     rank: int = Field(ge=0)
-    method: str = "SmithNormalForm"
 
 
 class ElementReduceResult(StrictModel):
     reduced: tuple[int, ...]
-    method: str = "MODULAR_REDUCTION"
 
 
 class ElementEqualResult(StrictModel):
     equal: bool
-    method: str = "MODULAR_COMPARISON"
 
 
 class ElementOrderResult(StrictModel):
     order: int = Field(ge=1)
-    method: str = "LCM"
 
 
 class SubgroupGeneratedResult(StrictModel):
     index: int = Field(ge=1)
     coset_representatives: tuple[tuple[int, ...], ...] = ()
-    method: str = "COSET_ENUMERATION"
 
 
 class QuotientResult(StrictModel):
     quotient_invariant_factors: tuple[int, ...] = ()
     quotient_order: int = Field(ge=1)
-    method: str = "SMITH_NORMAL_FORM"

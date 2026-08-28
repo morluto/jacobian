@@ -34,7 +34,6 @@ def test_profile_path_graph() -> None:
     assert result.radius == 1
     assert result.centers == (1,)
     assert result.periphery == (0, 2)
-    assert result.method == "DIRECT_DISTANCE_MATRIX_SCAN"
 
 
 def test_native_profile_returns_the_canonical_result() -> None:

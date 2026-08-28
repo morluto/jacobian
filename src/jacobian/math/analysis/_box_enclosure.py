@@ -185,7 +185,6 @@ class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest
     lower: ExactDyadic | None = None
     upper: ExactDyadic | None = None
     domain_failure: IntervalExpressionDomainFailure | None = None
-    method: Literal["ARB_NATURAL_INTERVAL_EXTENSION"] = "ARB_NATURAL_INTERVAL_EXTENSION"
     detail: str = Field(min_length=1, max_length=1024)
 
     @model_validator(mode="after")
@@ -237,7 +236,6 @@ class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest
             lower=lower,
             upper=upper,
             domain_failure=domain_failure,
-            method="ARB_NATURAL_INTERVAL_EXTENSION",
             detail=detail,
         )
 

@@ -195,7 +195,6 @@ class TestRun:
         assert result.state_chart == (((), (0, 1)),)
         assert result.accepted is True
         assert result.node_count == 1
-        assert result.complete is True
 
         payload = result.model_dump()
         payload["state_chart"] = (((), (0,)),)
@@ -313,7 +312,6 @@ class TestAcceptedTreeCount:
 
         assert result.count == str(comb(98, 49) // 50)
         assert result.tree_size == 99
-        assert result.complete is True
         assert result.estimated_work_bound <= 2_000_000
 
     def test_impossible_binary_tree_size_has_exact_zero_count(self) -> None:
@@ -324,7 +322,6 @@ class TestAcceptedTreeCount:
         )
 
         assert result.count == "0"
-        assert result.complete is True
 
 
 class TestReachableStates:

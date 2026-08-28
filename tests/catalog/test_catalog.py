@@ -68,9 +68,8 @@ def test_invoke_operation_runs_determinant_without_state() -> None:
 
     assert result.runtime_ms >= 0
     assert result.output is not None
-    assert set(result.output) == {"determinant", "method"}
+    assert set(result.output) == {"determinant"}
     assert result.output["determinant"] == {"num": "-2", "den": "1"}
-    assert result.output["method"] == "FRACTION_FREE_BAREISS"
 
 
 @pytest.mark.parametrize(

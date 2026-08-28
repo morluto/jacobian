@@ -110,8 +110,8 @@ def _orbit_result_fixed_frame_bytes() -> int:
     Derived from ``GraphSymmetryOrbitResult`` itself - the field-name tuple
     and the defaulted constant literals - so this admission bound cannot
     drift from the published wire contract. Covers the object braces, the
-    sixteen commas between the seventeen top-level fields, every quoted key
-    name with its colon, and the six fixed literal values.
+    commas between the top-level fields, every quoted key name with its colon,
+    and the four fixed literal values.
     """
 
     fields = GraphSymmetryOrbitResult.model_fields
@@ -126,8 +126,6 @@ def _orbit_result_fixed_frame_bytes() -> int:
         fields["generator_validation"].default,
         fields["orbit_completeness"].default,
         fields["automorphism_group_completeness"].default,
-        fields["exactness"].default,
-        fields["determinism"].default,
     )
     return frame_bytes + sum(_quoted_wire_size(value) for value in constants)
 
@@ -346,8 +344,6 @@ class GraphSymmetryOrbitResult(StrictModel):
     automorphism_group_completeness: Literal["FULL_AUTOMORPHISM_GROUP_NOT_CLAIMED"] = (
         "FULL_AUTOMORPHISM_GROUP_NOT_CLAIMED"
     )
-    exactness: Literal["EXACT_COMBINATORIAL"] = "EXACT_COMBINATORIAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @model_validator(mode="after")
     def require_canonical_source_bound_partitions(self) -> Self:

@@ -187,17 +187,14 @@ class RationalConicParametrizationRequest(StrictModel):
 class AffineCurveResult(StrictModel):
     is_valid: bool
     degree: int = Field(ge=0, le=_MAX_CURVE_EXPONENT)
-    method: Literal["SYMPY_CURVE_CHECK"] = "SYMPY_CURVE_CHECK"
 
 
 class ProjectiveClosureResult(StrictModel):
     polynomial: RationalPolynomial
-    method: Literal["HOMOGENIZATION"] = "HOMOGENIZATION"
 
 
 class AffineChartResult(StrictModel):
     polynomial: RationalPolynomial
-    method: Literal["DEHOMOGENIZATION"] = "DEHOMOGENIZATION"
 
 
 class RationalConicParametrizationResult(StrictModel):

@@ -62,17 +62,14 @@ class AdjacencyMatricesResult(StrictModel):
     adjacency_matrix: tuple[tuple[int, ...], ...]
     transpose_matrix: tuple[tuple[int, ...], ...]
     vertex_count: int = Field(ge=1)
-    method: str = "ADjaCENCY_CONSTRUCTION"
 
 
 class VertexProfilesResult(StrictModel):
     in_degrees: tuple[int, ...]
     out_degrees: tuple[int, ...]
     vertex_count: int = Field(ge=1)
-    method: str = "DEGREE_COUNT"
 
 
 class FixedLengthPathsResult(StrictModel):
     path_matrix: tuple[tuple[int, ...], ...]
     total_paths: int = Field(ge=0)
-    method: str = "MATRIX_POWER"

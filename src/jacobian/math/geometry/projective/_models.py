@@ -88,7 +88,6 @@ class ProjectiveLineArrangementResult(StrictModel):
     non_double_flats: tuple[tuple[ProjectiveLabel, ...], ...]
     multiplicity_histogram: tuple[ProjectiveMultiplicityCount, ...]
     pair_count_total: int = Field(ge=1, le=MAX_ARRANGEMENT_PAIRS, strict=True)
-    completion: Literal["COMPLETE"] = "COMPLETE"
     arithmetic: Literal["EXACT_INTEGER"] = "EXACT_INTEGER"
 
     @classmethod

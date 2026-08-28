@@ -85,4 +85,3 @@ class CenterResult(StrictModel):
     center_basis: tuple[tuple[int, ...], ...]
     dimension: int = Field(ge=1)
     center_dimension: int = Field(ge=0)
-    method: str = "COMMUTANT_COMPUTATION"

@@ -469,7 +469,6 @@ def test_rotation_matrix_is_annihilated_by_t_squared_plus_one() -> None:
     assert result.polynomial_degree == 2
     assert result.matrix_multiplications == 2
     assert result.scalar_product_terms == 16
-    assert result.method == "HORNER_OVER_QQ"
 
 
 @pytest.mark.parametrize(

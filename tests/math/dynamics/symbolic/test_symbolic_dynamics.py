@@ -171,7 +171,6 @@ def test_golden_mean_finite_type_presentation_is_exact() -> None:
         (edge.source, edge.target, edge.appended_symbol)
         for edge in result.presentation.transitions
     ) == ((0, 0, "0"), (0, 1, "1"), (1, 0, "0"))
-    assert result.complete is True
 
     payload = result.model_dump()
     payload["presentation"]["adjacency_matrix"] = ((1, 0), (1, 1))
@@ -254,9 +253,9 @@ def test_complete_block_language_includes_empty_word_convention() -> None:
 def test_oversized_enumerations_fail_before_computation() -> None:
     alphabet = tuple(chr(ord("a") + index) for index in range(16))
     shift = ForbiddenBlockShift(alphabet=alphabet, forbidden_blocks=())
-    request = BlockLanguageRequest(shift=shift, block_length=5)
+    language_request = BlockLanguageRequest(shift=shift, block_length=5)
     with pytest.raises(ValueError, match="requested block enumeration"):
-        compute_block_language(request)
+        compute_block_language(language_request)
     with pytest.raises(ValueError, match="requested block enumeration"):
         construct_finite_type_shift(
             FiniteTypeShiftRequest(
@@ -276,7 +275,7 @@ def test_oversized_enumerations_fail_before_computation() -> None:
                 )
             )
         )
-    request = HigherBlockRequest(
+    higher_block_request = HigherBlockRequest(
         shift=ForbiddenBlockShift(
             alphabet=ten_symbols,
             forbidden_blocks=(),
@@ -284,14 +283,14 @@ def test_oversized_enumerations_fail_before_computation() -> None:
         block_length=4,
     )
     with pytest.raises(ValueError, match="presentation adjacency"):
-        compute_higher_block(request)
+        compute_higher_block(higher_block_request)
     oversized_support = ForbiddenBlockShift(
         alphabet=alphabet,
         forbidden_blocks=(("a",) * 20,),
     )
-    request = BlockLanguageRequest(shift=oversized_support, block_length=1)
+    support_request = BlockLanguageRequest(shift=oversized_support, block_length=1)
     with pytest.raises(ValueError, match="work bound"):
-        compute_block_language(request)
+        compute_block_language(support_request)
     with pytest.raises(ValueError, match="work bound"):
         block_language(oversized_support, 1)
 

@@ -62,10 +62,8 @@ class EdgePathConcatenateRequest(StrictModel):
 class EdgePathWordResult(StrictModel):
     word: tuple[str, ...]
     length: int = Field(ge=0)
-    method: str = "EDGE_LABEL_REDUCTION"
 
 
 class EdgePathConcatenateResult(StrictModel):
     path: tuple[int, ...]
     length: int = Field(ge=0)
-    method: str = "PATH_CONCATENATION"

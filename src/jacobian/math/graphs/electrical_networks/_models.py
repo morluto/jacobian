@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import Field
 
 from jacobian._exact import CanonicalRational
@@ -53,7 +51,6 @@ class EffectiveResistanceResult(StrictModel):
     effective_resistance: CanonicalRational
     terminal_a: int = Field(ge=0, le=MAX_NETWORK_VERTICES - 1)
     terminal_b: int = Field(ge=0, le=MAX_NETWORK_VERTICES - 1)
-    method: Literal["SYMPY_REDUCED_LAPLACIAN_SOLVE"] = "SYMPY_REDUCED_LAPLACIAN_SOLVE"
 
 
 class NodePotentialRequest(StrictModel):
@@ -79,7 +76,6 @@ class NodePotentialResult(StrictModel):
     potentials: tuple[NodePotentialValue, ...] = Field(
         min_length=2, max_length=MAX_NETWORK_VERTICES
     )
-    method: Literal["SYMPY_LAPLACIAN_SOLVE"] = "SYMPY_LAPLACIAN_SOLVE"
 
 
 class LaplacianEntry(StrictModel):
@@ -101,7 +97,6 @@ class LaplacianResult(StrictModel):
 
     vertex_count: int = Field(ge=2, le=MAX_NETWORK_VERTICES)
     entries: tuple[LaplacianEntry, ...] = Field(min_length=1)
-    method: Literal["SYMPY_LAPLACIAN"] = "SYMPY_LAPLACIAN"
 
 
 __all__ = [

@@ -141,7 +141,6 @@ def test_constant_jet_returns_a_canonical_constant_polynomial() -> None:
     assert result.total_multiplicity == 1
     assert result.degree == 0
     assert result.leading_coefficient.as_fraction() == 5
-    assert result.method == "FLINT_FMPQ_HERMITE_VANDERMONDE_FFLU"
 
 
 def test_higher_jet_uses_ordinary_not_hasse_derivatives() -> None:

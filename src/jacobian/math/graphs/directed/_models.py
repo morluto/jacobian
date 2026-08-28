@@ -125,7 +125,6 @@ class ReachabilityResult(StrictModel):
     source: int = Field(ge=0, le=255)
     reachable: tuple[int, ...]
     unreachable: tuple[int, ...]
-    convention: Literal["NETWORKX_DESCENDANTS"] = "NETWORKX_DESCENDANTS"
 
 
 class StronglyConnectedComponentsRequest(StrictModel):
@@ -135,9 +134,6 @@ class StronglyConnectedComponentsRequest(StrictModel):
 class StronglyConnectedComponentsResult(StrictModel):
     component_count: int = Field(ge=0, strict=True)
     components: tuple[tuple[int, ...], ...]
-    convention: Literal["NETWORKX_STRONGLY_CONNECTED_COMPONENTS"] = (
-        "NETWORKX_STRONGLY_CONNECTED_COMPONENTS"
-    )
 
 
 class CondensationRequest(StrictModel):
@@ -153,7 +149,6 @@ class CondensationResult(StrictModel):
     vertex_count: int = Field(ge=0, strict=True)
     components: tuple[tuple[int, ...], ...]
     edges: tuple[CondensationEdge, ...] = Field(default=())
-    convention: Literal["NETWORKX_CONDENSATION"] = "NETWORKX_CONDENSATION"
 
 
 class AcyclicOrderRequest(StrictModel):
@@ -163,7 +158,6 @@ class AcyclicOrderRequest(StrictModel):
 class AcyclicOrderResult(StrictModel):
     acyclic: bool
     order: tuple[int, ...]
-    convention: Literal["NETWORKX_TOPOLOGICAL_SORT"] = "NETWORKX_TOPOLOGICAL_SORT"
 
     @model_validator(mode="after")
     def require_order_matches_acyclicity(self) -> Self:

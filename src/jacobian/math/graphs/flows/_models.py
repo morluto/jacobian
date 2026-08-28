@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import lcm
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -95,7 +95,6 @@ class MaxFlowResult(StrictModel):
     source: int = Field(ge=0, le=63)
     sink: int = Field(ge=0, le=63)
     flow_edges: tuple[FlowEdgeValue, ...] = Field(default=())
-    convention: Literal["NETWORKX_MAXIMUM_FLOW"] = "NETWORKX_MAXIMUM_FLOW"
 
 
 class MinCutRequest(StrictModel):
@@ -108,7 +107,6 @@ class MinCutResult(StrictModel):
     cut_value: CanonicalRational
     reachable: tuple[int, ...]
     unreachable: tuple[int, ...]
-    convention: Literal["NETWORKX_MINIMUM_CUT"] = "NETWORKX_MINIMUM_CUT"
 
 
 class EdgeDisjointPathsGraph(StrictModel):
@@ -153,7 +151,6 @@ class EdgeDisjointPathsResult(StrictModel):
     paths: tuple[tuple[int, ...], ...] = Field(default=())
     source: int = Field(ge=0, le=63)
     sink: int = Field(ge=0, le=63)
-    convention: Literal["NETWORKX_EDGE_DISJOINT_PATHS"] = "NETWORKX_EDGE_DISJOINT_PATHS"
 
 
 class CostedFlowEdge(StrictModel):
@@ -225,7 +222,6 @@ class MinCostFlowResult(StrictModel):
     total_cost: CanonicalRational
     flow_edges: tuple[FlowEdgeResult, ...] = Field(default=())
     feasible: bool
-    convention: Literal["NETWORKX_MIN_COST_FLOW"] = "NETWORKX_MIN_COST_FLOW"
 
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:
@@ -266,4 +262,3 @@ class MinCostFlowResult(StrictModel):
 class CirculationResult(StrictModel):
     feasible: bool
     flow_edges: tuple[FlowEdgeResult, ...] = Field(default=())
-    convention: Literal["NETWORKX_CIRCULATION"] = "NETWORKX_CIRCULATION"

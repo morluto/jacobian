@@ -182,19 +182,6 @@ def _inverse_height(series: TruncatedSeries) -> RationalHeight:
     return result
 
 
-def _composition_height(
-    outer: RationalHeight, inner: RationalHeight, order: int, operation: str
-) -> RationalHeight:
-    power = RationalHeight(1, 1)
-    result = outer.product(power)
-    for _ in range(1, order):
-        power = _convolution_height(power, inner, order)
-        _require_height(power, operation)
-        result = sum_heights((result, outer.product(power)))
-        _require_height(result, operation)
-    return result
-
-
 Variable = Annotated[
     str,
     StringConstraints(
@@ -555,7 +542,6 @@ class SeriesDivideRequest(_SeriesPairRequest):
 class SeriesArithmeticResult(StrictModel):
     result: TruncatedSeries
     residual_congruence: Literal["EXACT_MOD_X_TO_N"] = "EXACT_MOD_X_TO_N"
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
 class SeriesMultiplyResult(StrictModel):
@@ -566,7 +552,6 @@ class SeriesMultiplyResult(StrictModel):
         description="Per-degree Cauchy convolution sums c_n = sum_{i=0}^n a_i b_{n-i}.",
     )
     residual_congruence: Literal["EXACT_MOD_X_TO_N"] = "EXACT_MOD_X_TO_N"
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
     def require_structural_ledger(self) -> Self:
@@ -611,7 +596,6 @@ class SeriesScalarMultiplyRequest(StrictModel):
 
 class SeriesScalarMultiplyResult(StrictModel):
     result: TruncatedSeries
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
 # ---------------------------------------------------------------------------
@@ -628,7 +612,6 @@ class SeriesPowerResult(StrictModel):
     result: TruncatedSeries
     multiplication_count: StrictInt
     residual_congruence: Literal["EXACT_MOD_X_TO_N"] = "EXACT_MOD_X_TO_N"
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
 # ---------------------------------------------------------------------------
@@ -668,7 +651,6 @@ class SeriesInverseResult(StrictModel):
     residual_coefficients: tuple[CanonicalRational, ...] = Field(
         description="A(x) * B(x) - 1 coefficients (must all be zero).",
     )
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
     def require_structural_residual(self) -> Self:
@@ -717,7 +699,6 @@ class SeriesDivideResult(StrictModel):
     residual_coefficients: tuple[CanonicalRational, ...] = Field(
         description="B(x) Q(x) - A(x) coefficients (must all be zero).",
     )
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
     def require_structural_residual(self) -> Self:
@@ -782,7 +763,6 @@ class SeriesComposeRequest(StrictModel):
 class SeriesComposeResult(StrictModel):
     result: TruncatedSeries
     residual_congruence: Literal["EXACT_MOD_X_TO_N"] = "EXACT_MOD_X_TO_N"
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
 # ---------------------------------------------------------------------------
@@ -812,7 +792,6 @@ class SeriesReversionResult(StrictModel):
     right_identity: Literal["G_OF_F_IS_X_MOD_X_TO_N"] = "G_OF_F_IS_X_MOD_X_TO_N"
     left_residual: tuple[CanonicalRational, ...]
     right_residual: tuple[CanonicalRational, ...]
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
     def require_structural_residuals(self) -> Self:
@@ -856,7 +835,6 @@ class SeriesDerivativeResult(StrictModel):
     output_order_convention: Literal["MAX_N_MINUS_1_AT_LEAST_1"] = (
         "MAX_N_MINUS_1_AT_LEAST_1"
     )
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
 class SeriesIntegralRequest(StrictModel):
@@ -866,7 +844,6 @@ class SeriesIntegralRequest(StrictModel):
 
 class SeriesIntegralResult(StrictModel):
     result: TruncatedSeries
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
 # ---------------------------------------------------------------------------
@@ -888,7 +865,6 @@ class SeriesTruncateRequest(StrictModel):
 
 class SeriesTruncateResult(StrictModel):
     result: TruncatedSeries
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
 # ---------------------------------------------------------------------------
@@ -900,7 +876,6 @@ class SeriesIdentityCheckResult(StrictModel):
     status: Literal["EQUAL_MOD_X_TO_N", "NOT_EQUAL"]
     first_differing_index: StrictInt | None = None
     exact_difference: CanonicalRational | None = None
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
     def require_consistent_diff(self) -> Self:
@@ -947,7 +922,6 @@ class SeriesFromPolynomialRequest(StrictModel):
 
 class SeriesFromPolynomialResult(StrictModel):
     result: TruncatedSeries
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
 class SeriesToPolynomialResult(StrictModel):
@@ -955,4 +929,3 @@ class SeriesToPolynomialResult(StrictModel):
     polynomial_label: Literal["TRUNCATED_POLYNOMIAL_REPRESENTATIVE"] = (
         "TRUNCATED_POLYNOMIAL_REPRESENTATIVE"
     )
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"

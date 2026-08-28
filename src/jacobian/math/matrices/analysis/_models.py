@@ -109,9 +109,6 @@ class RationalSpectrumClaimResult(StrictModel):
     first_failed_claim_index: StrictInt | None = Field(
         default=None, ge=0, lt=MAX_RATIONAL_SPECTRUM_CLAIMS
     )
-    method: Literal["PYTHON_FLINT_EXACT_RANK_AFTER_ROW_DENOMINATOR_CLEARING"] = (
-        "PYTHON_FLINT_EXACT_RANK_AFTER_ROW_DENOMINATOR_CLEARING"
-    )
 
     @classmethod
     def _from_kernel(

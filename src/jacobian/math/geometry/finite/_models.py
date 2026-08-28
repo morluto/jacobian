@@ -200,7 +200,6 @@ class ProjectiveSpaceEnumerateRequest(StrictModel):
 class ProjectivePointCanonicalizeResult(ProjectivePointCanonicalizeRequest):
     point: ProjectivePoint
     scale: int = Field(ge=1)
-    method: str = "FIRST_NONZERO_TO_ONE"
 
     @model_validator(mode="after")
     def bind_point_parent(self) -> Self:
@@ -230,7 +229,6 @@ class ProjectivePointEqualResult(StrictModel):
     point_a: ProjectivePoint
     point_b: ProjectivePoint
     equal: bool
-    method: str = "CANONICAL_REPRESENTATIVE"
 
     @model_validator(mode="after")
     def require_same_parent(self) -> Self:
@@ -250,7 +248,6 @@ class ProjectivePointEqualResult(StrictModel):
 
 class SubspaceComputeResult(SubspaceComputeRequest):
     subspace: LinearSubspace
-    method: str = "RREF"
 
     @model_validator(mode="after")
     def bind_subspace_parent(self) -> Self:
@@ -274,7 +271,6 @@ class SubspaceMembershipResult(StrictModel):
     subspace: LinearSubspace
     vector: tuple[int, ...]
     is_member: bool
-    method: str = "RREF_MEMBERSHIP"
 
     @model_validator(mode="after")
     def bind_vector_parent(self) -> Self:
@@ -290,7 +286,6 @@ class SubspaceMembershipResult(StrictModel):
 
 class SubspaceSpanResult(SubspaceSpanRequest):
     subspace: LinearSubspace
-    method: str = "RREF"
 
     @model_validator(mode="after")
     def bind_subspace_parent(self) -> Self:
@@ -314,7 +309,6 @@ class SubspaceSpanResult(SubspaceSpanRequest):
 
 class SubspaceIntersectionResult(SubspaceIntersectionRequest):
     subspace: LinearSubspace
-    method: str = "INTERSECTION"
 
     @model_validator(mode="after")
     def bind_subspace_parent(self) -> Self:
@@ -343,7 +337,6 @@ class GrassmannianCountResult(StrictModel):
     count: CanonicalInteger = Field(
         description="Exact Gaussian-binomial count encoded as a canonical decimal integer."
     )
-    method: str = "GAUSSIAN_BINOMIAL"
 
     @classmethod
     def _from_kernel(
@@ -367,7 +360,6 @@ class ProjectiveSpaceEnumerateResult(StrictModel):
     """
 
     sequence: ProjectivePointSequence
-    method: str = "CANONICAL_REPRESENTATIVES"
 
 
 # ---------------------------------------------------------------------------
@@ -424,4 +416,3 @@ class PrimeFieldAffinePlaneResult(StrictModel):
     incidence: IncidenceStructure
     parallel_classes: tuple[ParallelClass, ...] = Field(min_length=2)
     total_incidences: int = Field(ge=0)
-    method: str = "MODULAR_ARITHMETIC"

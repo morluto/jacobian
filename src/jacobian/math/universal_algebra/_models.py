@@ -199,7 +199,6 @@ class HomomorphismProfileResult(StrictModel):
     surjective: bool | None = None
     isomorphism: bool | None = None
     obstruction: HomomorphismObstruction | None = None
-    method: Literal["DENSE_TABLE_SCAN"] = "DENSE_TABLE_SCAN"
 
     @model_validator(mode="after")
     def require_structural_profile(self) -> Self:

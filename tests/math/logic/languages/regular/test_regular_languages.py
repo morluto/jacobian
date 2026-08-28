@@ -79,7 +79,6 @@ def test_run_accepts_word_ending_in_1() -> None:
     assert result.accepted is True
     assert result.final_state == 1
     assert result.state_trace == (0, 1, 0, 1)
-    assert result.method == "DFA_SIMULATION"
 
 
 def test_run_rejects_word_ending_in_0() -> None:
@@ -109,7 +108,6 @@ def test_count_binary_strings_ending_in_1() -> None:
     dfa = _dfa_ends_in_1()
     result = compute_count(CountRequest(dfa=dfa, word_length=3))
     assert result.count == "4"
-    assert result.method == "MATRIX_POWERING"
 
 
 def test_count_length_zero() -> None:
@@ -193,7 +191,6 @@ def test_complement_flips_acceptance() -> None:
     dfa = _dfa_ends_in_1()
     result = compute_complement(ComplementRequest(dfa=dfa))
     assert result.dfa.accepting_states == (0,)
-    assert result.method == "ACCEPTING_FLIP"
     # Word ending in 0 should now be accepted
     run = compute_run(RunRequest(dfa=result.dfa, word=(0,)))
     assert run.accepted is True

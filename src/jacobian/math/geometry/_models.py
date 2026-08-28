@@ -1021,7 +1021,6 @@ class ConvexPolygonTriangulationResult(StrictModel):
     optimum: CanonicalRational
     objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"
     tie_break: Literal["LOWEST_SPLIT_INDEX"] = "LOWEST_SPLIT_INDEX"
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
 # Euclidean convex-polygon triangulation

@@ -33,7 +33,6 @@ def test_continued_fraction_sqrt_2() -> None:
     assert result.coefficients == (1, 2, 2, 2, 2)
     assert result.preperiod_length == 1
     assert result.period_length == 1
-    assert result.method == "SYMPY_CONTINUED_FRACTION"
 
 
 def test_continued_fraction_sqrt_3() -> None:

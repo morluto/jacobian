@@ -156,7 +156,6 @@ class TestWeylGroupOrder:
 
         assert result.group_order == expected
         assert result.matrix == matrix
-        assert result.method == "SYMPY_SCHREIER_SIMS_SIGNED_ROOT_ACTION"
 
     def test_e8_order_does_not_materialize_weyl_group_elements(self) -> None:
         from jacobian.math.groups.root_systems._operations import (

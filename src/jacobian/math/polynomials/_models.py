@@ -202,7 +202,6 @@ class PolynomialFactorizationResult(StrictModel):
     normalization: Literal["CONTENT_AND_MONIC_IRREDUCIBLES"] = (
         "CONTENT_AND_MONIC_IRREDUCIBLES"
     )
-    product_reconstruction: Literal["EXACT"] = "EXACT"
 
     @model_validator(mode="after")
     def require_canonical_irreducible_records(self) -> Self:
@@ -264,7 +263,6 @@ class PolynomialFactorizationResult(StrictModel):
             factors=factors,
             reconstructed=reconstructed,
             normalization="CONTENT_AND_MONIC_IRREDUCIBLES",
-            product_reconstruction="EXACT",
         )
 
 
@@ -300,7 +298,6 @@ class PolynomialGroebnerBasisResult(StrictModel):
     )
     monomial_order: Literal["lex", "grlex", "grevlex"]
     basis: tuple[RationalPolynomial, ...] = Field(max_length=64)
-    completion: Literal["COMPLETE"] = "COMPLETE"
     normalization: Literal["REDUCED_MONIC"] = "REDUCED_MONIC"
 
     @model_validator(mode="after")

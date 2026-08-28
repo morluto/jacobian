@@ -37,12 +37,8 @@ class FactorsLengthResult(FactorsLengthRequest):
     multiplicities: tuple[int, ...]
     first_occurrence: tuple[int, ...]
     distinct_count: int = Field(ge=0)
-    complete: Literal[True] = True
     scope: Literal["ALL_CONTIGUOUS_FACTORS_OF_REQUESTED_LENGTH"] = (
         "ALL_CONTIGUOUS_FACTORS_OF_REQUESTED_LENGTH"
-    )
-    method: Literal["EXACT_SLIDING_WINDOW_ENUMERATION"] = (
-        "EXACT_SLIDING_WINDOW_ENUMERATION"
     )
 
     @model_validator(mode="after")
@@ -123,8 +119,6 @@ class PeriodsResult(PeriodsRequest):
     periods: tuple[int, ...]
     least_period: int = Field(ge=0)
     is_primitive: bool
-    complete: Literal[True] = True
-    method: Literal["EXACT_OVERLAP_COMPARISON"] = "EXACT_OVERLAP_COMPARISON"
     primitive_convention: Literal["NOT_A_NONTRIVIAL_INTEGER_POWER"] = (
         "NOT_A_NONTRIVIAL_INTEGER_POWER"
     )
@@ -177,8 +171,6 @@ class IncidenceMatrixResult(IncidenceMatrixRequest):
     """Exact target-by-source incidence matrix."""
 
     matrix: tuple[tuple[int, ...], ...]
-    complete: Literal[True] = True
-    method: Literal["EXACT_SYMBOL_COUNTING"] = "EXACT_SYMBOL_COUNTING"
     orientation: Literal["ROWS_TARGET_COLUMNS_SOURCE"] = "ROWS_TARGET_COLUMNS_SOURCE"
 
     @model_validator(mode="after")
@@ -211,10 +203,6 @@ class SubstitutionDependencyGraphResult(SubstitutionDependencyGraphRequest):
     """Exact source-bound letter graph, including every occurrence position."""
 
     graph: SubstitutionDependencyGraph
-    complete: Literal[True] = True
-    method: Literal["EXACT_IMAGE_OCCURRENCE_ENUMERATION"] = (
-        "EXACT_IMAGE_OCCURRENCE_ENUMERATION"
-    )
     edge_convention: Literal["SOURCE_TO_OCCURRING_TARGET"] = (
         "SOURCE_TO_OCCURRING_TARGET"
     )
@@ -246,10 +234,6 @@ class SubstitutionPrimitivityProfileResult(SubstitutionPrimitivityProfileRequest
     obstruction: Literal[
         "NONE", "REDUCIBLE_DEPENDENCY_GRAPH", "PERIODIC_DEPENDENCY_GRAPH"
     ]
-    complete: Literal[True] = True
-    method: Literal["BOOLEAN_POWERS_THROUGH_WIELANDT_BOUND"] = (
-        "BOOLEAN_POWERS_THROUGH_WIELANDT_BOUND"
-    )
 
     @model_validator(mode="after")
     def require_structural_primitivity_profile(self) -> Self:
@@ -332,12 +316,8 @@ class SubstitutionFixedPointPrefixResult(SubstitutionFixedPointPrefixRequest):
     retained_prefix_lengths: tuple[int, ...] = Field(
         min_length=1, max_length=MAX_MORPHISM_OUTPUT_LENGTH
     )
-    complete: Literal[True] = True
     scope: Literal["FIRST_REQUESTED_LETTERS_OF_ONE_SIDED_FIXED_POINT"] = (
         "FIRST_REQUESTED_LETTERS_OF_ONE_SIDED_FIXED_POINT"
-    )
-    method: Literal["LEAST_TRUNCATED_SUBSTITUTION_ITERATE"] = (
-        "LEAST_TRUNCATED_SUBSTITUTION_ITERATE"
     )
 
     @model_validator(mode="after")

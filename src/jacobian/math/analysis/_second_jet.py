@@ -130,7 +130,6 @@ class IntervalExpressionSecondJetEnclosureResult(
         max_length=MAX_SECOND_JET_VARIABLES * (MAX_SECOND_JET_VARIABLES + 1) // 2,
     )
     domain_failure: IntervalExpressionDomainFailure | None = None
-    method: Literal["ARB_FORWARD_SECOND_ORDER_JET"] = "ARB_FORWARD_SECOND_ORDER_JET"
     detail: str = Field(min_length=1, max_length=1024)
 
     @field_validator("gradient", mode="before")
@@ -225,7 +224,6 @@ class IntervalExpressionSecondJetEnclosureResult(
             gradient=gradient,
             hessian=hessian,
             domain_failure=domain_failure,
-            method="ARB_FORWARD_SECOND_ORDER_JET",
             detail=detail,
         )
 

@@ -117,7 +117,6 @@ def compute_gradient(request: ScalarFieldRequest) -> VectorResult:
             _wire(sympy.diff(expression, variable), variables)
             for variable in symbols_for_variables(variables)
         ),
-        method="SYMPY_GRADIENT",
     )
 
 
@@ -134,7 +133,6 @@ def compute_divergence(request: VectorFieldRequest) -> ScalarResult:
     )
     return ScalarResult(
         result=_wire(expression, variables),
-        method="SYMPY_DIVERGENCE",
     )
 
 
@@ -151,7 +149,6 @@ def compute_curl(request: CurlRequest) -> VectorResult:
             _wire(sympy.diff(fx, z) - sympy.diff(fz, x), variables),
             _wire(sympy.diff(fy, x) - sympy.diff(fx, y), variables),
         ),
-        method="SYMPY_CURL",
     )
 
 
@@ -165,7 +162,6 @@ def compute_laplacian(request: ScalarFieldRequest) -> ScalarResult:
     )
     return ScalarResult(
         result=_wire(laplacian, variables),
-        method="SYMPY_LAPLACIAN",
     )
 
 
@@ -204,7 +200,6 @@ def compute_directional_derivative(
             ),
             variables,
         ),
-        method="SYMPY_DIRECTIONAL_DERIVATIVE",
     )
 
 

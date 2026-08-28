@@ -54,7 +54,6 @@ def test_syt_count_partition_321() -> None:
     )
     assert result.count == "16"
     assert result.n == 6
-    assert result.method == "HOOK_LENGTH_FORMULA"
 
 
 def test_syt_count_single_row() -> None:

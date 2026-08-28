@@ -35,7 +35,6 @@ class RecurrenceFindResult(StrictModel):
     )
     order: int = Field(ge=0, le=MAX_RATIONAL_SEQUENCE_LENGTH - 1)
     status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
-    method: Literal["RATIONAL_INTERPOLATION"] = "RATIONAL_INTERPOLATION"
 
     @model_validator(mode="after")
     def require_status_consistent_coefficients(self) -> Self:
@@ -66,7 +65,6 @@ class RecurrenceFindResult(StrictModel):
             coefficients=coefficients,
             order=order,
             status=status,
-            method="RATIONAL_INTERPOLATION",
         )
 
 
@@ -90,13 +88,12 @@ class ClosedFormResult(StrictModel):
     """The closed-form solution as a SymPy expression string."""
 
     expression: str
-    method: Literal["SYMPY_RSOLVE"] = "SYMPY_RSOLVE"
 
     @classmethod
     def _from_kernel(cls, *, expression: str) -> Self:
         """Construct a closed-form result from the trusted SymPy adapter."""
 
-        return cls.model_construct(expression=expression, method="SYMPY_RSOLVE")
+        return cls.model_construct(expression=expression)
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +187,6 @@ class PrimeFieldRecurrenceFindResult(StrictModel):
         ),
     )
     recurrence: PrimeFieldRecurrence
-    method: Literal["BERLEKAMP_MASSEY"] = "BERLEKAMP_MASSEY"
 
     @model_validator(mode="after")
     def require_status_consistent_coefficients(self) -> Self:
@@ -215,7 +211,6 @@ class PrimeFieldRecurrenceFindResult(StrictModel):
         return cls.model_construct(
             sequence=sequence,
             recurrence=recurrence,
-            method="BERLEKAMP_MASSEY",
         )
 
 

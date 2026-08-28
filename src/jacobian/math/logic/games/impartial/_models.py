@@ -41,8 +41,6 @@ class GrundyTableResult(GrundyTableRequest):
     max_grundy: int = Field(ge=0)
     histogram: tuple[int, ...]
     topological_order: tuple[str, ...]
-    complete: Literal[True] = True
-    method: Literal["REVERSE_TOPOLOGICAL_MEX"] = "REVERSE_TOPOLOGICAL_MEX"
 
     @model_validator(mode="after")
     def require_bounded_complete_shape(self) -> Self:
@@ -93,8 +91,6 @@ class BirthdayRequest(StrictModel):
 
 class BirthdayResult(BirthdayRequest):
     birthdays: tuple[tuple[str, int], ...]
-    complete: Literal[True] = True
-    method: Literal["REVERSE_TOPOLOGICAL_HEIGHT"] = "REVERSE_TOPOLOGICAL_HEIGHT"
 
     @model_validator(mode="after")
     def require_bounded_complete_shape(self) -> Self:
@@ -150,9 +146,7 @@ class SubtractionGrundyPrefixResult(SubtractionGrundyPrefixRequest):
     option_sets: tuple[tuple[int, ...], ...]
     p_positions: tuple[int, ...]
     n_positions: tuple[int, ...]
-    complete: Literal[True] = True
     scope: Literal["HEAPS_ZERO_THROUGH_MAX_HEAP"] = "HEAPS_ZERO_THROUGH_MAX_HEAP"
-    method: Literal["BOUNDED_DYNAMIC_PROGRAMMING"] = "BOUNDED_DYNAMIC_PROGRAMMING"
 
     @model_validator(mode="after")
     def require_bounded_complete_shape(self) -> Self:
@@ -276,7 +270,6 @@ class NimOptionsResult(NimOptionsRequest):
         le=MAX_NIM_DISTINCT_OPTIONS,
         description="Number of distinct canonical resulting positions.",
     )
-    complete: Literal[True] = True
 
     @model_validator(mode="after")
     def require_bounded_complete_shape(self) -> Self:

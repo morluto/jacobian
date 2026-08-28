@@ -52,7 +52,6 @@ def test_sturm_chain_cubic_known_answer() -> None:
     result = compute_sturm_chain(SturmChainRequest(polynomial=poly))
 
     assert result.degree == 3
-    assert result.method == "SYMPY_STURM"
     assert [_coefficient_map(p) for p in result.chain] == [
         {3: Fraction(1), 2: Fraction(-2), 1: Fraction(1), 0: Fraction(-3)},
         {2: Fraction(3), 1: Fraction(-4), 0: Fraction(1)},
@@ -81,7 +80,6 @@ def test_root_count_cubic_has_one_real_root() -> None:
     )
     assert result.source_polynomial == poly
     assert result.root_count == 1
-    assert result.method == "STURM_THEOREM"
 
 
 def test_root_count_x_squared_minus_2() -> None:

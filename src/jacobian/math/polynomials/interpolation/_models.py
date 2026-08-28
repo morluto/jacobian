@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import prod
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -406,9 +406,6 @@ class HermiteInterpolationResult(StrictModel):
             "rational node and then derivative order."
         ),
     )
-    method: Literal["FLINT_FMPQ_HERMITE_VANDERMONDE_FFLU"] = (
-        "FLINT_FMPQ_HERMITE_VANDERMONDE_FFLU"
-    )
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
@@ -540,12 +537,10 @@ class DividedDifferencesResult(StrictModel):
         min_length=1,
         max_length=MAX_NEWTON_POINTS,
     )
-    method: str = "NEWTON_DIVIDED_DIFFERENCES"
 
 
 class NewtonEvaluateResult(StrictModel):
     result: CanonicalRational
-    method: str = "NEWTON_HORNER"
 
 
 __all__ = [

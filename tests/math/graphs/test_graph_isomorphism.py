@@ -467,4 +467,3 @@ class TestOperationMetadata:
             result = op.run(req)
             assert isinstance(result, GraphIsomorphismResult)
             assert result.status in ("ISOMORPHIC", "NOT_ISOMORPHIC")
-            assert result.convention == "NETWORKX_IS_ISOMORPHIC"

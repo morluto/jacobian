@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -321,9 +321,6 @@ class WeylGroupOrderResult(StrictModel):
 
     matrix: tuple[tuple[int, ...], ...]
     group_order: int = Field(ge=1, le=MAX_WEYL_GROUP_ORDER)
-    method: Literal["SYMPY_SCHREIER_SIMS_SIGNED_ROOT_ACTION"] = (
-        "SYMPY_SCHREIER_SIMS_SIGNED_ROOT_ACTION"
-    )
 
     @model_validator(mode="after")
     def require_order_domain(self) -> Self:
@@ -335,5 +332,4 @@ class WeylGroupOrderResult(StrictModel):
         return cls.model_construct(
             matrix=request.matrix,
             group_order=group_order,
-            method="SYMPY_SCHREIER_SIMS_SIGNED_ROOT_ACTION",
         )

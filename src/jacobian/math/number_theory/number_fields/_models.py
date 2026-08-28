@@ -57,7 +57,6 @@ class NumberFieldRequest(StrictModel):
 class NumberFieldDiscriminantResult(StrictModel):
     status: Literal["COMPLETE", "UNKNOWN"] = "COMPLETE"
     discriminant: str | None = None
-    method: Literal["SYMPY_NUMBER_FIELD"] = "SYMPY_NUMBER_FIELD"
     detail: str | None = Field(default=None, max_length=1_024)
 
     @model_validator(mode="after")

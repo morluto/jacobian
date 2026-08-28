@@ -47,7 +47,6 @@ class TestMapIterate:
 
         assert result.coefficients == (_r(0), _r(1))
         assert result.degree == 1
-        assert result.complete is True
 
     def test_second_iterate_is_exact(self) -> None:
         result = compute_map_iterate(
@@ -201,7 +200,6 @@ class TestCycleMultiplier:
 
         assert result.multiplier == _r(1)
         assert result.period == 2
-        assert result.validated_cycle is True
 
     def test_arbitrary_points_cannot_be_labeled_a_cycle(self) -> None:
         with pytest.raises(OperationDomainValidationError) as exc_info:
@@ -237,7 +235,6 @@ class TestFiniteFieldFunctionalGraph:
         assert result.edges == ((0, 0), (1, 1), (2, 4), (3, 4), (4, 1))
         assert result.cycles == ((0,), (1,))
         assert result.tail_lengths == (0, 0, 2, 2, 1)
-        assert result.complete is True
 
     @pytest.mark.parametrize(
         ("prime", "coefficients"),

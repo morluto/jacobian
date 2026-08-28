@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
@@ -63,9 +63,6 @@ class CertifiedSmithNormalFormRequest(StrictModel):
 
 class CertifiedSmithNormalFormResult(StrictModel):
     certificate: SmithNormalFormCertificate
-    exactness: Literal["EXACT_INTEGER"] = "EXACT_INTEGER"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    completeness: Literal["FULL_MATRIX_TRANSFORMATIONS"] = "FULL_MATRIX_TRANSFORMATIONS"
 
     @classmethod
     def _from_kernel(

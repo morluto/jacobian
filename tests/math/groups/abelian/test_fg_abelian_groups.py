@@ -135,14 +135,6 @@ def test_subgroup_generated_z2_x_z4() -> None:
     assert result.index == 4
 
 
-def test_presentation_normalize_method_name() -> None:
-    """Normalization method should not have a typo."""
-    result = compute_presentation_normalize(
-        PresentationNormalizeRequest(invariant_factors=(2, 4))
-    )
-    assert result.method == "SmithNormalForm"
-
-
 @pytest.mark.parametrize(
     "invariant_factors",
     ((1,), (0,), tuple(range(2, 35)), (4_097,)),

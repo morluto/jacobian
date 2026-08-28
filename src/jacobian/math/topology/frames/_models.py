@@ -54,7 +54,6 @@ class CoherenceRequest(FiniteFrameRequest):
 class GramResult(VectorFamilyRequest):
     gram: tuple[tuple[int, ...], ...]
     dimension: int = Field(ge=1)
-    method: str = "DOT_PRODUCT"
 
     @classmethod
     def _from_kernel(
@@ -67,14 +66,12 @@ class GramResult(VectorFamilyRequest):
             vectors=vectors,
             gram=gram,
             dimension=len(vectors[0]),
-            method="DOT_PRODUCT",
         )
 
 
 class CoherenceResult(CoherenceRequest):
     coherence_squared: CanonicalRational
     maximizing_pair: tuple[int, int] | None
-    method: str = "EXACT_MAX_SQUARED_NORMALIZED_INNER_PRODUCT"
 
     @classmethod
     def _from_kernel(
@@ -88,13 +85,11 @@ class CoherenceResult(CoherenceRequest):
             vectors=vectors,
             coherence_squared=coherence_squared,
             maximizing_pair=maximizing_pair,
-            method="EXACT_MAX_SQUARED_NORMALIZED_INNER_PRODUCT",
         )
 
 
 class FramePotentialResult(FiniteFrameRequest):
     potential: CanonicalInteger
-    method: str = "EXACT_GRAM_SQUARE_SUM"
 
     @classmethod
     def _from_kernel(
@@ -103,7 +98,6 @@ class FramePotentialResult(FiniteFrameRequest):
         return cls.model_construct(
             vectors=vectors,
             potential=potential,
-            method="EXACT_GRAM_SQUARE_SUM",
         )
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -106,19 +106,10 @@ class DirectionalDerivativeRequest(StrictModel):
         return self
 
 
-ScalarMethod = Literal[
-    "SYMPY_DIVERGENCE",
-    "SYMPY_LAPLACIAN",
-    "SYMPY_DIRECTIONAL_DERIVATIVE",
-]
-VectorMethod = Literal["SYMPY_GRADIENT", "SYMPY_CURL"]
-
-
 class ScalarResult(StrictModel):
     """One canonical scalar polynomial result."""
 
     result: RationalPolynomial
-    method: ScalarMethod
 
 
 class VectorResult(StrictModel):
@@ -127,7 +118,6 @@ class VectorResult(StrictModel):
     components: tuple[RationalPolynomial, ...] = Field(
         min_length=1, max_length=MAX_POLYS
     )
-    method: VectorMethod
 
     @model_validator(mode="after")
     def require_one_result_ring(self) -> Self:

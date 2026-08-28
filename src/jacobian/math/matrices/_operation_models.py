@@ -272,7 +272,6 @@ class MatrixDeterminantResult(StrictModel):
     """One exact determinant, returned inline for ordinary composition."""
 
     determinant: CanonicalRational
-    method: Literal["FRACTION_FREE_BAREISS"] = "FRACTION_FREE_BAREISS"
 
 
 class MatrixRankResult(StrictModel):
@@ -281,7 +280,6 @@ class MatrixRankResult(StrictModel):
     matrix: RationalMatrix
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     pivot_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
-    method: Literal["EXACT_RATIONAL_ROW_REDUCTION"] = "EXACT_RATIONAL_ROW_REDUCTION"
 
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
@@ -376,7 +374,6 @@ class CharacteristicPolynomialResult(StrictModel):
         min_length=2,
         max_length=MAX_MATRIX_DIMENSION + 1,
     )
-    monic: Literal[True] = True
     convention: Literal["DET_LAMBDA_I_MINUS_A"] = "DET_LAMBDA_I_MINUS_A"
 
     @model_validator(mode="after")
@@ -495,7 +492,6 @@ class MatrixPermanentResult(StrictModel):
     """One exact matrix permanent."""
 
     permanent: CanonicalRational
-    method: Literal["SYMPY_PERMANENT"] = "SYMPY_PERMANENT"
 
 
 class MatrixKroneckerProductRequest(_MatrixRequest):
@@ -513,9 +509,6 @@ class MatrixKroneckerProductResult(StrictModel):
     left_columns: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
     right_rows: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
     right_columns: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
-    convention: Literal["SYMPY_KRONECKER_PRODUCT_OVER_QQ"] = (
-        "SYMPY_KRONECKER_PRODUCT_OVER_QQ"
-    )
 
     @model_validator(mode="after")
     def require_product_shape(self) -> Self:

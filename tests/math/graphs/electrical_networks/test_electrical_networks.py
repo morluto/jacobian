@@ -41,7 +41,6 @@ def test_single_edge_resistance_is_one() -> None:
     req = EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
     result = compute_effective_resistance(req)
     assert result.effective_resistance.as_fraction() == Fraction(1)
-    assert result.method == "SYMPY_REDUCED_LAPLACIAN_SOLVE"
     assert result.terminal_a == 0
     assert result.terminal_b == 1
 
@@ -110,7 +109,6 @@ def test_node_potentials_path_graph() -> None:
     assert result.potentials[0].potential.as_fraction() == Fraction(2)
     assert result.potentials[1].potential.as_fraction() == Fraction(1)
     assert result.potentials[2].potential.as_fraction() == Fraction(0)
-    assert result.method == "SYMPY_LAPLACIAN_SOLVE"
 
 
 def test_node_potentials_sink_is_gauge_zero() -> None:
@@ -145,7 +143,6 @@ def test_laplacian_single_edge() -> None:
     assert matrix[(1, 1)] == Fraction(1)
     assert matrix[(0, 1)] == Fraction(-1)
     assert matrix[(1, 0)] == Fraction(-1)
-    assert result.method == "SYMPY_LAPLACIAN"
 
 
 def test_laplacian_triangle_diagonal_sums_conductances() -> None:

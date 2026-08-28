@@ -222,24 +222,6 @@ class ModularPolynomialResidueImageResult(StrictModel):
         )
 
 
-def _evaluate_normalized_modular_polynomial(
-    terms: tuple[_NormalizedModularPolynomialTerm, ...],
-    assignment: tuple[int, ...],
-    modulus: int,
-) -> int:
-    value = 0
-    for term in terms:
-        monomial = term.coefficient
-        for coordinate, exponent in zip(
-            assignment,
-            term.exponents,
-            strict=True,
-        ):
-            monomial = monomial * pow(coordinate, exponent, modulus) % modulus
-        value = (value + monomial) % modulus
-    return value
-
-
 def _validate_residue_image_shape(
     result: ModularPolynomialResidueImageResult,
 ) -> tuple[tuple[int, ...], ...]:

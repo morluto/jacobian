@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from itertools import pairwise
-from typing import Any, Literal, Self
+from typing import Any, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -143,7 +143,6 @@ class RootIsolationResult(StrictModel):
         min_length=2, max_length=MAX_REAL_ALGEBRAIC_DEGREE + 1
     )
     roots: tuple[RootIsolationEntry, ...] = Field(max_length=MAX_REAL_ALGEBRAIC_DEGREE)
-    convention: Literal["SYMPY_REAL_ROOTS"] = "SYMPY_REAL_ROOTS"
 
     @model_validator(mode="after")
     def require_structural_order(self) -> Self:

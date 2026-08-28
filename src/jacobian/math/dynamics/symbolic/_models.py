@@ -31,8 +31,6 @@ class FiniteTypeShiftRequest(StrictModel):
 class FiniteTypeShiftResult(FiniteTypeShiftRequest):
     presentation: BlockPresentation
     normalized_forbidden_blocks: tuple[tuple[str, ...], ...]
-    complete: Literal[True] = True
-    method: Literal["EXACT_DE_BRUIJN_PRESENTATION"] = "EXACT_DE_BRUIJN_PRESENTATION"
 
 
 class BlockLanguageRequest(StrictModel):
@@ -43,12 +41,8 @@ class BlockLanguageRequest(StrictModel):
 class BlockLanguageResult(BlockLanguageRequest):
     allowed_blocks: tuple[tuple[str, ...], ...]
     count: int = Field(ge=0)
-    complete: Literal[True] = True
     scope: Literal["ALL_OCCURRING_BLOCKS_OF_REQUESTED_LENGTH"] = (
         "ALL_OCCURRING_BLOCKS_OF_REQUESTED_LENGTH"
-    )
-    method: Literal["EXACT_PRESENTATION_SUPPORT_ENUMERATION"] = (
-        "EXACT_PRESENTATION_SUPPORT_ENUMERATION"
     )
 
     @model_validator(mode="after")
@@ -71,9 +65,6 @@ class PeriodicPointProfileResult(PeriodicPointProfileRequest):
     least_period_point_counts: tuple[CanonicalInteger, ...]
     primitive_orbit_counts: tuple[CanonicalInteger, ...]
     complete_through_period: int = Field(ge=1, le=MAX_PERIOD)
-    method: Literal["EXACT_MATRIX_TRACES_AND_MOBIUS_INVERSION"] = (
-        "EXACT_MATRIX_TRACES_AND_MOBIUS_INVERSION"
-    )
 
     @model_validator(mode="after")
     def require_profile_shape(self) -> Self:
@@ -98,10 +89,6 @@ class HigherBlockRequest(StrictModel):
 
 class HigherBlockResult(HigherBlockRequest):
     presentation: BlockPresentation
-    complete: Literal[True] = True
-    method: Literal["EXACT_ALLOWED_OVERLAP_PRESENTATION"] = (
-        "EXACT_ALLOWED_OVERLAP_PRESENTATION"
-    )
 
 
 class ArtinMazurZetaRequest(StrictModel):
@@ -114,9 +101,6 @@ class ArtinMazurZetaResult(ArtinMazurZetaRequest):
     determinant_polynomial: RationalPolynomial
     zeta_function: RationalFunction
     convention: Literal["EDGE_SHIFT_ARTIN_MAZUR_ZETA"] = "EDGE_SHIFT_ARTIN_MAZUR_ZETA"
-    method: Literal["SYMPY_EXACT_CHARACTERISTIC_POLYNOMIAL"] = (
-        "SYMPY_EXACT_CHARACTERISTIC_POLYNOMIAL"
-    )
 
 
 def _from_kernel_artin_mazur_zeta(
@@ -136,7 +120,6 @@ def _from_kernel_artin_mazur_zeta(
         determinant_polynomial=determinant_polynomial,
         zeta_function=zeta_function,
         convention="EDGE_SHIFT_ARTIN_MAZUR_ZETA",
-        method="SYMPY_EXACT_CHARACTERISTIC_POLYNOMIAL",
     )
 
 

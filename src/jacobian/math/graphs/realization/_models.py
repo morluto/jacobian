@@ -65,7 +65,6 @@ class GraphRealizationResult(StrictModel):
     is_graphical: bool
     vertex_count: int = Field(ge=1)
     edges: tuple[tuple[int, int], ...] = Field(default=())
-    convention: str = "NETWORKX_HAVEL_HAKIMI"
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +106,6 @@ class RealizationCheckResult(StrictModel):
     is_realization: bool
     expected_degrees: tuple[int, ...]
     actual_degrees: tuple[int, ...]
-    convention: str = "NETWORKX_DEGREE"
 
 
 __all__ = [

@@ -345,7 +345,7 @@ def test_enumeration_wire_form_stays_compact_and_typed_natively() -> None:
     )
 
     wire = result.model_dump(mode="json")
-    assert set(wire) == {"sequence", "method"}
+    assert set(wire) == {"sequence"}
     assert set(wire["sequence"]) == {"space", "coordinates"}
     assert wire["sequence"]["coordinates"] == [[0, 1], [1, 0], [1, 1], [1, 2]]
     assert type(result).model_validate_json(result.model_dump_json()) == result

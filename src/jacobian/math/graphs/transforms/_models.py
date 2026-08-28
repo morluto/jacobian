@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import AfterValidator, Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -85,7 +85,6 @@ class GraphResult(StrictModel):
         default=(),
         max_length=MAX_RESULT_EDGES,
     )
-    method: Literal["NETWORKX"] = "NETWORKX"
 
 
 class SubgraphRequest(StrictModel):

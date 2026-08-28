@@ -58,7 +58,6 @@ class TestGrundyTable:
         )
         assert result.histogram == (2, 1, 1)
         assert result.max_grundy == 2
-        assert result.complete is True
 
     def test_option_grundy_values_are_a_set_not_a_multiset(self) -> None:
         game = ImpartialGame(
@@ -117,7 +116,6 @@ class TestBirthdays:
         result = compute_birthday(BirthdayRequest(game=_game()))
 
         assert result.birthdays == (("0", 0), ("1", 1), ("2", 2), ("3", 3))
-        assert result.complete is True
 
     def test_false_birthday_table_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
@@ -135,7 +133,6 @@ class TestSubtractionGrundyPrefix:
         assert result.p_positions == (0, 2, 4)
         assert result.n_positions == (1, 3, 5)
         assert result.scope == "HEAPS_ZERO_THROUGH_MAX_HEAP"
-        assert result.complete is True
 
     @pytest.mark.parametrize("values", [(3, 1), (1, 1), (0, 1), (1, 501)])
     def test_subtraction_set_must_be_canonical_and_bounded(

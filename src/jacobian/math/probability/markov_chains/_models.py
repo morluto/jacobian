@@ -61,9 +61,6 @@ class StationaryDistributionResult(StrictModel):
         min_length=1
     )
     unique: bool
-    method: Literal["CLOSED_CLASS_EXACT_LINEAR_SYSTEM"] = (
-        "CLOSED_CLASS_EXACT_LINEAR_SYSTEM"
-    )
 
     @classmethod
     def _from_kernel(
@@ -143,7 +140,6 @@ class MixingTimeResult(StrictModel):
     steps_examined: StrictInt = Field(ge=0, le=MAX_MIXING_STEPS + 1)
     mixing_time: StrictInt | None = Field(default=None, ge=0, le=MAX_MIXING_STEPS)
     max_total_variation_distance: CanonicalRational | None = None
-    method: Literal["SYMPY_EXACT_MATRIX_POWERS"] = "SYMPY_EXACT_MATRIX_POWERS"
 
     @model_validator(mode="after")
     def bind_search_result(self) -> Self:

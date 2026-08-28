@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import ceil, isqrt, log10
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -71,7 +71,6 @@ class ContinuedFractionResult(StrictModel):
     coefficients: tuple[StrictInt, ...] = Field(min_length=1, max_length=_MAX_TERMS)
     preperiod_length: StrictInt = Field(ge=1)
     period_length: StrictInt = Field(ge=1)
-    method: Literal["SYMPY_CONTINUED_FRACTION"] = "SYMPY_CONTINUED_FRACTION"
 
     @model_validator(mode="after")
     def require_bounded_shape(self) -> Self:
@@ -140,7 +139,6 @@ class ConvergentResult(StrictModel):
     convergents: tuple[ConvergentValue, ...] = Field(
         min_length=1, max_length=_MAX_TERMS
     )
-    method: Literal["CONTINUED_FRACTION_RECURSION"] = "CONTINUED_FRACTION_RECURSION"
 
     @model_validator(mode="after")
     def require_bounded_shape(self) -> Self:
@@ -198,7 +196,6 @@ class PellEquationResult(StrictModel):
     discriminant: StrictInt = Field(ge=2, le=_MAX_DISCRIMINANT)
     x: CanonicalInteger
     y: CanonicalInteger
-    method: Literal["CONTINUED_FRACTION_CONVERGENTS"] = "CONTINUED_FRACTION_CONVERGENTS"
 
     @model_validator(mode="after")
     def require_bounded_positive_components(self) -> Self:

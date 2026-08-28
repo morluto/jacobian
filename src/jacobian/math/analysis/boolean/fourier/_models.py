@@ -100,7 +100,6 @@ class MultilinearExtensionResult(StrictModel):
 
     polynomial: str = Field(min_length=1)
     variable_count: int = Field(ge=1, le=MAX_VARIABLES)
-    convention: Literal["SYMPY"] = "SYMPY"
 
 
 class ErasureNoiseRequest(StrictModel):

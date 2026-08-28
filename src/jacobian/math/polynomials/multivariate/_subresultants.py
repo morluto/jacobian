@@ -352,7 +352,6 @@ class MultivariateSubresultantSequenceResult(StrictModel):
         )
     )
     convention: Literal["BROWN_SUBRESULTANT_PRS"] = "BROWN_SUBRESULTANT_PRS"
-    zero_members_omitted: Literal[True] = True
 
     @model_validator(mode="after")
     def require_structural_sequence(self) -> Self:

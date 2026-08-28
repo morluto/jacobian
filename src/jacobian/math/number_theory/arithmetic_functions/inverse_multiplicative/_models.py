@@ -34,15 +34,12 @@ class EulerPhiPowerSumRequest(StrictModel):
 class EulerPhiPreimageResult(StrictModel):
     preimage: tuple[int, ...]
     count: int = Field(ge=0)
-    method: str = "EXACT_RECURSIVE_CONSTRUCTION"
 
 
 class EulerPhiPreimageCountResult(StrictModel):
     count: int = Field(ge=0)
-    method: str = "EXACT_RECURSIVE_CONSTRUCTION"
 
 
 class EulerPhiPowerSumResult(StrictModel):
     power_sum: int = Field(ge=0)
     count: int = Field(ge=0)
-    method: str = "EXACT_RECURSIVE_CONSTRUCTION"

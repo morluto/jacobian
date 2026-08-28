@@ -52,7 +52,6 @@ class BlockCutTreeResult(StrictModel):
     blocks: tuple[tuple[int, ...], ...] = Field(default=())
     articulation_points: tuple[int, ...] = Field(default=())
     tree: tuple[tuple[int, int], ...] = Field(default=())
-    convention: Literal["NETWORKX_BICONNECTED"] = "NETWORKX_BICONNECTED"
 
 
 class BridgeBlockRequest(StrictModel):
@@ -71,7 +70,6 @@ class BridgeBlockResult(StrictModel):
     components: tuple[tuple[int, ...], ...] = Field(default=())
     bridges: tuple[tuple[int, int], ...] = Field(default=())
     tree: tuple[tuple[int, int], ...] = Field(default=())
-    convention: Literal["NETWORKX_BRIDGES"] = "NETWORKX_BRIDGES"
 
 
 class EarDecompositionRequest(StrictModel):
@@ -110,7 +108,6 @@ class BiconnectedComponentsResult(StrictModel):
     """All biconnected components of a graph, each a sorted tuple of vertices."""
 
     components: tuple[tuple[int, ...], ...] = Field(default=())
-    convention: Literal["NETWORKX_BICONNECTED"] = "NETWORKX_BICONNECTED"
 
 
 # ---------------------------------------------------------------------------

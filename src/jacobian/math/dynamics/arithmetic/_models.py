@@ -317,8 +317,6 @@ class MapIterateResult(StrictModel):
         min_length=1, max_length=MAX_ITERATE_DEGREE + 1
     )
     degree: int = Field(ge=0, le=MAX_ITERATE_DEGREE)
-    complete: Literal[True] = True
-    method: Literal["EXACT_POLYNOMIAL_COMPOSITION"] = "EXACT_POLYNOMIAL_COMPOSITION"
 
     @classmethod
     def _from_kernel(
@@ -333,8 +331,6 @@ class MapIterateResult(StrictModel):
             n=request.n,
             coefficients=coefficients,
             degree=degree,
-            complete=True,
-            method="EXACT_POLYNOMIAL_COMPOSITION",
         )
 
     @model_validator(mode="after")
@@ -455,10 +451,6 @@ class DynatomicPolynomialResult(StrictModel):
     )
     degree: int = Field(ge=0, le=MAX_DYNATOMIC_DEGREE)
     n: int = Field(ge=1, le=MAX_ITERATE)
-    complete: Literal[True] = True
-    method: Literal["MOBIUS_EXACT_POLYNOMIAL_DIVISION"] = (
-        "MOBIUS_EXACT_POLYNOMIAL_DIVISION"
-    )
 
     @classmethod
     def _from_kernel(
@@ -473,8 +465,6 @@ class DynatomicPolynomialResult(StrictModel):
             coefficients=coefficients,
             degree=degree,
             n=request.n,
-            complete=True,
-            method="MOBIUS_EXACT_POLYNOMIAL_DIVISION",
         )
 
     @model_validator(mode="after")
@@ -503,8 +493,6 @@ class CycleMultiplierResult(StrictModel):
         min_length=1, max_length=MAX_ORBIT_STEPS
     )
     period: int = Field(ge=1, le=MAX_ORBIT_STEPS)
-    validated_cycle: Literal[True] = True
-    complete: Literal[True] = True
 
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:
@@ -550,10 +538,6 @@ class FiniteFieldMapResult(StrictModel):
     edges: tuple[tuple[int, int], ...]
     cycles: tuple[tuple[int, ...], ...]
     tail_lengths: tuple[int, ...]
-    complete: Literal[True] = True
-    method: Literal["COMPLETE_FUNCTIONAL_GRAPH_ENUMERATION"] = (
-        "COMPLETE_FUNCTIONAL_GRAPH_ENUMERATION"
-    )
 
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:

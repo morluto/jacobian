@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -82,7 +82,6 @@ class RunResult(RunRequest):
     accepted: bool
     final_state: int = Field(ge=0, le=MAX_DFA_STATES - 1)
     state_trace: tuple[int, ...]
-    method: Literal["DFA_SIMULATION"] = "DFA_SIMULATION"
 
     @model_validator(mode="after")
     def require_run_shape(self) -> Self:
@@ -121,7 +120,6 @@ class RunResult(RunRequest):
             accepted=accepted,
             final_state=final_state,
             state_trace=state_trace,
-            method="DFA_SIMULATION",
         )
 
 
@@ -130,7 +128,6 @@ class CountResult(CountRequest):
 
     count: CanonicalInteger
     word_length: int = Field(ge=0, le=MAX_COUNT_WORD_LENGTH)
-    method: Literal["MATRIX_POWERING"] = "MATRIX_POWERING"
 
     @model_validator(mode="after")
     def require_nonnegative_count(self) -> Self:
@@ -144,7 +141,6 @@ class CountResult(CountRequest):
             dfa=request.dfa,
             word_length=request.word_length,
             count=count,
-            method="MATRIX_POWERING",
         )
 
 
@@ -152,7 +148,6 @@ class ComplementResult(StrictModel):
     """The complement DFA."""
 
     dfa: DFA
-    method: Literal["ACCEPTING_FLIP"] = "ACCEPTING_FLIP"
 
 
 __all__ = [

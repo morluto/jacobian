@@ -459,14 +459,8 @@ class FiniteSimplicialComplex(StrictModel):
         return self
 
 
-class TopologyExactResult(StrictModel):
-    exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-
-
-class SimplicialComplexCanonicalizationResult(TopologyExactResult):
+class SimplicialComplexCanonicalizationResult(StrictModel):
     complex: FiniteSimplicialComplex
-    completeness: Literal["COMPLETE_FACE_CLOSURE"] = "COMPLETE_FACE_CLOSURE"
 
 
 def require_linear_algebra_bounds(complex_: FiniteSimplicialComplex) -> None:
@@ -571,7 +565,6 @@ class BoundarySquareLedgerEntry(StrictModel):
     product_rows: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     product_columns: StrictInt = Field(ge=1, le=MAX_TOPOLOGY_CHAIN_GROUP)
     nonzero_entries: Literal[0] = 0
-    product_is_zero: Literal[True] = True
 
 
 def _resolve_chain_coefficient_values(
@@ -610,7 +603,7 @@ def _validate_chain_convention_augmentation(
         )
 
 
-class ChainComplexResult(TopologyExactResult):
+class ChainComplexResult(StrictModel):
     complex_digest: Sha256Digest
     coefficient_ring: ChainCoefficientRing
     prime: StrictInt | None = Field(default=None, ge=2, le=MAX_TOPOLOGY_PRIME)
@@ -715,7 +708,7 @@ class BarycentricSubdivisionRequest(StrictModel):
     complex: SimplicialComplexRequest
 
 
-class BarycentricSubdivisionResult(TopologyExactResult):
+class BarycentricSubdivisionResult(StrictModel):
     """The barycentric subdivision as a facet list."""
 
     original_vertices: tuple[str, ...]
@@ -791,7 +784,7 @@ class ShellingCheckRequest(StrictModel):
     )
 
 
-class ShellingCheckResult(TopologyExactResult):
+class ShellingCheckResult(StrictModel):
     """Result of checking a shelling order, bound to its checked source."""
 
     complex: SimplicialComplexRequest

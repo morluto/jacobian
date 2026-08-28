@@ -187,10 +187,6 @@ class TestGraphRealization:
             assert edge not in seen, "duplicate edge detected"
             seen.add(edge)
 
-    def test_convention_is_havel_hakimi(self) -> None:
-        result = _realize([1, 2, 2, 1])
-        assert result.convention == "NETWORKX_HAVEL_HAKIMI"
-
 
 # ---------------------------------------------------------------------------
 # graphicality check (with certificate)
@@ -270,10 +266,6 @@ class TestRealizationCheck:
         edges = [(0, 1), (0, 2), (1, 2)]
         result = _check([2, 2, 2], 3, edges)
         assert result.actual_degrees == (2, 2, 2)
-
-    def test_convention_is_networkx_degree(self) -> None:
-        result = _check([0], 1, [])
-        assert result.convention == "NETWORKX_DEGREE"
 
     def test_contract_rejects_length_mismatch(self) -> None:
         with pytest.raises(ValidationError):

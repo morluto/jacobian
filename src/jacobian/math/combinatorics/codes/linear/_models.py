@@ -608,7 +608,6 @@ class FromGeneratorResult(StrictModel):
     dimension: int = Field(ge=0)
     length: int = Field(ge=0)
     cardinality: int = Field(ge=1)
-    method: str = "RREF"
 
     @model_validator(mode="after")
     def require_consistent_summaries(self) -> Self:
@@ -638,7 +637,6 @@ class DualCodeResult(StrictModel):
     dimension: int = Field(ge=0)
     dual_dimension: int = Field(ge=0)
     length: int = Field(ge=0)
-    method: str = "NULLSPACE"
 
     @model_validator(mode="after")
     def require_consistent_dual(self) -> Self:
@@ -680,7 +678,6 @@ class ParityCheckResult(StrictModel):
     dimension: int = Field(ge=0)
     rank_h: int = Field(ge=0)
     length: int = Field(ge=0)
-    method: str = "NULLSPACE"
 
 
 class CodewordCheckResult(StrictModel):
@@ -688,13 +685,11 @@ class CodewordCheckResult(StrictModel):
     hamming_weight: int = Field(ge=0)
     coefficients: tuple[int, ...] = ()
     syndrome: tuple[int, ...] = ()
-    method: str = "RREF_MEMBERSHIP"
 
 
 class SyndromeResult(StrictModel):
     syndrome: tuple[int, ...]
     is_member: bool
-    method: str = "MATRIX_VECTOR_PRODUCT"
 
 
 class CodeEqualResult(StrictModel):
@@ -702,12 +697,10 @@ class CodeEqualResult(StrictModel):
     dimension_a: int = Field(ge=0)
     dimension_b: int = Field(ge=0)
     witness_word: tuple[int, ...] | None = None
-    method: str = "MUTUAL_ROW_SPACE_CONTAINMENT"
 
 
 class MacWilliamsResult(StrictModel):
     dual_weights: tuple[int, ...]
-    method: str = "MACWILLIAMS_IDENTITY"
 
 
 class PunctureResult(StrictModel):
@@ -716,7 +709,6 @@ class PunctureResult(StrictModel):
     encoder: PrimeFieldLinearEncoder
     dimension: int = Field(ge=0)
     length: int = Field(ge=0)
-    method: str = "PUNCTURE"
 
     @model_validator(mode="after")
     def require_consistent_summaries(self) -> Self:
@@ -739,7 +731,6 @@ class ShortenResult(StrictModel):
     encoder: PrimeFieldLinearEncoder
     dimension: int = Field(ge=0)
     length: int = Field(ge=0)
-    method: str = "SHORTEN"
 
     @model_validator(mode="after")
     def require_consistent_summaries(self) -> Self:

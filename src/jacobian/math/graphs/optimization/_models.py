@@ -146,9 +146,6 @@ class GraphMstCycleCheck(StrictModel):
 class GraphMstOptimalityCertificate(StrictModel):
     """Inspectable cycle-property certificate for one selected tree."""
 
-    method: Literal["ALL_FUNDAMENTAL_CYCLES_NON_IMPROVING"] = (
-        "ALL_FUNDAMENTAL_CYCLES_NON_IMPROVING"
-    )
     checks: tuple[GraphMstCycleCheck, ...] = Field(max_length=496)
     required_checks: tuple[
         Literal[
@@ -193,7 +190,6 @@ class GraphMinimumSpanningTreeResult(StrictModel):
     convention: Literal[
         "MINIMUM_TOTAL_EDGE_WEIGHT_OVER_QQ_EMPTY_GRAPH_HAS_NO_SPANNING_TREE"
     ] = "MINIMUM_TOTAL_EDGE_WEIGHT_OVER_QQ_EMPTY_GRAPH_HAS_NO_SPANNING_TREE"
-    completion: Literal["COMPLETE"] = "COMPLETE"
 
     @model_validator(mode="after")
     def require_canonical_partition(self) -> Self:
@@ -315,7 +311,6 @@ class GraphHamiltonianPathResult(StrictModel):
     convention: Literal["EMPTY_GRAPH_HAS_EMPTY_HAMILTONIAN_PATH"] = (
         "EMPTY_GRAPH_HAS_EMPTY_HAMILTONIAN_PATH"
     )
-    completion: Literal["COMPLETE"] = "COMPLETE"
 
     @model_validator(mode="after")
     def bind_decision_and_path(self) -> Self:

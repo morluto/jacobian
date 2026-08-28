@@ -3,16 +3,28 @@
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.groups.root_systems._models import CartanMatrixRequest
+from jacobian.math.groups.root_systems._models import (
+    CartanMatrixRequest,
+    SimpleReflectionRequest,
+)
 from jacobian.math.groups.root_systems.operations import (
-    compute_root_system_data,
-    compute_simple_reflection,
-    compute_weyl_group_order,
     positive_roots,
     root_system_data,
     simple_reflection,
     weyl_group_order,
 )
+
+
+def compute_root_system_data(request: CartanMatrixRequest):
+    return root_system_data(request.matrix)
+
+
+def compute_simple_reflection(request: SimpleReflectionRequest):
+    return simple_reflection(request.matrix, request.vector, request.simple_index)
+
+
+def compute_weyl_group_order(request: CartanMatrixRequest):
+    return weyl_group_order(request.matrix)
 
 CartanMatrix = tuple[tuple[int, ...], ...]
 

@@ -15,10 +15,22 @@ from jacobian.math.groups.root_systems._models import (
     WeylGroupOrderResult,
 )
 from jacobian.math.groups.root_systems.operations import (
-    compute_root_system_data,
-    compute_simple_reflection,
-    compute_weyl_group_order,
+    root_system_data,
+    simple_reflection,
+    weyl_group_order,
 )
+
+
+def _run_root_system_data(request: CartanMatrixRequest) -> RootSystemDataResult:
+    return root_system_data(request.matrix)
+
+
+def _run_simple_reflection(request: SimpleReflectionRequest) -> SimpleReflectionResult:
+    return simple_reflection(request.matrix, request.vector, request.simple_index)
+
+
+def _run_weyl_group_order(request: CartanMatrixRequest) -> WeylGroupOrderResult:
+    return weyl_group_order(request.matrix)
 
 
 def _op[
@@ -58,7 +70,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "and Coxeter data for each irreducible component.",
         CartanMatrixRequest,
         RootSystemDataResult,
-        compute_root_system_data,
+        _run_root_system_data,
         "algebra",
         "root-system",
         "exact",
@@ -80,7 +92,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "simple-root axis and the index is zero-based.",
         SimpleReflectionRequest,
         SimpleReflectionResult,
-        compute_simple_reflection,
+        _run_simple_reflection,
         "algebra",
         "root-system",
         "exact",
@@ -103,7 +115,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Schreier-Sims order algorithm; it never enumerates Weyl-group elements.",
         CartanMatrixRequest,
         WeylGroupOrderResult,
-        compute_weyl_group_order,
+        _run_weyl_group_order,
         "algebra",
         "root-system",
         "exact",

@@ -72,11 +72,11 @@ class PositiveRootsResult(CartanMatrixRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: CartanMatrixRequest, positive_roots: tuple[tuple[int, ...], ...]
+        cls, matrix: tuple[tuple[int, ...], ...], positive_roots: tuple[tuple[int, ...], ...]
     ) -> Self:
         return cls.model_construct(
-            matrix=request.matrix,
-            rank=len(request.matrix),
+            matrix=matrix,
+            rank=len(matrix),
             positive_roots=positive_roots,
             num_positive_roots=len(positive_roots),
         )
@@ -175,7 +175,7 @@ class RootSystemDataResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: CartanMatrixRequest,
+        matrix: tuple[tuple[int, ...], ...],
         *,
         positive_roots: tuple[tuple[int, ...], ...],
         negative_roots: tuple[tuple[int, ...], ...],
@@ -183,8 +183,8 @@ class RootSystemDataResult(StrictModel):
         components: tuple[RootComponentData, ...],
     ) -> Self:
         return cls.model_construct(
-            rank=len(request.matrix),
-            cartan_matrix=request.matrix,
+            rank=len(matrix),
+            cartan_matrix=matrix,
             positive_roots=positive_roots,
             negative_roots=negative_roots,
             simple_roots=simple_roots,
@@ -251,12 +251,16 @@ class SimpleReflectionResult(StrictModel):
 
     @classmethod
     def _from_kernel(
-        cls, request: SimpleReflectionRequest, reflected_vector: tuple[int, ...]
+        cls,
+        matrix: tuple[tuple[int, ...], ...],
+        vector: tuple[int, ...],
+        simple_index: int,
+        reflected_vector: tuple[int, ...],
     ) -> Self:
         return cls.model_construct(
-            matrix=request.matrix,
-            vector=request.vector,
-            simple_index=request.simple_index,
+            matrix=matrix,
+            vector=vector,
+            simple_index=simple_index,
             reflected_vector=reflected_vector,
         )
 
@@ -268,8 +272,10 @@ class WeylGroupOrderResult(StrictModel):
     group_order: int = Field(ge=1, le=MAX_WEYL_GROUP_ORDER)
 
     @classmethod
-    def _from_kernel(cls, request: CartanMatrixRequest, group_order: int) -> Self:
+    def _from_kernel(
+        cls, matrix: tuple[tuple[int, ...], ...], group_order: int
+    ) -> Self:
         return cls.model_construct(
-            matrix=request.matrix,
+            matrix=matrix,
             group_order=group_order,
         )

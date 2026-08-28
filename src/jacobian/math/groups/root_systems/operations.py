@@ -16,11 +16,9 @@ from jacobian.math.groups.root_systems._models import (
     MAX_POSITIVE_ROOTS,
     MAX_RANK,
     MAX_REFLECTION_COORDINATE,
-    CartanMatrixRequest,
     PositiveRootsResult,
     RootComponentData,
     RootSystemDataResult,
-    SimpleReflectionRequest,
     SimpleReflectionResult,
     WeylGroupOrderResult,
 )
@@ -89,7 +87,6 @@ def _admit_cartan_finite_type(matrix: tuple[tuple[int, ...], ...]) -> None:
 def root_system_data(matrix: tuple[tuple[int, ...], ...]) -> RootSystemDataResult:
     """Compute complete root-system data from a canonical Cartan matrix."""
     _admit_cartan_finite_type(matrix)
-    request = CartanMatrixRequest.model_construct(matrix=matrix)
     n = len(matrix)
     simple_roots = tuple(tuple(int(i == j) for j in range(n)) for i in range(n))
     roots = enumerate_positive_roots(matrix)
@@ -114,7 +111,7 @@ def root_system_data(matrix: tuple[tuple[int, ...], ...]) -> RootSystemDataResul
         )
 
     return RootSystemDataResult._from_kernel(
-        request,
+        matrix,
         positive_roots=roots,
         negative_roots=tuple(tuple(-value for value in root) for root in roots),
         simple_roots=simple_roots,
@@ -125,9 +122,8 @@ def root_system_data(matrix: tuple[tuple[int, ...], ...]) -> RootSystemDataResul
 def positive_roots(matrix: tuple[tuple[int, ...], ...]) -> PositiveRootsResult:
     """Compute all positive roots of a root system from its Cartan matrix."""
     _admit_cartan_finite_type(matrix)
-    request = CartanMatrixRequest.model_construct(matrix=matrix)
     all_positive = enumerate_positive_roots(matrix)
-    return PositiveRootsResult._from_kernel(request, all_positive)
+    return PositiveRootsResult._from_kernel(matrix, all_positive)
 
 
 def _apply_reflection(
@@ -208,46 +204,18 @@ def simple_reflection(
             simple_index,
         )
     )
-    request = SimpleReflectionRequest.model_construct(
-        matrix=matrix, vector=vector, simple_index=simple_index
+    return SimpleReflectionResult._from_kernel(
+        matrix, vector, simple_index, reflected
     )
-    return SimpleReflectionResult._from_kernel(request, reflected)
 
 
 def weyl_group_order(matrix: tuple[tuple[int, ...], ...]) -> WeylGroupOrderResult:
     """Compute the exact order of a finite Weyl group without enumeration."""
     _admit_cartan_finite_type(matrix)
-    request = CartanMatrixRequest.model_construct(matrix=matrix)
-    return WeylGroupOrderResult._from_kernel(request, _weyl_group_order(matrix))
-
-
-def compute_positive_roots(request: CartanMatrixRequest) -> PositiveRootsResult:
-    """Project a wire request onto the native positive-roots operation."""
-    return positive_roots(request.matrix)
-
-
-def compute_root_system_data(request: CartanMatrixRequest) -> RootSystemDataResult:
-    """Project a wire request onto the native root-system operation."""
-    return root_system_data(request.matrix)
-
-
-def compute_simple_reflection(
-    request: SimpleReflectionRequest,
-) -> SimpleReflectionResult:
-    """Project a wire request onto the native simple-reflection operation."""
-    return simple_reflection(request.matrix, request.vector, request.simple_index)
-
-
-def compute_weyl_group_order(request: CartanMatrixRequest) -> WeylGroupOrderResult:
-    """Project a wire request onto the native Weyl-group operation."""
-    return weyl_group_order(request.matrix)
+    return WeylGroupOrderResult._from_kernel(matrix, _weyl_group_order(matrix))
 
 
 __all__ = [
-    "compute_positive_roots",
-    "compute_root_system_data",
-    "compute_simple_reflection",
-    "compute_weyl_group_order",
     "positive_roots",
     "root_system_data",
     "simple_reflection",

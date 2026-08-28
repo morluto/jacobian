@@ -15,14 +15,14 @@ from jacobian.math.topology.finite.spaces._models import (
     KolmogorovQuotientRequest,
     SubsetRequest,
 )
-from jacobian.math.topology.finite.spaces._operations import (
-    compute_boundary,
-    compute_closure,
-    compute_continuous_check,
-    compute_interior,
-    compute_kolmogorov_quotient,
+from jacobian.math.topology.finite.spaces._tools import (
+    TOOLS,
+    _boundary,
+    _closure,
+    _continuous_check,
+    _interior,
+    _kolmogorov_quotient,
 )
-from jacobian.math.topology.finite.spaces._tools import TOOLS
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -68,16 +68,16 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
 class TestInterior:
     def test_sierpinski_interior_a(self) -> None:
         # Interior of {a}: {a} is open, so interior = {a}.
-        result = compute_interior(SubsetRequest(space=_sierpinski(), subset=(0,)))
+        result = _interior(SubsetRequest(space=_sierpinski(), subset=(0,)))
         assert result.interior == (0,)
 
     def test_sierpinski_interior_b(self) -> None:
         # Interior of {b}: {b} is not open (its minimal nbhd is {a,b}), so interior = {}.
-        result = compute_interior(SubsetRequest(space=_sierpinski(), subset=(1,)))
+        result = _interior(SubsetRequest(space=_sierpinski(), subset=(1,)))
         assert result.interior == ()
 
     def test_sierpinski_interior_ab(self) -> None:
-        result = compute_interior(SubsetRequest(space=_sierpinski(), subset=(0, 1)))
+        result = _interior(SubsetRequest(space=_sierpinski(), subset=(0, 1)))
         assert result.interior == (0, 1)
 
 
@@ -89,11 +89,11 @@ class TestInterior:
 class TestClosure:
     def test_sierpinski_closure_a(self) -> None:
         # Closure of {a}: up-set of a = {b} (since b >= a in specialization).
-        result = compute_closure(SubsetRequest(space=_sierpinski(), subset=(0,)))
+        result = _closure(SubsetRequest(space=_sierpinski(), subset=(0,)))
         assert result.closure == (0, 1)
 
     def test_sierpinski_closure_b(self) -> None:
-        result = compute_closure(SubsetRequest(space=_sierpinski(), subset=(1,)))
+        result = _closure(SubsetRequest(space=_sierpinski(), subset=(1,)))
         assert result.closure == (1,)
 
 
@@ -105,7 +105,7 @@ class TestClosure:
 class TestBoundary:
     def test_sierpinski_boundary_a(self) -> None:
         # Closure({a}) = {a,b}, Interior({a}) = {a}. Boundary = {b}.
-        result = compute_boundary(SubsetRequest(space=_sierpinski(), subset=(0,)))
+        result = _boundary(SubsetRequest(space=_sierpinski(), subset=(0,)))
         assert result.boundary == (1,)
 
 
@@ -116,14 +116,14 @@ class TestBoundary:
 
 class TestKolmogorovQuotient:
     def test_sierpinski_is_t0(self) -> None:
-        result = compute_kolmogorov_quotient(
+        result = _kolmogorov_quotient(
             KolmogorovQuotientRequest(space=_sierpinski())
         )
         # Sierpinski space is T0, so the quotient has 2 points.
         assert len(result.quotient_points) == 2
 
     def test_discrete_is_t0(self) -> None:
-        result = compute_kolmogorov_quotient(
+        result = _kolmogorov_quotient(
             KolmogorovQuotientRequest(space=_discrete_2())
         )
         assert len(result.quotient_points) == 2
@@ -136,7 +136,7 @@ class TestKolmogorovQuotient:
             preorder=((0, 1), (0, 1)),
         )
 
-        result = compute_kolmogorov_quotient(KolmogorovQuotientRequest(space=space))
+        result = _kolmogorov_quotient(KolmogorovQuotientRequest(space=space))
 
         assert result.quotient_points == ((left, right),)
         assert result.quotient_preorder == ((0,),)
@@ -152,13 +152,13 @@ class TestContinuityCheck:
     def test_identity_is_continuous(self) -> None:
         space = _sierpinski()
         m = FiniteTopologicalMap(source=space, target=space, point_map=(0, 1))
-        result = compute_continuous_check(ContinuousCheckRequest(point_map=m))
+        result = _continuous_check(ContinuousCheckRequest(point_map=m))
         assert result.is_continuous is True
 
     def test_swap_not_continuous(self) -> None:
         space = _sierpinski()
         m = FiniteTopologicalMap(source=space, target=space, point_map=(1, 0))
-        result = compute_continuous_check(ContinuousCheckRequest(point_map=m))
+        result = _continuous_check(ContinuousCheckRequest(point_map=m))
         assert result.is_continuous is False
 
 
@@ -170,7 +170,7 @@ class TestContinuityCheck:
 class TestValidation:
     @pytest.mark.parametrize(
         "operation",
-        (compute_interior, compute_closure, compute_boundary),
+        (_interior, _closure, _boundary),
     )
     def test_subset_admission_rejects_out_of_range_indices(self, operation) -> None:
         request = SubsetRequest(space=_sierpinski(), subset=(2,))

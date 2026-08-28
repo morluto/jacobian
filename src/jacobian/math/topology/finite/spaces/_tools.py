@@ -5,7 +5,11 @@ from typing import Any
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.topology.finite.spaces._models import (
     BoundaryResult,
     ClosureResult,
@@ -16,13 +20,49 @@ from jacobian.math.topology.finite.spaces._models import (
     KolmogorovQuotientResult,
     SubsetRequest,
 )
-from jacobian.math.topology.finite.spaces._operations import (
-    compute_boundary,
-    compute_closure,
-    compute_continuous_check,
-    compute_interior,
-    compute_kolmogorov_quotient,
+from jacobian.math.topology.finite.spaces.operations import (
+    boundary,
+    closure,
+    continuous_check,
+    interior,
+    kolmogorov_quotient,
 )
+
+
+def _admit_subset(request: SubsetRequest) -> frozenset[int]:
+    if any(not 0 <= index < len(request.space.points) for index in request.subset):
+        raise OperationDomainValidationError(
+            location=("subset",),
+            code="finite_topology_space.subset_index_out_of_range",
+            message="subset index out of range",
+        )
+    return frozenset(request.subset)
+
+
+def _interior(request: SubsetRequest) -> InteriorResult:
+    result = interior(request.space, _admit_subset(request))
+    return InteriorResult(interior=tuple(sorted(result)))
+
+
+def _closure(request: SubsetRequest) -> ClosureResult:
+    result = closure(request.space, _admit_subset(request))
+    return ClosureResult(closure=tuple(sorted(result)))
+
+
+def _boundary(request: SubsetRequest) -> BoundaryResult:
+    result = boundary(request.space, _admit_subset(request))
+    return BoundaryResult(boundary=tuple(sorted(result)))
+
+
+def _continuous_check(request: ContinuousCheckRequest) -> ContinuousCheckResult:
+    result = continuous_check(request.point_map)
+    return ContinuousCheckResult(is_continuous=result)
+
+
+def _kolmogorov_quotient(
+    request: KolmogorovQuotientRequest,
+) -> KolmogorovQuotientResult:
+    return kolmogorov_quotient(request.space)
 
 
 def _op[
@@ -67,7 +107,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "open neighbourhood is contained in the subset.",
         SubsetRequest,
         InteriorResult,
-        compute_interior,
+        _interior,
         "finite-topology",
         "interior",
         "exact",
@@ -86,7 +126,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "of x is the up-set of x in the specialization preorder.",
         SubsetRequest,
         ClosureResult,
-        compute_closure,
+        _closure,
         "finite-topology",
         "closure",
         "exact",
@@ -104,7 +144,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Return the boundary of a subset: closure minus interior.",
         SubsetRequest,
         BoundaryResult,
-        compute_boundary,
+        _boundary,
         "finite-topology",
         "boundary",
         "exact",
@@ -123,7 +163,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "open neighbourhood, plus the class map.",
         KolmogorovQuotientRequest,
         KolmogorovQuotientResult,
-        compute_kolmogorov_quotient,
+        _kolmogorov_quotient,
         "finite-topology",
         "kolmogorov-quotient",
         "exact",
@@ -143,7 +183,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "f(x') <= f(x) in the specialization preorders.",
         ContinuousCheckRequest,
         ContinuousCheckResult,
-        compute_continuous_check,
+        _continuous_check,
         "finite-topology",
         "continuity",
         "exact",

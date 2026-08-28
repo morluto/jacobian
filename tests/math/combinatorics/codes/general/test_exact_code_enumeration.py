@@ -11,10 +11,10 @@ from jacobian.math.combinatorics.codes.general._models import (
     CoveringRadiusRequest,
     LinearCodeRequest,
 )
-from jacobian.math.combinatorics.codes.general._operations import (
-    compute_covering_radius,
-    compute_min_distance,
-    compute_weight_dist,
+from jacobian.math.combinatorics.codes.general._tools import (
+    _covering_radius,
+    _minimum_distance,
+    _weight_distribution,
 )
 
 
@@ -33,25 +33,25 @@ def _assert_operation_error(factory: Callable[[], object], code: str) -> None:
 def test_prime_field_code_enumeration_uses_the_declared_matrix() -> None:
     request = LinearCodeRequest(field_order=2, generator_matrix=((1, 1),))
 
-    assert compute_min_distance(request).minimum_distance == 2
-    assert compute_weight_dist(request).weights == ((0, 1), (2, 1))
+    assert _minimum_distance(request).minimum_distance == 2
+    assert _weight_distribution(request).weights == ((0, 1), (2, 1))
 
 
 def test_code_weight_distribution_counts_distinct_words_for_dependent_rows() -> None:
     request = LinearCodeRequest(field_order=2, generator_matrix=((1,), (1,)))
 
-    assert compute_weight_dist(request).weights == ((0, 1), (1, 1))
+    assert _weight_distribution(request).weights == ((0, 1), (1, 1))
 
 
 def test_code_contract_rejects_nonprime_fields_and_unbounded_enumeration() -> None:
     _assert_operation_error(
-        lambda: compute_min_distance(
+        lambda: _minimum_distance(
             LinearCodeRequest(field_order=4, generator_matrix=((1,),))
         ),
         "code_theory.field_order_not_prime",
     )
     _assert_operation_error(
-        lambda: compute_min_distance(
+        lambda: _minimum_distance(
             LinearCodeRequest(field_order=251, generator_matrix=((1,),) * 3)
         ),
         "code_theory.enumeration_work_exceeded",
@@ -87,7 +87,7 @@ def test_binary_repetition_code_length_three_has_covering_radius_one() -> None:
         generator_matrix=((1, 1, 1),),
     )
 
-    result = compute_covering_radius(request)
+    result = _covering_radius(request)
 
     assert result.covering_radius == 1
 
@@ -98,7 +98,7 @@ def test_binary_repetition_code_length_four_has_covering_radius_two() -> None:
         generator_matrix=((1, 1, 1, 1),),
     )
 
-    assert compute_covering_radius(request).covering_radius == 2
+    assert _covering_radius(request).covering_radius == 2
 
 
 def test_binary_hamming_code_has_covering_radius_one() -> None:
@@ -112,7 +112,7 @@ def test_binary_hamming_code_has_covering_radius_one() -> None:
         ),
     )
 
-    assert compute_covering_radius(request).covering_radius == 1
+    assert _covering_radius(request).covering_radius == 1
 
 
 def test_ternary_repetition_code_has_covering_radius_two() -> None:
@@ -121,7 +121,7 @@ def test_ternary_repetition_code_has_covering_radius_two() -> None:
         generator_matrix=((1, 1, 1),),
     )
 
-    assert compute_covering_radius(request).covering_radius == 2
+    assert _covering_radius(request).covering_radius == 2
 
 
 def test_dependent_generator_rows_use_rank_not_row_count() -> None:
@@ -130,7 +130,7 @@ def test_dependent_generator_rows_use_rank_not_row_count() -> None:
         generator_matrix=((1, 1, 1), (1, 1, 1)),
     )
 
-    assert compute_covering_radius(request).covering_radius == 1
+    assert _covering_radius(request).covering_radius == 1
 
 
 def test_full_space_code_has_covering_radius_zero() -> None:
@@ -139,7 +139,7 @@ def test_full_space_code_has_covering_radius_zero() -> None:
         generator_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
     )
 
-    assert compute_covering_radius(request).covering_radius == 0
+    assert _covering_radius(request).covering_radius == 0
 
 
 def test_zero_code_has_covering_radius_equal_to_length() -> None:
@@ -148,14 +148,14 @@ def test_zero_code_has_covering_radius_equal_to_length() -> None:
         generator_matrix=((0, 0, 0),),
     )
 
-    assert compute_covering_radius(request).covering_radius == 3
+    assert _covering_radius(request).covering_radius == 3
 
 
 def test_covering_radius_contract_rejects_dependent_row_state_space_hole() -> None:
     repeated_row = (1, 0, 0, 0, 0, 0, 0, 0)
 
     _assert_operation_error(
-        lambda: compute_covering_radius(
+        lambda: _covering_radius(
             CoveringRadiusRequest(
                 field_order=251,
                 generator_matrix=(repeated_row,) * 8,
@@ -171,7 +171,7 @@ def test_covering_radius_contract_rejects_excessive_transition_work() -> None:
     )
 
     _assert_operation_error(
-        lambda: compute_covering_radius(
+        lambda: _covering_radius(
             CoveringRadiusRequest(
                 field_order=3,
                 generator_matrix=generator_matrix,
@@ -183,7 +183,7 @@ def test_covering_radius_contract_rejects_excessive_transition_work() -> None:
 
 def test_covering_radius_contract_rejects_nonprime_field() -> None:
     _assert_operation_error(
-        lambda: compute_covering_radius(
+        lambda: _covering_radius(
             CoveringRadiusRequest(
                 field_order=4,
                 generator_matrix=((1, 1),),
@@ -210,12 +210,12 @@ def test_results_retain_source_and_round_trip() -> None:
     )
 
     request = _linear_request()
-    dist = compute_min_distance(request)
+    dist = _minimum_distance(request)
     assert dist.request == request
     assert dist.minimum_distance == 2
     assert MinimumDistanceResult.model_validate(dist.model_dump()) == dist
 
-    profile = compute_weight_dist(request)
+    profile = _weight_distribution(request)
     assert profile.request == request
     # q^rank = 9 distinct codewords over GF(3) with rank-2 generator rows.
     assert sum(count for _weight, count in profile.weights) == 9
@@ -224,7 +224,7 @@ def test_results_retain_source_and_round_trip() -> None:
     covering = CoveringRadiusRequest(
         field_order=2, generator_matrix=((1, 0, 1), (0, 1, 1))
     )
-    radius = compute_covering_radius(covering)
+    radius = _covering_radius(covering)
     assert radius.request == covering
     assert CoveringRadiusResult.model_validate(radius.model_dump()) == radius
 
@@ -285,7 +285,7 @@ def test_zero_code_result_preserves_the_documented_length_convention() -> None:
     from jacobian.math.combinatorics.codes.general._models import MinimumDistanceResult
 
     request = LinearCodeRequest(field_order=2, generator_matrix=((0, 0, 0),))
-    result = compute_min_distance(request)
+    result = _minimum_distance(request)
 
     assert result.minimum_distance == 3
     assert MinimumDistanceResult.model_validate(result.model_dump()) == result
@@ -297,7 +297,7 @@ def test_dependent_generator_rows_rank_cardinality() -> None:
     """Dependent rows deduplicate: cardinality is q^rank, not q^rows."""
 
     request = LinearCodeRequest(field_order=2, generator_matrix=((1, 1), (1, 1)))
-    profile = compute_weight_dist(request)
+    profile = _weight_distribution(request)
     assert sum(count for _weight, count in profile.weights) == 2
 
 
@@ -315,11 +315,11 @@ def test_enumeration_budget_charges_the_selected_kernel_path() -> None:
     boundary = LinearCodeRequest(field_order=251, generator_matrix=((1,), (0,)))
     tuples_per_pass = boundary.field_order ** len(boundary.generator_matrix)
     assert tuples_per_pass <= per_pass
-    assert compute_min_distance(boundary).minimum_distance == 1
-    assert compute_weight_dist(boundary).weights == ((0, 1), (1, 250))
+    assert _minimum_distance(boundary).minimum_distance == 1
+    assert _weight_distribution(boundary).weights == ((0, 1), (1, 250))
 
     _assert_operation_error(
-        lambda: compute_min_distance(
+        lambda: _minimum_distance(
             LinearCodeRequest(field_order=251, generator_matrix=((1,),) * 3)
         ),
         "code_theory.enumeration_work_exceeded",
@@ -348,7 +348,7 @@ def test_covering_radius_budget_charges_the_selected_bfs_path() -> None:
     assert states * 24 * SYNDROME_BFS_PASSES <= MAX_COVERING_RADIUS_TRANSITIONS
 
     _assert_operation_error(
-        lambda: compute_covering_radius(
+        lambda: _covering_radius(
             CoveringRadiusRequest(
                 field_order=2,
                 generator_matrix=tuple(row + (1,) * 17 for row in identity),

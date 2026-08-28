@@ -1,14 +1,28 @@
 """Finite delta-matroid operation declarations."""
 
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationDomainValidationError
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
 )
-from jacobian.math.combinatorics.matroids.delta._operations import (
-    compute_from_feasible_sets,
-)
+from jacobian.math.combinatorics.matroids.delta.operations import from_feasible_sets
+from jacobian.math.combinatorics.matroids.delta.values import DeltaMatroidAdmissionError
+
+
+def _from_feasible_sets(
+    request: DeltaMatroidFromFeasibleSetsRequest,
+) -> DeltaMatroidRecognitionResult:
+    """Recognize a complete feasible family as a finite delta-matroid."""
+
+    try:
+        return from_feasible_sets(request.system)
+    except DeltaMatroidAdmissionError as exc:
+        raise OperationDomainValidationError(
+            location=("system",),
+            code=f"delta_matroid.{exc.reason}",
+            message=str(exc),
+        ) from exc
 
 TOOLS: MathTools = (
     MathTool(
@@ -21,7 +35,7 @@ TOOLS: MathTools = (
         ),
         request_type=DeltaMatroidFromFeasibleSetsRequest,
         result_type=DeltaMatroidRecognitionResult,
-        run=compute_from_feasible_sets,
+        run=_from_feasible_sets,
         tags=("delta-matroid", "symmetric-exchange", "exact"),
         examples=(
             example(

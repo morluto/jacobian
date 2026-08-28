@@ -12,10 +12,7 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
 )
-from jacobian.math.combinatorics.matroids.delta._operations import (
-    compute_from_feasible_sets,
-)
-from jacobian.math.combinatorics.matroids.delta._tools import TOOLS
+from jacobian.math.combinatorics.matroids.delta._tools import TOOLS, _from_feasible_sets
 
 
 def _two_element_delta_matroid(*, scrambled: bool = False) -> FiniteFeasibleSetSystem:
@@ -30,7 +27,7 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
 
 
 def test_complete_feasible_family_constructs_canonical_delta_matroid() -> None:
-    result = compute_from_feasible_sets(
+    result = _from_feasible_sets(
         DeltaMatroidFromFeasibleSetsRequest(system=_two_element_delta_matroid())
     )
 
@@ -48,7 +45,7 @@ def test_empty_ground_identity_delta_matroid_has_native_and_wire_replay() -> Non
     assert native_result.status == "DELTA_MATROID"
     assert native_result.delta_matroid == FiniteDeltaMatroid(ground=(), feasible=((),))
 
-    wire_result = compute_from_feasible_sets(
+    wire_result = _from_feasible_sets(
         DeltaMatroidFromFeasibleSetsRequest(system=system)
     )
     assert wire_result == native_result
@@ -143,7 +140,7 @@ def test_sparse_family_beyond_any_fixed_ground_cap_is_recognized() -> None:
         feasible=((),),
     )
 
-    wire_result = compute_from_feasible_sets(
+    wire_result = _from_feasible_sets(
         DeltaMatroidFromFeasibleSetsRequest(system=system)
     )
     assert wire_result == native_result
@@ -171,7 +168,7 @@ def test_label_byte_budget_bounds_ground_count_without_a_fixed_cap() -> None:
     oversized = FiniteFeasibleSetSystem(ground=_labels(1_025), feasible=((),))
     request = DeltaMatroidFromFeasibleSetsRequest(system=oversized)
     with pytest.raises(ValueError, match="ground labels exceed"):
-        compute_from_feasible_sets(request)
+        _from_feasible_sets(request)
 
 
 def test_non_utf8_representable_ground_labels_are_rejected_not_host_errors() -> None:
@@ -185,7 +182,7 @@ def test_non_utf8_representable_ground_labels_are_rejected_not_host_errors() -> 
 
     request = DeltaMatroidFromFeasibleSetsRequest(system=system)
     with pytest.raises(ValueError, match="UTF-8-representable"):
-        compute_from_feasible_sets(request)
+        _from_feasible_sets(request)
 
     with pytest.raises(ValidationError) as error:
         FiniteDeltaMatroid(ground=("\ud800",), feasible=((),))
@@ -243,7 +240,7 @@ def test_membership_envelope_rejects_wide_families_without_a_row_cap() -> None:
         )
     )
     with pytest.raises(ValueError, match="memberships exceed"):
-        compute_from_feasible_sets(request)
+        _from_feasible_sets(request)
 
 
 def test_native_admission_rejects_exchange_candidate_space_before_axiom_pass() -> None:
@@ -264,4 +261,4 @@ def test_native_admission_rejects_exchange_candidate_space_before_axiom_pass() -
         )
     )
     with pytest.raises(ValueError, match="candidate checks exceed"):
-        compute_from_feasible_sets(request)
+        _from_feasible_sets(request)

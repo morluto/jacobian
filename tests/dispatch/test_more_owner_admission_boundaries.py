@@ -96,3 +96,48 @@ def test_comultiplication_coalgebra_admission_is_typed() -> None:
 
     assert caught.value.errors()[0]["loc"] == ("coalgebra",)
     assert caught.value.errors()[0]["type"] == "coalgebra.prime_not_prime"
+
+
+def test_visibility_kernel_result_budget_is_typed_after_wire_parsing() -> None:
+    """A valid large-coordinate polygon is rejected before kernel expansion."""
+
+    scale = 10**63
+    step = scale // 16
+    points = [
+        {
+            "x": {"num": str(index * step), "den": "1"},
+            "y": {"num": "0", "den": "1"},
+        }
+        for index in range(17)
+    ]
+    points.extend(
+        {
+            "x": {"num": str(scale), "den": "1"},
+            "y": {"num": str(index * step), "den": "1"},
+        }
+        for index in range(1, 17)
+    )
+    points.extend(
+        {
+            "x": {"num": str(index * step), "den": "1"},
+            "y": {"num": str(scale), "den": "1"},
+        }
+        for index in range(15, -1, -1)
+    )
+    points.extend(
+        {
+            "x": {"num": "0", "den": "1"},
+            "y": {"num": str(index * step), "den": "1"},
+        }
+        for index in range(15, 0, -1)
+    )
+
+    with pytest.raises(OperationDomainValidationError) as caught:
+        invoke_operation(
+            "geometry.polygon.visibility_kernel.compute",
+            {"polygon": {"points": points}},
+            Catalog.open(),
+        )
+
+    assert caught.value.errors()[0]["loc"] == ("polygon",)
+    assert caught.value.errors()[0]["type"] == "geometry.visibility_kernel_not_admitted"

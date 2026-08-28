@@ -22,11 +22,29 @@ from jacobian.math.coalgebras._models import (
     GroupLikeElementsResult,
     group_like_scan_work,
 )
-from jacobian.math.coalgebras._operations import (
-    compute_comultiplication,
-    compute_counit,
-    find_group_like_elements,
+from jacobian.math.coalgebras.operations import (
+    comultiplication,
+    counit,
+    group_like_elements,
 )
+
+
+def _run_comultiplication(request: ComultiplicationRequest) -> ComultiplicationResult:
+    return ComultiplicationResult._from_kernel(
+        request, comultiplication(request.coalgebra, request.element_index)
+    )
+
+
+def _run_counit(request: CounitRequest) -> CounitResult:
+    return CounitResult._from_kernel(
+        request, counit(request.coalgebra, request.element_index)
+    )
+
+
+def _run_group_like(request: GroupLikeElementsRequest) -> GroupLikeElementsResult:
+    return GroupLikeElementsResult._from_kernel(
+        request, elements=group_like_elements(request.coalgebra)
+    )
 
 
 class MatrixPayload(TypedDict):
@@ -63,7 +81,7 @@ class TestComultiplication:
             comultiplication=(((1,),),),
             counit=(1,),
         )
-        result = compute_comultiplication(
+        result = _run_comultiplication(
             ComultiplicationRequest(coalgebra=ca, element_index=0)
         )
         assert result.matrix.entries[0][0] == 1
@@ -79,7 +97,7 @@ class TestComultiplication:
             ),
             counit=(1, 1),
         )
-        result = compute_comultiplication(
+        result = _run_comultiplication(
             ComultiplicationRequest(coalgebra=ca, element_index=0)
         )
         assert result.matrix.entries[0][0] == 1
@@ -97,7 +115,7 @@ class TestCounit:
             comultiplication=(((1,),),),
             counit=(1,),
         )
-        result = compute_counit(CounitRequest(coalgebra=ca, element_index=0))
+        result = _run_counit(CounitRequest(coalgebra=ca, element_index=0))
         assert result.value == 1
 
     def test_counit_second_group_like(self) -> None:
@@ -111,7 +129,7 @@ class TestCounit:
             ),
             counit=(1, 1),
         )
-        result = compute_counit(CounitRequest(coalgebra=ca, element_index=1))
+        result = _run_counit(CounitRequest(coalgebra=ca, element_index=1))
         assert result.value == 1
 
 
@@ -126,7 +144,7 @@ class TestGroupLikeElements:
             comultiplication=(((1,),),),
             counit=(1,),
         )
-        result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
         assert result.count == 1
 
     def test_scaled_group_like_found(self) -> None:
@@ -137,7 +155,7 @@ class TestGroupLikeElements:
             comultiplication=(((2,),),),
             counit=(3,),
         )
-        result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
         assert result.count == 1
 
     def test_two_group_like(self) -> None:
@@ -151,7 +169,7 @@ class TestGroupLikeElements:
             ),
             counit=(1, 1),
         )
-        result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
         assert result.count == 2
 
     def test_scaled_group_like(self) -> None:
@@ -167,7 +185,7 @@ class TestGroupLikeElements:
             comultiplication=(((2,),),),
             counit=(3,),
         )
-        result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
         assert result.count == 1
         assert result.elements[0].coefficients == (2,)
 
@@ -180,7 +198,7 @@ class TestGroupLikeElements:
             counit=(1,),
         )
         with _raises_code("coalgebra.prime_not_prime"):
-            compute_comultiplication(
+            _run_comultiplication(
                 ComultiplicationRequest(coalgebra=ca, element_index=0)
             )
 
@@ -189,7 +207,7 @@ class TestGroupLikeElements:
         oversized = _direct_sum_group_like_coalgebra(12)
         assert group_like_scan_work(2, 12) > GROUP_LIKE_SCAN_WORK_BUDGET
         with _raises_code("coalgebra.scan_work_budget_exceeded"):
-            find_group_like_elements(GroupLikeElementsRequest(coalgebra=oversized))
+            _run_group_like(GroupLikeElementsRequest(coalgebra=oversized))
 
         large_prime_squared = Coalgebra(
             prime=9973,
@@ -202,7 +220,7 @@ class TestGroupLikeElements:
         )
         assert group_like_scan_work(9973, 2) > GROUP_LIKE_SCAN_WORK_BUDGET
         with _raises_code("coalgebra.scan_work_budget_exceeded"):
-            find_group_like_elements(
+            _run_group_like(
                 GroupLikeElementsRequest(coalgebra=large_prime_squared)
             )
 
@@ -220,7 +238,7 @@ class TestGroupLikeElements:
         assert (
             group_like_scan_work(ca.prime, ca.dimension) <= GROUP_LIKE_SCAN_WORK_BUDGET
         )
-        result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
         # Both basis elements are group-like in this direct-sum coalgebra.
         assert result.count == 2
         found = {tuple(e.coefficients) for e in result.elements}
@@ -243,11 +261,11 @@ class TestSourceBoundResults:
 
     def test_results_revalidate_round_trip(self) -> None:
         ca = self._two_dim_coalgebra()
-        comult = compute_comultiplication(
+        comult = _run_comultiplication(
             ComultiplicationRequest(coalgebra=ca, element_index=1)
         )
-        counit = compute_counit(CounitRequest(coalgebra=ca, element_index=0))
-        group_like = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        counit = _run_counit(CounitRequest(coalgebra=ca, element_index=0))
+        group_like = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
         assert ComultiplicationResult.model_validate(comult.model_dump()) == comult
         assert CounitResult.model_validate(counit.model_dump()) == counit
         assert (
@@ -318,7 +336,7 @@ class TestSourceBoundResults:
             ),
             counit=(1, 0),
         )
-        result = compute_counit(CounitRequest(coalgebra=ca, element_index=1))
+        result = _run_counit(CounitRequest(coalgebra=ca, element_index=1))
         claimed = CounitResult(
             coalgebra=other,
             element_index=result.element_index,
@@ -400,25 +418,25 @@ class TestDerivedDimensionAdmission:
             group_like_scan_work(ca.prime, ca.dimension) <= GROUP_LIKE_SCAN_WORK_BUDGET
         )
 
-        result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
         assert result.count == 9
         assert {tuple(e.coefficients) for e in result.elements} == {
             tuple(1 if i == j else 0 for i in range(9)) for j in range(9)
         }
 
-        comult = compute_comultiplication(
+        comult = _run_comultiplication(
             ComultiplicationRequest(coalgebra=ca, element_index=8)
         )
         assert comult.matrix.entries[8][8] == 1
 
-        counit = compute_counit(CounitRequest(coalgebra=ca, element_index=8))
+        counit = _run_counit(CounitRequest(coalgebra=ca, element_index=8))
         assert counit.value == 1
 
     def test_boundary_dimension_sixteen_admitted(self) -> None:
         """16^3 = 4096 entries sits exactly on the derived tensor budget."""
         ca = _direct_sum_group_like_coalgebra(16)
         assert ca.dimension**3 == MAX_TENSOR_ENTRIES
-        result = compute_comultiplication(
+        result = _run_comultiplication(
             ComultiplicationRequest(coalgebra=ca, element_index=15)
         )
         assert result.matrix.entries[15][15] == 1
@@ -427,7 +445,7 @@ class TestDerivedDimensionAdmission:
         """A 17-dim tensor would carry 4913 structure constants and is rejected."""
         ca = _direct_sum_group_like_coalgebra(17)
         with _raises_code("coalgebra.tensor_budget_exceeded"):
-            compute_comultiplication(
+            _run_comultiplication(
                 ComultiplicationRequest(coalgebra=ca, element_index=0)
             )
 
@@ -437,7 +455,7 @@ class TestDerivedDimensionAdmission:
         ca = _direct_sum_group_like_coalgebra(9, prime=13)
         assert ca.dimension**3 == 729 <= MAX_TENSOR_ENTRIES
         with _raises_code("coalgebra.scan_work_budget_exceeded"):
-            find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+            _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
 
 
 class TestCounitOperationRemovalFromCatalog:
@@ -459,7 +477,7 @@ class TestCounitOperationRemovalFromCatalog:
             comultiplication=(((1,),),),
             counit=(1,),
         )
-        result = compute_counit(CounitRequest(coalgebra=ca, element_index=0))
+        result = _run_counit(CounitRequest(coalgebra=ca, element_index=0))
         assert result.value == 1
 
 
@@ -477,7 +495,7 @@ class TestScanWorkBoundary:
             group_like_scan_work(ca.prime, ca.dimension) <= GROUP_LIKE_SCAN_WORK_BUDGET
         )
         started = time.monotonic()
-        result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
         elapsed = time.monotonic() - started
         assert result.count == 11
         assert {tuple(e.coefficients) for e in result.elements} == {
@@ -493,13 +511,13 @@ class TestScanWorkBoundary:
             group_like_scan_work(ca.prime, ca.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
         )
         with _raises_code("coalgebra.scan_work_budget_exceeded"):
-            find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+            _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
 
     def test_reported_sixteen_dim_request_typed_rejected(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The originally reported 16-dim GF(2) direct-sum request pays
-        roughly 152M reconstruction units per pass (kernel plus replay),
+        roughly 152M reconstruction units,
         far above the budget, so it fails admission without enumerating.
 
         Rejection is proven structurally: the predicted scan work exceeds
@@ -509,7 +527,7 @@ class TestScanWorkBoundary:
         construction legitimately pays the O(dimension^4) coalgebra-axiom
         verification, which varies several fold on loaded CI runners.
         """
-        import jacobian.math.coalgebras._operations as coalgebra_operations
+        import jacobian.math.coalgebras.operations as coalgebra_operations
 
         def forbid_enumeration(coalgebra: Coalgebra) -> NoReturn:
             raise AssertionError("admission must reject before enumeration")
@@ -522,7 +540,7 @@ class TestScanWorkBoundary:
             group_like_scan_work(ca.prime, ca.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
         )
         with _raises_code("coalgebra.scan_work_budget_exceeded"):
-            find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+            _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
 
 
 class TestNestedModulusPrevalidation:
@@ -564,15 +582,13 @@ class TestNestedModulusPrevalidation:
             ComultiplicationResult.model_validate(self._payload(composite))
 
     def test_matching_nested_modulus_still_round_trips(self) -> None:
-        from jacobian.math.coalgebras._operations import compute_comultiplication
-
         ca = Coalgebra(
             prime=5,
             dimension=1,
             comultiplication=(((1,),),),
             counit=(1,),
         )
-        result = compute_comultiplication(
+        result = _run_comultiplication(
             ComultiplicationRequest(coalgebra=ca, element_index=0)
         )
         assert ComultiplicationResult.model_validate(result.model_dump()) == result
@@ -590,13 +606,13 @@ class TestPrimeDigitAdmission:
             comultiplication=(((1,),),),
             counit=(1,),
         )
-        comult = compute_comultiplication(
+        comult = _run_comultiplication(
             ComultiplicationRequest(coalgebra=ca, element_index=0)
         )
         assert comult.matrix.entries == ((1,),)
-        counit = compute_counit(CounitRequest(coalgebra=ca, element_index=0))
+        counit = _run_counit(CounitRequest(coalgebra=ca, element_index=0))
         assert counit.value == 1
-        result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
         assert result.count == 1
         assert result.elements[0].coefficients == (1,)
 
@@ -611,7 +627,7 @@ class TestPrimeDigitAdmission:
             counit=(1,),
         )
         with _raises_code("coalgebra.prime_digits_exceeded"):
-            compute_comultiplication(
+            _run_comultiplication(
                 ComultiplicationRequest(coalgebra=ca, element_index=0)
             )
         assert time.monotonic() - started < 5
@@ -626,7 +642,7 @@ class TestPrimeDigitAdmission:
             counit=(1,),
         )
         with _raises_code("coalgebra.prime_digits_exceeded"):
-            compute_comultiplication(
+            _run_comultiplication(
                 ComultiplicationRequest(coalgebra=ca, element_index=0)
             )
         from sympy import nextprime
@@ -637,7 +653,7 @@ class TestPrimeDigitAdmission:
             comultiplication=(((1,),),),
             counit=(1,),
         )
-        comult = compute_comultiplication(
+        comult = _run_comultiplication(
             ComultiplicationRequest(coalgebra=ca, element_index=0)
         )
         assert comult.matrix.entries == ((1,),)

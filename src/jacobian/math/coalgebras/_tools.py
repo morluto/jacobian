@@ -12,10 +12,22 @@ from jacobian.math.coalgebras._models import (
     GroupLikeElementsRequest,
     GroupLikeElementsResult,
 )
-from jacobian.math.coalgebras._operations import (
-    compute_comultiplication,
-    find_group_like_elements,
+from jacobian.math.coalgebras.operations import (
+    comultiplication,
+    group_like_elements,
 )
+
+
+def _comultiplication(request: ComultiplicationRequest) -> ComultiplicationResult:
+    return ComultiplicationResult._from_kernel(
+        request, comultiplication(request.coalgebra, request.element_index)
+    )
+
+
+def _group_like(request: GroupLikeElementsRequest) -> GroupLikeElementsResult:
+    return GroupLikeElementsResult._from_kernel(
+        request, elements=group_like_elements(request.coalgebra)
+    )
 
 
 def coalgebra_operation[
@@ -77,7 +89,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "c_j (x) c_k in Delta(c_i).",
         ComultiplicationRequest,
         ComultiplicationResult,
-        compute_comultiplication,
+        _comultiplication,
         "coalgebra",
         "comultiplication",
         "exact",
@@ -100,7 +112,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "independent and each spans a one-dimensional subcoalgebra.",
         GroupLikeElementsRequest,
         GroupLikeElementsResult,
-        find_group_like_elements,
+        _group_like,
         "coalgebra",
         "group-like",
         "exact",

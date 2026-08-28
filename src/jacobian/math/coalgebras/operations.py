@@ -10,13 +10,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.coalgebras._models import (
     GROUP_LIKE_SCAN_WORK_BUDGET,
     Coalgebra,
-    ComultiplicationRequest,
-    ComultiplicationResult,
-    CounitRequest,
-    CounitResult,
     GroupLikeElement,
-    GroupLikeElementsRequest,
-    GroupLikeElementsResult,
     group_like_scan_work,
     require_coalgebra_admission,
 )
@@ -35,8 +29,8 @@ def _admit_coalgebra(coalgebra: Coalgebra) -> None:
         ) from exc
 
 
-def _admit_element_index(request: ComultiplicationRequest) -> None:
-    if request.element_index >= request.coalgebra.dimension:
+def _admit_element_index(coalgebra: Coalgebra, element_index: int) -> None:
+    if element_index < 0 or element_index >= coalgebra.dimension:
         raise OperationDomainValidationError(
             location=("element_index",),
             code="coalgebra.element_index_out_of_range",
@@ -44,18 +38,16 @@ def _admit_element_index(request: ComultiplicationRequest) -> None:
         )
 
 
-def compute_comultiplication(
-    request: ComultiplicationRequest,
-) -> ComultiplicationResult:
+def comultiplication(coalgebra: Coalgebra, element_index: int) -> PrimeFieldMatrix:
     """Compute Delta(c_i) for a basis element of a coalgebra.
 
     Returns the comultiplication as a dimension x dimension matrix of coefficients
     over GF(p), where entry (j, k) is the coefficient of c_j ⊗ c_k.
     """
-    _admit_element_index(request)
-    _admit_coalgebra(request.coalgebra)
-    ca = request.coalgebra
-    i = request.element_index
+    _admit_element_index(coalgebra, element_index)
+    _admit_coalgebra(coalgebra)
+    ca = coalgebra
+    i = element_index
     n = ca.dimension
     p = ca.prime
 
@@ -63,26 +55,18 @@ def compute_comultiplication(
         tuple(ca.comultiplication[i][j][k] % p for k in range(n)) for j in range(n)
     )
 
-    return ComultiplicationResult._from_kernel(
-        request,
-        PrimeFieldMatrix(prime=p, entries=coeffs, columns=n),
-    )
+    return PrimeFieldMatrix(prime=p, entries=coeffs, columns=n)
 
 
-def compute_counit(request: CounitRequest) -> CounitResult:
+def counit(coalgebra: Coalgebra, element_index: int) -> int:
     """Compute epsilon(c_i) for a basis element of a coalgebra."""
-    _admit_coalgebra(request.coalgebra)
-    if request.element_index >= request.coalgebra.dimension:
-        raise OperationDomainValidationError(
-            location=("element_index",),
-            code="coalgebra.element_index_out_of_range",
-            message="element_index must be in 0..dimension-1",
-        )
-    ca = request.coalgebra
-    i = request.element_index
+    _admit_coalgebra(coalgebra)
+    _admit_element_index(coalgebra, element_index)
+    ca = coalgebra
+    i = element_index
     p = ca.prime
 
-    return CounitResult._from_kernel(request, ca.counit[i] % p)
+    return ca.counit[i] % p
 
 
 def _group_like_coefficients(
@@ -128,9 +112,7 @@ def _group_like_coefficients(
     return tuple(found)
 
 
-def find_group_like_elements(
-    request: GroupLikeElementsRequest,
-) -> GroupLikeElementsResult:
+def group_like_elements(coalgebra: Coalgebra) -> tuple[GroupLikeElement, ...]:
     """Find all group-like elements g in a coalgebra over GF(p).
 
     An element g is group-like if Delta(g) = g ⊗ g and epsilon(g) = 1.
@@ -145,25 +127,20 @@ def find_group_like_elements(
     reconstruction -- fits the documented budget, so this scan is
     exhaustive and the result lists every group-like element.
     """
-    _admit_coalgebra(request.coalgebra)
-    work = group_like_scan_work(request.coalgebra.prime, request.coalgebra.dimension)
+    _admit_coalgebra(coalgebra)
+    work = group_like_scan_work(coalgebra.prime, coalgebra.dimension)
     if work > GROUP_LIKE_SCAN_WORK_BUDGET:
         raise OperationDomainValidationError(
             location=("coalgebra",),
             code="coalgebra.scan_work_budget_exceeded",
             message="group-like enumeration scan work exceeds the documented budget",
         )
-    ca = request.coalgebra
-    found = _group_like_coefficients(ca)
-
-    return GroupLikeElementsResult._from_kernel(
-        request,
-        elements=tuple(GroupLikeElement(coefficients=coeffs) for coeffs in found),
-    )
+    found = _group_like_coefficients(coalgebra)
+    return tuple(GroupLikeElement(coefficients=coeffs) for coeffs in found)
 
 
 __all__ = [
-    "compute_comultiplication",
-    "compute_counit",
-    "find_group_like_elements",
+    "comultiplication",
+    "counit",
+    "group_like_elements",
 ]

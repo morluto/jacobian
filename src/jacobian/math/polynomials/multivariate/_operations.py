@@ -403,16 +403,6 @@ def _monic_content_fraction(content: Any) -> Any:
     return Fraction(int(value.p), int(value.q))
 
 
-def _sympy_factor_key(poly: Any) -> _SympyFactorKey:
-    """Return a canonical hashable representation of one QQ ``Poly``."""
-
-    return tuple(
-        sorted(
-            (tuple(monom), int(coeff.p), int(coeff.q)) for monom, coeff in poly.terms()
-        )
-    )
-
-
 def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFactorResult:
     """Exact factorization over ``QQ[variables]`` via SymPy's ``factor_list``.
 

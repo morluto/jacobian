@@ -12,6 +12,7 @@ from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     IntegerMatrix,
     RationalMatrix,
+    RationalVectorSpaceBasis,
     require_matrix_scalar_digits,
 )
 
@@ -230,6 +231,18 @@ class SaturationResult(StrictModel):
         "SATURATED_BASIS_SPANS_PRIMITIVE_CLOSURE"
     )
 
+    @model_validator(mode="after")
+    def require_inclusion_shape(self) -> Self:
+        rank = len(self.saturated_basis.entries)
+        if len(self.inclusion_transform.entries) != rank or any(
+            len(row) != rank for row in self.inclusion_transform.entries
+        ):
+            raise _validation_error(
+                "saturation_inclusion_shape",
+                "saturation inclusion must be square by lattice rank",
+            )
+        return self
+
 
 class SublatticeIndexRequest(StrictModel):
     """An inclusion of a sublattice into a parent lattice.
@@ -302,11 +315,20 @@ class OrthogonalComplementRequest(StrictModel):
 class OrthogonalComplementResult(StrictModel):
     """A canonical rational basis for the orthogonal complement."""
 
-    complement_basis: RationalMatrix
+    complement_basis: RationalVectorSpaceBasis
     complement_rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     relation: Literal["COMPLEMENT_BASIS_SPANS_ORTHOGONAL_COMPLEMENT"] = (
         "COMPLEMENT_BASIS_SPANS_ORTHOGONAL_COMPLEMENT"
     )
+
+    @model_validator(mode="after")
+    def require_rank_shape(self) -> Self:
+        if self.complement_rank != len(self.complement_basis.vectors):
+            raise _validation_error(
+                "orthogonal_complement_rank",
+                "complement rank must equal the number of basis vectors",
+            )
+        return self
 
 
 class DirectSumRequest(StrictModel):

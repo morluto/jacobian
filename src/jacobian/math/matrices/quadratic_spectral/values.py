@@ -106,7 +106,7 @@ class RealQuadraticInertia(StrictModel):
             raise _validation_error(
                 "shape_mismatch", "inertia counts must sum to the matrix dimension"
             )
-        if self.definiteness != _definiteness(
+        if self.definiteness != _definiteness_from_inertia(
             self.n_positive, self.n_negative, self.n_zero
         ):
             raise _validation_error(
@@ -148,7 +148,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"matrix.{reason}", message)
 
 
-def _definiteness(positive: int, negative: int, zero: int) -> Definiteness:
+def _definiteness_from_inertia(positive: int, negative: int, zero: int) -> Definiteness:
     if positive == 0 and negative == 0:
         return "zero"
     if zero == 0:

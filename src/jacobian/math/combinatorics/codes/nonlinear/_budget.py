@@ -52,12 +52,6 @@ def _binary_word_wire_bytes(length: int) -> int:
     return max(2, 2 * length + 1)
 
 
-def _array_wire_bytes(length: int, maximum_value: int) -> int:
-    if length == 0:
-        return 2
-    return 1 + length * (_digits(maximum_value) + 1)
-
-
 def _sum_coordinate_digits(length: int) -> int:
     """Return the exact decimal digits in ``0, ..., length-1``."""
     if length == 0:

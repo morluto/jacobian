@@ -46,28 +46,17 @@ class GraphDiameterResult(StrictModel):
     status: Literal["COMPUTED", "NOT_APPLICABLE"]
     diameter: StrictInt | None = Field(default=None, ge=0, le=255)
     connected: StrictBool
-    exactness: Literal["EXACT", "NOT_APPLICABLE"]
     detail: str | None = Field(default=None, min_length=1, max_length=512)
 
     @model_validator(mode="after")
     def bind_connectivity(self) -> Self:
         if self.status == "COMPUTED":
-            if (
-                self.diameter is None
-                or not self.connected
-                or self.exactness != "EXACT"
-                or self.detail is not None
-            ):
+            if self.diameter is None or not self.connected or self.detail is not None:
                 raise PydanticCustomError(
                     "graph.computed_diameter_requires_exact_value_connected",
                     "computed diameter requires an exact value on a connected graph",
                 )
-        elif (
-            self.diameter is not None
-            or self.connected
-            or self.exactness != "NOT_APPLICABLE"
-            or self.detail is None
-        ):
+        elif self.diameter is not None or self.connected or self.detail is None:
             raise PydanticCustomError(
                 "graph.inapplicable_diameter_requires_no_value_explicit_detail",
                 "inapplicable diameter requires no value and an explicit detail",
@@ -170,28 +159,17 @@ class GraphRadiusResult(StrictModel):
     status: Literal["COMPUTED", "NOT_APPLICABLE"]
     radius: StrictInt | None = Field(default=None, ge=0, le=255)
     connected: StrictBool
-    exactness: Literal["EXACT", "NOT_APPLICABLE"]
     detail: str | None = Field(default=None, min_length=1, max_length=512)
 
     @model_validator(mode="after")
     def bind_connectivity(self) -> Self:
         if self.status == "COMPUTED":
-            if (
-                self.radius is None
-                or not self.connected
-                or self.exactness != "EXACT"
-                or self.detail is not None
-            ):
+            if self.radius is None or not self.connected or self.detail is not None:
                 raise PydanticCustomError(
                     "graph.computed_radius_requires_exact_value_connected",
                     "computed radius requires an exact value on a connected graph",
                 )
-        elif (
-            self.radius is not None
-            or self.connected
-            or self.exactness != "NOT_APPLICABLE"
-            or self.detail is None
-        ):
+        elif self.radius is not None or self.connected or self.detail is None:
             raise PydanticCustomError(
                 "graph.inapplicable_radius_requires_no_value_explicit_detail",
                 "inapplicable radius requires no value and an explicit detail",

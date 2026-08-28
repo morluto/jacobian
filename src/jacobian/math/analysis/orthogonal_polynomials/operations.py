@@ -231,14 +231,6 @@ def compute_shifted_hankel(request: ShiftedHankelRequest) -> HankelMomentMatrix:
     return hankel_matrix_from_prefix(request.prefix, request.order, shifted=True)
 
 
-def _poly_eval(coeffs: list[Fraction], x: Fraction) -> Fraction:
-    """Evaluate a polynomial with given coefficients (lowest degree first)."""
-    result = Fraction(0)
-    for c in reversed(coeffs):
-        result = result * x + c
-    return result
-
-
 def _require_nonzero_norm(norm: Fraction, degree: int) -> None:
     """Quasi-definite prefixes have no vanishing orthogonal-polynomial norm."""
     if norm == 0:

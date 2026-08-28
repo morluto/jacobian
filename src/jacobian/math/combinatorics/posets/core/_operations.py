@@ -36,8 +36,6 @@ from jacobian.math.combinatorics.posets.core._models import (
     PosetChain,
     PosetClosureRequest,
     PosetClosureResult,
-    PosetDualRequest,
-    PosetDualResult,
     PosetInterval,
     PosetRequest,
     PosetWidthResult,
@@ -418,52 +416,6 @@ def _closure(request: PosetClosureRequest) -> PosetClosureResult:
     )
 
 
-def _dual(request: PosetDualRequest) -> PosetDualResult:
-    poset = request.poset
-    elements = poset.elements
-    reversed_pairs = tuple(
-        OrderedPair(lower=p.upper, upper=p.lower) for p in poset.strict_order_pairs
-    )
-    reversed_covers = tuple(
-        OrderedPair(lower=p.upper, upper=p.lower) for p in poset.cover_relations
-    )
-    sorted_pairs = tuple(sorted((p.lower, p.upper) for p in reversed_pairs))
-    sorted_covers = tuple(sorted((p.lower, p.upper) for p in reversed_covers))
-    order_pairs_obj = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted_pairs)
-    cover_pairs_obj = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted_covers)
-    if poset.graded and poset.ranks is not None:
-        height = max(r.rank for r in poset.ranks)
-        dual_ranks = tuple(
-            type(poset.ranks[0])(element=r.element, rank=height - r.rank)
-            for r in sorted(poset.ranks, key=lambda r: r.element)
-        )
-        dual_ranks_sorted = tuple(sorted(dual_ranks, key=lambda r: r.element))
-    else:
-        dual_ranks_sorted = None
-    new_digest = finite_poset_digest(
-        elements=elements,
-        strict_order_pairs=order_pairs_obj,
-        cover_relations=cover_pairs_obj,
-        incomparable_pairs=poset.incomparable_pairs,
-        minimal_elements=tuple(sorted(poset.maximal_elements)),
-        maximal_elements=tuple(sorted(poset.minimal_elements)),
-        graded=poset.graded,
-        ranks=dual_ranks_sorted,
-    )
-    new_poset = FinitePoset(
-        elements=elements,
-        strict_order_pairs=order_pairs_obj,
-        cover_relations=cover_pairs_obj,
-        incomparable_pairs=poset.incomparable_pairs,
-        minimal_elements=tuple(sorted(poset.maximal_elements)),
-        maximal_elements=tuple(sorted(poset.minimal_elements)),
-        graded=poset.graded,
-        ranks=dual_ranks_sorted,
-        poset_digest=new_digest,
-    )
-    return PosetDualResult(poset=new_poset)
-
-
 def _zeta_transform(request: ZetaTransformRequest) -> ZetaTransformResult:
     poset = request.poset
     comparable = {(p.lower, p.upper) for p in poset.strict_order_pairs}
@@ -528,7 +480,7 @@ def _antichain_profile(
 
     n = len(elements)
     max_size = 0
-    max_antichains: list[tuple[str, ...]] = []
+    max_antichains: list[tuple[str, ...]] = [()]
     antichain_count = 1
     for mask in range(1, 1 << n):
         subset = tuple(sorted(elements[i] for i in range(n) if mask & (1 << i)))

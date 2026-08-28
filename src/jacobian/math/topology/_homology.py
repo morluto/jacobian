@@ -20,7 +20,6 @@ from jacobian.math.topology._models import (
     MAX_TOPOLOGY_PRIME,
     FiniteSimplicialComplex,
     HomologyConvention,
-    TopologyExactResult,
     _validation_error,
     is_bounded_prime,
 )
@@ -109,7 +108,7 @@ class HomologyGroupResult(StrictModel):
         return self
 
 
-class SimplicialHomologyResult(TopologyExactResult):
+class SimplicialHomologyResult(StrictModel):
     complex_digest: Sha256Digest
     coefficient_field: Literal["PRIME_FIELD"] = "PRIME_FIELD"
     prime: StrictInt = Field(ge=2, le=MAX_TOPOLOGY_PRIME)
@@ -307,7 +306,7 @@ class IntegralHomologyGroupResult(StrictModel):
         return self
 
 
-class IntegralSimplicialHomologyResult(TopologyExactResult):
+class IntegralSimplicialHomologyResult(StrictModel):
     complex_digest: Sha256Digest
     coefficient_ring: Literal["ZZ"] = "ZZ"
     convention: HomologyConvention
@@ -318,9 +317,6 @@ class IntegralSimplicialHomologyResult(TopologyExactResult):
     groups: tuple[IntegralHomologyGroupResult, ...] = Field(
         min_length=1,
         max_length=MAX_TOPOLOGY_DIMENSION + 1,
-    )
-    completeness: Literal["FREE_TORSION_AND_BOUND_GENERATORS"] = (
-        "FREE_TORSION_AND_BOUND_GENERATORS"
     )
     decomposition: Literal["DIRECT_SUM_Z_AND_FINITE_CYCLIC_FACTORS"] = (
         "DIRECT_SUM_Z_AND_FINITE_CYCLIC_FACTORS"

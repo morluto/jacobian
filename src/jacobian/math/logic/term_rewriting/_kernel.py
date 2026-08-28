@@ -17,6 +17,7 @@ from jacobian.math.logic.term_rewriting.values import (
     RewriteApplication,
     RewriteRule,
     Term,
+    _variable_symbols,
 )
 
 __all__ = [
@@ -37,18 +38,6 @@ _CRITICAL_PAIR_PROFILE_FIXED_NODES = 384
 _RESULT_BYTES_PER_NODE = 96
 _VARIABLE_LABEL_BASE_WIDTH = 6
 _RESULT_TERM_MAX_DEPTH = MAX_TERM_DEPTH - 1
-
-
-def _variables(term: Term) -> set[int]:
-    symbols: set[int] = set()
-    stack = [term]
-    while stack:
-        current = stack.pop()
-        if current.is_variable:
-            symbols.add(current.symbol)
-        else:
-            stack.extend(current.children)
-    return symbols
 
 
 def apply_substitution(term: Term, subst: dict[int, Term]) -> Term:
@@ -180,7 +169,7 @@ def _unify(
         if equation_right.is_variable:
             equation_left, equation_right = equation_right, equation_left
         if equation_left.is_variable:
-            if equation_left.symbol in _variables(equation_right):
+            if equation_left.symbol in _variable_symbols(equation_right):
                 return None
             if budget is not None:
                 budget.charge(equation_right)

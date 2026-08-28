@@ -65,6 +65,7 @@ from jacobian.math.lattices._models import (
 from jacobian.math.matrices.values import (
     IntegerMatrix,
     rational_matrix_from_fractions,
+    rational_vector_space_basis_from_fractions,
     require_matrix_scalar_digits,
 )
 
@@ -85,14 +86,6 @@ def _basis_int_list(lattice: IntegerLattice) -> list[list[int]]:
     return [[parse_canonical_integer(v) for v in row] for row in lattice.basis.entries]
 
 
-def _require_full_row_rank(lattice: IntegerLattice, *, label: str) -> list[list[int]]:
-    entries = _basis_int_list(lattice)
-    rows = len(entries)
-    if integer_rank(entries) != rows:
-        raise ValueError(f"{label} basis must be full row rank over QQ")
-    return entries
-
-
 def _integer_matrix(matrix: list[list[int]]) -> IntegerMatrix:
     return IntegerMatrix(
         entries=tuple(
@@ -107,7 +100,7 @@ def _integer_matrix(matrix: list[list[int]]) -> IntegerMatrix:
 
 
 def compute_rank_gram(request: RankGramRequest) -> RankGramResult:
-    basis = _require_full_row_rank(request.lattice, label="rank-gram")
+    basis = _basis_int_list(request.lattice)
     rank = len(basis)
     gram = _gram_matrix(basis)
     det = integer_determinant(gram)
@@ -124,7 +117,7 @@ def compute_rank_gram(request: RankGramRequest) -> RankGramResult:
 def compute_canonical_basis(
     lattice: IntegerLattice,
 ) -> CanonicalBasisResult:
-    basis = _require_full_row_rank(lattice, label="canonical-basis")
+    basis = _basis_int_list(lattice)
     hnf, transform = _hermite_basis(basis)
     rank = integer_rank(hnf)
     return CanonicalBasisResult(
@@ -135,7 +128,7 @@ def compute_canonical_basis(
 
 
 def compute_dual(request: DualRequest) -> DualResult:
-    basis = _require_full_row_rank(request.lattice, label="dual")
+    basis = _basis_int_list(request.lattice)
     dual = _dual_basis(basis)
     # dual Gram = (B B^T)^{-1}
     from sympy import Matrix
@@ -159,7 +152,7 @@ def compute_dual(request: DualRequest) -> DualResult:
 
 
 def compute_saturation(lattice: IntegerLattice) -> SaturationResult:
-    basis = _require_full_row_rank(lattice, label="saturation")
+    basis = _basis_int_list(lattice)
     saturated, inclusion, index = _saturate_lattice(basis)
     return SaturationResult(
         saturated_basis=_integer_matrix(saturated),
@@ -174,9 +167,6 @@ def compute_sublattice_index(request: SublatticeIndexRequest) -> SublatticeIndex
         maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,
         label="sublattice embedding",
     )
-    sub_basis = _require_full_row_rank(request.sublattice, label="sublattice")
-    parent_basis = _require_full_row_rank(request.parent, label="parent")
-    del sub_basis, parent_basis
     embedding = [
         [parse_canonical_integer(v) for v in row] for row in request.embedding.entries
     ]
@@ -195,7 +185,7 @@ def compute_sublattice_index(request: SublatticeIndexRequest) -> SublatticeIndex
 def compute_discriminant_group(
     request: DiscriminantGroupRequest,
 ) -> DiscriminantGroupResult:
-    basis = _require_full_row_rank(request.lattice, label="discriminant-group")
+    basis = _basis_int_list(request.lattice)
     order, factors = _discriminant_group(basis)
     return DiscriminantGroupResult(
         discriminant_order=order,
@@ -206,23 +196,20 @@ def compute_discriminant_group(
 def compute_orthogonal_complement(
     request: OrthogonalComplementRequest,
 ) -> OrthogonalComplementResult:
-    basis = _require_full_row_rank(request.lattice, label="orthogonal-complement")
+    basis = _basis_int_list(request.lattice)
     complement = _orthogonal_complement(basis)
-    if not complement:
-        rank = 0
-        complement_matrix = [[Fraction(0)]]
-    else:
-        rank = len(complement)
-        complement_matrix = complement
     return OrthogonalComplementResult(
-        complement_basis=rational_matrix_from_fractions(complement_matrix),
-        complement_rank=rank,
+        complement_basis=rational_vector_space_basis_from_fractions(
+            complement,
+            ambient_dimension=request.lattice.ambient_dimension,
+        ),
+        complement_rank=len(complement),
     )
 
 
 def compute_direct_sum(request: DirectSumRequest) -> DirectSumResult:
-    first = _require_full_row_rank(request.first, label="direct-sum first")
-    second = _require_full_row_rank(request.second, label="direct-sum second")
+    first = _basis_int_list(request.first)
+    second = _basis_int_list(request.second)
     result = _direct_sum(first, second)
     ambient = request.first.ambient_dimension + request.second.ambient_dimension
     return DirectSumResult(
@@ -232,8 +219,8 @@ def compute_direct_sum(request: DirectSumRequest) -> DirectSumResult:
 
 
 def compute_orthogonal_sum(request: OrthogonalSumRequest) -> OrthogonalSumResult:
-    first = _require_full_row_rank(request.first, label="orthogonal-sum first")
-    second = _require_full_row_rank(request.second, label="orthogonal-sum second")
+    first = _basis_int_list(request.first)
+    second = _basis_int_list(request.second)
     result = _orthogonal_sum(first, second)
     ambient = request.first.ambient_dimension + request.second.ambient_dimension
     return OrthogonalSumResult(

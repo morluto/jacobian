@@ -50,12 +50,6 @@ def _sympy_integer_matrix(entries: list[list[int]]) -> Any:
     return Matrix(entries)
 
 
-def _entries_to_int(matrix: Any) -> list[list[int]]:
-    rows = matrix.rows if hasattr(matrix, "rows") else len(matrix)
-    cols = matrix.cols if hasattr(matrix, "cols") else len(matrix[0])
-    return [[int(matrix[i, j]) for j in range(cols)] for i in range(rows)]
-
-
 def integer_rank(entries: list[list[int]]) -> int:
     """Return the exact rank over ``QQ`` of an integer entry matrix."""
     from sympy import Matrix
@@ -123,14 +117,6 @@ def smith_invariant_factors(entries: list[list[int]]) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def _sympy_to_fractions(matrix: Any) -> list[list[Fraction]]:
-    rows, cols = matrix.rows, matrix.cols
-    return [
-        [Fraction(int(matrix[i, j].p), int(matrix[i, j].q)) for j in range(cols)]
-        for i in range(rows)
-    ]
-
-
 def dual_basis(entries: list[list[int]]) -> list[list[Fraction]]:
     """Return a rational dual basis of the lattice spanned by ``entries``.
 
@@ -166,40 +152,28 @@ def saturate_lattice(
     """Return ``(saturated_basis, inclusion, index)`` for the lattice.
 
     ``saturated_basis`` spans ``sat(L) = span_Q(L) cap ZZ^n`` in HNF canonical
-    form.  ``inclusion`` is the integer matrix ``C`` with ``sat = C @ B``.
+    form.  ``inclusion`` is the integer matrix ``C`` with ``B = C @ sat``.
     ``index`` is the finite index ``[sat(L) : L]``.
     """
     from math import gcd
 
-    from sympy import Matrix
+    from sympy import ZZ, Matrix
     from sympy.matrices.normalforms import hermite_normal_form
+    from sympy.polys.matrices import DomainMatrix
+    from sympy.polys.matrices.normalforms import smith_normal_decomp
 
     basis = Matrix(entries)
     rows = basis.rows
     if basis.rank() != rows:
         raise ValueError("lattice basis must be full row rank for saturation")
 
-    # Saturation = ZZ^n cap span_Q(rows of B) = integer kernel of the left
-    # nullspace of B.
-    nullvecs = basis.T.nullspace()
-    sat: Matrix
-    if not nullvecs:
-        sat = Matrix.eye(basis.cols)
-    else:
-        kernel_rows = [[vec[j] for j in range(basis.cols)] for vec in nullvecs]
-        rational_kernel = Matrix(kernel_rows)
-        # Clear denominators to obtain an integer matrix.
-        denominators = [
-            rational_kernel[i, j].q if hasattr(rational_kernel[i, j], "q") else 1
-            for i in range(rational_kernel.rows)
-            for j in range(rational_kernel.cols)
-            if rational_kernel[i, j] != 0
-        ]
-        lcm = 1
-        for q in denominators:
-            lcm = lcm * q // gcd(lcm, q)
-        integer_kernel = rational_kernel * lcm
-        sat = hermite_normal_form(integer_kernel)
+    # If S B T = D is a Smith decomposition, the first r rows of T^{-1}
+    # form a primitive integer basis of span_Q(B) cap ZZ^n.  Row HNF makes
+    # that basis canonical without changing its lattice.
+    domain_basis = DomainMatrix.from_Matrix(basis).convert_to(ZZ)
+    _, _, right = smith_normal_decomp(domain_basis)
+    primitive_rows = right.to_Matrix().inv()[:rows, :]
+    sat = hermite_normal_form(primitive_rows.T).T
 
     # Inclusion L -> sat(L): each basis row of L is an integer combination
     # of the sat basis rows.  Solve basis = C @ sat_basis for the r x r
@@ -341,13 +315,6 @@ def orthogonal_sum(first: list[list[int]], second: list[list[int]]) -> list[list
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-
-def _hermite_form_row(basis: Any) -> Any:
-    """Return the row Hermite normal form of a SymPy integer matrix."""
-    from sympy.matrices.normalforms import hermite_normal_form
-
-    return hermite_normal_form(basis, D=None)
 
 
 def _sympy_to_int_list(matrix: Any) -> list[list[int]]:

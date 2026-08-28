@@ -42,22 +42,27 @@ def test_sidon_result_keeps_structural_normalization() -> None:
     assert result.normalized_elements == ("1", "2", "4")
 
 
-def test_sidon_result_rejects_a_forged_difference_profile() -> None:
+def test_sidon_kernel_returns_the_complete_ordered_difference_profile() -> None:
     result = decide_integer_sidon(IntegerSidonRequest(elements=("0", "1", "3")))
-    payload = result.model_dump(mode="json")
-    payload["ordered_differences"][0]["difference"] = "0"
+    expected = tuple(
+        (left, right, left - right)
+        for left in (0, 1, 3)
+        for right in (0, 1, 3)
+        if left != right
+    )
+    assert (
+        tuple(
+            (int(item.minuend), int(item.subtrahend), int(item.difference))
+            for item in result.ordered_differences
+        )
+        == expected
+    )
 
-    with raises_code("combinatorics.sidon_invariant"):
-        IntegerSidonResult.model_validate(payload)
 
-
-def test_sidon_result_rejects_a_forged_decision() -> None:
+def test_sidon_kernel_decision_matches_its_complete_profile() -> None:
     result = decide_integer_sidon(IntegerSidonRequest(elements=("0", "1", "3")))
-    payload = result.model_dump(mode="json")
-    payload["is_sidon"] = not result.is_sidon
-
-    with raises_code("combinatorics.sidon_invariant"):
-        IntegerSidonResult.model_validate(payload)
+    differences = tuple(int(item.difference) for item in result.ordered_differences)
+    assert result.is_sidon == (len(set(differences)) == len(differences))
 
 
 def test_extension_request_rejects_an_unbounded_candidate_space() -> None:
@@ -110,22 +115,27 @@ def test_pds_result_accepts_the_canonical_fano_profile() -> None:
     assert result.is_perfect is True
 
 
-def test_pds_result_rejects_a_forged_complete_profile() -> None:
+def test_pds_kernel_returns_the_complete_profile_for_its_source() -> None:
     result = decide_cyclic_perfect_difference_set(
         CyclicPerfectDifferenceSetRequest(modulus=7, residues=(0, 1, 3))
     )
-    payload = result.model_dump(mode="json")
-    payload["difference_multiplicities"][0]["multiplicity"] = 0
-    with pytest.raises(ValidationError):
-        CyclicPerfectDifferenceSetResult.model_validate(payload)
+    counts = Counter(
+        (left - right) % result.modulus
+        for left in result.normalized_residues
+        for right in result.normalized_residues
+        if left != right
+    )
+    assert tuple(
+        item.multiplicity for item in result.difference_multiplicities
+    ) == tuple(counts.get(residue, 0) for residue in range(1, result.modulus))
 
 
-def test_extension_result_rejects_a_forged_witness() -> None:
+def test_extension_result_rejects_a_witness_that_drops_the_retained_base() -> None:
     result = decide_cyclic_difference_set_extension(
         CyclicDifferenceSetExtensionRequest(base_elements=("0", "1"), target_order=3)
     )
     assert result.decision == "EXTENDS"
     payload = result.model_dump(mode="json")
-    payload["extension"] = [0, 1, 2]
+    payload["extension"] = [0, 2, 4]
     with pytest.raises(ValidationError):
         CyclicDifferenceSetExtensionResult.model_validate(payload)

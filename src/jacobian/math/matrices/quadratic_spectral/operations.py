@@ -21,6 +21,7 @@ from jacobian.math.matrices.quadratic_spectral.values import (
     RealQuadraticInertia,
     RealQuadraticSpectrum,
     SpectrumKind,
+    _definiteness_from_inertia,
 )
 from jacobian.math.matrices.values import RealQuadraticMatrix
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
@@ -577,22 +578,6 @@ def _inertia_counts(matrix: RealQuadraticMatrix) -> tuple[int, int, int]:
     return positive, negative, zero
 
 
-def _definiteness(positive: int, negative: int, zero: int) -> Definiteness:
-    if positive == 0 and negative == 0:
-        return "zero"
-    if zero == 0:
-        if negative == 0:
-            return "positive_definite"
-        if positive == 0:
-            return "negative_definite"
-        return "indefinite"
-    if negative == 0:
-        return "positive_semidefinite"
-    if positive == 0:
-        return "negative_semidefinite"
-    return "indefinite"
-
-
 def inertia_data(
     matrix: RealQuadraticMatrix,
 ) -> tuple[int, int, int, Definiteness]:
@@ -600,7 +585,12 @@ def inertia_data(
 
     require_inertia_matrix(matrix)
     positive, negative, zero = _inertia_counts(matrix)
-    return positive, negative, zero, _definiteness(positive, negative, zero)
+    return (
+        positive,
+        negative,
+        zero,
+        _definiteness_from_inertia(positive, negative, zero),
+    )
 
 
 def inertia(matrix: RealQuadraticMatrix) -> RealQuadraticInertia:

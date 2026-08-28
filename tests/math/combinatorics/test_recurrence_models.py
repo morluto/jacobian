@@ -42,8 +42,6 @@ def _result() -> dict[str, object]:
             {"index": index, "value": _q(value)}
             for index, value in enumerate((1, 1, 2, 3))
         ],
-        "exactness": "EXACT_RATIONAL",
-        "determinism": "DETERMINISTIC",
     }
 
 

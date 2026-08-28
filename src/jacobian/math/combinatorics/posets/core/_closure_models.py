@@ -12,7 +12,6 @@ from jacobian.math.combinatorics.posets.core._models import (
     MAX_POSET_ELEMENTS,
     ElementLabel,
     FinitePoset,
-    PosetExactResult,
 )
 
 
@@ -93,7 +92,7 @@ class InducedSubposetRequest(StrictModel):
 # ---------------------------------------------------------------------------
 
 
-class LowerClosureResult(PosetExactResult):
+class LowerClosureResult(StrictModel):
     """The lower closure ↓S = {x : x <= s for some s in S}."""
 
     poset_digest: str
@@ -102,7 +101,7 @@ class LowerClosureResult(PosetExactResult):
     is_ideal: bool = True
 
 
-class UpperClosureResult(PosetExactResult):
+class UpperClosureResult(StrictModel):
     """The upper closure ↑S = {x : s <= x for some s in S}."""
 
     poset_digest: str
@@ -111,14 +110,14 @@ class UpperClosureResult(PosetExactResult):
     is_filter: bool = True
 
 
-class DualPosetResult(PosetExactResult):
+class DualPosetResult(StrictModel):
     """The dual poset with reversed order."""
 
     poset: FinitePoset
     transport_map: tuple[ElementLabel, ...]
 
 
-class InducedSubposetResult(PosetExactResult):
+class InducedSubposetResult(StrictModel):
     """The subposet induced by restricting to a subset of elements."""
 
     subposet: FinitePoset

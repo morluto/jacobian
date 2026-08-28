@@ -86,6 +86,18 @@ class TestFactorValuesAndOperations:
         assert result.variables == ()
         assert _strings(result.table) == ("1",)
 
+    def test_marginalize_respects_an_ordered_nonascending_scope(self) -> None:
+        factor = _factor(
+            (1, 0),
+            ("1", "2", "10", "20", "100", "200"),
+            domain_sizes=(2, 3),
+        )
+
+        result = factor_marginalize(factor, 1)
+
+        assert result.variables == (0,)
+        assert _strings(result.table) == ("111", "222")
+
     @pytest.mark.parametrize("value", ["01", "+1", "2/4", "1.0"])
     def test_factor_entries_must_be_canonical_rationals(self, value: str) -> None:
         with pytest.raises(ValidationError) as error:

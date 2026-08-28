@@ -187,8 +187,6 @@ class LinearRecurrenceEvaluationResult(StrictModel):
         min_length=1,
         max_length=MAX_LINEAR_RECURRENCE_INDEX + 1,
     )
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @classmethod
     def _from_kernel(
@@ -204,8 +202,6 @@ class LinearRecurrenceEvaluationResult(StrictModel):
             coefficient_convention=coefficient_convention,
             scope=scope,
             values=values,
-            exactness="EXACT_RATIONAL",
-            determinism="DETERMINISTIC",
         )
 
     @model_validator(mode="after")
@@ -289,8 +285,6 @@ class PolynomialCoefficientRecurrenceEvaluationResult(StrictModel):
     values: tuple[IndexedRationalValue, ...] = Field(
         min_length=1, max_length=MAX_LINEAR_RECURRENCE_INDEX + 1
     )
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @classmethod
     def _from_kernel(
@@ -310,8 +304,6 @@ class PolynomialCoefficientRecurrenceEvaluationResult(StrictModel):
             scope=scope,
             recurrence_order=recurrence_order,
             values=values,
-            exactness="EXACT_RATIONAL",
-            determinism="DETERMINISTIC",
         )
 
     @model_validator(mode="after")
@@ -365,8 +357,6 @@ class RationalGeneratingFunctionCoefficientsResult(StrictModel):
         min_length=1,
         max_length=MAX_RATIONAL_SERIES_TRUNCATION_ORDER,
     )
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @classmethod
     def _from_kernel(
@@ -388,8 +378,6 @@ class RationalGeneratingFunctionCoefficientsResult(StrictModel):
             coefficients=coefficients,
             residual_congruence=residual_congruence,
             residual_coefficients=residual_coefficients,
-            exactness="EXACT_RATIONAL",
-            determinism="DETERMINISTIC",
         )
 
     @model_validator(mode="after")

@@ -178,10 +178,27 @@ def test_saturation_index_2() -> None:
 
 
 def test_saturation_rank_deficient() -> None:
-    """sat(2Z in ZZ^2) = ZZ^2 with index 2."""
+    """The saturation remains in the rational span of the source lattice."""
     result = compute_saturation(_lattice(2, [[2, 0]]))
-    assert result.saturated_basis.entries == (("1", "0"), ("0", "1"))
+    assert result.saturated_basis.entries == (("1", "0"),)
+    assert result.inclusion_transform.entries == (("2",),)
     assert result.saturation_index == 2
+
+
+def test_saturation_of_diagonal_line_is_its_primitive_line() -> None:
+    result = compute_saturation(_lattice(2, [[2, 2]]))
+
+    assert result.saturated_basis.entries == (("1", "1"),)
+    assert result.inclusion_transform.entries == (("2",),)
+    assert result.saturation_index == 2
+
+
+def test_saturation_of_coordinate_plane_does_not_gain_ambient_generator() -> None:
+    result = compute_saturation(_lattice(3, [[2, 0, 0], [0, 2, 0]]))
+
+    assert result.saturated_basis.entries == (("1", "0", "0"), ("0", "1", "0"))
+    assert result.inclusion_transform.entries == (("2", "0"), ("0", "2"))
+    assert result.saturation_index == 4
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +299,8 @@ def test_orthogonal_complement_of_full_rank_is_zero() -> None:
         OrthogonalComplementRequest(lattice=_lattice(2, [[1, 0], [0, 1]]))
     )
     assert result.complement_rank == 0
+    assert result.complement_basis.ambient_dimension == 2
+    assert result.complement_basis.vectors == ()
 
 
 def test_orthogonal_complement_of_plane_in_3d() -> None:
@@ -290,6 +309,8 @@ def test_orthogonal_complement_of_plane_in_3d() -> None:
         OrthogonalComplementRequest(lattice=_lattice(3, [[1, 0, 0], [0, 1, 0]]))
     )
     assert result.complement_rank == 1
+    assert result.complement_basis.ambient_dimension == 3
+    assert len(result.complement_basis.vectors[0]) == 3
 
 
 # ---------------------------------------------------------------------------

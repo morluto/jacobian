@@ -56,6 +56,14 @@ def test_antichain_profile_executes_the_admitted_fourteen_element_chain() -> Non
     assert MAX_ANTICHAIN_PROFILE_CANDIDATES == 16_384
 
 
+def test_empty_poset_has_the_empty_antichain_as_its_unique_maximum() -> None:
+    result = _antichain_profile(AntichainProfileRequest(poset=_chain(0)))
+
+    assert result.maximum_antichain_size == 0
+    assert result.antichain_count == 1
+    assert result.maximum_antichains == ((),)
+
+
 def test_antichain_profile_rejects_the_next_exponential_envelope() -> None:
     with pytest.raises(OperationDomainValidationError, match="candidate subsets"):
         _antichain_profile(AntichainProfileRequest(poset=_chain(15)))

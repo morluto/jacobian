@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pydantic_core import PydanticCustomError
-
 from jacobian.canonical import strict_json_object_size
 from jacobian.math.finite_categories.values import (
     MAX_CATEGORY_COMPOSABLE_PAIRS,
@@ -28,12 +26,6 @@ from jacobian.math.finite_categories.values import (
 
 MAX_CATEGORY_PRODUCT_RESULT_BYTES = 8 * 1024 * 1024
 MAX_CATEGORY_PRODUCT_EXECUTION_STEPS = 1_000_000
-
-
-def _product_error(reason: str, message: str) -> PydanticCustomError:
-    """Build a stable request-admission error for category products."""
-
-    return PydanticCustomError(f"finite_category.{reason}", message)
 
 
 class CategoryProductAdmissionError(ValueError):

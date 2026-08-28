@@ -148,6 +148,50 @@ def rational_matrix_from_fractions(
     )
 
 
+class RationalVectorSpaceBasis(StrictModel):
+    """A rational vector-space basis with its ambient dimension retained.
+
+    Unlike a dense matrix, a basis may be empty.  The explicit ambient
+    dimension distinguishes the zero subspace of ``QQ^n`` for different ``n``.
+    """
+
+    domain: Literal["QQ"] = "QQ"
+    ambient_dimension: int = Field(ge=1, le=MAX_RATIONAL_MATRIX_ORDER)
+    vectors: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        default=(), max_length=MAX_RATIONAL_MATRIX_ORDER
+    )
+
+    @model_validator(mode="after")
+    def require_vector_shape(self) -> Self:
+        if any(len(vector) != self.ambient_dimension for vector in self.vectors):
+            raise _validation_error(
+                "shape_mismatch",
+                "each basis vector must have the declared ambient dimension",
+            )
+        require_matrix_scalar_digits(
+            self.vectors,
+            maximum=MAX_MATRIX_SCALAR_DIGITS,
+            label="basis",
+        )
+        return self
+
+
+def rational_vector_space_basis_from_fractions(
+    vectors: tuple[tuple[Fraction, ...], ...] | list[list[Fraction]],
+    *,
+    ambient_dimension: int,
+) -> RationalVectorSpaceBasis:
+    """Construct a canonical rational basis, including the empty basis."""
+
+    return RationalVectorSpaceBasis(
+        ambient_dimension=ambient_dimension,
+        vectors=tuple(
+            tuple(CanonicalRational.from_fraction(value) for value in vector)
+            for vector in vectors
+        ),
+    )
+
+
 class RealQuadraticMatrix(StrictModel):
     """One nonempty rectangular matrix over a shared real quadratic field."""
 
@@ -284,9 +328,11 @@ __all__ = [
     "MAX_RATIONAL_MATRIX_ORDER",
     "IntegerMatrix",
     "RationalMatrix",
+    "RationalVectorSpaceBasis",
     "RealQuadraticMatrix",
     "SmithNormalForm",
     "rational_matrix_from_fractions",
+    "rational_vector_space_basis_from_fractions",
     "require_matrix_scalar_digits",
 ]
 

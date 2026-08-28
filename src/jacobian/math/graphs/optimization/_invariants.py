@@ -102,14 +102,12 @@ def _diameter(graph: Any) -> GraphDiameterResult:
         return GraphDiameterResult(
             status="NOT_APPLICABLE",
             connected=False,
-            exactness="NOT_APPLICABLE",
             detail="diameter requires a nonempty connected graph",
         )
     return GraphDiameterResult(
         status="COMPUTED",
         diameter=diameter(graph),
         connected=True,
-        exactness="EXACT",
     )
 
 
@@ -232,14 +230,12 @@ def _radius(graph: Any) -> GraphRadiusResult:
         return GraphRadiusResult(
             status="NOT_APPLICABLE",
             connected=False,
-            exactness="NOT_APPLICABLE",
             detail="radius requires a nonempty connected graph",
         )
     return GraphRadiusResult(
         status="COMPUTED",
         radius=int(nx.radius(graph)),
         connected=True,
-        exactness="EXACT",
     )
 
 

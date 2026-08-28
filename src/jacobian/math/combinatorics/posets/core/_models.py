@@ -468,16 +468,8 @@ class FinitePoset(StrictModel):
         return self
 
 
-class PosetExactResult(StrictModel):
-    exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-
-
-class FinitePosetMaterializationResult(PosetExactResult):
+class FinitePosetMaterializationResult(StrictModel):
     poset: FinitePoset
-    completeness: Literal["COMPLETE_CLOSURE_AND_REDUCTION"] = (
-        "COMPLETE_CLOSURE_AND_REDUCTION"
-    )
 
 
 class PosetRequest(StrictModel):
@@ -498,7 +490,7 @@ class MatchingEdge(StrictModel):
     right: ElementLabel
 
 
-class PosetWidthResult(PosetExactResult):
+class PosetWidthResult(StrictModel):
     poset_digest: Sha256Digest
     width: StrictInt = Field(ge=0, le=MAX_POSET_ELEMENTS)
     maximum_antichain: tuple[ElementLabel, ...] = Field(
@@ -548,9 +540,8 @@ class LinearExtensionRequest(StrictModel):
         return self
 
 
-class LinearExtensionCountResult(PosetExactResult):
+class LinearExtensionCountResult(StrictModel):
     count: StrictInt = Field(ge=1)
-    completeness: Literal["COMPLETE"] = "COMPLETE"
 
 
 class PosetInterval(StrictModel):
@@ -617,7 +608,7 @@ class MobiusValue(StrictModel):
     )
 
 
-class MobiusFunctionResult(PosetExactResult):
+class MobiusFunctionResult(StrictModel):
     poset_digest: Sha256Digest
     element_order: tuple[ElementLabel, ...] = Field(
         default=(),
@@ -689,23 +680,13 @@ class PosetClosureRequest(StrictModel):
         return self
 
 
-class PosetClosureResult(PosetExactResult):
+class PosetClosureResult(StrictModel):
     poset_digest: Sha256Digest
     closure_type: Literal["LOWER", "UPPER"]
     closure: tuple[ElementLabel, ...] = Field(default=(), max_length=MAX_POSET_ELEMENTS)
     generated_element: tuple[ElementLabel, ...] = Field(
         default=(), max_length=MAX_POSET_ELEMENTS
     )
-
-
-class PosetDualRequest(StrictModel):
-    """Request the dual (opposite) of a poset."""
-
-    poset: FinitePoset
-
-
-class PosetDualResult(PosetExactResult):
-    poset: FinitePoset
 
 
 class ZetaTransformRequest(StrictModel):
@@ -740,7 +721,7 @@ class ZetaTransformRequest(StrictModel):
         return self
 
 
-class ZetaTransformResult(PosetExactResult):
+class ZetaTransformResult(StrictModel):
     poset_digest: Sha256Digest
     transform: Literal["ZETA"] = "ZETA"
     values: tuple[MobiusValue, ...] = Field(default=(), max_length=MAX_POSET_RELATIONS)
@@ -778,7 +759,7 @@ class IncidenceConvolutionRequest(StrictModel):
         return self
 
 
-class IncidenceConvolutionResult(PosetExactResult):
+class IncidenceConvolutionResult(StrictModel):
     poset_digest: Sha256Digest
     values: tuple[MobiusValue, ...] = Field(default=(), max_length=MAX_POSET_RELATIONS)
 
@@ -789,7 +770,7 @@ class AntichainProfileRequest(StrictModel):
     poset: FinitePoset
 
 
-class AntichainProfileResult(PosetExactResult):
+class AntichainProfileResult(StrictModel):
     poset_digest: Sha256Digest
     maximum_antichain_size: StrictInt = Field(ge=0, le=MAX_POSET_ELEMENTS)
     antichain_count: StrictInt = Field(ge=1)
@@ -826,8 +807,6 @@ __all__ = [
     "PosetChain",
     "PosetClosureRequest",
     "PosetClosureResult",
-    "PosetDualRequest",
-    "PosetDualResult",
     "PosetInterval",
     "PosetRequest",
     "PosetSubset",

@@ -362,11 +362,6 @@ class DirectedBondConnectionProbabilityResult(StrictModel):
     event: Literal["DIRECTED_PATH_EXISTS"] = "DIRECTED_PATH_EXISTS"
     arc_independence: Literal["INDEPENDENT_BERNOULLI"] = "INDEPENDENT_BERNOULLI"
     enumeration: Literal["COMPLETE_ARC_SUBSETS"] = "COMPLETE_ARC_SUBSETS"
-    completeness: Literal["COMPLETE"] = "COMPLETE"
-    truncated: Literal[False] = False
-    termination_reason: Literal["EXHAUSTED"] = "EXHAUSTED"
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @model_validator(mode="after")
     def require_bounded_ledger_shape(self) -> Self:
@@ -412,11 +407,6 @@ class DirectedBondConnectionProbabilityResult(StrictModel):
             event="DIRECTED_PATH_EXISTS",
             arc_independence="INDEPENDENT_BERNOULLI",
             enumeration="COMPLETE_ARC_SUBSETS",
-            completeness="COMPLETE",
-            truncated=False,
-            termination_reason="EXHAUSTED",
-            exactness="EXACT_RATIONAL",
-            determinism="DETERMINISTIC",
         )
 
 

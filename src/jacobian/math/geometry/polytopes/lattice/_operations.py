@@ -110,26 +110,6 @@ def _vertices_from_h_representation(
     return [list(point) for point in vertices_from_halfspaces(halfspaces, dim)], dim
 
 
-def _rational_vertices(
-    request: LatticePolytopeRequest,
-) -> tuple[list[list[Rational]], int, Literal["vertices", "halfspaces"]]:
-    """Return the rational vertices and ambient dimension of the polytope."""
-    if request.vertices is not None:
-        dim = request.dimension()
-        verts = [[c.as_fraction() for c in v.coordinates] for v in request.vertices]
-        return verts, dim, "vertices"
-    assert request.halfspaces is not None
-    halfspaces = [
-        (
-            [c.as_fraction() for c in hs.coefficients],
-            hs.offset.as_fraction(),
-        )
-        for hs in request.halfspaces
-    ]
-    verts, _dim = _vertices_from_h_representation(halfspaces)
-    return verts, _dim, "halfspaces"
-
-
 def _floor(value: Rational) -> int:
     """Exact integer floor of a rational (Fraction or SymPy ``Rational``)."""
     frac = Fraction(value)

@@ -31,7 +31,6 @@ from typing import Literal
 from sympy import Matrix, Rational
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.polytopes._models import (
     MAX_BOUNDEDNESS_COMBINATIONS,
@@ -317,17 +316,6 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
             f"({combo_count} > {MAX_BOUNDEDNESS_COMBINATIONS})"
         )
     return recession_cone_is_trivial(normals, dim)
-
-
-def _format_rational(value: Rational) -> str:
-    """Render a SymPy ``Rational`` as a canonical ``num/den`` string."""
-
-    if value.denominator == 1:
-        return format_canonical_integer(int(value.numerator))
-    return (
-        f"{format_canonical_integer(int(value.numerator))}/"
-        f"{format_canonical_integer(int(value.denominator))}"
-    )
 
 
 def _canonical_rational(value: Rational) -> CanonicalRational:

@@ -22,7 +22,6 @@ from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     Simplex,
     SimplicialComplexRequest,
-    TopologyExactResult,
     VertexLabel,
     _validation_error,
     canonical_complex,
@@ -167,7 +166,7 @@ class FVectorRequest(StrictModel):
     complex: SimplicialComplexRequest
 
 
-class FVectorResult(TopologyExactResult):
+class FVectorResult(StrictModel):
     """The f-vector and h-vector of a simplicial complex."""
 
     f_vector: tuple[int, ...]
@@ -185,7 +184,7 @@ class LinkRequest(StrictModel):
     )
 
 
-class LinkResult(TopologyExactResult):
+class LinkResult(StrictModel):
     """The maximal facets of the link of a simplex."""
 
     simplex: tuple[str, ...]
@@ -202,7 +201,7 @@ class StarRequest(StrictModel):
     )
 
 
-class StarResult(TopologyExactResult):
+class StarResult(StrictModel):
     """The closed star produced for a simplex."""
 
     complex: SimplicialComplexRequest
@@ -273,7 +272,7 @@ class VertexDeletionRequest(StrictModel):
     )
 
 
-class VertexDeletionResult(TopologyExactResult):
+class VertexDeletionResult(StrictModel):
     """The induced subcomplex produced after deleting a vertex subset."""
 
     complex: SimplicialComplexRequest
@@ -325,7 +324,7 @@ class SkeletonRequest(StrictModel):
     k: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
 
 
-class SkeletonResult(TopologyExactResult):
+class SkeletonResult(StrictModel):
     """The k-skeleton as a facet list."""
 
     complex: SimplicialComplexRequest
@@ -404,7 +403,7 @@ class JoinRequest(StrictModel):
     complex_b: SimplicialComplexRequest
 
 
-class JoinResult(TopologyExactResult):
+class JoinResult(StrictModel):
     """The join of two complexes."""
 
     complex_a: SimplicialComplexRequest
@@ -452,7 +451,7 @@ class ElementaryCollapseRequest(StrictModel):
     )
 
 
-class ElementaryCollapseResult(TopologyExactResult):
+class ElementaryCollapseResult(StrictModel):
     """Result of one elementary collapse step."""
 
     complex: SimplicialComplexRequest

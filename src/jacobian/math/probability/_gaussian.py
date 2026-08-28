@@ -144,9 +144,6 @@ class GaussianPolynomialMomentResult(StrictModel):
         max_length=MAX_GAUSSIAN_EXPANSION_PATHS,
     )
     gaussian_model: Literal["INDEPENDENT_STANDARD_REAL"] = "INDEPENDENT_STANDARD_REAL"
-    completeness: Literal["COMPLETE_BOUNDED_EXPANSION"] = "COMPLETE_BOUNDED_EXPANSION"
-    exactness: Literal["EXACT_COMPLEX_RATIONAL"] = "EXACT_COMPLEX_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @model_validator(mode="after")
     def require_canonical_contraction_ledger(self) -> Self:

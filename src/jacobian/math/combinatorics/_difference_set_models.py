@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from collections import Counter
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
@@ -51,7 +50,7 @@ def _difference_set_validation_error(code: str, message: str) -> PydanticCustomE
 
 
 class IntegerSidonRequest(StrictModel):
-    """One bounded finite integer set for ordered-difference replay."""
+    """One bounded finite integer set for an ordered-difference profile."""
 
     elements: tuple[AdditiveInteger, ...] = Field(max_length=MAX_SIDON_SET_SIZE)
 
@@ -80,37 +79,19 @@ class IntegerSidonResult(StrictModel):
         max_length=MAX_SIDON_SET_SIZE * (MAX_SIDON_SET_SIZE - 1)
     )
     is_sidon: StrictBool
-    exactness: Literal["EXACT_INTEGER"] = "EXACT_INTEGER"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @model_validator(mode="after")
-    def bind_complete_ordered_difference_profile(self) -> Self:
+    def require_canonical_profile_shape(self) -> Self:
         values = tuple(int(value) for value in self.normalized_elements)
         if values != tuple(sorted(set(values))):
             raise _difference_set_validation_error(
                 "combinatorics.sidon_invariant",
                 "normalized Sidon elements must be sorted and unique",
             )
-        expected = tuple(
-            (left, right, left - right)
-            for left in values
-            for right in values
-            if left != right
-        )
-        actual = tuple(
-            (int(item.minuend), int(item.subtrahend), int(item.difference))
-            for item in self.ordered_differences
-        )
-        if actual != expected:
+        if len(self.ordered_differences) != len(values) * (len(values) - 1):
             raise _difference_set_validation_error(
                 "combinatorics.sidon_invariant",
-                "ordered differences must be the complete canonical profile",
-            )
-        differences = tuple(difference for _, _, difference in expected)
-        if self.is_sidon != (len(set(differences)) == len(differences)):
-            raise _difference_set_validation_error(
-                "combinatorics.sidon_invariant",
-                "Sidon decision must agree with the ordered-difference profile",
+                "ordered-difference profile has the wrong cardinality",
             )
         return self
 
@@ -126,8 +107,6 @@ class IntegerSidonResult(StrictModel):
             normalized_elements=normalized_elements,
             ordered_differences=ordered_differences,
             is_sidon=is_sidon,
-            exactness="EXACT_INTEGER",
-            determinism="DETERMINISTIC",
         )
 
 
@@ -174,11 +153,9 @@ class CyclicPerfectDifferenceSetResult(StrictModel):
         max_length=MAX_CYCLIC_DIFFERENCE_SET_MODULUS - 1
     )
     is_perfect: StrictBool
-    exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @model_validator(mode="after")
-    def bind_complete_cyclic_profile(self) -> Self:
+    def require_canonical_profile_shape(self) -> Self:
         residues = self.normalized_residues
         if residues != tuple(sorted(set(residues))):
             raise _difference_set_validation_error(
@@ -205,29 +182,11 @@ class CyclicPerfectDifferenceSetResult(StrictModel):
                 "combinatorics.difference_set_invariant",
                 "cyclic difference profile must cover every nonzero residue",
             )
-        counts = Counter(
-            (left - right) % self.modulus
-            for left in residues
-            for right in residues
-            if left != right
-        )
-        expected_profile = tuple(
-            counts.get(residue, 0) for residue in range(1, self.modulus)
-        )
-        if tuple(item.multiplicity for item in profile) != expected_profile:
-            raise _difference_set_validation_error(
-                "combinatorics.difference_set_invariant",
-                "cyclic difference profile must match the retained residue set",
-            )
         expected_missing = tuple(
-            residue
-            for residue, multiplicity in enumerate(expected_profile, start=1)
-            if multiplicity == 0
+            item.residue for item in profile if item.multiplicity == 0
         )
         expected_repeated = tuple(
-            residue
-            for residue, multiplicity in enumerate(expected_profile, start=1)
-            if multiplicity > 1
+            item.residue for item in profile if item.multiplicity > 1
         )
         if (
             self.missing_residues != expected_missing
@@ -271,8 +230,6 @@ class CyclicPerfectDifferenceSetResult(StrictModel):
             missing_residues=missing_residues,
             repeated_residues=repeated_residues,
             is_perfect=is_perfect,
-            exactness="EXACT_FINITE",
-            determinism="DETERMINISTIC",
         )
 
 
@@ -304,8 +261,6 @@ class CyclicDifferenceSetExtensionResult(StrictModel):
     decision: Literal["EXTENDS", "DOES_NOT_EXTEND"]
     extension: tuple[StrictInt, ...] = Field(max_length=64)
     coverage: Literal["WITNESS", "ALL_CANDIDATES"]
-    exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @model_validator(mode="after")
     def bind_extension_claim(self) -> Self:
@@ -336,23 +291,24 @@ class CyclicDifferenceSetExtensionResult(StrictModel):
                 "combinatorics.extension_invariant",
                 "extension candidate-space size must match the retained source",
             )
-        from jacobian.math.combinatorics._difference_sets import _find_extension
-
-        witness = _find_extension(self.base_residues, self.target_order, self.modulus)
         if self.decision == "EXTENDS":
             if (
                 self.coverage != "WITNESS"
-                or witness is None
-                or self.extension != witness
+                or len(self.extension) != self.target_order
+                or self.extension != tuple(sorted(set(self.extension)))
+                or not set(self.base_residues) <= set(self.extension)
+                or any(
+                    residue < 0 or residue >= self.modulus for residue in self.extension
+                )
             ):
                 raise _difference_set_validation_error(
                     "combinatorics.extension_invariant",
-                    "extension witness must be the canonical complete-search witness",
+                    "extension witness must be canonical and retain the base residues",
                 )
-        elif self.coverage != "ALL_CANDIDATES" or self.extension or witness is not None:
+        elif self.coverage != "ALL_CANDIDATES" or self.extension:
             raise _difference_set_validation_error(
                 "combinatorics.extension_invariant",
-                "negative extension decision must bind a complete candidate search",
+                "negative extension decisions cannot carry a witness",
             )
         return self
 
@@ -374,6 +330,4 @@ class CyclicDifferenceSetExtensionResult(StrictModel):
             decision="EXTENDS" if extension is not None else "DOES_NOT_EXTEND",
             extension=extension or (),
             coverage="WITNESS" if extension is not None else "ALL_CANDIDATES",
-            exactness="EXACT_FINITE",
-            determinism="DETERMINISTIC",
         )

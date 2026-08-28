@@ -29,10 +29,6 @@ __all__ = [
 ]
 
 
-def _is_feasible(system: FiniteFeasibleSetSystem, subset: frozenset[int]) -> bool:
-    return tuple(sorted(subset)) in system.feasible_index()
-
-
 def _feasible_sets(system: FiniteFeasibleSetSystem) -> list[frozenset[int]]:
     return [frozenset(row) for row in system.feasible]
 

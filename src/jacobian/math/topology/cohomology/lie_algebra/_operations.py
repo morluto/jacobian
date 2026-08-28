@@ -21,14 +21,6 @@ from jacobian.math.topology.cohomology.lie_algebra._models import (
 )
 
 
-def _wedge_index(indices: tuple[int, ...], dim: int) -> int:
-    """Convert a sorted tuple of indices to a lexicographic wedge basis index."""
-    result = 0
-    for i, idx in enumerate(indices):
-        result += idx * (dim**i)
-    return result
-
-
 def _chain_group_dimensions(dimension: int) -> tuple[int, ...]:
     from math import comb
 

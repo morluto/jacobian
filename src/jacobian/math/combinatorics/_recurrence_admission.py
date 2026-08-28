@@ -168,8 +168,6 @@ def _admit_linear_recurrence(
         lambda: _validate_result_inline_size(
             {
                 "coefficient_convention": coefficient_convention,
-                "determinism": "DETERMINISTIC",
-                "exactness": "EXACT_RATIONAL",
                 "scope": scope,
                 "values": [
                     {"index": index, "value": _fraction_wire(prefix[index])}
@@ -279,8 +277,6 @@ def _admit_p_recursive_recurrence(
             {
                 "coefficient_convention": coefficient_convention,
                 "polynomial_convention": polynomial_convention,
-                "determinism": "DETERMINISTIC",
-                "exactness": "EXACT_RATIONAL",
                 "recurrence_order": order,
                 "scope": scope,
                 "values": [
@@ -357,8 +353,6 @@ def _admit_series(
             {
                 "coefficient_convention": coefficient_convention,
                 "coefficients": [_fraction_wire(value) for value in coefficients],
-                "determinism": "DETERMINISTIC",
-                "exactness": "EXACT_RATIONAL",
                 "expansion_point": expansion_point,
                 "residual_coefficients": [_fraction_wire(Fraction())]
                 * truncation_order,

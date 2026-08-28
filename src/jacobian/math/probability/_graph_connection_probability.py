@@ -85,11 +85,6 @@ class GraphConnectionProbabilityResult(StrictModel):
     event: Literal["TERMINALS_CONNECTED"] = "TERMINALS_CONNECTED"
     edge_independence: Literal["INDEPENDENT_BERNOULLI"] = "INDEPENDENT_BERNOULLI"
     enumeration: Literal["COMPLETE_EDGE_SUBSETS"] = "COMPLETE_EDGE_SUBSETS"
-    completeness: Literal["COMPLETE"] = "COMPLETE"
-    truncated: Literal[False] = False
-    termination_reason: Literal["EXHAUSTED"] = "EXHAUSTED"
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @model_validator(mode="after")
     def require_canonical_state_ledger(self) -> Self:
@@ -119,13 +114,6 @@ def _wire(value: Any) -> CanonicalRational:
     )
 
 
-def _fmpq(value: CanonicalRational) -> Any:
-    from flint import fmpq
-
-    fraction = value.as_fraction()
-    return fmpq(fraction.numerator, fraction.denominator)
-
-
 def _admit_graph_connection_request(
     request: GraphConnectionProbabilityRequest,
 ) -> tuple[tuple[Any, ...], int]:
@@ -150,9 +138,12 @@ def _admit_graph_connection_request(
     ):
         raise ValueError("terminals must be two distinct declared graph vertices")
 
-    probabilities = tuple(
-        _fmpq(item.open_probability) for item in request.edge_probabilities
-    )
+    from flint import fmpq
+
+    probabilities = []
+    for item in request.edge_probabilities:
+        probability = item.open_probability.as_fraction()
+        probabilities.append(fmpq(probability.numerator, probability.denominator))
     if any(not 0 <= probability <= 1 for probability in probabilities):
         raise ValueError("graph reliability probabilities must lie in [0, 1]")
 
@@ -200,7 +191,7 @@ def _admit_graph_connection_request(
             "graph reliability request can exceed the complete ledger "
             f"budget of {MAX_GRAPH_RELIABILITY_LEDGER_BYTES} bytes"
         )
-    return probabilities, state_count
+    return tuple(probabilities), state_count
 
 
 def _terminals_connected(

@@ -11,7 +11,6 @@ from jacobian._models import StrictModel
 from jacobian.math.topology._models import (
     Simplex,
     SimplicialComplexRequest,
-    TopologyExactResult,
     _validation_error,
 )
 
@@ -73,7 +72,7 @@ class PseudomanifoldRequest(StrictModel):
     complex: SimplicialComplexRequest
 
 
-class PseudomanifoldResult(TopologyExactResult):
+class PseudomanifoldResult(StrictModel):
     """Pseudomanifold decision result produced for one source complex."""
 
     complex: SimplicialComplexRequest

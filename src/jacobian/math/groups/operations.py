@@ -5,7 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.groups._models import PermutationGroup, SubgroupEntry
+from jacobian.math.groups._models import (
+    PermutationGroup,
+    SubgroupEntry,
+    _full_permutation_form,
+)
 
 __all__ = [
     "element_order",
@@ -58,13 +62,6 @@ def group_orbit(group: PermutationGroup, point: int) -> list[int]:
             message="point must be in 0..n-1",
         )
     return sorted(_backend_group(group).orbit(point))
-
-
-def _full_generator(perm: Any, degree: int) -> tuple[int, ...]:
-    form = list(perm.array_form)
-    # array_form truncates trailing fixed points; restore them exactly.
-    form.extend(range(len(form), degree))
-    return tuple(form)
 
 
 def group_conjugacy_classes(
@@ -121,7 +118,10 @@ def group_conjugacy_classes(
             ),
         )
     classes = group.conjugacy_classes()
-    canonical = [sorted(list(p.array_form) for p in cls) for cls in classes]
+    canonical = [
+        sorted(list(_full_permutation_form(permutation, degree)) for permutation in cls)
+        for cls in classes
+    ]
     canonical.sort(key=lambda cls: tuple(cls[0]))
     return canonical
 
@@ -144,7 +144,8 @@ def group_stabilizer(group: PermutationGroup, point: int) -> PermutationGroup:
         )
     stabilizer = _backend_group(group).stabilizer(point)
     generators = tuple(
-        _full_generator(generator, group.degree) for generator in stabilizer.generators
+        _full_permutation_form(generator, group.degree)
+        for generator in stabilizer.generators
     )
     # The canonical group value requires at least one generator; represent the
     # trivial stabilizer by the identity permutation.
@@ -182,13 +183,6 @@ def _require_admitted_lattice_source(group: PermutationGroup) -> Any:
     return backend_group
 
 
-def _canonical_form(permutation: Any, degree: int) -> tuple[int, ...]:
-    form = list(permutation.array_form)
-    # array_form truncates trailing fixed points; restore them exactly.
-    form.extend(range(len(form), degree))
-    return tuple(form)
-
-
 def _element_table(
     group: Any, degree: int
 ) -> tuple[list[tuple[int, ...]], list[list[int]]]:
@@ -199,12 +193,16 @@ def _element_table(
     """
     from sympy.combinatorics import Permutation
 
-    elements = sorted({_canonical_form(element, degree) for element in group.elements})
+    elements = sorted(
+        {_full_permutation_form(element, degree) for element in group.elements}
+    )
     element_index = {form: position for position, form in enumerate(elements)}
     index_perms = [Permutation(list(form)) for form in elements]
     mul = [
         [
-            element_index[_canonical_form(index_perms[i] * index_perms[j], degree)]
+            element_index[
+                _full_permutation_form(index_perms[i] * index_perms[j], degree)
+            ]
             for j in range(len(elements))
         ]
         for i in range(len(elements))

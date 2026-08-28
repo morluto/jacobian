@@ -18,13 +18,35 @@ from jacobian.math.graphs.directed._models import (
     StronglyConnectedComponentsRequest,
     StronglyConnectedComponentsResult,
 )
-from jacobian.math.graphs.directed._operations import (
-    compute_acyclic_order,
-    compute_condensation,
-    compute_dag_longest_path,
-    compute_reachability,
-    compute_strongly_connected_components,
+from jacobian.math.graphs.directed.operations import (
+    acyclic_order,
+    condensation,
+    dag_longest_path,
+    reachability,
+    strongly_connected_components,
 )
+
+
+def _reachability(request: ReachabilityRequest) -> ReachabilityResult:
+    return reachability(request.graph, request.source)
+
+
+def _components(
+    request: StronglyConnectedComponentsRequest,
+) -> StronglyConnectedComponentsResult:
+    return strongly_connected_components(request.graph)
+
+
+def _condensation(request: CondensationRequest) -> CondensationResult:
+    return condensation(request.graph)
+
+
+def _acyclic_order(request: AcyclicOrderRequest) -> AcyclicOrderResult:
+    return acyclic_order(request.graph)
+
+
+def _dag_longest_path(request: DagLongestPathRequest) -> DagLongestPathResult:
+    return dag_longest_path(request.graph)
 
 
 def directed_graph_operation[
@@ -61,7 +83,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "unreachable vertex sets.",
         ReachabilityRequest,
         ReachabilityResult,
-        compute_reachability,
+        _reachability,
         "graph",
         "directed",
         "reachability",
@@ -86,7 +108,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Partition a simple directed graph into strongly connected components. Returns the number of components and each component's sorted vertex list.",
         StronglyConnectedComponentsRequest,
         StronglyConnectedComponentsResult,
-        compute_strongly_connected_components,
+        _components,
         "graph",
         "directed",
         "scc",
@@ -112,7 +134,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "original graph.",
         CondensationRequest,
         CondensationResult,
-        compute_condensation,
+        _condensation,
         "graph",
         "directed",
         "condensation",
@@ -138,7 +160,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "contains a cycle.",
         AcyclicOrderRequest,
         AcyclicOrderResult,
-        compute_acyclic_order,
+        _acyclic_order,
         "graph",
         "directed",
         "topological-sort",
@@ -164,7 +186,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "graph. Reports NOT_APPLICABLE when the graph contains a cycle.",
         DagLongestPathRequest,
         DagLongestPathResult,
-        compute_dag_longest_path,
+        _dag_longest_path,
         "graph",
         "directed",
         "dag",

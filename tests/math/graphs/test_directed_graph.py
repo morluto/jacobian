@@ -23,11 +23,11 @@ from jacobian.math.graphs.directed._models import (
     StronglyConnectedComponentsRequest,
     StronglyConnectedComponentsResult,
 )
-from jacobian.math.graphs.directed._operations import (
-    compute_acyclic_order,
-    compute_condensation,
-    compute_reachability,
-    compute_strongly_connected_components,
+from jacobian.math.graphs.directed.operations import (
+    acyclic_order,
+    condensation,
+    reachability,
+    strongly_connected_components,
 )
 
 # ---------------------------------------------------------------------------
@@ -35,24 +35,42 @@ from jacobian.math.graphs.directed._operations import (
 # ---------------------------------------------------------------------------
 
 
+def _run_reachability(request: ReachabilityRequest) -> ReachabilityResult:
+    return reachability(request.graph, request.source)
+
+
+def _run_components(
+    request: StronglyConnectedComponentsRequest,
+) -> StronglyConnectedComponentsResult:
+    return strongly_connected_components(request.graph)
+
+
+def _run_condensation(request: CondensationRequest) -> CondensationResult:
+    return condensation(request.graph)
+
+
+def _run_acyclic_order(request: AcyclicOrderRequest) -> AcyclicOrderResult:
+    return acyclic_order(request.graph)
+
+
 def _reachability(graph: dict[str, object], source: int) -> ReachabilityResult:
-    return compute_reachability(
+    return _run_reachability(
         ReachabilityRequest.model_validate({"graph": graph, "source": source})
     )
 
 
 def _scc(graph: dict[str, object]) -> StronglyConnectedComponentsResult:
-    return compute_strongly_connected_components(
+    return _run_components(
         StronglyConnectedComponentsRequest.model_validate({"graph": graph})
     )
 
 
 def _condensation(graph: dict[str, object]) -> CondensationResult:
-    return compute_condensation(CondensationRequest.model_validate({"graph": graph}))
+    return _run_condensation(CondensationRequest.model_validate({"graph": graph}))
 
 
 def _acyclic_order(graph: dict[str, object]) -> AcyclicOrderResult:
-    return compute_acyclic_order(AcyclicOrderRequest.model_validate({"graph": graph}))
+    return _run_acyclic_order(AcyclicOrderRequest.model_validate({"graph": graph}))
 
 
 def _directed_pairs(edge_count: int) -> list[list[int]]:
@@ -153,22 +171,22 @@ class TestReachabilityContract:
             {"graph": {"vertex_count": 2, "edges": [[0, 1]]}, "source": 5}
         )
         with pytest.raises(OperationDomainValidationError):
-            compute_reachability(request)
+            _run_reachability(request)
 
     def test_rejects_vertex_count_above_the_conservative_fallback(self) -> None:
         graph = DirectedGraph(vertex_count=257, edges=())
         assert graph.vertex_count == 257
 
         with pytest.raises(OperationDomainValidationError):
-            compute_reachability(ReachabilityRequest(graph=graph, source=0))
+            _run_reachability(ReachabilityRequest(graph=graph, source=0))
         with pytest.raises(OperationDomainValidationError):
-            compute_strongly_connected_components(
+            _run_components(
                 StronglyConnectedComponentsRequest(graph=graph)
             )
         with pytest.raises(OperationDomainValidationError):
-            compute_condensation(CondensationRequest(graph=graph))
+            _run_condensation(CondensationRequest(graph=graph))
         with pytest.raises(OperationDomainValidationError):
-            compute_acyclic_order(AcyclicOrderRequest(graph=graph))
+            _run_acyclic_order(AcyclicOrderRequest(graph=graph))
 
 
 # ---------------------------------------------------------------------------
@@ -395,17 +413,17 @@ class TestDirectOperationEnvelope:
         ]
         for request in beyond_envelope:
             with pytest.raises(OperationDomainValidationError):
-                compute_reachability(
+                _run_reachability(
                     ReachabilityRequest.model_validate({**request, "source": 0})
                 )
             with pytest.raises(OperationDomainValidationError):
-                compute_strongly_connected_components(
+                _run_components(
                     StronglyConnectedComponentsRequest.model_validate(request)
                 )
             with pytest.raises(OperationDomainValidationError):
-                compute_condensation(CondensationRequest.model_validate(request))
+                _run_condensation(CondensationRequest.model_validate(request))
             with pytest.raises(OperationDomainValidationError):
-                compute_acyclic_order(AcyclicOrderRequest.model_validate(request))
+                _run_acyclic_order(AcyclicOrderRequest.model_validate(request))
 
     def test_reachability_source_schema_matches_the_vertex_envelope(self) -> None:
         """The published source field keeps the operation-wide vertex maximum."""
@@ -433,11 +451,11 @@ class TestDirectOperationEnvelope:
 
         small_graph = {"graph": {"vertex_count": 4, "edges": []}}
         with pytest.raises(OperationDomainValidationError):
-            compute_reachability(
+            _run_reachability(
                 ReachabilityRequest.model_validate({**small_graph, "source": 4})
             )
         with pytest.raises(OperationDomainValidationError):
-            compute_reachability(
+            _run_reachability(
                 ReachabilityRequest.model_validate({**small_graph, "source": 255})
             )
 
@@ -512,7 +530,7 @@ class TestCarrierParseEnvelope:
             {"graph": {"vertex_count": 33, "edges": edges}}
         )
         with pytest.raises(OperationDomainValidationError) as excinfo:
-            compute_strongly_connected_components(request)
+            _run_components(request)
         message = str(excinfo.value)
         assert "supports at most 512 edges" in message
         assert "parse-safety envelope" not in message

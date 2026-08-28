@@ -6,13 +6,11 @@ from jacobian.math.graphs.directed._models import (
     DagLongestPathRequest,
     DagLongestPathResult,
 )
-from jacobian.math.graphs.directed._operations import compute_dag_longest_path
+from jacobian.math.graphs.directed.operations import dag_longest_path
 
 
 def _longest_path(graph: dict[str, object]) -> DagLongestPathResult:
-    return compute_dag_longest_path(
-        DagLongestPathRequest.model_validate({"graph": graph})
-    )
+    return dag_longest_path(DagLongestPathRequest.model_validate({"graph": graph}).graph)
 
 
 class TestDagLongestPath:

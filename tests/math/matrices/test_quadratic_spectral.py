@@ -20,12 +20,12 @@ from jacobian.math.matrices.quadratic_spectral._models import (
     RealQuadraticSingularSpectrumRequest,
     RealQuadraticSymmetricSpectrumRequest,
 )
-from jacobian.math.matrices.quadratic_spectral._operations import (
+from jacobian.math.matrices.quadratic_spectral._tools import (
+    TOOLS,
     compute_inertia,
     compute_singular_spectrum,
     compute_symmetric_spectrum,
 )
-from jacobian.math.matrices.quadratic_spectral._tools import TOOLS
 from jacobian.math.matrices.values import RealQuadraticMatrix
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
 from jacobian.math.number_theory.algebraic_numbers.real import compare_real_algebraic

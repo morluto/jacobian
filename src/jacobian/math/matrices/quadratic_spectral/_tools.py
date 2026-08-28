@@ -3,23 +3,56 @@
 from collections.abc import Callable
 from typing import Any
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
+from jacobian.math.matrices.quadratic_spectral import operations as native
 from jacobian.math.matrices.quadratic_spectral._models import (
     RealQuadraticInertiaRequest,
     RealQuadraticSingularSpectrumRequest,
     RealQuadraticSymmetricSpectrumRequest,
 )
-from jacobian.math.matrices.quadratic_spectral._operations import (
-    compute_inertia,
-    compute_singular_spectrum,
-    compute_symmetric_spectrum,
-)
 from jacobian.math.matrices.quadratic_spectral.values import (
     RealQuadraticInertia,
     RealQuadraticSpectrum,
 )
+
+
+def _run[ResultT](operation: Callable[[], ResultT]) -> ResultT:
+    try:
+        return operation()
+    except (PydanticCustomError, ValueError) as exc:
+        code = (
+            exc.type
+            if isinstance(exc, PydanticCustomError)
+            else "matrix.domain_invalid"
+        )
+        message = exc.message() if isinstance(exc, PydanticCustomError) else str(exc)
+        raise OperationDomainValidationError(
+            location=("matrix",), code=code, message=message
+        ) from exc
+
+
+def compute_symmetric_spectrum(
+    request: RealQuadraticSymmetricSpectrumRequest,
+) -> RealQuadraticSpectrum:
+    return _run(lambda: native.symmetric_spectrum(request.matrix))
+
+
+def compute_singular_spectrum(
+    request: RealQuadraticSingularSpectrumRequest,
+) -> RealQuadraticSpectrum:
+    return _run(lambda: native.singular_spectrum(request.matrix))
+
+
+def compute_inertia(request: RealQuadraticInertiaRequest) -> RealQuadraticInertia:
+    return _run(lambda: native.inertia(request.matrix))
 
 
 def _op[

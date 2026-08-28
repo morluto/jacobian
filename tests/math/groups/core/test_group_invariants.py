@@ -16,7 +16,7 @@ from jacobian.math.groups._models import (
     GroupSubgroupLatticeResult,
     PermutationGroup,
 )
-from jacobian.math.groups._operations import (
+from jacobian.math.groups._tools import (
     compute_subgroup_lattice,
 )
 
@@ -135,7 +135,7 @@ class TestBoundedEnumeration:
                 GroupSubgroupLatticeRequest(degree=6, generators=s6_generators)
             )
         s7_generators = ((1, 0, 2, 3, 4, 5, 6), (1, 2, 3, 4, 5, 6, 0))
-        from jacobian.math.groups._operations import compute_group_conjugacy_classes
+        from jacobian.math.groups._tools import compute_group_conjugacy_classes
 
         with pytest.raises(OperationDomainValidationError, match="group order"):
             compute_group_conjugacy_classes(
@@ -315,7 +315,7 @@ class TestExceededOutcomeSourceBinding:
 
     def test_entries_chain_into_permutation_group_consumers(self) -> None:
         from jacobian.math.groups._models import PermutationGroup
-        from jacobian.math.groups._operations import compute_group_order
+        from jacobian.math.groups._tools import compute_group_order
 
         result = compute_subgroup_lattice(
             GroupSubgroupLatticeRequest(degree=4, generators=((1, 2, 3, 0),))

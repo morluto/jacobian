@@ -18,7 +18,7 @@ from jacobian.math.groups._models import (
     GroupStabilizerRequest,
     PermutationGroup,
 )
-from jacobian.math.groups._operations import (
+from jacobian.math.groups._tools import (
     compute_group_orbit,
     compute_group_order,
     compute_group_stabilizer,
@@ -63,7 +63,7 @@ def test_group_orbit_request_accepts_stabilizer_value_unchanged() -> None:
 def test_group_conjugacy_classes_partition_s3() -> None:
     """S3 has three conjugacy classes of sizes 1, 2, 3."""
     from jacobian.math.groups._models import GroupConjugacyClassesRequest
-    from jacobian.math.groups._operations import compute_group_conjugacy_classes
+    from jacobian.math.groups._tools import compute_group_conjugacy_classes
 
     gens = ((1, 2, 0), (1, 0, 2))
     result = compute_group_conjugacy_classes(
@@ -85,7 +85,7 @@ def test_group_conjugacy_classes_abelian_group_is_singletons() -> None:
         GroupConjugacyClassesRequest,
         PermutationGroup,
     )
-    from jacobian.math.groups._operations import (
+    from jacobian.math.groups._tools import (
         compute_group_conjugacy_classes,
         compute_group_order,
     )
@@ -105,7 +105,7 @@ def test_group_conjugacy_classes_abelian_group_is_singletons() -> None:
 def test_group_conjugacy_classes_canonical_order_s3() -> None:
     """Members are lexicographically sorted; classes sort by representative."""
     from jacobian.math.groups._models import GroupConjugacyClassesRequest
-    from jacobian.math.groups._operations import compute_group_conjugacy_classes
+    from jacobian.math.groups._tools import compute_group_conjugacy_classes
 
     gens = ((1, 2, 0), (1, 0, 2))
     result = compute_group_conjugacy_classes(
@@ -212,7 +212,7 @@ def test_group_conjugacy_classes_result_round_trips_through_model_dump() -> None
         GroupConjugacyClassesRequest,
         GroupConjugacyClassesResult,
     )
-    from jacobian.math.groups._operations import compute_group_conjugacy_classes
+    from jacobian.math.groups._tools import compute_group_conjugacy_classes
 
     result = compute_group_conjugacy_classes(
         GroupConjugacyClassesRequest(degree=3, generators=((1, 2, 0), (1, 0, 2))),

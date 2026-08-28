@@ -4,8 +4,10 @@ from collections.abc import Callable
 from typing import Any
 
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.groups import operations as native
 from jacobian.math.groups._models import (
     MAX_CONJUGACY_CLASSES_GROUP_ORDER,
     GroupConjugacyClassesRequest,
@@ -21,14 +23,55 @@ from jacobian.math.groups._models import (
     GroupSubgroupLatticeResult,
     PermutationGroup,
 )
-from jacobian.math.groups._operations import (
-    compute_element_order,
-    compute_group_conjugacy_classes,
-    compute_group_orbit,
-    compute_group_order,
-    compute_group_stabilizer,
-    compute_subgroup_lattice,
-)
+from jacobian.math.groups.operations import SubgroupLatticeBudgetExceededError
+
+
+def compute_group_order(request: PermutationGroup) -> GroupOrderResult:
+    order = native.group_order(request)
+    return GroupOrderResult(order=format_canonical_integer(order))
+
+
+def compute_element_order(request: GroupElementOrderRequest) -> GroupElementOrderResult:
+    order = native.element_order(request.degree, list(request.generator))
+    return GroupElementOrderResult(order=format_canonical_integer(order))
+
+
+def compute_group_orbit(request: GroupOrbitRequest) -> GroupOrbitResult:
+    orbit = native.group_orbit(request.group, request.point)
+    return GroupOrbitResult(orbit=tuple(orbit), point=request.point)
+
+
+def compute_group_conjugacy_classes(
+    request: GroupConjugacyClassesRequest,
+) -> GroupConjugacyClassesResult:
+    classes = native.group_conjugacy_classes(
+        request.degree,
+        [list(g) for g in request.generators],
+    )
+    return GroupConjugacyClassesResult._from_kernel(
+        tuple(tuple(tuple(p) for p in cls) for cls in classes),
+    )
+
+
+def compute_group_stabilizer(request: GroupStabilizerRequest) -> GroupStabilizerResult:
+    return GroupStabilizerResult._from_kernel(
+        request.point,
+        request.group,
+        native.group_stabilizer(request.group, request.point),
+    )
+
+
+def compute_subgroup_lattice(
+    request: GroupSubgroupLatticeRequest,
+) -> GroupSubgroupLatticeResult:
+    source = PermutationGroup(degree=request.degree, generators=request.generators)
+    try:
+        subgroups = native.subgroup_lattice(source)
+    except SubgroupLatticeBudgetExceededError as error:
+        return GroupSubgroupLatticeResult._limit_exceeded_from_kernel(
+            request, str(error)
+        )
+    return GroupSubgroupLatticeResult._computed_from_kernel(request, tuple(subgroups))
 
 
 def group_operation[

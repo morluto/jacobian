@@ -18,6 +18,7 @@ from jacobian.math.topology.frames.values import (
 class VectorFamilyRequest(VectorFamily):
     """A bounded family in the standard ordered coordinate space."""
 
+
 class FiniteFrameRequest(VectorFamilyRequest):
     """Wire request for an operation whose input must span its ambient space."""
 

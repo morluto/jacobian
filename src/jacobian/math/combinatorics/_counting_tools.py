@@ -172,4 +172,3 @@ COUNTING_OPERATIONS = (
         ),
     ),
 )
-

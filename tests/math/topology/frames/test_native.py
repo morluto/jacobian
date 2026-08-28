@@ -20,9 +20,10 @@ def test_native_gram_and_potential_match_wire_adapters() -> None:
     family = VectorFamily(vectors=((1, 1), (1, 0), (0, 1)))
 
     assert gram(family).gram == ((2, 1, 1), (1, 1, 0), (1, 0, 1))
-    assert frame_potential(family).potential == compute_frame_potential(
-        FiniteFrameRequest(vectors=family.vectors)
-    ).potential
+    assert (
+        frame_potential(family).potential
+        == compute_frame_potential(FiniteFrameRequest(vectors=family.vectors)).potential
+    )
 
 
 def test_native_coherence_matches_wire_adapter() -> None:

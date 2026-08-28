@@ -104,4 +104,3 @@ PARTITION_OPERATIONS = (
         ),
     ),
 )
-

@@ -38,14 +38,16 @@ def test_chain_complex_count_admission_is_typed_after_wire_parsing() -> None:
     payload = {
         "coefficient_field": "QQ",
         "basis_sizes": [1, 1, 1],
-        "differential_matrices": [[ ["0"] ]],
+        "differential_matrices": [[["0"]]],
     }
 
     with pytest.raises(OperationDomainValidationError) as caught:
         invoke_operation("chain_complex.construct.compute", payload, Catalog.open())
 
     assert caught.value.errors()[0]["loc"] == ("differential_matrices",)
-    assert caught.value.errors()[0]["type"] == "chain_complex.differential_count_mismatch"
+    assert (
+        caught.value.errors()[0]["type"] == "chain_complex.differential_count_mismatch"
+    )
 
 
 def test_chain_complex_differential_admission_is_typed_after_wire_parsing() -> None:

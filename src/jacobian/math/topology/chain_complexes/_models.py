@@ -52,6 +52,7 @@ class ConstructChainComplexRequest(StrictModel):
         )
     )
 
+
 class VerifyDifferentialRequest(StrictModel):
     """Verify that d^2 = 0 for a chain complex."""
 

@@ -80,6 +80,7 @@ def _input_series_from_request(
             message="coefficient count must equal truncation_order",
         ) from exc
 
+
 TOOLS = (
     MathTool(
         operation_id="formal_series.rational.add.compute",

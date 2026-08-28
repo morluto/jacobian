@@ -225,7 +225,9 @@ def _admit_hankel_request(
     try:
         require_hankel_matrix_admission(prefix, order, shifted=shifted)
     except HankelMatrixAdmissionError as exc:
-        location = ("prefix", "moments") if exc.reason != "order_out_of_range" else ("order",)
+        location = (
+            ("prefix", "moments") if exc.reason != "order_out_of_range" else ("order",)
+        )
         operation = "shifted_hankel" if shifted else "hankel"
         raise OperationDomainValidationError(
             location=location,

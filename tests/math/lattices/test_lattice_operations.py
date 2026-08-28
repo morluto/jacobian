@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.lattices import (
+from jacobian.math.lattices._lattice_operations import (
     compute_canonical_basis,
     compute_direct_sum,
     compute_discriminant_group,

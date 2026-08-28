@@ -11,7 +11,6 @@ from jacobian.math.number_theory.sequences.core._models import (
     IntegerSequenceIndexListResult,
     IntegerSequenceListResult,
     IntegerSequenceRationalResult,
-    IntegerSequenceRequest,
     IntegerSequenceValueResult,
 )
 from jacobian.math.number_theory.sequences.core._support import sequence_operation
@@ -64,7 +63,7 @@ def _tool[ResultT: StrictModel](
         operation_id,
         title,
         description,
-        IntegerSequenceRequest,
+        IntegerSequence,
         result_type,
         operation,
         *tags,

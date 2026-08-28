@@ -18,7 +18,6 @@ from jacobian.math.number_theory.sequences.core._models import (
     IntegerSequenceIndexListResult,
     IntegerSequenceListResult,
     IntegerSequenceRationalResult,
-    IntegerSequenceRequest,
     IntegerSequenceValueResult,
 )
 from jacobian.math.number_theory.sequences.core.values import (
@@ -82,7 +81,7 @@ def _multiplicative_digits(request: IntegerSequence, *, prefix: bool = False) ->
     return maximum
 
 
-def _values(request: IntegerSequenceRequest) -> list[int]:
+def _values(request: IntegerSequence) -> list[int]:
     return [parse_canonical_integer(value) for value in request.values]
 
 
@@ -96,44 +95,44 @@ def _list_result(values: list[int]) -> IntegerSequenceListResult:
     )
 
 
-def sequence_sum(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
+def sequence_sum(request: IntegerSequence) -> IntegerSequenceValueResult:
     values = _admit(
         request, output_digits=_digits(request.values) + len(str(len(request.values)))
     )
     return _value_result(sum(values))
 
 
-def sequence_product(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
+def sequence_product(request: IntegerSequence) -> IntegerSequenceValueResult:
     values = _admit(request, output_digits=_multiplicative_digits(request))
     return _value_result(math.prod(values))
 
 
-def sequence_gcd(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
+def sequence_gcd(request: IntegerSequence) -> IntegerSequenceValueResult:
     values = _admit(request, output_digits=_digits(request.values))
     return _value_result(reduce(math.gcd, values, 0))
 
 
-def sequence_lcm(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
+def sequence_lcm(request: IntegerSequence) -> IntegerSequenceValueResult:
     values = _admit(request, output_digits=_multiplicative_digits(request))
     return _value_result(reduce(math.lcm, values, 1))
 
 
-def sequence_minimum(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
+def sequence_minimum(request: IntegerSequence) -> IntegerSequenceValueResult:
     values = _admit(request, output_digits=_digits(request.values))
     return _value_result(min(values))
 
 
-def sequence_maximum(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
+def sequence_maximum(request: IntegerSequence) -> IntegerSequenceValueResult:
     values = _admit(request, output_digits=_digits(request.values))
     return _value_result(max(values))
 
 
-def sequence_range(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
+def sequence_range(request: IntegerSequence) -> IntegerSequenceValueResult:
     values = _admit(request, output_digits=_digits(request.values) + 1)
     return _value_result(max(values) - min(values))
 
 
-def sequence_mean(request: IntegerSequenceRequest) -> IntegerSequenceRationalResult:
+def sequence_mean(request: IntegerSequence) -> IntegerSequenceRationalResult:
     values = _admit(
         request, output_digits=_digits(request.values) + len(str(len(request.values)))
     )
@@ -146,7 +145,7 @@ def sequence_mean(request: IntegerSequenceRequest) -> IntegerSequenceRationalRes
     )
 
 
-def sequence_median(request: IntegerSequenceRequest) -> IntegerSequenceRationalResult:
+def sequence_median(request: IntegerSequence) -> IntegerSequenceRationalResult:
     values = sorted(_admit(request, output_digits=_digits(request.values) + 1))
     middle = len(values) // 2
     if len(values) % 2:
@@ -162,13 +161,13 @@ def sequence_median(request: IntegerSequenceRequest) -> IntegerSequenceRationalR
 
 
 def sequence_distinct_count(
-    request: IntegerSequenceRequest,
+    request: IntegerSequence,
 ) -> IntegerSequenceValueResult:
     _admit(request, output_digits=len(str(len(request.values))))
     return _value_result(len(set(_values(request))))
 
 
-def prefix_sums(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def prefix_sums(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(
         request,
         output_digits=_digits(request.values) + len(str(len(request.values))),
@@ -182,7 +181,7 @@ def prefix_sums(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
     return _list_result(result)
 
 
-def first_differences(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def first_differences(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(
         request,
         output_digits=_digits(request.values) + 1,
@@ -191,7 +190,7 @@ def first_differences(request: IntegerSequenceRequest) -> IntegerSequenceListRes
     return _list_result([right - left for left, right in pairwise(values)])
 
 
-def second_differences(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def second_differences(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(
         request,
         output_digits=_digits(request.values) + 2,
@@ -201,7 +200,7 @@ def second_differences(request: IntegerSequenceRequest) -> IntegerSequenceListRe
     return _list_result([right - left for left, right in pairwise(first)])
 
 
-def prefix_products(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def prefix_products(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(
         request,
         output_digits=_multiplicative_digits(request, prefix=True),
@@ -215,7 +214,7 @@ def prefix_products(request: IntegerSequenceRequest) -> IntegerSequenceListResul
     return _list_result(result)
 
 
-def prefix_minima(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def prefix_minima(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(
         request,
         output_digits=_digits(request.values),
@@ -227,7 +226,7 @@ def prefix_minima(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
     return _list_result(result)
 
 
-def prefix_maxima(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def prefix_maxima(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(
         request,
         output_digits=_digits(request.values),
@@ -239,7 +238,7 @@ def prefix_maxima(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
     return _list_result(result)
 
 
-def prefix_gcds(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def prefix_gcds(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(
         request,
         output_digits=_digits(request.values),
@@ -251,7 +250,7 @@ def prefix_gcds(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
     return _list_result(result)
 
 
-def prefix_lcms(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def prefix_lcms(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(
         request,
         output_digits=_multiplicative_digits(request, prefix=True),
@@ -263,7 +262,7 @@ def prefix_lcms(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
     return _list_result(result)
 
 
-def sorted_unique(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def sorted_unique(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(
         request,
         output_digits=_digits(request.values),
@@ -272,7 +271,7 @@ def sorted_unique(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
     return _list_result(sorted(set(values)))
 
 
-def sort_sequence(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def sort_sequence(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(
         request,
         output_digits=_digits(request.values),
@@ -281,7 +280,7 @@ def sort_sequence(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
     return _list_result(sorted(values))
 
 
-def reverse_sequence(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def reverse_sequence(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(
         request,
         output_digits=_digits(request.values),
@@ -290,17 +289,17 @@ def reverse_sequence(request: IntegerSequenceRequest) -> IntegerSequenceListResu
     return _list_result(list(reversed(values)))
 
 
-def parities(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def parities(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(request, output_digits=1, output_items=len(request.values))
     return _list_result([value % 2 for value in values])
 
 
-def signs(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
+def signs(request: IntegerSequence) -> IntegerSequenceListResult:
     values = _admit(request, output_digits=1, output_items=len(request.values))
     return _list_result([(value > 0) - (value < 0) for value in values])
 
 
-def frequencies(request: IntegerSequenceRequest) -> IntegerSequenceFrequenciesResult:
+def frequencies(request: IntegerSequence) -> IntegerSequenceFrequenciesResult:
     values = _admit(
         request,
         output_digits=_digits(request.values),
@@ -314,7 +313,7 @@ def frequencies(request: IntegerSequenceRequest) -> IntegerSequenceFrequenciesRe
     return IntegerSequenceFrequenciesResult(entries=entries)
 
 
-def zero_indices(request: IntegerSequenceRequest) -> IntegerSequenceIndexListResult:
+def zero_indices(request: IntegerSequence) -> IntegerSequenceIndexListResult:
     values = _admit(
         request,
         output_digits=len(str(len(request.values))),
@@ -325,7 +324,7 @@ def zero_indices(request: IntegerSequenceRequest) -> IntegerSequenceIndexListRes
     )
 
 
-def decide_arithmetic(request: IntegerSequenceRequest) -> IntegerSequenceBooleanResult:
+def decide_arithmetic(request: IntegerSequence) -> IntegerSequenceBooleanResult:
     values = _admit(request, output_digits=1)
     if len(values) < 2:
         return IntegerSequenceBooleanResult(holds=True)
@@ -333,7 +332,7 @@ def decide_arithmetic(request: IntegerSequenceRequest) -> IntegerSequenceBoolean
     return IntegerSequenceBooleanResult(holds=len(differences) <= 1)
 
 
-def decide_geometric(request: IntegerSequenceRequest) -> IntegerSequenceBooleanResult:
+def decide_geometric(request: IntegerSequence) -> IntegerSequenceBooleanResult:
     values = _admit(request, output_digits=1)
     if len(values) < 2:
         return IntegerSequenceBooleanResult(holds=True)
@@ -349,7 +348,7 @@ def decide_geometric(request: IntegerSequenceRequest) -> IntegerSequenceBooleanR
 
 
 def decide_nondecreasing(
-    request: IntegerSequenceRequest,
+    request: IntegerSequence,
 ) -> IntegerSequenceBooleanResult:
     values = _admit(request, output_digits=1)
     return IntegerSequenceBooleanResult(
@@ -358,7 +357,7 @@ def decide_nondecreasing(
 
 
 def decide_strictly_increasing(
-    request: IntegerSequenceRequest,
+    request: IntegerSequence,
 ) -> IntegerSequenceBooleanResult:
     values = _admit(request, output_digits=1)
     return IntegerSequenceBooleanResult(

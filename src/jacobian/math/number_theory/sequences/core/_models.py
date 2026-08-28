@@ -10,16 +10,8 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.sequences.core.values import (
-    MAX_INTEGER_SEQUENCE_ITEM_DIGITS as MAX_INTEGER_SEQUENCE_ITEM_DIGITS,
-)
-from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_LENGTH,
-    IntegerSequence,
 )
-
-# The request is the wire name for the canonical native sequence value.  An
-# alias deliberately keeps producer/consumer composition on one Pydantic type.
-IntegerSequenceRequest = IntegerSequence
 
 
 class IntegerSequenceValueResult(StrictModel):

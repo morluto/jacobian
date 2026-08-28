@@ -1,3 +1,11 @@
 """Polynomial vector calculus operations."""
 
-__all__: list[str] = []
+from jacobian.math.polynomials.vector_calculus.operations import (
+    curl,
+    directional_derivative,
+    divergence,
+    gradient,
+    laplacian,
+)
+
+__all__ = ["curl", "directional_derivative", "divergence", "gradient", "laplacian"]

@@ -14,13 +14,33 @@ from jacobian.math.polynomials.vector_calculus._models import (
     VectorFieldRequest,
     VectorResult,
 )
-from jacobian.math.polynomials.vector_calculus._operations import (
-    compute_curl,
-    compute_directional_derivative,
-    compute_divergence,
-    compute_gradient,
-    compute_laplacian,
+from jacobian.math.polynomials.vector_calculus.operations import (
+    curl,
+    directional_derivative,
+    divergence,
+    gradient,
+    laplacian,
 )
+
+
+def _gradient(request: ScalarFieldRequest) -> VectorResult:
+    return gradient(request.polynomial)
+
+
+def _laplacian(request: ScalarFieldRequest) -> ScalarResult:
+    return laplacian(request.polynomial)
+
+
+def _directional_derivative(request: DirectionalDerivativeRequest) -> ScalarResult:
+    return directional_derivative(request.polynomial, request.direction)
+
+
+def _divergence(request: VectorFieldRequest) -> ScalarResult:
+    return divergence(request.components)
+
+
+def _curl(request: CurlRequest) -> VectorResult:
+    return curl(request.components)
 
 
 def _polynomial(
@@ -72,7 +92,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "field using exact symbolic differentiation.",
         ScalarFieldRequest,
         VectorResult,
-        compute_gradient,
+        _gradient,
         "polynomial",
         "vector-calculus",
         "exact",
@@ -98,7 +118,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "multivariate polynomial scalar field.",
         ScalarFieldRequest,
         ScalarResult,
-        compute_laplacian,
+        _laplacian,
         "polynomial",
         "vector-calculus",
         "exact",
@@ -124,7 +144,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "direction vector using exact symbolic differentiation.",
         DirectionalDerivativeRequest,
         ScalarResult,
-        compute_directional_derivative,
+        _directional_derivative,
         "polynomial",
         "vector-calculus",
         "exact",
@@ -154,7 +174,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "using exact symbolic differentiation.",
         VectorFieldRequest,
         ScalarResult,
-        compute_divergence,
+        _divergence,
         "polynomial",
         "vector-calculus",
         "exact",
@@ -179,7 +199,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "using exact symbolic differentiation.",
         CurlRequest,
         VectorResult,
-        compute_curl,
+        _curl,
         "polynomial",
         "vector-calculus",
         "exact",

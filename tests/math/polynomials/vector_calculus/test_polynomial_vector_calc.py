@@ -21,14 +21,34 @@ from jacobian.math.polynomials.vector_calculus._models import (
     ScalarFieldRequest,
     VectorFieldRequest,
 )
-from jacobian.math.polynomials.vector_calculus._operations import (
-    compute_curl,
-    compute_directional_derivative,
-    compute_divergence,
-    compute_gradient,
-    compute_laplacian,
-)
 from jacobian.math.polynomials.vector_calculus._tools import TOOLS
+from jacobian.math.polynomials.vector_calculus.operations import (
+    curl,
+    directional_derivative,
+    divergence,
+    gradient,
+    laplacian,
+)
+
+
+def _run_gradient(request: ScalarFieldRequest):
+    return gradient(request.polynomial)
+
+
+def _run_laplacian(request: ScalarFieldRequest):
+    return laplacian(request.polynomial)
+
+
+def _run_directional_derivative(request: DirectionalDerivativeRequest):
+    return directional_derivative(request.polynomial, request.direction)
+
+
+def _run_divergence(request: VectorFieldRequest):
+    return divergence(request.components)
+
+
+def _run_curl(request: CurlRequest):
+    return curl(request.components)
 
 
 def _polynomial(
@@ -62,7 +82,7 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 def test_gradient_returns_composable_polynomials() -> None:
     source = _polynomial(("x", "y"), {(2, 0): 1, (0, 2): 1})
-    result = compute_gradient(ScalarFieldRequest(polynomial=source))
+    result = _run_gradient(ScalarFieldRequest(polynomial=source))
     assert result.components == (
         _polynomial(("x", "y"), {(1, 0): 2}),
         _polynomial(("x", "y"), {(0, 1): 2}),
@@ -70,10 +90,10 @@ def test_gradient_returns_composable_polynomials() -> None:
 
 
 def test_renaming_the_declared_axis_transports_the_gradient() -> None:
-    original = compute_gradient(
+    original = _run_gradient(
         ScalarFieldRequest(polynomial=_polynomial(("x", "y"), {(2, 0): 1, (0, 1): 3}))
     )
-    renamed = compute_gradient(
+    renamed = _run_gradient(
         ScalarFieldRequest(polynomial=_polynomial(("u", "v"), {(2, 0): 1, (0, 1): 3}))
     )
 
@@ -86,7 +106,7 @@ def test_renaming_the_declared_axis_transports_the_gradient() -> None:
 
 def test_laplacian_returns_a_composable_polynomial() -> None:
     source = _polynomial(("x", "y"), {(3, 0): 1, (0, 3): 1})
-    result = compute_laplacian(ScalarFieldRequest(polynomial=source))
+    result = _run_laplacian(ScalarFieldRequest(polynomial=source))
     assert result.result == _polynomial(
         ("x", "y"),
         {(1, 0): 6, (0, 1): 6},
@@ -95,7 +115,7 @@ def test_laplacian_returns_a_composable_polynomial() -> None:
 
 def test_directional_derivative_uses_exact_rational_coordinates() -> None:
     source = _polynomial(("x", "y"), {(2, 0): 1, (0, 2): 1})
-    result = compute_directional_derivative(
+    result = _run_directional_derivative(
         DirectionalDerivativeRequest(
             polynomial=source,
             direction=(
@@ -111,7 +131,7 @@ def test_directional_derivative_uses_exact_rational_coordinates() -> None:
 
 
 def test_divergence_uses_one_authoritative_axis() -> None:
-    result = compute_divergence(
+    result = _run_divergence(
         VectorFieldRequest(
             components=(
                 _polynomial(("x", "y"), {(2, 0): 1}),
@@ -140,7 +160,7 @@ def test_curl_is_rejected_at_the_request_boundary_outside_three_dimensions() -> 
 
 def test_curl_three_dimensional_orientation() -> None:
     variables = ("x", "y", "z")
-    result = compute_curl(
+    result = _run_curl(
         CurlRequest(
             components=(
                 _polynomial(variables, {(0, 1, 0): 1}),
@@ -181,7 +201,7 @@ def test_vector_field_rejects_aggregate_result_term_growth() -> None:
         )
     )
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        compute_divergence(request)
+        _run_divergence(request)
     assert exc_info.value.errors()[0]["type"] == (
         "polynomial_vector_calc.derivative_term_budget"
     )

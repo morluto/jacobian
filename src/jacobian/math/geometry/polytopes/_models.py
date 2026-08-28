@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterator, Sequence
 from fractions import Fraction
+from itertools import combinations
 from typing import Annotated, Any, Self
 
 from pydantic import (
@@ -17,10 +18,15 @@ from pydantic import (
     model_validator,
 )
 from pydantic_core import PydanticCustomError
+from sympy import Matrix, Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.math.geometry.polytopes._rational_geometry import (
+    recession_cone_is_trivial,
+    vertices_from_halfspaces,
+)
 from jacobian.math.geometry.polytopes.values import (
     MAX_RATIONAL_POLYTOPE_DIMENSION,
     Halfspace,
@@ -130,6 +136,9 @@ The volume is a canonical rational whose components cannot exceed the
 global ``CanonicalRational`` limit; requests whose exact volume can
 provably leave that domain are rejected at admission.
 """
+
+MAX_SUBSYSTEM_SOLVES = 5_000_000
+"""Absolute combinatorial ceiling for vertex enumeration from H-representations."""
 
 
 def _largest_combination_axis(*, ceiling: int, dimension: int, work: int) -> int:
@@ -794,6 +803,337 @@ def _deduplicate_exact_points(
     return unique
 
 
+def _hull_subfacets(
+    points: list[list[Rational]], dim: int
+) -> list[tuple[int, ...]]:
+    """Enumerate the dim-subsets of points on the convex hull boundary.
+
+    A dim-subset is a (d-1)-subfacet if all remaining points lie on one
+    side (or on) the hyperplane it spans. Subfacets of a coplanar larger
+    facet are returned individually; merge with ``_max_facets``.
+    """
+
+    n = len(points)
+    subfacets: list[tuple[int, ...]] = []
+    for subset in combinations(range(n), dim):
+        signs: set[int] = set()
+        ok = True
+        for p in range(n):
+            if p in subset:
+                continue
+            mat = Matrix(
+                [[points[i][k] for k in range(dim)] + [1] for i in subset]
+                + [[points[p][k] for k in range(dim)] + [1]]
+            )
+            det = mat.det()
+            if det > 0:
+                signs.add(1)
+            elif det < 0:
+                signs.add(-1)
+            if len(signs) > 1:
+                ok = False
+                break
+        if ok and signs:
+            subfacets.append(tuple(subset))
+    return subfacets
+
+
+def _plane_signature(
+    subfacet: tuple[int, ...], points: list[list[Rational]]
+) -> tuple[int, ...] | None:
+    """Canonical signature of the hyperplane through the subfacet points."""
+
+    dim = len(subfacet)
+    mat = Matrix([[points[i][k] for k in range(dim)] + [1] for i in subfacet])
+    nullspace = mat.nullspace()
+    if not nullspace:
+        return None
+    vec = [Rational(nullspace[0][j]) for j in range(dim + 1)]
+    first_nonzero = next(j for j in range(dim + 1) if vec[j] != 0)
+    sign = 1 if vec[first_nonzero] > 0 else -1
+    denominators = [v.denominator for v in vec]
+    lcm = 1
+    for denominator in denominators:
+        lcm = lcm * denominator // math.gcd(lcm, denominator)
+    scaled = [int(v * sign * lcm) for v in vec]
+    gcd = 0
+    for value in scaled:
+        gcd = math.gcd(gcd, abs(value))
+    if gcd == 0:
+        gcd = 1
+    return tuple(value // gcd for value in scaled)
+
+
+def _max_facets(points: list[list[Rational]], dim: int) -> list[list[int]]:
+    """Return the maximal (d-1)-facets as sorted index lists."""
+
+    subfacets = _hull_subfacets(points, dim)
+    groups: dict[tuple[int, ...], set[int]] = {}
+    for subfacet in subfacets:
+        sig = _plane_signature(subfacet, points)
+        if sig is None:
+            continue
+        groups.setdefault(sig, set()).update(subfacet)
+    return [sorted(members) for members in groups.values()]
+
+
+def _extreme_point_indices(
+    groups: dict[tuple[int, ...], set[int]],
+    point_count: int,
+    dim: int,
+) -> tuple[list[int], list[int]]:
+    """Return (extreme indices, boundary counts) from grouped maximal facets."""
+
+    counts = [0] * point_count
+    active_normals: list[list[list[Rational]]] = [[] for _ in range(point_count)]
+    for normal, members in groups.items():
+        normal_values = list(normal[:-1])
+        for index in members:
+            if 0 <= index < point_count:
+                counts[index] += 1
+                active_normals[index].append(normal_values)
+    kept = [
+        index
+        for index in range(point_count)
+        if active_normals[index] and Matrix(active_normals[index]).rank() == dim
+    ]
+    return kept, counts
+
+
+def _filter_redundant_vertices(
+    points: list[list[Rational]], dim: int
+) -> list[list[Rational]]:
+    """Return extreme hull vertices, dropping redundant boundary points."""
+
+    if len(points) <= dim + 1:
+        return points
+    subfacet_count = math.comb(len(points), dim)
+    if subfacet_count > MAX_HULL_SUBFACETS:
+        return points
+    groups: dict[tuple[int, ...], set[int]] = {}
+    for subfacet in _hull_subfacets(points, dim):
+        sig = _plane_signature(subfacet, points)
+        if sig is None:
+            continue
+        groups.setdefault(sig, set()).update(subfacet)
+    if not groups:
+        return points
+    keep_indices, counts = _extreme_point_indices(groups, len(points), dim)
+    if len(keep_indices) < dim + 1:
+        hull_indices = [index for index, count in enumerate(counts) if count > 0]
+        if len(hull_indices) >= dim + 1:
+            keep_indices = hull_indices
+        else:
+            return points
+    keep_set = set(keep_indices)
+    return [point for index, point in enumerate(points) if index in keep_set]
+
+
+def _project_facet(
+    facet_points: list[list[Rational]], dim: int
+) -> list[list[Rational]]:
+    """Project a coplanar dim-dim facet into (dim-1)-dim coordinates."""
+
+    for axis in range(dim):
+        projected = [[point[k] for k in range(dim) if k != axis] for point in facet_points]
+        if _rank_of_diffs(projected, dim - 1) == dim - 1:
+            return projected
+    return [[point[k] for k in range(dim - 1)] for point in facet_points]
+
+
+def _triangulate_2d(points: list[list[Rational]]) -> list[tuple[int, ...]]:
+    """Triangulate a 2D convex polygon by a fan from its first corner."""
+
+    subfacets = _hull_subfacets(points, 2)
+    adjacency: dict[int, set[int]] = {}
+    for edge in subfacets:
+        adjacency.setdefault(edge[0], set()).add(edge[1])
+        adjacency.setdefault(edge[1], set()).add(edge[0])
+    corners = [index for index, neighbors in adjacency.items() if len(neighbors) == 2]
+    if not corners:
+        return []
+    start = corners[0]
+    order = [start]
+    previous = -1
+    current = start
+    while True:
+        neighbors = [value for value in adjacency[current] if value != previous]
+        if not neighbors:
+            break
+        nxt = neighbors[0]
+        if nxt == start:
+            break
+        order.append(nxt)
+        previous, current = current, nxt
+        if len(order) > len(corners) + 1:
+            break
+    return [(order[0], order[index], order[index + 1]) for index in range(1, len(order) - 1)]
+
+
+def _triangulate(points: list[list[Rational]], dim: int) -> list[tuple[int, ...]]:
+    """Return a triangulation of the convex hull as simplicial index tuples."""
+
+    n = len(points)
+    if n < dim + 1:
+        return []
+    if dim == 1:
+        coordinates = sorted({point[0] for point in points})
+        if len(coordinates) < 2:
+            return []
+        minimum = min(range(n), key=lambda index: points[index][0])
+        maximum = max(range(n), key=lambda index: points[index][0])
+        return [(minimum, maximum)]
+    if dim == 2:
+        return _triangulate_2d(points)
+    apex = _extreme_vertex(points, dim)
+    if apex is None:
+        return []
+    facets = _max_facets(points, dim)
+    triangulation: list[tuple[int, ...]] = []
+    for members in facets:
+        if apex in members:
+            continue
+        facet_points = [points[index] for index in members]
+        projected = _project_facet(facet_points, dim)
+        projected_triangulation = _triangulate(projected, dim - 1)
+        for tri in projected_triangulation:
+            triangulation.append((*tuple(members[index] for index in tri), apex))
+    return triangulation
+
+
+def _rank_of_diffs(points: list[list[Rational]], dim: int) -> int:
+    """Rank of the matrix of ``point - point[0]`` differences in ``dim`` dims."""
+
+    if len(points) <= 1:
+        return 0
+    reference = points[0]
+    columns = [
+        Matrix([[points[index][axis] - reference[axis]] for axis in range(dim)])
+        for index in range(1, len(points))
+    ]
+    return Matrix.hstack(*columns).rank() if columns else 0
+
+
+def _extreme_vertex(points: list[list[Rational]], dim: int) -> int | None:
+    """Return the index of one extreme hull vertex."""
+
+    subfacets = _hull_subfacets(points, dim)
+    if not subfacets:
+        return None
+    on_hull: set[int] = set()
+    for subfacet in subfacets:
+        on_hull.update(subfacet)
+    for index in range(len(points)):
+        if index in on_hull:
+            return index
+    return None
+
+
+def _deduplicate_halfspaces(
+    halfspaces: tuple[Halfspace, ...]
+) -> tuple[Halfspace, ...]:
+    """Drop duplicate half-spaces up to positive scaling."""
+
+    seen: set[tuple[tuple[int, ...], tuple[int, int]]] = set()
+    unique: list[Halfspace] = []
+    for halfspace in halfspaces:
+        fractions = [Fraction(*coefficient.as_integer_ratio()) for coefficient in halfspace.coefficients]
+        offset = Fraction(*halfspace.offset.as_integer_ratio())
+        lcm = 1
+        for fraction in fractions:
+            lcm = lcm * fraction.denominator // math.gcd(lcm, fraction.denominator)
+        ints = [int(fraction * lcm) for fraction in fractions]
+        gcd = 0
+        for integer in ints:
+            gcd = math.gcd(gcd, abs(integer))
+        normalized = (
+            tuple(integer // gcd for integer in ints),
+            ((offset * lcm / gcd).numerator, (offset * lcm / gcd).denominator),
+        )
+        if normalized not in seen:
+            seen.add(normalized)
+            unique.append(halfspace)
+    return tuple(unique)
+
+
+def _halfspace_rows(
+    halfspaces: tuple[Halfspace, ...],
+) -> list[tuple[list[Rational], Rational]]:
+    """Convert halfspaces to rational coefficient/offset rows."""
+
+    return [
+        (
+            [Rational(*coefficient.as_integer_ratio()) for coefficient in hs.coefficients],
+            Rational(*hs.offset.as_integer_ratio()),
+        )
+        for hs in halfspaces
+    ]
+
+
+def _vertices_from_v_representation(
+    vertices: tuple[Vertex, ...],
+) -> tuple[tuple[Rational, ...], int]:
+    """Return ambient dimension and exact rational coordinates from a V-rep."""
+
+    dimension = len(vertices[0].coordinates)
+    points: tuple[tuple[Rational, ...], ...] = tuple(
+        tuple(Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates)
+        for vertex in vertices
+    )
+    return points, dimension
+
+
+def _vertices_from_h_representation(
+    halfspaces: tuple[Halfspace, ...],
+) -> tuple[list[tuple[Rational, ...]], int]:
+    """Enumerate the vertices of an H-representation exactly."""
+
+    dimension = len(halfspaces[0].coefficients)
+    reduced = _deduplicate_halfspaces(halfspaces)
+    rows = _halfspace_rows(reduced)
+    subsystem_count = math.comb(len(rows), dimension)
+    if subsystem_count > MAX_SUBSYSTEM_SOLVES:
+        raise ValueError(
+            "polytope vertex enumeration exceeds the combinatorial bound "
+            f"({subsystem_count} > {MAX_SUBSYSTEM_SOLVES} subsystems)"
+        )
+    return vertices_from_halfspaces(rows, dimension), dimension
+
+
+def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
+    """Decide whether ``{x : A x <= 0}`` contains only the origin."""
+
+    dimension = len(halfspaces[0].coefficients)
+    halfspaces = _deduplicate_halfspaces(halfspaces)
+    if dimension == 1:
+        has_positive = any(
+            Rational(*halfspace.coefficients[0].as_integer_ratio()) > 0
+            for halfspace in halfspaces
+        )
+        has_negative = any(
+            Rational(*halfspace.coefficients[0].as_integer_ratio()) < 0
+            for halfspace in halfspaces
+        )
+        return has_positive and has_negative
+    normals = [
+        [Rational(*coefficient.as_integer_ratio()) for coefficient in halfspace.coefficients]
+        for halfspace in halfspaces
+    ]
+    if len(normals) < dimension + 1:
+        return False
+    try:
+        subset_count = math.comb(len(normals), dimension)
+    except ValueError:
+        subset_count = 10**18
+    if subset_count > MAX_BOUNDEDNESS_COMBINATIONS:
+        raise ValueError(
+            "H-representation boundedness precheck exceeds the "
+            f"{MAX_BOUNDEDNESS_COMBINATIONS}-combination budget "
+            f"({subset_count} > {MAX_BOUNDEDNESS_COMBINATIONS})"
+        )
+    return recession_cone_is_trivial(normals, dimension)
+
+
 def _prepare_volume_components(
     points: Sequence[Sequence[object]],
     dim: int,
@@ -823,11 +1163,6 @@ def _prepare_volume_components(
             return [list(point) for point in unique], []
         _require_interval_volume_within_result_bound(unique)
         return [list(point) for point in unique], []
-
-    from jacobian.math.geometry.polytopes._operations import (
-        _filter_redundant_vertices,
-        _triangulate,
-    )
 
     # Deduplicate exactly as the kernel does before any admission work:
     # the budget below measures the hull enumeration the kernel actually
@@ -1784,9 +2119,6 @@ def _validate_vertices(
             raise _validation_error(
                 "vertex_dimension_consistency", "all vertices must share one dimension"
             )
-    from jacobian.math.geometry.polytopes._operations import (
-        _vertices_from_v_representation,
-    )
 
     # Exact-volume growth is bounded over the whole triangulation, so the
     # same admission runs on the rational points themselves; it applies
@@ -1810,11 +2142,6 @@ def _require_admissible_h_vertices(
     caller-supplied V-representation, so the identical combinatorial and
     result-size admission applies before accepting the request.
     """
-
-    from jacobian.math.geometry.polytopes._operations import (
-        _is_bounded_h,
-        _vertices_from_h_representation,
-    )
 
     if not _is_bounded_h(halfspaces):
         raise _validation_error(

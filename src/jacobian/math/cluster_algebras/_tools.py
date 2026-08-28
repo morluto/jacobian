@@ -12,10 +12,15 @@ from jacobian.math.cluster_algebras._models import (
     SeedMutationRequest,
     SeedMutationResult,
 )
-from jacobian.math.cluster_algebras.operations import (
-    compute_g_vectors,
-    compute_seed_mutation,
-)
+from jacobian.math.cluster_algebras.operations import g_vectors, mutate_seed
+
+
+def _run_seed_mutation(request: SeedMutationRequest) -> SeedMutationResult:
+    return mutate_seed(request.exchange_matrix, request.mutation_index)
+
+
+def _run_g_vectors(request: GVectorRequest) -> GVectorResult:
+    return g_vectors(request.exchange_matrix)
 
 
 def cluster_algebra_operation[
@@ -73,7 +78,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "(no change when signs differ).",
         SeedMutationRequest,
         SeedMutationResult,
-        compute_seed_mutation,
+        _run_seed_mutation,
         "cluster-algebra",
         "mutation",
         "exact",
@@ -93,7 +98,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "convention.",
         GVectorRequest,
         GVectorResult,
-        compute_g_vectors,
+        _run_g_vectors,
         "cluster-algebra",
         "g-vector",
         "exact",

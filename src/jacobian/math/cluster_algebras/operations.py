@@ -7,9 +7,7 @@ from pydantic_core import PydanticCustomError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.cluster_algebras._models import (
     ExchangeMatrix,
-    GVectorRequest,
     GVectorResult,
-    SeedMutationRequest,
     SeedMutationResult,
     _require_mutatable,
     encoded_entries,
@@ -99,19 +97,4 @@ def g_vectors(exchange_matrix: ExchangeMatrix) -> GVectorResult:
     return GVectorResult._from_kernel(exchange_matrix)
 
 
-def compute_seed_mutation(request: SeedMutationRequest) -> SeedMutationResult:
-    """Project a wire request onto the native seed-mutation operation."""
-    return mutate_seed(request.exchange_matrix, request.mutation_index)
-
-
-def compute_g_vectors(request: GVectorRequest) -> GVectorResult:
-    """Project a wire request onto the native g-vector operation."""
-    return g_vectors(request.exchange_matrix)
-
-
-__all__ = [
-    "compute_g_vectors",
-    "compute_seed_mutation",
-    "g_vectors",
-    "mutate_seed",
-]
+__all__ = ["g_vectors", "mutate_seed"]

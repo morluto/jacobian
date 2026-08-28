@@ -17,13 +17,20 @@ from jacobian.math.cluster_algebras._models import (
     SeedMutationResult,
 )
 from jacobian.math.cluster_algebras.operations import (
-    compute_g_vectors,
-    compute_seed_mutation,
     g_vectors,
+    mutate_seed,
 )
 from jacobian.math.cluster_algebras.operations import (
     mutate_seed as native_mutate_seed,
 )
+
+
+def compute_seed_mutation(request: SeedMutationRequest) -> SeedMutationResult:
+    return mutate_seed(request.exchange_matrix, request.mutation_index)
+
+
+def compute_g_vectors(request: GVectorRequest) -> GVectorResult:
+    return g_vectors(request.exchange_matrix)
 
 
 def em(

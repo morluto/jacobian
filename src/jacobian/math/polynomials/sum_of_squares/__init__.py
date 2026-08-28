@@ -1,3 +1,8 @@
 """Sum-of-squares operations."""
 
-__all__: list[str] = []
+from jacobian.math.polynomials.sum_of_squares.operations import (
+    check_gram_certificate,
+    check_sos_decomposition,
+)
+
+__all__ = ["check_gram_certificate", "check_sos_decomposition"]

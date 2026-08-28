@@ -12,10 +12,20 @@ from jacobian.math.polynomials.sum_of_squares._models import (
     SOSDecompositionCheckRequest,
     SOSDecompositionCheckResult,
 )
-from jacobian.math.polynomials.sum_of_squares._operations import (
+from jacobian.math.polynomials.sum_of_squares.operations import (
     check_gram_certificate,
     check_sos_decomposition,
 )
+
+
+def _check_sos(request: SOSDecompositionCheckRequest) -> SOSDecompositionCheckResult:
+    return check_sos_decomposition(request.polynomial, request.summands)
+
+
+def _check_gram(request: GramCertificateRequest) -> GramCertificateResult:
+    return check_gram_certificate(
+        request.polynomial, request.monomial_basis, request.gram_matrix
+    )
 
 
 def sos_operation[
@@ -128,7 +138,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "solver status is not a mathematical certificate.",
         SOSDecompositionCheckRequest,
         SOSDecompositionCheckResult,
-        check_sos_decomposition,
+        _check_sos,
         "sum-of-squares",
         "decomposition",
         "exact",
@@ -150,7 +160,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "eigenvalue computation.",
         GramCertificateRequest,
         GramCertificateResult,
-        check_gram_certificate,
+        _check_gram,
         "sum-of-squares",
         "gram",
         "exact",

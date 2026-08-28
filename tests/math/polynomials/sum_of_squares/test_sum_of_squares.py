@@ -15,7 +15,7 @@ from jacobian.math.polynomials.sum_of_squares._models import (
     GramCertificateResult,
     SOSDecompositionCheckRequest,
 )
-from jacobian.math.polynomials.sum_of_squares._operations import (
+from jacobian.math.polynomials.sum_of_squares.operations import (
     check_gram_certificate,
     check_sos_decomposition,
 )
@@ -30,6 +30,16 @@ class RationalWire(TypedDict):
 
 
 type GramEntries = tuple[tuple[RationalWire, ...], ...]
+
+
+def _check_sos(request: SOSDecompositionCheckRequest):
+    return check_sos_decomposition(request.polynomial, request.summands)
+
+
+def _check_gram(request: GramCertificateRequest):
+    return check_gram_certificate(
+        request.polynomial, request.monomial_basis, request.gram_matrix
+    )
 
 
 def _poly(
@@ -60,7 +70,7 @@ class TestSOSDecompositionCheck:
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
         q1 = _poly(("x",), (1, 1, (1,)))
         q2 = _poly(("x",), (1, 1, (0,)))
-        result = check_sos_decomposition(
+        result = _check_sos(
             SOSDecompositionCheckRequest(polynomial=p, summands=(q1, q2))
         )
         assert result.is_valid
@@ -69,7 +79,7 @@ class TestSOSDecompositionCheck:
         """x^2 + 1 ≠ x^2 alone."""
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
         q1 = _poly(("x",), (1, 1, (1,)))
-        result = check_sos_decomposition(
+        result = _check_sos(
             SOSDecompositionCheckRequest(polynomial=p, summands=(q1,))
         )
         assert not result.is_valid
@@ -79,7 +89,7 @@ class TestSOSDecompositionCheck:
         p = _poly(("x", "y"), (1, 1, (2, 0)), (1, 1, (0, 2)))
         q1 = _poly(("x", "y"), (1, 1, (1, 0)))
         q2 = _poly(("x", "y"), (1, 1, (0, 1)))
-        result = check_sos_decomposition(
+        result = _check_sos(
             SOSDecompositionCheckRequest(polynomial=p, summands=(q1, q2))
         )
         assert result.is_valid
@@ -89,7 +99,7 @@ class TestSOSDecompositionCheck:
         p = _poly(("x", "y"), (2, 1, (2, 0)), (2, 1, (0, 2)))
         q1 = _poly(("x", "y"), (1, 1, (1, 0)), (1, 1, (0, 1)))
         q2 = _poly(("x", "y"), (1, 1, (1, 0)), (-1, 1, (0, 1)))
-        result = check_sos_decomposition(
+        result = _check_sos(
             SOSDecompositionCheckRequest(polynomial=p, summands=(q1, q2))
         )
         assert result.is_valid
@@ -100,13 +110,13 @@ class TestSOSDecompositionCheck:
         q1 = _poly(("y",), (1, 1, (1,)))
         request = SOSDecompositionCheckRequest(polynomial=p, summands=(q1,))
         with pytest.raises(OperationDomainValidationError, match="same ring"):
-            check_sos_decomposition(request)
+            _check_sos(request)
 
     def test_single_summand(self) -> None:
         """x^2 = (x)^2 is valid."""
         p = _poly(("x",), (1, 1, (2,)))
         q1 = _poly(("x",), (1, 1, (1,)))
-        result = check_sos_decomposition(
+        result = _check_sos(
             SOSDecompositionCheckRequest(polynomial=p, summands=(q1,))
         )
         assert result.is_valid
@@ -114,7 +124,7 @@ class TestSOSDecompositionCheck:
     def test_empty_decomposition_is_the_canonical_zero_sum(self) -> None:
         """The zero polynomial has the empty sum-of-squares decomposition."""
         zero = _poly(("x",))
-        result = check_sos_decomposition(
+        result = _check_sos(
             SOSDecompositionCheckRequest(polynomial=zero, summands=())
         )
         assert result.is_valid
@@ -124,7 +134,7 @@ class TestSOSDecompositionCheck:
     def test_empty_decomposition_does_not_certify_a_nonzero_polynomial(self) -> None:
         """The same degenerate witness is rejected by the exact identity check."""
         nonzero = _poly(("x",), (1, 1, (0,)))
-        result = check_sos_decomposition(
+        result = _check_sos(
             SOSDecompositionCheckRequest(polynomial=nonzero, summands=())
         )
         assert not result.is_valid
@@ -172,7 +182,7 @@ class TestSOSTermBudgets:
         assert len(q1.polynomial.terms) == 13
         wide_target = _sos_poly(q1, q2)
         assert len(wide_target.polynomial.terms) > MAX_SOS_SUMMAND_TERMS
-        expanded = check_sos_decomposition(
+        expanded = _check_sos(
             SOSDecompositionCheckRequest(polynomial=wide_target, summands=(q1, q2))
         )
         assert expanded.is_valid
@@ -184,7 +194,7 @@ class TestSOSTermBudgets:
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
         request = SOSDecompositionCheckRequest(polynomial=p, summands=(wide,))
         with pytest.raises(OperationDomainValidationError) as exc_info:
-            check_sos_decomposition(request)
+            _check_sos(request)
         assert exc_info.value.errors()[0]["type"] == "sum_of_squares.term_bound"
 
     def test_target_above_256_terms_rejected(self) -> None:
@@ -199,7 +209,7 @@ class TestSOSTermBudgets:
         q = _poly(("x", "y", "z"), (1, 1, (0, 0, 0)))
         request = SOSDecompositionCheckRequest(polynomial=p, summands=(q,))
         with pytest.raises(OperationDomainValidationError) as exc_info:
-            check_sos_decomposition(request)
+            _check_sos(request)
         assert exc_info.value.errors()[0]["type"] == "sum_of_squares.term_bound"
 
 
@@ -225,7 +235,7 @@ class TestGramCertificateAdmission:
         return {"num": num, "den": den}
 
     def test_valid_certificate(self) -> None:
-        result = check_gram_certificate(
+        result = _check_gram(
             self._request(
                 (
                     (self._entry("1"), self._entry("0")),
@@ -273,7 +283,7 @@ class TestGramCertificateAdmission:
     def test_non_square_side_vs_basis_rejected(self) -> None:
         request = self._request(((self._entry("1"),),))
         with pytest.raises(OperationDomainValidationError, match="square"):
-            check_gram_certificate(request)
+            _check_gram(request)
 
     def test_oversized_matrix_coefficient_rejected_before_eigenvalues(self) -> None:
         huge = "9" * 129
@@ -284,7 +294,7 @@ class TestGramCertificateAdmission:
             )
         )
         with pytest.raises(OperationDomainValidationError) as exc_info:
-            check_gram_certificate(request)
+            _check_gram(request)
         assert exc_info.value.errors()[0]["type"] == "sum_of_squares.coefficient_bound"
 
     def test_boundary_coefficient_admitted(self) -> None:
@@ -304,7 +314,7 @@ class TestGramCertificateResultStructure:
     def _valid_result(self) -> dict[str, Any]:
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
         basis = (_poly(("x",), (1, 1, (1,))), _poly(("x",), (1, 1, (0,))))
-        request = check_gram_certificate(
+        request = _check_gram(
             GramCertificateRequest.model_validate(
                 {
                     "polynomial": p.model_dump(mode="json"),
@@ -362,7 +372,7 @@ class TestGramMonomialBasisAdmission:
     def test_request_with_polynomial_basis_entry_is_rejected(self) -> None:
         p = _poly(("x",), (1, 1, (2,)), (2, 1, (1,)), (1, 1, (0,)))
         with pytest.raises(OperationDomainValidationError) as exc_info:
-            check_gram_certificate(
+            _check_gram(
                 GramCertificateRequest.model_validate(
                     {
                         "polynomial": p.model_dump(mode="json"),
@@ -380,7 +390,7 @@ class TestGramMonomialBasisAdmission:
     def test_duplicate_monomials_are_rejected(self) -> None:
         p = _poly(("x",), (2, 1, (2,)), (1, 1, (0,)))
         with pytest.raises(OperationDomainValidationError) as exc_info:
-            check_gram_certificate(
+            _check_gram(
                 GramCertificateRequest.model_validate(
                     {
                         "polynomial": p.model_dump(mode="json"),
@@ -436,7 +446,7 @@ class TestExactPsdCriterion:
             [0, 0, 0, 1, 24],
         ]
         gram = tuple(tuple(entry(v) for v in row) for row in rows)
-        result = check_gram_certificate(
+        result = _check_gram(
             GramCertificateRequest.model_validate(
                 {
                     "polynomial": _poly(
@@ -459,7 +469,7 @@ class TestExactPsdCriterion:
             return {"num": num, "den": "1"}
 
         gram = ((entry("-1"),),)
-        result = check_gram_certificate(
+        result = _check_gram(
             GramCertificateRequest.model_validate(
                 {
                     "polynomial": _poly(("x",), (-1, 1, (2,))).model_dump(mode="json"),
@@ -507,4 +517,4 @@ class TestSOSCoefficientGrowthAdmission:
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
         request = SOSDecompositionCheckRequest(polynomial=p, summands=summands)
         with pytest.raises(OperationDomainValidationError):
-            check_sos_decomposition(request)
+            _check_sos(request)

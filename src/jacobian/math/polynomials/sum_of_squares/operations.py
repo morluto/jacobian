@@ -9,14 +9,13 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
 )
 from jacobian.math.polynomials.sum_of_squares._models import (
-    GramCertificateRequest,
     GramCertificateResult,
-    SOSDecompositionCheckRequest,
     SOSDecompositionCheckResult,
     _require_bounded_gram_admission,
     _require_bounded_sos_work,
@@ -56,15 +55,16 @@ def _compute_sos_sum(
 
 
 def check_sos_decomposition(
-    request: SOSDecompositionCheckRequest,
+    polynomial: RationalPolynomial,
+    summands: tuple[RationalPolynomial, ...],
 ) -> SOSDecompositionCheckResult:
     """Check that p = q_1^2 + ... + q_r^2 by exact coefficient identity."""
-    _admit(lambda: _require_bounded_sos_work(request.polynomial, request.summands))
-    is_valid, computed_sum = _compute_sos_sum(request.polynomial, request.summands)
+    _admit(lambda: _require_bounded_sos_work(polynomial, summands))
+    is_valid, computed_sum = _compute_sos_sum(polynomial, summands)
     return SOSDecompositionCheckResult._from_kernel(
         is_valid=is_valid,
-        polynomial=request.polynomial,
-        summands=request.summands,
+        polynomial=polynomial,
+        summands=summands,
         computed_sum=computed_sum,
     )
 
@@ -119,24 +119,26 @@ def _exact_psd(matrix: sympy.Matrix) -> bool:
 
 
 def check_gram_certificate(
-    request: GramCertificateRequest,
+    polynomial: RationalPolynomial,
+    monomial_basis: tuple[RationalPolynomial, ...],
+    gram_matrix: RationalMatrix,
 ) -> GramCertificateResult:
     """Check that p = z^T Q z with Q symmetric PSD over QQ."""
     _admit(
         lambda: _require_bounded_gram_admission(
-            request.polynomial, request.monomial_basis, request.gram_matrix
+            polynomial, monomial_basis, gram_matrix
         )
     )
     is_symmetric, reconstructs, is_psd = _compute_gram_checks(
-        request.polynomial, request.monomial_basis, request.gram_matrix.entries
+        polynomial, monomial_basis, gram_matrix.entries
     )
     return GramCertificateResult._from_kernel(
         is_symmetric=is_symmetric,
         reconstructs_polynomial=reconstructs,
         is_psd=is_psd,
-        polynomial=request.polynomial,
-        monomial_basis=request.monomial_basis,
-        gram_matrix=request.gram_matrix,
+        polynomial=polynomial,
+        monomial_basis=monomial_basis,
+        gram_matrix=gram_matrix,
     )
 
 

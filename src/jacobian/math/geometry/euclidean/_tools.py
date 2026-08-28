@@ -1,5 +1,6 @@
 """Euclidean-geometry operation declarations."""
 
+from jacobian._exact import format_canonical_rational
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTools
 from jacobian.math.geometry._support import geometry_operation
@@ -11,11 +12,45 @@ from jacobian.math.geometry.euclidean._models import (
     TriangleSimilarityRequest,
     TriangleSimilarityResult,
 )
-from jacobian.math.geometry.euclidean._operations import (
-    compute_angle_equality,
-    compute_segment_ratio,
-    compute_triangle_similarity,
+from jacobian.math.geometry.euclidean.operations import (
+    _squared_segment_ratio_data,
+    angles_equal,
+    triangles_similar,
 )
+
+
+def compute_segment_ratio(request: SegmentRatioRequest) -> SegmentRatioResult:
+    numerator, denominator, ratio = _squared_segment_ratio_data(
+        request.segment1,
+        request.segment2,
+        denominator_location=("segment2",),
+    )
+    return SegmentRatioResult(
+        squared_ratio=format_canonical_rational(ratio),
+        ratio_numerator=format_canonical_rational(numerator),
+        ratio_denominator=format_canonical_rational(denominator),
+    )
+
+
+def compute_angle_equality(request: AngleEqualityRequest) -> AngleEqualityResult:
+    return AngleEqualityResult(
+        equal=angles_equal(
+            request.vertex1,
+            request.ray1_a,
+            request.ray1_b,
+            request.vertex2,
+            request.ray2_a,
+            request.ray2_b,
+        )
+    )
+
+
+def compute_triangle_similarity(
+    request: TriangleSimilarityRequest,
+) -> TriangleSimilarityResult:
+    return TriangleSimilarityResult(
+        similar=triangles_similar(request.triangle1, request.triangle2)
+    )
 
 _ORIGIN = {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}}
 _UNIT_X = {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}}

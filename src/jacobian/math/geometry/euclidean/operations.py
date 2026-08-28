@@ -24,20 +24,30 @@ def _squared_distance(left: RationalPoint2D, right: RationalPoint2D) -> Fraction
     return dx * dx + dy * dy
 
 
+def _squared_segment_ratio_data(
+    first: tuple[RationalPoint2D, RationalPoint2D],
+    second: tuple[RationalPoint2D, RationalPoint2D],
+    *,
+    denominator_location: tuple[str, ...] = ("second",),
+) -> tuple[Fraction, Fraction, Fraction]:
+    numerator = _squared_distance(*first)
+    denominator = _squared_distance(*second)
+    if denominator == 0:
+        raise OperationDomainValidationError(
+            location=denominator_location,
+            code="geometry.second_segment_nonzero",
+            message="second segment must be nonzero",
+        )
+    return numerator, denominator, numerator / denominator
+
+
 def squared_segment_ratio(
     first: tuple[RationalPoint2D, RationalPoint2D],
     second: tuple[RationalPoint2D, RationalPoint2D],
 ) -> Fraction:
     """Return the exact ratio of the two segments' squared lengths."""
 
-    denominator = _squared_distance(*second)
-    if denominator == 0:
-        raise OperationDomainValidationError(
-            location=("second",),
-            code="geometry.second_segment_nonzero",
-            message="second segment must be nonzero",
-        )
-    return _squared_distance(*first) / denominator
+    return _squared_segment_ratio_data(first, second)[2]
 
 
 def angles_equal(

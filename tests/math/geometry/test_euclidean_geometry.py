@@ -27,7 +27,7 @@ from jacobian.math.geometry.euclidean._models import (
     Triangle,
     TriangleSimilarityRequest,
 )
-from jacobian.math.geometry.euclidean._operations import (
+from jacobian.math.geometry.euclidean._tools import (
     compute_angle_equality,
     compute_segment_ratio,
     compute_triangle_similarity,
@@ -114,7 +114,7 @@ class TestSegmentRatio:
         )
         with pytest.raises(OperationDomainValidationError) as caught:
             compute_segment_ratio(request)
-        assert caught.value.errors()[0]["loc"] == ("second",)
+        assert caught.value.errors()[0]["loc"] == ("segment2",)
         assert caught.value.errors()[0]["type"] == "geometry.second_segment_nonzero"
 
     def test_native_ratio_matches_wire_projection(self) -> None:

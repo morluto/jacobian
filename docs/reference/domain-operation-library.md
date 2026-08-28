@@ -221,6 +221,14 @@ known-answer, adversarial, and property-based fixtures. Independently supplied
 claims need an explicit bounded verifier only when a public consumer accepts
 those claims as theorem-bearing input.
 
+Public results describe mathematical meaning, not the implementation used to
+compute it. Do not expose a constant backend, method, algorithm, exactness,
+determinism, or verification field merely to narrate trusted execution. Retain
+a field only when its value can vary and changes how callers must interpret the
+mathematical result. Examples include exact versus unknown status, complete
+versus bounded coverage, a normalization convention, approximation error, or a
+caller-selected algorithm that is part of the public contract.
+
 These checks have distinct owners. Catalog admission decides whether an
 operation is published; it does not admit a particular runtime request.
 Request admission proves that one parsed request belongs to the advertised

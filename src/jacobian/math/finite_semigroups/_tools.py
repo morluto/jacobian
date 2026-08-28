@@ -21,13 +21,39 @@ from jacobian.math.finite_semigroups._models import (
     PrincipalIdealsResult,
 )
 from jacobian.math.finite_semigroups.operations import (
-    compute_element_power,
-    compute_generated_subsemigroup,
-    compute_green_relations,
-    compute_idempotents,
-    compute_power_profile,
-    compute_principal_ideals,
+    element_power,
+    generated_subsemigroup,
+    green_relations,
+    idempotents,
+    power_profile,
+    principal_ideals,
 )
+
+
+def _run_power_profile(request: PowerProfileRequest) -> PowerProfileResult:
+    return power_profile(request.semigroup, request.element)
+
+
+def _run_generated_subsemigroup(
+    request: GeneratedSubsemigroupRequest,
+) -> GeneratedSubsemigroupResult:
+    return generated_subsemigroup(request.semigroup, request.generators)
+
+
+def _run_element_power(request: ElementPowerRequest) -> ElementPowerResult:
+    return element_power(request.semigroup, request.element, request.exponent)
+
+
+def _run_idempotents(request: IdempotentsRequest) -> IdempotentsResult:
+    return idempotents(request.semigroup)
+
+
+def _run_principal_ideals(request: PrincipalIdealsRequest) -> PrincipalIdealsResult:
+    return principal_ideals(request.semigroup, request.elements)
+
+
+def _run_green_relations(request: GreenRelationsRequest) -> GreenRelationsResult:
+    return green_relations(request.semigroup)
 
 
 def _op[
@@ -76,7 +102,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "complete cyclic subsemigroup of one element in a finite semigroup.",
         PowerProfileRequest,
         PowerProfileResult,
-        compute_power_profile,
+        _run_power_profile,
         "algebra",
         "semigroup",
         "exact",
@@ -100,7 +126,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "subsemigroup.",
         GeneratedSubsemigroupRequest,
         GeneratedSubsemigroupResult,
-        compute_generated_subsemigroup,
+        _run_generated_subsemigroup,
         "algebra",
         "semigroup",
         "exact",
@@ -123,7 +149,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "exponent in a finite semigroup using its finite eventual period.",
         ElementPowerRequest,
         ElementPowerResult,
-        compute_element_power,
+        _run_element_power,
         "algebra",
         "semigroup",
         "exact",
@@ -145,7 +171,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Return every element e with e*e = e in a finite semigroup.",
         IdempotentsRequest,
         IdempotentsResult,
-        compute_idempotents,
+        _run_idempotents,
         "algebra",
         "semigroup",
         "exact",
@@ -165,7 +191,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "For each requested element compute its principal two-sided ideal S^1 a S^1.",
         PrincipalIdealsRequest,
         PrincipalIdealsResult,
-        compute_principal_ideals,
+        _run_principal_ideals,
         "algebra",
         "semigroup",
         "exact",
@@ -189,7 +215,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "the two-sided Green relation defined by principal two-sided ideals.",
         GreenRelationsRequest,
         GreenRelationsResult,
-        compute_green_relations,
+        _run_green_relations,
         "algebra",
         "semigroup",
         "exact",

@@ -15,11 +15,6 @@ from jacobian.math.finite_semigroups._models import (
     PrincipalIdealsRequest,
 )
 from jacobian.math.finite_semigroups.operations import (
-    compute_element_power,
-    compute_generated_subsemigroup,
-    compute_idempotents,
-    compute_power_profile,
-    compute_principal_ideals,
     element_power,
     generated_subsemigroup,
     green_relations,
@@ -27,6 +22,30 @@ from jacobian.math.finite_semigroups.operations import (
     power_profile,
     principal_ideals,
 )
+
+
+def compute_power_profile(request: PowerProfileRequest):
+    return power_profile(request.semigroup, request.element)
+
+
+def compute_generated_subsemigroup(request: GeneratedSubsemigroupRequest):
+    return generated_subsemigroup(request.semigroup, request.generators)
+
+
+def compute_element_power(request: ElementPowerRequest):
+    return element_power(request.semigroup, request.element, request.exponent)
+
+
+def compute_idempotents(request: IdempotentsRequest):
+    return idempotents(request.semigroup)
+
+
+def compute_principal_ideals(request: PrincipalIdealsRequest):
+    return principal_ideals(request.semigroup, request.elements)
+
+
+def compute_green_relations(request):
+    return green_relations(request.semigroup)
 
 
 class SemigroupWire(TypedDict):
@@ -495,8 +514,6 @@ class TestGreenRelations:
         from jacobian.math.finite_semigroups._models import (
             GreenRelationsRequest,
         )
-        from jacobian.math.finite_semigroups.operations import compute_green_relations
-
         sg = _finite_semigroup(Z3)
         result = compute_green_relations(GreenRelationsRequest(semigroup=sg))
         # In a group, all elements are J-equivalent (and hence L, R, H, D)
@@ -511,8 +528,6 @@ class TestGreenRelations:
         from jacobian.math.finite_semigroups._models import (
             GreenRelationsRequest,
         )
-        from jacobian.math.finite_semigroups.operations import compute_green_relations
-
         sg = _finite_semigroup(NULL_SG)
         result = compute_green_relations(GreenRelationsRequest(semigroup=sg))
         # Each element has distinct left/right ideals, so all singletons
@@ -524,8 +539,6 @@ class TestGreenRelations:
         from jacobian.math.finite_semigroups._models import (
             GreenRelationsRequest,
         )
-        from jacobian.math.finite_semigroups.operations import compute_green_relations
-
         # left-zero band: a*b=a for all a,b
         # left ideal of a = {a, ...} but since a*b=a, left ideal of a = {a}
         # Actually for left-zero band: a*b=a, so Sa = {a} (left mult gives a),
@@ -555,8 +568,6 @@ class TestGreenRelations:
             GreenRelationsRequest,
             GreenRelationsResult,
         )
-        from jacobian.math.finite_semigroups.operations import compute_green_relations
-
         sg = _finite_semigroup(Z3)
         req = GreenRelationsRequest(semigroup=sg)
         result = compute_green_relations(req)
@@ -573,8 +584,6 @@ class TestGreenRelations:
 
     def test_green_relations_result_preserves_source_and_rows(self) -> None:
         from jacobian.math.finite_semigroups._models import GreenRelationsRequest
-        from jacobian.math.finite_semigroups.operations import compute_green_relations
-
         sg = _finite_semigroup(Z3)
         result = compute_green_relations(GreenRelationsRequest(semigroup=sg))
         assert result.semigroup == sg

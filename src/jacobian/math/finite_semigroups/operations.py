@@ -2,18 +2,12 @@
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_semigroups._models import (
-    ElementPowerRequest,
     ElementPowerResult,
     FiniteSemigroup,
-    GeneratedSubsemigroupRequest,
     GeneratedSubsemigroupResult,
-    GreenRelationsRequest,
     GreenRelationsResult,
-    IdempotentsRequest,
     IdempotentsResult,
-    PowerProfileRequest,
     PowerProfileResult,
-    PrincipalIdealsRequest,
     PrincipalIdealsResult,
 )
 
@@ -248,33 +242,6 @@ def principal_ideals(
     return PrincipalIdealsResult._from_kernel(semigroup, elements, ideals)
 
 
-def compute_power_profile(request: PowerProfileRequest) -> PowerProfileResult:
-    """Project a wire request onto the native power-profile operation."""
-    return power_profile(request.semigroup, request.element)
-
-
-def compute_generated_subsemigroup(
-    request: GeneratedSubsemigroupRequest,
-) -> GeneratedSubsemigroupResult:
-    """Project a wire request onto the native generated-subsemigroup operation."""
-    return generated_subsemigroup(request.semigroup, request.generators)
-
-
-def compute_element_power(request: ElementPowerRequest) -> ElementPowerResult:
-    """Project a wire request onto the native element-power operation."""
-    return element_power(request.semigroup, request.element, request.exponent)
-
-
-def compute_idempotents(request: IdempotentsRequest) -> IdempotentsResult:
-    """Project a wire request onto the native idempotents operation."""
-    return idempotents(request.semigroup)
-
-
-def compute_principal_ideals(request: PrincipalIdealsRequest) -> PrincipalIdealsResult:
-    """Project a wire request onto the native principal-ideals operation."""
-    return principal_ideals(request.semigroup, request.elements)
-
-
 def _left_ideals(
     elements: tuple[str, ...],
     multiplication: tuple[tuple[str, ...], ...],
@@ -478,18 +445,7 @@ def green_relations(semigroup: FiniteSemigroup) -> GreenRelationsResult:
     return GreenRelationsResult._from_kernel(semigroup, L, R, H, D, J)
 
 
-def compute_green_relations(request: GreenRelationsRequest) -> GreenRelationsResult:
-    """Project a wire request onto the native Green-relations operation."""
-    return green_relations(request.semigroup)
-
-
 __all__ = [
-    "compute_element_power",
-    "compute_generated_subsemigroup",
-    "compute_green_relations",
-    "compute_idempotents",
-    "compute_power_profile",
-    "compute_principal_ideals",
     "element_power",
     "generated_subsemigroup",
     "green_relations",

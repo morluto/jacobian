@@ -8,7 +8,7 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidClosureRequest,
     MatroidClosureResult,
 )
-from jacobian.math.combinatorics.matroids._operations import compute_closure
+from jacobian.math.combinatorics.matroids.operations import compute_closure
 
 _CLOSURE_EXAMPLE: dict[str, Any] = {
     "matroid": {

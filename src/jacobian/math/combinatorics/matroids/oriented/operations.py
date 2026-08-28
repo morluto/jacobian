@@ -129,10 +129,15 @@ def _compute_result(chirotope: UniformRank3Chirotope) -> ChirotopeCheckResult:
     )
 
 
-def check_chirotope(request: ChirotopeCheckRequest) -> ChirotopeCheckResult:
+def check_chirotope(chirotope: UniformRank3Chirotope) -> ChirotopeCheckResult:
     """Return the exact result of one bounded B2 enumeration."""
 
-    return _compute_result(request.chirotope)
+    return _compute_result(chirotope)
 
 
-__all__ = ["check_chirotope"]
+def compute_chirotope_check(request: ChirotopeCheckRequest) -> ChirotopeCheckResult:
+    """Project a wire request onto the native chirotope checker."""
+    return check_chirotope(request.chirotope)
+
+
+__all__ = ["check_chirotope", "compute_chirotope_check"]

@@ -59,7 +59,7 @@ def _closure_invariant(
     return tuple(sorted(closure)), subset_rank
 
 
-def compute_matroid_closure(
+def matroid_closure(
     matroid: LinearMatroid, subset: list[int]
 ) -> tuple[tuple[int, ...], int]:
     """Public native entry: exact closure and subset rank.
@@ -75,9 +75,7 @@ def compute_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
     """Compute the closure for the catalog's typed request."""
 
     try:
-        closure, subset_rank = compute_matroid_closure(
-            request.matroid, list(request.subset)
-        )
+        closure, subset_rank = matroid_closure(request.matroid, list(request.subset))
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("subset",),
@@ -85,3 +83,6 @@ def compute_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
             message=str(exc),
         ) from exc
     return MatroidClosureResult._from_kernel(request, closure, subset_rank)
+
+
+__all__ = ["compute_closure", "matroid_closure", "matroid_rank"]

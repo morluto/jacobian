@@ -18,11 +18,16 @@ from jacobian.math.combinatorics.matroids.oriented._models import (
     ChirotopeCheckStatus,
     UniformRank3Chirotope,
 )
-from jacobian.math.combinatorics.matroids.oriented._operations import (
-    _alternating_value,
-    check_chirotope,
-)
 from jacobian.math.combinatorics.matroids.oriented._tools import TOOLS
+from jacobian.math.combinatorics.matroids.oriented.operations import (
+    _alternating_value,
+)
+from jacobian.math.combinatorics.matroids.oriented.operations import (
+    check_chirotope as native_check_chirotope,
+)
+from jacobian.math.combinatorics.matroids.oriented.operations import (
+    compute_chirotope_check as check_chirotope,
+)
 
 type Triple = tuple[int, int, int]
 
@@ -163,6 +168,11 @@ class TestCanonicalUniformRank3Table:
 
 
 class TestChirotopeCheck:
+    def test_native_surface_accepts_chirotope_value(self) -> None:
+        source = UniformRank3Chirotope.model_validate(_alternating_table(4))
+        result = native_check_chirotope(source)
+        assert result.status is ChirotopeCheckStatus.VALID
+
     def test_alternating_rank3_fixture_has_exact_counts(self) -> None:
         result = check_chirotope(
             ChirotopeCheckRequest.model_validate({"chirotope": _alternating_table(4)})

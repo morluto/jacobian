@@ -97,7 +97,8 @@ class PowerProfileResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: PowerProfileRequest,
+        semigroup: FiniteSemigroup,
+        element: OpaqueLabel,
         powers: tuple[OpaqueLabel, ...],
         index: int,
         period: int,
@@ -105,8 +106,8 @@ class PowerProfileResult(StrictModel):
         cyclic_subsemigroup: tuple[OpaqueLabel, ...],
     ) -> Self:
         return cls.model_construct(
-            semigroup=request.semigroup,
-            element=request.element,
+            semigroup=semigroup,
+            element=element,
             powers=powers,
             index=index,
             period=period,
@@ -146,11 +147,17 @@ class ElementPowerResult(StrictModel):
     power: OpaqueLabel
 
     @classmethod
-    def _from_kernel(cls, request: ElementPowerRequest, power: OpaqueLabel) -> Self:
+    def _from_kernel(
+        cls,
+        semigroup: FiniteSemigroup,
+        element: OpaqueLabel,
+        exponent: int,
+        power: OpaqueLabel,
+    ) -> Self:
         return cls.model_construct(
-            semigroup=request.semigroup,
-            element=request.element,
-            exponent=request.exponent,
+            semigroup=semigroup,
+            element=element,
+            exponent=exponent,
             power=power,
         )
 
@@ -169,9 +176,9 @@ class IdempotentsResult(StrictModel):
 
     @classmethod
     def _from_kernel(
-        cls, request: IdempotentsRequest, idempotents: tuple[OpaqueLabel, ...]
+        cls, semigroup: FiniteSemigroup, idempotents: tuple[OpaqueLabel, ...]
     ) -> Self:
-        return cls.model_construct(semigroup=request.semigroup, idempotents=idempotents)
+        return cls.model_construct(semigroup=semigroup, idempotents=idempotents)
 
 
 class PrincipalIdealsRequest(StrictModel):
@@ -194,11 +201,12 @@ class PrincipalIdealsResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: PrincipalIdealsRequest,
+        semigroup: FiniteSemigroup,
+        elements: tuple[OpaqueLabel, ...],
         ideals: tuple[tuple[OpaqueLabel, ...], ...],
     ) -> Self:
         return cls.model_construct(
-            semigroup=request.semigroup, elements=request.elements, ideals=ideals
+            semigroup=semigroup, elements=elements, ideals=ideals
         )
 
 
@@ -227,11 +235,11 @@ class GreenRelationsResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: GreenRelationsRequest,
+        semigroup: FiniteSemigroup,
         L: tuple[tuple[str, ...], ...],  # noqa: N803
         R: tuple[tuple[str, ...], ...],  # noqa: N803
         H: tuple[tuple[str, ...], ...],  # noqa: N803
         D: tuple[tuple[str, ...], ...],  # noqa: N803
         J: tuple[tuple[str, ...], ...],  # noqa: N803
     ) -> Self:
-        return cls.model_construct(semigroup=request.semigroup, L=L, R=R, H=H, D=D, J=J)
+        return cls.model_construct(semigroup=semigroup, L=L, R=R, H=H, D=D, J=J)

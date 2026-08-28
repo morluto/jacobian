@@ -20,7 +20,7 @@ from jacobian.math.finite_semigroups._models import (
     PrincipalIdealsRequest,
     PrincipalIdealsResult,
 )
-from jacobian.math.finite_semigroups._operations import (
+from jacobian.math.finite_semigroups.operations import (
     compute_element_power,
     compute_generated_subsemigroup,
     compute_green_relations,

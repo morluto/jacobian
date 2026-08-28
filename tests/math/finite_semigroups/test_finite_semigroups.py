@@ -14,12 +14,18 @@ from jacobian.math.finite_semigroups._models import (
     PowerProfileRequest,
     PrincipalIdealsRequest,
 )
-from jacobian.math.finite_semigroups._operations import (
+from jacobian.math.finite_semigroups.operations import (
     compute_element_power,
     compute_generated_subsemigroup,
     compute_idempotents,
     compute_power_profile,
     compute_principal_ideals,
+    element_power,
+    generated_subsemigroup,
+    green_relations,
+    idempotents,
+    power_profile,
+    principal_ideals,
 )
 
 
@@ -34,6 +40,17 @@ def _finite_semigroup(data: SemigroupWire) -> FiniteSemigroup:
     """Validate a raw semigroup fixture into the public domain model."""
 
     return FiniteSemigroup.model_validate(data)
+
+
+def test_native_surface_accepts_semigroup_value() -> None:
+    semigroup = _finite_semigroup(Z3)
+
+    assert power_profile(semigroup, "1").period == 3
+    assert generated_subsemigroup(semigroup, ("1",)).elements == semigroup.elements
+    assert element_power(semigroup, "1", 2).power == "2"
+    assert idempotents(semigroup).idempotents == ("0",)
+    assert principal_ideals(semigroup, ("1",)).ideals == (("0", "1", "2"),)
+    assert len(green_relations(semigroup).L) == 1
 
 
 # Z/3Z as a semigroup under addition mod 3
@@ -478,7 +495,7 @@ class TestGreenRelations:
         from jacobian.math.finite_semigroups._models import (
             GreenRelationsRequest,
         )
-        from jacobian.math.finite_semigroups._operations import compute_green_relations
+        from jacobian.math.finite_semigroups.operations import compute_green_relations
 
         sg = _finite_semigroup(Z3)
         result = compute_green_relations(GreenRelationsRequest(semigroup=sg))
@@ -494,7 +511,7 @@ class TestGreenRelations:
         from jacobian.math.finite_semigroups._models import (
             GreenRelationsRequest,
         )
-        from jacobian.math.finite_semigroups._operations import compute_green_relations
+        from jacobian.math.finite_semigroups.operations import compute_green_relations
 
         sg = _finite_semigroup(NULL_SG)
         result = compute_green_relations(GreenRelationsRequest(semigroup=sg))
@@ -507,7 +524,7 @@ class TestGreenRelations:
         from jacobian.math.finite_semigroups._models import (
             GreenRelationsRequest,
         )
-        from jacobian.math.finite_semigroups._operations import compute_green_relations
+        from jacobian.math.finite_semigroups.operations import compute_green_relations
 
         # left-zero band: a*b=a for all a,b
         # left ideal of a = {a, ...} but since a*b=a, left ideal of a = {a}
@@ -538,7 +555,7 @@ class TestGreenRelations:
             GreenRelationsRequest,
             GreenRelationsResult,
         )
-        from jacobian.math.finite_semigroups._operations import compute_green_relations
+        from jacobian.math.finite_semigroups.operations import compute_green_relations
 
         sg = _finite_semigroup(Z3)
         req = GreenRelationsRequest(semigroup=sg)
@@ -556,7 +573,7 @@ class TestGreenRelations:
 
     def test_green_relations_result_preserves_source_and_rows(self) -> None:
         from jacobian.math.finite_semigroups._models import GreenRelationsRequest
-        from jacobian.math.finite_semigroups._operations import compute_green_relations
+        from jacobian.math.finite_semigroups.operations import compute_green_relations
 
         sg = _finite_semigroup(Z3)
         result = compute_green_relations(GreenRelationsRequest(semigroup=sg))

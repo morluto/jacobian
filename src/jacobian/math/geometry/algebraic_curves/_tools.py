@@ -17,11 +17,50 @@ from jacobian.math.geometry.algebraic_curves._models import (
     RationalConicParametrizationResult,
 )
 from jacobian.math.geometry.algebraic_curves.operations import (
-    compute_affine_chart,
-    compute_affine_curve_check,
-    compute_projective_closure,
-    compute_rational_conic_parametrization,
+    affine_chart,
+    affine_curve_check,
+    projective_closure,
+    rational_conic_parametrization,
 )
+
+
+def compute_affine_curve_check(request: AffineCurveRequest) -> AffineCurveResult:
+    """Unpack one request and project the native curve check to its wire result."""
+    is_valid, degree = affine_curve_check(request.polynomial)
+    return AffineCurveResult(is_valid=is_valid, degree=degree)
+
+
+def compute_projective_closure(
+    request: ProjectiveClosureRequest,
+) -> ProjectiveClosureResult:
+    """Unpack one request and project the native closure to its wire result."""
+    return ProjectiveClosureResult(
+        polynomial=projective_closure(request.polynomial),
+    )
+
+
+def compute_affine_chart(request: AffineChartRequest) -> AffineChartResult:
+    """Unpack one request and project the native chart to its wire result."""
+    return AffineChartResult(
+        polynomial=affine_chart(request.polynomial, request.chart_variable),
+    )
+
+
+def compute_rational_conic_parametrization(
+    request: RationalConicParametrizationRequest,
+) -> RationalConicParametrizationResult:
+    """Unpack one request and project the native conic data to its wire result."""
+    data = rational_conic_parametrization(
+        request.polynomial,
+        request.point,
+        request.parameter,
+    )
+    return RationalConicParametrizationResult._from_kernel(
+        request,
+        coordinates=data.coordinates,
+        inverse_parameter=data.inverse_parameter,
+        finite_parameter_denominator=data.finite_parameter_denominator,
+    )
 
 
 def _polynomial(

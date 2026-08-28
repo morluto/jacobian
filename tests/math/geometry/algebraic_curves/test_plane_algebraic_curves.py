@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.geometry.algebraic_curves import _conic
+from jacobian.math.geometry.algebraic_curves import _conic, operations
 from jacobian.math.geometry.algebraic_curves._conic import MAX_CONIC_INPUT_DIGITS
 from jacobian.math.geometry.algebraic_curves._models import (
     AffineChartRequest,
@@ -18,8 +18,8 @@ from jacobian.math.geometry.algebraic_curves._models import (
     RationalConicParametrizationRequest,
     RationalConicParametrizationResult,
 )
-from jacobian.math.geometry.algebraic_curves._tools import TOOLS
-from jacobian.math.geometry.algebraic_curves.operations import (
+from jacobian.math.geometry.algebraic_curves._tools import (
+    TOOLS,
     compute_affine_chart,
     compute_affine_curve_check,
     compute_projective_closure,
@@ -535,6 +535,23 @@ def test_affine_curve_check_circle() -> None:
     result = compute_affine_curve_check(request)
     assert result.is_valid is True
     assert result.degree == 2
+
+
+def test_native_operations_compose_canonical_values() -> None:
+    source = _polynomial(
+        ("x", "y"),
+        (1, (2, 0)),
+        (1, (0, 2)),
+        (-1, (0, 0)),
+    )
+    point = _point(source.variables, (_rational(1), _rational(0)))
+
+    assert operations.affine_curve_check(source) == (True, 2)
+    closure = operations.projective_closure(source)
+    assert operations.affine_chart(closure, "z") == source
+    data = operations.rational_conic_parametrization(source, point, "t")
+    assert data.coordinates[0].variables == ("t",)
+    assert data.inverse_parameter.variables == source.variables
 
 
 def test_projective_closure_circle_is_canonical_polynomial() -> None:

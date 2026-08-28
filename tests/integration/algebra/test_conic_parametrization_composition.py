@@ -4,7 +4,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.algebraic_curves._models import (
     RationalConicParametrizationRequest,
 )
-from jacobian.math.geometry.algebraic_curves.operations import (
+from jacobian.math.geometry.algebraic_curves._tools import (
     compute_rational_conic_parametrization,
 )
 from jacobian.math.matrices.symbolic._models import (

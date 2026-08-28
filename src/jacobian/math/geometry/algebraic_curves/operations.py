@@ -6,20 +6,13 @@ import sympy
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.algebraic_curves._conic import (
+    ConicParametrizationData,
     derive_rational_conic_parametrization,
     validate_rational_conic_request,
 )
 from jacobian.math.geometry.algebraic_curves._models import (
     _MAX_CURVE_TERMS,
     HOMOGENIZING_COORDINATE,
-    AffineChartRequest,
-    AffineChartResult,
-    AffineCurveRequest,
-    AffineCurveResult,
-    ProjectiveClosureRequest,
-    ProjectiveClosureResult,
-    RationalConicParametrizationRequest,
-    RationalConicParametrizationResult,
     _require_curve_polynomial,
     _validation_error,
     _validation_error_from,
@@ -29,7 +22,8 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.maps._models import VariablePoint
+from jacobian.math.polynomials.values import PolynomialVariable, RationalPolynomial
 
 
 def _domain_error(reason: str, message: str, *location: str) -> None:
@@ -51,42 +45,40 @@ def _admit_curve_polynomial(polynomial: RationalPolynomial) -> None:
         ) from exc
 
 
-def compute_affine_curve_check(request: AffineCurveRequest) -> AffineCurveResult:
-    """Check whether a nonconstant polynomial defines an affine plane curve."""
-    _admit_curve_polynomial(request.polynomial)
-    if len(request.polynomial.variables) != 2:
+def affine_curve_check(polynomial: RationalPolynomial) -> tuple[bool, int]:
+    """Return whether a polynomial defines an affine plane curve and its degree."""
+    _admit_curve_polynomial(polynomial)
+    if len(polynomial.variables) != 2:
         _domain_error(
             "affine_axis_invalid",
             "affine plane curves require exactly two variables",
             "polynomial",
         )
-    polynomial = rational_polynomial_to_sympy(request.polynomial)
-    degree = 0 if polynomial.is_zero else int(polynomial.total_degree())
-    return AffineCurveResult(is_valid=not polynomial.is_zero and degree >= 1, degree=degree)
+    source = rational_polynomial_to_sympy(polynomial)
+    degree = 0 if source.is_zero else int(source.total_degree())
+    return (not source.is_zero and degree >= 1, degree)
 
 
-def compute_projective_closure(
-    request: ProjectiveClosureRequest,
-) -> ProjectiveClosureResult:
+def projective_closure(polynomial: RationalPolynomial) -> RationalPolynomial:
     """Homogenize an affine plane curve with the reserved coordinate ``z``."""
-    _admit_curve_polynomial(request.polynomial)
-    if len(request.polynomial.variables) != 2:
+    _admit_curve_polynomial(polynomial)
+    if len(polynomial.variables) != 2:
         _domain_error(
             "closure_axis_invalid",
             "projective closure requires exactly two variables",
             "polynomial",
         )
-    if HOMOGENIZING_COORDINATE in request.polynomial.variables:
+    if HOMOGENIZING_COORDINATE in polynomial.variables:
         _domain_error(
             "homogenizing_coordinate_reserved",
             "affine variable axis must not contain the reserved "
             f"homogenizing coordinate {HOMOGENIZING_COORDINATE!r}",
             "polynomial",
         )
-    source = rational_polynomial_to_sympy(request.polynomial)
-    source_variables = symbols_for_variables(request.polynomial.variables)
+    source = rational_polynomial_to_sympy(polynomial)
+    source_variables = symbols_for_variables(polynomial.variables)
     homogenizing = sympy.Symbol(HOMOGENIZING_COORDINATE)
-    variables = (*request.polynomial.variables, HOMOGENIZING_COORDINATE)
+    variables = (*polynomial.variables, HOMOGENIZING_COORDINATE)
     degree = 0 if source.is_zero else int(source.total_degree())
     expression = sum(
         coefficient
@@ -100,40 +92,40 @@ def compute_projective_closure(
     closure = sympy.Poly(
         sympy.expand(expression), *source_variables, homogenizing, domain=sympy.QQ
     )
-    return ProjectiveClosureResult(
-        polynomial=rational_polynomial_from_sympy(
-            closure, variables, maximum_terms=_MAX_CURVE_TERMS
-        )
+    return rational_polynomial_from_sympy(
+        closure, variables, maximum_terms=_MAX_CURVE_TERMS
     )
 
 
-def compute_affine_chart(request: AffineChartRequest) -> AffineChartResult:
+def affine_chart(
+    polynomial: RationalPolynomial, chart_variable: PolynomialVariable
+) -> RationalPolynomial:
     """Dehomogenize a projective plane curve at one chart coordinate."""
-    _admit_curve_polynomial(request.polynomial)
-    if len(request.polynomial.variables) != 3:
+    _admit_curve_polynomial(polynomial)
+    if len(polynomial.variables) != 3:
         _domain_error(
             "chart_axis_invalid",
             "projective plane curves require exactly three variables",
             "polynomial",
         )
-    if request.chart_variable not in request.polynomial.variables:
+    if chart_variable not in polynomial.variables:
         _domain_error(
             "chart_variable_axis_mismatch",
             "chart_variable must belong to the polynomial axis",
             "chart_variable",
         )
-    source = rational_polynomial_to_sympy(request.polynomial)
+    source = rational_polynomial_to_sympy(polynomial)
     if not source.is_homogeneous:
         _domain_error(
             "polynomial_not_homogeneous",
             "projective polynomial must be homogeneous",
             "polynomial",
         )
-    chart_index = request.polynomial.variables.index(request.chart_variable)
-    symbols = symbols_for_variables(request.polynomial.variables)
+    chart_index = polynomial.variables.index(chart_variable)
+    symbols = symbols_for_variables(polynomial.variables)
     remaining_variables = tuple(
         variable
-        for index, variable in enumerate(request.polynomial.variables)
+        for index, variable in enumerate(polynomial.variables)
         if index != chart_index
     )
     remaining_symbols = tuple(
@@ -144,21 +136,19 @@ def compute_affine_chart(request: AffineChartRequest) -> AffineChartResult:
         *remaining_symbols,
         domain=sympy.QQ,
     )
-    return AffineChartResult(
-        polynomial=rational_polynomial_from_sympy(
-            chart, remaining_variables, maximum_terms=_MAX_CURVE_TERMS
-        )
+    return rational_polynomial_from_sympy(
+        chart, remaining_variables, maximum_terms=_MAX_CURVE_TERMS
     )
 
 
-def compute_rational_conic_parametrization(
-    request: RationalConicParametrizationRequest,
-) -> RationalConicParametrizationResult:
+def rational_conic_parametrization(
+    polynomial: RationalPolynomial,
+    point: VariablePoint,
+    parameter: PolynomialVariable,
+) -> ConicParametrizationData:
     """Parametrize a smooth rational conic by its normalized line pencil."""
     try:
-        validate_rational_conic_request(
-            request.polynomial, request.point, request.parameter
-        )
+        validate_rational_conic_request(polynomial, point, parameter)
     except ValueError as exc:
         classified = _validation_error_from(exc)
         raise OperationDomainValidationError(
@@ -166,20 +156,12 @@ def compute_rational_conic_parametrization(
             code=classified.type,
             message=classified.message(),
         ) from exc
-    data = derive_rational_conic_parametrization(
-        request.polynomial, request.point, request.parameter
-    )
-    return RationalConicParametrizationResult._from_kernel(
-        request,
-        coordinates=data.coordinates,
-        inverse_parameter=data.inverse_parameter,
-        finite_parameter_denominator=data.finite_parameter_denominator,
-    )
+    return derive_rational_conic_parametrization(polynomial, point, parameter)
 
 
 __all__ = [
-    "compute_affine_chart",
-    "compute_affine_curve_check",
-    "compute_projective_closure",
-    "compute_rational_conic_parametrization",
+    "affine_chart",
+    "affine_curve_check",
+    "projective_closure",
+    "rational_conic_parametrization",
 ]

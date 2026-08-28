@@ -10,11 +10,19 @@ from jacobian.math.topology.frames._models import (
     GramResult,
     VectorFamilyRequest,
 )
-from jacobian.math.topology.frames._operations import (
-    compute_coherence,
-    compute_frame_potential,
-    compute_gram,
-)
+from jacobian.math.topology.frames.operations import coherence, frame_potential, gram
+
+
+def _gram(request: VectorFamilyRequest) -> GramResult:
+    return gram(request)
+
+
+def _coherence(request: CoherenceRequest) -> CoherenceResult:
+    return coherence(request)
+
+
+def _frame_potential(request: FiniteFrameRequest) -> FramePotentialResult:
+    return frame_potential(request)
 
 _ORTHONORMAL = {"vectors": [[1, 0], [0, 1]]}
 
@@ -25,7 +33,7 @@ TOOLS: MathTools = (
         description="Compute the Gram matrix G with G_ij = <v_i, v_j>.",
         request_type=VectorFamilyRequest,
         result_type=GramResult,
-        run=compute_gram,
+        run=_gram,
         tags=("topology", "frame", "gram", "exact"),
         examples=(
             example(
@@ -41,7 +49,7 @@ TOOLS: MathTools = (
         description="Compute the maximum normalized off-diagonal Gram entry.",
         request_type=CoherenceRequest,
         result_type=CoherenceResult,
-        run=compute_coherence,
+        run=_coherence,
         tags=("topology", "frame", "coherence", "exact"),
         examples=(
             example(
@@ -57,7 +65,7 @@ TOOLS: MathTools = (
         description="Compute the frame potential sum_{i,j} |<v_i, v_j>|^2.",
         request_type=FiniteFrameRequest,
         result_type=FramePotentialResult,
-        run=compute_frame_potential,
+        run=_frame_potential,
         tags=("topology", "frame", "potential", "exact"),
         examples=(
             example(

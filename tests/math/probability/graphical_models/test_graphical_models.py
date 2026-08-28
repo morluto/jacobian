@@ -19,10 +19,14 @@ from jacobian.math.probability.graphical_models._models import (
     FactorMarginalizeRequest,
     FactorMultiplyRequest,
 )
-from jacobian.math.probability.graphical_models._operations import (
-    compute_d_separation,
-    compute_factor_marginalize,
-    compute_factor_multiply,
+from jacobian.math.probability.graphical_models._tools import (
+    _d_separation as compute_d_separation,
+)
+from jacobian.math.probability.graphical_models._tools import (
+    _factor_marginalize as compute_factor_marginalize,
+)
+from jacobian.math.probability.graphical_models._tools import (
+    _factor_multiply as compute_factor_multiply,
 )
 
 

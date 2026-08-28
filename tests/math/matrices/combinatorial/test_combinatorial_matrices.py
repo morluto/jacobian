@@ -13,14 +13,24 @@ from jacobian.math.matrices.combinatorial._models import (
     SignProfileRequest,
     SylvesterRequest,
 )
-from jacobian.math.matrices.combinatorial._operations import (
-    compute_determinant_profile,
-    compute_gram_profile,
-    compute_normalize,
-    compute_sign_profile,
-    compute_sylvester,
+from jacobian.math.matrices.combinatorial._tools import (
+    TOOLS,
 )
-from jacobian.math.matrices.combinatorial._tools import TOOLS
+from jacobian.math.matrices.combinatorial._tools import (
+    _determinant_profile as compute_determinant_profile,
+)
+from jacobian.math.matrices.combinatorial._tools import (
+    _gram_profile as compute_gram_profile,
+)
+from jacobian.math.matrices.combinatorial._tools import (
+    _normalize as compute_normalize,
+)
+from jacobian.math.matrices.combinatorial._tools import (
+    _sign_profile as compute_sign_profile,
+)
+from jacobian.math.matrices.combinatorial._tools import (
+    _sylvester as compute_sylvester,
+)
 from jacobian.math.matrices.combinatorial.operations import kronecker
 
 # ---------------------------------------------------------------------------

@@ -14,11 +14,40 @@ from jacobian.math.probability.graphical_models._models import (
     FactorMultiplyRequest,
     FactorMultiplyResult,
 )
-from jacobian.math.probability.graphical_models._operations import (
-    compute_d_separation,
-    compute_factor_marginalize,
-    compute_factor_multiply,
+from jacobian.math.probability.graphical_models.operations import (
+    d_separation,
+    factor_marginalize,
+    factor_multiply,
 )
+
+
+def _factor_multiply(request: FactorMultiplyRequest) -> FactorMultiplyResult:
+    return FactorMultiplyResult._from_kernel(
+        request.left, request.right, factor_multiply(request.left, request.right)
+    )
+
+
+def _factor_marginalize(
+    request: FactorMarginalizeRequest,
+) -> FactorMarginalizeResult:
+    return FactorMarginalizeResult._from_kernel(
+        request.factor,
+        request.variable,
+        factor_marginalize(request.factor, request.variable),
+    )
+
+
+def _d_separation(request: DSeparationRequest) -> DSeparationResult:
+    return DSeparationResult._from_kernel(
+        request,
+        d_separation(
+            request.variable_count,
+            request.edges,
+            request.set_a,
+            request.set_b,
+            request.set_c,
+        ),
+    )
 
 
 def _op[
@@ -71,7 +100,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "using bounded exact rational arithmetic. Scalar factors use an empty scope.",
         FactorMultiplyRequest,
         FactorMultiplyResult,
-        compute_factor_multiply,
+        _factor_multiply,
         "graphical-model",
         "factor",
         "exact",
@@ -100,7 +129,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "remaining variables using exact rational arithmetic.",
         FactorMarginalizeRequest,
         FactorMarginalizeResult,
-        compute_factor_marginalize,
+        _factor_marginalize,
         "graphical-model",
         "factor",
         "marginalization",
@@ -124,7 +153,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "restriction and moralization.",
         DSeparationRequest,
         DSeparationResult,
-        compute_d_separation,
+        _d_separation,
         "graphical-model",
         "d-separation",
         "exact",

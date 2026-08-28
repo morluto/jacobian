@@ -22,15 +22,51 @@ from jacobian.math.topology.combinatorial_maps._models import (
     VertexFaceIncidenceRequest,
     VertexFaceIncidenceResult,
 )
-from jacobian.math.topology.combinatorial_maps._operations import (
-    compute_connected_components,
-    compute_dual,
-    compute_euler_characteristic,
-    compute_faces,
-    compute_orientable_genus,
-    compute_orientation_reverse,
-    compute_vertex_face_incidence,
+from jacobian.math.topology.combinatorial_maps.operations import (
+    connected_components,
+    dual_map,
+    euler_characteristic,
+    face_orbits,
+    orientable_genus,
+    orientation_reverse,
+    vertex_face_incidence,
 )
+
+
+def _faces(request: FacesRequest) -> FacesResult:
+    return face_orbits(request.map)
+
+
+def _euler_characteristic(
+    request: EulerCharacteristicRequest,
+) -> EulerCharacteristicResult:
+    return euler_characteristic(request.map)
+
+
+def _orientable_genus(request: OrientableGenusRequest) -> OrientableGenusResult:
+    return orientable_genus(request.map)
+
+
+def _orientation_reverse(
+    request: OrientationReverseRequest,
+) -> OrientationReverseResult:
+    return orientation_reverse(request.map)
+
+
+def _connected_components(
+    request: ConnectedComponentsRequest,
+) -> ConnectedComponentsResult:
+    return connected_components(request.map)
+
+
+def _dual(request: DualRequest) -> DualResult:
+    return dual_map(request.map)
+
+
+def _vertex_face_incidence(
+    request: VertexFaceIncidenceRequest,
+) -> VertexFaceIncidenceResult:
+    return vertex_face_incidence(request.map)
 
 
 def _op[
@@ -94,7 +130,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "in exactly one facial walk.",
         FacesRequest,
         FacesResult,
-        compute_faces,
+        _faces,
         "combinatorial-map",
         "faces",
         "exact",
@@ -114,7 +150,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "an independent closed surface).",
         EulerCharacteristicRequest,
         EulerCharacteristicResult,
-        compute_euler_characteristic,
+        _euler_characteristic,
         "combinatorial-map",
         "euler-characteristic",
         "exact",
@@ -135,7 +171,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "valid orientable combinatorial map.",
         OrientableGenusRequest,
         OrientableGenusResult,
-        compute_orientable_genus,
+        _orientable_genus,
         "combinatorial-map",
         "genus",
         "exact",
@@ -156,7 +192,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "transport convention.",
         OrientationReverseRequest,
         OrientationReverseResult,
-        compute_orientation_reverse,
+        _orientation_reverse,
         "combinatorial-map",
         "orientation",
         "exact",
@@ -176,7 +212,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "independently.",
         ConnectedComponentsRequest,
         ConnectedComponentsResult,
-        compute_connected_components,
+        _connected_components,
         "combinatorial-map",
         "components",
         "exact",
@@ -198,7 +234,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "retained with identity.",
         DualRequest,
         DualResult,
-        compute_dual,
+        _dual,
         "combinatorial-map",
         "dual",
         "exact",
@@ -218,7 +254,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "times on a facial boundary, plus the boolean per-vertex face set.",
         VertexFaceIncidenceRequest,
         VertexFaceIncidenceResult,
-        compute_vertex_face_incidence,
+        _vertex_face_incidence,
         "combinatorial-map",
         "incidence",
         "exact",

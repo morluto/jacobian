@@ -8,10 +8,14 @@ from jacobian.math.topology.frames._models import (
     FiniteFrameRequest,
     VectorFamilyRequest,
 )
-from jacobian.math.topology.frames._operations import (
-    compute_coherence,
-    compute_frame_potential,
-    compute_gram,
+from jacobian.math.topology.frames._tools import (
+    _coherence as compute_coherence,
+)
+from jacobian.math.topology.frames._tools import (
+    _frame_potential as compute_frame_potential,
+)
+from jacobian.math.topology.frames._tools import (
+    _gram as compute_gram,
 )
 
 

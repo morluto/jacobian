@@ -11,11 +11,17 @@ from jacobian.math.combinatorics.finite_structures.sets._models import (
     FiniteSetElementListResult,
     FiniteSetPairRequest,
 )
-from jacobian.math.combinatorics.finite_structures.sets._operations import (
-    decide_exact_cover,
-    set_symmetric_difference,
-    set_union,
-    union_cardinality,
+from jacobian.math.combinatorics.finite_structures.sets._tools import (
+    _exact_cover as decide_exact_cover,
+)
+from jacobian.math.combinatorics.finite_structures.sets._tools import (
+    _symmetric_difference as set_symmetric_difference,
+)
+from jacobian.math.combinatorics.finite_structures.sets._tools import (
+    _union as set_union,
+)
+from jacobian.math.combinatorics.finite_structures.sets._tools import (
+    _union_cardinality as union_cardinality,
 )
 
 

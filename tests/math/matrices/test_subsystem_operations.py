@@ -23,10 +23,14 @@ from jacobian.math.matrices.subsystems._models import (
     SubsystemPartialTraceRequest,
     SubsystemPartialTraceResult,
 )
-from jacobian.math.matrices.subsystems._operations import (
-    compute_kronecker_product,
-    compute_partial_trace,
-    decide_psd_order,
+from jacobian.math.matrices.subsystems._tools import (
+    _kronecker_product as compute_kronecker_product,
+)
+from jacobian.math.matrices.subsystems._tools import (
+    _partial_trace as compute_partial_trace,
+)
+from jacobian.math.matrices.subsystems._tools import (
+    _psd_order as decide_psd_order,
 )
 from jacobian.math.matrices.subsystems.operations import (
     kronecker_product,

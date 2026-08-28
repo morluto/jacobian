@@ -14,11 +14,25 @@ from jacobian.math.geometry.metric_spaces._models import (
     MetricProfileRequest,
     MetricProfileResult,
 )
-from jacobian.math.geometry.metric_spaces._operations import (
-    compute_ball,
-    compute_gromov_hyperbolicity,
-    compute_metric_profile,
+from jacobian.math.geometry.metric_spaces.operations import (
+    ball,
+    gromov_hyperbolicity,
+    metric_profile,
 )
+
+
+def _metric_profile(request: MetricProfileRequest) -> MetricProfileResult:
+    return metric_profile(request.metric_space)
+
+
+def _ball(request: BallRequest) -> BallResult:
+    return ball(request.metric_space, request.center, request.radius)
+
+
+def _gromov_hyperbolicity(
+    request: GromovHyperbolicityRequest,
+) -> GromovHyperbolicityResult:
+    return gromov_hyperbolicity(request.metric_space)
 
 
 def fms_operation[RequestT: StrictModel, ResultT: StrictModel](
@@ -60,7 +74,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "eccentricities for all points, centers, and periphery.",
         MetricProfileRequest,
         MetricProfileResult,
-        compute_metric_profile,
+        _metric_profile,
         "metric",
         "profile",
         "exact",
@@ -79,7 +93,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "center point in a finite metric space.",
         BallRequest,
         BallResult,
-        compute_ball,
+        _ball,
         "metric",
         "ball",
         "exact",
@@ -102,7 +116,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "metric space by brute-force enumeration over all quadruples.",
         GromovHyperbolicityRequest,
         GromovHyperbolicityResult,
-        compute_gromov_hyperbolicity,
+        _gromov_hyperbolicity,
         "metric",
         "hyperbolicity",
         "exact",

@@ -12,10 +12,14 @@ from jacobian.math.geometry.metric_spaces._models import (
     GromovHyperbolicityRequest,
     MetricProfileRequest,
 )
-from jacobian.math.geometry.metric_spaces._operations import (
-    compute_ball,
-    compute_gromov_hyperbolicity,
-    compute_metric_profile,
+from jacobian.math.geometry.metric_spaces._tools import (
+    _ball as compute_ball,
+)
+from jacobian.math.geometry.metric_spaces._tools import (
+    _gromov_hyperbolicity as compute_gromov_hyperbolicity,
+)
+from jacobian.math.geometry.metric_spaces._tools import (
+    _metric_profile as compute_metric_profile,
 )
 from jacobian.math.geometry.metric_spaces.operations import ball, metric_profile
 

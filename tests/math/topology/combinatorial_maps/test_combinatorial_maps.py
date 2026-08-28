@@ -17,16 +17,30 @@ from jacobian.math.topology.combinatorial_maps._models import (
     OrientationReverseResult,
     VertexFaceIncidenceRequest,
 )
-from jacobian.math.topology.combinatorial_maps._operations import (
-    compute_connected_components,
-    compute_dual,
-    compute_euler_characteristic,
-    compute_faces,
-    compute_orientable_genus,
-    compute_orientation_reverse,
-    compute_vertex_face_incidence,
+from jacobian.math.topology.combinatorial_maps._tools import (
+    TOOLS,
 )
-from jacobian.math.topology.combinatorial_maps._tools import TOOLS
+from jacobian.math.topology.combinatorial_maps._tools import (
+    _connected_components as compute_connected_components,
+)
+from jacobian.math.topology.combinatorial_maps._tools import (
+    _dual as compute_dual,
+)
+from jacobian.math.topology.combinatorial_maps._tools import (
+    _euler_characteristic as compute_euler_characteristic,
+)
+from jacobian.math.topology.combinatorial_maps._tools import (
+    _faces as compute_faces,
+)
+from jacobian.math.topology.combinatorial_maps._tools import (
+    _orientable_genus as compute_orientable_genus,
+)
+from jacobian.math.topology.combinatorial_maps._tools import (
+    _orientation_reverse as compute_orientation_reverse,
+)
+from jacobian.math.topology.combinatorial_maps._tools import (
+    _vertex_face_incidence as compute_vertex_face_incidence,
+)
 from jacobian.math.topology.combinatorial_maps.operations import (
     face_orbits,
     rotation_successor,

@@ -1,17 +1,12 @@
 """Immutable declarations for integer-partition operations."""
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
+from jacobian.math.combinatorics import operations as native
 from jacobian.math.combinatorics._models import (
     IntegerResult,
     NonnegativeIntegerRequest,
     NonnegativePairRequest,
-)
-from jacobian.math.combinatorics._operations import (
-    bell,
-    enumerate_integer_partitions,
-    partition_number,
-    stirling_first,
-    stirling_second,
 )
 from jacobian.math.combinatorics._partition_models import (
     IntegerPartitionEnumerationRequest,
@@ -20,6 +15,38 @@ from jacobian.math.combinatorics._partition_models import (
 from jacobian.math.combinatorics._support import (
     combinatorics_operation,
 )
+
+
+def _integer_result(value: int) -> IntegerResult:
+    return IntegerResult(value=format_canonical_integer(value))
+
+
+def stirling_first(request: NonnegativePairRequest) -> IntegerResult:
+    return _integer_result(native.stirling_first(request.n, request.k))
+
+
+def stirling_second(request: NonnegativePairRequest) -> IntegerResult:
+    return _integer_result(native.stirling_second(request.n, request.k))
+
+
+def bell(request: NonnegativeIntegerRequest) -> IntegerResult:
+    return _integer_result(native.bell_number(request.n))
+
+
+def partition_number(request: NonnegativeIntegerRequest) -> IntegerResult:
+    return _integer_result(native.partition_number(request.n))
+
+
+def enumerate_integer_partitions(
+    request: IntegerPartitionEnumerationRequest,
+) -> IntegerPartitionEnumerationResult:
+    """Enumerate all bounded partitions using the native exact kernel."""
+    return IntegerPartitionEnumerationResult(
+        n=request.n,
+        max_parts=request.max_parts,
+        partitions=native.integer_partitions(request.n, max_parts=request.max_parts),
+    )
+
 
 PARTITION_OPERATIONS = (
     combinatorics_operation(

@@ -1,6 +1,8 @@
 """Immutable declarations for elementary counting operations."""
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
+from jacobian.math.combinatorics import operations as native
 from jacobian.math.combinatorics._counting_models import (
     BinomialRequest,
     IntegerListRequest,
@@ -10,21 +12,55 @@ from jacobian.math.combinatorics._models import (
     NonnegativeIntegerRequest,
     NonnegativePairRequest,
 )
-from jacobian.math.combinatorics._operations import (
-    binomial,
-    catalan,
-    central_binomial,
-    compositions,
-    derangements,
-    double_factorial,
-    factorial,
-    motzkin,
-    multinomial,
-    permutations,
-)
 from jacobian.math.combinatorics._support import (
     combinatorics_operation,
 )
+
+
+def _integer_result(value: int) -> IntegerResult:
+    return IntegerResult(value=format_canonical_integer(value))
+
+
+def factorial(request: NonnegativeIntegerRequest) -> IntegerResult:
+    return _integer_result(native.factorial(request.n))
+
+
+def double_factorial(request: NonnegativeIntegerRequest) -> IntegerResult:
+    return _integer_result(native.double_factorial(request.n))
+
+
+def derangements(request: NonnegativeIntegerRequest) -> IntegerResult:
+    return _integer_result(native.derangement_number(request.n))
+
+
+def binomial(request: BinomialRequest) -> IntegerResult:
+    return _integer_result(native.binomial(request.n, request.k))
+
+
+def multinomial(request: IntegerListRequest) -> IntegerResult:
+    values = tuple(parse_canonical_integer(value) for value in request.values)
+    return _integer_result(native.multinomial(values))
+
+
+def permutations(request: NonnegativePairRequest) -> IntegerResult:
+    return _integer_result(native.permutations(request.n, request.k))
+
+
+def catalan(request: NonnegativeIntegerRequest) -> IntegerResult:
+    return _integer_result(native.catalan_number(request.n))
+
+
+def motzkin(request: NonnegativeIntegerRequest) -> IntegerResult:
+    return _integer_result(native.motzkin_number(request.n))
+
+
+def central_binomial(request: NonnegativeIntegerRequest) -> IntegerResult:
+    return _integer_result(native.central_binomial(request.n))
+
+
+def compositions(request: NonnegativePairRequest) -> IntegerResult:
+    return _integer_result(native.compositions(request.n, request.k))
+
 
 COUNTING_OPERATIONS = (
     combinatorics_operation(

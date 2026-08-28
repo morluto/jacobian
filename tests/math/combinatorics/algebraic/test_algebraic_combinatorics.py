@@ -12,17 +12,17 @@ from jacobian.math.combinatorics.algebraic._models import (
     HookLengthRequest,
     StandardYoungTableauCountRequest,
 )
-from jacobian.math.combinatorics.algebraic._operations import (
-    compute_conjugate_partition,
-    compute_hook_lengths,
-    compute_syt_count,
+from jacobian.math.combinatorics.algebraic._tools import (
+    conjugate_partition,
+    hook_lengths,
+    syt_count,
 )
 from jacobian.math.combinatorics.symmetric_functions import IntegerPartition
 
 
 def test_hook_lengths_partition_321() -> None:
     """Hook lengths of (3,2,1) are [[5,3,1],[3,1],[1]]."""
-    result = compute_hook_lengths(
+    result = hook_lengths(
         HookLengthRequest(partition=IntegerPartition(parts=(3, 2, 1)))
     )
     assert result.hooks == ((5, 3, 1), (3, 1), (1,))
@@ -31,7 +31,7 @@ def test_hook_lengths_partition_321() -> None:
 
 def test_hook_lengths_single_row() -> None:
     """Hook lengths of (n) are [n, n-1, ..., 1]."""
-    result = compute_hook_lengths(
+    result = hook_lengths(
         HookLengthRequest(partition=IntegerPartition(parts=(4,)))
     )
     assert result.hooks == ((4, 3, 2, 1),)
@@ -40,7 +40,7 @@ def test_hook_lengths_single_row() -> None:
 
 def test_hook_lengths_single_column() -> None:
     """Hook lengths of (1,1,1) are [[1],[1],[1]]."""
-    result = compute_hook_lengths(
+    result = hook_lengths(
         HookLengthRequest(partition=IntegerPartition(parts=(1, 1, 1)))
     )
     assert result.hooks == ((3,), (2,), (1,))
@@ -49,7 +49,7 @@ def test_hook_lengths_single_column() -> None:
 
 def test_syt_count_partition_321() -> None:
     """Number of SYT for shape (3,2,1) is 16."""
-    result = compute_syt_count(
+    result = syt_count(
         StandardYoungTableauCountRequest(partition=IntegerPartition(parts=(3, 2, 1)))
     )
     assert result.count == "16"
@@ -58,7 +58,7 @@ def test_syt_count_partition_321() -> None:
 
 def test_syt_count_single_row() -> None:
     """Number of SYT for shape (n) is 1."""
-    result = compute_syt_count(
+    result = syt_count(
         StandardYoungTableauCountRequest(partition=IntegerPartition(parts=(5,)))
     )
     assert result.count == "1"
@@ -67,7 +67,7 @@ def test_syt_count_single_row() -> None:
 
 def test_syt_count_single_column() -> None:
     """Number of SYT for shape (1,1,...,1) is 1."""
-    result = compute_syt_count(
+    result = syt_count(
         StandardYoungTableauCountRequest(partition=IntegerPartition(parts=(1, 1, 1, 1)))
     )
     assert result.count == "1"
@@ -76,7 +76,7 @@ def test_syt_count_single_column() -> None:
 
 def test_syt_count_rectangle_22() -> None:
     """Number of SYT for shape (2,2) is 2."""
-    result = compute_syt_count(
+    result = syt_count(
         StandardYoungTableauCountRequest(partition=IntegerPartition(parts=(2, 2)))
     )
     assert result.count == "2"
@@ -106,7 +106,7 @@ def test_syt_count_matches_brute_force() -> None:
     """SYT count matches the number of valid fillings for small partitions."""
     for parts in [(3, 1), (2, 2), (3, 2)]:
         brute = _count_syt_brute_force(parts)
-        result = compute_syt_count(
+        result = syt_count(
             StandardYoungTableauCountRequest(partition=IntegerPartition(parts=parts))
         )
         assert result.count == str(brute)
@@ -114,7 +114,7 @@ def test_syt_count_matches_brute_force() -> None:
 
 def test_conjugate_self_conjugate_partition() -> None:
     """Conjugate of (3,2,1) is (3,2,1) — self-conjugate."""
-    result = compute_conjugate_partition(
+    result = conjugate_partition(
         ConjugatePartitionRequest(partition=IntegerPartition(parts=(3, 2, 1)))
     )
     assert result.conjugate.parts == (3, 2, 1)
@@ -122,7 +122,7 @@ def test_conjugate_self_conjugate_partition() -> None:
 
 def test_conjugate_row_to_column() -> None:
     """Conjugate of (4) is (1,1,1,1) and vice versa."""
-    result = compute_conjugate_partition(
+    result = conjugate_partition(
         ConjugatePartitionRequest(partition=IntegerPartition(parts=(4,)))
     )
     assert result.conjugate.parts == (1, 1, 1, 1)
@@ -130,7 +130,7 @@ def test_conjugate_row_to_column() -> None:
 
 def test_conjugate_column_to_row() -> None:
     """Conjugate of (1,1,1,1) is (4)."""
-    result = compute_conjugate_partition(
+    result = conjugate_partition(
         ConjugatePartitionRequest(partition=IntegerPartition(parts=(1, 1, 1, 1)))
     )
     assert result.conjugate.parts == (4,)
@@ -138,10 +138,10 @@ def test_conjugate_column_to_row() -> None:
 
 def test_conjugate_double_conjugate_is_identity() -> None:
     """Conjugate of conjugate is the original partition."""
-    result = compute_conjugate_partition(
+    result = conjugate_partition(
         ConjugatePartitionRequest(partition=IntegerPartition(parts=(5, 3, 2, 1)))
     )
-    result2 = compute_conjugate_partition(
+    result2 = conjugate_partition(
         ConjugatePartitionRequest(partition=result.conjugate)
     )
     assert result2.conjugate.parts == (5, 3, 2, 1)
@@ -149,11 +149,11 @@ def test_conjugate_double_conjugate_is_identity() -> None:
 
 def test_empty_canonical_partition_composes_with_all_partition_consumers() -> None:
     partition = IntegerPartition(parts=())
-    hook_result = compute_hook_lengths(HookLengthRequest(partition=partition))
-    count_result = compute_syt_count(
+    hook_result = hook_lengths(HookLengthRequest(partition=partition))
+    count_result = syt_count(
         StandardYoungTableauCountRequest(partition=partition)
     )
-    conjugate_result = compute_conjugate_partition(
+    conjugate_result = conjugate_partition(
         ConjugatePartitionRequest(partition=partition)
     )
 
@@ -179,20 +179,20 @@ def test_native_partition_functions_are_closed_at_conjugate_boundary() -> None:
 def test_partition_operations_return_typed_results_at_the_size_boundary() -> None:
     """The canonical domain admits the conjugate of every admitted partition."""
     row = IntegerPartition(parts=(500,))
-    conjugate_result = compute_conjugate_partition(
+    conjugate_result = conjugate_partition(
         ConjugatePartitionRequest(partition=row)
     )
     assert conjugate_result.conjugate.parts == (1,) * 500
-    round_trip = compute_conjugate_partition(
+    round_trip = conjugate_partition(
         ConjugatePartitionRequest(partition=conjugate_result.conjugate)
     )
     assert round_trip.conjugate == row
 
-    hook_result = compute_hook_lengths(HookLengthRequest(partition=row))
+    hook_result = hook_lengths(HookLengthRequest(partition=row))
     assert hook_result.hooks == (tuple(range(500, 0, -1)),)
     assert int(hook_result.total_product) == math.factorial(500)
 
-    count_result = compute_syt_count(
+    count_result = syt_count(
         StandardYoungTableauCountRequest(partition=conjugate_result.conjugate)
     )
     assert count_result.count == "1"
@@ -244,7 +244,7 @@ def test_contract_rejects_non_integer_parts() -> None:
 
 def test_syt_count_large_returns_canonical_string() -> None:
     """Large SYT counts are returned as canonical decimal strings."""
-    result = compute_syt_count(
+    result = syt_count(
         StandardYoungTableauCountRequest(
             partition=IntegerPartition(parts=(10, 9, 8, 7, 6, 5, 4, 1))
         )

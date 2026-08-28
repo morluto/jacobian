@@ -22,13 +22,13 @@ from jacobian.math.combinatorics.algebraic._models import (
     RSKResult,
     RSKWordRequest,
 )
-from jacobian.math.combinatorics.algebraic._operations import (
-    compute_hook_lengths,
-    compute_inverse_rsk_word,
-    compute_rsk_permutation,
-    compute_rsk_word,
+from jacobian.math.combinatorics.algebraic._tools import (
+    TOOLS,
+    hook_lengths,
+    inverse_rsk_word,
+    rsk_permutation,
+    rsk_word,
 )
-from jacobian.math.combinatorics.algebraic._tools import TOOLS
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
     MAX_RSK_WORD_BYTES,
@@ -56,7 +56,7 @@ def _word(
 
 
 def _pair(word: FiniteWord) -> RSKTableauPair:
-    return compute_rsk_word(RSKWordRequest(word=word))
+    return rsk_word(RSKWordRequest(word=word))
 
 
 @pytest.mark.parametrize(
@@ -142,9 +142,9 @@ def test_order_preserving_relabelling_transports_only_the_alphabet() -> None:
 
 def test_forward_output_feeds_inverse_without_representation_repair() -> None:
     source = _word(("c", "c", "b", "d", "a"))
-    produced = compute_rsk_word(RSKWordRequest(word=source))
+    produced = rsk_word(RSKWordRequest(word=source))
     consumed = RSKInverseWordRequest.model_validate({"pair": produced.model_dump()})
-    result = compute_inverse_rsk_word(consumed)
+    result = inverse_rsk_word(consumed)
     assert result == source
     assert row_insertion_rsk(result) == produced
 
@@ -159,7 +159,7 @@ def test_forward_output_feeds_inverse_without_representation_repair() -> None:
         (1,),
     )
     assert (
-        compute_hook_lengths(HookLengthRequest(partition=produced.shape)).hooks
+        hook_lengths(HookLengthRequest(partition=produced.shape)).hooks
         == expected_hooks
     )
     assert algebraic_combinatorics.hook_lengths(produced.shape) == expected_hooks
@@ -173,8 +173,8 @@ def test_forward_output_feeds_inverse_without_representation_repair() -> None:
 
 def test_inverse_result_chains_into_word_requests_without_rebuilding() -> None:
     source = _word(("c", "a", "c", "b", "a"))
-    pair = compute_rsk_word(RSKWordRequest(word=source))
-    result = compute_inverse_rsk_word(
+    pair = rsk_word(RSKWordRequest(word=source))
+    result = inverse_rsk_word(
         RSKInverseWordRequest.model_validate({"pair": pair.model_dump()})
     )
     assert result == source
@@ -195,7 +195,7 @@ def test_all_short_ternary_words_round_trip_both_directions() -> None:
 
 def test_permutation_operation_agrees_with_word_specialization() -> None:
     permutation = (3, 1, 4, 2)
-    old_result = compute_rsk_permutation(RSKPermutationRequest(permutation=permutation))
+    old_result = rsk_permutation(RSKPermutationRequest(permutation=permutation))
     word_pair = _pair(
         FiniteWord(
             alphabet=("1", "2", "3", "4"),
@@ -212,8 +212,8 @@ def test_permutation_inversion_swaps_the_tableaux() -> None:
         inverse = [0] * len(permutation)
         for position, value in enumerate(permutation, start=1):
             inverse[value - 1] = position
-        pair = compute_rsk_permutation(RSKPermutationRequest(permutation=permutation))
-        inverse_pair = compute_rsk_permutation(
+        pair = rsk_permutation(RSKPermutationRequest(permutation=permutation))
+        inverse_pair = rsk_permutation(
             RSKPermutationRequest(permutation=tuple(inverse))
         )
         assert pair.p_tableau == inverse_pair.q_tableau
@@ -224,20 +224,20 @@ def test_permutation_envelope_is_derived_from_the_canonical_cell_budget() -> Non
     assert MAX_RSK_PERMUTATION_LENGTH == MAX_RSK_WORD_LENGTH
 
     identity_51 = tuple(range(1, 52))
-    result = compute_rsk_permutation(RSKPermutationRequest(permutation=identity_51))
+    result = rsk_permutation(RSKPermutationRequest(permutation=identity_51))
     assert result.shape.parts == (51,)
     assert result.lis_length == 51
     assert result.lds_length == 1
 
     identity_at_cap = tuple(range(1, MAX_RSK_PERMUTATION_LENGTH + 1))
-    wide = compute_rsk_permutation(RSKPermutationRequest(permutation=identity_at_cap))
+    wide = rsk_permutation(RSKPermutationRequest(permutation=identity_at_cap))
     assert wide.p_tableau.rows == (identity_at_cap,)
     assert wide.q_tableau.rows == (identity_at_cap,)
     assert wide.shape.parts == (MAX_RSK_PERMUTATION_LENGTH,)
     assert RSKResult.model_validate(wide.model_dump()) == wide
 
     descending_at_cap = tuple(range(MAX_RSK_PERMUTATION_LENGTH, 0, -1))
-    deep = compute_rsk_permutation(RSKPermutationRequest(permutation=descending_at_cap))
+    deep = rsk_permutation(RSKPermutationRequest(permutation=descending_at_cap))
     assert deep.shape.parts == (1,) * MAX_RSK_PERMUTATION_LENGTH
     assert deep.lis_length == 1
     assert deep.lds_length == MAX_RSK_PERMUTATION_LENGTH
@@ -303,7 +303,7 @@ def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
     with pytest.raises(
         ValueError, match=rf"length must not exceed {MAX_RSK_WORD_LENGTH}"
     ):
-        compute_rsk_word(RSKWordRequest(word=too_long))
+        rsk_word(RSKWordRequest(word=too_long))
     with pytest.raises(
         ValueError, match=rf"length must not exceed {MAX_RSK_WORD_LENGTH}"
     ):
@@ -359,7 +359,7 @@ def test_canonical_tableau_cell_bound_admits_boundary_pairs_end_to_end() -> None
         alphabet=("a",), letters=("a",) * MAX_RSK_WORD_LENGTH
     )
 
-    reconstructed = compute_inverse_rsk_word(
+    reconstructed = inverse_rsk_word(
         RSKInverseWordRequest.model_validate({"pair": single_row.model_dump()})
     )
     assert reconstructed == FiniteWord(

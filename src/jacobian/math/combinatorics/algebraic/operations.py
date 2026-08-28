@@ -7,8 +7,11 @@ the public operations.
 
 from __future__ import annotations
 
-from math import factorial
+from math import factorial, prod
 
+from jacobian.math.combinatorics.algebraic._rsk import (
+    _row_insert,
+)
 from jacobian.math.combinatorics.algebraic._rsk import (
     inverse_row_insertion_rsk as _inverse_row_insertion_rsk,
 )
@@ -36,6 +39,15 @@ def row_insertion_rsk(word: FiniteWord) -> RSKTableauPair:
 def inverse_row_insertion_rsk(pair: RSKTableauPair) -> FiniteWord:
     """Reconstruct the unique word represented by a pair of at most 500 cells."""
     return _inverse_row_insertion_rsk(pair)
+
+
+def _rsk_permutation(
+    permutation: tuple[int, ...],
+) -> tuple[tuple[tuple[int, ...], ...], tuple[tuple[int, ...], ...]]:
+    """Validate and insert one strict permutation through the native kernel."""
+    if sorted(permutation) != list(range(1, len(permutation) + 1)):
+        raise ValueError("permutation must be a permutation of 1..n")
+    return _row_insert(permutation)
 
 
 def conjugate_partition(partition: IntegerPartition) -> IntegerPartition:
@@ -77,6 +89,11 @@ def hook_lengths(partition: IntegerPartition) -> tuple[tuple[int, ...], ...]:
     return tuple(tuple(row) for row in hooks)
 
 
+def _hook_length_product(hooks: tuple[tuple[int, ...], ...]) -> int:
+    """Return the exact product of one hook-length array."""
+    return prod(hook for row in hooks for hook in row)
+
+
 def standard_young_tableaux_count(partition: IntegerPartition) -> int:
     """Count standard Young tableaux of a canonical partition.
 
@@ -86,8 +103,4 @@ def standard_young_tableaux_count(partition: IntegerPartition) -> int:
     """
     hooks = hook_lengths(partition)
     n = sum(partition.parts)
-    product = 1
-    for row in hooks:
-        for hook in row:
-            product *= hook
-    return factorial(n) // product
+    return factorial(n) // _hook_length_product(hooks)

@@ -4,8 +4,14 @@ from collections.abc import Callable
 from typing import Any
 
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
+from jacobian.math.combinatorics.algebraic import operations as native
 from jacobian.math.combinatorics.algebraic._models import (
     ConjugatePartitionRequest,
     ConjugatePartitionResult,
@@ -18,16 +24,56 @@ from jacobian.math.combinatorics.algebraic._models import (
     StandardYoungTableauCountRequest,
     StandardYoungTableauCountResult,
 )
-from jacobian.math.combinatorics.algebraic._operations import (
-    compute_conjugate_partition,
-    compute_hook_lengths,
-    compute_inverse_rsk_word,
-    compute_rsk_permutation,
-    compute_rsk_word,
-    compute_syt_count,
-)
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
 from jacobian.math.logic.languages.words.values import FiniteWord
+
+
+def hook_lengths(request: HookLengthRequest) -> HookLengthResult:
+    hooks = native.hook_lengths(request.partition)
+    return HookLengthResult(
+        hooks=hooks,
+        total_product=format_canonical_integer(native._hook_length_product(hooks)),
+    )
+
+
+def syt_count(
+    request: StandardYoungTableauCountRequest,
+) -> StandardYoungTableauCountResult:
+    count = native.standard_young_tableaux_count(request.partition)
+    n = sum(request.partition.parts)
+    return StandardYoungTableauCountResult(count=format_canonical_integer(count), n=n)
+
+
+def conjugate_partition(
+    request: ConjugatePartitionRequest,
+) -> ConjugatePartitionResult:
+    return ConjugatePartitionResult(
+        conjugate=native.conjugate_partition(request.partition)
+    )
+
+
+def rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
+    try:
+        insertion_rows, recording_rows = native._rsk_permutation(request.permutation)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("permutation",),
+            code="algebraic_combinatorics.permutation_invalid",
+            message=str(exc),
+        ) from exc
+    return RSKResult._from_kernel(
+        request,
+        insertion_rows=insertion_rows,
+        recording_rows=recording_rows,
+    )
+
+
+def rsk_word(request: RSKWordRequest) -> RSKTableauPair:
+    return native.row_insertion_rsk(request.word)
+
+
+def inverse_rsk_word(request: RSKInverseWordRequest) -> FiniteWord:
+    return native.inverse_row_insertion_rsk(request.pair)
 
 
 def ac_operation[RequestT: StrictModel, ResultT: StrictModel](
@@ -62,7 +108,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "return their product.",
         HookLengthRequest,
         HookLengthResult,
-        compute_hook_lengths,
+        hook_lengths,
         "combinatorics",
         "young-diagram",
         "hook-length",
@@ -82,7 +128,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "hook-length formula.",
         StandardYoungTableauCountRequest,
         StandardYoungTableauCountResult,
-        compute_syt_count,
+        syt_count,
         "combinatorics",
         "young-tableaux",
         "exact",
@@ -100,7 +146,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Transpose the Ferrers diagram and return the exact conjugate partition.",
         ConjugatePartitionRequest,
         ConjugatePartitionResult,
-        compute_conjugate_partition,
+        conjugate_partition,
         "combinatorics",
         "partition",
         "exact",
@@ -121,7 +167,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "ROW_INSERTION_RSK_V1.",
         RSKPermutationRequest,
         RSKResult,
-        compute_rsk_permutation,
+        rsk_permutation,
         "combinatorics",
         "rsk",
         "exact",
@@ -148,7 +194,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "their validated common shape; no bumping ledger is materialized.",
         RSKWordRequest,
         RSKTableauPair,
-        compute_rsk_word,
+        rsk_word,
         "combinatorics",
         "rsk",
         "words",
@@ -177,7 +223,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "word value.",
         RSKInverseWordRequest,
         FiniteWord,
-        compute_inverse_rsk_word,
+        inverse_rsk_word,
         "combinatorics",
         "rsk",
         "words",

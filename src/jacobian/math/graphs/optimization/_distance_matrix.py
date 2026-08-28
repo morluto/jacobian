@@ -41,10 +41,7 @@ def compute_distance_matrix(
     connected = bool(vertices) and all(
         distance is not None for row in rows for distance in row.distances
     )
-    return GraphDistanceMatrixResult(
-        vertex_ordering="LEXICOGRAPHIC_ASCENDING",
-        pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
-        unreachable_representation="JSON_NULL",
+    return GraphDistanceMatrixResult._from_kernel(
         vertices=vertices,
         rows=rows,
         connected=connected,

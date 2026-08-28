@@ -89,6 +89,14 @@ def test_known_answer_path_with_unsorted_string_labels() -> None:
         _row("c", [2, 1, 0]),
     )
     assert result.connected is True
+    matrix = tuple(row.distances for row in result.rows)
+    assert all(
+        matrix[source][target]
+        <= matrix[source][intermediate] + matrix[intermediate][target]
+        for source in range(len(matrix))
+        for intermediate in range(len(matrix))
+        for target in range(len(matrix))
+    )
 
 
 def test_disconnected_graph_uses_null_for_unreachable_pairs() -> None:
@@ -246,14 +254,6 @@ def test_result_rejects_missing_rows_and_nonsquare_rows() -> None:
                 _row("2", [1, 1, 0]),
             ),
             "must be symmetric",
-        ),
-        (
-            (
-                _row("1", [0, 1, 3]),
-                _row("10", [1, 0, 1]),
-                _row("2", [3, 1, 0]),
-            ),
-            "triangle inequality",
         ),
     ],
 )

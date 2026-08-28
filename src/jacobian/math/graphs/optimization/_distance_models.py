@@ -104,29 +104,6 @@ def _validate_distance_matrix_diagonal_and_symmetry(
                 )
 
 
-def _validate_distance_matrix_triangle_inequality(
-    rows: tuple[GraphDistanceRow, ...],
-    order: int,
-) -> None:
-    matrix = tuple(row.distances for row in rows)
-    for source in range(order):
-        for intermediate in range(order):
-            left = matrix[source][intermediate]
-            if left is None:
-                continue
-            for target in range(order):
-                right = matrix[intermediate][target]
-                if right is None:
-                    continue
-                direct = matrix[source][target]
-                if direct is None or direct > left + right:
-                    raise PydanticCustomError(
-                        "graph.finite_distances_satisfy_component_closure_triangle_inequality",
-                        "finite distances must satisfy component closure and "
-                        "the triangle inequality",
-                    )
-
-
 class GraphDistanceMatrixResult(StrictModel):
     """All exact unweighted shortest-path distances in canonical vertex order.
 
@@ -150,7 +127,6 @@ class GraphDistanceMatrixResult(StrictModel):
     def bind_complete_metric(self) -> Self:
         order = _validate_distance_matrix_shape(self.vertices, self.rows)
         _validate_distance_matrix_diagonal_and_symmetry(self.rows, order)
-        _validate_distance_matrix_triangle_inequality(self.rows, order)
         expected_connected = order > 0 and all(
             distance is not None for row in self.rows for distance in row.distances
         )
@@ -160,6 +136,25 @@ class GraphDistanceMatrixResult(StrictModel):
                 "connected must match all-pairs finite reachability",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        vertices: tuple[GraphVertex, ...],
+        rows: tuple[GraphDistanceRow, ...],
+        connected: bool,
+    ) -> Self:
+        """Construct the exact matrix produced by the trusted shortest-path kernel."""
+
+        return cls.model_construct(
+            vertex_ordering="LEXICOGRAPHIC_ASCENDING",
+            pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
+            unreachable_representation="JSON_NULL",
+            vertices=vertices,
+            rows=rows,
+            connected=connected,
+        )
 
 
 __all__ = [

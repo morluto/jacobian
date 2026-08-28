@@ -2,12 +2,12 @@
 
 import pytest
 
+from jacobian.math.finite_dim_algebras import center_basis
 from jacobian.math.finite_dim_algebras._models import (
     CenterRequest,
     StructureConstants,
 )
-from jacobian.math.finite_dim_algebras._operations import compute_center
-from jacobian.math.finite_dim_algebras._tools import TOOLS
+from jacobian.math.finite_dim_algebras._tools import TOOLS, compute_center
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -77,6 +77,7 @@ def test_center_of_zero_algebra_is_full_space() -> None:
     result = compute_center(CenterRequest(algebra=ZERO_ALG_2))
     assert result.dimension == 2
     assert result.center_dimension == 2
+    assert center_basis(ZERO_ALG_2) == result.center_basis
 
 
 def test_center_of_field_is_full_space() -> None:

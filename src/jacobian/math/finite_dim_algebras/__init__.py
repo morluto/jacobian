@@ -1,3 +1,5 @@
 """Finite-dimensional algebra operations."""
 
-__all__: list[str] = []
+from jacobian.math.finite_dim_algebras.operations import center_basis
+
+__all__ = ["center_basis"]

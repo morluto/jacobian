@@ -10,7 +10,16 @@ from jacobian.math.finite_dim_algebras._models import (
     CenterRequest,
     CenterResult,
 )
-from jacobian.math.finite_dim_algebras._operations import compute_center
+from jacobian.math.finite_dim_algebras.operations import center_basis
+
+
+def compute_center(request: CenterRequest) -> CenterResult:
+    basis = center_basis(request.algebra)
+    return CenterResult(
+        center_basis=basis,
+        dimension=request.algebra.dimension,
+        center_dimension=len(basis),
+    )
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](

@@ -2,11 +2,12 @@
 
 from typing import TypedDict
 
+from jacobian.math.number_theory.counting import congruence_box_count, floor_sum
 from jacobian.math.number_theory.counting._models import (
     CongruenceBoxCountRequest,
     FloorSumRequest,
 )
-from jacobian.math.number_theory.counting._operations import (
+from jacobian.math.number_theory.counting._tools import (
     compute_congruence_box_count,
     compute_floor_sum,
 )
@@ -42,6 +43,7 @@ class TestFloorSum:
         req = FloorSumRequest(n=5, m=3, a=2, b=1)
         result = compute_floor_sum(req)
         assert result.value == "7"
+        assert floor_sum(5, 3, 2, 1) == 7
 
     def test_zero_n(self) -> None:
         req = FloorSumRequest(n=0, m=3, a=2, b=1)
@@ -111,6 +113,19 @@ class TestCongruenceBoxCount:
         # x=0: y=0,3; x=1: y=2,5; x=2: y=1,4; x=3: y=0,3; x=4: y=2,5; x=5: y=1,4
         # => 2 per x => 12 total
         assert result.count == 12
+        assert (
+            congruence_box_count(
+                x_lo=0,
+                x_hi=5,
+                y_lo=0,
+                y_hi=5,
+                u=1,
+                v=1,
+                c=0,
+                modulus=3,
+            )
+            == 12
+        )
 
     def test_rejects_oversized_box(self) -> None:
         import pytest

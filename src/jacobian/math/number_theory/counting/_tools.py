@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.counting._models import (
@@ -12,10 +13,34 @@ from jacobian.math.number_theory.counting._models import (
     FloorSumRequest,
     FloorSumResult,
 )
-from jacobian.math.number_theory.counting._operations import (
-    compute_congruence_box_count,
-    compute_floor_sum,
+from jacobian.math.number_theory.counting.operations import (
+    congruence_box_count,
+    floor_sum,
 )
+
+
+def compute_floor_sum(request: FloorSumRequest) -> FloorSumResult:
+    return FloorSumResult(
+        value=format_canonical_integer(
+            floor_sum(request.n, request.m, request.a, request.b)
+        )
+    )
+
+
+def compute_congruence_box_count(
+    request: CongruenceBoxCountRequest,
+) -> CongruenceBoxCountResult:
+    count = congruence_box_count(
+        x_lo=request.x_lo,
+        x_hi=request.x_hi,
+        y_lo=request.y_lo,
+        y_hi=request.y_hi,
+        u=request.u,
+        v=request.v,
+        c=request.c,
+        modulus=request.modulus,
+    )
+    return CongruenceBoxCountResult(count=count, modulus=request.modulus)
 
 
 def _op[

@@ -14,10 +14,15 @@ from jacobian.math.graphs.morphisms._models import (
     HomomorphismCheckRequest,
     HomomorphismCheckResult,
 )
-from jacobian.math.graphs.morphisms._operations import (
-    compute_homomorphism_check,
+from jacobian.math.graphs.morphisms._tools import (
+    TOOLS,
+    _compute_homomorphism_check,
 )
-from jacobian.math.graphs.morphisms._tools import TOOLS
+from jacobian.math.graphs.morphisms.operations import (
+    fixed_length_cycle,
+    homomorphism_check,
+    subgraph_pattern_find,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -40,6 +45,23 @@ def test_cycle_and_subgraph_metadata_state_the_representation_limit() -> None:
     assert "64 vertices" in subgraph.request_type.model_json_schema()["description"]
     assert "20 vertices" not in cycle.description
     assert "20 vertices" not in subgraph.description
+
+
+def test_native_operations_accept_canonical_graph_values() -> None:
+    graph = SimpleUndirectedGraph(
+        vertices=("a", "b", "c"),
+        edges=(("a", "b"), ("a", "c"), ("b", "c")),
+    )
+    vertex_map = _vertex_map(
+        ("a", "b", "c"),
+        graph.edges,
+        ("x", "y", "z"),
+        (("x", "y"), ("x", "z"), ("y", "z")),
+        (("a", "x"), ("b", "y"), ("c", "z")),
+    )
+    assert homomorphism_check(vertex_map).status == "HOMOMORPHISM"
+    assert fixed_length_cycle(graph, 3).decision == "EXISTS"
+    assert subgraph_pattern_find(graph, graph).decision == "EXISTS"
 
 
 def _vertex_map(
@@ -75,7 +97,9 @@ def test_homomorphism_check_returns_source_bound_checked_map() -> None:
         (("x", "y"),),
         (("a", "x"), ("b", "y")),
     )
-    result = compute_homomorphism_check(HomomorphismCheckRequest(vertex_map=vertex_map))
+    result = _compute_homomorphism_check(
+        HomomorphismCheckRequest(vertex_map=vertex_map)
+    )
     assert result.status == "HOMOMORPHISM"
     assert result.obstruction is None
     assert result.homomorphism == GraphHomomorphism(vertex_map=vertex_map)
@@ -89,7 +113,9 @@ def test_homomorphism_check_returns_first_edge_image_nonedge() -> None:
         (("x", "y"),),
         (("a", "x"), ("b", "x"), ("c", "y")),
     )
-    result = compute_homomorphism_check(HomomorphismCheckRequest(vertex_map=vertex_map))
+    result = _compute_homomorphism_check(
+        HomomorphismCheckRequest(vertex_map=vertex_map)
+    )
     assert result.status == "EDGE_IMAGE_NOT_EDGE"
     assert result.homomorphism is None
     assert result.obstruction == GraphHomomorphismObstruction(
@@ -107,7 +133,9 @@ def test_homomorphism_check_accepts_edgeless_noninjective_map() -> None:
         (),
         (("a", "x"), ("b", "x")),
     )
-    result = compute_homomorphism_check(HomomorphismCheckRequest(vertex_map=vertex_map))
+    result = _compute_homomorphism_check(
+        HomomorphismCheckRequest(vertex_map=vertex_map)
+    )
     assert result.status == "HOMOMORPHISM"
     assert result.homomorphism is not None
 
@@ -160,7 +188,7 @@ def test_homomorphism_check_orders_edge_obstructions_canonically() -> None:
             (("x", "y"),),
             (("a", "x"), ("b", "x"), ("c", "x")),
         )
-        result = compute_homomorphism_check(
+        result = _compute_homomorphism_check(
             HomomorphismCheckRequest(vertex_map=vertex_map)
         )
         assert result.obstruction is not None
@@ -182,7 +210,7 @@ def test_homomorphism_check_preflights_retained_result_bytes(
     small_limit = CanonicalLimits(max_output_bytes=400)
     monkeypatch.setattr(morphism_models, "CanonicalLimits", lambda: small_limit)
     monkeypatch.setattr(
-        "jacobian.math.graphs.morphisms._operations.CanonicalLimits",
+        "jacobian.math.graphs.morphisms.operations.CanonicalLimits",
         lambda: small_limit,
     )
 
@@ -194,7 +222,7 @@ def test_homomorphism_check_preflights_retained_result_bytes(
         (("a" * 100, "b" * 100),),
     )
     with pytest.raises(OperationDomainValidationError):
-        compute_homomorphism_check(HomomorphismCheckRequest(vertex_map=vertex_map))
+        _compute_homomorphism_check(HomomorphismCheckRequest(vertex_map=vertex_map))
 
 
 def _canonical_graph(
@@ -217,15 +245,15 @@ class TestFixedLengthCycle:
 
     def test_triangle_in_c4_with_chord(self) -> None:
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_fixed_length_cycle,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_fixed_length_cycle,
         )
 
         g = self._g(
             ["a", "b", "c", "d"],
             [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]],
         )
-        result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
+        result = _compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.decision == "EXISTS"
         assert len(result.cycle) == 3
         assert len(set(result.cycle)) == 3
@@ -243,27 +271,27 @@ class TestFixedLengthCycle:
 
     def test_plain_c4_has_no_triangle(self) -> None:
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_fixed_length_cycle,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_fixed_length_cycle,
         )
 
         g = self._g(
             ["a", "b", "c", "d"], [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]]
         )
-        result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
+        result = _compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.decision == "DOES_NOT_EXIST"
         assert result.cycle == ()
 
     def test_plain_c4_has_four_cycle(self) -> None:
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_fixed_length_cycle,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_fixed_length_cycle,
         )
 
         g = self._g(
             ["a", "b", "c", "d"], [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]]
         )
-        result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=4))
+        result = _compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=4))
         assert result.decision == "EXISTS"
         assert len(result.cycle) == 4
 
@@ -271,16 +299,16 @@ class TestFixedLengthCycle:
         # A graph with a 3-cycle and a 4-cycle: asking for length 4 still finds
         # the 4-cycle even though the girth is 3.
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_fixed_length_cycle,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_fixed_length_cycle,
         )
 
         g = self._g(
             ["a", "b", "c", "d"],
             [["a", "b"], ["a", "d"], ["b", "c"], ["a", "c"], ["c", "d"]],
         )
-        r3 = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
-        r4 = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=4))
+        r3 = _compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
+        r4 = _compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=4))
         assert r3.decision == "EXISTS"
         assert r4.decision == "EXISTS"
 
@@ -288,20 +316,20 @@ class TestFixedLengthCycle:
         import pytest
 
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_fixed_length_cycle,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_fixed_length_cycle,
         )
 
         g = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
         request = FixedLengthCycleRequest(graph=g, length=4)
         with pytest.raises(OperationDomainValidationError):
-            compute_fixed_length_cycle(request)
+            _compute_fixed_length_cycle(request)
 
     def test_composes_with_canonical_graph(self) -> None:
         # Verify direct composition with graph API: explicit_graph output can be passed unchanged.
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_fixed_length_cycle,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_fixed_length_cycle,
         )
         from jacobian.math.graphs.operations import explicit_graph
 
@@ -309,7 +337,7 @@ class TestFixedLengthCycle:
             vertices=("a", "b", "c"), edges=(("a", "b"), ("b", "c"), ("a", "c"))
         )
         # explicit_graph returns canonical SimpleUndirectedGraph; pass directly
-        result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
+        result = _compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.decision == "EXISTS"
 
     def test_oversized_length_is_rejected_before_exponentiating(self) -> None:
@@ -342,15 +370,15 @@ class TestFixedLengthCycle:
             FixedLengthCycleRequest,
             FixedLengthCycleResult,
         )
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_fixed_length_cycle,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_fixed_length_cycle,
         )
 
         # A path on 6 vertices has no triangle; the honest negative result
         # round-trips structurally within the admitted request domain.
         path_edges = [[chr(ord("a") + i), chr(ord("a") + i + 1)] for i in range(5)]
         g = self._g(list("abcdef"), path_edges)
-        result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
+        result = _compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.decision == "DOES_NOT_EXIST"
         revalidated = FixedLengthCycleResult(
             graph=g, decision=result.decision, length=result.length, cycle=result.cycle
@@ -412,8 +440,8 @@ class TestSubgraphPatternFind:
         from jacobian.math.graphs.morphisms._models import (
             SubgraphPatternFindRequest,
         )
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_subgraph_pattern_find,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_subgraph_pattern_find,
         )
 
         pat = self._g(["x", "y", "z"], [["x", "y"], ["x", "z"], ["y", "z"]])
@@ -421,7 +449,7 @@ class TestSubgraphPatternFind:
             ["a", "b", "c", "d"],
             [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]],
         )
-        result = compute_subgraph_pattern_find(
+        result = _compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=pat, host=host),
         )
         assert result.decision == "EXISTS"
@@ -442,13 +470,13 @@ class TestSubgraphPatternFind:
         from jacobian.math.graphs.morphisms._models import (
             SubgraphPatternFindRequest,
         )
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_subgraph_pattern_find,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_subgraph_pattern_find,
         )
 
         pat = self._g(["x", "y", "z"], [["x", "y"], ["y", "z"]])
         host = self._g(["a", "b", "c", "d"], [["a", "b"], ["c", "d"]])
-        result = compute_subgraph_pattern_find(
+        result = _compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=pat, host=host),
         )
         assert result.decision == "DOES_NOT_EXIST"
@@ -460,8 +488,8 @@ class TestSubgraphPatternFind:
         from jacobian.math.graphs.morphisms._models import (
             SubgraphPatternFindRequest,
         )
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_subgraph_pattern_find,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_subgraph_pattern_find,
         )
 
         pat = self._g(["x", "y", "z"], [["x", "y"], ["x", "z"], ["y", "z"]])
@@ -469,7 +497,7 @@ class TestSubgraphPatternFind:
             ["a", "b", "c", "d"],
             [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["b", "d"], ["c", "d"]],
         )
-        result = compute_subgraph_pattern_find(
+        result = _compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=pat, host=host),
         )
         assert result.decision == "EXISTS"
@@ -480,26 +508,26 @@ class TestSubgraphPatternFind:
         from jacobian.math.graphs.morphisms._models import (
             SubgraphPatternFindRequest,
         )
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_subgraph_pattern_find,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_subgraph_pattern_find,
         )
 
         pat = self._g(["x", "y", "z"], [["x", "y"], ["y", "z"]])
         host = self._g(["a", "b"], [["a", "b"]])
         request = SubgraphPatternFindRequest(pattern=pat, host=host)
         with pytest.raises(OperationDomainValidationError):
-            compute_subgraph_pattern_find(request)
+            _compute_subgraph_pattern_find(request)
 
     def test_composes_with_canonical_graph(self) -> None:
         from jacobian.math.graphs.morphisms._models import SubgraphPatternFindRequest
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_subgraph_pattern_find,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_subgraph_pattern_find,
         )
         from jacobian.math.graphs.operations import explicit_graph
 
         pat = explicit_graph(vertices=("x", "y"), edges=(("x", "y"),))
         host = explicit_graph(vertices=("a", "b", "c"), edges=(("a", "b"), ("b", "c")))
-        result = compute_subgraph_pattern_find(
+        result = _compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=pat, host=host)
         )
         assert result.decision == "EXISTS"
@@ -524,8 +552,8 @@ class TestSubgraphPatternFind:
         import pytest
 
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_fixed_length_cycle,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_fixed_length_cycle,
         )
 
         # An edgeless 20-vertex graph with one multi-megabyte NFC label fits
@@ -536,7 +564,7 @@ class TestSubgraphPatternFind:
         g = self._g(labels, [])
         request = FixedLengthCycleRequest(graph=g, length=3)
         with pytest.raises(OperationDomainValidationError):
-            compute_fixed_length_cycle(request)
+            _compute_fixed_length_cycle(request)
 
     def test_negative_decision_is_structural_inside_request_domain(self) -> None:
         import pytest
@@ -547,14 +575,14 @@ class TestSubgraphPatternFind:
             SubgraphPatternFindRequest,
             SubgraphPatternFindResult,
         )
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_subgraph_pattern_find,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_subgraph_pattern_find,
         )
 
         # An honest negative: a triangle pattern cannot embed in a path.
         pat = self._g(["x", "y", "z"], [["x", "y"], ["x", "z"], ["y", "z"]])
         host = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"]])
-        result = compute_subgraph_pattern_find(
+        result = _compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=pat, host=host),
         )
         assert result.decision == "DOES_NOT_EXIST"
@@ -604,8 +632,8 @@ class TestSubgraphPatternFindLabelCost:
             SubgraphPatternFindRequest,
             SubgraphPatternFindResult,
         )
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_subgraph_pattern_find,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_subgraph_pattern_find,
         )
 
         prefix = "n" * 4096
@@ -623,7 +651,7 @@ class TestSubgraphPatternFindLabelCost:
                 [f"{prefix}h6", f"{prefix}h7"],
             ],
         )
-        result = compute_subgraph_pattern_find(
+        result = _compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=pat, host=host),
         )
         assert result.decision == "DOES_NOT_EXIST"
@@ -636,7 +664,7 @@ class TestSubgraphPatternFindLabelCost:
             tuple(f"{prefix}q{i}" for i in range(8)),
             [[f"{prefix}q{i}", f"{prefix}q{4 + i}"] for i in range(4)],
         )
-        found = compute_subgraph_pattern_find(
+        found = _compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=smaller_pattern, host=host),
         )
         assert found.decision == "EXISTS"
@@ -663,8 +691,8 @@ class TestBacktrackingNodeBudget:
         from jacobian.math.graphs.morphisms._models import (
             SubgraphPatternFindRequest,
         )
-        from jacobian.math.graphs.morphisms._operations import (
-            compute_subgraph_pattern_find,
+        from jacobian.math.graphs.morphisms._tools import (
+            _compute_subgraph_pattern_find,
         )
         from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -675,7 +703,7 @@ class TestBacktrackingNodeBudget:
             vertices=self._complete(10).vertices, edges=host_edges
         )
         request = SubgraphPatternFindRequest(pattern=self._complete(10), host=host)
-        result = compute_subgraph_pattern_find(request)
+        result = _compute_subgraph_pattern_find(request)
         assert result.decision == "BUDGET_EXCEEDED"
         assert result.vertex_map == ()
         # The typed non-conclusion round-trips without a backend replay.

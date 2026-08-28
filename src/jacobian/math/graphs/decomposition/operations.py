@@ -9,20 +9,23 @@ from typing import Literal, cast
 import networkx as nx
 
 from jacobian.math.graphs.decomposition._models import (
-    BiconnectedComponentsRequest,
     BiconnectedComponentsResult,
-    BlockCutTreeRequest,
     BlockCutTreeResult,
-    BridgeBlockRequest,
     BridgeBlockResult,
-    EarDecompositionRequest,
     EarDecompositionResult,
     SPQRSkeleton,
-    SPQRTreeRequest,
     SPQRTreeResult,
 )
 from jacobian.math.graphs.multigraph._models import LooplessMultigraph, MultigraphEdge
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+
+__all__ = [
+    "biconnected_components",
+    "block_cut_tree",
+    "bridge_block_tree",
+    "ear_decomposition",
+    "spqr_tree",
+]
 
 
 def _build_graph(graph: IndexedSimpleUndirectedGraph) -> nx.Graph[int]:
@@ -39,7 +42,7 @@ def _build_graph(graph: IndexedSimpleUndirectedGraph) -> nx.Graph[int]:
     return g
 
 
-def compute_block_cut_tree(request: BlockCutTreeRequest) -> BlockCutTreeResult:
+def block_cut_tree(graph: IndexedSimpleUndirectedGraph) -> BlockCutTreeResult:
     """Compute the block-cut tree decomposition of an undirected graph.
 
     Uses ``nx.biconnected_components`` to identify the biconnected blocks
@@ -47,7 +50,7 @@ def compute_block_cut_tree(request: BlockCutTreeRequest) -> BlockCutTreeResult:
     constructs the bipartite block-cut tree: an edge connects a block to
     each articulation point it contains.
     """
-    g = _build_graph(request.graph)
+    g = _build_graph(graph)
     blocks = [
         frozenset(cast(set[int], component))
         for component in nx.biconnected_components(g)
@@ -67,14 +70,14 @@ def compute_block_cut_tree(request: BlockCutTreeRequest) -> BlockCutTreeResult:
     )
 
 
-def compute_bridge_block_tree(request: BridgeBlockRequest) -> BridgeBlockResult:
+def bridge_block_tree(graph: IndexedSimpleUndirectedGraph) -> BridgeBlockResult:
     """Compute the bridge-block (2-edge-connected component) decomposition.
 
     Uses ``nx.bridges`` to identify bridges.  Removing all bridges partitions
     the graph into its 2-edge-connected components; the bridge block tree
     connects two components whenever a bridge joins them.
     """
-    g = _build_graph(request.graph)
+    g = _build_graph(graph)
     bridges = list(cast(list[tuple[int, int]], nx.bridges(g)))
 
     # Contract each non-bridge edge to form the 2-edge-connected components.
@@ -110,9 +113,7 @@ def compute_bridge_block_tree(request: BridgeBlockRequest) -> BridgeBlockResult:
     )
 
 
-def compute_ear_decomposition(
-    request: EarDecompositionRequest,
-) -> EarDecompositionResult:
+def ear_decomposition(graph: IndexedSimpleUndirectedGraph) -> EarDecompositionResult:
     """Compute an open ear decomposition of a biconnected graph.
 
     NetworkX (3.6) does not expose a public ``ear_decomposition`` function, so
@@ -129,7 +130,7 @@ def compute_ear_decomposition(
     and each subsequent ear is a path.  This is the canonical open ear
     decomposition guaranteed to exist for any biconnected graph.
     """
-    g = _build_graph(request.graph)
+    g = _build_graph(graph)
 
     if g.number_of_nodes() < 2:
         return EarDecompositionResult(biconnected=True, ears=())
@@ -248,14 +249,14 @@ def _reconstruct_ear(
     return None
 
 
-def compute_biconnected_components(
-    request: BiconnectedComponentsRequest,
+def biconnected_components(
+    graph: IndexedSimpleUndirectedGraph,
 ) -> BiconnectedComponentsResult:
     """List all biconnected components of an undirected graph.
 
     Uses ``nx.biconnected_components`` directly.
     """
-    g = _build_graph(request.graph)
+    g = _build_graph(graph)
     components = [cast(set[int], c) for c in nx.biconnected_components(g)]
     return BiconnectedComponentsResult(
         components=tuple(tuple(sorted(component)) for component in components),
@@ -674,7 +675,7 @@ def _negative_spqr_result(graph: IndexedSimpleUndirectedGraph) -> SPQRTreeResult
     )
 
 
-def compute_spqr_tree(request: SPQRTreeRequest) -> SPQRTreeResult:
+def spqr_tree(graph: IndexedSimpleUndirectedGraph) -> SPQRTreeResult:
     """Compute a deterministic normalized full SPQR tree.
 
     The producer enumerates bounded vertex-pair split components, inserts
@@ -682,7 +683,6 @@ def compute_spqr_tree(request: SPQRTreeRequest) -> SPQRTreeResult:
     not use NetworkX as an SPQR backend: NetworkX only supplies the initial
     biconnectivity classification and connected-component primitive.
     """
-    graph = request.graph
     value = _build_graph(graph)
     if graph.vertex_count < 3 or not nx.is_biconnected(value):
         return _negative_spqr_result(graph)

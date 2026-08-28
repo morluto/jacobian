@@ -10,38 +10,47 @@ from jacobian.math.graphs.morphisms._models import (
     _RESULT_ENVELOPE_RESERVE_BYTES,
     MAX_CYCLE_SEARCH_PATHS,
     MORPHISM_MAX_VERTICES,
-    FixedLengthCycleRequest,
     FixedLengthCycleResult,
     GraphHomomorphism,
     GraphHomomorphismObstruction,
-    HomomorphismCheckRequest,
+    GraphVertexMap,
     HomomorphismCheckResult,
-    SubgraphPatternFindRequest,
     SubgraphPatternFindResult,
     _canonical_max_degree,
     _first_homomorphism_obstruction,
     _label_wire_bytes,
     _require_output_headroom,
 )
-from jacobian.math.graphs.values import simple_undirected_graph_wire_bytes
+from jacobian.math.graphs.values import (
+    SimpleUndirectedGraph,
+    simple_undirected_graph_wire_bytes,
+)
+
+__all__ = ["fixed_length_cycle", "homomorphism_check", "subgraph_pattern_find"]
 
 
-def _admit_cycle_request(request: FixedLengthCycleRequest) -> None:
+def _admit_cycle_request(graph: SimpleUndirectedGraph, length: int) -> None:
     """Admit the cross-field search and retained-result envelope."""
-    n = len(request.graph.vertices)
+    if type(length) is not int or length < 3:
+        raise OperationDomainValidationError(
+            location=("length",),
+            code="graph.cycle.length_bound",
+            message="cycle length must be an integer of at least 3",
+        )
+    n = len(graph.vertices)
     if n > MORPHISM_MAX_VERTICES:
         raise OperationDomainValidationError(
             location=("graph",),
             code="graph.cycle.vertex_bound",
             message=f"graph must have at most {MORPHISM_MAX_VERTICES} vertices",
         )
-    if request.length > n:
+    if length > n:
         raise OperationDomainValidationError(
             location=("length",),
             code="graph.cycle.length_bound",
             message="cycle length must not exceed the vertex count",
         )
-    work = n * (_canonical_max_degree(request.graph) ** (request.length - 1))
+    work = n * (_canonical_max_degree(graph) ** (length - 1))
     if work > MAX_CYCLE_SEARCH_PATHS:
         raise OperationDomainValidationError(
             location=("length",),
@@ -53,8 +62,8 @@ def _admit_cycle_request(request: FixedLengthCycleRequest) -> None:
         )
     try:
         _require_output_headroom(
-            simple_undirected_graph_wire_bytes(request.graph),
-            _label_wire_bytes(request.graph.vertices),
+            simple_undirected_graph_wire_bytes(graph),
+            _label_wire_bytes(graph.vertices),
             "fixed-length cycle",
         )
     except PydanticCustomError as exc:
@@ -63,9 +72,8 @@ def _admit_cycle_request(request: FixedLengthCycleRequest) -> None:
         ) from exc
 
 
-def _admit_homomorphism_request(request: HomomorphismCheckRequest) -> None:
+def _admit_homomorphism_request(vertex_map: GraphVertexMap) -> None:
     """Admit the source-bound result envelope for a map check."""
-    vertex_map = request.vertex_map
     max_label_bytes = max(
         (
             len(encode_strict_json(label))
@@ -91,16 +99,18 @@ def _admit_homomorphism_request(request: HomomorphismCheckRequest) -> None:
         )
 
 
-def _admit_subgraph_request(request: SubgraphPatternFindRequest) -> None:
+def _admit_subgraph_request(
+    pattern: SimpleUndirectedGraph, host: SimpleUndirectedGraph
+) -> None:
     """Admit the cross-field search and retained-result envelope."""
-    pattern_size = len(request.pattern.vertices)
+    pattern_size = len(pattern.vertices)
     if pattern_size > MORPHISM_MAX_VERTICES:
         raise OperationDomainValidationError(
             location=("pattern",),
             code="graph.subgraph.pattern_vertex_bound",
             message=f"pattern must have at most {MORPHISM_MAX_VERTICES} vertices",
         )
-    if pattern_size > len(request.host.vertices):
+    if pattern_size > len(host.vertices):
         raise OperationDomainValidationError(
             location=("pattern",),
             code="graph.subgraph.pattern_size_bound",
@@ -108,7 +118,7 @@ def _admit_subgraph_request(request: SubgraphPatternFindRequest) -> None:
         )
     assignments = 1
     for step in range(pattern_size):
-        assignments *= len(request.host.vertices) - step
+        assignments *= len(host.vertices) - step
         if assignments > MAX_CYCLE_SEARCH_PATHS:
             raise OperationDomainValidationError(
                 location=("pattern", "host"),
@@ -120,9 +130,9 @@ def _admit_subgraph_request(request: SubgraphPatternFindRequest) -> None:
             )
     try:
         _require_output_headroom(
-            simple_undirected_graph_wire_bytes(request.pattern)
-            + simple_undirected_graph_wire_bytes(request.host),
-            _label_wire_bytes(request.host.vertices),
+            simple_undirected_graph_wire_bytes(pattern)
+            + simple_undirected_graph_wire_bytes(host),
+            _label_wire_bytes(host.vertices),
             "subgraph-pattern",
         )
     except PydanticCustomError as exc:
@@ -133,21 +143,19 @@ def _admit_subgraph_request(request: SubgraphPatternFindRequest) -> None:
         ) from exc
 
 
-def compute_homomorphism_check(
-    request: HomomorphismCheckRequest,
-) -> HomomorphismCheckResult:
-    _admit_homomorphism_request(request)
-    obstruction = _first_homomorphism_obstruction(request.vertex_map)
+def homomorphism_check(vertex_map: GraphVertexMap) -> HomomorphismCheckResult:
+    _admit_homomorphism_request(vertex_map)
+    obstruction = _first_homomorphism_obstruction(vertex_map)
     if obstruction is None:
         return HomomorphismCheckResult._from_kernel(
             status="HOMOMORPHISM",
-            homomorphism=GraphHomomorphism(vertex_map=request.vertex_map),
+            homomorphism=GraphHomomorphism(vertex_map=vertex_map),
         )
     source_edge, image_vertices = obstruction
     return HomomorphismCheckResult._from_kernel(
         status="EDGE_IMAGE_NOT_EDGE",
         obstruction=GraphHomomorphismObstruction(
-            vertex_map=request.vertex_map,
+            vertex_map=vertex_map,
             source_edge=source_edge,
             image_vertices=image_vertices,
         ),
@@ -208,8 +216,8 @@ def find_cycle_of_length(
     return None
 
 
-def compute_fixed_length_cycle(
-    request: FixedLengthCycleRequest,
+def fixed_length_cycle(
+    graph: SimpleUndirectedGraph, length: int
 ) -> FixedLengthCycleResult:
     """Decide whether ``graph`` contains a simple cycle of length ``length``.
 
@@ -219,9 +227,8 @@ def compute_fixed_length_cycle(
     a subgraph and may have chords; this is distinct from girth (shortest
     cycle) and from Hamiltonicity (spanning).
     """
-    _admit_cycle_request(request)
-    graph = request.graph
-    k = request.length
+    _admit_cycle_request(graph, length)
+    k = length
     found = find_cycle_of_length(graph.vertices, graph.edges, k)
     if found is not None:
         return FixedLengthCycleResult._from_kernel(
@@ -373,8 +380,8 @@ def find_subgraph_embedding(
     return None
 
 
-def compute_subgraph_pattern_find(
-    request: SubgraphPatternFindRequest,
+def subgraph_pattern_find(
+    pattern: SimpleUndirectedGraph, host: SimpleUndirectedGraph
 ) -> SubgraphPatternFindResult:
     """Find an injective edge-preserving embedding of ``pattern`` in ``host``.
 
@@ -383,33 +390,33 @@ def compute_subgraph_pattern_find(
     Returns ``EXISTS`` with one witness vertex map (ordered by pattern vertex
     order) or ``DOES_NOT_EXIST`` after exhaustive bounded search.
     """
-    _admit_subgraph_request(request)
+    _admit_subgraph_request(pattern, host)
     try:
         found = find_subgraph_embedding(
-            request.pattern.vertices,
-            request.pattern.edges,
-            request.host.vertices,
-            request.host.edges,
+            pattern.vertices,
+            pattern.edges,
+            host.vertices,
+            host.edges,
             max_candidate_checks=MAX_CYCLE_SEARCH_PATHS,
         )
     except SearchBudgetExceededError:
         # A search stopped at its budget establishes nothing either way.
         return SubgraphPatternFindResult._from_kernel(
-            pattern=request.pattern,
-            host=request.host,
+            pattern=pattern,
+            host=host,
             decision="BUDGET_EXCEEDED",
             vertex_map=(),
         )
     if found is not None:
         return SubgraphPatternFindResult._from_kernel(
-            pattern=request.pattern,
-            host=request.host,
+            pattern=pattern,
+            host=host,
             decision="EXISTS",
-            vertex_map=tuple(request.host.vertices[i] for i in found),
+            vertex_map=tuple(host.vertices[i] for i in found),
         )
     return SubgraphPatternFindResult._from_kernel(
-        pattern=request.pattern,
-        host=request.host,
+        pattern=pattern,
+        host=host,
         decision="DOES_NOT_EXIST",
         vertex_map=(),
     )

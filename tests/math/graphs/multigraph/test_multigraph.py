@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.multigraph import _operations as multigraph_operations
+from jacobian.math.graphs.multigraph import operations as multigraph_operations
 from jacobian.math.graphs.multigraph._models import (
     MAX_CYCLE_EDGE_INCIDENCES,
     MAX_CYCLE_LENGTH,
@@ -33,11 +33,17 @@ from jacobian.math.graphs.multigraph._models import (
     _compute_divergence_ledger,
     _FlowSearchOutcome,
 )
-from jacobian.math.graphs.multigraph._operations import (
-    check_cycle_multicover,
-    check_multigraph_flow,
-    compute_eulerian_cycles,
-    find_multigraph_flow,
+from jacobian.math.graphs.multigraph._tools import (
+    _compute_cycle_multicover,
+    _compute_eulerian_cycles,
+    _compute_multigraph_flow_check,
+    _compute_multigraph_flow_find,
+)
+from jacobian.math.graphs.multigraph.operations import (
+    cycle_multicover,
+    eulerian_cycles,
+    multigraph_flow_check,
+    multigraph_flow_find,
 )
 
 # ---------------------------------------------------------------------------
@@ -95,12 +101,37 @@ Z3 = FiniteAbelianGroup(moduli=(3,))
 Z2CUBED = FiniteAbelianGroup(moduli=(2, 2, 2))
 
 
+def test_native_operations_accept_canonical_values() -> None:
+    flow = tuple(
+        FlowEdgeAssignment(
+            edge_id=edge.edge_id,
+            orientation="left_to_right",
+            value=(1,),
+        )
+        for edge in TRIANGLE.edges
+    )
+    assert multigraph_flow_check(TRIANGLE, Z3, flow).conservation_holds
+    found = multigraph_flow_find(
+        TRIANGLE,
+        Z3,
+        MultigraphFlowSearchBudget(max_states=1000, require_nowhere_zero=True),
+    )
+    assert found.status == "FOUND"
+    eulerian = eulerian_cycles(TRIANGLE)
+    assert eulerian.covers_all
+    assert cycle_multicover(
+        TRIANGLE,
+        (CycleRecord(vertices=(0, 1, 2, 0), edge_ids=("e0", "e1", "e2")),),
+        1,
+    ).is_exact_k_cover
+
+
 def _flow_check(
     graph: LooplessMultigraph,
     group: FiniteAbelianGroup,
     edge_values: tuple[FlowEdgeAssignment, ...],
 ) -> MultigraphFlowCheckResult:
-    return check_multigraph_flow(
+    return _compute_multigraph_flow_check(
         MultigraphFlowCheckRequest(graph=graph, group=group, edge_values=edge_values)
     )
 
@@ -110,7 +141,7 @@ def _flow_find(
     group: FiniteAbelianGroup,
     **kwargs: object,
 ) -> MultigraphFlowFindResult:
-    return find_multigraph_flow(
+    return _compute_multigraph_flow_find(
         MultigraphFlowFindRequest.model_validate(
             {"graph": graph.model_dump(), "group": group.model_dump(), **kwargs}
         )
@@ -307,7 +338,7 @@ class TestOrientationReversalWithoutNegation:
 class TestEulerianDecomposition:
     def test_triangle_eulerian(self) -> None:
         """Fixture 7: a valid Eulerian cycle decomposition of a triangle."""
-        result = compute_eulerian_cycles(EulerianCyclesRequest(graph=TRIANGLE))
+        result = _compute_eulerian_cycles(EulerianCyclesRequest(graph=TRIANGLE))
         assert result.covers_all
         assert len(result.cycles) >= 1
         # Every edge should have usage 1
@@ -320,7 +351,7 @@ class TestEulerianDecomposition:
     def test_non_eulerian_returns_empty(self) -> None:
         """A graph with odd-degree vertices is not Eulerian."""
         # Bridge graph has odd-degree vertices
-        result = compute_eulerian_cycles(EulerianCyclesRequest(graph=BRIDGE_GRAPH))
+        result = _compute_eulerian_cycles(EulerianCyclesRequest(graph=BRIDGE_GRAPH))
         assert not result.covers_all
         assert len(result.cycles) == 0
 
@@ -337,13 +368,13 @@ class TestEulerianDecomposition:
                 MultigraphEdge(edge_id="f", left=5, right=3),
             ),
         )
-        result = compute_eulerian_cycles(EulerianCyclesRequest(graph=two_triangles))
+        result = _compute_eulerian_cycles(EulerianCyclesRequest(graph=two_triangles))
         assert result.covers_all
         assert len(result.cycles) == 2
 
     def test_edge_subset(self) -> None:
         """An explicit edge subset that is Eulerian should decompose."""
-        result = compute_eulerian_cycles(
+        result = _compute_eulerian_cycles(
             EulerianCyclesRequest(graph=TRIANGLE, edge_subset=("e0", "e1", "e2"))
         )
         assert result.covers_all
@@ -351,7 +382,7 @@ class TestEulerianDecomposition:
 
     def test_empty_edge_set(self) -> None:
         """An empty edge set trivially decomposes."""
-        result = compute_eulerian_cycles(
+        result = _compute_eulerian_cycles(
             EulerianCyclesRequest(graph=TRIANGLE, edge_subset=())
         )
         assert result.covers_all
@@ -366,7 +397,7 @@ class TestEulerianDecomposition:
                 for i in range(64)
             ),
         )
-        result = compute_eulerian_cycles(EulerianCyclesRequest(graph=ring))
+        result = _compute_eulerian_cycles(EulerianCyclesRequest(graph=ring))
         assert result.covers_all
         assert len(result.cycles) == 1
         cycle = result.cycles[0]
@@ -388,7 +419,7 @@ class TestCycleMulticoverDoubleCover:
             CycleRecord(vertices=(0, 1, 2, 0), edge_ids=("e0", "e1", "e2")),
             CycleRecord(vertices=(0, 2, 1, 0), edge_ids=("e2", "e1", "e0")),
         )
-        result = check_cycle_multicover(
+        result = _compute_cycle_multicover(
             CycleMulticoverRequest(graph=TRIANGLE, cycles=cycles, target_multiplicity=2)
         )
         assert result.is_exact_k_cover
@@ -430,7 +461,7 @@ class TestCycleMulticoverMissingOver:
             CycleRecord(vertices=(0, 1, 2, 0), edge_ids=("b", "c", "d")),
             CycleRecord(vertices=(0, 1, 2, 0), edge_ids=("a", "c", "d")),
         )
-        result = check_cycle_multicover(
+        result = _compute_cycle_multicover(
             CycleMulticoverRequest(
                 graph=PARALLEL_TRIANGLE, cycles=cycles, target_multiplicity=2
             )
@@ -463,7 +494,7 @@ class TestMalformedCycle:
                 edge_ids=("e0", "e1", "e2"),
             ),
         )
-        result = check_cycle_multicover(
+        result = _compute_cycle_multicover(
             CycleMulticoverRequest(graph=TRIANGLE, cycles=cycles, target_multiplicity=1)
         )
         assert not all(result.cycle_validity)
@@ -567,11 +598,11 @@ class TestCdcLeanConstruction:
 
         # The support of a nonzero flow gives an Eulerian subgraph.
         # Decompose the full graph into cycles.
-        eulerian = compute_eulerian_cycles(EulerianCyclesRequest(graph=TRIANGLE))
+        eulerian = _compute_eulerian_cycles(EulerianCyclesRequest(graph=TRIANGLE))
         assert eulerian.covers_all
 
         # Check that the Eulerian decomposition is a 1-cover
-        cover_result = check_cycle_multicover(
+        cover_result = _compute_cycle_multicover(
             CycleMulticoverRequest(
                 graph=TRIANGLE,
                 cycles=eulerian.cycles,
@@ -662,7 +693,7 @@ class TestModelValidation:
             target_multiplicity=1,
         )
         with pytest.raises(OperationDomainValidationError) as exc_info:
-            check_cycle_multicover(request)
+            _compute_cycle_multicover(request)
         assert exc_info.value.errors()[0]["type"] == (
             "graph.total_cycle_edge_incidences_exceed_max_cycle"
         )
@@ -686,12 +717,12 @@ class TestMulticoverInvariance:
         """A cycle rotation does not change the multiplicity profile."""
         original = CycleRecord(vertices=(0, 1, 2, 0), edge_ids=("e0", "e1", "e2"))
         rotated = CycleRecord(vertices=(1, 2, 0, 1), edge_ids=("e1", "e2", "e0"))
-        r1 = check_cycle_multicover(
+        r1 = _compute_cycle_multicover(
             CycleMulticoverRequest(
                 graph=TRIANGLE, cycles=(original,), target_multiplicity=1
             )
         )
-        r2 = check_cycle_multicover(
+        r2 = _compute_cycle_multicover(
             CycleMulticoverRequest(
                 graph=TRIANGLE, cycles=(rotated,), target_multiplicity=1
             )
@@ -703,12 +734,12 @@ class TestMulticoverInvariance:
         """A cycle reversal does not change the multiplicity profile."""
         original = CycleRecord(vertices=(0, 1, 2, 0), edge_ids=("e0", "e1", "e2"))
         reversed_cycle = CycleRecord(vertices=(0, 2, 1, 0), edge_ids=("e2", "e1", "e0"))
-        r1 = check_cycle_multicover(
+        r1 = _compute_cycle_multicover(
             CycleMulticoverRequest(
                 graph=TRIANGLE, cycles=(original,), target_multiplicity=1
             )
         )
-        r2 = check_cycle_multicover(
+        r2 = _compute_cycle_multicover(
             CycleMulticoverRequest(
                 graph=TRIANGLE, cycles=(reversed_cycle,), target_multiplicity=1
             )
@@ -750,7 +781,7 @@ class TestSourceBinding:
                 max_states=1_000_000, require_nowhere_zero=True
             ),
         )
-        result = find_multigraph_flow(request)
+        result = _compute_multigraph_flow_find(request)
         assert result.status == "EXHAUSTED"
         assert MultigraphFlowFindResult.model_validate(result.model_dump()) == result
 
@@ -778,7 +809,7 @@ class TestSourceBinding:
                 max_states=1024, require_nowhere_zero=True
             ),
         )
-        result = find_multigraph_flow(request)
+        result = _compute_multigraph_flow_find(request)
         assert result.status == "FOUND"
         assert result.flow is not None
         assert len(result.flow) == 3
@@ -794,7 +825,7 @@ class TestEulerianSourceRequired:
 
     def test_genuine_decomposition_roundtrips(self) -> None:
         request = EulerianCyclesRequest(graph=SQUARE)
-        result = compute_eulerian_cycles(request)
+        result = _compute_eulerian_cycles(request)
         rebuilt = EulerianCyclesResult.model_validate(result.model_dump())
         assert rebuilt == result
 
@@ -804,7 +835,7 @@ class TestEulerianSubsetDuplicates:
         """Duplicate edge IDs must be rejected before set conversion so the
         retained multiset cannot differ from the admitted request subset."""
         request = EulerianCyclesRequest(graph=TRIANGLE)
-        result = compute_eulerian_cycles(request)
+        result = _compute_eulerian_cycles(request)
         payload = result.model_dump()
         payload["edge_subset"] = ["e0", "e0", "e1", "e2"]
         with pytest.raises(ValidationError):
@@ -817,7 +848,7 @@ class TestEulerianSubsetDuplicates:
 
 class TestEulerianParity:
     def test_non_eulerian_genuine_result_roundtrips(self) -> None:
-        result = compute_eulerian_cycles(EulerianCyclesRequest(graph=BRIDGE_GRAPH))
+        result = _compute_eulerian_cycles(EulerianCyclesRequest(graph=BRIDGE_GRAPH))
         assert not result.covers_all and result.cycles == ()
         rebuilt = EulerianCyclesResult.model_validate(result.model_dump())
         assert rebuilt == result
@@ -834,7 +865,7 @@ class TestEulerianParity:
                 MultigraphEdge(edge_id="b2", left=4, right=0),
             ),
         )
-        result = compute_eulerian_cycles(EulerianCyclesRequest(graph=graph))
+        result = _compute_eulerian_cycles(EulerianCyclesRequest(graph=graph))
         assert result.covers_all and len(result.cycles) == 2
         rebuilt = EulerianCyclesResult.model_validate(result.model_dump())
         assert rebuilt == result
@@ -989,7 +1020,7 @@ class TestEulerianSubsetParityContractPublished:
     def test_odd_parity_subset_is_accepted_and_returns_empty(self) -> None:
         """A two-edge path has odd induced degrees; the request is valid and
         returns the typed empty decomposition with covers_all=False."""
-        result = compute_eulerian_cycles(
+        result = _compute_eulerian_cycles(
             EulerianCyclesRequest(graph=TRIANGLE, edge_subset=("e0", "e1"))
         )
         assert result.cycles == ()

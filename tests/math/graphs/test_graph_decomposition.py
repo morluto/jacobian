@@ -17,12 +17,12 @@ from jacobian.math.graphs.decomposition._models import (
     SPQRTreeRequest,
     SPQRTreeResult,
 )
-from jacobian.math.graphs.decomposition._operations import (
-    compute_biconnected_components,
-    compute_block_cut_tree,
-    compute_bridge_block_tree,
-    compute_ear_decomposition,
-    compute_spqr_tree,
+from jacobian.math.graphs.decomposition.operations import (
+    biconnected_components,
+    block_cut_tree,
+    bridge_block_tree,
+    ear_decomposition,
+    spqr_tree,
 )
 from jacobian.math.graphs.multigraph._models import LooplessMultigraph
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
@@ -33,33 +33,29 @@ from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 
 def _block_cut_tree(graph: dict[str, object]) -> BlockCutTreeResult:
-    return compute_block_cut_tree(
-        BlockCutTreeRequest.model_validate({"graph": graph}),
-    )
+    return block_cut_tree(BlockCutTreeRequest.model_validate({"graph": graph}).graph)
 
 
 def _bridge_block_tree(graph: dict[str, object]) -> BridgeBlockResult:
-    return compute_bridge_block_tree(
-        BridgeBlockRequest.model_validate({"graph": graph}),
-    )
+    return bridge_block_tree(BridgeBlockRequest.model_validate({"graph": graph}).graph)
 
 
 def _ear_decomposition(graph: dict[str, object]) -> EarDecompositionResult:
-    return compute_ear_decomposition(
-        EarDecompositionRequest.model_validate({"graph": graph}),
+    return ear_decomposition(
+        EarDecompositionRequest.model_validate({"graph": graph}).graph
     )
 
 
 def _biconnected_components(
     graph: dict[str, object],
 ) -> BiconnectedComponentsResult:
-    return compute_biconnected_components(
-        BiconnectedComponentsRequest.model_validate({"graph": graph}),
+    return biconnected_components(
+        BiconnectedComponentsRequest.model_validate({"graph": graph}).graph
     )
 
 
 def _spqr_tree(graph: dict[str, object]) -> SPQRTreeResult:
-    return compute_spqr_tree(SPQRTreeRequest.model_validate({"graph": graph}))
+    return spqr_tree(SPQRTreeRequest.model_validate({"graph": graph}).graph)
 
 
 def _edges_as_sets(

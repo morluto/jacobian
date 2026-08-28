@@ -14,11 +14,29 @@ from jacobian.math.graphs.morphisms._models import (
     SubgraphPatternFindRequest,
     SubgraphPatternFindResult,
 )
-from jacobian.math.graphs.morphisms._operations import (
-    compute_fixed_length_cycle,
-    compute_homomorphism_check,
-    compute_subgraph_pattern_find,
+from jacobian.math.graphs.morphisms.operations import (
+    fixed_length_cycle,
+    homomorphism_check,
+    subgraph_pattern_find,
 )
+
+
+def _compute_homomorphism_check(
+    request: HomomorphismCheckRequest,
+) -> HomomorphismCheckResult:
+    return homomorphism_check(request.vertex_map)
+
+
+def _compute_fixed_length_cycle(
+    request: FixedLengthCycleRequest,
+) -> FixedLengthCycleResult:
+    return fixed_length_cycle(request.graph, request.length)
+
+
+def _compute_subgraph_pattern_find(
+    request: SubgraphPatternFindRequest,
+) -> SubgraphPatternFindResult:
+    return subgraph_pattern_find(request.pattern, request.host)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -95,7 +113,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "first source edge whose image is not a target edge.",
         HomomorphismCheckRequest,
         HomomorphismCheckResult,
-        compute_homomorphism_check,
+        _compute_homomorphism_check,
         "graph",
         "homomorphism",
         "exact",
@@ -133,7 +151,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "`SimpleUndirectedGraph` so `explicit_graph` output composes directly.",
         FixedLengthCycleRequest,
         FixedLengthCycleResult,
-        compute_fixed_length_cycle,
+        _compute_fixed_length_cycle,
         "graph",
         "cycle",
         "subgraph",
@@ -170,7 +188,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "graphs and the result envelope must fit the canonical output limit.",
         SubgraphPatternFindRequest,
         SubgraphPatternFindResult,
-        compute_subgraph_pattern_find,
+        _compute_subgraph_pattern_find,
         "graph",
         "subgraph",
         "monomorphism",

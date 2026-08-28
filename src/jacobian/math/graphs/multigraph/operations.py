@@ -15,18 +15,14 @@ import networkx as nx
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.multigraph._models import (
     MAX_CYCLE_EDGE_INCIDENCES,
-    CycleMulticoverRequest,
     CycleMulticoverResult,
     CycleRecord,
-    EulerianCyclesRequest,
     EulerianCyclesResult,
     FiniteAbelianGroup,
     FlowEdgeAssignment,
     LooplessMultigraph,
     MultigraphEdge,
-    MultigraphFlowCheckRequest,
     MultigraphFlowCheckResult,
-    MultigraphFlowFindRequest,
     MultigraphFlowFindResult,
     MultigraphFlowSearchBudget,
     _compute_divergence_ledger,
@@ -35,10 +31,10 @@ from jacobian.math.graphs.multigraph._models import (
 from jacobian.math.graphs.multigraph._orientation import oriented_endpoints
 
 __all__ = [
-    "check_cycle_multicover",
-    "check_multigraph_flow",
-    "compute_eulerian_cycles",
-    "find_multigraph_flow",
+    "cycle_multicover",
+    "eulerian_cycles",
+    "multigraph_flow_check",
+    "multigraph_flow_find",
 ]
 
 
@@ -47,8 +43,10 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
-def check_multigraph_flow(
-    request: MultigraphFlowCheckRequest,
+def multigraph_flow_check(
+    graph: LooplessMultigraph,
+    group: FiniteAbelianGroup,
+    edge_values: tuple[FlowEdgeAssignment, ...],
 ) -> MultigraphFlowCheckResult:
     """Check a finite-Abelian flow by recomputing every vertex sum exactly.
 
@@ -56,15 +54,12 @@ def check_multigraph_flow(
     minus the sum of incoming flow values (componentwise modular arithmetic).
     Conservation holds when every vertex divergence is the zero element.
     """
-    graph = request.graph
-    group = request.group
-
     divergence_ledger, conservation_holds = _compute_divergence_ledger(
-        graph, group, request.edge_values
+        graph, group, edge_values
     )
     # Identify zero-valued edges
     zero_edge_ids = [
-        assign.edge_id for assign in request.edge_values if group.is_zero(assign.value)
+        assign.edge_id for assign in edge_values if group.is_zero(assign.value)
     ]
     zero_edge_ids.sort()
     nowhere_zero = len(zero_edge_ids) == 0
@@ -72,7 +67,7 @@ def check_multigraph_flow(
     return MultigraphFlowCheckResult._from_kernel(
         graph=graph,
         group=group,
-        edge_flow_records=request.edge_values,
+        edge_flow_records=edge_values,
         divergence_ledger=divergence_ledger,
         zero_edge_ids=tuple(zero_edge_ids),
         nowhere_zero=nowhere_zero,
@@ -303,8 +298,10 @@ def _search_flow_unbound(
     return _search_dfs(graph, group, choices_per_edge, resource_budget.max_states)
 
 
-def find_multigraph_flow(
-    request: MultigraphFlowFindRequest,
+def multigraph_flow_find(
+    graph: LooplessMultigraph,
+    group: FiniteAbelianGroup,
+    resource_budget: MultigraphFlowSearchBudget,
 ) -> MultigraphFlowFindResult:
     """Search for a finite-Abelian flow on a loopless multigraph.
 
@@ -316,11 +313,11 @@ def find_multigraph_flow(
     complete space is covered with no witness, the result is ``EXHAUSTED``.
     """
 
-    inner = _search_flow_unbound(request.graph, request.group, request.resource_budget)
+    inner = _search_flow_unbound(graph, group, resource_budget)
     return MultigraphFlowFindResult._from_kernel(
-        graph=request.graph,
-        group=request.group,
-        resource_budget=request.resource_budget,
+        graph=graph,
+        group=group,
+        resource_budget=resource_budget,
         status=inner.status,
         flow=inner.flow,
         states_explored=inner.states_explored,
@@ -415,8 +412,9 @@ def _decompose_circuit_into_simple_cycles(
     return cycles
 
 
-def compute_eulerian_cycles(
-    request: EulerianCyclesRequest,
+def eulerian_cycles(
+    graph: LooplessMultigraph,
+    edge_subset: tuple[str, ...] | None = None,
 ) -> EulerianCyclesResult:
     """Decompose an edge multiset into edge-disjoint cycles.
 
@@ -425,16 +423,30 @@ def compute_eulerian_cycles(
     has odd degree), the result is an empty decomposition with
     ``covers_all=False``.
     """
-    graph = request.graph
-    if request.edge_subset is not None:
-        edge_ids = list(request.edge_subset)
+    if edge_subset is not None:
+        edge_ids = list(edge_subset)
     else:
         edge_ids = [edge.edge_id for edge in graph.edges]
+
+    graph_ids = graph.edge_id_set
+    if len(set(edge_ids)) != len(edge_ids):
+        raise OperationDomainValidationError(
+            location=("edge_subset",),
+            code="graph.edge_subset_must_not_repeat_edge_ids",
+            message="edge_subset must not repeat edge IDs",
+        )
+    unknown_ids = sorted(set(edge_ids) - graph_ids)
+    if unknown_ids:
+        raise OperationDomainValidationError(
+            location=("edge_subset",),
+            code="graph.edge_subset_contains_unknown_edge_ids",
+            message=f"edge_subset contains unknown edge IDs: {unknown_ids}",
+        )
 
     if not edge_ids:
         return EulerianCyclesResult._from_kernel(
             graph=graph,
-            edge_subset=request.edge_subset,
+            edge_subset=edge_subset,
             cycles=(),
             edge_usage=(),
             covers_all=True,
@@ -449,7 +461,7 @@ def compute_eulerian_cycles(
     if any(d % 2 != 0 for d in degree.values()):
         return EulerianCyclesResult._from_kernel(
             graph=graph,
-            edge_subset=request.edge_subset,
+            edge_subset=edge_subset,
             cycles=(),
             edge_usage=tuple((eid, 0) for eid in sorted(edge_ids)),
             covers_all=False,
@@ -482,7 +494,7 @@ def compute_eulerian_cycles(
 
     return EulerianCyclesResult._from_kernel(
         graph=graph,
-        edge_subset=request.edge_subset,
+        edge_subset=edge_subset,
         cycles=tuple(all_cycles),
         edge_usage=usage_tuple,
         covers_all=covers_all,
@@ -494,8 +506,10 @@ def compute_eulerian_cycles(
 # ---------------------------------------------------------------------------
 
 
-def check_cycle_multicover(
-    request: CycleMulticoverRequest,
+def cycle_multicover(
+    graph: LooplessMultigraph,
+    cycles: tuple[CycleRecord, ...],
+    target_multiplicity: int,
 ) -> CycleMulticoverResult:
     """Check that a cycle family covers each edge exactly ``k`` times.
 
@@ -504,7 +518,7 @@ def check_cycle_multicover(
     in the graph.  Cycles may appear in any ordering, rotation, or reversal.
     The operation scores per-edge multiplicity.
     """
-    total_incidences = sum(len(cycle.edge_ids) for cycle in request.cycles)
+    total_incidences = sum(len(cycle.edge_ids) for cycle in cycles)
     if total_incidences > MAX_CYCLE_EDGE_INCIDENCES:
         raise OperationDomainValidationError(
             location=("cycles",),
@@ -512,13 +526,12 @@ def check_cycle_multicover(
             message=(f"total cycle-edge incidences exceed {MAX_CYCLE_EDGE_INCIDENCES}"),
         )
 
-    graph = request.graph
-    k = request.target_multiplicity
+    k = target_multiplicity
 
     edge_multiplicity: dict[str, int] = {edge.edge_id: 0 for edge in graph.edges}
     cycle_validity: list[bool] = []
 
-    for cycle in request.cycles:
+    for cycle in cycles:
         cycle_valid = True
         for i, eid in enumerate(cycle.edge_ids):
             edge_valid = True
@@ -550,7 +563,7 @@ def check_cycle_multicover(
 
     return CycleMulticoverResult._from_kernel(
         graph=graph,
-        cycles=request.cycles,
+        cycles=cycles,
         target_multiplicity=k,
         cycle_validity=tuple(cycle_validity),
         edge_multiplicity=multiplicity_tuple,

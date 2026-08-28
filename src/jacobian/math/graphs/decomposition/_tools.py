@@ -18,13 +18,37 @@ from jacobian.math.graphs.decomposition._models import (
     SPQRTreeRequest,
     SPQRTreeResult,
 )
-from jacobian.math.graphs.decomposition._operations import (
-    compute_biconnected_components,
-    compute_block_cut_tree,
-    compute_bridge_block_tree,
-    compute_ear_decomposition,
-    compute_spqr_tree,
+from jacobian.math.graphs.decomposition.operations import (
+    biconnected_components,
+    block_cut_tree,
+    bridge_block_tree,
+    ear_decomposition,
+    spqr_tree,
 )
+
+
+def _compute_biconnected_components(
+    request: BiconnectedComponentsRequest,
+) -> BiconnectedComponentsResult:
+    return biconnected_components(request.graph)
+
+
+def _compute_block_cut_tree(request: BlockCutTreeRequest) -> BlockCutTreeResult:
+    return block_cut_tree(request.graph)
+
+
+def _compute_bridge_block_tree(request: BridgeBlockRequest) -> BridgeBlockResult:
+    return bridge_block_tree(request.graph)
+
+
+def _compute_ear_decomposition(
+    request: EarDecompositionRequest,
+) -> EarDecompositionResult:
+    return ear_decomposition(request.graph)
+
+
+def _compute_spqr_tree(request: SPQRTreeRequest) -> SPQRTreeResult:
+    return spqr_tree(request.graph)
 
 
 def graph_decomposition_operation[
@@ -63,7 +87,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         " the biconnected minimum-size convention returns a concrete witness.",
         SPQRTreeRequest,
         SPQRTreeResult,
-        compute_spqr_tree,
+        _compute_spqr_tree,
         "graph",
         "decomposition",
         "spqr",
@@ -96,7 +120,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Decompose an undirected graph into its biconnected components (blocks) and articulation points using NetworkX. Returns the blocks, the articulation points, and the edges of the bipartite block-cut tree joining each block to the articulation points it contains.",
         BlockCutTreeRequest,
         BlockCutTreeResult,
-        compute_block_cut_tree,
+        _compute_block_cut_tree,
         "graph",
         "decomposition",
         "block-cut",
@@ -127,7 +151,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Decompose an undirected graph into its 2-edge-connected components (bridge-blocks) using NetworkX. Returns the components, the bridges as normalised (u, v) pairs, and the edges of the bridge block tree joining adjacent components across each bridge.",
         BridgeBlockRequest,
         BridgeBlockResult,
-        compute_bridge_block_tree,
+        _compute_bridge_block_tree,
         "graph",
         "decomposition",
         "bridge",
@@ -159,7 +183,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute an open ear decomposition of a biconnected undirected graph. The first ear is a cycle and each subsequent ear is a path whose internal vertices are disjoint from all earlier ears. A graph that is not biconnected returns biconnected=false and no ears.",
         EarDecompositionRequest,
         EarDecompositionResult,
-        compute_ear_decomposition,
+        _compute_ear_decomposition,
         "graph",
         "decomposition",
         "ear",
@@ -188,7 +212,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "List all biconnected components of an undirected graph. Each component is returned as a sorted tuple of vertices.",
         BiconnectedComponentsRequest,
         BiconnectedComponentsResult,
-        compute_biconnected_components,
+        _compute_biconnected_components,
         "graph",
         "decomposition",
         "biconnected",

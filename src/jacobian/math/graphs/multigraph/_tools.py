@@ -16,12 +16,36 @@ from jacobian.math.graphs.multigraph._models import (
     MultigraphFlowFindRequest,
     MultigraphFlowFindResult,
 )
-from jacobian.math.graphs.multigraph._operations import (
-    check_cycle_multicover,
-    check_multigraph_flow,
-    compute_eulerian_cycles,
-    find_multigraph_flow,
+from jacobian.math.graphs.multigraph.operations import (
+    cycle_multicover,
+    eulerian_cycles,
+    multigraph_flow_check,
+    multigraph_flow_find,
 )
+
+
+def _compute_multigraph_flow_check(
+    request: MultigraphFlowCheckRequest,
+) -> MultigraphFlowCheckResult:
+    return multigraph_flow_check(request.graph, request.group, request.edge_values)
+
+
+def _compute_multigraph_flow_find(
+    request: MultigraphFlowFindRequest,
+) -> MultigraphFlowFindResult:
+    return multigraph_flow_find(request.graph, request.group, request.resource_budget)
+
+
+def _compute_eulerian_cycles(
+    request: EulerianCyclesRequest,
+) -> EulerianCyclesResult:
+    return eulerian_cycles(request.graph, request.edge_subset)
+
+
+def _compute_cycle_multicover(
+    request: CycleMulticoverRequest,
+) -> CycleMulticoverResult:
+    return cycle_multicover(request.graph, request.cycles, request.target_multiplicity)
 
 
 def multigraph_operation[
@@ -69,7 +93,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         " explicit edge IDs.",
         MultigraphFlowCheckRequest,
         MultigraphFlowCheckResult,
-        check_multigraph_flow,
+        _compute_multigraph_flow_check,
         "graph",
         "multigraph",
         "flow",
@@ -114,7 +138,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         " and orientations.",
         MultigraphFlowFindRequest,
         MultigraphFlowFindResult,
-        find_multigraph_flow,
+        _compute_multigraph_flow_find,
         "graph",
         "multigraph",
         "flow",
@@ -147,7 +171,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         " covers_all=False.",
         EulerianCyclesRequest,
         EulerianCyclesResult,
-        compute_eulerian_cycles,
+        _compute_eulerian_cycles,
         "graph",
         "multigraph",
         "eulerian",
@@ -178,7 +202,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         " profile, missing and overcovered edges, and the exact-k-cover flag.",
         CycleMulticoverRequest,
         CycleMulticoverResult,
-        check_cycle_multicover,
+        _compute_cycle_multicover,
         "graph",
         "multigraph",
         "cycle",

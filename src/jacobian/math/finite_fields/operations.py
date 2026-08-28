@@ -139,9 +139,17 @@ def restrict_scalars(
     """Construct ``B -> B^T b`` over the exact prime-field coordinate basis."""
 
     if direction.presentation != subspace.presentation:
-        raise ValueError("direction and subspace must share their field presentation")
+        raise OperationDomainValidationError(
+            location=("direction", "presentation"),
+            code="finite_field.direction_presentation_mismatch",
+            message="direction and subspace must share their field presentation",
+        )
     if direction.axis != subspace.row_axis:
-        raise ValueError("direction axis must match the subspace matrix row axis")
+        raise OperationDomainValidationError(
+            location=("direction", "axis"),
+            code="finite_field.direction_axis_mismatch",
+            message="direction axis must match the subspace matrix row axis",
+        )
     if _direction_rank_work(subspace, 1) > _MAX_DIRECTION_RANK_WORK:
         raise OperationDomainValidationError(
             location=("subspace",),
@@ -231,6 +239,18 @@ def direction_rank_ledger(
 ) -> DirectionRankLedger:
     """Restrict scalars and rank every supplied direction without losing order."""
 
+    if directions.presentation != subspace.presentation:
+        raise OperationDomainValidationError(
+            location=("directions", "presentation"),
+            code="finite_field.direction_presentation_mismatch",
+            message="directions and subspace must share their field presentation",
+        )
+    if directions.axis != subspace.row_axis:
+        raise OperationDomainValidationError(
+            location=("directions", "axis"),
+            code="finite_field.direction_axis_mismatch",
+            message="direction axis must match the subspace matrix row axis",
+        )
     if (
         _direction_rank_work(subspace, len(directions.points))
         > _MAX_DIRECTION_RANK_WORK

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from flint import nmod_mat
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import finite_fields
 from jacobian.math.finite_fields import (
     Axis,
@@ -227,10 +228,32 @@ def test_slice_a_rejects_wrong_presentation_and_axis() -> None:
         directions.points[0].coordinates,
     )
 
-    with pytest.raises(ValueError, match="presentation"):
+    with pytest.raises(OperationDomainValidationError, match="presentation"):
         restrict_scalars(subspace, wrong_parent_direction)
-    with pytest.raises(ValueError, match="axis"):
+    with pytest.raises(OperationDomainValidationError, match="axis"):
         restrict_scalars(subspace, wrong_axis_direction)
+
+
+def test_direction_rank_ledger_rejects_mismatched_line_before_iteration() -> None:
+    subspace, _ = _slice_a_values()
+    other_presentation = finite_field(2, (1, 0, 1, 1), generator="z")
+    wrong_parent = projective_line(other_presentation, subspace.row_axis)
+    wrong_axis = projective_line(
+        subspace.presentation,
+        Axis(name="other b", labels=subspace.row_axis.labels),
+    )
+
+    with pytest.raises(OperationDomainValidationError) as parent_error:
+        direction_rank_ledger(subspace, wrong_parent)
+    assert parent_error.value.errors()[0]["type"] == (
+        "finite_field.direction_presentation_mismatch"
+    )
+
+    with pytest.raises(OperationDomainValidationError) as axis_error:
+        direction_rank_ledger(subspace, wrong_axis)
+    assert (
+        axis_error.value.errors()[0]["type"] == "finite_field.direction_axis_mismatch"
+    )
 
 
 def test_permuting_a_declared_row_axis_preserves_restriction_ranks() -> None:

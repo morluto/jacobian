@@ -4,32 +4,88 @@ from __future__ import annotations
 
 from collections import deque
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.chip_firing._models import (
-    AbelJacobiRequest,
+    MAX_COEFFICIENT_DIGITS,
+    MAX_STABILIZATION_CHIPS,
+    MAX_VERTICES,
     AbelJacobiResult,
-    CanonicalDivisorRequest,
     CanonicalDivisorResult,
-    CriticalGroupRequest,
     CriticalGroupResult,
-    DegreeRequest,
     DegreeResult,
-    FireVectorRequest,
     FireVectorResult,
-    FiringRequest,
     FiringResult,
-    LaplacianRequest,
     LaplacianResult,
-    ParallelStepRequest,
     ParallelStepResult,
-    QReducedRequest,
     QReducedResult,
-    ReducedLaplacianRequest,
     ReducedLaplacianResult,
-    SinkConfiguration,
-    StabilizeRequest,
     StabilizeResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+
+def _admit_graph(graph: SimpleUndirectedGraph) -> None:
+    if not graph.vertices:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="chip_firing.empty_graph",
+            message="chip-firing requires a nonempty graph",
+        )
+    if len(graph.vertices) > MAX_VERTICES:
+        raise OperationDomainValidationError(
+            location=("graph", "vertices"),
+            code="chip_firing.vertex_bound",
+            message=f"chip-firing supports at most {MAX_VERTICES} vertices",
+        )
+
+
+def _admit_sink(graph: SimpleUndirectedGraph, sink: str) -> None:
+    _admit_graph(graph)
+    if sink not in graph.vertices:
+        raise OperationDomainValidationError(
+            location=("sink",),
+            code="chip_firing.sink_not_in_graph",
+            message="sink vertex must be in the graph",
+        )
+
+
+def _admit_divisor(graph: SimpleUndirectedGraph, divisor: tuple[int, ...]) -> None:
+    _admit_graph(graph)
+    if len(divisor) != len(graph.vertices):
+        raise OperationDomainValidationError(
+            location=("divisor",),
+            code="chip_firing.divisor_length",
+            message="divisor length must match vertex count",
+        )
+
+
+def _admit_configuration(
+    graph: SimpleUndirectedGraph, sink: str, configuration: tuple[int, ...]
+) -> None:
+    _admit_sink(graph, sink)
+    if len(configuration) != len(graph.vertices):
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="chip_firing.configuration_length",
+            message="configuration length must match vertex count",
+        )
+    sink_index = graph.vertices.index(sink)
+    nonsink = [index for index in range(len(graph.vertices)) if index != sink_index]
+    if any(configuration[index] < 0 for index in nonsink):
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="chip_firing.nonsink_negative",
+            message="nonsink configuration must be nonnegative",
+        )
+    if sum(configuration[index] for index in nonsink) > MAX_STABILIZATION_CHIPS:
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="chip_firing.stabilization_bound",
+            message=(
+                "nonsink configuration exceeds stabilization bound "
+                f"{MAX_STABILIZATION_CHIPS}"
+            ),
+        )
 
 
 def _adjacency(graph: SimpleUndirectedGraph) -> tuple[tuple[int, ...], ...]:
@@ -53,14 +109,15 @@ def _degrees(graph: SimpleUndirectedGraph) -> tuple[int, ...]:
     return tuple(deg)
 
 
-def compute_laplacian(request: LaplacianRequest) -> LaplacianResult:
+def laplacian(graph: SimpleUndirectedGraph) -> LaplacianResult:
     """Compute the graph Laplacian L = D - A where D is the degree matrix."""
-    vertices = request.graph.vertices
+    _admit_graph(graph)
+    vertices = graph.vertices
     n = len(vertices)
     idx = {v: i for i, v in enumerate(vertices)}
 
     adj = [[0] * n for _ in range(n)]
-    for u, v in request.graph.edges:
+    for u, v in graph.edges:
         i, j = idx[u], idx[v]
         adj[i][j] += 1
         adj[j][i] += 1
@@ -85,38 +142,48 @@ def compute_laplacian(request: LaplacianRequest) -> LaplacianResult:
     )
 
 
-def compute_reduced_laplacian(
-    request: ReducedLaplacianRequest,
+def reduced_laplacian(
+    graph: SimpleUndirectedGraph, sink: str
 ) -> ReducedLaplacianResult:
     """Delete the sink row/column from the full Laplacian."""
-    vertices = request.graph.vertices
+    _admit_sink(graph, sink)
+    vertices = graph.vertices
     n = len(vertices)
-    full = compute_laplacian(LaplacianRequest(graph=request.graph))
+    full = laplacian(graph)
     lap = full.laplacian
-    sink_idx = vertices.index(request.sink)
+    sink_idx = vertices.index(sink)
     nonsink = [i for i in range(n) if i != sink_idx]
     reduced = tuple(tuple(lap[i][j] for j in nonsink) for i in nonsink)
     return ReducedLaplacianResult(
         vertices=vertices,
-        sink=request.sink,
+        sink=sink,
         reduced_laplacian=reduced,
     )
 
 
-def compute_firing(request: FiringRequest) -> FiringResult:
+def firing(
+    graph: SimpleUndirectedGraph, divisor: tuple[int, ...], firing_vertex: str
+) -> FiringResult:
     """Fire a vertex: D' = D - L*e_v where L is the Laplacian."""
-    vertices = request.graph.vertices
+    _admit_divisor(graph, divisor)
+    if firing_vertex not in graph.vertices:
+        raise OperationDomainValidationError(
+            location=("firing_vertex",),
+            code="chip_firing.firing_vertex_not_in_graph",
+            message="firing vertex must be in the graph",
+        )
+    vertices = graph.vertices
     n = len(vertices)
     idx = {v: i for i, v in enumerate(vertices)}
 
     adj = [[0] * n for _ in range(n)]
-    for u, v in request.graph.edges:
+    for u, v in graph.edges:
         i, j = idx[u], idx[v]
         adj[i][j] += 1
         adj[j][i] += 1
 
-    fire_idx = idx[request.firing_vertex]
-    result = list(request.divisor)
+    fire_idx = idx[firing_vertex]
+    result = list(divisor)
 
     deg = sum(adj[fire_idx])
     result[fire_idx] -= deg
@@ -125,22 +192,39 @@ def compute_firing(request: FiringRequest) -> FiringResult:
             result[j] += adj[fire_idx][j]
 
     return FiringResult(
-        vertex=request.firing_vertex,
+        vertex=firing_vertex,
         fired_divisor=tuple(result),
     )
 
 
-def compute_fire_vector(request: FireVectorRequest) -> FireVectorResult:
+def fire_vector(
+    graph: SimpleUndirectedGraph,
+    divisor: tuple[int, ...],
+    firing_vector: tuple[int, ...],
+) -> FireVectorResult:
     """Fire a vector: D' = D - L f. Degree is preserved by construction."""
-    vertices = request.graph.vertices
+    _admit_divisor(graph, divisor)
+    if len(firing_vector) != len(graph.vertices):
+        raise OperationDomainValidationError(
+            location=("firing_vector",),
+            code="chip_firing.firing_vector_length",
+            message="firing vector length must match vertex count",
+        )
+    if any(abs(value) >= 10**MAX_COEFFICIENT_DIGITS for value in firing_vector):
+        raise OperationDomainValidationError(
+            location=("firing_vector",),
+            code="chip_firing.coefficient_bound",
+            message="firing vector coefficients exceed the digit bound",
+        )
+    vertices = graph.vertices
     n = len(vertices)
-    lap = compute_laplacian(LaplacianRequest(graph=request.graph)).laplacian
-    divisor = list(request.divisor)
-    f = request.firing_vector
+    lap = laplacian(graph).laplacian
+    divisor_values = list(divisor)
+    f = firing_vector
     result = []
     for i in range(n):
         delta = sum(lap[i][j] * f[j] for j in range(n))
-        result.append(divisor[i] - delta)
+        result.append(divisor_values[i] - delta)
     return FireVectorResult(
         fired_divisor=tuple(result),
         degree_preserved=True,
@@ -183,14 +267,16 @@ def _stabilize_configuration(
     return eta, odometer
 
 
-def compute_stabilize(request: StabilizeRequest) -> StabilizeResult:
+def stabilize(
+    graph: SimpleUndirectedGraph, sink: str, configuration: tuple[int, ...]
+) -> StabilizeResult:
     """Stabilize a sink configuration and return the odometer."""
-    sc = request.configuration
-    vertices = sc.graph.vertices
-    sink_idx = vertices.index(sc.sink)
-    adj = _adjacency(sc.graph)
-    degrees = _degrees(sc.graph)
-    config = list(sc.configuration)
+    _admit_configuration(graph, sink, configuration)
+    vertices = graph.vertices
+    sink_idx = vertices.index(sink)
+    adj = _adjacency(graph)
+    degrees = _degrees(graph)
+    config = list(configuration)
     eta, odometer = _stabilize_configuration(config, adj, degrees, sink_idx)
     return StabilizeResult(
         stable=tuple(eta),
@@ -199,14 +285,16 @@ def compute_stabilize(request: StabilizeRequest) -> StabilizeResult:
     )
 
 
-def compute_parallel_step(request: ParallelStepRequest) -> ParallelStepResult:
+def parallel_step(
+    graph: SimpleUndirectedGraph, sink: str, configuration: tuple[int, ...]
+) -> ParallelStepResult:
     """One simultaneous legal firing step on all unstable nonsink vertices."""
-    sc = request.configuration
-    vertices = sc.graph.vertices
-    sink_idx = vertices.index(sc.sink)
-    adj = _adjacency(sc.graph)
-    degrees = _degrees(sc.graph)
-    config = list(sc.configuration)
+    _admit_configuration(graph, sink, configuration)
+    vertices = graph.vertices
+    sink_idx = vertices.index(sink)
+    adj = _adjacency(graph)
+    degrees = _degrees(graph)
+    config = list(configuration)
     fired = [
         v for i, v in enumerate(vertices) if i != sink_idx and config[i] >= degrees[i]
     ]
@@ -224,7 +312,9 @@ def compute_parallel_step(request: ParallelStepRequest) -> ParallelStepResult:
     )
 
 
-def compute_q_reduced(request: QReducedRequest) -> QReducedResult:
+def q_reduced(
+    graph: SimpleUndirectedGraph, divisor: tuple[int, ...], sink: str
+) -> QReducedResult:
     """Compute the q-reduced normal form via Dhar's algorithm.
 
     After repeatedly firing unstable nonsink vertices (as in stabilization),
@@ -232,10 +322,11 @@ def compute_q_reduced(request: QReducedRequest) -> QReducedResult:
     non-negative configuration, and re-stabilize. This produces the unique
     q-reduced representative.
     """
-    graph = request.graph
+    _admit_divisor(graph, divisor)
+    _admit_sink(graph, sink)
     vertices = graph.vertices
     n = len(vertices)
-    sink_idx = vertices.index(request.sink)
+    sink_idx = vertices.index(sink)
     adj = _adjacency(graph)
     degrees = _degrees(graph)
     # Use Dhar's burning algorithm for q-reduction:
@@ -248,7 +339,7 @@ def compute_q_reduced(request: QReducedRequest) -> QReducedResult:
     # The q-reduced form is: D - L*f where f is the firing vector.
     # We compute f = odometer from stabilization + borrow rounds.
 
-    config = list(request.divisor)
+    config = list(divisor)
     total_firing = [0] * n
 
     # Stabilize first
@@ -285,17 +376,22 @@ def compute_q_reduced(request: QReducedRequest) -> QReducedResult:
     )
 
 
-def compute_degree(request: DegreeRequest) -> DegreeResult:
+def degree(divisor: tuple[int, ...]) -> DegreeResult:
     """Compute the degree of a divisor: sum of all coefficients."""
-    return DegreeResult(degree=sum(request.divisor))
+    if not divisor:
+        raise OperationDomainValidationError(
+            location=("divisor",),
+            code="chip_firing.divisor_must_not_be_empty",
+            message="divisor must not be empty",
+        )
+    return DegreeResult(degree=sum(divisor))
 
 
-def compute_canonical_divisor(
-    request: CanonicalDivisorRequest,
-) -> CanonicalDivisorResult:
+def canonical_divisor(graph: SimpleUndirectedGraph) -> CanonicalDivisorResult:
     """Compute the canonical divisor K(v) = deg(v) - 2."""
-    vertices = request.graph.vertices
-    degrees = _degrees(request.graph)
+    _admit_graph(graph)
+    vertices = graph.vertices
+    degrees = _degrees(graph)
     divisor = tuple(deg - 2 for deg in degrees)
     return CanonicalDivisorResult(
         vertices=vertices,
@@ -340,7 +436,7 @@ def _critical_group_factors(
     nonsink = [i for i in range(n) if i != sink_idx]
     if not nonsink:
         return (), ()
-    lap = compute_laplacian(LaplacianRequest(graph=graph)).laplacian
+    lap = laplacian(graph).laplacian
     reduced = [[lap[i][j] for j in nonsink] for i in nonsink]
     factors = _smith_normal_form_diagonal(reduced)
     nonsink_labels = tuple(vertices[i] for i in nonsink)
@@ -348,33 +444,44 @@ def _critical_group_factors(
     return nonsink_labels, invariant
 
 
-def compute_critical_group(request: CriticalGroupRequest) -> CriticalGroupResult:
+def critical_group(graph: SimpleUndirectedGraph, sink: str) -> CriticalGroupResult:
     """Compute the critical group via SNF of the reduced Laplacian."""
-    nonsink_labels, invariant = _critical_group_factors(request.graph, request.sink)
+    _admit_sink(graph, sink)
+    nonsink_labels, invariant = _critical_group_factors(graph, sink)
     order = 1
     for d in invariant:
         order *= d
     return CriticalGroupResult(
-        sink=request.sink,
+        sink=sink,
         nonsink_vertices=nonsink_labels,
         invariant_factors=invariant,
         order=order,
     )
 
 
-def compute_abel_jacobi(request: AbelJacobiRequest) -> AbelJacobiResult:
+def abel_jacobi(
+    graph: SimpleUndirectedGraph, divisor: tuple[int, ...], sink: str
+) -> AbelJacobiResult:
     """Map a degree-zero divisor into critical-group coordinates.
 
     The coordinates are the remainder of the nonsink divisor coefficients
     modulo the invariant factors of the critical group (the diagonal of
     the SNF of the reduced Laplacian). Zero and unit factors are excluded.
     """
-    vertices = request.graph.vertices
+    _admit_divisor(graph, divisor)
+    _admit_sink(graph, sink)
+    if sum(divisor) != 0:
+        raise OperationDomainValidationError(
+            location=("divisor",),
+            code="chip_firing.divisor_not_degree_zero",
+            message="divisor must have degree zero",
+        )
+    vertices = graph.vertices
     n = len(vertices)
-    sink_idx = vertices.index(request.sink)
+    sink_idx = vertices.index(sink)
     nonsink = [i for i in range(n) if i != sink_idx]
-    nonsink_labels, invariant = _critical_group_factors(request.graph, request.sink)
-    nonsink_div = [request.divisor[i] for i in nonsink]
+    nonsink_labels, invariant = _critical_group_factors(graph, sink)
+    nonsink_div = [divisor[i] for i in nonsink]
     # The coordinates: nonsink_div mod the invariant factors.
     # Only non-unit, non-zero factors matter for the quotient group.
     coords = []
@@ -386,109 +493,11 @@ def compute_abel_jacobi(request: AbelJacobiRequest) -> AbelJacobiResult:
         coords.append(nonsink_div[idx] % d)
         j += 1
     return AbelJacobiResult(
-        sink=request.sink,
+        sink=sink,
         nonsink_vertices=nonsink_labels,
         coordinates=tuple(coords),
         invariant_factors=invariant,
     )
-
-
-def laplacian(graph: SimpleUndirectedGraph) -> LaplacianResult:
-    """Compute the Laplacian of one canonical graph."""
-
-    return compute_laplacian(LaplacianRequest(graph=graph))
-
-
-def reduced_laplacian(graph: SimpleUndirectedGraph, sink: str) -> ReducedLaplacianResult:
-    """Compute the sink-deleted Laplacian of one canonical graph."""
-
-    return compute_reduced_laplacian(
-        ReducedLaplacianRequest(graph=graph, sink=sink)
-    )
-
-
-def firing(
-    graph: SimpleUndirectedGraph, divisor: tuple[int, ...], firing_vertex: str
-) -> FiringResult:
-    """Fire one vertex in a canonical graph divisor."""
-
-    return compute_firing(
-        FiringRequest(graph=graph, divisor=divisor, firing_vertex=firing_vertex)
-    )
-
-
-def fire_vector(
-    graph: SimpleUndirectedGraph,
-    divisor: tuple[int, ...],
-    firing_vector: tuple[int, ...],
-) -> FireVectorResult:
-    """Fire a canonical divisor by one canonical firing vector."""
-
-    return compute_fire_vector(
-        FireVectorRequest(graph=graph, divisor=divisor, firing_vector=firing_vector)
-    )
-
-
-def stabilize(
-    graph: SimpleUndirectedGraph, sink: str, configuration: tuple[int, ...]
-) -> StabilizeResult:
-    """Stabilize one canonical sink configuration."""
-
-    return compute_stabilize(
-        StabilizeRequest(
-            configuration=SinkConfiguration(
-                graph=graph, sink=sink, configuration=configuration
-            )
-        )
-    )
-
-
-def parallel_step(
-    graph: SimpleUndirectedGraph, sink: str, configuration: tuple[int, ...]
-) -> ParallelStepResult:
-    """Perform one parallel firing step on a canonical configuration."""
-
-    return compute_parallel_step(
-        ParallelStepRequest(
-            configuration=SinkConfiguration(
-                graph=graph, sink=sink, configuration=configuration
-            )
-        )
-    )
-
-
-def q_reduced(
-    graph: SimpleUndirectedGraph, divisor: tuple[int, ...], sink: str
-) -> QReducedResult:
-    """Return the q-reduced representative of one canonical divisor."""
-
-    return compute_q_reduced(QReducedRequest(graph=graph, divisor=divisor, sink=sink))
-
-
-def degree(divisor: tuple[int, ...]) -> DegreeResult:
-    """Compute the degree of one canonical divisor."""
-
-    return compute_degree(DegreeRequest(divisor=divisor))
-
-
-def canonical_divisor(graph: SimpleUndirectedGraph) -> CanonicalDivisorResult:
-    """Compute the canonical divisor of one canonical graph."""
-
-    return compute_canonical_divisor(CanonicalDivisorRequest(graph=graph))
-
-
-def critical_group(graph: SimpleUndirectedGraph, sink: str) -> CriticalGroupResult:
-    """Compute the critical group of one canonical graph."""
-
-    return compute_critical_group(CriticalGroupRequest(graph=graph, sink=sink))
-
-
-def abel_jacobi(
-    graph: SimpleUndirectedGraph, divisor: tuple[int, ...], sink: str
-) -> AbelJacobiResult:
-    """Map one canonical degree-zero divisor into critical-group coordinates."""
-
-    return compute_abel_jacobi(AbelJacobiRequest(graph=graph, divisor=divisor, sink=sink))
 
 
 __all__ = [

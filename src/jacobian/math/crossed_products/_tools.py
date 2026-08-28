@@ -7,8 +7,19 @@ from jacobian.catalog.models import MathTool
 from jacobian.math.crossed_products._models import (
     CrossedProductMultiplyRequest,
     CrossedProductMultiplyResult,
+    _computed_result,
 )
-from jacobian.math.crossed_products._operations import compute_product
+from jacobian.math.crossed_products.operations import multiply
+
+
+def compute_product(
+    request: CrossedProductMultiplyRequest,
+) -> CrossedProductMultiplyResult:
+    return _computed_result(
+        request.left,
+        request.right,
+        multiply(request.left, request.right),
+    )
 
 _INFINITE_DIHEDRAL_PRESENTATION = {
     "characteristic": 5,

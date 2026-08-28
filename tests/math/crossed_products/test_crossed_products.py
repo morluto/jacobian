@@ -13,10 +13,10 @@ from jacobian.math.crossed_products._models import (
     CrossedProductMultiplyRequest,
     CrossedProductMultiplyResult,
 )
-from jacobian.math.crossed_products._operations import (
+from jacobian.math.crossed_products._tools import (
+    TOOLS,
     compute_product,
 )
-from jacobian.math.crossed_products._tools import TOOLS
 from jacobian.math.crossed_products.operations import multiply
 from jacobian.math.crossed_products.values import (
     FiniteCosetCrossedProductElement,

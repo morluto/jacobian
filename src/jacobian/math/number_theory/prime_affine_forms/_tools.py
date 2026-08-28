@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.prime_affine_forms._admissibility import (
@@ -27,12 +28,6 @@ from jacobian.math.number_theory.prime_affine_forms._local_factors import (
     compute_local_factor,
     compute_local_factors,
 )
-from jacobian.math.number_theory.prime_affine_forms._operations import (
-    compute_interval_residue_profile,
-    compute_residue_wheel,
-    compute_residue_wheel_enumeration,
-    compute_wheel_membership,
-)
 from jacobian.math.number_theory.prime_affine_forms._residue_wheel import (
     PrimeTupleIntervalResidueProfileRequest,
     PrimeTupleIntervalResidueProfileResult,
@@ -48,6 +43,48 @@ from jacobian.math.number_theory.prime_affine_forms._translation import (
     PrimeAffineTranslationResult,
     compute_translation,
 )
+from jacobian.math.number_theory.prime_affine_forms.operations import (
+    enumerate_residue_wheel as native_enumerate_residue_wheel,
+)
+from jacobian.math.number_theory.prime_affine_forms.operations import (
+    interval_residue_profile as native_interval_residue_profile,
+)
+from jacobian.math.number_theory.prime_affine_forms.operations import (
+    residue_wheel as native_residue_wheel,
+)
+from jacobian.math.number_theory.prime_affine_forms.operations import (
+    wheel_membership as native_wheel_membership,
+)
+
+
+def compute_residue_wheel(
+    request: PrimeTupleResidueWheelRequest,
+) -> PrimeTupleResidueWheel:
+    return native_residue_wheel(request.source, request.primes)
+
+
+def compute_residue_wheel_enumeration(
+    request: PrimeTupleResidueWheelEnumerationRequest,
+) -> PrimeTupleResidueWheelEnumeration:
+    return native_enumerate_residue_wheel(request.wheel)
+
+
+def compute_wheel_membership(
+    request: PrimeTupleWheelMembershipRequest,
+) -> PrimeTupleWheelMembershipResult:
+    return native_wheel_membership(
+        request.wheel, parse_canonical_integer(request.value)
+    )
+
+
+def compute_interval_residue_profile(
+    request: PrimeTupleIntervalResidueProfileRequest,
+) -> PrimeTupleIntervalResidueProfileResult:
+    return native_interval_residue_profile(
+        request.wheel,
+        parse_canonical_integer(request.lower),
+        parse_canonical_integer(request.upper),
+    )
 
 
 def _operation[RequestT: StrictModel, ResultT: StrictModel](

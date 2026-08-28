@@ -589,11 +589,14 @@ class TestInstabilityDegreeAdmission:
 class TestCatalogPublication:
     """Public and native-only cohomology operations stay distinct."""
 
-    def test_published_manifest_keeps_only_the_steenrod_square(self) -> None:
+    def test_published_manifest_includes_supported_cohomology_operations(self) -> None:
         from jacobian.math.topology.cohomology.operations._tools import TOOLS
 
         published = tuple(tool.operation_id for tool in TOOLS)
-        assert published == ("cohomology.steenrod_square.compute",)
+        assert published == (
+            "cohomology.steenrod_square.compute",
+            "cohomology.bockstein.compute",
+        )
 
     def test_bockstein_native_symbol_is_supported(self) -> None:
         import jacobian.math.topology.cohomology.operations as public_module

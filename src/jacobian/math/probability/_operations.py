@@ -22,6 +22,7 @@ from jacobian.math.probability._distribution import (
     FiniteConvolutionRequest,
     FiniteConvolutionResult,
     FiniteDistributionAtom,
+    FiniteEventProbabilityResult,
     FiniteEventRequest,
     FinitePushforwardContribution,
     FinitePushforwardRequest,
@@ -302,6 +303,27 @@ def _raw_moment(
     )
 
 
+def _event_probability(
+    request: FiniteEventRequest,
+) -> FiniteEventProbabilityResult:
+    from flint import fmpq
+
+    _admit_event(request, require_positive=False)
+    selected_values = {value.as_fraction() for value in request.event_values}
+    selected = tuple(
+        atom
+        for atom in request.distribution.atoms
+        if atom.value.as_fraction() in selected_values
+    )
+    total = fmpq(0)
+    for atom in selected:
+        total += _fmpq(atom.probability)
+    return FiniteEventProbabilityResult._from_kernel(
+        event_probability=_wire(total),
+        selected_atoms=selected,
+    )
+
+
 def _condition(
     request: FiniteConditionRequest,
 ) -> FiniteConditionResult:
@@ -534,6 +556,28 @@ _FAIR_DIE_3 = {
 }
 
 FINITE_PROBABILITY_OPERATIONS = (
+    MathTool(
+        operation_id="probability.finite_distribution.event_probability.compute",
+        title="Exact finite-event probability",
+        description=(
+            "Compute the exact probability of a finite event selected from a "
+            "canonical finite rational distribution, retaining the selected atoms."
+        ),
+        request_type=FiniteEventRequest,
+        result_type=FiniteEventProbabilityResult,
+        run=_event_probability,
+        tags=("probability", "event", "finite", "exact", "python-flint"),
+        examples=(
+            example(
+                "fair_bit_event",
+                "Compute the probability that a fair bit equals one.",
+                {
+                    "distribution": _FAIR_BIT,
+                    "event_values": [{"num": "1", "den": "1"}],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="probability.finite_distribution.raw_moment.compute",
         title="Exact finite-distribution raw moment",

@@ -28,11 +28,13 @@ from jacobian.math.graphs.flows.multicommodity._models import (
     derived_profile_digit_budget,
     measured_profile_components,
 )
-from jacobian.math.graphs.flows.multicommodity._operations import (
+from jacobian.math.graphs.flows.multicommodity._tools import (
+    TOOLS,
     _run_multicommodity_flow_profile,
+)
+from jacobian.math.graphs.flows.multicommodity.operations import (
     compute_multicommodity_flow_profile,
 )
-from jacobian.math.graphs.flows.multicommodity._tools import TOOLS
 
 
 def q(numerator: int, denominator: int = 1) -> CanonicalRational:

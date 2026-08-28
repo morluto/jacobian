@@ -6,7 +6,6 @@ from jacobian.math.graphs.flows.multicommodity._kernel import profile_components
 from jacobian.math.graphs.flows.multicommodity._models import (
     AdmittedProfileScan,
     MulticommodityFlow,
-    MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
     _require_profile_output_admission,
 )
@@ -45,20 +44,6 @@ def _profile_result(
         capacity_feasible=capacity_feasible,
         congestion=congestion,
         work=work,
-    )
-
-
-def _run_multicommodity_flow_profile(
-    request: MulticommodityFlowProfileRequest,
-) -> MulticommodityFlowProfileResult:
-    """Run one parsed MCP request through the native profile computation.
-
-    The wire request is structural. Native execution performs semantic
-    admission once and passes the resulting reusable scan to the kernel.
-    """
-
-    return _profile_result(
-        request.flow, _require_profile_output_admission(request.flow)
     )
 
 

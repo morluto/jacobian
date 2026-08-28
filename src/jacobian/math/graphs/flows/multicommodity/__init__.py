@@ -9,7 +9,7 @@ from jacobian.math.graphs.flows.multicommodity._models import (
     MulticommodityFlowProfileResult,
     MulticommodityFlowProfileWork,
 )
-from jacobian.math.graphs.flows.multicommodity._operations import (
+from jacobian.math.graphs.flows.multicommodity.operations import (
     compute_multicommodity_flow_profile,
 )
 

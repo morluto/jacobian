@@ -6,9 +6,15 @@ from jacobian.math.graphs.flows.multicommodity._models import (
     MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
 )
-from jacobian.math.graphs.flows.multicommodity._operations import (
-    _run_multicommodity_flow_profile,
+from jacobian.math.graphs.flows.multicommodity.operations import (
+    compute_multicommodity_flow_profile,
 )
+
+
+def _run_multicommodity_flow_profile(
+    request: MulticommodityFlowProfileRequest,
+) -> MulticommodityFlowProfileResult:
+    return compute_multicommodity_flow_profile(request.flow)
 
 TOOLS: MathTools = (
     MathTool(

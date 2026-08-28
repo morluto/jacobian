@@ -219,15 +219,30 @@ def hankel_matrix_from_prefix(
     )
 
 
+def _admit_hankel_request(
+    prefix: MomentFunctionalPrefix, order: int, *, shifted: bool
+) -> None:
+    try:
+        require_hankel_matrix_admission(prefix, order, shifted=shifted)
+    except HankelMatrixAdmissionError as exc:
+        location = ("prefix", "moments") if exc.reason != "order_out_of_range" else ("order",)
+        operation = "shifted_hankel" if shifted else "hankel"
+        raise OperationDomainValidationError(
+            location=location,
+            code=f"moment_functional.{operation}.{exc.reason}",
+            message=str(exc),
+        ) from exc
+
+
 def compute_hankel_matrix(request: HankelRequest) -> HankelMomentMatrix:
     """MCP adapter: parse one request, call the canonical-prefix kernel."""
-    require_hankel_matrix_admission(request.prefix, request.order, shifted=False)
+    _admit_hankel_request(request.prefix, request.order, shifted=False)
     return hankel_matrix_from_prefix(request.prefix, request.order, shifted=False)
 
 
 def compute_shifted_hankel(request: ShiftedHankelRequest) -> HankelMomentMatrix:
     """MCP adapter: parse one request, call the canonical-prefix kernel."""
-    require_hankel_matrix_admission(request.prefix, request.order, shifted=True)
+    _admit_hankel_request(request.prefix, request.order, shifted=True)
     return hankel_matrix_from_prefix(request.prefix, request.order, shifted=True)
 
 

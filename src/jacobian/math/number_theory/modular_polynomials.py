@@ -15,6 +15,7 @@ from pydantic import (
 )
 
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationDomainValidationError
 
 _MAX_INTEGER_DIGITS = 256
 _MAX_MODULUS = 1_000_000
@@ -215,7 +216,14 @@ def modular_polynomial_identity(
             isinstance(term, ModularPolynomialTerm) for term in terms
         ):
             raise TypeError(f"{name} must be a tuple of ModularPolynomialTerm values")
-    _require_identity_admission(modulus, variables, left, right)
+    try:
+        _require_identity_admission(modulus, variables, left, right)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="modular_polynomial.identity_domain",
+            message=str(exc),
+        ) from exc
     return _compute_modular_polynomial_identity(modulus, variables, left, right)
 
 

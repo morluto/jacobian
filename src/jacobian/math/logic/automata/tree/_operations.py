@@ -30,7 +30,14 @@ __all__ = [
 
 
 def compute_tree_run(request: TreeRunRequest) -> TreeRunResult:
-    node_count = validate_ranked_tree(request.automaton, request.tree)
+    try:
+        node_count = validate_ranked_tree(request.automaton, request.tree)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("tree",),
+            code="tree_automata.ranked_tree_domain",
+            message=str(exc),
+        ) from exc
     chart = _tree_state_chart_unchecked(request.automaton, request.tree)
     states = set(chart[-1][1])
     accepting = set(states) & set(request.automaton.final_states)

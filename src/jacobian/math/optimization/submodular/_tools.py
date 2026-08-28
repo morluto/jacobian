@@ -14,11 +14,23 @@ from jacobian.math.optimization.submodular._models import (
     SubmodularityCheckRequest,
     SubmodularityCheckResult,
 )
-from jacobian.math.optimization.submodular._operations import (
+from jacobian.math.optimization.submodular.operations import (
     check_monotonicity,
     check_submodularity,
     evaluate_set_function,
 )
+
+
+def _evaluate(request: SetFunctionEvalRequest) -> SetFunctionEvalResult:
+    return evaluate_set_function(request.function, request.subset)
+
+
+def _monotonicity(request: MonotonicityCheckRequest) -> MonotonicityCheckResult:
+    return check_monotonicity(request.function)
+
+
+def _submodularity(request: SubmodularityCheckRequest) -> SubmodularityCheckResult:
+    return check_submodularity(request.function)
 
 
 def _op[
@@ -54,7 +66,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "at a specified subset of its complete table.",
         SetFunctionEvalRequest,
         SetFunctionEvalResult,
-        evaluate_set_function,
+        _evaluate,
         "combinatorics",
         "set-function",
         "evaluation",
@@ -85,7 +97,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "transport envelope; ground sets up to 16 elements.",
         MonotonicityCheckRequest,
         MonotonicityCheckResult,
-        check_monotonicity,
+        _monotonicity,
         "combinatorics",
         "set-function",
         "monotonicity",
@@ -118,7 +130,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "sets up to 16 elements.",
         SubmodularityCheckRequest,
         SubmodularityCheckResult,
-        check_submodularity,
+        _submodularity,
         "combinatorics",
         "set-function",
         "submodularity",

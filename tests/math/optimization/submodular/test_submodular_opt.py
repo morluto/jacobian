@@ -11,11 +11,23 @@ from jacobian.math.optimization.submodular._models import (
     SetFunctionEvalRequest,
     SubmodularityCheckRequest,
 )
-from jacobian.math.optimization.submodular._operations import (
+from jacobian.math.optimization.submodular.operations import (
     check_monotonicity,
     check_submodularity,
     evaluate_set_function,
 )
+
+
+def _evaluate_request(request: SetFunctionEvalRequest):
+    return evaluate_set_function(request.function, request.subset)
+
+
+def _check_monotonicity_request(request: MonotonicityCheckRequest):
+    return check_monotonicity(request.function)
+
+
+def _check_submodularity_request(request: SubmodularityCheckRequest):
+    return check_submodularity(request.function)
 
 
 def _make_uniform_function(n: int) -> SetFunction:
@@ -42,7 +54,7 @@ class TestSetFunctionEval:
     def test_simple(self) -> None:
         fn = _make_uniform_function(2)
         req = SetFunctionEvalRequest(function=fn, subset=(0, 1))
-        result = evaluate_set_function(req)
+        result = _evaluate_request(req)
         assert result.value == CanonicalRational(num="2", den="1")
 
     def test_fractional_value_uses_the_shared_canonical_rational(self) -> None:
@@ -51,7 +63,7 @@ class TestSetFunctionEval:
             entries=(_entry((), "1", "2"),),
         )
 
-        result = evaluate_set_function(
+        result = _evaluate_request(
             SetFunctionEvalRequest(function=function, subset=())
         )
 
@@ -74,7 +86,7 @@ class TestMonotonicity:
     def test_monotone(self) -> None:
         fn = _make_uniform_function(2)
         req = MonotonicityCheckRequest(function=fn)
-        result = check_monotonicity(req)
+        result = _check_monotonicity_request(req)
         assert result.is_monotone is True
 
     def test_rejects_incomplete_table(self) -> None:
@@ -100,7 +112,7 @@ class TestSubmodularity:
         """f(S) = |S| is modular (hence submodular)."""
         fn = _make_uniform_function(2)
         req = SubmodularityCheckRequest(function=fn)
-        result = check_submodularity(req)
+        result = _check_submodularity_request(req)
         assert result.is_submodular is True
 
 
@@ -179,17 +191,17 @@ class TestKernelEquivalence:
     def test_local_matches_bruteforce_integer_tables(self) -> None:
         for seed in range(6):
             function = self._random_function(6, seed=seed)
-            assert check_monotonicity(
+            assert _check_monotonicity_request(
                 MonotonicityCheckRequest(function=function)
             ).is_monotone == self._bruteforce_monotone(function)
-            assert check_submodularity(
+            assert _check_submodularity_request(
                 SubmodularityCheckRequest(function=function)
             ).is_submodular == self._bruteforce_submodular(function)
 
     def test_local_matches_bruteforce_fractional_tables(self) -> None:
         for seed in range(4):
             function = self._random_function(5, seed=100 + seed, fractional=True)
-            assert check_submodularity(
+            assert _check_submodularity_request(
                 SubmodularityCheckRequest(function=function)
             ).is_submodular == self._bruteforce_submodular(function)
 
@@ -199,7 +211,7 @@ class TestKernelEquivalence:
             _entry((), "0"),
             _entry((0,), "-1"),
         ]
-        result = check_monotonicity(
+        result = _check_monotonicity_request(
             MonotonicityCheckRequest(
                 function=SetFunction(ground_set_size=1, entries=tuple(entries))
             )
@@ -243,7 +255,7 @@ def test_value_height_bound_keeps_scan_work_small() -> None:
         function=SetFunction(ground_set_size=1, entries=(wide_empty, wide_full))
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        check_monotonicity(monotonicity_request)
+        _check_monotonicity_request(monotonicity_request)
     assert (
         error.value.errors()[0]["type"] == "submodular_opt.scan_value_height_exceeded"
     )
@@ -251,7 +263,7 @@ def test_value_height_bound_keeps_scan_work_small() -> None:
         function=SetFunction(ground_set_size=1, entries=(wide_empty, wide_full))
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        check_submodularity(submodularity_request)
+        _check_submodularity_request(submodularity_request)
     assert (
         error.value.errors()[0]["type"] == "submodular_opt.scan_value_height_exceeded"
     )
@@ -261,7 +273,7 @@ def test_value_height_bound_keeps_scan_work_small() -> None:
     )
     # Exactly-128-digit values are admitted and the scan completes normally.
     assert (
-        check_monotonicity(
+        _check_monotonicity_request(
             MonotonicityCheckRequest(
                 function=SetFunction(
                     ground_set_size=1,

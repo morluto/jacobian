@@ -8,12 +8,9 @@ from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.optimization.submodular._models import (
     MAX_SUBMODULAR_SCAN_VALUE_DIGITS,
-    MonotonicityCheckRequest,
     MonotonicityCheckResult,
     SetFunction,
-    SetFunctionEvalRequest,
     SetFunctionEvalResult,
-    SubmodularityCheckRequest,
     SubmodularityCheckResult,
 )
 
@@ -49,10 +46,11 @@ def _admit_scan(function: SetFunction) -> None:
 
 
 def evaluate_set_function(
-    request: SetFunctionEvalRequest,
+    function: SetFunction,
+    subset: tuple[int, ...],
 ) -> SetFunctionEvalResult:
     """Evaluate f(S) by table lookup."""
-    return SetFunctionEvalResult(value=_lookup(request.function, request.subset))
+    return SetFunctionEvalResult(value=_lookup(function, subset))
 
 
 def _lookup(
@@ -66,9 +64,7 @@ def _lookup(
     )
 
 
-def check_monotonicity(
-    request: MonotonicityCheckRequest,
-) -> MonotonicityCheckResult:
+def check_monotonicity(function: SetFunction) -> MonotonicityCheckResult:
     """Check if a set function is monotone non-decreasing.
 
     f is monotone iff every covering relation preserves order: for each S
@@ -76,9 +72,9 @@ def check_monotonicity(
     checks; violating any one covering relation violates some comparable
     pair, so the local scan is exact.
     """
-    _admit_scan(request.function)
-    size = request.function.ground_set_size
-    table = _table_by_mask(request.function)
+    _admit_scan(function)
+    size = function.ground_set_size
+    table = _table_by_mask(function)
 
     for mask in range(1 << size):
         value_mask = table[mask]
@@ -98,9 +94,7 @@ def check_monotonicity(
     return MonotonicityCheckResult(is_monotone=True, violation="")
 
 
-def check_submodularity(
-    request: SubmodularityCheckRequest,
-) -> SubmodularityCheckResult:
+def check_submodularity(function: SetFunction) -> SubmodularityCheckResult:
     """Check if a set function is submodular.
 
     Exact local characterization: f is submodular iff for every S and every
@@ -112,9 +106,9 @@ def check_submodularity(
     scan, and it is complete: any violated inequality anywhere in 2^N has a
     violated local instance (take S minimal inside the differing part).
     """
-    _admit_scan(request.function)
-    size = request.function.ground_set_size
-    table = _table_by_mask(request.function)
+    _admit_scan(function)
+    size = function.ground_set_size
+    table = _table_by_mask(function)
 
     full_mask = (1 << size) - 1
     complement_pairs = [

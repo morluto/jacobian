@@ -239,6 +239,20 @@ class EllipticCurvePointResult(StrictModel):
                 )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        curve: ShortWeierstrassCurve,
+        point: RationalAffinePoint | None,
+    ) -> Self:
+        """Construct a point already established by the exact group-law kernel."""
+
+        return cls.model_construct(
+            curve=curve,
+            point=point,
+            at_infinity=point is None,
+        )
+
 
 class EllipticCurvePointAdditionRequest(StrictModel):
     """Add two points on a short Weierstrass elliptic curve.

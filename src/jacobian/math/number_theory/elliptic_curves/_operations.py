@@ -243,18 +243,18 @@ def add_points(
     # Unwrap parent-bearing operands; an identity contributes nothing.
     if x1 is None or y1 is None:
         if x2 is None or y2 is None:
-            return EllipticCurvePointResult(curve=request.curve, at_infinity=True)
-        return EllipticCurvePointResult(
-            curve=request.curve,
-            point=RationalAffinePoint(
+            return EllipticCurvePointResult._from_kernel(request.curve, None)
+        return EllipticCurvePointResult._from_kernel(
+            request.curve,
+            RationalAffinePoint(
                 x=CanonicalRational.from_fraction(x2),
                 y=CanonicalRational.from_fraction(y2),
             ),
         )
     if x2 is None or y2 is None:
-        return EllipticCurvePointResult(
-            curve=request.curve,
-            point=RationalAffinePoint(
+        return EllipticCurvePointResult._from_kernel(
+            request.curve,
+            RationalAffinePoint(
                 x=CanonicalRational.from_fraction(x1),
                 y=CanonicalRational.from_fraction(y1),
             ),
@@ -264,11 +264,11 @@ def add_points(
 
     result = _point_add(a, b, p1, p2)
     if result is None:
-        return EllipticCurvePointResult(curve=request.curve, at_infinity=True)
+        return EllipticCurvePointResult._from_kernel(request.curve, None)
     x3, y3 = result
-    return EllipticCurvePointResult(
-        curve=request.curve,
-        point=RationalAffinePoint(
+    return EllipticCurvePointResult._from_kernel(
+        request.curve,
+        RationalAffinePoint(
             x=CanonicalRational.from_fraction(x3),
             y=CanonicalRational.from_fraction(y3),
         ),

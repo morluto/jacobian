@@ -1,4 +1,4 @@
-"""Domain-owned arithmetic-function operations."""
+"""Native arithmetic-function operations over canonical rational values."""
 
 from __future__ import annotations
 
@@ -8,14 +8,7 @@ from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.number_theory.arithmetic_functions._models import (
-    DirichletConvolutionRequest,
-    DirichletConvolutionResult,
-    DirichletInverseRequest,
-    DirichletInverseResult,
-    MobiusTransformRequest,
-    MobiusTransformResult,
-    SummatoryFunctionRequest,
-    SummatoryFunctionResult,
+    _MAX_LENGTH,
 )
 
 
@@ -56,9 +49,19 @@ def _require_result_height(height: RationalHeight, operation: str) -> None:
         )
 
 
-def _admit_convolution(request: DirichletConvolutionRequest) -> None:
-    left = _heights(request.f)
-    right = _heights(request.g)
+def _require_length(values: tuple[CanonicalRational, ...], name: str) -> None:
+    if not 1 <= len(values) <= _MAX_LENGTH:
+        raise ValueError(f"{name} must have between 1 and {_MAX_LENGTH} values")
+
+
+def _admit_convolution(
+    f: tuple[CanonicalRational, ...], g: tuple[CanonicalRational, ...]
+) -> None:
+    _require_length(f, "f")
+    if len(f) != len(g):
+        raise ValueError("f and g must have the same length")
+    left = _heights(f)
+    right = _heights(g)
     for index in range(1, len(left) + 1):
         terms = (
             left[divisor - 1].product(right[index // divisor - 1])
@@ -67,15 +70,19 @@ def _admit_convolution(request: DirichletConvolutionRequest) -> None:
         _require_result_height(sum_heights(terms), "Dirichlet convolution")
 
 
-def _admit_mobius(request: MobiusTransformRequest) -> None:
-    heights = _heights(request.values)
+def _admit_mobius(values: tuple[CanonicalRational, ...]) -> None:
+    _require_length(values, "values")
+    heights = _heights(values)
     for index in range(1, len(heights) + 1):
         terms = (heights[index // divisor - 1] for divisor in _divisors(index))
         _require_result_height(sum_heights(terms), "Möbius transform")
 
 
-def _admit_inverse(request: DirichletInverseRequest) -> None:
-    source = _heights(request.values)
+def _admit_inverse(values: tuple[CanonicalRational, ...]) -> None:
+    _require_length(values, "values")
+    if values[0].as_fraction() == 0:
+        raise ValueError("f(1) must be nonzero")
+    source = _heights(values)
     inverse = [RationalHeight(1, 1).quotient(source[0])]
     _require_result_height(inverse[0], "Dirichlet inverse")
     for index in range(2, len(source) + 1):
@@ -121,30 +128,27 @@ def _mobius_sieve(n: int) -> list[int]:
     return mobius
 
 
-def compute_dirichlet_convolution(
-    request: DirichletConvolutionRequest,
-) -> DirichletConvolutionResult:
+def dirichlet_convolution(
+    f: tuple[CanonicalRational, ...], g: tuple[CanonicalRational, ...]
+) -> tuple[CanonicalRational, ...]:
     """Compute ``h = f * g`` where ``h(K) = sum_{d|K} f(d) * g(K/d)``."""
-    _admit_convolution(request)
-    n = len(request.f)
-    f = [v.as_fraction() for v in request.f]
-    g = [v.as_fraction() for v in request.g]
+    _admit_convolution(f, g)
+    n = len(f)
+    f_values = [v.as_fraction() for v in f]
+    g_values = [v.as_fraction() for v in g]
     # Precompute divisors for each k = 1..n.
     result_values: list[Fraction] = [Fraction(0)] * n
     for k in range(1, n + 1):
         acc = Fraction(0)
         for d in _divisors(k):
-            acc += f[d - 1] * g[k // d - 1]
+            acc += f_values[d - 1] * g_values[k // d - 1]
         result_values[k - 1] = acc
-    return DirichletConvolutionResult(
-        values=tuple(_rational(v) for v in result_values),
-        length=n,
-    )
+    return tuple(_rational(v) for v in result_values)
 
 
-def compute_mobius_transform(
-    request: MobiusTransformRequest,
-) -> MobiusTransformResult:
+def mobius_transform(
+    values: tuple[CanonicalRational, ...], inverse: bool = False
+) -> tuple[CanonicalRational, ...]:
     """Compute the Möbius (inverse) transform.
 
     Forward:  ``f(K) = sum_{d|K} mu(d) * F(K/d)`` (input is F, output is f).
@@ -156,16 +160,16 @@ def compute_mobius_transform(
     The two operations are mutually inverse: forward then inverse (or vice
     versa) recovers the original function.
     """
-    _admit_mobius(request)
-    n = len(request.values)
-    values = [v.as_fraction() for v in request.values]
+    _admit_mobius(values)
+    n = len(values)
+    fraction_values = [v.as_fraction() for v in values]
     result_values: list[Fraction] = [Fraction(0)] * n
-    if request.inverse:
+    if inverse:
         # F(K) = sum_{d|K} f(K/d)  (Dirichlet convolution with 1)
         for k in range(1, n + 1):
             acc = Fraction(0)
             for d in _divisors(k):
-                acc += values[k // d - 1]
+                acc += fraction_values[k // d - 1]
             result_values[k - 1] = acc
     else:
         # f(K) = sum_{d|K} mu(d) * F(K/d)  (Dirichlet convolution with mu)
@@ -175,36 +179,30 @@ def compute_mobius_transform(
             for d in _divisors(k):
                 if mobius[d] == 0:
                     continue
-                acc += mobius[d] * values[k // d - 1]
+                acc += mobius[d] * fraction_values[k // d - 1]
             result_values[k - 1] = acc
-    return MobiusTransformResult(
-        values=tuple(_rational(v) for v in result_values),
-        length=n,
-        inverse=request.inverse,
-    )
+    return tuple(_rational(v) for v in result_values)
 
 
-def compute_summatory_function(
-    request: SummatoryFunctionRequest,
-) -> SummatoryFunctionResult:
+def summatory_function(
+    values: tuple[CanonicalRational, ...],
+) -> tuple[CanonicalRational, ...]:
     """Compute ``S(K) = sum_{i=1}^{K} f(i)`` for K = 1..n."""
-    _require_result_height(sum_heights(_heights(request.values)), "summatory function")
-    n = len(request.values)
-    values = [v.as_fraction() for v in request.values]
+    _require_length(values, "values")
+    _require_result_height(sum_heights(_heights(values)), "summatory function")
+    n = len(values)
+    fraction_values = [v.as_fraction() for v in values]
     result_values: list[Fraction] = [Fraction(0)] * n
     running = Fraction(0)
     for i in range(n):
-        running += values[i]
+        running += fraction_values[i]
         result_values[i] = running
-    return SummatoryFunctionResult(
-        values=tuple(_rational(v) for v in result_values),
-        length=n,
-    )
+    return tuple(_rational(v) for v in result_values)
 
 
-def compute_dirichlet_inverse(
-    request: DirichletInverseRequest,
-) -> DirichletInverseResult:
+def dirichlet_inverse(
+    values: tuple[CanonicalRational, ...],
+) -> tuple[CanonicalRational, ...]:
     """Compute the Dirichlet inverse ``g`` of ``f`` such that ``f * g = epsilon``.
 
     The Dirichlet inverse is defined recursively:
@@ -213,9 +211,9 @@ def compute_dirichlet_inverse(
 
     The first element of ``f`` (i.e. ``f(1)``) must be non-zero.
     """
-    _admit_inverse(request)
-    f = [v.as_fraction() for v in request.values]
-    n = len(request.values)
+    _admit_inverse(values)
+    f = [v.as_fraction() for v in values]
+    n = len(values)
     g: list[Fraction] = [Fraction(0)] * n
     g[0] = Fraction(1) / f[0]
     for k in range(2, n + 1):
@@ -226,7 +224,12 @@ def compute_dirichlet_inverse(
                 continue
             partial += f[d - 1] * g[k // d - 1]
         g[k - 1] = -(partial / f[0])
-    return DirichletInverseResult(
-        values=tuple(_rational(v) for v in g),
-        length=n,
-    )
+    return tuple(_rational(v) for v in g)
+
+
+__all__ = [
+    "dirichlet_convolution",
+    "dirichlet_inverse",
+    "mobius_transform",
+    "summatory_function",
+]

@@ -8,7 +8,7 @@ from jacobian.math.number_theory.arithmetic_functions._models import (
     MobiusTransformRequest,
     SummatoryFunctionRequest,
 )
-from jacobian.math.number_theory.arithmetic_functions._operations import (
+from jacobian.math.number_theory.arithmetic_functions._tools import (
     compute_dirichlet_convolution,
     compute_dirichlet_inverse,
     compute_mobius_transform,

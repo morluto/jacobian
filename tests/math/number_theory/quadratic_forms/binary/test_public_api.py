@@ -6,11 +6,12 @@ from jacobian.math.number_theory.quadratic_forms import (
 from jacobian.math.number_theory.quadratic_forms.binary._models import (
     BinaryQuadraticFormCheckRequest,
 )
-from jacobian.math.number_theory.quadratic_forms.binary._operations import compute_check
+from jacobian.math.number_theory.quadratic_forms.binary.operations import check
 
 
 def test_public_form_value_and_native_functions_compose_after_serialization() -> None:
-    checked = compute_check(BinaryQuadraticFormCheckRequest(a=5, b=3, c=1))
+    request = BinaryQuadraticFormCheckRequest(a=5, b=3, c=1)
+    checked = check(request.a, request.b, request.c)
     assert checked.form is not None
 
     form = integral_binary_quadratic_forms.PrimitivePositiveDefiniteBinaryQuadraticForm.model_validate(

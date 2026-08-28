@@ -5,7 +5,10 @@ from jacobian.math.number_theory.quadratic_forms.binary._models import (
     PrimitivePositiveDefiniteBinaryQuadraticForm,
 )
 from jacobian.math.number_theory.quadratic_forms.binary.operations import (
+    check,
     evaluate,
+    proper_equivalence,
+    reduced_classes,
     reduced_form,
     representations,
 )
@@ -13,7 +16,10 @@ from jacobian.math.number_theory.quadratic_forms.binary.operations import (
 __all__ = [
     "BinaryQuadraticFormRepresentation",
     "PrimitivePositiveDefiniteBinaryQuadraticForm",
+    "check",
     "evaluate",
+    "proper_equivalence",
+    "reduced_classes",
     "reduced_form",
     "representations",
 ]

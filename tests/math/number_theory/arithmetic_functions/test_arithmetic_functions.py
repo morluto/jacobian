@@ -8,13 +8,14 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.number_theory.arithmetic_functions import dirichlet_convolution
 from jacobian.math.number_theory.arithmetic_functions._models import (
     DirichletConvolutionRequest,
     DirichletInverseRequest,
     MobiusTransformRequest,
     SummatoryFunctionRequest,
 )
-from jacobian.math.number_theory.arithmetic_functions._operations import (
+from jacobian.math.number_theory.arithmetic_functions._tools import (
     compute_dirichlet_convolution,
     compute_dirichlet_inverse,
     compute_mobius_transform,
@@ -36,6 +37,16 @@ def _vals(*vals: tuple[int, int]) -> list[dict[str, str]]:
 
 def _frac(v: CanonicalRational) -> Fraction:
     return v.as_fraction()
+
+
+def test_native_convolution_returns_canonical_values() -> None:
+    values = tuple(CanonicalRational.from_fraction(value) for value in (1, 2, 3))
+    result = dirichlet_convolution(values, values)
+    assert tuple(value.as_fraction() for value in result) == (
+        Fraction(1),
+        Fraction(4),
+        Fraction(6),
+    )
 
 
 # ---------------------------------------------------------------------------

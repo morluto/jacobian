@@ -17,7 +17,8 @@ from jacobian.math.number_theory.quadratic_forms.binary._models import (
     PrimitivePositiveDefiniteBinaryQuadraticForm,
     _representation_y_bound,
 )
-from jacobian.math.number_theory.quadratic_forms.binary._operations import (
+from jacobian.math.number_theory.quadratic_forms.binary._tools import (
+    TOOLS,
     compute_check,
     compute_evaluate,
     compute_proper_equivalence,
@@ -25,7 +26,6 @@ from jacobian.math.number_theory.quadratic_forms.binary._operations import (
     compute_reduced_classes,
     compute_representations,
 )
-from jacobian.math.number_theory.quadratic_forms.binary._tools import TOOLS
 
 
 def _positive_form(

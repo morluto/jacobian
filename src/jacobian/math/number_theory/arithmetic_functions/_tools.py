@@ -6,6 +6,7 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.number_theory.arithmetic_functions import operations as native
 from jacobian.math.number_theory.arithmetic_functions._models import (
     DirichletConvolutionRequest,
     DirichletConvolutionResult,
@@ -16,12 +17,36 @@ from jacobian.math.number_theory.arithmetic_functions._models import (
     SummatoryFunctionRequest,
     SummatoryFunctionResult,
 )
-from jacobian.math.number_theory.arithmetic_functions._operations import (
-    compute_dirichlet_convolution,
-    compute_dirichlet_inverse,
-    compute_mobius_transform,
-    compute_summatory_function,
-)
+
+
+def compute_dirichlet_convolution(
+    request: DirichletConvolutionRequest,
+) -> DirichletConvolutionResult:
+    values = native.dirichlet_convolution(request.f, request.g)
+    return DirichletConvolutionResult(values=values, length=len(values))
+
+
+def compute_mobius_transform(
+    request: MobiusTransformRequest,
+) -> MobiusTransformResult:
+    values = native.mobius_transform(request.values, request.inverse)
+    return MobiusTransformResult(
+        values=values, length=len(values), inverse=request.inverse
+    )
+
+
+def compute_summatory_function(
+    request: SummatoryFunctionRequest,
+) -> SummatoryFunctionResult:
+    values = native.summatory_function(request.values)
+    return SummatoryFunctionResult(values=values, length=len(values))
+
+
+def compute_dirichlet_inverse(
+    request: DirichletInverseRequest,
+) -> DirichletInverseResult:
+    values = native.dirichlet_inverse(request.values)
+    return DirichletInverseResult(values=values, length=len(values))
 
 
 def arithmetic_functions_operation[

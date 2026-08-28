@@ -1,11 +1,19 @@
 """Integral binary quadratic form operation declarations."""
 
 from collections.abc import Callable
+from math import gcd
 from typing import Any
+
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
+from jacobian.math.number_theory.quadratic_forms.binary import operations as native
 from jacobian.math.number_theory.quadratic_forms.binary._models import (
     BinaryQuadraticFormCheckRequest,
     BinaryQuadraticFormCheckResult,
@@ -20,14 +28,75 @@ from jacobian.math.number_theory.quadratic_forms.binary._models import (
     ReducedBinaryQuadraticFormResult,
     ReducedClassesResult,
 )
-from jacobian.math.number_theory.quadratic_forms.binary._operations import (
-    compute_check,
-    compute_evaluate,
-    compute_proper_equivalence,
-    compute_reduce,
-    compute_reduced_classes,
-    compute_representations,
-)
+
+
+def _admit[ResultT](operation: Callable[[], ResultT], location: tuple[str, ...]) -> ResultT:
+    try:
+        return operation()
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=location, code=exc.type, message=exc.message()
+        ) from exc
+
+
+def compute_check(
+    request: BinaryQuadraticFormCheckRequest,
+) -> BinaryQuadraticFormCheckResult:
+    return native.check(request.a, request.b, request.c)
+
+
+def compute_evaluate(
+    request: BinaryQuadraticFormEvaluateRequest,
+) -> BinaryQuadraticFormEvaluateResult:
+    value = _admit(
+        lambda: native.evaluate(request.form, request.x, request.y), ("x", "y")
+    )
+    return BinaryQuadraticFormEvaluateResult._from_kernel(
+        form=request.form,
+        x=request.x,
+        y=request.y,
+        value=value,
+        primitive=gcd(request.x, request.y) == 1,
+    )
+
+
+def compute_reduce(
+    request: BinaryQuadraticFormReduceRequest,
+) -> ReducedBinaryQuadraticFormResult:
+    reduced, matrix = native.reduction(request.form)
+    return ReducedBinaryQuadraticFormResult._from_kernel(
+        form=request.form, reduced_form=reduced, matrix=matrix
+    )
+
+
+def compute_proper_equivalence(
+    request: BinaryQuadraticFormProperEquivRequest,
+) -> ProperEquivalenceResult:
+    return native.proper_equivalence(request.first, request.second)
+
+
+def compute_reduced_classes(
+    request: BinaryQuadraticFormReducedClassesRequest,
+) -> ReducedClassesResult:
+    classes = _admit(
+        lambda: native.reduced_classes(request.discriminant), ("discriminant",)
+    )
+    return ReducedClassesResult._from_kernel(
+        discriminant=request.discriminant, classes=classes
+    )
+
+
+def compute_representations(
+    request: BinaryQuadraticFormRepresentationsRequest,
+) -> BinaryQuadraticFormRepresentationsResult:
+    representations = _admit(
+        lambda: native.representations(request.form, request.target), ("target",)
+    )
+    return BinaryQuadraticFormRepresentationsResult._from_kernel(
+        form=request.form,
+        target=request.target,
+        representations=representations,
+    )
 
 
 def _op[

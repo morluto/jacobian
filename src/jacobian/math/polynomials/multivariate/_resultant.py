@@ -96,7 +96,9 @@ class MultivariateResultantRequest(StrictModel):
 
 
 def _sylvester_resultant_value(
-    request: MultivariateResultantRequest,
+    left: RationalPolynomial,
+    right: RationalPolynomial,
+    elimination_variable: str,
 ) -> PolynomialScalarValue | PolynomialValue:
     """Replay the exact resultant value of an admitted request.
 
@@ -108,16 +110,16 @@ def _sylvester_resultant_value(
 
     from jacobian.math.polynomials._sympy import polynomial_resultant
 
-    variables = request.left.variables
-    elimination_index = variables.index(request.elimination_variable)
+    variables = left.variables
+    elimination_index = variables.index(elimination_variable)
     generator = symbols_for_variables(variables)[elimination_index]
 
-    left = rational_polynomial_to_sympy(request.left)
-    right = rational_polynomial_to_sympy(request.right)
-    value = polynomial_resultant(left, right, generator)
+    left_value = rational_polynomial_to_sympy(left)
+    right_value = rational_polynomial_to_sympy(right)
+    value = polynomial_resultant(left_value, right_value, generator)
 
     remaining_variables = tuple(
-        variable for variable in variables if variable != request.elimination_variable
+        variable for variable in variables if variable != elimination_variable
     )
     if not remaining_variables:
         from jacobian.math.polynomials._conversions import rational_from_sympy
@@ -168,16 +170,18 @@ class MultivariateResultantResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: MultivariateResultantRequest,
+        left: RationalPolynomial,
+        right: RationalPolynomial,
+        elimination_variable: str,
         *,
         resultant: PolynomialInvariantValue,
     ) -> Self:
         """Build a result after the admitted Sylvester kernel established it."""
 
         return cls.model_construct(
-            left=request.left,
-            right=request.right,
-            elimination_variable=request.elimination_variable,
+            left=left,
+            right=right,
+            elimination_variable=elimination_variable,
             resultant=resultant,
         )
 

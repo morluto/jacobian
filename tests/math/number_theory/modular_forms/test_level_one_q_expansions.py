@@ -25,10 +25,10 @@ from jacobian.math.number_theory.modular_forms.operations import (
     level_one_named_q_expansion,
 )
 from jacobian.math.number_theory.modular_forms.values import LevelOneModularQExpansion
-from jacobian.math.polynomials.series._operations import (
-    compute_power,
-    compute_scalar_multiply,
-    compute_subtract,
+from jacobian.math.polynomials.series.operations import (
+    power,
+    scalar_multiply,
+    subtract,
 )
 
 
@@ -67,10 +67,8 @@ def test_delta_known_prefix_and_defining_e4_e6_identity() -> None:
     assert _integers(delta) == (0, 1, -24, 252, -1472, 4830, -6048)
     e4 = level_one_named_q_expansion("E4", 7).q_expansion
     e6 = level_one_named_q_expansion("E6", 7).q_expansion
-    derived = compute_scalar_multiply(
-        compute_subtract(
-            compute_power(e4, 3).result, compute_power(e6, 2).result
-        ).result,
+    derived = scalar_multiply(
+        subtract(power(e4, 3).result, power(e6, 2).result).result,
         CanonicalRational(num="1", den="1728"),
     ).result
     assert derived == delta.q_expansion

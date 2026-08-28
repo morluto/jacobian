@@ -423,7 +423,9 @@ class MultivariateSubresultantSequenceResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: MultivariateSubresultantSequenceRequest,
+        left: RationalPolynomial,
+        right: RationalPolynomial,
+        main_variable: str,
         *,
         source_order: SubresultantSourceOrder,
         members: tuple[MultivariateSubresultantMember, ...],
@@ -440,9 +442,9 @@ class MultivariateSubresultantSequenceResult(StrictModel):
         """Build a result after the admitted Brown kernel established its ledger."""
 
         return cls.model_construct(
-            left=request.left,
-            right=request.right,
-            main_variable=request.main_variable,
+            left=left,
+            right=right,
+            main_variable=main_variable,
             source_order=source_order,
             members=members,
             skipped_member_degrees=skipped_member_degrees,

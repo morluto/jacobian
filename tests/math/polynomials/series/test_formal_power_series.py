@@ -9,8 +9,11 @@ from jacobian.math.polynomials.series import (
     compose,
     derivative,
     identity_check,
+    integral_zero_constant,
+    inverse,
     multiply,
     power,
+    reversion,
     to_polynomial,
     truncate,
 )
@@ -23,16 +26,6 @@ from jacobian.math.polynomials.series._models import (
     SeriesPowerRequest,
     SeriesTruncateRequest,
     TruncatedSeries,
-)
-from jacobian.math.polynomials.series._operations import (
-    compute_derivative,
-    compute_integral,
-    compute_inverse,
-    compute_multiply,
-    compute_power,
-    compute_reversion,
-    compute_to_polynomial,
-    compute_truncate,
 )
 
 
@@ -54,7 +47,7 @@ def test_derivative_of_order_one_is_zero() -> None:
         truncation_order=1,
         coefficients=(_coeff("7"),),
     )
-    result = compute_derivative(series)
+    result = derivative(series)
     assert result.result.truncation_order == 1
     assert result.result.coefficients[0].as_fraction() == 0
 
@@ -66,9 +59,9 @@ def test_native_exports_call_the_shared_typed_kernels() -> None:
         coefficients=(_coeff("1"), _coeff("2")),
     )
 
-    assert derivative(series) == compute_derivative(series)
-    assert multiply(series, series) == compute_multiply(series, series)
-    assert to_polynomial(series) == compute_to_polynomial(series)
+    assert derivative(series) == derivative(series)
+    assert multiply(series, series) == multiply(series, series)
+    assert to_polynomial(series) == to_polynomial(series)
 
 
 def test_power_rejects_result_digit_overflow() -> None:
@@ -84,7 +77,7 @@ def test_power_rejects_result_digit_overflow() -> None:
         exponent=1000,
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_power(request.series, request.exponent)
+        power(request.series, request.exponent)
     assert (
         error.value.errors()[0]["type"]
         == "formal_power_series.power_coefficient_growth"
@@ -102,7 +95,7 @@ def test_reversion_rejects_nonzero_constant() -> None:
         coefficients=(_coeff("1"), _coeff("1")),
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_reversion(request.as_series())
+        reversion(request.as_series())
     assert (
         error.value.errors()[0]["type"]
         == "formal_power_series.reversion_nonzero_constant"
@@ -123,7 +116,7 @@ def test_integral_rejects_oversized_output_order() -> None:
         output_order=4,
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_integral(request.series, request.output_order)
+        integral_zero_constant(request.series, request.output_order)
     assert (
         error.value.errors()[0]["type"]
         == "formal_power_series.integral_output_order_exceeds_source"
@@ -141,7 +134,7 @@ def test_inverse_rejects_zero_constant() -> None:
         coefficients=(_coeff("0"), _coeff("1")),
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_inverse(request.as_series())
+        inverse(request.as_series())
     assert (
         error.value.errors()[0]["type"] == "formal_power_series.inverse_zero_constant"
     )
@@ -161,7 +154,7 @@ def test_inverse_rejects_result_coefficient_growth() -> None:
         ),
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_inverse(request.as_series())
+        inverse(request.as_series())
     assert (
         error.value.errors()[0]["type"]
         == "formal_power_series.inverse_coefficient_growth"
@@ -178,7 +171,7 @@ def test_input_series_rejects_oversized_coefficients() -> None:
         coefficients=(_coeff(huge),),
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_derivative(oversized)
+        derivative(oversized)
     assert error.value.errors()[0]["type"] == "formal_power_series.admission"
 
 
@@ -194,7 +187,7 @@ def test_product_can_exceed_input_digit_bound() -> None:
         truncation_order=1,
         coefficients=(_coeff(large),),
     )
-    result = compute_multiply(left, right)
+    result = multiply(left, right)
     value = result.result.coefficients[0]
     assert len(value.num.lstrip("-")) > MAX_RATIONAL_DIGITS
     assert len(value.num.lstrip("-")) <= 4096
@@ -326,7 +319,7 @@ def test_native_exports_still_admit_the_wire_boundary_order() -> None:
     edge = _ascending(MAX_TRUNCATION_ORDER)
     assert power(edge, 0).result.truncation_order == MAX_TRUNCATION_ORDER
     assert identity_check(edge, edge).status == "EQUAL_MOD_X_TO_N"
-    assert to_polynomial(edge) == compute_to_polynomial(edge)
+    assert to_polynomial(edge) == to_polynomial(edge)
 
 
 def test_identity_check_admits_bounded_inputs_whose_product_would_overflow() -> None:
@@ -389,7 +382,7 @@ def test_truncate_accepts_widened_carrier_orders_and_replays_the_prefix() -> Non
     request = SeriesTruncateRequest.model_validate(
         {"series": source.model_dump(), "target_order": MAX_TRUNCATION_ORDER}
     )
-    result = compute_truncate(request.series, request.target_order)
+    result = truncate(request.series, request.target_order)
     assert result.result.truncation_order == MAX_TRUNCATION_ORDER
     assert result.result.coefficients == source.coefficients[:MAX_TRUNCATION_ORDER]
 
@@ -405,7 +398,7 @@ def test_truncate_accepts_widened_carrier_orders_and_replays_the_prefix() -> Non
         }
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_truncate(request.series, request.target_order)
+        truncate(request.series, request.target_order)
     assert (
         error.value.errors()[0]["type"]
         == "formal_power_series.truncate_target_exceeds_public_bound"
@@ -420,7 +413,7 @@ def test_truncate_source_admission_bounds_the_request_before_parsing() -> None:
         {"series": edge.model_dump(), "target_order": 1}
     )
     assert (
-        compute_truncate(request.series, request.target_order).result.coefficients
+        truncate(request.series, request.target_order).result.coefficients
         == edge.coefficients[:1]
     )
 
@@ -429,7 +422,7 @@ def test_truncate_source_admission_bounds_the_request_before_parsing() -> None:
         {"series": oversized.model_dump(), "target_order": 1}
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_truncate(request.series, request.target_order)
+        truncate(request.series, request.target_order)
     assert (
         error.value.errors()[0]["type"] == "formal_power_series.truncate_source_order"
     )

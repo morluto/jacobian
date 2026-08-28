@@ -30,9 +30,9 @@ from jacobian.math.polynomials.series._models import (
     SeriesFromPolynomialRequest,
     SeriesTruncateRequest,
 )
-from jacobian.math.polynomials.series._operations import (
-    compute_from_polynomial,
-    compute_truncate,
+from jacobian.math.polynomials.series.operations import (
+    from_polynomial,
+    truncate,
 )
 
 
@@ -98,7 +98,7 @@ def test_formal_series_value_composes_into_truncation_request() -> None:
             "truncation_order": 3,
         }
     )
-    produced = compute_from_polynomial(
+    produced = from_polynomial(
         producer_request.variable,
         producer_request.coefficients,
         producer_request.truncation_order,
@@ -107,7 +107,7 @@ def test_formal_series_value_composes_into_truncation_request() -> None:
     consumer_request = SeriesTruncateRequest.model_validate(
         {"series": _canonical_json(produced.result), "target_order": 2}
     )
-    truncated = compute_truncate(consumer_request.series, consumer_request.target_order)
+    truncated = truncate(consumer_request.series, consumer_request.target_order)
 
     assert tuple(value.as_fraction() for value in truncated.result.coefficients) == (
         Fraction(1),

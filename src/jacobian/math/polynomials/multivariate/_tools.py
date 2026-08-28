@@ -18,13 +18,6 @@ from jacobian.math.polynomials.multivariate._gcd import (
     MultivariateGcdRequest,
     MultivariateGcdResult,
 )
-from jacobian.math.polynomials.multivariate._operations import (
-    compute_multivariate_division,
-    compute_multivariate_gcd,
-    compute_multivariate_resultant,
-    compute_multivariate_subresultant_sequence,
-    multivariate_factor,
-)
 from jacobian.math.polynomials.multivariate._resultant import (
     MultivariateResultantRequest,
     MultivariateResultantResult,
@@ -33,6 +26,43 @@ from jacobian.math.polynomials.multivariate._subresultants import (
     MultivariateSubresultantSequenceRequest,
     MultivariateSubresultantSequenceResult,
 )
+from jacobian.math.polynomials.multivariate.operations import (
+    multivariate_division,
+    multivariate_factor,
+    multivariate_gcd,
+    multivariate_resultant,
+    multivariate_subresultant_sequence,
+)
+
+
+def _compute_gcd(request: MultivariateGcdRequest) -> MultivariateGcdResult:
+    return multivariate_gcd(request.left, request.right)
+
+
+def _compute_division(
+    request: MultivariateDivisionRequest,
+) -> MultivariateDivisionResult:
+    return multivariate_division(request.left, request.right, request.monomial_order)
+
+
+def _compute_resultant(
+    request: MultivariateResultantRequest,
+) -> MultivariateResultantResult:
+    return multivariate_resultant(
+        request.left, request.right, request.elimination_variable
+    )
+
+
+def _compute_subresultants(
+    request: MultivariateSubresultantSequenceRequest,
+) -> MultivariateSubresultantSequenceResult:
+    return multivariate_subresultant_sequence(
+        request.left, request.right, request.main_variable
+    )
+
+
+def _compute_factor(request: MultivariateFactorRequest) -> MultivariateFactorResult:
+    return multivariate_factor(request.polynomial)
 
 
 def multivariate_polynomial_operation[
@@ -234,7 +264,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         MultivariateGcdRequest,
         MultivariateGcdResult,
-        compute_multivariate_gcd,
+        _compute_gcd,
         "polynomial",
         "gcd",
         "multivariate",
@@ -251,7 +281,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         MultivariateDivisionRequest,
         MultivariateDivisionResult,
-        compute_multivariate_division,
+        _compute_division,
         "polynomial",
         "division",
         "multivariate",
@@ -273,7 +303,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         MultivariateResultantRequest,
         MultivariateResultantResult,
-        compute_multivariate_resultant,
+        _compute_resultant,
         "polynomial",
         "resultant",
         "multivariate",
@@ -296,7 +326,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         MultivariateSubresultantSequenceRequest,
         MultivariateSubresultantSequenceResult,
-        compute_multivariate_subresultant_sequence,
+        _compute_subresultants,
         "polynomial",
         "subresultant",
         "polynomial remainder sequence",
@@ -320,7 +350,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         MultivariateFactorRequest,
         MultivariateFactorResult,
-        multivariate_factor,
+        _compute_factor,
         "polynomial",
         "factorization",
         "multivariate",

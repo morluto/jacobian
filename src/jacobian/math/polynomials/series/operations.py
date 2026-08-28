@@ -46,6 +46,24 @@ from jacobian.math.polynomials.series._models import (
     admit_native_truncate,
 )
 
+__all__ = [
+    "add",
+    "compose",
+    "derivative",
+    "divide",
+    "from_polynomial",
+    "identity_check",
+    "integral_zero_constant",
+    "inverse",
+    "multiply",
+    "power",
+    "reversion",
+    "scalar_multiply",
+    "subtract",
+    "to_polynomial",
+    "truncate",
+]
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -103,9 +121,7 @@ def _cauchy_convolve(
 # ---------------------------------------------------------------------------
 
 
-def compute_add(
-    left: TruncatedSeries, right: TruncatedSeries
-) -> SeriesArithmeticResult:
+def add(left: TruncatedSeries, right: TruncatedSeries) -> SeriesArithmeticResult:
     """Add two series coefficientwise modulo x^N."""
     _run_admission(lambda: admit_native_add_subtract(left, right))
     n = left.truncation_order
@@ -116,9 +132,7 @@ def compute_add(
     )
 
 
-def compute_subtract(
-    left: TruncatedSeries, right: TruncatedSeries
-) -> SeriesArithmeticResult:
+def subtract(left: TruncatedSeries, right: TruncatedSeries) -> SeriesArithmeticResult:
     """Subtract two series coefficientwise modulo x^N."""
     _run_admission(lambda: admit_native_add_subtract(left, right))
     n = left.truncation_order
@@ -129,9 +143,7 @@ def compute_subtract(
     )
 
 
-def compute_multiply(
-    left: TruncatedSeries, right: TruncatedSeries
-) -> SeriesMultiplyResult:
+def multiply(left: TruncatedSeries, right: TruncatedSeries) -> SeriesMultiplyResult:
     """Multiply two series modulo x^N via Cauchy convolution."""
     _run_admission(lambda: admit_native_multiply(left, right))
     n = left.truncation_order
@@ -146,7 +158,7 @@ def compute_multiply(
     )
 
 
-def compute_scalar_multiply(
+def scalar_multiply(
     series: TruncatedSeries, scalar: CanonicalRational
 ) -> SeriesScalarMultiplyResult:
     """Multiply a series by an exact rational scalar."""
@@ -163,7 +175,7 @@ def compute_scalar_multiply(
 # ---------------------------------------------------------------------------
 
 
-def compute_power(series: TruncatedSeries, exponent: int) -> SeriesPowerResult:
+def power(series: TruncatedSeries, exponent: int) -> SeriesPowerResult:
     """Compute series^exponent via binary exponentiation modulo x^N."""
     _run_admission(lambda: admit_native_power(series, exponent))
     n = series.truncation_order
@@ -211,7 +223,7 @@ def _inverse_coefficients(series: TruncatedSeries) -> list[Fraction]:
     return inverse
 
 
-def compute_inverse(series: TruncatedSeries) -> SeriesInverseResult:
+def inverse(series: TruncatedSeries) -> SeriesInverseResult:
     """Compute the multiplicative inverse of a series modulo x^N.
 
     Requires a_0 != 0.  Computes B such that A*B = 1 (mod x^N) via the
@@ -236,7 +248,7 @@ def compute_inverse(series: TruncatedSeries) -> SeriesInverseResult:
 # ---------------------------------------------------------------------------
 
 
-def compute_divide(
+def divide(
     numerator: TruncatedSeries, denominator: TruncatedSeries
 ) -> SeriesDivideResult:
     """Compute Q = A / B mod x^N where b_0 != 0."""
@@ -278,9 +290,7 @@ def _compose_coefficients(
     return result
 
 
-def compute_compose(
-    outer: TruncatedSeries, inner: TruncatedSeries
-) -> SeriesComposeResult:
+def compose(outer: TruncatedSeries, inner: TruncatedSeries) -> SeriesComposeResult:
     """Compute F(G(x)) mod x^N where G(0) = 0.
 
     Composes by iteratively computing G^k (powers) and multiplying by f_k:
@@ -301,7 +311,7 @@ def compute_compose(
 # ---------------------------------------------------------------------------
 
 
-def compute_reversion(series: TruncatedSeries) -> SeriesReversionResult:
+def reversion(series: TruncatedSeries) -> SeriesReversionResult:
     """Compute the compositional inverse G(x) of F(x) mod x^N.
 
     Requires F(0) = 0 and F'(0) = f_1 != 0.  Returns G such that:
@@ -367,7 +377,7 @@ def compute_reversion(series: TruncatedSeries) -> SeriesReversionResult:
 # ---------------------------------------------------------------------------
 
 
-def compute_derivative(series: TruncatedSeries) -> SeriesDerivativeResult:
+def derivative(series: TruncatedSeries) -> SeriesDerivativeResult:
     """Formal derivative: b_n = (n+1) * a_{n+1}.
 
     Output order convention: max(N-1, 1).
@@ -390,7 +400,7 @@ def compute_derivative(series: TruncatedSeries) -> SeriesDerivativeResult:
 # ---------------------------------------------------------------------------
 
 
-def compute_integral(
+def integral_zero_constant(
     series: TruncatedSeries, output_order: int
 ) -> SeriesIntegralResult:
     """Zero-constant formal antiderivative with output_order coefficients.
@@ -415,9 +425,7 @@ def compute_integral(
 # ---------------------------------------------------------------------------
 
 
-def compute_truncate(
-    series: TruncatedSeries, target_order: int
-) -> SeriesTruncateResult:
+def truncate(series: TruncatedSeries, target_order: int) -> SeriesTruncateResult:
     """Truncate a series to a smaller order."""
     _run_admission(lambda: admit_native_truncate(series, target_order))
     a = _series_fractions(series)
@@ -432,7 +440,7 @@ def compute_truncate(
 # ---------------------------------------------------------------------------
 
 
-def compute_identity_check(
+def identity_check(
     left: TruncatedSeries, right: TruncatedSeries
 ) -> SeriesIdentityCheckResult:
     """Check if two series are equal mod x^N."""
@@ -455,7 +463,7 @@ def compute_identity_check(
 # ---------------------------------------------------------------------------
 
 
-def compute_from_polynomial(
+def from_polynomial(
     variable: str,
     coefficients: Sequence[CanonicalRational],
     truncation_order: int,
@@ -473,7 +481,7 @@ def compute_from_polynomial(
     )
 
 
-def compute_to_polynomial(series: TruncatedSeries) -> SeriesToPolynomialResult:
+def to_polynomial(series: TruncatedSeries) -> SeriesToPolynomialResult:
     """Return the canonical truncated polynomial representative of the series."""
     _run_admission(lambda: admit_native_from_polynomial(series))
     return SeriesToPolynomialResult(

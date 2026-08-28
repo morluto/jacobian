@@ -14,7 +14,6 @@ from jacobian.math.polynomials._conversions import (
 )
 from jacobian.math.polynomials.multivariate import _factor_backend
 from jacobian.math.polynomials.multivariate._division import (
-    MultivariateDivisionRequest,
     MultivariateDivisionResult,
 )
 from jacobian.math.polynomials.multivariate._factor_backend import (
@@ -24,12 +23,10 @@ from jacobian.math.polynomials.multivariate._factor_backend import (
 )
 from jacobian.math.polynomials.multivariate._factor_models import (
     _MAX_FACTOR_OUTPUT_TERMS,
-    MultivariateFactorRequest,
     MultivariateFactorResult,
     MultivariateIrreducibleFactor,
 )
 from jacobian.math.polynomials.multivariate._gcd import (
-    MultivariateGcdRequest,
     MultivariateGcdResult,
 )
 from jacobian.math.polynomials.multivariate._models import (
@@ -44,7 +41,6 @@ from jacobian.math.polynomials.multivariate._models import (
 )
 from jacobian.math.polynomials.multivariate._resultant import (
     _MAX_RESULTANT_TERMS,
-    MultivariateResultantRequest,
     MultivariateResultantResult,
     _resultant_support_bound,
     _sylvester_resultant_value,
@@ -58,7 +54,6 @@ from jacobian.math.polynomials.multivariate._subresultants import (
     _MAX_SUBRESULTANT_SERIALIZED_COEFFICIENT_BITS,
     MultivariatePrincipalSubresultantCoefficient,
     MultivariateSubresultantMember,
-    MultivariateSubresultantSequenceRequest,
     MultivariateSubresultantSequenceResult,
     _subresultant_envelope,
 )
@@ -66,6 +61,14 @@ from jacobian.math.polynomials.values import (
     RationalPolynomial,
     require_polynomial_budget,
 )
+
+__all__ = [
+    "multivariate_division",
+    "multivariate_factor",
+    "multivariate_gcd",
+    "multivariate_resultant",
+    "multivariate_subresultant_sequence",
+]
 
 
 def _run_admission(admission: Any) -> None:
@@ -94,26 +97,26 @@ def _admit_pair(left: RationalPolynomial, right: RationalPolynomial) -> None:
         )
 
 
-def _admit_gcd(request: MultivariateGcdRequest) -> None:
-    _admit_pair(request.left, request.right)
+def _admit_gcd(left: RationalPolynomial, right: RationalPolynomial) -> None:
+    _admit_pair(left, right)
 
 
-def _admit_division(request: MultivariateDivisionRequest) -> None:
-    _admit_pair(request.left, request.right)
-    if not request.right.polynomial.terms:
+def _admit_division(left: RationalPolynomial, right: RationalPolynomial) -> None:
+    _admit_pair(left, right)
+    if not right.polynomial.terms:
         raise _validation_error("divisor polynomial must be nonzero")
 
 
-def _admit_factor(request: MultivariateFactorRequest) -> None:
-    if len(request.polynomial.variables) < _MULTIVARIATE_MIN_VARIABLES:
+def _admit_factor(polynomial: RationalPolynomial) -> None:
+    if len(polynomial.variables) < _MULTIVARIATE_MIN_VARIABLES:
         raise _validation_error(
             "multivariate factorization requires at least two variables; "
             "univariate polynomials are handled by polynomial.factor.compute"
         )
-    if not request.polynomial.polynomial.terms:
+    if not polynomial.polynomial.terms:
         raise _validation_error("zero polynomial has no factorization")
     require_polynomial_budget(
-        request.polynomial,
+        polynomial,
         maximum_terms=_MAX_MULTIVARIATE_TERMS,
         maximum_exponent=_MAX_MULTIVARIATE_EXPONENT,
         maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
@@ -122,36 +125,33 @@ def _admit_factor(request: MultivariateFactorRequest) -> None:
         _require_representable_content,
     )
 
-    _require_representable_content(request.polynomial)
+    _require_representable_content(polynomial)
 
 
-def _admit_resultant(request: MultivariateResultantRequest) -> None:
-    _admit_pair(request.left, request.right)
-    if request.elimination_variable not in request.left.variables:
+def _admit_resultant(
+    left: RationalPolynomial, right: RationalPolynomial, elimination_variable: str
+) -> None:
+    _admit_pair(left, right)
+    if elimination_variable not in left.variables:
         raise _validation_error("elimination variable must belong to the declared ring")
-    index = request.left.variables.index(request.elimination_variable)
+    index = left.variables.index(elimination_variable)
     if (
-        _degree_in_variable(request.left, index)
-        + _degree_in_variable(request.right, index)
+        _degree_in_variable(left, index) + _degree_in_variable(right, index)
         > _MAX_ELIMINATION_DEGREE_SUM
     ):
         raise _validation_error("Sylvester degree exceeds the resultant budget")
-    if (
-        _resultant_support_bound(request.left, request.right, index)
-        > _MAX_RESULTANT_TERMS
-    ):
+    if _resultant_support_bound(left, right, index) > _MAX_RESULTANT_TERMS:
         raise _validation_error("resultant output exceeds the term budget")
 
 
-def _admit_subresultants(request: MultivariateSubresultantSequenceRequest) -> None:
-    _admit_pair(request.left, request.right)
-    if request.main_variable not in request.left.variables:
+def _admit_subresultants(
+    left: RationalPolynomial, right: RationalPolynomial, main_variable: str
+) -> None:
+    _admit_pair(left, right)
+    if main_variable not in left.variables:
         raise _validation_error("main variable must belong to the declared ring")
-    index = request.left.variables.index(request.main_variable)
-    degrees = (
-        _degree_in_variable(request.left, index),
-        _degree_in_variable(request.right, index),
-    )
+    index = left.variables.index(main_variable)
+    degrees = (_degree_in_variable(left, index), _degree_in_variable(right, index))
     if any(degree == 0 for degree in degrees):
         raise _validation_error(
             "both polynomials must have positive main-variable degree"
@@ -160,7 +160,7 @@ def _admit_subresultants(request: MultivariateSubresultantSequenceRequest) -> No
         raise _validation_error(
             "Sylvester order exceeds the subresultant backend budget"
         )
-    envelope = _subresultant_envelope(request.left, request.right, index)
+    envelope = _subresultant_envelope(left, right, index)
     if envelope.aggregate_terms > _MAX_SUBRESULTANT_SEQUENCE_TERMS:
         raise _validation_error(
             "formal subresultant sequence support exceeds the aggregate result-term budget"
@@ -217,27 +217,31 @@ def _result_polynomial(
         raise
 
 
-def compute_multivariate_gcd(request: MultivariateGcdRequest) -> MultivariateGcdResult:
+def multivariate_gcd(
+    left: RationalPolynomial, right: RationalPolynomial
+) -> MultivariateGcdResult:
     """Compute the GCD of two multivariate polynomials over ``QQ``."""
 
-    _run_admission(lambda: _admit_gcd(request))
+    _run_admission(lambda: _admit_gcd(left, right))
 
-    left = rational_polynomial_to_sympy(request.left)
-    right = rational_polynomial_to_sympy(request.right)
-    gcd = left.gcd(right)
+    left_value = rational_polynomial_to_sympy(left)
+    right_value = rational_polynomial_to_sympy(right)
+    gcd = left_value.gcd(right_value)
     return MultivariateGcdResult(
-        gcd=_result_polynomial(gcd, request.left.variables),
+        gcd=_result_polynomial(gcd, left.variables),
     )
 
 
-def compute_multivariate_division(
-    request: MultivariateDivisionRequest,
+def multivariate_division(
+    left: RationalPolynomial,
+    right: RationalPolynomial,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "lex",
 ) -> MultivariateDivisionResult:
     """Divide one multivariate polynomial by another with a declared monomial order."""
 
-    _run_admission(lambda: _admit_division(request))
+    _run_admission(lambda: _admit_division(left, right))
 
-    variables = request.left.variables
+    variables = left.variables
     symbols = symbols_for_variables(variables)
 
     # Build a low-level ring with the requested monomial order so that
@@ -247,10 +251,10 @@ def compute_multivariate_division(
     from sympy import QQ
     from sympy.polys.rings import ring as sympy_ring
 
-    ring_obj = sympy_ring(symbols, QQ, request.monomial_order)[0]
+    ring_obj = sympy_ring(symbols, QQ, monomial_order)[0]
 
-    left_poly = rational_polynomial_to_sympy(request.left)
-    right_poly = rational_polynomial_to_sympy(request.right)
+    left_poly = rational_polynomial_to_sympy(left)
+    right_poly = rational_polynomial_to_sympy(right)
 
     left_ring = ring_obj.from_dict(
         {exponents: coeff for exponents, coeff in left_poly.terms()}  # noqa: C416
@@ -275,27 +279,33 @@ def compute_multivariate_division(
     return MultivariateDivisionResult(
         quotient=_result_polynomial(quotient_poly, variables),
         remainder=_result_polynomial(remainder_poly, variables),
-        monomial_order=request.monomial_order,
+        monomial_order=monomial_order,
     )
 
 
-def compute_multivariate_resultant(
-    request: MultivariateResultantRequest,
+def multivariate_resultant(
+    left: RationalPolynomial,
+    right: RationalPolynomial,
+    elimination_variable: str,
 ) -> MultivariateResultantResult:
     """Compute the resultant of two multivariate polynomials w.r.t. one variable."""
-    _run_admission(lambda: _admit_resultant(request))
+    _run_admission(lambda: _admit_resultant(left, right, elimination_variable))
     return MultivariateResultantResult._from_kernel(
-        request,
-        resultant=_sylvester_resultant_value(request),
+        left,
+        right,
+        elimination_variable,
+        resultant=_sylvester_resultant_value(left, right, elimination_variable),
     )
 
 
-def compute_multivariate_subresultant_sequence(
-    request: MultivariateSubresultantSequenceRequest,
+def multivariate_subresultant_sequence(
+    left: RationalPolynomial,
+    right: RationalPolynomial,
+    main_variable: str,
 ) -> MultivariateSubresultantSequenceResult:
     """Return the exact nonzero Brown PRS in one declared main variable."""
 
-    _run_admission(lambda: _admit_subresultants(request))
+    _run_admission(lambda: _admit_subresultants(left, right, main_variable))
 
     from jacobian.math.polynomials.multivariate._subresultants import (
         polynomial_leading_coefficient_in_remaining_ring,
@@ -305,13 +315,13 @@ def compute_multivariate_subresultant_sequence(
 
     source_order, polynomials, principal_coefficients = (
         polynomial_subresultant_sequence(
-            request.left,
-            request.right,
-            request.main_variable,
+            left,
+            right,
+            main_variable,
             maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
         )
     )
-    variable_index = request.left.variables.index(request.main_variable)
+    variable_index = left.variables.index(main_variable)
     members = tuple(
         MultivariateSubresultantMember(
             polynomial=polynomial,
@@ -322,21 +332,23 @@ def compute_multivariate_subresultant_sequence(
     degrees = {member.degree_in_main_variable for member in members}
     greatest_degree = max(degrees)
     resultant = polynomial_resultant_in_remaining_ring(
-        request.left,
-        request.right,
-        request.main_variable,
+        left,
+        right,
+        main_variable,
         maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
     )
     gcd_degree = members[-1].degree_in_main_variable
     gcd_leading_coefficient = polynomial_leading_coefficient_in_remaining_ring(
         members[-1].polynomial,
-        request.main_variable,
+        main_variable,
         maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
     )
-    left_degree = _degree_in_variable(request.left, variable_index)
-    right_degree = _degree_in_variable(request.right, variable_index)
+    left_degree = _degree_in_variable(left, variable_index)
+    right_degree = _degree_in_variable(right, variable_index)
     return MultivariateSubresultantSequenceResult._from_kernel(
-        request,
+        left,
+        right,
+        main_variable,
         source_order=source_order,
         members=members,
         skipped_member_degrees=tuple(
@@ -403,7 +415,7 @@ def _monic_content_fraction(content: Any) -> Any:
     return Fraction(int(value.p), int(value.q))
 
 
-def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFactorResult:
+def multivariate_factor(polynomial: RationalPolynomial) -> MultivariateFactorResult:
     """Exact factorization over ``QQ[variables]`` via SymPy's ``factor_list``.
 
     The factorization kernel runs in a bounded, killable worker process.
@@ -419,7 +431,7 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
     instead.
     """
 
-    _run_admission(lambda: _admit_factor(request))
+    _run_admission(lambda: _admit_factor(polynomial))
 
     from jacobian._exact import CanonicalRational
 
@@ -431,16 +443,14 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
         return MultivariateFactorResult._from_kernel(
             status=status,
             coefficient=CanonicalRational.from_fraction(
-                _factor_backend.primitive_content_fraction(request.polynomial)
+                _factor_backend.primitive_content_fraction(polynomial)
             ),
             factors=(),
-            reconstructed=request.polynomial,
+            reconstructed=polynomial,
         )
 
     try:
-        coefficient, raw_factors, reconstructed = _sympy_factorization(
-            request.polynomial
-        )
+        coefficient, raw_factors, reconstructed = _sympy_factorization(polynomial)
     except FactorBackendInterruptedError:
         return _bounded_outcome("EXECUTION_FAILED")
     except FactorBackendExhaustedError:
@@ -458,7 +468,7 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
                 MultivariateIrreducibleFactor(
                     factor=_result_polynomial(
                         factor,
-                        request.polynomial.variables,
+                        polynomial.variables,
                         maximum_terms=_MAX_FACTOR_OUTPUT_TERMS,
                     ),
                     multiplicity=multiplicity,
@@ -486,7 +496,7 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
 
     reconstructed_poly = _result_polynomial(
         reconstructed,
-        request.polynomial.variables,
+        polynomial.variables,
         maximum_terms=_MAX_FACTOR_OUTPUT_TERMS,
     )
 

@@ -16,12 +16,12 @@ from jacobian.math.polynomials.series._models import (
     _SeriesAddSubtractRequest,
     _SeriesMultiplyRequest,
 )
-from jacobian.math.polynomials.series._operations import (
-    compute_compose,
-    compute_divide,
-    compute_multiply,
-    compute_power,
-    compute_reversion,
+from jacobian.math.polynomials.series.operations import (
+    compose,
+    divide,
+    multiply,
+    power,
+    reversion,
 )
 
 
@@ -44,7 +44,7 @@ def test_multiplication_bound_does_not_reject_coefficientwise_addition() -> None
     assert _SeriesAddSubtractRequest.model_validate(payload)
     request = _SeriesMultiplyRequest.model_validate(payload)
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_multiply(request.left, request.right)
+        multiply(request.left, request.right)
     assert (
         error.value.errors()[0]["type"]
         == "formal_power_series.multiplication_coefficient_growth"
@@ -58,7 +58,7 @@ def test_power_propagates_binary_convolution_growth() -> None:
         {"series": _series(order, coefficients), "exponent": 16}
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_power(request.series, request.exponent)
+        power(request.series, request.exponent)
     assert (
         error.value.errors()[0]["type"]
         == "formal_power_series.power_coefficient_growth"
@@ -73,7 +73,7 @@ def test_division_propagates_inverse_and_residual_growth() -> None:
         {"left": _series(order, numerator), "right": _series(order, denominator)}
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_divide(request.left, request.right)
+        divide(request.left, request.right)
     assert (
         error.value.errors()[0]["type"]
         == "formal_power_series.inverse_coefficient_growth"
@@ -88,7 +88,7 @@ def test_composition_propagates_inner_power_growth() -> None:
         {"outer": _series(order, outer), "inner": _series(order, inner)}
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_compose(request.outer, request.inner)
+        compose(request.outer, request.inner)
     assert (
         error.value.errors()[0]["type"]
         == "formal_power_series.composition_coefficient_growth"
@@ -104,7 +104,7 @@ def test_reversion_propagates_linear_coefficient_division() -> None:
     ]
     request = SeriesReversionRequest.model_validate(_series(order, coefficients))
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_reversion(request.as_series())
+        reversion(request.as_series())
     assert (
         error.value.errors()[0]["type"]
         == "formal_power_series.reversion_coefficient_growth"
@@ -148,7 +148,7 @@ def test_operation_inputs_keep_the_shared_order_ceiling() -> None:
         )
     )
     with pytest.raises(OperationDomainValidationError):
-        compute_power(series, 1)
+        power(series, 1)
 
 
 def test_largest_multiplication_result_fits_shared_output_envelope() -> None:
@@ -159,7 +159,7 @@ def test_largest_multiplication_result_fits_shared_output_envelope() -> None:
         _series(MAX_TRUNCATION_ORDER, [coefficient] * MAX_TRUNCATION_ORDER)
     )
     with pytest.raises(OperationDomainValidationError):
-        compute_multiply(series, series)
+        multiply(series, series)
 
 
 def test_result_round_trips_remain_structural() -> None:
@@ -183,7 +183,7 @@ def test_multiplication_result_rejects_structural_context_mismatch() -> None:
     series = InputTruncatedSeries.model_validate(
         _series(2, [_coefficient("1"), _coefficient("1")])
     )
-    payload = compute_multiply(series, series).model_dump(mode="json")
+    payload = multiply(series, series).model_dump(mode="json")
     payload["result"]["variable"] = "y"
 
     with pytest.raises(ValidationError) as error:

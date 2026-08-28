@@ -15,8 +15,8 @@ from jacobian.math.polynomials.multivariate._factor_models import (
     MultivariateFactorResult,
     MultivariateIrreducibleFactor,
 )
-from jacobian.math.polynomials.multivariate._operations import (
-    multivariate_factor,
+from jacobian.math.polynomials.multivariate._tools import (
+    _compute_factor,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -48,21 +48,21 @@ class TestMultivariateFactor:
     def test_simple_factorization(self) -> None:
         """Factor x^2*y - x = x * (x*y - 1) in Q[x,y]."""
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) >= 1
         assert result.reconstructed is not None
 
     def test_irreducible(self) -> None:
         """An irreducible polynomial has one factor."""
         poly = _poly(("x", "y"), ((1, 1, (1, 1)), (-1, 1, (0, 0))))
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) == 1
         assert result.factors[0].multiplicity == 1
 
     def test_repeated_factor(self) -> None:
         """(x*y -1)^2 = x^2*y^2 -2*x*y +1 should have multiplicity 2."""
         poly = _poly(("x", "y"), ((1, 1, (2, 2)), (-2, 1, (1, 1)), (1, 1, (0, 0))))
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) >= 1
         mults = [f.multiplicity for f in result.factors]
         assert 2 in mults
@@ -70,20 +70,20 @@ class TestMultivariateFactor:
     def test_trivariate(self) -> None:
         """Factor x*y*z in Q[x,y,z]."""
         poly = _poly(("x", "y", "z"), ((1, 1, (1, 1, 1)),))
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) >= 1
 
     def test_constant_polynomial(self) -> None:
         """A constant has zero factors."""
         poly = _poly(("x", "y"), ((5, 1, (0, 0)),))
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) == 0
 
 
 class TestMultivariateFactorResultInvariants:
     def test_roundtrip_result_validates(self) -> None:
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
     def test_rejects_zero_coefficient_with_zero_reconstruction(self) -> None:
@@ -152,7 +152,7 @@ class TestOutputBudgetOutcome:
                 (1, 1, (0, 0, 0)),
             ),
         )
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert result.status == "OUTPUT_BUDGET_EXCEEDED"
         assert result.factors == ()
         assert result.reconstructed == poly
@@ -225,7 +225,7 @@ class TestConversionAndResultLimitAlignment:
                 (1, 1, (0, 0, 0)),
             ),
         )
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert result.status == "FACTORIZED"
         term_counts = [len(record.factor.polynomial.terms) for record in result.factors]
         assert 530 in term_counts
@@ -249,7 +249,7 @@ class TestBoundedReconstruction:
                 (-1, 1, (0, 0, 0)),
             ),
         )
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert result.status == "FACTORIZED"
         assert len(result.factors) > 3
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
@@ -272,7 +272,7 @@ class TestBudgetOutcomeCoefficientBinding:
                 (1, 1, (0, 0, 0)),
             ),
         )
-        outcome = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        outcome = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert outcome.status == "OUTPUT_BUDGET_EXCEEDED"
         dump = outcome.model_dump()
         assert MultivariateFactorResult.model_validate(dump) == outcome
@@ -314,7 +314,7 @@ class TestUniqueFactorizationReplay:
         variables = tuple(f"x{i}" for i in range(1, 9))
         poly = _poly(variables, _difference_product_terms(variables, 12))
         assert len(poly.polynomial.terms) == 256
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert result.status == "FACTORIZED"
         assert len(result.factors) == 48
         assert result.reconstructed == poly
@@ -325,7 +325,7 @@ class TestUniqueFactorizationReplay:
         every factor is monic with multiplicity one and total degrees are
         1, 1, 2, 2, 2, 4 per variable."""
         poly = _poly(("x", "y"), _difference_product_terms(("x", "y"), 12))
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert result.status == "FACTORIZED"
         assert result.coefficient.as_fraction() == 1
         assert {record.multiplicity for record in result.factors} == {1}
@@ -376,7 +376,7 @@ class TestAggregateContentAdmission:
         declared typed result; admission rejects before invoking SymPy."""
         request = MultivariateFactorRequest(polynomial=_prime_denominator_poly(129))
         with pytest.raises(OperationDomainValidationError):
-            multivariate_factor(request)
+            _compute_factor(request)
 
     @pytest.mark.scale
     def test_content_within_limit_but_primitive_coefficients_rejected(self) -> None:
@@ -385,7 +385,7 @@ class TestAggregateContentAdmission:
         operation's own 256-digit coefficient budget."""
         request = MultivariateFactorRequest(polynomial=_prime_denominator_poly(127))
         with pytest.raises(OperationDomainValidationError):
-            multivariate_factor(request)
+            _compute_factor(request)
 
     def test_small_shared_denominators_still_admitted(self) -> None:
         """Ordinary rational coefficients clear to small primitive values
@@ -396,7 +396,7 @@ class TestAggregateContentAdmission:
                 ((1, 6, (2, 1)), (-1, 10, (1, 0))),
             )
         )
-        result = multivariate_factor(request)
+        result = _compute_factor(request)
         assert result.status == "FACTORIZED"
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
@@ -470,7 +470,7 @@ class TestKillableFactorBackend:
 
         request = MultivariateFactorRequest(polynomial=poly)
         started = time.monotonic()
-        result = multivariate_factor(request)
+        result = _compute_factor(request)
         elapsed = time.monotonic() - started
         # Either status is exact: an output-capacity hit is the
         # mathematical bounded status, while a deadline, cancellation, or
@@ -683,7 +683,7 @@ class TestSignedBudgetOutcomeContent:
                 if value != 0
             ),
         )
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         if result.status != "OUTPUT_BUDGET_EXCEEDED":
             pytest.fail("expected the oversized-factor bounded outcome")
         expected = _factor_backend.primitive_content_fraction(poly)
@@ -729,7 +729,7 @@ class TestExecutionInterruptionSeparation:
         from jacobian.math.polynomials.multivariate import _factor_backend
 
         monkeypatch.setattr(_factor_backend, "FACTOR_WORK_WALL_SECONDS", 0.25)
-        result = multivariate_factor(request)
+        result = _compute_factor(request)
         assert result.status == "EXECUTION_FAILED"
         assert result.factors == ()
         assert result.reconstructed == poly
@@ -792,7 +792,7 @@ class TestExecutionInterruptionSeparation:
     ) -> None:
         """A worker ``MemoryError`` under the address-space cap proves only
         that this run's work envelope was too small; it establishes nothing
-        about the exact output size, so multivariate_factor must return the
+        about the exact output size, so _compute_factor must return the
         retryable EXECUTION_FAILED status, never OUTPUT_BUDGET_EXCEEDED
         (PR #2226 review)."""
         import json as _json
@@ -815,7 +815,7 @@ class TestExecutionInterruptionSeparation:
 
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert result.status == "EXECUTION_FAILED"
         assert result.factors == ()
         assert result.reconstructed == poly

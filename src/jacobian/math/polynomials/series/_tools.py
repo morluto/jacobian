@@ -35,22 +35,22 @@ from jacobian.math.polynomials.series._models import (
     _SeriesIdentityCheckRequest,
     _SeriesMultiplyRequest,
 )
-from jacobian.math.polynomials.series._operations import (
-    compute_add,
-    compute_compose,
-    compute_derivative,
-    compute_divide,
-    compute_from_polynomial,
-    compute_identity_check,
-    compute_integral,
-    compute_inverse,
-    compute_multiply,
-    compute_power,
-    compute_reversion,
-    compute_scalar_multiply,
-    compute_subtract,
-    compute_to_polynomial,
-    compute_truncate,
+from jacobian.math.polynomials.series.operations import (
+    add,
+    compose,
+    derivative,
+    divide,
+    from_polynomial,
+    identity_check,
+    integral_zero_constant,
+    inverse,
+    multiply,
+    power,
+    reversion,
+    scalar_multiply,
+    subtract,
+    to_polynomial,
+    truncate,
 )
 
 _ZERO = {"num": "0", "den": "1"}
@@ -91,7 +91,7 @@ TOOLS = (
         ),
         request_type=_SeriesAddSubtractRequest,
         result_type=SeriesArithmeticResult,
-        run=lambda request: compute_add(request.left, request.right),
+        run=lambda request: add(request.left, request.right),
         tags=("formal-series", "arithmetic", "addition", "rational", "exact"),
         examples=(
             example(
@@ -110,7 +110,7 @@ TOOLS = (
         ),
         request_type=_SeriesAddSubtractRequest,
         result_type=SeriesArithmeticResult,
-        run=lambda request: compute_subtract(request.left, request.right),
+        run=lambda request: subtract(request.left, request.right),
         tags=("formal-series", "arithmetic", "subtraction", "rational", "exact"),
         examples=(
             example(
@@ -130,7 +130,7 @@ TOOLS = (
         ),
         request_type=_SeriesMultiplyRequest,
         result_type=SeriesMultiplyResult,
-        run=lambda request: compute_multiply(request.left, request.right),
+        run=lambda request: multiply(request.left, request.right),
         tags=(
             "formal-series",
             "power-series",
@@ -176,7 +176,7 @@ TOOLS = (
         ),
         request_type=SeriesScalarMultiplyRequest,
         result_type=SeriesScalarMultiplyResult,
-        run=lambda request: compute_scalar_multiply(request.series, request.scalar),
+        run=lambda request: scalar_multiply(request.series, request.scalar),
         tags=("formal-series", "arithmetic", "scalar", "rational", "exact"),
         examples=(
             example(
@@ -195,7 +195,7 @@ TOOLS = (
         ),
         request_type=SeriesPowerRequest,
         result_type=SeriesPowerResult,
-        run=lambda request: compute_power(request.series, request.exponent),
+        run=lambda request: power(request.series, request.exponent),
         tags=(
             "formal-series",
             "power-series",
@@ -235,7 +235,7 @@ TOOLS = (
         ),
         request_type=SeriesInverseRequest,
         result_type=SeriesInverseResult,
-        run=lambda request: compute_inverse(_input_series_from_request(request)),
+        run=lambda request: inverse(_input_series_from_request(request)),
         tags=(
             "formal-series",
             "power-series",
@@ -271,7 +271,7 @@ TOOLS = (
         ),
         request_type=SeriesDivideRequest,
         result_type=SeriesDivideResult,
-        run=lambda request: compute_divide(request.left, request.right),
+        run=lambda request: divide(request.left, request.right),
         tags=(
             "formal-series",
             "power-series",
@@ -318,7 +318,7 @@ TOOLS = (
         ),
         request_type=SeriesComposeRequest,
         result_type=SeriesComposeResult,
-        run=lambda request: compute_compose(request.outer, request.inner),
+        run=lambda request: compose(request.outer, request.inner),
         tags=(
             "formal-series",
             "power-series",
@@ -367,7 +367,7 @@ TOOLS = (
         ),
         request_type=SeriesReversionRequest,
         result_type=SeriesReversionResult,
-        run=lambda request: compute_reversion(_input_series_from_request(request)),
+        run=lambda request: reversion(_input_series_from_request(request)),
         tags=(
             "formal-series",
             "power-series",
@@ -403,7 +403,7 @@ TOOLS = (
         ),
         request_type=InputTruncatedSeries,
         result_type=SeriesDerivativeResult,
-        run=compute_derivative,
+        run=derivative,
         tags=("formal-series", "calculus", "derivative", "rational", "exact"),
         examples=(
             example(
@@ -422,7 +422,9 @@ TOOLS = (
         ),
         request_type=SeriesIntegralRequest,
         result_type=SeriesIntegralResult,
-        run=lambda request: compute_integral(request.series, request.output_order),
+        run=lambda request: integral_zero_constant(
+            request.series, request.output_order
+        ),
         tags=("formal-series", "calculus", "integral", "rational", "exact"),
         examples=(
             example(
@@ -441,7 +443,7 @@ TOOLS = (
         ),
         request_type=SeriesTruncateRequest,
         result_type=SeriesTruncateResult,
-        run=lambda request: compute_truncate(request.series, request.target_order),
+        run=lambda request: truncate(request.series, request.target_order),
         tags=("formal-series", "truncation", "rational", "exact"),
         examples=(
             example(
@@ -460,7 +462,7 @@ TOOLS = (
         ),
         request_type=_SeriesIdentityCheckRequest,
         result_type=SeriesIdentityCheckResult,
-        run=lambda request: compute_identity_check(request.left, request.right),
+        run=lambda request: identity_check(request.left, request.right),
         tags=("formal-series", "identity", "rational", "exact"),
         examples=(
             example(
@@ -479,7 +481,7 @@ TOOLS = (
         ),
         request_type=SeriesFromPolynomialRequest,
         result_type=SeriesFromPolynomialResult,
-        run=lambda request: compute_from_polynomial(
+        run=lambda request: from_polynomial(
             request.variable, request.coefficients, request.truncation_order
         ),
         tags=("formal-series", "polynomial", "conversion", "rational", "exact"),
@@ -504,7 +506,7 @@ TOOLS = (
         ),
         request_type=InputTruncatedSeries,
         result_type=SeriesToPolynomialResult,
-        run=compute_to_polynomial,
+        run=to_polynomial,
         tags=("formal-series", "polynomial", "conversion", "rational", "exact"),
         examples=(
             example(

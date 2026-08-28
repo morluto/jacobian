@@ -12,7 +12,7 @@ from jacobian.math.polynomials.multivariate import _factor_backend
 from jacobian.math.polynomials.multivariate._factor_models import (
     MultivariateFactorRequest,
 )
-from jacobian.math.polynomials.multivariate._operations import multivariate_factor
+from jacobian.math.polynomials.multivariate._tools import _compute_factor
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -44,7 +44,7 @@ def test_factorization_charges_its_single_backend_job() -> None:
         "run_bounded_factorization",
         wraps=_factor_backend.run_bounded_factorization,
     ) as run:
-        result = multivariate_factor(
+        result = _compute_factor(
             MultivariateFactorRequest(polynomial=_factorable_polynomial())
         )
 

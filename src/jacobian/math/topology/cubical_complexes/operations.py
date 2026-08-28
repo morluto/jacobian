@@ -3,22 +3,19 @@
 from __future__ import annotations
 
 from jacobian.math.topology.cubical_complexes._models import (
-    CubicalComplexRequest,
-    FaceClosureRequest,
+    CubicalCell,
     FaceClosureResult,
     FVectorResult,
 )
 
 
-def compute_f_vector(request: CubicalComplexRequest) -> FVectorResult:
+def f_vector(cells: tuple[CubicalCell, ...]) -> FVectorResult:
     """Compute the f-vector and Euler characteristic of a cubical complex.
 
     The f-vector counts all faces (including the supplied maximal cells) by
     dimension.  A single square [0,1]x[0,1] has 4 vertices, 4 edges, 1 square,
     so its f-vector is (4, 4, 1).
     """
-    cells = request.cells
-
     # Generate all faces including lower and upper degenerations
     all_cells: set[tuple[tuple[int, int], ...]] = set()
 
@@ -55,10 +52,8 @@ def compute_f_vector(request: CubicalComplexRequest) -> FVectorResult:
     )
 
 
-def compute_face_closure(request: FaceClosureRequest) -> FaceClosureResult:
+def face_closure(cells: tuple[CubicalCell, ...]) -> FaceClosureResult:
     """Compute the full face closure of a set of cells."""
-    cells = request.cells
-
     all_cells: set[tuple[tuple[int, int], ...]] = set()
 
     def add_faces(intervals: tuple[tuple[int, int], ...]) -> None:
@@ -93,3 +88,6 @@ def compute_face_closure(request: FaceClosureRequest) -> FaceClosureResult:
         total_cells=len(all_cells),
         cells_by_dimension=cells_by_dimension,
     )
+
+
+__all__ = ["f_vector", "face_closure"]

@@ -1,3 +1,5 @@
 """Cubical complex operations."""
 
-__all__: list[str] = []
+from jacobian.math.topology.cubical_complexes.operations import f_vector, face_closure
+
+__all__ = ["f_vector", "face_closure"]

@@ -12,10 +12,18 @@ from jacobian.math.topology.cubical_complexes._models import (
     FaceClosureResult,
     FVectorResult,
 )
-from jacobian.math.topology.cubical_complexes._operations import (
-    compute_f_vector,
-    compute_face_closure,
+from jacobian.math.topology.cubical_complexes.operations import (
+    f_vector,
+    face_closure,
 )
+
+
+def _f_vector(request: CubicalComplexRequest) -> FVectorResult:
+    return f_vector(request.cells)
+
+
+def _face_closure(request: FaceClosureRequest) -> FaceClosureResult:
+    return face_closure(request.cells)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -59,7 +67,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "elementary unit lattice cubes.",
         CubicalComplexRequest,
         FVectorResult,
-        compute_f_vector,
+        _f_vector,
         "topology",
         "cubical",
         "exact",
@@ -80,7 +88,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "cells by dimension.",
         FaceClosureRequest,
         FaceClosureResult,
-        compute_face_closure,
+        _face_closure,
         "topology",
         "cubical",
         "exact",

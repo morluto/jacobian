@@ -12,10 +12,20 @@ from jacobian.math.topology.edge_paths._models import (
     EdgePathWordRequest,
     EdgePathWordResult,
 )
-from jacobian.math.topology.edge_paths._operations import (
-    compute_edge_path_concatenate,
-    compute_edge_path_word,
+from jacobian.math.topology.edge_paths.operations import (
+    concatenate_edge_paths,
+    edge_path_word,
 )
+
+
+def _word(request: EdgePathWordRequest) -> EdgePathWordResult:
+    return edge_path_word(
+        request.vertex_count, request.edges, request.start_vertex, request.path
+    )
+
+
+def _concatenate(request: EdgePathConcatenateRequest) -> EdgePathConcatenateResult:
+    return concatenate_edge_paths(request.vertex_count, request.path_a, request.path_b)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -48,7 +58,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "graph, where each edge corresponds to a generator and its inverse.",
         EdgePathWordRequest,
         EdgePathWordResult,
-        compute_edge_path_word,
+        _word,
         "topology",
         "edge-path",
         "exact",
@@ -74,7 +84,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Concatenate two edge paths in a graph, removing the shared vertex.",
         EdgePathConcatenateRequest,
         EdgePathConcatenateResult,
-        compute_edge_path_concatenate,
+        _concatenate,
         "topology",
         "edge-path",
         "exact",

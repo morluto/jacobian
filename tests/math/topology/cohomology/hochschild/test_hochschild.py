@@ -16,10 +16,20 @@ from jacobian.math.topology.cohomology.hochschild._models import (
     HochschildHomologyRequest,
     HochschildHomologyResult,
 )
-from jacobian.math.topology.cohomology.hochschild._operations import (
-    compute_hochschild_chain_complex,
-    compute_hochschild_homology,
+from jacobian.math.topology.cohomology.hochschild.operations import (
+    hochschild_chain_complex,
+    hochschild_homology,
 )
+
+
+def _run_chain_complex(
+    request: HochschildChainComplexRequest,
+) -> HochschildChainComplexResult:
+    return hochschild_chain_complex(request.algebra, request.max_degree)
+
+
+def _run_homology(request: HochschildHomologyRequest) -> HochschildHomologyResult:
+    return hochschild_homology(request.algebra, request.max_degree)
 
 
 @contextmanager
@@ -56,7 +66,7 @@ class TestHochschildChainComplex:
             structure_constants=(((1,),),),
             augmentation=(1,),
         )
-        result = compute_hochschild_chain_complex(
+        result = _run_chain_complex(
             HochschildChainComplexRequest(algebra=alg, max_degree=2)
         )
         assert result.group_dimensions == (1, 1, 1)
@@ -72,7 +82,7 @@ class TestHochschildChainComplex:
             ),
             augmentation=(1, 1),
         )
-        result = compute_hochschild_chain_complex(
+        result = _run_chain_complex(
             HochschildChainComplexRequest(algebra=alg, max_degree=1)
         )
         assert result.group_dimensions[0] == 1
@@ -89,7 +99,7 @@ class TestHochschildChainComplex:
             ),
             augmentation=(1, 5 - 1),
         )
-        result = compute_hochschild_chain_complex(
+        result = _run_chain_complex(
             HochschildChainComplexRequest(algebra=alg, max_degree=2)
         )
         assert len(result.differentials) >= 1
@@ -106,7 +116,7 @@ class TestHochschildHomology:
             structure_constants=(((1,),),),
             augmentation=(1,),
         )
-        result = compute_hochschild_homology(
+        result = _run_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=2)
         )
         assert result.groups[0].betti == 1
@@ -122,7 +132,7 @@ class TestHochschildHomology:
             ),
             augmentation=(1, 1),
         )
-        result = compute_hochschild_homology(
+        result = _run_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=2)
         )
         assert len(result.groups) >= 2
@@ -135,7 +145,7 @@ class TestHochschildHomology:
             structure_constants=(((0,),),),
             augmentation=(0,),
         )
-        result = compute_hochschild_homology(
+        result = _run_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=2)
         )
         # With zero multiplication, the differential vanishes
@@ -165,7 +175,7 @@ class TestHochschildAdmissionAndTopDegree:
             augmentation=(0, 0),
         )
         with pytest.raises(ValueError, match="associative"):
-            compute_hochschild_chain_complex(
+            _run_chain_complex(
                 HochschildChainComplexRequest(algebra=algebra, max_degree=1)
             )
 
@@ -177,7 +187,7 @@ class TestHochschildAdmissionAndTopDegree:
             structure_constants=(((1,),),),
             augmentation=(1,),
         )
-        result = compute_hochschild_homology(
+        result = _run_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=2)
         )
         bettis = {g.degree: g.betti for g in result.groups}
@@ -189,11 +199,11 @@ class TestHochschildAdmissionAndTopDegree:
         alg = _coordinatewise_algebra(2, 7)
         assert alg.dimension ** (4 + 1) <= 20_000
         with pytest.raises(ValueError, match="matrix"):
-            compute_hochschild_homology(
+            _run_homology(
                 HochschildHomologyRequest(algebra=alg, max_degree=4)
             )
         with pytest.raises(ValueError, match="matrix"):
-            compute_hochschild_chain_complex(
+            _run_chain_complex(
                 HochschildChainComplexRequest(algebra=alg, max_degree=4)
             )
 
@@ -202,7 +212,7 @@ class TestHochschildAdmissionAndTopDegree:
         alg = _coordinatewise_algebra(5, 5)
         request = HochschildHomologyRequest(algebra=alg, max_degree=3)
         assert MAX_HOCHSCHILD_MATRIX_ENTRIES >= alg.dimension**7 == 78_125
-        result = compute_hochschild_homology(request)
+        result = _run_homology(request)
         assert [group.betti for group in result.groups] == [1, 0, 0, 0]
 
     def test_nine_dim_coordinatewise_algebra_admitted(self) -> None:
@@ -215,13 +225,13 @@ class TestHochschildAdmissionAndTopDegree:
         """
         alg = _coordinatewise_algebra(5, 9)
         assert alg.dimension**3 == 729
-        homology = compute_hochschild_homology(
+        homology = _run_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=1)
         )
         # GF(5)^9 is separable with the projection augmentation, so
         # HH_0 = K and all higher groups vanish.
         assert [group.betti for group in homology.groups] == [1, 0]
-        complex_result = compute_hochschild_chain_complex(
+        complex_result = _run_chain_complex(
             HochschildChainComplexRequest(algebra=alg, max_degree=1)
         )
         assert complex_result.group_dimensions == (1, 9)
@@ -239,7 +249,7 @@ class TestHochschildAdmissionAndTopDegree:
         assert 2 * (boundary + 1) ** 5 > MAX_ASSOCIATIVITY_DOT_STEPS
         algebra = _coordinatewise_algebra(2, boundary + 1)
         with pytest.raises(ValueError, match="associativity"):
-            compute_hochschild_chain_complex(
+            _run_chain_complex(
                 HochschildChainComplexRequest(algebra=algebra, max_degree=1)
             )
 
@@ -253,7 +263,7 @@ class TestHochschildAdmissionAndTopDegree:
         assert oversized**3 > MAX_STRUCTURE_CONSTANT_ENTRIES
         algebra = _coordinatewise_algebra(2, oversized)
         with pytest.raises(ValueError, match="structure"):
-            compute_hochschild_chain_complex(
+            _run_chain_complex(
                 HochschildChainComplexRequest(algebra=algebra, max_degree=1)
             )
 
@@ -263,7 +273,7 @@ class TestHochschildAdmissionAndTopDegree:
             algebra=_coordinatewise_algebra(2, 10), max_degree=4
         )
         with pytest.raises(ValueError, match="tensor"):
-            compute_hochschild_homology(request)
+            _run_homology(request)
 
 
 class TestChainComplexSourceBinding:
@@ -279,7 +289,7 @@ class TestChainComplexSourceBinding:
 
     def test_result_retains_its_source(self) -> None:
         algebra = self._swap_algebra()
-        result = compute_hochschild_chain_complex(
+        result = _run_chain_complex(
             HochschildChainComplexRequest(algebra=algebra, max_degree=3)
         )
         assert result.algebra == algebra
@@ -309,7 +319,7 @@ class TestChainComplexSourceBinding:
 
     def test_inconsistent_group_dimensions_rejected(self) -> None:
         algebra = self._swap_algebra()
-        result = compute_hochschild_chain_complex(
+        result = _run_chain_complex(
             HochschildChainComplexRequest(algebra=algebra, max_degree=2)
         )
         payload = result.model_dump()
@@ -319,7 +329,7 @@ class TestChainComplexSourceBinding:
 
     def test_mismatched_prime_rejected(self) -> None:
         algebra = self._swap_algebra()
-        result = compute_hochschild_chain_complex(
+        result = _run_chain_complex(
             HochschildChainComplexRequest(algebra=algebra, max_degree=1)
         )
         payload = result.model_dump()
@@ -335,7 +345,7 @@ class TestChainComplexSourceBinding:
         silently switching fields inside rank/RREF/nullspace consumers.
         """
         algebra = _dual_numbers(5)
-        result = compute_hochschild_chain_complex(
+        result = _run_chain_complex(
             HochschildChainComplexRequest(algebra=algebra, max_degree=1)
         )
         assert result.differentials[0].matrix.entries != ((0,),)
@@ -355,7 +365,7 @@ class TestChainComplexSourceBinding:
             ),
             augmentation=(0, 0),
         )
-        result = compute_hochschild_chain_complex(
+        result = _run_chain_complex(
             HochschildChainComplexRequest(algebra=zero_algebra, max_degree=1)
         )
         assert result.differentials[0].matrix.entries == ((0, 0),)
@@ -367,7 +377,7 @@ class TestChainComplexSourceBinding:
     def test_matching_differential_prime_accepted(self) -> None:
         """Round-tripped differentials carrying the algebra prime still validate."""
         algebra = self._swap_algebra()
-        result = compute_hochschild_chain_complex(
+        result = _run_chain_complex(
             HochschildChainComplexRequest(algebra=algebra, max_degree=2)
         )
         assert all(
@@ -385,7 +395,7 @@ class TestHomologySourceBinding:
             structure_constants=(((1,),),),
             augmentation=(1,),
         )
-        genuine = compute_hochschild_homology(
+        genuine = _run_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=2)
         )
         payload = genuine.model_dump()
@@ -412,7 +422,7 @@ class TestAugmentationEndpointFaces:
 
     def test_dual_numbers_hh_is_one_in_every_degree(self) -> None:
         """HH_n(GF(p)[x]/(x^2), K) = K for all n; adjacent-only would give H_1 = 0."""
-        result = compute_hochschild_homology(
+        result = _run_homology(
             HochschildHomologyRequest(algebra=_dual_numbers(5), max_degree=4)
         )
         assert [group.betti for group in result.groups] == [1, 1, 1, 1, 1]
@@ -428,7 +438,7 @@ class TestAugmentationEndpointFaces:
             ),
             augmentation=(0, 0),
         )
-        result = compute_hochschild_homology(
+        result = _run_homology(
             HochschildHomologyRequest(algebra=zeroed, max_degree=3)
         )
         # With no augmentation action the image of d_2 is all of A
@@ -490,7 +500,7 @@ class TestAugmentationEndpointFaces:
             augmentation=(1, 1),
         )
         with pytest.raises(ValueError, match="augmentation"):
-            compute_hochschild_chain_complex(
+            _run_chain_complex(
                 HochschildChainComplexRequest(algebra=algebra, max_degree=1)
             )
 

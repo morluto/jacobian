@@ -12,10 +12,20 @@ from jacobian.math.topology.cohomology.hochschild._models import (
     HochschildHomologyRequest,
     HochschildHomologyResult,
 )
-from jacobian.math.topology.cohomology.hochschild._operations import (
-    compute_hochschild_chain_complex,
-    compute_hochschild_homology,
+from jacobian.math.topology.cohomology.hochschild.operations import (
+    hochschild_chain_complex,
+    hochschild_homology,
 )
+
+
+def _chain_complex(
+    request: HochschildChainComplexRequest,
+) -> HochschildChainComplexResult:
+    return hochschild_chain_complex(request.algebra, request.max_degree)
+
+
+def _homology(request: HochschildHomologyRequest) -> HochschildHomologyResult:
+    return hochschild_homology(request.algebra, request.max_degree)
 
 
 def hochschild_operation[
@@ -66,7 +76,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "multiplications plus both augmentation-dependent endpoint faces.",
         HochschildChainComplexRequest,
         HochschildChainComplexResult,
-        compute_hochschild_chain_complex,
+        _chain_complex,
         "hochschild",
         "chain-complex",
         "exact",
@@ -87,7 +97,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "defined by epsilon, using Gaussian elimination over GF(p).",
         HochschildHomologyRequest,
         HochschildHomologyResult,
-        compute_hochschild_homology,
+        _homology,
         "hochschild",
         "homology",
         "exact",

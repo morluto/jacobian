@@ -9,11 +9,9 @@ from jacobian.math.topology.cohomology.hochschild._bar import bar_differential_e
 from jacobian.math.topology.cohomology.hochschild._models import (
     MAX_HOCHSCHILD_TENSOR_ELEMENTS,
     AlgebraStructure,
-    HochschildChainComplexRequest,
     HochschildChainComplexResult,
     HochschildDifferential,
     HochschildHomologyGroup,
-    HochschildHomologyRequest,
     HochschildHomologyResult,
 )
 
@@ -79,8 +77,9 @@ def _boundary_rank(
         return int(domain_matrix.rank())
 
 
-def compute_hochschild_chain_complex(
-    request: HochschildChainComplexRequest,
+def hochschild_chain_complex(
+    algebra: AlgebraStructure,
+    max_degree: int,
 ) -> HochschildChainComplexResult:
     """Compute the exact Hochschild chain complex with trivial coefficients.
 
@@ -95,12 +94,12 @@ def compute_hochschild_chain_complex(
         require_hochschild_budget,
     )
 
-    require_algebra_admission(request.algebra)
-    require_hochschild_budget(request.algebra.dimension, request.max_degree)
-    alg = request.algebra
+    require_algebra_admission(algebra)
+    require_hochschild_budget(algebra.dimension, max_degree)
+    alg = algebra
     n = alg.dimension
     p = alg.prime
-    max_deg = request.max_degree
+    max_deg = max_degree
 
     group_dims = [1]
     for k in range(1, max_deg + 1):
@@ -165,8 +164,9 @@ def hochschild_homology_groups(
     return tuple(groups)
 
 
-def compute_hochschild_homology(
-    request: HochschildHomologyRequest,
+def hochschild_homology(
+    algebra: AlgebraStructure,
+    max_degree: int,
 ) -> HochschildHomologyResult:
     """Compute exact Hochschild homology HH_n(A, K) for trivial coefficients."""
     from jacobian.math.topology.cohomology.hochschild._bounds import (
@@ -174,18 +174,19 @@ def compute_hochschild_homology(
         require_hochschild_budget,
     )
 
-    require_algebra_admission(request.algebra)
-    require_hochschild_budget(request.algebra.dimension, request.max_degree)
-    alg = request.algebra
+    require_algebra_admission(algebra)
+    require_hochschild_budget(algebra.dimension, max_degree)
+    alg = algebra
 
     return HochschildHomologyResult._from_kernel(
         alg,
-        request.max_degree,
-        hochschild_homology_groups(alg, request.max_degree),
+        max_degree,
+        hochschild_homology_groups(alg, max_degree),
     )
 
 
 __all__ = [
-    "compute_hochschild_chain_complex",
-    "compute_hochschild_homology",
+    "hochschild_chain_complex",
+    "hochschild_homology",
+    "hochschild_homology_groups",
 ]

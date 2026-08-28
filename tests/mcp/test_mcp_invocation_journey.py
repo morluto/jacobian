@@ -348,6 +348,7 @@ def test_mcp_composes_public_finite_field_values_with_native_projections(
         from jacobian.math.finite_fields import (
             Axis,
             AxisBoundMatrix,
+            FiberPartition,
             FiniteDimensionalSubspace,
             FiniteMapTable,
             ProjectiveLine,
@@ -371,31 +372,6 @@ def test_mcp_composes_public_finite_field_values_with_native_projections(
             create_server(),
             raise_exceptions=True,
         ) as client:
-            excluded = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "inspect",
-                        "operation_id": ("finite_field.polynomial_map.fibers.compute"),
-                    }
-                },
-            )
-            assert excluded.is_error is False
-            assert excluded.structured_content == {
-                "kind": "error",
-                "error": {
-                    "code": "UNKNOWN_OPERATION",
-                    "stage": "operation_resolution",
-                    "message": (
-                        "Unknown operation: finite_field.polynomial_map.fibers.compute"
-                    ),
-                    "hint": (
-                        "Call math.find with a mathematical query to search "
-                        "installed operations."
-                    ),
-                },
-            }
-
             table_call = await client.call_tool(
                 "math.run",
                 {
@@ -412,7 +388,18 @@ def test_mcp_composes_public_finite_field_values_with_native_projections(
             table_value = table_output
 
             table = FiniteMapTable.model_validate(table_value)
-            fibers = fiber_partition(table)
+            fibers_call = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "finite_field.polynomial_map.fibers.compute",
+                    "payload": {"table": table_value},
+                },
+            )
+            assert isinstance(fibers_call.structured_content, dict)
+            fibers = FiberPartition.model_validate(
+                fibers_call.structured_content["output"]
+            )
+            assert fibers == fiber_partition(table)
             assert fibers.table == table
             assert sorted(len(sources) for _image, sources in fibers.fibers) == [1, 3]
 

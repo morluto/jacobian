@@ -215,7 +215,6 @@ ignore_imports = [
     # helpers may import catalog declaration types to publish built-ins.
     "jacobian.math.** -> jacobian.catalog.models",
     "jacobian.math.** -> jacobian.catalog._examples",
-    "jacobian.math.** -> jacobian.catalog.admission",
     # The logic domain launches bounded external solvers via jacobian.process.
     "jacobian.math.logic._sat -> jacobian.process",
     "jacobian.math.logic._smt -> jacobian.process",

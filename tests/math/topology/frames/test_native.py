@@ -4,9 +4,7 @@ from collections.abc import Callable
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.topology.frames import VectorFamily, coherence, frame_potential, gram
 from jacobian.math.topology.frames._models import (
     CoherenceRequest,
@@ -35,19 +33,6 @@ def test_native_coherence_matches_wire_adapter() -> None:
     wire = compute_coherence(CoherenceRequest(vectors=family.vectors))
 
     assert native.model_dump() == wire.model_dump()
-
-
-def test_frame_tools_are_discoverable_and_dispatch_matches_native() -> None:
-    catalog = Catalog.open()
-    descriptor = catalog.inspect("frame.gram.compute")
-    assert descriptor is not None
-
-    dispatched = invoke_operation(
-        "frame.gram.compute", {"vectors": [[1, 1], [1, 0], [0, 1]]}, catalog
-    )
-    assert dispatched.output == gram(
-        VectorFamily(vectors=((1, 1), (1, 0), (0, 1)))
-    ).model_dump(mode="json")
 
 
 @pytest.mark.parametrize("operation", [coherence, frame_potential])

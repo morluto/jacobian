@@ -200,13 +200,17 @@ def test_native_api_rejects_boolean_modulus_and_integer() -> None:
 def test_catalog_declares_the_composable_principal_operations() -> None:
     assert tuple(tool.operation_id for tool in TOOLS) == (
         "dirichlet_character.principal.compute",
+        "dirichlet_character.principal.value.compute",
     )
 
 
-def test_published_catalog_keeps_only_the_complete_table_operation() -> None:
+def test_published_catalog_includes_table_and_value_operations() -> None:
     published = tuple(tool.operation_id for tool in TOOLS)
 
-    assert published == ("dirichlet_character.principal.compute",)
+    assert published == (
+        "dirichlet_character.principal.compute",
+        "dirichlet_character.principal.value.compute",
+    )
 
 
 def test_value_native_symbol_is_supported_by_the_public_module() -> None:

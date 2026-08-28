@@ -371,8 +371,8 @@ class TestLagrangeInterpolateNative:
             lagrange_interpolate((_canonical("0"), _canonical("1")), (_canonical("1"),))
 
 
-class TestInterpolationAdmissionDisposition:
-    """The duplicate interpolant must stay out of discovery, native only."""
+class TestInterpolationPublication:
+    """Interpolation is available through both native and MCP surfaces."""
 
     def test_interpolation_is_native_only_with_supported_symbol(self) -> None:
         import jacobian.math.analysis.approximation as public_module
@@ -380,9 +380,9 @@ class TestInterpolationAdmissionDisposition:
         assert "lagrange_interpolate" in public_module.__all__
         assert callable(public_module.lagrange_interpolate)
 
-    def test_duplicate_interpolant_is_not_served(self) -> None:
+    def test_interpolant_is_published_alongside_basis(self) -> None:
         from jacobian.catalog.builtins import BUILTIN_TOOLS
 
         ids = {tool.operation_id for tool in BUILTIN_TOOLS}
-        assert "approximation.lagrange.interpolate.compute" not in ids
+        assert "approximation.lagrange.interpolate.compute" in ids
         assert "approximation.lagrange.basis.compute" in ids

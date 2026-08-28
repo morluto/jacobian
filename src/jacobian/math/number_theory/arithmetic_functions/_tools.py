@@ -13,11 +13,14 @@ from jacobian.math.number_theory.arithmetic_functions._models import (
     DirichletInverseResult,
     MobiusTransformRequest,
     MobiusTransformResult,
+    SummatoryFunctionRequest,
+    SummatoryFunctionResult,
 )
 from jacobian.math.number_theory.arithmetic_functions._operations import (
     compute_dirichlet_convolution,
     compute_dirichlet_inverse,
     compute_mobius_transform,
+    compute_summatory_function,
 )
 
 
@@ -100,6 +103,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         {"num": "1", "den": "1"},
                     ],
                     "inverse": False,
+                },
+            ),
+        ),
+    ),
+    arithmetic_functions_operation(
+        "arithmetic.summatory_function.compute",
+        "Compute the summatory function of an arithmetic function",
+        "Given exact values of an arithmetic function at indices 1 through n, "
+        "compute the partial sums S(K) = sum_{i=1}^K f(i) for K = 1 through n.",
+        SummatoryFunctionRequest,
+        SummatoryFunctionResult,
+        compute_summatory_function,
+        "arithmetic",
+        "summatory",
+        "exact",
+        examples=(
+            example(
+                "identity_summatory",
+                "The partial sums of 1, 2, 3, 4 are 1, 3, 6, 10.",
+                {
+                    "values": [
+                        {"num": "1", "den": "1"},
+                        {"num": "2", "den": "1"},
+                        {"num": "3", "den": "1"},
+                        {"num": "4", "den": "1"},
+                    ]
                 },
             ),
         ),

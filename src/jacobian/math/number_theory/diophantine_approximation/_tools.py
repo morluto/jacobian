@@ -9,11 +9,14 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.diophantine_approximation._models import (
     ContinuedFractionRequest,
     ContinuedFractionResult,
+    ConvergentRequest,
+    ConvergentResult,
     PellEquationRequest,
     PellEquationResult,
 )
 from jacobian.math.number_theory.diophantine_approximation._operations import (
     compute_continued_fraction,
+    compute_convergents,
     compute_pell_equation,
 )
 
@@ -58,6 +61,25 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "sqrt_2",
                 "Continued fraction of sqrt(2) is [1; 2, 2, 2, ...].",
                 {"discriminant": 2, "term_count": 5},
+            ),
+        ),
+    ),
+    da_operation(
+        "diophantine.convergents.compute",
+        "Compute convergents of sqrt(D)",
+        "Compute the first n convergents p_k/q_k of sqrt(D) using the exact "
+        "continued-fraction recurrence.",
+        ConvergentRequest,
+        ConvergentResult,
+        compute_convergents,
+        "number-theory",
+        "convergents",
+        "exact",
+        examples=(
+            example(
+                "sqrt_2_convergents",
+                "Compute the first five convergents of sqrt(2).",
+                {"discriminant": 2, "convergent_count": 5},
             ),
         ),
     ),

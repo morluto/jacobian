@@ -9,9 +9,12 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.analysis.approximation._models import (
     LagrangeBasisRequest,
     LagrangeBasisResult,
+    LagrangeInterpolationRequest,
+    LagrangeInterpolationResult,
 )
 from jacobian.math.analysis.approximation._operations import (
     compute_lagrange_basis,
+    compute_lagrange_interpolation,
 )
 
 
@@ -85,6 +88,27 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "three_nodes",
                 "Compute the Lagrange basis for nodes 0, 1/2, 1.",
                 _BASIS_EXAMPLE,
+            ),
+        ),
+    ),
+    approximation_operation(
+        "approximation.lagrange.interpolate.compute",
+        "Interpolate a polynomial through rational nodes and values",
+        "Given distinct rational nodes x_0, ..., x_{n-1} and values y_0, ..., "
+        "y_{n-1}, compute the exact interpolation polynomial p(x) of degree at "
+        "most n-1 such that p(x_k) = y_k, using the Lagrange formula over QQ.",
+        LagrangeInterpolationRequest,
+        LagrangeInterpolationResult,
+        compute_lagrange_interpolation,
+        "approximation",
+        "lagrange",
+        "interpolation",
+        "exact",
+        examples=(
+            example(
+                "quadratic_through_three_points",
+                "Interpolate through (0,1), (1,3), (2,9).",
+                _INTERP_EXAMPLE,
             ),
         ),
     ),

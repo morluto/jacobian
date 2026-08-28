@@ -8,34 +8,45 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.matrices._operation_models import (
     CharacteristicPolynomialResult,
     IntegerMatrixRequest,
+    MatrixAdjugateResult,
     MatrixDeterminantRequest,
     MatrixDeterminantResult,
     MatrixInverseResult,
+    MatrixKroneckerProductRequest,
+    MatrixKroneckerProductResult,
     MatrixPartialTraceRequest,
     MatrixPartialTraceResult,
     MatrixPermanentRequest,
     MatrixPermanentResult,
+    MatrixProductResult,
     MatrixRankRequest,
     MatrixRankResult,
+    MatrixTraceResult,
     NonsingularIntegerMatrixRequest,
     NullspaceResult,
     RationalLinearSolveRequest,
     RationalLinearSolveResult,
+    RationalMatrixProductRequest,
     RationalMatrixRequest,
     RrefResult,
+    SquareIntegerMatrixRequest,
     SquareRationalMatrixRequest,
 )
 from jacobian.math.matrices._operations import (
+    compute_adjugate,
     compute_characteristic_polynomial,
     compute_determinant,
     compute_inverse,
+    compute_kronecker_product,
     compute_nullspace,
     compute_partial_trace,
     compute_permanent,
+    compute_product,
     compute_rank,
     compute_rational_linear_solve,
     compute_rref,
     compute_smith_normal_form,
+    compute_trace,
 )
 from jacobian.math.matrices.values import SmithNormalForm
 
@@ -124,6 +135,106 @@ MATRIX_DETERMINANT_COMPUTE = matrix_operation(
 
 TOOLS = (
     MATRIX_DETERMINANT_COMPUTE,
+    matrix_operation(
+        "matrix.adjugate.compute",
+        "Compute an exact matrix adjugate",
+        "Compute the classical adjugate of a square integer matrix.",
+        SquareIntegerMatrixRequest,
+        MatrixAdjugateResult,
+        compute_adjugate,
+        "matrix",
+        "adjugate",
+        "exact-integer",
+        examples=(
+            example(
+                "adjugate_two_by_two",
+                "Compute the adjugate of [[1, 2], [3, 4]].",
+                {"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
+            ),
+        ),
+    ),
+    matrix_operation(
+        "matrix.trace.compute",
+        "Compute the exact trace of an integer matrix",
+        "Compute the sum of the diagonal entries of a square integer matrix.",
+        SquareIntegerMatrixRequest,
+        MatrixTraceResult,
+        compute_trace,
+        "matrix",
+        "trace",
+        "exact-integer",
+        examples=(
+            example(
+                "trace_two_by_two",
+                "Compute the trace of [[1, 2], [3, 4]].",
+                {"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
+            ),
+        ),
+    ),
+    matrix_operation(
+        "matrix.multiply.compute",
+        "Multiply two exact rational matrices",
+        "Compute the standard row-by-column product of two compatible bounded matrices over QQ.",
+        RationalMatrixProductRequest,
+        MatrixProductResult,
+        compute_product,
+        "matrix",
+        "matrix-multiplication",
+        "product",
+        "exact-rational",
+        examples=(
+            example(
+                "multiply_square_matrices",
+                "Multiply two 2x2 matrices over QQ.",
+                {
+                    "left": {
+                        "entries": [
+                            [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                        ]
+                    },
+                    "right": {
+                        "entries": [
+                            [{"num": "2", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "2", "den": "1"}],
+                        ]
+                    },
+                },
+            ),
+        ),
+    ),
+    matrix_operation(
+        "matrix.kronecker_product.compute",
+        "Compute an exact Kronecker product",
+        "Compute the Kronecker product of two bounded rational matrices over QQ.",
+        MatrixKroneckerProductRequest,
+        MatrixKroneckerProductResult,
+        compute_kronecker_product,
+        "matrix",
+        "kronecker-product",
+        "tensor",
+        "exact-rational",
+        examples=(
+            example(
+                "kronecker_identity",
+                "Compute the Kronecker product of two 2x2 identity matrices.",
+                {
+                    "left": {
+                        "entries": [
+                            [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                        ]
+                    },
+                    "right": {
+                        "entries": [
+                            [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                        ]
+                    },
+                },
+            ),
+        ),
+    ),
     matrix_operation(
         "matrix.rank.compute",
         "Compute exact rational matrix rank",

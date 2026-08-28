@@ -10,7 +10,7 @@ from jacobian.math.geometry.algebraic_curves._operations import (
 from jacobian.math.matrices.symbolic._models import (
     SymbolicDeterminantRequest,
 )
-from jacobian.math.matrices.symbolic._operations import compute_symbolic_determinant
+from jacobian.math.matrices.symbolic.operations import compute_symbolic_determinant
 from jacobian.math.polynomials.maps._models import EvalRequest, VariablePoint
 from jacobian.math.polynomials.maps._operations import evaluate_polynomial
 from jacobian.math.polynomials.values import (

@@ -32,7 +32,7 @@ from jacobian.math.matrices._operation_models import (
     SquareIntegerMatrixRequest,
     SquareRationalMatrixRequest,
 )
-from jacobian.math.matrices._operations import (
+from jacobian.math.matrices.operations import (
     compute_adjugate,
     compute_characteristic_polynomial,
     compute_determinant,

@@ -19,7 +19,7 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicMatrixRequest,
     SymbolicRankResult,
 )
-from jacobian.math.matrices.symbolic._operations import (
+from jacobian.math.matrices.symbolic.operations import (
     compute_symbolic_characteristic_polynomial,
     compute_symbolic_determinant,
     compute_symbolic_eigenvalues,

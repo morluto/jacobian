@@ -15,7 +15,7 @@ from jacobian.math.matrices._operation_models import (
     MatrixPermanentRequest,
     MatrixPermanentResult,
 )
-from jacobian.math.matrices._operations import (
+from jacobian.math.matrices.operations import (
     compute_kronecker_product,
     compute_partial_trace,
     compute_permanent,

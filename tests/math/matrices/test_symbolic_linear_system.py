@@ -13,10 +13,10 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicLinearSystemResult,
     SymbolicMatrix,
 )
-from jacobian.math.matrices.symbolic._operations import (
+from jacobian.math.matrices.symbolic.operations import (
+    SystemClassification,
     compute_symbolic_linear_system,
 )
-from jacobian.math.matrices.symbolic.operations import SystemClassification
 from jacobian.math.polynomials.values import RationalFunction
 
 Payload = dict[str, object]

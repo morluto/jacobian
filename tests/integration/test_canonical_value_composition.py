@@ -25,7 +25,7 @@ from jacobian.math.matrices._operation_models import (
     MatrixDeterminantRequest,
     RationalMatrixProductRequest,
 )
-from jacobian.math.matrices._operations import compute_determinant, compute_product
+from jacobian.math.matrices.operations import compute_determinant, compute_product
 from jacobian.math.polynomials.series._models import (
     SeriesFromPolynomialRequest,
     SeriesTruncateRequest,

@@ -13,7 +13,7 @@ from jacobian.math.matrices.canonical_forms._models import (
     RationalCanonicalFormResult,
     SquareMatrixRequest,
 )
-from jacobian.math.matrices.canonical_forms._operations import (
+from jacobian.math.matrices.canonical_forms.operations import (
     compute_matrix_polynomial_evaluation,
     compute_minimal_polynomial,
     compute_primary_decomposition,

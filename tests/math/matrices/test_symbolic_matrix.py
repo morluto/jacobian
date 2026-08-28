@@ -23,14 +23,14 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicMatrixRequest,
     SymbolicRankResult,
 )
-from jacobian.math.matrices.symbolic._operations import (
+from jacobian.math.matrices.symbolic._tools import TOOLS
+from jacobian.math.matrices.symbolic.operations import (
     compute_symbolic_characteristic_polynomial,
     compute_symbolic_determinant,
     compute_symbolic_eigenvalues,
     compute_symbolic_matrix_product,
     compute_symbolic_rank,
 )
-from jacobian.math.matrices.symbolic._tools import TOOLS
 from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomialTerm,

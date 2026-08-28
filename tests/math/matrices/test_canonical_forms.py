@@ -8,19 +8,19 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.matrices.canonical_forms import _operations as canonical_operations
 from jacobian.math.matrices.canonical_forms import (
     invariant_factors,
     minimal_polynomial,
     primary_decomposition,
 )
+from jacobian.math.matrices.canonical_forms import operations as canonical_operations
 from jacobian.math.matrices.canonical_forms._models import (
     InvariantFactorEntry,
     MonicPolynomial,
     RationalCanonicalFormResult,
     SquareMatrixRequest,
 )
-from jacobian.math.matrices.canonical_forms._operations import (
+from jacobian.math.matrices.canonical_forms.operations import (
     compute_minimal_polynomial,
     compute_primary_decomposition,
     compute_rational_canonical_form,

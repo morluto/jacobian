@@ -1,11 +1,22 @@
 """Exact bounded integral binary quadratic form operations."""
 
 from collections.abc import Callable
-from math import isqrt
 
 from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.quadratic_forms.binary._kernel import (
+    gcd as _gcd,
+)
+from jacobian.math.number_theory.quadratic_forms.binary._kernel import (
+    is_reduced as _check_reduced,
+)
+from jacobian.math.number_theory.quadratic_forms.binary._kernel import (
+    reduce as _reduce,
+)
+from jacobian.math.number_theory.quadratic_forms.binary._kernel import (
+    representations as _representations,
+)
 from jacobian.math.number_theory.quadratic_forms.binary._models import (
     BinaryQuadraticFormCheckRequest,
     BinaryQuadraticFormCheckResult,
@@ -14,18 +25,14 @@ from jacobian.math.number_theory.quadratic_forms.binary._models import (
     BinaryQuadraticFormProperEquivRequest,
     BinaryQuadraticFormReducedClassesRequest,
     BinaryQuadraticFormReduceRequest,
-    BinaryQuadraticFormRepresentation,
     BinaryQuadraticFormRepresentationsRequest,
     BinaryQuadraticFormRepresentationsResult,
     PrimitivePositiveDefiniteBinaryQuadraticForm,
     ProperEquivalenceResult,
     ReducedBinaryQuadraticFormResult,
     ReducedClassesResult,
-    _has_sum_of_two_squares_mod_four_obstruction,
-    _representation_y_bound,
     _require_evaluated_value_bound,
     _require_reduced_class_search_budget,
-    _require_representation_budget,
 )
 
 
@@ -40,126 +47,6 @@ def _admit[AdmissionResult](
         raise OperationDomainValidationError(
             location=location, code=exc.type, message=exc.message()
         ) from exc
-
-
-def _gcd(a: int, b: int) -> int:
-    a, b = abs(a), abs(b)
-    while b:
-        a, b = b, a % b
-    if a == 0 and b == 0:
-        return 0
-    return a or 1
-
-
-def _evaluate(a: int, b: int, c: int, x: int, y: int) -> int:
-    return a * x * x + b * x * y + c * y * y
-
-
-def _check_reduced(a: int, b: int, c: int) -> bool:
-    """Check Gauss reduction: |b| <= a <= c, with tie-breaking b>=0."""
-    if a <= 0 or c <= 0:
-        return False
-    if abs(b) > a:
-        return False
-    if a > c:
-        return False
-    if abs(b) == a and b < 0:
-        return False
-    return not (a == c and b < 0)
-
-
-def _reduce_step(
-    a: int, b: int, c: int
-) -> tuple[int, int, int, int, int, int, int, int, int, int]:
-    """One reduction step.
-
-    Returns (a, b, c, p, q, r, s, new_a, new_b, new_c).
-    If already reduced, returns identity.
-    """
-    # Step 1: ensure |b| <= a by applying S: [a,b,c] -> [c,-b,a] and T: [a,b,c] -> [a, b+2a, a+b+c]
-    # The standard reduction uses:
-    # T: [a, b, c] -> [a, b+2a, c+a+b+a] (i.e. b -> b + 2a, c -> c + b + a)
-    # S: [a, b, c] -> [c, -b, a]
-    # First, if c < a, swap using S
-    if c < a:
-        # S = [[0,-1],[1,0]], det=1
-        return a, b, c, 0, -1, 1, 0, c, -b, a
-    # Now c >= a. Reduce |b| <= a using T^n where T^n shifts b by 2n*a
-    if abs(b) > a:
-        # Find n such that |b + 2n*a| <= a
-        # b' = b + 2n*a, we want -a <= b' <= a
-        # n = round(-b / (2*a))
-        quotient, remainder = divmod(abs(b), 2 * a)
-        if remainder * 2 >= 2 * a:
-            quotient += 1
-        n = -quotient if b > 0 else quotient
-        # T^n = [[1,n],[0,1]]
-        new_b = b + 2 * n * a
-        new_c = c + n * b + n * n * a
-        return a, b, c, 1, n, 0, 1, a, new_b, new_c
-    # Now |b| <= a <= c. Apply tie-breaking.
-    if abs(b) == a and b < 0:
-        # T^1: b -> b + 2a, c -> c + b + a
-        new_b = b + 2 * a
-        new_c = c + b + a
-        return a, b, c, 1, 1, 0, 1, a, new_b, new_c
-    if a == c and b < 0:
-        # S: [a,b,c] -> [c,-b,a]
-        return a, b, c, 0, -1, 1, 0, c, -b, a
-    # Already reduced
-    return a, b, c, 1, 0, 0, 1, a, b, c
-
-
-def _reduce(
-    a: int, b: int, c: int
-) -> tuple[
-    int,
-    int,
-    int,
-    int,
-    int,
-    int,
-    int,
-]:
-    """Full Gauss reduction.
-
-    Returns ``(ra, rb, rc, p, q, r, s)`` where the matrix maps the source to
-    the canonical reduced form under the published substitution convention.
-    """
-
-    # Compose two SL_2(Z) matrices
-    def compose(
-        m1: tuple[tuple[int, int], tuple[int, int]],
-        m2: tuple[tuple[int, int], tuple[int, int]],
-    ) -> tuple[tuple[int, int], tuple[int, int]]:
-        p1, q1 = m1[0]
-        r1, s1 = m1[1]
-        p2, q2 = m2[0]
-        r2, s2 = m2[1]
-        return (
-            (p1 * p2 + q1 * r2, p1 * q2 + q1 * s2),
-            (r1 * p2 + s1 * r2, r1 * q2 + s1 * s2),
-        )
-
-    cur_a, cur_b, cur_c = a, b, c
-    matrix = ((1, 0), (0, 1))
-    max_iter = 100
-    for _ in range(max_iter):
-        if _check_reduced(cur_a, cur_b, cur_c):
-            break
-        _oa, _ob, _oc, p, q, r, s, na, nb, nc = _reduce_step(cur_a, cur_b, cur_c)
-        step_matrix = ((p, q), (r, s))
-        matrix = compose(matrix, step_matrix)
-        cur_a, cur_b, cur_c = na, nb, nc
-    else:
-        raise RuntimeError("reduction did not converge")
-
-    # Verify determinant
-    p, q = matrix[0]
-    r, s = matrix[1]
-    assert p * s - q * r == 1, "reduction matrix must have det 1"
-
-    return cur_a, cur_b, cur_c, p, q, r, s
 
 
 def compute_check(
@@ -218,13 +105,9 @@ def compute_evaluate(
 ) -> BinaryQuadraticFormEvaluateResult:
     """Evaluate a binary quadratic form at an integer pair."""
 
-    _admit(
+    value = _admit(
         lambda: _require_evaluated_value_bound(request.form, request.x, request.y),
         location=("x", "y"),
-    )
-
-    value = _evaluate(
-        request.form.a, request.form.b, request.form.c, request.x, request.y
     )
     primitive = _gcd(request.x, request.y) == 1
     return BinaryQuadraticFormEvaluateResult._from_kernel(
@@ -312,57 +195,14 @@ def compute_reduced_classes(
     )
 
 
-def _enumerate_representations(
-    form: PrimitivePositiveDefiniteBinaryQuadraticForm, target: int
-) -> tuple[BinaryQuadraticFormRepresentation, ...]:
-    """Enumerate every ordered signed pair satisfying ``Q(x,y) = target``.
-
-    For a fixed ``y`` the equation is quadratic in ``x``.  Its discriminant is
-    ``4*a*target + D*y^2``; checking that exact integer square and the two
-    divisibility conditions is both complete and avoids a two-dimensional box.
-    """
-    a, b, c = form.a, form.b, form.c
-    discriminant = form.discriminant
-    rows: list[BinaryQuadraticFormRepresentation] = []
-    if _has_sum_of_two_squares_mod_four_obstruction(form, target):
-        return ()
-    y_bound = _representation_y_bound(form, target)
-    for y in range(-y_bound, y_bound + 1):
-        x_discriminant = 4 * a * target + discriminant * y * y
-        if x_discriminant < 0:
-            continue
-        root = isqrt(x_discriminant)
-        if root * root != x_discriminant:
-            continue
-        numerator = -b * y
-        candidates = (
-            (numerator + root,) if root == 0 else (numerator - root, numerator + root)
-        )
-        for value in candidates:
-            if value % (2 * a) != 0:
-                continue
-            x = value // (2 * a)
-            if _evaluate(a, b, c, x, y) != target:
-                raise AssertionError("quadratic discriminant reconstruction failed")
-            rows.append(
-                BinaryQuadraticFormRepresentation._from_kernel(
-                    x=x,
-                    y=y,
-                    primitive=_gcd(x, y) == 1,
-                )
-            )
-    return tuple(sorted(rows, key=lambda row: (row.x, row.y)))
-
-
 def compute_representations(
     request: BinaryQuadraticFormRepresentationsRequest,
 ) -> BinaryQuadraticFormRepresentationsResult:
     """Return all ordered signed integer representations of one target exactly."""
-    _admit(
-        lambda: _require_representation_budget(request.form, request.target),
+    representations = _admit(
+        lambda: _representations(request.form, request.target),
         location=("target",),
     )
-    representations = _enumerate_representations(request.form, request.target)
     return BinaryQuadraticFormRepresentationsResult._from_kernel(
         form=request.form, target=request.target, representations=representations
     )

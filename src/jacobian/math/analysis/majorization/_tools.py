@@ -20,7 +20,7 @@ from jacobian.math.analysis.majorization._models import (
     WeakMajorizationCheckRequest,
     WeakMajorizationCheckResult,
 )
-from jacobian.math.analysis.majorization._operations import (
+from jacobian.math.analysis.majorization.operations import (
     compute_birkhoff_decomposition,
     compute_doubly_stochastic_check,
     compute_majorization_check,

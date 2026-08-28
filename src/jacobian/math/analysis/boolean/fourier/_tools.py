@@ -16,7 +16,7 @@ from jacobian.math.analysis.boolean.fourier._models import (
     TruthTableRequest,
     TruthTableResult,
 )
-from jacobian.math.analysis.boolean.fourier._operations import (
+from jacobian.math.analysis.boolean.fourier.operations import (
     compute_erasure_noise,
     compute_fourier_spectrum,
     compute_multilinear_extension,

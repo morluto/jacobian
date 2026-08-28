@@ -16,11 +16,11 @@ from jacobian.math.logic.games.impartial._models import (
     NimOptionsResult,
     NimSumRequest,
 )
-from jacobian.math.logic.games.impartial._operations import (
+from jacobian.math.logic.games.impartial._tools import (
+    TOOLS,
     compute_nim_options,
     compute_nim_sum,
 )
-from jacobian.math.logic.games.impartial._tools import TOOLS
 from jacobian.math.logic.games.impartial.values import (
     MAX_NIM_DISTINCT_OPTIONS,
     MAX_NIM_OPTION_RESULT_BYTES,

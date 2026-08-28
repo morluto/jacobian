@@ -6,10 +6,10 @@ from pydantic import ValidationError
 from jacobian.math.logic.games.impartial._models import (
     DisjunctiveSumRequest,
 )
-from jacobian.math.logic.games.impartial._operations import (
+from jacobian.math.logic.games.impartial._tools import (
+    TOOLS,
     compute_disjunctive_sum,
 )
-from jacobian.math.logic.games.impartial._tools import TOOLS
 from jacobian.math.logic.games.impartial.values import ImpartialGame
 
 # -- helpers -----------------------------------------------------------------

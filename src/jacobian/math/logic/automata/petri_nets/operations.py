@@ -5,10 +5,13 @@ from __future__ import annotations
 from collections import deque
 
 from jacobian.math.logic.automata.petri_nets._models import (
+    MAX_SIPHON_TRAP_PLACES,
+    MAX_SIPHON_TRAP_WORK,
     EnabledTransitionsResult,
     FireTransitionResult,
     IncidenceMatrixResult,
     ReachabilityResult,
+    SiphonTrapResult,
 )
 from jacobian.math.logic.automata.petri_nets.values import (
     MAX_PETRI_MARKING,
@@ -24,6 +27,7 @@ __all__ = [
     "find_minimal_traps",
     "fire_transition",
     "reachability_graph",
+    "siphon_trap",
 ]
 
 
@@ -242,3 +246,23 @@ def find_minimal_traps(net: PetriNet) -> list[frozenset[int]]:
             found.append(s)
 
     return found
+
+
+def siphon_trap(net: PetriNet) -> SiphonTrapResult:
+    """Return all inclusion-minimal siphons and traps within the exact bound."""
+
+    if net.place_count > MAX_SIPHON_TRAP_PLACES:
+        raise ValueError(
+            "siphon/trap check supports at most "
+            f"{MAX_SIPHON_TRAP_PLACES} places for exact enumeration"
+        )
+    candidates = (1 << net.place_count) - 1
+    work = 2 * candidates * (net.transition_count + net.place_count)
+    if work > MAX_SIPHON_TRAP_WORK:
+        raise ValueError(
+            "siphon/trap candidate and transition-scan work exceeds the admitted bound"
+        )
+    return SiphonTrapResult(
+        siphons=tuple(tuple(sorted(s)) for s in find_minimal_siphons(net)),
+        traps=tuple(tuple(sorted(t)) for t in find_minimal_traps(net)),
+    )

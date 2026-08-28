@@ -25,12 +25,12 @@ from jacobian.math.logic.games.impartial._models import (
     GrundyTableResult,
     SubtractionGrundyPrefixRequest,
 )
-from jacobian.math.logic.games.impartial._operations import (
+from jacobian.math.logic.games.impartial._tools import (
+    TOOLS,
     compute_birthday,
     compute_grundy_table,
     compute_subtraction_grundy_prefix,
 )
-from jacobian.math.logic.games.impartial._tools import TOOLS
 
 
 def _game() -> ImpartialGame:

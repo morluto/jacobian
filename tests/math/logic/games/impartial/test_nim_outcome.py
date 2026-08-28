@@ -7,7 +7,7 @@ from jacobian.math.logic.games.impartial._models import (
     NimSumRequest,
     OutcomeProfileRequest,
 )
-from jacobian.math.logic.games.impartial._operations import (
+from jacobian.math.logic.games.impartial._tools import (
     compute_nim_sum,
     compute_outcome_profile,
 )

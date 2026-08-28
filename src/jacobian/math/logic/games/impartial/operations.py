@@ -7,6 +7,10 @@ from functools import reduce
 from heapq import heapify, heappop, heappush
 from operator import xor
 
+from jacobian.math.logic.games.impartial._models import (
+    DisjunctiveSumResult,
+    OutcomeProfileResult,
+)
 from jacobian.math.logic.games.impartial._nim_admission import admit_nim_options
 from jacobian.math.logic.games.impartial.values import (
     MAX_HEAP_BOUND,
@@ -92,6 +96,45 @@ def outcome_profile(game: ImpartialGame) -> tuple[tuple[str, ...], tuple[str, ..
     return (
         tuple(position for position in game.positions if values[position] == 0),
         tuple(position for position in game.positions if values[position] != 0),
+    )
+
+
+def _outcome_profile_result(game: ImpartialGame) -> OutcomeProfileResult:
+    """Build the complete typed outcome profile from one Grundy analysis."""
+
+    analysis = grundy_table(game)
+    p_positions = tuple(pos for pos, grundy in analysis.values if grundy == 0)
+    n_positions = tuple(pos for pos, grundy in analysis.values if grundy > 0)
+    terminal_positions = tuple(
+        position
+        for position in game.positions
+        if not any(move.source == position for move in game.moves)
+    )
+    return OutcomeProfileResult(
+        p_positions=p_positions,
+        n_positions=n_positions,
+        grundy_values=analysis.values,
+        terminal_positions=terminal_positions,
+    )
+
+
+def _disjunctive_sum_result(
+    components: tuple[ImpartialGame, ...], start_positions: tuple[str, ...]
+) -> DisjunctiveSumResult:
+    """Build the typed Grundy result for a disjunctive sum."""
+
+    component_grundy_values: list[int] = []
+    for game, start in zip(components, start_positions, strict=True):
+        grundy_map = dict(grundy_table(game).values)
+        if start not in grundy_map:
+            raise ValueError("start position is not in the component game")
+        component_grundy_values.append(grundy_map[start])
+    result_grundy = reduce(xor, component_grundy_values, 0)
+    return DisjunctiveSumResult(
+        grundy_value=result_grundy,
+        component_grundy_values=tuple(component_grundy_values),
+        is_p_position=result_grundy == 0,
+        component_count=len(component_grundy_values),
     )
 
 

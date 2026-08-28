@@ -32,7 +32,7 @@ from jacobian.math.logic.languages.words import (
     substitution_dependency_graph,
     substitution_primitivity_profile,
 )
-from jacobian.math.logic.languages.words import _operations as word_operations
+from jacobian.math.logic.languages.words import _tools as word_operations
 from jacobian.math.logic.languages.words._models import (
     FactorsLengthRequest,
     FactorsLengthResult,
@@ -46,7 +46,8 @@ from jacobian.math.logic.languages.words._models import (
     SubstitutionFixedPointPrefixResult,
     SubstitutionPrimitivityProfileRequest,
 )
-from jacobian.math.logic.languages.words._operations import (
+from jacobian.math.logic.languages.words._tools import (
+    TOOLS,
     compute_factors_length,
     compute_incidence_matrix,
     compute_periods,
@@ -54,7 +55,6 @@ from jacobian.math.logic.languages.words._operations import (
     compute_substitution_fixed_point_prefix,
     compute_substitution_primitivity_profile,
 )
-from jacobian.math.logic.languages.words._tools import TOOLS
 
 
 @contextmanager

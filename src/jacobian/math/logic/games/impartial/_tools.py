@@ -5,12 +5,17 @@ from typing import Any
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.logic.games.impartial._models import (
     BirthdayRequest,
     BirthdayResult,
     DisjunctiveSumRequest,
     DisjunctiveSumResult,
+    GrundyEntry,
     GrundyTableRequest,
     GrundyTableResult,
     NimOptionsRequest,
@@ -22,15 +27,90 @@ from jacobian.math.logic.games.impartial._models import (
     SubtractionGrundyPrefixRequest,
     SubtractionGrundyPrefixResult,
 )
-from jacobian.math.logic.games.impartial._operations import (
-    compute_birthday,
-    compute_disjunctive_sum,
-    compute_grundy_table,
-    compute_nim_options,
-    compute_nim_sum,
-    compute_outcome_profile,
-    compute_subtraction_grundy_prefix,
+from jacobian.math.logic.games.impartial.operations import (
+    _disjunctive_sum_result,
+    _outcome_profile_result,
+    birthdays,
+    grundy_table,
+    nim_options,
+    nim_sum,
+    subtraction_grundy_prefix,
 )
+
+
+def compute_grundy_table(request: GrundyTableRequest) -> GrundyTableResult:
+    analysis = grundy_table(request.game)
+    option_sets = dict(analysis.option_value_sets)
+    entries = tuple(
+        GrundyEntry(
+            position=position,
+            grundy=value,
+            option_grundy_set=option_sets[position],
+        )
+        for position, value in analysis.values
+    )
+    values = tuple(entry.grundy for entry in entries)
+    maximum = max(values, default=0)
+    return GrundyTableResult._from_kernel(
+        request,
+        entries,
+        maximum,
+        tuple(values.count(index) for index in range(maximum + 1)),
+        analysis.topological_order,
+    )
+
+
+def compute_birthday(request: BirthdayRequest) -> BirthdayResult:
+    return BirthdayResult._from_kernel(request, birthdays(request.game))
+
+
+def compute_subtraction_grundy_prefix(
+    request: SubtractionGrundyPrefixRequest,
+) -> SubtractionGrundyPrefixResult:
+    analysis = subtraction_grundy_prefix(request.subtraction_set, request.max_heap)
+    return SubtractionGrundyPrefixResult._from_kernel(
+        request,
+        analysis.grundy_values,
+        analysis.option_value_sets,
+        tuple(heap for heap, value in enumerate(analysis.grundy_values) if value == 0),
+        tuple(heap for heap, value in enumerate(analysis.grundy_values) if value != 0),
+    )
+
+
+def compute_nim_sum(request: NimSumRequest) -> NimSumResult:
+    """Compute the exact nim sum (bitwise xor) of a Nim position."""
+
+    return NimSumResult._from_kernel(request, nim_sum(request.position))
+
+
+def compute_nim_options(request: NimOptionsRequest) -> NimOptionsResult:
+    """Enumerate the complete deduplicated option family of a Nim position."""
+
+    try:
+        options = nim_options(request.position)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("position",),
+            code="impartial_game.nim_options_not_admitted",
+            message=str(exc),
+        ) from exc
+    return NimOptionsResult._from_kernel(
+        request, options, sum(request.position.heaps), len(options)
+    )
+
+
+def compute_outcome_profile(request: OutcomeProfileRequest) -> OutcomeProfileResult:
+    """Compute the P/N outcome partition of an impartial game."""
+
+    return _outcome_profile_result(request.game)
+
+
+def compute_disjunctive_sum(
+    request: DisjunctiveSumRequest,
+) -> DisjunctiveSumResult:
+    """Compute the Grundy value of a disjunctive sum."""
+
+    return _disjunctive_sum_result(request.components, request.start_positions)
 
 
 def _op[

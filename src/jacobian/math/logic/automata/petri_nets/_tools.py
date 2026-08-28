@@ -5,8 +5,13 @@ from typing import Any
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.logic.automata.petri_nets._models import (
+    MAX_SIPHON_TRAP_PLACES,
     EnabledTransitionsRequest,
     EnabledTransitionsResult,
     FireTransitionRequest,
@@ -18,13 +23,56 @@ from jacobian.math.logic.automata.petri_nets._models import (
     SiphonTrapRequest,
     SiphonTrapResult,
 )
-from jacobian.math.logic.automata.petri_nets._operations import (
-    compute_enabled_transitions,
-    compute_fire_transition,
-    compute_incidence,
-    compute_reachability,
-    compute_siphon_trap,
+from jacobian.math.logic.automata.petri_nets.operations import (
+    compute_incidence_matrix,
+    enabled_transitions,
+    fire_transition,
+    reachability_graph,
+    siphon_trap,
 )
+
+
+def compute_enabled_transitions(
+    request: EnabledTransitionsRequest,
+) -> EnabledTransitionsResult:
+    return enabled_transitions(request.net, request.marking)
+
+
+def compute_fire_transition(request: FireTransitionRequest) -> FireTransitionResult:
+    return fire_transition(request.net, request.marking, request.transition)
+
+
+def compute_incidence(request: IncidenceMatrixRequest) -> IncidenceMatrixResult:
+    return compute_incidence_matrix(request.net)
+
+
+def compute_reachability(request: ReachabilityRequest) -> ReachabilityResult:
+    try:
+        return reachability_graph(
+            request.net, request.initial_marking, request.max_states
+        )
+    except ValueError as error:
+        raise OperationDomainValidationError(
+            location=("net", "max_states"),
+            code="petri_net.reachability_bound",
+            message=str(error),
+        ) from error
+
+
+def compute_siphon_trap(request: SiphonTrapRequest) -> SiphonTrapResult:
+    try:
+        return siphon_trap(request.net)
+    except ValueError as error:
+        code = (
+            "petri_net.siphon_trap_place_bound"
+            if request.net.place_count > MAX_SIPHON_TRAP_PLACES
+            else "petri_net.siphon_trap_work_bound"
+        )
+        raise OperationDomainValidationError(
+            location=("net",),
+            code=code,
+            message=str(error),
+        ) from error
 
 
 def _op[

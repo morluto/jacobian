@@ -17,7 +17,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     ReachabilityRequest,
     SiphonTrapRequest,
 )
-from jacobian.math.logic.automata.petri_nets._operations import (
+from jacobian.math.logic.automata.petri_nets._tools import (
     compute_enabled_transitions,
     compute_fire_transition,
     compute_incidence,
@@ -235,7 +235,7 @@ class TestValidation:
 # Siphon and trap detection
 # ---------------------------------------------------------------------------
 
-from jacobian.math.logic.automata.petri_nets._operations import (  # noqa: E402
+from jacobian.math.logic.automata.petri_nets._tools import (  # noqa: E402
     compute_siphon_trap,
 )
 from jacobian.math.logic.automata.petri_nets.operations import (  # noqa: E402

@@ -30,6 +30,22 @@ from jacobian.math.topology.chain_complexes.values import (
     VerificationResult,
 )
 
+MapMatrices = tuple[tuple[tuple[str, ...], ...], ...]
+
+__all__ = [
+    "chain_map_commutes",
+    "compute_homology",
+    "compute_mapping_cone",
+    "compute_tensor_product",
+    "construct_chain_complex",
+    "differential_squares_to_zero",
+    "homology_groups",
+    "mapping_cone",
+    "tensor_product_complex",
+    "verify_chain_map",
+    "verify_differential",
+]
+
 
 class ChainComplexAdmissionError(ValueError):
     """Expected boundedness failure before a derived complex is allocated."""
@@ -1116,6 +1132,96 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
     degree_min = left.degree_min + right.degree_min
     degree_max = degree_min + group_count - 1
 
+    value = ChainComplexValue(
+        coefficient_field=left.coefficient_field,
+        prime=left.prime,
+        degree_min=degree_min,
+        degree_max=degree_max,
+        basis_sizes=tensor_basis_sizes,
+        differential_matrices=tensor_diffs,
+    )
+    return TensorProductResult._from_kernel(
+        tensor_basis_sizes=tensor_basis_sizes,
+        tensor_differential_matrices=tensor_diffs,
+        left=left,
+        right=right,
+        value=value,
+    )
+
+
+def homology_groups(complex_value: ChainComplexValue) -> HomologyResult:
+    """Return exact homology groups for a canonical chain complex value."""
+    groups = _compute_homology_groups(complex_value)
+    return HomologyResult._from_kernel(
+        homology_groups=tuple(groups),
+        source_complex=complex_value,
+    )
+
+
+def differential_squares_to_zero(
+    complex_value: ChainComplexValue,
+) -> VerificationResult:
+    """Verify d^2 = 0 for one canonical chain-complex value."""
+    is_valid, detail = _differential_verdict(complex_value)
+    return VerificationResult(is_valid=is_valid, detail=detail, complex=complex_value)
+
+
+def chain_map_commutes(
+    source: ChainComplexValue,
+    target: ChainComplexValue,
+    map_matrices: MapMatrices,
+) -> VerificationResult:
+    """Verify that a component-wise chain map commutes with differentials."""
+    _require_chain_map_components(
+        source, target, map_matrices, label="chain-map verification"
+    )
+    is_valid, detail = _chain_map_verdict(source, target, map_matrices)
+    return VerificationResult._from_chain_map_kernel(
+        is_valid=is_valid,
+        detail=detail,
+        source=source,
+        target=target,
+        map_matrices=map_matrices,
+    )
+
+
+def mapping_cone(
+    source: ChainComplexValue,
+    target: ChainComplexValue,
+    map_matrices: MapMatrices,
+) -> MappingConeResult:
+    """Compute the mapping cone of a chain-map value."""
+    _require_chain_map_components(source, target, map_matrices, label="mapping cone")
+    _require_cone_admission(source, target, map_matrices)
+    cone_basis_sizes, cone_diffs = _compute_mapping_cone(source, target, map_matrices)
+    value = ChainComplexValue(
+        coefficient_field=source.coefficient_field,
+        prime=source.prime,
+        degree_min=source.degree_min,
+        degree_max=source.degree_min + len(cone_basis_sizes) - 1,
+        basis_sizes=cone_basis_sizes,
+        differential_matrices=cone_diffs,
+    )
+    return MappingConeResult._from_kernel(
+        cone_basis_sizes=cone_basis_sizes,
+        cone_differential_matrices=cone_diffs,
+        source=source,
+        target=target,
+        map_matrices=map_matrices,
+        value=value,
+    )
+
+
+def tensor_product_complex(
+    left: ChainComplexValue,
+    right: ChainComplexValue,
+) -> TensorProductResult:
+    """Compute the tensor product of two canonical chain-complex values."""
+    _require_tensor_admission(left, right)
+    tensor_basis_sizes, tensor_diffs = _compute_tensor_product(left, right)
+    group_count = len(tensor_basis_sizes)
+    degree_min = left.degree_min + right.degree_min
+    degree_max = degree_min + group_count - 1
     value = ChainComplexValue(
         coefficient_field=left.coefficient_field,
         prime=left.prime,

@@ -15,14 +15,14 @@ from jacobian.math.topology._models import (
     SimplicialComplexRequest,
     canonical_complex,
 )
-from jacobian.math.topology._operations import (
+from jacobian.math.topology._pseudomanifold import (
+    PseudomanifoldRequest,
+)
+from jacobian.math.topology._simplicial_operations import (
     _CANONICAL_CIRCLE,
     compute_barycentric_subdivision,
     compute_pseudomanifold_decision,
     compute_shelling_check,
-)
-from jacobian.math.topology._pseudomanifold import (
-    PseudomanifoldRequest,
 )
 from jacobian.math.topology._structural import (
     ElementaryCollapseRequest,

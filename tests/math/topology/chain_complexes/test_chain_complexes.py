@@ -15,10 +15,15 @@ from jacobian.math.topology.chain_complexes._models import (
     VerifyDifferentialRequest,
 )
 from jacobian.math.topology.chain_complexes.operations import (
+    chain_map_commutes,
     compute_homology,
     compute_mapping_cone,
     compute_tensor_product,
     construct_chain_complex,
+    differential_squares_to_zero,
+    homology_groups,
+    mapping_cone,
+    tensor_product_complex,
     verify_differential,
 )
 from jacobian.math.topology.chain_complexes.values import (
@@ -1047,12 +1052,6 @@ class TestTensorValueComposition:
         homology_groups(result.value)
 
 
-def homology_groups(complex_value: ChainComplexValue) -> HomologyResult:
-    from jacobian.math.topology.chain_complexes import homology_groups as native
-
-    return native(complex_value)
-
-
 class TestChainDegreeDiagnostics:
     def test_diagnostics_report_declared_degree(self) -> None:
         """A shifted complex reports its declared chain degree, not the
@@ -1547,18 +1546,16 @@ class TestNativeWrappersCallKernelsDirectly:
         ):
             monkeypatch.setattr(ops, name, blocked)
 
-        from jacobian.math.topology.chain_complexes import native
-
         circle = self._circle()
-        homology = native.homology_groups(circle)
+        homology = homology_groups(circle)
         assert homology.homology_groups[0].betti_number == 1
-        assert native.differential_squares_to_zero(circle).is_valid is True
+        assert differential_squares_to_zero(circle).is_valid is True
         identity_map: MapMatrices = ((("1",),),)
         assert len(identity_map) == 1
         identity_map = ((("1",),), (("1",),))
-        cone = native.mapping_cone(circle, circle, identity_map)
+        cone = mapping_cone(circle, circle, identity_map)
         assert cone.source_degree_min == 0
-        tensor = native.tensor_product_complex(circle, circle)
+        tensor = tensor_product_complex(circle, circle)
         assert tensor.value.degree_max == 2
 
     def test_native_chain_map_verdict_matches_wire_semantics(
@@ -1570,10 +1567,8 @@ class TestNativeWrappersCallKernelsDirectly:
             raise AssertionError("wire handler reached from the native path")
 
         monkeypatch.setattr(ops, "verify_chain_map", blocked)
-        from jacobian.math.topology.chain_complexes import native
-
         circle = self._circle()
         # One component per chain group: the identity chain map.
         identity = ((("1",),), (("1",),))
-        verdict = native.chain_map_commutes(circle, circle, identity)
+        verdict = chain_map_commutes(circle, circle, identity)
         assert verdict.is_valid is True

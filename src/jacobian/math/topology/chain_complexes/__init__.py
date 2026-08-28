@@ -1,6 +1,6 @@
 """Finite based chain complexes over exact fields."""
 
-from jacobian.math.topology.chain_complexes.native import (
+from jacobian.math.topology.chain_complexes.operations import (
     chain_map_commutes,
     differential_squares_to_zero,
     homology_groups,

@@ -71,7 +71,6 @@ from jacobian.math.topology._request_admission import (
     run_topology_admission,
 )
 from jacobian.math.topology._shelling import evaluate_shelling
-from jacobian.math.topology.chain_complexes.values import ChainComplexValue
 
 
 def _admit_chain_request(request: ChainComplexRequest) -> None:
@@ -316,16 +315,6 @@ def _chain_result(
             boundaries,
         ),
     )
-
-
-def _canonical_chain_complex_value(result: ChainComplexResult) -> ChainComplexValue:
-    """The canonical chain-complex value carried by one chain result."""
-    if result.canonical_value is None:
-        raise ValueError(
-            "only unreduced prime-field simplicial chain complexes convert "
-            "to a canonical chain-complex value"
-        )
-    return result.canonical_value
 
 
 def _prime_matrix(

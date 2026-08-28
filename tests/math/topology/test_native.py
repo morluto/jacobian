@@ -31,7 +31,7 @@ from jacobian.math.topology.chain_complexes.operations import (
     compute_tensor_product,
 )
 from jacobian.math.topology.chain_complexes.values import CoefficientField
-from jacobian.math.topology.native import simplicial_chain_complex_value
+from jacobian.math.topology.operations import simplicial_chain_complex_value
 
 
 @overload

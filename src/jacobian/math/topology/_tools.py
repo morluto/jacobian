@@ -8,15 +8,15 @@ from jacobian.math.topology._models import (
     ShellingCheckRequest,
     ShellingCheckResult,
 )
-from jacobian.math.topology._operations import (
+from jacobian.math.topology._pseudomanifold import (
+    PseudomanifoldRequest,
+    PseudomanifoldResult,
+)
+from jacobian.math.topology._simplicial_operations import (
     TOPOLOGY_OPERATIONS,
     compute_barycentric_subdivision,
     compute_pseudomanifold_decision,
     compute_shelling_check,
-)
-from jacobian.math.topology._pseudomanifold import (
-    PseudomanifoldRequest,
-    PseudomanifoldResult,
 )
 from jacobian.math.topology._structural import (
     ElementaryCollapseRequest,

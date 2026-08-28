@@ -4,23 +4,19 @@ from __future__ import annotations
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.quivers._models import (
-    AdjacencyMatricesRequest,
     AdjacencyMatricesResult,
-    FixedLengthPathsRequest,
+    FiniteQuiver,
     FixedLengthPathsResult,
-    VertexProfilesRequest,
     VertexProfilesResult,
 )
 from jacobian.math.graphs.quivers._path_bounds import fixed_length_paths_envelope
 
 
-def compute_adjacency_matrices(
-    request: AdjacencyMatricesRequest,
-) -> AdjacencyMatricesResult:
+def adjacency_matrices(quiver: FiniteQuiver) -> AdjacencyMatricesResult:
     """Compute the adjacency matrix and its transpose."""
-    n = request.quiver.vertex_count
+    n = quiver.vertex_count
     matrix = [[0] * n for _ in range(n)]
-    for source, target in request.quiver.arrows:
+    for source, target in quiver.arrows:
         matrix[source][target] += 1
     adj = tuple(tuple(row) for row in matrix)
     transpose = tuple(tuple(matrix[j][i] for j in range(n)) for i in range(n))
@@ -31,14 +27,12 @@ def compute_adjacency_matrices(
     )
 
 
-def compute_vertex_profiles(
-    request: VertexProfilesRequest,
-) -> VertexProfilesResult:
+def vertex_profiles(quiver: FiniteQuiver) -> VertexProfilesResult:
     """Compute in-degree and out-degree for each vertex."""
-    n = request.quiver.vertex_count
+    n = quiver.vertex_count
     in_degrees = [0] * n
     out_degrees = [0] * n
-    for source, target in request.quiver.arrows:
+    for source, target in quiver.arrows:
         out_degrees[source] += 1
         in_degrees[target] += 1
     return VertexProfilesResult(
@@ -48,15 +42,13 @@ def compute_vertex_profiles(
     )
 
 
-def compute_fixed_length_paths(
-    request: FixedLengthPathsRequest,
-) -> FixedLengthPathsResult:
+def fixed_length_paths(quiver: FiniteQuiver, length: int) -> FixedLengthPathsResult:
     """Count paths of fixed length between all vertex pairs using matrix powers."""
     try:
         fixed_length_paths_envelope(
-            vertex_count=request.quiver.vertex_count,
-            arrow_count=len(request.quiver.arrows),
-            length=request.length,
+            vertex_count=quiver.vertex_count,
+            arrow_count=len(quiver.arrows),
+            length=length,
         )
     except ValueError as error:
         raise OperationDomainValidationError(
@@ -64,16 +56,16 @@ def compute_fixed_length_paths(
             code="quiver.fixed_length_paths_exceeds_envelope",
             message=str(error),
         ) from error
-    n = request.quiver.vertex_count
+    n = quiver.vertex_count
     matrix = [[0] * n for _ in range(n)]
-    for source, target in request.quiver.arrows:
+    for source, target in quiver.arrows:
         matrix[source][target] += 1
 
-    if request.length == 0:
+    if length == 0:
         result = [[1 if i == j else 0 for j in range(n)] for i in range(n)]
     else:
         result = matrix
-        for _ in range(request.length - 1):
+        for _ in range(length - 1):
             result = _matrix_multiply(result, matrix)
 
     total = sum(sum(row) for row in result)
@@ -93,3 +85,6 @@ def _matrix_multiply(a: list[list[int]], b: list[list[int]]) -> list[list[int]]:
             for _l in range(k):
                 result[i][j] += a[i][_l] * b[_l][j]
     return result
+
+
+__all__ = ["adjacency_matrices", "fixed_length_paths", "vertex_profiles"]

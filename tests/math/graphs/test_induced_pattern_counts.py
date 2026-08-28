@@ -19,9 +19,6 @@ from jacobian.math.graphs.patterns._models import (
     MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS,
     InducedVertexSubsetPatternCountRequest,
 )
-from jacobian.math.graphs.patterns._operations import (
-    compute_induced_vertex_subset_pattern_count,
-)
 from jacobian.math.graphs.patterns._tools import TOOLS
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -64,7 +61,7 @@ def _empty(order: int, prefix: str) -> SimpleUndirectedGraph:
 
 def _count(host: SimpleUndirectedGraph, pattern: SimpleUndirectedGraph) -> str:
     request = InducedVertexSubsetPatternCountRequest(host=host, pattern=pattern)
-    return compute_induced_vertex_subset_pattern_count(request).occurrence_count
+    return TOOLS[0].run(request).occurrence_count
 
 
 def _edge_key(left: str, right: str) -> tuple[str, str]:
@@ -205,7 +202,7 @@ def test_canonical_graph_producer_output_enters_request_unchanged() -> None:
 
     assert request.host == host
     assert request.pattern == pattern
-    assert compute_induced_vertex_subset_pattern_count(request).occurrence_count == "2"
+    assert TOOLS[0].run(request).occurrence_count == "2"
 
 
 def test_small_random_graphs_match_independent_subset_and_permutation_oracle() -> None:
@@ -243,7 +240,7 @@ def test_request_accepts_useful_case_near_subset_bound() -> None:
         host=_empty(20, "h"),
         pattern=_complete(4, "p"),
     )
-    assert compute_induced_vertex_subset_pattern_count(request).occurrence_count == "0"
+    assert TOOLS[0].run(request).occurrence_count == "0"
 
 
 def test_dense_host_at_subset_bound_avoids_host_filtered_views(
@@ -277,7 +274,7 @@ def test_request_rejects_next_graph_order_above_subset_bound() -> None:
         pattern=_complete(4, "p"),
     )
     with pytest.raises(OperationDomainValidationError):
-        compute_induced_vertex_subset_pattern_count(request)
+        TOOLS[0].run(request)
 
 
 def test_request_bounds_per_subset_isomorphism_work() -> None:
@@ -289,7 +286,7 @@ def test_request_bounds_per_subset_isomorphism_work() -> None:
         pattern=_empty(9, "p"),
     )
     with pytest.raises(OperationDomainValidationError):
-        compute_induced_vertex_subset_pattern_count(request)
+        TOOLS[0].run(request)
 
 
 def test_canonical_graph_size_bound_rejects_257_vertices() -> None:
@@ -324,7 +321,7 @@ def test_request_reserves_exact_output_headroom_for_retained_sources() -> None:
 
     request = InducedVertexSubsetPatternCountRequest(host=host, pattern=pattern)
     with pytest.raises(OperationDomainValidationError):
-        compute_induced_vertex_subset_pattern_count(request)
+        TOOLS[0].run(request)
 
 
 def test_numeric_admission_caps_are_visible_in_schema_and_tool_description() -> None:

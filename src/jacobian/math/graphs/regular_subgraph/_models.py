@@ -17,16 +17,6 @@ class RegularSubgraphRequest(StrictModel):
     graph: SimpleUndirectedGraph
     k: int = Field(ge=0)
 
-    @model_validator(mode="after")
-    def require_bounded_k(self) -> Self:
-        n = len(self.graph.vertices)
-        if self.k > 0 and self.k >= n:
-            raise PydanticCustomError(
-                "graphs.regular_subgraph.k_too_large",
-                "k must be less than the number of vertices for a nonempty subgraph",
-            )
-        return self
-
 
 class RegularSubgraphResult(StrictModel):
     """Result of a k-regular subgraph search."""

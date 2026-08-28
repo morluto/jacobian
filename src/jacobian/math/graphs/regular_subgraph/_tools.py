@@ -6,9 +6,13 @@ from jacobian.math.graphs.regular_subgraph._models import (
     RegularSubgraphRequest,
     RegularSubgraphResult,
 )
-from jacobian.math.graphs.regular_subgraph._operations import (
-    compute_k_regular_subgraph,
+from jacobian.math.graphs.regular_subgraph.operations import (
+    find_k_regular_subgraph,
 )
+
+
+def _find(request: RegularSubgraphRequest) -> RegularSubgraphResult:
+    return find_k_regular_subgraph(request.graph, request.k)
 
 TOOLS: MathTools = (
     MathTool(
@@ -22,7 +26,7 @@ TOOLS: MathTools = (
         ),
         request_type=RegularSubgraphRequest,
         result_type=RegularSubgraphResult,
-        run=compute_k_regular_subgraph,
+        run=_find,
         tags=(
             "graph",
             "regular",

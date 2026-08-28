@@ -1,5 +1,6 @@
 """Induced graph-pattern count operation declaration."""
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
 from jacobian.math.graphs.patterns._models import (
@@ -8,9 +9,21 @@ from jacobian.math.graphs.patterns._models import (
     InducedVertexSubsetPatternCountRequest,
     InducedVertexSubsetPatternCountResult,
 )
-from jacobian.math.graphs.patterns._operations import (
-    compute_induced_vertex_subset_pattern_count,
+from jacobian.math.graphs.patterns.operations import (
+    induced_vertex_subset_pattern_count,
 )
+
+
+def _run_count(
+    request: InducedVertexSubsetPatternCountRequest,
+) -> InducedVertexSubsetPatternCountResult:
+    return InducedVertexSubsetPatternCountResult._from_kernel(
+        host=request.host,
+        pattern=request.pattern,
+        occurrence_count=format_canonical_integer(
+            induced_vertex_subset_pattern_count(request.host, request.pattern)
+        ),
+    )
 
 TOOLS: MathTools = (
     MathTool(
@@ -26,7 +39,7 @@ TOOLS: MathTools = (
         ),
         request_type=InducedVertexSubsetPatternCountRequest,
         result_type=InducedVertexSubsetPatternCountResult,
-        run=compute_induced_vertex_subset_pattern_count,
+        run=_run_count,
         tags=(
             "graph",
             "induced-subgraph",

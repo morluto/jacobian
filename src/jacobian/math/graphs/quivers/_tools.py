@@ -14,11 +14,23 @@ from jacobian.math.graphs.quivers._models import (
     VertexProfilesRequest,
     VertexProfilesResult,
 )
-from jacobian.math.graphs.quivers._operations import (
-    compute_adjacency_matrices,
-    compute_fixed_length_paths,
-    compute_vertex_profiles,
+from jacobian.math.graphs.quivers.operations import (
+    adjacency_matrices,
+    fixed_length_paths,
+    vertex_profiles,
 )
+
+
+def _adjacency_matrices(request: AdjacencyMatricesRequest) -> AdjacencyMatricesResult:
+    return adjacency_matrices(request.quiver)
+
+
+def _vertex_profiles(request: VertexProfilesRequest) -> VertexProfilesResult:
+    return vertex_profiles(request.quiver)
+
+
+def _fixed_length_paths(request: FixedLengthPathsRequest) -> FixedLengthPathsResult:
+    return fixed_length_paths(request.quiver, request.length)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -50,7 +62,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the adjacency matrix and its transpose for a finite quiver.",
         AdjacencyMatricesRequest,
         AdjacencyMatricesResult,
-        compute_adjacency_matrices,
+        _adjacency_matrices,
         "quiver",
         "adjacency",
         "exact",
@@ -73,7 +85,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the in-degree and out-degree for each vertex of a finite quiver.",
         VertexProfilesRequest,
         VertexProfilesResult,
-        compute_vertex_profiles,
+        _vertex_profiles,
         "quiver",
         "vertex-profiles",
         "exact",
@@ -97,7 +109,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "pairs using adjacency matrix powers.",
         FixedLengthPathsRequest,
         FixedLengthPathsResult,
-        compute_fixed_length_paths,
+        _fixed_length_paths,
         "quiver",
         "paths",
         "exact",

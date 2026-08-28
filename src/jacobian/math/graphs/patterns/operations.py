@@ -7,11 +7,8 @@ from itertools import combinations
 import networkx as nx
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.patterns._models import (
-    InducedVertexSubsetPatternCountRequest,
-    InducedVertexSubsetPatternCountResult,
     _require_bounded_request,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -73,28 +70,20 @@ def count_induced_vertex_subset_patterns(
     return occurrence_count
 
 
-def compute_induced_vertex_subset_pattern_count(
-    request: InducedVertexSubsetPatternCountRequest,
-) -> InducedVertexSubsetPatternCountResult:
-    """Count induced pattern occurrences once per host vertex subset."""
-
+def induced_vertex_subset_pattern_count(
+    host: SimpleUndirectedGraph,
+    pattern: SimpleUndirectedGraph,
+) -> int:
+    """Return the exact number of vertex subsets of ``host`` inducing ``pattern``."""
     try:
-        _require_bounded_request(request.host, request.pattern)
+        _require_bounded_request(host, pattern)
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("host", "pattern"),
             code=exc.type,
             message=exc.message(),
         ) from None
-    occurrence_count = count_induced_vertex_subset_patterns(
-        request.host,
-        request.pattern,
-    )
-    return InducedVertexSubsetPatternCountResult._from_kernel(
-        host=request.host,
-        pattern=request.pattern,
-        occurrence_count=format_canonical_integer(occurrence_count),
-    )
+    return count_induced_vertex_subset_patterns(host, pattern)
 
 
-__all__ = ["compute_induced_vertex_subset_pattern_count"]
+__all__ = ["induced_vertex_subset_pattern_count"]

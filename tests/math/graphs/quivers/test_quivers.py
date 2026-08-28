@@ -10,12 +10,12 @@ from jacobian.math.graphs.quivers._models import (
     FixedLengthPathsRequest,
     VertexProfilesRequest,
 )
-from jacobian.math.graphs.quivers._operations import (
-    compute_adjacency_matrices,
-    compute_fixed_length_paths,
-    compute_vertex_profiles,
-)
 from jacobian.math.graphs.quivers._tools import TOOLS
+from jacobian.math.graphs.quivers.operations import (
+    adjacency_matrices,
+    fixed_length_paths,
+    vertex_profiles,
+)
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -30,7 +30,7 @@ def test_adjacency_matrices_kronecker() -> None:
     request = AdjacencyMatricesRequest(
         quiver=FiniteQuiver(vertex_count=2, arrows=((0, 1), (0, 1)))
     )
-    result = compute_adjacency_matrices(request)
+    result = adjacency_matrices(request.quiver)
     assert result.adjacency_matrix == ((0, 2), (0, 0))
     assert result.transpose_matrix == ((0, 0), (2, 0))
 
@@ -39,7 +39,7 @@ def test_vertex_profiles_kronecker() -> None:
     request = VertexProfilesRequest(
         quiver=FiniteQuiver(vertex_count=2, arrows=((0, 1), (0, 1)))
     )
-    result = compute_vertex_profiles(request)
+    result = vertex_profiles(request.quiver)
     assert result.in_degrees == (0, 2)
     assert result.out_degrees == (2, 0)
 
@@ -49,7 +49,7 @@ def test_fixed_length_paths_triangle() -> None:
         quiver=FiniteQuiver(vertex_count=3, arrows=((0, 1), (1, 2), (2, 0))),
         length=2,
     )
-    result = compute_fixed_length_paths(request)
+    result = fixed_length_paths(request.quiver, request.length)
     assert result.total_paths == 3
 
 
@@ -58,7 +58,7 @@ def test_fixed_length_paths_zero() -> None:
         quiver=FiniteQuiver(vertex_count=2, arrows=((0, 1),)),
         length=0,
     )
-    result = compute_fixed_length_paths(request)
+    result = fixed_length_paths(request.quiver, request.length)
     assert result.total_paths == 2
 
 
@@ -68,7 +68,7 @@ def test_fixed_length_paths_admits_transportable_count_boundary() -> None:
         quiver=FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 8), length=17
     )
 
-    result = compute_fixed_length_paths(request)
+    result = fixed_length_paths(request.quiver, request.length)
 
     assert result.path_matrix == ((8**17,),)
     assert result.total_paths == 8**17
@@ -82,7 +82,7 @@ def test_fixed_length_paths_rejects_untransportable_count_before_kernel() -> Non
         quiver=FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 8), length=18
     )
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        compute_fixed_length_paths(request)
+        fixed_length_paths(request.quiver, request.length)
 
     assert exc_info.value.errors()[0]["type"] == (
         "quiver.fixed_length_paths_exceeds_envelope"
@@ -95,4 +95,4 @@ def test_fixed_length_paths_rejects_parallel_loop_explosion_before_kernel() -> N
         quiver=FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 32), length=32
     )
     with pytest.raises(OperationDomainValidationError):
-        compute_fixed_length_paths(request)
+        fixed_length_paths(request.quiver, request.length)

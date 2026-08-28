@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from itertools import combinations
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.regular_subgraph._models import (
-    RegularSubgraphRequest,
     RegularSubgraphResult,
 )
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def compute_k_regular_subgraph(
-    request: RegularSubgraphRequest,
+def find_k_regular_subgraph(
+    graph: SimpleUndirectedGraph,
+    k: int,
 ) -> RegularSubgraphResult:
     """Return a nonempty k-regular subgraph (vertex set and edge set) or found=false.
 
@@ -20,10 +22,20 @@ def compute_k_regular_subgraph(
     return the first feasible solution. For k=0, any single vertex suffices.
     """
 
-    graph = request.graph
-    k = request.k
+    if k < 0:
+        raise OperationDomainValidationError(
+            location=("k",),
+            code="graphs.regular_subgraph.negative_k",
+            message="k must be nonnegative",
+        )
     vertices = graph.vertices
     n_vertices = len(vertices)
+    if k > 0 and k >= n_vertices:
+        raise OperationDomainValidationError(
+            location=("k",),
+            code="graphs.regular_subgraph.k_too_large",
+            message="k must be less than the number of vertices",
+        )
     edges = list(graph.edges)
     n_edges = len(edges)
 
@@ -85,3 +97,6 @@ def compute_k_regular_subgraph(
                 )
 
     return RegularSubgraphResult(graph=graph, k=k, found=False)
+
+
+__all__ = ["find_k_regular_subgraph"]

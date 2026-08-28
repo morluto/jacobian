@@ -21,7 +21,7 @@ from jacobian.math.matrices.subsystems.operations import (
 )
 
 
-def _kronecker_product(
+def compute_kronecker_product(
     request: SubsystemKroneckerProductRequest,
 ) -> SubsystemKroneckerProductResult:
     return SubsystemKroneckerProductResult(
@@ -29,7 +29,7 @@ def _kronecker_product(
     )
 
 
-def _partial_trace(
+def compute_partial_trace(
     request: SubsystemPartialTraceRequest,
 ) -> SubsystemPartialTraceResult:
     return SubsystemPartialTraceResult._from_kernel(
@@ -39,7 +39,7 @@ def _partial_trace(
     )
 
 
-def _psd_order(request: PsdOrderRequest) -> PsdOrderResult:
+def decide_psd_order(request: PsdOrderRequest) -> PsdOrderResult:
     return psd_order(request.left, request.right)
 
 
@@ -83,7 +83,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "matrices and concatenate their ordered subsystem factors.",
         SubsystemKroneckerProductRequest,
         SubsystemKroneckerProductResult,
-        _kronecker_product,
+        compute_kronecker_product,
         "matrix",
         "kronecker-product",
         "subsystem-axis",
@@ -112,7 +112,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "matrix while retaining every untraced subsystem in source order.",
         SubsystemPartialTraceRequest,
         SubsystemPartialTraceResult,
-        _partial_trace,
+        compute_partial_trace,
         "matrix",
         "partial-trace",
         "subsystem-axis",
@@ -145,7 +145,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "bounded rational Hermitian matrices on exactly the same ordered factors.",
         PsdOrderRequest,
         PsdOrderResult,
-        _psd_order,
+        decide_psd_order,
         "matrix",
         "positive-semidefinite",
         "loewner-order",

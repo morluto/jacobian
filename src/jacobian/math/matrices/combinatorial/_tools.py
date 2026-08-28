@@ -27,25 +27,25 @@ from jacobian.math.matrices.combinatorial.operations import (
 )
 
 
-def _sign_profile(request: SignProfileRequest) -> SignProfileResult:
+def compute_sign_profile(request: SignProfileRequest) -> SignProfileResult:
     return sign_profile(request.matrix)
 
 
-def _gram_profile(request: GramProfileRequest) -> GramProfileResult:
+def compute_gram_profile(request: GramProfileRequest) -> GramProfileResult:
     return gram_profile(request.matrix)
 
 
-def _normalize(request: NormalizeRequest) -> NormalizeResult:
+def compute_normalize(request: NormalizeRequest) -> NormalizeResult:
     return normalize(request.matrix)
 
 
-def _determinant_profile(
+def compute_determinant_profile(
     request: DeterminantProfileRequest,
 ) -> DeterminantProfileResult:
     return determinant_profile(request.matrix)
 
 
-def _sylvester(request: SylvesterRequest) -> SylvesterResult:
+def compute_sylvester(request: SylvesterRequest) -> SylvesterResult:
     return sylvester(request.k)
 
 
@@ -86,7 +86,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "for a general {-1, +1} sign matrix.",
         SignProfileRequest,
         SignProfileResult,
-        _sign_profile,
+        compute_sign_profile,
         "combinatorial-matrix",
         "sign-profile",
         "exact",
@@ -106,7 +106,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "replayed exactly with no floating tolerance.",
         GramProfileRequest,
         GramProfileResult,
-        _gram_profile,
+        compute_gram_profile,
         "combinatorial-matrix",
         "gram-profile",
         "exact",
@@ -126,7 +126,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "used. Normalization preserves the full matrix and is idempotent.",
         NormalizeRequest,
         NormalizeResult,
-        _normalize,
+        compute_normalize,
         "combinatorial-matrix",
         "normalize",
         "exact",
@@ -147,7 +147,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "that has not first passed exact orthogonality.",
         DeterminantProfileRequest,
         DeterminantProfileResult,
-        _determinant_profile,
+        compute_determinant_profile,
         "combinatorial-matrix",
         "determinant-profile",
         "exact",
@@ -167,7 +167,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "existence search.",
         SylvesterRequest,
         SylvesterResult,
-        _sylvester,
+        compute_sylvester,
         "combinatorial-matrix",
         "sylvester",
         "exact",

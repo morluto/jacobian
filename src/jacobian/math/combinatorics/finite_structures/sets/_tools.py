@@ -16,29 +16,29 @@ from jacobian.math.combinatorics.finite_structures.sets._support import (
 )
 
 
-def _exact_cover(request: FiniteSetCoverageRequest) -> FiniteSetCoverageResult:
+def decide_exact_cover(request: FiniteSetCoverageRequest) -> FiniteSetCoverageResult:
     return native.exact_cover(request.scope, request.values)
 
 
-def _union(request: FiniteSetPairRequest) -> FiniteSetElementListResult:
+def set_union(request: FiniteSetPairRequest) -> FiniteSetElementListResult:
     return FiniteSetElementListResult(
         elements=native.set_union(request.left, request.right).elements
     )
 
 
-def _intersection(request: FiniteSetPairRequest) -> FiniteSetElementListResult:
+def set_intersection(request: FiniteSetPairRequest) -> FiniteSetElementListResult:
     return FiniteSetElementListResult(
         elements=native.set_intersection(request.left, request.right).elements
     )
 
 
-def _difference(request: FiniteSetPairRequest) -> FiniteSetElementListResult:
+def set_difference(request: FiniteSetPairRequest) -> FiniteSetElementListResult:
     return FiniteSetElementListResult(
         elements=native.set_difference(request.left, request.right).elements
     )
 
 
-def _symmetric_difference(
+def set_symmetric_difference(
     request: FiniteSetPairRequest,
 ) -> FiniteSetElementListResult:
     return FiniteSetElementListResult(
@@ -46,27 +46,27 @@ def _symmetric_difference(
     )
 
 
-def _subset(request: FiniteSetPairRequest) -> FiniteSetBooleanResult:
+def decide_subset(request: FiniteSetPairRequest) -> FiniteSetBooleanResult:
     return FiniteSetBooleanResult(holds=native.is_subset(request.left, request.right))
 
 
-def _proper_subset(request: FiniteSetPairRequest) -> FiniteSetBooleanResult:
+def decide_proper_subset(request: FiniteSetPairRequest) -> FiniteSetBooleanResult:
     return FiniteSetBooleanResult(
         holds=native.is_proper_subset(request.left, request.right)
     )
 
 
-def _disjoint(request: FiniteSetPairRequest) -> FiniteSetBooleanResult:
+def decide_disjoint(request: FiniteSetPairRequest) -> FiniteSetBooleanResult:
     return FiniteSetBooleanResult(
         holds=native.are_disjoint(request.left, request.right)
     )
 
 
-def _cardinality(request: FiniteSetPairRequest) -> FiniteSetCardinalityResult:
+def left_cardinality(request: FiniteSetPairRequest) -> FiniteSetCardinalityResult:
     return FiniteSetCardinalityResult(cardinality=native.cardinality(request.left))
 
 
-def _intersection_cardinality(
+def intersection_cardinality(
     request: FiniteSetPairRequest,
 ) -> FiniteSetCardinalityResult:
     return FiniteSetCardinalityResult(
@@ -74,7 +74,7 @@ def _intersection_cardinality(
     )
 
 
-def _union_cardinality(request: FiniteSetPairRequest) -> FiniteSetCardinalityResult:
+def union_cardinality(request: FiniteSetPairRequest) -> FiniteSetCardinalityResult:
     return FiniteSetCardinalityResult(
         cardinality=native.union_cardinality(request.left, request.right)
     )
@@ -88,7 +88,7 @@ TOOLS: MathTools = (
         "Return the sorted union of two finite integer sets.",
         FiniteSetPairRequest,
         FiniteSetElementListResult,
-        _union,
+        set_union,
         "finite-set",
         "exact",
         examples=(example("overlapping_sets", "Union two finite sets.", _PAIR),),
@@ -99,7 +99,7 @@ TOOLS: MathTools = (
         "Return the sorted intersection of two finite integer sets.",
         FiniteSetPairRequest,
         FiniteSetElementListResult,
-        _intersection,
+        set_intersection,
         "finite-set",
         "exact",
         examples=(example("overlapping_sets", "Intersect two finite sets.", _PAIR),),
@@ -110,7 +110,7 @@ TOOLS: MathTools = (
         "Return elements in the first finite set but not the second.",
         FiniteSetPairRequest,
         FiniteSetElementListResult,
-        _difference,
+        set_difference,
         "finite-set",
         "exact",
         examples=(example("overlapping_sets", "Subtract two finite sets.", _PAIR),),
@@ -121,7 +121,7 @@ TOOLS: MathTools = (
         "Return elements occurring in exactly one of two finite integer sets.",
         FiniteSetPairRequest,
         FiniteSetElementListResult,
-        _symmetric_difference,
+        set_symmetric_difference,
         "finite-set",
         "exact",
         examples=(
@@ -134,7 +134,7 @@ TOOLS: MathTools = (
         "Decide whether a sequence contains every scope element exactly once.",
         FiniteSetCoverageRequest,
         FiniteSetCoverageResult,
-        _exact_cover,
+        decide_exact_cover,
         "finite-set",
         "predicate",
         examples=(
@@ -151,7 +151,7 @@ TOOLS: MathTools = (
         "Decide whether every left-set element occurs in the right set.",
         FiniteSetPairRequest,
         FiniteSetBooleanResult,
-        _subset,
+        decide_subset,
         "finite-set",
         "predicate",
         examples=(example("overlapping_sets", "Check the subset relation.", _PAIR),),
@@ -162,7 +162,7 @@ TOOLS: MathTools = (
         "Decide whether the left set is a strict subset of the right set.",
         FiniteSetPairRequest,
         FiniteSetBooleanResult,
-        _proper_subset,
+        decide_proper_subset,
         "finite-set",
         "predicate",
         examples=(
@@ -175,7 +175,7 @@ TOOLS: MathTools = (
         "Decide whether two finite integer sets have empty intersection.",
         FiniteSetPairRequest,
         FiniteSetBooleanResult,
-        _disjoint,
+        decide_disjoint,
         "finite-set",
         "predicate",
         examples=(example("overlapping_sets", "Check disjointness.", _PAIR),),
@@ -186,7 +186,7 @@ TOOLS: MathTools = (
         "Count distinct elements in the left finite integer set.",
         FiniteSetPairRequest,
         FiniteSetCardinalityResult,
-        _cardinality,
+        left_cardinality,
         "finite-set",
         "counting",
         examples=(example("overlapping_sets", "Count the left set.", _PAIR),),
@@ -197,7 +197,7 @@ TOOLS: MathTools = (
         "Count common elements of two finite integer sets.",
         FiniteSetPairRequest,
         FiniteSetCardinalityResult,
-        _intersection_cardinality,
+        intersection_cardinality,
         "finite-set",
         "counting",
         examples=(example("overlapping_sets", "Count the intersection.", _PAIR),),
@@ -208,7 +208,7 @@ TOOLS: MathTools = (
         "Count distinct elements occurring in either finite integer set.",
         FiniteSetPairRequest,
         FiniteSetCardinalityResult,
-        _union_cardinality,
+        union_cardinality,
         "finite-set",
         "counting",
         examples=(example("overlapping_sets", "Count the union.", _PAIR),),

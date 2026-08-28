@@ -10,12 +10,7 @@ from jacobian.math.topology.frames._models import (
     CoherenceRequest,
     FiniteFrameRequest,
 )
-from jacobian.math.topology.frames._tools import (
-    _coherence as compute_coherence,
-)
-from jacobian.math.topology.frames._tools import (
-    _frame_potential as compute_frame_potential,
-)
+from jacobian.math.topology.frames._tools import _coherence, _frame_potential
 
 
 def test_native_gram_and_potential_match_wire_adapters() -> None:
@@ -24,7 +19,7 @@ def test_native_gram_and_potential_match_wire_adapters() -> None:
     assert gram(family).gram == ((2, 1, 1), (1, 1, 0), (1, 0, 1))
     assert (
         frame_potential(family).potential
-        == compute_frame_potential(FiniteFrameRequest(vectors=family.vectors)).potential
+        == _frame_potential(FiniteFrameRequest(vectors=family.vectors)).potential
     )
 
 
@@ -32,7 +27,7 @@ def test_native_coherence_matches_wire_adapter() -> None:
     family = VectorFamily(vectors=((1, 1), (1, 0), (0, 1)))
 
     native = coherence(family)
-    wire = compute_coherence(CoherenceRequest(vectors=family.vectors))
+    wire = _coherence(CoherenceRequest(vectors=family.vectors))
 
     assert native.model_dump() == wire.model_dump()
 

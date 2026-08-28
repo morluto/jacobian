@@ -16,7 +16,6 @@ from jacobian.math.groups.cohomology._models import (
     MAX_GROUP_ORDER,
     MAX_PRIME,
     CohomologyGroup,
-    GroupCohomologyRequest,
     GroupCohomologyResult,
 )
 
@@ -33,25 +32,27 @@ def _admitted_max_degree(order: int) -> int:
     return degree - 1
 
 
-def _admit_request(request: GroupCohomologyRequest) -> list[tuple[int, ...]]:
+def _admit_request(
+    group: PermutationGroup, prime: int, max_degree: int
+) -> list[tuple[int, ...]]:
     from sympy import isprime
 
-    if type(request.prime) is not int or request.prime < 2 or request.prime > MAX_PRIME:
+    if type(prime) is not int or prime < 2 or prime > MAX_PRIME:
         raise OperationDomainValidationError(
             location=("prime",),
             code="group_cohomology.prime_out_of_range",
             message=f"prime must be an integer between 2 and {MAX_PRIME}",
         )
-    if not isprime(request.prime):
+    if not isprime(prime):
         raise OperationDomainValidationError(
             location=("prime",),
             code="group_cohomology.prime_not_prime",
             message="prime must be a prime integer",
         )
     if (
-        type(request.max_degree) is not int
-        or request.max_degree < 0
-        or request.max_degree > MAX_COCHAIN_DEGREE
+        type(max_degree) is not int
+        or max_degree < 0
+        or max_degree > MAX_COCHAIN_DEGREE
     ):
         raise OperationDomainValidationError(
             location=("max_degree",),
@@ -60,7 +61,7 @@ def _admit_request(request: GroupCohomologyRequest) -> list[tuple[int, ...]]:
                 f"max_degree must be an integer between 0 and {MAX_COCHAIN_DEGREE}"
             ),
         )
-    elements = _enumerate_group_elements(request.group)
+    elements = _enumerate_group_elements(group)
     order = len(elements)
     if order > MAX_GROUP_ORDER:
         raise OperationDomainValidationError(
@@ -72,12 +73,12 @@ def _admit_request(request: GroupCohomologyRequest) -> list[tuple[int, ...]]:
             ),
         )
     admitted_degree = _admitted_max_degree(order)
-    if request.max_degree > admitted_degree:
+    if max_degree > admitted_degree:
         raise OperationDomainValidationError(
             location=("max_degree",),
             code="group_cohomology.max_degree_exceeds_work_budget",
             message=(
-                f"max_degree {request.max_degree} exceeds the work-derived degree "
+                f"max_degree {max_degree} exceeds the work-derived degree "
                 f"budget {admitted_degree} for enumerated group order {order}"
             ),
         )
@@ -169,12 +170,13 @@ def _bar_delta_rank(group_size: int, n: int, cayley: list[list[int]], p: int) ->
 
 
 def _cohomology_profile(
-    request: GroupCohomologyRequest,
+    prime: int,
+    max_degree: int,
     elements: list[tuple[int, ...]],
 ) -> tuple[tuple[CohomologyGroup, ...], int]:
     """Exact cochain dimensions and Betti numbers for degrees 0..max_degree."""
-    p = request.prime
-    max_deg = request.max_degree
+    p = prime
+    max_deg = max_degree
 
     group_order = len(elements)
     cayley = _cayley_table(elements)
@@ -209,17 +211,11 @@ def group_cohomology(
     coboundaries are materialized exactly; each ``betti`` number is
     dim ker(delta^n) - rank(im(delta^{n-1})) = dim H^n(G, GF(p)).
     """
-    request = GroupCohomologyRequest.model_construct(
-        group=group, prime=prime, max_degree=max_degree
+    elements = _admit_request(group, prime, max_degree)
+    groups, group_order = _cohomology_profile(prime, max_degree, elements)
+    return GroupCohomologyResult._from_kernel(
+        group, prime, max_degree, groups, group_order
     )
-    elements = _admit_request(request)
-    groups, group_order = _cohomology_profile(request, elements)
-    return GroupCohomologyResult._from_kernel(request, groups, group_order)
 
 
-def compute_group_cohomology(request: GroupCohomologyRequest) -> GroupCohomologyResult:
-    """Project a wire request onto the native group-cohomology operation."""
-    return group_cohomology(request.group, request.prime, request.max_degree)
-
-
-__all__ = ["compute_group_cohomology", "group_cohomology"]
+__all__ = ["group_cohomology"]

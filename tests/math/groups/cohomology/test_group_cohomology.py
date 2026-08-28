@@ -14,9 +14,12 @@ from jacobian.math.groups.cohomology._models import (
     GroupCohomologyResult,
 )
 from jacobian.math.groups.cohomology.operations import (
-    compute_group_cohomology,
     group_cohomology,
 )
+
+
+def compute_group_cohomology(request: GroupCohomologyRequest):
+    return group_cohomology(request.group, request.prime, request.max_degree)
 
 
 class TestGroupCohomology:
@@ -35,7 +38,7 @@ class TestGroupCohomology:
     def test_native_surface_accepts_canonical_group_value(self) -> None:
         group = PermutationGroup(degree=2, generators=((1, 0),))
         result = group_cohomology(group, 2, 2)
-        assert result.request.group is group
+        assert result.group is group
         assert result.group_order == 2
 
     def test_group_order(self) -> None:
@@ -69,7 +72,7 @@ class TestGroupCohomology:
             max_degree=1,
         )
         result = compute_group_cohomology(req)
-        assert result.request.prime == 7
+        assert result.prime == 7
 
     def test_trivial_group(self) -> None:
         """The trivial group has H^0 = K and higher groups = 0."""
@@ -289,7 +292,7 @@ class TestExactBarComplex:
     def test_reuses_canonical_permutation_group_value(self) -> None:
         """GroupCohomologyRequest reuses PermutationGroup so native
         composition such as GroupCohomologyRequest(group=result.stabilizer)
-        and result.request.group -> group consumer works unchanged."""
+        and result.group -> group consumer works unchanged."""
         from jacobian.math.groups._models import (
             PermutationGroup as CanonicalGroup,
         )
@@ -298,8 +301,8 @@ class TestExactBarComplex:
         canonical = CanonicalGroup(degree=3, generators=((1, 0, 2), (0, 2, 1)))
         req = GroupCohomologyRequest(group=canonical, prime=2, max_degree=1)
         result = compute_group_cohomology(req)
-        # result.request.group must be consumable by group consumers unchanged
-        assert group_order(result.request.group) == 6
+        # The retained canonical group feeds group consumers unchanged.
+        assert group_order(result.group) == 6
 
         # stabilizer result's stabilizer subgroup feeds cohomology unchanged
         source = CanonicalGroup(degree=4, generators=((1, 0, 2, 3), (1, 2, 3, 0)))
@@ -330,7 +333,7 @@ class TestDeclarationContract:
 
 
 class TestResultBinding:
-    """Results are structural; explicit verification replays the bar complex."""
+    """Results retain their canonical source fields without replaying the kernel."""
 
     def _request(self) -> GroupCohomologyRequest:
         return GroupCohomologyRequest(
@@ -339,27 +342,31 @@ class TestResultBinding:
             max_degree=2,
         )
 
-    def test_result_retains_request_without_replaying(self) -> None:
+    def test_result_retains_source_without_replaying(self) -> None:
         request = self._request()
         result = compute_group_cohomology(request)
-        assert result.request == request
+        assert (result.group, result.prime, result.max_degree) == (
+            request.group,
+            request.prime,
+            request.max_degree,
+        )
         assert GroupCohomologyResult(
-            request=request,
+            group=request.group,
+            prime=request.prime,
+            max_degree=request.max_degree,
             groups=result.groups,
             group_order=result.group_order,
         )
 
     def test_result_parsing_does_not_readmit_its_source_request(self) -> None:
         result = GroupCohomologyResult(
-            request=GroupCohomologyRequest(
-                group=PermutationGroup(degree=2, generators=((1, 0),)),
-                prime=4,
-                max_degree=1,
-            ),
+            group=PermutationGroup(degree=2, generators=((1, 0),)),
+            prime=4,
+            max_degree=1,
             groups=(
                 CohomologyGroup(degree=0, betti=1, cochain_dimension=1),
                 CohomologyGroup(degree=1, betti=0, cochain_dimension=2),
             ),
             group_order=2,
         )
-        assert result.request.prime == 4
+        assert result.prime == 4

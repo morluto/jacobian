@@ -95,15 +95,17 @@ class GroupCohomologyResult(StrictModel):
     computation runs in the owner operation.
     """
 
-    request: GroupCohomologyRequest
+    group: PermutationGroup
+    prime: int = Field(ge=2, le=MAX_PRIME)
+    max_degree: int = Field(ge=0, le=MAX_COCHAIN_DEGREE)
     groups: tuple[CohomologyGroup, ...] = Field(min_length=1)
     group_order: int = Field(ge=1)
 
     @model_validator(mode="after")
     def require_consistent(self) -> Self:
-        if len(self.groups) != self.request.max_degree + 1 or tuple(
+        if len(self.groups) != self.max_degree + 1 or tuple(
             group.degree for group in self.groups
-        ) != tuple(range(self.request.max_degree + 1)):
+        ) != tuple(range(self.max_degree + 1)):
             raise _validation_error(
                 "degrees_not_contiguous",
                 "groups must cover degrees 0..max_degree exactly once in order",
@@ -131,14 +133,20 @@ class GroupCohomologyResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: GroupCohomologyRequest,
+        group: PermutationGroup,
+        prime: int,
+        max_degree: int,
         groups: tuple[CohomologyGroup, ...],
         group_order: int,
     ) -> Self:
         """Construct a trusted result emitted by the owner-local kernel."""
 
         return cls.model_construct(
-            request=request, groups=groups, group_order=group_order
+            group=group,
+            prime=prime,
+            max_degree=max_degree,
+            groups=groups,
+            group_order=group_order,
         )
 
 

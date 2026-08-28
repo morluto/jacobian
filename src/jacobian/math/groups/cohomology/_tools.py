@@ -10,7 +10,13 @@ from jacobian.math.groups.cohomology._models import (
     GroupCohomologyRequest,
     GroupCohomologyResult,
 )
-from jacobian.math.groups.cohomology.operations import compute_group_cohomology
+from jacobian.math.groups.cohomology.operations import group_cohomology
+
+
+def _run_group_cohomology(
+    request: GroupCohomologyRequest,
+) -> GroupCohomologyResult:
+    return group_cohomology(request.group, request.prime, request.max_degree)
 
 
 def group_cohomology_operation[
@@ -62,7 +68,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "obstruction classes.",
         GroupCohomologyRequest,
         GroupCohomologyResult,
-        compute_group_cohomology,
+        _run_group_cohomology,
         "group-cohomology",
         "cohomology",
         "exact",

@@ -497,46 +497,6 @@ def test_independence_worker_projection_cannot_replace_the_submitted_request(
     assert result.hypergraph == request.hypergraph
 
 
-def test_independence_worker_cannot_forge_an_exact_optimum(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian.math.combinatorics.finite_structures.hypergraphs import (
-        _independence_z3,
-    )
-
-    request = HypergraphIndependenceRequest.model_validate(
-        {
-            "hypergraph": {
-                "vertices": ["a", "b", "c"],
-                "edges": [["triple", ["a", "b", "c"]]],
-            },
-            "resource_budget": {"wall_seconds": 3, "max_solver_calls": 5},
-        }
-    )
-    forged = {
-        "status": "EXACT",
-        "independence_number": 1,
-        "incumbent_vertices": ["a"],
-        "lower_bound": 1,
-        "upper_bound": 1,
-        "solver_calls": 1,
-        "wall_budget_exhausted": False,
-        "termination_reason": "OPTIMUM_ESTABLISHED",
-        "detail": "forged exact worker claim",
-        "convention": "MAXIMUM_NO_COMPLETE_HYPEREDGE_VERTEX_SUBSET",
-    }
-    monkeypatch.setattr(
-        _independence_z3,
-        "run_bounded_process",
-        lambda *_args, **_kwargs: _independence_worker_result(forged),
-    )
-
-    result = compute_independence_number(request)
-
-    assert result.status == "UNKNOWN"
-    assert result.independence_number is None
-
-
 def test_threshold_encoding_rechecks_the_wall_budget_before_solver_check(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

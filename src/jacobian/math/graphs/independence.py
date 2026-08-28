@@ -21,7 +21,6 @@ IndependenceTermination = Literal[
     "SOLVER_UNKNOWN",
     "SOLVER_UNSAT",
     "SPECIAL_CASE",
-    "REPLAY_INCOMPLETE",
 ]
 
 

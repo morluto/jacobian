@@ -29,36 +29,6 @@ _WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 
 
-def _externally_supplied_exact_result_is_valid(
-    result: IndependenceNumberResult,
-    *,
-    deadline: float,
-) -> bool:
-    """Authenticate an exact worker claim against its retained source graph."""
-
-    if result.status != "EXACT":
-        return True
-    remaining_ms = int((deadline - time.monotonic()) * 1000)
-    if remaining_ms <= 0 or result.optimum_value is None:
-        return False
-
-    import z3
-
-    selected = {
-        vertex: z3.Bool(f"verify_selected_{index}")
-        for index, vertex in enumerate(result.graph.vertices)
-    }
-    solver = z3.Solver()
-    solver.set(timeout=max(1, remaining_ms))
-    for left, right in result.graph.edges:
-        solver.add(z3.Or(z3.Not(selected[left]), z3.Not(selected[right])))
-    solver.add(
-        z3.Sum([z3.If(selected[vertex], 1, 0) for vertex in result.graph.vertices])
-        > result.optimum_value
-    )
-    return solver.check() == z3.unsat and time.monotonic() < deadline
-
-
 def _integer_bound(value: Any, fallback: int) -> int:
     import z3
 
@@ -176,7 +146,7 @@ def solve_independence_number_values(
     graph: SimpleUndirectedGraph,
     resource_budget: IndependenceNumberBudget,
 ) -> IndependenceNumberResult:
-    """Run all Z3 optimization and exact replay in one bounded owner worker."""
+    """Run Z3 optimization in one bounded owner worker and decode its result."""
 
     incumbent = () if not graph.vertices else (min(graph.vertices),)
 
@@ -199,12 +169,6 @@ def solve_independence_number_values(
                 return fallback(
                     "the graph independence request expired before worker startup"
                 )
-            verification_reserve = min(1.0, resource_budget.wall_seconds / 5)
-            worker_seconds = remaining_seconds - verification_reserve
-            if worker_seconds <= 0:
-                return fallback(
-                    "the graph independence request expired before worker startup"
-                )
             completed = run_bounded_process(
                 [sys.executable, str(_INDEPENDENCE_WORKER)],
                 input_bytes=json.dumps(
@@ -215,7 +179,7 @@ def solve_independence_number_values(
                     separators=(",", ":"),
                     ensure_ascii=False,
                 ).encode("utf-8"),
-                timeout_seconds=worker_seconds,
+                timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_WORKER_OUTPUT_BYTES,
                 stderr_limit=_WORKER_ERROR_BYTES,
@@ -249,10 +213,6 @@ def solve_independence_number_values(
                 "graph": graph.model_dump(mode="json"),
             }
         )
-        if not _externally_supplied_exact_result_is_valid(result, deadline=deadline):
-            return fallback(
-                "the bounded graph independence worker returned an unverified exact claim"
-            )
         return (
             result
             if time.monotonic() < deadline

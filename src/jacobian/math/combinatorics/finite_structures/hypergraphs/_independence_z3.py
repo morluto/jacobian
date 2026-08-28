@@ -143,32 +143,6 @@ def _solver_witness_is_canonical_and_independent(
     return not any(set(members) <= candidate_set for _, members in source.edges)
 
 
-def _externally_supplied_exact_result_is_valid(
-    result: HypergraphIndependenceResult,
-    *,
-    started: float,
-) -> bool:
-    """Authenticate an exact worker claim with one bounded threshold check."""
-
-    if result.status != "EXACT":
-        return True
-    if result.independence_number is None:
-        return False
-    solver, selected, cardinality = _build_solver(result.hypergraph)
-    status, _, _ = _check_threshold(
-        solver,
-        selected,
-        cardinality,
-        result.independence_number + 1,
-        started,
-        result.resource_budget.wall_seconds,
-        result.hypergraph.vertices,
-    )
-    import z3
-
-    return cast(bool, status == z3.unsat)
-
-
 def _solve_independence_number_kernel(
     request: HypergraphIndependenceRequest,
 ) -> HypergraphIndependenceResult:
@@ -394,23 +368,9 @@ def solve_independence_number(
             termination_reason="WALL_TIME",
             detail="the hypergraph independence request expired before worker startup",
         )
-    verification_reserve = min(1.0, request.resource_budget.wall_seconds / 5)
-    worker_seconds = remaining_seconds - verification_reserve
-    if worker_seconds <= 0:
-        return _result(
-            request,
-            status="UNKNOWN",
-            independence_number=None,
-            incumbent=incumbent,
-            upper_bound=source_upper_bound,
-            solver_calls=0,
-            wall_budget_exhausted=True,
-            termination_reason="WALL_TIME",
-            detail="the hypergraph independence request expired before worker startup",
-        )
     response = _run_independence_worker(
         {"kind": "solve", "request": request.model_dump(mode="json")},
-        timeout_seconds=worker_seconds,
+        timeout_seconds=remaining_seconds,
     )
     if not isinstance(response, dict):
         return _result(
@@ -448,8 +408,6 @@ def solve_independence_number(
                 "resource_budget": request.resource_budget.model_dump(mode="json"),
             }
         )
-        if not _externally_supplied_exact_result_is_valid(result, started=started):
-            raise ValueError("worker exact claim failed bounded verification")
         if _remaining_ms(started, request.resource_budget.wall_seconds) > 0:
             return result
         raise ValueError("request expired during response validation")

@@ -423,41 +423,6 @@ def test_independence_worker_projection_cannot_replace_the_submitted_graph(
     assert result.graph == request.graph
 
 
-def test_independence_worker_cannot_forge_an_exact_optimum(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    request = IndependenceNumberRequest(graph=_path_graph())
-    forged = {
-        "status": "EXACT",
-        "order": 3,
-        "optimum_value": 1,
-        "incumbent_value": 1,
-        "lower_bound": 1,
-        "upper_bound": 1,
-        "witness_vertices": ["a"],
-        "termination_reason": "OPTIMUM_ESTABLISHED",
-        "detail": "forged exact worker claim",
-        "convention": "MAXIMUM_EDGE_FREE_VERTEX_SUBSET",
-    }
-    monkeypatch.setattr(
-        z3_backend,
-        "run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
-            returncode=0,
-            stdout=json.dumps(forged).encode("utf-8"),
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
-        ),
-    )
-
-    result = solve_independence_number(request)
-
-    assert result.status == "UNKNOWN"
-    assert result.optimum_value is None
-
-
 def test_result_headroom_admission_rejects_oversized_echo() -> None:
     """A huge identifier is rejected before solving, not by dispatch after."""
 

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.coloring import _operations
+from jacobian.math.graphs.coloring import operations as _operations
 from jacobian.math.graphs.coloring._chromatic_number_models import (
     MAX_CHROMATIC_CERTIFICATE_DERIVED_RATIONAL_DIGITS,
     MAX_CHROMATIC_CERTIFICATE_EDGES,
@@ -20,7 +20,7 @@ from jacobian.math.graphs.coloring._chromatic_number_models import (
     ChromaticNumberCertificateCheckRequest,
     ChromaticNumberCertificateCheckResult,
 )
-from jacobian.math.graphs.coloring._operations import (
+from jacobian.math.graphs.coloring._tools import (
     compute_chromatic_number_certificate_check,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph

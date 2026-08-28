@@ -6,6 +6,7 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.graphs.coloring import operations as native
 from jacobian.math.graphs.coloring._chromatic_number_models import (
     ChromaticNumberCertificateCheckRequest,
     ChromaticNumberCertificateCheckResult,
@@ -20,13 +21,43 @@ from jacobian.math.graphs.coloring._models import (
     MaximalIndependentSetRequest,
     MaximalIndependentSetResult,
 )
-from jacobian.math.graphs.coloring._operations import (
-    compute_chromatic_number_certificate_check,
-    compute_edge_coloring_check,
-    compute_edge_k_colorability,
-    compute_k_colorability,
-    compute_maximal_independent_set_decision,
-)
+
+
+def compute_chromatic_number_certificate_check(
+    request: ChromaticNumberCertificateCheckRequest,
+) -> ChromaticNumberCertificateCheckResult:
+    return native.chromatic_number_certificate(
+        request.graph,
+        request.claimed_chromatic_number,
+        request.coloring,
+        request.weights,
+    )
+
+
+def compute_k_colorability(request: KColorabilityRequest) -> KColorabilityResult:
+    return native.k_colorability(
+        request.graph, request.colors, request.solver_conflicts
+    )
+
+
+def compute_maximal_independent_set_decision(
+    request: MaximalIndependentSetRequest,
+) -> MaximalIndependentSetResult:
+    return native.maximal_independent_set(request.graph, request.candidate_set)
+
+
+def compute_edge_k_colorability(
+    request: EdgeKColorabilityRequest,
+) -> EdgeKColorabilityResult:
+    return native.edge_k_colorability(
+        request.graph, request.colors, request.solver_conflicts
+    )
+
+
+def compute_edge_coloring_check(
+    request: EdgeColoringCheckRequest,
+) -> EdgeColoringCheckResult:
+    return native.edge_coloring_check(request.assignment)
 
 
 def graph_coloring_operation[

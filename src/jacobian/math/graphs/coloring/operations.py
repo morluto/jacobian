@@ -10,6 +10,7 @@ from typing import Literal
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring._chromatic_number_models import (
     ChromaticNumberCertificateCheckRequest,
@@ -416,3 +417,74 @@ def compute_edge_coloring_check(
         blocking_edge=None,
         conflicting_edge=None,
     )
+
+
+def chromatic_number_certificate(
+    graph: SimpleUndirectedGraph,
+    claimed_chromatic_number: int,
+    coloring: tuple[int, ...],
+    weights: tuple[CanonicalRational, ...],
+) -> ChromaticNumberCertificateCheckResult:
+    """Check a chromatic-number certificate over canonical graph data."""
+
+    return compute_chromatic_number_certificate_check(
+        ChromaticNumberCertificateCheckRequest(
+            graph=graph,
+            claimed_chromatic_number=claimed_chromatic_number,
+            coloring=coloring,
+            weights=weights,
+        )
+    )
+
+
+def k_colorability(
+    graph: IndexedSimpleUndirectedGraph, colors: int, solver_conflicts: int
+) -> KColorabilityResult:
+    """Decide vertex k-colorability for one canonical indexed graph."""
+
+    return compute_k_colorability(
+        KColorabilityRequest(
+            graph=graph, colors=colors, solver_conflicts=solver_conflicts
+        )
+    )
+
+
+def maximal_independent_set(
+    graph: IndexedSimpleUndirectedGraph, candidate_set: tuple[int, ...]
+) -> MaximalIndependentSetResult:
+    """Check maximal independence of a canonical candidate vertex set."""
+
+    return compute_maximal_independent_set_decision(
+        MaximalIndependentSetRequest(graph=graph, candidate_set=candidate_set)
+    )
+
+
+def edge_k_colorability(
+    graph: SimpleUndirectedGraph, colors: int, solver_conflicts: int
+) -> EdgeKColorabilityResult:
+    """Decide edge k-colorability for one canonical graph."""
+
+    return compute_edge_k_colorability(
+        EdgeKColorabilityRequest(
+            graph=graph, colors=colors, solver_conflicts=solver_conflicts
+        )
+    )
+
+
+def edge_coloring_check(
+    assignment: EdgeColoringAssignment,
+) -> EdgeColoringCheckResult:
+    """Check one canonical edge-coloring assignment."""
+
+    return compute_edge_coloring_check(
+        EdgeColoringCheckRequest(assignment=assignment)
+    )
+
+
+__all__ = [
+    "chromatic_number_certificate",
+    "edge_coloring_check",
+    "edge_k_colorability",
+    "k_colorability",
+    "maximal_independent_set",
+]

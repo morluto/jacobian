@@ -11,11 +11,11 @@ from jacobian.catalog.models import (
 from jacobian.math.graphs.coloring._models import (
     KColorabilityRequest,
 )
-from jacobian.math.graphs.coloring._operations import (
+from jacobian.math.graphs.coloring._tools import (
     compute_k_colorability,
 )
 from jacobian.math.graphs.flows._models import MaxFlowRequest
-from jacobian.math.graphs.flows._operations import compute_max_flow
+from jacobian.math.graphs.flows._tools import compute_max_flow
 from jacobian.math.graphs.independence import independence_number
 from jacobian.math.graphs.spectra._models import GraphSpectrumRequest
 from jacobian.math.graphs.spectra._tools import compute_laplacian_spectrum

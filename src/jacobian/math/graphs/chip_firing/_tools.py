@@ -6,6 +6,7 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.graphs.chip_firing import operations as native
 from jacobian.math.graphs.chip_firing._models import (
     AbelJacobiRequest,
     AbelJacobiResult,
@@ -13,6 +14,8 @@ from jacobian.math.graphs.chip_firing._models import (
     CanonicalDivisorResult,
     CriticalGroupRequest,
     CriticalGroupResult,
+    DegreeRequest,
+    DegreeResult,
     FireVectorRequest,
     FireVectorResult,
     FiringRequest,
@@ -28,18 +31,56 @@ from jacobian.math.graphs.chip_firing._models import (
     StabilizeRequest,
     StabilizeResult,
 )
-from jacobian.math.graphs.chip_firing._operations import (
-    compute_abel_jacobi,
-    compute_canonical_divisor,
-    compute_critical_group,
-    compute_fire_vector,
-    compute_firing,
-    compute_laplacian,
-    compute_parallel_step,
-    compute_q_reduced,
-    compute_reduced_laplacian,
-    compute_stabilize,
-)
+
+
+def compute_laplacian(request: LaplacianRequest) -> LaplacianResult:
+    return native.laplacian(request.graph)
+
+
+def compute_reduced_laplacian(request: ReducedLaplacianRequest) -> ReducedLaplacianResult:
+    return native.reduced_laplacian(request.graph, request.sink)
+
+
+def compute_firing(request: FiringRequest) -> FiringResult:
+    return native.firing(request.graph, request.divisor, request.firing_vertex)
+
+
+def compute_fire_vector(request: FireVectorRequest) -> FireVectorResult:
+    return native.fire_vector(request.graph, request.divisor, request.firing_vector)
+
+
+def compute_stabilize(request: StabilizeRequest) -> StabilizeResult:
+    configuration = request.configuration
+    return native.stabilize(
+        configuration.graph, configuration.sink, configuration.configuration
+    )
+
+
+def compute_parallel_step(request: ParallelStepRequest) -> ParallelStepResult:
+    configuration = request.configuration
+    return native.parallel_step(
+        configuration.graph, configuration.sink, configuration.configuration
+    )
+
+
+def compute_q_reduced(request: QReducedRequest) -> QReducedResult:
+    return native.q_reduced(request.graph, request.divisor, request.sink)
+
+
+def compute_canonical_divisor(request: CanonicalDivisorRequest) -> CanonicalDivisorResult:
+    return native.canonical_divisor(request.graph)
+
+
+def compute_critical_group(request: CriticalGroupRequest) -> CriticalGroupResult:
+    return native.critical_group(request.graph, request.sink)
+
+
+def compute_degree(request: DegreeRequest) -> DegreeResult:
+    return native.degree(request.divisor)
+
+
+def compute_abel_jacobi(request: AbelJacobiRequest) -> AbelJacobiResult:
+    return native.abel_jacobi(request.graph, request.divisor, request.sink)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](

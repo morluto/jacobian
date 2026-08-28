@@ -9,15 +9,14 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.flows import _operations as flow_operations
+from jacobian.math.graphs.flows import operations as flow_operations
 from jacobian.math.graphs.flows._models import (
     CostedFlowEdge,
     CostedFlowGraph,
     MinCostFlowRequest,
     MinCostFlowResult,
 )
-from jacobian.math.graphs.flows._operations import compute_min_cost_flow
-from jacobian.math.graphs.flows._tools import TOOLS
+from jacobian.math.graphs.flows._tools import TOOLS, compute_min_cost_flow
 
 
 def test_catalog_contains_only_audited_operations() -> None:

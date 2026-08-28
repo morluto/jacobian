@@ -7,13 +7,13 @@ from typing import NoReturn
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.graphs.coloring import _operations as coloring_operations
+from jacobian.math.graphs.coloring import operations as coloring_operations
 from jacobian.math.graphs.coloring._models import (
     EdgeKColorabilityResult,
     MaximalIndependentSetRequest,
     MaximalIndependentSetResult,
 )
-from jacobian.math.graphs.coloring._operations import (
+from jacobian.math.graphs.coloring._tools import (
     compute_maximal_independent_set_decision,
 )
 from jacobian.math.graphs.values import (
@@ -165,7 +165,7 @@ def test_coloring_worker_failure_is_typed_inconclusive_without_a_math_claim(
 
     monkeypatch.setattr(coloring_operations, "run_bounded_process", expired_worker)
     from jacobian.math.graphs.coloring._models import KColorabilityRequest
-    from jacobian.math.graphs.coloring._operations import compute_k_colorability
+    from jacobian.math.graphs.coloring.operations import compute_k_colorability
 
     result = compute_k_colorability(
         KColorabilityRequest.model_validate(
@@ -189,7 +189,7 @@ def test_edgeless_vertex_coloring_bypasses_the_worker(
         coloring_operations, "run_bounded_process", worker_must_not_start
     )
     from jacobian.math.graphs.coloring._models import KColorabilityRequest
-    from jacobian.math.graphs.coloring._operations import compute_k_colorability
+    from jacobian.math.graphs.coloring.operations import compute_k_colorability
 
     result = compute_k_colorability(
         KColorabilityRequest.model_validate(
@@ -229,7 +229,7 @@ class TestEdgeKColorability:
 
     def test_petersen_not_3_edge_colorable(self) -> None:
         from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
-        from jacobian.math.graphs.coloring._operations import (
+        from jacobian.math.graphs.coloring.operations import (
             compute_edge_k_colorability,
         )
 
@@ -244,7 +244,7 @@ class TestEdgeKColorability:
             EdgeColoringCheckRequest,
             EdgeKColorabilityRequest,
         )
-        from jacobian.math.graphs.coloring._operations import (
+        from jacobian.math.graphs.coloring.operations import (
             compute_edge_coloring_check,
             compute_edge_k_colorability,
         )
@@ -265,7 +265,7 @@ class TestEdgeKColorability:
 
     def test_triangle_needs_3_edge_colors(self) -> None:
         from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
-        from jacobian.math.graphs.coloring._operations import (
+        from jacobian.math.graphs.coloring.operations import (
             compute_edge_k_colorability,
         )
         from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -353,7 +353,7 @@ class TestEdgeColoringRequestSchema:
     ) -> None:
         from jacobian.catalog.models import OperationDomainValidationError
         from jacobian.math.graphs.coloring._models import KColorabilityRequest
-        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+        from jacobian.math.graphs.coloring.operations import compute_k_colorability
         from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
         edges = tuple(
@@ -374,7 +374,7 @@ class TestEdgeColoringRequestSchema:
             EdgeColoringCheckRequest,
             EdgeKColorabilityRequest,
         )
-        from jacobian.math.graphs.coloring._operations import (
+        from jacobian.math.graphs.coloring.operations import (
             compute_edge_coloring_check,
             compute_edge_k_colorability,
         )
@@ -424,7 +424,7 @@ class TestEdgeColoringCheck:
             EdgeColoringAssignment,
             EdgeColoringCheckRequest,
         )
-        from jacobian.math.graphs.coloring._operations import (
+        from jacobian.math.graphs.coloring.operations import (
             compute_edge_coloring_check,
         )
 
@@ -444,7 +444,7 @@ class TestEdgeColoringCheck:
             EdgeColoringAssignment,
             EdgeColoringCheckRequest,
         )
-        from jacobian.math.graphs.coloring._operations import (
+        from jacobian.math.graphs.coloring.operations import (
             compute_edge_coloring_check,
         )
         from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -509,7 +509,7 @@ class TestCanonicalEdgeColoringValue:
             EdgeKColorabilityRequest,
             EdgeKColorabilityResult,
         )
-        from jacobian.math.graphs.coloring._operations import (
+        from jacobian.math.graphs.coloring.operations import (
             compute_edge_coloring_check,
             compute_edge_k_colorability,
         )
@@ -564,7 +564,7 @@ class TestSolverConflictBudget:
             EdgeKColorabilityRequest,
             EdgeKColorabilityResult,
         )
-        from jacobian.math.graphs.coloring._operations import (
+        from jacobian.math.graphs.coloring.operations import (
             compute_edge_k_colorability,
         )
 
@@ -592,7 +592,7 @@ class TestSolverConflictBudget:
 
     def test_default_budget_still_decides_petersen_negative(self) -> None:
         from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
-        from jacobian.math.graphs.coloring._operations import (
+        from jacobian.math.graphs.coloring.operations import (
             compute_edge_k_colorability,
         )
 
@@ -606,7 +606,7 @@ class TestSolverConflictBudget:
         """Results built from the producing solve must equal their fully
         validated reconstruction, so the skipped replay invariant holds."""
         from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
-        from jacobian.math.graphs.coloring._operations import (
+        from jacobian.math.graphs.coloring.operations import (
             compute_edge_k_colorability,
         )
 
@@ -639,7 +639,7 @@ class TestVertexKColorability:
             KColorabilityRequest,
             KColorabilityResult,
         )
-        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+        from jacobian.math.graphs.coloring.operations import compute_k_colorability
         from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
         result = compute_k_colorability(
@@ -657,7 +657,7 @@ class TestVertexKColorability:
     def test_edgeless_graph_just_past_the_old_vertex_cap_is_admitted(self) -> None:
         """A 65-vertex edgeless graph has no adjacency constraints to charge."""
         from jacobian.math.graphs.coloring._models import KColorabilityRequest
-        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+        from jacobian.math.graphs.coloring.operations import compute_k_colorability
         from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
         request = KColorabilityRequest(
@@ -671,7 +671,7 @@ class TestVertexKColorability:
 
     def test_triangle_decision_carries_a_proper_witness(self) -> None:
         from jacobian.math.graphs.coloring._models import KColorabilityRequest
-        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+        from jacobian.math.graphs.coloring.operations import compute_k_colorability
 
         result = compute_k_colorability(
             KColorabilityRequest.model_validate(
@@ -698,7 +698,7 @@ class TestVertexKColorability:
             KColorabilityRequest,
             KColorabilityResult,
         )
-        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+        from jacobian.math.graphs.coloring.operations import compute_k_colorability
 
         request = KColorabilityRequest(graph=self._k4(), colors=3, solver_conflicts=1)
         result = compute_k_colorability(request)
@@ -724,7 +724,7 @@ class TestVertexKColorability:
 
     def test_default_budget_still_decides_k4_negative(self) -> None:
         from jacobian.math.graphs.coloring._models import KColorabilityRequest
-        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+        from jacobian.math.graphs.coloring.operations import compute_k_colorability
 
         result = compute_k_colorability(
             KColorabilityRequest(graph=self._k4(), colors=3)

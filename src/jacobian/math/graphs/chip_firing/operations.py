@@ -25,6 +25,7 @@ from jacobian.math.graphs.chip_firing._models import (
     QReducedResult,
     ReducedLaplacianRequest,
     ReducedLaplacianResult,
+    SinkConfiguration,
     StabilizeRequest,
     StabilizeResult,
 )
@@ -390,3 +391,116 @@ def compute_abel_jacobi(request: AbelJacobiRequest) -> AbelJacobiResult:
         coordinates=tuple(coords),
         invariant_factors=invariant,
     )
+
+
+def laplacian(graph: SimpleUndirectedGraph) -> LaplacianResult:
+    """Compute the Laplacian of one canonical graph."""
+
+    return compute_laplacian(LaplacianRequest(graph=graph))
+
+
+def reduced_laplacian(graph: SimpleUndirectedGraph, sink: str) -> ReducedLaplacianResult:
+    """Compute the sink-deleted Laplacian of one canonical graph."""
+
+    return compute_reduced_laplacian(
+        ReducedLaplacianRequest(graph=graph, sink=sink)
+    )
+
+
+def firing(
+    graph: SimpleUndirectedGraph, divisor: tuple[int, ...], firing_vertex: str
+) -> FiringResult:
+    """Fire one vertex in a canonical graph divisor."""
+
+    return compute_firing(
+        FiringRequest(graph=graph, divisor=divisor, firing_vertex=firing_vertex)
+    )
+
+
+def fire_vector(
+    graph: SimpleUndirectedGraph,
+    divisor: tuple[int, ...],
+    firing_vector: tuple[int, ...],
+) -> FireVectorResult:
+    """Fire a canonical divisor by one canonical firing vector."""
+
+    return compute_fire_vector(
+        FireVectorRequest(graph=graph, divisor=divisor, firing_vector=firing_vector)
+    )
+
+
+def stabilize(
+    graph: SimpleUndirectedGraph, sink: str, configuration: tuple[int, ...]
+) -> StabilizeResult:
+    """Stabilize one canonical sink configuration."""
+
+    return compute_stabilize(
+        StabilizeRequest(
+            configuration=SinkConfiguration(
+                graph=graph, sink=sink, configuration=configuration
+            )
+        )
+    )
+
+
+def parallel_step(
+    graph: SimpleUndirectedGraph, sink: str, configuration: tuple[int, ...]
+) -> ParallelStepResult:
+    """Perform one parallel firing step on a canonical configuration."""
+
+    return compute_parallel_step(
+        ParallelStepRequest(
+            configuration=SinkConfiguration(
+                graph=graph, sink=sink, configuration=configuration
+            )
+        )
+    )
+
+
+def q_reduced(
+    graph: SimpleUndirectedGraph, divisor: tuple[int, ...], sink: str
+) -> QReducedResult:
+    """Return the q-reduced representative of one canonical divisor."""
+
+    return compute_q_reduced(QReducedRequest(graph=graph, divisor=divisor, sink=sink))
+
+
+def degree(divisor: tuple[int, ...]) -> DegreeResult:
+    """Compute the degree of one canonical divisor."""
+
+    return compute_degree(DegreeRequest(divisor=divisor))
+
+
+def canonical_divisor(graph: SimpleUndirectedGraph) -> CanonicalDivisorResult:
+    """Compute the canonical divisor of one canonical graph."""
+
+    return compute_canonical_divisor(CanonicalDivisorRequest(graph=graph))
+
+
+def critical_group(graph: SimpleUndirectedGraph, sink: str) -> CriticalGroupResult:
+    """Compute the critical group of one canonical graph."""
+
+    return compute_critical_group(CriticalGroupRequest(graph=graph, sink=sink))
+
+
+def abel_jacobi(
+    graph: SimpleUndirectedGraph, divisor: tuple[int, ...], sink: str
+) -> AbelJacobiResult:
+    """Map one canonical degree-zero divisor into critical-group coordinates."""
+
+    return compute_abel_jacobi(AbelJacobiRequest(graph=graph, divisor=divisor, sink=sink))
+
+
+__all__ = [
+    "abel_jacobi",
+    "canonical_divisor",
+    "critical_group",
+    "degree",
+    "fire_vector",
+    "firing",
+    "laplacian",
+    "parallel_step",
+    "q_reduced",
+    "reduced_laplacian",
+    "stabilize",
+]

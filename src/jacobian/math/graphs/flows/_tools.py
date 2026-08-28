@@ -16,12 +16,55 @@ from jacobian.math.graphs.flows._models import (
     MinCutRequest,
     MinCutResult,
 )
-from jacobian.math.graphs.flows._operations import (
-    compute_edge_disjoint_paths,
-    compute_max_flow,
-    compute_min_cost_flow,
-    compute_min_cut,
+from jacobian.math.graphs.flows.operations import (
+    edge_disjoint_paths,
+    max_flow,
+    min_cost_flow,
+    min_cut,
 )
+
+
+def compute_max_flow(request: MaxFlowRequest) -> MaxFlowResult:
+    flow_value, flow_edges = max_flow(request.graph, request.source, request.sink)
+    return MaxFlowResult(
+        flow_value=flow_value,
+        source=request.source,
+        sink=request.sink,
+        flow_edges=flow_edges,
+    )
+
+
+def compute_min_cut(request: MinCutRequest) -> MinCutResult:
+    cut_value, reachable, unreachable = min_cut(
+        request.graph, request.source, request.sink
+    )
+    return MinCutResult(
+        cut_value=cut_value,
+        reachable=reachable,
+        unreachable=unreachable,
+    )
+
+
+def compute_edge_disjoint_paths(
+    request: EdgeDisjointPathsRequest,
+) -> EdgeDisjointPathsResult:
+    paths = edge_disjoint_paths(request.graph, request.source, request.sink)
+    return EdgeDisjointPathsResult(
+        path_count=len(paths),
+        paths=paths,
+        source=request.source,
+        sink=request.sink,
+    )
+
+
+def compute_min_cost_flow(request: MinCostFlowRequest) -> MinCostFlowResult:
+    total_cost, feasible, flow_edges = min_cost_flow(request.graph, request.demands)
+    return MinCostFlowResult._from_kernel(
+        request,
+        total_cost=total_cost,
+        feasible=feasible,
+        flow_edges=flow_edges,
+    )
 
 
 def graph_flow_operation[

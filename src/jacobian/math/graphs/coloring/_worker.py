@@ -6,7 +6,7 @@ import json
 import sys
 from typing import Any
 
-from jacobian.math.graphs.coloring._operations import (
+from jacobian.math.graphs.coloring.operations import (
     _run_edge_coloring_solver_kernel,
     _run_k_colorability_solver_kernel,
 )

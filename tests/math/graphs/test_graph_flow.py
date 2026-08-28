@@ -16,7 +16,7 @@ from jacobian.math.graphs.flows._models import (
     MinCutRequest,
     MinCutResult,
 )
-from jacobian.math.graphs.flows._operations import (
+from jacobian.math.graphs.flows._tools import (
     compute_edge_disjoint_paths,
     compute_max_flow,
     compute_min_cut,

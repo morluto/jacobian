@@ -20,7 +20,7 @@ from jacobian.math.graphs.chip_firing._models import (
     SinkConfiguration,
     StabilizeRequest,
 )
-from jacobian.math.graphs.chip_firing._operations import (
+from jacobian.math.graphs.chip_firing._tools import (
     compute_abel_jacobi,
     compute_canonical_divisor,
     compute_critical_group,

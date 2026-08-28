@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from functools import reduce
-from operator import mul
-
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.combinatorics import operations as native
@@ -33,10 +30,7 @@ def _integer_result(value: int) -> IntegerResult:
 
 
 def factorial(request: NonnegativeIntegerRequest) -> IntegerResult:
-    import math
-
-    n = request.n
-    return _integer_result(math.factorial(n))
+    return _integer_result(native.factorial(request.n))
 
 
 def double_factorial(request: NonnegativeIntegerRequest) -> IntegerResult:
@@ -48,30 +42,16 @@ def derangements(request: NonnegativeIntegerRequest) -> IntegerResult:
 
 
 def binomial(request: BinomialRequest) -> IntegerResult:
-    import math
-
-    pair = request
-    if pair.k > pair.n:
-        return _integer_result(0)
-    return _integer_result(math.comb(pair.n, pair.k))
+    return _integer_result(native.binomial(request.n, request.k))
 
 
 def multinomial(request: IntegerListRequest) -> IntegerResult:
-    import math
-
-    values = [parse_canonical_integer(value) for value in request.values]
-    numerator = math.factorial(sum(values))
-    denominator = reduce(mul, (math.factorial(v) for v in values), 1)
-    return _integer_result(numerator // denominator)
+    values = tuple(parse_canonical_integer(value) for value in request.values)
+    return _integer_result(native.multinomial(values))
 
 
 def permutations(request: NonnegativePairRequest) -> IntegerResult:
-    import math
-
-    pair = request
-    if pair.k > pair.n:
-        return _integer_result(0)
-    return _integer_result(math.perm(pair.n, pair.k))
+    return _integer_result(native.permutations(request.n, request.k))
 
 
 def stirling_first(request: NonnegativePairRequest) -> IntegerResult:
@@ -141,18 +121,8 @@ def bernoulli(request: NonnegativeIntegerRequest) -> RationalResult:
 
 
 def central_binomial(request: NonnegativeIntegerRequest) -> IntegerResult:
-    import math
-
-    n = request.n
-    return _integer_result(math.comb(2 * n, n))
+    return _integer_result(native.central_binomial(request.n))
 
 
 def compositions(request: NonnegativePairRequest) -> IntegerResult:
-    import math
-
-    pair = request
-    if pair.n == pair.k == 0:
-        return _integer_result(1)
-    if 0 < pair.k <= pair.n:
-        return _integer_result(math.comb(pair.n - 1, pair.k - 1))
-    return _integer_result(0)
+    return _integer_result(native.compositions(request.n, request.k))

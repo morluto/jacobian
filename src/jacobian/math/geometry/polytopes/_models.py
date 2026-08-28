@@ -803,9 +803,7 @@ def _deduplicate_exact_points(
     return unique
 
 
-def _hull_subfacets(
-    points: list[list[Rational]], dim: int
-) -> list[tuple[int, ...]]:
+def _hull_subfacets(points: list[list[Rational]], dim: int) -> list[tuple[int, ...]]:
     """Enumerate the dim-subsets of points on the convex hull boundary.
 
     A dim-subset is a (d-1)-subfacet if all remaining points lie on one
@@ -935,7 +933,9 @@ def _project_facet(
     """Project a coplanar dim-dim facet into (dim-1)-dim coordinates."""
 
     for axis in range(dim):
-        projected = [[point[k] for k in range(dim) if k != axis] for point in facet_points]
+        projected = [
+            [point[k] for k in range(dim) if k != axis] for point in facet_points
+        ]
         if _rank_of_diffs(projected, dim - 1) == dim - 1:
             return projected
     return [[point[k] for k in range(dim - 1)] for point in facet_points]
@@ -967,7 +967,9 @@ def _triangulate_2d(points: list[list[Rational]]) -> list[tuple[int, ...]]:
         previous, current = current, nxt
         if len(order) > len(corners) + 1:
             break
-    return [(order[0], order[index], order[index + 1]) for index in range(1, len(order) - 1)]
+    return [
+        (order[0], order[index], order[index + 1]) for index in range(1, len(order) - 1)
+    ]
 
 
 def _triangulate(points: list[list[Rational]], dim: int) -> list[tuple[int, ...]]:
@@ -1029,15 +1031,16 @@ def _extreme_vertex(points: list[list[Rational]], dim: int) -> int | None:
     return None
 
 
-def _deduplicate_halfspaces(
-    halfspaces: tuple[Halfspace, ...]
-) -> tuple[Halfspace, ...]:
+def _deduplicate_halfspaces(halfspaces: tuple[Halfspace, ...]) -> tuple[Halfspace, ...]:
     """Drop duplicate half-spaces up to positive scaling."""
 
     seen: set[tuple[tuple[int, ...], tuple[int, int]]] = set()
     unique: list[Halfspace] = []
     for halfspace in halfspaces:
-        fractions = [Fraction(*coefficient.as_integer_ratio()) for coefficient in halfspace.coefficients]
+        fractions = [
+            Fraction(*coefficient.as_integer_ratio())
+            for coefficient in halfspace.coefficients
+        ]
         offset = Fraction(*halfspace.offset.as_integer_ratio())
         lcm = 1
         for fraction in fractions:
@@ -1063,7 +1066,10 @@ def _halfspace_rows(
 
     return [
         (
-            [Rational(*coefficient.as_integer_ratio()) for coefficient in hs.coefficients],
+            [
+                Rational(*coefficient.as_integer_ratio())
+                for coefficient in hs.coefficients
+            ],
             Rational(*hs.offset.as_integer_ratio()),
         )
         for hs in halfspaces
@@ -1077,7 +1083,10 @@ def _vertices_from_v_representation(
 
     dimension = len(vertices[0].coordinates)
     points: tuple[tuple[Rational, ...], ...] = tuple(
-        tuple(Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates)
+        tuple(
+            Rational(*coordinate.as_integer_ratio())
+            for coordinate in vertex.coordinates
+        )
         for vertex in vertices
     )
     return points, dimension
@@ -1116,7 +1125,10 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
         )
         return has_positive and has_negative
     normals = [
-        [Rational(*coefficient.as_integer_ratio()) for coefficient in halfspace.coefficients]
+        [
+            Rational(*coefficient.as_integer_ratio())
+            for coefficient in halfspace.coefficients
+        ]
         for halfspace in halfspaces
     ]
     if len(normals) < dimension + 1:

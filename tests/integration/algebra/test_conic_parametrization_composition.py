@@ -12,7 +12,7 @@ from jacobian.math.matrices.symbolic._models import (
 )
 from jacobian.math.matrices.symbolic.operations import compute_symbolic_determinant
 from jacobian.math.polynomials.maps._models import EvalRequest, VariablePoint
-from jacobian.math.polynomials.maps._operations import evaluate_polynomial
+from jacobian.math.polynomials.maps.operations import evaluate_polynomial
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -92,4 +92,7 @@ def test_exceptional_point_serialization_evaluates_on_its_source_conic() -> None
         }
     )
     assert evaluation_request.point == parametrization.exceptional_point
-    assert evaluate_polynomial(evaluation_request).value == _integer(0)
+    assert (
+        evaluate_polynomial(evaluation_request.polynomial, evaluation_request.point).value
+        == _integer(0)
+    )

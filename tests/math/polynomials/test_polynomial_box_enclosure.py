@@ -32,7 +32,7 @@ from jacobian.math.polynomials.intervals._tools import (
     TOOLS,
     compute_polynomial_box_enclosure,
 )
-from jacobian.math.polynomials.maps._operations import compute_jacobian
+from jacobian.math.polynomials.maps.operations import jacobian_matrix
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
@@ -217,7 +217,7 @@ def test_jacobian_entry_is_consumed_without_parent_or_axis_conversion() -> None:
         ("x", "y"),
         {(2, 0): 1, (1, 1): 1, (0, 0): -1},
     )
-    jacobian = compute_jacobian(
+    jacobian = jacobian_matrix(
         RationalPolynomialMap(
             input_variables=("x", "y"),
             output_polynomials=(source,),

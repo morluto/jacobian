@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
+import jacobian.math.polynomials.maps.operations as operations
 from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials.maps import (
     RationalPolynomialMap,
-    _operations,
     _singular,
 )
 from jacobian.math.polynomials.maps._models import (
@@ -23,7 +23,7 @@ from jacobian.math.polynomials.maps._models import (
     GenericFiberPolynomial,
     GenericFiberTerm,
 )
-from jacobian.math.polynomials.maps._operations import compute_generic_degree
+from jacobian.math.polynomials.maps.operations import generic_degree
 from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomial,
@@ -31,6 +31,10 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 from jacobian.process import bounded_process_cancellation
+
+
+def _run_generic_degree(request: GenericDegreeRequest):
+    return generic_degree(request.polynomial_map, request.resource_budget)
 
 
 def _map() -> RationalPolynomialMap:
@@ -120,7 +124,7 @@ def test_valid_protocol_is_replayed_to_a_mathematical_result(
     executable = _executable(tmp_path, f"print({chr(10).join(records)!r})")
     _select_executable(monkeypatch, executable)
 
-    result = compute_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
+    result = _run_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
 
     assert result.outcome == "GENERICALLY_FINITE"
     assert result.degree == 1
@@ -161,7 +165,7 @@ def test_invocation_disables_ambient_startup_shell_and_standard_library(
     executable = _executable(tmp_path, body)
     _select_executable(monkeypatch, executable)
 
-    result = compute_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
+    result = _run_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
 
     assert result.outcome == "GENERICALLY_FINITE"
 
@@ -173,7 +177,7 @@ def test_timeout_is_not_a_dominance_conclusion(
     executable = _executable(tmp_path, "import time; time.sleep(30)")
     _select_executable(monkeypatch, executable)
 
-    result = compute_generic_degree(
+    result = _run_generic_degree(
         GenericDegreeRequest(
             polynomial_map=_map(),
             resource_budget=GenericDegreeComputationBudget(wall_seconds=1),
@@ -195,7 +199,7 @@ def test_cancellation_is_preserved_as_its_own_public_outcome(
     cancellation.set()
 
     with bounded_process_cancellation(cancellation):
-        result = compute_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
+        result = _run_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
 
     assert result.outcome == "CANCELLED"
     assert result.degree is None
@@ -209,7 +213,7 @@ def test_malformed_success_output_fails_closed(
     executable = _executable(tmp_path, 'print("not the protocol")')
     _select_executable(monkeypatch, executable)
 
-    result = compute_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
+    result = _run_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
 
     assert result.outcome == "ERROR"
     assert result.degree is None
@@ -222,7 +226,7 @@ def test_oversized_certificate_is_a_typed_bound_outcome(
     executable = _executable(tmp_path, 'print("x" * 600_000)')
     _select_executable(monkeypatch, executable)
 
-    result = compute_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
+    result = _run_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
 
     assert result.outcome == "BOUND_EXCEEDED"
     assert result.degree is None
@@ -314,7 +318,7 @@ def test_heavy_certificate_returns_the_owner_kernel_conclusion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        _operations,
+        operations,
         "run_singular_generic_fiber",
         lambda *_args: _singular.SingularGenericFiberResult(
             outcome="COMPUTED",
@@ -325,7 +329,7 @@ def test_heavy_certificate_returns_the_owner_kernel_conclusion(
         ),
     )
 
-    result = compute_generic_degree(
+    result = _run_generic_degree(
         GenericDegreeRequest(
             polynomial_map=_two_variable_map(),
             resource_budget=GenericDegreeComputationBudget(wall_seconds=1),
@@ -367,7 +371,7 @@ def test_one_second_budget_still_replays_a_light_certificate(
     executable = _executable(tmp_path, f"print({chr(10).join(records)!r})")
     _select_executable(monkeypatch, executable)
 
-    result = compute_generic_degree(
+    result = _run_generic_degree(
         GenericDegreeRequest(
             polynomial_map=_map(),
             resource_budget=GenericDegreeComputationBudget(wall_seconds=1),

@@ -14,10 +14,10 @@ from jacobian.math.polynomials.maps._models import (
     EvalRequest,
     VariablePoint,
 )
-from jacobian.math.polynomials.maps._operations import (
+from jacobian.math.polynomials.maps.operations import (
     compose_polynomials,
-    compute_jacobian,
     evaluate_polynomial,
+    jacobian_matrix,
 )
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
 from jacobian.math.polynomials.values import (
@@ -25,6 +25,19 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+
+
+def _evaluate(request: EvalRequest):
+    return evaluate_polynomial(request.polynomial, request.point)
+
+
+def _compose(request: CompositionRequest):
+    return compose_polynomials(
+        request.outer,
+        request.inner,
+        outer_variable=request.outer_variable,
+        inner_variable=request.inner_variable,
+    )
 
 
 def _polynomial(
@@ -57,7 +70,7 @@ def test_evaluation_returns_a_canonical_rational() -> None:
             ),
         ),
     )
-    assert evaluate_polynomial(request).value == CanonicalRational(num="11", den="1")
+    assert _evaluate(request).value == CanonicalRational(num="11", den="1")
 
 
 def test_evaluation_requires_the_complete_ordered_axis() -> None:
@@ -69,7 +82,7 @@ def test_evaluation_requires_the_complete_ordered_axis() -> None:
         ),
     )
     with pytest.raises(OperationDomainValidationError):
-        evaluate_polynomial(request)
+        _evaluate(request)
 
 
 def test_evaluation_rejects_a_point_whose_exact_value_exceeds_result_bound() -> None:
@@ -81,7 +94,7 @@ def test_evaluation_rejects_a_point_whose_exact_value_exceeds_result_bound() -> 
         ),
     )
     with pytest.raises(OperationDomainValidationError):
-        evaluate_polynomial(request)
+        _evaluate(request)
 
 
 def test_jacobian_entries_are_directly_composable_polynomials() -> None:
@@ -92,7 +105,7 @@ def test_jacobian_entries_are_directly_composable_polynomials() -> None:
             _polynomial(("x", "y"), {(0, 2): 1}),
         ),
     )
-    result = compute_jacobian(request)
+    result = jacobian_matrix(request)
     assert result.n_inputs == 2
     assert result.n_outputs == 2
     assert result.entries == (
@@ -112,7 +125,7 @@ def test_jacobian_rejects_a_mismatched_output_ring() -> None:
 
 
 def test_univariate_composition_returns_a_canonical_polynomial() -> None:
-    result = compose_polynomials(
+    result = _compose(
         CompositionRequest(
             outer=_polynomial(("u",), {(2,): 1}),
             inner=_polynomial(("x",), {(1,): 1, (0,): 1}),
@@ -134,4 +147,4 @@ def test_composition_rejects_multivariate_operands() -> None:
         outer_variable="u",
     )
     with pytest.raises(OperationDomainValidationError):
-        compose_polynomials(request)
+        _compose(request)

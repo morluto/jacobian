@@ -11,12 +11,12 @@ import pytest
 import sympy
 from tests.math.polynomials._support import polynomial_validation_error
 
+import jacobian.math.polynomials.maps.operations as operations
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.maps import (
     RationalPolynomialMap,
     _generic_degree,
-    _operations,
 )
 from jacobian.math.polynomials.maps._generic_degree import (
     GenericFiberReplayLimitError,
@@ -32,15 +32,19 @@ from jacobian.math.polynomials.maps._models import (
     GenericFiberPolynomial,
     GenericFiberTerm,
 )
-from jacobian.math.polynomials.maps._operations import compute_generic_degree
 from jacobian.math.polynomials.maps._singular import SingularGenericFiberResult
 from jacobian.math.polynomials.maps._tools import TOOLS
+from jacobian.math.polynomials.maps.operations import generic_degree
 from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+
+
+def _run_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult:
+    return generic_degree(request.polynomial_map, request.resource_budget)
 
 
 def _polynomial(
@@ -75,7 +79,7 @@ def _map(
 
 
 def _compute(polynomial_map: RationalPolynomialMap) -> GenericDegreeResult:
-    return compute_generic_degree(GenericDegreeRequest(polynomial_map=polynomial_map))
+    return _run_generic_degree(GenericDegreeRequest(polynomial_map=polynomial_map))
 
 
 def _generic_fiber_coefficient(
@@ -194,7 +198,7 @@ def test_missing_backend_is_operational_unavailability(
 
 def test_request_rejects_unproved_dimension_degree_and_height() -> None:
     with pytest.raises(OperationDomainValidationError):
-        compute_generic_degree(
+        _run_generic_degree(
             GenericDegreeRequest(
                 polynomial_map=_map(
                     ("w", "x", "y", "z"),
@@ -203,7 +207,7 @@ def test_request_rejects_unproved_dimension_degree_and_height() -> None:
             )
         )
     with pytest.raises(OperationDomainValidationError):
-        compute_generic_degree(
+        _run_generic_degree(
             GenericDegreeRequest(
                 polynomial_map=_map(
                     ("x",),
@@ -215,11 +219,11 @@ def test_request_rejects_unproved_dimension_degree_and_height() -> None:
             )
         )
     with pytest.raises(OperationDomainValidationError):
-        compute_generic_degree(
+        _run_generic_degree(
             GenericDegreeRequest(polynomial_map=_map(("x",), {(9,): 1}))
         )
     with pytest.raises(OperationDomainValidationError):
-        compute_generic_degree(
+        _run_generic_degree(
             GenericDegreeRequest(polynomial_map=_map(("x",), {(1,): int("1" * 65)}))
         )
 
@@ -229,7 +233,7 @@ def test_request_bounds_component_and_aggregate_support() -> None:
         (a, b, c) for a in range(9) for b in range(9 - a) for c in range(9 - a - b)
     ]
     with pytest.raises(OperationDomainValidationError):
-        compute_generic_degree(
+        _run_generic_degree(
             GenericDegreeRequest(
                 polynomial_map=_map(
                     ("x", "y", "z"),
@@ -238,7 +242,7 @@ def test_request_bounds_component_and_aggregate_support() -> None:
             )
         )
     with pytest.raises(OperationDomainValidationError):
-        compute_generic_degree(
+        _run_generic_degree(
             GenericDegreeRequest(
                 polynomial_map=_map(
                     ("x", "y", "z"),
@@ -453,7 +457,7 @@ def test_malformed_computed_backend_state_is_a_typed_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        _operations,
+        operations,
         "run_singular_generic_fiber",
         lambda *_args: backend,
     )

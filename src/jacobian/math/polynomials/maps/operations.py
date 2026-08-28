@@ -25,14 +25,13 @@ from jacobian.math.polynomials.maps._models import (
     MAX_GENERIC_DEGREE_SOURCE_VARIABLES,
     MAX_GENERIC_DEGREE_TARGET_VARIABLES,
     MAX_GENERIC_DEGREE_TOTAL_DEGREE,
-    CompositionRequest,
     CompositionResult,
-    EvalRequest,
     EvalResult,
+    GenericDegreeComputationBudget,
     GenericDegreeOutcome,
-    GenericDegreeRequest,
     GenericDegreeResult,
     JacobianResult,
+    VariablePoint,
     _total_degree,
     _validation_error,
 )
@@ -42,7 +41,10 @@ from jacobian.math.polynomials.maps.values import (
     RationalPolynomialMap,
     require_map_polynomial,
 )
-from jacobian.math.polynomials.values import rational_evaluation_component_digit_bounds
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    rational_evaluation_component_digit_bounds,
+)
 
 
 def _run_admission(admission: Callable[[], object]) -> None:
@@ -60,15 +62,15 @@ def _run_admission(admission: Callable[[], object]) -> None:
         ) from exc
 
 
-def _admit_evaluation(request: EvalRequest) -> None:
-    require_map_polynomial(request.polynomial, label="evaluation polynomial")
-    if request.point.variables != request.polynomial.variables:
+def _admit_evaluation(polynomial: RationalPolynomial, point: VariablePoint) -> None:
+    require_map_polynomial(polynomial, label="evaluation polynomial")
+    if point.variables != polynomial.variables:
         raise _validation_error(
             "evaluation point must use the polynomial's complete ordered axis"
         )
     numerator_digits, denominator_digits = rational_evaluation_component_digit_bounds(
-        request.polynomial,
-        request.point.values,
+        polynomial,
+        point.values,
     )
     if max(numerator_digits, denominator_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationDomainValidationError(
@@ -81,25 +83,29 @@ def _admit_evaluation(request: EvalRequest) -> None:
         )
 
 
-def _admit_composition(request: CompositionRequest) -> None:
-    require_map_polynomial(request.outer, label="outer polynomial")
-    require_map_polynomial(request.inner, label="inner polynomial")
-    if request.outer.variables != (request.outer_variable,):
+def _admit_composition(
+    outer: RationalPolynomial,
+    inner: RationalPolynomial,
+    outer_variable: str,
+    inner_variable: str,
+) -> None:
+    require_map_polynomial(outer, label="outer polynomial")
+    require_map_polynomial(inner, label="inner polynomial")
+    if outer.variables != (outer_variable,):
         raise _validation_error("outer polynomial must use exactly outer_variable")
-    if request.inner.variables != (request.inner_variable,):
+    if inner.variables != (inner_variable,):
         raise _validation_error("inner polynomial must use exactly inner_variable")
     outer_degree = max(
-        (term.exponents[0] for term in request.outer.polynomial.terms), default=0
+        (term.exponents[0] for term in outer.polynomial.terms), default=0
     )
     inner_degree = max(
-        (term.exponents[0] for term in request.inner.polynomial.terms), default=0
+        (term.exponents[0] for term in inner.polynomial.terms), default=0
     )
     if outer_degree * inner_degree > _MAX_COMPOSITION_DEGREE:
         raise _validation_error(f"composition exceeds degree {_MAX_COMPOSITION_DEGREE}")
 
 
-def _admit_generic_degree(request: GenericDegreeRequest) -> None:
-    polynomial_map = request.polynomial_map
+def _admit_generic_degree(polynomial_map: RationalPolynomialMap) -> None:
     source_count = len(polynomial_map.input_variables)
     target_count = len(polynomial_map.output_polynomials)
     if source_count > MAX_GENERIC_DEGREE_SOURCE_VARIABLES:
@@ -164,13 +170,16 @@ def _admit_generic_degree(request: GenericDegreeRequest) -> None:
             )
 
 
-def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult:
+def generic_degree(
+    polynomial_map: RationalPolynomialMap,
+    resource_budget: GenericDegreeComputationBudget,
+) -> GenericDegreeResult:
     """Compute the exact degree of the map's generic scheme-theoretic fiber."""
 
-    _run_admission(lambda: _admit_generic_degree(request))
+    _run_admission(lambda: _admit_generic_degree(polynomial_map))
     backend = run_singular_generic_fiber(
-        request.polynomial_map,
-        request.resource_budget,
+        polynomial_map,
+        resource_budget,
     )
     if backend.outcome != "COMPUTED":
         operational_outcome = (
@@ -178,13 +187,13 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
         )
         return GenericDegreeResult(
             outcome=operational_outcome,
-            source=request.polynomial_map,
+            source=polynomial_map,
             detail=backend.detail,
         )
     if backend.certificate is None or backend.dimension is None:
         return GenericDegreeResult(
             outcome="ERROR",
-            source=request.polynomial_map,
+            source=polynomial_map,
             detail="Singular returned incomplete generic-fiber evidence.",
         )
     mathematical_outcome: GenericDegreeOutcome
@@ -195,7 +204,7 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
         if backend.vector_dimension is None:
             return GenericDegreeResult(
                 outcome="ERROR",
-                source=request.polynomial_map,
+                source=polynomial_map,
                 detail="Singular returned a finite fiber without its exact degree.",
             )
         mathematical_outcome = "GENERICALLY_FINITE"
@@ -205,41 +214,43 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
         degree = None
     return GenericDegreeResult._from_kernel(
         outcome=mathematical_outcome,
-        source=request.polynomial_map,
+        source=polynomial_map,
         degree=degree,
         evidence=backend.certificate,
         detail=None,
     )
 
 
-def evaluate_polynomial(request: EvalRequest) -> EvalResult:
+def evaluate_polynomial(
+    polynomial: RationalPolynomial, point: VariablePoint
+) -> EvalResult:
     """Evaluate one exact polynomial at its complete ordered rational point."""
 
-    _run_admission(lambda: _admit_evaluation(request))
-    polynomial = rational_polynomial_to_sympy(request.polynomial)
+    _run_admission(lambda: _admit_evaluation(polynomial, point))
+    backend_polynomial = rational_polynomial_to_sympy(polynomial)
     substitutions = dict(
         zip(
-            symbols_for_variables(request.point.variables),
-            (value.as_fraction() for value in request.point.values),
+            symbols_for_variables(point.variables),
+            (value.as_fraction() for value in point.values),
             strict=True,
         )
     )
-    value = polynomial.as_expr().subs(substitutions)
+    value = backend_polynomial.as_expr().subs(substitutions)
     return EvalResult(value=rational_from_sympy(value))
 
 
-def compute_jacobian(request: RationalPolynomialMap) -> JacobianResult:
+def jacobian_matrix(polynomial_map: RationalPolynomialMap) -> JacobianResult:
     """Compute a row-major Jacobian over the map's source ring."""
 
-    variables = symbols_for_variables(request.input_variables)
+    variables = symbols_for_variables(polynomial_map.input_variables)
     outputs = [
         rational_polynomial_to_sympy(polynomial).as_expr()
-        for polynomial in request.output_polynomials
+        for polynomial in polynomial_map.output_polynomials
     ]
     entries = tuple(
         rational_polynomial_from_sympy(
             sympy.Poly(sympy.diff(output, variable), *variables, domain=sympy.QQ),
-            request.input_variables,
+            polynomial_map.input_variables,
             maximum_terms=MAX_MAP_POLYNOMIAL_TERMS,
         )
         for output in outputs
@@ -252,23 +263,31 @@ def compute_jacobian(request: RationalPolynomialMap) -> JacobianResult:
     )
 
 
-def compose_polynomials(request: CompositionRequest) -> CompositionResult:
+def compose_polynomials(
+    outer: RationalPolynomial,
+    inner: RationalPolynomial,
+    *,
+    outer_variable: str,
+    inner_variable: str,
+) -> CompositionResult:
     """Substitute the inner univariate polynomial into the outer polynomial."""
 
-    _run_admission(lambda: _admit_composition(request))
-    outer = rational_polynomial_to_sympy(request.outer).as_expr()
-    inner = rational_polynomial_to_sympy(request.inner).as_expr()
-    outer_variable = symbols_for_variables(request.outer.variables)[0]
-    inner_variable = symbols_for_variables(request.inner.variables)[0]
+    _run_admission(
+        lambda: _admit_composition(outer, inner, outer_variable, inner_variable)
+    )
+    outer_expression = rational_polynomial_to_sympy(outer).as_expr()
+    inner_expression = rational_polynomial_to_sympy(inner).as_expr()
+    outer_symbol = symbols_for_variables(outer.variables)[0]
+    inner_symbol = symbols_for_variables(inner.variables)[0]
     composition = sympy.Poly(
-        sympy.expand(outer.subs(outer_variable, inner)),
-        inner_variable,
+        sympy.expand(outer_expression.subs(outer_symbol, inner_expression)),
+        inner_symbol,
         domain=sympy.QQ,
     )
     return CompositionResult(
         polynomial=rational_polynomial_from_sympy(
             composition,
-            request.inner.variables,
+            inner.variables,
             maximum_terms=MAX_MAP_POLYNOMIAL_TERMS,
         )
     )
@@ -276,7 +295,7 @@ def compose_polynomials(request: CompositionRequest) -> CompositionResult:
 
 __all__ = [
     "compose_polynomials",
-    "compute_generic_degree",
-    "compute_jacobian",
     "evaluate_polynomial",
+    "generic_degree",
+    "jacobian_matrix",
 ]

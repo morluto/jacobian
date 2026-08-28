@@ -15,13 +15,30 @@ from jacobian.math.polynomials.maps._models import (
     GenericDegreeResult,
     JacobianResult,
 )
-from jacobian.math.polynomials.maps._operations import (
+from jacobian.math.polynomials.maps.operations import (
     compose_polynomials,
-    compute_generic_degree,
-    compute_jacobian,
     evaluate_polynomial,
+    generic_degree,
+    jacobian_matrix,
 )
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
+
+
+def _generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult:
+    return generic_degree(request.polynomial_map, request.resource_budget)
+
+
+def _evaluate(request: EvalRequest) -> EvalResult:
+    return evaluate_polynomial(request.polynomial, request.point)
+
+
+def _compose(request: CompositionRequest) -> CompositionResult:
+    return compose_polynomials(
+        request.outer,
+        request.inner,
+        outer_variable=request.outer_variable,
+        inner_variable=request.inner_variable,
+    )
 
 
 def _polynomial(
@@ -94,7 +111,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "target function field and never infers degree from a sampled fiber.",
         GenericDegreeRequest,
         GenericDegreeResult,
-        compute_generic_degree,
+        _generic_degree,
         "polynomial",
         "algebraic-geometry",
         "generic-fiber",
@@ -123,7 +140,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "rational point.",
         EvalRequest,
         EvalResult,
-        evaluate_polynomial,
+        _evaluate,
         "polynomial",
         "evaluation",
         "exact",
@@ -153,7 +170,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the row-major Jacobian matrix of a canonical polynomial map.",
         RationalPolynomialMap,
         JacobianResult,
-        compute_jacobian,
+        jacobian_matrix,
         "polynomial",
         "jacobian",
         "exact",
@@ -179,7 +196,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "rational polynomials.",
         CompositionRequest,
         CompositionResult,
-        compose_polynomials,
+        _compose,
         "polynomial",
         "composition",
         "exact",

@@ -18,11 +18,29 @@ from jacobian.math.analysis.boolean.fourier._models import (
     TruthTableResult,
 )
 from jacobian.math.analysis.boolean.fourier.operations import (
-    compute_erasure_noise,
-    compute_fourier_spectrum,
-    compute_multilinear_extension,
-    compute_truth_table,
+    erasure_noise,
+    fourier_spectrum,
+    multilinear_extension,
+    truth_table,
 )
+
+
+def compute_truth_table(request: TruthTableRequest) -> TruthTableResult:
+    return truth_table(request.truth_table)
+
+
+def compute_fourier_spectrum(request: FourierSpectrumRequest) -> FourierSpectrumResult:
+    return fourier_spectrum(request.truth_table)
+
+
+def compute_multilinear_extension(
+    request: MultilinearExtensionRequest,
+) -> MultilinearExtensionResult:
+    return multilinear_extension(request.truth_table)
+
+
+def compute_erasure_noise(request: ErasureNoiseRequest) -> ErasureNoiseResult:
+    return erasure_noise(request.truth_table, request.probability, request.base_input)
 
 
 def _zero() -> CanonicalRational:

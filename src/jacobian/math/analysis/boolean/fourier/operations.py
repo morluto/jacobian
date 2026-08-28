@@ -11,13 +11,9 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.boolean.fourier._models import (
     MAX_VARIABLES,
     MIN_VARIABLES,
-    ErasureNoiseRequest,
     ErasureNoiseResult,
-    FourierSpectrumRequest,
     FourierSpectrumResult,
-    MultilinearExtensionRequest,
     MultilinearExtensionResult,
-    TruthTableRequest,
     TruthTableResult,
 )
 
@@ -57,28 +53,27 @@ def _admit_truth_table(truth_table: tuple[CanonicalRational, ...]) -> int:
     return variable_count
 
 
-def compute_truth_table(request: TruthTableRequest) -> TruthTableResult:
+def truth_table(values: tuple[CanonicalRational, ...]) -> TruthTableResult:
     """Return the truth table with variable count metadata."""
-    variable_count = _admit_truth_table(request.truth_table)
+    variable_count = _admit_truth_table(values)
     return TruthTableResult(
-        truth_table=request.truth_table,
+        truth_table=values,
         variable_count=variable_count,
     )
 
 
-def compute_fourier_spectrum(request: FourierSpectrumRequest) -> FourierSpectrumResult:
+def fourier_spectrum(values: tuple[CanonicalRational, ...]) -> FourierSpectrumResult:
     """Compute the exact Walsh-Hadamard (Fourier) spectrum via FWHT."""
-    variable_count = _admit_truth_table(request.truth_table)
-    truth = request.as_int_list()
-    spectrum = _fast_walsh_hadamard_transform(truth)
+    variable_count = _admit_truth_table(values)
+    spectrum = _fast_walsh_hadamard_transform(_truth_values(values))
     return FourierSpectrumResult(
         spectrum=tuple(_rational(value) for value in spectrum),
         variable_count=variable_count,
     )
 
 
-def compute_multilinear_extension(
-    request: MultilinearExtensionRequest,
+def multilinear_extension(
+    values: tuple[CanonicalRational, ...],
 ) -> MultilinearExtensionResult:
     """Compute the multilinear extension polynomial over the rationals.
 
@@ -90,8 +85,8 @@ def compute_multilinear_extension(
     where ``W_f(S)`` is the Walsh-Hadamard coefficient at subset ``S`` and
     the character ``prod_{i in S} (1 - 2 x_i)`` equals ``(-1)^{<S, x>}``.
     """
-    n = _admit_truth_table(request.truth_table)
-    truth = request.as_int_list()
+    n = _admit_truth_table(values)
+    truth = _truth_values(values)
     spectrum = _fast_walsh_hadamard_transform(truth)
     total = len(truth)
 
@@ -115,7 +110,11 @@ def compute_multilinear_extension(
     )
 
 
-def compute_erasure_noise(request: ErasureNoiseRequest) -> ErasureNoiseResult:
+def erasure_noise(
+    values: tuple[CanonicalRational, ...],
+    probability_value: CanonicalRational,
+    base_input: tuple[int, ...],
+) -> ErasureNoiseResult:
     """Compute the expected value of f under erasure noise.
 
     With probability ``p`` each coordinate is kept; with probability ``(1-p)``
@@ -124,31 +123,31 @@ def compute_erasure_noise(request: ErasureNoiseRequest) -> ErasureNoiseResult:
     ``sum_S f_hat(S) * p^|S| * chi_S(x)`` at the supplied base assignment
     ``x``, where ``f_hat(S) = W_f(S) / 2^n``.  All arithmetic is exact rational.
     """
-    n = _admit_truth_table(request.truth_table)
-    probability = request.probability.as_fraction()
+    n = _admit_truth_table(values)
+    probability = probability_value.as_fraction()
     if not 0 <= probability <= 1:
         raise OperationDomainValidationError(
             location=("probability",),
             code="boolean_analysis.probability_range",
             message="probability must be in [0, 1]",
         )
-    if len(request.base_input) != n:
+    if len(base_input) != n:
         raise OperationDomainValidationError(
             location=("base_input",),
             code="boolean_analysis.base_input_length",
             message="base_input must have one bit per variable",
         )
-    if any(bit not in (0, 1) for bit in request.base_input):
+    if any(bit not in (0, 1) for bit in base_input):
         raise OperationDomainValidationError(
             location=("base_input",),
             code="boolean_analysis.base_input_boolean",
             message="base_input bits must be 0 or 1",
         )
-    truth = request.as_int_list()
+    truth = _truth_values(values)
     spectrum = _fast_walsh_hadamard_transform(truth)
     total = len(truth)
     one_mask = 0
-    for bit_idx, bit in enumerate(request.base_input):
+    for bit_idx, bit in enumerate(base_input):
         if bit == 1:
             one_mask |= 1 << bit_idx
 
@@ -163,8 +162,12 @@ def compute_erasure_noise(request: ErasureNoiseRequest) -> ErasureNoiseResult:
     return ErasureNoiseResult(
         expected_value=_rational(result),
         variable_count=n,
-        probability=request.probability,
+        probability=probability_value,
     )
+
+
+def _truth_values(values: tuple[CanonicalRational, ...]) -> list[int]:
+    return [int(entry.as_fraction()) for entry in values]
 
 
 def _fast_walsh_hadamard_transform(values: list[int]) -> list[int]:
@@ -187,3 +190,6 @@ def _fast_walsh_hadamard_transform(values: list[int]) -> list[int]:
             i += step * 2
         step *= 2
     return result
+
+
+__all__ = ["erasure_noise", "fourier_spectrum", "multilinear_extension", "truth_table"]

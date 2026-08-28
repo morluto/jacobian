@@ -17,11 +17,29 @@ from jacobian.math.analysis.boolean.fourier._models import (
     TruthTableResult,
 )
 from jacobian.math.analysis.boolean.fourier.operations import (
-    compute_erasure_noise,
-    compute_fourier_spectrum,
-    compute_multilinear_extension,
-    compute_truth_table,
+    erasure_noise,
+    fourier_spectrum,
+    multilinear_extension,
+    truth_table,
 )
+
+
+def _run_truth_table(request: TruthTableRequest) -> TruthTableResult:
+    return truth_table(request.truth_table)
+
+
+def _run_fourier_spectrum(request: FourierSpectrumRequest) -> FourierSpectrumResult:
+    return fourier_spectrum(request.truth_table)
+
+
+def _run_multilinear_extension(
+    request: MultilinearExtensionRequest,
+) -> MultilinearExtensionResult:
+    return multilinear_extension(request.truth_table)
+
+
+def _run_erasure_noise(request: ErasureNoiseRequest) -> ErasureNoiseResult:
+    return erasure_noise(request.truth_table, request.probability, request.base_input)
 
 
 def boolean_analysis_operation[
@@ -60,7 +78,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Return a complete Boolean truth table with its variable count and ordering convention.",
         TruthTableRequest,
         TruthTableResult,
-        compute_truth_table,
+        _run_truth_table,
         "boolean",
         "truth-table",
         "exact",
@@ -78,7 +96,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the exact Walsh-Hadamard spectrum of a Boolean function from its complete truth table.",
         FourierSpectrumRequest,
         FourierSpectrumResult,
-        compute_fourier_spectrum,
+        _run_fourier_spectrum,
         "boolean",
         "fourier",
         "walsh",
@@ -97,7 +115,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the unique multilinear polynomial over the rationals that agrees with the Boolean function on {0,1}^n. Returns a canonical SymPy polynomial string.",
         MultilinearExtensionRequest,
         MultilinearExtensionResult,
-        compute_multilinear_extension,
+        _run_multilinear_extension,
         "boolean",
         "multilinear",
         "polynomial",
@@ -116,7 +134,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "With probability p each coordinate of the supplied base assignment is kept; with probability (1-p) it is replaced by an independent uniform random bit. Returns the exact rational expected value T_p f(x), computed via the Fourier expansion weighted by p^|S| chi_S(x).",
         ErasureNoiseRequest,
         ErasureNoiseResult,
-        compute_erasure_noise,
+        _run_erasure_noise,
         "boolean",
         "noise",
         "erasure",

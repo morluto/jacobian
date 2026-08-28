@@ -321,6 +321,18 @@ def compute_optimal_discrepancy(
     return _incumbent_outcome(request, result, variable_count)
 
 
+def _compute_optimal_discrepancy_isolated(
+    request: DiscrepancyOptimumRequest,
+) -> DiscrepancyOptimumResult:
+    """Run the complete HiGHS/Z3 transaction in a bounded owner worker."""
+
+    from jacobian.math.discrepancy_theory._optimum_process import (
+        compute_optimal_discrepancy_isolated,
+    )
+
+    return compute_optimal_discrepancy_isolated(request)
+
+
 def _incumbent_outcome(
     request: DiscrepancyOptimumRequest,
     result: Any,

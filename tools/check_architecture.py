@@ -30,6 +30,8 @@ _EXTERNAL_OPERATION_OWNERS = frozenset(
         PurePosixPath("src/jacobian/math/graphs/optimization/_finite_optimization.py"),
         PurePosixPath("src/jacobian/math/graphs/optimization/_invariants.py"),
         PurePosixPath("src/jacobian/math/graphs/optimization/_chromatic_number.py"),
+        PurePosixPath("src/jacobian/math/graphs/optimization/_maximum_cut_process.py"),
+        PurePosixPath("src/jacobian/math/discrepancy_theory/_optimum_process.py"),
         PurePosixPath("src/jacobian/math/number_theory/_factorization_kernels.py"),
         PurePosixPath("src/jacobian/math/number_field/_operations.py"),
         PurePosixPath("src/jacobian/math/polynomials/multivariate/_factor_backend.py"),

@@ -12,6 +12,8 @@ import pytest
 from pydantic import ValidationError
 
 import jacobian.math.discrepancy_theory._models as discrepancy_models
+import jacobian.math.discrepancy_theory._operations as discrepancy_operations
+import jacobian.math.discrepancy_theory._optimum_process as optimum_process
 from jacobian.math.discrepancy_theory._models import (
     MAX_COLUMN_INCIDENCES,
     MAX_MONITORED_COLUMNS,
@@ -32,6 +34,7 @@ from jacobian.math.discrepancy_theory._operations import (
     compute_hard_constraint_rounding,
     compute_optimal_discrepancy,
 )
+from jacobian.process import BoundedProcessResult
 
 
 @contextmanager
@@ -930,6 +933,45 @@ class TestDiscrepancyOptimum:
             for subset in system.sets
         )
         assert replayed == result.optimal_discrepancy
+
+    @pytest.mark.parametrize(
+        ("timed_out", "expected_status"),
+        ((False, "EXECUTION_FAILED"), (True, "BUDGET_EXCEEDED")),
+    )
+    def test_tool_worker_failure_stays_claim_free(
+        self,
+        timed_out: bool,
+        expected_status: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def failed_worker(*_args: object, **_kwargs: object) -> BoundedProcessResult:
+            return BoundedProcessResult(
+                returncode=None if timed_out else -11,
+                stdout=b"",
+                stderr=b"ASSERTION VIOLATION",
+                stdout_exceeded=False,
+                stderr_exceeded=False,
+                timed_out=timed_out,
+            )
+
+        monkeypatch.setattr(
+            optimum_process,
+            "run_bounded_process",
+            failed_worker,
+        )
+        request = DiscrepancyOptimumRequest(
+            set_system=FiniteSetSystem(
+                ground_set_size=3,
+                sets=((0, 1), (1, 2), (0, 2)),
+            )
+        )
+
+        result = discrepancy_operations._compute_optimal_discrepancy_isolated(request)
+
+        assert result.status == expected_status
+        assert result.set_system == request.set_system
+        assert result.optimal_coloring == ()
+        assert result.optimal_discrepancy is None
 
     @pytest.mark.scale
     def test_hard_instance_outcome_is_honest(self) -> None:

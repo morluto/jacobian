@@ -15,9 +15,9 @@ from jacobian.math.discrepancy_theory._models import (
     HardConstraintRoundingResult,
 )
 from jacobian.math.discrepancy_theory._operations import (
+    _compute_optimal_discrepancy_isolated,
     compute_discrepancy,
     compute_hard_constraint_rounding,
-    compute_optimal_discrepancy,
 )
 
 
@@ -126,7 +126,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "claim.",
         DiscrepancyOptimumRequest,
         DiscrepancyOptimumResult,
-        compute_optimal_discrepancy,
+        _compute_optimal_discrepancy_isolated,
         "discrepancy",
         "set-system",
         "combinatorial-search",

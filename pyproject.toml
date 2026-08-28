@@ -227,7 +227,9 @@ ignore_imports = [
     "jacobian.math.graphs.optimization._chromatic_number -> jacobian.process",
     "jacobian.math.graphs.optimization._finite_optimization -> jacobian.process",
     "jacobian.math.graphs.optimization._invariants -> jacobian.process",
+    "jacobian.math.graphs.optimization._maximum_cut_process -> jacobian.process",
     "jacobian.math.hypergraphs._independence_z3 -> jacobian.process",
+    "jacobian.math.discrepancy_theory._optimum_process -> jacobian.process",
     "jacobian.math.number_field._operations -> jacobian.process",
     "jacobian.math.number_theory._factorization_kernels -> jacobian.process",
     # Private exact-algebra adapters share one bounded Singular process owner.

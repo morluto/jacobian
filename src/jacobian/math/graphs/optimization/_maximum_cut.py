@@ -504,6 +504,20 @@ def _solve_analysis(
     return _combine_component_solutions(analysis, tuple(solutions))
 
 
+def _solve_analysis_by_enumeration(
+    analysis: _MaximumCutAnalysis,
+) -> tuple[bool, ...]:
+    """Complete the admitted exact search without entering a native backend."""
+
+    return _combine_component_solutions(
+        analysis,
+        tuple(
+            _solve_component_by_enumeration(analysis, component_index)
+            for component_index in range(len(analysis.components))
+        ),
+    )
+
+
 def _partition_from_class_sides(
     graph: SimpleUndirectedGraph,
     analysis: _MaximumCutAnalysis,
@@ -547,6 +561,39 @@ def compute_maximum_cut(request: GraphMaximumCutRequest) -> GraphMaximumCutResul
     )
 
 
+def _compute_maximum_cut_without_z3(
+    request: GraphMaximumCutRequest,
+) -> GraphMaximumCutResult:
+    """Compute the same exact result through the admitted exhaustive fallback."""
+
+    analysis = _analyze_graph(request.graph)
+    class_sides = _solve_analysis_by_enumeration(analysis)
+    left_vertices, right_vertices, crossing_edges = _partition_from_class_sides(
+        request.graph,
+        analysis,
+        class_sides,
+    )
+    return GraphMaximumCutResult._from_kernel(
+        graph=request.graph,
+        left_vertices=left_vertices,
+        right_vertices=right_vertices,
+        crossing_edges=crossing_edges,
+        cut_value=len(crossing_edges),
+    )
+
+
+def _compute_maximum_cut_isolated(
+    request: GraphMaximumCutRequest,
+) -> GraphMaximumCutResult:
+    """Run the Z3 acceleration in a bounded worker, never in the service host."""
+
+    from jacobian.math.graphs.optimization._maximum_cut_process import (
+        compute_maximum_cut_isolated,
+    )
+
+    return compute_maximum_cut_isolated(request)
+
+
 MAXIMUM_CUT_OPERATION: MathTool[
     GraphMaximumCutRequest,
     GraphMaximumCutResult,
@@ -561,7 +608,7 @@ MAXIMUM_CUT_OPERATION: MathTool[
     ),
     request_type=GraphMaximumCutRequest,
     result_type=GraphMaximumCutResult,
-    run=compute_maximum_cut,
+    run=_compute_maximum_cut_isolated,
     tags=(
         "graph",
         "cut",

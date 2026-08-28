@@ -11,7 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
-from jacobian.math.graphs.optimization import _maximum_cut
+from jacobian.math.graphs.optimization import _maximum_cut, _maximum_cut_process
 from jacobian.math.graphs.optimization._maximum_cut import (
     MAXIMUM_CUT_CANDIDATE_PARTITIONS,
     MAXIMUM_CUT_RESULT_BYTES,
@@ -20,6 +20,7 @@ from jacobian.math.graphs.optimization._maximum_cut import (
     compute_maximum_cut,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.process import BoundedProcessResult
 
 
 def _graph(
@@ -377,6 +378,33 @@ def test_bounded_exhaustive_fallback_preserves_an_exact_result(
     result = _validated_result(_complete(7))
 
     assert result.cut_value == 12
+
+
+def test_tool_worker_segfault_falls_back_to_the_bounded_exact_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def segfaulted_worker(*_args: object, **_kwargs: object) -> BoundedProcessResult:
+        return BoundedProcessResult(
+            returncode=-11,
+            stdout=b"",
+            stderr=b"ASSERTION VIOLATION",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=False,
+        )
+
+    monkeypatch.setattr(
+        _maximum_cut_process,
+        "run_bounded_process",
+        segfaulted_worker,
+    )
+
+    result = _maximum_cut.MAXIMUM_CUT_OPERATION.run(
+        GraphMaximumCutRequest(graph=_cycle(5))
+    )
+
+    assert result.cut_value == 4
+    _assert_cut_invariant(result)
 
 
 def test_operation_is_deterministic_on_a_nonunique_optimum() -> None:

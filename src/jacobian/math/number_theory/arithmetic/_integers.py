@@ -12,11 +12,30 @@ from jacobian.math.number_theory.arithmetic._models import (
     IntegerNthRootResult,
 )
 from jacobian.math.number_theory.arithmetic._operations import (
+    decimal_digit_count,
     nth_root,
 )
 from jacobian.math.number_theory.arithmetic._support import arithmetic_operation
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 INTEGER_OPERATIONS = (
+    arithmetic_operation(
+        "integer.compute.decimal_digit_count",
+        "Count decimal digits",
+        "Count decimal digits in one integer's absolute value.",
+        IntegerValue,
+        IntegerValue,
+        decimal_digit_count,
+        "integer",
+        "representation",
+        examples=(
+            example(
+                "decimal_digit_count_12345",
+                "Count the decimal digits of 12345.",
+                {"value": "12345"},
+            ),
+        ),
+    ),
     arithmetic_operation(
         "integer.compute.nth_root",
         "Compute integer nth root",

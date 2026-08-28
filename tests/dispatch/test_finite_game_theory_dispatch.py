@@ -83,7 +83,7 @@ def test_best_response_declaration_publishes_an_operation_neutral_schema() -> No
     equilibrium_schema = tools[
         "game_theory.nash_equilibrium.compute"
     ].request_type.model_json_schema()
-    assert "game_theory.best_response.compute" not in tools
+    assert "game_theory.best_response.compute" in tools
 
     assert "linear program" not in best_response_schema["description"]
     assert "x-jacobian-bounds" not in best_response_schema

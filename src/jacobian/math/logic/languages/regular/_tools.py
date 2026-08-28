@@ -7,6 +7,8 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.logic.languages.regular._models import (
+    ComplementRequest,
+    ComplementResult,
     CountRequest,
     CountResult,
     RunRequest,
@@ -14,6 +16,7 @@ from jacobian.math.logic.languages.regular._models import (
     TransitionParikhProfileRequest,
 )
 from jacobian.math.logic.languages.regular._operations import (
+    compute_complement,
     compute_count,
     compute_run,
     compute_transition_parikh_profile,
@@ -74,6 +77,26 @@ _TRANSITION_PROFILE_EXAMPLE = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    rl_operation(
+        "regular_language.complement.compute",
+        "Complement a deterministic finite automaton",
+        "Return the complete DFA over the same alphabet with accepting and "
+        "non-accepting states exchanged.",
+        ComplementRequest,
+        ComplementResult,
+        compute_complement,
+        "automata",
+        "dfa",
+        "complement",
+        "exact",
+        examples=(
+            example(
+                "binary_ends_in_1_complement",
+                "Complement the DFA accepting binary strings ending in one.",
+                {"dfa": _DFA_EXAMPLE["dfa"]},
+            ),
+        ),
+    ),
     rl_operation(
         "automaton.path.transition_parikh_profile.compute",
         "Compute a transition-Parikh profile for fixed-length automaton paths",

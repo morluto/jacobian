@@ -6,7 +6,7 @@ from jacobian.math.combinatorics.designs.coherent_configurations._models import 
     CoherentConfigurationAnalyzeRequest,
     CoherentConfigurationAnalyzeResult,
 )
-from jacobian.math.combinatorics.designs.coherent_configurations._operations import (
+from jacobian.math.combinatorics.designs.coherent_configurations.operations import (
     compute_analyze,
 )
 

@@ -18,7 +18,7 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     LeviGraphRequest,
     RestrictionRequest,
 )
-from jacobian.math.combinatorics.designs.incidence_structures._operations import (
+from jacobian.math.combinatorics.designs.incidence_structures.operations import (
     compute_complement,
     compute_containment_profile,
     compute_degree_profile,

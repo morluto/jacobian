@@ -22,11 +22,9 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IncidenceMultiplicityDifference,
     IncidenceTradeRequest,
 )
-from jacobian.math.combinatorics.designs.incidence_structures._operations import (
+from jacobian.math.combinatorics.designs.incidence_structures.operations import (
     compute_containment_profile,
     compute_incidence_trade,
-)
-from jacobian.math.combinatorics.designs.incidence_structures.operations import (
     verify_incidence_moment_comparison,
 )
 

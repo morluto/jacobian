@@ -13,11 +13,11 @@ from jacobian.canonical import encode_strict_json, parse_canonical_integer
 from jacobian.math.logic.languages.regular._models import (
     TransitionParikhProfileRequest,
 )
-from jacobian.math.logic.languages.regular._operations import (
-    compute_transition_parikh_profile,
-)
 from jacobian.math.logic.languages.regular._profile_admission import (
     MAX_TRANSITION_PROFILE_RESULT_BYTES,
+)
+from jacobian.math.logic.languages.regular._tools import (
+    compute_transition_parikh_profile,
 )
 from jacobian.math.logic.languages.regular.operations import (
     dfa_transition_carrier,

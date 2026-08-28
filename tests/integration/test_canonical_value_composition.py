@@ -17,7 +17,7 @@ from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountRequest,
     TreeAutomatonReachabilityRequest,
 )
-from jacobian.math.logic.automata.tree._operations import (
+from jacobian.math.logic.automata.tree._tools import (
     compute_accepted_tree_count,
     compute_tree_automaton_reachability,
 )

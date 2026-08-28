@@ -15,12 +15,12 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonReachabilityRequest,
     TreeRunRequest,
 )
-from jacobian.math.logic.automata.tree._operations import (
+from jacobian.math.logic.automata.tree._tools import (
+    TOOLS,
     compute_accepted_tree_count,
     compute_tree_automaton_reachability,
     compute_tree_run,
 )
-from jacobian.math.logic.automata.tree._tools import TOOLS
 from jacobian.math.logic.automata.tree.operations import (
     accepted_tree_count,
     run_tree_automaton,

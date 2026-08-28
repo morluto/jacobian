@@ -22,12 +22,12 @@ from jacobian.math.logic.automata.transducers._models import (
     RelationPathReplayRequest,
     SubseqRunRequest,
 )
-from jacobian.math.logic.automata.transducers._operations import (
+from jacobian.math.logic.automata.transducers._tools import (
+    TOOLS,
     compute_compose,
     compute_relation_path_replay,
     compute_run,
 )
-from jacobian.math.logic.automata.transducers._tools import TOOLS
 
 
 def _flip() -> SubsequentialTransducer:

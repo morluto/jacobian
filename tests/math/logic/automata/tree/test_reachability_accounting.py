@@ -8,7 +8,7 @@ from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian.math.logic.automata.tree import values
 from jacobian.math.logic.automata.tree._models import TreeAutomatonReachabilityRequest
-from jacobian.math.logic.automata.tree._operations import (
+from jacobian.math.logic.automata.tree._tools import (
     compute_tree_automaton_reachability,
 )
 from jacobian.math.logic.automata.tree.values import (

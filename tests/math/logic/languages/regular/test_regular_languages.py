@@ -10,7 +10,7 @@ from jacobian.math.logic.languages.regular._models import (
     CountRequest,
     RunRequest,
 )
-from jacobian.math.logic.languages.regular._operations import (
+from jacobian.math.logic.languages.regular._tools import (
     compute_complement,
     compute_count,
     compute_run,

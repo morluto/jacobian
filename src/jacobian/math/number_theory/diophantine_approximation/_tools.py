@@ -6,6 +6,7 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.number_theory.diophantine_approximation import operations as native
 from jacobian.math.number_theory.diophantine_approximation._models import (
     ContinuedFractionRequest,
     ContinuedFractionResult,
@@ -14,11 +15,20 @@ from jacobian.math.number_theory.diophantine_approximation._models import (
     PellEquationRequest,
     PellEquationResult,
 )
-from jacobian.math.number_theory.diophantine_approximation._operations import (
-    compute_continued_fraction,
-    compute_convergents,
-    compute_pell_equation,
-)
+
+
+def compute_continued_fraction(
+    request: ContinuedFractionRequest,
+) -> ContinuedFractionResult:
+    return native.continued_fraction(request.discriminant, request.term_count)
+
+
+def compute_convergents(request: ConvergentRequest) -> ConvergentResult:
+    return native.convergents(request.discriminant, request.convergent_count)
+
+
+def compute_pell_equation(request: PellEquationRequest) -> PellEquationResult:
+    return native.solve_pell(request.discriminant)
 
 
 def da_operation[RequestT: StrictModel, ResultT: StrictModel](

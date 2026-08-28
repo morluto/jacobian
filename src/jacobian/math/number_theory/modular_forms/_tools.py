@@ -2,13 +2,17 @@
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.number_theory.modular_forms import operations as native
 from jacobian.math.number_theory.modular_forms._models import (
     LevelOneNamedQExpansionRequest,
 )
-from jacobian.math.number_theory.modular_forms._operations import (
-    compute_level_one_named_q_expansion,
-)
 from jacobian.math.number_theory.modular_forms.values import LevelOneModularQExpansion
+
+
+def compute_level_one_named_q_expansion(
+    request: LevelOneNamedQExpansionRequest,
+) -> LevelOneModularQExpansion:
+    return native.level_one_named_q_expansion(request.form, request.truncation_order)
 
 TOOLS: MathTools = (
     MathTool(

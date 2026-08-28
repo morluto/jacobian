@@ -18,7 +18,7 @@ from jacobian.math.number_theory.diophantine_approximation._models import (
     ConvergentRequest,
     PellEquationRequest,
 )
-from jacobian.math.number_theory.diophantine_approximation._operations import (
+from jacobian.math.number_theory.diophantine_approximation._tools import (
     compute_continued_fraction,
     compute_convergents,
     compute_pell_equation,

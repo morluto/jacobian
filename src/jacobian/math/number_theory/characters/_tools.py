@@ -2,18 +2,43 @@
 
 from __future__ import annotations
 
+from typing import Literal, cast
+
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.number_theory.characters import operations as native
 from jacobian.math.number_theory.characters._models import (
     PrincipalDirichletCharacterRequest,
     PrincipalDirichletCharacterValueRequest,
     PrincipalDirichletCharacterValueResult,
 )
-from jacobian.math.number_theory.characters._operations import (
-    compute_principal_dirichlet_character,
-    compute_principal_dirichlet_character_value,
-)
 from jacobian.math.number_theory.characters.values import PrincipalDirichletCharacter
+
+
+def compute_principal_dirichlet_character(
+    request: PrincipalDirichletCharacterRequest,
+) -> PrincipalDirichletCharacter:
+    """Materialize the complete exact principal character for one modulus."""
+
+    return native.principal_dirichlet_character(request.modulus)
+
+
+def compute_principal_dirichlet_character_value(
+    request: PrincipalDirichletCharacterValueRequest,
+) -> PrincipalDirichletCharacterValueResult:
+    """Evaluate one principal Dirichlet character at a source-bound integer."""
+
+    value = native.principal_dirichlet_character_value(
+        request.character, request.integer_value()
+    )
+    residue = request.integer_value() % request.character.modulus
+    return PrincipalDirichletCharacterValueResult(
+        character=request.character,
+        integer=request.integer,
+        canonical_residue=residue,
+        is_unit=value == 1,
+        value=cast(Literal[0, 1], value),
+    )
 
 TOOLS: MathTools = (
     MathTool(

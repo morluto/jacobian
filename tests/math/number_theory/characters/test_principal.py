@@ -15,11 +15,11 @@ from jacobian.math.number_theory.characters._models import (
     PrincipalDirichletCharacterValueRequest,
     PrincipalDirichletCharacterValueResult,
 )
-from jacobian.math.number_theory.characters._operations import (
+from jacobian.math.number_theory.characters._tools import (
+    TOOLS,
     compute_principal_dirichlet_character,
     compute_principal_dirichlet_character_value,
 )
-from jacobian.math.number_theory.characters._tools import TOOLS
 from jacobian.math.number_theory.characters.values import (
     MAX_PRINCIPAL_CHARACTER_MODULUS,
     PrincipalDirichletCharacter,

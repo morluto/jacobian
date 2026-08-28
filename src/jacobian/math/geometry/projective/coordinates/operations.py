@@ -11,12 +11,9 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.projective.coordinates._models import (
     MAX_PROJECTIVE_COORDINATE_DIGITS,
-    ChartTransitionRequest,
     ChartTransitionResult,
-    RationalPointConstructRequest,
     RationalPointConstructResult,
     RationalProjectivePoint,
-    StandardChartRequest,
     StandardChartResult,
 )
 
@@ -40,46 +37,19 @@ def _require_ratio_result_budget(
         )
 
 
-def _admit(
-    request: RationalPointConstructRequest
-    | StandardChartRequest
-    | ChartTransitionRequest,
-) -> None:
-    coordinates = (
-        request.coordinates
-        if isinstance(request, RationalPointConstructRequest)
-        else request.point.coordinates
-    )
+def _admit_coordinates(coordinates: tuple[CanonicalRational, ...]) -> None:
     try:
         _require_ratio_result_budget(coordinates)
-        if isinstance(request, RationalPointConstructRequest):
-            if all(c.as_fraction() == 0 for c in coordinates):
-                raise _validation_error(
-                    "projective_point_least_nonzero_coordinate",
-                    "projective point must have at least one nonzero coordinate",
-                )
-            return
-        if isinstance(request, StandardChartRequest):
-            if request.chart_index >= len(coordinates):
-                raise _validation_error(
-                    "chart_index_out_range", "chart_index out of range"
-                )
-            if coordinates[request.chart_index].as_fraction() == 0:
-                raise _validation_error(
-                    "chart_coordinate_nonzero", "chart coordinate must be nonzero"
-                )
-            return
-        n = len(coordinates)
-        if request.chart_i >= n or request.chart_j >= n:
-            raise _validation_error("chart_index_out_range", "chart index out of range")
-        if coordinates[request.chart_i].as_fraction() == 0:
-            raise _validation_error(
-                "chart_i_coordinate_nonzero", "chart_i coordinate must be nonzero"
-            )
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("request",), code=exc.type, message=exc.message()
         ) from exc
+
+
+def _reject(reason: str, message: str, location: tuple[str, ...]) -> None:
+    raise OperationDomainValidationError(
+        location=location, code=f"geometry.{reason}", message=message
+    )
 
 
 def _rational(frac: Fraction) -> CanonicalRational:
@@ -89,12 +59,18 @@ def _rational(frac: Fraction) -> CanonicalRational:
     )
 
 
-def compute_rational_point_construct(
-    request: RationalPointConstructRequest,
+def rational_projective_point(
+    coordinates: tuple[CanonicalRational, ...],
 ) -> RationalPointConstructResult:
     """Canonicalize by scaling so first nonzero coordinate is 1."""
-    _admit(request)
-    coords = request.coordinates
+    _admit_coordinates(coordinates)
+    if all(c.as_fraction() == 0 for c in coordinates):
+        _reject(
+            "projective_point_least_nonzero_coordinate",
+            "projective point must have at least one nonzero coordinate",
+            ("coordinates",),
+        )
+    coords = coordinates
     for _i, c in enumerate(coords):
         if c.as_fraction() != 0:
             inv = Fraction(1, 1) / c.as_fraction()
@@ -107,11 +83,21 @@ def compute_rational_point_construct(
     raise AssertionError("admission accepted all-zero projective coordinates")
 
 
-def compute_standard_chart(request: StandardChartRequest) -> StandardChartResult:
+def standard_chart(
+    point: RationalProjectivePoint, chart_index: int
+) -> StandardChartResult:
     """Dehomogenize at the given chart index (divide by that coordinate)."""
-    _admit(request)
-    coords = request.point.coordinates
-    chart = request.chart_index
+    coords = point.coordinates
+    _admit_coordinates(coords)
+    if chart_index >= len(coords):
+        _reject("chart_index_out_range", "chart_index out of range", ("chart_index",))
+    if coords[chart_index].as_fraction() == 0:
+        _reject(
+            "chart_coordinate_nonzero",
+            "chart coordinate must be nonzero",
+            ("chart_index",),
+        )
+    chart = chart_index
     inv = Fraction(1, 1) / coords[chart].as_fraction()
     affine = tuple(
         _rational(coords[i].as_fraction() * inv)
@@ -124,28 +110,41 @@ def compute_standard_chart(request: StandardChartRequest) -> StandardChartResult
     )
 
 
-def compute_chart_transition(request: ChartTransitionRequest) -> ChartTransitionResult:
+def chart_transition(
+    point: RationalProjectivePoint, chart_i: int, chart_j: int
+) -> ChartTransitionResult:
     """Return the complete target-chart coordinates for the projective point."""
-    _admit(request)
-    coords = request.point.coordinates
-    xj = coords[request.chart_j].as_fraction()
+    coords = point.coordinates
+    _admit_coordinates(coords)
+    if chart_i >= len(coords) or chart_j >= len(coords):
+        _reject("chart_index_out_range", "chart index out of range", ("chart_i", "chart_j"))
+    if coords[chart_i].as_fraction() == 0:
+        _reject(
+            "chart_i_coordinate_nonzero",
+            "chart_i coordinate must be nonzero",
+            ("chart_i",),
+        )
+    xj = coords[chart_j].as_fraction()
     if xj == 0:
         return ChartTransitionResult(
             status="OUTSIDE_TARGET_CHART",
             transition=None,
-            chart_i=request.chart_i,
-            chart_j=request.chart_j,
+            chart_i=chart_i,
+            chart_j=chart_j,
             projective_dimension=len(coords) - 1,
         )
     ratios = tuple(
         _rational(coords[i].as_fraction() / xj)
         for i in range(len(coords))
-        if i != request.chart_j
+        if i != chart_j
     )
     return ChartTransitionResult(
         status="DEFINED",
         transition=ratios,
-        chart_i=request.chart_i,
-        chart_j=request.chart_j,
+        chart_i=chart_i,
+        chart_j=chart_j,
         projective_dimension=len(coords) - 1,
     )
+
+
+__all__ = ["chart_transition", "rational_projective_point", "standard_chart"]

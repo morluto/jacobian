@@ -14,11 +14,23 @@ from jacobian.math.geometry.projective.coordinates._models import (
     StandardChartRequest,
     StandardChartResult,
 )
-from jacobian.math.geometry.projective.coordinates._operations import (
-    compute_chart_transition,
-    compute_rational_point_construct,
-    compute_standard_chart,
+from jacobian.math.geometry.projective.coordinates.operations import (
+    chart_transition,
+    rational_projective_point,
+    standard_chart,
 )
+
+
+def _construct(request: RationalPointConstructRequest) -> RationalPointConstructResult:
+    return rational_projective_point(request.coordinates)
+
+
+def _standard_chart(request: StandardChartRequest) -> StandardChartResult:
+    return standard_chart(request.point, request.chart_index)
+
+
+def _chart_transition(request: ChartTransitionRequest) -> ChartTransitionResult:
+    return chart_transition(request.point, request.chart_i, request.chart_j)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -51,7 +63,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "nonzero coordinate is 1.",
         RationalPointConstructRequest,
         RationalPointConstructResult,
-        compute_rational_point_construct,
+        _construct,
         "projective",
         "rational",
         "exact",
@@ -75,7 +87,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "dividing all coordinates by that coordinate.",
         StandardChartRequest,
         StandardChartResult,
-        compute_standard_chart,
+        _standard_chart,
         "projective",
         "affine-chart",
         "exact",
@@ -103,7 +115,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "or OUTSIDE_TARGET_CHART when the target coordinate vanishes.",
         ChartTransitionRequest,
         ChartTransitionResult,
-        compute_chart_transition,
+        _chart_transition,
         "projective",
         "chart-transition",
         "exact",

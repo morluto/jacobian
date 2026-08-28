@@ -4,18 +4,23 @@ from collections.abc import Mapping
 
 import pytest
 
+from jacobian.math.logic.languages.context_free import (
+    dependency_edges,
+    first_sets,
+    nullable_nonterminals,
+)
 from jacobian.math.logic.languages.context_free._models import (
     DependencyGraphRequest,
     FiniteCFGO,
     FirstSetsRequest,
     SymbolProfilesRequest,
 )
-from jacobian.math.logic.languages.context_free._operations import (
+from jacobian.math.logic.languages.context_free._tools import (
+    TOOLS,
     compute_dependency_graph,
     compute_first_sets,
     compute_symbol_profiles,
 )
-from jacobian.math.logic.languages.context_free._tools import TOOLS
 
 GRAMMAR = {
     "nonterminals": ["S", "A"],
@@ -55,6 +60,7 @@ def test_symbol_profiles_nullable() -> None:
     request = SymbolProfilesRequest(grammar=_grammar(GRAMMAR))
     result = compute_symbol_profiles(request)
     assert result.nullable == (False, True)
+    assert nullable_nonterminals(request.grammar) == result.nullable
 
 
 def test_symbol_profiles_nullable_simple() -> None:
@@ -67,12 +73,14 @@ def test_dependency_graph() -> None:
     request = DependencyGraphRequest(grammar=_grammar(GRAMMAR))
     result = compute_dependency_graph(request)
     assert ("S", "A") in result.edges
+    assert dependency_edges(request.grammar) == result.edges
 
 
 def test_first_sets() -> None:
     request = FirstSetsRequest(grammar=_grammar(GRAMMAR2))
     result = compute_first_sets(request)
     assert result.first_sets == (("a",),)
+    assert first_sets(request.grammar) == result.first_sets
 
 
 def test_first_sets_nullable_prefix() -> None:

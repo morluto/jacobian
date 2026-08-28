@@ -14,11 +14,23 @@ from jacobian.math.logic.languages.context_free._models import (
     SymbolProfilesRequest,
     SymbolProfilesResult,
 )
-from jacobian.math.logic.languages.context_free._operations import (
-    compute_dependency_graph,
-    compute_first_sets,
-    compute_symbol_profiles,
+from jacobian.math.logic.languages.context_free.operations import (
+    dependency_edges,
+    first_sets,
+    nullable_nonterminals,
 )
+
+
+def compute_symbol_profiles(request: SymbolProfilesRequest) -> SymbolProfilesResult:
+    return SymbolProfilesResult(nullable=nullable_nonterminals(request.grammar))
+
+
+def compute_dependency_graph(request: DependencyGraphRequest) -> DependencyGraphResult:
+    return DependencyGraphResult(edges=dependency_edges(request.grammar))
+
+
+def compute_first_sets(request: FirstSetsRequest) -> FirstSetsResult:
+    return FirstSetsResult(first_sets=first_sets(request.grammar))
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](

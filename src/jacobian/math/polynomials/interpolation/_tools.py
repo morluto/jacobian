@@ -16,12 +16,30 @@ from jacobian.math.polynomials.interpolation._models import (
     NewtonForm,
     NewtonFormRequest,
 )
-from jacobian.math.polynomials.interpolation._operations import (
-    compute_divided_differences,
-    compute_hermite_interpolation,
-    compute_newton_evaluate,
-    compute_newton_form,
+from jacobian.math.polynomials.interpolation.operations import (
+    divided_differences,
+    evaluate_newton,
+    hermite_interpolation,
+    newton_form,
 )
+
+
+def _hermite(request: HermiteInterpolationRequest) -> HermiteInterpolationResult:
+    return hermite_interpolation(request.table)
+
+
+def _divided_differences(
+    request: DividedDifferencesRequest,
+) -> DividedDifferencesResult:
+    return divided_differences(request.samples)
+
+
+def _newton_form(request: NewtonFormRequest) -> NewtonForm:
+    return newton_form(request.samples)
+
+
+def _evaluate_newton(request: NewtonEvaluateRequest) -> NewtonEvaluateResult:
+    return evaluate_newton(request.newton_form, request.evaluation_point)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -90,7 +108,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "orders 0 through m-1.",
         HermiteInterpolationRequest,
         HermiteInterpolationResult,
-        compute_hermite_interpolation,
+        _hermite,
         "polynomial",
         "interpolation",
         "hermite",
@@ -114,7 +132,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "bounded exact rational arithmetic.",
         DividedDifferencesRequest,
         DividedDifferencesResult,
-        compute_divided_differences,
+        _divided_differences,
         "polynomial",
         "interpolation",
         "exact",
@@ -133,7 +151,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "exact rational arithmetic.",
         NewtonFormRequest,
         NewtonForm,
-        compute_newton_form,
+        _newton_form,
         "polynomial",
         "interpolation",
         "exact",
@@ -152,7 +170,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "nested multiplication.",
         NewtonEvaluateRequest,
         NewtonEvaluateResult,
-        compute_newton_evaluate,
+        _evaluate_newton,
         "polynomial",
         "interpolation",
         "exact",

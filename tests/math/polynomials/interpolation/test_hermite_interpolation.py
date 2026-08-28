@@ -30,9 +30,6 @@ from jacobian.math.polynomials.interpolation._models import (
     MAX_HERMITE_SYSTEM_CELLS,
     HermiteInterpolationRequest,
 )
-from jacobian.math.polynomials.interpolation._operations import (
-    compute_hermite_interpolation,
-)
 
 
 def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
@@ -129,7 +126,10 @@ def test_native_api_exports_the_typed_hermite_operation() -> None:
         "OrdinaryDerivativeJet",
         "OrdinaryDerivativeJetTable",
         "OrdinaryDerivativeValue",
+        "divided_differences",
+        "evaluate_newton",
         "hermite_interpolation",
+        "newton_form",
     )
     assert interpolation.hermite_interpolation is hermite_interpolation
 
@@ -164,7 +164,7 @@ def test_known_polynomial_is_reconstructed_from_several_nodes() -> None:
         _jet(2, (62, 1)),
     )
 
-    result = compute_hermite_interpolation(HermiteInterpolationRequest(table=table))
+    result = hermite_interpolation(HermiteInterpolationRequest(table=table).table)
 
     assert _coefficient_map(result) == {
         5: Fraction(2),

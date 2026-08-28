@@ -10,12 +10,12 @@ from jacobian.math.polynomials.interpolation._models import (
     NewtonEvaluateRequest,
     NewtonFormRequest,
 )
-from jacobian.math.polynomials.interpolation._operations import (
-    compute_divided_differences,
-    compute_newton_evaluate,
-    compute_newton_form,
-)
 from jacobian.math.polynomials.interpolation._tools import TOOLS
+from jacobian.math.polynomials.interpolation.operations import (
+    divided_differences,
+    evaluate_newton,
+    newton_form,
+)
 
 
 def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
@@ -39,16 +39,15 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_divided_differences_are_canonical_rationals() -> None:
-    result = compute_divided_differences(DividedDifferencesRequest(samples=_samples()))
+    result = divided_differences(DividedDifferencesRequest(samples=_samples()).samples)
     assert result.coefficients == (_q(1), _q(1), _q(1))
 
 
 def test_newton_form_is_directly_evaluable() -> None:
-    form = compute_newton_form(NewtonFormRequest(samples=_samples()))
+    form = newton_form(NewtonFormRequest(samples=_samples()).samples)
     assert form.coefficients == (_q(1), _q(1), _q(1))
-    result = compute_newton_evaluate(
-        NewtonEvaluateRequest(newton_form=form, evaluation_point=_q(3))
-    )
+    request = NewtonEvaluateRequest(newton_form=form, evaluation_point=_q(3))
+    result = evaluate_newton(request.newton_form, request.evaluation_point)
     assert result.result == _q(10)
 
 
@@ -57,11 +56,10 @@ def test_interpolation_reconstructs_every_sample() -> None:
         nodes=(_q(0), _q(1, 2), _q(1), _q(3, 2)),
         values=(_q(1), _q(3, 2), _q(2), _q(11, 4)),
     )
-    form = compute_newton_form(NewtonFormRequest(samples=samples))
+    form = newton_form(NewtonFormRequest(samples=samples).samples)
     for node, expected in zip(samples.nodes, samples.values, strict=True):
-        result = compute_newton_evaluate(
-            NewtonEvaluateRequest(newton_form=form, evaluation_point=node)
-        )
+        request = NewtonEvaluateRequest(newton_form=form, evaluation_point=node)
+        result = evaluate_newton(request.newton_form, request.evaluation_point)
         assert result.result == expected
 
 
@@ -70,24 +68,23 @@ def test_rational_interpolation_has_exact_coefficients_and_evaluation() -> None:
         nodes=(_q(0), _q(1, 2), _q(1)),
         values=(_q(1), _q(3, 2), _q(2)),
     )
-    form = compute_newton_form(NewtonFormRequest(samples=samples))
+    form = newton_form(NewtonFormRequest(samples=samples).samples)
     assert form.coefficients == (_q(1), _q(1), _q(0))
-    result = compute_newton_evaluate(
-        NewtonEvaluateRequest(newton_form=form, evaluation_point=_q(3, 4))
-    )
+    request = NewtonEvaluateRequest(newton_form=form, evaluation_point=_q(3, 4))
+    result = evaluate_newton(request.newton_form, request.evaluation_point)
     assert result.result == _q(7, 4)
 
 
 def test_newton_coefficients_may_grow_beyond_input_digit_bound() -> None:
     left = 10**255 + 19
     right = 10**255 + 21
-    form = compute_newton_form(
+    form = newton_form(
         NewtonFormRequest(
             samples=_samples(
                 nodes=(_q(0), _q(1)),
                 values=(_q(1, left), _q(1, right)),
             )
-        )
+        ).samples
     )
 
     assert len(form.coefficients[1].den) > 256

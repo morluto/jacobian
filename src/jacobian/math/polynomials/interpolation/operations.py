@@ -17,15 +17,12 @@ from jacobian.math.polynomials.interpolation._kernel import (
 )
 from jacobian.math.polynomials.interpolation._models import (
     _MAX_RATIONAL_DIGITS,
-    DividedDifferencesRequest,
     DividedDifferencesResult,
     HermiteConstraintReplay,
-    HermiteInterpolationRequest,
     HermiteInterpolationResult,
-    NewtonEvaluateRequest,
+    InterpolationSamples,
     NewtonEvaluateResult,
     NewtonForm,
-    NewtonFormRequest,
     OrdinaryDerivativeJetTable,
     _require_distinct,
     _require_hermite_preflight,
@@ -57,10 +54,7 @@ def _run_admission[ResultT](admission: Callable[[], ResultT]) -> ResultT:
         ) from exc
 
 
-def _admit_samples(
-    request: DividedDifferencesRequest | NewtonFormRequest,
-) -> tuple[CanonicalRational, ...]:
-    samples = request.samples
+def _admit_samples(samples: InterpolationSamples) -> tuple[CanonicalRational, ...]:
     _require_distinct(samples.nodes)
     coefficients = _canonical(
         divided_difference_coefficients(samples.nodes, samples.values)
@@ -76,42 +70,42 @@ def _admit_samples(
     return coefficients
 
 
-def _admit_hermite(request: HermiteInterpolationRequest) -> None:
-    _require_hermite_preflight(request.table)
+def _admit_hermite(table: OrdinaryDerivativeJetTable) -> None:
+    _require_hermite_preflight(table)
 
 
-def _admit_newton_evaluate(request: NewtonEvaluateRequest) -> None:
+def _admit_newton_evaluate(evaluation_point: CanonicalRational) -> None:
     if (
-        len(request.evaluation_point.num.lstrip("-")) > _MAX_RATIONAL_DIGITS
-        or len(request.evaluation_point.den) > _MAX_RATIONAL_DIGITS
+        len(evaluation_point.num.lstrip("-")) > _MAX_RATIONAL_DIGITS
+        or len(evaluation_point.den) > _MAX_RATIONAL_DIGITS
     ):
         raise _validation_error(
             f"evaluation point exceeds the {_MAX_RATIONAL_DIGITS}-digit bound"
         )
 
 
-def compute_divided_differences(
-    request: DividedDifferencesRequest,
-) -> DividedDifferencesResult:
-    return DividedDifferencesResult(coefficients=_admit_samples(request))
+def divided_differences(samples: InterpolationSamples) -> DividedDifferencesResult:
+    return DividedDifferencesResult(coefficients=_admit_samples(samples))
 
 
-def compute_newton_form(request: NewtonFormRequest) -> NewtonForm:
-    coefficients = _admit_samples(request)
+def newton_form(samples: InterpolationSamples) -> NewtonForm:
+    coefficients = _admit_samples(samples)
     return NewtonForm(
         coefficients=coefficients,
-        nodes=request.samples.nodes,
+        nodes=samples.nodes,
     )
 
 
-def compute_newton_evaluate(request: NewtonEvaluateRequest) -> NewtonEvaluateResult:
-    _run_admission(lambda: _admit_newton_evaluate(request))
+def evaluate_newton(
+    form: NewtonForm, evaluation_point: CanonicalRational
+) -> NewtonEvaluateResult:
+    _run_admission(lambda: _admit_newton_evaluate(evaluation_point))
     return NewtonEvaluateResult(
         result=CanonicalRational.from_fraction(
             evaluate_newton_form(
-                request.newton_form.nodes,
-                request.newton_form.coefficients,
-                request.evaluation_point,
+                form.nodes,
+                form.coefficients,
+                evaluation_point,
             )
         )
     )
@@ -122,7 +116,7 @@ def hermite_interpolation(
 ) -> HermiteInterpolationResult:
     """Return the unique degree-``< M`` polynomial matching one jet table."""
 
-    _run_admission(lambda: _admit_hermite(HermiteInterpolationRequest(table=table)))
+    _run_admission(lambda: _admit_hermite(table))
 
     coefficients = hermite_interpolation_coefficients(table)
     nonzero_degrees = tuple(
@@ -173,16 +167,9 @@ def hermite_interpolation(
     )
 
 
-def compute_hermite_interpolation(
-    request: HermiteInterpolationRequest,
-) -> HermiteInterpolationResult:
-    return hermite_interpolation(request.table)
-
-
 __all__ = [
-    "compute_divided_differences",
-    "compute_hermite_interpolation",
-    "compute_newton_evaluate",
-    "compute_newton_form",
+    "divided_differences",
+    "evaluate_newton",
     "hermite_interpolation",
+    "newton_form",
 ]

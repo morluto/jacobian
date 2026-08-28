@@ -16,7 +16,7 @@ from jacobian.math.number_theory.galois._models import (
     SolvableRequest,
     SolvableResult,
 )
-from jacobian.math.number_theory.galois._operations import (
+from jacobian.math.number_theory.galois.operations import (
     compute_frobenius_cycle,
     compute_galois_factor,
     compute_galois_group,

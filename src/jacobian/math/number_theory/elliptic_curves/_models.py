@@ -12,6 +12,8 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math._rational_height import RationalHeight, sum_heights
 
+MAX_SCALAR = 10_000
+
 
 class ShortWeierstrassCurve(StrictModel):
     """A short Weierstrass curve y^2 = x^3 + A*x + B over QQ."""
@@ -272,7 +274,7 @@ class ScalarMultiplicationRequest(StrictModel):
 
     curve: ShortWeierstrassCurve
     point: EllipticCurvePointResult
-    scalar: int = Field(ge=0, le=10_000)
+    scalar: int = Field(ge=0, le=MAX_SCALAR)
 
 
 class ScalarMultiplicationResult(EllipticCurvePointResult):

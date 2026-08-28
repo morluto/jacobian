@@ -81,8 +81,13 @@ def _admit_frobenius(request: FrobeniusCycleRequest) -> None:
             )
 
 
-def compute_galois_factor(request: GaloisFactorRequest) -> GaloisFactorResult:
+def galois_factor(
+    field_order: int, coefficients: tuple[int, ...]
+) -> GaloisFactorResult:
     """Factor a polynomial over GF(p) using SymPy."""
+    request = GaloisFactorRequest.model_construct(
+        field_order=field_order, coefficients=coefficients
+    )
     _admit(lambda: _admit_factor(request), location=("field_order", "coefficients"))
     from sympy import GF, Poly, Symbol
 
@@ -119,7 +124,16 @@ def compute_galois_factor(request: GaloisFactorRequest) -> GaloisFactorResult:
     )
 
 
-def compute_frobenius_cycle(request: FrobeniusCycleRequest) -> FrobeniusCycleResult:
+def frobenius_cycle(
+    field_order: int,
+    polynomial_degree: int,
+    factorization_degrees: tuple[int, ...],
+) -> FrobeniusCycleResult:
+    request = FrobeniusCycleRequest.model_construct(
+        field_order=field_order,
+        polynomial_degree=polynomial_degree,
+        factorization_degrees=factorization_degrees,
+    )
     _admit(
         lambda: _admit_frobenius(request),
         location=("field_order", "factorization_degrees"),
@@ -163,8 +177,9 @@ def _wire_group(perm_group: PermutationGroup, degree: int) -> FinitePermutationG
     )
 
 
-def compute_galois_group(request: GaloisGroupRequest) -> GaloisGroupResult:
+def galois_group(coefficients: tuple[int, ...]) -> GaloisGroupResult:
     """Compute the Galois group of a polynomial over Q."""
+    request = GaloisGroupRequest.model_construct(coefficients=coefficients)
     _admit(
         lambda: _supported_galois_polynomial(request.coefficients),
         location=("coefficients",),
@@ -183,12 +198,13 @@ def compute_galois_group(request: GaloisGroupRequest) -> GaloisGroupResult:
     )
 
 
-def compute_solvable(request: SolvableRequest) -> SolvableResult:
+def solvable(coefficients: tuple[int, ...]) -> SolvableResult:
     """Determine if a polynomial is solvable by radicals.
 
     A polynomial is solvable by radicals iff its Galois group is solvable.
     This is computed from the actual Galois group, not from the degree alone.
     """
+    request = SolvableRequest.model_construct(coefficients=coefficients)
     _admit(
         lambda: _supported_galois_polynomial(request.coefficients),
         location=("coefficients",),
@@ -199,3 +215,39 @@ def compute_solvable(request: SolvableRequest) -> SolvableResult:
         solvable_by_radicals=is_solvable,
         group=_wire_group(perm_group, len(request.coefficients) - 1),
     )
+
+
+def compute_galois_factor(request: GaloisFactorRequest) -> GaloisFactorResult:
+    """Project a wire request onto the native finite-field factor operation."""
+    return galois_factor(request.field_order, request.coefficients)
+
+
+def compute_frobenius_cycle(request: FrobeniusCycleRequest) -> FrobeniusCycleResult:
+    """Project a wire request onto the native Frobenius-cycle operation."""
+    return frobenius_cycle(
+        request.field_order,
+        request.polynomial_degree,
+        request.factorization_degrees,
+    )
+
+
+def compute_galois_group(request: GaloisGroupRequest) -> GaloisGroupResult:
+    """Project a wire request onto the native Galois-group operation."""
+    return galois_group(request.coefficients)
+
+
+def compute_solvable(request: SolvableRequest) -> SolvableResult:
+    """Project a wire request onto the native solvability operation."""
+    return solvable(request.coefficients)
+
+
+__all__ = [
+    "compute_frobenius_cycle",
+    "compute_galois_factor",
+    "compute_galois_group",
+    "compute_solvable",
+    "frobenius_cycle",
+    "galois_factor",
+    "galois_group",
+    "solvable",
+]

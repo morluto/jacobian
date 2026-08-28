@@ -16,11 +16,11 @@ from jacobian.math.number_theory.elliptic_curves._models import (
     ScalarMultiplicationRequest,
     ScalarMultiplicationResult,
 )
-from jacobian.math.number_theory.elliptic_curves._operations import (
-    add_points,
+from jacobian.math.number_theory.elliptic_curves.operations import (
     check_point_on_curve,
+    compute_add_points,
     compute_discriminant,
-    scalar_multiply,
+    compute_scalar_multiply,
 )
 
 
@@ -164,7 +164,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "at infinity when P₁ + P₂ = O.",
         EllipticCurvePointAdditionRequest,
         EllipticCurvePointResult,
-        add_points,
+        compute_add_points,
         "elliptic-curve",
         "point-addition",
         "group-law",
@@ -185,7 +185,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "when n*P = O.",
         ScalarMultiplicationRequest,
         ScalarMultiplicationResult,
-        scalar_multiply,
+        compute_scalar_multiply,
         "elliptic-curve",
         "scalar-multiplication",
         "group-law",

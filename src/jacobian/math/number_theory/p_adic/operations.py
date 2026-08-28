@@ -171,8 +171,19 @@ def _hensel_lift_root(
     return current
 
 
-def hensel_lift_root(request: HenselRootRequest) -> HenselRootResult:
+def hensel_lift_root(
+    polynomial: IntegerPolynomial,
+    prime: int,
+    root_mod_p: int,
+    precision: int,
+) -> HenselRootResult:
     """Normalize, admit, and lift one simple root of ``f`` modulo ``p``."""
+    request = HenselRootRequest.model_construct(
+        polynomial=polynomial,
+        prime=prime,
+        root_mod_p=root_mod_p,
+        precision=precision,
+    )
     coeffs = _admit_root(request)
     lifted = _hensel_lift_root(
         coeffs, request.prime, request.root_mod_p, request.precision
@@ -276,7 +287,13 @@ def _bezout_unit_mod_p(
     return s, t
 
 
-def hensel_lift_factors(request: HenselFactorLiftRequest) -> HenselFactorLiftResult:
+def hensel_lift_factors(
+    polynomial: IntegerPolynomial,
+    factor_g: IntegerPolynomial,
+    factor_h: IntegerPolynomial,
+    prime: int,
+    precision: int,
+) -> HenselFactorLiftResult:
     """Lift a coprime factorization f ≡ g*h (mod p) to f ≡ g*h (mod p^k).
 
     Standard quadratic Hensel lifting: every step derives both factor
@@ -284,6 +301,13 @@ def hensel_lift_factors(request: HenselFactorLiftRequest) -> HenselFactorLiftRes
     preserving the product congruence exactly. The reconstructed product
     is validated against ``f`` modulo ``p^k`` before returning.
     """
+    request = HenselFactorLiftRequest.model_construct(
+        polynomial=polynomial,
+        factor_g=factor_g,
+        factor_h=factor_h,
+        prime=prime,
+        precision=precision,
+    )
     _admit_factors(request)
     f_asc = _kernel_coefficients(request.polynomial)
     g_asc = _kernel_coefficients(request.factor_g)
@@ -355,7 +379,11 @@ def hensel_lift_factors(request: HenselFactorLiftRequest) -> HenselFactorLiftRes
     )
 
 
-def find_padic_roots(request: PAdicRootsRequest) -> PAdicRootsResult:
+def find_padic_roots(
+    polynomial: IntegerPolynomial,
+    prime: int,
+    precision: int,
+) -> PAdicRootsResult:
     """Find every simple root of f(x) mod p^k via Hensel lifting.
 
     Roots are found mod p by brute force. Each residue with nonzero
@@ -364,6 +392,9 @@ def find_padic_roots(request: PAdicRootsRequest) -> PAdicRootsResult:
     their mod-p^k solution sets can grow unboundedly (x^2 has five roots mod
     25), so enumerating them would not be bounded.
     """
+    request = PAdicRootsRequest.model_construct(
+        polynomial=polynomial, prime=prime, precision=precision
+    )
     _require_polynomial_budget(request.polynomial, "polynomial")
     _require_prime(request.prime)
     coeffs = _kernel_coefficients(request.polynomial)
@@ -386,7 +417,35 @@ def find_padic_roots(request: PAdicRootsRequest) -> PAdicRootsResult:
     )
 
 
+def compute_hensel_lift_root(request: HenselRootRequest) -> HenselRootResult:
+    """Project a wire request onto the native Hensel-root operation."""
+    return hensel_lift_root(
+        request.polynomial, request.prime, request.root_mod_p, request.precision
+    )
+
+
+def compute_padic_roots(request: PAdicRootsRequest) -> PAdicRootsResult:
+    """Project a wire request onto the native p-adic-roots operation."""
+    return find_padic_roots(request.polynomial, request.prime, request.precision)
+
+
+def compute_hensel_lift_factors(
+    request: HenselFactorLiftRequest,
+) -> HenselFactorLiftResult:
+    """Project a wire request onto the native factor-lifting operation."""
+    return hensel_lift_factors(
+        request.polynomial,
+        request.factor_g,
+        request.factor_h,
+        request.prime,
+        request.precision,
+    )
+
+
 __all__ = [
+    "compute_hensel_lift_factors",
+    "compute_hensel_lift_root",
+    "compute_padic_roots",
     "find_padic_roots",
     "hensel_lift_factors",
     "hensel_lift_root",

@@ -14,13 +14,15 @@ from jacobian.math.number_theory.galois._models import (
     GaloisGroupRequest,
     SolvableRequest,
 )
-from jacobian.math.number_theory.galois._operations import (
+from jacobian.math.number_theory.galois._tools import TOOLS
+from jacobian.math.number_theory.galois.operations import (
     compute_frobenius_cycle,
     compute_galois_factor,
     compute_galois_group,
     compute_solvable,
+    galois_factor,
+    galois_group,
 )
-from jacobian.math.number_theory.galois._tools import TOOLS
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -30,6 +32,13 @@ def test_catalog_contains_only_audited_operations() -> None:
         "polynomial.galois_group.compute",
         "polynomial.solvable_by_radicals.decide",
     }
+
+
+def test_native_surface_accepts_canonical_coefficient_values() -> None:
+    factor = galois_factor(5, (1, 0, 1))
+    assert factor.field_order == 5
+    group = galois_group((-2, 0, 1))
+    assert group.degree == 2
 
 
 def _multiply_mod(

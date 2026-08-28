@@ -11,6 +11,7 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._rational_height import RationalHeight
 from jacobian.math.number_theory.elliptic_curves._models import (
+    MAX_SCALAR,
     CurveDiscriminantResult,
     CurvePointRequest,
     EllipticCurvePointAdditionRequest,
@@ -20,6 +21,7 @@ from jacobian.math.number_theory.elliptic_curves._models import (
     RationalAffinePoint,
     ScalarMultiplicationRequest,
     ScalarMultiplicationResult,
+    ShortWeierstrassCurve,
     _chord_step_heights,
     _doubling_lambda_height,
     _doubling_lambda_height_from_heights,
@@ -159,10 +161,10 @@ def _curve_discriminant(a: Fraction, b: Fraction) -> Fraction:
     return -16 * (4 * a**3 + 27 * b**2)
 
 
-def compute_discriminant(request: EllipticCurveRequest) -> CurveDiscriminantResult:
+def discriminant(curve: ShortWeierstrassCurve) -> CurveDiscriminantResult:
     """Compute the discriminant of a short Weierstrass curve."""
-    a = request.curve.coefficient_a.as_fraction()
-    b = request.curve.coefficient_b.as_fraction()
+    a = curve.coefficient_a.as_fraction()
+    b = curve.coefficient_b.as_fraction()
     disc = _curve_discriminant(a, b)
     if (
         max(
@@ -180,21 +182,26 @@ def compute_discriminant(request: EllipticCurveRequest) -> CurveDiscriminantResu
             ),
         )
     return CurveDiscriminantResult._from_kernel(
-        request=request,
+        request=EllipticCurveRequest.model_construct(curve=curve),
         discriminant=CanonicalRational.from_fraction(disc),
         is_nonsingular=disc != 0,
     )
 
 
-def check_point_on_curve(request: CurvePointRequest) -> PointOnCurveResult:
+def point_on_curve(
+    curve: ShortWeierstrassCurve, point: RationalAffinePoint
+) -> PointOnCurveResult:
     """Check whether a point lies on a short Weierstrass curve."""
-    a = request.curve.coefficient_a.as_fraction()
-    b = request.curve.coefficient_b.as_fraction()
-    x = request.point.x.as_fraction()
-    y = request.point.y.as_fraction()
+    a = curve.coefficient_a.as_fraction()
+    b = curve.coefficient_b.as_fraction()
+    x = point.x.as_fraction()
+    y = point.y.as_fraction()
     lhs = y * y
     rhs = x * x * x + a * x + b
-    return PointOnCurveResult._from_kernel(request=request, on_curve=lhs == rhs)
+    return PointOnCurveResult._from_kernel(
+        request=CurvePointRequest.model_construct(curve=curve, point=point),
+        on_curve=lhs == rhs,
+    )
 
 
 def _point_add(
@@ -227,9 +234,14 @@ def _point_add(
 
 
 def add_points(
-    request: EllipticCurvePointAdditionRequest,
+    curve: ShortWeierstrassCurve,
+    first: EllipticCurvePointResult,
+    second: EllipticCurvePointResult,
 ) -> EllipticCurvePointResult:
     """Add two points on a short Weierstrass elliptic curve."""
+    request = EllipticCurvePointAdditionRequest.model_construct(
+        curve=curve, first=first, second=second
+    )
     _admit_point_addition(request)
     a = request.curve.coefficient_a.as_fraction()
     b = request.curve.coefficient_b.as_fraction()
@@ -276,9 +288,20 @@ def add_points(
 
 
 def scalar_multiply(
-    request: ScalarMultiplicationRequest,
+    curve: ShortWeierstrassCurve,
+    point: EllipticCurvePointResult,
+    scalar: int,
 ) -> ScalarMultiplicationResult:
     """Compute n*P on a short Weierstrass elliptic curve using double-and-add."""
+    if type(scalar) is not int or not 0 <= scalar <= MAX_SCALAR:
+        raise OperationDomainValidationError(
+            location=("scalar",),
+            code="elliptic_curve.scalar_out_of_range",
+            message=f"scalar must be an integer between 0 and {MAX_SCALAR}",
+        )
+    request = ScalarMultiplicationRequest.model_construct(
+        curve=curve, point=point, scalar=scalar
+    )
     _admit_scalar_multiplication(request)
     operand = request.point.point
     if request.scalar == 0 or request.point.at_infinity or operand is None:
@@ -319,9 +342,37 @@ def scalar_multiply(
     )
 
 
+def compute_discriminant(request: EllipticCurveRequest) -> CurveDiscriminantResult:
+    """Project a wire request onto the native discriminant operation."""
+    return discriminant(request.curve)
+
+
+def check_point_on_curve(request: CurvePointRequest) -> PointOnCurveResult:
+    """Project a wire request onto the native point-membership operation."""
+    return point_on_curve(request.curve, request.point)
+
+
+def compute_add_points(
+    request: EllipticCurvePointAdditionRequest,
+) -> EllipticCurvePointResult:
+    """Project a wire request onto the native point-addition operation."""
+    return add_points(request.curve, request.first, request.second)
+
+
+def compute_scalar_multiply(
+    request: ScalarMultiplicationRequest,
+) -> ScalarMultiplicationResult:
+    """Project a wire request onto the native scalar-multiplication operation."""
+    return scalar_multiply(request.curve, request.point, request.scalar)
+
+
 __all__ = [
     "add_points",
     "check_point_on_curve",
+    "compute_add_points",
     "compute_discriminant",
+    "compute_scalar_multiply",
+    "discriminant",
+    "point_on_curve",
     "scalar_multiply",
 ]

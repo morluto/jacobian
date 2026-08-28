@@ -1,5 +1,7 @@
 """Native exact visibility-kernel operation."""
 
+from __future__ import annotations
+
 from math import comb
 
 from jacobian._exact import canonical_rational_component_digits
@@ -25,7 +27,6 @@ def _admit_visibility_kernel(
     polygon: KernelPolygon,
 ) -> tuple[OrientedEdgeHalfPlane, ...]:
     """Check derived work/output bounds and return prepared half-planes."""
-
     max_coordinate_digits = max(
         canonical_rational_component_digits(component)
         for point in polygon.points
@@ -80,7 +81,6 @@ def _admit_visibility_kernel(
 
 def compute_visibility_kernel(request: PolygonKernelRequest) -> PolygonKernelResult:
     """Reconstruct a simple CCW polygon's closed visibility kernel exactly."""
-
     half_planes = _admit_visibility_kernel(request.polygon)
     data = compute_kernel_data(request.polygon, half_planes=half_planes)
     return PolygonKernelResult._from_kernel(request.polygon, data=data)

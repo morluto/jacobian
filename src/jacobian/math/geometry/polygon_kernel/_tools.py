@@ -6,7 +6,7 @@ from jacobian.math.geometry.polygon_kernel._models import (
     PolygonKernelRequest,
     PolygonKernelResult,
 )
-from jacobian.math.geometry.polygon_kernel._operations import (
+from jacobian.math.geometry.polygon_kernel.operations import (
     compute_visibility_kernel,
 )
 

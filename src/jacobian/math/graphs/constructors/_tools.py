@@ -13,7 +13,7 @@ from jacobian.math.graphs.constructors._models import (
     TriangleProfileRequest,
     TriangleProfileResult,
 )
-from jacobian.math.graphs.constructors._operations import (
+from jacobian.math.graphs.constructors.operations import (
     _run_hypercube_graph,
     _run_keller_graph,
     _run_triangle_profile,

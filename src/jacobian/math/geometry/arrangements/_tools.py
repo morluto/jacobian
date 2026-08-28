@@ -14,7 +14,7 @@ from jacobian.math.geometry.arrangements._models import (
     HyperplaneArrangementRequest,
     HyperplaneArrangementResult,
 )
-from jacobian.math.geometry.arrangements._operations import (
+from jacobian.math.geometry.arrangements.operations import (
     compute_arrangement,
     compute_chamber_count,
     compute_characteristic_polynomial,

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import canonical_rational_component_digits
 from jacobian.canonical import encode_strict_json
-from jacobian.math.geometry.polygon_kernel import _operations
+from jacobian.math.geometry.polygon_kernel import operations
 from jacobian.math.geometry.polygon_kernel._kernel import oriented_half_planes
 from jacobian.math.geometry.polygon_kernel._models import (
     MAX_KERNEL_COORDINATE_DIGITS,
@@ -23,7 +23,7 @@ from jacobian.math.geometry.polygon_kernel._models import (
     PolygonKernelResult,
     _estimate_visibility_kernel_result_characters,
 )
-from jacobian.math.geometry.polygon_kernel._operations import (
+from jacobian.math.geometry.polygon_kernel.operations import (
     compute_visibility_kernel,
 )
 
@@ -305,7 +305,7 @@ def test_fractional_polygon_round_trips_structurally() -> None:
 
 def test_trusted_producer_runs_kernel_once(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = 0
-    original = cast(Callable[..., object], vars(_operations)["compute_kernel_data"])
+    original = cast(Callable[..., object], vars(operations)["compute_kernel_data"])
 
     def counted(
         polygon: KernelPolygon,
@@ -316,7 +316,7 @@ def test_trusted_producer_runs_kernel_once(monkeypatch: pytest.MonkeyPatch) -> N
         calls += 1
         return original(polygon, half_planes=half_planes)
 
-    monkeypatch.setattr(_operations, "compute_kernel_data", counted)
+    monkeypatch.setattr(operations, "compute_kernel_data", counted)
     result = compute_visibility_kernel(_request(PUBLISHED_PENTAGON))
 
     assert calls == 1

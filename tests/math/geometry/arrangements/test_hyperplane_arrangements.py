@@ -10,12 +10,12 @@ from jacobian.math.geometry.arrangements._models import (
     HyperplaneArrangementRequest,
     RationalHyperplane,
 )
-from jacobian.math.geometry.arrangements._operations import (
+from jacobian.math.geometry.arrangements._tools import TOOLS
+from jacobian.math.geometry.arrangements.operations import (
     compute_arrangement,
     compute_chamber_count,
     compute_characteristic_polynomial,
 )
-from jacobian.math.geometry.arrangements._tools import TOOLS
 
 
 def _r(num: int, den: int = 1) -> CanonicalRational:

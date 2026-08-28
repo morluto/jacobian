@@ -23,6 +23,7 @@ def test_subject_operation_groups_preserve_wire_contracts() -> None:
         ),
         (
             "probability.joint.mutual_information.compute",
+            "probability.finite_distribution.event_probability.compute",
             "probability.finite_distribution.raw_moment.compute",
             "probability.finite_distribution.condition.compute",
             "probability.finite_distribution.pushforward.compute",

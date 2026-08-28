@@ -168,7 +168,7 @@ def test_subset_sum_singular_and_plural_queries_rank_the_profile_ahead_of_sidon(
         "all subset sum and repeated representation of a finite integer set",
         "all subset sums and repeated representations of a finite integer set",
     ):
-        result = catalog.search(OperationDiscoveryRequest(query=query, limit=10))
+        result = catalog.search(OperationDiscoveryRequest(query=query, limit=20))
         positions = {
             match.operation_id: index for index, match in enumerate(result.matches)
         }

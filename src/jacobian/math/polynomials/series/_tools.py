@@ -327,6 +327,7 @@ TOOLS = (
             "truncated",
             "exact",
         ),
+        discovery_terms=("series",),
         examples=(
             example(
                 "compose_x_with_x_squared",

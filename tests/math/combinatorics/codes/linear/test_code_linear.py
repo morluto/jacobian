@@ -18,7 +18,8 @@ from jacobian.math.combinatorics.codes.linear._models import (
     ShortenRequest,
     SyndromeRequest,
 )
-from jacobian.math.combinatorics.codes.linear._operations import (
+from jacobian.math.combinatorics.codes.linear._tools import TOOLS
+from jacobian.math.combinatorics.codes.linear.operations import (
     compute_code_equal,
     compute_codeword_check,
     compute_dual_code,
@@ -29,7 +30,6 @@ from jacobian.math.combinatorics.codes.linear._operations import (
     compute_shorten,
     compute_syndrome,
 )
-from jacobian.math.combinatorics.codes.linear._tools import TOOLS
 from jacobian.math.combinatorics.codes.linear.values import PrimeFieldLinearEncoder
 
 

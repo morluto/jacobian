@@ -28,7 +28,7 @@ from jacobian.math.combinatorics.codes.linear._models import (
     SyndromeRequest,
     SyndromeResult,
 )
-from jacobian.math.combinatorics.codes.linear._operations import (
+from jacobian.math.combinatorics.codes.linear.operations import (
     compute_code_equal,
     compute_codeword_check,
     compute_dual_code,

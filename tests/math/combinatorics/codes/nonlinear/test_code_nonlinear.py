@@ -35,7 +35,7 @@ from jacobian.math.combinatorics.codes.nonlinear._models import (
     ToSetSystemRequest,
     WordDistanceRequest,
 )
-from jacobian.math.combinatorics.codes.nonlinear._operations import (
+from jacobian.math.combinatorics.codes.nonlinear.operations import (
     compute_constant_weight,
     compute_constant_weight_profile,
     compute_explicit_profile,

@@ -14,7 +14,7 @@ from jacobian.math.combinatorics.discrepancy._models import (
     HardConstraintRoundingRequest,
     HardConstraintRoundingResult,
 )
-from jacobian.math.combinatorics.discrepancy._operations import (
+from jacobian.math.combinatorics.discrepancy.operations import (
     _compute_optimal_discrepancy_isolated,
     compute_discrepancy,
     compute_hard_constraint_rounding,

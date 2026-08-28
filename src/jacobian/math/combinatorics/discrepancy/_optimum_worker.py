@@ -7,7 +7,7 @@ import sys
 from typing import Any
 
 from jacobian.math.combinatorics.discrepancy._models import DiscrepancyOptimumRequest
-from jacobian.math.combinatorics.discrepancy._operations import (
+from jacobian.math.combinatorics.discrepancy.operations import (
     compute_optimal_discrepancy,
 )
 

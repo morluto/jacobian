@@ -12,8 +12,8 @@ import pytest
 from pydantic import ValidationError
 
 import jacobian.math.combinatorics.discrepancy._models as discrepancy_models
-import jacobian.math.combinatorics.discrepancy._operations as discrepancy_operations
 import jacobian.math.combinatorics.discrepancy._optimum_process as optimum_process
+import jacobian.math.combinatorics.discrepancy.operations as discrepancy_operations
 from jacobian.math.combinatorics.discrepancy._models import (
     MAX_COLUMN_INCIDENCES,
     MAX_MONITORED_COLUMNS,
@@ -29,7 +29,7 @@ from jacobian.math.combinatorics.discrepancy._models import (
     HardConstraintRoundingRequest,
     HardConstraintRoundingResult,
 )
-from jacobian.math.combinatorics.discrepancy._operations import (
+from jacobian.math.combinatorics.discrepancy.operations import (
     compute_discrepancy,
     compute_hard_constraint_rounding,
     compute_optimal_discrepancy,

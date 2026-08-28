@@ -196,8 +196,7 @@ def _mat_mul_vec(
 ) -> list[int]:
     return [
         sum(row[j] * vec[j] for j in range(len(vec))) % field_order for row in matrix
-    ]
-
+]
 
 def _hamming_weight(word: list[int] | tuple[int, ...]) -> int:
     return sum(1 for v in word if v != 0)

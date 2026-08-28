@@ -8,6 +8,8 @@ they do not exercise installation, state migration, or rollout machinery.
 
 from __future__ import annotations
 
+import json
+
 import httpx2
 import pytest
 from deploy.smoke import (
@@ -17,6 +19,73 @@ from deploy.smoke import (
     is_transient_transport_failure,
     raise_for_http_error,
 )
+from deploy.smoke_remote import _validate_discovery_response
+
+
+def _current_discovery_payload() -> dict[str, object]:
+    return {
+        "kind": "discovery",
+        "query": "exact determinant",
+        "namespace": None,
+        "matches": [
+            {
+                "operation_id": "matrix.determinant.compute",
+                "title": "Exact determinant",
+                "description": "Compute one exact determinant.",
+                "tags": ["matrix", "determinant"],
+            }
+        ],
+        "total_matches": 1,
+        "next_cursor": None,
+        "catalog_resource": "operation://catalog",
+    }
+
+
+def test_remote_smoke_accepts_the_current_typed_discovery_response() -> None:
+    discovery = _current_discovery_payload()
+    failures: list[str] = []
+
+    matches = _validate_discovery_response(
+        discovery,
+        json.dumps(discovery),
+        failures,
+    )
+
+    assert matches == ("matrix.determinant.compute",)
+    assert failures == []
+
+
+def test_remote_smoke_rejects_divergent_model_visible_discovery() -> None:
+    discovery = _current_discovery_payload()
+    failures: list[str] = []
+
+    _validate_discovery_response(
+        discovery,
+        json.dumps({**discovery, "matches": []}),
+        failures,
+    )
+
+    assert failures == [
+        "deployed operation discovery text and structured content disagree"
+    ]
+
+
+def test_remote_smoke_reports_the_removed_discovery_limit_as_schema_drift() -> None:
+    discovery = {
+        **_current_discovery_payload(),
+        "response_byte_limit": 16_384,
+    }
+    failures: list[str] = []
+
+    matches = _validate_discovery_response(
+        discovery,
+        json.dumps(discovery),
+        failures,
+    )
+
+    assert matches == ()
+    assert len(failures) == 1
+    assert failures[0].startswith("deployed operation discovery violates its schema:")
 
 
 def test_smoke_retry_classification_is_transport_only() -> None:

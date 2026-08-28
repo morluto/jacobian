@@ -77,8 +77,10 @@ source control.
 
 Run `uv run python -m deploy.smoke_remote <url>` against the private listener
 and public endpoint before directing traffic to the new artifact. The probe
-implementation lives in [`deploy/`](../../deploy/). Roll back by selecting the
-previous immutable artifact and rerunning the probe.
+implementation lives in [`deploy/`](../../deploy/). It validates discovery
+against the checkout's current typed response model and requires the text and
+structured MCP projections to agree. Roll back by selecting the previous
+immutable artifact and rerunning the probe.
 
 When moving hosts, provision the same pinned artifact, transfer operator-owned
 configuration and secrets, run the probes, and move traffic.

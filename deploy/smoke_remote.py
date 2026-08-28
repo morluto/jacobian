@@ -10,19 +10,20 @@ import os
 from typing import Any
 
 import httpx2
-from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import Implementation, TextContent, TextResourceContents
 
-from .smoke import exit_for_smoke_failure, raise_for_http_error
 from jacobian import __version__
 from jacobian.canonical import canonicalize_json
+from jacobian.mcp.models import OperationFindResponse, OperationSearchResult
+from mcp import Client
+
+from .smoke import exit_for_smoke_failure, raise_for_http_error
 
 REQUIRED_TOOLS = {
     "math.find",
     "math.run",
 }
-DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384
 
 
 def _require_server_info(server_info: Implementation | None) -> Implementation:
@@ -101,6 +102,31 @@ def _validate_server_version(
         )
 
 
+def _validate_discovery_response(
+    discovery: dict[str, Any],
+    discovery_text: str,
+    failures: list[str],
+) -> tuple[str, ...]:
+    try:
+        response = OperationFindResponse.model_validate(discovery)
+    except ValueError as exc:
+        failures.append(f"deployed operation discovery violates its schema: {exc}")
+        return ()
+    if not isinstance(response.root, OperationSearchResult):
+        failures.append("deployed operation search returned a non-search response")
+        return ()
+    try:
+        model_visible = json.loads(discovery_text)
+    except json.JSONDecodeError as exc:
+        failures.append(f"deployed operation discovery text is not JSON: {exc}")
+        return ()
+    if model_visible != discovery:
+        failures.append(
+            "deployed operation discovery text and structured content disagree"
+        )
+    return tuple(match.operation_id for match in response.root.matches)
+
+
 async def inspect(
     *,
     url: str,
@@ -172,10 +198,11 @@ async def inspect(
             json.dumps(discovery, ensure_ascii=False, indent=2).encode("utf-8")
         )
         discovery_model_visible_bytes = len(discovery_text.encode("utf-8"))
-        if discovery["response_byte_limit"] != DISCOVERY_RESPONSE_BYTE_LIMIT:
-            failures.append("deployed discovery byte limit does not match the contract")
-        if discovery_bytes > DISCOVERY_RESPONSE_BYTE_LIMIT:
-            failures.append("deployed discovery response exceeds its byte limit")
+        discovery_matches = _validate_discovery_response(
+            discovery,
+            discovery_text,
+            failures,
+        )
 
         report = {
             "url": url,
@@ -192,7 +219,7 @@ async def inspect(
             "discovery": {
                 "bytes": discovery_bytes,
                 "model_visible_bytes": discovery_model_visible_bytes,
-                "matches": [match["operation_id"] for match in discovery["matches"]],
+                "matches": list(discovery_matches),
             },
         }
     if failures:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.canonical import parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH
 from jacobian.math.crossed_products.values import (
     MAX_EXPONENT_DIGITS,
@@ -15,6 +16,14 @@ MAX_CONVOLUTION_PAIRS = 1_024
 MAX_MULTIPLICATION_SCALAR_WORK = 80_000
 MAX_COEFFICIENT_INTERMEDIATE_DIGITS = 19
 MAX_SERIALIZED_RESULT_BYTES = 10 * 1024 * 1024
+
+
+def _reject(*, location: tuple[str, ...], code: str, message: str) -> None:
+    raise OperationDomainValidationError(
+        location=location,
+        code=f"crossed_product.{code}",
+        message=message,
+    )
 
 
 def _maximum_absolute(values: tuple[int, ...]) -> int:
@@ -66,25 +75,40 @@ def require_multiplication_budget(
     """Preflight all work, intermediate, support, exponent, and output bounds."""
 
     if left.presentation != right.presentation:
-        raise ValueError("crossed-product operands must have the same presentation")
+        _reject(
+            location=("left", "right"),
+            code="presentation_mismatch",
+            message="crossed-product operands must have the same presentation",
+        )
 
     pair_count = len(left.terms) * len(right.terms)
     if pair_count > MAX_CONVOLUTION_PAIRS:
-        raise ValueError(
-            "operand supports exceed the 1024-pair sparse convolution budget"
+        _reject(
+            location=("left", "right"),
+            code="convolution_work_bound",
+            message=(
+                f"operand supports exceed the {MAX_CONVOLUTION_PAIRS}-pair "
+                "sparse convolution budget"
+            ),
         )
 
     dimension = left.presentation.lattice_rank
     scalar_work = pair_count * (dimension**2 + 3 * dimension + 1)
     if scalar_work > MAX_MULTIPLICATION_SCALAR_WORK:
-        raise ValueError(
-            "crossed-product multiplication exceeds its scalar-work budget"
+        _reject(
+            location=("left", "right"),
+            code="scalar_work_bound",
+            message="crossed-product multiplication exceeds its scalar-work budget",
         )
 
     characteristic = left.presentation.characteristic
     coefficient_intermediate = (characteristic - 1) ** 2 + characteristic - 1
     if len(str(coefficient_intermediate)) > MAX_COEFFICIENT_INTERMEDIATE_DIGITS:
-        raise ValueError("coefficient accumulation exceeds its exact-integer bound")
+        _reject(
+            location=("left", "right"),
+            code="coefficient_growth_bound",
+            message="coefficient accumulation exceeds its exact-integer bound",
+        )
 
     if pair_count:
         left_height = _maximum_absolute(
@@ -123,8 +147,13 @@ def require_multiplication_budget(
             left_height + dimension * action_height * right_height + cocycle_height
         )
         if len(str(exponent_height)) > MAX_EXPONENT_DIGITS:
-            raise ValueError(
-                "predicted product exponents exceed the 64-digit carrier bound"
+            _reject(
+                location=("left", "right"),
+                code="exponent_growth_bound",
+                message=(
+                    f"predicted product exponents exceed the {MAX_EXPONENT_DIGITS}-digit "
+                    "carrier bound"
+                ),
             )
 
     # Every input pair contributes to at most one support key, so pair_count is
@@ -132,8 +161,13 @@ def require_multiplication_budget(
     # presentations and every source/product term.
     serialized_bound = _result_serialized_upper_bound(left, right, pair_count)
     if serialized_bound > MAX_SERIALIZED_RESULT_BYTES:
-        raise ValueError(
-            "predicted source-bound result exceeds the 10 MiB output bound"
+        _reject(
+            location=("left", "right"),
+            code="result_size_bound",
+            message=(
+                "predicted source-bound result exceeds the "
+                f"{MAX_SERIALIZED_RESULT_BYTES}-byte output bound"
+            ),
         )
 
 

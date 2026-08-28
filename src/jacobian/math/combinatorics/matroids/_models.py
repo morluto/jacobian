@@ -166,15 +166,16 @@ class MatroidClosureResult(MatroidClosureRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: MatroidClosureRequest,
+        matroid: LinearMatroid,
+        subset: tuple[int, ...],
         closure: tuple[int, ...],
         rank: int,
     ) -> Self:
         """Construct trusted output of the owner-local closure kernel."""
 
         return cls.model_construct(
-            matroid=request.matroid,
-            subset=request.subset,
+            matroid=matroid,
+            subset=subset,
             closure=closure,
             rank=rank,
         )

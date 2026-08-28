@@ -5,7 +5,6 @@ from __future__ import annotations
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.matroids._models import (
     LinearMatroid,
-    MatroidClosureRequest,
     MatroidClosureResult,
     validate_subset_indices,
 )
@@ -60,29 +59,35 @@ def _closure_invariant(
 
 
 def matroid_closure(
-    matroid: LinearMatroid, subset: list[int]
+    matroid: LinearMatroid, subset: list[int] | tuple[int, ...]
 ) -> tuple[tuple[int, ...], int]:
     """Public native entry: exact closure and subset rank.
 
     Applies the same subset admission as the wire request so negative or
     out-of-range indices never reach the kernel through Python indexing.
     """
-    validate_subset_indices(matroid, subset)
-    return _closure_invariant(matroid, subset)
-
-
-def compute_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
-    """Compute the closure for the catalog's typed request."""
-
+    canonical_subset = tuple(subset)
     try:
-        closure, subset_rank = matroid_closure(request.matroid, list(request.subset))
+        validate_subset_indices(matroid, list(canonical_subset))
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("subset",),
             code="matroid.subset.invalid",
             message=str(exc),
         ) from exc
-    return MatroidClosureResult._from_kernel(request, closure, subset_rank)
+    return _closure_invariant(matroid, list(canonical_subset))
 
 
-__all__ = ["compute_closure", "matroid_closure", "matroid_rank"]
+def closure_result(
+    matroid: LinearMatroid, subset: list[int] | tuple[int, ...]
+) -> MatroidClosureResult:
+    """Return the canonical source-bound closure result."""
+
+    canonical_subset = tuple(subset)
+    closure, subset_rank = matroid_closure(matroid, canonical_subset)
+    return MatroidClosureResult._from_kernel(
+        matroid, canonical_subset, closure, subset_rank
+    )
+
+
+__all__ = ["closure_result", "matroid_closure", "matroid_rank"]

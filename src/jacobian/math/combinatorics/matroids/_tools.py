@@ -8,7 +8,11 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidClosureRequest,
     MatroidClosureResult,
 )
-from jacobian.math.combinatorics.matroids.operations import compute_closure
+from jacobian.math.combinatorics.matroids.operations import closure_result
+
+
+def _run_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
+    return closure_result(request.matroid, request.subset)
 
 _CLOSURE_EXAMPLE: dict[str, Any] = {
     "matroid": {
@@ -32,7 +36,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=MatroidClosureRequest,
         result_type=MatroidClosureResult,
-        run=compute_closure,
+        run=_run_closure,
         tags=("matroid", "closure", "flat", "exact"),
         examples=(
             example(

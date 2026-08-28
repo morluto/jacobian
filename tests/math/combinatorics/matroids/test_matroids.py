@@ -15,7 +15,11 @@ from jacobian.math.combinatorics.matroids import (
     matroid_rank,
 )
 from jacobian.math.combinatorics.matroids._models import MatroidClosureRequest
-from jacobian.math.combinatorics.matroids.operations import compute_closure
+from jacobian.math.combinatorics.matroids.operations import closure_result
+
+
+def compute_closure(request: MatroidClosureRequest):
+    return closure_result(request.matroid, request.subset)
 
 
 class _PrimeFieldMatrixPayload(TypedDict):

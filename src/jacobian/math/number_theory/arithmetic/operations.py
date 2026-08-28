@@ -146,16 +146,32 @@ def continued_fraction(
 ) -> tuple[int, ...]:
     """Return the canonical finite simple continued fraction of a rational."""
 
-    from sympy import Rational as SympyRational
-    from sympy import continued_fraction as sympy_continued_fraction
+    return _continued_fraction_terms(_as_rational(value))
 
-    rational = _as_rational(value)
-    return tuple(
-        int(term)
-        for term in sympy_continued_fraction(
-            SympyRational(rational.numerator, rational.denominator)
-        )
-    )
+
+def _continued_fraction_terms(
+    rational: Fraction,
+    *,
+    max_terms: int | None = None,
+) -> tuple[int, ...]:
+    """Expand one rational, stopping before a bounded result would overflow."""
+
+    numerator = rational.numerator
+    denominator = rational.denominator
+    terms: list[int] = []
+    while denominator:
+        quotient, remainder = divmod(numerator, denominator)
+        if max_terms is not None and len(terms) == max_terms:
+            raise OperationDomainValidationError(
+                location=("value",),
+                code="arithmetic.continued_fraction_terms_exceed_limit",
+                message=(
+                    f"continued fraction exceeds the {max_terms}-term result bound"
+                ),
+            )
+        terms.append(quotient)
+        numerator, denominator = denominator, remainder
+    return tuple(terms)
 
 
 def equal_rationals(

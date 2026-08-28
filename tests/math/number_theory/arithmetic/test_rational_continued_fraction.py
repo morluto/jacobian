@@ -6,8 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.arithmetic._operations import continued_fraction
 from jacobian.math.number_theory.arithmetic._rational_models import (
+    MAX_RATIONAL_CONTINUED_FRACTION_TERMS,
     RationalContinuedFractionResult,
     RationalValueRequest,
 )
@@ -75,4 +77,24 @@ def test_result_rejects_terms_for_a_different_rational() -> None:
     assert (
         exc_info.value.errors()[0]["type"]
         == "arithmetic.continued_fraction_reconstruction"
+    )
+
+
+def test_producer_rejects_expansion_beyond_result_term_bound() -> None:
+    previous, current = 0, 1
+    for _ in range(MAX_RATIONAL_CONTINUED_FRACTION_TERMS + 2):
+        previous, current = current, previous + current
+
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        continued_fraction(_request(str(current), str(previous)))
+
+    assert exc_info.value.errors() == (
+        {
+            "loc": ("value",),
+            "type": "arithmetic.continued_fraction_terms_exceed_limit",
+            "msg": (
+                "continued fraction exceeds the "
+                f"{MAX_RATIONAL_CONTINUED_FRACTION_TERMS}-term result bound"
+            ),
+        },
     )

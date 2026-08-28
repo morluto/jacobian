@@ -4,8 +4,11 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory import arithmetic
+from jacobian.math.number_theory.arithmetic._operations import product
+from jacobian.math.number_theory.arithmetic._rational_models import RationalPairRequest
 from jacobian.math.number_theory.arithmetic._rationals import RATIONAL_OPERATIONS
 
 
@@ -130,6 +133,22 @@ def test_complete_native_rational_arithmetic() -> None:
     assert arithmetic.continued_fraction(left) == (-3, 1, 2)
     assert arithmetic.equal_rationals(left, Fraction(-7, 3)) is True
     assert arithmetic.less_than_rationals(left, right) is True
+
+
+def test_published_product_rejects_unrepresentable_exact_result() -> None:
+    left_denominator = "1" + "0" * (MAX_CANONICAL_RATIONAL_DIGITS - 1)
+    right_denominator = "9" * MAX_CANONICAL_RATIONAL_DIGITS
+    request = RationalPairRequest(
+        left=CanonicalRational(num="1", den=left_denominator),
+        right=CanonicalRational(num="1", den=right_denominator),
+    )
+
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        product(request)
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "arithmetic.rational_result_exceeds_component_bound"
+    )
 
 
 def test_all_fourteen_rational_operations_are_published() -> None:

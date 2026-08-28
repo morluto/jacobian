@@ -11,7 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel
 
-_MAX_CONTINUED_FRACTION_TERMS = 1_024
+MAX_RATIONAL_CONTINUED_FRACTION_TERMS = 1_024
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -89,7 +89,7 @@ class RationalContinuedFractionResult(StrictModel):
     value: CanonicalRational
     terms: tuple[CanonicalInteger, ...] = Field(
         min_length=1,
-        max_length=_MAX_CONTINUED_FRACTION_TERMS,
+        max_length=MAX_RATIONAL_CONTINUED_FRACTION_TERMS,
     )
 
     @model_validator(mode="after")

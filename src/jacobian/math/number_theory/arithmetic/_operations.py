@@ -15,7 +15,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Literal
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory import arithmetic as native_arithmetic
@@ -28,6 +28,7 @@ from jacobian.math.number_theory.arithmetic._models import (
     IntegerSignResult,
 )
 from jacobian.math.number_theory.arithmetic._rational_models import (
+    MAX_RATIONAL_CONTINUED_FRACTION_TERMS,
     NonzeroRationalValueRequest,
     RationalComparisonResult,
     RationalContinuedFractionResult,
@@ -36,6 +37,9 @@ from jacobian.math.number_theory.arithmetic._rational_models import (
     RationalPairRequest,
     RationalValueRequest,
     RationalValueResult,
+)
+from jacobian.math.number_theory.arithmetic.operations import (
+    _continued_fraction_terms,
 )
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
@@ -127,10 +131,28 @@ def _fraction(value: CanonicalRational) -> Fraction:
     return value.as_fraction()
 
 
-def _wire(value: Fraction) -> CanonicalRational:
+def _wire(
+    value: Fraction,
+    *,
+    location: tuple[str | int, ...] = ("value",),
+) -> CanonicalRational:
+    numerator = format_canonical_integer(value.numerator)
+    denominator = format_canonical_integer(value.denominator)
+    if (
+        len(numerator.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
+        or len(denominator) > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise OperationDomainValidationError(
+            location=location,
+            code="arithmetic.rational_result_exceeds_component_bound",
+            message=(
+                "exact rational result exceeds the "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit component bound"
+            ),
+        )
     return CanonicalRational(
-        num=format_canonical_integer(value.numerator),
-        den=format_canonical_integer(value.denominator),
+        num=numerator,
+        den=denominator,
     )
 
 
@@ -156,7 +178,8 @@ def sum_rationals(request: RationalPairRequest) -> RationalValueResult:
         value=_wire(
             native_arithmetic.sum_rationals(
                 _fraction(request.left), _fraction(request.right)
-            )
+            ),
+            location=("left", "right"),
         )
     )
 
@@ -166,7 +189,8 @@ def difference(request: RationalPairRequest) -> RationalValueResult:
         value=_wire(
             native_arithmetic.difference_rationals(
                 _fraction(request.left), _fraction(request.right)
-            )
+            ),
+            location=("left", "right"),
         )
     )
 
@@ -176,7 +200,8 @@ def product(request: RationalPairRequest) -> RationalValueResult:
         value=_wire(
             native_arithmetic.product_rationals(
                 _fraction(request.left), _fraction(request.right)
-            )
+            ),
+            location=("left", "right"),
         )
     )
 
@@ -185,7 +210,7 @@ def quotient(request: RationalDivisionRequest) -> RationalValueResult:
     value = native_arithmetic.quotient(
         _fraction(request.left), _fraction(request.right)
     )
-    return RationalValueResult(value=_wire(value))
+    return RationalValueResult(value=_wire(value, location=("left", "right")))
 
 
 def minimum(request: RationalPairRequest) -> RationalValueResult:
@@ -227,7 +252,10 @@ def ceiling(request: RationalValueRequest) -> RationalIntegerResult:
 def continued_fraction(
     request: RationalValueRequest,
 ) -> RationalContinuedFractionResult:
-    terms = native_arithmetic.continued_fraction(_fraction(request.value))
+    terms = _continued_fraction_terms(
+        _fraction(request.value),
+        max_terms=MAX_RATIONAL_CONTINUED_FRACTION_TERMS,
+    )
     return RationalContinuedFractionResult._from_kernel(
         value=request.value,
         terms=tuple(format_canonical_integer(int(term)) for term in terms),

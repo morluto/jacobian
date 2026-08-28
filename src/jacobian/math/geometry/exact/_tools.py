@@ -13,7 +13,7 @@ from jacobian.math.geometry.exact._models import (
     PinnedLineDistanceRequest,
     PinnedLineDistanceResult,
 )
-from jacobian.math.geometry.exact._operations import (
+from jacobian.math.geometry.exact.operations import (
     compute_distance_graph,
     compute_distance_profile,
     compute_pinned_line_distance_profile,

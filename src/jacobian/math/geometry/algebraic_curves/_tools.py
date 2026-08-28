@@ -16,7 +16,7 @@ from jacobian.math.geometry.algebraic_curves._models import (
     RationalConicParametrizationRequest,
     RationalConicParametrizationResult,
 )
-from jacobian.math.geometry.algebraic_curves._operations import (
+from jacobian.math.geometry.algebraic_curves.operations import (
     compute_affine_chart,
     compute_affine_curve_check,
     compute_projective_closure,

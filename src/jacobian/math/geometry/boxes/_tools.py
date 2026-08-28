@@ -7,7 +7,7 @@ from jacobian.math.geometry.boxes._models import (
     BoxUnionVolumeRequest,
     BoxUnionVolumeResult,
 )
-from jacobian.math.geometry.boxes._operations import _box_union_volume_from_request
+from jacobian.math.geometry.boxes.operations import _box_union_volume_from_request
 
 TOOLS: MathTools = (
     geometry_operation(

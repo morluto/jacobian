@@ -18,7 +18,7 @@ from jacobian.math.geometry.exact._models import (
     PinnedLinePoint,
     PointConfiguration,
 )
-from jacobian.math.geometry.exact._operations import (
+from jacobian.math.geometry.exact.operations import (
     compute_distance_graph,
     compute_distance_profile,
     compute_pinned_line_distance_profile,
@@ -190,7 +190,7 @@ class TestPinnedLineDistance:
         from jacobian.math.geometry.exact._models import (
             PinnedLineDistanceRequest,
         )
-        from jacobian.math.geometry.exact._operations import (
+        from jacobian.math.geometry.exact.operations import (
             compute_pinned_line_distance_profile,
         )
 
@@ -215,7 +215,7 @@ class TestPinnedLineDistance:
         from jacobian.math.geometry.exact._models import (
             PinnedLineDistanceRequest,
         )
-        from jacobian.math.geometry.exact._operations import (
+        from jacobian.math.geometry.exact.operations import (
             compute_pinned_line_distance_profile,
         )
 
@@ -239,7 +239,7 @@ class TestPinnedLineDistance:
         from jacobian.math.geometry.exact._models import (
             PinnedLineDistanceRequest,
         )
-        from jacobian.math.geometry.exact._operations import (
+        from jacobian.math.geometry.exact.operations import (
             compute_pinned_line_distance_profile,
         )
 
@@ -259,7 +259,7 @@ class TestPinnedLineDistance:
         from jacobian.math.geometry.exact._models import (
             PinnedLineDistanceRequest,
         )
-        from jacobian.math.geometry.exact._operations import (
+        from jacobian.math.geometry.exact.operations import (
             compute_pinned_line_distance_profile,
         )
 
@@ -313,7 +313,7 @@ class TestPinnedLineDistance:
             PinnedLineDistanceRequest,
             PinnedLineDistanceResult,
         )
-        from jacobian.math.geometry.exact._operations import (
+        from jacobian.math.geometry.exact.operations import (
             compute_pinned_line_distance_profile,
         )
 
@@ -571,7 +571,7 @@ class TestPinnedLineDistance:
             MAX_PINNED_PROFILE_RESULT_BYTES,
             _maximum_pinned_profile_wire_bytes,
         )
-        from jacobian.math.geometry.exact._operations import (
+        from jacobian.math.geometry.exact.operations import (
             compute_pinned_line_distance_profile,
         )
 
@@ -616,7 +616,7 @@ class TestCanonicalPointValueComposition:
         )
 
     def test_every_surviving_operation_accepts_canonical_configuration(self) -> None:
-        from jacobian.math.geometry.exact._operations import (
+        from jacobian.math.geometry.exact.operations import (
             compute_pinned_line_distance_profile,
         )
 
@@ -648,7 +648,7 @@ class TestCanonicalPointValueComposition:
     def test_retained_configuration_feeds_sibling_operations_unchanged(self) -> None:
         """A producer's retained configuration is the canonical domain value,
         so consumers accept it without translation through a second type."""
-        from jacobian.math.geometry.exact._operations import (
+        from jacobian.math.geometry.exact.operations import (
             compute_pinned_line_distance_profile,
         )
 
@@ -848,7 +848,7 @@ class TestAggregatePairLedgerBound:
             PinnedLineDistanceResult,
             PointConfiguration,
         )
-        from jacobian.math.geometry.exact._operations import (
+        from jacobian.math.geometry.exact.operations import (
             compute_pinned_line_distance_profile,
         )
 
@@ -887,7 +887,7 @@ class TestSortedPairLedger:
         from jacobian.math.geometry.exact._models import (
             PinnedLineDistanceRequest,
         )
-        from jacobian.math.geometry.exact._operations import (
+        from jacobian.math.geometry.exact.operations import (
             compute_pinned_line_distance_profile,
         )
 

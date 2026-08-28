@@ -5,7 +5,7 @@ from jacobian.math.geometry.boxes._models import (
     BoxIntersectionLedgerEntry,
     BoxUnionVolumeResult,
 )
-from jacobian.math.geometry.boxes._operations import compute_box_union_volume
+from jacobian.math.geometry.boxes.operations import compute_box_union_volume
 from jacobian.math.geometry.boxes.values import RationalAxisAlignedBox
 
 __all__ = [

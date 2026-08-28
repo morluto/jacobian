@@ -1,4 +1,4 @@
-"""Exact operations on finite families of rational boxes."""
+"""Exact native operations on finite families of rational boxes."""
 
 from __future__ import annotations
 
@@ -61,10 +61,7 @@ def _digit_bounds(
             len(value) for value in {endpoint.den for endpoint in endpoints}
         )
     union_numerator_digits = (
-        volume_numerator_digits
-        + common_denominator_digits
-        + len(str(candidate_count))
-        + 2
+        volume_numerator_digits + common_denominator_digits + len(str(candidate_count)) + 2
     )
     union_denominator_digits = common_denominator_digits + 1
     return (
@@ -166,11 +163,8 @@ def _admit(source: BoxUnionVolumeRequest) -> None:
         ) from exc
 
 
-def _union_volume_from_source(
-    source: BoxUnionVolumeRequest,
-) -> BoxUnionVolumeResult:
-    """Compute the complete ledger for one already-admitted box family."""
-
+def _union_volume_from_source(source: BoxUnionVolumeRequest) -> BoxUnionVolumeResult:
+    """Compute the complete ledger for one admitted box family."""
     _admit(source)
     records, union_volume = complete_intersection_ledger(source.boxes)
     return BoxUnionVolumeResult._from_kernel(
@@ -190,20 +184,14 @@ def _union_volume_from_source(
 def compute_box_union_volume(
     boxes: tuple[RationalAxisAlignedBox, ...],
 ) -> BoxUnionVolumeResult:
-    """Return exact union volume and the complete inclusion-exclusion ledger.
-
-    Accepts the canonical ordered ``RationalAxisAlignedBox`` family and admits
-    it against the published box-union execution envelope before computing.
-    """
-
+    """Return exact union volume and the complete inclusion-exclusion ledger."""
     return _union_volume_from_source(BoxUnionVolumeRequest(boxes=boxes))
 
 
 def _box_union_volume_from_request(
     request: BoxUnionVolumeRequest,
 ) -> BoxUnionVolumeResult:
-    """Run one parsed catalog request without reconstructing admission."""
-
+    """Run one parsed catalog request."""
     return _union_volume_from_source(request)
 
 

@@ -239,7 +239,7 @@ def test_native_call_admits_the_family_before_the_kernel() -> None:
 def test_math_tool_consumes_parsed_request_without_reconstruction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import jacobian.math.geometry.boxes._operations as operations
+    import jacobian.math.geometry.boxes.operations as operations
     from jacobian.math.geometry.boxes._tools import TOOLS
 
     tool = next(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -187,36 +186,6 @@ class RationalCoordinateVector(StrictModel):
         return self
 
 
-def evaluate_rational_quadratic_form(
-    form: RationalQuadraticForm,
-    vector: RationalCoordinateVector,
-) -> Fraction:
-    """Evaluate one form at an axis-matched rational vector exactly."""
-
-    if vector.axis != form.axis:
-        raise ValueError("vector axis must equal the quadratic-form axis")
-    require_evaluation_budget(form, vector)
-    coordinates = tuple(value.as_fraction() for value in vector.coordinates)
-    value = sum(
-        (
-            coefficient.as_fraction() * coordinate * coordinate
-            for coefficient, coordinate in zip(
-                form.diagonal_coefficients, coordinates, strict=True
-            )
-        ),
-        Fraction(),
-    )
-    return value + sum(
-        (
-            term.coefficient.as_fraction()
-            * coordinates[term.left]
-            * coordinates[term.right]
-            for term in form.cross_terms
-        ),
-        Fraction(),
-    )
-
-
 def require_evaluation_budget(
     form: RationalQuadraticForm,
     vector: RationalCoordinateVector,
@@ -309,6 +278,5 @@ __all__ = [
     "QuadraticCrossTerm",
     "RationalCoordinateVector",
     "RationalQuadraticForm",
-    "evaluate_rational_quadratic_form",
     "require_evaluation_budget",
 ]

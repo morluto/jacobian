@@ -17,10 +17,10 @@ from jacobian.math.number_theory.quadratic_forms.general._models import (
     EvaluationRequest,
     EvaluationResult,
 )
-from jacobian.math.number_theory.quadratic_forms.general._operations import (
+from jacobian.math.number_theory.quadratic_forms.general._tools import (
+    TOOLS,
     evaluate_form,
 )
-from jacobian.math.number_theory.quadratic_forms.general._tools import TOOLS
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
     MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS,

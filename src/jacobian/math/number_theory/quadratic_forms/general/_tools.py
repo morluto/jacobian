@@ -6,8 +6,8 @@ from jacobian.math.number_theory.quadratic_forms.general._models import (
     EvaluationRequest,
     EvaluationResult,
 )
-from jacobian.math.number_theory.quadratic_forms.general._operations import (
-    evaluate_form,
+from jacobian.math.number_theory.quadratic_forms.general.operations import (
+    evaluate_rational_quadratic_form,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
@@ -16,6 +16,13 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
     MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS,
 )
+
+
+def evaluate_form(request: EvaluationRequest) -> EvaluationResult:
+    return EvaluationResult._from_kernel(
+        request,
+        value=evaluate_rational_quadratic_form(request.form, request.vector),
+    )
 
 TOOLS = (
     MathTool(

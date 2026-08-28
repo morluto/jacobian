@@ -12,7 +12,7 @@ from jacobian.math.analysis.approximation._models import (
     LagrangeInterpolationRequest,
     LagrangeInterpolationResult,
 )
-from jacobian.math.analysis.approximation._operations import (
+from jacobian.math.analysis.approximation.operations import (
     compute_lagrange_basis,
     compute_lagrange_interpolation,
 )

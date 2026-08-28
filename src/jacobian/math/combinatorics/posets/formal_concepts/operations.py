@@ -6,7 +6,19 @@ from typing import TypedDict
 
 from jacobian.canonical import encode_strict_json
 
-from ._models import MAX_CONCEPTS, ConceptLatticeResult, ConceptResult
+from ._models import (
+    MAX_CONCEPTS,
+    AttributeSubsetRequest,
+    ClosureResult,
+    ConceptLatticeResult,
+    ConceptResult,
+    DerivationResult,
+    DuquenneGuiguesBasisRequest,
+    EnumerateConceptsRequest,
+    EnumerateConceptsResult,
+    ImplicationClosureRequest,
+    ObjectSubsetRequest,
+)
 from .basis import (
     CanonicalImplicationBasisResult,
     DGBasisClosureRow,
@@ -29,6 +41,16 @@ __all__ = [
     "MAX_CONCEPTS",
     "attribute_closure",
     "attribute_derivation",
+    "compute_attribute_closure",
+    "compute_attribute_derivation",
+    "compute_concept_from_attributes",
+    "compute_concept_from_objects",
+    "compute_concept_lattice",
+    "compute_duquenne_guigues_basis",
+    "compute_enumerate_concepts",
+    "compute_implication_closure",
+    "compute_object_closure",
+    "compute_object_derivation",
     "concept_family_size_capped",
     "concept_from_attributes",
     "concept_from_objects",
@@ -482,3 +504,82 @@ def _concept_lattice_from_concepts(
         top=top,
         bottom=bottom,
     )
+
+
+def compute_object_derivation(request: ObjectSubsetRequest) -> DerivationResult:
+    return DerivationResult(
+        derived=tuple(
+            sorted(object_derivation(request.context, frozenset(request.subset)))
+        )
+    )
+
+
+def compute_attribute_derivation(
+    request: AttributeSubsetRequest,
+) -> DerivationResult:
+    return DerivationResult(
+        derived=tuple(
+            sorted(attribute_derivation(request.context, frozenset(request.subset)))
+        )
+    )
+
+
+def compute_object_closure(request: ObjectSubsetRequest) -> ClosureResult:
+    objects = frozenset(request.subset)
+    derived = object_derivation(request.context, objects)
+    closure = object_closure(request.context, objects)
+    return ClosureResult(
+        closure=tuple(sorted(closure)),
+        derived=tuple(sorted(derived)),
+        added=tuple(sorted(closure - objects)),
+        is_closed=closure == objects,
+    )
+
+
+def compute_attribute_closure(request: AttributeSubsetRequest) -> ClosureResult:
+    attributes = frozenset(request.subset)
+    derived = attribute_derivation(request.context, attributes)
+    closure = attribute_closure(request.context, attributes)
+    return ClosureResult(
+        closure=tuple(sorted(closure)),
+        derived=tuple(sorted(derived)),
+        added=tuple(sorted(closure - attributes)),
+        is_closed=closure == attributes,
+    )
+
+
+def compute_implication_closure(
+    request: ImplicationClosureRequest,
+) -> ImplicationClosureResult:
+    return implication_closure(request.system, frozenset(request.seed))
+
+
+def compute_duquenne_guigues_basis(
+    request: DuquenneGuiguesBasisRequest,
+) -> CanonicalImplicationBasisResult:
+    return duquenne_guigues_basis(request.context)
+
+
+def compute_concept_from_objects(request: ObjectSubsetRequest) -> ConceptResult:
+    return concept_from_objects(request.context, frozenset(request.subset))
+
+
+def compute_concept_from_attributes(request: AttributeSubsetRequest) -> ConceptResult:
+    return concept_from_attributes(request.context, frozenset(request.subset))
+
+
+def compute_enumerate_concepts(
+    request: EnumerateConceptsRequest,
+) -> EnumerateConceptsResult:
+    concepts = enumerate_concepts(request.context)
+    pairs = tuple(
+        (tuple(sorted(concept["extent"])), tuple(sorted(concept["intent"])))
+        for concept in concepts
+    )
+    return EnumerateConceptsResult(concepts=pairs, count=len(pairs))
+
+
+def compute_concept_lattice(
+    request: EnumerateConceptsRequest,
+) -> ConceptLatticeResult:
+    return concept_lattice(request.context)

@@ -18,7 +18,10 @@ from jacobian.math.combinatorics.posets.formal_concepts._models import (
     ImplicationClosureRequest,
     ObjectSubsetRequest,
 )
-from jacobian.math.combinatorics.posets.formal_concepts._operations import (
+from jacobian.math.combinatorics.posets.formal_concepts.basis import (
+    CanonicalImplicationBasisResult,
+)
+from jacobian.math.combinatorics.posets.formal_concepts.operations import (
     compute_attribute_derivation,
     compute_concept_from_attributes,
     compute_concept_from_objects,
@@ -28,9 +31,6 @@ from jacobian.math.combinatorics.posets.formal_concepts._operations import (
     compute_implication_closure,
     compute_object_closure,
     compute_object_derivation,
-)
-from jacobian.math.combinatorics.posets.formal_concepts.basis import (
-    CanonicalImplicationBasisResult,
 )
 from jacobian.math.combinatorics.posets.formal_concepts.values import (
     ImplicationClosureResult,

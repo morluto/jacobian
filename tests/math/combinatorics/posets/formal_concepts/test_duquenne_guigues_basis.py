@@ -15,15 +15,15 @@ from jacobian.math.combinatorics.posets.formal_concepts import (
 from jacobian.math.combinatorics.posets.formal_concepts._models import (
     DuquenneGuiguesBasisRequest,
 )
-from jacobian.math.combinatorics.posets.formal_concepts._operations import (
-    compute_duquenne_guigues_basis,
-)
 from jacobian.math.combinatorics.posets.formal_concepts.basis import (
     MAX_DG_ATTRIBUTES,
     MAX_DG_CANDIDATE_STATES,
     MAX_DG_LOGICAL_WORK,
     MAX_DG_RESULT_BYTES,
     _require_dg_canonical_carrier_fit,
+)
+from jacobian.math.combinatorics.posets.formal_concepts.operations import (
+    compute_duquenne_guigues_basis,
 )
 from jacobian.math.combinatorics.posets.formal_concepts.values import MAX_IMPLICATIONS
 

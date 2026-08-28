@@ -4,6 +4,7 @@ from typing import Any
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
+from jacobian.math.dynamics.symbolic import operations as native
 from jacobian.math.dynamics.symbolic._models import (
     ArtinMazurZetaRequest,
     ArtinMazurZetaResult,
@@ -15,14 +16,50 @@ from jacobian.math.dynamics.symbolic._models import (
     HigherBlockResult,
     PeriodicPointProfileRequest,
     PeriodicPointProfileResult,
+    _from_kernel_artin_mazur_zeta,
+    _from_kernel_block_language,
+    _from_kernel_finite_type_shift,
+    _from_kernel_higher_block,
+    _from_kernel_periodic_point_profile,
 )
-from jacobian.math.dynamics.symbolic._operations import (
-    compute_artin_mazur_zeta,
-    compute_block_language,
-    compute_higher_block,
-    compute_periodic_point_profile,
-    construct_finite_type_shift,
-)
+
+
+def compute_artin_mazur_zeta(
+    request: ArtinMazurZetaRequest,
+) -> ArtinMazurZetaResult:
+    determinant, zeta = native.artin_mazur_zeta(request.shift)
+    return _from_kernel_artin_mazur_zeta(request, determinant, zeta)
+
+
+def construct_finite_type_shift(
+    request: FiniteTypeShiftRequest,
+) -> FiniteTypeShiftResult:
+    return _from_kernel_finite_type_shift(
+        request,
+        native.finite_type_presentation(request.shift),
+        native.normalize_forbidden_blocks(request.shift),
+    )
+
+
+def compute_block_language(request: BlockLanguageRequest) -> BlockLanguageResult:
+    return _from_kernel_block_language(
+        request, native.block_language(request.shift, request.block_length)
+    )
+
+
+def compute_periodic_point_profile(
+    request: PeriodicPointProfileRequest,
+) -> PeriodicPointProfileResult:
+    fixed, exact, orbits = native.periodic_point_profile(
+        request.shift, request.max_period
+    )
+    return _from_kernel_periodic_point_profile(request, fixed, exact, orbits)
+
+
+def compute_higher_block(request: HigherBlockRequest) -> HigherBlockResult:
+    return _from_kernel_higher_block(
+        request, native.higher_block_presentation(request.shift, request.block_length)
+    )
 
 _GOLDEN_MEAN = {
     "alphabet": ["0", "1"],

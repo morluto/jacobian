@@ -6,16 +6,24 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.finite_categories import operations as native
 from jacobian.math.finite_categories._models import (
     CategoryProductRequest,
     CategoryProfileResult,
 )
-from jacobian.math.finite_categories._operations import (
-    compute_category_product,
-    compute_category_profile,
-    compute_opposite_category,
-)
 from jacobian.math.finite_categories.values import FiniteCategory, FiniteCategoryProduct
+
+
+def compute_category_profile(request: FiniteCategory) -> CategoryProfileResult:
+    return native.category_profile(request)
+
+
+def compute_opposite_category(request: FiniteCategory) -> FiniteCategory:
+    return native.opposite_category(request)
+
+
+def compute_category_product(request: CategoryProductRequest) -> FiniteCategoryProduct:
+    return native.product(request.left, request.right)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](

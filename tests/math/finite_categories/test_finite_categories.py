@@ -14,13 +14,13 @@ from jacobian.math.finite_categories import (
 from jacobian.math.finite_categories._models import (
     CategoryProductRequest,
 )
-from jacobian.math.finite_categories._operations import (
+from jacobian.math.finite_categories._product import (
+    _admit_product,
+)
+from jacobian.math.finite_categories._tools import (
     compute_category_product,
     compute_category_profile,
     compute_opposite_category,
-)
-from jacobian.math.finite_categories._product import (
-    _admit_product,
 )
 
 

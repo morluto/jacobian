@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.math.probability._distribution import (
     FiniteDistributionAtom,
     FiniteRationalDistribution,
+)
+from jacobian.math.probability.stochastic_processes._models import (
+    MAX_STOCHASTIC_VALUE_DIGITS,
 )
 from jacobian.math.probability.stochastic_processes._poisson_binomial_models import (
     _admit_probabilities,
@@ -112,6 +115,12 @@ def conditional_expectation(
     On each block, the conditional expectation is the probability-weighted
     average of X over the samples in that block.
     """
+    for value in rv.values:
+        require_bounded_rational(
+            value,
+            max_digits=MAX_STOCHASTIC_VALUE_DIGITS,
+            label="random-variable value",
+        )
     if rv.space != sigma.space:
         raise ValueError("random variable and sigma algebra must share the same space")
     idx = _index_of(rv.space)
@@ -165,6 +174,10 @@ def doob_martingale(
     The payoff is a rational-valued random variable. The result is one
     tuple of canonical rational values per time step.
     """
+    for value in payoff:
+        require_bounded_rational(
+            value, max_digits=MAX_STOCHASTIC_VALUE_DIGITS, label="payoff"
+        )
     if len(payoff) != len(space.samples):
         raise ValueError("payoff must have one entry per sample")
     sigmas = filtration_natural(space, observations)

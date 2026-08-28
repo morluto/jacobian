@@ -17,13 +17,13 @@ from jacobian.math.probability.stochastic_processes._models import (
     FiltrationRequest,
     FromObservationRequest,
 )
-from jacobian.math.probability.stochastic_processes._operations import (
+from jacobian.math.probability.stochastic_processes._tools import (
+    TOOLS,
     compute_conditional_expectation,
     compute_doob_martingale,
     compute_filtration,
     compute_sigma_from_observation,
 )
-from jacobian.math.probability.stochastic_processes._tools import TOOLS
 
 # ---------------------------------------------------------------------------
 # Helpers

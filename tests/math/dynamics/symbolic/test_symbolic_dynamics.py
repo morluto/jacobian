@@ -30,14 +30,14 @@ from jacobian.math.dynamics.symbolic._models import (
     HigherBlockResult,
     PeriodicPointProfileRequest,
 )
-from jacobian.math.dynamics.symbolic._operations import (
+from jacobian.math.dynamics.symbolic._tools import (
+    TOOLS,
     compute_artin_mazur_zeta,
     compute_block_language,
     compute_higher_block,
     compute_periodic_point_profile,
     construct_finite_type_shift,
 )
-from jacobian.math.dynamics.symbolic._tools import TOOLS
 
 
 def _golden_mean() -> ForbiddenBlockShift:

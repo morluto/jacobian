@@ -4,6 +4,11 @@ import pytest
 from pydantic import ValidationError
 from typing_extensions import TypedDict
 
+from jacobian.math.combinatorics.designs.latin_squares import (
+    is_latin_square,
+    orthogonality_profile,
+    transpose,
+)
 from jacobian.math.combinatorics.designs.latin_squares._models import (
     LatinSquare,
     LatinSquareCandidate,
@@ -11,12 +16,12 @@ from jacobian.math.combinatorics.designs.latin_squares._models import (
     OrthogonalityRequest,
     TransposeRequest,
 )
-from jacobian.math.combinatorics.designs.latin_squares._operations import (
+from jacobian.math.combinatorics.designs.latin_squares._tools import (
+    TOOLS,
     compute_latin_square_check,
     compute_latin_square_transpose,
     compute_orthogonality,
 )
-from jacobian.math.combinatorics.designs.latin_squares._tools import TOOLS
 
 
 class _RawSquare(TypedDict):
@@ -53,6 +58,7 @@ def test_latin_square_check_valid() -> None:
     request = LatinSquareRequest(square=_candidate_square(2, ((0, 1), (1, 0))))
     result = compute_latin_square_check(request)
     assert result.is_latin is True
+    assert is_latin_square(request.square)
 
 
 def test_latin_square_check_invalid() -> None:
@@ -84,6 +90,8 @@ def test_transpose() -> None:
     request = TransposeRequest(square=Z2)
     result = compute_latin_square_transpose(request)
     assert result.transposed == ((0, 1), (1, 0))
+    assert transpose(Z2) == result.transposed
+    assert orthogonality_profile(Z2, Z2) == (False, 2)
 
 
 def test_orthogonality_rejects_non_latin_square() -> None:

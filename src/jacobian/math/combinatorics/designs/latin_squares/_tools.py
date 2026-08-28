@@ -14,11 +14,31 @@ from jacobian.math.combinatorics.designs.latin_squares._models import (
     OrthogonalityResult,
     TransposeRequest,
 )
-from jacobian.math.combinatorics.designs.latin_squares._operations import (
-    compute_latin_square_check,
-    compute_latin_square_transpose,
-    compute_orthogonality,
+from jacobian.math.combinatorics.designs.latin_squares.operations import (
+    is_latin_square,
+    orthogonality_profile,
+    transpose,
 )
+
+
+def compute_latin_square_check(request: LatinSquareRequest) -> LatinSquareCheckResult:
+    return LatinSquareCheckResult(is_latin=is_latin_square(request.square))
+
+
+def compute_orthogonality(request: OrthogonalityRequest) -> OrthogonalityResult:
+    is_orthogonal, pair_count = orthogonality_profile(
+        request.square_a, request.square_b
+    )
+    return OrthogonalityResult(
+        is_orthogonal=is_orthogonal,
+        pair_count=pair_count,
+    )
+
+
+def compute_latin_square_transpose(
+    request: TransposeRequest,
+) -> LatinSquareTransposeResult:
+    return LatinSquareTransposeResult(transposed=transpose(request.square))
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](

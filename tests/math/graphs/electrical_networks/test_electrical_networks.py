@@ -14,7 +14,7 @@ from jacobian.math.graphs.electrical_networks._models import (
     LaplacianRequest,
     NodePotentialRequest,
 )
-from jacobian.math.graphs.electrical_networks._operations import (
+from jacobian.math.graphs.electrical_networks._tools import (
     compute_effective_resistance,
     compute_laplacian,
     compute_node_potentials,

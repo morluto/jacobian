@@ -44,14 +44,14 @@ from jacobian.math.logic.term_rewriting._models import (
     UnificationRequest,
     UnificationResult,
 )
-from jacobian.math.logic.term_rewriting._operations import (
+from jacobian.math.logic.term_rewriting._tools import TOOLS
+from jacobian.math.logic.term_rewriting.operations import (
     compute_critical_pairs,
     compute_normal_form,
     compute_rewrite_step,
     compute_substitution,
     compute_unification,
 )
-from jacobian.math.logic.term_rewriting._tools import TOOLS
 from jacobian.math.logic.term_rewriting.values import (
     MAX_CRITICAL_PAIR_CANDIDATES,
     MAX_CRITICAL_PAIR_RESULT_BYTES,

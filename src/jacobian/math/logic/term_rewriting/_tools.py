@@ -16,7 +16,7 @@ from jacobian.math.logic.term_rewriting._models import (
     UnificationRequest,
     UnificationResult,
 )
-from jacobian.math.logic.term_rewriting._operations import (
+from jacobian.math.logic.term_rewriting.operations import (
     compute_critical_pairs,
     compute_matching,
     compute_rewrite_step,

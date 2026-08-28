@@ -8,6 +8,8 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.additive._models import (
     _MAX_VECTOR_SET_SIZE,
+    AdditiveEnergyRequest,
+    AdditiveEnergyResult,
     DirectSumPredicateRequest,
     DirectSumPredicateResult,
     MultisetSumRepresentationProfileRequest,
@@ -17,12 +19,16 @@ from jacobian.math.combinatorics.additive._models import (
     RepresentationProfileRequest,
     RepresentationProfileResult,
     SubsetSumProfileRequest,
+    SumsetCardinalityRequest,
+    SumsetCardinalityResult,
 )
 from jacobian.math.combinatorics.additive._operations import (
+    compute_additive_energy,
     compute_multiset_sum_representation_profile,
     compute_ordered_difference_profile,
     compute_representation_profile,
     compute_subset_sum_profile,
+    compute_sumset_cardinality,
     decide_direct_sum_predicate,
 )
 from jacobian.math.combinatorics.additive._subset_sum_profile import (
@@ -167,6 +173,45 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "E(A,B)=6 is derivable from this profile."
                 ),
                 _REPRESENTATION_PROFILE_EXAMPLE,
+            ),
+        ),
+    ),
+    additive_combinatorics_operation(
+        "additive.energy.compute",
+        "Compute additive energy",
+        "Return the exact additive energy E(A,B) as the sum of squared "
+        "representation multiplicities, together with its decomposition by sum.",
+        AdditiveEnergyRequest,
+        AdditiveEnergyResult,
+        compute_additive_energy,
+        "additive-combinatorics",
+        "energy",
+        "sumset",
+        "exact",
+        examples=(
+            example(
+                "two_by_two_energy",
+                "For A={1,2} and B={3,4}, the representation multiplicities are 1,2,1 and the energy is 6.",
+                _ADDITIVE_ENERGY_EXAMPLE,
+            ),
+        ),
+    ),
+    additive_combinatorics_operation(
+        "additive.sumset_cardinality.compute",
+        "Compute sumset cardinality",
+        "Return the exact cardinality and sorted support of the sumset A+B.",
+        SumsetCardinalityRequest,
+        SumsetCardinalityResult,
+        compute_sumset_cardinality,
+        "additive-combinatorics",
+        "sumset",
+        "cardinality",
+        "exact",
+        examples=(
+            example(
+                "two_by_two_sumset",
+                "For A={0,1,2} and B={0,2}, return the five-element support of A+B.",
+                _SUMSET_CARDINALITY_EXAMPLE,
             ),
         ),
     ),

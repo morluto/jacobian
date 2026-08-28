@@ -9,12 +9,18 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.analysis.boolean.fourier._models import (
     ErasureNoiseRequest,
     ErasureNoiseResult,
+    FourierSpectrumRequest,
+    FourierSpectrumResult,
     MultilinearExtensionRequest,
     MultilinearExtensionResult,
+    TruthTableRequest,
+    TruthTableResult,
 )
 from jacobian.math.analysis.boolean.fourier._operations import (
     compute_erasure_noise,
+    compute_fourier_spectrum,
     compute_multilinear_extension,
+    compute_truth_table,
 )
 
 
@@ -48,6 +54,43 @@ def _z(n: str) -> dict[str, str]:
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    boolean_analysis_operation(
+        "boolean.truth_table.compute",
+        "Evaluate a Boolean function over all 2^n inputs",
+        "Return a complete Boolean truth table with its variable count and ordering convention.",
+        TruthTableRequest,
+        TruthTableResult,
+        compute_truth_table,
+        "boolean",
+        "truth-table",
+        "exact",
+        examples=(
+            example(
+                "single_variable",
+                "Return the truth table of a one-variable Boolean function.",
+                {"truth_table": [_z("0"), _z("1")]},
+            ),
+        ),
+    ),
+    boolean_analysis_operation(
+        "boolean.fourier_spectrum.compute",
+        "Compute a Boolean Fourier spectrum",
+        "Compute the exact Walsh-Hadamard spectrum of a Boolean function from its complete truth table.",
+        FourierSpectrumRequest,
+        FourierSpectrumResult,
+        compute_fourier_spectrum,
+        "boolean",
+        "fourier",
+        "walsh",
+        "exact",
+        examples=(
+            example(
+                "and_function",
+                "Compute the Walsh spectrum of the two-bit AND function.",
+                {"truth_table": [_z("0"), _z("0"), _z("0"), _z("1")]},
+            ),
+        ),
+    ),
     boolean_analysis_operation(
         "boolean.multilinear_extension.compute",
         "Compute the multilinear extension polynomial of a Boolean function",

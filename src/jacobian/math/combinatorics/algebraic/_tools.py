@@ -7,15 +7,24 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.algebraic._models import (
+    ConjugatePartitionRequest,
+    ConjugatePartitionResult,
+    HookLengthRequest,
+    HookLengthResult,
     RSKInverseWordRequest,
     RSKPermutationRequest,
     RSKResult,
     RSKWordRequest,
+    StandardYoungTableauCountRequest,
+    StandardYoungTableauCountResult,
 )
 from jacobian.math.combinatorics.algebraic._operations import (
+    compute_conjugate_partition,
+    compute_hook_lengths,
     compute_inverse_rsk_word,
     compute_rsk_permutation,
     compute_rsk_word,
+    compute_syt_count,
 )
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
 from jacobian.math.logic.languages.words.values import FiniteWord
@@ -46,6 +55,63 @@ def ac_operation[RequestT: StrictModel, ResultT: StrictModel](
 _PARTITION_321 = {"partition": {"parts": [3, 2, 1]}}
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    ac_operation(
+        "combinatorics.hook_length.compute",
+        "Compute hook lengths of a Young diagram",
+        "Compute the exact hook length of every cell in a Young diagram and "
+        "return their product.",
+        HookLengthRequest,
+        HookLengthResult,
+        compute_hook_lengths,
+        "combinatorics",
+        "young-diagram",
+        "hook-length",
+        "exact",
+        examples=(
+            example(
+                "partition_321",
+                "Compute hook lengths for partition (3,2,1).",
+                _PARTITION_321,
+            ),
+        ),
+    ),
+    ac_operation(
+        "combinatorics.standard_young_tableaux.count",
+        "Count standard Young tableaux",
+        "Count standard Young tableaux of a partition shape using the exact "
+        "hook-length formula.",
+        StandardYoungTableauCountRequest,
+        StandardYoungTableauCountResult,
+        compute_syt_count,
+        "combinatorics",
+        "young-tableaux",
+        "exact",
+        examples=(
+            example(
+                "partition_321",
+                "Count tableaux of partition (3,2,1).",
+                _PARTITION_321,
+            ),
+        ),
+    ),
+    ac_operation(
+        "combinatorics.conjugate_partition.compute",
+        "Compute a conjugate partition",
+        "Transpose the Ferrers diagram and return the exact conjugate partition.",
+        ConjugatePartitionRequest,
+        ConjugatePartitionResult,
+        compute_conjugate_partition,
+        "combinatorics",
+        "partition",
+        "exact",
+        examples=(
+            example(
+                "partition_321",
+                "Compute the conjugate of partition (3,2,1).",
+                _PARTITION_321,
+            ),
+        ),
+    ),
     ac_operation(
         "combinatorics.rsk.permutation.compute",
         "Compute RSK correspondence for a permutation",

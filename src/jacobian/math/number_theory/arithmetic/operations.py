@@ -2,17 +2,29 @@
 
 from collections.abc import Iterable
 from fractions import Fraction
-from math import gcd, lcm
+from math import ceil, floor, gcd, lcm
 from typing import SupportsIndex
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 __all__ = [
     "absolute_value",
+    "ceiling_rational",
+    "continued_fraction",
+    "difference_rationals",
+    "equal_rationals",
+    "floor_rational",
     "integerize_rational_vector",
+    "less_than_rationals",
+    "maximum_rational",
+    "minimum_rational",
+    "negate_rational",
     "primitive_integer_vector",
+    "product_rationals",
     "quotient",
+    "rational_absolute_value",
     "reciprocal",
     "sign",
     "sum_rationals",
@@ -53,7 +65,11 @@ def reciprocal(value: Fraction | int | IntegerValue) -> Fraction:
 
     rational = _as_rational(value)
     if not rational:
-        raise ZeroDivisionError("zero has no reciprocal")
+        raise OperationDomainValidationError(
+            location=("value",),
+            code="arithmetic.reciprocal_requires_nonzero",
+            message="reciprocal requires a nonzero rational",
+        )
     return 1 / rational
 
 
@@ -63,6 +79,101 @@ def sum_rationals(
     """Add two exact rational values."""
 
     return _as_rational(left) + _as_rational(right)
+
+
+def negate_rational(value: Fraction | int | IntegerValue) -> Fraction:
+    """Return the exact additive inverse of a rational value."""
+
+    return -_as_rational(value)
+
+
+def rational_absolute_value(value: Fraction | int | IntegerValue) -> Fraction:
+    """Return the exact absolute value of a rational value."""
+
+    return abs(_as_rational(value))
+
+
+def difference_rationals(
+    left: Fraction | int | IntegerValue,
+    right: Fraction | int | IntegerValue,
+) -> Fraction:
+    """Subtract two exact rational values."""
+
+    return _as_rational(left) - _as_rational(right)
+
+
+def product_rationals(
+    left: Fraction | int | IntegerValue,
+    right: Fraction | int | IntegerValue,
+) -> Fraction:
+    """Multiply two exact rational values."""
+
+    return _as_rational(left) * _as_rational(right)
+
+
+def minimum_rational(
+    left: Fraction | int | IntegerValue,
+    right: Fraction | int | IntegerValue,
+) -> Fraction:
+    """Return the lesser of two exact rational values."""
+
+    return min(_as_rational(left), _as_rational(right))
+
+
+def maximum_rational(
+    left: Fraction | int | IntegerValue,
+    right: Fraction | int | IntegerValue,
+) -> Fraction:
+    """Return the greater of two exact rational values."""
+
+    return max(_as_rational(left), _as_rational(right))
+
+
+def floor_rational(value: Fraction | int | IntegerValue) -> int:
+    """Return the greatest integer not exceeding an exact rational."""
+
+    return floor(_as_rational(value))
+
+
+def ceiling_rational(value: Fraction | int | IntegerValue) -> int:
+    """Return the least integer not below an exact rational."""
+
+    return ceil(_as_rational(value))
+
+
+def continued_fraction(
+    value: Fraction | int | IntegerValue,
+) -> tuple[int, ...]:
+    """Return the canonical finite simple continued fraction of a rational."""
+
+    from sympy import Rational as SympyRational
+    from sympy import continued_fraction as sympy_continued_fraction
+
+    rational = _as_rational(value)
+    return tuple(
+        int(term)
+        for term in sympy_continued_fraction(
+            SympyRational(rational.numerator, rational.denominator)
+        )
+    )
+
+
+def equal_rationals(
+    left: Fraction | int | IntegerValue,
+    right: Fraction | int | IntegerValue,
+) -> bool:
+    """Decide exact rational equality."""
+
+    return _as_rational(left) == _as_rational(right)
+
+
+def less_than_rationals(
+    left: Fraction | int | IntegerValue,
+    right: Fraction | int | IntegerValue,
+) -> bool:
+    """Decide strict order of two exact rational values."""
+
+    return _as_rational(left) < _as_rational(right)
 
 
 def integerize_rational_vector(
@@ -102,5 +213,9 @@ def quotient(
 
     divisor = _as_rational(right)
     if not divisor:
-        raise ZeroDivisionError("division by zero")
+        raise OperationDomainValidationError(
+            location=("right",),
+            code="arithmetic.division_requires_nonzero_divisor",
+            message="quotient requires a nonzero divisor",
+        )
     return _as_rational(left) / divisor

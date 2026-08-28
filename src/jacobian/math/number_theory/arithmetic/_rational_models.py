@@ -36,14 +36,6 @@ class NonzeroRationalValueRequest(StrictModel):
 
     value: CanonicalRational
 
-    @model_validator(mode="after")
-    def require_nonzero(self) -> Self:
-        if self.value.as_fraction() == 0:
-            raise _validation_error(
-                "reciprocal_requires_nonzero", "reciprocal requires a nonzero rational"
-            )
-        return self
-
 
 class RationalPairRequest(StrictModel):
     """Two canonical rationals supplied to a binary rational operation."""
@@ -57,15 +49,6 @@ class RationalDivisionRequest(StrictModel):
 
     left: CanonicalRational
     right: CanonicalRational
-
-    @model_validator(mode="after")
-    def require_nonzero_divisor(self) -> Self:
-        if self.right.as_fraction() == 0:
-            raise _validation_error(
-                "division_requires_nonzero_divisor",
-                "quotient requires a nonzero divisor",
-            )
-        return self
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,6 @@ SymPy provides a maintained implementation.
 
 from __future__ import annotations
 
-import math
 from fractions import Fraction
 from typing import Literal
 
@@ -141,11 +140,15 @@ def reciprocal(request: NonzeroRationalValueRequest) -> RationalValueResult:
 
 
 def negation(request: RationalValueRequest) -> RationalValueResult:
-    return RationalValueResult(value=_wire(-_fraction(request.value)))
+    return RationalValueResult(
+        value=_wire(native_arithmetic.negate_rational(_fraction(request.value)))
+    )
 
 
 def rational_absolute_value(request: RationalValueRequest) -> RationalValueResult:
-    return RationalValueResult(value=_wire(abs(_fraction(request.value))))
+    return RationalValueResult(
+        value=_wire(native_arithmetic.rational_absolute_value(_fraction(request.value)))
+    )
 
 
 def sum_rationals(request: RationalPairRequest) -> RationalValueResult:
@@ -160,13 +163,21 @@ def sum_rationals(request: RationalPairRequest) -> RationalValueResult:
 
 def difference(request: RationalPairRequest) -> RationalValueResult:
     return RationalValueResult(
-        value=_wire(_fraction(request.left) - _fraction(request.right))
+        value=_wire(
+            native_arithmetic.difference_rationals(
+                _fraction(request.left), _fraction(request.right)
+            )
+        )
     )
 
 
 def product(request: RationalPairRequest) -> RationalValueResult:
     return RationalValueResult(
-        value=_wire(_fraction(request.left) * _fraction(request.right))
+        value=_wire(
+            native_arithmetic.product_rationals(
+                _fraction(request.left), _fraction(request.right)
+            )
+        )
     )
 
 
@@ -179,36 +190,44 @@ def quotient(request: RationalDivisionRequest) -> RationalValueResult:
 
 def minimum(request: RationalPairRequest) -> RationalValueResult:
     return RationalValueResult(
-        value=_wire(min(_fraction(request.left), _fraction(request.right)))
+        value=_wire(
+            native_arithmetic.minimum_rational(
+                _fraction(request.left), _fraction(request.right)
+            )
+        )
     )
 
 
 def maximum(request: RationalPairRequest) -> RationalValueResult:
     return RationalValueResult(
-        value=_wire(max(_fraction(request.left), _fraction(request.right)))
+        value=_wire(
+            native_arithmetic.maximum_rational(
+                _fraction(request.left), _fraction(request.right)
+            )
+        )
     )
 
 
 def floor(request: RationalValueRequest) -> RationalIntegerResult:
     return RationalIntegerResult(
-        value=format_canonical_integer(math.floor(_fraction(request.value)))
+        value=format_canonical_integer(
+            native_arithmetic.floor_rational(_fraction(request.value))
+        )
     )
 
 
 def ceiling(request: RationalValueRequest) -> RationalIntegerResult:
     return RationalIntegerResult(
-        value=format_canonical_integer(math.ceil(_fraction(request.value)))
+        value=format_canonical_integer(
+            native_arithmetic.ceiling_rational(_fraction(request.value))
+        )
     )
 
 
 def continued_fraction(
     request: RationalValueRequest,
 ) -> RationalContinuedFractionResult:
-    from sympy import Rational as SympyRational
-    from sympy import continued_fraction as sympy_continued_fraction
-
-    value = _fraction(request.value)
-    terms = sympy_continued_fraction(SympyRational(value.numerator, value.denominator))
+    terms = native_arithmetic.continued_fraction(_fraction(request.value))
     return RationalContinuedFractionResult._from_kernel(
         value=request.value,
         terms=tuple(format_canonical_integer(int(term)) for term in terms),
@@ -217,11 +236,15 @@ def continued_fraction(
 
 def equal(request: RationalPairRequest) -> RationalComparisonResult:
     return RationalComparisonResult(
-        holds=_fraction(request.left) == _fraction(request.right)
+        holds=native_arithmetic.equal_rationals(
+            _fraction(request.left), _fraction(request.right)
+        )
     )
 
 
 def less_than(request: RationalPairRequest) -> RationalComparisonResult:
     return RationalComparisonResult(
-        holds=_fraction(request.left) < _fraction(request.right)
+        holds=native_arithmetic.less_than_rationals(
+            _fraction(request.left), _fraction(request.right)
+        )
     )

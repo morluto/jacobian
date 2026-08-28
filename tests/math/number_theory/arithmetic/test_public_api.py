@@ -4,7 +4,9 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory import arithmetic
+from jacobian.math.number_theory.arithmetic._rationals import RATIONAL_OPERATIONS
 
 
 @given(st.integers())
@@ -80,9 +82,9 @@ def test_rational_consumers_identify_plain_and_canonical_integers(
 def test_zero_canonical_integer_rejection_matches_plain_zero(operation: object) -> None:
     zero = arithmetic.IntegerValue(value="0")
 
-    with pytest.raises(ZeroDivisionError, match=r"zero|division by zero"):
+    with pytest.raises(OperationDomainValidationError):
         operation(zero)  # type: ignore[operator]
-    with pytest.raises(ZeroDivisionError, match=r"zero|division by zero"):
+    with pytest.raises(OperationDomainValidationError):
         arithmetic.quotient(3, zero)
 
 
@@ -109,8 +111,30 @@ def test_primitive_integer_vector_rejects_zero_vector() -> None:
     "operation", [arithmetic.reciprocal, lambda x: arithmetic.quotient(1, x)]
 )
 def test_zero_division_is_explicit(operation: object) -> None:
-    with pytest.raises(ZeroDivisionError, match=r"zero|division by zero"):
+    with pytest.raises(OperationDomainValidationError):
         operation(0)  # type: ignore[operator]
+
+
+def test_complete_native_rational_arithmetic() -> None:
+    left = Fraction(-7, 3)
+    right = Fraction(2, 5)
+
+    assert arithmetic.negate_rational(left) == Fraction(7, 3)
+    assert arithmetic.rational_absolute_value(left) == Fraction(7, 3)
+    assert arithmetic.difference_rationals(left, right) == Fraction(-41, 15)
+    assert arithmetic.product_rationals(left, right) == Fraction(-14, 15)
+    assert arithmetic.minimum_rational(left, right) == left
+    assert arithmetic.maximum_rational(left, right) == right
+    assert arithmetic.floor_rational(left) == -3
+    assert arithmetic.ceiling_rational(left) == -2
+    assert arithmetic.continued_fraction(left) == (-3, 1, 2)
+    assert arithmetic.equal_rationals(left, Fraction(-7, 3)) is True
+    assert arithmetic.less_than_rationals(left, right) is True
+
+
+def test_all_fourteen_rational_operations_are_published() -> None:
+    assert len(RATIONAL_OPERATIONS) == 14
+    assert len({operation.operation_id for operation in RATIONAL_OPERATIONS}) == 14
 
 
 def test_exact_public_api_symbols() -> None:
@@ -118,9 +142,20 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "IntegerValue",
         "absolute_value",
+        "ceiling_rational",
+        "continued_fraction",
+        "difference_rationals",
+        "equal_rationals",
+        "floor_rational",
         "integerize_rational_vector",
+        "less_than_rationals",
+        "maximum_rational",
+        "minimum_rational",
+        "negate_rational",
         "primitive_integer_vector",
+        "product_rationals",
         "quotient",
+        "rational_absolute_value",
         "reciprocal",
         "sign",
         "sum_rationals",

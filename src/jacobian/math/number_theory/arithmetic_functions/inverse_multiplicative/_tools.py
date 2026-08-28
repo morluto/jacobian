@@ -14,11 +14,36 @@ from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._mo
     EulerPhiPreimageRequest,
     EulerPhiPreimageResult,
 )
-from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._operations import (
-    compute_euler_phi_power_sum,
-    compute_euler_phi_preimage,
-    compute_euler_phi_preimage_count,
+from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative.operations import (
+    euler_phi_preimage_count,
+    euler_phi_preimage_power_profile,
+    euler_phi_preimages,
 )
+
+
+def compute_euler_phi_preimage(
+    request: EulerPhiPreimageRequest,
+) -> EulerPhiPreimageResult:
+    preimage = euler_phi_preimages(request.target)
+    return EulerPhiPreimageResult(preimage=preimage, count=len(preimage))
+
+
+def compute_euler_phi_preimage_count(
+    request: EulerPhiPreimageCountRequest,
+) -> EulerPhiPreimageCountResult:
+    return EulerPhiPreimageCountResult(count=euler_phi_preimage_count(request.target))
+
+
+def compute_euler_phi_power_sum(
+    request: EulerPhiPowerSumRequest,
+) -> EulerPhiPowerSumResult:
+    power_sum, count = euler_phi_preimage_power_profile(
+        request.target, request.exponent
+    )
+    return EulerPhiPowerSumResult(
+        power_sum=power_sum,
+        count=count,
+    )
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](

@@ -7,6 +7,7 @@ from pydantic import Field
 from jacobian._models import StrictModel
 
 MAX_N = 100000
+MAX_POWER_SUM_EXPONENT = 20
 
 
 class EulerPhiPreimageRequest(StrictModel):
@@ -25,7 +26,7 @@ class EulerPhiPowerSumRequest(StrictModel):
     """Compute sum of k-th powers of preimage of phi."""
 
     target: int = Field(ge=1, le=MAX_N)
-    exponent: int = Field(ge=1, le=20)
+    exponent: int = Field(ge=1, le=MAX_POWER_SUM_EXPONENT)
 
 
 # Results

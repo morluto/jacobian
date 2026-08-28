@@ -1,17 +1,20 @@
 """Tests for inverse multiplicative function operations."""
 
+from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative import (
+    euler_phi_preimage_count,
+    euler_phi_preimage_power_sum,
+    euler_phi_preimages,
+)
 from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._models import (
     EulerPhiPowerSumRequest,
     EulerPhiPreimageCountRequest,
     EulerPhiPreimageRequest,
 )
-from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._operations import (
+from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._tools import (
+    TOOLS,
     compute_euler_phi_power_sum,
     compute_euler_phi_preimage,
     compute_euler_phi_preimage_count,
-)
-from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._tools import (
-    TOOLS,
 )
 
 
@@ -28,12 +31,14 @@ def test_preimage_of_1() -> None:
     result = compute_euler_phi_preimage(request)
     assert result.preimage == (1, 2)
     assert result.count == 2
+    assert euler_phi_preimages(1) == result.preimage
 
 
 def test_preimage_count_of_1() -> None:
     request = EulerPhiPreimageCountRequest(target=1)
     result = compute_euler_phi_preimage_count(request)
     assert result.count == 2
+    assert euler_phi_preimage_count(1) == result.count
 
 
 def test_power_sum_of_1_squared() -> None:
@@ -41,6 +46,7 @@ def test_power_sum_of_1_squared() -> None:
     result = compute_euler_phi_power_sum(request)
     assert result.power_sum == 5  # 1^2 + 2^2 = 5
     assert result.count == 2
+    assert euler_phi_preimage_power_sum(1, 2) == result.power_sum
 
 
 def test_preimage_of_4() -> None:

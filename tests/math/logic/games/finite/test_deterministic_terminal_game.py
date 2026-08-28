@@ -20,17 +20,16 @@ from jacobian.math.logic.games.finite import (
     DeterministicTerminalGameSolution,
     StationaryChoice,
     TerminalGameValueClass,
+    operations,
     solve_terminal_game,
 )
-from jacobian.math.logic.games.finite import _operations as operation_adapter
-from jacobian.math.logic.games.finite import operations as terminal_operations
 from jacobian.math.logic.games.finite._models import (
     DeterministicTerminalGameRequest,
 )
-from jacobian.math.logic.games.finite._operations import (
+from jacobian.math.logic.games.finite._tools import TOOLS
+from jacobian.math.logic.games.finite.operations import (
     compute_deterministic_terminal_game,
 )
-from jacobian.math.logic.games.finite._tools import TOOLS
 
 
 def _r(numerator: int, denominator: int = 1) -> CanonicalRational:
@@ -415,7 +414,7 @@ def test_trusted_terminal_game_producers_run_the_minimax_kernel_once(
     calls = 0
     original = cast(
         Callable[[DeterministicTerminalGame], object],
-        vars(terminal_operations)["_solve_terminal_game_data"],
+        vars(operations)["_solve_terminal_game_data"],
     )
 
     def counted_native(game: DeterministicTerminalGame) -> object:
@@ -424,23 +423,24 @@ def test_trusted_terminal_game_producers_run_the_minimax_kernel_once(
         return original(game)
 
     monkeypatch.setattr(
-        terminal_operations, "_solve_terminal_game_data", counted_native
+        operations, "_solve_terminal_game_data", counted_native
     )
     solve_terminal_game(game)
     assert calls == 1
 
+    monkeypatch.undo()
     calls = 0
-    original_adapter = cast(
+    original = cast(
         Callable[[DeterministicTerminalGame], object],
-        vars(operation_adapter)["_solve_terminal_game_data"],
+        vars(operations)["_solve_terminal_game_data"],
     )
 
-    def counted_adapter(game: DeterministicTerminalGame) -> object:
+    def counted_projection(game: DeterministicTerminalGame) -> object:
         nonlocal calls
         calls += 1
-        return original_adapter(game)
+        return original(game)
 
-    monkeypatch.setattr(operation_adapter, "_solve_terminal_game_data", counted_adapter)
+    monkeypatch.setattr(operations, "_solve_terminal_game_data", counted_projection)
     compute_deterministic_terminal_game(request)
     assert calls == 1
 

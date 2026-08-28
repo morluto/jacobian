@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability.markov_chains._models import MixingTimeRequest
-from jacobian.math.probability.markov_chains._operations import compute_mixing_time
+from jacobian.math.probability.markov_chains.operations import compute_mixing_time
 
 
 def _r(num: int, den: int = 1) -> dict[str, str]:

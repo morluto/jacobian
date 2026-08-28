@@ -15,7 +15,7 @@ from jacobian.math.probability.markov_chains._models import (
     StationaryDistributionResult,
     TransitionMatrixRequest,
 )
-from jacobian.math.probability.markov_chains._operations import (
+from jacobian.math.probability.markov_chains.operations import (
     compute_communicating_classes,
     compute_ergodic_decision,
     compute_mixing_time,

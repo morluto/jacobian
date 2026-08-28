@@ -10,7 +10,7 @@ from jacobian.math.logic.games.finite._models import (
     PayoffMatrix,
     ZeroSumGameRequest,
 )
-from jacobian.math.logic.games.finite._operations import (
+from jacobian.math.logic.games.finite.operations import (
     compute_best_response,
     compute_nash_equilibrium,
 )

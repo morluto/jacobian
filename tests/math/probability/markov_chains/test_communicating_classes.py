@@ -7,14 +7,14 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.probability.markov_chains import _operations
+from jacobian.math.probability.markov_chains import operations
 from jacobian.math.probability.markov_chains._models import (
     TransitionMatrixRequest,
 )
-from jacobian.math.probability.markov_chains._operations import (
+from jacobian.math.probability.markov_chains._tools import TOOLS
+from jacobian.math.probability.markov_chains.operations import (
     compute_communicating_classes,
 )
-from jacobian.math.probability.markov_chains._tools import TOOLS
 
 _C = CanonicalRational.from_fraction
 
@@ -93,7 +93,7 @@ def test_two_closed_classes() -> None:
 
 def test_producer_derives_scc_partition_once(monkeypatch: pytest.MonkeyPatch) -> None:
     request = _matrix([[Fraction(0), Fraction(1)], [Fraction(0), Fraction(1)]])
-    original = _operations._derive_communicating_classes
+    original = operations._derive_communicating_classes
     calls = 0
 
     def counted(matrix):  # type: ignore[no-untyped-def]
@@ -101,7 +101,7 @@ def test_producer_derives_scc_partition_once(monkeypatch: pytest.MonkeyPatch) ->
         calls += 1
         return original(matrix)
 
-    monkeypatch.setattr(_operations, "_derive_communicating_classes", counted)
+    monkeypatch.setattr(operations, "_derive_communicating_classes", counted)
     result = compute_communicating_classes(request)
 
     assert result.classes == (((0,), False), ((1,), True))

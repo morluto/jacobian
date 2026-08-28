@@ -14,7 +14,7 @@ from jacobian.math.logic.games.finite._models import (
     NashEquilibriumResult,
     ZeroSumGameRequest,
 )
-from jacobian.math.logic.games.finite._operations import (
+from jacobian.math.logic.games.finite.operations import (
     compute_best_response,
     compute_deterministic_terminal_game,
     compute_nash_equilibrium,

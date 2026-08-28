@@ -7,6 +7,8 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.decomposition._models import (
+    BiconnectedComponentsRequest,
+    BiconnectedComponentsResult,
     BlockCutTreeRequest,
     BlockCutTreeResult,
     BridgeBlockRequest,
@@ -17,6 +19,7 @@ from jacobian.math.graphs.decomposition._models import (
     SPQRTreeResult,
 )
 from jacobian.math.graphs.decomposition._operations import (
+    compute_biconnected_components,
     compute_block_cut_tree,
     compute_bridge_block_tree,
     compute_ear_decomposition,
@@ -174,6 +177,30 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             [2, 3],
                             [0, 3],
                         ],
+                    },
+                },
+            ),
+        ),
+    ),
+    graph_decomposition_operation(
+        "graph.decomposition.biconnected_components.compute",
+        "List the biconnected components of an undirected graph",
+        "List all biconnected components of an undirected graph. Each component is returned as a sorted tuple of vertices.",
+        BiconnectedComponentsRequest,
+        BiconnectedComponentsResult,
+        compute_biconnected_components,
+        "graph",
+        "decomposition",
+        "biconnected",
+        "exact",
+        examples=(
+            example(
+                "two_triangle_blocks",
+                "List the biconnected components of two triangles sharing one vertex.",
+                {
+                    "graph": {
+                        "vertex_count": 5,
+                        "edges": [[0, 1], [1, 2], [0, 2], [0, 3], [3, 4], [0, 4]],
                     },
                 },
             ),

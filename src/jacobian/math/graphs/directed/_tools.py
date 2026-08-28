@@ -15,12 +15,15 @@ from jacobian.math.graphs.directed._models import (
     DagLongestPathResult,
     ReachabilityRequest,
     ReachabilityResult,
+    StronglyConnectedComponentsRequest,
+    StronglyConnectedComponentsResult,
 )
 from jacobian.math.graphs.directed._operations import (
     compute_acyclic_order,
     compute_condensation,
     compute_dag_longest_path,
     compute_reachability,
+    compute_strongly_connected_components,
 )
 
 
@@ -73,6 +76,30 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "edges": [[0, 1], [1, 2], [2, 3]],
                     },
                     "source": 0,
+                },
+            ),
+        ),
+    ),
+    directed_graph_operation(
+        "graph.directed.scc.compute",
+        "Compute strongly connected components of a directed graph",
+        "Partition a simple directed graph into strongly connected components. Returns the number of components and each component's sorted vertex list.",
+        StronglyConnectedComponentsRequest,
+        StronglyConnectedComponentsResult,
+        compute_strongly_connected_components,
+        "graph",
+        "directed",
+        "scc",
+        "exact",
+        examples=(
+            example(
+                "simple_cycle_scc",
+                "Compute SCCs of a graph containing a simple cycle.",
+                {
+                    "graph": {
+                        "vertex_count": 4,
+                        "edges": [[0, 1], [1, 2], [2, 0], [2, 3]],
+                    },
                 },
             ),
         ),

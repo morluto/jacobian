@@ -7,12 +7,15 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.realization._models import (
+    DegreeSequenceRequest,
+    DegreeSequenceResult,
     GraphRealizationRequest,
     GraphRealizationResult,
     RealizationCheckRequest,
     RealizationCheckResult,
 )
 from jacobian.math.graphs.realization._operations import (
+    compute_degree_sequence,
     compute_graph_realization,
     compute_realization_check,
 )
@@ -44,6 +47,25 @@ def graph_realization_operation[
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    graph_realization_operation(
+        "graph.realization.is_graphical.compute",
+        "Determine if a degree sequence is graphical",
+        "Determine whether a degree sequence is realized by a simple graph using the Erdos-Gallai theorem.",
+        DegreeSequenceRequest,
+        DegreeSequenceResult,
+        compute_degree_sequence,
+        "graph",
+        "realization",
+        "graphicality",
+        "exact",
+        examples=(
+            example(
+                "graphical_path",
+                "Check the degree sequence of a four-vertex path.",
+                {"sequence": {"degrees": [1, 2, 2, 1]}},
+            ),
+        ),
+    ),
     graph_realization_operation(
         "graph.realization.construct.compute",
         "Construct a simple graph realizing a degree sequence",

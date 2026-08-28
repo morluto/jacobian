@@ -5,6 +5,17 @@ from collections.abc import Callable
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
+from jacobian.math.graphs.transforms._models import (
+    GraphResult,
+    GraphTransformRequest,
+    SubgraphRequest,
+)
+from jacobian.math.graphs.transforms._operations import (
+    compute_complement,
+    compute_graph_power,
+    compute_induced_subgraph,
+    compute_line_graph,
+)
 from jacobian.math.graphs.transforms._path_profile_models import (
     PathProfileRequest,
     PathProfileResult,
@@ -48,6 +59,64 @@ _GRAPH_EXAMPLE = {
 
 
 TOOLS: MathTools = (
+    gt_operation(
+        "graph.complement.compute",
+        "Compute the complement of a graph",
+        "Compute the exact complement of a simple undirected graph. The complement has the same vertex set, with edges exactly where the original has no edge.",
+        GraphTransformRequest,
+        GraphResult,
+        compute_complement,
+        "graph",
+        "complement",
+        "exact",
+        examples=(
+            example("path_p2", "Complement of a path graph P2.", _GRAPH_EXAMPLE),
+        ),
+    ),
+    gt_operation(
+        "graph.line_graph.compute",
+        "Compute the line graph of a graph",
+        "Compute the exact line graph L(G), whose vertices are edges of G and whose edges join pairs of incident edges.",
+        GraphTransformRequest,
+        GraphResult,
+        compute_line_graph,
+        "graph",
+        "line-graph",
+        "exact",
+        examples=(
+            example("path_p2", "Line graph of a path graph P2.", _GRAPH_EXAMPLE),
+        ),
+    ),
+    gt_operation(
+        "graph.power.compute",
+        "Compute the graph square",
+        "Compute the exact square G^2 of a simple undirected graph, joining vertices at distance at most two.",
+        GraphTransformRequest,
+        GraphResult,
+        compute_graph_power,
+        "graph",
+        "graph-power",
+        "exact",
+        examples=(example("path_p2", "Square of a path graph P2.", _GRAPH_EXAMPLE),),
+    ),
+    gt_operation(
+        "graph.induced_subgraph.compute",
+        "Extract an induced subgraph on a vertex subset",
+        "Compute the exact induced subgraph G[V'] and reindex its selected vertices from zero.",
+        SubgraphRequest,
+        GraphResult,
+        compute_induced_subgraph,
+        "graph",
+        "induced-subgraph",
+        "exact",
+        examples=(
+            example(
+                "path_p2_vertices_0_2",
+                "Induced subgraph of P2 on vertices {0, 2}.",
+                {"graph": _GRAPH_EXAMPLE["graph"], "vertices": [0, 2]},
+            ),
+        ),
+    ),
     gt_operation(
         "graph.path_profile.compute",
         "Profile fixed-length simple paths by endpoint",

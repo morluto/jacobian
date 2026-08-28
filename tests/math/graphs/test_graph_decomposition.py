@@ -472,6 +472,7 @@ class TestOperationManifest:
         operations = TOOLS
         operation_ids = {op.operation_id for op in operations}
         assert operation_ids == {
+            "graph.decomposition.biconnected_components.compute",
             "graph.decomposition.block_cut_tree.compute",
             "graph.decomposition.bridge_block_tree.compute",
             "graph.decomposition.ear.compute",

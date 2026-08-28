@@ -1,4 +1,4 @@
-from jacobian.math.number_theory.arithmetic._operations import decimal_digit_count
+from jacobian.math.number_theory.arithmetic._integers import decimal_digit_count
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 

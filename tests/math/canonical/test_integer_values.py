@@ -4,7 +4,7 @@ from fractions import Fraction
 
 from jacobian.math.number_theory import arithmetic
 from jacobian.math.number_theory._divisibility_operations import decide_even
-from jacobian.math.number_theory.arithmetic._operations import decimal_digit_sum
+from jacobian.math.number_theory.arithmetic.operations import decimal_digit_sum
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 

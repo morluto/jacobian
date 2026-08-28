@@ -3,13 +3,13 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.number_theory.arithmetic import _operations as arithmetic_operations
+from jacobian.math.number_theory.arithmetic import operations as arithmetic_operations
+from jacobian.math.number_theory.arithmetic._integers import base_digits
 from jacobian.math.number_theory.arithmetic._models import (
     MAX_BASE_DIGITS,
     IntegerBaseDigitsRequest,
     IntegerBaseDigitsResult,
 )
-from jacobian.math.number_theory.arithmetic._operations import base_digits
 
 
 @pytest.mark.parametrize(
@@ -65,7 +65,7 @@ def test_base_digits_rejects_an_oversized_result_before_integer_conversion(
     def unexpected_conversion(_: str) -> int:
         raise AssertionError("base expansion must preflight before integer conversion")
 
-    monkeypatch.setattr(arithmetic_operations, "_int", unexpected_conversion)
+    monkeypatch.setattr(arithmetic_operations, "parse_canonical_integer", unexpected_conversion)
 
     with pytest.raises(ValueError, match=rf"{MAX_BASE_DIGITS}-digit result bound"):
         base_digits(

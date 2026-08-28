@@ -6,17 +6,35 @@ operations (gcd, lcm, divisors, primes, predicates, modular arithmetic) are
 owned by the number-theory domain (p3) and are NOT included here.
 """
 
+from typing import Literal, cast
+
 from jacobian.catalog._examples import example
+from jacobian.math.number_theory.arithmetic import operations as native
 from jacobian.math.number_theory.arithmetic._models import (
+    IntegerBaseDigitsRequest,
+    IntegerBaseDigitsResult,
     IntegerNthRootRequest,
     IntegerNthRootResult,
 )
-from jacobian.math.number_theory.arithmetic._operations import (
-    decimal_digit_count,
-    nth_root,
-)
 from jacobian.math.number_theory.arithmetic._support import arithmetic_operation
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
+
+
+def decimal_digit_count(request: IntegerValue) -> IntegerValue:
+    return native.decimal_digit_count(request)
+
+
+def base_digits(request: IntegerBaseDigitsRequest) -> IntegerBaseDigitsResult:
+    sign, base, digits = native.base_digits(
+        IntegerValue(value=request.value), request.base
+    )
+    sign_value = cast(Literal[-1, 0, 1], sign)
+    return IntegerBaseDigitsResult(sign=sign_value, base=base, digits=digits)
+
+
+def nth_root(request: IntegerNthRootRequest) -> IntegerNthRootResult:
+    root, exact = native.nth_root(IntegerValue(value=request.value), request.degree)
+    return IntegerNthRootResult(root=root.value, exact=exact)
 
 INTEGER_OPERATIONS = (
     arithmetic_operation(

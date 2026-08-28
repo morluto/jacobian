@@ -1,23 +1,14 @@
 """Rational-owned exact arithmetic operation declarations."""
 
+from fractions import Fraction
+
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
-from jacobian.math.number_theory.arithmetic._operations import (
-    ceiling,
-    continued_fraction,
-    difference,
-    equal,
-    floor,
-    less_than,
-    maximum,
-    minimum,
-    negation,
-    product,
-    quotient,
-    rational_absolute_value,
-    reciprocal,
-    sum_rationals,
-)
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.arithmetic import operations as native
 from jacobian.math.number_theory.arithmetic._rational_models import (
+    MAX_RATIONAL_CONTINUED_FRACTION_TERMS,
     NonzeroRationalValueRequest,
     RationalComparisonResult,
     RationalContinuedFractionResult,
@@ -28,6 +19,123 @@ from jacobian.math.number_theory.arithmetic._rational_models import (
     RationalValueResult,
 )
 from jacobian.math.number_theory.arithmetic._support import arithmetic_operation
+
+
+def _fraction(value: CanonicalRational) -> Fraction:
+    return value.as_fraction()
+
+
+def _wire(
+    value: Fraction, *, location: tuple[str | int, ...] = ("value",)
+) -> CanonicalRational:
+    numerator = format_canonical_integer(value.numerator)
+    denominator = format_canonical_integer(value.denominator)
+    if (
+        len(numerator.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
+        or len(denominator) > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise OperationDomainValidationError(
+            location=location,
+            code="arithmetic.rational_result_exceeds_component_bound",
+            message="exact rational result exceeds the canonical component bound",
+        )
+    return CanonicalRational(num=numerator, den=denominator)
+
+
+def reciprocal(request: NonzeroRationalValueRequest) -> RationalValueResult:
+    return RationalValueResult(value=_wire(native.reciprocal(_fraction(request.value))))
+
+
+def negation(request: RationalValueRequest) -> RationalValueResult:
+    return RationalValueResult(value=_wire(native.negate_rational(_fraction(request.value))))
+
+
+def rational_absolute_value(request: RationalValueRequest) -> RationalValueResult:
+    return RationalValueResult(
+        value=_wire(native.rational_absolute_value(_fraction(request.value)))
+    )
+
+
+def sum_rationals(request: RationalPairRequest) -> RationalValueResult:
+    return RationalValueResult(
+        value=_wire(
+            native.sum_rationals(_fraction(request.left), _fraction(request.right)),
+            location=("left", "right"),
+        )
+    )
+
+
+def difference(request: RationalPairRequest) -> RationalValueResult:
+    return RationalValueResult(
+        value=_wire(
+            native.difference_rationals(_fraction(request.left), _fraction(request.right)),
+            location=("left", "right"),
+        )
+    )
+
+
+def product(request: RationalPairRequest) -> RationalValueResult:
+    return RationalValueResult(
+        value=_wire(
+            native.product_rationals(_fraction(request.left), _fraction(request.right)),
+            location=("left", "right"),
+        )
+    )
+
+
+def quotient(request: RationalDivisionRequest) -> RationalValueResult:
+    return RationalValueResult(
+        value=_wire(
+            native.quotient(_fraction(request.left), _fraction(request.right)),
+            location=("left", "right"),
+        )
+    )
+
+
+def minimum(request: RationalPairRequest) -> RationalValueResult:
+    return RationalValueResult(
+        value=_wire(native.minimum_rational(_fraction(request.left), _fraction(request.right)))
+    )
+
+
+def maximum(request: RationalPairRequest) -> RationalValueResult:
+    return RationalValueResult(
+        value=_wire(native.maximum_rational(_fraction(request.left), _fraction(request.right)))
+    )
+
+
+def floor(request: RationalValueRequest) -> RationalIntegerResult:
+    return RationalIntegerResult(
+        value=format_canonical_integer(native.floor_rational(_fraction(request.value)))
+    )
+
+
+def ceiling(request: RationalValueRequest) -> RationalIntegerResult:
+    return RationalIntegerResult(
+        value=format_canonical_integer(native.ceiling_rational(_fraction(request.value)))
+    )
+
+
+def continued_fraction(request: RationalValueRequest) -> RationalContinuedFractionResult:
+    terms = native.continued_fraction(
+        _fraction(request.value), max_terms=MAX_RATIONAL_CONTINUED_FRACTION_TERMS
+    )
+    return RationalContinuedFractionResult._from_kernel(
+        value=request.value,
+        terms=tuple(format_canonical_integer(term) for term in terms),
+    )
+
+
+def equal(request: RationalPairRequest) -> RationalComparisonResult:
+    return RationalComparisonResult(
+        holds=native.equal_rationals(_fraction(request.left), _fraction(request.right))
+    )
+
+
+def less_than(request: RationalPairRequest) -> RationalComparisonResult:
+    return RationalComparisonResult(
+        holds=native.less_than_rationals(_fraction(request.left), _fraction(request.right))
+    )
 
 _ONE_HALF = {"num": "1", "den": "2"}
 _TWO_THIRDS = {"num": "2", "den": "3"}

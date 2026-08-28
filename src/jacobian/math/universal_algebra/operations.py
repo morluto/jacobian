@@ -4,13 +4,24 @@ from __future__ import annotations
 
 from itertools import product as iproduct
 
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+)
+from jacobian.catalog.models import OperationDomainValidationError
+
 from ._models import (
+    _HOMOMORPHISM_RESULT_RESERVE_BYTES,
+    MAX_ENUMERATION_WORK,
     CongruenceResult,
     EquationCounterexample,
     EquationProfileResult,
     HomomorphismObstruction,
     HomomorphismProfileResult,
     SubalgebraResult,
+    _congruence_work,
+    _require_homomorphism_output_headroom,
 )
 from .values import (
     ApplicationTerm,
@@ -19,6 +30,7 @@ from .values import (
     FiniteAlgebraHomomorphism,
     FlatTerm,
     OperationSymbol,
+    UniversalAlgebraAdmissionError,
     VariableTerm,
     _first_homomorphism_failure,
     _homomorphism_kernel_and_image,
@@ -33,6 +45,157 @@ __all__ = [
     "homomorphism_profile",
     "quotient",
 ]
+
+
+def _reject(*, location: tuple[str | int, ...], code: str, message: str) -> None:
+    raise OperationDomainValidationError(
+        location=location, code=f"universal_algebra.{code}", message=message
+    )
+
+
+def _admit_evaluate(
+    algebra: FiniteAlgebra, term: FlatTerm, assignment: tuple[int, ...]
+) -> None:
+    try:
+        require_term_for_algebra(term, algebra)
+    except UniversalAlgebraAdmissionError as exc:
+        _reject(location=("term",), code="term_signature", message=str(exc))
+    if len(assignment) != term.variable_count:
+        _reject(
+            location=("assignment",),
+            code="assignment_coverage",
+            message="assignment must cover exactly the referenced variables",
+        )
+    size = len(algebra.carrier)
+    if any(not 0 <= value < size for value in assignment):
+        _reject(
+            location=("assignment",),
+            code="assignment_carrier_range",
+            message="assignment value out of carrier range",
+        )
+
+
+def _admit_equation_profile(
+    algebra: FiniteAlgebra,
+    left: FlatTerm,
+    right: FlatTerm,
+    variable_count: int,
+) -> None:
+    for term in (left, right):
+        try:
+            require_term_for_algebra(term, algebra)
+        except UniversalAlgebraAdmissionError as exc:
+            _reject(location=("term",), code="term_signature", message=str(exc))
+    if max(left.variable_count, right.variable_count) > variable_count:
+        _reject(
+            location=("variable_count",),
+            code="variable_coverage",
+            message="variable_count must cover every referenced variable",
+        )
+    if len(algebra.carrier) ** variable_count > MAX_ENUMERATION_WORK:
+        _reject(
+            location=("variable_count",),
+            code="equation_work_bound",
+            message="equation profile exceeds the assignment work budget",
+        )
+
+
+def _admit_subalgebra(algebra: FiniteAlgebra, generators: tuple[int, ...]) -> None:
+    size = len(algebra.carrier)
+    if any(not 0 <= generator < size for generator in generators):
+        _reject(
+            location=("generators",),
+            code="generator_carrier_range",
+            message="generator out of carrier range",
+        )
+    work = sum(size**symbol.arity for symbol in algebra.operations) * size
+    if work > MAX_ENUMERATION_WORK:
+        _reject(
+            location=("generators",),
+            code="subalgebra_work_bound",
+            message="subalgebra closure exceeds the operation work budget",
+        )
+
+
+def _admit_homomorphism(carrier_map: FiniteAlgebraCarrierMap) -> None:
+    preservation_cells = sum(len(table) for table in carrier_map.source.tables)
+    if preservation_cells > MAX_ENUMERATION_WORK:
+        _reject(
+            location=("carrier_map",),
+            code="homomorphism_work_bound",
+            message="homomorphism operation work exceeds the enumeration budget",
+        )
+    try:
+        _require_homomorphism_output_headroom(carrier_map)
+    except ValueError as exc:
+        _reject(
+            location=("carrier_map",),
+            code="homomorphism_output_bound",
+            message=str(exc),
+        )
+
+
+def _admit_partition(
+    algebra: FiniteAlgebra,
+    partition: tuple[tuple[int, ...], ...],
+    *,
+    quotient_request: bool,
+) -> None:
+    congruence_work = _congruence_work(algebra)
+    if congruence_work > MAX_ENUMERATION_WORK:
+        _reject(
+            location=("algebra",),
+            code="congruence_work_bound",
+            message="congruence check exceeds the operation work budget",
+        )
+    if not quotient_request:
+        return
+    quotient_size = len(partition)
+    quotient_table_cells = sum(
+        quotient_size**operation.arity for operation in algebra.operations
+    )
+    quotient_work = (
+        congruence_work
+        + sum(len(table) for table in algebra.tables)
+        + quotient_table_cells
+    )
+    if quotient_work > MAX_ENUMERATION_WORK:
+        _reject(
+            location=("partition",),
+            code="quotient_work_bound",
+            message="quotient construction exceeds the operation work budget",
+        )
+    try:
+        source_bytes = len(encode_strict_json(algebra.model_dump(mode="json")))
+        operation_bytes = len(
+            encode_strict_json(
+                [operation.model_dump(mode="json") for operation in algebra.operations]
+            )
+        )
+        quotient_carrier_bytes = sum(
+            len(encode_strict_json(f"B{index}")) + 1 for index in range(quotient_size)
+        )
+    except CanonicalizationError as exc:
+        raise OperationDomainValidationError(
+            location=("algebra",),
+            code="universal_algebra.quotient_output_bound",
+            message="quotient source exceeds the canonical output limit",
+        ) from exc
+    quotient_index_bytes = len(str(quotient_size - 1)) + 1
+    predicted_bytes = (
+        source_bytes
+        + operation_bytes
+        + quotient_carrier_bytes
+        + quotient_table_cells * quotient_index_bytes
+        + len(algebra.carrier) * quotient_index_bytes
+        + _HOMOMORPHISM_RESULT_RESERVE_BYTES
+    )
+    if predicted_bytes > CanonicalLimits().max_output_bytes:
+        _reject(
+            location=("partition",),
+            code="quotient_output_bound",
+            message="canonical quotient homomorphism would exceed the output limit",
+        )
 
 
 def _evaluate_node(
@@ -71,10 +234,7 @@ def evaluate_term(
 
     Return the exact carrier value ``t^A(alpha)``.
     """
-    n = len(algebra.carrier)
-    require_term_for_algebra(term, algebra)
-    if any(not 0 <= v < n for v in assignment.values()):
-        raise ValueError("assignment value out of carrier range")
+    _admit_evaluate(algebra, term, tuple(assignment.values()))
     return _evaluate_term_unchecked(algebra, term, assignment)
 
 
@@ -86,8 +246,7 @@ def equation_profile(
     Return ``HOLDS`` with the satisfying assignment count, or ``FAILS`` with
     the first counterassignment and exact left/right values.
     """
-    require_term_for_algebra(left, algebra)
-    require_term_for_algebra(right, algebra)
+    _admit_equation_profile(algebra, left, right, variable_count)
     return _equation_profile_unchecked(algebra, left, right, variable_count)
 
 
@@ -127,6 +286,7 @@ def generated_subalgebra(
 ) -> SubalgebraResult:
     """Return the least subalgebra containing the generating set by finite
     closure under all basic operations and nullary constants."""
+    _admit_subalgebra(algebra, generators)
     n = len(algebra.carrier)
     carrier_set = set(generators)
     for op_idx, symbol in enumerate(algebra.operations):
@@ -168,6 +328,7 @@ def homomorphism_profile(
     with its canonical kernel fibers and image.
     """
 
+    _admit_homomorphism(carrier_map)
     failure = _first_homomorphism_failure(carrier_map)
     if failure is not None:
         return HomomorphismProfileResult(
@@ -270,6 +431,13 @@ def congruence_check(
     A congruence theta satisfies: if x_j theta y_j for every argument j, then
     f(x_1,...,x_r) theta f(y_1,...,y_r) for every basic operation.
     """
+    _admit_partition(algebra, partition, quotient_request=False)
+    return _congruence_check_unchecked(algebra, partition)
+
+
+def _congruence_check_unchecked(
+    algebra: FiniteAlgebra, partition: tuple[tuple[int, ...], ...]
+) -> CongruenceResult:
     n = len(algebra.carrier)
     block_of: dict[int, int] = {}
     for block_idx, block in enumerate(partition):
@@ -288,7 +456,8 @@ def quotient(
     algebra: FiniteAlgebra, partition: tuple[tuple[int, ...], ...]
 ) -> FiniteAlgebraHomomorphism:
     """Return the canonical quotient homomorphism ``A -> A/theta``."""
-    check = congruence_check(algebra, partition)
+    _admit_partition(algebra, partition, quotient_request=True)
+    check = _congruence_check_unchecked(algebra, partition)
     if not check.is_congruence:
         raise ValueError("partition is not a congruence")
     n = len(algebra.carrier)

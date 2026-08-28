@@ -7,12 +7,20 @@ from typing import SupportsIndex
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.arithmetic._models import (
+    _MAX_BASE,
+    _MAX_NTH_ROOT_DEGREE,
+    MAX_BASE_DIGITS,
+)
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 __all__ = [
     "absolute_value",
+    "base_digits",
     "ceiling_rational",
     "continued_fraction",
+    "decimal_digit_count",
+    "decimal_digit_sum",
     "difference_rationals",
     "equal_rationals",
     "floor_rational",
@@ -21,6 +29,7 @@ __all__ = [
     "maximum_rational",
     "minimum_rational",
     "negate_rational",
+    "nth_root",
     "primitive_integer_vector",
     "product_rationals",
     "quotient",
@@ -50,6 +59,63 @@ def sign(value: SupportsIndex | IntegerValue) -> int:
 
     integer = _as_python_integer(value)
     return (integer > 0) - (integer < 0)
+
+
+def decimal_digit_sum(value: IntegerValue) -> IntegerValue:
+    """Return the sum of the decimal digits of an exact integer."""
+    return IntegerValue(
+        value=format_canonical_integer(
+            sum(int(digit) for digit in value.value.lstrip("-"))
+        )
+    )
+
+
+def decimal_digit_count(value: IntegerValue) -> IntegerValue:
+    """Return the number of decimal digits in an exact integer's magnitude."""
+    return IntegerValue(
+        value=format_canonical_integer(len(value.value.lstrip("-")))
+    )
+
+
+def base_digits(value: IntegerValue, base: int) -> tuple[int, int, tuple[str, ...]]:
+    """Return sign, base, and canonical positional digits for an integer."""
+    if not 2 <= base <= _MAX_BASE:
+        raise ValueError("base must be between 2 and 10000")
+    magnitude = value.value.lstrip("-")
+    maximum_value = format_canonical_integer(base**MAX_BASE_DIGITS)
+    if len(magnitude) > len(maximum_value) or (
+        len(magnitude) == len(maximum_value) and magnitude >= maximum_value
+    ):
+        raise OperationDomainValidationError(
+            location=("value",),
+            code="arithmetic.base_expansion_exceeds_bound",
+            message=f"base expansion exceeds the {MAX_BASE_DIGITS}-digit result bound",
+        )
+    from sympy.ntheory import digits as sympy_digits
+
+    integer = parse_canonical_integer(value.value)
+    signed_base, *expanded = sympy_digits(integer, base)
+    sign_value = 0 if integer == 0 else (-1 if signed_base < 0 else 1)
+    return sign_value, abs(signed_base), tuple(str(digit) for digit in expanded)
+
+
+def nth_root(value: IntegerValue, degree: int) -> tuple[IntegerValue, bool]:
+    """Return the exact floor nth root and whether the root is integral."""
+    if not 1 <= degree <= _MAX_NTH_ROOT_DEGREE:
+        raise ValueError("degree must be between 1 and 100000")
+    from sympy import integer_nthroot
+
+    integer = parse_canonical_integer(value.value)
+    if integer < 0 and degree % 2 == 0:
+        raise OperationDomainValidationError(
+            location=("value", "degree"),
+            code="arithmetic.even_root_of_negative",
+            message="even root of a negative integer is not integral-real",
+        )
+    root, exact = integer_nthroot(abs(integer), degree)
+    if integer < 0 and not exact:
+        root += 1
+    return IntegerValue(value=format_canonical_integer(-root if integer < 0 else root)), exact
 
 
 def _as_rational(value: Fraction | int | IntegerValue) -> Fraction:
@@ -143,10 +209,12 @@ def ceiling_rational(value: Fraction | int | IntegerValue) -> int:
 
 def continued_fraction(
     value: Fraction | int | IntegerValue,
+    *,
+    max_terms: int | None = None,
 ) -> tuple[int, ...]:
     """Return the canonical finite simple continued fraction of a rational."""
 
-    return _continued_fraction_terms(_as_rational(value))
+    return _continued_fraction_terms(_as_rational(value), max_terms=max_terms)
 
 
 def _continued_fraction_terms(

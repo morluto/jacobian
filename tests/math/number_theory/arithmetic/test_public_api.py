@@ -7,9 +7,11 @@ from hypothesis import strategies as st
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory import arithmetic
-from jacobian.math.number_theory.arithmetic._operations import product
 from jacobian.math.number_theory.arithmetic._rational_models import RationalPairRequest
-from jacobian.math.number_theory.arithmetic._rationals import RATIONAL_OPERATIONS
+from jacobian.math.number_theory.arithmetic._rationals import (
+    RATIONAL_OPERATIONS,
+    product,
+)
 
 
 @given(st.integers())

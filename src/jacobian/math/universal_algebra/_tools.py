@@ -6,6 +6,7 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.universal_algebra import operations as native
 from jacobian.math.universal_algebra._models import (
     CongruenceRequest,
     CongruenceResult,
@@ -19,15 +20,41 @@ from jacobian.math.universal_algebra._models import (
     SubalgebraRequest,
     SubalgebraResult,
 )
-from jacobian.math.universal_algebra._operations import (
-    compute_congruence,
-    compute_equation_profile,
-    compute_evaluate,
-    compute_generated_subalgebra,
-    compute_homomorphism_profile,
-    compute_quotient,
-)
 from jacobian.math.universal_algebra.values import FiniteAlgebraHomomorphism
+
+
+def compute_evaluate(request: EvaluateRequest) -> EvaluateResult:
+    return EvaluateResult(
+        value=native.evaluate_term(
+            request.algebra,
+            request.term,
+            dict(enumerate(request.assignment)),
+        )
+    )
+
+
+def compute_equation_profile(request: EquationProfileRequest) -> EquationProfileResult:
+    return native.equation_profile(
+        request.algebra, request.left, request.right, request.variable_count
+    )
+
+
+def compute_generated_subalgebra(request: SubalgebraRequest) -> SubalgebraResult:
+    return native.generated_subalgebra(request.algebra, request.generators)
+
+
+def compute_homomorphism_profile(
+    request: HomomorphismProfileRequest,
+) -> HomomorphismProfileResult:
+    return native.homomorphism_profile(request.carrier_map)
+
+
+def compute_congruence(request: CongruenceRequest) -> CongruenceResult:
+    return native.congruence_check(request.algebra, request.partition)
+
+
+def compute_quotient(request: QuotientRequest) -> FiniteAlgebraHomomorphism:
+    return native.quotient(request.algebra, request.partition)
 
 
 def _op[

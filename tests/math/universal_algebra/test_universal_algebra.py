@@ -23,7 +23,8 @@ from jacobian.math.universal_algebra._models import (
     QuotientRequest,
     SubalgebraRequest,
 )
-from jacobian.math.universal_algebra._operations import (
+from jacobian.math.universal_algebra._tools import (
+    TOOLS,
     compute_congruence,
     compute_equation_profile,
     compute_evaluate,
@@ -31,7 +32,6 @@ from jacobian.math.universal_algebra._operations import (
     compute_homomorphism_profile,
     compute_quotient,
 )
-from jacobian.math.universal_algebra._tools import TOOLS
 
 # ---------------------------------------------------------------------------
 # Helpers

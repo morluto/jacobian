@@ -7,12 +7,12 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_theory.arithmetic._operations import continued_fraction
 from jacobian.math.number_theory.arithmetic._rational_models import (
     MAX_RATIONAL_CONTINUED_FRACTION_TERMS,
     RationalContinuedFractionResult,
     RationalValueRequest,
 )
+from jacobian.math.number_theory.arithmetic._rationals import continued_fraction
 
 
 def _request(num: str, den: str) -> RationalValueRequest:

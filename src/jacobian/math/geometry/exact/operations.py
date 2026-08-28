@@ -16,13 +16,12 @@ from jacobian.math.geometry.exact._line_arithmetic import (
 )
 from jacobian.math.geometry.exact._models import (
     MAX_PINNED_PROFILE_RESULT_BYTES,
-    DistanceGraphRequest,
     DistanceMultiplicityEntry,
-    DistanceProfileRequest,
     DistanceProfileResult,
     LabelledRationalPoint,
-    PinnedLineDistanceRequest,
+    PinnedLineConfiguration,
     PinnedLineDistanceResult,
+    PointConfiguration,
     _maximum_pinned_profile_wire_bytes,
     _require_bounded_point_configuration,
     _validation_error,
@@ -43,11 +42,8 @@ def _squared_distance(
     return result
 
 
-def compute_distance_profile(
-    request: DistanceProfileRequest,
-) -> DistanceProfileResult:
+def distance_profile(configuration: PointConfiguration) -> DistanceProfileResult:
     """Compute exact pairwise squared distances for every unordered pair."""
-    configuration = request.configuration
     points = [_to_fraction_point(point) for point in configuration.points]
     distances: Counter[Fraction] = Counter(
         _squared_distance(points[left], points[right])
@@ -68,13 +64,13 @@ def compute_distance_profile(
     )
 
 
-def compute_distance_graph(
-    request: DistanceGraphRequest,
+def distance_graph(
+    configuration: PointConfiguration,
+    target_squared_distance: CanonicalRational,
 ) -> IndexedSimpleUndirectedGraph:
     """Build the graph whose edges connect pairs at the target distance."""
-    configuration = request.configuration
     points = [_to_fraction_point(point) for point in configuration.points]
-    target = request.target_squared_distance.as_fraction()
+    target = target_squared_distance.as_fraction()
     edges = tuple(
         (left, right)
         for left in range(len(points))
@@ -87,15 +83,15 @@ def compute_distance_graph(
     )
 
 
-def compute_pinned_line_distance_profile(
-    request: PinnedLineDistanceRequest,
+def pinned_line_distance_profile(
+    configuration: PinnedLineConfiguration,
+    anchor_value: tuple[CanonicalRational, ...],
 ) -> PinnedLineDistanceResult:
     """Compute the pinned line-distance profile of a point configuration."""
     from jacobian.math.geometry.exact._models import PinnedLineEntry
 
-    configuration = request.configuration
     try:
-        _require_bounded_point_configuration(configuration, request.anchor)
+        _require_bounded_point_configuration(configuration, anchor_value)
         if len(configuration.points[0].coordinates) != 2:
             raise _validation_error(
                 "pinned_line_distance_profile_requires_a",
@@ -111,7 +107,7 @@ def compute_pinned_line_distance_profile(
                 "pinned line-distance profile requires distinct point coordinates",
             )
         if (
-            _maximum_pinned_profile_wire_bytes(configuration, request.anchor)
+            _maximum_pinned_profile_wire_bytes(configuration, anchor_value)
             > MAX_PINNED_PROFILE_RESULT_BYTES
         ):
             raise _validation_error(
@@ -126,7 +122,7 @@ def compute_pinned_line_distance_profile(
         ) from exc
 
     points = [_to_fraction_point(point) for point in configuration.points]
-    anchor = tuple(coordinate.as_fraction() for coordinate in request.anchor)
+    anchor = tuple(coordinate.as_fraction() for coordinate in anchor_value)
     lines: dict[tuple[Fraction, Fraction, Fraction], list[tuple[int, int]]] = {}
     distances: dict[tuple[Fraction, Fraction, Fraction], Fraction] = {}
     for left, right in combinations(range(len(points)), 2):
@@ -153,7 +149,8 @@ def compute_pinned_line_distance_profile(
         distance = entry.squared_distance.as_fraction()
         multiplicities[distance] = multiplicities.get(distance, 0) + 1
     return PinnedLineDistanceResult._from_kernel(
-        request,
+        configuration,
+        anchor_value,
         lines=entries,
         distance_multiplicities=tuple(
             (CanonicalRational.from_fraction(distance), count)
@@ -163,7 +160,7 @@ def compute_pinned_line_distance_profile(
 
 
 __all__ = [
-    "compute_distance_graph",
-    "compute_distance_profile",
-    "compute_pinned_line_distance_profile",
+    "distance_graph",
+    "distance_profile",
+    "pinned_line_distance_profile",
 ]

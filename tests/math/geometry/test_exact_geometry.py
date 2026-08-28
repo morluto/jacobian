@@ -19,14 +19,26 @@ from jacobian.math.geometry.exact._models import (
     PointConfiguration,
 )
 from jacobian.math.geometry.exact.operations import (
-    compute_distance_graph,
-    compute_distance_profile,
-    compute_pinned_line_distance_profile,
+    distance_graph,
+    distance_profile,
+    pinned_line_distance_profile,
 )
 from jacobian.math.graphs.spectra._models import GraphSpectrumRequest
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 type Scalar = int | Fraction
+
+
+def compute_distance_profile(request: DistanceProfileRequest):
+    return distance_profile(request.configuration)
+
+
+def compute_distance_graph(request: DistanceGraphRequest):
+    return distance_graph(request.configuration, request.target_squared_distance)
+
+
+def compute_pinned_line_distance_profile(request: PinnedLineDistanceRequest):
+    return pinned_line_distance_profile(request.configuration, request.anchor)
 
 
 class RationalWire(TypedDict):
@@ -190,10 +202,6 @@ class TestPinnedLineDistance:
         from jacobian.math.geometry.exact._models import (
             PinnedLineDistanceRequest,
         )
-        from jacobian.math.geometry.exact.operations import (
-            compute_pinned_line_distance_profile,
-        )
-
         cfg = self._cfg(
             [
                 ("b", Fraction(1, 4), Fraction(0)),
@@ -215,10 +223,6 @@ class TestPinnedLineDistance:
         from jacobian.math.geometry.exact._models import (
             PinnedLineDistanceRequest,
         )
-        from jacobian.math.geometry.exact.operations import (
-            compute_pinned_line_distance_profile,
-        )
-
         cfg = self._cfg([("a", 0, 0), ("b", 1, 0), ("c", 0, 1), ("d", 1, 1)])
         result = compute_pinned_line_distance_profile(
             PinnedLineDistanceRequest(configuration=cfg, anchor=self._anchor(0, 0)),
@@ -239,10 +243,6 @@ class TestPinnedLineDistance:
         from jacobian.math.geometry.exact._models import (
             PinnedLineDistanceRequest,
         )
-        from jacobian.math.geometry.exact.operations import (
-            compute_pinned_line_distance_profile,
-        )
-
         # Three collinear points on y=0: pairs (0,1),(0,2),(1,2) span ONE line.
         cfg = self._cfg([("a", 0, 0), ("b", 1, 0), ("c", 2, 0)])
         result = compute_pinned_line_distance_profile(
@@ -259,10 +259,6 @@ class TestPinnedLineDistance:
         from jacobian.math.geometry.exact._models import (
             PinnedLineDistanceRequest,
         )
-        from jacobian.math.geometry.exact.operations import (
-            compute_pinned_line_distance_profile,
-        )
-
         # Same geometric set, different label order -> same line coefficients.
         cfg_a = self._cfg([("a", 0, 0), ("b", 2, 0), ("c", 1, 2)])
         cfg_b = self._cfg([("x", 1, 2), ("y", 2, 0), ("z", 0, 0)])
@@ -313,10 +309,6 @@ class TestPinnedLineDistance:
             PinnedLineDistanceRequest,
             PinnedLineDistanceResult,
         )
-        from jacobian.math.geometry.exact.operations import (
-            compute_pinned_line_distance_profile,
-        )
-
         cfg = self._cfg([("a", 0, 0), ("b", 1, 0), ("c", 0, 1), ("d", 1, 1)])
         result = compute_pinned_line_distance_profile(
             PinnedLineDistanceRequest(configuration=cfg, anchor=self._anchor(0, 0))
@@ -571,10 +563,6 @@ class TestPinnedLineDistance:
             MAX_PINNED_PROFILE_RESULT_BYTES,
             _maximum_pinned_profile_wire_bytes,
         )
-        from jacobian.math.geometry.exact.operations import (
-            compute_pinned_line_distance_profile,
-        )
-
         cfg = self._cfg([("a", 0, 0), ("b", 1, 0), ("c", 0, 1), ("d", 5, 3)])
         request = PinnedLineDistanceRequest(
             configuration=cfg,
@@ -616,10 +604,6 @@ class TestCanonicalPointValueComposition:
         )
 
     def test_every_surviving_operation_accepts_canonical_configuration(self) -> None:
-        from jacobian.math.geometry.exact.operations import (
-            compute_pinned_line_distance_profile,
-        )
-
         configuration = self._configuration()
         profile = compute_distance_profile(
             DistanceProfileRequest(configuration=configuration)
@@ -648,10 +632,6 @@ class TestCanonicalPointValueComposition:
     def test_retained_configuration_feeds_sibling_operations_unchanged(self) -> None:
         """A producer's retained configuration is the canonical domain value,
         so consumers accept it without translation through a second type."""
-        from jacobian.math.geometry.exact.operations import (
-            compute_pinned_line_distance_profile,
-        )
-
         configuration = self._configuration()
         result = compute_pinned_line_distance_profile(
             PinnedLineDistanceRequest.model_validate(
@@ -848,10 +828,6 @@ class TestAggregatePairLedgerBound:
             PinnedLineDistanceResult,
             PointConfiguration,
         )
-        from jacobian.math.geometry.exact.operations import (
-            compute_pinned_line_distance_profile,
-        )
-
         def _wire(value: int) -> RationalWire:
             return {"num": str(value), "den": "1"}
 
@@ -887,10 +863,6 @@ class TestSortedPairLedger:
         from jacobian.math.geometry.exact._models import (
             PinnedLineDistanceRequest,
         )
-        from jacobian.math.geometry.exact.operations import (
-            compute_pinned_line_distance_profile,
-        )
-
         cfg = PinnedLineConfiguration(
             points=tuple(
                 _pinned_wire_point(label, x, y)

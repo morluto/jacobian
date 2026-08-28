@@ -671,7 +671,8 @@ class PinnedLineDistanceResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: PinnedLineDistanceRequest,
+        configuration: PinnedLineConfiguration,
+        anchor: tuple[CanonicalRational, ...],
         *,
         lines: tuple[PinnedLineEntry, ...],
         distance_multiplicities: tuple[tuple[CanonicalRational, int], ...],
@@ -679,10 +680,10 @@ class PinnedLineDistanceResult(StrictModel):
         """Build a result after the admitted profile kernel established it."""
 
         return cls.model_construct(
-            configuration=request.configuration,
-            anchor=request.anchor,
+            configuration=configuration,
+            anchor=anchor,
             dimension=2,
-            point_count=len(request.configuration.points),
+            point_count=len(configuration.points),
             lines=lines,
             distance_multiplicities=distance_multiplicities,
         )

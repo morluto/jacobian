@@ -14,11 +14,25 @@ from jacobian.math.geometry.exact._models import (
     PinnedLineDistanceResult,
 )
 from jacobian.math.geometry.exact.operations import (
-    compute_distance_graph,
-    compute_distance_profile,
-    compute_pinned_line_distance_profile,
+    distance_graph,
+    distance_profile,
+    pinned_line_distance_profile,
 )
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+
+
+def _run_distance_profile(request: DistanceProfileRequest) -> DistanceProfileResult:
+    return distance_profile(request.configuration)
+
+
+def _run_distance_graph(request: DistanceGraphRequest) -> IndexedSimpleUndirectedGraph:
+    return distance_graph(request.configuration, request.target_squared_distance)
+
+
+def _run_pinned_line_distance_profile(
+    request: PinnedLineDistanceRequest,
+) -> PinnedLineDistanceResult:
+    return pinned_line_distance_profile(request.configuration, request.anchor)
 
 
 def _op[
@@ -122,7 +136,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "multiplicity profile.",
         DistanceProfileRequest,
         DistanceProfileResult,
-        compute_distance_profile,
+        _run_distance_profile,
         "geometry",
         "distance",
         "exact",
@@ -142,7 +156,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "at exactly that distance.",
         DistanceGraphRequest,
         IndexedSimpleUndirectedGraph,
-        compute_distance_graph,
+        _run_distance_graph,
         "geometry",
         "distance-graph",
         "exact",
@@ -167,7 +181,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "sorted multiplicity partition.",
         PinnedLineDistanceRequest,
         PinnedLineDistanceResult,
-        compute_pinned_line_distance_profile,
+        _run_pinned_line_distance_profile,
         "geometry",
         "pinned-distance",
         "lines",

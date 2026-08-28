@@ -14,7 +14,7 @@ from jacobian.canonical import (
     format_canonical_integer,
 )
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._models import MAX_INPUT_RATIONAL_DIGITS
 
@@ -119,24 +119,40 @@ def _admit_graph_connection_request(
 ) -> tuple[tuple[Any, ...], int]:
     """Normalize edge probabilities and admit the complete ledger envelope."""
     if len(request.graph.vertices) > MAX_GRAPH_RELIABILITY_VERTICES:
-        raise ValueError(
-            "graph reliability exceeds the "
-            f"{MAX_GRAPH_RELIABILITY_VERTICES}-vertex bound"
+        raise OperationDomainValidationError(
+            location=("graph", "vertices"),
+            code="probability.graph_reliability.vertex_bound",
+            message=(
+                "graph reliability exceeds the "
+                f"{MAX_GRAPH_RELIABILITY_VERTICES}-vertex bound"
+            ),
         )
     if len(request.graph.edges) > MAX_GRAPH_RELIABILITY_EDGES:
-        raise ValueError(
-            f"graph reliability exceeds the {MAX_GRAPH_RELIABILITY_EDGES}-edge bound"
+        raise OperationDomainValidationError(
+            location=("graph", "edges"),
+            code="probability.graph_reliability.edge_bound",
+            message=(
+                f"graph reliability exceeds the {MAX_GRAPH_RELIABILITY_EDGES}-edge bound"
+            ),
         )
     if tuple(item.edge for item in request.edge_probabilities) != request.graph.edges:
-        raise ValueError(
-            "edge probabilities must cover graph edges in canonical graph order"
+        raise OperationDomainValidationError(
+            location=("edge_probabilities",),
+            code="probability.graph_reliability.edge_probability_binding",
+            message=(
+                "edge probabilities must cover graph edges in canonical graph order"
+            ),
         )
     if (
         len(request.terminals) != 2
         or request.terminals[0] == request.terminals[1]
         or any(terminal not in request.graph.vertices for terminal in request.terminals)
     ):
-        raise ValueError("terminals must be two distinct declared graph vertices")
+        raise OperationDomainValidationError(
+            location=("terminals",),
+            code="probability.graph_reliability.terminals",
+            message="terminals must be two distinct declared graph vertices",
+        )
 
     from flint import fmpq
 
@@ -145,7 +161,11 @@ def _admit_graph_connection_request(
         probability = item.open_probability.as_fraction()
         probabilities.append(fmpq(probability.numerator, probability.denominator))
     if any(not 0 <= probability <= 1 for probability in probabilities):
-        raise ValueError("graph reliability probabilities must lie in [0, 1]")
+        raise OperationDomainValidationError(
+            location=("edge_probabilities",),
+            code="probability.graph_reliability.probability_range",
+            message="graph reliability probabilities must lie in [0, 1]",
+        )
 
     edge_count = len(request.graph.edges)
     state_count = 1 << edge_count
@@ -187,9 +207,13 @@ def _admit_graph_connection_request(
         + GRAPH_RELIABILITY_LEDGER_FIXED_BYTES
     )
     if estimated_ledger_bytes > MAX_GRAPH_RELIABILITY_LEDGER_BYTES:
-        raise ValueError(
-            "graph reliability request can exceed the complete ledger "
-            f"budget of {MAX_GRAPH_RELIABILITY_LEDGER_BYTES} bytes"
+        raise OperationDomainValidationError(
+            location=("edge_probabilities",),
+            code="probability.graph_reliability.ledger_budget",
+            message=(
+                "graph reliability request can exceed the complete ledger "
+                f"budget of {MAX_GRAPH_RELIABILITY_LEDGER_BYTES} bytes"
+            ),
         )
     return tuple(probabilities), state_count
 

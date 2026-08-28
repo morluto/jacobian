@@ -6,7 +6,11 @@ from pydantic import Field, StrictStr
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import (
+    MathTool,
+    MathTools,
+    OperationDomainValidationError,
+)
 from jacobian.math.graphs.graph6 import (
     Graph6DecodeValue,
     decode_graph6,
@@ -18,7 +22,14 @@ class Graph6DecodeRequest(StrictModel):
 
 
 def _decode(request: Graph6DecodeRequest) -> Graph6DecodeValue:
-    return decode_graph6(request.graph6)
+    try:
+        return decode_graph6(request.graph6)
+    except ValueError as error:
+        raise OperationDomainValidationError(
+            location=("graph6",),
+            code="graph.encoding.graph6.invalid_payload",
+            message=str(error),
+        ) from error
 
 
 TOOLS: MathTools = (

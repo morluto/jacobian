@@ -71,19 +71,6 @@ class GroupElementOrderRequest(StrictModel):
     degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
     generator: tuple[int, ...] = Field(min_length=1, max_length=MAX_GROUP_DEGREE)
 
-    @model_validator(mode="after")
-    def require_valid_generator(self) -> Self:
-        if len(self.generator) != self.degree:
-            raise _validation_error(
-                "group.generator_length", "generator must have length equal to degree"
-            )
-        if sorted(self.generator) != list(range(self.degree)):
-            raise _validation_error(
-                "group.generator_permutation",
-                "generator must be a permutation of 0..n-1",
-            )
-        return self
-
 
 class GroupElementOrderResult(StrictModel):
     """The exact order of one permutation."""
@@ -107,14 +94,6 @@ class GroupOrbitRequest(StrictModel):
         )
     )
     point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
-
-    @model_validator(mode="after")
-    def require_point_in_group(self) -> Self:
-        if not 0 <= self.point < self.group.degree:
-            raise _validation_error(
-                "group.point_out_of_range", "point must be in 0..group.degree-1"
-            )
-        return self
 
 
 class GroupOrbitResult(StrictModel):
@@ -146,21 +125,6 @@ class GroupConjugacyClassesRequest(StrictModel):
             f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER}."
         ),
     )
-
-    @model_validator(mode="after")
-    def require_valid_generators(self) -> Self:
-        for perm in self.generators:
-            if len(perm) != self.degree:
-                raise _validation_error(
-                    "group.generator_length",
-                    "each generator must have length equal to degree",
-                )
-            if sorted(perm) != list(range(self.degree)):
-                raise _validation_error(
-                    "group.generator_permutation",
-                    "each generator must be a permutation of 0..n-1",
-                )
-        return self
 
 
 ConjugacyClassElement = Annotated[
@@ -263,14 +227,6 @@ class GroupStabilizerRequest(StrictModel):
         )
     )
     point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
-
-    @model_validator(mode="after")
-    def require_point_in_group(self) -> Self:
-        if not 0 <= self.point < self.group.degree:
-            raise _validation_error(
-                "group.point_out_of_range", "point must be in 0..group.degree-1"
-            )
-        return self
 
 
 def _require_permutation(perm: tuple[int, ...], degree: int, label: str) -> None:

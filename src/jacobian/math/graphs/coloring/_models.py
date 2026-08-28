@@ -20,7 +20,6 @@ from jacobian.math.graphs.values import (
 # than treating 64 vertices as the mathematical domain: sparse graphs on the
 # shared 256-vertex axis are no more expensive in the vertex-coloring formula.
 MAX_COLORING_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
-MAX_EDGE_COLORING_VERTICES = MAX_COLORING_VERTICES
 _DENSE_COLORING_REFERENCE_ORDER = 64
 MAX_COLORING_COLORS = _DENSE_COLORING_REFERENCE_ORDER
 MAX_EDGE_COLORING_EDGES = (

@@ -20,6 +20,12 @@ from jacobian.math.cluster_algebras._models import (
 def _admit_mutation(request: SeedMutationRequest) -> None:
     """Expose mutation-growth admission as a typed domain failure."""
 
+    if request.mutation_index >= request.exchange_matrix.n:
+        raise OperationDomainValidationError(
+            location=("mutation_index",),
+            code="cluster_algebra.mutation_index",
+            message="mutation_index must be in 0..n-1",
+        )
     try:
         _require_mutatable(request.exchange_matrix, request.mutation_index)
     except PydanticCustomError as exc:

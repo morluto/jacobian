@@ -90,8 +90,11 @@ class TestSeedMutation:
     def test_invalid_mutation_index(self) -> None:
         """Mutation index out of range should fail."""
         b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
-        with pytest.raises(ValueError, match="mutation_index"):
-            SeedMutationRequest(exchange_matrix=b, mutation_index=2)
+        request = SeedMutationRequest(exchange_matrix=b, mutation_index=2)
+        with pytest.raises(OperationDomainValidationError) as caught:
+            mutate_seed(request)
+        assert caught.value.errors()[0]["loc"] == ("mutation_index",)
+        assert caught.value.errors()[0]["type"] == "cluster_algebra.mutation_index"
 
     def test_skew_symmetrizable(self) -> None:
         """A non-skew-symmetrizable matrix should fail."""

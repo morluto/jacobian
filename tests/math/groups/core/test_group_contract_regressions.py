@@ -36,8 +36,11 @@ def _group_error(code: str) -> Iterator[None]:
 
 def test_group_orbit_contract_binds_the_point_to_the_declared_degree() -> None:
     group = PermutationGroup(degree=2, generators=((1, 0),))
-    with _group_error("group.point_out_of_range"):
-        GroupOrbitRequest(group=group, point=3)
+    request = GroupOrbitRequest(group=group, point=3)
+    with pytest.raises(OperationDomainValidationError) as info:
+        compute_group_orbit(request)
+    assert info.value.errors()[0]["type"] == "group.point_out_of_range"
+    assert info.value.errors()[0]["loc"] == ("point",)
 
 
 def test_group_orbit_request_accepts_stabilizer_value_unchanged() -> None:
@@ -331,8 +334,11 @@ def test_group_stabilizer_degree_one_boundary() -> None:
 
 def test_group_stabilizer_rejects_invalid_point() -> None:
     group = PermutationGroup(degree=2, generators=((1, 0),))
-    with _group_error("group.point_out_of_range"):
-        GroupStabilizerRequest(group=group, point=5)
+    request = GroupStabilizerRequest(group=group, point=5)
+    with pytest.raises(OperationDomainValidationError) as info:
+        compute_group_stabilizer(request)
+    assert info.value.errors()[0]["type"] == "group.point_out_of_range"
+    assert info.value.errors()[0]["loc"] == ("point",)
     with pytest.raises(OperationDomainValidationError, match="point") as error:
         group_stabilizer(group, 7)
     assert error.value.errors()[0]["loc"] == ("point",)

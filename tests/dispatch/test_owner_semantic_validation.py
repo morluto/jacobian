@@ -90,6 +90,102 @@ def test_symbolic_dynamics_enumeration_admission_is_typed() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("operation_id", "payload", "location", "code"),
+    (
+        (
+            "group.element_order.compute",
+            {"degree": 3, "generator": [0, 0, 1]},
+            ("generator",),
+            "group.generator_permutation",
+        ),
+        (
+            "group.orbit.compute",
+            {
+                "group": {"degree": 2, "generators": [[1, 0]]},
+                "point": 3,
+            },
+            ("point",),
+            "group.point_out_of_range",
+        ),
+        (
+            "group.conjugacy_classes.compute",
+            {"degree": 3, "generators": [[0, 0, 1]]},
+            ("generators",),
+            "group.generator_permutation",
+        ),
+        (
+            "group.stabilizer.compute",
+            {
+                "group": {"degree": 2, "generators": [[1, 0]]},
+                "point": 3,
+            },
+            ("point",),
+            "group.point_out_of_range",
+        ),
+    ),
+)
+def test_group_semantic_admission_is_owned_by_native_operations(
+    operation_id: str,
+    payload: dict[str, object],
+    location: tuple[str, ...],
+    code: str,
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as caught:
+        invoke_operation(operation_id, payload, Catalog.open())
+
+    assert caught.value.errors()[0]["loc"] == location
+    assert caught.value.errors()[0]["type"] == code
+
+
+def test_euclidean_segment_admission_is_typed() -> None:
+    operation_id = "geometry.euclidean.segment_ratio.compute"
+    payload = _example_payload(operation_id)
+    payload["segment2"] = [
+        {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
+        {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
+    ]
+
+    with pytest.raises(OperationDomainValidationError) as caught:
+        invoke_operation(operation_id, payload, Catalog.open())
+
+    assert caught.value.errors()[0]["loc"] == ("second",)
+    assert caught.value.errors()[0]["type"] == "geometry.second_segment_nonzero"
+
+
+@pytest.mark.parametrize(
+    ("operation_id", "payload", "location", "code"),
+    (
+        (
+            "rational.compute.reciprocal",
+            {"value": {"num": "0", "den": "1"}},
+            ("value",),
+            "arithmetic.reciprocal_requires_nonzero",
+        ),
+        (
+            "rational.compute.quotient",
+            {
+                "left": {"num": "1", "den": "2"},
+                "right": {"num": "0", "den": "1"},
+            },
+            ("right",),
+            "arithmetic.division_requires_nonzero_divisor",
+        ),
+    ),
+)
+def test_rational_arithmetic_admission_is_typed(
+    operation_id: str,
+    payload: dict[str, object],
+    location: tuple[str, ...],
+    code: str,
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as caught:
+        invoke_operation(operation_id, payload, Catalog.open())
+
+    assert caught.value.errors()[0]["loc"] == location
+    assert caught.value.errors()[0]["type"] == code
+
+
 def test_orthogonal_recurrence_admission_is_typed() -> None:
     operation_id = "orthogonal_polynomial.recurrence.compute"
     payload = _example_payload(operation_id)

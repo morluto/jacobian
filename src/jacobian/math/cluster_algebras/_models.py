@@ -187,14 +187,6 @@ class SeedMutationRequest(StrictModel):
     exchange_matrix: ExchangeMatrix
     mutation_index: int = Field(ge=0)
 
-    @model_validator(mode="after")
-    def require_valid_index(self) -> Self:
-        if self.mutation_index >= self.exchange_matrix.n:
-            raise _validation_error(
-                "cluster_algebra.mutation_index", "mutation_index must be in 0..n-1"
-            )
-        return self
-
 
 class SeedMutationResult(StrictModel):
     """The mutated exchange matrix after applying the Fomin-Zelevinsky mutation."""

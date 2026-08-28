@@ -69,34 +69,17 @@ def _digits(values: tuple[str, ...]) -> int:
     return max((len(value.lstrip("-")) for value in values), default=1)
 
 
-def _product_digits(request: IntegerSequence, *, prefix: bool = False) -> int:
-    """Bound product widths, accounting for the absorbing zero value."""
+def _multiplicative_digits(request: IntegerSequence, *, prefix: bool = False) -> int:
+    """Bound product-like widths, accounting for the absorbing zero value."""
 
-    if not prefix and "0" in request.values:
-        return 1
-    widths: list[int] = []
     total = 0
+    maximum = 1
     for value in request.values:
-        total += len(value.lstrip("-"))
-        widths.append(total)
         if value == "0":
-            total = 1
-    return max(widths, default=1)
-
-
-def _lcm_digits(request: IntegerSequence, *, prefix: bool = False) -> int:
-    """Bound lcm widths, accounting for zero absorbing later prefixes."""
-
-    if not prefix and "0" in request.values:
-        return 1
-    widths: list[int] = []
-    total = 0
-    for value in request.values:
+            return maximum if prefix else 1
         total += len(value.lstrip("-"))
-        widths.append(total)
-        if value == "0":
-            total = 1
-    return max(widths, default=1)
+        maximum = max(maximum, total)
+    return maximum
 
 
 def _values(request: IntegerSequenceRequest) -> list[int]:
@@ -121,7 +104,7 @@ def sequence_sum(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
 
 
 def sequence_product(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
-    values = _admit(request, output_digits=_product_digits(request))
+    values = _admit(request, output_digits=_multiplicative_digits(request))
     return _value_result(math.prod(values))
 
 
@@ -131,7 +114,7 @@ def sequence_gcd(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
 
 
 def sequence_lcm(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
-    values = _admit(request, output_digits=_lcm_digits(request))
+    values = _admit(request, output_digits=_multiplicative_digits(request))
     return _value_result(reduce(math.lcm, values, 1))
 
 
@@ -221,7 +204,7 @@ def second_differences(request: IntegerSequenceRequest) -> IntegerSequenceListRe
 def prefix_products(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
     values = _admit(
         request,
-        output_digits=_product_digits(request, prefix=True),
+        output_digits=_multiplicative_digits(request, prefix=True),
         output_items=len(request.values),
     )
     total = 1
@@ -271,7 +254,7 @@ def prefix_gcds(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
 def prefix_lcms(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
     values = _admit(
         request,
-        output_digits=_lcm_digits(request, prefix=True),
+        output_digits=_multiplicative_digits(request, prefix=True),
         output_items=len(request.values),
     )
     result = [abs(values[0])]

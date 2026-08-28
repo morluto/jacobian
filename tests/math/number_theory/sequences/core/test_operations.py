@@ -34,7 +34,10 @@ from jacobian.math.number_theory.sequences.core.operations import (
     sorted_unique,
     zero_indices,
 )
-from jacobian.math.number_theory.sequences.core.values import IntegerSequence
+from jacobian.math.number_theory.sequences.core.values import (
+    MAX_INTEGER_SEQUENCE_ITEM_DIGITS,
+    IntegerSequence,
+)
 
 
 def test_native_aggregate_and_statistic_values_are_exact() -> None:
@@ -83,3 +86,12 @@ def test_native_admission_rejects_unrepresentable_product() -> None:
         sequence_product(sequence)
 
     assert error.value.errors()[0]["type"] == "sequences.result_digits_exceeded"
+
+
+def test_zero_absorbs_later_prefix_product_and_lcm_widths() -> None:
+    sequence = IntegerSequence(
+        values=("0", "1" + "0" * (MAX_INTEGER_SEQUENCE_ITEM_DIGITS - 1))
+    )
+
+    assert prefix_products(sequence).values == ("0", "0")
+    assert prefix_lcms(sequence).values == ("0", "0")

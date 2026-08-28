@@ -6,7 +6,7 @@ import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._models import PolynomialGcdRequest
-from jacobian.math.polynomials._operations import polynomial_gcd
+from jacobian.math.polynomials.operations import polynomial_gcd
 
 ZERO = {
     "domain": "QQ",

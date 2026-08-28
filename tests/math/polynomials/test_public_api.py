@@ -119,7 +119,7 @@ def _univariate(variable: str, terms: dict[int, str]) -> Any:
 def test_factor_producers_compute_once_and_round_trip_structurally(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from jacobian.math.polynomials import _operations
+    from jacobian.math.polynomials import operations as _operations
     from jacobian.math.polynomials._models import (
         PolynomialFactorizationResult,
         PolynomialFactorRequest,
@@ -129,8 +129,8 @@ def test_factor_producers_compute_once_and_round_trip_structurally(
 
     source = _univariate("x", {4: "1", 2: "-2", 0: "1"})
     factor_calls = square_free_calls = 0
-    original_factorization = polynomials.factorization
-    original_square_free = polynomials.square_free_decomposition
+    original_factorization = _operations.factorization
+    original_square_free = _operations.square_free_decomposition
 
     def count_factorization(poly: Any) -> Any:
         nonlocal factor_calls
@@ -142,8 +142,8 @@ def test_factor_producers_compute_once_and_round_trip_structurally(
         square_free_calls += 1
         return original_square_free(poly)
 
-    monkeypatch.setattr(polynomials, "factorization", count_factorization)
-    monkeypatch.setattr(polynomials, "square_free_decomposition", count_square_free)
+    monkeypatch.setattr(_operations, "factorization", count_factorization)
+    monkeypatch.setattr(_operations, "square_free_decomposition", count_square_free)
     factorization = _operations.polynomial_factorization(
         PolynomialFactorRequest(polynomial=source)
     )
@@ -168,7 +168,7 @@ def test_factor_results_keep_structural_ring_and_order_checks() -> None:
         PolynomialFactorRequest,
         PolynomialIrreducibleFactor,
     )
-    from jacobian.math.polynomials._operations import polynomial_factorization
+    from jacobian.math.polynomials.operations import polynomial_factorization
 
     result = polynomial_factorization(
         PolynomialFactorRequest(polynomial=_univariate("x", {3: "1", 0: "-1"}))

@@ -5,7 +5,7 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
 )
 from jacobian.math.polynomials._models import PolynomialGcdRequest
-from jacobian.math.polynomials._operations import polynomial_gcd
+from jacobian.math.polynomials.operations import polynomial_gcd
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     SparseRationalPolynomial,

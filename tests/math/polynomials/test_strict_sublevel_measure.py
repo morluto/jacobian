@@ -12,14 +12,14 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
-from jacobian.math.polynomials.real_algebra._operations import (
-    compute_strict_sublevel_measure,
-)
 from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
     LevelRootEndpoint,
     ScopeEndpoint,
     StrictSublevelMeasureRequest,
     StrictSublevelMeasureResult,
+)
+from jacobian.math.polynomials.real_algebra.operations import (
+    compute_strict_sublevel_measure,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -128,8 +128,8 @@ def test_quadratic_measure_retains_exact_irrational_boundary_sum() -> None:
 def test_producer_isolates_once_and_result_parsing_stays_structural(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import jacobian.math.polynomials.real_algebra._operations as operations
     import jacobian.math.polynomials.real_algebra._strict_sublevel as kernel
+    import jacobian.math.polynomials.real_algebra.operations as operations
 
     calls = 0
     original = kernel.compute_strict_sublevel_payload

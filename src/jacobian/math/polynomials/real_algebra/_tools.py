@@ -12,14 +12,14 @@ from jacobian.math.polynomials.real_algebra._models import (
     SturmChainRequest,
     SturmChainResult,
 )
-from jacobian.math.polynomials.real_algebra._operations import (
-    compute_root_count,
-    compute_strict_sublevel_measure,
-    compute_sturm_chain,
-)
 from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
     StrictSublevelMeasureRequest,
     StrictSublevelMeasureResult,
+)
+from jacobian.math.polynomials.real_algebra.operations import (
+    compute_root_count,
+    compute_strict_sublevel_measure,
+    compute_sturm_chain,
 )
 
 

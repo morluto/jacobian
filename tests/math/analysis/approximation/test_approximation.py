@@ -17,14 +17,26 @@ from jacobian.math.analysis.approximation._models import (
     RationalNodeSet,
 )
 from jacobian.math.analysis.approximation.operations import (
-    compute_lagrange_basis,
-    compute_lagrange_interpolation,
+    lagrange_basis,
+    lagrange_interpolate,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+
+
+def compute_lagrange_basis(request: LagrangeBasisRequest) -> LagrangeBasisResult:
+    return lagrange_basis(request.nodes)
+
+
+def compute_lagrange_interpolation(
+    request: LagrangeInterpolationRequest,
+) -> LagrangeInterpolationResult:
+    return LagrangeInterpolationResult(
+        polynomial=lagrange_interpolate(request.nodes.nodes, request.values)
+    )
 
 
 class RationalWire(TypedDict):

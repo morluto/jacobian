@@ -8,10 +8,7 @@ from fractions import Fraction
 from jacobian._exact import CanonicalRational
 from jacobian.math.analysis.approximation._models import (
     LagrangeBasisPolynomial,
-    LagrangeBasisRequest,
     LagrangeBasisResult,
-    LagrangeInterpolationRequest,
-    LagrangeInterpolationResult,
     RationalNodeSet,
     admit_interpolation_values,
 )
@@ -60,7 +57,7 @@ def _poly_scale(a: Sequence[Fraction], scale: Fraction) -> list[Fraction]:
 
 def _interpolate(
     node_set: RationalNodeSet, values: tuple[CanonicalRational, ...]
-) -> LagrangeInterpolationResult:
+) -> RationalPolynomial:
     admit_interpolation_values(node_set, values)
     nodes = [node.as_fraction() for node in node_set.nodes]
     samples = [value.as_fraction() for value in values]
@@ -74,28 +71,24 @@ def _interpolate(
         result = _poly_add(result, _poly_scale(basis, samples[k]))
     while len(result) > 1 and result[-1] == 0:
         result.pop()
-    return LagrangeInterpolationResult(polynomial=_polynomial_from_coeffs(result))
+    return _polynomial_from_coeffs(result)
 
 
 def lagrange_interpolate(
     nodes: Sequence[CanonicalRational], values: Sequence[CanonicalRational]
 ) -> RationalPolynomial:
-    return _interpolate(RationalNodeSet(nodes=tuple(nodes)), tuple(values)).polynomial
+    return _interpolate(RationalNodeSet(nodes=tuple(nodes)), tuple(values))
 
 
-def compute_lagrange_interpolation(
-    request: LagrangeInterpolationRequest,
-) -> LagrangeInterpolationResult:
-    return _interpolate(request.nodes, request.values)
+def lagrange_basis(nodes: RationalNodeSet) -> LagrangeBasisResult:
+    """Return the exact Lagrange basis and barycentric weights for ``nodes``."""
 
-
-def compute_lagrange_basis(request: LagrangeBasisRequest) -> LagrangeBasisResult:
-    nodes = [node.as_fraction() for node in request.nodes.nodes]
+    rational_nodes = [node.as_fraction() for node in nodes.nodes]
     basis = []
-    for k, x_k in enumerate(nodes):
+    for k, x_k in enumerate(rational_nodes):
         polynomial = [Fraction(1)]
         denominator = Fraction(1)
-        for i, x_i in enumerate(nodes):
+        for i, x_i in enumerate(rational_nodes):
             if i != k:
                 polynomial = _poly_multiply(polynomial, [-x_i, Fraction(1)])
                 denominator *= x_k - x_i
@@ -108,12 +101,11 @@ def compute_lagrange_basis(request: LagrangeBasisRequest) -> LagrangeBasisResult
             )
         )
     return LagrangeBasisResult(
-        nodes=request.nodes, node_count=len(nodes), basis=tuple(basis)
+        nodes=nodes, node_count=len(rational_nodes), basis=tuple(basis)
     )
 
 
 __all__ = [
-    "compute_lagrange_basis",
-    "compute_lagrange_interpolation",
+    "lagrange_basis",
     "lagrange_interpolate",
 ]

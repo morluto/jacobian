@@ -13,9 +13,21 @@ from jacobian.math.analysis.approximation._models import (
     LagrangeInterpolationResult,
 )
 from jacobian.math.analysis.approximation.operations import (
-    compute_lagrange_basis,
-    compute_lagrange_interpolation,
+    lagrange_basis,
+    lagrange_interpolate,
 )
+
+
+def _run_lagrange_basis(request: LagrangeBasisRequest) -> LagrangeBasisResult:
+    return lagrange_basis(request.nodes)
+
+
+def _run_lagrange_interpolation(
+    request: LagrangeInterpolationRequest,
+) -> LagrangeInterpolationResult:
+    return LagrangeInterpolationResult(
+        polynomial=lagrange_interpolate(request.nodes.nodes, request.values)
+    )
 
 
 def approximation_operation[
@@ -78,7 +90,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "weights w_k = 1/prod_{i!=k}(x_k - x_i) over QQ.",
         LagrangeBasisRequest,
         LagrangeBasisResult,
-        compute_lagrange_basis,
+        _run_lagrange_basis,
         "approximation",
         "lagrange",
         "interpolation",
@@ -99,7 +111,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "most n-1 such that p(x_k) = y_k, using the Lagrange formula over QQ.",
         LagrangeInterpolationRequest,
         LagrangeInterpolationResult,
-        compute_lagrange_interpolation,
+        _run_lagrange_interpolation,
         "approximation",
         "lagrange",
         "interpolation",

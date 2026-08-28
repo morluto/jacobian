@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from fractions import Fraction
 
 import sympy
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -42,6 +42,7 @@ from jacobian.math.polynomials.maps.values import (
     RationalPolynomialMap,
     require_map_polynomial,
 )
+from jacobian.math.polynomials.values import rational_evaluation_component_digit_bounds
 
 
 def _run_admission(admission: Callable[[], object]) -> None:
@@ -65,18 +66,19 @@ def _admit_evaluation(request: EvalRequest) -> None:
         raise _validation_error(
             "evaluation point must use the polynomial's complete ordered axis"
         )
-    value = Fraction(0)
-    for term in request.polynomial.polynomial.terms:
-        monomial = term.coefficient.as_fraction()
-        for coordinate, exponent in zip(
-            request.point.values, term.exponents, strict=True
-        ):
-            monomial *= coordinate.as_fraction() ** exponent
-        value += monomial
-    # Exercise the public exact carrier before invoking the backend.
-    from jacobian._exact import CanonicalRational
-
-    CanonicalRational.from_fraction(value)
+    numerator_digits, denominator_digits = rational_evaluation_component_digit_bounds(
+        request.polynomial,
+        request.point.values,
+    )
+    if max(numerator_digits, denominator_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationDomainValidationError(
+            location=("polynomial", "point"),
+            code="polynomial.evaluation_result_exceeds_component_bound",
+            message=(
+                "exact evaluation exceeds the "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational component bound"
+            ),
+        )
 
 
 def _admit_composition(request: CompositionRequest) -> None:

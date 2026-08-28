@@ -1,4 +1,7 @@
-from jacobian._exact import CanonicalRational
+import pytest
+
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._elementary import INTEGER_POLYNOMIAL_OPERATIONS
 from jacobian.math.polynomials._elementary_operations import (
     integer_polynomial_evaluate,
@@ -51,3 +54,31 @@ def test_rational_polynomial_evaluation_is_exact() -> None:
     )
 
     assert result.value == CanonicalRational(num="5", den="1")
+
+
+def test_rational_polynomial_evaluation_rejects_oversized_exact_result() -> None:
+    polynomial = RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num="1", den="1"),
+                    exponents=(64,),
+                ),
+            )
+        ),
+    )
+    request = RationalPolynomialEvaluationRequest(
+        polynomial=polynomial,
+        point=CanonicalRational(
+            num="1" + "0" * (MAX_CANONICAL_RATIONAL_DIGITS - 1),
+            den="1",
+        ),
+    )
+
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        rational_polynomial_evaluate(request)
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "polynomial.evaluation_result_exceeds_component_bound"
+    )

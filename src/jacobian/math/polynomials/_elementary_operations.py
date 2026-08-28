@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import polynomials
@@ -44,7 +45,10 @@ from jacobian.math.polynomials._models import (
     RationalPolynomialRequest,
     _validation_error,
 )
-from jacobian.math.polynomials.values import require_polynomial_budget
+from jacobian.math.polynomials.values import (
+    rational_evaluation_component_digit_bounds,
+    require_polynomial_budget,
+)
 
 
 def _run_admission(admission: Any) -> None:
@@ -104,6 +108,25 @@ def _admit_rational(request: RationalPolynomialRequest) -> None:
         maximum_terms=_MAX_GCD_TERMS,
         maximum_exponent=_MAX_ELEMENTARY_DEGREE,
     )
+
+
+def _admit_rational_evaluation(
+    request: RationalPolynomialEvaluationRequest,
+) -> None:
+    _admit_rational(request)
+    numerator_digits, denominator_digits = rational_evaluation_component_digit_bounds(
+        request.polynomial,
+        (request.point,),
+    )
+    if max(numerator_digits, denominator_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationDomainValidationError(
+            location=("polynomial", "point"),
+            code="polynomial.evaluation_result_exceeds_component_bound",
+            message=(
+                "exact evaluation exceeds the "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational component bound"
+            ),
+        )
 
 
 def _admit_division(request: RationalPolynomialDivisionRequest) -> None:
@@ -255,7 +278,7 @@ def rational_polynomial_division(
 def rational_polynomial_evaluate(
     request: RationalPolynomialEvaluationRequest,
 ) -> RationalPolynomialEvaluationResult:
-    _run_admission(lambda: _admit_rational(request))
+    _run_admission(lambda: _admit_rational_evaluation(request))
     point = request.point.as_fraction()
     from sympy import Rational
 

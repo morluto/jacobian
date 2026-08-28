@@ -279,6 +279,78 @@ def require_polynomial_budget(
     )
 
 
+def rational_evaluation_component_digit_bounds(
+    polynomial: RationalPolynomial,
+    point: tuple[CanonicalRational, ...],
+) -> tuple[int, int]:
+    """Bound numerator and denominator digits for exact point evaluation.
+
+    The bound uses a common denominator formed from coefficient denominators
+    and the greatest exponent of each point denominator. It is intentionally
+    source-derived so evaluation can be rejected before exponentiation.
+    """
+
+    if len(point) != len(polynomial.variables):
+        raise ValueError("evaluation point must match the polynomial axis")
+    active_terms = tuple(
+        term
+        for term in polynomial.polynomial.terms
+        if not any(
+            exponent and coordinate.num == "0"
+            for coordinate, exponent in zip(point, term.exponents, strict=True)
+        )
+    )
+    if not active_terms:
+        return 1, 1
+
+    maximum_exponents = tuple(
+        max(term.exponents[axis] for term in active_terms) for axis in range(len(point))
+    )
+    has_nontrivial_denominator = any(
+        term.coefficient.den != "1" for term in active_terms
+    ) or any(
+        exponent and coordinate.den != "1"
+        for coordinate, exponent in zip(point, maximum_exponents, strict=True)
+    )
+    common_denominator_digits = max(
+        1,
+        sum(
+            len(term.coefficient.den)
+            for term in active_terms
+            if term.coefficient.den != "1"
+        )
+        + sum(
+            exponent * len(coordinate.den)
+            for coordinate, exponent in zip(point, maximum_exponents, strict=True)
+            if coordinate.den != "1"
+        ),
+    )
+    maximum_term_numerator_digits = max(
+        max(
+            1,
+            (
+                0
+                if term.coefficient.num in {"1", "-1"}
+                else len(term.coefficient.num.lstrip("-"))
+            )
+            + sum(
+                exponent * len(coordinate.num.lstrip("-"))
+                for coordinate, exponent in zip(point, term.exponents, strict=True)
+                if coordinate.num not in {"1", "-1"}
+            ),
+        )
+        for term in active_terms
+    )
+    denominator_scale_digits = (
+        common_denominator_digits if has_nontrivial_denominator else 0
+    )
+    addition_digits = 0 if len(active_terms) == 1 else len(str(len(active_terms) - 1))
+    numerator_digits = (
+        maximum_term_numerator_digits + denominator_scale_digits + addition_digits
+    )
+    return numerator_digits, common_denominator_digits
+
+
 __all__ = [
     "MAX_POLYNOMIAL_EXPONENT",
     "MAX_POLYNOMIAL_TERMS",
@@ -289,6 +361,7 @@ __all__ = [
     "RationalPolynomialIdeal",
     "RationalPolynomialTerm",
     "SparseRationalPolynomial",
+    "rational_evaluation_component_digit_bounds",
     "require_polynomial_budget",
     "require_sparse_polynomial_budget",
 ]

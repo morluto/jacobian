@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from jacobian.math.combinatorics.designs.incidence_structures._kernel import (
+    containment_profile_data,
+    incidence_trade_data,
+)
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
     ContainmentProfileResult,
     IncidenceMomentComparison,
@@ -9,10 +13,6 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IncidenceTradeResult,
     _require_containment_profile_admitted,
     _require_incidence_trade_admitted,
-)
-from jacobian.math.combinatorics.designs.incidence_structures._operations import (
-    _containment_profile_data,
-    _incidence_trade_data,
 )
 
 
@@ -27,7 +27,7 @@ def containment_profile(
         raise TypeError("containment-profile order must be an integer")
     _require_containment_profile_admitted(incidence, order)
     return ContainmentProfileResult._from_kernel(
-        incidence, order, _containment_profile_data(incidence, order)
+        incidence, order, containment_profile_data(incidence, order)
     )
 
 
@@ -43,7 +43,7 @@ def check_incidence_trade(
     if type(max_order) is not int:
         raise TypeError("trade comparison order must be an integer")
     _require_incidence_trade_admitted(left, right, max_order)
-    zeroth_difference, comparisons, _positive_moments_equal = _incidence_trade_data(
+    zeroth_difference, comparisons, _positive_moments_equal = incidence_trade_data(
         left, right, max_order
     )
     return IncidenceTradeResult._from_kernel(
@@ -61,8 +61,8 @@ def verify_incidence_moment_comparison(
         _require_containment_profile_admitted(comparison.right, comparison.order)
     except ValueError:
         return False
-    left_profile = _containment_profile_data(comparison.left, comparison.order)
-    right_profile = _containment_profile_data(comparison.right, comparison.order)
+    left_profile = containment_profile_data(comparison.left, comparison.order)
+    right_profile = containment_profile_data(comparison.right, comparison.order)
     expected_differences = tuple(
         (left_entry[0], left_entry[1], right_entry[1])
         for left_entry, right_entry in zip(

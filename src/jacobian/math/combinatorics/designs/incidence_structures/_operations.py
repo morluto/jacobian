@@ -1,10 +1,12 @@
 """Exact incidence structure operations."""
 
-from collections import Counter
 from collections.abc import Callable
-from itertools import combinations
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.designs.incidence_structures._kernel import (
+    containment_profile_data,
+    incidence_trade_data,
+)
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
     ComplementRequest,
     ComplementResult,
@@ -19,8 +21,6 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     GramResult,
     IncidenceMatrixRequest,
     IncidenceMatrixResult,
-    IncidenceMomentComparison,
-    IncidenceMultiplicityDifference,
     IncidenceStructure,
     IncidenceStructureAdmissionError,
     IncidenceTradeRequest,
@@ -34,75 +34,6 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     _require_containment_profile_admitted,
     _require_incidence_trade_admitted,
 )
-
-type _SubsetProfile = tuple[tuple[tuple[str, ...], int], ...]
-type _Histogram = tuple[tuple[int, int], ...]
-type _ContainmentProfileData = tuple[
-    _SubsetProfile, _Histogram, int, int, int, bool, int | None
-]
-
-
-def _containment_profile_data(
-    incidence: IncidenceStructure, order: int
-) -> _ContainmentProfileData:
-    """Return one complete fixed-order multiplicity profile."""
-
-    points = incidence.points
-    counts: Counter[tuple[str, ...]] = Counter()
-    for block in incidence.blocks:
-        block_members = set(block)
-        counts.update(
-            combinations(
-                tuple(point for point in points if point in block_members), order
-            )
-        )
-    subset_profile = tuple(
-        (subset, counts[subset]) for subset in combinations(points, order)
-    )
-    histogram = tuple(sorted(Counter(count for _, count in subset_profile).items()))
-    multiplicities = tuple(count for _, count in subset_profile)
-    minimum = min(multiplicities, default=0)
-    maximum = max(multiplicities, default=0)
-    return (
-        subset_profile,
-        histogram,
-        sum(multiplicities),
-        minimum,
-        maximum,
-        minimum == maximum,
-        minimum if minimum == maximum else None,
-    )
-
-
-def _incidence_trade_data(
-    left: IncidenceStructure, right: IncidenceStructure, max_order: int
-) -> tuple[int, tuple[IncidenceMomentComparison, ...], bool]:
-    comparisons: list[IncidenceMomentComparison] = []
-    for order in range(1, max_order + 1):
-        left_profile = _containment_profile_data(left, order)
-        right_profile = _containment_profile_data(right, order)
-        differences = tuple(
-            IncidenceMultiplicityDifference(
-                subset=left_entry[0],
-                left_multiplicity=left_entry[1],
-                right_multiplicity=right_entry[1],
-            )
-            for left_entry, right_entry in zip(
-                left_profile[0], right_profile[0], strict=True
-            )
-            if left_entry[1] != right_entry[1]
-        )
-        comparisons.append(
-            IncidenceMomentComparison._from_kernel(
-                left, right, order, left_profile[2], right_profile[2], differences
-            )
-        )
-    comparison_tuple = tuple(comparisons)
-    return (
-        len(left.blocks) - len(right.blocks),
-        comparison_tuple,
-        all(comparison.equal for comparison in comparison_tuple),
-    )
 
 
 def _point_sort_key(points: tuple[str, ...]) -> Callable[[str], int]:
@@ -163,7 +94,7 @@ def compute_containment_profile(
     return ContainmentProfileResult._from_kernel(
         request.incidence,
         request.t,
-        _containment_profile_data(request.incidence, request.t),
+        containment_profile_data(request.incidence, request.t),
     )
 
 
@@ -181,7 +112,7 @@ def compute_incidence_trade(request: IncidenceTradeRequest) -> IncidenceTradeRes
             message=str(exc),
         ) from exc
 
-    zeroth_difference, comparisons, _positive_moments_equal = _incidence_trade_data(
+    zeroth_difference, comparisons, _positive_moments_equal = incidence_trade_data(
         request.left, request.right, request.max_order
     )
     return IncidenceTradeResult._from_kernel(

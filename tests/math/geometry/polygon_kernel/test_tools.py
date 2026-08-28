@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import canonical_rational_component_digits
 from jacobian.canonical import encode_strict_json
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.polygon_kernel import operations
 from jacobian.math.geometry.polygon_kernel._kernel import oriented_half_planes
 from jacobian.math.geometry.polygon_kernel._models import (
@@ -24,8 +25,12 @@ from jacobian.math.geometry.polygon_kernel._models import (
     _estimate_visibility_kernel_result_characters,
 )
 from jacobian.math.geometry.polygon_kernel.operations import (
-    compute_visibility_kernel,
+    visibility_kernel,
 )
+
+
+def compute_visibility_kernel(request: PolygonKernelRequest) -> PolygonKernelResult:
+    return visibility_kernel(request.polygon)
 
 
 def _point(x: int | Fraction, y: int | Fraction) -> dict[str, object]:
@@ -357,13 +362,13 @@ def test_rejects_immediately_above_structural_boundaries() -> None:
 
 def test_rejects_derived_work_before_pairwise_expansion() -> None:
     request = _request(_parabola_polygon(10**30))
-    with pytest.raises(ValueError, match="feasibility work"):
+    with pytest.raises(OperationDomainValidationError, match="feasibility work"):
         compute_visibility_kernel(request)
 
 
 def test_rejects_derived_result_size_before_pairwise_expansion() -> None:
     request = _request(_parabola_polygon(10**45))
-    with pytest.raises(ValueError, match="result can require"):
+    with pytest.raises(OperationDomainValidationError, match="result can require"):
         compute_visibility_kernel(request)
 
 
@@ -411,5 +416,5 @@ def test_feasibility_admission_flips_at_the_derived_work_boundary() -> None:
     accepted = _request(_parabola_polygon(10**28))
     assert len(accepted.polygon.points) == MAX_KERNEL_SOURCE_VERTICES
 
-    with pytest.raises(ValueError, match="feasibility work"):
+    with pytest.raises(OperationDomainValidationError, match="feasibility work"):
         compute_visibility_kernel(_request(_parabola_polygon(10**29)))

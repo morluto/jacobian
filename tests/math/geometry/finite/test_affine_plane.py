@@ -6,10 +6,10 @@ from pydantic import ValidationError
 from jacobian.math.geometry.finite._models import (
     PrimeFieldAffinePlaneRequest,
 )
-from jacobian.math.geometry.finite._operations import (
+from jacobian.math.geometry.finite._tools import TOOLS
+from jacobian.math.geometry.finite.operations import (
     compute_prime_field_affine_plane,
 )
-from jacobian.math.geometry.finite._tools import TOOLS
 
 # ---------------------------------------------------------------------------
 # Catalog registration

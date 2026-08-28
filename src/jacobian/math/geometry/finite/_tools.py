@@ -26,7 +26,7 @@ from jacobian.math.geometry.finite._models import (
     SubspaceSpanRequest,
     SubspaceSpanResult,
 )
-from jacobian.math.geometry.finite._operations import (
+from jacobian.math.geometry.finite.operations import (
     compute_grassmannian_count,
     compute_prime_field_affine_plane,
     compute_projective_point_canonicalize,

@@ -8,7 +8,7 @@ from jacobian.math.graphs.polynomials._models import (
     GraphPolynomialResult,
     MatchingPolynomialRequest,
 )
-from jacobian.math.graphs.polynomials._operations import (
+from jacobian.math.graphs.polynomials.operations import (
     compute_chromatic_polynomial,
     compute_flow_polynomial,
     compute_matching_polynomial,

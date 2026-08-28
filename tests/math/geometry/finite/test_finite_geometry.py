@@ -24,7 +24,8 @@ from jacobian.math.geometry.finite._models import (
     SubspaceMembershipRequest,
     SubspaceSpanRequest,
 )
-from jacobian.math.geometry.finite._operations import (
+from jacobian.math.geometry.finite._tools import TOOLS
+from jacobian.math.geometry.finite.operations import (
     compute_grassmannian_count,
     compute_projective_point_canonicalize,
     compute_projective_point_equal,
@@ -34,7 +35,6 @@ from jacobian.math.geometry.finite._operations import (
     compute_subspace_membership,
     compute_subspace_span,
 )
-from jacobian.math.geometry.finite._tools import TOOLS
 from jacobian.math.geometry.finite.values import ProjectivePoint
 
 

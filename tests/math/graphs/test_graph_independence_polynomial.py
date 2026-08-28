@@ -25,7 +25,7 @@ from jacobian.math.graphs.polynomials._models import (
     TreeIndependencePolynomialRequest,
     TreeIndependencePolynomialResult,
 )
-from jacobian.math.graphs.polynomials._operations import compute_independence_polynomial
+from jacobian.math.graphs.polynomials.operations import compute_independence_polynomial
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.polynomials._elementary_operations import (
     rational_polynomial_evaluate,

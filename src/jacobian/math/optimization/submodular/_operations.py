@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian._exact import format_canonical_rational, require_bounded_rational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.optimization.submodular._models import (
     MAX_SUBMODULAR_SCAN_VALUE_DIGITS,
@@ -52,22 +52,18 @@ def evaluate_set_function(
     request: SetFunctionEvalRequest,
 ) -> SetFunctionEvalResult:
     """Evaluate f(S) by table lookup."""
-    val = _lookup(request.function, request.subset)
-    if val is not None:
-        return SetFunctionEvalResult(value=format_canonical_rational(val), found=True)
-    return SetFunctionEvalResult(value="0", found=False)
+    return SetFunctionEvalResult(value=_lookup(request.function, request.subset))
 
 
 def _lookup(
     function: SetFunction,
     subset: tuple[int, ...],
-) -> Fraction | None:
-    """Look up f(S) in the table; return None if not found."""
+) -> CanonicalRational:
+    """Look up f(S) in the request-validated complete table."""
     key = tuple(sorted(subset))
-    for entry in function.entries:
-        if tuple(sorted(entry.subset)) == key:
-            return entry.value.as_fraction()
-    return None
+    return next(
+        entry.value for entry in function.entries if tuple(sorted(entry.subset)) == key
+    )
 
 
 def check_monotonicity(

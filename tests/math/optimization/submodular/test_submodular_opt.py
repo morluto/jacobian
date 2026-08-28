@@ -43,8 +43,20 @@ class TestSetFunctionEval:
         fn = _make_uniform_function(2)
         req = SetFunctionEvalRequest(function=fn, subset=(0, 1))
         result = evaluate_set_function(req)
-        assert result.found is True
-        assert result.value == "2"
+        assert result.value == CanonicalRational(num="2", den="1")
+
+    def test_fractional_value_uses_the_shared_canonical_rational(self) -> None:
+        function = SetFunction(
+            ground_set_size=0,
+            entries=(_entry((), "1", "2"),),
+        )
+
+        result = evaluate_set_function(
+            SetFunctionEvalRequest(function=function, subset=())
+        )
+
+        assert result.value == CanonicalRational(num="1", den="2")
+        assert result.model_dump(mode="json")["value"] == {"num": "1", "den": "2"}
 
     def test_rejects_duplicate_eval_subset(self) -> None:
         import pytest

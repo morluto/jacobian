@@ -121,10 +121,9 @@ class SetFunctionEvalRequest(StrictModel):
 
 
 class SetFunctionEvalResult(StrictModel):
-    """Value of f(S) or unknown."""
+    """Exact canonical value of f(S)."""
 
-    value: str
-    found: bool
+    value: CanonicalRational
 
 
 class MonotonicityCheckRequest(StrictModel):

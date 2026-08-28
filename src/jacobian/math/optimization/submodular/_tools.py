@@ -50,9 +50,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "combinatorics.set_function.evaluate",
         "Evaluate a finite set function",
-        "Look up the exact value of a finite set function at a specified "
-        "subset. The result reports whether that subset is present in the "
-        "complete table.",
+        "Look up the exact canonical rational value of a finite set function "
+        "at a specified subset of its complete table.",
         SetFunctionEvalRequest,
         SetFunctionEvalResult,
         evaluate_set_function,

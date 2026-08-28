@@ -1,4 +1,4 @@
-"""Domain-owned graph isomorphism decision operation."""
+"""Killable VF2 process boundary for exact graph isomorphism."""
 
 from __future__ import annotations
 

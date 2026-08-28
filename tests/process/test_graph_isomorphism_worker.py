@@ -3,9 +3,9 @@
 import pytest
 
 import jacobian.process as process
-from jacobian.math.graphs.isomorphism import _operations as isomorphism_operations
+from jacobian.math.graphs.isomorphism import _vf2_process as isomorphism_operations
 from jacobian.math.graphs.isomorphism._models import GraphIsomorphismRequest
-from jacobian.math.graphs.isomorphism._operations import decide_graph_isomorphism
+from jacobian.math.graphs.isomorphism._vf2_process import decide_graph_isomorphism
 from jacobian.math.graphs.isomorphism._vf2_worker import _first_isomorphism_mapping
 from jacobian.math.number_theory._certification_models import (
     CertifiedFactorizationRequest,

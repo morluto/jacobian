@@ -12,7 +12,7 @@ from jacobian.math.graphs.isomorphism._models import (
     GraphIsomorphismRequest,
     GraphIsomorphismResult,
 )
-from jacobian.math.graphs.isomorphism._operations import (
+from jacobian.math.graphs.isomorphism._vf2_process import (
     decide_graph_isomorphism,
 )
 

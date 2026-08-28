@@ -24,7 +24,7 @@ from jacobian.math.graphs.isomorphism import (
     canonicalize_colored_graph,
 )
 from jacobian.math.graphs.isomorphism._models import ColoredGraphCanonicalizationRequest
-from jacobian.math.graphs.isomorphism._operations import (
+from jacobian.math.graphs.isomorphism._vf2_process import (
     compute_colored_graph_canonicalization,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph

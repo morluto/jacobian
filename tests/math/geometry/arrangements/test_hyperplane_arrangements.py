@@ -12,10 +12,24 @@ from jacobian.math.geometry.arrangements._models import (
 )
 from jacobian.math.geometry.arrangements._tools import TOOLS
 from jacobian.math.geometry.arrangements.operations import (
-    compute_arrangement,
-    compute_chamber_count,
-    compute_characteristic_polynomial,
+    arrangement,
+    chamber_count,
+    characteristic_polynomial,
 )
+
+
+def compute_arrangement(request: HyperplaneArrangementRequest):
+    return arrangement(request.ambient_dimension, request.hyperplanes)
+
+
+def compute_characteristic_polynomial(request: CharacteristicPolynomialRequest):
+    return characteristic_polynomial(
+        request.ambient_dimension, request.hyperplane_count
+    )
+
+
+def compute_chamber_count(request: ChamberCountRequest):
+    return chamber_count(request.ambient_dimension, request.hyperplane_count)
 
 
 def _r(num: int, den: int = 1) -> CanonicalRational:

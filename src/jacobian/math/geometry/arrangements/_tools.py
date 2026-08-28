@@ -15,10 +15,28 @@ from jacobian.math.geometry.arrangements._models import (
     HyperplaneArrangementResult,
 )
 from jacobian.math.geometry.arrangements.operations import (
-    compute_arrangement,
-    compute_chamber_count,
-    compute_characteristic_polynomial,
+    arrangement,
+    chamber_count,
+    characteristic_polynomial,
 )
+
+
+def _run_arrangement(
+    request: HyperplaneArrangementRequest,
+) -> HyperplaneArrangementResult:
+    return arrangement(request.ambient_dimension, request.hyperplanes)
+
+
+def _run_characteristic_polynomial(
+    request: CharacteristicPolynomialRequest,
+) -> CharacteristicPolynomialResult:
+    return characteristic_polynomial(
+        request.ambient_dimension, request.hyperplane_count
+    )
+
+
+def _run_chamber_count(request: ChamberCountRequest) -> ChamberCountResult:
+    return chamber_count(request.ambient_dimension, request.hyperplane_count)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -50,7 +68,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Construct a hyperplane arrangement and check if it is central.",
         HyperplaneArrangementRequest,
         HyperplaneArrangementResult,
-        compute_arrangement,
+        _run_arrangement,
         "hyperplane",
         "arrangement",
         "exact",
@@ -87,7 +105,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "hyperplane arrangement using the Zaslavsky formula.",
         CharacteristicPolynomialRequest,
         CharacteristicPolynomialResult,
-        compute_characteristic_polynomial,
+        _run_characteristic_polynomial,
         "hyperplane",
         "characteristic-polynomial",
         "exact",
@@ -106,7 +124,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "hyperplane arrangement using the central formula 2 * sum C(m-1, k).",
         ChamberCountRequest,
         ChamberCountResult,
-        compute_chamber_count,
+        _run_chamber_count,
         "hyperplane",
         "chamber-count",
         "exact",

@@ -96,7 +96,12 @@ _LINEAR_MAPS = tuple(_linear_map(rank) for rank in (0, 1, 1, 1, 1))
 _LEDGER: dict[str, object] = {
     "subspace": _SUBSPACE,
     "entries": [
-        {"direction": direction, "linear_map": linear_map, "rank": rank}
+        {
+            "subspace": _SUBSPACE,
+            "direction": direction,
+            "linear_map": linear_map,
+            "rank": rank,
+        }
         for direction, linear_map, rank in zip(
             _DIRECTIONS, _LINEAR_MAPS, (0, 1, 1, 1, 1), strict=True
         )

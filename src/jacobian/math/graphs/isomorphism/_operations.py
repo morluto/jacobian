@@ -11,22 +11,15 @@ from tempfile import TemporaryDirectory
 from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.isomorphism._canonicalization import (
-    canonicalize_colored_graph_data,
-)
-from jacobian.math.graphs.isomorphism._canonicalization_bounds import (
-    require_admitted_colored_graph_canonicalization,
-)
 from jacobian.math.graphs.isomorphism._models import (
     ColoredGraphCanonicalizationRequest,
     ColoredGraphCanonicalizationResult,
     GraphIsomorphismRequest,
     GraphIsomorphismResult,
-    GraphRelabelingPair,
     SimpleGraph,
     VertexMappingPair,
 )
-from jacobian.math.graphs.values import ColoredUndirectedGraph
+from jacobian.math.graphs.isomorphism.operations import _canonicalize_colored_graph
 
 _VF2_WORKER = Path(__file__).resolve().with_name("_vf2_worker.py")
 _VF2_WALL_SECONDS = 60.0
@@ -176,27 +169,10 @@ def compute_colored_graph_canonicalization(
     """
 
     try:
-        return canonicalize_colored_graph_kernel(request.colored_graph)
+        return _canonicalize_colored_graph(request.colored_graph)
     except PydanticCustomError as error:
         raise OperationDomainValidationError(
             location=("colored_graph",),
             code=error.type,
             message=str(error),
         ) from error
-
-
-def canonicalize_colored_graph_kernel(
-    graph: ColoredUndirectedGraph,
-) -> ColoredGraphCanonicalizationResult:
-    """Construct the exact canonical value from one admitted graph value."""
-
-    require_admitted_colored_graph_canonicalization(graph)
-    canonical_graph, relabeling = canonicalize_colored_graph_data(graph)
-    return ColoredGraphCanonicalizationResult._from_kernel(
-        source_graph=graph,
-        canonical_graph=canonical_graph,
-        relabeling=tuple(
-            GraphRelabelingPair(source_vertex=source, canonical_vertex=target)
-            for source, target in relabeling
-        ),
-    )

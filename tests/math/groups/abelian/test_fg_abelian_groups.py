@@ -12,7 +12,8 @@ from jacobian.math.groups.abelian._models import (
     QuotientRequest,
     SubgroupGeneratedRequest,
 )
-from jacobian.math.groups.abelian._operations import (
+from jacobian.math.groups.abelian._tools import TOOLS
+from jacobian.math.groups.abelian.operations import (
     compute_element_equal,
     compute_element_order,
     compute_element_reduce,
@@ -20,7 +21,6 @@ from jacobian.math.groups.abelian._operations import (
     compute_quotient,
     compute_subgroup_generated,
 )
-from jacobian.math.groups.abelian._tools import TOOLS
 
 
 def test_catalog_contains_only_audited_operations() -> None:

@@ -24,7 +24,7 @@ from jacobian.math.graphs.symmetry._models import (
     GraphVertexOrbit,
     _orbit_result_canonical_wire_bytes,
 )
-from jacobian.math.graphs.symmetry._operations import (
+from jacobian.math.graphs.symmetry.operations import (
     _generator_orbits,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -140,7 +140,7 @@ def test_graph_symmetry_request_admission_bounds_retained_source_output() -> Non
     actual canonicalized result size.
     """
 
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     payload = _wide_orbit_payload(MAX_GRAPH_SYMMETRY_GENERATORS)
     assert len(encode_strict_json(payload)) <= CanonicalLimits().max_input_bytes
@@ -156,7 +156,7 @@ def test_graph_symmetry_request_admission_bounds_retained_source_output() -> Non
 
 
 def test_graph_symmetry_admitted_request_result_fits_canonical_output() -> None:
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     request = GraphSymmetryOrbitRequest.model_validate(_wide_orbit_payload(8))
     result = _generator_orbits(request)
@@ -167,7 +167,7 @@ def test_graph_symmetry_admitted_request_result_fits_canonical_output() -> None:
 
 
 def test_graph_symmetry_admission_estimate_bounds_actual_result_wire() -> None:
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     request = GraphSymmetryOrbitRequest.model_validate(_path_request())
     result = _generator_orbits(request)
@@ -185,7 +185,7 @@ def test_graph_symmetry_request_admits_result_near_output_limit() -> None:
     limit, so the boundary case pins the sums-based bound.
     """
 
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     request = GraphSymmetryOrbitRequest.model_validate(_wide_orbit_payload(14))
     result = _generator_orbits(request)
@@ -205,7 +205,7 @@ def test_transitive_action_charges_only_possible_representatives() -> None:
     output limit even though the exact result keeps over 2 MiB of headroom.
     """
 
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     prefix = "a" * 60
     vertices = [f"{prefix}{index:04d}" for index in range(256)]
@@ -263,7 +263,7 @@ def test_colored_singleton_orbits_price_exact_fixed_structure() -> None:
     per-orbit pricing at each index's digit width and separators.
     """
 
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     payload = _wide_orbit_payload(14)
     payload["graph"]["vertex_colors"] = [  # type: ignore[index]
@@ -292,7 +292,7 @@ def test_singleton_orbit_separators_price_from_computed_blocks() -> None:
     computed partition's block sizes instead.
     """
 
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     payload = _wide_orbit_payload(14)
     payload["graph"]["vertex_colors"] = [  # type: ignore[index]
@@ -317,7 +317,7 @@ def test_singleton_orbit_separators_price_from_computed_blocks() -> None:
 def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
     """One large label among tiny ones must not inflate the estimate by a maximum."""
 
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     vertices = ["h" * 64] + [f"t{index:03d}" for index in range(255)]
     ring = vertices[1:]
@@ -448,7 +448,7 @@ def test_canonicalization_result_passes_unchanged_into_symmetry_request() -> Non
 def test_graph_symmetry_nfc_request_wire_matches_canonicalized_result() -> None:
     """NFC-retained strings make the strict measurements canonical-exact."""
 
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     request = GraphSymmetryOrbitRequest.model_validate(_path_request())
     result = _generator_orbits(request)
@@ -547,7 +547,7 @@ def test_graph_symmetry_result_retains_declared_source_action() -> None:
 
 
 def test_graph_symmetry_operation_produces_source_bound_result() -> None:
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     request = _reflection_path_source()
     result = _generator_orbits(request)
@@ -565,7 +565,7 @@ def test_graph_symmetry_operation_produces_source_bound_result() -> None:
 def test_graph_symmetry_retained_source_action_is_deeply_immutable() -> None:
     """A validated result must stay bound to its declared action forever."""
 
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     request = _reflection_path_source()
     result = _generator_orbits(request)
@@ -583,7 +583,7 @@ def test_graph_symmetry_retained_source_action_is_deeply_immutable() -> None:
 def test_graph_symmetry_den_num_identity_generator_canonicalizes() -> None:
     """Labels spelling the canonical rational keys must not collide."""
 
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     payload = {
         "graph": {"graph": {"vertices": ["den", "num"], "edges": [["den", "num"]]}},
@@ -660,7 +660,7 @@ def test_orbit_result_wire_size_is_exact_across_partition_shapes() -> None:
     labels, colored axes, and the empty graph alike.
     """
 
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     def den_num() -> dict[str, Any]:
         return {
@@ -724,7 +724,7 @@ def test_graph_symmetry_admits_fifteen_character_color_boundary() -> None:
     exact pricing rejected such fitting requests.
     """
 
-    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import _generator_orbits
 
     payload = _wide_orbit_payload(14)
     payload["graph"]["vertex_colors"] = [  # type: ignore[index]
@@ -789,7 +789,7 @@ def test_graph_symmetry_operation_declares_version_seven() -> None:
     """
 
     from jacobian.catalog.models import MathTool
-    from jacobian.math.graphs.symmetry._operations import GRAPH_SYMMETRY_OPERATIONS
+    from jacobian.math.graphs.symmetry.operations import GRAPH_SYMMETRY_OPERATIONS
 
     (declaration,) = GRAPH_SYMMETRY_OPERATIONS
     assert isinstance(declaration, MathTool)
@@ -798,7 +798,7 @@ def test_graph_symmetry_operation_declares_version_seven() -> None:
 def test_graph_symmetry_schema_publishes_aggregate_output_envelope() -> None:
     """math.find readers must see the aggregate retained-result bound."""
 
-    from jacobian.math.graphs.symmetry._operations import GRAPH_SYMMETRY_OPERATIONS
+    from jacobian.math.graphs.symmetry.operations import GRAPH_SYMMETRY_OPERATIONS
 
     schema = GraphSymmetryOrbitRequest.model_json_schema()
     assert "canonical output limit" in schema["description"]

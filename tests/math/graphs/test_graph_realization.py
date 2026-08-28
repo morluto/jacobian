@@ -15,7 +15,7 @@ from jacobian.math.graphs.realization._models import (
     RealizationCheckRequest,
     RealizationCheckResult,
 )
-from jacobian.math.graphs.realization._operations import (
+from jacobian.math.graphs.realization.operations import (
     compute_degree_sequence,
     compute_graph_realization,
     compute_graphicality_check,

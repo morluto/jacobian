@@ -24,7 +24,6 @@ from jacobian.math.graphs.symmetry._orbits import declared_orbit_partitions
 
 def _admit_graph_symmetry_orbit(request: GraphSymmetryOrbitRequest) -> None:
     """Admit graph, generator, and retained-result execution bounds."""
-
     vertices = request.graph.graph.vertices
     edges = request.graph.graph.edges
     try:
@@ -105,17 +104,13 @@ def _generator_orbits(
     vertex_orbit_members, edge_orbit_members = _declared_orbit_partitions(request)
     vertex_orbits = tuple(
         GraphVertexOrbit(
-            orbit_index=index,
-            representative=members[0],
-            members=members,
+            orbit_index=index, representative=members[0], members=members
         )
         for index, members in enumerate(vertex_orbit_members)
     )
     edge_orbits = tuple(
         GraphEdgeOrbit(
-            orbit_index=index,
-            representative=members[0],
-            members=members,
+            orbit_index=index, representative=members[0], members=members
         )
         for index, members in enumerate(edge_orbit_members)
     )
@@ -169,21 +164,14 @@ GRAPH_SYMMETRY_OPERATIONS: MathTools = (
                     "graph": {
                         "graph": {
                             "vertices": ["a", "b", "c"],
-                            "edges": [
-                                ["a", "b"],
-                                ["b", "c"],
-                            ],
+                            "edges": [["a", "b"], ["b", "c"]],
                         },
                         "vertex_colors": ["endpoint", "middle", "endpoint"],
                     },
                     "generators": [
                         {
                             "generator_id": "reflection",
-                            "mapping": [
-                                ["a", "c"],
-                                ["b", "b"],
-                                ["c", "a"],
-                            ],
+                            "mapping": [["a", "c"], ["b", "b"], ["c", "a"]],
                         }
                     ],
                 },
@@ -191,5 +179,6 @@ GRAPH_SYMMETRY_OPERATIONS: MathTools = (
         ),
     ),
 )
+
 
 __all__ = ["GRAPH_SYMMETRY_OPERATIONS"]

@@ -20,7 +20,7 @@ from jacobian.math.groups.abelian._models import (
     SubgroupGeneratedRequest,
     SubgroupGeneratedResult,
 )
-from jacobian.math.groups.abelian._operations import (
+from jacobian.math.groups.abelian.operations import (
     compute_element_equal,
     compute_element_order,
     compute_element_reduce,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from itertools import combinations
 from math import gcd as exact_gcd
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.number_theory.non_coprimality_graph._models import (
@@ -43,7 +44,7 @@ def non_coprimality_graph(
 
     values: list[int] = []
     for index, label in enumerate(vertices):
-        value = int(label)
+        value = parse_canonical_integer(label)
         if value <= 0:
             raise OperationDomainValidationError(
                 location=("elements", index),

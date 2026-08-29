@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
+from typing import NoReturn
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.pinned_distance._models import (
     DistanceClass,
@@ -13,6 +17,97 @@ from jacobian.math.geometry.exact.pinned_distance._models import (
 )
 
 __all__ = ["compute_pinned_distance_support_profile"]
+
+MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _DistanceClassPlan:
+    squared_distance: CanonicalRational
+    target_labels: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _EntryPlan:
+    source_label: str
+    distance_classes: tuple[_DistanceClassPlan, ...]
+
+
+def _reject(code: str, message: str) -> NoReturn:
+    raise OperationDomainValidationError(
+        location=("configuration",),
+        code=f"pinned_distance.{code}",
+        message=message,
+    )
+
+
+def _admit_configuration(configuration: PointConfiguration) -> tuple[_EntryPlan, ...]:
+    if not isinstance(configuration, PointConfiguration):
+        _reject("invalid_configuration", "configuration must be a point configuration")
+    try:
+        # The shared point type intentionally accepts larger exact values for
+        # other geometry operations; this complete profile has its own height
+        # envelope so every squared distance remains representable.
+        from jacobian.math.geometry.exact._models import (
+            _require_bounded_point_configuration,
+        )
+
+        _require_bounded_point_configuration(configuration)
+    except ValueError as exc:
+        _reject("coordinate_height_bound", str(exc))
+
+    plans: list[_EntryPlan] = []
+    for index, source in enumerate(configuration.points):
+        distances: dict[Fraction, list[str]] = {}
+        for target_index, target in enumerate(configuration.points):
+            if index == target_index:
+                continue
+            squared = _squared_distance(source.coordinates, target.coordinates)
+            distances.setdefault(squared, []).append(target.label)
+        classes: list[_DistanceClassPlan] = []
+        for squared, labels in sorted(distances.items()):
+            try:
+                canonical = CanonicalRational.from_fraction(squared)
+            except ValueError as exc:
+                _reject("distance_height_bound", str(exc))
+            classes.append(
+                _DistanceClassPlan(
+                    squared_distance=canonical,
+                    target_labels=tuple(sorted(labels)),
+                )
+            )
+        plans.append(
+            _EntryPlan(source_label=source.label, distance_classes=tuple(classes))
+        )
+
+    payload = {
+        "configuration": configuration.model_dump(mode="json"),
+        "entries": [
+            {
+                "source_label": entry.source_label,
+                "distance_classes": [
+                    {
+                        "squared_distance": item.squared_distance.model_dump(
+                            mode="json"
+                        ),
+                        "target_labels": list(item.target_labels),
+                    }
+                    for item in entry.distance_classes
+                ],
+            }
+            for entry in plans
+        ],
+    }
+    try:
+        result_bytes = len(encode_strict_json(payload))
+    except ValueError as exc:
+        _reject("result_size_bound", str(exc))
+    if result_bytes > MAX_RESULT_BYTES:
+        _reject(
+            "result_size_bound",
+            f"the complete distance profile exceeds the {MAX_RESULT_BYTES}-byte output bound",
+        )
+    return tuple(plans)
 
 
 def compute_pinned_distance_support_profile(
@@ -23,31 +118,20 @@ def compute_pinned_distance_support_profile(
     For each source point, group all other points by their exact squared
     Euclidean distance, sorted by increasing distance.
     """
-    points = configuration.points
-    entries: list[PinnedDistanceEntry] = []
-
-    for i, source in enumerate(points):
-        dist_to_targets: dict[Fraction, list[str]] = {}
-        for j, target in enumerate(points):
-            if i == j:
-                continue
-            sq_dist = _squared_distance(source.coordinates, target.coordinates)
-            dist_to_targets.setdefault(sq_dist, []).append(target.label)
-
-        classes: list[DistanceClass] = []
-        for dist in sorted(dist_to_targets):
-            classes.append(
+    plans = _admit_configuration(configuration)
+    entries = [
+        PinnedDistanceEntry(
+            source_label=entry.source_label,
+            distance_classes=tuple(
                 DistanceClass(
-                    squared_distance=CanonicalRational.from_fraction(dist),
-                    target_labels=tuple(sorted(dist_to_targets[dist])),
+                    squared_distance=item.squared_distance,
+                    target_labels=item.target_labels,
                 )
-            )
-        entries.append(
-            PinnedDistanceEntry(
-                source_label=source.label,
-                distance_classes=tuple(classes),
-            )
+                for item in entry.distance_classes
+            ),
         )
+        for entry in plans
+    ]
 
     return PinnedDistanceSupportProfileResult(
         configuration=configuration,

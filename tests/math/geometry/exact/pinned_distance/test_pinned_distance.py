@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import (
     LabelledRationalPoint,
     PointConfiguration,
@@ -119,3 +122,16 @@ def test_result_preserves_source() -> None:
     )
     result = compute_pinned_distance_support_profile(config)
     assert result.configuration == config
+
+
+def test_native_admission_rejects_coordinate_height_before_squaring() -> None:
+    """The profile's squared-distance envelope is narrower than shared points."""
+    huge = CanonicalRational.from_fraction(Fraction(10**256))
+    config = PointConfiguration(
+        points=(
+            LabelledRationalPoint(label="a", coordinates=(huge,)),
+            _pt("b", (0,)),
+        )
+    )
+    with pytest.raises(OperationDomainValidationError, match="coordinate"):
+        compute_pinned_distance_support_profile(config)

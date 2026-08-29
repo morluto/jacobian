@@ -5,6 +5,7 @@ from __future__ import annotations
 from math import isqrt
 
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.arithmetic._integer_predicates import is_square_free
 from jacobian.math.number_theory.diophantine_approximation._models import (
     ContinuedFractionResult,
@@ -19,12 +20,24 @@ __all__ = ["continued_fraction", "convergents", "solve_pell"]
 def _require_periodic_discriminant(discriminant: int) -> None:
     """Reject discriminants whose sqrt is not a periodic quadratic surd."""
     if discriminant < 2:
-        raise ValueError("discriminant must be at least 2")
+        raise OperationDomainValidationError(
+            location=("discriminant",),
+            code="diophantine.discriminant_out_of_range",
+            message="discriminant must be at least 2",
+        )
     root = isqrt(discriminant)
     if root * root == discriminant:
-        raise ValueError("discriminant must not be a perfect square")
+        raise OperationDomainValidationError(
+            location=("discriminant",),
+            code="diophantine.discriminant_must_not_be_square",
+            message="discriminant must not be a perfect square",
+        )
     if not is_square_free(discriminant):
-        raise ValueError("discriminant must be squarefree")
+        raise OperationDomainValidationError(
+            location=("discriminant",),
+            code="diophantine.discriminant_must_be_squarefree",
+            message="discriminant must be squarefree",
+        )
 
 
 def _cf_coefficients(discriminant: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
@@ -67,7 +80,11 @@ def continued_fraction(
 ) -> ContinuedFractionResult:
     """Return the continued fraction expansion of sqrt(D)."""
     if term_count < 1:
-        raise ValueError("term_count must be at least 1")
+        raise OperationDomainValidationError(
+            location=("term_count",),
+            code="diophantine.term_count_out_of_range",
+            message="term_count must be at least 1",
+        )
     preperiod, period = _cf_coefficients(discriminant)
     return ContinuedFractionResult._from_kernel(
         discriminant=discriminant,
@@ -81,7 +98,11 @@ def continued_fraction(
 def convergents(discriminant: int, count: int) -> ConvergentResult:
     """Return the first count convergents (index, p_n, q_n) of sqrt(D)."""
     if count < 1:
-        raise ValueError("count must be at least 1")
+        raise OperationDomainValidationError(
+            location=("count",),
+            code="diophantine.convergent_count_out_of_range",
+            message="count must be at least 1",
+        )
     preperiod, period = _cf_coefficients(discriminant)
     coefficients = _coefficients(preperiod, period, count)
 

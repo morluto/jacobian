@@ -8,6 +8,9 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.modular_forms import kernel as level_one_kernel
 from jacobian.math.number_theory.modular_forms._models import (
     LevelOneNamedQExpansionRequest,
@@ -116,17 +119,26 @@ def test_eisenstein_prefixes_beyond_the_former_carrier_ceiling_are_admitted() ->
 
 def test_requests_above_the_serialized_budget_name_the_controlling_quantity() -> None:
     request = LevelOneNamedQExpansionRequest(form="E6", truncation_order=1301)
-    with pytest.raises(ValueError, match="serialized result bound"):
+    with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
         level_one_named_q_expansion(request.form, request.truncation_order)
-    with pytest.raises(ValueError, match="serialized result bound"):
+    with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
         require_level_one_admission("E4", 1478)
+
+
+def test_dispatch_projects_admission_work_failure_as_typed_domain_error() -> None:
+    with pytest.raises(OperationDomainValidationError, match="exact work bound"):
+        invoke_operation(
+            "modular_form.level_one.named_q_expansion.compute",
+            {"form": "DELTA", "truncation_order": 999_999},
+            Catalog.open(),
+        )
 
 
 def test_delta_above_the_serialized_budget_names_the_controlling_quantity() -> None:
     request = LevelOneNamedQExpansionRequest(form="DELTA", truncation_order=845)
-    with pytest.raises(ValueError, match="serialized result bound"):
+    with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
         level_one_named_q_expansion(request.form, request.truncation_order)
-    with pytest.raises(ValueError, match="serialized result bound"):
+    with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
         require_level_one_admission("DELTA", 845)
 
 
@@ -136,9 +148,9 @@ def test_wire_request_rejects_boolean_truncation_orders() -> None:
 
 
 def test_native_admission_rejects_boolean_truncation_orders() -> None:
-    with pytest.raises(ValueError, match="plain integer"):
+    with pytest.raises(OperationDomainValidationError, match="plain integer"):
         require_level_one_admission("DELTA", True)
-    with pytest.raises(ValueError, match="plain integer"):
+    with pytest.raises(OperationDomainValidationError, match="plain integer"):
         level_one_named_q_expansion("E4", True)
 
 
@@ -150,9 +162,15 @@ def test_native_admission_rejects_unknown_forms_before_any_scan(
         raise AssertionError("an unknown form must never reach a divisor scan")
 
     monkeypatch.setattr(level_one_kernel, "divisor_power_sum", fail)
-    with pytest.raises(ValueError, match="form must be one of 'E4', 'E6', or 'DELTA'"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="form must be one of 'E4', 'E6', or 'DELTA'",
+    ):
         level_one_named_q_expansion(cast(NamedLevelOneModularForm, form), 8)
-    with pytest.raises(ValueError, match="form must be one of 'E4', 'E6', or 'DELTA'"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="form must be one of 'E4', 'E6', or 'DELTA'",
+    ):
         require_level_one_admission(cast(NamedLevelOneModularForm, form), 8)
 
 
@@ -184,7 +202,7 @@ def _beyond_budget_e4_payload() -> dict[str, object]:
 
 
 def test_exact_expansions_beyond_the_producer_envelope_remain_canonical() -> None:
-    with pytest.raises(ValueError, match="serialized result bound"):
+    with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
         require_level_one_admission("E4", 1478)
 
     value = LevelOneModularQExpansion.model_validate(_beyond_budget_e4_payload())

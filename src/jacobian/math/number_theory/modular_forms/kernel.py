@@ -11,6 +11,8 @@ from fractions import Fraction
 from math import isqrt
 from typing import Literal
 
+from jacobian.catalog.models import OperationDomainValidationError
+
 NamedLevelOneModularForm = Literal["E4", "E6", "DELTA"]
 
 NAMED_LEVEL_ONE_FORMS = frozenset(("E4", "E6", "DELTA"))
@@ -122,25 +124,45 @@ def require_level_one_admission(
 ) -> None:
     """Prove finite scan, series work, coefficient, and output envelopes."""
     if form not in NAMED_LEVEL_ONE_FORMS:
-        raise ValueError("form must be one of 'E4', 'E6', or 'DELTA'")
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="modular_form.form_out_of_range",
+            message="form must be one of 'E4', 'E6', or 'DELTA'",
+        )
     if isinstance(truncation_order, bool) or not isinstance(truncation_order, int):
-        raise ValueError("truncation_order must be a plain integer")
+        raise OperationDomainValidationError(
+            location=("truncation_order",),
+            code="modular_form.truncation_order_must_be_integer",
+            message="truncation_order must be a plain integer",
+        )
     if truncation_order < 1:
-        raise ValueError("truncation_order must be positive")
+        raise OperationDomainValidationError(
+            location=("truncation_order",),
+            code="modular_form.truncation_order_out_of_range",
+            message="truncation_order must be positive",
+        )
 
     p = truncation_order
     divisor_scans = p * isqrt(p)
     formula_scans = divisor_scans if form in {"E4", "E6"} else 2 * divisor_scans
     series_terms = 0 if form in {"E4", "E6"} else 5 * p * p
     if formula_scans + series_terms > MAX_LEVEL_ONE_WORK_TERMS:
-        raise ValueError("level-one q-expansion exceeds the exact work bound")
+        raise OperationDomainValidationError(
+            location=("truncation_order",),
+            code="modular_form.exact_work_bound_exceeded",
+            message="level-one q-expansion exceeds the exact work bound",
+        )
 
     digits = coefficient_digit_bound(form, p)
     # ``num`` and ``den`` are canonical integer strings; these fixed 28
     # characters cover their JSON punctuation, field names, and a separator.
     serialized_characters = 512 + p * (digits + 28)
     if serialized_characters > MAX_LEVEL_ONE_SERIALIZED_CHARACTERS:
-        raise ValueError("level-one q-expansion exceeds the serialized result bound")
+        raise OperationDomainValidationError(
+            location=("truncation_order",),
+            code="modular_form.serialized_result_bound_exceeded",
+            message="level-one q-expansion exceeds the serialized result bound",
+        )
 
 
 __all__ = [

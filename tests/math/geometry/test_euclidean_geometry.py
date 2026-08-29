@@ -74,6 +74,26 @@ def test_circumcircle_rejects_collinear_points_at_operation_boundary() -> None:
     )
 
 
+def test_circumcircle_handles_large_rational_coordinates_exactly() -> None:
+    """SymPy's large-rational Segment2D projection must not leak a host error."""
+
+    denominator = "9" * 30
+    request = CircumcircleRequest(
+        first=_pt(0, 0),
+        second=GeometryRationalPoint2D(
+            x=CanonicalRational(num="2", den=denominator),
+            y=CanonicalRational(num="0", den="1"),
+        ),
+        third=_pt(0, 2),
+    )
+
+    result = circumcircle(request)
+
+    assert result.center.x.den == denominator
+    assert result.center.y == CanonicalRational(num="1", den="1")
+    assert result.radius_squared.den == str(int(denominator) ** 2)
+
+
 def test_point_classification_rejects_non_simple_polygon_at_operation_boundary() -> (
     None
 ):

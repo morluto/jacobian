@@ -7,6 +7,7 @@ from hypothesis import strategies as st
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory import arithmetic
+from jacobian.math.number_theory.arithmetic import operations as arithmetic_operations
 from jacobian.math.number_theory.arithmetic._rational_models import RationalPairRequest
 from jacobian.math.number_theory.arithmetic._rationals import (
     RATIONAL_OPERATIONS,
@@ -108,8 +109,17 @@ def test_integerize_rational_vector_uses_one_lcm_for_mixed_denominators() -> Non
 
 
 def test_primitive_integer_vector_rejects_zero_vector() -> None:
-    with pytest.raises(ValueError, match="nonzero"):
+    with pytest.raises(OperationDomainValidationError, match="nonzero"):
         arithmetic.primitive_integer_vector((Fraction(0), Fraction(0)))
+
+
+def test_native_integer_admission_uses_typed_domain_errors() -> None:
+    value = arithmetic.IntegerValue(value="8")
+
+    with pytest.raises(OperationDomainValidationError, match="base must be"):
+        arithmetic_operations.base_digits(value, 1)
+    with pytest.raises(OperationDomainValidationError, match="degree must be"):
+        arithmetic_operations.nth_root(value, 0)
 
 
 @pytest.mark.parametrize(

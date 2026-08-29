@@ -31,7 +31,11 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 
 def _nonnegative(value: int, *, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{name} must be a nonnegative integer")
+        raise OperationDomainValidationError(
+            location=(name,),
+            code="combinatorics.nonnegative_integer_required",
+            message=f"{name} must be a nonnegative integer",
+        )
     return value
 
 
@@ -47,8 +51,10 @@ MAX_MULTINOMIAL_TOTAL = MAX_COUNTING_INDEX
 def _bounded_counting_index(value: int, *, name: str) -> int:
     value = _nonnegative(value, name=name)
     if value > MAX_COUNTING_INDEX:
-        raise ValueError(
-            f"{name} exceeds the {MAX_COUNTING_INDEX}-element counting bound"
+        raise OperationDomainValidationError(
+            location=(name,),
+            code="combinatorics.counting_index_out_of_range",
+            message=f"{name} exceeds the {MAX_COUNTING_INDEX}-element counting bound",
         )
     return value
 
@@ -74,19 +80,29 @@ def multinomial(values: tuple[int, ...]) -> int:
     import math
 
     if not isinstance(values, tuple) or not values:
-        raise ValueError("values must be a nonempty tuple of nonnegative integers")
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="combinatorics.multinomial_values_required",
+            message="values must be a nonempty tuple of nonnegative integers",
+        )
     parts = tuple(_nonnegative(value, name="values") for value in values)
     if len(parts) > MAX_MULTINOMIAL_PARTS:
-        raise ValueError(
-            f"values exceeds the {MAX_MULTINOMIAL_PARTS}-part counting bound"
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="combinatorics.multinomial_part_count_out_of_range",
+            message=f"values exceeds the {MAX_MULTINOMIAL_PARTS}-part counting bound",
         )
     if len(parts) == 1:
         return 1
     total = sum(parts)
     if total > MAX_MULTINOMIAL_TOTAL:
-        raise ValueError(
-            "the sum of values exceeds the "
-            f"{MAX_MULTINOMIAL_TOTAL}-element counting bound"
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="combinatorics.multinomial_total_out_of_range",
+            message=(
+                "the sum of values exceeds the "
+                f"{MAX_MULTINOMIAL_TOTAL}-element counting bound"
+            ),
         )
     return math.factorial(total) // math.prod(math.factorial(part) for part in parts)
 
@@ -274,7 +290,11 @@ def _require_rational_tuple(values: object, *, name: str) -> None:
     if not isinstance(values, tuple) or not all(
         isinstance(value, CanonicalRational) for value in values
     ):
-        raise TypeError(f"{name} must be a tuple of CanonicalRational values")
+        raise OperationDomainValidationError(
+            location=(name,),
+            code="combinatorics.canonical_rational_tuple_required",
+            message=f"{name} must be a tuple of CanonicalRational values",
+        )
 
 
 def _requested_indices(
@@ -292,7 +312,11 @@ def _requested_indices(
             )
         return tuple(range(term_count))
     if scope != "INDICES":
-        raise TypeError("scope must be PREFIX or INDICES")
+        raise OperationDomainValidationError(
+            location=("scope",),
+            code="combinatorics.recurrence_scope",
+            message="scope must be PREFIX or INDICES",
+        )
     if term_count is not None or not indices:
         raise OperationDomainValidationError(
             location=("scope",),
@@ -331,7 +355,11 @@ def evaluate_linear_recurrence(
     if coefficient_convention != (
         "A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"
     ):
-        raise TypeError("unsupported linear recurrence coefficient convention")
+        raise OperationDomainValidationError(
+            location=("coefficient_convention",),
+            code="combinatorics.recurrence_convention",
+            message="unsupported linear recurrence coefficient convention",
+        )
     _require_rational_tuple(coefficients, name="coefficients")
     _require_rational_tuple(initial_values, name="initial_values")
     if not 1 <= len(coefficients) <= 16 or not 1 <= len(initial_values) <= 16:
@@ -346,8 +374,14 @@ def evaluate_linear_recurrence(
             code="combinatorics.recurrence_invariant",
             message="initial_values length must equal the recurrence order",
         )
-    if not isinstance(indices, tuple) or not all(type(index) is int for index in indices):
-        raise TypeError("indices must be a tuple of integers")
+    if not isinstance(indices, tuple) or not all(
+        type(index) is int for index in indices
+    ):
+        raise OperationDomainValidationError(
+            location=("indices",),
+            code="combinatorics.recurrence_indices_required",
+            message="indices must be a tuple of integers",
+        )
     requested_indices = _requested_indices(
         scope=scope, term_count=term_count, indices=indices
     )
@@ -384,16 +418,28 @@ def evaluate_polynomial_coefficient_recurrence(
     if coefficient_convention != (
         "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
     ):
-        raise TypeError("unsupported polynomial recurrence coefficient convention")
+        raise OperationDomainValidationError(
+            location=("coefficient_convention",),
+            code="combinatorics.recurrence_convention",
+            message="unsupported polynomial recurrence coefficient convention",
+        )
     if polynomial_convention != "ASCENDING_POWERS_OF_N":
-        raise TypeError("unsupported polynomial recurrence convention")
+        raise OperationDomainValidationError(
+            location=("polynomial_convention",),
+            code="combinatorics.recurrence_convention",
+            message="unsupported polynomial recurrence convention",
+        )
     if not isinstance(coefficient_polynomials, tuple) or not all(
         isinstance(polynomial, tuple)
         and all(isinstance(value, CanonicalRational) for value in polynomial)
         for polynomial in coefficient_polynomials
     ):
-        raise TypeError(
-            "coefficient_polynomials must be tuples of CanonicalRational values"
+        raise OperationDomainValidationError(
+            location=("coefficient_polynomials",),
+            code="combinatorics.canonical_rational_tuple_required",
+            message=(
+                "coefficient_polynomials must be tuples of CanonicalRational values"
+            ),
         )
     _require_rational_tuple(initial_values, name="initial_values")
     if not 2 <= len(coefficient_polynomials) <= 17:
@@ -408,8 +454,14 @@ def evaluate_polynomial_coefficient_recurrence(
             code="combinatorics.recurrence_invariant",
             message="initial_values length must equal the recurrence order",
         )
-    if not isinstance(indices, tuple) or not all(type(index) is int for index in indices):
-        raise TypeError("indices must be a tuple of integers")
+    if not isinstance(indices, tuple) or not all(
+        type(index) is int for index in indices
+    ):
+        raise OperationDomainValidationError(
+            location=("indices",),
+            code="combinatorics.recurrence_indices_required",
+            message="indices must be a tuple of integers",
+        )
     requested_indices = _requested_indices(
         scope=scope, term_count=term_count, indices=indices
     )
@@ -443,9 +495,17 @@ def rational_generating_function_coefficients(
     """Expand ``N(x)/D(x)`` through one bounded exact truncation order."""
 
     if coefficient_convention != "ASCENDING_POWERS_OF_X":
-        raise TypeError("unsupported generating-function coefficient convention")
+        raise OperationDomainValidationError(
+            location=("coefficient_convention",),
+            code="combinatorics.generating_function_convention",
+            message="unsupported generating-function coefficient convention",
+        )
     if expansion_point != "0":
-        raise TypeError("only expansion at zero is supported")
+        raise OperationDomainValidationError(
+            location=("expansion_point",),
+            code="combinatorics.generating_function_expansion_point",
+            message="only expansion at zero is supported",
+        )
     _require_rational_tuple(numerator, name="numerator")
     _require_rational_tuple(denominator, name="denominator")
     if not 1 <= len(numerator) <= 33 or not 1 <= len(denominator) <= 33:

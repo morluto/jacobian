@@ -497,7 +497,11 @@ def decimal_digit_count(value: IntegerValue) -> IntegerValue:
 def base_digits(value: IntegerValue, base: int) -> tuple[int, int, tuple[str, ...]]:
     """Return sign, base, and canonical positional digits for an integer."""
     if not 2 <= base <= _MAX_BASE:
-        raise ValueError("base must be between 2 and 10000")
+        raise OperationDomainValidationError(
+            location=("base",),
+            code="arithmetic.base_out_of_range",
+            message="base must be between 2 and 10000",
+        )
     magnitude = value.value.lstrip("-")
     maximum_value = format_canonical_integer(base**MAX_BASE_DIGITS)
     if len(magnitude) > len(maximum_value) or (
@@ -519,7 +523,11 @@ def base_digits(value: IntegerValue, base: int) -> tuple[int, int, tuple[str, ..
 def nth_root(value: IntegerValue, degree: int) -> tuple[IntegerValue, bool]:
     """Return the exact floor nth root and whether the root is integral."""
     if not 1 <= degree <= _MAX_NTH_ROOT_DEGREE:
-        raise ValueError("degree must be between 1 and 100000")
+        raise OperationDomainValidationError(
+            location=("degree",),
+            code="arithmetic.root_degree_out_of_range",
+            message="degree must be between 1 and 100000",
+        )
     from sympy import integer_nthroot
 
     integer = parse_canonical_integer(value.value)
@@ -700,7 +708,11 @@ def primitive_integer_vector(
     for value in integers:
         divisor = gcd(divisor, abs(value))
     if not divisor:
-        raise ValueError("a primitive integer vector must be nonzero")
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="arithmetic.primitive_vector_requires_nonzero",
+            message="a primitive integer vector must be nonzero",
+        )
     primitive = tuple(value // divisor for value in integers)
     if next(value for value in primitive if value) < 0:
         return tuple(-value for value in primitive)

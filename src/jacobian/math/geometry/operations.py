@@ -467,6 +467,43 @@ def circumcircle(
     _admit_circumcircle((first_point, second_point, third_point))
     points = [_point(first_point), _point(second_point), _point(third_point)]
     circle = Circle(*points)
+    # SymPy can represent a circle with very large rational coordinates as a
+    # Segment2D instead of raising an error.  The three points have already
+    # passed exact non-collinearity admission, so retain the mathematical
+    # postcondition with the owner-local rational formula in that case.
+    if not hasattr(circle, "center") or not hasattr(circle, "radius"):
+        first, second, third = (
+            _point_key(point) for point in (first_point, second_point, third_point)
+        )
+        cross = (
+            first[0] * (second[1] - third[1])
+            + second[0] * (third[1] - first[1])
+            + third[0] * (first[1] - second[1])
+        )
+        first_norm = first[0] * first[0] + first[1] * first[1]
+        second_norm = second[0] * second[0] + second[1] * second[1]
+        third_norm = third[0] * third[0] + third[1] * third[1]
+        center = (
+            (
+                first_norm * (second[1] - third[1])
+                + second_norm * (third[1] - first[1])
+                + third_norm * (first[1] - second[1])
+            )
+            / (2 * cross),
+            (
+                first_norm * (third[0] - second[0])
+                + second_norm * (first[0] - third[0])
+                + third_norm * (second[0] - first[0])
+            )
+            / (2 * cross),
+        )
+        radius_squared = (center[0] - first[0]) ** 2 + (center[1] - first[1]) ** 2
+        return GeometryCircleResult(
+            center=RationalPoint2D(
+                x=_wire_rational(center[0]), y=_wire_rational(center[1])
+            ),
+            radius_squared=_wire_rational(radius_squared),
+        )
     return GeometryCircleResult(
         center=_wire_point(circle.center),
         radius_squared=_wire_rational(circle.radius**2),

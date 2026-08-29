@@ -8,6 +8,9 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import parse_canonical_integer
+from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.diophantine_approximation import (
     continued_fraction,
     convergents,
@@ -221,12 +224,33 @@ def test_contract_rejects_out_of_range() -> None:
 
 
 def test_public_kernels_reject_perfect_square() -> None:
-    with pytest.raises(ValueError, match="perfect square"):
+    with pytest.raises(OperationDomainValidationError, match="perfect square"):
         continued_fraction(4, 5)
-    with pytest.raises(ValueError, match="perfect square"):
+    with pytest.raises(OperationDomainValidationError, match="perfect square"):
         convergents(9, 3)
-    with pytest.raises(ValueError, match="perfect square"):
+    with pytest.raises(OperationDomainValidationError, match="perfect square"):
         solve_pell(16)
+
+
+@pytest.mark.parametrize(
+    "operation_id",
+    (
+        "diophantine.continued_fraction.compute",
+        "diophantine.convergents.compute",
+        "diophantine.pell_equation.solve",
+    ),
+)
+def test_dispatch_rejects_perfect_square_as_typed_domain_error(
+    operation_id: str,
+) -> None:
+    payload = {"discriminant": 9}
+    if operation_id.endswith("continued_fraction.compute"):
+        payload["term_count"] = 5
+    elif operation_id.endswith("convergents.compute"):
+        payload["convergent_count"] = 5
+
+    with pytest.raises(OperationDomainValidationError, match="perfect square"):
+        invoke_operation(operation_id, payload, Catalog.open())
 
 
 def test_public_kernels_return_typed_values() -> None:

@@ -10,22 +10,25 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.matrices.values import (
+    MAX_INVERSE_INTEGER_MATRIX_ORDER,
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
+    InverseIntegerMatrix,
     RationalMatrix,
     require_matrix_scalar_digits,
 )
 
 MAX_INPUT_SCALAR_DIGITS = 256
-MAX_DETERMINANT_MATRIX_DIMENSION = 64
+MAX_DETERMINANT_MATRIX_DIMENSION = 128
+MAX_DETERMINANT_SCALAR_WORK = 500_000_000
 MAX_CHARACTERISTIC_POLYNOMIAL_ORDER = 128
-MAX_INVERSE_MATRIX_ORDER = 128
+MAX_INVERSE_MATRIX_ORDER = MAX_INVERSE_INTEGER_MATRIX_ORDER
 MAX_INVERSE_OUTPUT_DIGIT_WORK = 3_000_000
 MAX_PERMANENT_RYSER_SUBSETS = 4_096
 MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
 # The canonical dense rational matrix carries determinant inputs through
-# order 64, but Kronecker admission was established only for product axes
+# order 128, but Kronecker admission was established only for product axes
 # through order 50. Pin each admitted output axis to that envelope.
 MAX_KRONECKER_PRODUCT_AXIS = 50
 
@@ -191,7 +194,7 @@ class MatrixPermanentRequest(_MatrixRequest):
 
 
 class MatrixDeterminantRequest(_MatrixRequest):
-    """One square rational matrix of order at most 64."""
+    """One square rational matrix of order at most 128."""
 
     matrix: RationalMatrix
     _raw_matrix_axis_limit: ClassVar[int] = MAX_DETERMINANT_MATRIX_DIMENSION
@@ -210,7 +213,7 @@ class IntegerMatrixRequest(_MatrixRequest):
 class NonsingularIntegerMatrixRequest(_MatrixRequest):
     """One bounded square integer matrix for the exact inverse kernel."""
 
-    matrix: IntegerMatrix
+    matrix: InverseIntegerMatrix
     _raw_matrix_axis_limit: ClassVar[int] = MAX_INVERSE_MATRIX_ORDER
 
 

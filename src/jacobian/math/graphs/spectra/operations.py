@@ -15,7 +15,10 @@ __all__ = [
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.spectra._models import _require_spectral_graph
+from jacobian.math.graphs.spectra._models import (
+    _require_characteristic_polynomial_graph,
+    _require_spectral_graph,
+)
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -33,17 +36,29 @@ def _require_admitted_spectral_graph(
         ) from error
 
 
+def _require_admitted_characteristic_polynomial_graph(
+    graph: IndexedSimpleUndirectedGraph,
+) -> None:
+    try:
+        _require_characteristic_polynomial_graph(graph)
+    except PydanticCustomError as error:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code=error.type,
+            message=error.message(),
+        ) from error
+
+
 def _characteristic_polynomial_coeffs(
-    matrix: Any,
+    entries: list[int], order: int
 ) -> tuple[CanonicalRational, ...]:
     """Return monic charpoly coefficients (increasing degree) as canonical values."""
-    from fractions import Fraction
+    from flint import fmpz_mat
 
-    coeffs = matrix.charpoly().all_coeffs()
-    increasing = list(reversed(coeffs))
+    coefficients = fmpz_mat(order, order, entries).charpoly().coeffs()
     return tuple(
-        CanonicalRational.from_fraction(Fraction(int(c.p), int(c.q)))
-        for c in increasing
+        CanonicalRational(num=str(int(coefficient)), den="1")
+        for coefficient in coefficients
     )
 
 
@@ -74,6 +89,29 @@ def _laplacian_matrix(graph: IndexedSimpleUndirectedGraph) -> Any:
     return degree - adj
 
 
+def _adjacency_matrix_entries(graph: IndexedSimpleUndirectedGraph) -> list[int]:
+    order = graph.vertex_count
+    entries = [0] * (order * order)
+    for left, right in graph.edges:
+        entries[left * order + right] = 1
+        entries[right * order + left] = 1
+    return entries
+
+
+def _laplacian_matrix_entries(graph: IndexedSimpleUndirectedGraph) -> list[int]:
+    order = graph.vertex_count
+    entries = [0] * (order * order)
+    degrees = [0] * order
+    for left, right in graph.edges:
+        entries[left * order + right] = -1
+        entries[right * order + left] = -1
+        degrees[left] += 1
+        degrees[right] += 1
+    for vertex, degree in enumerate(degrees):
+        entries[vertex * order + vertex] = degree
+    return entries
+
+
 def adjacency_spectrum(graph: IndexedSimpleUndirectedGraph) -> list[tuple[str, int]]:
     mat = _adjacency_matrix(graph)
     eigenvals = mat.eigenvals()
@@ -90,9 +128,10 @@ def adjacency_characteristic_polynomial(
 ) -> RationalPolynomial:
     """Return det(xI - A) as the canonical sparse rational polynomial."""
 
-    _require_spectral_graph(graph)
+    _require_admitted_characteristic_polynomial_graph(graph)
+    order = graph.vertex_count
     return _dense_to_canonical_polynomial(
-        _characteristic_polynomial_coeffs(_adjacency_matrix(graph))
+        _characteristic_polynomial_coeffs(_adjacency_matrix_entries(graph), order)
     )
 
 
@@ -101,7 +140,8 @@ def laplacian_characteristic_polynomial(
 ) -> RationalPolynomial:
     """Return det(xI - L) as the canonical sparse rational polynomial."""
 
-    _require_spectral_graph(graph)
+    _require_admitted_characteristic_polynomial_graph(graph)
+    order = graph.vertex_count
     return _dense_to_canonical_polynomial(
-        _characteristic_polynomial_coeffs(_laplacian_matrix(graph))
+        _characteristic_polynomial_coeffs(_laplacian_matrix_entries(graph), order)
     )

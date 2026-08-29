@@ -178,3 +178,37 @@ def test_inverse_rejects_dense_output_work_before_backend() -> None:
 
     with pytest.raises(ValueError, match="exact output budget"):
         _run_inverse(identity)
+
+
+def test_shared_integer_matrix_keeps_order_32_for_non_inverse_ops() -> None:
+    from pydantic import ValidationError
+
+    from jacobian.math.lattices._models import LatticeReductionRequest
+    from jacobian.math.matrices._operation_models import (
+        IntegerMatrixRequest,
+        SquareIntegerMatrixRequest,
+    )
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    order = 33
+    entries = [
+        [str(int(row == column)) for column in range(order)] for row in range(order)
+    ]
+
+    with pytest.raises(ValidationError):
+        IntegerMatrix.model_validate({"entries": entries})
+    with pytest.raises(ValidationError):
+        IntegerMatrixRequest.model_validate({"matrix": {"entries": entries}})
+    with pytest.raises(ValidationError):
+        SquareIntegerMatrixRequest.model_validate({"matrix": {"entries": entries}})
+    with pytest.raises(ValidationError):
+        LatticeReductionRequest.model_validate({"basis": {"entries": entries}})
+
+    inverse_schema = _operation("matrix.inverse.compute").request_type.model_json_schema()
+    square_schema = SquareIntegerMatrixRequest.model_json_schema()
+    assert inverse_schema["$defs"]["InverseIntegerMatrix"]["properties"]["entries"][
+        "maxItems"
+    ] == 128
+    assert square_schema["$defs"]["IntegerMatrix"]["properties"]["entries"][
+        "maxItems"
+    ] == 32

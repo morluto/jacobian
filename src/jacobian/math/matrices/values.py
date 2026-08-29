@@ -22,13 +22,15 @@ MAX_MATRIX_DIMENSION = 32
 # The canonical dense rational matrix retains exact sources for analysis
 # results whose operations admit them by their own work and result budgets,
 # so its structural order is not tied to the shared computation dimension.
-# Characteristic polynomials admit square matrices through order 128. Keep
-# that complete public domain representable by the one canonical QQ matrix
-# value while narrower operations enforce their own request envelopes.
+# Determinant and characteristic-polynomial operations admit square matrices
+# through order 128. Keep that complete public domain representable by the one
+# canonical QQ matrix value while narrower operations enforce their own
+# request envelopes.
 MAX_RATIONAL_MATRIX_ORDER = 128
-# Exact inverse requests retain integer sources through the same structural
-# order; all other integer operations keep their owner-local order-32 limit.
-MAX_INTEGER_MATRIX_ORDER = 128
+# Exact inverse admits square integer sources through order 128 via the
+# inverse-owned carrier; the shared IntegerMatrix stays at order 32 for
+# lattice reduction and the other integer matrix operations.
+MAX_INVERSE_INTEGER_MATRIX_ORDER = 128
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 
@@ -234,25 +236,61 @@ class IntegerMatrix(StrictModel):
     domain: Literal["ZZ"] = "ZZ"
     entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
         min_length=1,
-        max_length=MAX_INTEGER_MATRIX_ORDER,
+        max_length=MAX_MATRIX_DIMENSION,
     )
 
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
         data = _require_raw_matrix_envelope(
-            data, maximum_axis=MAX_INTEGER_MATRIX_ORDER, label="matrix"
+            data, maximum_axis=MAX_MATRIX_DIMENSION, label="matrix"
         )
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_INTEGER_MATRIX_ORDER:
+        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
+            raise _validation_error(
+                "budget_exceeded", "matrix rows must contain between 1 and 32 entries"
+            )
+        if any(len(row) != column_count for row in self.entries):
+            raise _validation_error(
+                "budget_exceeded", "matrix rows must all have the same length"
+            )
+        require_matrix_scalar_digits(
+            self.entries,
+            maximum=MAX_MATRIX_SCALAR_DIGITS,
+            label="matrix",
+        )
+        return self
+
+
+class InverseIntegerMatrix(StrictModel):
+    """Square integer matrix carrier owned by the exact inverse operation."""
+
+    domain: Literal["ZZ"] = "ZZ"
+    entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_INVERSE_INTEGER_MATRIX_ORDER,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_matrix_envelope(cls, data: Any) -> Any:
+        data = _require_raw_matrix_envelope(
+            data, maximum_axis=MAX_INVERSE_INTEGER_MATRIX_ORDER, label="matrix"
+        )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_rectangular_nonempty_rows(self) -> Self:
+        column_count = len(self.entries[0])
+        if column_count == 0 or column_count > MAX_INVERSE_INTEGER_MATRIX_ORDER:
             raise _validation_error(
                 "budget_exceeded",
                 "matrix rows must contain between 1 and "
-                f"{MAX_INTEGER_MATRIX_ORDER} entries",
+                f"{MAX_INVERSE_INTEGER_MATRIX_ORDER} entries",
             )
         if any(len(row) != column_count for row in self.entries):
             raise _validation_error(
@@ -328,11 +366,12 @@ class SmithNormalForm(StrictModel):
 
 
 __all__ = [
-    "MAX_INTEGER_MATRIX_ORDER",
+    "MAX_INVERSE_INTEGER_MATRIX_ORDER",
     "MAX_MATRIX_DIMENSION",
     "MAX_MATRIX_SCALAR_DIGITS",
     "MAX_RATIONAL_MATRIX_ORDER",
     "IntegerMatrix",
+    "InverseIntegerMatrix",
     "RationalMatrix",
     "RationalVectorSpaceBasis",
     "RealQuadraticMatrix",

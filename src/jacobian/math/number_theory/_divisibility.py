@@ -6,12 +6,6 @@ from jacobian.math.number_theory._divisibility_models import (
     IntegerPairRequest,
     ValuationRequest,
 )
-from jacobian.math.number_theory._divisibility_operations import (
-    compute_divisor_count,
-    compute_divisor_sum,
-    compute_extended_gcd,
-    compute_valuation,
-)
 from jacobian.math.number_theory._factorization import FACTORIZATION_OPERATIONS
 from jacobian.math.number_theory._integer_models import (
     PositiveIntegerRequest,
@@ -19,7 +13,29 @@ from jacobian.math.number_theory._integer_models import (
 from jacobian.math.number_theory._support import (
     number_theory_operation,
 )
+from jacobian.math.number_theory.arithmetic.operations import (
+    divisor_count,
+    divisor_sum,
+    extended_gcd,
+    prime_valuation,
+)
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
+
+
+def compute_extended_gcd(request: IntegerPairRequest) -> ExtendedGcdResult:
+    return extended_gcd(request.left, request.right)
+
+
+def compute_valuation(request: ValuationRequest) -> IntegerValue:
+    return prime_valuation(request.value, request.prime)
+
+
+def compute_divisor_count(request: PositiveIntegerRequest) -> IntegerValue:
+    return divisor_count(request.n)
+
+
+def compute_divisor_sum(request: PositiveIntegerRequest) -> IntegerValue:
+    return divisor_sum(request.n)
 
 DIVISIBILITY_OPERATIONS = (
     *FACTORIZATION_OPERATIONS,

@@ -12,12 +12,24 @@ from jacobian.math.number_theory._divisibility_models import (
     IntegerPairRequest,
     ValuationRequest,
 )
-from jacobian.math.number_theory._divisibility_operations import (
-    compute_gcd,
-    compute_valuation,
-    decide_divides,
+from jacobian.math.number_theory.arithmetic.operations import (
+    absolute_value,
+    aliquot_sum,
+    are_coprime,
+    divides,
+    divisor_count,
+    divisor_sum,
+    extended_gcd,
+    integer_gcd,
+    integer_lcm,
+    is_abundant,
+    is_deficient,
+    is_even,
+    is_odd,
+    is_perfect,
+    is_square,
+    prime_valuation,
 )
-from jacobian.math.number_theory.arithmetic.operations import absolute_value
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
@@ -62,15 +74,31 @@ def test_divisibility_declarations_keep_their_owner_local_contracts(
 
 def test_divisibility_contracts_retain_their_typed_admission_errors() -> None:
     with pytest.raises(OperationDomainValidationError, match="divisor"):
-        decide_divides(DivisibilityRequest(divisor="0", dividend="1"))
+        divides(0, 1)
     with pytest.raises(OperationDomainValidationError, match="nonzero"):
-        compute_valuation(ValuationRequest(value="0", prime="2"))
+        prime_valuation(0, 2)
     with pytest.raises(OperationDomainValidationError, match="prime"):
-        compute_valuation(ValuationRequest(value="1", prime="4"))
+        prime_valuation(1, 4)
 
 
 def test_gcd_result_composes_with_arithmetic_integer_consumers() -> None:
-    gcd = compute_gcd(IntegerPairRequest(left="-84", right="30"))
+    gcd = integer_gcd(-84, 30)
 
     assert type(gcd) is IntegerValue
     assert absolute_value(gcd) == IntegerValue(value="6")
+
+
+def test_native_divisibility_vocabulary_remains_available() -> None:
+    assert integer_lcm(12, 18) == IntegerValue(value="36")
+    assert extended_gcd(84, 30).gcd == "6"
+    assert divisor_count(36) == IntegerValue(value="9")
+    assert divisor_sum(12) == IntegerValue(value="28")
+    assert aliquot_sum(12) == IntegerValue(value="16")
+    assert are_coprime(35, 12).holds
+    assert divides(7, 42).holds
+    assert is_even(42).holds
+    assert is_odd(41).holds
+    assert is_square(49).holds
+    assert is_perfect(28).holds
+    assert is_abundant(12).holds
+    assert is_deficient(8).holds

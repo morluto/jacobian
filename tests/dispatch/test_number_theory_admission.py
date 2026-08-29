@@ -19,10 +19,10 @@ from jacobian.math.number_theory._discrete_logarithm import (
     DISCRETE_LOGARITHM_OPERATION,
     DiscreteLogarithmRequest,
 )
-from jacobian.math.number_theory._divisibility_models import ValuationRequest
-from jacobian.math.number_theory._divisibility_operations import (
+from jacobian.math.number_theory._divisibility import (
     compute_valuation,
 )
+from jacobian.math.number_theory._divisibility_models import ValuationRequest
 from jacobian.math.number_theory._factorization_kernels import enumerate_divisors
 from jacobian.math.number_theory._modular_basic_models import (
     ChineseRemainderRequest,

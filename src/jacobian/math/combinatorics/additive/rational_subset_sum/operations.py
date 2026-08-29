@@ -1,0 +1,49 @@
+"""Rational subset-sum profile kernel."""
+
+from __future__ import annotations
+
+from fractions import Fraction
+from itertools import combinations
+
+from jacobian._exact import CanonicalRational
+from jacobian.math.combinatorics.additive.rational_subset_sum._models import (
+    RationalSubsetSumEntry,
+    RationalSubsetSumResult,
+)
+
+__all__ = ["compute_rational_subset_sum_profile"]
+
+
+def compute_rational_subset_sum_profile(
+    values: tuple[CanonicalRational, ...],
+) -> RationalSubsetSumResult:
+    """Return every attainable subset sum and its multiplicity.
+
+    For each subset I of {0,...,n-1}, the sum is sum(values[i] for i in I).
+    The multiplicity of a sum s is the number of subsets achieving that sum.
+    """
+    n = len(values)
+    fracs = [v.as_fraction() for v in values]
+
+    sums: dict[Fraction, int] = {}
+    sums[Fraction(0)] = 1  # Empty subset
+
+    if n > 0:
+        for size in range(1, n + 1):
+            for subset in combinations(range(n), size):
+                s = sum(fracs[i] for i in subset)
+                sums[s] = sums.get(s, 0) + 1
+
+    entries = tuple(
+        RationalSubsetSumEntry(
+            sum=CanonicalRational.from_fraction(s),
+            multiplicity=m,
+        )
+        for s, m in sorted(sums.items())
+    )
+
+    return RationalSubsetSumResult(
+        values=values,
+        entries=entries,
+        support_cardinality=len(sums),
+    )

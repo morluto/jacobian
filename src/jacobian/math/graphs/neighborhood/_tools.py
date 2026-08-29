@@ -13,12 +13,12 @@ from jacobian.math.graphs.neighborhood._models import (
     NeighborhoodResult,
 )
 from jacobian.math.graphs.neighborhood.operations import (
-    _open_neighborhood_from_admission,
+    open_neighborhood,
 )
 
 
 def compute_open_neighborhood(request: NeighborhoodRequest) -> NeighborhoodResult:
-    result = _open_neighborhood_from_admission(request.graph, request._admission)
+    result = open_neighborhood(request.graph, request.selected_vertices)
     require_open_neighborhood_output_budget(
         result.graph, result.selected_vertices, result.neighborhood
     )

@@ -135,8 +135,9 @@ def test_catalog_request_rejects_an_oversized_raw_selection() -> None:
 
 def test_catalog_request_reuses_selection_admission() -> None:
     g = _graph(["a", "b"], [("a", "b")])
-    with pytest.raises(ValueError, match="every selected vertex"):
-        NeighborhoodRequest(graph=g, selected_vertices=("c",))
+    request = NeighborhoodRequest(graph=g, selected_vertices=("c",))
+    with pytest.raises(OperationDomainValidationError, match="every selected vertex"):
+        compute_open_neighborhood(request)
 
 
 def test_selected_vertices_are_normalized_as_a_set_in_source_order() -> None:

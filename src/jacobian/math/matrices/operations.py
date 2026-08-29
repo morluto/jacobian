@@ -9,6 +9,8 @@ lazily so importing ``jacobian.math`` does not eagerly load packaged backends.
 from __future__ import annotations
 
 from collections.abc import Callable
+from fractions import Fraction
+from math import lcm
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic_core import PydanticCustomError
@@ -19,6 +21,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices import _conversions as conversions
 from jacobian.math.matrices._operation_models import (
     MAX_DETERMINANT_MATRIX_DIMENSION,
+    MAX_DETERMINANT_SCALAR_WORK,
     MAX_INPUT_SCALAR_DIGITS,
     MAX_KRONECKER_PRODUCT_AXIS,
     MAX_PERMANENT_RYSER_SUBSETS,
@@ -39,7 +42,12 @@ from jacobian.math.matrices._operation_models import (
     _require_square_system_admission,
     _validation_error,
 )
-from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix, SmithNormalForm
+from jacobian.math.matrices.values import (
+    MAX_MATRIX_SCALAR_DIGITS,
+    IntegerMatrix,
+    RationalMatrix,
+    SmithNormalForm,
+)
 
 if TYPE_CHECKING:
     from sympy.matrices.matrixbase import MatrixBase
@@ -229,11 +237,11 @@ def permanent(matrix: MatrixBase) -> Any:
     return Permanent(source).doit()
 
 
-def _admit(
-    check: Callable[..., None], *values: Any, location: tuple[str, ...] = ("matrix",)
-) -> None:
+def _admit[T](
+    check: Callable[..., T], *values: Any, location: tuple[str, ...] = ("matrix",)
+) -> T:
     try:
-        check(*values)
+        return check(*values)
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=location, code=exc.type, message=exc.message()
@@ -329,7 +337,13 @@ def _admit_partial_trace(
         )
 
 
-def _admit_determinant(matrix: RationalMatrix) -> None:
+def _bit_bound_decimal_digits(bits: int) -> int:
+    return max(1, (bits * 30_103 + 99_999) // 100_000)
+
+
+def _admit_determinant(
+    matrix: RationalMatrix,
+) -> tuple[tuple[Fraction, ...], ...]:
     from jacobian.math.matrices.values import require_matrix_scalar_digits
 
     require_matrix_scalar_digits(
@@ -343,6 +357,44 @@ def _admit_determinant(matrix: RationalMatrix) -> None:
             "determinant matrices are limited to order "
             f"{MAX_DETERMINANT_MATRIX_DIMENSION}",
         )
+    entries = tuple(
+        tuple(value.as_fraction() for value in row) for row in matrix.entries
+    )
+    order = len(entries)
+    input_digits = max(
+        max(len(str(abs(value.numerator))), len(str(value.denominator)))
+        for row in entries
+        for value in row
+    )
+    scalar_work = order**3 * input_digits
+    if scalar_work > MAX_DETERMINANT_SCALAR_WORK:
+        raise _validation_error(
+            "budget_exceeded",
+            "determinant exceeds the "
+            f"{MAX_DETERMINANT_SCALAR_WORK:,}-unit scalar-work budget",
+        )
+    numerator_bits = 0
+    denominator_bits = 0
+    for row in entries:
+        row_denominator = lcm(*(value.denominator for value in row))
+        denominator_bits += row_denominator.bit_length()
+        squared_norm = sum(
+            (value.numerator * (row_denominator // value.denominator)) ** 2
+            for value in row
+        )
+        numerator_bits += (squared_norm.bit_length() + 1) // 2
+    if (
+        max(
+            _bit_bound_decimal_digits(numerator_bits),
+            _bit_bound_decimal_digits(denominator_bits),
+        )
+        > MAX_MATRIX_SCALAR_DIGITS
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "determinant exceeds the canonical rational result-height bound",
+        )
+    return entries
 
 
 def _admit_linear_solve(
@@ -352,9 +404,11 @@ def _admit_linear_solve(
 
 
 def determinant_result(matrix: RationalMatrix) -> MatrixDeterminantResult:
-    _admit(_admit_determinant, matrix)
-    value = determinant(conversions.rational_matrix_to_sympy(matrix))
-    return MatrixDeterminantResult(determinant=conversions.rational_from_sympy(value))
+    entries = _admit(_admit_determinant, matrix)
+    from jacobian.math.matrices._flint import rational_determinant
+
+    value = rational_determinant(entries)
+    return MatrixDeterminantResult(determinant=CanonicalRational.from_fraction(value))
 
 
 def rank_result(matrix: RationalMatrix) -> MatrixRankResult:

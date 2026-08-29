@@ -125,6 +125,26 @@ class RealAlgebraicValue(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        polynomial: tuple[CanonicalInteger, ...],
+        real_root_index: int,
+    ) -> Self:
+        """Construct after an exact owner kernel proved the canonical identity.
+
+        Public parsing deliberately continues through
+        :meth:`require_canonical_real_root`; this factory is only for trusted
+        producers that already factored the primitive integer polynomial and
+        isolated the selected real root.
+        """
+
+        return cls.model_construct(
+            polynomial=polynomial,
+            real_root_index=real_root_index,
+        )
+
 
 class RationalIsolatingInterval(StrictModel):
     """A canonical rational interval isolating one real polynomial root."""

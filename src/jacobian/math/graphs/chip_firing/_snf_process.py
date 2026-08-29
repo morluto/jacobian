@@ -74,6 +74,7 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
             "bounded chip-firing SNF worker could not be started"
         ) from exc
 
+<<<<<<< HEAD
     if completed.cancelled:
         raise OperationExecutionCancelledError(
             "request cancelled during reduced-Laplacian SNF"
@@ -82,6 +83,10 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
         raise OperationExecutionTimeoutError(
             "request deadline expired during reduced-Laplacian SNF"
         )
+=======
+    if completed.timed_out or completed.cancelled:
+        raise TimeoutError("request deadline expired during reduced-Laplacian SNF")
+>>>>>>> origin/fix/flint-chip-firing-snf
     if (
         completed.stdout_exceeded
         or completed.stderr_exceeded

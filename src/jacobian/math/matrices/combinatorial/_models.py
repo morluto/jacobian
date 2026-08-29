@@ -78,7 +78,11 @@ class NormalizeResult(StrictModel):
 
 
 class DeterminantProfileRequest(StrictModel):
-    """Compute the determinant profile of a Hadamard matrix."""
+    """Compute the determinant profile of a Hadamard matrix.
+
+    ``matrix`` is a structurally square sign matrix. Exact orthogonality is
+    established by the owner recognition operation, not by request parsing.
+    """
 
     matrix: HadamardMatrix
 

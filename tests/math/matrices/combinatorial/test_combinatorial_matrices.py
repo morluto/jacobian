@@ -5,7 +5,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json, loads_strict_json
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.combinatorial import HadamardMatrix, SignMatrix
 from jacobian.math.matrices.combinatorial._models import (
@@ -28,6 +33,7 @@ from jacobian.math.matrices.combinatorial.operations import (
     determinant_profile,
     gram_profile,
     kronecker,
+    recognize_hadamard,
 )
 from jacobian.math.matrices.combinatorial.values import (
     MAX_MATERIALIZED_SIGN_MATRIX_AXIS,
@@ -220,6 +226,34 @@ class TestNormalize:
 
 
 # ---------------------------------------------------------------------------
+# Hadamard recognition
+# ---------------------------------------------------------------------------
+
+
+class TestRecognizeHadamard:
+    def test_h2_returns_a_trusted_hadamard_matrix(self) -> None:
+        recognized = recognize_hadamard(_h2())
+        assert type(recognized) is HadamardMatrix
+        assert recognized.rows == _h2().rows
+
+    def test_non_square_sign_matrix_is_rejected(self) -> None:
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            recognize_hadamard(SignMatrix(rows=((1, 1, 1), (1, -1, 1))))
+        assert exc_info.value.errors()[0]["type"] == "combinatorial_matrix.not_square"
+
+    def test_square_recognition_above_work_budget_is_rejected(self) -> None:
+        order = MAX_GRAM_PROFILE_AXIS + 1
+        matrix = SignMatrix(rows=((1,) * order,) * order)
+
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            recognize_hadamard(matrix)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_matrix.gram_work_budget"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Determinant profile
 # ---------------------------------------------------------------------------
 
@@ -232,9 +266,7 @@ class TestDeterminantProfile:
         assert result.determinant_magnitude == "2"  # 2^(2/2) = 2
         assert result.gram_determinant == "4"  # 2^2
 
-    def test_hadamard_validation_and_determinant_above_previous_boundary(self) -> None:
-        from jacobian.canonical import parse_canonical_integer
-
+    def test_hadamard_recognition_and_determinant_above_previous_boundary(self) -> None:
         order = 256
         matrix = HadamardMatrix(rows=_sylvester_rows(order))
         result = determinant_profile(matrix)
@@ -245,13 +277,16 @@ class TestDeterminantProfile:
         assert magnitude**2 == gram
         assert gram == order**order
 
-    def test_flint_validator_rejects_corruption_above_previous_boundary(self) -> None:
+    def test_request_parse_is_structural_for_corrupted_wide_hadamard(self) -> None:
         order = 256
         rows = [list(row) for row in _sylvester_rows(order)]
         rows[-1][-1] = -rows[-1][-1]
 
-        with pytest.raises(ValidationError) as exc_info:
-            DeterminantProfileRequest.model_validate({"matrix": {"rows": rows}})
+        request = DeterminantProfileRequest.model_validate({"matrix": {"rows": rows}})
+        assert request.matrix.rows[-1][-1] == rows[-1][-1]
+
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            compute_determinant_profile(request)
         assert (
             exc_info.value.errors()[0]["type"]
             == "combinatorial_matrix.orthogonality_violation"
@@ -264,7 +299,7 @@ class TestDeterminantProfile:
 
 
 def test_kronecker_returns_a_canonical_hadamard_matrix() -> None:
-    factor = HadamardMatrix(rows=_h2().rows)
+    factor = recognize_hadamard(_h2())
     result = kronecker(factor, factor)
 
     assert isinstance(result.product, HadamardMatrix)
@@ -309,9 +344,14 @@ class TestValidation:
             == "combinatorial_matrix.sign_entry_invalid"
         )
 
-    def test_non_hadamard_rejected(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            HadamardMatrix(rows=((1, 1), (1, 1)))
+    def test_non_hadamard_is_structural_on_the_value_and_rejected_by_recognition(
+        self,
+    ) -> None:
+        matrix = HadamardMatrix(rows=((1, 1), (1, 1)))
+        assert matrix.rows == ((1, 1), (1, 1))
+
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            recognize_hadamard(SignMatrix(rows=matrix.rows))
         assert (
             exc_info.value.errors()[0]["type"]
             == "combinatorial_matrix.orthogonality_violation"

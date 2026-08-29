@@ -15,6 +15,23 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
+def _require_hypergraph_compatible_labels(graph: SimpleUndirectedGraph) -> None:
+    for label in graph.vertices:
+        if len(label) > MAX_LABEL_LENGTH:
+            raise PydanticCustomError(
+                "graph.maximal_clique_hypergraph.label_length",
+                "graph vertex labels must fit the hypergraph label bound of "
+                f"{MAX_LABEL_LENGTH} characters",
+            )
+        try:
+            label.encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise PydanticCustomError(
+                "graph.maximal_clique_hypergraph.label_encoding",
+                "graph vertex labels must be valid UTF-8",
+            ) from error
+
+
 class MaximalCliqueHypergraphRequest(StrictModel):
     """Request to construct the maximal-clique hypergraph of a graph."""
 
@@ -22,20 +39,7 @@ class MaximalCliqueHypergraphRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_hypergraph_compatible_labels(self) -> Self:
-        for label in self.graph.vertices:
-            if len(label) > MAX_LABEL_LENGTH:
-                raise PydanticCustomError(
-                    "graph.maximal_clique_hypergraph.label_length",
-                    "graph vertex labels must fit the hypergraph label bound of "
-                    f"{MAX_LABEL_LENGTH} characters",
-                )
-            try:
-                label.encode("utf-8")
-            except UnicodeEncodeError as error:
-                raise PydanticCustomError(
-                    "graph.maximal_clique_hypergraph.label_encoding",
-                    "graph vertex labels must be valid UTF-8",
-                ) from error
+        _require_hypergraph_compatible_labels(self.graph)
         return self
 
 

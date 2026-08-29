@@ -225,7 +225,7 @@ def test_rejects_graph_labels_outside_hypergraph_carrier() -> None:
     graph = _graph(["x" * 65], [])
     with pytest.raises(ValidationError, match="64 characters"):
         MaximalCliqueHypergraphRequest(graph=graph)
-    with pytest.raises(ValidationError, match="64 characters"):
+    with pytest.raises(OperationDomainValidationError, match="64 characters"):
         construct_maximal_clique_hypergraph(graph)
 
 

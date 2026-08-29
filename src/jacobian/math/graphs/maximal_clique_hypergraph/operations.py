@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import networkx as nx
+from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
@@ -14,8 +15,8 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 from jacobian.math.graphs.maximal_clique_hypergraph._models import (
-    MaximalCliqueHypergraphRequest,
     MaximalCliqueHypergraphResult,
+    _require_hypergraph_compatible_labels,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -45,8 +46,10 @@ def _as_networkx_graph(graph: SimpleUndirectedGraph) -> nx.Graph[str]:
 def _enumeration_plan(graph: SimpleUndirectedGraph) -> _CliqueEnumerationPlan:
     """Enumerate once while enforcing the complete-family result ledger."""
 
-    # Reuse the request contract for native callers as well as the MCP adapter.
-    MaximalCliqueHypergraphRequest(graph=graph)
+    try:
+        _require_hypergraph_compatible_labels(graph)
+    except PydanticCustomError as error:
+        raise _reject(error.type, str(error)) from error
     source_position = {vertex: index for index, vertex in enumerate(graph.vertices)}
     clique_members: list[tuple[str, ...]] = []
     incidence_count = 0

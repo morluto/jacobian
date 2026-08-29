@@ -80,3 +80,29 @@ def test_result_preserves_source() -> None:
     g = _graph(["a", "b", "c"], [("a", "b"), ("a", "c"), ("b", "c")])
     result = compute_cycle_length_profile(g)
     assert result.graph == g
+
+
+def test_cycle_traversal_allows_descending_indices() -> None:
+    """A cycle is found even when its path must go down the vertex axis."""
+    g = _graph(
+        ["0", "1", "2", "3"],
+        [("0", "2"), ("1", "2"), ("1", "3"), ("0", "3")],
+    )
+    result = compute_cycle_length_profile(g)
+    assert [row.cycle_length for row in result.rows] == [4]
+
+
+def test_cycle_witness_canonicalizes_reverse_orientation() -> None:
+    """Canonical witnesses compare both rotations and orientations."""
+    g = _graph(["z", "b", "a"], [("b", "z"), ("a", "z"), ("a", "b")])
+    result = compute_cycle_length_profile(g)
+    assert result.rows[0].witness == ("a", "b", "z")
+
+
+def test_native_admission_rejects_large_graph() -> None:
+    """Native execution applies the owner vertex bound before search."""
+    import pytest
+
+    graph = _graph([str(i) for i in range(17)], [])
+    with pytest.raises(ValueError, match="at most 16 vertices"):
+        compute_cycle_length_profile(graph)

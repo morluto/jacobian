@@ -84,6 +84,7 @@ admitted operation with no residual surface. -->
 - [ ] Explicitly relevant specialist validation is listed above (boundary, backend, Harbor/Oracle)
 - [ ] Harbor task or verifier changes ran `make harbor-prepare-task` then `make harbor-validate-task` (if applicable)
 - [ ] Catalog changes have an explicit owner-local `_tools.py` publication outcome (if applicable)
+- [ ] No compatibility aliases, forwarding modules, or generic `_operations.py` shadow paths were introduced
 - [ ] Runtime-bound changes name the request-bounds owner and execute the same semantic path for native and MCP callers (if applicable)
 - [ ] Result semantics distinguish exact, approximate, incomplete, unknown, and unavailable outcomes where applicable
 - [ ] Public operation changes include a behavioral regression copied from a motivating parent-gap request, or explain why no source request exists (if applicable)

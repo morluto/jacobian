@@ -74,6 +74,6 @@ def _is_valid_coloring(
     vertex_to_color = {vertices[i]: coloring[i] for i in range(len(coloring))}
     for _, members in edges:
         colors = {vertex_to_color[m] for m in members}
-        if len(colors) == 1:
+        if len(colors) < 2:
             return False
     return True

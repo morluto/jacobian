@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
-from jacobian.math.combinatorics.finite_structures.hypergraph_coloring._models import (
-    NonmonochromaticColoringRequest,
-)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraph_coloring.operations import (
     decide_nonmonochromatic_coloring,
 )
@@ -42,11 +39,11 @@ def test_not_colorable_k3() -> None:
     assert result.witness is None
 
 
-def test_empty_edges_rejected() -> None:
-    """The bounded decision operation requires an edge to inspect."""
+def test_empty_edges_are_vacuously_colorable() -> None:
+    """An edgeless hypergraph has a vacuous non-monochromatic colouring."""
     h = _hg(["0", "1"], [])
-    with pytest.raises(ValueError, match="at least one edge"):
-        decide_nonmonochromatic_coloring(h, 2)
+    result = decide_nonmonochromatic_coloring(h, 2)
+    assert result.outcome == "COLORABLE"
 
 
 def test_q1_singleton_edge_not_colorable() -> None:
@@ -57,10 +54,10 @@ def test_q1_singleton_edge_not_colorable() -> None:
 
 
 def test_q1_empty_edges_colorable() -> None:
-    """The decision operation rejects an empty edge family."""
+    """A positive palette still colors an edgeless hypergraph vacuously."""
     h = _hg(["0"], [])
-    with pytest.raises(ValueError, match="at least one edge"):
-        decide_nonmonochromatic_coloring(h, 1)
+    result = decide_nonmonochromatic_coloring(h, 1)
+    assert result.outcome == "COLORABLE"
 
 
 def test_witness_replay() -> None:
@@ -120,13 +117,19 @@ def test_singleton_edge_not_colorable() -> None:
     assert result.outcome == "NOT_COLORABLE"
 
 
-def test_rejects_too_many_vertices() -> None:
-    h = _hg([str(i) for i in range(17)], [])
-    with pytest.raises(ValidationError):
-        NonmonochromaticColoringRequest(hypergraph=h, palette_size=2)
+def test_native_admission_matches_request_bounds() -> None:
+    h = _hg([str(i) for i in range(256)], [("e0", ("0", "1"))])
+    with pytest.raises(OperationDomainValidationError, match="edge checks"):
+        decide_nonmonochromatic_coloring(h, 16)
+
+
+def test_large_carrier_with_cheap_search_is_admitted() -> None:
+    h = _hg([str(i) for i in range(17)], [("e0", ("0", "1"))])
+    result = decide_nonmonochromatic_coloring(h, 1)
+    assert result.outcome == "NOT_COLORABLE"
 
 
 def test_rejects_search_work_before_enumeration() -> None:
     h = _hg([str(i) for i in range(16)], [("e0", ("0", "1"))])
-    with pytest.raises(ValueError, match="edge checks"):
+    with pytest.raises(OperationDomainValidationError, match="edge checks"):
         decide_nonmonochromatic_coloring(h, 16)

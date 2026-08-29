@@ -4,17 +4,18 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_VERTICES,
     FiniteHypergraph,
 )
 
 MAX_PALETTE_SIZE = 16
-MAX_VERTEX_COUNT = 16
+MAX_VERTEX_COUNT = MAX_VERTICES
 MAX_EDGE_COUNT = 200
 MAX_COLORING_WORK = 2_000_000
 
@@ -40,11 +41,6 @@ def _validate_coloring_envelope(
         raise PydanticCustomError(
             "hypergraph_coloring.too_many_vertices",
             f"at most {MAX_VERTEX_COUNT} vertices are supported",
-        )
-    if edge_count == 0:
-        raise PydanticCustomError(
-            "hypergraph_coloring.no_edges",
-            "the hypergraph must contain at least one edge",
         )
     if edge_count > MAX_EDGE_COUNT:
         raise PydanticCustomError(
@@ -77,12 +73,7 @@ class NonmonochromaticColoringRequest(StrictModel):
     """Decide whether a hypergraph has a q-colouring with no monochromatic edge."""
 
     hypergraph: FiniteHypergraph
-    palette_size: int = Field(ge=1, le=MAX_PALETTE_SIZE)
-
-    @model_validator(mode="after")
-    def validate_bounds(self) -> Self:
-        _validate_coloring_envelope(self.hypergraph, self.palette_size)
-        return self
+    palette_size: StrictInt = Field(ge=1, le=MAX_PALETTE_SIZE)
 
 
 class ColoringWitness(StrictModel):

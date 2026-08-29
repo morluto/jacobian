@@ -33,18 +33,14 @@ def _edge(source: int, target: int, num: str, den: str) -> ConductanceEdge:
 
 
 def _laplacian_edge(source: int, target: int, num: str, den: str) -> LaplacianEdge:
-    return LaplacianEdge(
-        source=source, target=target, conductance=C(num=num, den=den)
-    )
+    return LaplacianEdge(source=source, target=target, conductance=C(num=num, den=den))
 
 
 def _net(vertex_count: int, *edges: ConductanceEdge) -> ConductanceNetwork:
     return ConductanceNetwork(vertex_count=vertex_count, edges=edges)
 
 
-def _laplacian_net(
-    vertex_count: int, *edges: LaplacianEdge
-) -> LaplacianNetwork:
+def _laplacian_net(vertex_count: int, *edges: LaplacianEdge) -> LaplacianNetwork:
     return LaplacianNetwork(vertex_count=vertex_count, edges=edges)
 
 

@@ -54,7 +54,7 @@ TOOLS: MathTools = (
         "Compute the exact prefix count of a periodic congruence union",
         (
             "Given a finite periodic congruence union (optionally complemented) "
-            "and a nonnegative integer cutoff, return the exact number of "
+            "and a nonnegative integer cutoff of at most 256 digits, return the exact number of "
             "integers in [1, cutoff] that belong to the declared periodic set."
         ),
         PeriodicUnionPrefixCountRequest,

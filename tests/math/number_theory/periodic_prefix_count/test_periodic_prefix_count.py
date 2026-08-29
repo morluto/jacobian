@@ -78,3 +78,19 @@ def test_negative_cutoff_is_a_typed_domain_rejection() -> None:
     source = _source([("2", ["0"])])
     with pytest.raises(OperationDomainValidationError, match="nonnegative"):
         compute_periodic_union_prefix_count(source, -1)
+
+
+def test_scalar_count_keeps_period_lift_plan() -> None:
+    """A dense, small-period source is counted without IE merge limits."""
+    source = _source(
+        [("1000", [str(i) for i in range(999)])],
+        complement=False,
+    )
+    result = compute_periodic_union_prefix_count(source, 1000)
+    assert result.count == "999"
+
+
+def test_cutoff_digit_bound_is_typed() -> None:
+    source = _source([("2", ["0"])])
+    with pytest.raises(OperationDomainValidationError, match="at most 256 digits"):
+        compute_periodic_union_prefix_count(source, 10**256)

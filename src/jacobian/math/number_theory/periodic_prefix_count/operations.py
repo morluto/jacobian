@@ -12,12 +12,14 @@ from jacobian.canonical import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic_kernel import (
-    _intersection_bounds,
+    _ExecutionPlan,
     _merge_congruences,
-    common_period,
+    _sparse_union,
+    _union_mask,
     require_admitted_periodic_source,
 )
 from jacobian.math.number_theory._periodic_models import (
+    MAX_PERIODIC_INTEGER_DIGITS,
     PeriodicCongruenceUnionSource,
 )
 from jacobian.math.number_theory.periodic_prefix_count._models import (
@@ -73,28 +75,47 @@ def _union_prefix_count(source: PeriodicCongruenceUnionSource, upper: int) -> in
     return count
 
 
-def _admit_source(source: PeriodicCongruenceUnionSource, cutoff: int) -> int:
+def _prefix_union_count(
+    source: PeriodicCongruenceUnionSource,
+    plan: _ExecutionPlan,
+    upper: int,
+) -> int:
+    if plan.method == "FULL_UNION":
+        return upper
+    if plan.method == "PERIOD_LIFT":
+        mask = _union_mask(source, plan.common_period)
+        count = sum(mask[1 : upper + 1])
+        if upper >= plan.common_period and mask[0]:
+            count += 1
+        return count
+    if plan.method == "SPARSE_LIFT":
+        occupied = _sparse_union(source, plan.common_period)
+        return sum(
+            (residue if residue else plan.common_period) <= upper
+            for residue in occupied
+        )
+    return _union_prefix_count(source, upper)
+
+
+def _admit_source(
+    source: PeriodicCongruenceUnionSource, cutoff: int
+) -> _ExecutionPlan:
     if not isinstance(source, PeriodicCongruenceUnionSource):
         _reject("invalid_source", "source must be a canonical periodic union")
     if isinstance(cutoff, bool) or not isinstance(cutoff, int):
         _reject("invalid_cutoff", "cutoff must be a strict integer")
     if cutoff < 0:
         _reject("negative_cutoff", "cutoff must be nonnegative")
+    if cutoff > 10**MAX_PERIODIC_INTEGER_DIGITS - 1:
+        _reject(
+            "cutoff_digit_bound",
+            f"cutoff must have at most {MAX_PERIODIC_INTEGER_DIGITS} digits",
+        )
     try:
-        require_admitted_periodic_source(source)
-        period = common_period(source)
+        plan = require_admitted_periodic_source(source)
     except ValueError as exc:
         _reject("execution_bound", str(exc))
-    states, merges = _intersection_bounds(source)
-    full_union = any(
-        len(subset.residues) == parse_canonical_integer(subset.modulus)
-        for subset in source.subsets
-    )
-    if not full_union and (states > 65_535 or merges > 100_000):
-        _reject(
-            "prefix_execution_bound",
-            "scalar prefix counting requires a bounded compressed congruence profile",
-        )
+    period = plan.common_period
     cutoff_text = format_canonical_integer(cutoff)
     try:
         source_bytes = len(encode_strict_json(source.model_dump(mode="json")))
@@ -111,7 +132,7 @@ def _admit_source(source: PeriodicCongruenceUnionSource, cutoff: int) -> int:
             "result_size_bound",
             f"the scalar result exceeds the {MAX_RESULT_BYTES}-byte output bound",
         )
-    return period
+    return plan
 
 
 def compute_periodic_union_prefix_count(
@@ -124,17 +145,10 @@ def compute_periodic_union_prefix_count(
     occupied in one period, then the count through X is q*c + r,
     where q = X // L, r = X % L, and c is the one-period count.
     """
-    period = _admit_source(source, cutoff)
-    full_union = any(
-        len(subset.residues) == parse_canonical_integer(subset.modulus)
-        for subset in source.subsets
-    )
-    if full_union:
-        occupied_count = period
-        partial_union_count = cutoff % period
-    else:
-        occupied_count = _union_prefix_count(source, period)
-        partial_union_count = _union_prefix_count(source, cutoff % period)
+    plan = _admit_source(source, cutoff)
+    period = plan.common_period
+    occupied_count = _prefix_union_count(source, plan, period)
+    partial_union_count = _prefix_union_count(source, plan, cutoff % period)
     if source.complement:
         occupied_count = period - occupied_count
         partial_union_count = cutoff % period - partial_union_count

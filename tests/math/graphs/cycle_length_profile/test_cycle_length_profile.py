@@ -99,6 +99,25 @@ def test_cycle_witness_canonicalizes_reverse_orientation() -> None:
     assert result.rows[0].witness == ("a", "b", "z")
 
 
+def test_cycle_witness_preserves_canonical_graph_labels() -> None:
+    """Witnesses accept the graph value's complete string-label domain."""
+    long_label = "label-" + "x" * 65
+    g = _graph(
+        ["", "a", long_label],
+        [("", "a"), ("", long_label), ("a", long_label)],
+    )
+    result = compute_cycle_length_profile(g)
+    assert result.rows[0].witness == ("", "a", long_label)
+
+
+def test_sparse_star_is_admitted_without_global_degree_restriction() -> None:
+    """A sparse high-degree graph does not inherit a dense-graph estimate."""
+    center = ""
+    leaves = [str(index) for index in range(1, 16)]
+    g = _graph([center, *leaves], [(center, leaf) for leaf in leaves])
+    assert compute_cycle_length_profile(g).rows == ()
+
+
 def test_native_admission_rejects_large_graph() -> None:
     """Native execution applies the owner vertex bound before search."""
     import pytest

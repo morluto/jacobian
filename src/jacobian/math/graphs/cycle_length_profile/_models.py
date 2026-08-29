@@ -8,7 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.graphs.values import GraphVertexLabel, SimpleUndirectedGraph
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_VERTICES = 16
 
@@ -32,7 +32,7 @@ class CycleLengthRow(StrictModel):
     """One cycle length with a canonical witness cycle."""
 
     cycle_length: StrictInt = Field(ge=3, le=MAX_VERTICES)
-    witness: tuple[GraphVertexLabel, ...] = Field(min_length=3, max_length=MAX_VERTICES)
+    witness: tuple[str, ...] = Field(min_length=3, max_length=MAX_VERTICES)
 
     @model_validator(mode="after")
     def require_matching_witness_length(self) -> Self:

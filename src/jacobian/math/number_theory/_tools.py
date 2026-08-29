@@ -11,10 +11,6 @@ from jacobian.math.number_theory._divisibility_graph import (
 from jacobian.math.number_theory._divisibility_profiles import (
     DIVISIBILITY_PROFILE_OPERATIONS,
 )
-from jacobian.math.number_theory._finite_abelian_groups import (
-    FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
-    FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION,
-)
 from jacobian.math.number_theory._friable import FRIABLE_COUNT_OPERATION
 from jacobian.math.number_theory._interval_profiles import (
     INTERVAL_PROFILE_OPERATIONS,
@@ -39,8 +35,6 @@ TOOLS: MathTools = (
     *MODULAR_IDENTITY_OPERATIONS,
     *DERIVED_NUMBER_THEORY_OPERATIONS,
     RAMANUJAN_SUM_OPERATION,
-    FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
-    FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION,
     FRIABLE_COUNT_OPERATION,
     CONTIGUOUS_SUM_OPERATION,
     PRIME_SHIFT_OPERATION,

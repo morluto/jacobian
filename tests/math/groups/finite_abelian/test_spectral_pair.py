@@ -11,6 +11,7 @@ from tests.math.groups.finite_abelian._support import finite_abelian_validation_
 
 from jacobian.canonical import encode_strict_json
 from jacobian.math.groups import finite_abelian as domain
+from jacobian.math.groups._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.groups.finite_abelian import (
     FiniteAbelianGroupFactorizationRequest,
     FiniteAbelianProductGroup,
@@ -20,8 +21,11 @@ from jacobian.math.groups.finite_abelian import (
     decide_finite_abelian_spectral_pair,
     finite_abelian_group_factorization,
 )
-from jacobian.math.number_theory._finite_abelian_groups import (
-    FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION,
+
+FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION = next(
+    tool
+    for tool in GROUP_TOOLS
+    if tool.operation_id == "finite_abelian_group.spectral_pair.decide"
 )
 
 

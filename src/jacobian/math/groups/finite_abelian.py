@@ -653,14 +653,6 @@ def decide_finite_abelian_spectral_pair(
     return FiniteAbelianSpectralPairResult._from_kernel(source, decision)
 
 
-def _run_finite_abelian_spectral_pair(
-    request: FiniteAbelianSpectralPairRequest,
-) -> FiniteAbelianSpectralPairResult:
-    """Adapt the catalog request to the native source-value function."""
-
-    return decide_finite_abelian_spectral_pair(request.source)
-
-
 class FiniteAbelianRepresentationCount(StrictModel):
     """Number of group elements having one representation count."""
 
@@ -909,16 +901,6 @@ def finite_abelian_group_factorization(
         is_exact_factorization=exact,
         first_missing=None if exact else first_missing,
         first_duplicate=None if exact else duplicate,
-    )
-
-
-def _run_finite_abelian_group_factorization(
-    request: FiniteAbelianGroupFactorizationRequest,
-) -> FiniteAbelianGroupFactorizationResult:
-    """Adapt the catalog request onto the canonical native boundary once."""
-
-    return finite_abelian_group_factorization(
-        FiniteAbelianProductGroup(moduli=request.moduli), request.left, request.right
     )
 
 

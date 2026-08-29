@@ -3,10 +3,16 @@
 from collections.abc import Callable
 from typing import Any
 
+from pydantic import ValidationError
+
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.groups import operations as native
 from jacobian.math.groups._models import (
     MAX_CONJUGACY_CLASSES_GROUP_ORDER,
@@ -23,7 +29,36 @@ from jacobian.math.groups._models import (
     GroupSubgroupLatticeResult,
     PermutationGroup,
 )
+from jacobian.math.groups.finite_abelian import (
+    FiniteAbelianGroupFactorizationRequest,
+    FiniteAbelianGroupFactorizationResult,
+    FiniteAbelianProductGroup,
+    FiniteAbelianSpectralPairRequest,
+    FiniteAbelianSpectralPairResult,
+    decide_finite_abelian_spectral_pair,
+    finite_abelian_group_factorization,
+)
 from jacobian.math.groups.operations import SubgroupLatticeBudgetExceededError
+
+
+def compute_finite_abelian_group_factorization(
+    request: FiniteAbelianGroupFactorizationRequest,
+) -> FiniteAbelianGroupFactorizationResult:
+    try:
+        group = FiniteAbelianProductGroup(moduli=request.moduli)
+    except ValidationError as error:
+        raise OperationDomainValidationError(
+            location=("moduli",),
+            code="finite_abelian_group.invalid_group",
+            message="moduli must define an admitted finite Abelian product group",
+        ) from error
+    return finite_abelian_group_factorization(group, request.left, request.right)
+
+
+def compute_finite_abelian_spectral_pair(
+    request: FiniteAbelianSpectralPairRequest,
+) -> FiniteAbelianSpectralPairResult:
+    return decide_finite_abelian_spectral_pair(request.source)
 
 
 def compute_group_order(request: PermutationGroup) -> GroupOrderResult:
@@ -106,6 +141,62 @@ S3_STABILIZER_POINT_0 = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    group_operation(
+        "finite_abelian_group.exact_factorization.compute",
+        "Exact finite abelian group factorization",
+        "Normalize two bounded integer-vector factors in a declared product "
+        "of cyclic groups, exhaustively count every sum representation, and "
+        "decide whether every group element has exactly one representation.",
+        FiniteAbelianGroupFactorizationRequest,
+        FiniteAbelianGroupFactorizationResult,
+        compute_finite_abelian_group_factorization,
+        "group",
+        "finite-abelian-group",
+        "cyclic-product",
+        "factorization",
+        "exact",
+        examples=(
+            example(
+                "z2_times_z4_transversal",
+                "Verify eight representatives form a complete transversal.",
+                {
+                    "moduli": [2, 4],
+                    "left": [
+                        [0, 0], [0, 1], [0, 2], [0, 3],
+                        [1, 0], [1, 1], [1, 2], [1, 3],
+                    ],
+                    "right": [[0, 0]],
+                },
+            ),
+        ),
+    ),
+    group_operation(
+        "finite_abelian_group.spectral_pair.decide",
+        "Decide an exact finite-Abelian spectral pair",
+        "Decide whether a canonical residue-tuple frequency set is a spectrum "
+        "of a point set in an explicit product of cyclic groups under the "
+        "positive product dual pairing.",
+        FiniteAbelianSpectralPairRequest,
+        FiniteAbelianSpectralPairResult,
+        compute_finite_abelian_spectral_pair,
+        "harmonic-analysis",
+        "finite-abelian-group",
+        "spectral-pair",
+        "exact",
+        examples=(
+            example(
+                "z4_even_pair",
+                "Decide the two-point spectral pair A={0,2}, Lambda={0,1} in Z/4.",
+                {
+                    "source": {
+                        "group": {"moduli": [4]},
+                        "points": [[0], [2]],
+                        "frequencies": [[0], [1]],
+                    }
+                },
+            ),
+        ),
+    ),
     group_operation(
         "group.order.compute",
         "Compute the exact order of a finite permutation group",

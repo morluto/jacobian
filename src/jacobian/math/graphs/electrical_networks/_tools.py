@@ -21,6 +21,7 @@ from jacobian.math.graphs.electrical_networks._models import (
     EffectiveResistanceRequest,
     EffectiveResistanceResult,
     LaplacianEntry,
+    LaplacianNetwork,
     LaplacianRequest,
     LaplacianResult,
     NodePotentialRequest,
@@ -37,7 +38,7 @@ def _domain_error(location: tuple[str | int, ...], code: str, message: str) -> N
     )
 
 
-def _admit_network(network: ConductanceNetwork) -> None:
+def _admit_network(network: ConductanceNetwork | LaplacianNetwork) -> None:
     """Check mathematical graph and conductance preconditions once per call."""
     seen: set[tuple[int, int]] = set()
     for index, edge in enumerate(network.edges):
@@ -150,7 +151,7 @@ def _admit_terminals(
 
 
 def _edge_triples(
-    network: ConductanceNetwork,
+    network: ConductanceNetwork | LaplacianNetwork,
 ) -> tuple[tuple[int, int, Fraction], ...]:
     return tuple(
         (edge.source, edge.target, edge.conductance.as_fraction())

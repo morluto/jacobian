@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import Field, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -38,6 +35,23 @@ class ConductanceNetwork(StrictModel):
 
     vertex_count: int = Field(ge=2, le=MAX_NETWORK_VERTICES)
     edges: tuple[ConductanceEdge, ...] = Field(
+        min_length=1, max_length=MAX_NETWORK_EDGES
+    )
+
+
+class LaplacianEdge(StrictModel):
+    """One undirected edge admitted by Laplacian materialization."""
+
+    source: int = Field(ge=0, le=MAX_LAPLACIAN_VERTICES - 1)
+    target: int = Field(ge=0, le=MAX_LAPLACIAN_VERTICES - 1)
+    conductance: CanonicalRational
+
+
+class LaplacianNetwork(StrictModel):
+    """A conductance network whose Laplacian matrix fits the materialization bound."""
+
+    vertex_count: int = Field(ge=2, le=MAX_LAPLACIAN_VERTICES)
+    edges: tuple[LaplacianEdge, ...] = Field(
         min_length=1, max_length=MAX_NETWORK_EDGES
     )
 
@@ -86,30 +100,21 @@ class NodePotentialResult(StrictModel):
 class LaplacianEntry(StrictModel):
     """One entry of the exact conductance-weighted Laplacian matrix."""
 
-    row: int = Field(ge=0, le=MAX_NETWORK_VERTICES - 1)
-    col: int = Field(ge=0, le=MAX_NETWORK_VERTICES - 1)
+    row: int = Field(ge=0, le=MAX_LAPLACIAN_VERTICES - 1)
+    col: int = Field(ge=0, le=MAX_LAPLACIAN_VERTICES - 1)
     value: CanonicalRational
 
 
 class LaplacianRequest(StrictModel):
     """Compute the conductance-weighted Laplacian matrix of a network."""
 
-    network: ConductanceNetwork
-
-    @model_validator(mode="after")
-    def require_materialized_matrix_envelope(self) -> Self:
-        if self.network.vertex_count > MAX_LAPLACIAN_VERTICES:
-            raise PydanticCustomError(
-                "electrical_network.laplacian_vertex_bound",
-                f"Laplacian output is limited to {MAX_LAPLACIAN_VERTICES} vertices",
-            )
-        return self
+    network: LaplacianNetwork
 
 
 class LaplacianResult(StrictModel):
     """Exact Laplacian matrix as a flat list of (row, col, value) entries."""
 
-    vertex_count: int = Field(ge=2, le=MAX_NETWORK_VERTICES)
+    vertex_count: int = Field(ge=2, le=MAX_LAPLACIAN_VERTICES)
     entries: tuple[LaplacianEntry, ...] = Field(min_length=1)
 
 
@@ -118,7 +123,9 @@ __all__ = [
     "ConductanceNetwork",
     "EffectiveResistanceRequest",
     "EffectiveResistanceResult",
+    "LaplacianEdge",
     "LaplacianEntry",
+    "LaplacianNetwork",
     "LaplacianRequest",
     "LaplacianResult",
     "NodePotentialRequest",

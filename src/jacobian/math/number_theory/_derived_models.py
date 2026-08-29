@@ -11,7 +11,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._integer_models import MAX_SAFE_INTEGER
 
@@ -64,6 +63,7 @@ class FactorialValuationRequest(StrictModel):
         description=f"Integer base in [2, {MAX_FACTORIAL_BASE}].",
     )
 
+
 class FactorialValuationResult(StrictModel):
     n: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
     base: CanonicalInteger = Field(max_length=len(str(MAX_FACTORIAL_BASE)))
@@ -112,6 +112,7 @@ class BinomialPrimeValuationRequest(StrictModel):
             "(deterministic SymPy primality range)."
         ),
     )
+
 
 class BinomialPrimeValuationResult(StrictModel):
     n: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)

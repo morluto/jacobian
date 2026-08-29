@@ -15,16 +15,20 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices import _conversions as conversions
 from jacobian.math.matrices._operation_models import (
+    MAX_CHARACTERISTIC_POLYNOMIAL_ORDER,
     MAX_DETERMINANT_MATRIX_DIMENSION,
     MAX_DETERMINANT_SCALAR_WORK,
     MAX_EXACT_LINEAR_MATRIX_WORK,
     MAX_INPUT_SCALAR_DIGITS,
     MAX_KRONECKER_PRODUCT_AXIS,
+    MAX_MATRIX_PRODUCT_AXIS,
+    MAX_MATRIX_PRODUCT_MULTIPLY_ADDS,
+    MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK,
     MAX_PERMANENT_RYSER_SUBSETS,
     CharacteristicPolynomialResult,
     MatrixAdjugateResult,
@@ -109,6 +113,17 @@ def _exact_matrix(value: MatrixBase, *, maximum_dimension: int = 32) -> MatrixBa
     return value
 
 
+def _rational_scalars_within_kernel_limit(value: MatrixBase) -> bool:
+    return all(
+        max(
+            len(str(abs(int(entry.p)))),
+            len(str(abs(int(entry.q)))),
+        )
+        <= MAX_INPUT_SCALAR_DIGITS
+        for entry in value
+    )
+
+
 def rref(matrix: MatrixBase) -> tuple[MatrixBase, tuple[int, ...]]:
     result = rref_result(
         conversions.rational_matrix_from_sympy(
@@ -145,10 +160,35 @@ def trace(matrix: MatrixBase) -> Any:
 
 
 def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
-    source = _exact_matrix(matrix)
+    import sympy
+
+    source = _exact_matrix(
+        matrix, maximum_dimension=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER
+    )
     if source.rows != source.cols:
         raise ValueError("characteristic polynomial requires a square matrix")
-    return source.charpoly(variable)
+    if not all(entry.is_Rational is True for entry in source):
+        if source.rows > MAX_MATRIX_DIMENSION:
+            raise ValueError(
+                f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+            )
+        return source.charpoly(variable)
+    if not _rational_scalars_within_kernel_limit(source):
+        if source.rows > MAX_MATRIX_DIMENSION:
+            raise ValueError(
+                f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+            )
+        return source.charpoly(variable)
+    result = characteristic_polynomial_result(
+        conversions.rational_matrix_from_sympy(source)
+    )
+    return sympy.Poly(
+        [
+            sympy.Rational(coefficient.num, coefficient.den)
+            for coefficient in result.coefficients_descending
+        ],
+        sympy.Symbol(variable),
+    )
 
 
 def determinant(matrix: MatrixBase) -> Any:
@@ -181,7 +221,38 @@ def smith_normal_form(matrix: MatrixBase) -> MatrixBase:
 
 
 def multiply(left: MatrixBase, right: MatrixBase) -> MatrixBase:
-    return _exact_matrix(left) * _exact_matrix(right)
+    from sympy.matrices.matrixbase import MatrixBase as SymPyMatrix
+
+    if (
+        isinstance(left, SymPyMatrix)
+        and isinstance(right, SymPyMatrix)
+        and all(entry.is_Rational is True for entry in left)
+        and all(entry.is_Rational is True for entry in right)
+    ):
+        left_source = _exact_matrix(left, maximum_dimension=MAX_MATRIX_PRODUCT_AXIS)
+        right_source = _exact_matrix(right, maximum_dimension=MAX_MATRIX_PRODUCT_AXIS)
+        if not (
+            _rational_scalars_within_kernel_limit(left_source)
+            and _rational_scalars_within_kernel_limit(right_source)
+        ):
+            if (
+                left_source.rows > MAX_MATRIX_DIMENSION
+                or left_source.cols > MAX_MATRIX_DIMENSION
+                or right_source.rows > MAX_MATRIX_DIMENSION
+                or right_source.cols > MAX_MATRIX_DIMENSION
+            ):
+                raise ValueError(
+                    f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+                )
+            return left_source * right_source
+        result = product_result(
+            conversions.rational_matrix_from_sympy(left_source),
+            conversions.rational_matrix_from_sympy(right_source),
+        )
+        return conversions.rational_matrix_to_sympy(result.product)
+    left_fallback = _exact_matrix(left, maximum_dimension=MAX_MATRIX_DIMENSION)
+    right_fallback = _exact_matrix(right, maximum_dimension=MAX_MATRIX_DIMENSION)
+    return left_fallback * right_fallback
 
 
 def solve_linear_system(
@@ -418,14 +489,105 @@ def _admit_permanent(matrix: RationalMatrix) -> None:
         )
 
 
+def _denominator_digits(denominator: str) -> int:
+    return 0 if denominator == "1" else len(denominator)
+
+
+def _product_cell_digit_bound(
+    left_row: tuple[CanonicalRational, ...],
+    right_column: tuple[CanonicalRational, ...],
+) -> int:
+    """Bound one output cell after combining equal-denominator terms.
+
+    Zero factors do not contribute. Terms that share a reduced product
+    denominator are combined by summing their numerators before charging, so
+    equivalent products with swapped factors and cancelling pairs do not
+    inflate the denominator bound.
+    """
+
+    combined_numerators: dict[str, int] = {}
+    for left_value, right_value in zip(left_row, right_column, strict=True):
+        if left_value.num == "0" or right_value.num == "0":
+            continue
+        left_fraction = left_value.as_fraction()
+        right_fraction = right_value.as_fraction()
+        product = left_fraction * right_fraction
+        key = format_canonical_integer(product.denominator)
+        combined_numerators[key] = combined_numerators.get(key, 0) + product.numerator
+    remaining = tuple(
+        (key, numerator)
+        for key, numerator in combined_numerators.items()
+        if numerator != 0
+    )
+    if not remaining:
+        return 1
+    denominator_digits = 0
+    max_numerator_digits = 1
+    for denominator, numerator in remaining:
+        denominator_digits += _denominator_digits(denominator)
+        max_numerator_digits = max(
+            max_numerator_digits, _positive_decimal_digits(numerator)
+        )
+    denominator_digits = max(1, denominator_digits)
+    numerator_digits = (
+        max_numerator_digits + denominator_digits + len(str(len(remaining)))
+    )
+    return max(numerator_digits, denominator_digits)
+
+
 def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
     if len(left.entries[0]) != len(right.entries):
         raise _validation_error(
             "budget_exceeded",
             "matrix multiplication requires the left column count to equal the right row count",
         )
-    _admit_rational_matrix(left)
-    _admit_rational_matrix(right)
+    from jacobian.math.matrices.values import require_matrix_scalar_digits
+
+    for label, matrix in (("left", left), ("right", right)):
+        require_matrix_scalar_digits(
+            matrix.entries,
+            maximum=MAX_INPUT_SCALAR_DIGITS,
+            label=f"{label} matrix input",
+        )
+    left_rows = len(left.entries)
+    inner_dimension = len(left.entries[0])
+    right_columns = len(right.entries[0])
+    if (
+        left_rows > MAX_MATRIX_PRODUCT_AXIS
+        or inner_dimension > MAX_MATRIX_PRODUCT_AXIS
+        or right_columns > MAX_MATRIX_PRODUCT_AXIS
+        or len(right.entries) > MAX_MATRIX_PRODUCT_AXIS
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "matrix product axes are limited to "
+            f"{MAX_MATRIX_PRODUCT_AXIS} rows and columns",
+        )
+    if left_rows * inner_dimension * right_columns > MAX_MATRIX_PRODUCT_MULTIPLY_ADDS:
+        raise _validation_error(
+            "budget_exceeded",
+            "matrix product exceeds the exact multiply-add work budget",
+        )
+
+    right_columns_entries = tuple(
+        tuple(right.entries[row][column] for row in range(inner_dimension))
+        for column in range(right_columns)
+    )
+    output_digit_work = 0
+    for left_row in left.entries:
+        for right_column in right_columns_entries:
+            cell_digits = _product_cell_digit_bound(left_row, right_column)
+            if cell_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "matrix product components exceed the canonical digit budget",
+                )
+            output_digit_work += cell_digits
+    if output_digit_work > MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK:
+        raise _validation_error(
+            "budget_exceeded",
+            "matrix product exceeds the exact dense-output digit budget",
+        )
 
 
 def _admit_kronecker(left: RationalMatrix, right: RationalMatrix) -> None:
@@ -456,6 +618,19 @@ def _admit_partial_trace(
 
 def _bit_bound_decimal_digits(bits: int) -> int:
     return max(1, (bits * 30_103 + 99_999) // 100_000)
+
+
+def _exceeds_canonical_rational_digits(bits: int) -> bool:
+    return _bit_bound_decimal_digits(bits) > MAX_CANONICAL_RATIONAL_DIGITS
+
+
+def _positive_decimal_digits(value: int) -> int:
+    """Upper-bound decimal length without converting the integer to a string."""
+
+    magnitude = abs(value)
+    if magnitude <= 9:
+        return 1
+    return _bit_bound_decimal_digits(magnitude.bit_length())
 
 
 def _admit_determinant(
@@ -512,6 +687,86 @@ def _admit_determinant(
             "determinant exceeds the canonical rational result-height bound",
         )
     return entries
+
+
+def _characteristic_polynomial_component_digit_bound(
+    matrix: RationalMatrix,
+) -> int:
+    fractions = tuple(
+        tuple(value.as_fraction() for value in row) for row in matrix.entries
+    )
+    order = len(fractions)
+    over_budget = MAX_CANONICAL_RATIONAL_DIGITS + 1
+    numerator_bits = 0
+    denominator_bits = 0
+    is_upper_triangular = all(
+        fractions[row][column] == 0 for row in range(order) for column in range(row)
+    )
+    is_lower_triangular = all(
+        fractions[row][column] == 0
+        for row in range(order)
+        for column in range(row + 1, order)
+    )
+    triangular = is_upper_triangular or is_lower_triangular
+    bound_rows = (
+        tuple((fractions[index][index],) for index in range(order))
+        if triangular
+        else fractions
+    )
+    seen_rows: set[tuple[Fraction, ...]] = set()
+    for row in bound_rows:
+        if not triangular and row in seen_rows:
+            continue
+        if not triangular:
+            seen_rows.add(row)
+        row_denominator = 1
+        for value in row:
+            row_denominator = lcm(row_denominator, value.denominator)
+            if _exceeds_canonical_rational_digits(
+                denominator_bits + row_denominator.bit_length()
+            ):
+                return over_budget
+        denominator_bits += row_denominator.bit_length()
+        squared_norm = sum(
+            (value.numerator * (row_denominator // value.denominator)) ** 2
+            for value in row
+        )
+        numerator_bits += (squared_norm.bit_length() + 1) // 2
+        if _exceeds_canonical_rational_digits(
+            numerator_bits + denominator_bits + order
+        ):
+            return over_budget
+    return max(
+        _bit_bound_decimal_digits(numerator_bits + denominator_bits + order),
+        _bit_bound_decimal_digits(max(1, denominator_bits)),
+    )
+
+
+def _admit_characteristic_polynomial(matrix: RationalMatrix) -> None:
+    from jacobian.math.matrices.values import require_matrix_scalar_digits
+
+    require_matrix_scalar_digits(
+        matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+    )
+    order = len(matrix.entries)
+    if order != len(matrix.entries[0]):
+        raise _validation_error(
+            "budget_exceeded", "characteristic polynomial requires a square matrix"
+        )
+    if order > MAX_CHARACTERISTIC_POLYNOMIAL_ORDER:
+        raise _validation_error(
+            "budget_exceeded",
+            "characteristic-polynomial matrices are limited to order "
+            f"{MAX_CHARACTERISTIC_POLYNOMIAL_ORDER}",
+        )
+    if (
+        _characteristic_polynomial_component_digit_bound(matrix)
+        > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "characteristic-polynomial coefficients exceed the canonical digit budget",
+        )
 
 
 def _admit_linear_solve(
@@ -584,15 +839,21 @@ def nullspace_result(matrix: RationalMatrix) -> NullspaceResult:
 def characteristic_polynomial_result(
     matrix: RationalMatrix,
 ) -> CharacteristicPolynomialResult:
-    _admit(_admit_square_rational, matrix)
-    polynomial = characteristic_polynomial(
-        conversions.rational_matrix_to_sympy(matrix), "lambda"
+    _admit(_admit_characteristic_polynomial, matrix)
+    from jacobian.math.matrices._flint import rational_characteristic_polynomial
+
+    order = len(matrix.entries)
+    entries = tuple(
+        tuple(value.as_fraction() for value in row) for row in matrix.entries
     )
+    coefficients = rational_characteristic_polynomial(entries)
     return CharacteristicPolynomialResult(
-        degree=polynomial.degree(),
+        degree=order,
         coefficients_descending=tuple(
-            conversions.rational_from_sympy(coefficient)
-            for coefficient in polynomial.all_coeffs()
+            CanonicalRational.from_integer_ratio(
+                coefficient.numerator, coefficient.denominator
+            )
+            for coefficient in coefficients
         ),
     )
 
@@ -654,14 +915,30 @@ def trace_result(matrix: IntegerMatrix) -> MatrixTraceResult:
 
 def product_result(left: RationalMatrix, right: RationalMatrix) -> MatrixProductResult:
     _admit(_admit_product, left, right, location=("left", "right"))
-    left_source = conversions.rational_matrix_to_sympy(left)
-    right_source = conversions.rational_matrix_to_sympy(right)
-    product = multiply(left_source, right_source)
+    from jacobian.math.matrices._flint import rational_matrix_product
+
+    left_rows = len(left.entries)
+    inner_dimension = len(left.entries[0])
+    right_columns = len(right.entries[0])
+    product = rational_matrix_product(
+        tuple(tuple(value.as_fraction() for value in row) for row in left.entries),
+        tuple(tuple(value.as_fraction() for value in row) for row in right.entries),
+    )
     return MatrixProductResult(
-        product=conversions.rational_matrix_from_sympy(product),
-        left_rows=left_source.rows,
-        inner_dimension=left_source.cols,
-        right_columns=right_source.cols,
+        product=RationalMatrix(
+            entries=tuple(
+                tuple(
+                    CanonicalRational.from_integer_ratio(
+                        value.numerator, value.denominator
+                    )
+                    for value in row
+                )
+                for row in product
+            )
+        ),
+        left_rows=left_rows,
+        inner_dimension=inner_dimension,
+        right_columns=right_columns,
     )
 
 

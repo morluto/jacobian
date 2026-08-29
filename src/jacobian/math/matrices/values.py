@@ -23,9 +23,10 @@ MAX_EXACT_LINEAR_MATRIX_AXIS = 64
 # The canonical dense rational matrix retains exact sources for analysis
 # results whose operations admit them by their own work and result budgets,
 # so its structural order is not tied to the shared computation dimension.
-# The determinant operation admits square matrices through order 128. Keep
-# that complete public domain representable by the one canonical QQ matrix
-# value so a determinant consumer can accept a produced matrix unchanged.
+# Determinant and characteristic-polynomial operations admit square matrices
+# through order 128. Keep that complete public domain representable by the one
+# canonical QQ matrix value while narrower operations enforce their own
+# request envelopes.
 MAX_RATIONAL_MATRIX_ORDER = 128
 MAX_SPARSE_RATIONAL_MATRIX_AXIS = 8_192
 MAX_SPARSE_RATIONAL_MATRIX_NONZEROS = 32_768

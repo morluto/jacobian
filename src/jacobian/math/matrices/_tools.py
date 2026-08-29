@@ -6,6 +6,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.matrices._operation_models import (
+    CharacteristicPolynomialRequest,
     CharacteristicPolynomialResult,
     IntegerMatrixRequest,
     MatrixAdjugateResult,
@@ -30,7 +31,6 @@ from jacobian.math.matrices._operation_models import (
     RationalMatrixRequest,
     RrefResult,
     SquareIntegerMatrixRequest,
-    SquareRationalMatrixRequest,
 )
 from jacobian.math.matrices.operations import (
     adjugate_result,
@@ -96,7 +96,7 @@ def compute_nullspace(request: RationalMatrixRequest) -> NullspaceResult:
 
 
 def compute_characteristic_polynomial(
-    request: SquareRationalMatrixRequest,
+    request: CharacteristicPolynomialRequest,
 ) -> CharacteristicPolynomialResult:
     return characteristic_polynomial_result(request.matrix)
 
@@ -497,7 +497,7 @@ TOOLS = (
         "matrix.characteristic_polynomial.compute",
         "Compute an exact characteristic polynomial",
         "Compute dense coefficients of det(lambda I - A) over QQ.",
-        SquareRationalMatrixRequest,
+        CharacteristicPolynomialRequest,
         CharacteristicPolynomialResult,
         compute_characteristic_polynomial,
         "matrix",

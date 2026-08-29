@@ -7,6 +7,7 @@ from collections import deque
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.chip_firing._models import (
     MAX_COEFFICIENT_DIGITS,
+    MAX_CRITICAL_GROUP_VERTICES,
     MAX_STABILIZATION_CHIPS,
     MAX_VERTICES,
     AbelJacobiResult,
@@ -405,24 +406,15 @@ def _smith_normal_form_diagonal(
 ) -> tuple[int, ...]:
     """Return the diagonal entries of the Smith normal form of an integer matrix.
 
-    Uses SymPy's smith_normal_decomp over ZZ.
+    Uses FLINT's diagonal-only exact integer SNF kernel in a deadline-bound
+    killable worker so expanded critical-group requests stay inside the
+    request-scoped execution envelope.
     """
-    import sympy
-    from sympy.matrices.normalforms import smith_normal_decomp
+    from jacobian.math.graphs.chip_firing._snf_process import (
+        smith_normal_form_diagonal,
+    )
 
-    rows = len(matrix)
-    cols = len(matrix[0]) if matrix else 0
-    if rows == 0 or cols == 0:
-        return ()
-    source = sympy.Matrix([[int(value) for value in row] for row in matrix])
-    diagonal, _left, _right = smith_normal_decomp(source, domain=sympy.ZZ)
-    result = []
-    for i in range(min(rows, cols)):
-        val = int(diagonal[i, i])
-        if val < 0:
-            val = -val
-        result.append(val)
-    return tuple(result)
+    return smith_normal_form_diagonal(matrix)
 
 
 def _critical_group_factors(
@@ -436,7 +428,14 @@ def _critical_group_factors(
     nonsink = [i for i in range(n) if i != sink_idx]
     if not nonsink:
         return (), ()
-    lap = laplacian(graph).laplacian
+    idx = {vertex: index for index, vertex in enumerate(vertices)}
+    lap = [[0] * n for _ in range(n)]
+    for left, right in graph.edges:
+        i, j = idx[left], idx[right]
+        lap[i][i] += 1
+        lap[j][j] += 1
+        lap[i][j] -= 1
+        lap[j][i] -= 1
     reduced = [[lap[i][j] for j in nonsink] for i in nonsink]
     factors = _smith_normal_form_diagonal(reduced)
     nonsink_labels = tuple(vertices[i] for i in nonsink)
@@ -444,9 +443,54 @@ def _critical_group_factors(
     return nonsink_labels, invariant
 
 
+def _is_connected(graph: SimpleUndirectedGraph) -> bool:
+    vertices = graph.vertices
+    if not vertices:
+        return False
+    neighbors: dict[str, set[str]] = {vertex: set() for vertex in vertices}
+    for left, right in graph.edges:
+        neighbors[left].add(right)
+        neighbors[right].add(left)
+    reached = {vertices[0]}
+    pending = [vertices[0]]
+    while pending:
+        vertex = pending.pop()
+        for neighbor in neighbors[vertex] - reached:
+            reached.add(neighbor)
+            pending.append(neighbor)
+    return len(reached) == len(vertices)
+
+
 def critical_group(graph: SimpleUndirectedGraph, sink: str) -> CriticalGroupResult:
     """Compute the critical group via SNF of the reduced Laplacian."""
-    _admit_sink(graph, sink)
+    if not 1 <= len(graph.vertices) <= MAX_CRITICAL_GROUP_VERTICES:
+        raise OperationDomainValidationError(
+            location=("graph", "vertices"),
+            code="chip_firing.critical_group_vertex_bound",
+            message="critical-group computation supports at most "
+            f"{MAX_CRITICAL_GROUP_VERTICES} vertices",
+        )
+    if sink not in graph.vertices:
+        raise OperationDomainValidationError(
+            location=("sink",),
+            code="chip_firing.sink_not_in_graph",
+            message="sink vertex must be in the graph",
+        )
+    if not _is_connected(graph):
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="chip_firing.critical_group_requires_connected_graph",
+            message="critical-group computation requires a connected graph",
+        )
+    dimension = len(graph.vertices) - 1
+    # A simple connected graph has at most n^(n-2) spanning trees, so the
+    # result size is bounded independently of the cubic SNF work estimate.
+    if dimension**3 > 1_500_000:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="chip_firing.critical_group_work_bound",
+            message="reduced-Laplacian SNF exceeds the exact work bound",
+        )
     nonsink_labels, invariant = _critical_group_factors(graph, sink)
     order = 1
     for d in invariant:

@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.math.matrices.combinatorial.values import HadamardMatrix, SignMatrix
 
@@ -54,13 +55,13 @@ class GramProfileResult(StrictModel):
 class NormalizeRequest(StrictModel):
     """Normalize a sign matrix so first row/column are all +1."""
 
-    matrix: HadamardMatrix | SignMatrix
+    matrix: SignMatrix
 
 
 class NormalizeResult(StrictModel):
     """The normalized matrix and row/column sign switches used."""
 
-    normalized: HadamardMatrix | SignMatrix
+    normalized: SignMatrix
     row_switches: tuple[int, ...]
     column_switches: tuple[int, ...]
 
@@ -77,7 +78,11 @@ class NormalizeResult(StrictModel):
 
 
 class DeterminantProfileRequest(StrictModel):
-    """Compute the determinant profile of a Hadamard matrix."""
+    """Compute the determinant profile of a Hadamard matrix.
+
+    ``matrix`` is a structurally square sign matrix. Exact orthogonality is
+    established by the owner recognition operation, not by request parsing.
+    """
 
     matrix: HadamardMatrix
 
@@ -86,8 +91,8 @@ class DeterminantProfileResult(StrictModel):
     """Order, |det H|, Gram determinant, and the identity."""
 
     order: int = Field(ge=1)
-    determinant_magnitude: int = Field(ge=1)
-    gram_determinant: int = Field(ge=1)
+    determinant_magnitude: CanonicalInteger
+    gram_determinant: CanonicalInteger
     identity: str
 
 

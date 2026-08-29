@@ -21,6 +21,10 @@ from jacobian.math.matrices.values import (
 MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 128
 MAX_DETERMINANT_SCALAR_WORK = 500_000_000
+MAX_CHARACTERISTIC_POLYNOMIAL_ORDER = 128
+MAX_MATRIX_PRODUCT_AXIS = 128
+MAX_MATRIX_PRODUCT_MULTIPLY_ADDS = 2_500_000
+MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK = 3_000_000
 MAX_PERMANENT_RYSER_SUBSETS = 4_096
 MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
 # The canonical dense rational matrix carries determinant inputs through
@@ -121,11 +125,14 @@ class _MatrixRequest(StrictModel):
 def _require_computation_dimensions(
     entries: tuple[tuple[CanonicalRational, ...], ...],
 ) -> None:
-    if len(entries) > MAX_MATRIX_DIMENSION or len(entries[0]) > MAX_MATRIX_DIMENSION:
+    if (
+        len(entries) > MAX_EXACT_LINEAR_MATRIX_AXIS
+        or len(entries[0]) > MAX_EXACT_LINEAR_MATRIX_AXIS
+    ):
         raise _validation_error(
             "budget_exceeded",
             "matrix computation dimensions are limited to "
-            f"{MAX_MATRIX_DIMENSION} rows and columns",
+            f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
         )
 
 
@@ -165,16 +172,29 @@ class RationalMatrixRequest(_MatrixRequest):
     matrix: RationalMatrix
     _raw_matrix_axis_limit: ClassVar[int] = MAX_EXACT_LINEAR_MATRIX_AXIS
 
+    @model_validator(mode="after")
+    def require_computation_dimensions(self) -> Self:
+        _require_computation_dimensions(self.matrix.entries)
+        return self
+
 
 class RationalMatrixProductRequest(_MatrixRequest):
     """Two compatible bounded matrices over the exact rational domain."""
 
     left: RationalMatrix
     right: RationalMatrix
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_MATRIX_PRODUCT_AXIS
 
 
 class SquareRationalMatrixRequest(_MatrixRequest):
     matrix: RationalMatrix
+
+
+class CharacteristicPolynomialRequest(_MatrixRequest):
+    """One rational matrix for a complete exact characteristic polynomial."""
+
+    matrix: RationalMatrix
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_CHARACTERISTIC_POLYNOMIAL_ORDER
 
 
 class MatrixPermanentRequest(_MatrixRequest):
@@ -196,6 +216,11 @@ class MatrixRankRequest(_MatrixRequest):
 
     matrix: RationalMatrix
     _raw_matrix_axis_limit: ClassVar[int] = MAX_EXACT_LINEAR_MATRIX_AXIS
+
+    @model_validator(mode="after")
+    def require_computation_dimensions(self) -> Self:
+        _require_computation_dimensions(self.matrix.entries)
+        return self
 
 
 class IntegerMatrixRequest(_MatrixRequest):
@@ -363,10 +388,10 @@ class NullspaceResult(StrictModel):
 
 class CharacteristicPolynomialResult(StrictModel):
     variable: Literal["lambda"] = "lambda"
-    degree: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    degree: int = Field(ge=1, le=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER)
     coefficients_descending: tuple[CanonicalRational, ...] = Field(
         min_length=2,
-        max_length=MAX_MATRIX_DIMENSION + 1,
+        max_length=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER + 1,
     )
     convention: Literal["DET_LAMBDA_I_MINUS_A"] = "DET_LAMBDA_I_MINUS_A"
 
@@ -401,9 +426,9 @@ class MatrixTraceResult(StrictModel):
 
 class MatrixProductResult(StrictModel):
     product: RationalMatrix
-    left_rows: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
-    inner_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
-    right_columns: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    left_rows: int = Field(ge=1, le=MAX_MATRIX_PRODUCT_AXIS)
+    inner_dimension: int = Field(ge=1, le=MAX_MATRIX_PRODUCT_AXIS)
+    right_columns: int = Field(ge=1, le=MAX_MATRIX_PRODUCT_AXIS)
     convention: Literal["STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ"] = (
         "STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ"
     )

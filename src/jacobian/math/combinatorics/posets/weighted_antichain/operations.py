@@ -2,16 +2,107 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from fractions import Fraction
 from itertools import combinations
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import (
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    strict_json_object_size,
+)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
 from jacobian.math.combinatorics.posets.weighted_antichain._models import (
+    MAX_ENUMERATION_WORK,
     MaximumWeightAntichainResult,
 )
 
 __all__ = ["compute_maximum_weight_antichain"]
+
+
+def _admit_maximum_weight_antichain(
+    poset: FinitePoset, weights: tuple[CanonicalRational, ...]
+) -> None:
+    if not isinstance(poset, FinitePoset):
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="weighted_antichain.invalid_poset",
+            message="poset must be a FinitePoset value",
+        )
+    if not isinstance(weights, tuple) or len(weights) != len(poset.elements):
+        raise OperationDomainValidationError(
+            location=("weights",),
+            code="weighted_antichain.weight_count_mismatch",
+            message="weights must have exactly one entry per poset element",
+        )
+    if any(not isinstance(weight, CanonicalRational) for weight in weights):
+        raise OperationDomainValidationError(
+            location=("weights",),
+            code="weighted_antichain.invalid_weight",
+            message="weights must be CanonicalRational values",
+        )
+    if any(weight.as_fraction() < 0 for weight in weights):
+        raise OperationDomainValidationError(
+            location=("weights",),
+            code="weighted_antichain.negative_weight",
+            message="all weights must be nonnegative",
+        )
+    n = len(poset.elements)
+    pair_checks = n * max(n - 1, 0) // 2
+    if (1 << n) * pair_checks > MAX_ENUMERATION_WORK:
+        raise OperationDomainValidationError(
+            location=("poset", "elements"),
+            code="weighted_antichain.work_bound_exceeded",
+            message="the exhaustive antichain work envelope is exceeded",
+        )
+    max_digits = max(
+        (canonical_rational_component_digits(weight) for weight in weights),
+        default=1,
+    )
+    max_sum_digits = n * max_digits + len(str(max(1, n)))
+    if max_sum_digits > 32_768:
+        raise OperationDomainValidationError(
+            location=("weights",),
+            code="weighted_antichain.result_growth_exceeded",
+            message="maximum-weight rational growth exceeds the canonical digit envelope",
+        )
+    rational_size = strict_json_object_size(
+        (
+            ("num", len(encode_strict_json("9" * max_sum_digits))),
+            ("den", len(encode_strict_json("9" * max_sum_digits))),
+        )
+    )
+    labels_size = (
+        2
+        + max(n - 1, 0)
+        + sum(len(encode_strict_json(element)) for element in poset.elements)
+    )
+    result_bytes = strict_json_object_size(
+        (
+            ("poset", len(encode_strict_json(poset.model_dump(mode="json")))),
+            (
+                "weights",
+                len(
+                    encode_strict_json(
+                        [weight.model_dump(mode="json") for weight in weights]
+                    )
+                ),
+            ),
+            ("maximum_weight", rational_size),
+            ("antichain", labels_size),
+        )
+    )
+    if result_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("poset", "weights"),
+            code="weighted_antichain.result_too_large",
+            message="maximum-weight antichain result exceeds the canonical output envelope",
+        )
 
 
 def compute_maximum_weight_antichain(
@@ -20,9 +111,9 @@ def compute_maximum_weight_antichain(
 ) -> MaximumWeightAntichainResult:
     """Return the exact maximum weight antichain and a witness.
 
-    For small posets (<= 16 elements), uses exhaustive search over
-    all subsets.
+    Uses exhaustive search over all subsets within the admitted work envelope.
     """
+    _admit_maximum_weight_antichain(poset, weights)
     elements = list(poset.elements)
     n = len(elements)
     weight_fracs = [w.as_fraction() for w in weights]
@@ -34,7 +125,9 @@ def compute_maximum_weight_antichain(
 
     for subset in _all_subsets(n):
         if _is_antichain(subset, comparable):
-            total = sum(weight_fracs[i] for i in subset)
+            total = Fraction(0)
+            for index in subset:
+                total += weight_fracs[index]
             if total > best_weight or (
                 total == best_weight
                 and _subset_to_elements(subset, elements) < best_antichain
@@ -60,7 +153,7 @@ def _build_comparable(poset: FinitePoset, elements: list[str]) -> set[tuple[int,
     return comparable
 
 
-def _all_subsets(n: int):
+def _all_subsets(n: int) -> Iterator[tuple[int, ...]]:
     yield from (subset for r in range(n + 1) for subset in combinations(range(n), r))
 
 

@@ -9,9 +9,12 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math.combinatorics.posets.core._models import FinitePoset
+from jacobian.math.combinatorics.posets.core._models import (
+    MAX_POSET_ELEMENTS,
+    FinitePoset,
+)
 
-MAX_ELEMENT_COUNT = 16
+MAX_ENUMERATION_WORK = 250_000_000
 
 
 class MaximumWeightAntichainRequest(StrictModel):
@@ -19,7 +22,11 @@ class MaximumWeightAntichainRequest(StrictModel):
 
     poset: FinitePoset
     weights: tuple[CanonicalRational, ...] = Field(
-        max_length=MAX_ELEMENT_COUNT,
+        max_length=MAX_POSET_ELEMENTS,
+        description=(
+            "One nonnegative exact rational per poset element. Exhaustive "
+            "admission uses the candidate-subset work envelope."
+        ),
     )
 
     @model_validator(mode="after")
@@ -28,11 +35,6 @@ class MaximumWeightAntichainRequest(StrictModel):
             raise PydanticCustomError(
                 "weighted_antichain.weight_count_mismatch",
                 "weights must have exactly one entry per poset element",
-            )
-        if len(self.poset.elements) > MAX_ELEMENT_COUNT:
-            raise PydanticCustomError(
-                "weighted_antichain.too_many_elements",
-                f"at most {MAX_ELEMENT_COUNT} elements are supported",
             )
         for w in self.weights:
             if w.as_fraction() < 0:
@@ -53,7 +55,7 @@ class MaximumWeightAntichainResult(StrictModel):
 
 
 __all__ = [
-    "MAX_ELEMENT_COUNT",
+    "MAX_ENUMERATION_WORK",
     "MaximumWeightAntichainRequest",
     "MaximumWeightAntichainResult",
 ]

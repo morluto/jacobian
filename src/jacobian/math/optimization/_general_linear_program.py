@@ -1,4 +1,4 @@
-"""General-form exact rational LP operation built on the private standard kernel."""
+"""General-form LP normalization and result projection."""
 
 from __future__ import annotations
 

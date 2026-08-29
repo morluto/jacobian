@@ -2,11 +2,11 @@
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.optimization._general_linear_program import general_linear_program
 from jacobian.math.optimization._general_models import (
     GeneralRationalLinearProgramRequest,
     GeneralRationalLinearProgramResult,
 )
-from jacobian.math.optimization._general_operations import general_linear_program
 from jacobian.math.optimization._models import (
     RationalLinearProgramRequest,
     RationalLinearProgramResult,

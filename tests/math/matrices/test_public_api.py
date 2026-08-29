@@ -86,6 +86,16 @@ def test_characteristic_polynomial_accepts_large_exact_native_scalars() -> None:
     )
 
 
+def test_large_native_scalar_fallbacks_avoid_python_digit_conversion_limit() -> None:
+    huge = 10**5000
+    source = sympy.Matrix([[huge]])
+
+    assert matrices.characteristic_polynomial(source, "lambda").as_expr() == (
+        sympy.Symbol("lambda") - huge
+    )
+    assert matrices.inverse(source) == sympy.Matrix([[sympy.Rational(1, huge)]])
+
+
 def test_trace_of_identity_equals_dimension() -> None:
     assert matrices.trace(sympy.eye(4)) == 4
 

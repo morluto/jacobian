@@ -115,8 +115,8 @@ def _exact_matrix(value: MatrixBase, *, maximum_dimension: int = 32) -> MatrixBa
 def _rational_scalars_within_kernel_limit(value: MatrixBase) -> bool:
     return all(
         max(
-            len(str(abs(int(entry.p)))),
-            len(str(abs(int(entry.q)))),
+            _positive_decimal_digits(int(entry.p)),
+            _positive_decimal_digits(int(entry.q)),
         )
         <= MAX_INPUT_SCALAR_DIGITS
         for entry in value
@@ -142,7 +142,8 @@ def inverse(matrix: MatrixBase) -> MatrixBase:
         raise ValueError("inverse requires a square matrix")
     integer_entries = all(entry.is_Integer is True for entry in source)
     input_within_kernel_limit = integer_entries and all(
-        len(str(abs(int(entry)))) <= MAX_INPUT_SCALAR_DIGITS for entry in source
+        _positive_decimal_digits(int(entry)) <= MAX_INPUT_SCALAR_DIGITS
+        for entry in source
     )
     if integer_entries and input_within_kernel_limit:
         result = inverse_result(conversions.integer_matrix_from_sympy(source))

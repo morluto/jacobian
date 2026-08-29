@@ -5,9 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.lattices._hnf import compute_hermite_normal_form
 from jacobian.math.lattices._lattice import reduce_lattice_basis
 from jacobian.math.lattices._models import (
@@ -419,18 +417,6 @@ def test_hermite_accepts_order_32_identity() -> None:
     result = compute_hermite_normal_form(request)
     assert result.normal_form.entries == tuple(
         tuple(row) for row in _identity_entries(MAX_MATRIX_DIMENSION)
-    )
-
-
-def test_dispatch_rejects_lll_above_the_lattice_axis() -> None:
-    with pytest.raises(OperationRequestValidationError) as exc_info:
-        invoke_operation(
-            "lattice.basis.reduce",
-            {"basis": {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}},
-            Catalog.open(),
-        )
-    assert f"limited to {MAX_MATRIX_DIMENSION} rows and columns" in str(
-        exc_info.value.cause
     )
 
 

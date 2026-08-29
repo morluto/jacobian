@@ -1,6 +1,5 @@
 """Exact number-theory operations with structured, argument-bound results."""
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.number_theory._derived_models import (
     BinomialPrimeValuationRequest,
@@ -14,8 +13,8 @@ from jacobian.math.number_theory._derived_models import (
 )
 from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.operations import (
-    binomial_prime_valuation,
-    factorial_valuation,
+    _binomial_prime_valuation,
+    _factorial_valuation,
     floor_square_root,
     legendre_symbol,
 )
@@ -32,19 +31,13 @@ def compute_legendre_symbol(request: LegendreSymbolRequest) -> LegendreSymbolRes
 def compute_factorial_valuation(
     request: FactorialValuationRequest,
 ) -> FactorialValuationResult:
-    return factorial_valuation(
-        parse_canonical_integer(request.n), parse_canonical_integer(request.base)
-    )
+    return _factorial_valuation(request.admitted)
 
 
 def compute_binomial_prime_valuation(
     request: BinomialPrimeValuationRequest,
 ) -> BinomialPrimeValuationResult:
-    return binomial_prime_valuation(
-        parse_canonical_integer(request.n),
-        parse_canonical_integer(request.k),
-        parse_canonical_integer(request.prime),
-    )
+    return _binomial_prime_valuation(request.admitted)
 
 
 DERIVED_NUMBER_THEORY_OPERATIONS = (

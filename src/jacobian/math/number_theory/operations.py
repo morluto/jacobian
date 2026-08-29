@@ -34,6 +34,7 @@ from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileResult,
 )
 from jacobian.math.number_theory._derived_models import (
+    MAX_BINOMIAL_VALUATION_PRIME,
     MAX_FACTORIAL_BASE,
     MAX_LEGENDRE_PRIME,
     MAX_VALUATION_ARGUMENT_DIGITS,
@@ -41,6 +42,8 @@ from jacobian.math.number_theory._derived_models import (
     FactorialValuationResult,
     FloorSquareRootResult,
     LegendreSymbolResult,
+    _BinomialValuationInput,
+    _FactorialValuationInput,
 )
 from jacobian.math.number_theory._divisibility_graph_models import (
     MAX_FAMILY_SIZE as MAX_GRAPH_FAMILY_SIZE,
@@ -365,12 +368,20 @@ def factorial_valuation(n: int, base: int) -> FactorialValuationResult:
             code="number_theory.factorial_valuation.base_bound",
             message=f"base must be between 2 and {MAX_FACTORIAL_BASE}",
         )
+    return _factorial_valuation(_FactorialValuationInput(n=n, base=base))
+
+
+def _factorial_valuation(
+    admitted: _FactorialValuationInput,
+) -> FactorialValuationResult:
     from sympy.ntheory import multiplicity_in_factorial
 
-    return FactorialValuationResult(
-        n=format_canonical_integer(n),
-        base=format_canonical_integer(base),
-        valuation=format_canonical_integer(int(multiplicity_in_factorial(base, n))),
+    return FactorialValuationResult.model_construct(
+        n=format_canonical_integer(admitted.n),
+        base=format_canonical_integer(admitted.base),
+        valuation=format_canonical_integer(
+            int(multiplicity_in_factorial(admitted.base, admitted.n))
+        ),
     )
 
 
@@ -394,27 +405,39 @@ def binomial_prime_valuation(
                 f"{MAX_VALUATION_ARGUMENT_DIGITS} decimal digits"
             ),
         )
-    from sympy import isprime
-
-    if type(prime) is not int or not 2 <= prime < 10**20 or not isprime(prime):
+    if type(prime) is not int or not 2 <= prime <= MAX_BINOMIAL_VALUATION_PRIME:
         raise OperationDomainValidationError(
             location=("prime",),
             code="number_theory.binomial_valuation.prime_required",
-            message="prime must be a prime number between 2 and 10^20 - 1",
+            message=f"prime must be a prime number between 2 and {MAX_BINOMIAL_VALUATION_PRIME}",
         )
-    left = k
-    right = n - k
+    from sympy import isprime
+
+    if not isprime(prime):
+        raise OperationDomainValidationError(
+            location=("prime",),
+            code="number_theory.binomial_valuation.prime_required",
+            message="prime must be prime",
+        )
+    return _binomial_prime_valuation(_BinomialValuationInput(n=n, k=k, prime=prime))
+
+
+def _binomial_prime_valuation(
+    admitted: _BinomialValuationInput,
+) -> BinomialPrimeValuationResult:
+    left = admitted.k
+    right = admitted.n - admitted.k
     carries = 0
     carry = 0
     while left or right or carry:
-        left, left_digit = divmod(left, prime)
-        right, right_digit = divmod(right, prime)
-        carry = int(left_digit + right_digit + carry >= prime)
+        left, left_digit = divmod(left, admitted.prime)
+        right, right_digit = divmod(right, admitted.prime)
+        carry = int(left_digit + right_digit + carry >= admitted.prime)
         carries += carry
-    return BinomialPrimeValuationResult(
-        n=format_canonical_integer(n),
-        k=format_canonical_integer(k),
-        prime=format_canonical_integer(prime),
+    return BinomialPrimeValuationResult.model_construct(
+        n=format_canonical_integer(admitted.n),
+        k=format_canonical_integer(admitted.k),
+        prime=format_canonical_integer(admitted.prime),
         valuation=format_canonical_integer(carries),
     )
 

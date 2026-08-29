@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from functools import cached_property
 from math import isqrt
 from typing import Literal, Self
 
@@ -15,6 +17,7 @@ from jacobian.math.number_theory._integer_models import MAX_SAFE_INTEGER
 
 MAX_VALUATION_ARGUMENT_DIGITS = 4_096
 MAX_FACTORIAL_BASE = 1_000_000
+MAX_BINOMIAL_VALUATION_PRIME = 2**64 - 1
 MAX_FLOOR_SQUARE_ROOT = isqrt(MAX_SAFE_INTEGER)
 MAX_LEGENDRE_PRIME = MAX_SAFE_INTEGER
 
@@ -48,9 +51,10 @@ class FactorialValuationRequest(StrictModel):
     n: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
     base: CanonicalInteger = Field(max_length=len(str(MAX_FACTORIAL_BASE)))
 
-    @model_validator(mode="after")
-    def require_domain(self) -> Self:
-        if parse_canonical_integer(self.n) < 0:
+    @cached_property
+    def admitted(self) -> _FactorialValuationInput:
+        n = parse_canonical_integer(self.n)
+        if n < 0:
             raise PydanticCustomError(
                 "number_theory.factorial_valuation.argument",
                 "n must be nonnegative",
@@ -61,6 +65,11 @@ class FactorialValuationRequest(StrictModel):
                 "number_theory.factorial_valuation.base",
                 f"base must be between 2 and {MAX_FACTORIAL_BASE}",
             )
+        return _FactorialValuationInput(n=n, base=base)
+
+    @model_validator(mode="after")
+    def require_domain(self) -> Self:
+        _ = self.admitted
         return self
 
 
@@ -71,8 +80,11 @@ class FactorialValuationResult(StrictModel):
 
     @model_validator(mode="after")
     def require_domain(self) -> Self:
-        FactorialValuationRequest(n=self.n, base=self.base)
-        if parse_canonical_integer(self.valuation) < 0:
+        if (
+            self.n.startswith("-")
+            or self.base.startswith("-")
+            or self.valuation.startswith("-")
+        ):
             raise PydanticCustomError(
                 "number_theory.factorial_valuation.result",
                 "valuation must be nonnegative",
@@ -85,10 +97,10 @@ class BinomialPrimeValuationRequest(StrictModel):
 
     n: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
     k: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
-    prime: CanonicalInteger = Field(max_length=20)
+    prime: CanonicalInteger = Field(max_length=len(str(MAX_BINOMIAL_VALUATION_PRIME)))
 
-    @model_validator(mode="after")
-    def require_domain(self) -> Self:
+    @cached_property
+    def admitted(self) -> _BinomialValuationInput:
         n = parse_canonical_integer(self.n)
         k = parse_canonical_integer(self.k)
         prime = parse_canonical_integer(self.prime)
@@ -97,29 +109,56 @@ class BinomialPrimeValuationRequest(StrictModel):
                 "number_theory.binomial_valuation.indices",
                 "n and k must satisfy 0 <= k <= n",
             )
-        if not 2 <= prime < 10**20:
+        if not 2 <= prime <= MAX_BINOMIAL_VALUATION_PRIME:
             raise PydanticCustomError(
                 "number_theory.binomial_valuation.prime",
-                "prime must be between 2 and 10^20 - 1",
+                f"prime must be between 2 and {MAX_BINOMIAL_VALUATION_PRIME}",
             )
+        from sympy import isprime
+
+        if not isprime(prime):
+            raise PydanticCustomError(
+                "number_theory.binomial_valuation.prime",
+                "prime must be prime",
+            )
+        return _BinomialValuationInput(n=n, k=k, prime=prime)
+
+    @model_validator(mode="after")
+    def require_domain(self) -> Self:
+        _ = self.admitted
         return self
 
 
 class BinomialPrimeValuationResult(StrictModel):
     n: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
     k: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
-    prime: CanonicalInteger = Field(max_length=20)
+    prime: CanonicalInteger = Field(max_length=len(str(MAX_BINOMIAL_VALUATION_PRIME)))
     valuation: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
 
     @model_validator(mode="after")
     def require_domain(self) -> Self:
-        BinomialPrimeValuationRequest(n=self.n, k=self.k, prime=self.prime)
-        if parse_canonical_integer(self.valuation) < 0:
+        if any(
+            value.startswith("-")
+            for value in (self.n, self.k, self.prime, self.valuation)
+        ):
             raise PydanticCustomError(
                 "number_theory.binomial_valuation.result",
                 "valuation must be nonnegative",
             )
         return self
+
+
+@dataclass(frozen=True, slots=True)
+class _FactorialValuationInput:
+    n: int
+    base: int
+
+
+@dataclass(frozen=True, slots=True)
+class _BinomialValuationInput:
+    n: int
+    k: int
+    prime: int
 
 
 __all__ = [

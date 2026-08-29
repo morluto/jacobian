@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 import pytest
+from pydantic import ValidationError
 from tests.math.number_theory._validation import expect_validation
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -150,10 +151,8 @@ def test_kummer_carries_match_direct_binomial_factorization() -> None:
 
 
 def test_scalar_binomial_valuation_rejects_composite_base() -> None:
-    request = BinomialPrimeValuationRequest(n="20", k="7", prime="4")
-
-    with pytest.raises(OperationDomainValidationError, match="prime number"):
-        compute_binomial_prime_valuation(request)
+    with pytest.raises(ValidationError, match="prime must be prime"):
+        BinomialPrimeValuationRequest(n="20", k="7", prime="4")
 
 
 def test_chinese_remainder_rejects_combined_modulus_beyond_result_budget() -> None:

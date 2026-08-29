@@ -64,6 +64,8 @@ class _ConvolutionPowerPlan:
     exponent: int
     degree: int
     multiplication_shapes: tuple[tuple[int, int], ...]
+    profile_result_bytes: int
+    peak_result_bytes: int
 
 
 def _wire(value: Any) -> CanonicalRational:
@@ -278,11 +280,9 @@ def _power_multiplication_shapes(
     return tuple(shapes)
 
 
-def _admit_convolution_power(
+def _plan_convolution_power(
     distribution: FiniteRationalDistribution,
     exponent: int,
-    *,
-    complete_profile: bool,
 ) -> _ConvolutionPowerPlan:
     if type(exponent) is not int or not 1 <= exponent <= MAX_FINITE_CONVOLUTION_POWER:
         raise OperationDomainValidationError(
@@ -387,26 +387,14 @@ def _admit_convolution_power(
         for value in (minimum_value, maximum_value)
         for component in (value.numerator, value.denominator)
     )
-    if complete_profile:
-        row_bytes = value_digits * 2 + coefficient_digits * 2 + 96
-        result_bytes = source_bytes + output_slots * row_bytes + 4_096
-    else:
-        # A peak can tie at every attainable lattice position, but stores the
-        # maximum probability once instead of repeating one mass per value.
-        tie_bytes = value_digits * 2 + 48
-        result_bytes = (
-            source_bytes + output_slots * tie_bytes + coefficient_digits * 2 + 4_096
-        )
-    if result_bytes > MAX_CONVOLUTION_POWER_RESULT_BYTES:
-        result_kind = "profile" if complete_profile else "peak ties"
-        raise OperationDomainValidationError(
-            location=("distribution", "exponent"),
-            code="probability.convolution_power.result_bound",
-            message=(
-                f"convolution-power {result_kind} exceed the "
-                f"{MAX_CONVOLUTION_POWER_RESULT_BYTES:,}-byte result bound"
-            ),
-        )
+    row_bytes = value_digits * 2 + coefficient_digits * 2 + 96
+    profile_result_bytes = source_bytes + output_slots * row_bytes + 4_096
+    # A peak can tie at every attainable lattice position, but stores the
+    # maximum probability once instead of repeating one mass per value.
+    tie_bytes = value_digits * 2 + 48
+    peak_result_bytes = (
+        source_bytes + output_slots * tie_bytes + coefficient_digits * 2 + 4_096
+    )
     return _ConvolutionPowerPlan(
         positions=positions,
         weights=weights,
@@ -416,7 +404,43 @@ def _admit_convolution_power(
         exponent=exponent,
         degree=degree,
         multiplication_shapes=multiplication_shapes,
+        profile_result_bytes=profile_result_bytes,
+        peak_result_bytes=peak_result_bytes,
     )
+
+
+def _admit_convolution_power(
+    distribution: FiniteRationalDistribution,
+    exponent: int,
+) -> _ConvolutionPowerPlan:
+    plan = _plan_convolution_power(distribution, exponent)
+    if plan.profile_result_bytes > MAX_CONVOLUTION_POWER_RESULT_BYTES:
+        raise OperationDomainValidationError(
+            location=("distribution", "exponent"),
+            code="probability.convolution_power.result_bound",
+            message=(
+                "convolution-power profile exceeds the "
+                f"{MAX_CONVOLUTION_POWER_RESULT_BYTES:,}-byte result bound"
+            ),
+        )
+    return plan
+
+
+def _admit_convolution_peak(
+    distribution: FiniteRationalDistribution,
+    exponent: int,
+) -> _ConvolutionPowerPlan:
+    plan = _plan_convolution_power(distribution, exponent)
+    if plan.peak_result_bytes > MAX_CONVOLUTION_POWER_RESULT_BYTES:
+        raise OperationDomainValidationError(
+            location=("distribution", "exponent"),
+            code="probability.convolution_power.result_bound",
+            message=(
+                "convolution-power peak ties exceed the "
+                f"{MAX_CONVOLUTION_POWER_RESULT_BYTES:,}-byte result bound"
+            ),
+        )
+    return plan
 
 
 def _admit_gaussian_polynomial_moment(
@@ -678,11 +702,7 @@ def convolution_power(
 ) -> FiniteConvolutionPowerResult:
     """Return the complete exact law of a positive i.i.d. convolution power."""
 
-    plan = _admit_convolution_power(
-        distribution,
-        exponent,
-        complete_profile=True,
-    )
+    plan = _admit_convolution_power(distribution, exponent)
     denominator = plan.powered_probability_denominator
     coefficients = _convolution_power_coefficients(plan)
     powered_distribution = FiniteRationalDistribution(
@@ -710,11 +730,7 @@ def convolution_peak(
 ) -> FiniteConvolutionPeakResult:
     """Return the exact largest atom mass and all values attaining it."""
 
-    plan = _admit_convolution_power(
-        distribution,
-        exponent,
-        complete_profile=False,
-    )
+    plan = _admit_convolution_peak(distribution, exponent)
     coefficients = _convolution_power_coefficients(plan)
     maximum = max(coefficients)
     denominator = plan.powered_probability_denominator

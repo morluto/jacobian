@@ -20,15 +20,11 @@ from jacobian.math.probability._distribution import (
 )
 from jacobian.math.probability.operations import (
     MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS,
-    _admit_convolution_power,
+    _admit_convolution_peak,
     convolution,
     convolution_peak,
     convolution_power,
 )
-
-
-def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
-    return CanonicalRational(num=str(numerator), den=str(denominator))
 
 
 def _distribution(
@@ -206,7 +202,7 @@ def test_power_rejects_dense_lattice_span_before_backend_execution() -> None:
 
 def test_power_rejects_work_and_height_envelopes_separately() -> None:
     admitted = _three_point_lattice(971)
-    plan = _admit_convolution_power(admitted, 12, complete_profile=False)
+    plan = _admit_convolution_peak(admitted, 12)
     charged_products = sum(left * right for left, right in plan.multiplication_shapes)
     assert charged_products == MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS - 292
     assert convolution_peak(admitted, 12).maximum_probability.as_fraction() > 0

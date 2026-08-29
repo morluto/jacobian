@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from typing import Self
+
+from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
-MAX_NETWORK_VERTICES = 128
+MAX_NETWORK_VERTICES = 256
+MAX_LAPLACIAN_VERTICES = 128
 MAX_NETWORK_EDGES = 512
+MAX_NETWORK_SOLVE_WORK = 500_000_000
 
 # Each conductance is reduced and has numerator and denominator at most this many
 # decimal digits. Results (effective resistance, node potentials, Laplacian
-# entries) are ratios of degree-at-most-127 weighted spanning-forest/tree
+# entries) are ratios of degree-at-most-255 weighted spanning-forest/tree
 # polynomials: after clearing the common denominator, each component is bounded
-# by MAX_NETWORK_EDGES * MAX_CONDUCTANCE_DIGITS + log10(128**126) digits
-# (512 * 50 + 266 = 25,866), comfortably inside the canonical 32,768-digit
+# by MAX_NETWORK_EDGES * MAX_CONDUCTANCE_DIGITS + log10(256**254) digits
+# (512 * 50 + 612 = 26,212), comfortably inside the canonical 32,768-digit
 # rational ceiling.
 MAX_CONDUCTANCE_DIGITS = 50
 
@@ -90,6 +95,15 @@ class LaplacianRequest(StrictModel):
     """Compute the conductance-weighted Laplacian matrix of a network."""
 
     network: ConductanceNetwork
+
+    @model_validator(mode="after")
+    def require_materialized_matrix_envelope(self) -> Self:
+        if self.network.vertex_count > MAX_LAPLACIAN_VERTICES:
+            raise PydanticCustomError(
+                "electrical_network.laplacian_vertex_bound",
+                f"Laplacian output is limited to {MAX_LAPLACIAN_VERTICES} vertices",
+            )
+        return self
 
 
 class LaplacianResult(StrictModel):

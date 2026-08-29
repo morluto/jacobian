@@ -128,6 +128,54 @@ def test_node_potentials_satisfy_kirchhoff_current() -> None:
     assert result.potentials[1].potential.as_fraction() == Fraction(0)
 
 
+def test_flint_solves_a_path_above_the_previous_vertex_ceiling() -> None:
+    vertex_count = 200
+    net = _net(
+        vertex_count,
+        *(_edge(node, node + 1, "1", "1") for node in range(vertex_count - 1)),
+    )
+
+    resistance = compute_effective_resistance(
+        EffectiveResistanceRequest(
+            network=net, terminal_a=0, terminal_b=vertex_count - 1
+        )
+    )
+    potentials = compute_node_potentials(
+        NodePotentialRequest(network=net, source=0, sink=vertex_count - 1)
+    )
+
+    assert resistance.effective_resistance.as_fraction() == vertex_count - 1
+    assert tuple(
+        value.potential.as_fraction() for value in potentials.potentials
+    ) == tuple(Fraction(vertex_count - 1 - node) for node in range(vertex_count))
+
+
+def test_exact_solve_work_rejects_the_wide_carrier_boundary() -> None:
+    vertex_count = 256
+    net = _net(
+        vertex_count,
+        *(_edge(node, node + 1, "1", "1") for node in range(vertex_count - 1)),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="solve-work bound"):
+        compute_effective_resistance(
+            EffectiveResistanceRequest(
+                network=net, terminal_a=0, terminal_b=vertex_count - 1
+            )
+        )
+
+
+def test_laplacian_keeps_its_separate_materialized_matrix_ceiling() -> None:
+    vertex_count = 129
+    net = _net(
+        vertex_count,
+        *(_edge(node, node + 1, "1", "1") for node in range(vertex_count - 1)),
+    )
+
+    with pytest.raises(ValidationError, match="Laplacian output is limited"):
+        LaplacianRequest(network=net)
+
+
 # ------------------------------------------------------------------ Laplacian
 
 

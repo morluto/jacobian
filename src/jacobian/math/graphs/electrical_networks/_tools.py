@@ -15,6 +15,8 @@ from jacobian.catalog.models import (
 from jacobian.math.graphs.electrical_networks import operations as native
 from jacobian.math.graphs.electrical_networks._models import (
     MAX_CONDUCTANCE_DIGITS,
+    MAX_NETWORK_SOLVE_WORK,
+    MAX_NETWORK_VERTICES,
     ConductanceNetwork,
     EffectiveResistanceRequest,
     EffectiveResistanceResult,
@@ -102,6 +104,26 @@ def _require_connected(network: ConductanceNetwork) -> None:
         )
 
 
+def _admit_solve(network: ConductanceNetwork) -> None:
+    dimension = network.vertex_count - 1
+    scalar_work = dimension**3 * MAX_CONDUCTANCE_DIGITS
+    if scalar_work > MAX_NETWORK_SOLVE_WORK:
+        _domain_error(
+            ("network",),
+            "solve_work_bound",
+            "reduced Laplacian exceeds the exact solve-work bound",
+        )
+    result_digits = len(network.edges) * MAX_CONDUCTANCE_DIGITS + max(
+        0, network.vertex_count - 2
+    ) * len(str(MAX_NETWORK_VERTICES))
+    if result_digits > 32_768:
+        _domain_error(
+            ("network",),
+            "solve_result_bound",
+            "reduced Laplacian solution exceeds the canonical rational bound",
+        )
+
+
 def _admit_terminals(
     network: ConductanceNetwork,
     first: int,
@@ -145,6 +167,7 @@ def compute_effective_resistance(
         network, request.terminal_a, request.terminal_b, ("terminal_a", "terminal_b")
     )
     _require_connected(network)
+    _admit_solve(network)
     value = native.effective_resistance(
         network.vertex_count,
         _edge_triples(network),
@@ -163,6 +186,7 @@ def compute_node_potentials(request: NodePotentialRequest) -> NodePotentialResul
     _admit_network(network)
     _admit_terminals(network, request.source, request.sink, ("source", "sink"))
     _require_connected(network)
+    _admit_solve(network)
     potentials = native.node_potentials(
         network.vertex_count,
         _edge_triples(network),

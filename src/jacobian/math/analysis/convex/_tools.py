@@ -13,9 +13,19 @@ from jacobian.math.analysis.convex._models import (
     MaxAffineSubdifferentialResult,
 )
 from jacobian.math.analysis.convex.operations import (
-    compute_max_affine_evaluation,
-    compute_subdifferential,
+    max_affine_evaluation,
+    max_affine_subdifferential,
 )
+
+
+def _run_max_affine_evaluation(request: MaxAffineEvalRequest) -> MaxAffineEvalResult:
+    return max_affine_evaluation(request.function, request.point)
+
+
+def _run_subdifferential(
+    request: MaxAffineSubdifferentialRequest,
+) -> MaxAffineSubdifferentialResult:
+    return max_affine_subdifferential(request.function, request.point)
 
 
 def _op[
@@ -51,7 +61,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "and identify all active pieces.",
         MaxAffineEvalRequest,
         MaxAffineEvalResult,
-        compute_max_affine_evaluation,
+        _run_max_affine_evaluation,
         "convex",
         "max-affine",
         "exact",
@@ -86,7 +96,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "max-affine function at a rational point.",
         MaxAffineSubdifferentialRequest,
         MaxAffineSubdifferentialResult,
-        compute_subdifferential,
+        _run_subdifferential,
         "convex",
         "subdifferential",
         "exact",

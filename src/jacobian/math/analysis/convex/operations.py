@@ -9,10 +9,8 @@ from jacobian._exact import format_canonical_rational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.convex._models import (
     AffinePiece,
-    MaxAffineEvalRequest,
     MaxAffineEvalResult,
     MaxAffineFunction,
-    MaxAffineSubdifferentialRequest,
     MaxAffineSubdifferentialResult,
     RationalPoint,
 )
@@ -95,23 +93,7 @@ def max_affine_subdifferential(
     return MaxAffineSubdifferentialResult(active_gradients=active_grads)
 
 
-def compute_max_affine_evaluation(
-    request: MaxAffineEvalRequest,
-) -> MaxAffineEvalResult:
-    """Project a wire request onto the native max-affine operation."""
-    return max_affine_evaluation(request.function, request.point)
-
-
-def compute_subdifferential(
-    request: MaxAffineSubdifferentialRequest,
-) -> MaxAffineSubdifferentialResult:
-    """Project a wire request onto the native subdifferential operation."""
-    return max_affine_subdifferential(request.function, request.point)
-
-
 __all__ = [
-    "compute_max_affine_evaluation",
-    "compute_subdifferential",
     "max_affine_evaluation",
     "max_affine_subdifferential",
 ]

@@ -12,11 +12,17 @@ from jacobian.math.analysis.convex._models import (
     RationalPoint,
 )
 from jacobian.math.analysis.convex.operations import (
-    compute_max_affine_evaluation,
-    compute_subdifferential,
     max_affine_evaluation,
     max_affine_subdifferential,
 )
+
+
+def compute_max_affine_evaluation(request: MaxAffineEvalRequest):
+    return max_affine_evaluation(request.function, request.point)
+
+
+def compute_subdifferential(request: MaxAffineSubdifferentialRequest):
+    return max_affine_subdifferential(request.function, request.point)
 
 
 def _rational(num: str, den: str = "1") -> CanonicalRational:

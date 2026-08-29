@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
-from math import gcd, lcm
+from math import gcd
 from typing import Any
 
 from jacobian._exact import CanonicalRational, require_bounded_rational

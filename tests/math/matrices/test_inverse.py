@@ -180,41 +180,94 @@ def test_inverse_rejects_dense_output_work_before_backend() -> None:
         _run_inverse(identity)
 
 
-def test_shared_integer_matrix_keeps_order_32_for_non_inverse_ops() -> None:
-    from pydantic import ValidationError
+def _identity_entries(order: int) -> list[list[str]]:
+    return [
+        [str(int(row == column)) for column in range(order)] for row in range(order)
+    ]
 
-    from jacobian.math.lattices._models import LatticeReductionRequest
+
+def _entry_axis_limit(schema: dict[str, Any], field: str) -> int:
+    field_schema = schema["properties"][field]
+    entries = field_schema.get("properties", {}).get("entries")
+    if entries is None:
+        reference = field_schema["$ref"]
+        name = reference.rsplit("/", 1)[-1]
+        entries = schema["$defs"][name]["properties"]["entries"]
+    return int(entries["maxItems"])
+
+
+def test_inverse_reuses_canonical_integer_matrix() -> None:
+    from jacobian.math.matrices._operation_models import (
+        NonsingularIntegerMatrixRequest,
+    )
+    from jacobian.math.matrices._tools import compute_inverse
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    matrix = IntegerMatrix.model_validate({"entries": [["1", "0"], ["0", "1"]]})
+    request = NonsingularIntegerMatrixRequest(matrix=matrix)
+
+    assert request.matrix is matrix
+    inverse = _result_entries(compute_inverse(request))
+    assert inverse == ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
+
+
+def test_non_inverse_integer_requests_keep_order_32_envelope() -> None:
+    from pydantic import ValidationError
+    from pydantic_core import PydanticCustomError
+
+    from jacobian.math.lattices._hnf import compute_hermite_normal_form
+    from jacobian.math.lattices._lattice import reduce_lattice_basis
+    from jacobian.math.lattices._models import (
+        HermiteNormalFormRequest,
+        LatticeReductionRequest,
+    )
     from jacobian.math.matrices._operation_models import (
         IntegerMatrixRequest,
+        NonsingularIntegerMatrixRequest,
         SquareIntegerMatrixRequest,
     )
     from jacobian.math.matrices.values import IntegerMatrix
 
     order = 33
-    entries = [
-        [str(int(row == column)) for column in range(order)] for row in range(order)
-    ]
+    entries = _identity_entries(order)
+    matrix = IntegerMatrix.model_validate({"entries": entries})
+    inverse_request = NonsingularIntegerMatrixRequest(matrix=matrix)
 
-    with pytest.raises(ValidationError):
-        IntegerMatrix.model_validate({"entries": entries})
+    assert len(matrix.entries) == order
+    assert inverse_request.matrix is matrix
+
     with pytest.raises(ValidationError):
         IntegerMatrixRequest.model_validate({"matrix": {"entries": entries}})
     with pytest.raises(ValidationError):
+        IntegerMatrixRequest(matrix=matrix)
+    with pytest.raises(ValidationError):
         SquareIntegerMatrixRequest.model_validate({"matrix": {"entries": entries}})
     with pytest.raises(ValidationError):
+        SquareIntegerMatrixRequest(matrix=matrix)
+    with pytest.raises(ValidationError):
         LatticeReductionRequest.model_validate({"basis": {"entries": entries}})
+    with pytest.raises(ValidationError):
+        LatticeReductionRequest(basis=matrix)
+    with pytest.raises(ValidationError):
+        HermiteNormalFormRequest.model_validate({"matrix": {"entries": entries}})
+    with pytest.raises(ValidationError):
+        HermiteNormalFormRequest(matrix=matrix)
+
+    with pytest.raises(PydanticCustomError, match="32"):
+        reduce_lattice_basis(LatticeReductionRequest.model_construct(basis=matrix))
+    with pytest.raises(PydanticCustomError, match="32"):
+        compute_hermite_normal_form(
+            HermiteNormalFormRequest.model_construct(matrix=matrix)
+        )
 
     inverse_schema = _operation(
         "matrix.inverse.compute"
     ).request_type.model_json_schema()
     square_schema = SquareIntegerMatrixRequest.model_json_schema()
-    assert (
-        inverse_schema["$defs"]["InverseIntegerMatrix"]["properties"]["entries"][
-            "maxItems"
-        ]
-        == 128
-    )
-    assert (
-        square_schema["$defs"]["IntegerMatrix"]["properties"]["entries"]["maxItems"]
-        == 32
-    )
+    integer_schema = IntegerMatrixRequest.model_json_schema()
+    lattice_schema = LatticeReductionRequest.model_json_schema()
+    assert _entry_axis_limit(inverse_schema, "matrix") == 128
+    assert _entry_axis_limit(square_schema, "matrix") == 32
+    assert _entry_axis_limit(integer_schema, "matrix") == 32
+    assert _entry_axis_limit(lattice_schema, "basis") == 32
+    assert IntegerMatrix.model_json_schema()["properties"]["entries"]["maxItems"] == 128

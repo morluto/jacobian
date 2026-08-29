@@ -49,7 +49,6 @@ from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
-    InverseIntegerMatrix,
     RationalMatrix,
     SmithNormalForm,
 )
@@ -300,7 +299,7 @@ def _admit_square_integer(matrix: IntegerMatrix) -> None:
         )
 
 
-def _admit_inverse(matrix: InverseIntegerMatrix) -> None:
+def _admit_inverse(matrix: IntegerMatrix) -> None:
     from jacobian.math.matrices.values import require_matrix_scalar_digits
 
     require_matrix_scalar_digits(
@@ -593,7 +592,7 @@ def smith_normal_form_result(matrix: IntegerMatrix) -> SmithNormalForm:
     return conversions.smith_normal_form_from_sympy(raw)
 
 
-def inverse_result(matrix: InverseIntegerMatrix) -> MatrixInverseResult:
+def inverse_result(matrix: IntegerMatrix) -> MatrixInverseResult:
     _admit(_admit_inverse, matrix)
     from flint import fmpq_mat
 

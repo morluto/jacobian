@@ -7,6 +7,7 @@ from itertools import pairwise
 from typing import Any, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
+from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
@@ -27,10 +28,11 @@ MAX_MATRIX_DIMENSION = 32
 # canonical QQ matrix value while narrower operations enforce their own
 # request envelopes.
 MAX_RATIONAL_MATRIX_ORDER = 128
-# Exact inverse admits square integer sources through order 128 via the
-# inverse-owned carrier; the shared IntegerMatrix stays at order 32 for
-# lattice reduction and the other integer matrix operations.
-MAX_INVERSE_INTEGER_MATRIX_ORDER = 128
+# Exact inverse admits square integer sources through order 128. Keep that
+# complete public domain representable by the one canonical ZZ matrix value
+# while lattice reduction and the other integer operations enforce their own
+# request envelopes.
+MAX_INTEGER_MATRIX_ORDER = 128
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 
@@ -236,63 +238,25 @@ class IntegerMatrix(StrictModel):
     domain: Literal["ZZ"] = "ZZ"
     entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
         min_length=1,
-        max_length=MAX_MATRIX_DIMENSION,
+        max_length=MAX_INTEGER_MATRIX_ORDER,
     )
 
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
         data = _require_raw_matrix_envelope(
-            data, maximum_axis=MAX_MATRIX_DIMENSION, label="matrix"
+            data, maximum_axis=MAX_INTEGER_MATRIX_ORDER, label="matrix"
         )
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
-            raise _validation_error(
-                "budget_exceeded", "matrix rows must contain between 1 and 32 entries"
-            )
-        if any(len(row) != column_count for row in self.entries):
-            raise _validation_error(
-                "budget_exceeded", "matrix rows must all have the same length"
-            )
-        require_matrix_scalar_digits(
-            self.entries,
-            maximum=MAX_MATRIX_SCALAR_DIGITS,
-            label="matrix",
-        )
-        return self
-
-
-class InverseIntegerMatrix(StrictModel):
-    """Square integer matrix carrier owned by the exact inverse operation."""
-
-    domain: Literal["ZZ"] = "ZZ"
-    entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
-        min_length=1,
-        max_length=MAX_INVERSE_INTEGER_MATRIX_ORDER,
-    )
-
-    @model_validator(mode="before")
-    @classmethod
-    def require_raw_matrix_envelope(cls, data: Any) -> Any:
-        if isinstance(data, IntegerMatrix):
-            data = {"domain": "ZZ", "entries": data.entries}
-        data = _require_raw_matrix_envelope(
-            data, maximum_axis=MAX_INVERSE_INTEGER_MATRIX_ORDER, label="matrix"
-        )
-        return canonicalize_json_containers(data)
-
-    @model_validator(mode="after")
-    def require_rectangular_nonempty_rows(self) -> Self:
-        column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_INVERSE_INTEGER_MATRIX_ORDER:
+        if column_count == 0 or column_count > MAX_INTEGER_MATRIX_ORDER:
             raise _validation_error(
                 "budget_exceeded",
                 "matrix rows must contain between 1 and "
-                f"{MAX_INVERSE_INTEGER_MATRIX_ORDER} entries",
+                f"{MAX_INTEGER_MATRIX_ORDER} entries",
             )
         if any(len(row) != column_count for row in self.entries):
             raise _validation_error(
@@ -304,6 +268,26 @@ class InverseIntegerMatrix(StrictModel):
             label="matrix",
         )
         return self
+
+
+def integer_matrix_axis_schema(maximum_axis: int) -> JsonSchemaValue:
+    """Project ``IntegerMatrix`` with an operation-local axis ceiling.
+
+    The canonical ZZ matrix retains inverse sources through order 128, so a
+    verbatim shared definition would publish ``maxItems: 128`` on every
+    consumer. Narrower operations attach this schema through
+    ``WithJsonSchema`` so discovery advertises the axis their validators
+    enforce; validation itself stays with the canonical value plus owner-local
+    admission.
+    """
+
+    schema: dict[str, Any] = IntegerMatrix.model_json_schema()
+    entries = schema["properties"]["entries"]
+    entries["maxItems"] = maximum_axis
+    row_schema = entries.get("items")
+    if isinstance(row_schema, dict):
+        row_schema["maxItems"] = maximum_axis
+    return schema
 
 
 class SmithNormalForm(StrictModel):
@@ -368,16 +352,16 @@ class SmithNormalForm(StrictModel):
 
 
 __all__ = [
-    "MAX_INVERSE_INTEGER_MATRIX_ORDER",
+    "MAX_INTEGER_MATRIX_ORDER",
     "MAX_MATRIX_DIMENSION",
     "MAX_MATRIX_SCALAR_DIGITS",
     "MAX_RATIONAL_MATRIX_ORDER",
     "IntegerMatrix",
-    "InverseIntegerMatrix",
     "RationalMatrix",
     "RationalVectorSpaceBasis",
     "RealQuadraticMatrix",
     "SmithNormalForm",
+    "integer_matrix_axis_schema",
     "rational_matrix_from_fractions",
     "rational_vector_space_basis_from_fractions",
     "require_matrix_scalar_digits",

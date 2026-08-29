@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -13,10 +13,16 @@ from jacobian.math.matrices.values import (
     IntegerMatrix,
     RationalMatrix,
     RationalVectorSpaceBasis,
+    integer_matrix_axis_schema,
     require_matrix_scalar_digits,
 )
 
 _MAX_LATTICE_INPUT_SCALAR_DIGITS = 256
+
+_LatticeIntegerMatrix = Annotated[
+    IntegerMatrix,
+    WithJsonSchema(integer_matrix_axis_schema(MAX_MATRIX_DIMENSION)),
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -25,10 +31,45 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"lattice.{reason}", message)
 
 
+def _require_lattice_matrix_dimensions(value: object, *, label: str) -> None:
+    """Keep lattice consumers on the order-32 computation envelope."""
+
+    if isinstance(value, dict):
+        entries = value.get("entries")
+    else:
+        entries = getattr(value, "entries", None)
+    if not isinstance(entries, (list, tuple)):
+        return
+    if len(entries) > MAX_MATRIX_DIMENSION:
+        raise _validation_error(
+            "matrix_dimension",
+            f"{label} dimensions are limited to {MAX_MATRIX_DIMENSION} rows and columns",
+        )
+    for row in entries:
+        if isinstance(row, (list, tuple)) and len(row) > MAX_MATRIX_DIMENSION:
+            raise _validation_error(
+                "matrix_dimension",
+                f"{label} dimensions are limited to "
+                f"{MAX_MATRIX_DIMENSION} rows and columns",
+            )
+
+
 class HermiteNormalFormRequest(StrictModel):
     """One bounded integer matrix for row Hermite normal form."""
 
-    matrix: IntegerMatrix
+    matrix: _LatticeIntegerMatrix
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_matrix_envelope(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "matrix" in data:
+            _require_lattice_matrix_dimensions(data["matrix"], label="matrix")
+        return data
+
+    @model_validator(mode="after")
+    def require_matrix_dimensions(self) -> Self:
+        _require_lattice_matrix_dimensions(self.matrix, label="matrix")
+        return self
 
 
 class HermiteNormalFormResult(StrictModel):
@@ -58,7 +99,19 @@ class HermiteNormalFormResult(StrictModel):
 class LatticeReductionRequest(StrictModel):
     """One bounded integer row basis for exact LLL reduction."""
 
-    basis: IntegerMatrix
+    basis: _LatticeIntegerMatrix
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_basis_envelope(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "basis" in data:
+            _require_lattice_matrix_dimensions(data["basis"], label="basis")
+        return data
+
+    @model_validator(mode="after")
+    def require_basis_dimensions(self) -> Self:
+        _require_lattice_matrix_dimensions(self.basis, label="basis")
+        return self
 
 
 class LatticeReductionResult(StrictModel):
@@ -106,7 +159,7 @@ class IntegerLattice(StrictModel):
     """A rank-``r`` lattice in ``ZZ^n`` given by full-row-rank integer rows."""
 
     ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
-    basis: IntegerMatrix
+    basis: _LatticeIntegerMatrix
 
     @model_validator(mode="after")
     def require_full_row_rank(self) -> Self:
@@ -255,7 +308,7 @@ class SublatticeIndexRequest(StrictModel):
 
     sublattice: IntegerLattice
     parent: IntegerLattice
-    embedding: IntegerMatrix
+    embedding: _LatticeIntegerMatrix
 
     @model_validator(mode="after")
     def require_compatible_inclusion(self) -> Self:

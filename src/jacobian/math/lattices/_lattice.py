@@ -12,6 +12,7 @@ from jacobian.math.lattices._models import (
     _MAX_LATTICE_INPUT_SCALAR_DIGITS,
     LatticeReductionRequest,
     LatticeReductionResult,
+    _require_lattice_matrix_dimensions,
 )
 from jacobian.math.matrices.values import (
     MAX_MATRIX_SCALAR_DIGITS,
@@ -45,6 +46,7 @@ def reduce_lattice_basis(
         maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,
         label="basis input",
     )
+    _require_lattice_matrix_dimensions(request.basis, label="basis")
     entries = [
         [parse_canonical_integer(value) for value in row]
         for row in request.basis.entries

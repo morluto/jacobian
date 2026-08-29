@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, WithJsonSchema, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.matrices.values import (
-    MAX_INVERSE_INTEGER_MATRIX_ORDER,
+    MAX_INTEGER_MATRIX_ORDER,
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
-    InverseIntegerMatrix,
     RationalMatrix,
+    integer_matrix_axis_schema,
     require_matrix_scalar_digits,
 )
 
@@ -23,7 +23,7 @@ MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 128
 MAX_DETERMINANT_SCALAR_WORK = 500_000_000
 MAX_CHARACTERISTIC_POLYNOMIAL_ORDER = 128
-MAX_INVERSE_MATRIX_ORDER = MAX_INVERSE_INTEGER_MATRIX_ORDER
+MAX_INVERSE_MATRIX_ORDER = MAX_INTEGER_MATRIX_ORDER
 MAX_INVERSE_OUTPUT_DIGIT_WORK = 3_000_000
 MAX_PERMANENT_RYSER_SUBSETS = 4_096
 MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
@@ -206,19 +206,25 @@ class MatrixRankRequest(_MatrixRequest):
     matrix: RationalMatrix
 
 
+_ComputationIntegerMatrix = Annotated[
+    IntegerMatrix,
+    WithJsonSchema(integer_matrix_axis_schema(MAX_MATRIX_DIMENSION)),
+]
+
+
 class IntegerMatrixRequest(_MatrixRequest):
-    matrix: IntegerMatrix
+    matrix: _ComputationIntegerMatrix
 
 
 class NonsingularIntegerMatrixRequest(_MatrixRequest):
     """One bounded square integer matrix for the exact inverse kernel."""
 
-    matrix: InverseIntegerMatrix
+    matrix: IntegerMatrix
     _raw_matrix_axis_limit: ClassVar[int] = MAX_INVERSE_MATRIX_ORDER
 
 
 class SquareIntegerMatrixRequest(_MatrixRequest):
-    matrix: IntegerMatrix
+    matrix: _ComputationIntegerMatrix
 
 
 class RationalLinearSolveRequest(_MatrixRequest):

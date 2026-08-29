@@ -350,3 +350,24 @@ def test_all_new_operations_registered_in_catalog() -> None:
         "lattice.orthogonal_sum.compute",
     }
     assert expected <= ids
+
+
+def test_lattice_reduction_rejects_order_above_32_before_backend() -> None:
+    from pydantic import ValidationError
+    from pydantic_core import PydanticCustomError
+
+    from jacobian.math.lattices._lattice import reduce_lattice_basis
+    from jacobian.math.lattices._models import LatticeReductionRequest
+    from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, IntegerMatrix
+
+    order = MAX_MATRIX_DIMENSION + 1
+    entries = tuple(
+        tuple("1" if row == column else "0" for column in range(order))
+        for row in range(order)
+    )
+    matrix = IntegerMatrix(entries=entries)
+
+    with pytest.raises(ValidationError):
+        LatticeReductionRequest(basis=matrix)
+    with pytest.raises(PydanticCustomError, match="32"):
+        reduce_lattice_basis(LatticeReductionRequest.model_construct(basis=matrix))

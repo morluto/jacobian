@@ -12,6 +12,7 @@ from jacobian.math.lattices._models import (
     _MAX_LATTICE_INPUT_SCALAR_DIGITS,
     HermiteNormalFormRequest,
     HermiteNormalFormResult,
+    _require_lattice_matrix_dimensions,
 )
 from jacobian.math.matrices.values import IntegerMatrix, require_matrix_scalar_digits
 
@@ -36,6 +37,7 @@ def compute_hermite_normal_form(
         maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,
         label="Hermite normal form input",
     )
+    _require_lattice_matrix_dimensions(request.matrix, label="matrix")
     integer_entries = [
         [parse_canonical_integer(value) for value in row]
         for row in request.matrix.entries

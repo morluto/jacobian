@@ -113,17 +113,6 @@ def _exact_matrix(value: MatrixBase, *, maximum_dimension: int = 32) -> MatrixBa
     return value
 
 
-def _rational_scalars_within_kernel_limit(value: MatrixBase) -> bool:
-    return all(
-        max(
-            len(str(abs(int(entry.p)))),
-            len(str(abs(int(entry.q)))),
-        )
-        <= MAX_INPUT_SCALAR_DIGITS
-        for entry in value
-    )
-
-
 def rref(matrix: MatrixBase) -> tuple[MatrixBase, tuple[int, ...]]:
     result = rref_result(
         conversions.rational_matrix_from_sympy(
@@ -197,6 +186,12 @@ def determinant(matrix: MatrixBase) -> Any:
     source = _exact_matrix(matrix, maximum_dimension=MAX_DETERMINANT_MATRIX_DIMENSION)
     if source.rows != source.cols:
         raise ValueError("determinant requires a square matrix")
+    if not all(entry.is_Rational is True for entry in source):
+        if source.rows > MAX_MATRIX_DIMENSION:
+            raise ValueError(
+                f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+            )
+        return source.det(method="bareiss")
     result = determinant_result(conversions.rational_matrix_from_sympy(source))
     value = result.determinant.as_fraction()
     return sympy.Rational(value.numerator, value.denominator)
@@ -497,21 +492,13 @@ def _product_cell_digit_bound(
     left_row: tuple[CanonicalRational, ...],
     right_column: tuple[CanonicalRational, ...],
 ) -> int:
-    """Bound one output cell after combining equal-denominator terms.
-
-    Zero factors do not contribute. Terms that share a reduced product
-    denominator are combined by summing their numerators before charging, so
-    equivalent products with swapped factors and cancelling pairs do not
-    inflate the denominator bound.
-    """
+    """Bound one output cell after combining equal-denominator terms."""
 
     combined_numerators: dict[str, int] = {}
     for left_value, right_value in zip(left_row, right_column, strict=True):
         if left_value.num == "0" or right_value.num == "0":
             continue
-        left_fraction = left_value.as_fraction()
-        right_fraction = right_value.as_fraction()
-        product = left_fraction * right_fraction
+        product = left_value.as_fraction() * right_value.as_fraction()
         key = format_canonical_integer(product.denominator)
         combined_numerators[key] = combined_numerators.get(key, 0) + product.numerator
     remaining = tuple(
@@ -521,18 +508,16 @@ def _product_cell_digit_bound(
     )
     if not remaining:
         return 1
-    denominator_digits = 0
-    max_numerator_digits = 1
-    for denominator, numerator in remaining:
-        denominator_digits += _denominator_digits(denominator)
-        max_numerator_digits = max(
-            max_numerator_digits, _positive_decimal_digits(numerator)
-        )
-    denominator_digits = max(1, denominator_digits)
-    numerator_digits = (
-        max_numerator_digits + denominator_digits + len(str(len(remaining)))
+    denominator_digits = max(
+        1, sum(_denominator_digits(denominator) for denominator, _ in remaining)
     )
-    return max(numerator_digits, denominator_digits)
+    max_numerator_digits = max(
+        1, max(_positive_decimal_digits(numerator) for _, numerator in remaining)
+    )
+    return max(
+        max_numerator_digits + denominator_digits + len(str(len(remaining))),
+        denominator_digits,
+    )
 
 
 def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
@@ -568,7 +553,6 @@ def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
             "budget_exceeded",
             "matrix product exceeds the exact multiply-add work budget",
         )
-
     right_columns_entries = tuple(
         tuple(right.entries[row][column] for row in range(inner_dimension))
         for column in range(right_columns)
@@ -620,17 +604,38 @@ def _bit_bound_decimal_digits(bits: int) -> int:
     return max(1, (bits * 30_103 + 99_999) // 100_000)
 
 
-def _exceeds_canonical_rational_digits(bits: int) -> bool:
-    return _bit_bound_decimal_digits(bits) > MAX_CANONICAL_RATIONAL_DIGITS
-
-
 def _positive_decimal_digits(value: int) -> int:
-    """Upper-bound decimal length without converting the integer to a string."""
+    """Count decimal digits exactly without converting the integer to a string."""
 
     magnitude = abs(value)
     if magnitude <= 9:
         return 1
-    return _bit_bound_decimal_digits(magnitude.bit_length())
+    digits = _bit_bound_decimal_digits(magnitude.bit_length())
+    lower_bound = 10 ** (digits - 1)
+    while magnitude < lower_bound:
+        digits -= 1
+        lower_bound //= 10
+    upper_bound = lower_bound * 10
+    while magnitude >= upper_bound:
+        digits += 1
+        lower_bound = upper_bound
+        upper_bound *= 10
+    return digits
+
+
+def _rational_scalars_within_kernel_limit(value: MatrixBase) -> bool:
+    return all(
+        max(
+            _positive_decimal_digits(int(entry.p)),
+            _positive_decimal_digits(int(entry.q)),
+        )
+        <= MAX_INPUT_SCALAR_DIGITS
+        for entry in value
+    )
+
+
+def _exceeds_canonical_rational_digits(bits: int) -> bool:
+    return _bit_bound_decimal_digits(bits) > MAX_CANONICAL_RATIONAL_DIGITS
 
 
 def _admit_determinant(
@@ -692,6 +697,16 @@ def _admit_determinant(
 def _characteristic_polynomial_component_digit_bound(
     matrix: RationalMatrix,
 ) -> int:
+    """Bound every coefficient from the row-cleared principal-minor envelope.
+
+    Coefficients are sums of principal minors. Clearing row ``i`` by the LCM
+    ``d_i`` of its denominators, Hadamard bounds the cleared numerator of any
+    minor that includes that row, and the product of the participating ``d_i``
+    bounds that minor's denominator. ``2^n`` bounds the number of minors of
+    any fixed order. Unreduced coefficients written over the product of all
+    row denominators therefore fit in ``2^n`` times the full-order Hadamard
+    bound times that product.
+    """
     fractions = tuple(
         tuple(value.as_fraction() for value in row) for row in matrix.entries
     )
@@ -715,11 +730,11 @@ def _characteristic_polynomial_component_digit_bound(
     )
     seen_rows: set[tuple[Fraction, ...]] = set()
     for row in bound_rows:
+        row_denominator = 1
         if not triangular and row in seen_rows:
             continue
         if not triangular:
             seen_rows.add(row)
-        row_denominator = 1
         for value in row:
             row_denominator = lcm(row_denominator, value.denominator)
             if _exceeds_canonical_rational_digits(
@@ -927,12 +942,7 @@ def product_result(left: RationalMatrix, right: RationalMatrix) -> MatrixProduct
     return MatrixProductResult(
         product=RationalMatrix(
             entries=tuple(
-                tuple(
-                    CanonicalRational.from_integer_ratio(
-                        value.numerator, value.denominator
-                    )
-                    for value in row
-                )
+                tuple(CanonicalRational.from_fraction(value) for value in row)
                 for row in product
             )
         ),

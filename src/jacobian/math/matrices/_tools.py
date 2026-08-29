@@ -306,7 +306,7 @@ TOOLS = (
     matrix_operation(
         "matrix.rank.compute",
         "Compute exact rational matrix rank",
-        "Compute the rank and RREF pivot columns of one rectangular matrix over QQ.",
+        "Compute the rank and RREF pivot columns of one rectangular matrix over QQ through 64 rows and columns, subject to scalar-work and result-height bounds.",
         MatrixRankRequest,
         MatrixRankResult,
         compute_rank,
@@ -431,7 +431,7 @@ TOOLS = (
     matrix_operation(
         "matrix.normal_form.rref.compute",
         "Compute exact reduced row echelon form",
-        "Compute the unique reduced row echelon form over QQ.",
+        "Compute the unique reduced row echelon form over QQ through 64 rows and columns, subject to scalar-work and result-height bounds.",
         RationalMatrixRequest,
         RrefResult,
         compute_rref,
@@ -457,7 +457,7 @@ TOOLS = (
         "matrix.nullspace.compute",
         "Compute a canonical exact nullspace or relation basis",
         (
-            "Compute the RREF fundamental basis of the right nullspace over QQ. "
+            "Compute the RREF fundamental basis of the right nullspace over QQ through 64 rows and columns, subject to scalar-work and result-height bounds. "
             "When columns are ordered vectors, the result gives their rank and "
             "every exact rational linear dependency coefficient."
         ),
@@ -547,8 +547,7 @@ TOOLS = (
         "matrix.normal_form.smith.compute",
         "Compute an exact Smith normal form",
         (
-            "Compute the canonical diagonal Smith form over ZZ without claiming "
-            "unavailable left or right transformations."
+            "Compute the canonical diagonal Smith form over ZZ through 64 rows and columns, subject to scalar-work and result-height bounds, without claiming unavailable left or right transformations."
         ),
         IntegerMatrixRequest,
         SmithNormalForm,

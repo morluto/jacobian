@@ -16,12 +16,13 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices import _conversions as conversions
 from jacobian.math.matrices._operation_models import (
     MAX_DETERMINANT_MATRIX_DIMENSION,
     MAX_DETERMINANT_SCALAR_WORK,
+    MAX_EXACT_LINEAR_MATRIX_WORK,
     MAX_INPUT_SCALAR_DIGITS,
     MAX_KRONECKER_PRODUCT_AXIS,
     MAX_PERMANENT_RYSER_SUBSETS,
@@ -43,10 +44,13 @@ from jacobian.math.matrices._operation_models import (
     _validation_error,
 )
 from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
+    MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
     RationalMatrix,
     SmithNormalForm,
+    rational_matrix_from_fractions,
 )
 
 if TYPE_CHECKING:
@@ -106,8 +110,15 @@ def _exact_matrix(value: MatrixBase, *, maximum_dimension: int = 32) -> MatrixBa
 
 
 def rref(matrix: MatrixBase) -> tuple[MatrixBase, tuple[int, ...]]:
-    reduced, pivots = _exact_matrix(matrix).rref()
-    return reduced, tuple(int(pivot) for pivot in pivots)
+    result = rref_result(
+        conversions.rational_matrix_from_sympy(
+            _exact_matrix(matrix, maximum_dimension=MAX_EXACT_LINEAR_MATRIX_AXIS)
+        )
+    )
+    return (
+        conversions.rational_matrix_to_sympy(result.reduced_matrix),
+        result.pivot_columns,
+    )
 
 
 def inverse(matrix: MatrixBase) -> MatrixBase:
@@ -141,22 +152,32 @@ def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
 
 
 def determinant(matrix: MatrixBase) -> Any:
+    import sympy
+
     source = _exact_matrix(matrix, maximum_dimension=MAX_DETERMINANT_MATRIX_DIMENSION)
     if source.rows != source.cols:
         raise ValueError("determinant requires a square matrix")
-    return source.det(method="bareiss")
+    result = determinant_result(conversions.rational_matrix_from_sympy(source))
+    value = result.determinant.as_fraction()
+    return sympy.Rational(value.numerator, value.denominator)
 
 
 def rank(matrix: MatrixBase) -> tuple[int, tuple[int, ...]]:
-    _, pivots = rref(matrix)
-    return len(pivots), pivots
+    result = rank_result(
+        conversions.rational_matrix_from_sympy(
+            _exact_matrix(matrix, maximum_dimension=MAX_EXACT_LINEAR_MATRIX_AXIS)
+        )
+    )
+    return result.rank, result.pivot_columns
 
 
 def smith_normal_form(matrix: MatrixBase) -> MatrixBase:
-    import sympy
-    from sympy.matrices.normalforms import smith_normal_form as sympy_smith_normal_form
-
-    return sympy_smith_normal_form(_exact_matrix(matrix), domain=sympy.ZZ)
+    result = smith_normal_form_result(
+        conversions.integer_matrix_from_sympy(
+            _exact_matrix(matrix, maximum_dimension=MAX_EXACT_LINEAR_MATRIX_AXIS)
+        )
+    )
+    return conversions.integer_matrix_to_sympy(result.normal_form)
 
 
 def multiply(left: MatrixBase, right: MatrixBase) -> MatrixBase:
@@ -261,6 +282,96 @@ def _admit_rational(matrix: RationalMatrix) -> None:
     _admit_rational_matrix(matrix)
 
 
+def _admit_exact_linear_matrix(
+    entries: tuple[tuple[CanonicalRational | str, ...], ...],
+) -> None:
+    from jacobian.math.matrices.values import require_matrix_scalar_digits
+
+    require_matrix_scalar_digits(
+        entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+    )
+    rows = len(entries)
+    columns = len(entries[0])
+    if rows > MAX_EXACT_LINEAR_MATRIX_AXIS or columns > MAX_EXACT_LINEAR_MATRIX_AXIS:
+        raise _validation_error(
+            "budget_exceeded",
+            "matrix computation dimensions are limited to "
+            f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
+        )
+    rank_bound = min(rows, columns)
+    scalar_digits = max(
+        len(component.lstrip("-"))
+        for row in entries
+        for value in row
+        for component in (
+            (value,) if isinstance(value, str) else (value.num, value.den)
+        )
+    )
+    work = rows * columns * rank_bound * scalar_digits
+    if work > MAX_EXACT_LINEAR_MATRIX_WORK:
+        raise _validation_error(
+            "budget_exceeded",
+            "exact linear algebra exceeds the "
+            f"{MAX_EXACT_LINEAR_MATRIX_WORK:,}-unit scalar-work budget",
+        )
+
+    row_numerator_bits: list[int] = []
+    row_denominator_bits: list[int] = []
+    for row in entries:
+        if isinstance(row[0], str):
+            integer_row = cast(tuple[str, ...], row)
+            row_numerator_bits.append(
+                max(
+                    parse_canonical_integer(value).bit_length() for value in integer_row
+                )
+                + (columns.bit_length() + 1) // 2
+            )
+            row_denominator_bits.append(1)
+            continue
+        rational_row = cast(tuple[CanonicalRational, ...], row)
+        fractions = tuple(value.as_fraction() for value in rational_row)
+        denominator = lcm(*(value.denominator for value in fractions))
+        largest_cleared_numerator = max(
+            abs(value.numerator) * (denominator // value.denominator)
+            for value in fractions
+        )
+        row_numerator_bits.append(
+            largest_cleared_numerator.bit_length() + (columns.bit_length() + 1) // 2
+        )
+        row_denominator_bits.append(denominator.bit_length())
+
+    numerator_bits = sum(sorted(row_numerator_bits, reverse=True)[:rank_bound])
+    denominator_bits = sum(sorted(row_denominator_bits, reverse=True)[:rank_bound])
+    # RREF entries are ratios of minors. After clearing denominators row by
+    # row, either canonical component is bounded by one integer-minor bound
+    # plus one clearing-denominator bound. Smith factors need only the former,
+    # so this shared sum remains conservative for both domains.
+    if (
+        _bit_bound_decimal_digits(numerator_bits + denominator_bits)
+        > MAX_MATRIX_SCALAR_DIGITS
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "exact linear algebra exceeds the canonical result-height bound",
+        )
+
+
+def _flint_rref(
+    matrix: RationalMatrix,
+) -> tuple[tuple[tuple[Fraction, ...], ...], tuple[int, ...]]:
+    from jacobian.math.matrices._flint import rational_rref
+
+    entries = tuple(
+        tuple(value.as_fraction() for value in row) for row in matrix.entries
+    )
+    reduced, rank_value = rational_rref(entries)
+    pivots = tuple(
+        next(column for column, value in enumerate(row) if value)
+        for row in reduced[:rank_value]
+    )
+    return reduced, pivots
+
+
 def _admit_square_rational(matrix: RationalMatrix) -> None:
     _admit_rational_matrix(matrix)
     if len(matrix.entries) != len(matrix.entries[0]):
@@ -283,6 +394,12 @@ def _admit_square_integer(matrix: IntegerMatrix) -> None:
     if rows == 0 or rows != len(matrix.entries[0]):
         raise _validation_error(
             "budget_exceeded", "operation requires a square integer matrix"
+        )
+    if rows > MAX_MATRIX_DIMENSION:
+        raise _validation_error(
+            "budget_exceeded",
+            "matrix computation dimensions are limited to "
+            f"{MAX_MATRIX_DIMENSION} rows and columns",
         )
 
 
@@ -412,23 +529,23 @@ def determinant_result(matrix: RationalMatrix) -> MatrixDeterminantResult:
 
 
 def rank_result(matrix: RationalMatrix) -> MatrixRankResult:
-    _admit(_admit_rational, matrix)
-    value, pivot_columns = rank(conversions.rational_matrix_to_sympy(matrix))
+    _admit(_admit_exact_linear_matrix, matrix.entries)
+    _, pivot_columns = _flint_rref(matrix)
     return MatrixRankResult._from_kernel(
         matrix=matrix,
-        rank=value,
+        rank=len(pivot_columns),
         pivot_columns=tuple(int(column) for column in pivot_columns),
     )
 
 
 def rref_result(matrix: RationalMatrix) -> RrefResult:
-    _admit(_admit_rational, matrix)
-    reduced, pivots = rref(conversions.rational_matrix_to_sympy(matrix))
-    columns = reduced.cols
+    _admit(_admit_exact_linear_matrix, matrix.entries)
+    reduced, pivots = _flint_rref(matrix)
+    columns = len(reduced[0])
     pivot_columns = tuple(int(column) for column in pivots)
     return RrefResult._from_kernel(
         matrix=matrix,
-        reduced_matrix=conversions.rational_matrix_from_sympy(reduced),
+        reduced_matrix=rational_matrix_from_fractions(reduced),
         rank=len(pivot_columns),
         pivot_columns=pivot_columns,
         free_columns=tuple(
@@ -438,28 +555,25 @@ def rref_result(matrix: RationalMatrix) -> RrefResult:
 
 
 def nullspace_result(matrix: RationalMatrix) -> NullspaceResult:
-    _admit(_admit_rational, matrix)
-    import sympy
-
-    source = conversions.rational_matrix_to_sympy(matrix)
-    reduced, pivots = rref(source)
+    _admit(_admit_exact_linear_matrix, matrix.entries)
+    reduced, pivots = _flint_rref(matrix)
     pivot_columns = tuple(int(column) for column in pivots)
     free_columns = tuple(
-        column for column in range(source.cols) if column not in pivot_columns
+        column for column in range(len(reduced[0])) if column not in pivot_columns
     )
     pivot_row_by_column = {
         pivot_column: row for row, pivot_column in enumerate(pivot_columns)
     }
     basis: list[tuple[CanonicalRational, ...]] = []
     for free_column in free_columns:
-        vector = [sympy.S.Zero] * source.cols
-        vector[free_column] = sympy.S.One
+        vector = [Fraction(0)] * len(reduced[0])
+        vector[free_column] = Fraction(1)
         for pivot_column, row in pivot_row_by_column.items():
-            vector[pivot_column] = -reduced[row, free_column]
-        basis.append(tuple(conversions.rational_from_sympy(value) for value in vector))
+            vector[pivot_column] = -reduced[row][free_column]
+        basis.append(tuple(CanonicalRational.from_fraction(value) for value in vector))
     return NullspaceResult._from_kernel(
         matrix=matrix,
-        ambient_dimension=source.cols,
+        ambient_dimension=len(reduced[0]),
         rank=len(pivot_columns),
         nullity=len(basis),
         basis_vectors=tuple(basis),
@@ -484,9 +598,36 @@ def characteristic_polynomial_result(
 
 
 def smith_normal_form_result(matrix: IntegerMatrix) -> SmithNormalForm:
-    _admit(_admit_integer, matrix)
-    raw = smith_normal_form(conversions.integer_matrix_to_sympy(matrix))
-    return conversions.smith_normal_form_from_sympy(raw)
+    _admit(_admit_exact_linear_matrix, matrix.entries)
+    from jacobian.math.matrices._flint import integer_smith_normal_form
+
+    raw = integer_smith_normal_form(
+        tuple(
+            tuple(parse_canonical_integer(value) for value in row)
+            for row in matrix.entries
+        )
+    )
+    diagonal = tuple(raw[index][index] for index in range(min(len(raw), len(raw[0]))))
+    rank_value = next(
+        (index for index, value in enumerate(diagonal) if value == 0), len(diagonal)
+    )
+    factors = tuple(abs(value) for value in diagonal[:rank_value])
+    normal_form = IntegerMatrix(
+        entries=tuple(
+            tuple(
+                format_canonical_integer(factors[row])
+                if row == column and row < rank_value
+                else "0"
+                for column in range(len(raw[0]))
+            )
+            for row in range(len(raw))
+        )
+    )
+    return SmithNormalForm(
+        normal_form=normal_form,
+        rank=rank_value,
+        invariant_factors=tuple(format_canonical_integer(value) for value in factors),
+    )
 
 
 def inverse_result(matrix: IntegerMatrix) -> MatrixInverseResult:

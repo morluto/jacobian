@@ -19,9 +19,9 @@ class PeriodicIntervalCountResult(StrictModel):
     """The exact count of periodic set members in [lower, upper]."""
 
     source: PeriodicCongruenceUnionSource
-    lower: int
-    upper: int
-    count: int
+    lower: CanonicalInteger
+    upper: CanonicalInteger
+    count: CanonicalInteger
 
 
 __all__ = [

@@ -1,6 +1,7 @@
 """Periodic congruence union prefix count kernel."""
 
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceUnionSource,
 )
@@ -23,6 +24,12 @@ def compute_periodic_union_prefix_count(
     occupied in one period, then the count through X is q*c + r,
     where q = X // L, r = X % L, and c is the one-period count.
     """
+    if cutoff < 0:
+        raise OperationDomainValidationError(
+            location=("cutoff",),
+            code="periodic_prefix_count.nonnegative_cutoff",
+            message="periodic prefix cutoff must be nonnegative",
+        )
     profile = periodic_congruence_union_profile(source)
     period = parse_canonical_integer(profile.common_period)
     occupied = {parse_canonical_integer(r) for r in profile.occupied_residues}
@@ -34,7 +41,7 @@ def compute_periodic_union_prefix_count(
             cutoff=str(cutoff),
             common_period="0",
             occupied_count=0,
-            count=0,
+            count="0",
         )
 
     q, r = divmod(cutoff, period)
@@ -48,5 +55,5 @@ def compute_periodic_union_prefix_count(
         cutoff=str(cutoff),
         common_period=profile.common_period,
         occupied_count=occupied_count,
-        count=count,
+        count=format_canonical_integer(count),
     )

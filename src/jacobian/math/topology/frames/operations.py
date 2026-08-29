@@ -80,8 +80,9 @@ def _require_gram_work_budget(value: VectorFamily) -> None:
 
 
 def _require_gram_entry_representation(value: VectorFamily) -> None:
-    coefficient_height = _coefficient_height(value)
-    gram_entry_bound = len(value.vectors[0]) * coefficient_height**2
+    gram_entry_bound = max(
+        sum(entry**2 for entry in vector) for vector in value.vectors
+    )
     if gram_entry_bound > _MAX_SAFE_JSON_INTEGER:
         raise OperationDomainValidationError(
             location=("vectors",),

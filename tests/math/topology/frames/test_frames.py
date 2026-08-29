@@ -189,6 +189,14 @@ def test_sparse_high_height_gram_is_admitted_by_occupancy() -> None:
     assert len(encoded) <= CanonicalLimits().max_output_bytes
 
 
+def test_sparse_row_norm_controls_gram_entry_admission() -> None:
+    family = VectorFamily(vectors=((70_000_000, 0),))
+
+    result = _gram(VectorFamilyRequest(vectors=family.vectors))
+
+    assert result.gram == ((4_900_000_000_000_000,),)
+
+
 def test_dense_high_height_gram_is_rejected_before_backend_expansion() -> None:
     dimension = 512
     basis = tuple(

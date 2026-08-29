@@ -247,37 +247,21 @@ def adjacency_shift(
     return AdjacencyShift(matrix=matrix, two_sided=two_sided)
 
 
-def _matrix_product(
-    left: tuple[tuple[int, ...], ...], right: tuple[tuple[int, ...], ...]
-) -> tuple[tuple[int, ...], ...]:
-    size = len(left)
-    return tuple(
-        tuple(
-            sum(left[row][inner] * right[inner][column] for inner in range(size))
-            for column in range(size)
-        )
-        for row in range(size)
-    )
+def _mobius_sieve(limit: int) -> tuple[int, ...]:
+    """Return mu(0)..mu(limit) by a bounded Eratosthenes sieve."""
 
-
-def _mobius(value: int) -> int:
-    remaining = value
-    prime = 2
-    distinct_factors = 0
-    while prime * prime <= remaining:
-        if remaining % prime:
-            prime += 1
+    values = [1] * (limit + 1)
+    is_prime = [True] * (limit + 1)
+    for prime in range(2, limit + 1):
+        if not is_prime[prime]:
             continue
-        remaining //= prime
-        distinct_factors += 1
-        if remaining % prime == 0:
-            return 0
-        while remaining % prime == 0:
-            remaining //= prime
-        prime += 1
-    if remaining > 1:
-        distinct_factors += 1
-    return -1 if distinct_factors % 2 else 1
+        for multiple in range(prime, limit + 1, prime):
+            is_prime[multiple] = False
+            values[multiple] *= -1
+        square = prime * prime
+        for multiple in range(square, limit + 1, square):
+            values[multiple] = 0
+    return tuple(values)
 
 
 def periodic_point_profile(
@@ -291,35 +275,37 @@ def periodic_point_profile(
         )
     matrix = shift.matrix
     states = len(matrix)
-    if states**3 * max_period > MAX_PERIODIC_PROFILE_WORK:
+    matrix_work = states**3 * max_period
+    divisor_work = 3 * max_period * (max_period.bit_length() + 1)
+    if matrix_work + divisor_work > MAX_PERIODIC_PROFILE_WORK:
         raise OperationDomainValidationError(
             location=("shift", "max_period"),
             code="symbolic_dynamics.periodic_profile_work_bound",
             message="periodic-point matrix powering exceeds the work bound",
         )
     maximum_row_sum = max(sum(row) for row in matrix)
-    count_bound = states * max(1, maximum_row_sum) ** max_period
-    aggregate_digits = 3 * max_period * len(str(count_bound))
+    count_bits = (
+        states.bit_length() + max_period * (max(1, maximum_row_sum) - 1).bit_length()
+    )
+    count_digits = max(1, (count_bits * 30_103 + 99_999) // 100_000)
+    aggregate_digits = 3 * max_period * count_digits
     if aggregate_digits > MAX_PERIODIC_PROFILE_DIGITS:
         raise OperationDomainValidationError(
             location=("shift", "max_period"),
             code="symbolic_dynamics.periodic_profile_output_bound",
             message="periodic-point profile exceeds the output digit bound",
         )
-    power = matrix
-    fixed: list[int] = []
-    for period in range(1, max_period + 1):
-        fixed.append(sum(power[index][index] for index in range(len(matrix))))
-        if period < max_period:
-            power = _matrix_product(power, matrix)
-    exact = tuple(
-        sum(
-            _mobius(divisor) * fixed[period // divisor - 1]
-            for divisor in range(1, period + 1)
-            if period % divisor == 0
-        )
-        for period in range(1, max_period + 1)
-    )
+    from jacobian.math.dynamics.symbolic._flint import matrix_power_traces
+
+    fixed = matrix_power_traces(matrix, max_period)
+    mobius = _mobius_sieve(max_period)
+    exact_values = [0] * max_period
+    for divisor in range(1, max_period + 1):
+        multiplier = mobius[divisor]
+        if multiplier:
+            for period in range(divisor, max_period + 1, divisor):
+                exact_values[period - 1] += multiplier * fixed[period // divisor - 1]
+    exact = tuple(exact_values)
     if any(count < 0 or count % period for period, count in enumerate(exact, 1)):
         raise RuntimeError("periodic-point inversion violated orbit integrality")
     orbits = tuple(count // period for period, count in enumerate(exact, 1))

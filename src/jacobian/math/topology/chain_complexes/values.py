@@ -12,7 +12,10 @@ from jacobian._models import StrictModel
 
 MAX_CHAIN_DEGREE = 32
 MAX_BASIS_SIZE = 64
-MAX_MATRIX_CELLS = 4096
+# Canonical values may retain the larger homology input envelope. Operations
+# that construct or expand complexes keep the smaller owner-local limit.
+MAX_OPERATION_MATRIX_CELLS = 4096
+MAX_MATRIX_CELLS = 16384
 # Derived tensor-product work bounds: each tensor group dimension and the
 # total tensor cell count stay within these conservative limits so no
 # accepted request can allocate an unbounded dense intermediate.
@@ -521,6 +524,7 @@ __all__ = [
     "MAX_BASIS_SIZE",
     "MAX_CHAIN_DEGREE",
     "MAX_MATRIX_CELLS",
+    "MAX_OPERATION_MATRIX_CELLS",
     "MAX_TENSOR_COEFFICIENT_DIGITS",
     "MAX_TENSOR_GROUP_DIMENSION",
     "MAX_TENSOR_TOTAL_CELLS",

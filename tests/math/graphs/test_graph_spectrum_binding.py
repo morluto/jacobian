@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.spectra._models import (
+    GraphCharacteristicPolynomialRequest,
     GraphSpectrumRequest,
     GraphSpectrumResult,
 )
@@ -182,7 +183,9 @@ def test_spectrum_reconstructs_the_characteristic_polynomial() -> None:
     path = _graph(4, ((0, 1), (1, 2), (2, 3)))
     request = GraphSpectrumRequest(graph=path)
     spectrum = compute_adjacency_spectrum(request)
-    charpoly_result = compute_adjacency_characteristic_polynomial(request)
+    charpoly_result = compute_adjacency_characteristic_polynomial(
+        GraphCharacteristicPolynomialRequest(graph=path)
+    )
     expected = Poly(
         rational_polynomial_to_sympy(charpoly_result.polynomial).as_expr(), x
     )

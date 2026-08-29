@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -23,6 +24,7 @@ from jacobian.math.polynomials._models import (
     _MAX_GROEBNER_EXPONENT,
     _MAX_INVARIANT_TERMS,
     _MAX_SQUARE_FREE_EXPONENT,
+    _MAX_UNIVARIATE_INVARIANT_DEGREE_SUM,
     MAX_GROEBNER_GENERATORS,
     PolynomialBezoutIdentity,
     PolynomialDiscriminantResult,
@@ -246,15 +248,33 @@ def _admit_resultant(
         raise _validation_error("polynomials must use the same ordered variables")
     if elimination_variable not in left.variables:
         raise _validation_error("elimination variable must belong to the declared ring")
+    univariate = len(left.variables) == 1
+    maximum_exponent = (
+        _MAX_UNIVARIATE_INVARIANT_DEGREE_SUM
+        if univariate
+        else _MAX_ELIMINATION_DEGREE_SUM
+    )
     for polynomial in (left, right):
         require_polynomial_budget(
             polynomial,
             maximum_terms=_MAX_INVARIANT_TERMS,
-            maximum_exponent=_MAX_ELIMINATION_DEGREE_SUM,
+            maximum_exponent=maximum_exponent,
         )
     index = left.variables.index(elimination_variable)
-    if _degree(left, index) + _degree(right, index) > _MAX_ELIMINATION_DEGREE_SUM:
+    degree_sum = _degree(left, index) + _degree(right, index)
+    degree_limit = (
+        _MAX_UNIVARIATE_INVARIANT_DEGREE_SUM
+        if univariate
+        else _MAX_ELIMINATION_DEGREE_SUM
+    )
+    if degree_sum > degree_limit:
         raise _validation_error("Sylvester degree exceeds the resultant budget")
+    if (
+        univariate
+        and _resultant_component_digit_bound(left, right)
+        > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise _validation_error("resultant scalar exceeds the canonical digit budget")
 
 
 def _admit_discriminant(polynomial: RationalPolynomial, variable: str) -> None:
@@ -262,16 +282,74 @@ def _admit_discriminant(polynomial: RationalPolynomial, variable: str) -> None:
         raise _validation_error(
             "discriminant variable must belong to the declared ring"
         )
+    univariate = len(polynomial.variables) == 1
+    maximum_exponent = (
+        _MAX_UNIVARIATE_INVARIANT_DEGREE_SUM
+        if univariate
+        else _MAX_SQUARE_FREE_EXPONENT
+    )
     require_polynomial_budget(
         polynomial,
         maximum_terms=_MAX_INVARIANT_TERMS,
-        maximum_exponent=_MAX_SQUARE_FREE_EXPONENT,
+        maximum_exponent=maximum_exponent,
     )
-    if (
+    if not univariate and (
         _degree(polynomial, polynomial.variables.index(variable))
         > _MAX_DISCRIMINANT_DEGREE
     ):
         raise _validation_error("main-variable degree exceeds the discriminant budget")
+    if (
+        univariate
+        and _discriminant_component_digit_bound(polynomial)
+        > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise _validation_error(
+            "discriminant scalar exceeds the canonical digit budget"
+        )
+
+
+def _coefficient_bounds(polynomial: RationalPolynomial) -> tuple[int, int]:
+    terms = polynomial.polynomial.terms
+    denominator_digits = sum(len(term.coefficient.den) for term in terms)
+    cleared_height_digits = max(
+        (
+            len(term.coefficient.num.lstrip("-"))
+            + denominator_digits
+            - len(term.coefficient.den)
+            for term in terms
+        ),
+        default=1,
+    )
+    return denominator_digits, cleared_height_digits
+
+
+def _resultant_component_digit_bound(
+    left: RationalPolynomial, right: RationalPolynomial
+) -> int:
+    left_degree = _degree(left, 0)
+    right_degree = _degree(right, 0)
+    left_denominator, left_height = _coefficient_bounds(left)
+    right_denominator, right_height = _coefficient_bounds(right)
+    left_norm_digits = left_height + len(str(len(left.polynomial.terms) or 1))
+    right_norm_digits = right_height + len(str(len(right.polynomial.terms) or 1))
+    numerator_digits = right_degree * left_norm_digits + left_degree * right_norm_digits
+    denominator_digits = (
+        right_degree * left_denominator + left_degree * right_denominator
+    )
+    return max(1, numerator_digits, denominator_digits)
+
+
+def _discriminant_component_digit_bound(polynomial: RationalPolynomial) -> int:
+    degree = _degree(polynomial, 0)
+    denominator_digits, height_digits = _coefficient_bounds(polynomial)
+    derivative_growth_digits = len(str(max(1, degree)))
+    numerator_digits = max(1, 2 * degree - 1) * (
+        height_digits
+        + derivative_growth_digits
+        + len(str(len(polynomial.polynomial.terms) or 1))
+    )
+    denominator_result_digits = max(0, 2 * degree - 2) * denominator_digits
+    return max(1, numerator_digits, denominator_result_digits)
 
 
 def _admit_square_free(polynomial: RationalPolynomial) -> None:
@@ -356,6 +434,21 @@ def _invariant_value(
     )
 
 
+def _flint_univariate(polynomial: RationalPolynomial) -> Any:
+    from flint import fmpq, fmpq_poly
+
+    degree = _degree(polynomial, 0)
+    coefficients = [fmpq(0)] * (degree + 1)
+    for term in polynomial.polynomial.terms:
+        numerator, denominator = term.coefficient.as_integer_ratio()
+        coefficients[term.exponents[0]] = fmpq(numerator, denominator)
+    return fmpq_poly(coefficients)
+
+
+def _canonical_rational_from_flint(value: Any) -> CanonicalRational:
+    return CanonicalRational.from_integer_ratio(int(value.p), int(value.q))
+
+
 def polynomial_gcd(
     left: RationalPolynomial, right: RationalPolynomial
 ) -> PolynomialGcdResult:
@@ -384,6 +477,16 @@ def polynomial_resultant(
 
     _run_admission(lambda: _admit_resultant(left, right, elimination_variable))
     variables = left.variables
+    if len(variables) == 1:
+        left_flint = _flint_univariate(left)
+        right_flint = _flint_univariate(right)
+        value = left_flint.resultant(right_flint)
+        return PolynomialResultantResult(
+            elimination_variable=elimination_variable,
+            resultant=PolynomialScalarValue(
+                value=_canonical_rational_from_flint(value)
+            ),
+        )
     elimination_index = variables.index(elimination_variable)
     generator = symbols_for_variables(variables)[elimination_index]
     value = resultant(
@@ -407,6 +510,14 @@ def polynomial_discriminant(
 
     _run_admission(lambda: _admit_discriminant(polynomial, variable))
     variables = polynomial.variables
+    if len(variables) == 1:
+        value = _flint_univariate(polynomial).discriminant()
+        return PolynomialDiscriminantResult(
+            variable=variable,
+            discriminant=PolynomialScalarValue(
+                value=_canonical_rational_from_flint(value)
+            ),
+        )
     variable_index = variables.index(variable)
     generator = symbols_for_variables(variables)[variable_index]
     value = discriminant(rational_polynomial_to_sympy(polynomial), generator)

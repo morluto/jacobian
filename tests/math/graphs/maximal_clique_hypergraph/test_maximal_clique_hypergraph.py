@@ -2,33 +2,48 @@ from __future__ import annotations
 
 from itertools import combinations
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MinimumTransversalRequest,
+)
+from jacobian.math.graphs.maximal_clique_hypergraph._models import (
+    MaximalCliqueHypergraphRequest,
+    MaximalCliqueHypergraphResult,
+)
 from jacobian.math.graphs.maximal_clique_hypergraph.operations import (
     construct_maximal_clique_hypergraph,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _graph(vertices, edges):
+def _graph(vertices: list[str], edges: list[tuple[str, str]]) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(
         vertices=tuple(vertices),
         edges=tuple((a, b) for a, b in edges),
     )
 
 
-def _clique_members(result):
+def _clique_members(
+    result: MaximalCliqueHypergraphResult,
+) -> set[frozenset[str]]:
     """Return the set of frozenset clique member sets."""
     return {frozenset(members) for _, members in result.hypergraph.edges}
 
 
-def _independent_maximal_cliques(graph):
+def _independent_maximal_cliques(
+    graph: SimpleUndirectedGraph,
+) -> list[frozenset[str]]:
     """Independent oracle: enumerate all subsets, find maximal cliques."""
     vertices = list(graph.vertices)
-    adj = {v: set() for v in vertices}
+    adj: dict[str, set[str]] = {v: set() for v in vertices}
     for a, b in graph.edges:
         adj[a].add(b)
         adj[b].add(a)
 
-    all_cliques = []
+    all_cliques: list[frozenset[str]] = []
     for size in range(2, len(vertices) + 1):
         for subset in combinations(vertices, size):
             s = set(subset)
@@ -147,15 +162,18 @@ def test_vertex_preservation() -> None:
 
 
 def test_exhaustive_small_comparison() -> None:
-    """Compare against independent oracle for small graphs."""
-    g = _graph(
-        ["a", "b", "c", "d"],
-        [("a", "b"), ("a", "c"), ("b", "c"), ("b", "d"), ("c", "d"), ("a", "d")],
-    )
-    result = construct_maximal_clique_hypergraph(g)
-    expected = _independent_maximal_cliques(g)
-    actual = _clique_members(result)
-    assert actual == set(expected)
+    """Compare every graph on four labelled vertices with a subset oracle."""
+    vertices = ["a", "b", "c", "d"]
+    candidate_edges = list(combinations(vertices, 2))
+    for edge_mask in range(1 << len(candidate_edges)):
+        edges = [
+            edge
+            for index, edge in enumerate(candidate_edges)
+            if edge_mask & (1 << index)
+        ]
+        graph = _graph(vertices, edges)
+        result = construct_maximal_clique_hypergraph(graph)
+        assert _clique_members(result) == set(_independent_maximal_cliques(graph))
 
 
 def test_source_retained() -> None:
@@ -163,3 +181,92 @@ def test_source_retained() -> None:
     g = _graph(["a", "b"], [("a", "b")])
     result = construct_maximal_clique_hypergraph(g)
     assert result.graph == g
+
+
+def test_edge_ids_follow_source_order_deterministically() -> None:
+    graph = _graph(
+        ["d", "a", "c", "b"],
+        [("a", "d"), ("b", "c")],
+    )
+    first = construct_maximal_clique_hypergraph(graph)
+    second = construct_maximal_clique_hypergraph(graph)
+    assert first == second
+    assert first.hypergraph.edges == (
+        ("clique_0", ("a", "d")),
+        ("clique_1", ("b", "c")),
+    )
+
+
+def test_coherent_relabelling_preserves_clique_id_positions() -> None:
+    original = _graph(
+        ["a", "b", "c", "d"],
+        [("a", "b"), ("a", "c"), ("b", "c"), ("c", "d")],
+    )
+    relabelled = _graph(
+        ["w", "x", "y", "z"],
+        [("w", "x"), ("w", "y"), ("x", "y"), ("y", "z")],
+    )
+    original_result = construct_maximal_clique_hypergraph(original)
+    relabelled_result = construct_maximal_clique_hypergraph(relabelled)
+    assert tuple(edge_id for edge_id, _ in original_result.hypergraph.edges) == tuple(
+        edge_id for edge_id, _ in relabelled_result.hypergraph.edges
+    )
+    assert tuple(len(members) for _, members in original_result.hypergraph.edges) == (
+        3,
+        2,
+    )
+    assert tuple(len(members) for _, members in relabelled_result.hypergraph.edges) == (
+        3,
+        2,
+    )
+
+
+def test_rejects_graph_labels_outside_hypergraph_carrier() -> None:
+    graph = _graph(["x" * 65], [])
+    with pytest.raises(ValidationError, match="64 characters"):
+        MaximalCliqueHypergraphRequest(graph=graph)
+    with pytest.raises(ValidationError, match="64 characters"):
+        construct_maximal_clique_hypergraph(graph)
+
+
+def test_rejects_complete_family_above_hypergraph_incidence_bound() -> None:
+    parts = [[f"{part}:{offset}" for offset in range(3)] for part in range(9)]
+    vertices = [vertex for part in parts for vertex in part]
+    edges: list[tuple[str, str]] = [
+        (left, right) if left < right else (right, left)
+        for left_part, right_part in combinations(parts, 2)
+        for left in left_part
+        for right in right_part
+    ]
+    graph = _graph(vertices, edges)
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="36,000-incidence hypergraph bound",
+    ):
+        construct_maximal_clique_hypergraph(graph)
+
+
+def test_rejects_complete_family_above_hypergraph_edge_bound() -> None:
+    left = [f"left:{index}" for index in range(120)]
+    right = [f"right:{index}" for index in range(101)]
+    graph = _graph(
+        [*left, *right],
+        [(left_vertex, right_vertex) for left_vertex in left for right_vertex in right],
+    )
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="12,000-edge hypergraph bound",
+    ):
+        construct_maximal_clique_hypergraph(graph)
+
+
+def test_hypergraph_serializes_unchanged_into_transversal_consumer() -> None:
+    graph = _graph(
+        ["0", "1", "2", "3"],
+        [("0", "1"), ("0", "2"), ("1", "2"), ("2", "3")],
+    )
+    result = construct_maximal_clique_hypergraph(graph)
+    consumer = MinimumTransversalRequest.model_validate(
+        {"hypergraph": result.hypergraph.model_dump(mode="json")}
+    )
+    assert consumer.hypergraph == result.hypergraph

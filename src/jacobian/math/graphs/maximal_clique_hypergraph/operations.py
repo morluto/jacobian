@@ -1,11 +1,20 @@
-"""Maximal-clique hypergraph constructor using Bron-Kerbosch with pivoting."""
+"""Exact maximal-clique hypergraph construction."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+import networkx as nx
+
+from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGES,
+    MAX_TOTAL_INCIDENCES,
     FiniteHypergraph,
 )
 from jacobian.math.graphs.maximal_clique_hypergraph._models import (
+    MaximalCliqueHypergraphRequest,
     MaximalCliqueHypergraphResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -13,69 +22,96 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 __all__ = ["construct_maximal_clique_hypergraph"]
 
 
+@dataclass(frozen=True)
+class _CliqueEnumerationPlan:
+    edges: tuple[tuple[str, tuple[str, ...]], ...]
+    incidence_count: int
+    result_wire_bytes: int
+
+
+def _reject(code: str, message: str) -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("graph",), code=code, message=message
+    )
+
+
+def _as_networkx_graph(graph: SimpleUndirectedGraph) -> nx.Graph[str]:
+    backend: nx.Graph[str] = nx.Graph()
+    backend.add_nodes_from(graph.vertices)
+    backend.add_edges_from(graph.edges)
+    return backend
+
+
+def _enumeration_plan(graph: SimpleUndirectedGraph) -> _CliqueEnumerationPlan:
+    """Enumerate once while enforcing the complete-family result ledger."""
+
+    # Reuse the request contract for native callers as well as the MCP adapter.
+    MaximalCliqueHypergraphRequest(graph=graph)
+    source_position = {vertex: index for index, vertex in enumerate(graph.vertices)}
+    clique_members: list[tuple[str, ...]] = []
+    incidence_count = 0
+
+    # NetworkX 3.6 find_cliques is the maintained iterative Bron--Kerbosch /
+    # Tomita kernel. It yields every maximal clique once, in unspecified order.
+    for clique in nx.find_cliques(_as_networkx_graph(graph)):
+        if len(clique) < 2:
+            continue
+        members = tuple(sorted(clique, key=source_position.__getitem__))
+        clique_members.append(members)
+        incidence_count += len(members)
+        if len(clique_members) > MAX_EDGES:
+            raise _reject(
+                "graph.maximal_clique_hypergraph.edge_bound",
+                "the complete maximal-clique family exceeds the "
+                f"{MAX_EDGES:,}-edge hypergraph bound",
+            )
+        if incidence_count > MAX_TOTAL_INCIDENCES:
+            raise _reject(
+                "graph.maximal_clique_hypergraph.incidence_bound",
+                "the complete maximal-clique family exceeds the "
+                f"{MAX_TOTAL_INCIDENCES:,}-incidence hypergraph bound",
+            )
+
+    clique_members.sort(key=lambda members: tuple(source_position[v] for v in members))
+    edges = tuple(
+        (f"clique_{index}", members) for index, members in enumerate(clique_members)
+    )
+    result_payload = {
+        "graph": graph.model_dump(mode="json"),
+        "hypergraph": {
+            "vertices": list(graph.vertices),
+            "edges": [[edge_id, list(members)] for edge_id, members in edges],
+        },
+        "clique_count": len(edges),
+    }
+    result_wire_bytes = len(encode_strict_json(result_payload))
+    output_limit = CanonicalLimits().max_output_bytes
+    if result_wire_bytes > output_limit:
+        raise _reject(
+            "graph.maximal_clique_hypergraph.output_bound",
+            "the source-bound maximal-clique hypergraph result exceeds the "
+            f"{output_limit}-byte canonical output bound",
+        )
+    return _CliqueEnumerationPlan(
+        edges=edges,
+        incidence_count=incidence_count,
+        result_wire_bytes=result_wire_bytes,
+    )
+
+
 def construct_maximal_clique_hypergraph(
     graph: SimpleUndirectedGraph,
 ) -> MaximalCliqueHypergraphResult:
-    """Construct the maximal-clique hypergraph of a simple graph.
+    """Return every nontrivial inclusion-maximal clique as one hyperedge."""
 
-    The hypergraph has the same vertices as the graph. Each hyperedge is
-    one inclusion-maximal complete vertex set of cardinality at least two
-    (nontrivial clique). Isolated vertices induce no singleton edge.
-    """
-    vertices = list(graph.vertices)
-    adjacency = _build_adjacency(graph)
-    cliques = _find_maximal_cliques(vertices, adjacency)
-    nontrivial = [c for c in cliques if len(c) >= 2]
-
-    hyper_vertices = tuple(vertices)
-    hyper_edges = []
-    for i, clique in enumerate(nontrivial):
-        edge_id = f"clique_{i}"
-        hyper_edges.append((edge_id, tuple(sorted(clique))))
-
-    hypergraph = FiniteHypergraph(
-        vertices=hyper_vertices,
-        edges=tuple(hyper_edges),
+    if not isinstance(graph, SimpleUndirectedGraph):
+        raise TypeError(
+            "construct_maximal_clique_hypergraph expects a SimpleUndirectedGraph"
+        )
+    plan = _enumeration_plan(graph)
+    hypergraph = FiniteHypergraph(vertices=graph.vertices, edges=plan.edges)
+    return MaximalCliqueHypergraphResult(
+        graph=graph,
+        hypergraph=hypergraph,
+        clique_count=len(plan.edges),
     )
-    return MaximalCliqueHypergraphResult(graph=graph, hypergraph=hypergraph)
-
-
-def _build_adjacency(graph: SimpleUndirectedGraph) -> dict[str, set[str]]:
-    adj: dict[str, set[str]] = {v: set() for v in graph.vertices}
-    for a, b in graph.edges:
-        adj[a].add(b)
-        adj[b].add(a)
-    return adj
-
-
-def _find_maximal_cliques(
-    vertices: list[str], adjacency: dict[str, set[str]]
-) -> list[list[str]]:
-    """Find all maximal cliques using Bron-Kerbosch with pivoting."""
-    cliques: list[list[str]] = []
-    _bron_kerbosch_pivot(set(), set(vertices), set(), adjacency, cliques)
-    return cliques
-
-
-def _bron_kerbosch_pivot(
-    r: set[str],
-    p: set[str],
-    x: set[str],
-    adjacency: dict[str, set[str]],
-    cliques: list[list[str]],
-) -> None:
-    if not p and not x:
-        cliques.append(sorted(r))
-        return
-    pivot = next(iter(p | x)) if (p | x) else None
-    if pivot is not None:
-        for v in sorted(p - adjacency[pivot]):
-            _bron_kerbosch_pivot(
-                r | {v},
-                p & adjacency[v],
-                x & adjacency[v],
-                adjacency,
-                cliques,
-            )
-            p = p - {v}
-            x = x | {v}

@@ -53,8 +53,8 @@ TOOLS: MathTools = (
             "Construct a source-bound FiniteHypergraph whose vertices are "
             "the graph's vertices and whose hyperedges are the inclusion-"
             "maximal complete vertex sets of cardinality at least two "
-            "(nontrivial maximal cliques). Uses Bron-Kerbosch with pivoting "
-            "for exact enumeration."
+            "(nontrivial maximal cliques). The complete family is returned "
+            "in deterministic source-vertex order."
         ),
         MaximalCliqueHypergraphRequest,
         MaximalCliqueHypergraphResult,

@@ -113,24 +113,24 @@ class PrimeTupleAdmissibilityResult(StrictModel):
 
 
 def compute_local_admissibility(
-    request: PrimeTupleAdmissibilityRequest,
+    source: PrimeAffineTuple,
 ) -> PrimeTupleAdmissibilityResult:
     """Decide whether every prime-affine local factor has a valid residue."""
 
-    _run_admission(lambda: _admit_local_admissibility(request.source))
-    cutoff = request.source.form_count
+    _run_admission(lambda: _admit_local_admissibility(source))
+    cutoff = source.form_count
     checked_primes = primes_through(cutoff)
-    rows = tuple(local_summary(request.source, prime) for prime in checked_primes)
+    rows = tuple(local_summary(source, prime) for prime in checked_primes)
     obstructing = tuple(row.prime for row in rows if row.valid_count == 0)
     return PrimeTupleAdmissibilityResult(
-        source=request.source,
+        source=source,
         cutoff=cutoff,
         checked_primes=checked_primes,
         local_rows=rows,
         status="LOCALLY_OBSTRUCTED" if obstructing else "LOCALLY_ADMISSIBLE",
         least_obstructing_prime=obstructing[0] if obstructing else None,
         large_prime_lower_bound=cutoff + 1,
-        maximum_large_prime_bad_residues=request.source.form_count,
+        maximum_large_prime_bad_residues=source.form_count,
     )
 
 

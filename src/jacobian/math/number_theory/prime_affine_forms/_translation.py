@@ -28,11 +28,22 @@ class PrimeAffineTranslationRequest(StrictModel):
     shift: IntervalEndpointInteger
 
 
-def _admit_translation(request: PrimeAffineTranslationRequest) -> int:
-    require_bounded_affine_endpoints(request.source, request.shift, label="translation")
-    shift = parse_canonical_integer(request.shift)
+def parse_translation_shift(source: PrimeAffineTuple, shift: str) -> int:
+    """Preflight a wire shift before constructing its unbounded Python integer."""
+
+    _run_admission(
+        lambda: require_bounded_affine_endpoints(
+            source, shift, label="translation"
+        )
+    )
+    return parse_canonical_integer(shift)
+
+
+def _admit_translation(source: PrimeAffineTuple, shift: int) -> None:
+    shift_text = str(shift)
+    require_bounded_affine_endpoints(source, shift_text, label="translation")
     aggregate_digits = 0
-    for form in request.source.forms:
+    for form in source.forms:
         translated_constant = form.evaluate(shift)
         if _digits(translated_constant) > MAX_AFFINE_COMPONENT_DIGITS:
             raise _validation_error(
@@ -44,7 +55,6 @@ def _admit_translation(request: PrimeAffineTranslationRequest) -> int:
             "translated affine tuple exceeds the aggregate coefficient-digit "
             f"bound {MAX_AFFINE_AGGREGATE_DIGITS}"
         )
-    return shift
 
 
 class PrimeAffineTranslationResult(StrictModel):
@@ -54,24 +64,29 @@ class PrimeAffineTranslationResult(StrictModel):
 
     @classmethod
     def _from_kernel(
-        cls, request: PrimeAffineTranslationRequest, *, translated: PrimeAffineTuple
+        cls,
+        source: PrimeAffineTuple,
+        shift: int,
+        *,
+        translated: PrimeAffineTuple,
     ) -> PrimeAffineTranslationResult:
         """Build after the admitted translation kernel established the tuple."""
 
         return cls.model_construct(
-            source=request.source, shift=request.shift, translated=translated
+            source=source, shift=str(shift), translated=translated
         )
 
 
 def compute_translation(
-    request: PrimeAffineTranslationRequest,
+    source: PrimeAffineTuple, shift: int,
 ) -> PrimeAffineTranslationResult:
     """Apply one admitted translation and retain its exact canonical tuple."""
 
-    shift = _run_admission(lambda: _admit_translation(request))
+    _run_admission(lambda: _admit_translation(source, shift))
     return PrimeAffineTranslationResult._from_kernel(
-        request,
-        translated=translated_tuple(request.source, shift),
+        source,
+        shift,
+        translated=translated_tuple(source, shift),
     )
 
 
@@ -79,4 +94,5 @@ __all__ = [
     "PrimeAffineTranslationRequest",
     "PrimeAffineTranslationResult",
     "compute_translation",
+    "parse_translation_shift",
 ]

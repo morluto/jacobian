@@ -10,7 +10,6 @@ from jacobian.math.number_theory.affine_forms.values import (
     MAX_FORM_ID_LENGTH,
 )
 from jacobian.math.number_theory.prime_affine_forms._admissibility import (
-    PrimeTupleAdmissibilityRequest,
     PrimeTupleAdmissibilityResult,
     compute_local_admissibility,
 )
@@ -63,7 +62,6 @@ from jacobian.math.number_theory.prime_affine_forms._residue_wheel import (
     PrimeTupleWheelResidueRow,
 )
 from jacobian.math.number_theory.prime_affine_forms._translation import (
-    PrimeAffineTranslationRequest,
     PrimeAffineTranslationResult,
     compute_translation,
 )
@@ -91,7 +89,7 @@ def local_factors(
 def local_admissibility(source: PrimeAffineTuple) -> PrimeTupleAdmissibilityResult:
     """Decide local admissibility by checking exactly every prime at most k."""
 
-    return compute_local_admissibility(PrimeTupleAdmissibilityRequest(source=source))
+    return compute_local_admissibility(source)
 
 
 def _admit_residue_wheel(
@@ -350,11 +348,7 @@ def translate_tuple(
 ) -> PrimeAffineTranslationResult:
     """Apply the substitution n -> n+shift to every labelled form."""
 
-    return compute_translation(
-        PrimeAffineTranslationRequest(
-            source=source, shift=format_canonical_integer(shift)
-        )
-    )
+    return compute_translation(source, shift)
 
 
 __all__ = [

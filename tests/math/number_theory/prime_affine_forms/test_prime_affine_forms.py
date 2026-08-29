@@ -18,7 +18,6 @@ from jacobian.math.number_theory.prime_affine_forms import (
 )
 from jacobian.math.number_theory.prime_affine_forms._admissibility import (
     PrimeTupleAdmissibilityRequest,
-    compute_local_admissibility,
 )
 from jacobian.math.number_theory.prime_affine_forms._interval import (
     PrimeAffineIntervalCountRequest,
@@ -50,14 +49,15 @@ from jacobian.math.number_theory.prime_affine_forms._residue_wheel import (
 from jacobian.math.number_theory.prime_affine_forms._tools import (
     TOOLS,
     compute_interval_residue_profile,
+    compute_local_admissibility,
     compute_residue_wheel,
     compute_residue_wheel_enumeration,
+    compute_translation,
     compute_wheel_membership,
 )
 from jacobian.math.number_theory.prime_affine_forms._translation import (
     PrimeAffineTranslationRequest,
     PrimeAffineTranslationResult,
-    compute_translation,
 )
 from jacobian.math.number_theory.prime_affine_forms.values import (
     MAX_AFFINE_AGGREGATE_DIGITS,

@@ -10,7 +10,6 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.prime_affine_forms._admissibility import (
     PrimeTupleAdmissibilityRequest,
     PrimeTupleAdmissibilityResult,
-    compute_local_admissibility,
 )
 from jacobian.math.number_theory.prime_affine_forms._interval import (
     PrimeAffineIntervalCountRequest,
@@ -41,7 +40,7 @@ from jacobian.math.number_theory.prime_affine_forms._residue_wheel import (
 from jacobian.math.number_theory.prime_affine_forms._translation import (
     PrimeAffineTranslationRequest,
     PrimeAffineTranslationResult,
-    compute_translation,
+    parse_translation_shift,
 )
 from jacobian.math.number_theory.prime_affine_forms.operations import (
     enumerate_residue_wheel as native_enumerate_residue_wheel,
@@ -50,11 +49,31 @@ from jacobian.math.number_theory.prime_affine_forms.operations import (
     interval_residue_profile as native_interval_residue_profile,
 )
 from jacobian.math.number_theory.prime_affine_forms.operations import (
+    local_admissibility as native_local_admissibility,
+)
+from jacobian.math.number_theory.prime_affine_forms.operations import (
     residue_wheel as native_residue_wheel,
+)
+from jacobian.math.number_theory.prime_affine_forms.operations import (
+    translate_tuple as native_translate_tuple,
 )
 from jacobian.math.number_theory.prime_affine_forms.operations import (
     wheel_membership as native_wheel_membership,
 )
+
+
+def compute_local_admissibility(
+    request: PrimeTupleAdmissibilityRequest,
+) -> PrimeTupleAdmissibilityResult:
+    return native_local_admissibility(request.source)
+
+
+def compute_translation(
+    request: PrimeAffineTranslationRequest,
+) -> PrimeAffineTranslationResult:
+    return native_translate_tuple(
+        request.source, parse_translation_shift(request.source, request.shift)
+    )
 
 
 def compute_residue_wheel(

@@ -22,6 +22,7 @@ class AdoptionExpectation(StrEnum):
     """Whether the prompt should use or abstain from Jacobian MCP tools."""
 
     USE = "USE"
+    DISCOVER = "DISCOVER"
     ABSTAIN = "ABSTAIN"
 
 
@@ -30,6 +31,16 @@ class ToolMode(StrEnum):
 
     DIRECT = "direct"
     UNIFIED_EXEC = "unified_exec"
+
+
+class SurfaceArm(StrEnum):
+    """The exact Jacobian tools made visible to one fresh evaluated client."""
+
+    FULL = "full"
+    LEGACY = "legacy"
+    DIRECT = "direct"
+    DIRECT_FIND = "direct_find"
+    FIND_ONLY = "find_only"
 
 
 class VisibilityOutputOutcome(BaseModel):
@@ -56,6 +67,10 @@ class VisibilityCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     case_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    category: str | None = Field(
+        default=None,
+        pattern=r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$",
+    )
     cue_level: CueLevel
     prompt: str = Field(min_length=1)
     expectation: AdoptionExpectation = AdoptionExpectation.USE
@@ -80,12 +95,16 @@ class VisibilityCase(BaseModel):
             set(self.expected_operation_ids) | set(self.diagnostic_operation_ids)
         ):
             raise ValueError("output-outcome operation IDs must be tracked")
-        if (
-            self.expectation is AdoptionExpectation.USE
-            and not self.expected_operation_ids
-            and not self.acceptable_output_outcomes
+        if self.expectation is AdoptionExpectation.USE and (
+            not self.expected_operation_ids and not self.acceptable_output_outcomes
         ):
             raise ValueError("USE cases require an operation or output outcome")
+        if self.expectation is AdoptionExpectation.DISCOVER and (
+            not self.expected_operation_ids or self.acceptable_output_outcomes
+        ):
+            raise ValueError(
+                "DISCOVER cases require operations and cannot declare execution outcomes"
+            )
         if self.expectation is AdoptionExpectation.ABSTAIN and (
             self.expected_operation_ids
             or self.diagnostic_operation_ids
@@ -100,7 +119,7 @@ class VisibilitySuite(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["1", "2"]
+    schema_version: Literal["1", "2", "3"]
     suite_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     cases: tuple[VisibilityCase, ...] = Field(min_length=1)
 
@@ -113,6 +132,10 @@ class VisibilitySuite(BaseModel):
             case.expectation is not AdoptionExpectation.USE for case in self.cases
         ):
             raise ValueError("schema version 1 supports only USE cases")
+        if self.schema_version == "3" and any(
+            case.category is None for case in self.cases
+        ):
+            raise ValueError("schema version 3 requires a category for every case")
         return self
 
 
@@ -124,6 +147,7 @@ def load_suite(path: Path) -> VisibilitySuite:
 __all__ = [
     "AdoptionExpectation",
     "CueLevel",
+    "SurfaceArm",
     "ToolMode",
     "VisibilityCase",
     "VisibilityOutputOutcome",

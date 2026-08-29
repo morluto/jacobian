@@ -35,6 +35,9 @@ from benchmarks.tooling.codex_visibility.contracts import (
     CueLevel as CueLevel,
 )
 from benchmarks.tooling.codex_visibility.contracts import (
+    SurfaceArm as SurfaceArm,
+)
+from benchmarks.tooling.codex_visibility.contracts import (
     ToolMode as ToolMode,
 )
 from benchmarks.tooling.codex_visibility.contracts import (
@@ -52,9 +55,9 @@ from benchmarks.tooling.codex_visibility.contracts import (
 from jacobian.canonical import canonicalize_json
 from mcp import Client
 
-_ROOT = Path(__file__).resolve().parents[2]
+_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_CASES = _ROOT / "benchmarks/config/codex-visibility-v2.json"
-_REQUIRED_TOOLS = frozenset({"math.find", "math.run"})
+_FIXED_TOOLS = frozenset({"math.find", "math.run"})
 _CODEX_ENVIRONMENT = (
     "HOME",
     "PATH",
@@ -129,7 +132,10 @@ def _output_outcome_matches(
     observed: dict[str, object] = {}
     for path in outcome.required_output_fields:
         present, value = _output_field(invocation.get("output"), path)
-        if not present or not _substantive_output_value(value):
+        if not present or (
+            path not in outcome.expected_output_values
+            and not _substantive_output_value(value)
+        ):
             return False
         observed[path] = value
     return all(
@@ -184,6 +190,20 @@ def classify_visibility(
     mcp_calls = [
         value for value in telemetry.get("mcp_calls", []) if isinstance(value, str)
     ]
+    math_run_call_count = mcp_calls.count("math.run")
+    direct_operation_call_count = telemetry.get("direct_operation_call_count")
+    if not isinstance(direct_operation_call_count, int) or isinstance(
+        direct_operation_call_count, bool
+    ):
+        direct_operation_call_count = sum(
+            tool_name not in _FIXED_TOOLS for tool_name in mcp_calls
+        )
+    execution_free = (
+        not attempted
+        and not completed
+        and not math_run_call_count
+        and not direct_operation_call_count
+    )
     discovery_call_count = int(telemetry.get("operation_describe_index_calls", 0))
     inspection_call_count = int(telemetry.get("operation_describe_exact_calls", 0))
     resource_read_count = int(telemetry.get("mcp_resource_read_attempts", 0))
@@ -196,12 +216,19 @@ def classify_visibility(
         "discovery_free_invocation": bool(expected_attempted)
         and not discovery_call_count
         and not inspection_call_count,
-        "abstained": not mcp_calls and not resource_read_count,
+        "execution_free_discovery": execution_free,
+        "abstained": (
+            not mcp_calls
+            and not resource_read_count
+            and not attempted
+            and not completed
+        ),
     }
     expected_observed = {
         "described": sorted(expected & described),
         "attempted": sorted(expected & attempted),
         "completed": sorted(expected & completed),
+        "missing_described": sorted(expected - described),
         "missing_completed": sorted(expected - completed),
     }
     diagnostic_observed = {
@@ -212,6 +239,10 @@ def classify_visibility(
     }
     if case.expectation is AdoptionExpectation.ABSTAIN:
         contract_satisfied = observed["abstained"]
+    elif case.expectation is AdoptionExpectation.DISCOVER:
+        contract_satisfied = (
+            not expected_observed["missing_described"] and execution_free
+        )
     else:
         contract_satisfied = not expected_observed["missing_completed"] and (
             bool(matched_outcomes) or not case.acceptable_output_outcomes
@@ -247,7 +278,8 @@ def classify_visibility(
         "uncached_input_tokens": uncached_input_tokens,
         "mcp_call_count": len(mcp_calls),
         "math_find_call_count": discovery_call_count + inspection_call_count,
-        "math_run_call_count": len(attempted_sequence),
+        "math_run_call_count": math_run_call_count,
+        "direct_operation_call_count": direct_operation_call_count,
         "mcp_resource_read_count": resource_read_count,
         "mcp_wire_bytes": telemetry.get("mcp_wire_bytes", 0),
         "mcp_model_visible_bytes": telemetry.get("mcp_model_visible_bytes", 0),
@@ -263,6 +295,7 @@ def classify_visibility(
 async def inspect_surface(
     url: str,
     timeout_seconds: float,
+    surface_arm: SurfaceArm = SurfaceArm.FULL,
 ) -> dict[str, Any]:
     """Snapshot the exact MCP surface used by a visibility run."""
 
@@ -288,7 +321,7 @@ async def inspect_surface(
             for tool in listed.tools
         ]
         tool_names = {record["name"] for record in tool_records}
-        missing = sorted(_REQUIRED_TOOLS - tool_names)
+        missing = sorted(_FIXED_TOOLS - tool_names)
         if missing:
             raise RuntimeError(f"MCP surface is missing required tools: {missing}")
         catalog_result = await client.read_resource("operation://catalog")
@@ -296,6 +329,9 @@ async def inspect_surface(
         if not isinstance(catalog_content, TextResourceContents):
             raise RuntimeError("operation catalog is not text")
         catalog = json.loads(catalog_content.text)
+        operation_ids = sorted(
+            operation["operation_id"] for operation in catalog["operations"]
+        )
         catalog_digest = _sha256_bytes(
             canonicalize_json(
                 {
@@ -305,12 +341,24 @@ async def inspect_surface(
                 }
             )
         )
+        catalog_ids = {
+            operation["operation_id"]
+            for operation in catalog["operations"]
+            if isinstance(operation, Mapping)
+            and isinstance(operation.get("operation_id"), str)
+        }
+        if tool_names - _FIXED_TOOLS != catalog_ids:
+            raise RuntimeError("direct MCP tools do not match the catalog snapshot")
+        visible_names = _visible_tool_names(tool_names, surface_arm)
+        visible_records = [
+            record for record in tool_records if record["name"] in visible_names
+        ]
         snapshot = {
             "server": server_info.model_dump(
                 mode="json", by_alias=True, exclude_none=True
             ),
             "instructions": client.instructions,
-            "tools": sorted(tool_records, key=lambda item: item["name"]),
+            "tools": sorted(visible_records, key=lambda item: item["name"]),
             "catalog": {
                 **(
                     {"catalog_version": catalog["catalog_version"]}
@@ -319,10 +367,34 @@ async def inspect_surface(
                 ),
                 "catalog_digest": catalog_digest,
                 "operation_count": len(catalog["operations"]),
+                "operation_ids": operation_ids,
                 "content_sha256": _sha256_bytes(catalog_content.text.encode("utf-8")),
+            },
+            "client_surface": {
+                "arm": surface_arm,
+                "visible_tool_count": len(visible_records),
+                "visible_direct_operation_count": len(visible_names - _FIXED_TOOLS),
+                "eager_definition_bytes": len(canonicalize_json(visible_records)),
+                "server_tool_count": len(tool_records),
+                "server_definition_bytes": len(canonicalize_json(tool_records)),
             },
         }
     return {**snapshot, "surface_digest": surface_snapshot_digest(snapshot)}
+
+
+def _visible_tool_names(
+    tool_names: set[str],
+    surface_arm: SurfaceArm,
+) -> set[str]:
+    if surface_arm is SurfaceArm.FULL:
+        return set(tool_names)
+    if surface_arm is SurfaceArm.LEGACY:
+        return set(_FIXED_TOOLS)
+    if surface_arm is SurfaceArm.DIRECT:
+        return set(tool_names - _FIXED_TOOLS)
+    if surface_arm is SurfaceArm.DIRECT_FIND:
+        return set(tool_names - {"math.run"})
+    return {"math.find"}
 
 
 def _codex_arguments(
@@ -333,7 +405,22 @@ def _codex_arguments(
     mcp_url: str,
     prompt: str,
     tool_mode: ToolMode,
+    surface_arm: SurfaceArm,
 ) -> tuple[str, ...]:
+    server_config = [
+        f"url={json.dumps(mcp_url)}",
+        f"default_tools_approval_mode={json.dumps(_MCP_TOOL_APPROVAL_MODE)}",
+    ]
+    if surface_arm is SurfaceArm.LEGACY:
+        server_config.append('enabled_tools=["math.find","math.run"]')
+    elif surface_arm is SurfaceArm.DIRECT:
+        server_config.append('disabled_tools=["math.find","math.run"]')
+    elif surface_arm is SurfaceArm.DIRECT_FIND:
+        server_config.append('disabled_tools=["math.run"]')
+    elif surface_arm is SurfaceArm.FIND_ONLY:
+        server_config.append('enabled_tools=["math.find"]')
+    if os.environ.get("JACOBIAN_MCP_BEARER_TOKEN"):
+        server_config.append('bearer_token_env_var="JACOBIAN_MCP_BEARER_TOKEN"')
     arguments = [
         "--approve-for-me",
         "exec",
@@ -351,22 +438,10 @@ def _codex_arguments(
         "-c",
         f"model_reasoning_effort={json.dumps(reasoning_effort)}",
         "-c",
-        f"mcp_servers.jacobian.url={json.dumps(mcp_url)}",
-        "-c",
-        (
-            "mcp_servers.jacobian.default_tools_approval_mode="
-            f"{json.dumps(_MCP_TOOL_APPROVAL_MODE)}"
-        ),
+        f"mcp_servers.jacobian={{{','.join(server_config)}}}",
     ]
     if tool_mode is ToolMode.UNIFIED_EXEC:
         arguments.extend(("--enable", "unified_exec"))
-    if os.environ.get("JACOBIAN_MCP_BEARER_TOKEN"):
-        arguments.extend(
-            (
-                "-c",
-                'mcp_servers.jacobian.bearer_token_env_var="JACOBIAN_MCP_BEARER_TOKEN"',
-            )
-        )
     return (*arguments, prompt)
 
 
@@ -417,13 +492,14 @@ def _normalized_skill_source(
     environment: Mapping[str, str],
 ) -> tuple[str, bool]:
     roots = (
-        ("$CODEX_HOME", Path(environment["CODEX_HOME"])),
-        ("$HOME", Path(environment["HOME"])),
-        ("$WORKSPACE", workspace),
+        ("$CODEX_HOME", Path(environment["CODEX_HOME"]).resolve()),
+        ("$HOME", Path(environment["HOME"]).resolve()),
+        ("$WORKSPACE", workspace.resolve()),
     )
     candidate = Path(source)
     if not candidate.is_absolute():
         return source, False
+    candidate = candidate.resolve()
     for label, root in roots:
         try:
             relative = candidate.relative_to(root)
@@ -527,6 +603,8 @@ def _run_case(
     mcp_url: str,
     timeout_seconds: float,
     tool_mode: ToolMode,
+    surface_arm: SurfaceArm,
+    direct_operation_ids: frozenset[str],
     environment: Mapping[str, str],
 ) -> dict[str, Any]:
     stem = f"{case.case_id}-r{repetition:02d}"
@@ -542,6 +620,7 @@ def _run_case(
             mcp_url=mcp_url,
             prompt=case.prompt,
             tool_mode=tool_mode,
+            surface_arm=surface_arm,
         ),
         cwd=workspace,
         timeout_seconds=timeout_seconds,
@@ -552,13 +631,17 @@ def _run_case(
     elapsed_seconds = round(time.monotonic() - command_start, 6)
     transcript_path.write_bytes(result.stdout)
     stderr_path.write_bytes(result.stderr)
-    telemetry = parse_agent_transcript(transcript_path)
+    telemetry = parse_agent_transcript(
+        transcript_path,
+        direct_operation_ids=direct_operation_ids,
+    )
     classification = classify_visibility(case, telemetry)
     command_completed = (
         result.status is ToolCommandStatus.EXITED and result.exit_code == 0
     )
     return {
         "case_id": case.case_id,
+        "category": case.category,
         "cue_level": case.cue_level,
         "expectation": case.expectation,
         "repetition": repetition,
@@ -602,6 +685,13 @@ def _parser() -> argparse.ArgumentParser:
         choices=tuple(ToolMode),
         default=ToolMode.DIRECT,
         help="Codex tool dispatch mode; unified_exec matches Harbor Code Mode.",
+    )
+    parser.add_argument(
+        "--surface-arm",
+        type=SurfaceArm,
+        choices=tuple(SurfaceArm),
+        default=SurfaceArm.FULL,
+        help="exact fixed/direct MCP subset visible to each fresh Codex run",
     )
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument(
@@ -724,6 +814,9 @@ def _build_summary(runs: list[dict[str, Any]]) -> dict[str, Any]:
                 for run in runs
             ),
             "mcp_calls": sum(run["classification"]["mcp_call_count"] for run in runs),
+            "direct_operation_calls": sum(
+                run["classification"]["direct_operation_call_count"] for run in runs
+            ),
             "mcp_model_visible_bytes": sum(
                 run["classification"]["mcp_model_visible_bytes"] for run in runs
             ),
@@ -768,7 +861,13 @@ def main() -> None:
     output = args.output.resolve()
     if output.exists():
         raise SystemExit(f"output directory already exists: {output}")
-    surface = asyncio.run(inspect_surface(args.mcp_url, args.timeout_seconds))
+    surface = asyncio.run(
+        inspect_surface(args.mcp_url, args.timeout_seconds, args.surface_arm)
+    )
+    visible_tool_names = {tool["name"] for tool in surface["tools"]}
+    direct_operation_ids = frozenset(
+        visible_tool_names & set(surface["catalog"]["operation_ids"])
+    )
     output.mkdir(parents=True)
     with (
         tempfile.TemporaryDirectory(prefix="jacobian-codex-visibility-") as raw,
@@ -793,6 +892,8 @@ def main() -> None:
                 mcp_url=args.mcp_url,
                 timeout_seconds=args.timeout_seconds,
                 tool_mode=args.tool_mode,
+                surface_arm=args.surface_arm,
+                direct_operation_ids=direct_operation_ids,
                 environment=environment,
             )
             for case in selected_cases
@@ -811,6 +912,14 @@ def main() -> None:
         "condition": {
             "mcp_url": args.mcp_url,
             "surface": surface,
+            "client_tool_discovery_evidence": {
+                "configured_surface_filtering": "OBSERVED",
+                "deferred_tool_search": "UNMEASURED_BY_CODEX_JSONL",
+                "exact_loaded_tool_definition_bytes": None,
+                "eager_visible_definition_bytes": surface["client_surface"][
+                    "eager_definition_bytes"
+                ],
+            },
             "evaluator": {
                 "runner_sha256": _sha256_bytes(Path(__file__).read_bytes()),
                 "telemetry_parser_sha256": _sha256_bytes(
@@ -823,6 +932,7 @@ def main() -> None:
             "model": args.model,
             "reasoning_effort": args.reasoning_effort,
             "tool_mode": args.tool_mode,
+            "surface_arm": args.surface_arm,
             "repetitions": args.repetitions,
             "repository_revision": git_head_sha(_ROOT),
         },

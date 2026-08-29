@@ -2,8 +2,9 @@
 
 Every built-in operation is a direct typed mathematical function with one
 domain owner. Declaration modules export immutable tuples of
-`MathTool` values. `math.find` reads those entries and `math.run`
-validates then executes exactly one of them.
+`MathTool` values. MCP registration derives one direct typed tool from every
+entry; `math.find` reads the same catalog for semantic discovery. The
+transitional `math.run` path validates and executes the same declarations.
 
 The canonical operation path and ownership boundaries are defined in the
 [architecture](../explanation/architecture.md). A domain function may use a

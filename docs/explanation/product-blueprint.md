@@ -1,8 +1,13 @@
 # Product blueprint
 
-Jacobian exposes stateless functions over typed mathematical values through two
-MCP verbs: find an operation and run one operation. The caller owns composition:
-decomposition, sequencing, retention of values, and stopping.
+Jacobian exposes each admitted stateless function over typed mathematical
+values as a directly callable MCP tool. Its operation ID is also its MCP tool
+name, and its owner-local request and result models are the callable schemas.
+`math.find` separately provides semantic mathematical catalog search and exact
+contract inspection. The generic `math.run` path remains temporarily available
+while direct discovery is evaluated; ordinary direct calls do not require it.
+The caller owns composition: decomposition, sequencing, retention of values,
+and stopping.
 
 The server owns typed operation contracts, strict request validation, resource
 bounds, immutable discovery, and the final MCP projection.

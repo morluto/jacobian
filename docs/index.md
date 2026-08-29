@@ -1,8 +1,10 @@
 # Jacobian documentation
 
-Jacobian is a stateless mathematical tool layer for agents: `math.find`
-discovers typed operations, `math.run` executes one bounded operation, and the
-caller composes the returned mathematical values.
+Jacobian is a stateless mathematical tool layer for agents: every admitted
+operation is a directly callable typed MCP tool, `math.find` provides semantic
+catalog search and inspection, and the caller composes returned mathematical
+values. The generic `math.run` path remains temporarily available during the
+direct-tool migration.
 
 ## Choose a path
 
@@ -45,8 +47,9 @@ caller composes the returned mathematical values.
 - [Testing strategy](reference/testing-strategy.md) — validation ownership and
   focused test lanes.
 
-The live `math.find` catalog is authoritative for available operations and their
-current schemas.
+The direct MCP tool list is derived from the admitted immutable catalog.
+`math.find` and `operation://catalog` expose searchable and bulk views of that
+same authoritative membership and its current schemas.
 
 ## Contributing
 

@@ -1,7 +1,9 @@
 # Contributing to Jacobian
 
-Jacobian is a pre-stable **math toolbox for agents**: atomic tools behind
-`math.find` / `math.run`, math-first results, and agent-owned composition.
+Jacobian is a pre-stable **math toolbox for agents**: admitted operations are
+direct typed MCP tools, `math.find` provides semantic catalog discovery,
+results are math-first, and composition is agent-owned. The generic `math.run`
+path remains isolated during the direct-tool migration.
 Contributions should preserve that product model—see
 [product-blueprint](docs/explanation/product-blueprint.md) and
 [architecture](docs/explanation/architecture.md).

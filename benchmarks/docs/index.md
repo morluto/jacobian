@@ -11,4 +11,5 @@ contract.
 - [Evaluation methods](evaluation-methods.md)
 - [Run agent observations](run-agent-evaluations.md)
 - [Run the MCP visibility evaluation](run-codex-visibility-evaluation.md)
+- [Direct MCP catalog evaluation v1 results](../evidence/direct-mcp-catalog-evaluation-v1/README.md)
 - [Internalcot visible-reasoning intervention](internalcot-visible-reasoning-intervention.md)

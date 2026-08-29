@@ -272,25 +272,27 @@ class SubsetSumTargetResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: SubsetSumTargetRequest,
+        source: IndexedIntegerSequence,
+        target: CanonicalInteger,
+        allow_empty_subset: bool,
         indices: tuple[int, ...] | None,
     ) -> Self:
         """Construct trusted output without replaying the target search."""
 
         if indices is None:
             return cls.model_construct(
-                source=request.source,
-                target=request.target,
-                allow_empty_subset=request.allow_empty_subset,
+                source=source,
+                target=target,
+                allow_empty_subset=allow_empty_subset,
                 status="NOT_ATTAINED",
                 witness=None,
                 reconstructed_sum=None,
             )
-        values = tuple(parse_canonical_integer(value) for value in request.source.items)
+        values = tuple(parse_canonical_integer(value) for value in source.items)
         return cls.model_construct(
-            source=request.source,
-            target=request.target,
-            allow_empty_subset=request.allow_empty_subset,
+            source=source,
+            target=target,
+            allow_empty_subset=allow_empty_subset,
             status="ATTAINED",
             witness=IndexSubset(indices=indices),
             reconstructed_sum=format_canonical_integer(
@@ -299,17 +301,19 @@ class SubsetSumTargetResult(StrictModel):
         )
 
 
-def solve_subset_sum_target_request(
-    request: SubsetSumTargetRequest,
+def solve_subset_sum_target(
+    source: IndexedIntegerSequence,
+    target: CanonicalInteger,
+    allow_empty_subset: bool,
 ) -> SubsetSumTargetResult:
     """Decide one admitted exact target and return its canonical witness."""
 
-    values, target = _admit_subset_sum_target(request)
+    values, target_value = _admit_subset_sum_target(source, target, allow_empty_subset)
     try:
         indices = _solve_subset_sum_target(
             values,
-            target,
-            allow_empty_subset=request.allow_empty_subset,
+            target_value,
+            allow_empty_subset=allow_empty_subset,
             maximum_transitions=MAX_SUBSET_SUM_TRANSITIONS,
             maximum_states=MAX_SUBSET_SUM_REACHABLE_STATES,
         )
@@ -332,9 +336,13 @@ def solve_subset_sum_target_request(
             ),
         ) from error
     if indices is None:
-        return SubsetSumTargetResult._from_kernel(request, None)
+        return SubsetSumTargetResult._from_kernel(
+            source, target, allow_empty_subset, None
+        )
 
-    return SubsetSumTargetResult._from_kernel(request, indices)
+    return SubsetSumTargetResult._from_kernel(
+        source, target, allow_empty_subset, indices
+    )
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -342,11 +350,25 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 def _admit_subset_sum_target(
-    request: SubsetSumTargetRequest,
+    source: IndexedIntegerSequence,
+    target: CanonicalInteger,
+    allow_empty_subset: bool,
 ) -> tuple[tuple[int, ...], int]:
     """Admit one native target query before invoking the subset-sum kernel."""
 
-    source_wire_bound = 64 + sum(len(value) + 4 for value in request.source.items)
+    if not isinstance(source, IndexedIntegerSequence):
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="additive_combinatorics.subset_sum.source_domain",
+            message="subset-sum source must be an IndexedIntegerSequence",
+        )
+    if type(target) is not str or type(allow_empty_subset) is not bool:
+        raise OperationDomainValidationError(
+            location=("target", "allow_empty_subset"),
+            code="additive_combinatorics.subset_sum.argument_domain",
+            message="subset-sum target must be canonical text and the flag a boolean",
+        )
+    source_wire_bound = 64 + sum(len(value) + 4 for value in source.items)
     if source_wire_bound > MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:
         raise OperationDomainValidationError(
             location=("source",),
@@ -356,7 +378,7 @@ def _admit_subset_sum_target(
                 f"{MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:,}-byte wire-size bound"
             ),
         )
-    for value in request.source.items:
+    for value in source.items:
         if len(value.lstrip("-")) > MAX_SUBSET_SUM_INTEGER_DIGITS:
             raise OperationDomainValidationError(
                 location=("source",),
@@ -366,6 +388,6 @@ def _admit_subset_sum_target(
                     f"{MAX_SUBSET_SUM_INTEGER_DIGITS}-digit bound"
                 ),
             )
-    values = tuple(parse_canonical_integer(value) for value in request.source.items)
-    target = parse_canonical_integer(request.target)
-    return values, target
+    values = tuple(parse_canonical_integer(value) for value in source.items)
+    target_value = parse_canonical_integer(target)
+    return values, target_value

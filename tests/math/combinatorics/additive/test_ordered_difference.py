@@ -12,7 +12,7 @@ from jacobian.math.combinatorics.additive._models import (
     OrderedDifferenceProfileResult,
 )
 from jacobian.math.combinatorics.additive.operations import (
-    compute_ordered_difference_profile,
+    ordered_difference_profile,
 )
 
 
@@ -30,11 +30,15 @@ def _request(*vectors: tuple[int, ...]) -> OrderedDifferenceProfileRequest:
     )
 
 
+def _run_ordered(request: OrderedDifferenceProfileRequest):
+    return ordered_difference_profile(request.vectors)
+
+
 class TestOrderedDifferenceProfile:
     def test_three_points_2d(self) -> None:
         """Three points in Z^2 with known differences."""
         req = _request((0, 0), (1, 0), (0, 1))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         assert result.dimension == 2
         assert result.set_size == 3
         assert result.total_ordered_pairs == 6  # 3*2
@@ -45,7 +49,7 @@ class TestOrderedDifferenceProfile:
     def test_no_repeated(self) -> None:
         """A Sidon set has no repeated differences."""
         req = _request((0, 0, 0), (1, 0, 0), (0, 1, 0))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         for entry in result.entries:
             for pair in entry.pairs:
                 assert pair.left_index != pair.right_index
@@ -53,7 +57,7 @@ class TestOrderedDifferenceProfile:
     def test_repeated_difference(self) -> None:
         """Four points forming a parallelogram have repeated differences."""
         req = _request((0, 0), (1, 0), (0, 1), (1, 1))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         assert result.has_repeated_difference
         assert result.first_collision is not None
         assert result.max_multiplicity >= 2
@@ -61,13 +65,13 @@ class TestOrderedDifferenceProfile:
     def test_total_pairs_formula(self) -> None:
         """Total ordered pairs must equal |A|(|A|-1)."""
         req = _request((0, 0), (1, 0), (2, 0), (3, 0))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         assert result.total_ordered_pairs == 4 * 3
 
     def test_single_point(self) -> None:
         """A single point has no differences."""
         req = _request((1, 2))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         assert result.total_ordered_pairs == 0
         assert result.support_size == 0
         assert result.entries == ()
@@ -76,7 +80,7 @@ class TestOrderedDifferenceProfile:
     def test_one_dimensional(self) -> None:
         """One-dimensional vectors work correctly."""
         req = _request((0,), (1,), (2,))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         assert result.dimension == 1
         assert result.total_ordered_pairs == 6  # 3*2
 
@@ -95,10 +99,8 @@ class TestOrderedDifferenceProfile:
             )
 
     def test_translation_invariance(self) -> None:
-        base = compute_ordered_difference_profile(_request((0, 0), (1, 0), (0, 1)))
-        shifted = compute_ordered_difference_profile(
-            _request((5, -3), (6, -3), (5, -2))
-        )
+        base = _run_ordered(_request((0, 0), (1, 0), (0, 1)))
+        shifted = _run_ordered(_request((5, -3), (6, -3), (5, -2)))
         base_diffs = {e.difference.as_int_tuple(): e.multiplicity for e in base.entries}
         shifted_diffs = {
             e.difference.as_int_tuple(): e.multiplicity for e in shifted.entries
@@ -106,9 +108,7 @@ class TestOrderedDifferenceProfile:
         assert base_diffs == shifted_diffs
 
     def test_sign_reversal_symmetry(self) -> None:
-        result = compute_ordered_difference_profile(
-            _request((0, 0), (1, 0), (0, 1), (1, 1))
-        )
+        result = _run_ordered(_request((0, 0), (1, 0), (0, 1), (1, 1)))
         mult = {e.difference.as_int_tuple(): e.multiplicity for e in result.entries}
         assert mult
         for d, count in mult.items():
@@ -116,14 +116,14 @@ class TestOrderedDifferenceProfile:
 
     def test_result_retains_canonical_source(self) -> None:
         req = _request((0, 0), (1, 0), (0, 1))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         assert result.vectors == req.vectors
 
     def test_retained_source_feeds_requests_unchanged(self) -> None:
         """The canonical IntegerVectorSet result value composes: it can be
         supplied unchanged as the source of another vector-set request."""
-        result = compute_ordered_difference_profile(_request((0, 0), (1, 0), (0, 1)))
-        recomputed = compute_ordered_difference_profile(
+        result = _run_ordered(_request((0, 0), (1, 0), (0, 1)))
+        recomputed = _run_ordered(
             OrderedDifferenceProfileRequest(vectors=result.vectors)
         )
         assert recomputed == result
@@ -145,7 +145,7 @@ class TestOrderedDifferenceProfile:
 
     def test_result_replays_every_difference_from_source(self) -> None:
         req = _request((0, 0), (1, 0), (1, 1), (0, 1))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         seen = set()
         source = [v.as_int_tuple() for v in result.vectors.vectors]
         for entry in result.entries:
@@ -164,7 +164,7 @@ class TestOrderedDifferenceProfile:
         """The witness must be pairs[0] of the first sorted repeated entry,
         not a designated pair from any later repeated entry."""
         req = _request((0, 0), (1, 0), (0, 1), (1, 1))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         payload = result.model_dump(mode="json")
         repeated = [e for e in payload["entries"] if e["multiplicity"] > 1]
         assert len(repeated) >= 2
@@ -177,7 +177,7 @@ class TestOrderedDifferenceProfile:
         entry breaks the canonical lexicographic pair order, so the swap
         cannot move a forged pair into the witness position."""
         req = _request((0, 0), (1, 0), (0, 1), (1, 1))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         payload = result.model_dump(mode="json")
         first_repeated = next(e for e in payload["entries"] if e["multiplicity"] > 1)
         assert len(first_repeated["pairs"]) >= 2
@@ -192,7 +192,7 @@ class TestOrderedDifferenceProfile:
         """The witness must equal the lexicographic minimum pair of the
         first sorted repeated-difference entry."""
         req = _request((0, 0), (1, 0), (0, 1), (1, 1), (3, 2))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         assert result.has_repeated_difference
         first_repeated = next(e for e in result.entries if e.multiplicity > 1)
         minimum = min((p.left_index, p.right_index) for p in first_repeated.pairs)
@@ -225,7 +225,7 @@ class TestOrderedDifferenceProfile:
     def test_difference_coordinates_may_carry_one_extra_digit(self) -> None:
         """Exact differences of maximally bounded sources stay representable."""
         req = _request((-999999,), (999999,))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         diffs = {e.difference.as_int_tuple()[0] for e in result.entries}
         assert diffs == {-1999998, 1999998}
 
@@ -258,7 +258,7 @@ class TestOrderedDifferenceProfile:
             (i, i * i, i * i, i * i, i * i, i * i, i * i, i * i) for i in range(side)
         ]
         req = _request(*vectors)
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         assert result.support_size == side * (side - 1)
         payload = result.model_dump(mode="json")
         encoded = canonicalize_json(
@@ -269,7 +269,7 @@ class TestOrderedDifferenceProfile:
 
     def test_result_roundtrip(self) -> None:
         req = _request((0, 0), (1, 0), (0, 1), (1, 1))
-        result = compute_ordered_difference_profile(req)
+        result = _run_ordered(req)
         assert (
             OrderedDifferenceProfileResult.model_validate(result.model_dump()) == result
         )

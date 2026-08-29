@@ -562,13 +562,15 @@ class MultisetSumRepresentationProfileResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: MultisetSumRepresentationProfileRequest,
+        source: FiniteIntegerSet,
+        arity: int,
+        window: MultisetSumWindow | None,
         entries: tuple[RepresentationProfileEntry, ...],
     ) -> Self:
         return cls.model_construct(
-            source=request.source,
-            arity=request.arity,
-            window=request.window,
+            source=source,
+            arity=arity,
+            window=window,
             entries=entries,
         )
 
@@ -928,7 +930,7 @@ class OrderedDifferenceProfileResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: OrderedDifferenceProfileRequest,
+        vectors: IntegerVectorSet,
         *,
         dimension: int,
         total_ordered_pairs: int,
@@ -939,9 +941,9 @@ class OrderedDifferenceProfileResult(StrictModel):
         first_collision: OrderedDifferencePair | None,
     ) -> Self:
         return cls.model_construct(
-            vectors=request.vectors,
+            vectors=vectors,
             dimension=dimension,
-            set_size=len(request.vectors.vectors),
+            set_size=len(vectors.vectors),
             total_ordered_pairs=total_ordered_pairs,
             support_size=support_size,
             max_multiplicity=max_multiplicity,

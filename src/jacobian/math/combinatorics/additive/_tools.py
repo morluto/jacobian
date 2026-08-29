@@ -32,22 +32,22 @@ from jacobian.math.combinatorics.additive._subset_sum_residue import (
     MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS,
     SubsetSumResidueProfileRequest,
     SubsetSumResidueProfileResult,
-    compute_subset_sum_residue_profile,
+    subset_sum_residue_profile,
 )
 from jacobian.math.combinatorics.additive._subset_sum_target import (
     MAX_SUBSET_SUM_TRANSITIONS,
     SubsetSumTargetRequest,
     SubsetSumTargetResult,
-    solve_subset_sum_target_request,
+    solve_subset_sum_target,
 )
 from jacobian.math.combinatorics.additive.operations import (
-    compute_additive_energy,
-    compute_multiset_sum_representation_profile,
-    compute_ordered_difference_profile,
-    compute_representation_profile,
-    compute_subset_sum_profile,
-    compute_sumset_cardinality,
-    decide_direct_sum_predicate,
+    additive_energy,
+    direct_sum_predicate,
+    multiset_sum_representation_profile,
+    ordered_difference_profile,
+    representation_profile,
+    subset_sum_profile,
+    sumset_cardinality,
 )
 from jacobian.math.combinatorics.additive.values import (
     MAX_SUBSET_SUM_ITEM_DIGITS,
@@ -55,6 +55,61 @@ from jacobian.math.combinatorics.additive.values import (
     MAX_SUBSET_SUM_PROFILE_ENTRIES,
     SubsetSumProfile,
 )
+
+
+def _run_representation_profile(
+    request: RepresentationProfileRequest,
+) -> RepresentationProfileResult:
+    return representation_profile(request.left, request.right)
+
+
+def _run_energy(request: AdditiveEnergyRequest) -> AdditiveEnergyResult:
+    return additive_energy(request.left, request.right)
+
+
+def _run_sumset_cardinality(
+    request: SumsetCardinalityRequest,
+) -> SumsetCardinalityResult:
+    return sumset_cardinality(request.left, request.right)
+
+
+def _run_multiset_sum(
+    request: MultisetSumRepresentationProfileRequest,
+) -> MultisetSumRepresentationProfileResult:
+    return multiset_sum_representation_profile(
+        request.source, request.arity, request.window
+    )
+
+
+def _run_subset_sum_profile(request: SubsetSumProfileRequest) -> SubsetSumProfile:
+    return subset_sum_profile(request.source)
+
+
+def _run_direct_sum(request: DirectSumPredicateRequest) -> DirectSumPredicateResult:
+    return direct_sum_predicate(request.modulus, request.left, request.right)
+
+
+def _run_ordered_difference(
+    request: OrderedDifferenceProfileRequest,
+) -> OrderedDifferenceProfileResult:
+    return ordered_difference_profile(request.vectors)
+
+
+def _run_subset_sum_target(request: SubsetSumTargetRequest) -> SubsetSumTargetResult:
+    return solve_subset_sum_target(
+        request.source, request.target, request.allow_empty_subset
+    )
+
+
+def _run_subset_sum_residue(
+    request: SubsetSumResidueProfileRequest,
+) -> SubsetSumResidueProfileResult:
+    return subset_sum_residue_profile(
+        request.source,
+        request.modulus,
+        request.include_empty_subset,
+        request.include_witnesses,
+    )
 
 
 def additive_combinatorics_operation[
@@ -134,7 +189,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         SubsetSumTargetRequest,
         SubsetSumTargetResult,
-        solve_subset_sum_target_request,
+        _run_subset_sum_target,
         "additive-combinatorics",
         "subset-sum",
         "decision",
@@ -160,7 +215,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "with multiplicities.",
         RepresentationProfileRequest,
         RepresentationProfileResult,
-        compute_representation_profile,
+        _run_representation_profile,
         "additive-combinatorics",
         "representation-function",
         "sumset",
@@ -183,7 +238,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "representation multiplicities, together with its decomposition by sum.",
         AdditiveEnergyRequest,
         AdditiveEnergyResult,
-        compute_additive_energy,
+        _run_energy,
         "additive-combinatorics",
         "energy",
         "sumset",
@@ -202,7 +257,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Return the exact cardinality and sorted support of the sumset A+B.",
         SumsetCardinalityRequest,
         SumsetCardinalityResult,
-        compute_sumset_cardinality,
+        _run_sumset_cardinality,
         "additive-combinatorics",
         "sumset",
         "cardinality",
@@ -226,7 +281,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "execution; the result retains its source, arity, and scope.",
         MultisetSumRepresentationProfileRequest,
         MultisetSumRepresentationProfileResult,
-        compute_multiset_sum_representation_profile,
+        _run_multiset_sum,
         "additive-combinatorics",
         "multiset-sum",
         "representation-profile",
@@ -255,7 +310,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "every accepted result is complete.",
         SubsetSumProfileRequest,
         SubsetSumProfile,
-        compute_subset_sum_profile,
+        _run_subset_sum_profile,
         "additive-combinatorics",
         "subset-sum",
         "representation-profile",
@@ -289,7 +344,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "collisions (multiple representations), and missing residues.",
         DirectSumPredicateRequest,
         DirectSumPredicateResult,
-        decide_direct_sum_predicate,
+        _run_direct_sum,
         "additive-combinatorics",
         "direct-sum",
         "tiling",
@@ -325,7 +380,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "energy, or collision count is a cheap projection of this complete profile.",
         OrderedDifferenceProfileRequest,
         OrderedDifferenceProfileResult,
-        compute_ordered_difference_profile,
+        _run_ordered_difference,
         "additive-combinatorics",
         "difference-profile",
         "exact",
@@ -364,7 +419,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         SubsetSumResidueProfileRequest,
         SubsetSumResidueProfileResult,
-        compute_subset_sum_residue_profile,
+        _run_subset_sum_residue,
         "additive-combinatorics",
         "subset-sum",
         "modular-arithmetic",

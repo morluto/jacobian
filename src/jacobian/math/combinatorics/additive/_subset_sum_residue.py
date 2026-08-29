@@ -400,17 +400,20 @@ class SubsetSumResidueProfileResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: SubsetSumResidueProfileRequest,
+        source: IndexedIntegerSequence,
+        modulus: int,
+        include_empty_subset: bool,
+        include_witnesses: bool,
         residue_counts: tuple[ResidueMultiplicity, ...],
         residue_witnesses: tuple[IndexSubset | None, ...] | None,
     ) -> Self:
         """Construct output whose mathematical invariants the kernel established."""
 
         return cls.model_construct(
-            source=request.source,
-            modulus=request.modulus,
-            include_empty_subset=request.include_empty_subset,
-            include_witnesses=request.include_witnesses,
+            source=source,
+            modulus=modulus,
+            include_empty_subset=include_empty_subset,
+            include_witnesses=include_witnesses,
             residue_counts=residue_counts,
             residue_witnesses=residue_witnesses,
         )
@@ -421,7 +424,10 @@ def _indices_from_mask(mask: int, item_count: int) -> tuple[int, ...]:
 
 
 def _compute_residue_profile(
-    request: SubsetSumResidueProfileRequest,
+    source: IndexedIntegerSequence,
+    modulus: int,
+    include_empty_subset: bool,
+    include_witnesses: bool,
 ) -> tuple[
     tuple[ResidueMultiplicity, ...],
     tuple[IndexSubset | None, ...] | None,
@@ -431,23 +437,22 @@ def _compute_residue_profile(
     Witnesses are canonical by minimizing ``sum(2**i for i in I)``.  This is a
     normalization only, not a minimum-cardinality claim.
     """
-    modulus = request.modulus
     counts = [0] * modulus
     witness_masks: list[int | None] | None = (
-        [None] * modulus if request.include_witnesses else None
+        [None] * modulus if include_witnesses else None
     )
-    if request.include_empty_subset:
+    if include_empty_subset:
         counts[0] = 1
         if witness_masks is not None:
             witness_masks[0] = 0
 
-    for index, raw_value in enumerate(request.source.items):
+    for index, raw_value in enumerate(source.items):
         residue = parse_canonical_integer(raw_value) % modulus
         next_counts = counts.copy()
         next_witness_masks = witness_masks.copy() if witness_masks is not None else None
         bit = 1 << index
 
-        if not request.include_empty_subset:
+        if not include_empty_subset:
             next_counts[residue] += 1
             if next_witness_masks is not None:
                 current = next_witness_masks[residue]
@@ -477,31 +482,59 @@ def _compute_residue_profile(
     residue_witnesses = tuple(
         None
         if mask is None
-        else IndexSubset(indices=_indices_from_mask(mask, len(request.source.items)))
+        else IndexSubset(indices=_indices_from_mask(mask, len(source.items)))
         for mask in witness_masks
     )
     return residue_counts, residue_witnesses
 
 
-def compute_subset_sum_residue_profile(
-    request: SubsetSumResidueProfileRequest,
+def subset_sum_residue_profile(
+    source: IndexedIntegerSequence,
+    modulus: int,
+    include_empty_subset: bool,
+    include_witnesses: bool = False,
 ) -> SubsetSumResidueProfileResult:
     """Return every exact indexed-subset multiplicity modulo ``m``."""
-    _admit_subset_sum_residue_profile(request)
-    residue_counts, residue_witnesses = _compute_residue_profile(request)
+    _admit_subset_sum_residue_profile(
+        source, modulus, include_empty_subset, include_witnesses
+    )
+    residue_counts, residue_witnesses = _compute_residue_profile(
+        source, modulus, include_empty_subset, include_witnesses
+    )
     return SubsetSumResidueProfileResult._from_kernel(
-        request,
+        source,
+        modulus,
+        include_empty_subset,
+        include_witnesses,
         residue_counts=residue_counts,
         residue_witnesses=residue_witnesses,
     )
 
 
 def _admit_subset_sum_residue_profile(
-    request: SubsetSumResidueProfileRequest,
+    source: IndexedIntegerSequence,
+    modulus: int,
+    include_empty_subset: bool,
+    include_witnesses: bool,
 ) -> None:
     """Admit one native residue profile before running the dense recurrence."""
 
-    item_count = len(request.source.items)
+    if type(modulus) is not int or not 1 <= modulus <= MAX_RESIDUE_PROFILE_MODULUS:
+        raise OperationDomainValidationError(
+            location=("modulus",),
+            code="additive_combinatorics.subset_sum_residue.modulus_domain",
+            message=(
+                "subset-sum residue modulus must be an integer between 1 and "
+                f"{MAX_RESIDUE_PROFILE_MODULUS:,}"
+            ),
+        )
+    if type(include_empty_subset) is not bool or type(include_witnesses) is not bool:
+        raise OperationDomainValidationError(
+            location=("include_empty_subset", "include_witnesses"),
+            code="additive_combinatorics.subset_sum_residue.boolean_domain",
+            message="subset-sum residue flags must be booleans",
+        )
+    item_count = len(source.items)
     if item_count + 1 > MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS:
         raise OperationDomainValidationError(
             location=("source",),
@@ -511,7 +544,7 @@ def _admit_subset_sum_residue_profile(
     oversized = next(
         (
             index
-            for index, value in enumerate(request.source.items)
+            for index, value in enumerate(source.items)
             if len(value.lstrip("-")) > MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS
         ),
         None,
@@ -522,23 +555,23 @@ def _admit_subset_sum_residue_profile(
             code="additive_combinatorics.subset_sum_residue.integer_bound",
             message=f"source value at index {oversized} exceeds the 32,768-digit input bound",
         )
-    dp_cells = item_count * request.modulus
+    dp_cells = item_count * modulus
     if dp_cells > MAX_RESIDUE_PROFILE_DP_CELLS:
         raise OperationDomainValidationError(
             location=("source",),
             code="additive_combinatorics.subset_sum_residue.dp_bound",
             message="subset-sum residue DP exceeds the 1,000,000-cell work bound",
         )
-    if request.include_witnesses and dp_cells > MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS:
+    if include_witnesses and dp_cells > MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS:
         raise OperationDomainValidationError(
             location=("source",),
             code="additive_combinatorics.subset_sum_residue.witness_bound",
             message="residue witnesses exceed the 250,000 index-slot storage bound",
         )
     result_bytes = _estimated_result_bytes(
-        request.source,
-        request.modulus,
-        include_witnesses=request.include_witnesses,
+        source,
+        modulus,
+        include_witnesses=include_witnesses,
     )
     if result_bytes > MAX_RESIDUE_PROFILE_RESULT_BYTES:
         raise OperationDomainValidationError(
@@ -558,7 +591,7 @@ __all__ = [
     "MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS",
     "SubsetSumResidueProfileRequest",
     "SubsetSumResidueProfileResult",
-    "compute_subset_sum_residue_profile",
+    "subset_sum_residue_profile",
 ]
 
 

@@ -15,7 +15,7 @@ from jacobian.math.combinatorics.additive import (
 )
 from jacobian.math.combinatorics.additive._subset_sum_residue import (
     SubsetSumResidueProfileRequest,
-    compute_subset_sum_residue_profile,
+    subset_sum_residue_profile,
 )
 from jacobian.math.combinatorics.additive._subset_sum_target import (
     MAX_SUBSET_SUM_INTEGER_DIGITS,
@@ -45,6 +45,15 @@ def _operation() -> MathTool[SubsetSumTargetRequest, SubsetSumTargetResult]:
             for operation in TOOLS
             if operation.operation_id == "additive.subset_sum.target.solve"
         ),
+    )
+
+
+def _run_residue(request: SubsetSumResidueProfileRequest):
+    return subset_sum_residue_profile(
+        request.source,
+        request.modulus,
+        request.include_empty_subset,
+        request.include_witnesses,
     )
 
 
@@ -568,7 +577,7 @@ def test_target_sources_compose_across_indexed_sequence_operations() -> None:
     profile = subset_sum_profile(attained.source)
     assert profile.source == sequence
 
-    residue = compute_subset_sum_residue_profile(
+    residue = _run_residue(
         SubsetSumResidueProfileRequest(
             source=attained.source,
             modulus=5,

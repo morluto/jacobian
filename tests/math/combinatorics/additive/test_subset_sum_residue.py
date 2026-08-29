@@ -21,7 +21,7 @@ from jacobian.math.combinatorics.additive._subset_sum_residue import (
     MAX_RESIDUE_PROFILE_RESULT_BYTES,
     SubsetSumResidueProfileRequest,
     SubsetSumResidueProfileResult,
-    compute_subset_sum_residue_profile,
+    subset_sum_residue_profile,
 )
 
 
@@ -39,6 +39,15 @@ def _request(
             "include_empty_subset": include_empty_subset,
             "include_witnesses": include_witnesses,
         }
+    )
+
+
+def _run_residue(request: SubsetSumResidueProfileRequest):
+    return subset_sum_residue_profile(
+        request.source,
+        request.modulus,
+        request.include_empty_subset,
+        request.include_witnesses,
     )
 
 
@@ -78,7 +87,7 @@ def test_request_and_result_compose_through_strict_json_parsing() -> None:
     )
 
     assert request.source == IndexedIntegerSequence(items=("2", "3"))
-    result = compute_subset_sum_residue_profile(request)
+    result = _run_residue(request)
     assert (
         SubsetSumResidueProfileResult.model_validate_json(
             result.model_dump_json(), strict=True
@@ -88,7 +97,7 @@ def test_request_and_result_compose_through_strict_json_parsing() -> None:
 
 
 def test_two_items_have_nonempty_zero_residue_with_canonical_witnesses() -> None:
-    result = compute_subset_sum_residue_profile(
+    result = _run_residue(
         _request(
             (2, 3),
             5,
@@ -115,15 +124,13 @@ def test_empty_source_has_explicit_empty_subset_convention(
     include_empty_subset: bool,
     expected: tuple[str, ...],
 ) -> None:
-    result = compute_subset_sum_residue_profile(
-        _request((), 4, include_empty_subset=include_empty_subset)
-    )
+    result = _run_residue(_request((), 4, include_empty_subset=include_empty_subset))
     assert result.residue_counts == expected
     assert result.source == IndexedIntegerSequence(items=())
 
 
 def test_single_item_does_not_claim_nonempty_zero_residue() -> None:
-    result = compute_subset_sum_residue_profile(
+    result = _run_residue(
         _request((2,), 5, include_empty_subset=False, include_witnesses=True)
     )
     assert result.residue_counts[0] == "0"
@@ -136,7 +143,7 @@ def test_problem_131_local_predicate_and_planted_failure() -> None:
         counts: list[int] = []
         for removed_index, modulus in enumerate(values):
             remaining = values[:removed_index] + values[removed_index + 1 :]
-            result = compute_subset_sum_residue_profile(
+            result = _run_residue(
                 _request(
                     remaining,
                     modulus,
@@ -151,7 +158,7 @@ def test_problem_131_local_predicate_and_planted_failure() -> None:
 
 
 def test_repeated_zeros_preserve_index_multiplicity() -> None:
-    result = compute_subset_sum_residue_profile(
+    result = _run_residue(
         _request((0, 0), 3, include_empty_subset=False, include_witnesses=True)
     )
     assert result.residue_counts == ("3", "0", "0")
@@ -161,18 +168,14 @@ def test_repeated_zeros_preserve_index_multiplicity() -> None:
 
 def test_negative_values_are_reduced_only_for_the_recurrence() -> None:
     request = _request((-7, 3), 5, include_empty_subset=True)
-    result = compute_subset_sum_residue_profile(request)
+    result = _run_residue(request)
     assert result.source == request.source
     assert result.residue_counts == ("1", "1", "0", "2", "0")
 
 
 def test_translation_by_modulus_multiples_preserves_profile() -> None:
-    base = compute_subset_sum_residue_profile(
-        _request((-2, 0, 3), 7, include_empty_subset=False)
-    )
-    translated = compute_subset_sum_residue_profile(
-        _request((12, -21, 24), 7, include_empty_subset=False)
-    )
+    base = _run_residue(_request((-2, 0, 3), 7, include_empty_subset=False))
+    translated = _run_residue(_request((12, -21, 24), 7, include_empty_subset=False))
     assert translated.residue_counts == base.residue_counts
 
 
@@ -182,7 +185,7 @@ def test_all_small_profiles_match_complete_bitmask_enumeration() -> None:
         for values in product(range(-2, 3), repeat=item_count):
             for modulus in range(1, 6):
                 for include_empty_subset in (False, True):
-                    result = compute_subset_sum_residue_profile(
+                    result = _run_residue(
                         _request(
                             values,
                             modulus,
@@ -211,7 +214,7 @@ def test_total_multiplicity_is_the_number_of_permitted_subsets(
     include_empty_subset: bool,
 ) -> None:
     values = (0, 1, 1, 5, -3, 12)
-    result = compute_subset_sum_residue_profile(
+    result = _run_residue(
         _request(values, 8, include_empty_subset=include_empty_subset)
     )
     expected_total = (1 << len(values)) - (not include_empty_subset)
@@ -219,7 +222,7 @@ def test_total_multiplicity_is_the_number_of_permitted_subsets(
 
 
 def test_result_rejects_noncanonical_witness() -> None:
-    result = compute_subset_sum_residue_profile(
+    result = _run_residue(
         _request(
             (0, 0),
             3,
@@ -291,9 +294,7 @@ def test_schema_item_ceiling_matches_validator_at_the_boundary() -> None:
 
 
 def test_positions_beyond_legacy_source_cap_are_admitted() -> None:
-    result = compute_subset_sum_residue_profile(
-        _request((0,) * 257, 1, include_empty_subset=False)
-    )
+    result = _run_residue(_request((0,) * 257, 1, include_empty_subset=False))
 
     assert result.residue_counts == (str((1 << 257) - 1),)
 
@@ -301,9 +302,7 @@ def test_positions_beyond_legacy_source_cap_are_admitted() -> None:
 def test_single_integer_beyond_legacy_digit_cap_is_admitted() -> None:
     value = 10**256
 
-    result = compute_subset_sum_residue_profile(
-        _request((value,), 7, include_empty_subset=False)
-    )
+    result = _run_residue(_request((value,), 7, include_empty_subset=False))
 
     assert result.residue_counts == tuple(
         "1" if residue == value % 7 else "0" for residue in range(7)
@@ -321,7 +320,7 @@ def test_exact_dp_cell_boundary_is_complete_and_serializable() -> None:
             "include_empty_subset": True,
         }
     )
-    result = compute_subset_sum_residue_profile(request)
+    result = _run_residue(request)
     assert result.residue_counts[0] == str(1 << item_count)
     assert set(result.residue_counts[1:]) == {"0"}
     encoded = canonicalize_json(
@@ -335,7 +334,7 @@ def test_request_just_above_dp_cell_boundary_is_rejected() -> None:
     item_count = 201
     modulus = MAX_RESIDUE_PROFILE_DP_CELLS // 200
     with pytest.raises(ValueError):
-        compute_subset_sum_residue_profile(
+        _run_residue(
             SubsetSumResidueProfileRequest.model_validate(
                 {
                     "source": {"items": ["0"] * item_count},
@@ -379,7 +378,7 @@ def test_modulus_boundary_and_schema_are_explicit() -> None:
 
 def test_witness_and_result_output_budgets_reject_before_work() -> None:
     with pytest.raises(ValueError):
-        compute_subset_sum_residue_profile(
+        _run_residue(
             SubsetSumResidueProfileRequest.model_validate(
                 {
                     "source": {"items": ["0"] * 251},
@@ -392,7 +391,7 @@ def test_witness_and_result_output_budgets_reject_before_work() -> None:
 
 
 def test_result_bounds_raw_arrays_before_source_binding_replay() -> None:
-    base = compute_subset_sum_residue_profile(
+    base = _run_residue(
         _request((), 4, include_empty_subset=True, include_witnesses=True)
     ).model_dump(mode="json")
 
@@ -421,7 +420,7 @@ def test_result_bounds_raw_arrays_before_source_binding_replay() -> None:
     with pytest.raises(ValidationError):
         SubsetSumResidueProfileResult.model_validate(out_of_range_witness)
 
-    one_item = compute_subset_sum_residue_profile(
+    one_item = _run_residue(
         _request((0,), 4, include_empty_subset=True, include_witnesses=True)
     ).model_dump(mode="json")
     one_item["residue_witnesses"][0] = {"indices": [1]}
@@ -430,7 +429,7 @@ def test_result_bounds_raw_arrays_before_source_binding_replay() -> None:
 
     widest = "1" + "0" * (MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS - 1)
     with pytest.raises(ValueError):
-        compute_subset_sum_residue_profile(
+        _run_residue(
             SubsetSumResidueProfileRequest.model_validate(
                 {
                     "source": {"items": [widest] * 128},

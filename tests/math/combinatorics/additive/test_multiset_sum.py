@@ -27,12 +27,22 @@ from jacobian.math.combinatorics.additive._multiset_sum import (
     _bar_position_tuples,
 )
 from jacobian.math.combinatorics.additive.operations import (
-    compute_multiset_sum_representation_profile,
-    compute_representation_profile,
+    multiset_sum_representation_profile,
+    representation_profile,
 )
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     MAX_FINITE_INTEGER_SET_ELEMENTS,
 )
+
+
+def _run_multiset(request: MultisetSumRepresentationProfileRequest):
+    return multiset_sum_representation_profile(
+        request.source, request.arity, request.window
+    )
+
+
+def _run_representation(request: RepresentationProfileRequest):
+    return representation_profile(request.left, request.right)
 
 
 def _request(
@@ -58,9 +68,7 @@ def _profile(
     arity: int,
     window: tuple[int, int] | None = None,
 ) -> dict[int, int]:
-    result = compute_multiset_sum_representation_profile(
-        _request(source, arity, window)
-    )
+    result = _run_multiset(_request(source, arity, window))
     return {int(entry.sum): entry.multiplicity for entry in result.entries}
 
 
@@ -94,7 +102,7 @@ def test_zero_arity_uses_derived_admission_not_the_legacy_source_cap() -> None:
 
 
 def test_closed_window_is_complete_only_for_its_declared_scope() -> None:
-    result = compute_multiset_sum_representation_profile(_request((0, 1, 2), 3, (2, 3)))
+    result = _run_multiset(_request((0, 1, 2), 3, (2, 3)))
     assert result.window is not None
     assert (result.window.lower, result.window.upper) == ("2", "3")
     assert {int(entry.sum): entry.multiplicity for entry in result.entries} == {
@@ -127,8 +135,8 @@ def test_bounded_exhaustive_profiles_match_itertools_oracle() -> None:
 
 
 def test_result_retains_source_for_unchanged_recomposition() -> None:
-    result = compute_multiset_sum_representation_profile(_request((-3, 1, 8), 3))
-    recomputed = compute_multiset_sum_representation_profile(
+    result = _run_multiset(_request((-3, 1, 8), 3))
+    recomputed = _run_multiset(
         MultisetSumRepresentationProfileRequest(
             source=result.source,
             arity=result.arity,
@@ -139,9 +147,7 @@ def test_result_retains_source_for_unchanged_recomposition() -> None:
 
 
 def test_result_round_trip_preserves_the_profile() -> None:
-    result = compute_multiset_sum_representation_profile(
-        _request((-5, 0, 9), 5, (-10, 20))
-    )
+    result = _run_multiset(_request((-5, 0, 9), 5, (-10, 20)))
     decoded = MultisetSumRepresentationProfileResult.model_validate(result.model_dump())
     assert decoded == result
 
@@ -303,7 +309,7 @@ def test_full_profile_rejects_worst_case_support_above_result_bound() -> None:
 @pytest.mark.scale
 def test_dense_full_profile_uses_the_attainable_sum_range_bound() -> None:
     source = tuple(range(_MAX_SET_SIZE))
-    result = compute_multiset_sum_representation_profile(_request(source, 2))
+    result = _run_multiset(_request(source, 2))
 
     assert len(result.entries) == 2 * _MAX_SET_SIZE - 1
     assert sum(entry.multiplicity for entry in result.entries) == (
@@ -314,7 +320,7 @@ def test_dense_full_profile_uses_the_attainable_sum_range_bound() -> None:
 @pytest.mark.scale
 def test_narrow_window_admits_large_candidate_family_with_small_output() -> None:
     source = tuple(range(327))
-    result = compute_multiset_sum_representation_profile(_request(source, 3, (0, 0)))
+    result = _run_multiset(_request(source, 3, (0, 0)))
     assert [(entry.sum, entry.multiplicity) for entry in result.entries] == [("0", 1)]
 
 
@@ -329,7 +335,7 @@ def test_widened_source_axis_preserves_cartesian_pair_bound() -> None:
     right = FiniteIntegerSet(elements=tuple(str(i) for i in range(256)))
     request = RepresentationProfileRequest(left=left, right=right)
     with pytest.raises(ValueError):
-        compute_representation_profile(request)
+        _run_representation(request)
 
 
 @pytest.mark.scale
@@ -340,7 +346,7 @@ def test_near_maximal_full_profile_stays_inside_owner_result_budget() -> None:
     spacing = 2 * source_size * source_size
     offset = 10**63
     source = tuple(offset + spacing * i + i * i for i in range(source_size))
-    result = compute_multiset_sum_representation_profile(_request(source, 2))
+    result = _run_multiset(_request(source, 2))
     assert len(result.entries) == source_size * (source_size + 1) // 2
     encoded = canonicalize_json(
         result.model_dump(mode="json"),
@@ -359,9 +365,7 @@ def test_oeis_prime_cube_targets_have_published_multiplicities() -> None:
     assert len(prime_cubes) == 327
     for multiplicity, target in enumerate(targets, start=1):
         complete_source = tuple(value for value in prime_cubes if value <= target)
-        result = compute_multiset_sum_representation_profile(
-            _request(complete_source, 3, (target, target))
-        )
+        result = _run_multiset(_request(complete_source, 3, (target, target)))
         assert [(entry.sum, entry.multiplicity) for entry in result.entries] == [
             (str(target), multiplicity)
         ]

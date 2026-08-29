@@ -72,7 +72,9 @@ class PositiveRootsResult(CartanMatrixRequest):
 
     @classmethod
     def _from_kernel(
-        cls, matrix: tuple[tuple[int, ...], ...], positive_roots: tuple[tuple[int, ...], ...]
+        cls,
+        matrix: tuple[tuple[int, ...], ...],
+        positive_roots: tuple[tuple[int, ...], ...],
     ) -> Self:
         return cls.model_construct(
             matrix=matrix,

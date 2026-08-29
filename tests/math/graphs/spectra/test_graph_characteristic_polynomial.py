@@ -269,7 +269,9 @@ def test_native_polynomial_is_accepted_unchanged_by_a_polynomial_consumer() -> N
         {"polynomial": polynomial.model_dump(mode="json")}
     )
     derivative = rational_polynomial_derivative(request.polynomial).derivative
-    assert rational_polynomial_derivative(serialized.polynomial).derivative == derivative
+    assert (
+        rational_polynomial_derivative(serialized.polynomial).derivative == derivative
+    )
     assert _coeffs(derivative) == [Fraction(-2), Fraction(0), Fraction(3)]
 
 

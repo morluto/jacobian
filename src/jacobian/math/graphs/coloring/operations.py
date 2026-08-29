@@ -65,10 +65,7 @@ def _admit_solver_parameters(colors: int, solver_conflicts: int) -> None:
         raise OperationDomainValidationError(
             location=("solver_conflicts",),
             code="graph.solver_conflicts_must_be_between_1_and_maximum",
-            message=(
-                "solver_conflicts must be in "
-                f"1..{MAX_SOLVER_CONFLICT_BUDGET}"
-            ),
+            message=(f"solver_conflicts must be in 1..{MAX_SOLVER_CONFLICT_BUDGET}"),
         )
 
 
@@ -161,9 +158,7 @@ def k_colorability(
             colorable=True,
             coloring=(0,) * graph.vertex_count,
         )
-    outcome, coloring = run_coloring_worker(
-        "vertex", graph, colors, solver_conflicts
-    )
+    outcome, coloring = run_coloring_worker("vertex", graph, colors, solver_conflicts)
     if outcome == "sat":
         if coloring is None:
             raise AssertionError(
@@ -262,9 +257,7 @@ def edge_k_colorability(
 
     if not edges:
         return _colorable_result(())
-    outcome, coloring = run_coloring_worker(
-        "edge", graph, colors, solver_conflicts
-    )
+    outcome, coloring = run_coloring_worker("edge", graph, colors, solver_conflicts)
     if outcome == "sat":
         if coloring is None:
             raise AssertionError(
@@ -301,9 +294,7 @@ def edge_coloring_check(
     _admit_edge_coloring_graph(assignment.graph)
     edges = assignment.graph.edges
     coloring = assignment.coloring
-    for a, b in _incident_edge_index_pairs_for_canonical_graph(
-        assignment.graph
-    ):
+    for a, b in _incident_edge_index_pairs_for_canonical_graph(assignment.graph):
         if coloring[a] == coloring[b]:
             return EdgeColoringCheckResult._from_kernel(
                 assignment=assignment,

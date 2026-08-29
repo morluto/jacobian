@@ -16,6 +16,7 @@ def _run_modular_polynomial_identity(
         request.modulus, request.variables, request.left, request.right
     )
 
+
 MODULAR_IDENTITY_OPERATIONS = (
     number_theory_operation(
         "modular.polynomial_identity.compute",

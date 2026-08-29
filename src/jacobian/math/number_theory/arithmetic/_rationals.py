@@ -47,7 +47,9 @@ def reciprocal(request: NonzeroRationalValueRequest) -> RationalValueResult:
 
 
 def negation(request: RationalValueRequest) -> RationalValueResult:
-    return RationalValueResult(value=_wire(native.negate_rational(_fraction(request.value))))
+    return RationalValueResult(
+        value=_wire(native.negate_rational(_fraction(request.value)))
+    )
 
 
 def rational_absolute_value(request: RationalValueRequest) -> RationalValueResult:
@@ -68,7 +70,9 @@ def sum_rationals(request: RationalPairRequest) -> RationalValueResult:
 def difference(request: RationalPairRequest) -> RationalValueResult:
     return RationalValueResult(
         value=_wire(
-            native.difference_rationals(_fraction(request.left), _fraction(request.right)),
+            native.difference_rationals(
+                _fraction(request.left), _fraction(request.right)
+            ),
             location=("left", "right"),
         )
     )
@@ -94,13 +98,17 @@ def quotient(request: RationalDivisionRequest) -> RationalValueResult:
 
 def minimum(request: RationalPairRequest) -> RationalValueResult:
     return RationalValueResult(
-        value=_wire(native.minimum_rational(_fraction(request.left), _fraction(request.right)))
+        value=_wire(
+            native.minimum_rational(_fraction(request.left), _fraction(request.right))
+        )
     )
 
 
 def maximum(request: RationalPairRequest) -> RationalValueResult:
     return RationalValueResult(
-        value=_wire(native.maximum_rational(_fraction(request.left), _fraction(request.right)))
+        value=_wire(
+            native.maximum_rational(_fraction(request.left), _fraction(request.right))
+        )
     )
 
 
@@ -112,11 +120,15 @@ def floor(request: RationalValueRequest) -> RationalIntegerResult:
 
 def ceiling(request: RationalValueRequest) -> RationalIntegerResult:
     return RationalIntegerResult(
-        value=format_canonical_integer(native.ceiling_rational(_fraction(request.value)))
+        value=format_canonical_integer(
+            native.ceiling_rational(_fraction(request.value))
+        )
     )
 
 
-def continued_fraction(request: RationalValueRequest) -> RationalContinuedFractionResult:
+def continued_fraction(
+    request: RationalValueRequest,
+) -> RationalContinuedFractionResult:
     terms = native.continued_fraction(
         _fraction(request.value), max_terms=MAX_RATIONAL_CONTINUED_FRACTION_TERMS
     )
@@ -134,8 +146,11 @@ def equal(request: RationalPairRequest) -> RationalComparisonResult:
 
 def less_than(request: RationalPairRequest) -> RationalComparisonResult:
     return RationalComparisonResult(
-        holds=native.less_than_rationals(_fraction(request.left), _fraction(request.right))
+        holds=native.less_than_rationals(
+            _fraction(request.left), _fraction(request.right)
+        )
     )
+
 
 _ONE_HALF = {"num": "1", "den": "2"}
 _TWO_THIRDS = {"num": "2", "den": "3"}

@@ -97,9 +97,7 @@ def test_public_values_and_functions_have_one_canonical_module() -> None:
         for name in getattr(module, "__all__", ()):
             value = getattr(module, name)
             if callable(value) and not isinstance(value, type(importlib)):
-                function_locations.setdefault(value, []).append(
-                    f"{module_name}.{name}"
-                )
+                function_locations.setdefault(value, []).append(f"{module_name}.{name}")
     assert all(len(locations) == 1 for locations in function_locations.values())
 
 

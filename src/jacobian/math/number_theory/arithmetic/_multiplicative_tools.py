@@ -24,7 +24,9 @@ from jacobian.math.number_theory.arithmetic.operations import (
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
-def _compute_perfect_power_profile(request: IntegerRequest) -> PerfectPowerProfileResult:
+def _compute_perfect_power_profile(
+    request: IntegerRequest,
+) -> PerfectPowerProfileResult:
     """Project the wire request onto the native integer-value operation."""
 
     return perfect_power_profile(IntegerValue(value=request.value))

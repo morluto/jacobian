@@ -38,9 +38,7 @@ def euler_phi_preimages(target: int) -> tuple[int, ...]:
     if target == 1:
         return (1, 2)
     candidate_primes = [
-        divisor + 1
-        for divisor in _divisors_descending(target)
-        if isprime(divisor + 1)
+        divisor + 1 for divisor in _divisors_descending(target) if isprime(divisor + 1)
     ]
 
     def solve(remaining: int, maximum_index: int) -> set[int]:
@@ -78,10 +76,7 @@ def euler_phi_preimage_power_profile(target: int, exponent: int) -> tuple[int, i
         raise OperationDomainValidationError(
             location=("exponent",),
             code="inverse_totient.exponent_out_of_range",
-            message=(
-                "exponent must lie between 1 and "
-                f"{MAX_POWER_SUM_EXPONENT}"
-            ),
+            message=(f"exponent must lie between 1 and {MAX_POWER_SUM_EXPONENT}"),
         )
     preimage = euler_phi_preimages(target)
     return sum(value**exponent for value in preimage), len(preimage)

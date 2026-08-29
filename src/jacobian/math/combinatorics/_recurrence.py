@@ -62,6 +62,7 @@ def _run_rational_generating_function_coefficients(
         request.truncation_order,
     )
 
+
 RECURRENCE_OPERATIONS = (
     combinatorics_operation(
         "combinatorics.recurrence.linear.evaluate",

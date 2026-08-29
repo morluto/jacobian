@@ -31,9 +31,7 @@ def test_hook_lengths_partition_321() -> None:
 
 def test_hook_lengths_single_row() -> None:
     """Hook lengths of (n) are [n, n-1, ..., 1]."""
-    result = hook_lengths(
-        HookLengthRequest(partition=IntegerPartition(parts=(4,)))
-    )
+    result = hook_lengths(HookLengthRequest(partition=IntegerPartition(parts=(4,))))
     assert result.hooks == ((4, 3, 2, 1),)
     assert result.total_product == "24"
 
@@ -141,18 +139,14 @@ def test_conjugate_double_conjugate_is_identity() -> None:
     result = conjugate_partition(
         ConjugatePartitionRequest(partition=IntegerPartition(parts=(5, 3, 2, 1)))
     )
-    result2 = conjugate_partition(
-        ConjugatePartitionRequest(partition=result.conjugate)
-    )
+    result2 = conjugate_partition(ConjugatePartitionRequest(partition=result.conjugate))
     assert result2.conjugate.parts == (5, 3, 2, 1)
 
 
 def test_empty_canonical_partition_composes_with_all_partition_consumers() -> None:
     partition = IntegerPartition(parts=())
     hook_result = hook_lengths(HookLengthRequest(partition=partition))
-    count_result = syt_count(
-        StandardYoungTableauCountRequest(partition=partition)
-    )
+    count_result = syt_count(StandardYoungTableauCountRequest(partition=partition))
     conjugate_result = conjugate_partition(
         ConjugatePartitionRequest(partition=partition)
     )
@@ -179,9 +173,7 @@ def test_native_partition_functions_are_closed_at_conjugate_boundary() -> None:
 def test_partition_operations_return_typed_results_at_the_size_boundary() -> None:
     """The canonical domain admits the conjugate of every admitted partition."""
     row = IntegerPartition(parts=(500,))
-    conjugate_result = conjugate_partition(
-        ConjugatePartitionRequest(partition=row)
-    )
+    conjugate_result = conjugate_partition(ConjugatePartitionRequest(partition=row))
     assert conjugate_result.conjugate.parts == (1,) * 500
     round_trip = conjugate_partition(
         ConjugatePartitionRequest(partition=conjugate_result.conjugate)

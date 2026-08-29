@@ -50,6 +50,7 @@ def _run_factorization(
 ) -> PolynomialFactorizationResult:
     return polynomial_factorization(request.polynomial)
 
+
 POLYNOMIAL_INVARIANT_OPERATIONS = (
     polynomial_operation(
         "polynomial.compute.gcd",

@@ -516,14 +516,10 @@ def test_evaluation_preserves_polynomial_sum_and_product() -> None:
     polynomial_product = _polynomial((2, 3), (3, 2), (-2, 1), (-3, 0))
 
     f_value = _fractions(
-        _evaluate(
-            MatrixPolynomialEvaluationRequest(matrix=source, polynomial=f)
-        ).value
+        _evaluate(MatrixPolynomialEvaluationRequest(matrix=source, polynomial=f)).value
     )
     g_value = _fractions(
-        _evaluate(
-            MatrixPolynomialEvaluationRequest(matrix=source, polynomial=g)
-        ).value
+        _evaluate(MatrixPolynomialEvaluationRequest(matrix=source, polynomial=g)).value
     )
     sum_value = _fractions(
         _evaluate(

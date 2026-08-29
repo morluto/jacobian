@@ -52,6 +52,7 @@ def compute_triangle_similarity(
         similar=triangles_similar(request.triangle1, request.triangle2)
     )
 
+
 _ORIGIN = {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}}
 _UNIT_X = {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}}
 _UNIT_Y = {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}}

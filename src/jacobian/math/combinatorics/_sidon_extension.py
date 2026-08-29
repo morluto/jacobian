@@ -19,6 +19,7 @@ def compute_sidon_extension_profile(
         request.candidate_elements,
     )
 
+
 SIDON_EXTENSION_OPERATION = (
     combinatorics_operation(
         "combinatorics.integer_set.sidon.extension_profile.compute",

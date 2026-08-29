@@ -250,9 +250,7 @@ def test_domain_and_subset_boundary_of_fifty_positions_is_accepted() -> None:
         domain=tuple(f"p{position}" for position in range(50)),
         generators=(tuple(range(50)),),
     )
-    result = _run_subset(
-        _request(action, tuple(reversed(range(50))))
-    )
+    result = _run_subset(_request(action, tuple(reversed(range(50)))))
 
     assert result.source_subset.positions == tuple(range(50))
     assert result.canonical_subset.positions == tuple(range(50))

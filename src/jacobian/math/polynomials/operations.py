@@ -253,10 +253,7 @@ def _admit_resultant(
             maximum_exponent=_MAX_ELIMINATION_DEGREE_SUM,
         )
     index = left.variables.index(elimination_variable)
-    if (
-        _degree(left, index) + _degree(right, index)
-        > _MAX_ELIMINATION_DEGREE_SUM
-    ):
+    if _degree(left, index) + _degree(right, index) > _MAX_ELIMINATION_DEGREE_SUM:
         raise _validation_error("Sylvester degree exceeds the resultant budget")
 
 
@@ -305,9 +302,7 @@ def _admit_groebner(
         raise _validation_error("monomial order must be lex, grlex, or grevlex")
     variables = generators[0].variables
     if any(generator.variables != variables for generator in generators):
-        raise _validation_error(
-            "all ideal generators must use the same ordered ring"
-        )
+        raise _validation_error("all ideal generators must use the same ordered ring")
     if (
         sum(len(generator.polynomial.terms) for generator in generators)
         > _MAX_INVARIANT_TERMS
@@ -414,12 +409,8 @@ def polynomial_discriminant(
     variables = polynomial.variables
     variable_index = variables.index(variable)
     generator = symbols_for_variables(variables)[variable_index]
-    value = discriminant(
-        rational_polynomial_to_sympy(polynomial), generator
-    )
-    remaining_variables = tuple(
-        name for name in variables if name != variable
-    )
+    value = discriminant(rational_polynomial_to_sympy(polynomial), generator)
+    remaining_variables = tuple(name for name in variables if name != variable)
     return PolynomialDiscriminantResult(
         variable=variable,
         discriminant=_invariant_value(value, remaining_variables),
@@ -433,9 +424,7 @@ def polynomial_square_free_decomposition(
 
     _run_admission(lambda: _admit_square_free(polynomial))
     source = rational_polynomial_to_sympy(polynomial)
-    coefficient, canonical_factors, reconstructed = (
-        square_free_decomposition(source)
-    )
+    coefficient, canonical_factors, reconstructed = square_free_decomposition(source)
     factors = tuple(
         PolynomialSquareFreeFactor(
             factor=_result_polynomial(factor, polynomial.variables),
@@ -509,10 +498,7 @@ def polynomial_groebner_basis(
     basis_polynomials = tuple(
         _result_polynomial(polynomial, variables)
         for polynomial in groebner_basis(
-            tuple(
-                rational_polynomial_to_sympy(generator)
-                for generator in generators
-            ),
+            tuple(rational_polynomial_to_sympy(generator) for generator in generators),
             symbols_for_variables(variables),
             monomial_order,
         )

@@ -49,11 +49,7 @@ def _admit_request(
             code="group_cohomology.prime_not_prime",
             message="prime must be a prime integer",
         )
-    if (
-        type(max_degree) is not int
-        or max_degree < 0
-        or max_degree > MAX_COCHAIN_DEGREE
-    ):
+    if type(max_degree) is not int or max_degree < 0 or max_degree > MAX_COCHAIN_DEGREE:
         raise OperationDomainValidationError(
             location=("max_degree",),
             code="group_cohomology.max_degree_out_of_range",

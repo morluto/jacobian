@@ -34,9 +34,7 @@ class TestRSK:
         assert result.convention == "ROW_INSERTION_RSK_V1"
 
     def test_identity(self) -> None:
-        result = rsk_permutation(
-            RSKPermutationRequest(permutation=(1, 2, 3, 4, 5))
-        )
+        result = rsk_permutation(RSKPermutationRequest(permutation=(1, 2, 3, 4, 5)))
         assert result.shape.parts == (5,)
         assert result.lis_length == 5
         assert result.lds_length == 1
@@ -44,9 +42,7 @@ class TestRSK:
         assert result.q_tableau.rows == ((1, 2, 3, 4, 5),)
 
     def test_reverse(self) -> None:
-        result = rsk_permutation(
-            RSKPermutationRequest(permutation=(5, 4, 3, 2, 1))
-        )
+        result = rsk_permutation(RSKPermutationRequest(permutation=(5, 4, 3, 2, 1)))
         assert result.shape.parts == (1, 1, 1, 1, 1)
         assert result.lis_length == 1
         assert result.lds_length == 5

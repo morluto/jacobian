@@ -308,6 +308,7 @@ FINITE_PROBABILITY_OPERATIONS = (
     DIRECTED_BOND_CONNECTION_PROBABILITY_OPERATION,
 )
 
+
 def finite_probability_operations() -> MathTools:
     from dataclasses import replace
 

@@ -26,7 +26,9 @@ __all__ = [
 ]
 
 
-def _admit_terminals(graph: FlowGraph | EdgeDisjointPathsGraph, source: int, sink: int) -> None:
+def _admit_terminals(
+    graph: FlowGraph | EdgeDisjointPathsGraph, source: int, sink: int
+) -> None:
     if not 0 <= source < graph.vertex_count:
         raise OperationDomainValidationError(
             location=("source",),
@@ -94,9 +96,7 @@ def max_flow(
     """Return the exact maximum flow value and its edge decomposition."""
 
     _admit_terminals(graph, source, sink)
-    flow_value, flow_dict = nx.maximum_flow(
-        _build_digraph(graph), source, sink
-    )
+    flow_value, flow_dict = nx.maximum_flow(_build_digraph(graph), source, sink)
     if not isinstance(flow_value, (int, Fraction)):
         raise RuntimeError("NetworkX did not preserve the exact flow value")
     flow_edges = tuple(
@@ -131,7 +131,9 @@ def edge_disjoint_paths(
     network.add_nodes_from(range(graph.vertex_count))
     network.add_edges_from(graph.edges)
     try:
-        return tuple(tuple(path) for path in nx.edge_disjoint_paths(network, source, sink))
+        return tuple(
+            tuple(path) for path in nx.edge_disjoint_paths(network, source, sink)
+        )
     except nx.NetworkXNoPath:
         return ()
 

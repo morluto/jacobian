@@ -37,7 +37,9 @@ def compute_laplacian(request: LaplacianRequest) -> LaplacianResult:
     return native.laplacian(request.graph)
 
 
-def compute_reduced_laplacian(request: ReducedLaplacianRequest) -> ReducedLaplacianResult:
+def compute_reduced_laplacian(
+    request: ReducedLaplacianRequest,
+) -> ReducedLaplacianResult:
     return native.reduced_laplacian(request.graph, request.sink)
 
 
@@ -67,7 +69,9 @@ def compute_q_reduced(request: QReducedRequest) -> QReducedResult:
     return native.q_reduced(request.graph, request.divisor, request.sink)
 
 
-def compute_canonical_divisor(request: CanonicalDivisorRequest) -> CanonicalDivisorResult:
+def compute_canonical_divisor(
+    request: CanonicalDivisorRequest,
+) -> CanonicalDivisorResult:
     return native.canonical_divisor(request.graph)
 
 

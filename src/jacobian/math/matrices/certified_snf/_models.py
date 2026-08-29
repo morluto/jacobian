@@ -33,6 +33,7 @@ class CertifiedSmithNormalFormRequest(StrictModel):
         WithJsonSchema(_certified_smith_input_schema()),
     ]
 
+
 class CertifiedSmithNormalFormResult(StrictModel):
     certificate: SmithNormalFormCertificate
 

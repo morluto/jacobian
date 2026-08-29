@@ -116,9 +116,7 @@ class TestHochschildHomology:
             structure_constants=(((1,),),),
             augmentation=(1,),
         )
-        result = _run_homology(
-            HochschildHomologyRequest(algebra=alg, max_degree=2)
-        )
+        result = _run_homology(HochschildHomologyRequest(algebra=alg, max_degree=2))
         assert result.groups[0].betti == 1
 
     def test_2d_commutative(self) -> None:
@@ -132,9 +130,7 @@ class TestHochschildHomology:
             ),
             augmentation=(1, 1),
         )
-        result = _run_homology(
-            HochschildHomologyRequest(algebra=alg, max_degree=2)
-        )
+        result = _run_homology(HochschildHomologyRequest(algebra=alg, max_degree=2))
         assert len(result.groups) >= 2
 
     def test_zero_algebra(self) -> None:
@@ -145,9 +141,7 @@ class TestHochschildHomology:
             structure_constants=(((0,),),),
             augmentation=(0,),
         )
-        result = _run_homology(
-            HochschildHomologyRequest(algebra=alg, max_degree=2)
-        )
+        result = _run_homology(HochschildHomologyRequest(algebra=alg, max_degree=2))
         # With zero multiplication, the differential vanishes
         assert result.groups[0].betti >= 0
 
@@ -187,9 +181,7 @@ class TestHochschildAdmissionAndTopDegree:
             structure_constants=(((1,),),),
             augmentation=(1,),
         )
-        result = _run_homology(
-            HochschildHomologyRequest(algebra=alg, max_degree=2)
-        )
+        result = _run_homology(HochschildHomologyRequest(algebra=alg, max_degree=2))
         bettis = {g.degree: g.betti for g in result.groups}
         assert bettis[1] == 0
         assert bettis[0] == 1
@@ -199,13 +191,9 @@ class TestHochschildAdmissionAndTopDegree:
         alg = _coordinatewise_algebra(2, 7)
         assert alg.dimension ** (4 + 1) <= 20_000
         with pytest.raises(ValueError, match="matrix"):
-            _run_homology(
-                HochschildHomologyRequest(algebra=alg, max_degree=4)
-            )
+            _run_homology(HochschildHomologyRequest(algebra=alg, max_degree=4))
         with pytest.raises(ValueError, match="matrix"):
-            _run_chain_complex(
-                HochschildChainComplexRequest(algebra=alg, max_degree=4)
-            )
+            _run_chain_complex(HochschildChainComplexRequest(algebra=alg, max_degree=4))
 
     def test_largest_admitted_homology_request(self) -> None:
         """The densest admitted elimination stays inside the entry budget."""
@@ -225,9 +213,7 @@ class TestHochschildAdmissionAndTopDegree:
         """
         alg = _coordinatewise_algebra(5, 9)
         assert alg.dimension**3 == 729
-        homology = _run_homology(
-            HochschildHomologyRequest(algebra=alg, max_degree=1)
-        )
+        homology = _run_homology(HochschildHomologyRequest(algebra=alg, max_degree=1))
         # GF(5)^9 is separable with the projection augmentation, so
         # HH_0 = K and all higher groups vanish.
         assert [group.betti for group in homology.groups] == [1, 0]
@@ -395,9 +381,7 @@ class TestHomologySourceBinding:
             structure_constants=(((1,),),),
             augmentation=(1,),
         )
-        genuine = _run_homology(
-            HochschildHomologyRequest(algebra=alg, max_degree=2)
-        )
+        genuine = _run_homology(HochschildHomologyRequest(algebra=alg, max_degree=2))
         payload = genuine.model_dump()
         payload["prime"] = 7
         with _validation_error("hochschild_complex.prime_binding"):
@@ -438,9 +422,7 @@ class TestAugmentationEndpointFaces:
             ),
             augmentation=(0, 0),
         )
-        result = _run_homology(
-            HochschildHomologyRequest(algebra=zeroed, max_degree=3)
-        )
+        result = _run_homology(HochschildHomologyRequest(algebra=zeroed, max_degree=3))
         # With no augmentation action the image of d_2 is all of A
         # (1*1 = 1 spans), so H_1 vanishes - the pre-fix behaviour.
         bettis = {group.degree: group.betti for group in result.groups}

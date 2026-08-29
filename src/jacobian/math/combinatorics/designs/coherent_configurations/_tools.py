@@ -16,6 +16,7 @@ def _run_analyze(
 ) -> CoherentConfigurationAnalyzeResult:
     return analyze_configuration(request.configuration)
 
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="coherent_configuration.analyze.compute",

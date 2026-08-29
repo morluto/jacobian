@@ -102,6 +102,7 @@ def compute_beat_points(request: BeatPointsRequest) -> BeatPointsResult:
         up_beat_points=analysis.up_beat_points,
     )
 
+
 _SIERPINSKI = {
     "point_count": 2,
     "open_sets": [[], [1], [0, 1]],

@@ -14,6 +14,7 @@ def construct_3term_progression_hypergraph(
 ) -> ProgressionHypergraphResult:
     return progression_hypergraph(request.group_order)
 
+
 PROGRESSION_HYPERGRAPH_OPERATION = combinatorics_operation(
     "combinatorics.finite_abelian.3term_progression_hypergraph.construct",
     "Construct 3-term progression hypergraph of a finite cyclic group",

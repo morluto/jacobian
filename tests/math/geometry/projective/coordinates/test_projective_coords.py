@@ -91,15 +91,17 @@ def test_chart_transition_is_invariant_under_homogeneous_rescaling() -> None:
 
     assert (
         chart_transition(original.point, original.chart_i, original.chart_j).transition
-        == chart_transition(rescaled.point, rescaled.chart_i, rescaled.chart_j).transition
+        == chart_transition(
+            rescaled.point, rescaled.chart_i, rescaled.chart_j
+        ).transition
     )
 
 
 def test_chart_transition_reports_outside_target_chart() -> None:
     request = ChartTransitionRequest(
-            point=_point(_r("1"), _r("0"), _r("3")),
-            chart_i=0,
-            chart_j=1,
+        point=_point(_r("1"), _r("0"), _r("3")),
+        chart_i=0,
+        chart_j=1,
     )
     result = chart_transition(request.point, request.chart_i, request.chart_j)
 

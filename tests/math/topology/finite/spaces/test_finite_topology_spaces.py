@@ -116,16 +116,12 @@ class TestBoundary:
 
 class TestKolmogorovQuotient:
     def test_sierpinski_is_t0(self) -> None:
-        result = _kolmogorov_quotient(
-            KolmogorovQuotientRequest(space=_sierpinski())
-        )
+        result = _kolmogorov_quotient(KolmogorovQuotientRequest(space=_sierpinski()))
         # Sierpinski space is T0, so the quotient has 2 points.
         assert len(result.quotient_points) == 2
 
     def test_discrete_is_t0(self) -> None:
-        result = _kolmogorov_quotient(
-            KolmogorovQuotientRequest(space=_discrete_2())
-        )
+        result = _kolmogorov_quotient(KolmogorovQuotientRequest(space=_discrete_2()))
         assert len(result.quotient_points) == 2
 
     def test_equivalence_classes_retain_long_source_labels(self) -> None:

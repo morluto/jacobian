@@ -26,6 +26,7 @@ def compute_simple_reflection(request: SimpleReflectionRequest):
 def compute_weyl_group_order(request: CartanMatrixRequest):
     return weyl_group_order(request.matrix)
 
+
 CartanMatrix = tuple[tuple[int, ...], ...]
 
 A2: CartanMatrix = ((2, -1), (-1, 2))

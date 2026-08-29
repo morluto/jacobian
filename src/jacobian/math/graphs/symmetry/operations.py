@@ -41,9 +41,7 @@ def _admit_graph_symmetry_orbit(
                 "graph.symmetry_exceeds_max_symmetry_edges_edge_bound",
                 f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_EDGES}-edge bound",
             )
-        generator_ids = tuple(
-            generator.generator_id for generator in generators
-        )
+        generator_ids = tuple(generator.generator_id for generator in generators)
         if len(set(generator_ids)) != len(generator_ids):
             raise PydanticCustomError(
                 "graph.graph_symmetry_generator_identifiers_must_be_uni",
@@ -113,15 +111,11 @@ def graph_symmetry_orbits(
         graph, generators
     )
     vertex_orbits = tuple(
-        GraphVertexOrbit(
-            orbit_index=index, representative=members[0], members=members
-        )
+        GraphVertexOrbit(orbit_index=index, representative=members[0], members=members)
         for index, members in enumerate(vertex_orbit_members)
     )
     edge_orbits = tuple(
-        GraphEdgeOrbit(
-            orbit_index=index, representative=members[0], members=members
-        )
+        GraphEdgeOrbit(orbit_index=index, representative=members[0], members=members)
         for index, members in enumerate(edge_orbit_members)
     )
     return GraphSymmetryOrbitResult._from_kernel(
@@ -129,13 +123,12 @@ def graph_symmetry_orbits(
         generators=generators,
         vertices=vertices,
         edges=edges,
-        generator_ids=tuple(
-            sorted(generator.generator_id for generator in generators)
-        ),
+        generator_ids=tuple(sorted(generator.generator_id for generator in generators)),
         vertex_orbits=vertex_orbits,
         edge_orbits=edge_orbits,
         vertex_color_mode=("DECLARED" if graph.vertex_colors else "UNCOLORED"),
         edge_color_mode="DECLARED" if graph.edge_colors else "UNCOLORED",
     )
+
 
 __all__ = ["graph_symmetry_orbits"]

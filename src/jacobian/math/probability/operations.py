@@ -81,13 +81,9 @@ def _admit_event(
     *,
     require_positive: bool,
 ) -> None:
-    support = set(
-        _admit_distribution(distribution.atoms, require_canonical=True)
-    )
+    support = set(_admit_distribution(distribution.atoms, require_canonical=True))
     try:
-        event = _require_strictly_increasing(
-            event_values, label="finite event values"
-        )
+        event = _require_strictly_increasing(event_values, label="finite event values")
         for value in event_values:
             require_bounded_rational(
                 value,
@@ -124,9 +120,7 @@ def _admit_pushforward(
     distribution: FiniteRationalDistribution,
     mapping: tuple[FinitePushforwardMapEntry, ...],
 ) -> None:
-    source_values = _admit_distribution(
-        distribution.atoms, require_canonical=True
-    )
+    source_values = _admit_distribution(distribution.atoms, require_canonical=True)
     try:
         mapping_sources = tuple(item.source.as_fraction() for item in mapping)
         if mapping_sources != source_values:
@@ -174,10 +168,7 @@ def _admit_convolution(
 ) -> None:
     _admit_distribution(left.atoms, require_canonical=True)
     _admit_distribution(right.atoms, require_canonical=True)
-    if (
-        len(left.atoms) * len(right.atoms)
-        > MAX_FINITE_CONVOLUTION_PAIRS
-    ):
+    if len(left.atoms) * len(right.atoms) > MAX_FINITE_CONVOLUTION_PAIRS:
         raise OperationDomainValidationError(
             location=("left", "right"),
             code="probability.convolution.pair_bound",
@@ -222,8 +213,7 @@ def _admit_gaussian_polynomial_moment(
     """Admit the complete expansion and exact-result envelope."""
     if type(order) is not int or not 0 <= order <= MAX_GAUSSIAN_MOMENT_ORDER:
         raise ValueError(
-            "Gaussian moment order must be between 0 and "
-            f"{MAX_GAUSSIAN_MOMENT_ORDER}"
+            f"Gaussian moment order must be between 0 and {MAX_GAUSSIAN_MOMENT_ORDER}"
         )
     expansion_paths: int = len(polynomial.terms) ** order
     if expansion_paths > MAX_GAUSSIAN_EXPANSION_PATHS:
@@ -449,16 +439,10 @@ def gaussian_polynomial_moment(
     names = tuple(f"x{index}" for index in range(dimension))
     ctx = fmpq_mpoly_ctx.get(names, "lex")
     real_base = ctx.from_dict(
-        {
-            term.exponents: _fmpq(term.coefficient.real)
-            for term in polynomial.terms
-        }
+        {term.exponents: _fmpq(term.coefficient.real) for term in polynomial.terms}
     )
     imag_base = ctx.from_dict(
-        {
-            term.exponents: _fmpq(term.coefficient.imaginary)
-            for term in polynomial.terms
-        }
+        {term.exponents: _fmpq(term.coefficient.imaginary) for term in polynomial.terms}
     )
 
     def _complex_poly_multiply(

@@ -24,6 +24,7 @@ def _from_feasible_sets(
             message=str(exc),
         ) from exc
 
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="delta_matroid.from_feasible_sets.compute",

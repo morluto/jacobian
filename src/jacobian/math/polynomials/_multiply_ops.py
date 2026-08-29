@@ -12,6 +12,7 @@ def compute_rational_polynomial_multiply(
 ) -> RationalPolynomial:
     return rational_polynomial_multiply(request.left, request.right)
 
+
 _C1 = {"num": "1", "den": "1"}
 
 POLYNOMIAL_MULTIPLY_OPERATION = polynomial_operation(

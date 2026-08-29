@@ -204,9 +204,7 @@ def simple_reflection(
             simple_index,
         )
     )
-    return SimpleReflectionResult._from_kernel(
-        matrix, vector, simple_index, reflected
-    )
+    return SimpleReflectionResult._from_kernel(matrix, vector, simple_index, reflected)
 
 
 def weyl_group_order(matrix: tuple[tuple[int, ...], ...]) -> WeylGroupOrderResult:

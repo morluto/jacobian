@@ -14,6 +14,7 @@ def compute_level_one_named_q_expansion(
 ) -> LevelOneModularQExpansion:
     return native.level_one_named_q_expansion(request.form, request.truncation_order)
 
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="modular_form.level_one.named_q_expansion.compute",

@@ -27,9 +27,7 @@ _WORKER_OUTPUT_BYTES = 64 * 1024
 _WORKER_ERROR_BYTES = 16_384
 _WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
-ColoringWorkerOutcome = Literal[
-    "sat", "unsat", "budget_exceeded", "execution_failed"
-]
+ColoringWorkerOutcome = Literal["sat", "unsat", "budget_exceeded", "execution_failed"]
 
 
 def run_k_colorability_solver_kernel(

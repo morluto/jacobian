@@ -58,6 +58,7 @@ def compute_periodic_congruence_union_profile(
 
     return periodic_congruence_union_profile(normalize_periodic_source(request))
 
+
 PERIODIC_CONGRUENCE_OPERATIONS = (
     number_theory_operation(
         "congruence.periodic_union.measure.compute",

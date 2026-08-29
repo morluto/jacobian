@@ -21,6 +21,7 @@ def compute_product(
         multiply(request.left, request.right),
     )
 
+
 _INFINITE_DIHEDRAL_PRESENTATION = {
     "characteristic": 5,
     "lattice_basis": ["t"],

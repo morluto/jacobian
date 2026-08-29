@@ -106,9 +106,9 @@ def test_native_operation_matches_catalog_projection() -> None:
     polynomial = _polynomial(("x",), {(2,): 1, (0,): -1})
     box = _box(("x",), ((0, 2),))
 
-    assert polynomial_box_enclosure(polynomial, box) == _enclose(
-        polynomial, box
-    ).enclosure
+    assert (
+        polynomial_box_enclosure(polynomial, box) == _enclose(polynomial, box).enclosure
+    )
 
 
 def test_affine_and_multilinear_corner_extrema_are_enclosed_exactly() -> None:

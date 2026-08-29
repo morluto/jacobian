@@ -14,7 +14,9 @@ def nullable_nonterminals(grammar: FiniteCFGO) -> tuple[bool, ...]:
         for rule in grammar.rules:
             if nullable[rule.head]:
                 continue
-            if all(symbol not in terminals and nullable[symbol] for symbol in rule.body):
+            if all(
+                symbol not in terminals and nullable[symbol] for symbol in rule.body
+            ):
                 nullable[rule.head] = True
                 changed = True
     return tuple(nullable[nonterminal] for nonterminal in grammar.nonterminals)

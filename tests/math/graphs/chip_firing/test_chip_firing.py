@@ -128,9 +128,7 @@ class TestFireVector:
         f2 = (0, 1, 0)
         r1 = fire_vector(GRAPH, div, f1)
         r2 = fire_vector(GRAPH, r1.fired_divisor, f2)
-        composed = fire_vector(
-            GRAPH, div, tuple(f1[i] + f2[i] for i in range(3))
-        )
+        composed = fire_vector(GRAPH, div, tuple(f1[i] + f2[i] for i in range(3)))
         assert r2.fired_divisor == composed.fired_divisor
 
     def test_wrong_vector_length(self) -> None:

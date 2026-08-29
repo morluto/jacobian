@@ -36,8 +36,7 @@ def characteristic_polynomial(
     n = ambient_dimension
     m = hyperplane_count
     inner = sum(
-        (-1) ** k * sympy.binomial(m - 1, k) * t ** (n - 1 - k)
-        for k in range(n)
+        (-1) ** k * sympy.binomial(m - 1, k) * t ** (n - 1 - k) for k in range(n)
     )
     coefficients = sympy.expand((t - 1) * inner).as_poly().all_coeffs()
     return CharacteristicPolynomialResult(
@@ -49,8 +48,7 @@ def characteristic_polynomial(
 def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCountResult:
     r"""Count chambers of a generic central arrangement."""
     count = 2 * sum(
-        sympy.binomial(hyperplane_count - 1, k)
-        for k in range(ambient_dimension)
+        sympy.binomial(hyperplane_count - 1, k) for k in range(ambient_dimension)
     )
     return ChamberCountResult(chamber_count=int(count))
 

@@ -74,9 +74,7 @@ def _admit_integer(polynomial: IntegerPolynomial) -> None:
         raise _validation_error("integer coefficient exceeds the decimal-digit budget")
 
 
-def _admit_integer_pair(
-    left: IntegerPolynomial, right: IntegerPolynomial
-) -> None:
+def _admit_integer_pair(left: IntegerPolynomial, right: IntegerPolynomial) -> None:
     _admit_integer(left)
     _admit_integer(right)
 
@@ -212,7 +210,9 @@ def integer_polynomial_gcd(
     )
 
 
-def integer_polynomial_content(polynomial: IntegerPolynomial) -> IntegerPolynomialContentResult:
+def integer_polynomial_content(
+    polynomial: IntegerPolynomial,
+) -> IntegerPolynomialContentResult:
     """Return the nonnegative coefficient content of a canonical polynomial."""
 
     _run_admission(lambda: _admit_integer(polynomial))
@@ -281,7 +281,9 @@ def rational_polynomial_division(
     _run_admission(lambda: _admit_division(left, right))
     left_backend = rational_polynomial_to_sympy(left)
     right_backend = rational_polynomial_to_sympy(right)
-    quotient, remainder, reconstruction = polynomials.divide(left_backend, right_backend)
+    quotient, remainder, reconstruction = polynomials.divide(
+        left_backend, right_backend
+    )
     variables = left.variables
     return RationalPolynomialDivisionResult(
         quotient=rational_polynomial_from_sympy(quotient, variables),

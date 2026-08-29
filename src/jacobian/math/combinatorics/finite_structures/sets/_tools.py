@@ -79,6 +79,7 @@ def union_cardinality(request: FiniteSetPairRequest) -> FiniteSetCardinalityResu
         cardinality=native.union_cardinality(request.left, request.right)
     )
 
+
 _PAIR = {"left": {"elements": ["1", "2"]}, "right": {"elements": ["2", "3"]}}
 
 TOOLS: MathTools = (

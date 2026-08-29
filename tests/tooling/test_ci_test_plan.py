@@ -110,9 +110,7 @@ def test_public_operation_kernel_selects_catalog_examples() -> None:
 
 
 def test_numerical_semigroup_operations_select_catalog_examples() -> None:
-    plan = _plan(
-        ["src/jacobian/math/number_theory/numerical_semigroups/operations.py"]
-    )
+    plan = _plan(["src/jacobian/math/number_theory/numerical_semigroups/operations.py"])
 
     assert plan.run_math is True
     assert plan.math_tests == ("tests/math/number_theory/numerical_semigroups",)

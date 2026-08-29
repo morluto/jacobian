@@ -306,9 +306,7 @@ def polya_inventory(
 ) -> PolyaInventoryResult:
     """Compute the Pólya enumeration inventory polynomial."""
     degree, terms = _polya_inventory_data(action, colors)
-    return PolyaInventoryResult._from_kernel(
-        action, colors, degree, terms
-    )
+    return PolyaInventoryResult._from_kernel(action, colors, degree, terms)
 
 
 __all__ = [

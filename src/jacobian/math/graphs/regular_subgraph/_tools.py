@@ -14,6 +14,7 @@ from jacobian.math.graphs.regular_subgraph.operations import (
 def _find(request: RegularSubgraphRequest) -> RegularSubgraphResult:
     return find_k_regular_subgraph(request.graph, request.k)
 
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="graph.k_regular_subgraph.find",

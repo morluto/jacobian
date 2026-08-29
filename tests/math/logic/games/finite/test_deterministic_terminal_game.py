@@ -417,9 +417,7 @@ def test_trusted_terminal_game_producers_run_the_minimax_kernel_once(
         calls += 1
         return original(game)
 
-    monkeypatch.setattr(
-        operations, "_solve_terminal_game_data", counted_native
-    )
+    monkeypatch.setattr(operations, "_solve_terminal_game_data", counted_native)
     solve_terminal_game(game)
     assert calls == 1
 

@@ -32,9 +32,7 @@ def parse_translation_shift(source: PrimeAffineTuple, shift: str) -> int:
     """Preflight a wire shift before constructing its unbounded Python integer."""
 
     _run_admission(
-        lambda: require_bounded_affine_endpoints(
-            source, shift, label="translation"
-        )
+        lambda: require_bounded_affine_endpoints(source, shift, label="translation")
     )
     return parse_canonical_integer(shift)
 
@@ -78,7 +76,8 @@ class PrimeAffineTranslationResult(StrictModel):
 
 
 def compute_translation(
-    source: PrimeAffineTuple, shift: int,
+    source: PrimeAffineTuple,
+    shift: int,
 ) -> PrimeAffineTranslationResult:
     """Apply one admitted translation and retain its exact canonical tuple."""
 

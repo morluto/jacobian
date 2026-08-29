@@ -346,13 +346,17 @@ def _positive_integer(value: SupportsIndex | CanonicalInteger | IntegerValue) ->
     return integer
 
 
-def divisor_count(value: SupportsIndex | CanonicalInteger | IntegerValue) -> IntegerValue:
+def divisor_count(
+    value: SupportsIndex | CanonicalInteger | IntegerValue,
+) -> IntegerValue:
     """Return the number of positive divisors of a positive integer."""
 
     from sympy import divisor_count as sympy_divisor_count
 
     return IntegerValue(
-        value=format_canonical_integer(int(sympy_divisor_count(_positive_integer(value))))
+        value=format_canonical_integer(
+            int(sympy_divisor_count(_positive_integer(value)))
+        )
     )
 
 
@@ -451,14 +455,18 @@ def is_perfect(value: SupportsIndex | CanonicalInteger | IntegerValue) -> Boolea
     return BooleanResult(holds=bool(integer and aliquot == integer))
 
 
-def is_abundant(value: SupportsIndex | CanonicalInteger | IntegerValue) -> BooleanResult:
+def is_abundant(
+    value: SupportsIndex | CanonicalInteger | IntegerValue,
+) -> BooleanResult:
     """Return whether a positive integer is smaller than its aliquot sum."""
 
     integer, aliquot = _aliquot_relation(value)
     return BooleanResult(holds=bool(integer and aliquot > integer))
 
 
-def is_deficient(value: SupportsIndex | CanonicalInteger | IntegerValue) -> BooleanResult:
+def is_deficient(
+    value: SupportsIndex | CanonicalInteger | IntegerValue,
+) -> BooleanResult:
     """Return whether a positive integer is larger than its aliquot sum."""
 
     integer, aliquot = _aliquot_relation(value)
@@ -489,9 +497,7 @@ def decimal_digit_sum(value: IntegerValue) -> IntegerValue:
 
 def decimal_digit_count(value: IntegerValue) -> IntegerValue:
     """Return the number of decimal digits in an exact integer's magnitude."""
-    return IntegerValue(
-        value=format_canonical_integer(len(value.value.lstrip("-")))
-    )
+    return IntegerValue(value=format_canonical_integer(len(value.value.lstrip("-"))))
 
 
 def base_digits(value: IntegerValue, base: int) -> tuple[int, int, tuple[str, ...]]:
@@ -540,7 +546,9 @@ def nth_root(value: IntegerValue, degree: int) -> tuple[IntegerValue, bool]:
     root, exact = integer_nthroot(abs(integer), degree)
     if integer < 0 and not exact:
         root += 1
-    return IntegerValue(value=format_canonical_integer(-root if integer < 0 else root)), exact
+    return IntegerValue(
+        value=format_canonical_integer(-root if integer < 0 else root)
+    ), exact
 
 
 def _as_rational(value: Fraction | int | IntegerValue) -> Fraction:

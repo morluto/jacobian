@@ -14,6 +14,7 @@ from jacobian.math.combinatorics.matroids.operations import closure_result
 def _run_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
     return closure_result(request.matroid, request.subset)
 
+
 _CLOSURE_EXAMPLE: dict[str, Any] = {
     "matroid": {
         "matrix": {

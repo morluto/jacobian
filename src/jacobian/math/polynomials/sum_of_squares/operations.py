@@ -125,9 +125,7 @@ def check_gram_certificate(
 ) -> GramCertificateResult:
     """Check that p = z^T Q z with Q symmetric PSD over QQ."""
     _admit(
-        lambda: _require_bounded_gram_admission(
-            polynomial, monomial_basis, gram_matrix
-        )
+        lambda: _require_bounded_gram_admission(polynomial, monomial_basis, gram_matrix)
     )
     is_symmetric, reconstructs, is_psd = _compute_gram_checks(
         polynomial, monomial_basis, gram_matrix.entries

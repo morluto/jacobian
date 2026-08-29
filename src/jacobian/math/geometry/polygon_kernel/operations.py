@@ -37,8 +37,8 @@ def _admit_visibility_kernel(
             location=("polygon",),
             code="geometry.polygon_kernel.coordinate_digits",
             message=(
-            "polygon coordinates exceed the "
-            f"{MAX_KERNEL_COORDINATE_DIGITS}-digit visibility-kernel bound"
+                "polygon coordinates exceed the "
+                f"{MAX_KERNEL_COORDINATE_DIGITS}-digit visibility-kernel bound"
             ),
         )
 
@@ -53,8 +53,8 @@ def _admit_visibility_kernel(
             location=("polygon",),
             code="geometry.polygon_kernel.half_plane_digits",
             message=(
-            "oriented half-plane coefficients exceed the "
-            f"{MAX_HALF_PLANE_COEFFICIENT_DIGITS}-digit bound"
+                "oriented half-plane coefficients exceed the "
+                f"{MAX_HALF_PLANE_COEFFICIENT_DIGITS}-digit bound"
             ),
         )
     intersection_digits = 8 * coefficient_digits + 8
@@ -63,8 +63,8 @@ def _admit_visibility_kernel(
             location=("polygon",),
             code="geometry.polygon_kernel.intersection_digits",
             message=(
-            "a boundary-line intersection can exceed the "
-            f"{MAX_INTERSECTION_COMPONENT_DIGITS}-digit component bound"
+                "a boundary-line intersection can exceed the "
+                f"{MAX_INTERSECTION_COMPONENT_DIGITS}-digit component bound"
             ),
         )
 
@@ -80,9 +80,9 @@ def _admit_visibility_kernel(
             location=("polygon",),
             code="geometry.polygon_kernel.result_size",
             message=(
-            "visibility-kernel result can require "
-            f"{estimated_result_chars} characters, exceeding the "
-            f"{MAX_KERNEL_RESULT_CHARS}-character bound"
+                "visibility-kernel result can require "
+                f"{estimated_result_chars} characters, exceeding the "
+                f"{MAX_KERNEL_RESULT_CHARS}-character bound"
             ),
         )
     feasibility_work = (

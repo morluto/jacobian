@@ -57,8 +57,10 @@ def center_basis(algebra: StructureConstants) -> tuple[tuple[int, ...], ...]:
     multiplication = algebra.multiplication
     commutator_rows = [
         [
-            (multiplication[column][basis][coordinate]
-             - multiplication[basis][column][coordinate])
+            (
+                multiplication[column][basis][coordinate]
+                - multiplication[basis][column][coordinate]
+            )
             % prime
             for column in range(dimension)
         ]

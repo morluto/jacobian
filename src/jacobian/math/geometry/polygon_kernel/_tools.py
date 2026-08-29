@@ -14,6 +14,7 @@ from jacobian.math.geometry.polygon_kernel.operations import (
 def _run_visibility_kernel(request: PolygonKernelRequest) -> PolygonKernelResult:
     return visibility_kernel(request.polygon)
 
+
 _NAKANO_PENTAGON = [
     {"x": {"num": "0", "den": "1"}, "y": {"num": "4620", "den": "1"}},
     {"x": {"num": "0", "den": "1"}, "y": {"num": "-4620", "den": "1"}},

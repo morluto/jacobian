@@ -32,7 +32,9 @@ def compute_facet_incidence(request: FacetIncidenceRequest) -> FacetIncidenceRes
     """Unpack a request and project the native facet profile."""
     vertices = request.vertices
     if isinstance(vertices, RationalVPolytope):
-        vertices = tuple(Vertex(coordinates=vertex.coordinates) for vertex in vertices.vertices)
+        vertices = tuple(
+            Vertex(coordinates=vertex.coordinates) for vertex in vertices.vertices
+        )
     return facet_incidence(vertices, request.dimension_bound)
 
 
@@ -40,7 +42,9 @@ def compute_polytope_volume(request: PolytopeVolumeRequest) -> PolytopeVolumeRes
     """Unpack a request and project the native volume result."""
     vertices = request.vertices
     if isinstance(vertices, RationalVPolytope):
-        vertices = tuple(Vertex(coordinates=vertex.coordinates) for vertex in vertices.vertices)
+        vertices = tuple(
+            Vertex(coordinates=vertex.coordinates) for vertex in vertices.vertices
+        )
     return polytope_volume(
         vertices,
         request.halfspaces,

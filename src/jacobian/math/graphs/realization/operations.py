@@ -28,8 +28,7 @@ def _is_graphical_erdos_gallai(degrees: tuple[int, ...]) -> bool:
     for k in range(1, vertex_count + 1):
         cumulative += sorted_degrees[k - 1]
         rhs = k * (k - 1) + sum(
-            min(sorted_degrees[index], k)
-            for index in range(k, vertex_count)
+            min(sorted_degrees[index], k) for index in range(k, vertex_count)
         )
         if cumulative > rhs:
             return False
@@ -87,8 +86,7 @@ def graphicality_check(sequence: DegreeSequence) -> GraphicalityCheckResult:
     for k in range(1, vertex_count + 1):
         cumulative += sorted_degrees[k - 1]
         rhs = k * (k - 1) + sum(
-            min(sorted_degrees[index], k)
-            for index in range(k, vertex_count)
+            min(sorted_degrees[index], k) for index in range(k, vertex_count)
         )
         if cumulative > rhs:
             return GraphicalityCheckResult(
@@ -96,8 +94,7 @@ def graphicality_check(sequence: DegreeSequence) -> GraphicalityCheckResult:
                 degree_sum=degree_sum,
                 vertex_count=vertex_count,
                 certificate=(
-                    f"erdos-gallai violation at k={k}: "
-                    f"left={cumulative} > right={rhs}"
+                    f"erdos-gallai violation at k={k}: left={cumulative} > right={rhs}"
                 ),
             )
     return GraphicalityCheckResult(
@@ -116,9 +113,7 @@ def realization_check(
     graph: nx.Graph[Any] = nx.Graph()
     graph.add_nodes_from(range(graph_value.vertex_count))
     graph.add_edges_from(graph_value.edges)
-    actual = tuple(
-        len(graph[vertex]) for vertex in range(graph_value.vertex_count)
-    )
+    actual = tuple(len(graph[vertex]) for vertex in range(graph_value.vertex_count))
     return RealizationCheckResult(
         is_realization=actual == sequence.degrees,
         expected_degrees=sequence.degrees,

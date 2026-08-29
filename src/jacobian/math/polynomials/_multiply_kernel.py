@@ -35,17 +35,13 @@ def _admit(left: RationalPolynomial, right: RationalPolynomial) -> None:
         raise _validation_error(
             "the polynomial product exceeds the bounded convolution work limit"
         )
-    coefficient_digits = _maximum_product_coefficient_digits(
-        left, right
-    )
+    coefficient_digits = _maximum_product_coefficient_digits(left, right)
     if coefficient_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise _validation_error(
             "the polynomial product may exceed the canonical coefficient digit limit"
         )
     maximum_exponents = tuple(
-        max(
-            (term.exponents[index] for term in left.polynomial.terms), default=0
-        )
+        max((term.exponents[index] for term in left.polynomial.terms), default=0)
         + max(
             (term.exponents[index] for term in right.polynomial.terms),
             default=0,

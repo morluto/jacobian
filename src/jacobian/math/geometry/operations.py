@@ -154,7 +154,9 @@ def _admit_configuration(
         _reject_geometry_domain(location=("points",), code=code, message=str(exc))
 
 
-def _admit_circumcircle(points: tuple[RationalPoint2D, RationalPoint2D, RationalPoint2D]) -> None:
+def _admit_circumcircle(
+    points: tuple[RationalPoint2D, RationalPoint2D, RationalPoint2D],
+) -> None:
     keys = tuple(_point_key(point) for point in points)
     if len(set(keys)) != len(keys):
         _reject_geometry_domain(
@@ -374,8 +376,10 @@ def concyclic(
 
     return GeometryBooleanResult(
         holds=Point2D.is_concyclic(
-            _point(first_point), _point(second_point),
-            _point(third_point), _point(fourth_point),
+            _point(first_point),
+            _point(second_point),
+            _point(third_point),
+            _point(fourth_point),
         )
     )
 
@@ -429,7 +433,9 @@ def orientation(
     import sympy
 
     first, second, third = (
-        _point(first_point), _point(second_point), _point(third_point),
+        _point(first_point),
+        _point(second_point),
+        _point(third_point),
     )
     determinant = (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (
         third.x - first.x
@@ -526,14 +532,14 @@ def simple_polygon(points: tuple[RationalPoint2D, ...]) -> SimplePolygonDecision
         for second in range(first + 1, len(points)):
             checked += 1
             intersection = segment_intersection(
-                    ClosedSegment2D(
-                        start=points[first],
-                        end=points[(first + 1) % len(points)],
-                    ),
-                    ClosedSegment2D(
-                        start=points[second],
-                        end=points[(second + 1) % len(points)],
-                    )
+                ClosedSegment2D(
+                    start=points[first],
+                    end=points[(first + 1) % len(points)],
+                ),
+                ClosedSegment2D(
+                    start=points[second],
+                    end=points[(second + 1) % len(points)],
+                ),
             )
             adjacent = (first - second) % len(points) in {1, len(points) - 1}
             shared = (
@@ -576,7 +582,7 @@ def classify_polygon_point(
     for index, start in enumerate(points):
         if _on_segment(point, start, points[(index + 1) % len(points)]):
             return PolygonPointClassificationResult(
-            polygon_vertex_count=len(points),
+                polygon_vertex_count=len(points),
                 classification="BOUNDARY",
                 boundary_edge_index=index,
             )

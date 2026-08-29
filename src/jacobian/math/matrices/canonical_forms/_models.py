@@ -1397,8 +1397,7 @@ class MatrixPolynomialEvaluationResult(StrictModel):
             value=value,
             polynomial_degree=polynomial_degree,
             matrix_multiplications=polynomial_degree or 0,
-            scalar_product_terms=(polynomial_degree or 0)
-            * len(matrix.entries) ** 3,
+            scalar_product_terms=(polynomial_degree or 0) * len(matrix.entries) ** 3,
         )
 
 
@@ -1443,7 +1442,9 @@ class MinimalPolynomialResult(StrictModel):
             raise _validation_error(
                 "invariant_mismatch", "degree must equal the minimal-polynomial degree"
             )
-        if len(self.characteristic_polynomial.coefficients) - 1 != len(self.matrix.entries):
+        if len(self.characteristic_polynomial.coefficients) - 1 != len(
+            self.matrix.entries
+        ):
             raise _validation_error(
                 "shape_mismatch",
                 "characteristic-polynomial degree must equal matrix order",
@@ -1541,9 +1542,7 @@ class PrimaryDecompositionResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_metadata(self) -> Self:
-        if len(self.minimal_polynomial.coefficients) - 1 > len(
-            self.matrix.entries
-        ):
+        if len(self.minimal_polynomial.coefficients) - 1 > len(self.matrix.entries):
             raise _validation_error(
                 "shape_mismatch",
                 "minimal-polynomial degree cannot exceed matrix order",

@@ -37,6 +37,7 @@ def _run_weight_profile(request: WeightProfileRequest) -> PolynomialWeightProfil
 def _run_initial_form(request: InitialFormRequest) -> PolynomialFaceData:
     return initial_form(request.polynomial, request.weight)
 
+
 # Canonical x^2 + xy + y^2 over the ordered ring QQ[x, y].
 _TOY_POLYNOMIAL = {
     "variables": ["x", "y"],

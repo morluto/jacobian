@@ -16,6 +16,7 @@ def _run_generalized_exact_cover(
         request.instance, search_node_limit=request.search_node_limit
     )
 
+
 GENERALIZED_EXACT_COVER_OPERATION = MathTool(
     operation_id="combinatorics.generalized_exact_cover.find",
     title="Find a generalized exact cover",

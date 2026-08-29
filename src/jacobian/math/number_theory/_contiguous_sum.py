@@ -14,6 +14,7 @@ def compute_contiguous_sum_profile(
 ) -> ContiguousSumProfileResult:
     return contiguous_sum_profile(request.lower_bound, request.upper_bound)
 
+
 CONTIGUOUS_SUM_OPERATION = number_theory_operation(
     "number_theory.integer_interval.contiguous_sum_profile.compute",
     "Compute contiguous-sum representation profile on a bounded interval",

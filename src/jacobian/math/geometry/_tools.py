@@ -46,7 +46,9 @@ def midpoint(request: PointPairRequest) -> GeometryPointResult:
     return _native.midpoint(request.first, request.second)
 
 
-def segment_intersection(request: SegmentIntersectionRequest) -> SegmentIntersectionResult:
+def segment_intersection(
+    request: SegmentIntersectionRequest,
+) -> SegmentIntersectionResult:
     return _native.segment_intersection(request.first, request.second)
 
 
@@ -55,7 +57,9 @@ def collinear(request: PointTripleRequest) -> GeometryBooleanResult:
 
 
 def concyclic(request: PointQuadrupleRequest) -> GeometryBooleanResult:
-    return _native.concyclic(request.first, request.second, request.third, request.fourth)
+    return _native.concyclic(
+        request.first, request.second, request.third, request.fourth
+    )
 
 
 def line_intersection(request: LinePairRequest) -> GeometryLineIntersectionResult:
@@ -106,7 +110,9 @@ def general_position_search(request: GeneralPositionRequest) -> GeneralPositionR
     return _native.general_position_search(request.points)
 
 
-def circumradius_profile(request: CircumradiusProfileRequest) -> CircumradiusProfileResult:
+def circumradius_profile(
+    request: CircumradiusProfileRequest,
+) -> CircumradiusProfileResult:
     return _native.circumradius_profile(request.points)
 
 

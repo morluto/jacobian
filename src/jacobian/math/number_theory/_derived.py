@@ -30,6 +30,7 @@ def compute_factorial_valuation(
 ) -> FactorialValuationResult:
     return factorial_valuation(request.n, request.base)
 
+
 DERIVED_NUMBER_THEORY_OPERATIONS = (
     number_theory_operation(
         "integer.compute.floor_square_root",

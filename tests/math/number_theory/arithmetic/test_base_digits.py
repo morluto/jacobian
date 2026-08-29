@@ -65,7 +65,9 @@ def test_base_digits_rejects_an_oversized_result_before_integer_conversion(
     def unexpected_conversion(_: str) -> int:
         raise AssertionError("base expansion must preflight before integer conversion")
 
-    monkeypatch.setattr(arithmetic_operations, "parse_canonical_integer", unexpected_conversion)
+    monkeypatch.setattr(
+        arithmetic_operations, "parse_canonical_integer", unexpected_conversion
+    )
 
     with pytest.raises(ValueError, match=rf"{MAX_BASE_DIGITS}-digit result bound"):
         base_digits(

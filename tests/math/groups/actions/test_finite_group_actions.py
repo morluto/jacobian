@@ -157,9 +157,7 @@ class TestFixedPointsAndCycles:
         # A transposition (0,1,2) -> (1,0,2) should exist; it has 1 fixed point.
         target = (1, 0, 2)
         idx = list(group).index(target)
-        result = _run_element_cycles(
-            ElementCyclesRequest(action=action, element=idx)
-        )
+        result = _run_element_cycles(ElementCyclesRequest(action=action, element=idx))
         assert result.fixed_point_count == 1
         assert result.fixed_points == (2,)
         assert result.cycle_type == (2, 1)
@@ -269,15 +267,11 @@ class TestBurnsideOrbitPartition:
 class TestTwoColorCounts:
     def test_s3_two_color_total_orbits(self) -> None:
         # S_3 on 3 points with 2 colours: 4 orbits.
-        result = _run_polya(
-            PolyaInventoryRequest(action=_symmetric_s3(), colors=2)
-        )
+        result = _run_polya(PolyaInventoryRequest(action=_symmetric_s3(), colors=2))
         assert sum(c for _, c in result.terms) == 4
 
     def test_s3_two_color_polynomial_coefficients(self) -> None:
-        result = _run_polya(
-            PolyaInventoryRequest(action=_symmetric_s3(), colors=2)
-        )
+        result = _run_polya(PolyaInventoryRequest(action=_symmetric_s3(), colors=2))
         assert dict(result.terms) == {(0, 3): 1, (1, 2): 1, (2, 1): 1, (3, 0): 1}
 
     def test_trivial_two_color_is_binomial(self) -> None:
@@ -297,17 +291,13 @@ class TestSubsetInventory:
         # For 2 colours (absent/present), the coefficient of t^k counts the
         # number of S_3 orbits on k-subsets of a 3-set.
         # k=0: 1 (empty set), k=1: 1, k=2: 1, k=3: 1.
-        result = _run_polya(
-            PolyaInventoryRequest(action=_symmetric_s3(), colors=2)
-        )
+        result = _run_polya(PolyaInventoryRequest(action=_symmetric_s3(), colors=2))
         by_degree = {mono[1]: coeff for mono, coeff in result.terms}
         assert by_degree == {0: 1, 1: 1, 2: 1, 3: 1}
 
     def test_d4_subset_inventory_by_cardinality(self) -> None:
         # D_4 on 4 vertices; orbits on subsets of each cardinality.
-        result = _run_polya(
-            PolyaInventoryRequest(action=_dihedral_d4(), colors=2)
-        )
+        result = _run_polya(PolyaInventoryRequest(action=_dihedral_d4(), colors=2))
         by_degree = {mono[1]: coeff for mono, coeff in result.terms}
         # k=0: 1; k=1: 1; k=2: 2; k=3: 1; k=4: 1.
         assert by_degree == {0: 1, 1: 1, 2: 2, 3: 1, 4: 1}
@@ -320,15 +310,11 @@ class TestSubsetInventory:
 
 class TestMulticolorPolya:
     def test_s3_three_color_total(self) -> None:
-        result = _run_polya(
-            PolyaInventoryRequest(action=_symmetric_s3(), colors=3)
-        )
+        result = _run_polya(PolyaInventoryRequest(action=_symmetric_s3(), colors=3))
         assert sum(c for _, c in result.terms) == 10
 
     def test_s3_three_color_monomials_sum_to_degree(self) -> None:
-        result = _run_polya(
-            PolyaInventoryRequest(action=_symmetric_s3(), colors=3)
-        )
+        result = _run_polya(PolyaInventoryRequest(action=_symmetric_s3(), colors=3))
         for mono, _ in result.terms:
             assert sum(mono) == 3
             assert len(mono) == 3

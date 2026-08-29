@@ -30,6 +30,7 @@ from jacobian.math.combinatorics.matroids.oriented.operations import (
 def check_chirotope(request: ChirotopeCheckRequest):
     return native_check_chirotope(request.chirotope)
 
+
 type Triple = tuple[int, int, int]
 
 

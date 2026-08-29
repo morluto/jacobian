@@ -120,6 +120,7 @@ def compute_substitution_fixed_point_prefix(
         retained_prefix_lengths=analysis.retained_prefix_lengths,
     )
 
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="word.factors.length.compute",

@@ -34,9 +34,7 @@ def _path_prefix_work_bound(vertex_count: int, max_degree: int, length: int) -> 
     return total
 
 
-def _path_profile_result_bytes(
-    graph: SimpleUndirectedGraph, path_length: int
-) -> int:
+def _path_profile_result_bytes(graph: SimpleUndirectedGraph, path_length: int) -> int:
     vertex_count = len(graph.vertices)
     graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
     max_label_bytes = max(

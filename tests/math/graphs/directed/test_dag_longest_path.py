@@ -10,7 +10,9 @@ from jacobian.math.graphs.directed.operations import dag_longest_path
 
 
 def _longest_path(graph: dict[str, object]) -> DagLongestPathResult:
-    return dag_longest_path(DagLongestPathRequest.model_validate({"graph": graph}).graph)
+    return dag_longest_path(
+        DagLongestPathRequest.model_validate({"graph": graph}).graph
+    )
 
 
 class TestDagLongestPath:

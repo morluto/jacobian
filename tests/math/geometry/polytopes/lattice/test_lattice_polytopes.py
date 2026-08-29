@@ -1163,7 +1163,9 @@ class TestThirdWaveRegressions:
             seen_sizes.append(len(halfspaces))
             return original(halfspaces)
 
-        monkeypatch.setattr(native_operations, "_vertices_from_h_representation", counting)
+        monkeypatch.setattr(
+            native_operations, "_vertices_from_h_representation", counting
+        )
         request = LatticePolytopeRequest(halfspaces=UNIT_SQUARE_4D_SIDES * 4)
         assert request.halfspaces is not None
         assert len(request.halfspaces) == 32
@@ -1189,7 +1191,9 @@ class TestThirdWaveRegressions:
             seen_sizes.append(len(halfspaces))
             return original(halfspaces)
 
-        monkeypatch.setattr(native_operations, "_vertices_from_h_representation", counting)
+        monkeypatch.setattr(
+            native_operations, "_vertices_from_h_representation", counting
+        )
         # Full square plus positive rescalings of two of its sides:
         # 6 raw rows collapse onto the 4 primitive constraints.
         sides = (

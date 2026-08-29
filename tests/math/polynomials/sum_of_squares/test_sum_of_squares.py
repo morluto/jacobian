@@ -79,9 +79,7 @@ class TestSOSDecompositionCheck:
         """x^2 + 1 ≠ x^2 alone."""
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
         q1 = _poly(("x",), (1, 1, (1,)))
-        result = _check_sos(
-            SOSDecompositionCheckRequest(polynomial=p, summands=(q1,))
-        )
+        result = _check_sos(SOSDecompositionCheckRequest(polynomial=p, summands=(q1,)))
         assert not result.is_valid
 
     def test_two_variable_decomposition(self) -> None:
@@ -116,17 +114,13 @@ class TestSOSDecompositionCheck:
         """x^2 = (x)^2 is valid."""
         p = _poly(("x",), (1, 1, (2,)))
         q1 = _poly(("x",), (1, 1, (1,)))
-        result = _check_sos(
-            SOSDecompositionCheckRequest(polynomial=p, summands=(q1,))
-        )
+        result = _check_sos(SOSDecompositionCheckRequest(polynomial=p, summands=(q1,)))
         assert result.is_valid
 
     def test_empty_decomposition_is_the_canonical_zero_sum(self) -> None:
         """The zero polynomial has the empty sum-of-squares decomposition."""
         zero = _poly(("x",))
-        result = _check_sos(
-            SOSDecompositionCheckRequest(polynomial=zero, summands=())
-        )
+        result = _check_sos(SOSDecompositionCheckRequest(polynomial=zero, summands=()))
         assert result.is_valid
         assert result.summands == ()
         assert result.computed_sum == zero

@@ -59,6 +59,7 @@ def compute_euler_totient(request: PositiveIntegerRequest) -> IntegerValue:
 def compute_mobius(request: PositiveIntegerRequest) -> IntegerValue:
     return mobius(request.n)
 
+
 PRIME_OPERATIONS = (
     number_theory_operation(
         "integer.decide.prime",

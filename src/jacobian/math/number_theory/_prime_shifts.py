@@ -26,6 +26,7 @@ def compute_prime_shift_profile(
             message=str(exc),
         ) from exc
 
+
 PRIME_SHIFT_OPERATION = number_theory_operation(
     "number_theory.translated_prime.representation_profile.compute",
     "Compute translated-prime representation profile on a bounded interval",

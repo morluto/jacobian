@@ -774,9 +774,7 @@ def test_graph_symmetry_admission_flips_exactly_at_the_output_limit(
         lambda **kwargs: CanonicalLimits(max_output_bytes=actual - 1),
     )
     with pytest.raises(OperationDomainValidationError):
-        rejected = GraphSymmetryOrbitRequest.model_validate(
-            _wide_orbit_payload(14)
-        )
+        rejected = GraphSymmetryOrbitRequest.model_validate(_wide_orbit_payload(14))
         graph_symmetry_orbits(rejected.graph, rejected.generators)
 
 
@@ -790,6 +788,7 @@ def test_graph_symmetry_operation_declares_version_seven() -> None:
     """
 
     from jacobian.catalog.models import MathTool
+
     (declaration,) = TOOLS
     assert isinstance(declaration, MathTool)
 

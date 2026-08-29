@@ -63,9 +63,7 @@ class TestSetFunctionEval:
             entries=(_entry((), "1", "2"),),
         )
 
-        result = _evaluate_request(
-            SetFunctionEvalRequest(function=function, subset=())
-        )
+        result = _evaluate_request(SetFunctionEvalRequest(function=function, subset=()))
 
         assert result.value == CanonicalRational(num="1", den="2")
         assert result.model_dump(mode="json")["value"] == {"num": "1", "den": "2"}

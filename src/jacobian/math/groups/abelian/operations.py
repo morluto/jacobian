@@ -39,9 +39,7 @@ def reduce_element(
 ) -> ElementReduceResult:
     reduced = tuple(
         coordinate % factor
-        for coordinate, factor in zip(
-            coordinates, invariant_factors, strict=True
-        )
+        for coordinate, factor in zip(coordinates, invariant_factors, strict=True)
     )
     return ElementReduceResult(reduced=reduced)
 
@@ -53,15 +51,11 @@ def elements_equal(
 ) -> ElementEqualResult:
     reduced_a = tuple(
         coordinate % factor
-        for coordinate, factor in zip(
-            coordinates_a, invariant_factors, strict=True
-        )
+        for coordinate, factor in zip(coordinates_a, invariant_factors, strict=True)
     )
     reduced_b = tuple(
         coordinate % factor
-        for coordinate, factor in zip(
-            coordinates_b, invariant_factors, strict=True
-        )
+        for coordinate, factor in zip(coordinates_b, invariant_factors, strict=True)
     )
     return ElementEqualResult(equal=reduced_a == reduced_b)
 
@@ -71,9 +65,7 @@ def element_order(
 ) -> ElementOrderResult:
     reduced = [
         coordinate % factor
-        for coordinate, factor in zip(
-            coordinates, invariant_factors, strict=True
-        )
+        for coordinate, factor in zip(coordinates, invariant_factors, strict=True)
     ]
     order = 1
     for coordinate, factor in zip(reduced, invariant_factors, strict=True):

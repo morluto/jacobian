@@ -301,9 +301,7 @@ def test_primary_decomposition_normalizes_rational_root_factors() -> None:
 
 def test_contract_rejects_nonsquare() -> None:
     _assert_admission_rejected(
-        RationalMatrix(
-            entries=((R(num="1", den="1"), R(num="0", den="1")),)
-        )
+        RationalMatrix(entries=((R(num="1", den="1"), R(num="0", den="1")),))
     )
 
 
@@ -367,14 +365,10 @@ def test_contract_rejects_oversized_and_wide_scalar_matrices() -> None:
         tuple(R(num="1" if row == column else "0", den="1") for column in range(17))
         for row in range(17)
     )
-    _assert_admission_rejected(
-        RationalMatrix(entries=identity_17)
-    )
+    _assert_admission_rejected(RationalMatrix(entries=identity_17))
 
     wide_scalar = ((R(num="1" + "0" * 256, den="1"),),)
-    _assert_admission_rejected(
-        RationalMatrix(entries=wide_scalar)
-    )
+    _assert_admission_rejected(RationalMatrix(entries=wide_scalar))
 
 
 def test_public_kernels_return_monic_coefficient_lists() -> None:

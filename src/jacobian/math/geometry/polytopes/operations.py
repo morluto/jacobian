@@ -229,8 +229,7 @@ def facet_incidence(
     try:
         if dimension > dimension_bound:
             raise ValueError(
-                f"dimension {dimension} exceeds the dimension bound "
-                f"{dimension_bound}"
+                f"dimension {dimension} exceeds the dimension bound {dimension_bound}"
             )
         if any(len(vertex.coordinates) != dimension for vertex in vertices):
             raise ValueError("all vertices must share one dimension")
@@ -884,9 +883,7 @@ def polytope_volume(
         if vertices is not None:
             representation = "vertices"
             location = ("vertices",)
-            prepared, dim, triangulation = _validate_vertices(
-                vertices, dimension_bound
-            )
+            prepared, dim, triangulation = _validate_vertices(vertices, dimension_bound)
         else:
             assert halfspaces is not None
             representation = "halfspaces"
@@ -932,7 +929,10 @@ def convex_hull_volume(
 
     if isinstance(vertices, RationalVPolytope):
         normalized = tuple(
-            tuple(Fraction(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates)
+            tuple(
+                Fraction(*coordinate.as_integer_ratio())
+                for coordinate in vertex.coordinates
+            )
             for vertex in _canonical_v_polytope_vertices(vertices)
         )
     else:
@@ -940,7 +940,9 @@ def convex_hull_volume(
             raise ValueError("`vertices` must be non-empty")
         if any(len(vertex) != len(vertices[0]) for vertex in vertices):
             raise ValueError("all vertices must share one dimension")
-        normalized = tuple(tuple(Fraction(coordinate) for coordinate in vertex) for vertex in vertices)
+        normalized = tuple(
+            tuple(Fraction(coordinate) for coordinate in vertex) for vertex in vertices
+        )
 
     dim = len(normalized[0])
     if not 1 <= dim <= MAX_DIMENSION:

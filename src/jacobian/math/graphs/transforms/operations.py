@@ -120,9 +120,7 @@ def _admit_path_profile(graph: SimpleUndirectedGraph, path_length: int) -> None:
         )
 
 
-def path_profile(
-    graph: SimpleUndirectedGraph, path_length: int
-) -> PathProfileResult:
+def path_profile(graph: SimpleUndirectedGraph, path_length: int) -> PathProfileResult:
     """Count simple paths of a fixed length for every ordered endpoint pair."""
 
     _admit_path_profile(graph, path_length)

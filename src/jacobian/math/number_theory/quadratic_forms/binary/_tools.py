@@ -30,7 +30,9 @@ from jacobian.math.number_theory.quadratic_forms.binary._models import (
 )
 
 
-def _admit[ResultT](operation: Callable[[], ResultT], location: tuple[str, ...]) -> ResultT:
+def _admit[ResultT](
+    operation: Callable[[], ResultT], location: tuple[str, ...]
+) -> ResultT:
     try:
         return operation()
     except PydanticCustomError as exc:

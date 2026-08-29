@@ -25,6 +25,7 @@ def _run_count(
         ),
     )
 
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="graph.induced_vertex_subset_pattern.count",

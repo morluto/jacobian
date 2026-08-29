@@ -36,6 +36,7 @@ def nth_root(request: IntegerNthRootRequest) -> IntegerNthRootResult:
     root, exact = native.nth_root(IntegerValue(value=request.value), request.degree)
     return IntegerNthRootResult(root=root.value, exact=exact)
 
+
 INTEGER_OPERATIONS = (
     arithmetic_operation(
         "integer.compute.decimal_digit_count",

@@ -67,6 +67,7 @@ def _run_modular_polynomial_residue_assignments(
 def _run_chinese_remainder(request: ChineseRemainderRequest) -> ChineseRemainderResult:
     return chinese_remainder(request.residues, request.moduli)
 
+
 MODULAR_OPERATIONS = (
     number_theory_operation(
         "number_theory.compute.jacobi_symbol",

@@ -154,9 +154,7 @@ def _admit_steenrod_square(
             )
         effective_ambient = _effective_ambient(ambient_simplices, ambient_complex)
         if (
-            not _is_zero_mod2_cochain(
-                simplex_values, simplex_coefficients
-            )
+            not _is_zero_mod2_cochain(simplex_values, simplex_coefficients)
             and not effective_ambient
         ):
             raise _validation_error(

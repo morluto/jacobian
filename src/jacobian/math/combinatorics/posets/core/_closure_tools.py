@@ -30,6 +30,7 @@ def dual_poset(request: DualPosetRequest) -> DualPosetResult:
 def induced_subposet(request: InducedSubposetRequest) -> InducedSubposetResult:
     return native.induced_subposet(request.poset, request.subset)
 
+
 CLOSURE_OPERATIONS: MathTools = (
     MathTool(
         operation_id="poset.lower_closure.compute",

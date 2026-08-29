@@ -24,6 +24,7 @@ def evaluate_form(request: EvaluationRequest) -> EvaluationResult:
         value=evaluate_rational_quadratic_form(request.form, request.vector),
     )
 
+
 TOOLS = (
     MathTool(
         operation_id="quadratic_form.evaluate.compute",

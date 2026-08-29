@@ -27,6 +27,7 @@ def compute_friable_count(request: FriableCountRequest) -> FriableCountResult:
         ) from exc
     return FriableCountResult._from_kernel(request, count=count)
 
+
 FRIABLE_COUNT_OPERATION = number_theory_operation(
     "number_theory.friable.count.compute",
     "Count friable integers exactly",

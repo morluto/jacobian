@@ -40,6 +40,7 @@ def compute_principal_dirichlet_character_value(
         value=cast(Literal[0, 1], value),
     )
 
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="dirichlet_character.principal.compute",

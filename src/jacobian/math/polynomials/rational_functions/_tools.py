@@ -34,6 +34,7 @@ def compute_hermite_reduction(
         remainder=remainder,
     )
 
+
 TOOLS = (
     MathTool(
         operation_id="rational_function.hermite_reduction.compute",

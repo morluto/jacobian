@@ -352,9 +352,7 @@ def evaluate_linear_recurrence(
 ) -> LinearRecurrenceEvaluationResult:
     """Evaluate requested terms of one bounded constant-coefficient recurrence."""
 
-    if coefficient_convention != (
-        "A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"
-    ):
+    if coefficient_convention != ("A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"):
         raise OperationDomainValidationError(
             location=("coefficient_convention",),
             code="combinatorics.recurrence_convention",

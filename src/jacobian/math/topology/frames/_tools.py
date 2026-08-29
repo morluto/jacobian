@@ -24,6 +24,7 @@ def _coherence(request: CoherenceRequest) -> CoherenceResult:
 def _frame_potential(request: FiniteFrameRequest) -> FramePotentialResult:
     return frame_potential(request)
 
+
 _ORTHONORMAL = {"vectors": [[1, 0], [0, 1]]}
 
 TOOLS: MathTools = (

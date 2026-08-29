@@ -37,6 +37,7 @@ def compute_divisor_count(request: PositiveIntegerRequest) -> IntegerValue:
 def compute_divisor_sum(request: PositiveIntegerRequest) -> IntegerValue:
     return divisor_sum(request.n)
 
+
 DIVISIBILITY_OPERATIONS = (
     *FACTORIZATION_OPERATIONS,
     number_theory_operation(

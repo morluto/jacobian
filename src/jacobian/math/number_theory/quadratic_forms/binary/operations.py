@@ -43,7 +43,10 @@ def reduced_form(
 
 def reduction(
     form: PrimitivePositiveDefiniteBinaryQuadraticForm,
-) -> tuple[PrimitivePositiveDefiniteBinaryQuadraticForm, tuple[tuple[int, int], tuple[int, int]]]:
+) -> tuple[
+    PrimitivePositiveDefiniteBinaryQuadraticForm,
+    tuple[tuple[int, int], tuple[int, int]],
+]:
     """Return the reduced form and its certifying unimodular matrix."""
     a, b, c, p, q, r, s = _reduce(form.a, form.b, form.c)
     return PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c), (

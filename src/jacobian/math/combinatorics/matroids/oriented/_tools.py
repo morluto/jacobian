@@ -16,6 +16,7 @@ from jacobian.math.combinatorics.matroids.oriented.operations import (
 def _run_chirotope_check(request: ChirotopeCheckRequest) -> ChirotopeCheckResult:
     return check_chirotope(request.chirotope)
 
+
 _ALTERNATING_RANK3_EXAMPLE: dict[str, Any] = {
     "chirotope": {
         "ground_size": 4,

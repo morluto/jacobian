@@ -45,9 +45,7 @@ def _build_above_map(
     return above
 
 
-def lower_closure(
-    poset: FinitePoset, subset: tuple[str, ...]
-) -> LowerClosureResult:
+def lower_closure(poset: FinitePoset, subset: tuple[str, ...]) -> LowerClosureResult:
     """Compute ↓S = {x : x <= s for some s in S}."""
     below = _build_comparable_map(poset.elements, poset.strict_order_pairs)
     closure: set[str] = set()
@@ -60,9 +58,7 @@ def lower_closure(
     )
 
 
-def upper_closure(
-    poset: FinitePoset, subset: tuple[str, ...]
-) -> UpperClosureResult:
+def upper_closure(poset: FinitePoset, subset: tuple[str, ...]) -> UpperClosureResult:
     """Compute ↑S = {x : s <= x for some s in S}."""
     above = _build_above_map(poset.elements, poset.strict_order_pairs)
     closure: set[str] = set()

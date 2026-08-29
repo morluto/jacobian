@@ -34,6 +34,7 @@ def _run_rational_evaluation(
 ) -> RationalPolynomialEvaluationResult:
     return rational_polynomial_evaluate(request.polynomial, request.point)
 
+
 INTEGER_POLYNOMIAL_OPERATIONS = (
     polynomial_operation(
         "polynomial.integer.compute.gcd",

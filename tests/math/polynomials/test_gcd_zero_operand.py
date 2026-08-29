@@ -42,9 +42,7 @@ def _run(request: PolynomialGcdRequest) -> PolynomialGcdResult:
 
 def test_gcd_left_zero_succeeds() -> None:
     """gcd(0, f) = monic(f)."""
-    result = _run(
-        PolynomialGcdRequest.model_validate({"left": ZERO, "right": F})
-    )
+    result = _run(PolynomialGcdRequest.model_validate({"left": ZERO, "right": F}))
     assert len(result.gcd.polynomial.terms) == 2
     # monic of 2x^2 - 2 is x^2 - 1
     terms = sorted(result.gcd.polynomial.terms, key=lambda t: t.exponents[0])
@@ -56,9 +54,7 @@ def test_gcd_left_zero_succeeds() -> None:
 
 def test_gcd_right_zero_succeeds() -> None:
     """gcd(f, 0) = monic(f)."""
-    result = _run(
-        PolynomialGcdRequest.model_validate({"left": F, "right": ZERO})
-    )
+    result = _run(PolynomialGcdRequest.model_validate({"left": F, "right": ZERO}))
     assert len(result.gcd.polynomial.terms) == 2
     terms = sorted(result.gcd.polynomial.terms, key=lambda t: t.exponents[0])
     assert terms[0].coefficient.num == "-1"
@@ -81,27 +77,21 @@ def test_both_zero_rejected() -> None:
 
 def test_bezout_left_zero() -> None:
     """Bézout identity: s*0 + t*f = gcd(f)."""
-    result = _run(
-        PolynomialGcdRequest.model_validate({"left": ZERO, "right": F})
-    )
+    result = _run(PolynomialGcdRequest.model_validate({"left": ZERO, "right": F}))
     # left_multiplier should be zero
     assert len(result.bezout.left_multiplier.polynomial.terms) == 0
 
 
 def test_bezout_right_zero() -> None:
     """Bézout identity: s*f + t*0 = gcd(f)."""
-    result = _run(
-        PolynomialGcdRequest.model_validate({"left": F, "right": ZERO})
-    )
+    result = _run(PolynomialGcdRequest.model_validate({"left": F, "right": ZERO}))
     # right_multiplier should be zero
     assert len(result.bezout.right_multiplier.polynomial.terms) == 0
 
 
 def test_gcd_with_nonzero_coprime() -> None:
     """Control: gcd of two nonzero coprime polynomials."""
-    result = _run(
-        PolynomialGcdRequest.model_validate({"left": F, "right": G})
-    )
+    result = _run(PolynomialGcdRequest.model_validate({"left": F, "right": G}))
     # gcd(2x^2-2, 4x) = 2 (constant), monic = 1
     assert len(result.gcd.polynomial.terms) == 1
     assert result.gcd.polynomial.terms[0].coefficient.num == "1"
@@ -120,9 +110,7 @@ def test_gcd_negative_leading_coefficient() -> None:
             ]
         },
     }
-    result = _run(
-        PolynomialGcdRequest.model_validate({"left": f, "right": ZERO})
-    )
+    result = _run(PolynomialGcdRequest.model_validate({"left": f, "right": ZERO}))
     # monic of -3x^2 + 3 = x^2 - 1
     terms = sorted(result.gcd.polynomial.terms, key=lambda t: t.exponents[0])
     assert terms[0].coefficient.num == "-1"
@@ -141,9 +129,7 @@ def test_rational_leading_coefficient() -> None:
             ]
         },
     }
-    result = _run(
-        PolynomialGcdRequest.model_validate({"left": f, "right": ZERO})
-    )
+    result = _run(PolynomialGcdRequest.model_validate({"left": f, "right": ZERO}))
     # monic of (1/2)x + (1/2) = x + 1
     assert len(result.gcd.polynomial.terms) == 2
     terms = sorted(result.gcd.polynomial.terms, key=lambda t: t.exponents[0])

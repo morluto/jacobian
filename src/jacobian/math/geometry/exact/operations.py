@@ -133,7 +133,9 @@ def pinned_line_distance_profile(
                 anchor, points[left], points[right]
             )
 
-    ordered = sorted(lines, key=lambda coefficients: (distances[coefficients], coefficients))
+    ordered = sorted(
+        lines, key=lambda coefficients: (distances[coefficients], coefficients)
+    )
     entries = tuple(
         PinnedLineEntry(
             line_coefficients=tuple(

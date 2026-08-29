@@ -33,9 +33,7 @@ def _is_graphical(degrees: list[int]) -> DegreeSequenceResult:
 
 
 def _realize(degrees: list[int]) -> GraphRealizationResult:
-    request = GraphRealizationRequest.model_validate(
-        {"sequence": {"degrees": degrees}}
-    )
+    request = GraphRealizationRequest.model_validate({"sequence": {"degrees": degrees}})
     return graph_realization(request.sequence)
 
 

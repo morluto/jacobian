@@ -48,9 +48,7 @@ def test_potential_remains_exact_above_json_safe_integer() -> None:
     vectors = (
         [repeated] * 5 + [final] + [[int(i == j) for j in range(16)] for i in range(16)]
     )
-    result = _frame_potential(
-        FiniteFrameRequest.model_validate({"vectors": vectors})
-    )
+    result = _frame_potential(FiniteFrameRequest.model_validate({"vectors": vectors}))
     expected = sum(
         sum(a * b for a, b in zip(left, right, strict=True)) ** 2
         for left in result.vectors

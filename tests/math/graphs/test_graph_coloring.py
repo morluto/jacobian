@@ -80,9 +80,7 @@ def test_nonmaximal_candidate_returns_smallest_addable_vertex() -> None:
 
 
 def test_empty_candidate_in_nonempty_graph_is_not_maximal() -> None:
-    result = _maximal(
-        _request(vertex_count=1, edges=[], candidate_set=[])
-    )
+    result = _maximal(_request(vertex_count=1, edges=[], candidate_set=[]))
 
     assert result.decision == "INDEPENDENT_NOT_MAXIMAL"
     assert result.addable_vertex == 0
@@ -101,9 +99,7 @@ def test_singleton_in_complete_graph_is_maximal() -> None:
 
 
 def test_all_vertices_of_empty_graph_form_a_maximal_set() -> None:
-    result = _maximal(
-        _request(vertex_count=3, edges=[], candidate_set=[0, 1, 2])
-    )
+    result = _maximal(_request(vertex_count=3, edges=[], candidate_set=[0, 1, 2]))
 
     assert result.decision == "MAXIMAL"
 
@@ -112,9 +108,7 @@ def test_null_graph_makes_the_empty_candidate_maximal() -> None:
     """The canonical value carries the null graph; the empty candidate set
     is its unique maximal independent set."""
 
-    result = _maximal(
-        _request(vertex_count=0, edges=[], candidate_set=[])
-    )
+    result = _maximal(_request(vertex_count=0, edges=[], candidate_set=[]))
 
     assert result.decision == "MAXIMAL"
 
@@ -187,9 +181,7 @@ def test_edgeless_vertex_coloring_bypasses_the_worker(
     def worker_must_not_start(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("edgeless vertex coloring must not start a worker")
 
-    monkeypatch.setattr(
-        coloring_process, "run_bounded_process", worker_must_not_start
-    )
+    monkeypatch.setattr(coloring_process, "run_bounded_process", worker_must_not_start)
     from jacobian.math.graphs.coloring._models import KColorabilityRequest
     from jacobian.math.graphs.coloring._tools import compute_k_colorability
 

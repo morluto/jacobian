@@ -180,9 +180,7 @@ class TestReachabilityContract:
         with pytest.raises(OperationDomainValidationError):
             _run_reachability(ReachabilityRequest(graph=graph, source=0))
         with pytest.raises(OperationDomainValidationError):
-            _run_components(
-                StronglyConnectedComponentsRequest(graph=graph)
-            )
+            _run_components(StronglyConnectedComponentsRequest(graph=graph))
         with pytest.raises(OperationDomainValidationError):
             _run_condensation(CondensationRequest(graph=graph))
         with pytest.raises(OperationDomainValidationError):

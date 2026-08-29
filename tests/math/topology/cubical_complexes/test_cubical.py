@@ -37,7 +37,9 @@ class TestFaceClosure:
 class TestFVector:
     def test_single_square(self) -> None:
         result = f_vector(
-            CubicalComplexRequest(cells=(CubicalCell(intervals=((0, 1), (0, 1))),)).cells
+            CubicalComplexRequest(
+                cells=(CubicalCell(intervals=((0, 1), (0, 1))),)
+            ).cells
         )
         assert result.dimension == 2
         # 4 vertices + 4 edges + 1 square

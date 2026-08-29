@@ -220,9 +220,7 @@ class TestGroupLikeElements:
         )
         assert group_like_scan_work(9973, 2) > GROUP_LIKE_SCAN_WORK_BUDGET
         with _raises_code("coalgebra.scan_work_budget_exceeded"):
-            _run_group_like(
-                GroupLikeElementsRequest(coalgebra=large_prime_squared)
-            )
+            _run_group_like(GroupLikeElementsRequest(coalgebra=large_prime_squared))
 
     def test_within_scan_work_budget_admitted(self) -> None:
         """An element space whose scan work fits the budget enumerates."""

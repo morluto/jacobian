@@ -67,9 +67,7 @@ def _admit_prime_field_matrix(
     return width
 
 
-def _admit_enumeration(
-    generator_matrix: GeneratorMatrix, field_order: int
-) -> None:
+def _admit_enumeration(generator_matrix: GeneratorMatrix, field_order: int) -> None:
     _admit_prime_field_matrix(field_order, generator_matrix)
     if (
         EXACT_ENUMERATION_PASSES * field_order ** len(generator_matrix)

@@ -16,6 +16,7 @@ def _run_multicommodity_flow_profile(
 ) -> MulticommodityFlowProfileResult:
     return compute_multicommodity_flow_profile(request.flow)
 
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="network.multicommodity_flow.profile.compute",

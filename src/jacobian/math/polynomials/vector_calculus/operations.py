@@ -186,8 +186,7 @@ def directional_derivative(
         for variable in symbols_for_variables(variables)
     )
     direction_values = (
-        sympy.Rational(*coordinate.as_integer_ratio())
-        for coordinate in direction
+        sympy.Rational(*coordinate.as_integer_ratio()) for coordinate in direction
     )
     return ScalarResult(
         result=_wire(

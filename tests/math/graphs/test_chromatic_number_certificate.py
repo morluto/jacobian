@@ -325,7 +325,10 @@ def test_producer_evaluates_the_certificate_once(
 
     monkeypatch.setattr(_operations, "_evaluate_chromatic_number_certificate", counted)
     result = chromatic_number_certificate(
-        request.graph, request.claimed_chromatic_number, request.coloring, request.weights
+        request.graph,
+        request.claimed_chromatic_number,
+        request.coloring,
+        request.weights,
     )
 
     assert result.verdict == "ACCEPTED"

@@ -46,7 +46,9 @@ def _solve(
     return values
 
 
-def _fractions(system: LinearRationalSystem) -> tuple[list[list[Fraction]], list[Fraction]]:
+def _fractions(
+    system: LinearRationalSystem,
+) -> tuple[list[list[Fraction]], list[Fraction]]:
     coefficients = [
         [value.as_fraction() for value in row] for row in system.coefficients.entries
     ]

@@ -231,9 +231,7 @@ class TestSidonExtensionProfile:
             calls += 1
             return real_obstruction(*args, **kwargs)
 
-        monkeypatch.setattr(
-            sidon_kernel, "_candidate_obstruction", counted_obstruction
-        )
+        monkeypatch.setattr(sidon_kernel, "_candidate_obstruction", counted_obstruction)
         monkeypatch.setattr(sidon_models, "_candidate_obstruction", counted_obstruction)
         _extension(["1", "2"], ["3", "4", "10"])
         assert calls == 3

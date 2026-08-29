@@ -248,8 +248,7 @@ class TestNormalizedQuadraticRadical:
         with pytest.raises(OperationDomainValidationError) as exc_info:
             normalized_quadratic_radical(IntegerValue(value="-1"))
         assert (
-            exc_info.value.errors()[0]["type"]
-            == "arithmetic.value_must_be_nonnegative"
+            exc_info.value.errors()[0]["type"] == "arithmetic.value_must_be_nonnegative"
         )
 
     def test_reconstruction(self) -> None:

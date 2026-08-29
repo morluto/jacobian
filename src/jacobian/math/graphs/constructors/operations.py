@@ -99,8 +99,6 @@ def compute_triangle_profile(graph: SimpleUndirectedGraph) -> TriangleProfileRes
     )
 
 
-
-
 __all__ = [
     "compute_triangle_profile",
     "construct_hypercube_graph",

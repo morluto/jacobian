@@ -117,7 +117,9 @@ def chart_transition(
     coords = point.coordinates
     _admit_coordinates(coords)
     if chart_i >= len(coords) or chart_j >= len(coords):
-        _reject("chart_index_out_range", "chart index out of range", ("chart_i", "chart_j"))
+        _reject(
+            "chart_index_out_range", "chart index out of range", ("chart_i", "chart_j")
+        )
     if coords[chart_i].as_fraction() == 0:
         _reject(
             "chart_i_coordinate_nonzero",

@@ -61,6 +61,7 @@ def compute_higher_block(request: HigherBlockRequest) -> HigherBlockResult:
         request, native.higher_block_presentation(request.shift, request.block_length)
     )
 
+
 _GOLDEN_MEAN = {
     "alphabet": ["0", "1"],
     "forbidden_blocks": [["1", "1"]],

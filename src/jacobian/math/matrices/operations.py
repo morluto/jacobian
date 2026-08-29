@@ -138,10 +138,23 @@ def trace(matrix: MatrixBase) -> Any:
 
 
 def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
-    source = _exact_matrix(matrix)
+    import sympy
+
+    source = _exact_matrix(
+        matrix, maximum_dimension=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER
+    )
     if source.rows != source.cols:
         raise ValueError("characteristic polynomial requires a square matrix")
-    return source.charpoly(variable)
+    result = characteristic_polynomial_result(
+        conversions.rational_matrix_from_sympy(source)
+    )
+    return sympy.Poly(
+        [
+            sympy.Rational(coefficient.num, coefficient.den)
+            for coefficient in result.coefficients_descending
+        ],
+        sympy.Symbol(variable),
+    )
 
 
 def determinant(matrix: MatrixBase) -> Any:
@@ -416,6 +429,15 @@ def _bit_bound_decimal_digits(bits: int) -> int:
     return max(1, (bits * 30_103 + 99_999) // 100_000)
 
 
+def _positive_decimal_digits(value: int) -> int:
+    """Upper-bound decimal length without converting the integer to a string."""
+
+    magnitude = abs(value)
+    if magnitude <= 9:
+        return 1
+    return _bit_bound_decimal_digits(magnitude.bit_length())
+
+
 def _admit_determinant(
     matrix: RationalMatrix,
 ) -> tuple[tuple[Fraction, ...], ...]:
@@ -475,26 +497,35 @@ def _admit_determinant(
 def _characteristic_polynomial_component_digit_bound(
     matrix: RationalMatrix,
 ) -> int:
-    """Bound every coefficient after clearing all input denominators.
+    """Bound every coefficient after clearing a common input denominator.
 
-    Coefficients are sums of principal minors. Hadamard bounds each cleared
-    minor, while 2^n bounds the number of minors of any fixed order.
+    Coefficients are sums of principal minors. Writing ``A = N / D`` with
+    common positive denominator ``D = lcm`` of all entry denominators, the
+    cleared integer matrix ``N`` has Hadamard-bounded minors; ``2^n`` bounds
+    the number of minors of any fixed order.
     """
     order = len(matrix.entries)
-    denominator_growth = sum(
-        len(value.den) for row in matrix.entries for value in row if value.den != "1"
+    fractions = tuple(
+        tuple(value.as_fraction() for value in row) for row in matrix.entries
     )
+    common_denominator = 1
+    for row in fractions:
+        for value in row:
+            common_denominator = lcm(common_denominator, value.denominator)
+    denominator_growth = _positive_decimal_digits(common_denominator)
     cleared_height = max(
         (
-            len(value.num.lstrip("-"))
-            + denominator_growth
-            - (len(value.den) if value.den != "1" else 0)
-            for row in matrix.entries
+            _positive_decimal_digits(
+                value.numerator * (common_denominator // value.denominator)
+            )
+            for row in fractions
             for value in row
         ),
         default=1,
     )
-    numerator_digits = order * (cleared_height + len(str(order))) + order
+    numerator_digits = (
+        order * (cleared_height + _positive_decimal_digits(order)) + order
+    )
     denominator_digits = max(1, order * denominator_growth)
     return max(numerator_digits, denominator_digits)
 
@@ -600,20 +631,20 @@ def characteristic_polynomial_result(
     matrix: RationalMatrix,
 ) -> CharacteristicPolynomialResult:
     _admit(_admit_characteristic_polynomial, matrix)
-    from flint import fmpq, fmpq_mat
+    from jacobian.math.matrices._flint import rational_characteristic_polynomial
 
     order = len(matrix.entries)
-    entries = [
-        fmpq(int(value.num), int(value.den)) for row in matrix.entries for value in row
-    ]
-    polynomial = fmpq_mat(order, order, entries).charpoly()
+    entries = tuple(
+        tuple(value.as_fraction() for value in row) for row in matrix.entries
+    )
+    coefficients = rational_characteristic_polynomial(entries)
     return CharacteristicPolynomialResult(
         degree=order,
         coefficients_descending=tuple(
             CanonicalRational.from_integer_ratio(
-                int(polynomial[index].p), int(polynomial[index].q)
+                coefficient.numerator, coefficient.denominator
             )
-            for index in range(order, -1, -1)
+            for coefficient in coefficients
         ),
     )
 

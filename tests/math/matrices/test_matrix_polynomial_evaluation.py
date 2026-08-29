@@ -627,9 +627,13 @@ def test_flint_characteristic_polynomial_preserves_exact_conventions(
 def test_characteristic_polynomial_rejects_predicted_coefficient_growth() -> None:
     order = 128
     denominator = 10**255 + 1
+    numerator = denominator - 1
     source = _matrix(
         *tuple(
-            tuple((1, denominator) if row == column else 0 for column in range(order))
+            tuple(
+                (numerator, denominator) if row == column else 0
+                for column in range(order)
+            )
             for row in range(order)
         )
     )
@@ -638,6 +642,54 @@ def test_characteristic_polynomial_rejects_predicted_coefficient_growth() -> Non
         compute_characteristic_polynomial(
             CharacteristicPolynomialRequest(matrix=source)
         )
+
+
+def test_characteristic_polynomial_admits_shared_denominator_order_32() -> None:
+    order = 32
+    source = _matrix(*tuple(tuple((1, 2) for _ in range(order)) for _ in range(order)))
+
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(matrix=source)
+    )
+
+    coefficients = tuple(
+        coefficient.as_fraction() for coefficient in result.coefficients_descending
+    )
+    assert result.degree == order
+    assert coefficients[0] == 1
+    assert coefficients[1] == Fraction(-16)
+    assert all(coefficient == 0 for coefficient in coefficients[2:-1])
+    assert coefficients[-1] == 0
+
+
+def test_native_characteristic_polynomial_shares_widened_flint_kernel() -> None:
+    import sympy
+
+    from jacobian.math import matrices
+
+    order = 96
+    source = sympy.diag(*range(1, order + 1))
+
+    polynomial = matrices.characteristic_polynomial(source, "lambda")
+    wire = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(
+            matrix=RationalMatrix(
+                entries=tuple(
+                    tuple(
+                        CanonicalRational.from_integer_ratio(
+                            int(source[row, column]), 1
+                        )
+                        for column in range(order)
+                    )
+                    for row in range(order)
+                )
+            )
+        )
+    )
+
+    assert polynomial.all_coeffs() == [
+        coefficient.as_fraction() for coefficient in wire.coefficients_descending
+    ]
 
 
 def test_adapter_preserves_canonical_coefficients_above_python_digit_limit() -> None:

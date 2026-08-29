@@ -41,4 +41,26 @@ def rational_matrix_product(
     )
 
 
-__all__ = ["rational_determinant", "rational_matrix_product"]
+def rational_characteristic_polynomial(
+    entries: tuple[tuple[Fraction, ...], ...],
+) -> tuple[Fraction, ...]:
+    """Return monic ``det(λI - A)`` coefficients, highest degree first."""
+
+    from flint import fmpq, fmpq_mat
+
+    order = len(entries)
+    backend = fmpq_mat(
+        [[fmpq(value.numerator, value.denominator) for value in row] for row in entries]
+    )
+    polynomial = backend.charpoly()
+    return tuple(
+        Fraction(int(polynomial[index].p), int(polynomial[index].q))
+        for index in range(order, -1, -1)
+    )
+
+
+__all__ = [
+    "rational_characteristic_polynomial",
+    "rational_determinant",
+    "rational_matrix_product",
+]

@@ -5,15 +5,8 @@ from typing import Any
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
-from jacobian.math.lattices._hnf import compute_hermite_normal_form
-from jacobian.math.lattices._lattice import reduce_lattice_basis
-from jacobian.math.lattices._models import (
-    HermiteNormalFormRequest,
-    LatticeReductionRequest,
-)
-from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, IntegerMatrix
+from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION
 
 
 def _identity_payload(order: int) -> dict[str, Any]:

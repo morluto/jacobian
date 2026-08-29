@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, WithJsonSchema, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.matrices.values import (
     MAX_EXACT_LINEAR_MATRIX_AXIS,
+    MAX_INTEGER_MATRIX_ORDER,
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     MAX_RATIONAL_MATRIX_ORDER,
     IntegerMatrix,
     RationalMatrix,
+    integer_matrix_axis_schema,
     require_matrix_scalar_digits,
 )
 
@@ -26,6 +28,8 @@ MAX_CHARACTERISTIC_POLYNOMIAL_ORDER = 128
 MAX_MATRIX_PRODUCT_AXIS = 128
 MAX_MATRIX_PRODUCT_MULTIPLY_ADDS = 2_500_000
 MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK = 3_000_000
+MAX_INVERSE_MATRIX_ORDER = MAX_INTEGER_MATRIX_ORDER
+MAX_INVERSE_OUTPUT_DIGIT_WORK = 3_000_000
 MAX_PERMANENT_RYSER_SUBSETS = 4_096
 MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
 # The canonical dense rational matrix carries determinant inputs through
@@ -134,6 +138,18 @@ def _require_computation_dimensions(
         )
 
 
+def _require_integer_computation_dimensions(matrix: IntegerMatrix) -> None:
+    if (
+        len(matrix.entries) > MAX_MATRIX_DIMENSION
+        or len(matrix.entries[0]) > MAX_MATRIX_DIMENSION
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "integer matrix computation dimensions are limited to "
+            f"{MAX_MATRIX_DIMENSION} rows and columns",
+        )
+
+
 def _check_integer_digits(
     value: str, *, maximum: int = MAX_INPUT_SCALAR_DIGITS
 ) -> None:
@@ -211,8 +227,17 @@ class MatrixRankRequest(_MatrixRequest):
     _raw_matrix_axis_limit: ClassVar[int] = MAX_RATIONAL_MATRIX_ORDER
 
 
+_ComputationIntegerMatrix = Annotated[
+    IntegerMatrix,
+    WithJsonSchema(integer_matrix_axis_schema(MAX_MATRIX_DIMENSION)),
+]
+
+
 class IntegerMatrixRequest(_MatrixRequest):
-    matrix: IntegerMatrix
+    matrix: Annotated[
+        IntegerMatrix,
+        WithJsonSchema(integer_matrix_axis_schema(MAX_EXACT_LINEAR_MATRIX_AXIS)),
+    ]
     _raw_matrix_axis_limit: ClassVar[int] = MAX_EXACT_LINEAR_MATRIX_AXIS
 
 
@@ -220,10 +245,17 @@ class NonsingularIntegerMatrixRequest(_MatrixRequest):
     """One bounded square integer matrix for the exact inverse kernel."""
 
     matrix: IntegerMatrix
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_INVERSE_MATRIX_ORDER
 
 
 class SquareIntegerMatrixRequest(_MatrixRequest):
-    matrix: IntegerMatrix
+    matrix: _ComputationIntegerMatrix
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_MATRIX_DIMENSION
+
+    @model_validator(mode="after")
+    def require_computation_dimensions(self) -> Self:
+        _require_integer_computation_dimensions(self.matrix)
+        return self
 
 
 class RationalLinearSolveRequest(_MatrixRequest):

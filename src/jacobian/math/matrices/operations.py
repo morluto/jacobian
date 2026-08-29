@@ -25,6 +25,8 @@ from jacobian.math.matrices._operation_models import (
     MAX_DETERMINANT_SCALAR_WORK,
     MAX_EXACT_LINEAR_MATRIX_WORK,
     MAX_INPUT_SCALAR_DIGITS,
+    MAX_INVERSE_MATRIX_ORDER,
+    MAX_INVERSE_OUTPUT_DIGIT_WORK,
     MAX_KRONECKER_PRODUCT_AXIS,
     MAX_MATRIX_PRODUCT_AXIS,
     MAX_MATRIX_PRODUCT_MULTIPLY_ADDS,
@@ -113,6 +115,17 @@ def _exact_matrix(value: MatrixBase, *, maximum_dimension: int = 32) -> MatrixBa
     return value
 
 
+def _rational_scalars_within_kernel_limit(value: MatrixBase) -> bool:
+    return all(
+        max(
+            _positive_decimal_digits(int(entry.p)),
+            _positive_decimal_digits(int(entry.q)),
+        )
+        <= MAX_INPUT_SCALAR_DIGITS
+        for entry in value
+    )
+
+
 def rref(matrix: MatrixBase) -> tuple[MatrixBase, tuple[int, ...]]:
     result = rref_result(
         conversions.rational_matrix_from_sympy(
@@ -126,9 +139,22 @@ def rref(matrix: MatrixBase) -> tuple[MatrixBase, tuple[int, ...]]:
 
 
 def inverse(matrix: MatrixBase) -> MatrixBase:
-    source = _exact_matrix(matrix)
+
+    source = _exact_matrix(matrix, maximum_dimension=MAX_INVERSE_MATRIX_ORDER)
     if source.rows != source.cols:
         raise ValueError("inverse requires a square matrix")
+    integer_entries = all(entry.is_Integer is True for entry in source)
+    input_within_kernel_limit = integer_entries and all(
+        _positive_decimal_digits(int(entry)) <= MAX_INPUT_SCALAR_DIGITS
+        for entry in source
+    )
+    if integer_entries and input_within_kernel_limit:
+        result = inverse_result(conversions.integer_matrix_from_sympy(source))
+        return conversions.rational_matrix_to_sympy(result.inverse)
+    if source.rows > MAX_MATRIX_DIMENSION:
+        raise ValueError(
+            f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+        )
     from sympy.polys.matrices import DomainMatrix
     from sympy.polys.matrices.exceptions import DMNonInvertibleMatrixError
 
@@ -136,7 +162,13 @@ def inverse(matrix: MatrixBase) -> MatrixBase:
         numerator, denominator = DomainMatrix.from_Matrix(source).inv_den()
     except DMNonInvertibleMatrixError as exc:
         raise MatrixSingularError("matrix is singular; inverse does not exist") from exc
-    return numerator.to_Matrix() / int(denominator)
+    if hasattr(denominator, "x") and hasattr(denominator, "y"):
+        import sympy
+
+        denominator = sympy.Integer(denominator.x) + sympy.I * sympy.Integer(
+            denominator.y
+        )
+    return numerator.to_Matrix() / denominator
 
 
 def trace(matrix: MatrixBase) -> Any:
@@ -452,6 +484,15 @@ def _admit_integer(matrix: IntegerMatrix) -> None:
         maximum=MAX_INPUT_SCALAR_DIGITS,
         label="matrix input",
     )
+    if (
+        len(matrix.entries) > MAX_MATRIX_DIMENSION
+        or len(matrix.entries[0]) > MAX_MATRIX_DIMENSION
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "integer matrix computation dimensions are limited to "
+            f"{MAX_MATRIX_DIMENSION} rows and columns",
+        )
 
 
 def _admit_square_integer(matrix: IntegerMatrix) -> None:
@@ -467,6 +508,117 @@ def _admit_square_integer(matrix: IntegerMatrix) -> None:
             "matrix computation dimensions are limited to "
             f"{MAX_MATRIX_DIMENSION} rows and columns",
         )
+
+
+def _admit_inverse(matrix: IntegerMatrix) -> None:
+    from jacobian.math.matrices.values import require_matrix_scalar_digits
+
+    require_matrix_scalar_digits(
+        matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+    )
+    order = len(matrix.entries)
+    if order != len(matrix.entries[0]):
+        raise _validation_error(
+            "budget_exceeded", "inverse requires a square integer matrix"
+        )
+    if order > MAX_INVERSE_MATRIX_ORDER:
+        raise _validation_error(
+            "budget_exceeded",
+            f"inverse matrices are limited to order {MAX_INVERSE_MATRIX_ORDER}",
+        )
+    entries = tuple(tuple(int(value) for value in row) for row in matrix.entries)
+    diagonal = tuple(entries[index][index] for index in range(order))
+    if all(
+        entries[row][column] == 0
+        for row in range(order)
+        for column in range(order)
+        if row != column
+    ) and all(value != 0 for value in diagonal):
+        output_digit_work = order * order + sum(
+            _positive_decimal_digits(value) for value in diagonal
+        )
+        if output_digit_work > MAX_INVERSE_OUTPUT_DIGIT_WORK:
+            raise _validation_error(
+                "budget_exceeded",
+                "diagonal inverse coefficient work exceeds the exact output budget",
+            )
+        return
+    rank_one_digit_work = _rank_one_inverse_digit_work(entries)
+    if (
+        rank_one_digit_work is not None
+        and rank_one_digit_work <= MAX_INVERSE_OUTPUT_DIGIT_WORK
+    ):
+        return
+    row_squared_norms = tuple(sum(value * value for value in row) for row in entries)
+    column_squared_norms = tuple(
+        sum(row[column] * row[column] for row in entries) for column in range(order)
+    )
+    row_determinant_bits, row_cofactor_bits = _hadamard_axis_bits(row_squared_norms)
+    column_determinant_bits, column_cofactor_bits = _hadamard_axis_bits(
+        column_squared_norms
+    )
+    component_digits = _bit_bound_decimal_digits(
+        max(
+            min(row_determinant_bits, column_determinant_bits),
+            min(row_cofactor_bits, column_cofactor_bits),
+        )
+    )
+    if order * order * component_digits > MAX_INVERSE_OUTPUT_DIGIT_WORK:
+        raise _validation_error(
+            "budget_exceeded",
+            "dense inverse coefficient work exceeds the exact output budget",
+        )
+
+
+def _rank_one_inverse_digit_work(
+    entries: tuple[tuple[int, ...], ...],
+) -> int | None:
+    """Bound an inverse of ``I + B`` when ``B`` has rank one.
+
+    For rank-one ``B``, ``B² = trace(B) B``.  If ``1 + trace(B)`` is
+    nonzero, Sherman--Morrison gives ``(I + B)⁻¹ = I - B/(1 + trace(B))``.
+    Returning the exact component-height bound for this structural case avoids
+    charging the generic dense Hadamard estimate to a reconstructible result.
+    """
+
+    order = len(entries)
+    perturbation = tuple(
+        tuple(value - int(row == column) for column, value in enumerate(values))
+        for row, values in enumerate(entries)
+    )
+    pivot_row: tuple[int, ...] | None = None
+    pivot_column = 0
+    for row in perturbation:
+        for column, value in enumerate(row):
+            if value != 0:
+                pivot_row = row
+                pivot_column = column
+                break
+        if pivot_row is not None:
+            break
+    if pivot_row is None:
+        return order * order
+    pivot = pivot_row[pivot_column]
+    for row in perturbation:
+        if any(
+            row[column] * pivot != row[pivot_column] * pivot_row[column]
+            for column in range(order)
+        ):
+            return None
+    denominator = 1 + sum(perturbation[index][index] for index in range(order))
+    if denominator == 0:
+        return None
+    component_digits = max(
+        max(
+            _positive_decimal_digits(
+                (denominator if row == column else 0) - perturbation[row][column]
+            ),
+            _positive_decimal_digits(denominator),
+        )
+        for row in range(order)
+        for column in range(order)
+    )
+    return order * order + order * order * component_digits
 
 
 def _admit_permanent(matrix: RationalMatrix) -> None:
@@ -623,15 +775,20 @@ def _positive_decimal_digits(value: int) -> int:
     return digits
 
 
-def _rational_scalars_within_kernel_limit(value: MatrixBase) -> bool:
-    return all(
-        max(
-            _positive_decimal_digits(int(entry.p)),
-            _positive_decimal_digits(int(entry.q)),
-        )
-        <= MAX_INPUT_SCALAR_DIGITS
-        for entry in value
-    )
+def _hadamard_axis_bits(squared_norms: tuple[int, ...]) -> tuple[int, int]:
+    """Return determinant and max-cofactor bit bounds along one Hadamard axis.
+
+    Zero coordinates contribute a zero Euclidean norm, so sparse rows and
+    columns do not inflate the product. Cofactors of ``A`` are bounded by the
+    product of the remaining axis norms, hence by the product of the
+    ``n - 1`` largest norms.
+    """
+
+    axis_bits = tuple((norm.bit_length() + 1) // 2 for norm in squared_norms)
+    determinant_bits = sum(axis_bits)
+    if len(axis_bits) <= 1:
+        return determinant_bits, 0
+    return determinant_bits, determinant_bits - min(axis_bits)
 
 
 def _exceeds_canonical_rational_digits(bits: int) -> bool:
@@ -855,20 +1012,20 @@ def characteristic_polynomial_result(
     matrix: RationalMatrix,
 ) -> CharacteristicPolynomialResult:
     _admit(_admit_characteristic_polynomial, matrix)
-    from jacobian.math.matrices._flint import rational_characteristic_polynomial
+    from flint import fmpq, fmpq_mat
 
     order = len(matrix.entries)
-    entries = tuple(
-        tuple(value.as_fraction() for value in row) for row in matrix.entries
-    )
-    coefficients = rational_characteristic_polynomial(entries)
+    entries = [
+        fmpq(*value.as_integer_ratio()) for row in matrix.entries for value in row
+    ]
+    polynomial = fmpq_mat(order, order, entries).charpoly()
     return CharacteristicPolynomialResult(
         degree=order,
         coefficients_descending=tuple(
             CanonicalRational.from_integer_ratio(
-                coefficient.numerator, coefficient.denominator
+                int(polynomial[index].p), int(polynomial[index].q)
             )
-            for coefficient in coefficients
+            for index in range(order, -1, -1)
         ),
     )
 
@@ -907,16 +1064,36 @@ def smith_normal_form_result(matrix: IntegerMatrix) -> SmithNormalForm:
 
 
 def inverse_result(matrix: IntegerMatrix) -> MatrixInverseResult:
-    _admit(_admit_square_integer, matrix)
+    _admit(_admit_inverse, matrix)
+    from flint import fmpq_mat
+
+    order = len(matrix.entries)
+    source = fmpq_mat(
+        order,
+        order,
+        [int(value) for row in matrix.entries for value in row],
+    )
     try:
-        value = inverse(conversions.integer_matrix_to_sympy(matrix))
-    except MatrixSingularError as exc:
+        value = source.inv()
+    except ZeroDivisionError as exc:
         raise OperationDomainValidationError(
             location=("matrix",),
             code="matrix.singular_matrix",
             message="matrix is singular; inverse does not exist",
         ) from exc
-    return MatrixInverseResult(inverse=conversions.rational_matrix_from_sympy(value))
+    return MatrixInverseResult(
+        inverse=RationalMatrix(
+            entries=tuple(
+                tuple(
+                    CanonicalRational.from_integer_ratio(
+                        int(value[row, column].p), int(value[row, column].q)
+                    )
+                    for column in range(order)
+                )
+                for row in range(order)
+            )
+        )
+    )
 
 
 def trace_result(matrix: IntegerMatrix) -> MatrixTraceResult:

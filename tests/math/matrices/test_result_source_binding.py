@@ -501,6 +501,7 @@ def test_native_matrix_operations_admit_exact_256_digit_scalars() -> None:
     source = sympy.diag(boundary, *([1] * 32))
 
     assert matrices.multiply(source, sympy.eye(33)) == source
+    assert matrices.inverse(source)[0, 0] == sympy.Rational(1, boundary)
     polynomial = matrices.characteristic_polynomial(source, "lambda")
     assert polynomial.degree() == 33
     assert polynomial.LC() == 1
@@ -533,7 +534,7 @@ def test_exact_linear_requests_admit_tall_matrices_above_the_square_dimension() 
     assert MatrixRankRequest(matrix=tall).matrix is tall
 
 
-def test_exact_linear_admission_rejects_an_axis_above_the_operation_envelope() -> None:
+def test_exact_linear_requests_reject_an_axis_above_the_operation_envelope() -> None:
     matrix = RationalMatrix(
         entries=tuple(
             tuple(

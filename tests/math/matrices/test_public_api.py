@@ -142,6 +142,31 @@ def test_inverse_of_3x3_integer_matrix() -> None:
     assert matrices.inverse(source) == expected
 
 
+def test_inverse_accepts_exact_noninteger_entries_in_native_fallback() -> None:
+    source = sympy.Matrix([[sympy.I]])
+
+    assert matrices.inverse(source) == sympy.Matrix([[-sympy.I]])
+
+
+def test_characteristic_polynomial_accepts_large_exact_native_scalars() -> None:
+    huge = 10**256
+    source = sympy.Matrix([[huge]])
+
+    assert matrices.characteristic_polynomial(source, "lambda").as_expr() == (
+        sympy.Symbol("lambda") - huge
+    )
+
+
+def test_large_native_scalar_fallbacks_avoid_python_digit_conversion_limit() -> None:
+    huge = 10**5000
+    source = sympy.Matrix([[huge]])
+
+    assert matrices.characteristic_polynomial(source, "lambda").as_expr() == (
+        sympy.Symbol("lambda") - huge
+    )
+    assert matrices.inverse(source) == sympy.Matrix([[sympy.Rational(1, huge)]])
+
+
 def test_trace_of_identity_equals_dimension() -> None:
     assert matrices.trace(sympy.eye(4)) == 4
 

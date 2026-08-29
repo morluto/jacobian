@@ -18,7 +18,11 @@ from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.matrices._operation_models import MatrixInverseResult
 from jacobian.math.matrices._tools import TOOLS
 from jacobian.math.matrices.operations import inverse_result
-from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, IntegerMatrix
+from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
+    MAX_MATRIX_DIMENSION,
+    IntegerMatrix,
+)
 
 
 def _operation(operation_id: str) -> MathTool[Any, Any]:
@@ -132,8 +136,8 @@ def test_inverse_operation_round_trips_random_unimodular_matrices(size: int) -> 
         assert _multiply(inverse, source_fraction) == identity
 
 
-def test_inverse_result_rejects_order_33_integer_matrix() -> None:
-    """Widened IntegerMatrix must not skip square-integer 32-axis admission."""
+def test_inverse_result_accepts_order_33_integer_matrix() -> None:
+    """The inverse operation owns the widened integer-matrix envelope."""
 
     matrix = IntegerMatrix(
         entries=tuple(
@@ -144,11 +148,10 @@ def test_inverse_result_rejects_order_33_integer_matrix() -> None:
             for row in range(MAX_MATRIX_DIMENSION + 1)
         )
     )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
-        inverse_result(matrix)
-    error = exc_info.value.errors()[0]
-    assert error["type"] == "matrix.budget_exceeded"
-    assert str(MAX_MATRIX_DIMENSION) in error["msg"]
+    result = inverse_result(matrix)
+    assert _result_entries(result) == tuple(
+        tuple(Fraction(int(row == column)) for column in range(33)) for row in range(33)
+    )
 
 
 def test_inverse_operation_rejects_empty_matrix() -> None:
@@ -164,3 +167,181 @@ def test_inverse_operation_rejects_non_square_matrices() -> None:
 def test_inverse_operation_rejects_singular_matrices() -> None:
     with pytest.raises(ValueError):
         _run_inverse([["1", "2"], ["2", "4"]])
+
+
+def test_flint_inverse_exceeds_shared_integer_matrix_order() -> None:
+    order = 80
+    source = [
+        [str(int(row == column or column == row + 1)) for column in range(order)]
+        for row in range(order)
+    ]
+
+    inverse = _result_entries(_run_inverse(source))
+
+    expected = tuple(
+        tuple(
+            Fraction((-1) ** (column - row)) if column >= row else Fraction(0)
+            for column in range(order)
+        )
+        for row in range(order)
+    )
+    assert inverse == expected
+    identity = tuple(
+        tuple(Fraction(int(row == column)) for column in range(order))
+        for row in range(order)
+    )
+    assert _multiply(_fraction_entries(source), inverse) == identity
+    assert _multiply(inverse, _fraction_entries(source)) == identity
+
+
+def _identity_entries(order: int) -> list[list[str]]:
+    return [
+        [str(int(row == column)) for column in range(order)] for row in range(order)
+    ]
+
+
+def test_inverse_admits_sparse_identity_with_tiny_output() -> None:
+    order = 100
+    source = _identity_entries(order)
+    inverse = _result_entries(_run_inverse(source))
+    identity = tuple(
+        tuple(Fraction(int(row == column)) for column in range(order))
+        for row in range(order)
+    )
+
+    assert inverse == identity
+    assert _multiply(_fraction_entries(source), inverse) == identity
+    assert _multiply(inverse, _fraction_entries(source)) == identity
+
+
+def test_inverse_admits_diagonal_max_height_output() -> None:
+    order = 100
+    diagonal = "1" + "0" * 255
+    source = [
+        [diagonal if row == column else "0" for column in range(order)]
+        for row in range(order)
+    ]
+
+    inverse = _result_entries(_run_inverse(source))
+    expected = tuple(
+        tuple(
+            Fraction(1, 10**255) if row == column else Fraction(0)
+            for column in range(order)
+        )
+        for row in range(order)
+    )
+    assert inverse == expected
+
+
+def test_inverse_admits_bounded_rank_one_update() -> None:
+    order = 100
+    height = 10**255
+    vector = tuple(height if index % 2 == 0 else -height for index in range(order))
+    source = [
+        [str((1 if row == column else 0) + vector[column]) for column in range(order)]
+        for row in range(order)
+    ]
+
+    inverse = _result_entries(_run_inverse(source))
+    expected = tuple(
+        tuple(
+            Fraction((1 if row == column else 0) - vector[column])
+            for column in range(order)
+        )
+        for row in range(order)
+    )
+
+    assert inverse == expected
+
+
+def test_inverse_rejects_dense_output_work_before_backend() -> None:
+    order = 128
+    tall = "1" + "0" * 99
+    source = [[tall] * order for _ in range(order)]
+
+    with pytest.raises(ValueError, match="exact output budget"):
+        _run_inverse(source)
+
+
+def _entry_axis_limit(schema: dict[str, Any], field: str) -> int:
+    field_schema = schema["properties"][field]
+    entries = field_schema.get("properties", {}).get("entries")
+    if entries is None:
+        reference = field_schema["$ref"]
+        name = reference.rsplit("/", 1)[-1]
+        entries = schema["$defs"][name]["properties"]["entries"]
+    return int(entries["maxItems"])
+
+
+def test_inverse_reuses_canonical_integer_matrix() -> None:
+    from jacobian.math.matrices._operation_models import (
+        NonsingularIntegerMatrixRequest,
+    )
+    from jacobian.math.matrices._tools import compute_inverse
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    matrix = IntegerMatrix.model_validate({"entries": [["1", "0"], ["0", "1"]]})
+    request = NonsingularIntegerMatrixRequest(matrix=matrix)
+
+    assert request.matrix is matrix
+    inverse = _result_entries(compute_inverse(request))
+    assert inverse == ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
+
+
+def test_non_inverse_integer_requests_keep_order_32_envelope() -> None:
+    from pydantic import ValidationError
+
+    from jacobian.math.lattices._hnf import compute_hermite_normal_form
+    from jacobian.math.lattices._lattice import reduce_lattice_basis
+    from jacobian.math.lattices._models import (
+        HermiteNormalFormRequest,
+        LatticeReductionRequest,
+    )
+    from jacobian.math.matrices._operation_models import (
+        IntegerMatrixRequest,
+        NonsingularIntegerMatrixRequest,
+        SquareIntegerMatrixRequest,
+    )
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    order = 33
+    entries = _identity_entries(order)
+    matrix = IntegerMatrix.model_validate({"entries": entries})
+    inverse_request = NonsingularIntegerMatrixRequest(matrix=matrix)
+
+    assert len(matrix.entries) == order
+    assert inverse_request.matrix is matrix
+
+    assert IntegerMatrixRequest.model_validate({"matrix": {"entries": entries}})
+    assert IntegerMatrixRequest(matrix=matrix).matrix is matrix
+    with pytest.raises(ValidationError):
+        SquareIntegerMatrixRequest.model_validate({"matrix": {"entries": entries}})
+    with pytest.raises(ValidationError):
+        SquareIntegerMatrixRequest(matrix=matrix)
+    with pytest.raises(ValidationError):
+        LatticeReductionRequest.model_validate({"basis": {"entries": entries}})
+    with pytest.raises(ValidationError):
+        LatticeReductionRequest(basis=matrix)
+    with pytest.raises(ValidationError):
+        HermiteNormalFormRequest.model_validate({"matrix": {"entries": entries}})
+    with pytest.raises(ValidationError):
+        HermiteNormalFormRequest(matrix=matrix)
+
+    with pytest.raises(OperationDomainValidationError, match="32"):
+        reduce_lattice_basis(LatticeReductionRequest.model_construct(basis=matrix))
+    with pytest.raises(OperationDomainValidationError, match="32"):
+        compute_hermite_normal_form(
+            HermiteNormalFormRequest.model_construct(matrix=matrix)
+        )
+
+    inverse_schema = _operation(
+        "matrix.inverse.compute"
+    ).request_type.model_json_schema()
+    square_schema = SquareIntegerMatrixRequest.model_json_schema()
+    integer_schema = IntegerMatrixRequest.model_json_schema()
+    lattice_schema = LatticeReductionRequest.model_json_schema()
+    assert _entry_axis_limit(inverse_schema, "matrix") == 128
+    assert _entry_axis_limit(square_schema, "matrix") == 32
+    assert _entry_axis_limit(integer_schema, "matrix") == MAX_EXACT_LINEAR_MATRIX_AXIS
+    assert _entry_axis_limit(lattice_schema, "basis") == 32
+    assert IntegerMatrix.model_json_schema()["properties"]["entries"]["maxItems"] == 128

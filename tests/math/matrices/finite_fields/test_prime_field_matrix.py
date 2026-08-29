@@ -39,6 +39,46 @@ def assert_error_type(
 
 
 class TestRank:
+    def test_flint_operations_execute_above_previous_axis_limit(self) -> None:
+        """All three FLINT kernels execute beyond the former 256-axis cap."""
+        prime = 65_537
+        rows = 256
+        columns = 257
+        entries = tuple(
+            tuple(
+                int(column == row or column == columns - 1) for column in range(columns)
+            )
+            for row in range(rows)
+        )
+        request = pfm(prime=prime, entries=entries)
+
+        assert compute_rank(request).rank == rows
+        rref_result = compute_rref(request)
+        assert rref_result.rref_matrix.entries == entries
+        assert rref_result.pivot_columns == tuple(range(rows))
+        nullspace_result = compute_nullspace(request)
+        expected_vector = (prime - 1,) * rows + (1,)
+        assert nullspace_result.nullspace_matrix.entries == (expected_vector,)
+
+    def test_maximum_dense_rref_and_nullspace_output_are_exact(self) -> None:
+        dimension = 1_024
+        zero_row = (0,) * dimension
+        dense_zero = (zero_row,) * dimension
+        request = pfm(prime=2, entries=dense_zero)
+        rref_result = compute_rref(request)
+        assert rref_result.rref_matrix.entries == dense_zero
+        assert rref_result.pivot_columns == ()
+
+        empty_request = PrimeFieldMatrixRequest(
+            matrix=PrimeFieldMatrix(prime=2, entries=(), columns=dimension)
+        )
+        nullspace_result = compute_nullspace(empty_request)
+        assert nullspace_result.nullity == dimension
+        assert all(
+            sum(vector) == 1 and vector[index] == 1
+            for index, vector in enumerate(nullspace_result.nullspace_matrix.entries)
+        )
+
     def test_full_rank_gf2(self) -> None:
         """Identity 3x3 over GF(2) has rank 3."""
         req = pfm(prime=2, entries=((1, 0, 0), (0, 1, 0), (0, 0, 1)))

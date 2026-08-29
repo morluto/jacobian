@@ -93,11 +93,21 @@ def test_matrix_accepts_canonical_residues_at_the_boundary() -> None:
     assert rank(matrix) == 2
 
 
+def test_large_native_prime_uses_exact_fallback() -> None:
+    prime = 2**127 - 1
+    matrix = PrimeFieldMatrix(prime=prime, entries=((1, 1),), columns=2)
+    assert rank(matrix) == 1
+    assert rref(matrix) == (((1, 1),), (0,))
+    assert nullspace(matrix) == ((prime - 1, 1),)
+    with pytest.raises(ValueError, match="fallback axis bound"):
+        PrimeFieldMatrix(prime=prime, entries=(), columns=257)
+
+
 def test_matrix_rejects_oversized_dimensions_before_primality() -> None:
-    with pytest.raises(ValueError, match="dimension bound"):
-        PrimeFieldMatrix(prime=2, entries=(), columns=257)
-    with pytest.raises(ValueError, match="dimension bound"):
-        PrimeFieldMatrix(prime=2, entries=((),) * 257, columns=0)
+    with pytest.raises(ValueError, match="axis bound"):
+        PrimeFieldMatrix(prime=2, entries=(), columns=1025)
+    with pytest.raises(ValueError, match="axis bound"):
+        PrimeFieldMatrix(prime=2, entries=((),) * 1025, columns=0)
 
 
 def test_exact_public_api_symbols() -> None:

@@ -13,6 +13,7 @@ from jacobian.math.graphs.spectra import (
     laplacian_spectrum,
 )
 from jacobian.math.graphs.spectra._models import (
+    GraphCharacteristicPolynomialRequest,
     GraphCharacteristicPolynomialResult,
     GraphSpectrumRequest,
     GraphSpectrumResult,
@@ -40,7 +41,7 @@ def compute_laplacian_spectrum(request: GraphSpectrumRequest) -> GraphSpectrumRe
 
 
 def compute_adjacency_characteristic_polynomial(
-    request: GraphSpectrumRequest,
+    request: GraphCharacteristicPolynomialRequest,
 ) -> GraphCharacteristicPolynomialResult:
     return GraphCharacteristicPolynomialResult._from_kernel(
         graph=request.graph,
@@ -50,7 +51,7 @@ def compute_adjacency_characteristic_polynomial(
 
 
 def compute_laplacian_characteristic_polynomial(
-    request: GraphSpectrumRequest,
+    request: GraphCharacteristicPolynomialRequest,
 ) -> GraphCharacteristicPolynomialResult:
     return GraphCharacteristicPolynomialResult._from_kernel(
         graph=request.graph,
@@ -143,8 +144,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the exact monic characteristic polynomial det(xI - A) of the "
         "adjacency matrix of a simple undirected graph over QQ, returned as "
         "the canonical sparse RationalPolynomial in x with nonzero terms "
-        "serialized in descending exponent order, using SymPy.",
-        GraphSpectrumRequest,
+        "serialized in descending exponent order, using FLINT.",
+        GraphCharacteristicPolynomialRequest,
         GraphCharacteristicPolynomialResult,
         compute_adjacency_characteristic_polynomial,
         "graph",
@@ -157,7 +158,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "path_adjacency_charpoly",
                 (
                     "Characteristic polynomial of the adjacency matrix of P3; "
-                    "the graph must be simple with at most 32 vertices."
+                    "the graph must be simple with at most 256 vertices."
                 ),
                 PATH_P3,
             ),
@@ -169,8 +170,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the exact monic characteristic polynomial det(xI - L) of the "
         "Laplacian matrix of a simple undirected graph over QQ, returned as "
         "the canonical sparse RationalPolynomial in x with nonzero terms "
-        "serialized in descending exponent order, using SymPy.",
-        GraphSpectrumRequest,
+        "serialized in descending exponent order, using FLINT.",
+        GraphCharacteristicPolynomialRequest,
         GraphCharacteristicPolynomialResult,
         compute_laplacian_characteristic_polynomial,
         "graph",
@@ -183,7 +184,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "path_laplacian_charpoly",
                 (
                     "Characteristic polynomial of the Laplacian matrix of P3; "
-                    "the graph must be simple with at most 32 vertices."
+                    "the graph must be simple with at most 256 vertices."
                 ),
                 PATH_P3,
             ),

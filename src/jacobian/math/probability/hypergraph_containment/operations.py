@@ -4,15 +4,72 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import (
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 from jacobian.math.probability.hypergraph_containment._models import (
+    MAX_CONTAINMENT_WORK,
+    MAX_SUBSET_STATES,
     HypergraphVertexContainmentResult,
 )
 
 __all__ = ["compute_hypergraph_vertex_containment"]
+
+
+def _admit_hypergraph_vertex_containment(
+    hypergraph: FiniteHypergraph,
+    retention_probability: CanonicalRational,
+) -> tuple[int, ...]:
+    if not isinstance(hypergraph, FiniteHypergraph):
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="hypergraph_containment.invalid_hypergraph",
+            message="hypergraph must be a FiniteHypergraph value",
+        )
+    if not isinstance(retention_probability, CanonicalRational):
+        raise OperationDomainValidationError(
+            location=("retention_probability",),
+            code="hypergraph_containment.invalid_probability",
+            message="retention_probability must be a CanonicalRational value",
+        )
+    p = retention_probability.as_fraction()
+    if not 0 <= p <= 1:
+        raise OperationDomainValidationError(
+            location=("retention_probability",),
+            code="hypergraph_containment.probability_out_of_range",
+            message="retention_probability must be between 0 and 1",
+        )
+    n = len(hypergraph.vertices)
+    state_count = 1 << n
+    if state_count > MAX_SUBSET_STATES:
+        raise OperationDomainValidationError(
+            location=("hypergraph", "vertices"),
+            code="hypergraph_containment.state_bound_exceeded",
+            message="the complete subset-state envelope is exceeded",
+        )
+    edge_count = len(hypergraph.edges)
+    if edge_count and state_count * edge_count > MAX_CONTAINMENT_WORK:
+        raise OperationDomainValidationError(
+            location=("hypergraph", "edges"),
+            code="hypergraph_containment.work_bound_exceeded",
+            message="the complete subset containment work envelope is exceeded",
+        )
+    if n * canonical_rational_component_digits(retention_probability) > 32_768:
+        raise OperationDomainValidationError(
+            location=("retention_probability",),
+            code="hypergraph_containment.result_growth_exceeded",
+            message="probability rational growth exceeds the canonical digit envelope",
+        )
+    vertex_index = {vertex: index for index, vertex in enumerate(hypergraph.vertices)}
+    return tuple(
+        sum(1 << vertex_index[member] for member in members)
+        for _, members in hypergraph.edges
+    )
 
 
 def compute_hypergraph_vertex_containment(
@@ -25,15 +82,13 @@ def compute_hypergraph_vertex_containment(
     Count by k and compute the exact probability under independent vertex
     retention.
     """
-    vertices = list(hypergraph.vertices)
-    n = len(vertices)
-    edges = [frozenset(members) for _, members in hypergraph.edges]
+    edge_masks = _admit_hypergraph_vertex_containment(hypergraph, retention_probability)
+    n = len(hypergraph.vertices)
 
     counts = [0] * (n + 1)
     for mask in range(1 << n):
-        selected = frozenset(vertices[i] for i in range(n) if mask & (1 << i))
-        k = len(selected)
-        contains_edge = any(edge <= selected for edge in edges)
+        k = mask.bit_count()
+        contains_edge = any(edge_mask & ~mask == 0 for edge_mask in edge_masks)
         if contains_edge:
             counts[k] += 1
 

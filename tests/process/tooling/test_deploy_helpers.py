@@ -19,7 +19,7 @@ from deploy.smoke import (
     is_transient_transport_failure,
     raise_for_http_error,
 )
-from deploy.smoke_remote import _validate_discovery_response
+from deploy.smoke_remote import _validate_discovery_response, _validate_tool_surface
 
 
 def _current_discovery_payload() -> dict[str, object]:
@@ -67,6 +67,26 @@ def test_remote_smoke_rejects_divergent_model_visible_discovery() -> None:
 
     assert failures == [
         "deployed operation discovery text and structured content disagree"
+    ]
+
+
+def test_remote_smoke_requires_the_catalog_derived_direct_tool_surface() -> None:
+    class Tool:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+    class Listed:
+        tools = (Tool("integer.compute.extended_gcd"), Tool("stale.tool"))
+
+    failures: list[str] = []
+    names = _validate_tool_surface(
+        Listed(), {"integer.compute.extended_gcd", "matrix.determinant.compute"}, failures
+    )
+
+    assert names == {"integer.compute.extended_gcd", "stale.tool"}
+    assert failures == [
+        "deployed MCP tool surface is missing catalog tools: ['matrix.determinant.compute']",
+        "deployed MCP tool surface has tools absent from the catalog: ['stale.tool']",
     ]
 
 

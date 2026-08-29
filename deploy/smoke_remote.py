@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx2
 from mcp.client.streamable_http import streamable_http_client
-from mcp.types import Implementation, TextContent, TextResourceContents
+from mcp.types import Implementation, TextResourceContents
 
 from jacobian import __version__
 from jacobian.canonical import canonicalize_json
@@ -20,10 +20,7 @@ from mcp import Client
 
 from .smoke import exit_for_smoke_failure, raise_for_http_error
 
-REQUIRED_TOOLS = {
-    "math.find",
-    "math.run",
-}
+PROBE_OPERATION_ID = "integer.compute.extended_gcd"
 
 
 def _require_server_info(server_info: Implementation | None) -> Implementation:
@@ -76,17 +73,21 @@ def _headers() -> dict[str, str] | None:
     return {"Authorization": f"Bearer {token}"} if token else None
 
 
-def _validate_tool_surface(listed: Any, failures: list[str]) -> set[str]:
+def _validate_tool_surface(
+    listed: Any,
+    expected_tool_names: set[str],
+    failures: list[str],
+) -> set[str]:
     tool_names = {tool.name for tool in listed.tools}
-    missing = sorted(REQUIRED_TOOLS - tool_names)
-    unexpected = sorted(tool_names - REQUIRED_TOOLS)
+    missing = sorted(expected_tool_names - tool_names)
+    unexpected = sorted(tool_names - expected_tool_names)
     if missing:
         failures.append(
-            f"deployed MCP tool surface is missing required tools: {missing!r}"
+            f"deployed MCP tool surface is missing catalog tools: {missing!r}"
         )
     if unexpected:
         failures.append(
-            f"deployed MCP tool surface has unexpected tools: {unexpected!r}"
+            f"deployed MCP tool surface has tools absent from the catalog: {unexpected!r}"
         )
     return tool_names
 
@@ -155,7 +156,6 @@ async def inspect(
         _validate_server_version(server_version, expected_version, failures)
 
         listed = await client.list_tools()
-        tool_names = _validate_tool_surface(listed, failures)
 
         catalog_result = await client.read_resource("operation://catalog")
         catalog_content = catalog_result.contents[0]
@@ -181,28 +181,27 @@ async def inspect(
             failures.append(
                 f"deployed catalog is missing required operations: {missing!r}"
             )
-        discovery_result = await client.call_tool(
-            "math.find",
-            {"request": {"op": "search", "query": query, "limit": 5}},
-        )
-        if discovery_result.is_error:
-            failures.append("deployed operation discovery returned an MCP error")
-        discovery_content = discovery_result.content[0]
-        if not isinstance(discovery_content, TextContent):
-            raise RuntimeError("deployed operation discovery is not text")
-        discovery_text = discovery_content.text
-        if not isinstance(discovery_result.structured_content, dict):
-            raise RuntimeError("deployed operation discovery is not structured")
-        discovery = discovery_result.structured_content
-        discovery_bytes = len(
-            json.dumps(discovery, ensure_ascii=False, indent=2).encode("utf-8")
-        )
-        discovery_model_visible_bytes = len(discovery_text.encode("utf-8"))
-        discovery_matches = _validate_discovery_response(
-            discovery,
-            discovery_text,
-            failures,
-        )
+        tool_names = _validate_tool_surface(listed, operation_ids, failures)
+        if PROBE_OPERATION_ID not in operation_ids:
+            failures.append(
+                f"deployed catalog is missing the smoke operation {PROBE_OPERATION_ID!r}"
+            )
+        probe = None
+        if PROBE_OPERATION_ID in tool_names and PROBE_OPERATION_ID in operation_ids:
+            probe_result = await client.call_tool(
+                PROBE_OPERATION_ID,
+                {"left": "84", "right": "30"},
+            )
+            if probe_result.is_error:
+                failures.append("deployed direct operation probe returned an MCP error")
+            elif not isinstance(probe_result.structured_content, dict):
+                raise RuntimeError("deployed direct operation probe is not structured")
+            elif probe_result.structured_content.get("gcd") != "6":
+                failures.append(
+                    "deployed direct operation probe returned an unexpected gcd"
+                )
+            else:
+                probe = probe_result.structured_content
 
         report = {
             "url": url,
@@ -216,10 +215,9 @@ async def inspect(
                 "catalog_digest": catalog_digest,
                 "sha256": hashlib.sha256(catalog_text.encode("utf-8")).hexdigest(),
             },
-            "discovery": {
-                "bytes": discovery_bytes,
-                "model_visible_bytes": discovery_model_visible_bytes,
-                "matches": list(discovery_matches),
+            "probe": {
+                "operation_id": PROBE_OPERATION_ID,
+                "result": probe,
             },
         }
     if failures:

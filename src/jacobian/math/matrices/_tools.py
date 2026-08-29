@@ -33,22 +33,90 @@ from jacobian.math.matrices._operation_models import (
     SquareRationalMatrixRequest,
 )
 from jacobian.math.matrices.operations import (
-    compute_adjugate,
-    compute_characteristic_polynomial,
-    compute_determinant,
-    compute_inverse,
-    compute_kronecker_product,
-    compute_nullspace,
-    compute_partial_trace,
-    compute_permanent,
-    compute_product,
-    compute_rank,
-    compute_rational_linear_solve,
-    compute_rref,
-    compute_smith_normal_form,
-    compute_trace,
+    adjugate_result,
+    characteristic_polynomial_result,
+    determinant_result,
+    inverse_result,
+    kronecker_product_result,
+    nullspace_result,
+    partial_trace_result,
+    permanent_result,
+    product_result,
+    rank_result,
+    rational_linear_solve_result,
+    rref_result,
+    smith_normal_form_result,
+    trace_result,
 )
 from jacobian.math.matrices.values import SmithNormalForm
+
+
+def compute_determinant(request: MatrixDeterminantRequest) -> MatrixDeterminantResult:
+    return determinant_result(request.matrix)
+
+
+def compute_adjugate(request: SquareIntegerMatrixRequest) -> MatrixAdjugateResult:
+    return adjugate_result(request.matrix)
+
+
+def compute_trace(request: SquareIntegerMatrixRequest) -> MatrixTraceResult:
+    return trace_result(request.matrix)
+
+
+def compute_product(request: RationalMatrixProductRequest) -> MatrixProductResult:
+    return product_result(request.left, request.right)
+
+
+def compute_kronecker_product(
+    request: MatrixKroneckerProductRequest,
+) -> MatrixKroneckerProductResult:
+    return kronecker_product_result(request.left, request.right)
+
+
+def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
+    return rank_result(request.matrix)
+
+
+def compute_rational_linear_solve(
+    request: RationalLinearSolveRequest,
+) -> RationalLinearSolveResult:
+    return rational_linear_solve_result(request.matrix, request.rhs)
+
+
+def compute_inverse(request: NonsingularIntegerMatrixRequest) -> MatrixInverseResult:
+    return inverse_result(request.matrix)
+
+
+def compute_rref(request: RationalMatrixRequest) -> RrefResult:
+    return rref_result(request.matrix)
+
+
+def compute_nullspace(request: RationalMatrixRequest) -> NullspaceResult:
+    return nullspace_result(request.matrix)
+
+
+def compute_characteristic_polynomial(
+    request: SquareRationalMatrixRequest,
+) -> CharacteristicPolynomialResult:
+    return characteristic_polynomial_result(request.matrix)
+
+
+def compute_smith_normal_form(request: IntegerMatrixRequest) -> SmithNormalForm:
+    return smith_normal_form_result(request.matrix)
+
+
+def compute_permanent(request: MatrixPermanentRequest) -> MatrixPermanentResult:
+    return permanent_result(request.matrix)
+
+
+def compute_partial_trace(
+    request: MatrixPartialTraceRequest,
+) -> MatrixPartialTraceResult:
+    return partial_trace_result(
+        request.matrix,
+        request.traced_dimension,
+        request.kept_dimension,
+    )
 
 
 def matrix_operation[

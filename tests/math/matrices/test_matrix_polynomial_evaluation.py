@@ -18,6 +18,7 @@ from jacobian.canonical import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices._operation_models import SquareRationalMatrixRequest
+from jacobian.math.matrices._tools import compute_characteristic_polynomial
 from jacobian.math.matrices.canonical_forms._models import (
     _MAX_WORK_BOUND,
     _RESULT_ENTRY_OVERHEAD_BYTES,
@@ -40,7 +41,6 @@ from jacobian.math.matrices.canonical_forms.operations import (
     _HornerEvaluationMetrics,
     compute_matrix_polynomial_evaluation,
 )
-from jacobian.math.matrices.operations import compute_characteristic_polynomial
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.polynomials.values import (
     RationalPolynomial,

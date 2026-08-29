@@ -18,7 +18,7 @@ from jacobian.math.matrices._operation_models import (
     RationalMatrixRequest,
     RrefResult,
 )
-from jacobian.math.matrices.operations import (
+from jacobian.math.matrices._tools import (
     compute_determinant,
     compute_nullspace,
     compute_product,

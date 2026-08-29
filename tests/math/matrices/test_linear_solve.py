@@ -10,7 +10,7 @@ from jacobian.math.matrices._operation_models import (
     RationalLinearSolveRequest,
     RationalLinearSolveResult,
 )
-from jacobian.math.matrices.operations import (
+from jacobian.math.matrices._tools import (
     compute_inverse,
     compute_rational_linear_solve,
 )

@@ -60,9 +60,7 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
     if word_length == 0:
         return 1 if dfa.initial_state in dfa.accepting_states else 0
     count_digits = _accepted_count_digit_bound(dfa.alphabet_size, word_length)
-    matrix_bit_work = (
-        state_count**3 * max(1, word_length.bit_length()) * count_digits
-    )
+    matrix_bit_work = state_count**3 * max(1, word_length.bit_length()) * count_digits
     if matrix_bit_work > MAX_COUNT_MATRIX_BIT_WORK:
         raise OperationDomainValidationError(
             location=("dfa", "word_length"),

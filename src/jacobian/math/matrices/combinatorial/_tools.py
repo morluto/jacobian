@@ -102,8 +102,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "matrix.hadamard.gram_profile.compute",
         "Compute the Gram profile of a sign matrix",
         "Return order, exact H H^T, diagonal residuals from n, all nonzero "
-        "off-diagonal inner products, and is_hadamard. Orthogonality is "
-        "replayed exactly with no floating tolerance.",
+        "off-diagonal inner products, and is_hadamard. Row and column counts "
+        "are admitted by Gram multiply-add work and exact-result size.",
         GramProfileRequest,
         GramProfileResult,
         compute_gram_profile,
@@ -141,10 +141,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "matrix.hadamard.determinant_profile.compute",
         "Compute the determinant profile of a Hadamard matrix",
-        "For a constructed Hadamard matrix of order n, return |det H| = "
-        "n^(n/2), the Gram determinant = n^n, and the identity det(H)^2 = "
-        "det(H H^T). Determinant magnitude is not inferred from a matrix "
-        "that has not first passed exact orthogonality.",
+        "For a square sign matrix of order n, return |det H| = n^(n/2), "
+        "the Gram determinant = n^n, and the identity det(H)^2 = "
+        "det(H H^T) when H H^T = n I_n exactly. Determinant magnitude is "
+        "not inferred from a matrix that fails exact orthogonality.",
         DeterminantProfileRequest,
         DeterminantProfileResult,
         compute_determinant_profile,

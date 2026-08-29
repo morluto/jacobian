@@ -9,7 +9,11 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from jacobian._execution import current_request_execution, request_execution
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    current_request_execution,
+    request_execution,
+)
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalizationError, encode_strict_json
 from jacobian.catalog.catalog import Catalog
@@ -45,10 +49,6 @@ class OperationRequestValidationError(ValueError):
                 "input": None,
             }
         ]
-
-
-class OperationExecutionTimeoutError(TimeoutError):
-    """The request-scoped owner envelope expired during dispatch projection."""
 
 
 class _OperationResolutionError(ValueError):

@@ -18,6 +18,32 @@ def rational_determinant(entries: tuple[tuple[Fraction, ...], ...]) -> Fraction:
     return Fraction(int(result.numerator), int(result.denominator))
 
 
+def rational_matrix_product(
+    left: tuple[tuple[Fraction, ...], ...],
+    right: tuple[tuple[Fraction, ...], ...],
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Return the exact dense rational matrix product through FLINT."""
+
+    from flint import fmpq, fmpq_mat
+
+    left_rows = len(left)
+    right_columns = len(right[0])
+    left_backend = fmpq_mat(
+        [[fmpq(value.numerator, value.denominator) for value in row] for row in left]
+    )
+    right_backend = fmpq_mat(
+        [[fmpq(value.numerator, value.denominator) for value in row] for row in right]
+    )
+    product = left_backend * right_backend
+    return tuple(
+        tuple(
+            Fraction(int(product[row, column].p), int(product[row, column].q))
+            for column in range(right_columns)
+        )
+        for row in range(left_rows)
+    )
+
+
 def rational_characteristic_polynomial(
     entries: tuple[tuple[Fraction, ...], ...],
 ) -> tuple[Fraction, ...]:
@@ -76,5 +102,6 @@ __all__ = [
     "integer_smith_normal_form",
     "rational_characteristic_polynomial",
     "rational_determinant",
+    "rational_matrix_product",
     "rational_rref",
 ]

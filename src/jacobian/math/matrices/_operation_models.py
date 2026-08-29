@@ -22,6 +22,9 @@ MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 128
 MAX_DETERMINANT_SCALAR_WORK = 500_000_000
 MAX_CHARACTERISTIC_POLYNOMIAL_ORDER = 128
+MAX_MATRIX_PRODUCT_AXIS = 128
+MAX_MATRIX_PRODUCT_MULTIPLY_ADDS = 2_500_000
+MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK = 3_000_000
 MAX_PERMANENT_RYSER_SUBSETS = 4_096
 MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
 # The canonical dense rational matrix carries determinant inputs through
@@ -172,6 +175,7 @@ class RationalMatrixProductRequest(_MatrixRequest):
 
     left: RationalMatrix
     right: RationalMatrix
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_MATRIX_PRODUCT_AXIS
 
 
 class SquareRationalMatrixRequest(_MatrixRequest):
@@ -409,9 +413,9 @@ class MatrixTraceResult(StrictModel):
 
 class MatrixProductResult(StrictModel):
     product: RationalMatrix
-    left_rows: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
-    inner_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
-    right_columns: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    left_rows: int = Field(ge=1, le=MAX_MATRIX_PRODUCT_AXIS)
+    inner_dimension: int = Field(ge=1, le=MAX_MATRIX_PRODUCT_AXIS)
+    right_columns: int = Field(ge=1, le=MAX_MATRIX_PRODUCT_AXIS)
     convention: Literal["STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ"] = (
         "STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ"
     )

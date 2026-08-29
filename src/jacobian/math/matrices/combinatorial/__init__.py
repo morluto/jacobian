@@ -5,6 +5,7 @@ from jacobian.math.matrices.combinatorial.operations import (
     gram_profile,
     kronecker,
     normalize,
+    recognize_hadamard,
     sign_profile,
     sylvester,
 )
@@ -17,6 +18,7 @@ __all__ = [
     "gram_profile",
     "kronecker",
     "normalize",
+    "recognize_hadamard",
     "sign_profile",
     "sylvester",
 ]

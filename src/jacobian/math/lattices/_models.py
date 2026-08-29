@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -15,6 +15,7 @@ from jacobian.math.matrices.values import (
     IntegerMatrix,
     RationalMatrix,
     RationalVectorSpaceBasis,
+    integer_matrix_axis_schema,
     require_matrix_scalar_digits,
 )
 
@@ -61,7 +62,10 @@ class HermiteNormalFormRequest(StrictModel):
     Row and column counts are at most ``MAX_MATRIX_DIMENSION``.
     """
 
-    matrix: IntegerMatrix = Field(
+    matrix: Annotated[
+        IntegerMatrix,
+        WithJsonSchema(integer_matrix_axis_schema(MAX_MATRIX_DIMENSION)),
+    ] = Field(
         description=(
             "Integer matrix whose row and column counts are at most "
             f"{MAX_MATRIX_DIMENSION}."
@@ -104,7 +108,10 @@ class LatticeReductionRequest(StrictModel):
     Row and column counts are at most ``MAX_MATRIX_DIMENSION``.
     """
 
-    basis: IntegerMatrix = Field(
+    basis: Annotated[
+        IntegerMatrix,
+        WithJsonSchema(integer_matrix_axis_schema(MAX_MATRIX_DIMENSION)),
+    ] = Field(
         description=(
             "Integer row basis whose row and column counts are at most "
             f"{MAX_MATRIX_DIMENSION}."

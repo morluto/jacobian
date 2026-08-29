@@ -216,6 +216,32 @@ def test_widened_power_result_composes_into_finite_distribution_consumers() -> N
         convolution(powered.distribution, degenerate)
 
 
+def test_identity_power_preserves_mixed_large_denominator_source() -> None:
+    first = 10**300 + 1
+    second = 10**300 + 3
+    source = _distribution(
+        (
+            (Fraction(0), Fraction(1, 2 * first)),
+            (Fraction(1), Fraction(first - 1, 2 * first)),
+            (Fraction(2), Fraction(1, 2 * second)),
+            (Fraction(3), Fraction(second - 1, 2 * second)),
+        )
+    )
+
+    identity = convolution_power(source, 1)
+    assert identity.source == source
+    assert identity.distribution == source
+
+    peak = convolution_peak(source, 1)
+    maximum = max(atom.probability.as_fraction() for atom in source.atoms)
+    assert peak.maximum_probability.as_fraction() == maximum
+    assert tuple(value.as_fraction() for value in peak.maximizing_values) == tuple(
+        atom.value.as_fraction()
+        for atom in source.atoms
+        if atom.probability.as_fraction() == maximum
+    )
+
+
 def test_wider_canonical_carrier_does_not_widen_binary_convolution() -> None:
     source = _distribution(
         tuple((Fraction(2**index), Fraction(1, 23)) for index in range(23))

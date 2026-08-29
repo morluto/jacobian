@@ -33,7 +33,7 @@ def derangements(request: NonnegativeIntegerRequest) -> IntegerResult:
 
 
 def binomial(request: SparseCountingPairRequest) -> IntegerResult:
-    return _integer_result(native.binomial(request.n, request.k))
+    return IntegerResult(value=native.canonical_binomial(request.n, request.k))
 
 
 def multinomial(request: IntegerListRequest) -> IntegerResult:
@@ -42,7 +42,7 @@ def multinomial(request: IntegerListRequest) -> IntegerResult:
 
 
 def permutations(request: SparseCountingPairRequest) -> IntegerResult:
-    return _integer_result(native.permutations(request.n, request.k))
+    return IntegerResult(value=native.canonical_permutations(request.n, request.k))
 
 
 def catalan(request: NonnegativeIntegerRequest) -> IntegerResult:
@@ -58,7 +58,7 @@ def central_binomial(request: NonnegativeIntegerRequest) -> IntegerResult:
 
 
 def compositions(request: SparseCountingPairRequest) -> IntegerResult:
-    return _integer_result(native.compositions(request.n, request.k))
+    return IntegerResult(value=native.canonical_compositions(request.n, request.k))
 
 
 COUNTING_OPERATIONS = (

@@ -336,6 +336,39 @@ def _power_multiplication_shapes(
     return tuple(shapes)
 
 
+def _admit_identity_convolution(distribution: FiniteRationalDistribution) -> None:
+    """Admit exponent one without building an unnecessary probability LCM."""
+
+    values = _support_values(distribution)
+    origin = values[0]
+    value_denominator = 1
+    for value in values[1:]:
+        value_denominator = _lcm_within_result_digits(
+            value_denominator,
+            (value - origin).denominator,
+            location=("distribution",),
+            code="probability.convolution_power.height_bound",
+            message=(
+                "convolution-power lattice denominators exceed the "
+                f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+            ),
+        )
+    offsets = tuple(
+        int((value - origin) * value_denominator) for value in values
+    )
+    lattice_gcd = max(1, gcd(*offsets[1:])) if len(offsets) > 1 else 1
+    output_slots = offsets[-1] // lattice_gcd + 1
+    if output_slots > MAX_FINITE_DISTRIBUTION_ATOMS:
+        raise OperationDomainValidationError(
+            location=("distribution", "exponent"),
+            code="probability.convolution_power.support_bound",
+            message=(
+                "convolution power can occupy at most "
+                f"{MAX_FINITE_DISTRIBUTION_ATOMS} lattice positions"
+            ),
+        )
+
+
 def _plan_convolution_power(
     distribution: FiniteRationalDistribution,
     exponent: int,
@@ -785,6 +818,13 @@ def convolution_power(
 ) -> FiniteConvolutionPowerResult:
     """Return the complete exact law of a positive i.i.d. convolution power."""
 
+    if type(exponent) is int and exponent == 1:
+        _admit_identity_convolution(distribution)
+        return FiniteConvolutionPowerResult._from_kernel(
+            source=distribution,
+            exponent=exponent,
+            distribution=distribution,
+        )
     plan = _admit_convolution_power(distribution, exponent)
     denominator = plan.powered_probability_denominator
     coefficients = _convolution_power_coefficients(plan)
@@ -813,6 +853,21 @@ def convolution_peak(
 ) -> FiniteConvolutionPeakResult:
     """Return the exact largest atom mass and all values attaining it."""
 
+    if type(exponent) is int and exponent == 1:
+        _admit_identity_convolution(distribution)
+        maximum = max(
+            atom.probability.as_fraction() for atom in distribution.atoms
+        )
+        return FiniteConvolutionPeakResult._from_kernel(
+            source=distribution,
+            exponent=exponent,
+            maximum_probability=CanonicalRational.from_fraction(maximum),
+            maximizing_values=tuple(
+                atom.value
+                for atom in distribution.atoms
+                if atom.probability.as_fraction() == maximum
+            ),
+        )
     plan = _admit_convolution_peak(distribution, exponent)
     coefficients = _convolution_power_coefficients(plan)
     maximum = max(coefficients)

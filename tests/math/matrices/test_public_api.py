@@ -1,12 +1,19 @@
 import importlib
+from fractions import Fraction
 
 import pytest
 import sympy
 from hypothesis import given
 from hypothesis import strategies as st
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import matrices
-from jacobian.math.matrices.values import MAX_EXACT_LINEAR_MATRIX_AXIS
+from jacobian.math.matrices._operation_models import MatrixDeterminantRequest
+from jacobian.math.matrices._tools import compute_determinant
+from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
+    rational_matrix_from_fractions,
+)
 
 
 def test_orphan_combinatorial_matrix_models_are_not_importable() -> None:
@@ -40,6 +47,70 @@ def test_exact_matrix_operations() -> None:
     assert pivots == (0,)
 
 
+def test_characteristic_polynomial_preserves_exact_algebraic_inputs() -> None:
+    source = sympy.Matrix([[sympy.sqrt(2), 0], [0, 1]])
+
+    assert matrices.characteristic_polynomial(source, "lambda").all_coeffs() == [
+        1,
+        -1 - sympy.sqrt(2),
+        sympy.sqrt(2),
+    ]
+
+
+def test_native_determinant_preserves_exact_algebraic_inputs() -> None:
+    source = sympy.Matrix([[sympy.sqrt(2), 0], [0, 1]])
+
+    assert matrices.determinant(source) == sympy.sqrt(2)
+
+
+def test_native_determinant_shares_admission_and_flint_kernel_above_order_64() -> None:
+    order = 65
+    entries = tuple(
+        tuple(
+            Fraction(1, row + 1) if row == column else Fraction(0)
+            for column in range(order)
+        )
+        for row in range(order)
+    )
+    source = sympy.diag(*[sympy.Rational(1, row + 1) for row in range(order)])
+
+    native = matrices.determinant(source)
+    wire = compute_determinant(
+        MatrixDeterminantRequest(matrix=rational_matrix_from_fractions(entries))
+    )
+
+    assert native == sympy.Rational(wire.determinant.num, wire.determinant.den)
+    assert native == sympy.Rational(1, sympy.factorial(order))
+
+
+def test_native_determinant_rejects_input_scalars_above_the_shared_digit_bound() -> (
+    None
+):
+    source = sympy.diag(10**256, *[1] * 64)
+
+    with pytest.raises(OperationDomainValidationError, match="256 decimal digits"):
+        matrices.determinant(source)
+
+
+def test_multiply_preserves_exact_algebraic_inputs() -> None:
+    source = sympy.Matrix([[sympy.sqrt(2), 0], [0, 1]])
+
+    assert matrices.multiply(source, sympy.eye(2)) == source
+
+
+def test_multiply_admits_algebraic_inputs_at_shared_axis() -> None:
+    source = sympy.diag(*([sympy.sqrt(2)] * 32))
+
+    assert matrices.multiply(source, sympy.eye(32)) == source
+
+
+def test_multiply_rejects_algebraic_inputs_above_shared_axis() -> None:
+    source = sympy.diag(*([sympy.sqrt(2)] * 33))
+
+    with pytest.raises(ValueError, match="between 1 and 32"):
+        matrices.multiply(source, sympy.eye(33))
+
+
 def test_rref_of_identity_is_identity_with_all_pivots() -> None:
     reduced, pivots = matrices.rref(sympy.eye(3))
     assert reduced == sympy.eye(3)
@@ -69,6 +140,31 @@ def test_inverse_of_3x3_integer_matrix() -> None:
     source = sympy.Matrix([[1, 0, 2], [0, 1, 3], [0, 0, 1]])
     expected = sympy.Matrix([[1, 0, -2], [0, 1, -3], [0, 0, 1]])
     assert matrices.inverse(source) == expected
+
+
+def test_inverse_accepts_exact_noninteger_entries_in_native_fallback() -> None:
+    source = sympy.Matrix([[sympy.I]])
+
+    assert matrices.inverse(source) == sympy.Matrix([[-sympy.I]])
+
+
+def test_characteristic_polynomial_accepts_large_exact_native_scalars() -> None:
+    huge = 10**256
+    source = sympy.Matrix([[huge]])
+
+    assert matrices.characteristic_polynomial(source, "lambda").as_expr() == (
+        sympy.Symbol("lambda") - huge
+    )
+
+
+def test_large_native_scalar_fallbacks_avoid_python_digit_conversion_limit() -> None:
+    huge = 10**5000
+    source = sympy.Matrix([[huge]])
+
+    assert matrices.characteristic_polynomial(source, "lambda").as_expr() == (
+        sympy.Symbol("lambda") - huge
+    )
+    assert matrices.inverse(source) == sympy.Matrix([[sympy.Rational(1, huge)]])
 
 
 def test_trace_of_identity_equals_dimension() -> None:

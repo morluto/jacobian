@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._hnf import compute_hermite_normal_form
 from jacobian.math.lattices._lattice import reduce_lattice_basis
 from jacobian.math.lattices._models import (
@@ -395,6 +396,20 @@ def test_hermite_accepts_order_32_identity() -> None:
 # ---------------------------------------------------------------------------
 # Catalog registration
 # ---------------------------------------------------------------------------
+
+
+def test_lattice_reduction_rejects_order_above_32_before_backend() -> None:
+    order = MAX_MATRIX_DIMENSION + 1
+    entries = tuple(
+        tuple("1" if row == column else "0" for column in range(order))
+        for row in range(order)
+    )
+    matrix = IntegerMatrix(entries=entries)
+
+    with pytest.raises(ValidationError):
+        LatticeReductionRequest(basis=matrix)
+    with pytest.raises(OperationDomainValidationError, match="32"):
+        reduce_lattice_basis(LatticeReductionRequest.model_construct(basis=matrix))
 
 
 def test_all_new_operations_registered_in_catalog() -> None:

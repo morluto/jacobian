@@ -672,9 +672,7 @@ def _characteristic_polynomial_component_digit_bound(
     numerator_bits = 0
     denominator_bits = 0
     is_upper_triangular = all(
-        fractions[row][column] == 0
-        for row in range(order)
-        for column in range(row)
+        fractions[row][column] == 0 for row in range(order) for column in range(row)
     )
     is_lower_triangular = all(
         fractions[row][column] == 0

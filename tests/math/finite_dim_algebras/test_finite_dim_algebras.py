@@ -160,8 +160,8 @@ def test_dimension_limit_is_derived_from_structure_constant_budget() -> None:
 def test_published_dimension_fits_canonical_request_byte_limit() -> None:
     """Worst-case valid tensors must encode under the 10 MiB transport envelope."""
     from jacobian.canonical import (
-        CanonicalLimits,
         CanonicalizationError,
+        CanonicalLimits,
         encode_strict_json,
     )
 

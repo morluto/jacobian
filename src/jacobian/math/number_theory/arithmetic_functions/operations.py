@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from fractions import Fraction
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
@@ -26,20 +25,25 @@ def _rational(value: Fraction | int) -> CanonicalRational:
 
 def _divisor_incidences(
     length: int, *, minimum_divisor: int = 1
-) -> Iterator[tuple[int, int]]:
-    """Yield ``(divisor, multiple)`` for the bounded dense prefix."""
-    for divisor in range(minimum_divisor, length + 1):
-        for multiple in range(divisor, length + 1, divisor):
-            yield divisor, multiple
+) -> tuple[tuple[int, int], ...]:
+    """Return ``(divisor, multiple)`` pairs for the bounded dense prefix."""
+    return tuple(
+        (divisor, multiple)
+        for divisor in range(minimum_divisor, length + 1)
+        for multiple in range(divisor, length + 1, divisor)
+    )
 
 
 def _divisor_incidence_count(length: int, *, minimum_divisor: int = 1) -> int:
     return sum(length // divisor for divisor in range(minimum_divisor, length + 1))
 
 
-def _require_divisor_work(length: int) -> None:
-    incidences = _divisor_incidence_count(length)
-    if incidences > MAX_DIVISOR_INCIDENCES:
+def _require_divisor_incidences(
+    length: int, *, minimum_divisor: int = 1
+) -> tuple[tuple[int, int], ...]:
+    if _divisor_incidence_count(length, minimum_divisor=minimum_divisor) > (
+        MAX_DIVISOR_INCIDENCES
+    ):
         raise OperationDomainValidationError(
             location=("values",),
             code="arithmetic_functions.divisor_incidence_work_exceeded",
@@ -48,6 +52,7 @@ def _require_divisor_work(length: int) -> None:
                 f"{MAX_DIVISOR_INCIDENCES}-incidence divisor-sieve budget"
             ),
         )
+    return _divisor_incidences(length, minimum_divisor=minimum_divisor)
 
 
 class _HeightSums:
@@ -151,11 +156,11 @@ def _shared_denominator_digits(
 
 def _admit_convolution(
     f: tuple[CanonicalRational, ...], g: tuple[CanonicalRational, ...]
-) -> None:
+) -> tuple[tuple[int, int], ...]:
     _require_length(f, "f", _MAX_DIVISOR_PREFIX_LENGTH)
     if len(f) != len(g):
         raise ValueError("f and g must have the same length")
-    _require_divisor_work(len(f))
+    incidences = _require_divisor_incidences(len(f))
     left = _heights(f)
     right = _heights(g)
     left_shared = _shared_denominator_digits(f)
@@ -170,32 +175,36 @@ def _admit_convolution(
     sums = _HeightSums(
         len(left), shared_denominator_digits=shared_product_denominator_digits
     )
-    for divisor, multiple in _divisor_incidences(len(left)):
+    for divisor, multiple in incidences:
         sums.add(
             multiple - 1,
             left[divisor - 1].product(right[multiple // divisor - 1]),
         )
     _require_result_envelope(sums.heights(), "Dirichlet convolution")
+    return incidences
 
 
-def _admit_mobius(values: tuple[CanonicalRational, ...]) -> None:
+def _admit_mobius(
+    values: tuple[CanonicalRational, ...],
+) -> tuple[tuple[int, int], ...]:
     _require_length(values, "values", _MAX_DIVISOR_PREFIX_LENGTH)
-    _require_divisor_work(len(values))
+    incidences = _require_divisor_incidences(len(values))
     heights = _heights(values)
     sums = _HeightSums(
         len(heights),
         shared_denominator_digits=_shared_denominator_digits(values),
     )
-    for divisor, multiple in _divisor_incidences(len(heights)):
+    for divisor, multiple in incidences:
         sums.add(multiple - 1, heights[multiple // divisor - 1])
     _require_result_envelope(sums.heights(), "Möbius transform")
+    return incidences
 
 
 def _admit_inverse(values: tuple[CanonicalRational, ...]) -> None:
     _require_length(values, "values", _MAX_DIVISOR_PREFIX_LENGTH)
     if values[0].as_fraction() == 0:
         raise ValueError("f(1) must be nonzero")
-    _require_divisor_work(len(values))
+    _require_divisor_incidences(len(values))
     source = _heights(values)
     inverse = [RationalHeight(1, 1)] * len(source)
     inverse[0] = RationalHeight(1, 1).quotient(source[0])
@@ -251,12 +260,12 @@ def dirichlet_convolution(
     f: tuple[CanonicalRational, ...], g: tuple[CanonicalRational, ...]
 ) -> tuple[CanonicalRational, ...]:
     """Compute ``h = f * g`` where ``h(K) = sum_{d|K} f(d) * g(K/d)``."""
-    _admit_convolution(f, g)
+    incidences = _admit_convolution(f, g)
     n = len(f)
     f_values = [v.as_fraction() for v in f]
     g_values = [v.as_fraction() for v in g]
     result_values: list[Fraction] = [Fraction(0)] * n
-    for divisor, multiple in _divisor_incidences(n):
+    for divisor, multiple in incidences:
         result_values[multiple - 1] += (
             f_values[divisor - 1] * g_values[multiple // divisor - 1]
         )
@@ -277,18 +286,18 @@ def mobius_transform(
     The two operations are mutually inverse: forward then inverse (or vice
     versa) recovers the original function.
     """
-    _admit_mobius(values)
+    incidences = _admit_mobius(values)
     n = len(values)
     fraction_values = [v.as_fraction() for v in values]
     result_values: list[Fraction] = [Fraction(0)] * n
     if inverse:
         # F(K) = sum_{d|K} f(K/d)  (Dirichlet convolution with 1)
-        for divisor, multiple in _divisor_incidences(n):
+        for divisor, multiple in incidences:
             result_values[multiple - 1] += fraction_values[multiple // divisor - 1]
     else:
         # f(K) = sum_{d|K} mu(d) * F(K/d)  (Dirichlet convolution with mu)
         mobius = _mobius_sieve(n)
-        for divisor, multiple in _divisor_incidences(n):
+        for divisor, multiple in incidences:
             if mobius[divisor]:
                 result_values[multiple - 1] += (
                     mobius[divisor] * fraction_values[multiple // divisor - 1]

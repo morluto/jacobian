@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 import operator
+from itertools import product
 from typing import Literal, SupportsIndex, cast
 
 from jacobian._exact import CanonicalInteger
@@ -17,21 +19,50 @@ from jacobian.math.number_theory._derived_models import (
     LegendreSymbolResult,
 )
 from jacobian.math.number_theory._integer_models import BooleanResult
+from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
+from jacobian.math.number_theory._modular_basic_models import (
+    MAX_CRT_COMBINED_MODULUS,
+    MAX_CRT_SIZE,
+    MAX_MODULUS,
+    ChineseRemainderResult,
+    JacobiSymbolResult,
+    QuadraticResiduesResult,
+)
+from jacobian.math.number_theory._modular_models import (
+    _MAX_RESIDUE_ASSIGNMENTS,
+    _MAX_RESIDUE_EXPONENT,
+    ModularPolynomialResidueCount,
+    ModularPolynomialResidueImageResult,
+    ModularPolynomialResidueTableRow,
+    ModularPolynomialResidueWitness,
+    ModularPolynomialVariable,
+)
 from jacobian.math.number_theory._prime_models import PrimorialResult
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
+from jacobian.math.number_theory.modular_polynomials import (
+    ModularPolynomialTerm,
+    NormalizedModularPolynomialTerm,
+)
 
 __all__ = [
+    "chinese_remainder",
     "euler_totient",
     "factorial_valuation",
     "floor_square_root",
     "is_prime",
     "legendre_symbol",
+    "jacobi_symbol",
     "mobius",
+    "modular_inverse",
+    "modular_polynomial_residue_assignments",
+    "modular_polynomial_residue_image",
+    "multiplicative_order",
     "next_prime",
     "nth_prime",
     "previous_prime",
     "prime_count",
     "primorial",
+    "quadratic_residues",
 ]
 
 
@@ -171,3 +202,353 @@ def factorial_valuation(n: int, base: int) -> FactorialValuationResult:
         base=base,
         valuation=int(multiplicity_in_factorial(base, n)),
     )
+
+
+def _modular_integer(value: SupportsIndex | CanonicalInteger | IntegerValue) -> int:
+    """Convert one native integer value without accepting request envelopes."""
+
+    return _integer(value)
+
+
+def _require_modulus(modulus: int) -> None:
+    if type(modulus) is not int:
+        raise TypeError("modulus must be an integer")
+    if not 2 <= modulus <= MAX_MODULUS:
+        raise OperationDomainValidationError(
+            location=("modulus",),
+            code="number_theory.modulus_out_of_range",
+            message=f"modulus must be between 2 and {MAX_MODULUS:,}",
+        )
+
+
+def _require_bounded_integer(value: int, *, location: tuple[str, ...]) -> None:
+    if len(str(abs(value))) > MAX_INTEGER_DIGITS:
+        raise OperationDomainValidationError(
+            location=location,
+            code="number_theory.integer_exceeds_digit_bound",
+            message=f"integer must have at most {MAX_INTEGER_DIGITS} digits",
+        )
+
+
+def jacobi_symbol(
+    a: SupportsIndex | CanonicalInteger | IntegerValue,
+    n: SupportsIndex,
+) -> JacobiSymbolResult:
+    """Return the Jacobi symbol ``(a / n)`` for an odd positive denominator."""
+
+    a_value = _modular_integer(a)
+    n_value = operator.index(n)
+    _require_bounded_integer(a_value, location=("a",))
+    _require_modulus(n_value)
+    if n_value % 2 == 0:
+        raise OperationDomainValidationError(
+            location=("n",),
+            code="number_theory.jacobi_symbol_denominator_must_be_odd",
+            message="Jacobi symbol denominator must be odd",
+        )
+    from sympy import jacobi_symbol as sympy_jacobi_symbol
+
+    return JacobiSymbolResult(
+        a=format_canonical_integer(a_value),
+        n=n_value,
+        jacobi=cast(
+            Literal[-1, 0, 1],
+            int(sympy_jacobi_symbol(a_value, n_value)),
+        ),
+    )
+
+
+def _require_unit(value: int, modulus: int) -> None:
+    _require_modulus(modulus)
+    _require_bounded_integer(value, location=("value",))
+    if math.gcd(value, modulus) != 1:
+        raise OperationDomainValidationError(
+            location=("value",),
+            code="number_theory.value_must_be_coprime_to_the_modulus",
+            message="value must be coprime to the modulus",
+        )
+
+
+def modular_inverse(
+    value: SupportsIndex | CanonicalInteger | IntegerValue,
+    modulus: SupportsIndex,
+) -> IntegerValue:
+    """Return the least nonnegative inverse of a unit modulo ``modulus``."""
+
+    value_integer = _modular_integer(value)
+    modulus_integer = operator.index(modulus)
+    _require_unit(value_integer, modulus_integer)
+    return IntegerValue(
+        value=format_canonical_integer(pow(value_integer, -1, modulus_integer))
+    )
+
+
+def multiplicative_order(
+    value: SupportsIndex | CanonicalInteger | IntegerValue,
+    modulus: SupportsIndex,
+) -> IntegerValue:
+    """Return the multiplicative order of a unit modulo ``modulus``."""
+
+    value_integer = _modular_integer(value)
+    modulus_integer = operator.index(modulus)
+    _require_unit(value_integer, modulus_integer)
+    from sympy import n_order
+
+    return IntegerValue(
+        value=format_canonical_integer(int(n_order(value_integer, modulus_integer)))
+    )
+
+
+def quadratic_residues(modulus: SupportsIndex) -> QuadraticResiduesResult:
+    """Return all quadratic residues modulo one bounded modulus."""
+
+    modulus_integer = operator.index(modulus)
+    _require_modulus(modulus_integer)
+    from sympy.ntheory.residue_ntheory import (
+        quadratic_residues as sympy_quadratic_residues,
+    )
+
+    return QuadraticResiduesResult(
+        residues=tuple(
+            format_canonical_integer(int(value))
+            for value in sympy_quadratic_residues(modulus_integer)
+        )
+    )
+
+
+def _require_crt_admission(residues: tuple[int, ...], moduli: tuple[int, ...]) -> None:
+    if not 1 <= len(residues) <= MAX_CRT_SIZE or not 1 <= len(moduli) <= MAX_CRT_SIZE:
+        raise OperationDomainValidationError(
+            location=("residues",),
+            code="number_theory.congruence_system_size_out_of_range",
+            message=f"congruence systems must contain between 1 and {MAX_CRT_SIZE} pairs",
+        )
+    if len(residues) != len(moduli):
+        raise OperationDomainValidationError(
+            location=("residues",),
+            code="number_theory.residues_and_moduli_must_have_equal_length",
+            message="residues and moduli must have equal length",
+        )
+    combined = 1
+    for index, modulus in enumerate(moduli):
+        if not 2 <= modulus <= MAX_MODULUS:
+            raise OperationDomainValidationError(
+                location=("moduli", index),
+                code="number_theory.modulus_out_of_range",
+                message=f"every modulus must be between 2 and {MAX_MODULUS:,}",
+            )
+        combined = combined // math.gcd(combined, modulus) * modulus
+        if combined > MAX_CRT_COMBINED_MODULUS:
+            raise OperationDomainValidationError(
+                location=("moduli", index),
+                code="number_theory.combined_modulus_exceeds_bound",
+                message=(
+                    "the system's combined modulus must have fewer than "
+                    f"{len(str(MAX_CRT_COMBINED_MODULUS))} digits; split the "
+                    "congruence system into narrower subsystems"
+                ),
+            )
+    for index, (residue, modulus) in enumerate(
+        zip(residues, moduli, strict=True)
+    ):
+        if not 0 <= residue < modulus:
+            raise OperationDomainValidationError(
+                location=("residues", index),
+                code="number_theory.every_residue_must_be_canonical_for_its_modulus",
+                message="every residue must be canonical for its modulus",
+            )
+        for other_index in range(index):
+            if (residue - residues[other_index]) % math.gcd(
+                modulus, moduli[other_index]
+            ):
+                raise OperationDomainValidationError(
+                    location=("residues", index),
+                    code="number_theory.congruence_system_is_inconsistent",
+                    message="congruence system is inconsistent",
+                )
+
+
+def chinese_remainder(
+    residues: tuple[int, ...],
+    moduli: tuple[int, ...],
+) -> ChineseRemainderResult:
+    """Solve a finite compatible system of integer congruences."""
+
+    if not isinstance(residues, tuple) or not all(type(item) is int for item in residues):
+        raise TypeError("residues must be a tuple of integers")
+    if not isinstance(moduli, tuple) or not all(type(item) is int for item in moduli):
+        raise TypeError("moduli must be a tuple of integers")
+    _require_crt_admission(residues, moduli)
+    from sympy.ntheory.modular import solve_congruence
+
+    result = solve_congruence(*zip(residues, moduli, strict=True), check=True)
+    if result is None or result[0] is None:
+        raise AssertionError("admitted congruence system was not solved")
+    residue, modulus = result
+    return ChineseRemainderResult(
+        residue=format_canonical_integer(int(residue)),
+        modulus=format_canonical_integer(int(modulus)),
+    )
+
+
+def _require_residue_image_admission(
+    modulus: int,
+    variables: tuple[ModularPolynomialVariable, ...],
+    terms: tuple[ModularPolynomialTerm, ...],
+) -> None:
+    _require_modulus(modulus)
+    if not all(isinstance(variable, ModularPolynomialVariable) for variable in variables):
+        raise TypeError("variables must contain ModularPolynomialVariable values")
+    if not all(isinstance(term, ModularPolynomialTerm) for term in terms):
+        raise TypeError("terms must contain ModularPolynomialTerm values")
+    if not 1 <= len(variables) <= 6:
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="number_theory.residue_variable_count_out_of_range",
+            message="variable count must be between 1 and 6",
+        )
+    if len(terms) > 64:
+        raise OperationDomainValidationError(
+            location=("terms",),
+            code="number_theory.residue_term_count_exceeds_bound",
+            message="residue polynomial may contain at most 64 terms",
+        )
+    variable_names = [variable.name for variable in variables]
+    if len(variable_names) != len(set(variable_names)):
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="number_theory.polynomial_variable_names_must_be_unique",
+            message="polynomial variable names must be unique",
+        )
+    if any(
+        variable.residues != tuple(sorted(set(variable.residues)))
+        or any(residue < 0 or residue >= modulus for residue in variable.residues)
+        for variable in variables
+    ):
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="number_theory.variable_residues_must_be_canonical",
+            message="variable residues must be canonical and less than the modulus",
+        )
+    assignment_count = math.prod(len(variable.residues) for variable in variables)
+    if assignment_count > _MAX_RESIDUE_ASSIGNMENTS:
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="number_theory.residue_assignment_count_exceeds_bound",
+            message=(
+                "declared residue domains exceed the "
+                f"{_MAX_RESIDUE_ASSIGNMENTS:,}-assignment bound"
+            ),
+        )
+    if any(len(term.exponents) != len(variables) for term in terms):
+        raise OperationDomainValidationError(
+            location=("terms",),
+            code="number_theory.every_term_exponent_vector_must_match_the_variable_count",
+            message="every term exponent vector must match the variable count",
+        )
+    if any(
+        len(term.coefficient) > MAX_INTEGER_DIGITS
+        or any(
+            exponent < 0 or exponent > _MAX_RESIDUE_EXPONENT
+            for exponent in term.exponents
+        )
+        for term in terms
+    ):
+        raise OperationDomainValidationError(
+            location=("terms",),
+            code="number_theory.term_outside_residue_image_admission",
+            message="term coefficient or exponents exceed the residue-image admission",
+        )
+    exponent_vectors = [term.exponents for term in terms]
+    if exponent_vectors != sorted(set(exponent_vectors)):
+        raise OperationDomainValidationError(
+            location=("terms",),
+            code="number_theory.term_exponent_vectors_must_be_unique_and_lexicographically_increasing",
+            message="term exponent vectors must be unique and lexicographically increasing",
+        )
+    if any(int(term.coefficient) % modulus == 0 for term in terms):
+        raise OperationDomainValidationError(
+            location=("terms",),
+            code="number_theory.sparse_polynomial_terms_must_have_nonzero_coefficient_modulo_m",
+            message="sparse polynomial terms must have nonzero coefficient modulo m",
+        )
+
+
+def _evaluate_modular_polynomial(
+    terms: tuple[NormalizedModularPolynomialTerm, ...],
+    assignment: tuple[int, ...],
+    modulus: int,
+) -> int:
+    value = 0
+    for term in terms:
+        monomial = term.coefficient
+        for coordinate, exponent in zip(assignment, term.exponents, strict=True):
+            monomial = monomial * pow(coordinate, exponent, modulus) % modulus
+        value = (value + monomial) % modulus
+    return value
+
+
+def _residue_image(
+    modulus: int,
+    variables: tuple[ModularPolynomialVariable, ...],
+    terms: tuple[ModularPolynomialTerm, ...],
+    *,
+    include_table: bool,
+) -> ModularPolynomialResidueImageResult:
+    _require_residue_image_admission(modulus, variables, terms)
+    normalized_terms = tuple(
+        NormalizedModularPolynomialTerm(
+            coefficient=int(term.coefficient) % modulus,
+            exponents=term.exponents,
+        )
+        for term in terms
+    )
+    counts: dict[int, int] = {}
+    first_assignments: dict[int, tuple[int, ...]] = {}
+    table: list[ModularPolynomialResidueTableRow] | None = [] if include_table else None
+    for assignment in product(*(variable.residues for variable in variables)):
+        residue = _evaluate_modular_polynomial(normalized_terms, assignment, modulus)
+        if table is not None:
+            table.append(ModularPolynomialResidueTableRow(assignment=assignment, residue=residue))
+        counts[residue] = counts.get(residue, 0) + 1
+        first_assignments.setdefault(residue, assignment)
+    image = tuple(sorted(counts))
+    return ModularPolynomialResidueImageResult._from_kernel(
+        modulus=modulus,
+        variable_order=tuple(variable.name for variable in variables),
+        domains=tuple(variable.residues for variable in variables),
+        normalized_terms=normalized_terms,
+        total_assignments=math.prod(len(variable.residues) for variable in variables),
+        image=image,
+        residue_counts=tuple(
+            ModularPolynomialResidueCount(residue=residue, count=counts[residue])
+            for residue in image
+        ),
+        witnesses=tuple(
+            ModularPolynomialResidueWitness(
+                residue=residue, assignment=first_assignments[residue]
+            )
+            for residue in image
+        ),
+        table=tuple(table) if table is not None else None,
+    )
+
+
+def modular_polynomial_residue_image(
+    modulus: int,
+    variables: tuple[ModularPolynomialVariable, ...],
+    terms: tuple[ModularPolynomialTerm, ...],
+) -> ModularPolynomialResidueImageResult:
+    """Return the exact image of a sparse polynomial on finite residue domains."""
+
+    return _residue_image(modulus, variables, terms, include_table=False)
+
+
+def modular_polynomial_residue_assignments(
+    modulus: int,
+    variables: tuple[ModularPolynomialVariable, ...],
+    terms: tuple[ModularPolynomialTerm, ...],
+) -> ModularPolynomialResidueImageResult:
+    """Return the exact assignment-to-residue table and image summary."""
+
+    return _residue_image(modulus, variables, terms, include_table=True)

@@ -17,19 +17,55 @@ from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
 )
-from jacobian.math.number_theory._modular_operations import (
-    compute_jacobi_symbol,
-    compute_modular_inverse,
-    compute_modular_polynomial_residue_assignments,
-    compute_modular_polynomial_residue_image,
-    compute_multiplicative_order,
-    enumerate_quadratic_residues,
-    solve_chinese_remainder,
-)
 from jacobian.math.number_theory._support import (
     number_theory_operation,
 )
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
+from jacobian.math.number_theory.operations import (
+    chinese_remainder,
+    jacobi_symbol,
+    modular_inverse,
+    modular_polynomial_residue_assignments,
+    modular_polynomial_residue_image,
+    multiplicative_order,
+    quadratic_residues,
+)
+
+
+def _run_jacobi_symbol(request: JacobiSymbolRequest) -> JacobiSymbolResult:
+    return jacobi_symbol(request.a, request.n)
+
+
+def _run_modular_inverse(request: ModularUnitRequest) -> IntegerValue:
+    return modular_inverse(request.value, request.modulus)
+
+
+def _run_multiplicative_order(request: ModularUnitRequest) -> IntegerValue:
+    return multiplicative_order(request.value, request.modulus)
+
+
+def _run_quadratic_residues(request: ModulusRequest) -> QuadraticResiduesResult:
+    return quadratic_residues(request.modulus)
+
+
+def _run_modular_polynomial_residue_image(
+    request: ModularPolynomialResidueImageRequest,
+) -> ModularPolynomialResidueImageResult:
+    return modular_polynomial_residue_image(
+        request.modulus, request.variables, request.terms
+    )
+
+
+def _run_modular_polynomial_residue_assignments(
+    request: ModularPolynomialResidueImageRequest,
+) -> ModularPolynomialResidueImageResult:
+    return modular_polynomial_residue_assignments(
+        request.modulus, request.variables, request.terms
+    )
+
+
+def _run_chinese_remainder(request: ChineseRemainderRequest) -> ChineseRemainderResult:
+    return chinese_remainder(request.residues, request.moduli)
 
 MODULAR_OPERATIONS = (
     number_theory_operation(
@@ -38,7 +74,7 @@ MODULAR_OPERATIONS = (
         "Compute the Jacobi symbol (a / n) for an odd positive denominator.",
         JacobiSymbolRequest,
         JacobiSymbolResult,
-        compute_jacobi_symbol,
+        _run_jacobi_symbol,
         "number-theory",
         "modular",
         "jacobi-symbol",
@@ -61,7 +97,7 @@ MODULAR_OPERATIONS = (
         "Compute the least nonnegative inverse of a unit modulo m.",
         ModularUnitRequest,
         IntegerValue,
-        compute_modular_inverse,
+        _run_modular_inverse,
         "number-theory",
         "modular",
         examples=(
@@ -78,7 +114,7 @@ MODULAR_OPERATIONS = (
         "Compute the multiplicative order of a unit modulo m.",
         ModularUnitRequest,
         IntegerValue,
-        compute_multiplicative_order,
+        _run_multiplicative_order,
         "number-theory",
         "modular",
         examples=(
@@ -95,7 +131,7 @@ MODULAR_OPERATIONS = (
         "Enumerate all quadratic residues modulo m.",
         ModulusRequest,
         QuadraticResiduesResult,
-        enumerate_quadratic_residues,
+        _run_quadratic_residues,
         "number-theory",
         "modular",
         "enumeration",
@@ -117,7 +153,7 @@ MODULAR_OPERATIONS = (
         ),
         ModularPolynomialResidueImageRequest,
         ModularPolynomialResidueImageResult,
-        compute_modular_polynomial_residue_image,
+        _run_modular_polynomial_residue_image,
         "number-theory",
         "modular",
         "polynomial",
@@ -150,7 +186,7 @@ MODULAR_OPERATIONS = (
         ),
         ModularPolynomialResidueImageRequest,
         ModularPolynomialResidueImageResult,
-        compute_modular_polynomial_residue_assignments,
+        _run_modular_polynomial_residue_assignments,
         "number-theory",
         "modular",
         "polynomial",
@@ -181,7 +217,7 @@ MODULAR_OPERATIONS = (
         "exact result width rather than each modulus alone.",
         ChineseRemainderRequest,
         ChineseRemainderResult,
-        solve_chinese_remainder,
+        _run_chinese_remainder,
         "number-theory",
         "modular",
         examples=(

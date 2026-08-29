@@ -34,19 +34,19 @@ from jacobian.math.number_theory._modular_basic_models import (
 from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueImageRequest,
 )
-from jacobian.math.number_theory._modular_operations import solve_chinese_remainder
 from jacobian.math.number_theory._prime_models import (
     PreviousPrimeRequest,
     PrimalityRequest,
 )
 from jacobian.math.number_theory._primes import compute_previous_prime
+from jacobian.math.number_theory.operations import chinese_remainder
 
 
 @pytest.mark.parametrize("residue", [-1, 3])
 def test_chinese_remainder_rejects_noncanonical_residues(residue: int) -> None:
     request = ChineseRemainderRequest(residues=(residue,), moduli=(3,))
     with pytest.raises(OperationDomainValidationError, match="canonical"):
-        solve_chinese_remainder(request)
+        chinese_remainder(request.residues, request.moduli)
 
 
 @pytest.mark.parametrize(
@@ -63,7 +63,7 @@ def test_chinese_remainder_rejects_invalid_system_bounds(
 ) -> None:
     request = ChineseRemainderRequest.model_validate(payload)
     with pytest.raises(OperationDomainValidationError, match=message):
-        solve_chinese_remainder(request)
+        chinese_remainder(request.residues, request.moduli)
 
 
 @pytest.mark.parametrize("prime", (3, 97, 9_999_991))
@@ -111,7 +111,7 @@ def test_chinese_remainder_rejects_combined_modulus_beyond_result_budget() -> No
 
     request = ChineseRemainderRequest(residues=(1,) * len(moduli), moduli=tuple(moduli))
     with pytest.raises(OperationDomainValidationError, match="combined modulus"):
-        solve_chinese_remainder(request)
+        chinese_remainder(request.residues, request.moduli)
 
 
 def test_chinese_remainder_admits_boundary_system_and_solves_exactly() -> None:
@@ -122,9 +122,7 @@ def test_chinese_remainder_admits_boundary_system_and_solves_exactly() -> None:
 
     from sympy import prevprime
 
-    from jacobian.math.number_theory._modular_operations import (
-        solve_chinese_remainder,
-    )
+    from jacobian.math.number_theory.operations import chinese_remainder
 
     moduli: list[int] = []
     combined = 1
@@ -138,7 +136,7 @@ def test_chinese_remainder_admits_boundary_system_and_solves_exactly() -> None:
     assert len(str(combined)) >= MAX_INTEGER_DIGITS - 6
 
     request = ChineseRemainderRequest(residues=(1,) * len(moduli), moduli=tuple(moduli))
-    result = solve_chinese_remainder(request)
+    result = chinese_remainder(request.residues, request.moduli)
 
     assert result.residue == "1"
     assert result.modulus == str(combined)
@@ -178,8 +176,8 @@ def test_direct_factorization_contract_schemas_preserve_their_envelopes() -> Non
 
 
 def test_modular_residue_image_contract_round_trips_canonical_assignments() -> None:
-    from jacobian.math.number_theory._modular_operations import (
-        compute_modular_polynomial_residue_assignments,
+    from jacobian.math.number_theory.operations import (
+        modular_polynomial_residue_assignments,
     )
 
     request = ModularPolynomialResidueImageRequest.model_validate(
@@ -190,7 +188,9 @@ def test_modular_residue_image_contract_round_trips_canonical_assignments() -> N
         }
     )
 
-    result = compute_modular_polynomial_residue_assignments(request)
+    result = modular_polynomial_residue_assignments(
+        request.modulus, request.variables, request.terms
+    )
 
     assert request.__class__.model_json_schema()["title"] == (
         "ModularPolynomialResidueImageRequest"

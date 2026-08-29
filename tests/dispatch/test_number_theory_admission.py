@@ -33,51 +33,56 @@ from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueImageRequest,
     ModularPolynomialVariable,
 )
-from jacobian.math.number_theory._modular_operations import (
-    compute_jacobi_symbol,
-    compute_modular_inverse,
-    compute_modular_polynomial_residue_image,
-    solve_chinese_remainder,
-)
 from jacobian.math.number_theory._ramanujan_sum import (
     RamanujanSumRequest,
     compute_ramanujan_sum,
 )
 from jacobian.math.number_theory.modular_polynomials import ModularPolynomialTerm
+from jacobian.math.number_theory.operations import (
+    chinese_remainder,
+    jacobi_symbol,
+    modular_inverse,
+    modular_polynomial_residue_image,
+)
 
 
 @pytest.mark.parametrize(
-    ("operation_id", "payload", "request_model", "native"),
+    ("operation_id", "payload", "request_model", "native", "native_args"),
     (
         (
             "integer.compute.valuation",
             {"value": "1", "prime": "4"},
             ValuationRequest(value="1", prime="4"),
             compute_valuation,
+            (),
         ),
         (
             "modular.compute.inverse",
             {"value": "2", "modulus": 4},
             ModularUnitRequest(value="2", modulus=4),
-            compute_modular_inverse,
+            modular_inverse,
+            ("2", 4),
         ),
         (
             "number_theory.compute.jacobi_symbol",
             {"a": "1", "n": 4},
             JacobiSymbolRequest(a="1", n=4),
-            compute_jacobi_symbol,
+            jacobi_symbol,
+            ("1", 4),
         ),
         (
             "number_theory.ramanujan_sum.compute",
             {"modulus": "-1", "frequency": "0"},
             RamanujanSumRequest(modulus="-1", frequency="0"),
             compute_ramanujan_sum,
+            (),
         ),
         (
             "number_theory.compute.legendre_symbol",
             {"a": 2, "prime": 9},
             LegendreSymbolRequest(a=2, prime=9),
             compute_legendre_symbol,
+            (),
         ),
     ),
 )
@@ -86,9 +91,10 @@ def test_native_and_dispatch_share_domain_admission(
     payload: dict[str, Any],
     request_model: Any,
     native: Callable[[Any], Any],
+    native_args: tuple[Any, ...],
 ) -> None:
     with pytest.raises(OperationDomainValidationError) as native_error:
-        native(request_model)
+        native(*(native_args or (request_model,)))
     with pytest.raises(OperationDomainValidationError) as dispatch_error:
         invoke_operation(operation_id, payload, Catalog.open())
 
@@ -98,7 +104,7 @@ def test_native_and_dispatch_share_domain_admission(
 def test_native_and_dispatch_share_crt_admission() -> None:
     request = ChineseRemainderRequest(residues=(3,), moduli=(3,))
     with pytest.raises(OperationDomainValidationError) as native_error:
-        solve_chinese_remainder(request)
+        chinese_remainder(request.residues, request.moduli)
     with pytest.raises(OperationDomainValidationError) as dispatch_error:
         invoke_operation(
             "modular.solve.chinese_remainder",
@@ -147,7 +153,9 @@ def test_modular_polynomial_admission_is_native() -> None:
         terms=(ModularPolynomialTerm(coefficient="1", exponents=(1, 1)),),
     )
     with pytest.raises(OperationDomainValidationError) as native_error:
-        compute_modular_polynomial_residue_image(request)
+        modular_polynomial_residue_image(
+            request.modulus, request.variables, request.terms
+        )
     with pytest.raises(OperationDomainValidationError) as dispatch_error:
         invoke_operation(
             "modular.polynomial_residue_image.compute",

@@ -14,15 +14,15 @@ from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueImageResult,
     ModularPolynomialVariable,
 )
-from jacobian.math.number_theory._modular_operations import (
-    compute_modular_polynomial_residue_assignments,
-    compute_modular_polynomial_residue_image,
-)
 from jacobian.math.number_theory.modular_polynomials import (
     _INTEGER,
     ModularPolynomialTerm,
     NormalizedModularPolynomialTerm,
     modular_polynomial_identity,
+)
+from jacobian.math.number_theory.operations import (
+    modular_polynomial_residue_assignments,
+    modular_polynomial_residue_image,
 )
 
 
@@ -65,7 +65,9 @@ def test_residue_image_consumes_and_produces_the_canonical_term_types() -> None:
         ("x",),
         request.terms,
     )
-    result = compute_modular_polynomial_residue_image(request)
+    result = modular_polynomial_residue_image(
+        request.modulus, request.variables, request.terms
+    )
 
     assert type(result.normalized_terms[0]) is NormalizedModularPolynomialTerm
     assert identity.normalized_left == result.normalized_terms
@@ -100,8 +102,13 @@ def test_identity_result_rejects_a_forged_residual() -> None:
 
 
 def test_residue_image_keeps_its_narrower_exponent_admission() -> None:
+    request = _request(exponent=33)
     with pytest.raises(OperationDomainValidationError, match="exponents"):
-        compute_modular_polynomial_residue_image(_request(exponent=33))
+        modular_polynomial_residue_image(
+            request.modulus,
+            request.variables,
+            request.terms,
+        )
 
 
 def test_published_term_schema_matches_residue_image_admission() -> None:
@@ -181,8 +188,12 @@ def test_emitted_results_parse_under_their_advertised_output_schema() -> None:
     documents = [
         operation.model_dump(mode="json")
         for operation in (
-            compute_modular_polynomial_residue_image(request),
-            compute_modular_polynomial_residue_assignments(request),
+            modular_polynomial_residue_image(
+                request.modulus, request.variables, request.terms
+            ),
+            modular_polynomial_residue_assignments(
+                request.modulus, request.variables, request.terms
+            ),
         )
     ]
     for document in documents:
@@ -215,8 +226,9 @@ def test_coefficient_boundary_follows_the_advertised_envelope() -> None:
     assert int(admitted.terms[0].coefficient) < 0
 
     with pytest.raises(OperationDomainValidationError, match="coefficient"):
-        compute_modular_polynomial_residue_image(
-            _request_with_coefficient("-" + "9" * 256)
+        request = _request_with_coefficient("-" + "9" * 256)
+        modular_polynomial_residue_image(
+            request.modulus, request.variables, request.terms
         )
 
 

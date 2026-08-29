@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import comb, prod
 
 import pytest
 from pydantic import ValidationError
@@ -26,7 +27,12 @@ from jacobian.math.analysis.orthogonal_polynomials._tools import (
     compute_recurrence,
     compute_shifted_hankel,
 )
+from jacobian.math.analysis.orthogonal_polynomials.operations import (
+    _hankel_determinant_height_bound,
+    require_hankel_matrix_admission,
+)
 from jacobian.math.analysis.orthogonal_polynomials.values import (
+    MAX_HANKEL_ORDER,
     GaussianQuadratureRule,
     MomentFunctionalPrefix,
     OrthogonalPolynomialFamily,
@@ -49,6 +55,10 @@ def _moments_uniform(n: int) -> tuple[CanonicalRational, ...]:
         else CanonicalRational(num="0", den="1")
         for k in range(n)
     )
+
+
+def _moments_unit_interval(n: int) -> tuple[CanonicalRational, ...]:
+    return tuple(CanonicalRational(num="1", den=str(degree + 1)) for degree in range(n))
 
 
 class TestHankel:
@@ -79,6 +89,34 @@ class TestHankel:
         with pytest.raises(ValueError):
             compute_hankel_matrix(request)
 
+    def test_flint_invariants_at_maximum_hankel_order(self) -> None:
+        moments = _moments_unit_interval(129)
+        result = compute_hankel_matrix(HankelRequest(prefix=_prefix(moments), order=64))
+        expected_denominator = prod(
+            (2 * index + 1) * comb(2 * index, index) ** 2 for index in range(65)
+        )
+
+        assert result.rank == 65
+        assert result.determinant.as_fraction() == Fraction(1, expected_denominator)
+        assert all(
+            result.entries[row][column] == moments[row + column]
+            for row in range(65)
+            for column in range(65)
+        )
+
+    def test_maximum_order_rejects_moment_above_derived_height_bound(self) -> None:
+        order = MAX_HANKEL_ORDER
+        bound = _hankel_determinant_height_bound(order)
+        ones = tuple(CanonicalRational(num="1", den="1") for _ in range(2 * order))
+        prefix_at_bound = _prefix((CanonicalRational(num="1", den="9" * bound), *ones))
+        prefix_over_bound = _prefix(
+            (CanonicalRational(num="1", den="9" * (bound + 1)), *ones)
+        )
+
+        require_hankel_matrix_admission(prefix_at_bound, order, shifted=False)
+        with pytest.raises(ValueError, match=rf"conservative {bound}-digit bound"):
+            compute_hankel_matrix(HankelRequest(prefix=prefix_over_bound, order=order))
+
 
 class TestShiftedHankel:
     def test_shifted_hankel(self) -> None:
@@ -86,6 +124,16 @@ class TestShiftedHankel:
             ShiftedHankelRequest(prefix=_prefix(_moments_uniform(6)), order=2)
         )
         assert result.order == 2
+
+    def test_rank_deficient_invariants_at_maximum_shifted_order(self) -> None:
+        moments = tuple(CanonicalRational(num="1", den="1") for _ in range(129))
+        result = compute_shifted_hankel(
+            ShiftedHankelRequest(prefix=_prefix(moments), order=63)
+        )
+
+        assert result.rank == 1
+        assert result.determinant.as_fraction() == 0
+        assert all(entry == moments[0] for row in result.entries for entry in row)
 
     def test_consumed_moment_heights_bound_admission(self) -> None:
         """The shifted determinant consumes mu_1..mu_(2r+1); an extreme
@@ -1048,16 +1096,16 @@ class TestRuleRoundTrip:
 
 
 class TestShiftedHankelOrderCap:
-    def test_order_32_is_not_schema_advertised(self) -> None:
-        """A shifted matrix of order 32 would need mu_1..mu_66 but the
-        canonical prefix holds at most 65 moments, so order 32 must not be
+    def test_order_64_is_not_schema_advertised(self) -> None:
+        """A shifted matrix of order 64 would need mu_1..mu_129 but the
+        canonical prefix holds at most 129 moments, so order 64 must not be
         advertised as supported."""
         full_prefix = _prefix(
-            tuple(CanonicalRational(num="1", den="1") for _ in range(65))
+            tuple(CanonicalRational(num="1", den="1") for _ in range(129))
         )
         with pytest.raises(ValidationError):
-            ShiftedHankelRequest(prefix=full_prefix, order=32)
-        assert ShiftedHankelRequest(prefix=full_prefix, order=31)
+            ShiftedHankelRequest(prefix=full_prefix, order=64)
+        assert ShiftedHankelRequest(prefix=full_prefix, order=63)
 
 
 class TestCoefficientTupleSchemaBound:

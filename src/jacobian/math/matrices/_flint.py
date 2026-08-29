@@ -24,7 +24,6 @@ def rational_matrix_product(
     from flint import fmpq, fmpq_mat
 
     left_rows = len(left)
-    inner_dimension = len(left[0])
     right_columns = len(right[0])
     left_backend = fmpq_mat(
         [[fmpq(value.numerator, value.denominator) for value in row] for row in left]

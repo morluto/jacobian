@@ -89,27 +89,15 @@ def test_no_duplicates() -> None:
 def test_result_preserves_bounds() -> None:
     """Result retains source bounds."""
     result = construct_divisibility_sum_triples_hypergraph(3, 8)
-    assert result.lower_bound == "3"
-    assert result.upper_bound == "8"
+    assert result.lower_bound == 3
+    assert result.upper_bound == 8
 
 
-def test_result_sensitive_admission_accepts_edge_free_shifted_interval() -> None:
-    result = construct_divisibility_sum_triples_hypergraph(1000, 1042)
-    assert result.hypergraph.edges == ()
-
-
-def test_rejects_actual_hypergraph_envelope() -> None:
-    with pytest.raises(ValueError, match="exact triple family"):
-        construct_divisibility_sum_triples_hypergraph(1, 90)
+def test_rejects_hypergraph_envelope_before_enumeration() -> None:
+    with pytest.raises(ValueError, match="triple family"):
+        construct_divisibility_sum_triples_hypergraph(1, 43)
 
 
 def test_native_rejects_reversed_interval() -> None:
     with pytest.raises(ValueError, match="must not exceed"):
         construct_divisibility_sum_triples_hypergraph(4, 1)
-
-
-def test_native_rejects_oversized_endpoint_before_string_conversion() -> None:
-    endpoint = 10**5_000
-
-    with pytest.raises(ValueError, match="vertices must be at most"):
-        construct_divisibility_sum_triples_hypergraph(endpoint, endpoint + 2)

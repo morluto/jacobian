@@ -796,12 +796,15 @@ def _wire_model_names(root: Path, tree: ast.AST, source_module: str) -> set[str]
             node.name
             for node in tree.body
             if isinstance(node, ast.ClassDef)
-            and node.name.endswith(("Request", "Input"))
+            and node.name.endswith("Request")
         }
-    for local, (_, original) in _imports_by_local_name(
+    for local, (module, original) in _imports_by_local_name(
         root, tree, source_module
     ).items():
-        if original.endswith(("Request", "Input")):
+        if original.endswith("Request") or (
+            original.endswith("Input")
+            and module.rsplit(".", 1)[-1] in {"_models", "models"}
+        ):
             names.add(local)
     return names
 
@@ -904,6 +907,59 @@ def _native_public_boundary_violations(root: Path) -> tuple[Violation, ...]:
                         "exported native functions must call a private direct kernel, not a public compute adapter",
                     )
                 )
+    return tuple(violations)
+
+
+def _native_operations_wire_violations(
+    root: Path, relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    """Keep transport Request/Input models out of canonical native modules."""
+
+    if (
+        relative.name != "operations.py"
+        or not relative.is_relative_to(PurePosixPath("src/jacobian/math"))
+    ):
+        return ()
+    module = _module_name(relative)
+    if module is None:
+        return ()
+    wire_names = _wire_model_names(root, tree, module)
+    violations: list[Violation] = []
+    for node in _walk(tree):
+        if isinstance(node, ast.arg) and node.annotation is not None:
+            if _annotation_contains_wire_model(node.annotation, wire_names):
+                violations.append(
+                    _violation(
+                        relative,
+                        node.annotation,
+                        "operations-wire-boundary",
+                        "operations.py functions must accept canonical mathematical values, not Request/Input models",
+                    )
+                )
+        elif (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.returns is not None
+            and _annotation_contains_wire_model(node.returns, wire_names)
+        ):
+            violations.append(
+                _violation(
+                    relative,
+                    node.returns,
+                    "operations-wire-boundary",
+                    "operations.py functions must not return Request/Input models",
+                )
+            )
+        elif isinstance(node, ast.Call) and _is_wire_model_reference(
+            node.func, wire_names
+        ):
+            violations.append(
+                _violation(
+                    relative,
+                    node,
+                    "operations-wire-boundary",
+                    "operations.py must not construct Request/Input models",
+                )
+            )
     return tuple(violations)
 
 
@@ -1016,6 +1072,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         *_evaluator_parser_violations(relative, tree),
         *_owner_operation_reentry_violations(relative, tree),
         *_result_validator_replay_violations(relative, tree),
+        *_native_operations_wire_violations(root, relative, tree),
         *_unsafe_wire_conversion_violations(relative, tree),
         *_rational_output_violations(relative, tree),
     )

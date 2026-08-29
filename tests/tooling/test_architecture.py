@@ -255,6 +255,29 @@ def test_exported_native_functions_do_not_annotate_wire_models(
     ]
 
 
+def test_operations_modules_do_not_use_wire_models(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/operations.py",
+        "class ExampleRequest: pass\n"
+        "def compute(request: ExampleRequest) -> ExampleRequest:\n"
+        "    return ExampleRequest()\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/_tools.py",
+        "class ExampleRequest: pass\n"
+        "def compute(request: ExampleRequest) -> ExampleRequest:\n"
+        "    return ExampleRequest()\n",
+    )
+
+    assert _violations(tmp_path, "operations-wire-boundary") == [
+        "src/jacobian/math/example/operations.py",
+        "src/jacobian/math/example/operations.py",
+        "src/jacobian/math/example/operations.py",
+    ]
+
+
 def test_imported_native_domain_must_be_in_root_surface(tmp_path: Path) -> None:
     _write(
         tmp_path,

@@ -124,7 +124,9 @@ def test_result_preserves_source() -> None:
     assert result.configuration == config
 
 
-def test_result_sensitive_admission_accepts_large_but_representable_coordinates() -> None:
+def test_result_sensitive_admission_accepts_large_but_representable_coordinates() -> (
+    None
+):
     """A small profile can use coordinates beyond the old fixed cap."""
     huge = CanonicalRational.from_fraction(Fraction(10**999))
     config = PointConfiguration(
@@ -134,7 +136,9 @@ def test_result_sensitive_admission_accepts_large_but_representable_coordinates(
         )
     )
     result = compute_pinned_distance_support_profile(config)
-    assert result.entries[0].distance_classes[0].squared_distance.as_fraction() == 10**1998
+    assert (
+        result.entries[0].distance_classes[0].squared_distance.as_fraction() == 10**1998
+    )
 
 
 def test_native_admission_rejects_distance_height_before_squaring() -> None:

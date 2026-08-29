@@ -86,18 +86,14 @@ def _maximum_result_bytes(
     distance_denominator_digits: int,
 ) -> int:
     points = configuration.points
-    max_label_bytes = max(
-        len(encode_strict_json(point.label)) for point in points
-    )
+    max_label_bytes = max(len(encode_strict_json(point.label)) for point in points)
     rational_bytes = strict_json_object_size(
         (
             ("num", distance_numerator_digits),
             ("den", distance_denominator_digits),
         )
     )
-    target_labels_bytes = _array_size(
-        [max_label_bytes] * max(len(points) - 1, 0)
-    )
+    target_labels_bytes = _array_size([max_label_bytes] * max(len(points) - 1, 0))
     class_bytes = strict_json_object_size(
         (
             ("squared_distance", rational_bytes),
@@ -129,9 +125,7 @@ def _admit_configuration(configuration: PointConfiguration) -> tuple[_EntryPlan,
             numerator_digits, denominator_digits = _squared_distance_digit_bound(
                 left.coordinates, right.coordinates
             )
-            maximum_numerator_digits = max(
-                maximum_numerator_digits, numerator_digits
-            )
+            maximum_numerator_digits = max(maximum_numerator_digits, numerator_digits)
             maximum_denominator_digits = max(
                 maximum_denominator_digits, denominator_digits
             )

@@ -676,7 +676,7 @@ def test_characteristic_polynomial_rejects_predicted_coefficient_growth() -> Non
 def test_characteristic_polynomial_rejects_coprime_denominator_lcm_growth() -> None:
     """Dense pairwise-coprime 256-digit dens exceed the budget after a few LCMs.
 
-    Completing a 128×128 product LCM would materialize about four million
+    Completing a 128x128 product LCM would materialize about four million
     digits; admission must stop from ``order * digits(LCM)`` before that.
     """
     order = MAX_CHARACTERISTIC_POLYNOMIAL_ORDER
@@ -686,9 +686,7 @@ def test_characteristic_polynomial_rejects_coprime_denominator_lcm_growth() -> N
     source = RationalMatrix(
         entries=tuple(
             tuple(
-                CanonicalRational(
-                    num="1", den=str(denominators[row * order + column])
-                )
+                CanonicalRational(num="1", den=str(denominators[row * order + column]))
                 for column in range(order)
             )
             for row in range(order)

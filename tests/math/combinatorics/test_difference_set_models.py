@@ -65,6 +65,41 @@ def test_sidon_kernel_decision_matches_its_complete_profile() -> None:
     assert result.is_sidon == (len(set(differences)) == len(differences))
 
 
+def test_singleton_sidon_has_empty_complete_ledger() -> None:
+    result = decide_integer_sidon(IntegerSidonRequest(elements=("7",)))
+
+    assert result.normalized_elements == ("7",)
+    assert result.ordered_differences == ()
+    assert result.is_sidon is True
+
+
+def test_sidon_admits_complete_profile_for_first_69_squares() -> None:
+    elements = tuple(str(value * value) for value in range(1, 70))
+    result = decide_integer_sidon(IntegerSidonRequest(elements=elements))
+
+    assert len(result.normalized_elements) == 69
+    assert len(result.ordered_differences) == 69 * 68
+    assert len(result.model_dump_json().encode()) < 10 * 1024 * 1024
+
+
+def test_sidon_rejects_profile_exceeding_canonical_output_bound() -> None:
+    prefix = "9" * 125
+    elements = tuple(f"{prefix}{value:03d}" for value in range(256))
+
+    with pytest.raises(OperationDomainValidationError, match="canonical output bound"):
+        decide_integer_sidon(IntegerSidonRequest(elements=elements))
+
+
+def test_sidon_result_rejects_forged_difference_and_decision() -> None:
+    result = decide_integer_sidon(IntegerSidonRequest(elements=("0", "1", "3")))
+    payload = result.model_dump(mode="json")
+    payload["ordered_differences"][0]["difference"] = "0"
+    payload["is_sidon"] = not result.is_sidon
+
+    with raises_code("combinatorics.sidon_invariant"):
+        IntegerSidonResult.model_validate(payload)
+
+
 def test_extension_request_rejects_an_unbounded_candidate_space() -> None:
     request = CyclicDifferenceSetExtensionRequest(
         base_elements=("0", "1", "2", "3", "4", "5", "6"),

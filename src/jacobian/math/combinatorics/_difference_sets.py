@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 
+from jacobian.canonical import CanonicalLimits
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._difference_set_models import (
@@ -27,6 +28,7 @@ from jacobian.math.combinatorics._support import (
 
 def decide_integer_sidon(request: IntegerSidonRequest) -> IntegerSidonResult:
     elements = tuple(sorted(int(value) for value in request.elements))
+    _require_integer_sidon_result_admission(elements)
     differences = tuple(
         OrderedIntegerDifference(
             minuend=str(left),
@@ -38,11 +40,43 @@ def decide_integer_sidon(request: IntegerSidonRequest) -> IntegerSidonResult:
         if left != right
     )
     values = tuple(int(record.difference) for record in differences)
-    return IntegerSidonResult(
+    return IntegerSidonResult._from_kernel(
         normalized_elements=tuple(str(value) for value in elements),
         ordered_differences=differences,
         is_sidon=len(set(values)) == len(values),
     )
+
+
+def _require_integer_sidon_result_admission(elements: tuple[int, ...]) -> None:
+    """Reserve the complete canonical result before constructing profile rows."""
+
+    normalized = tuple(str(value) for value in elements)
+    normalized_bytes = sum(len(value) + 2 for value in normalized) + max(
+        len(normalized) - 1, 0
+    )
+    difference_bytes = 0
+    pair_count = 0
+    for left in elements:
+        left_wire = str(left)
+        for right in elements:
+            if left == right:
+                continue
+            pair_count += 1
+            difference_bytes += (
+                46 + len(left_wire) + len(str(right)) + len(str(left - right))
+            )
+    difference_bytes += max(pair_count - 1, 0)
+    # Empty arrays and the longer ``false`` decision occupy 68 bytes before
+    # their contents are inserted.
+    result_bytes = 68 + normalized_bytes + difference_bytes
+    if result_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("elements",),
+            code="combinatorics.sidon_result_bound",
+            message=(
+                "complete ordered-difference profile exceeds the canonical output bound"
+            ),
+        )
 
 
 def _difference_counts(residues: tuple[int, ...], modulus: int) -> Counter[int]:

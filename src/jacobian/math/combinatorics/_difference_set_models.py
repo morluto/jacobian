@@ -10,7 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
-MAX_SIDON_SET_SIZE = 32
+MAX_SIDON_SET_SIZE = 256
 MAX_CYCLIC_DIFFERENCE_SET_MODULUS = 4_096
 MAX_DIFFERENCE_SET_EXTENSION_CANDIDATES = 50_000
 MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS = 3
@@ -92,6 +92,28 @@ class IntegerSidonResult(StrictModel):
             raise _difference_set_validation_error(
                 "combinatorics.sidon_invariant",
                 "ordered-difference profile has the wrong cardinality",
+            )
+        seen_differences: set[int] = set()
+        for record, (left, right) in zip(
+            self.ordered_differences,
+            ((left, right) for left in values for right in values if left != right),
+            strict=True,
+        ):
+            difference = left - right
+            if (
+                int(record.minuend) != left
+                or int(record.subtrahend) != right
+                or int(record.difference) != difference
+            ):
+                raise _difference_set_validation_error(
+                    "combinatorics.sidon_invariant",
+                    "ordered-difference rows must be the canonical source pairs",
+                )
+            seen_differences.add(difference)
+        if self.is_sidon != (len(seen_differences) == len(self.ordered_differences)):
+            raise _difference_set_validation_error(
+                "combinatorics.sidon_invariant",
+                "is_sidon must match the ordered-difference multiplicities",
             )
         return self
 

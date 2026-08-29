@@ -12,6 +12,7 @@ or compatibility aliases leak into the public surface.
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 
 import jacobian
 
@@ -72,18 +73,24 @@ def test_public_math_namespaces_expose_no_wire_models() -> None:
         ), f"{domain} exports a wire model"
 
 
-def test_public_functions_have_one_canonical_module() -> None:
-    """Every public callable must resolve to one canonical owner, not an alias."""
-    from jacobian import math
+def test_public_values_and_functions_have_one_canonical_module() -> None:
+    """Every exported value or callable has one owner across the full math tree."""
 
+    math_root = Path(__file__).parents[3] / "src" / "jacobian" / "math"
+    modules = tuple(
+        "jacobian.math."
+        + path.parent.relative_to(math_root).as_posix().replace("/", ".")
+        for path in math_root.rglob("__init__.py")
+        if path.parent != math_root
+    )
     function_locations: dict[object, list[str]] = {}
-    for domain in math.__all__:
-        module = importlib.import_module(f"jacobian.math.{domain}")
-        for name in module.__all__:
+    for module_name in modules:
+        module = importlib.import_module(module_name)
+        for name in getattr(module, "__all__", ()):
             value = getattr(module, name)
             if callable(value) and not isinstance(value, type(importlib)):
                 function_locations.setdefault(value, []).append(
-                    f"jacobian.math.{domain}.{name}"
+                    f"{module_name}.{name}"
                 )
     assert all(len(locations) == 1 for locations in function_locations.values())
 

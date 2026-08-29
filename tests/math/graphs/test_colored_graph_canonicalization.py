@@ -17,10 +17,9 @@ from pydantic_core import PydanticCustomError
 import jacobian.math.graphs.isomorphism._canonicalization as isomorphism_canonicalization
 import jacobian.math.graphs.isomorphism._canonicalization_bounds as isomorphism_bounds
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs import explicit_graph
+from jacobian.math.graphs import ColoredUndirectedGraph, explicit_graph
 from jacobian.math.graphs.isomorphism import (
     ColoredGraphCanonicalizationResult,
-    ColoredUndirectedGraph,
     canonicalize_colored_graph,
 )
 from jacobian.math.graphs.isomorphism._models import ColoredGraphCanonicalizationRequest
@@ -510,10 +509,8 @@ def test_schema_documents_nfc_and_byte_limits_for_color_names() -> None:
 def test_canonical_value_is_hash_seed_independent() -> None:
     code = """
 import json
-from jacobian.math.graphs.isomorphism import (
-    ColoredUndirectedGraph,
-    canonicalize_colored_graph,
-)
+from jacobian.math.graphs import ColoredUndirectedGraph
+from jacobian.math.graphs.isomorphism import canonicalize_colored_graph
 graph = ColoredUndirectedGraph(
     graph={
         "vertices": ("a", "b", "c", "d"),
@@ -541,9 +538,11 @@ print(json.dumps(result.canonical_graph.model_dump(mode="json"), sort_keys=True)
 
 
 def test_native_api_exports_typed_canonicalization() -> None:
+    from jacobian.math import graphs
     from jacobian.math.graphs import isomorphism
 
-    assert "ColoredUndirectedGraph" in isomorphism.__all__
+    assert "ColoredUndirectedGraph" in graphs.__all__
+    assert "ColoredUndirectedGraph" not in isomorphism.__all__
     assert "canonicalize_colored_graph" in isomorphism.__all__
 
 

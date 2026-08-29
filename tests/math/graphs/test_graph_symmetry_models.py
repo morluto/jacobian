@@ -11,8 +11,8 @@ from jacobian.canonical import (
     encode_strict_json,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs import ColoredUndirectedGraph
 from jacobian.math.graphs.isomorphism import (
-    ColoredUndirectedGraph,
     canonicalize_colored_graph,
 )
 from jacobian.math.graphs.symmetry._models import (

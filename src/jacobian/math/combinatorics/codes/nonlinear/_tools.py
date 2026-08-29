@@ -5,7 +5,14 @@ from typing import Any
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
+from jacobian.math.combinatorics.codes.nonlinear._budget import (
+    require_set_system_output_bound,
+)
 from jacobian.math.combinatorics.codes.nonlinear._models import (
     ConstantWeightProfileRequest,
     ConstantWeightProfileResult,
@@ -19,12 +26,42 @@ from jacobian.math.combinatorics.codes.nonlinear._models import (
     WordDistanceResult,
 )
 from jacobian.math.combinatorics.codes.nonlinear.operations import (
-    compute_constant_weight,
-    compute_constant_weight_profile,
-    compute_explicit_profile,
-    compute_to_set_system,
-    compute_word_distance,
+    constant_weight_code,
+    constant_weight_profile,
+    explicit_profile,
+    to_set_system,
+    word_distance,
 )
+
+
+def _constant_weight(request: ConstantWeightRequest) -> ConstantWeightResult:
+    return constant_weight_code(request.length, request.weight)
+
+
+def _word_distance(request: WordDistanceRequest) -> WordDistanceResult:
+    return word_distance(request.word1, request.word2)
+
+
+def _explicit_profile(request: ExplicitProfileRequest) -> ExplicitProfileResult:
+    return explicit_profile(request.code)
+
+
+def _constant_weight_profile(
+    request: ConstantWeightProfileRequest,
+) -> ConstantWeightProfileResult:
+    return constant_weight_profile(request.code)
+
+
+def _to_set_system(request: ToSetSystemRequest) -> ToSetSystemResult:
+    try:
+        require_set_system_output_bound(request.code)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("code",),
+            code="nonlinear_code.set_system_not_admitted",
+            message=str(exc),
+        ) from exc
+    return to_set_system(request.code)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -56,7 +93,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Generate all binary words of given length and Hamming weight; the exact work and result are bounded by length times binomial(length, weight).",
         ConstantWeightRequest,
         ConstantWeightResult,
-        compute_constant_weight,
+        _constant_weight,
         "code",
         "constant-weight",
         "exact",
@@ -74,7 +111,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the exact Hamming distance, differing coordinates, weights, and support intersection of two equal-length binary words; the exact result is bounded by the retained words plus their actual differing coordinates.",
         WordDistanceRequest,
         WordDistanceResult,
-        compute_word_distance,
+        _word_distance,
         "code",
         "distance",
         "exact",
@@ -92,7 +129,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute retained source metadata, complete weight and distance histograms, pair accounting, and compact extremal word-pair witnesses without materializing a distance graph.",
         ExplicitProfileRequest,
         ExplicitProfileResult,
-        compute_explicit_profile,
+        _explicit_profile,
         "code",
         "distance",
         "exact",
@@ -115,7 +152,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute complete distance and support-intersection histograms with source-bound extremal witnesses for a nonempty constant-weight explicit code.",
         ConstantWeightProfileRequest,
         ConstantWeightProfileResult,
-        compute_constant_weight_profile,
+        _constant_weight_profile,
         "code",
         "constant-weight",
         "exact",
@@ -138,7 +175,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Map each canonical source codeword to its exact support block on the retained coordinate axis.",
         ToSetSystemRequest,
         ToSetSystemResult,
-        compute_to_set_system,
+        _to_set_system,
         "code",
         "set-system",
         "exact",

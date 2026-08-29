@@ -10,20 +10,14 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes.nonlinear._budget import (
     require_constant_weight_admission,
     require_profile_admission,
-    require_set_system_output_bound,
     require_word_distance_output_bound,
 )
 from jacobian.math.combinatorics.codes.nonlinear._models import (
     BinaryCodeDistanceWitness,
-    ConstantWeightProfileRequest,
     ConstantWeightProfileResult,
-    ConstantWeightRequest,
     ConstantWeightResult,
-    ExplicitProfileRequest,
     ExplicitProfileResult,
-    ToSetSystemRequest,
     ToSetSystemResult,
-    WordDistanceRequest,
     WordDistanceResult,
 )
 from jacobian.math.combinatorics.codes.nonlinear.values import (
@@ -218,35 +212,33 @@ def _constant_weight(code: ExplicitBinaryCode) -> int:
     return weight
 
 
-def compute_constant_weight(request: ConstantWeightRequest) -> ConstantWeightResult:
+def constant_weight_code(length: int, weight: int) -> ConstantWeightResult:
     """Generate the complete constant-weight binary code."""
     try:
-        require_constant_weight_admission(request.length, request.weight)
+        require_constant_weight_admission(length, weight)
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("length", "weight"),
             code="nonlinear_code.constant_weight_not_admitted",
             message=str(exc),
         ) from exc
-    code = _constant_weight_code(request.length, request.weight)
-    return ConstantWeightResult._from_kernel(
-        length=request.length, weight=request.weight, code=code
-    )
+    code = _constant_weight_code(length, weight)
+    return ConstantWeightResult._from_kernel(length=length, weight=weight, code=code)
 
 
-def compute_word_distance(request: WordDistanceRequest) -> WordDistanceResult:
+def word_distance(word1: BinaryWord, word2: BinaryWord) -> WordDistanceResult:
     """Compute the exact Hamming relation between two words."""
     _admit(
-        lambda: require_word_distance_output_bound(request.word1, request.word2),
+        lambda: require_word_distance_output_bound(word1, word2),
         location=("word1", "word2"),
         code="nonlinear_code.word_distance_not_admitted",
     )
     distance, differing, weight1, weight2, intersection = _word_distance_data(
-        request.word1, request.word2
+        word1, word2
     )
     return WordDistanceResult._from_kernel(
-        word1=request.word1,
-        word2=request.word2,
+        word1=word1,
+        word2=word2,
         distance=distance,
         differing_coordinates=differing,
         weight1=weight1,
@@ -255,9 +247,8 @@ def compute_word_distance(request: WordDistanceRequest) -> WordDistanceResult:
     )
 
 
-def compute_explicit_profile(request: ExplicitProfileRequest) -> ExplicitProfileResult:
+def explicit_profile(code: ExplicitBinaryCode) -> ExplicitProfileResult:
     """Compute the complete compact profile of an explicit binary code."""
-    code = request.code
     plan = _admit(
         lambda: require_profile_admission(code),
         location=("code",),
@@ -278,11 +269,8 @@ def compute_explicit_profile(request: ExplicitProfileRequest) -> ExplicitProfile
     )
 
 
-def compute_constant_weight_profile(
-    request: ConstantWeightProfileRequest,
-) -> ConstantWeightProfileResult:
+def constant_weight_profile(code: ExplicitBinaryCode) -> ConstantWeightProfileResult:
     """Compute distance and intersection profiles of a constant-weight code."""
-    code = request.code
     plan = _admit(
         lambda: require_profile_admission(code),
         location=("code",),
@@ -312,25 +300,6 @@ def compute_constant_weight_profile(
     )
 
 
-def compute_to_set_system(request: ToSetSystemRequest) -> ToSetSystemResult:
-    """Map each source word to its coordinate support."""
-    code = request.code
-    _admit(
-        lambda: require_set_system_output_bound(code),
-        location=("code",),
-        code="nonlinear_code.set_system_not_admitted",
-    )
-    return ToSetSystemResult._from_kernel(
-        source=code,
-        length=code.length,
-        cardinality=len(code.codewords),
-        coordinate_axis=tuple(range(code.length)),
-        supports=tuple(
-            tuple(i for i, bit in enumerate(word) if bit) for word in code.codewords
-        ),
-    )
-
-
 def to_set_system(code: ExplicitBinaryCode) -> ToSetSystemResult:
     """Native support conversion for one canonical explicit binary code."""
     return ToSetSystemResult._from_kernel(
@@ -345,10 +314,9 @@ def to_set_system(code: ExplicitBinaryCode) -> ToSetSystemResult:
 
 
 __all__ = [
-    "compute_constant_weight",
-    "compute_constant_weight_profile",
-    "compute_explicit_profile",
-    "compute_to_set_system",
-    "compute_word_distance",
+    "constant_weight_code",
+    "constant_weight_profile",
+    "explicit_profile",
     "to_set_system",
+    "word_distance",
 ]

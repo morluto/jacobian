@@ -35,12 +35,12 @@ from jacobian.math.combinatorics.codes.nonlinear._models import (
     ToSetSystemRequest,
     WordDistanceRequest,
 )
+from jacobian.math.combinatorics.codes.nonlinear._tools import TOOLS
 from jacobian.math.combinatorics.codes.nonlinear.operations import (
-    compute_constant_weight,
-    compute_constant_weight_profile,
-    compute_explicit_profile,
-    compute_to_set_system,
-    compute_word_distance,
+    constant_weight_code,
+    constant_weight_profile,
+    explicit_profile,
+    word_distance,
 )
 from jacobian.math.combinatorics.codes.nonlinear.values import (
     MAX_EXPLICIT_CODE_BITS,
@@ -192,9 +192,7 @@ class TestCanonicalExplicitBinaryCode:
 
 class TestWordDistance:
     def test_exact_relation(self) -> None:
-        result = compute_word_distance(
-            WordDistanceRequest(word1=(1, 1, 0, 0), word2=(1, 0, 1, 0))
-        )
+        result = word_distance((1, 1, 0, 0), (1, 0, 1, 0))
         assert result.distance == 2
         assert result.differing_coordinates == (1, 2)
         assert result.weight1 == result.weight2 == 2
@@ -212,7 +210,7 @@ class TestWordDistance:
     def test_identical_maximal_words_admit_result_sensitive_bound(self) -> None:
         word = [0] * MAX_EXPLICIT_CODE_LENGTH
         request = WordDistanceRequest.model_validate({"word1": word, "word2": word})
-        result = compute_word_distance(request)
+        result = word_distance(request.word1, request.word2)
         assert result.distance == 0
         assert result.differing_coordinates == ()
         assert result.weight1 == result.weight2 == 0
@@ -221,7 +219,7 @@ class TestWordDistance:
     def test_word_distance_output_bound_covers_the_canonical_result(self) -> None:
         word = [0] * MAX_EXPLICIT_CODE_LENGTH
         request = WordDistanceRequest.model_validate({"word1": word, "word2": word})
-        result = compute_word_distance(request)
+        result = word_distance(request.word1, request.word2)
         bound = require_word_distance_output_bound(request.word1, request.word2)
         assert len(encode_strict_json(result.model_dump(mode="json"))) <= bound
         assert bound <= MAX_CODE_RESULT_BYTES
@@ -231,7 +229,7 @@ class TestWordDistance:
         right = [1] * MAX_EXPLICIT_CODE_LENGTH
         request = WordDistanceRequest.model_validate({"word1": left, "word2": right})
         with pytest.raises(OperationDomainValidationError, match="result can use"):
-            compute_word_distance(request)
+            word_distance(request.word1, request.word2)
 
     def test_differing_coordinate_wire_size_tracks_actual_difference_positions(
         self,
@@ -252,13 +250,13 @@ class TestWordDistance:
             high[index] = 1
         request = WordDistanceRequest.model_validate({"word1": left, "word2": high})
         with pytest.raises(OperationDomainValidationError, match="result can use"):
-            compute_word_distance(request)
+            word_distance(request.word1, request.word2)
 
 
 class TestExplicitProfile:
     def test_known_answer_and_defining_accounting(self) -> None:
         source = _code((0, 0, 0, 0), (0, 0, 1, 1), (1, 1, 1, 1))
-        result = compute_explicit_profile(ExplicitProfileRequest(code=source))
+        result = explicit_profile(source)
         assert result.source is source
         assert result.length == 4
         assert result.cardinality == 3
@@ -275,9 +273,7 @@ class TestExplicitProfile:
     def test_empty_and_singleton_codes_retain_context_without_fake_extrema(
         self,
     ) -> None:
-        empty = compute_explicit_profile(
-            ExplicitProfileRequest(code=ExplicitBinaryCode(length=5, codewords=()))
-        )
+        empty = explicit_profile(ExplicitBinaryCode(length=5, codewords=()))
         assert empty.length == 5
         assert empty.cardinality == empty.pair_count == 0
         assert empty.minimum_distance is empty.maximum_distance is None
@@ -285,19 +281,13 @@ class TestExplicitProfile:
         assert empty.maximum_distance_witness is None
         assert empty.weight_distribution == (0, 0, 0, 0, 0, 0)
 
-        singleton = compute_explicit_profile(
-            ExplicitProfileRequest(code=_code((1, 0, 1)))
-        )
+        singleton = explicit_profile(_code((1, 0, 1)))
         assert singleton.pair_count == 0
         assert singleton.minimum_distance is singleton.maximum_distance is None
         assert singleton.weight_distribution == (0, 0, 1, 0)
 
-        zero_empty = compute_explicit_profile(
-            ExplicitProfileRequest(code=ExplicitBinaryCode(length=0, codewords=()))
-        )
-        zero_singleton = compute_explicit_profile(
-            ExplicitProfileRequest(code=ExplicitBinaryCode(length=0, codewords=((),)))
-        )
+        zero_empty = explicit_profile(ExplicitBinaryCode(length=0, codewords=()))
+        zero_singleton = explicit_profile(ExplicitBinaryCode(length=0, codewords=((),)))
         assert zero_empty.weight_distribution == (0,)
         assert zero_singleton.weight_distribution == (1,)
         for result in (zero_empty, zero_singleton):
@@ -322,7 +312,7 @@ class TestExplicitProfile:
         assert plan.bitset_chunk_work <= MAX_PROFILE_BITSET_CHUNK_WORK
         assert plan.result_wire_upper_bound <= MAX_CODE_RESULT_BYTES
 
-        result = compute_explicit_profile(ExplicitProfileRequest(code=source))
+        result = explicit_profile(source)
         assert (
             len(encode_strict_json(result.model_dump(mode="json")))
             <= plan.result_wire_upper_bound
@@ -362,9 +352,7 @@ class TestExplicitProfile:
 class TestConstantWeightProfile:
     def test_distance_and_intersection_defining_identity(self) -> None:
         source = _code((0, 0, 1, 1), (0, 1, 0, 1), (1, 0, 1, 0))
-        result = compute_constant_weight_profile(
-            ConstantWeightProfileRequest(code=source)
-        )
+        result = constant_weight_profile(source)
         assert result.source is source
         assert result.length == 4
         assert result.weight == 2
@@ -383,20 +371,14 @@ class TestConstantWeightProfile:
                 assert distance == 2 * (result.weight - intersection)
 
     def test_singleton_has_no_pairwise_extremum(self) -> None:
-        result = compute_constant_weight_profile(
-            ConstantWeightProfileRequest(code=_code((1, 0, 1)))
-        )
+        result = constant_weight_profile(_code((1, 0, 1)))
         assert result.pair_count == 0
         assert result.minimum_distance is result.maximum_distance is None
         assert result.minimum_distance_witness is None
         assert result.maximum_distance_witness is None
 
     def test_zero_coordinate_singleton_has_weight_zero_profile(self) -> None:
-        result = compute_constant_weight_profile(
-            ConstantWeightProfileRequest(
-                code=ExplicitBinaryCode(length=0, codewords=((),))
-            )
-        )
+        result = constant_weight_profile(ExplicitBinaryCode(length=0, codewords=((),)))
         assert result.length == result.weight == result.pair_count == 0
         assert result.cardinality == 1
         assert result.distance_histogram == (0,)
@@ -408,13 +390,13 @@ class TestConstantWeightProfile:
     def test_rejects_mixed_weight_source(self) -> None:
         request = ConstantWeightProfileRequest(code=_code((0, 0, 1, 1), (1, 1, 1, 0)))
         with pytest.raises(ValueError, match="all codewords"):
-            compute_constant_weight_profile(request)
+            constant_weight_profile(request.code)
 
 
 class TestSetSystemConversion:
     def test_exact_source_bound_bijection(self) -> None:
         source = _code((1, 0, 1, 0), (0, 1, 0, 1))
-        result = compute_to_set_system(ToSetSystemRequest(code=source))
+        result = to_set_system(source)
         assert result.source is source
         assert result.length == 4
         assert result.cardinality == 2
@@ -458,7 +440,7 @@ class TestSetSystemConversion:
 
 class TestProducerConsumerClosure:
     def test_generated_code_serializes_unchanged_into_all_consumers(self) -> None:
-        generated = compute_constant_weight(ConstantWeightRequest(length=4, weight=2))
+        generated = constant_weight_code(4, 2)
         serialized_code = generated.model_dump(mode="json")["code"]
 
         explicit_request = ExplicitProfileRequest.model_validate(
@@ -473,16 +455,16 @@ class TestProducerConsumerClosure:
         assert explicit_request.code == generated.code
         assert constant_request.code == generated.code
         assert support_request.code == generated.code
-        assert compute_explicit_profile(explicit_request).pair_count == 15
-        assert compute_constant_weight_profile(constant_request).weight == 2
-        assert compute_to_set_system(support_request).cardinality == 6
+        assert explicit_profile(explicit_request.code).pair_count == 15
+        assert constant_weight_profile(constant_request.code).weight == 2
+        assert to_set_system(support_request.code).cardinality == 6
 
     def test_each_source_bound_result_serializes_into_every_consumer(self) -> None:
         source = _code((0, 0, 1, 1), (0, 1, 0, 1), (1, 0, 1, 0))
         results = (
-            compute_explicit_profile(ExplicitProfileRequest(code=source)),
-            compute_constant_weight_profile(ConstantWeightProfileRequest(code=source)),
-            compute_to_set_system(ToSetSystemRequest(code=source)),
+            explicit_profile(source),
+            constant_weight_profile(source),
+            to_set_system(source),
         )
         for result in results:
             serialized_source = result.model_dump(mode="json")["source"]
@@ -517,7 +499,7 @@ class TestDerivedAdmissionBoundaries:
             code=ExplicitBinaryCode(length=12, codewords=_binary_words(12, 3_163))
         )
         with pytest.raises(OperationDomainValidationError, match="unordered pairs"):
-            compute_explicit_profile(request)
+            explicit_profile(request.code)
 
     def test_bitset_chunk_work_immediate_boundary(self) -> None:
         accepted = ExplicitProfileRequest(
@@ -533,7 +515,7 @@ class TestDerivedAdmissionBoundaries:
         with pytest.raises(
             OperationDomainValidationError, match="pair-by-bitset-chunk"
         ):
-            compute_explicit_profile(request)
+            explicit_profile(request.code)
 
     def test_profile_output_size_immediate_boundary(self) -> None:
         accepted_length = 100_770
@@ -558,7 +540,7 @@ class TestDerivedAdmissionBoundaries:
         with pytest.raises(
             OperationDomainValidationError, match="canonical JSON bytes"
         ):
-            compute_explicit_profile(request)
+            explicit_profile(request.code)
 
     @pytest.mark.parametrize("length", [200_000, MAX_EXPLICIT_CODE_LENGTH])
     def test_empty_profile_charges_no_witnesses_and_fits_output_bound(
@@ -572,7 +554,7 @@ class TestDerivedAdmissionBoundaries:
             source_wire_upper_bound(source) + 3 * histogram_bytes + 2_048
         )
 
-        result = compute_explicit_profile(ExplicitProfileRequest(code=source))
+        result = explicit_profile(source)
         actual_wire_bytes = len(encode_strict_json(result.model_dump(mode="json")))
         assert actual_wire_bytes <= plan.result_wire_upper_bound
         assert plan.result_wire_upper_bound <= MAX_CODE_RESULT_BYTES
@@ -589,22 +571,30 @@ class TestDerivedAdmissionBoundaries:
             source_wire_upper_bound(source) + 3 * histogram_bytes + 2_048
         )
 
-        result = compute_explicit_profile(ExplicitProfileRequest(code=source))
+        result = explicit_profile(source)
         actual_wire_bytes = len(encode_strict_json(result.model_dump(mode="json")))
         assert actual_wire_bytes <= plan.result_wire_upper_bound
         assert result.minimum_distance_witness is None
         assert result.maximum_distance_witness is None
 
     def test_set_system_output_size_immediate_boundary(self) -> None:
+        operation = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "code.binary.explicit.to_set_system.compute"
+        )
         accepted_length = 275_963
-        ToSetSystemRequest(code=_code((1,) * accepted_length, length=accepted_length))
+        accepted = ToSetSystemRequest(
+            code=_code((1,) * accepted_length, length=accepted_length)
+        )
+        operation.run(accepted)
         request = ToSetSystemRequest(
             code=_code((1,) * (accepted_length + 1), length=accepted_length + 1)
         )
         with pytest.raises(
             OperationDomainValidationError, match="canonical JSON bytes"
         ):
-            compute_to_set_system(request)
+            operation.run(request)
 
     @pytest.mark.parametrize(
         ("length", "weight", "expected"),
@@ -640,7 +630,7 @@ class TestDerivedAdmissionBoundaries:
         ConstantWeightRequest.model_validate({"length": 101, "weight": 2})
         request = ConstantWeightRequest.model_validate({"length": 102, "weight": 2})
         with pytest.raises(ValueError, match="entry bound"):
-            compute_constant_weight(request)
+            constant_weight_code(request.length, request.weight)
         request = ConstantWeightRequest.model_validate(
             {
                 "length": MAX_EXPLICIT_CODE_LENGTH,
@@ -648,12 +638,12 @@ class TestDerivedAdmissionBoundaries:
             }
         )
         with pytest.raises(ValueError, match="entry bound"):
-            compute_constant_weight(request)
+            constant_weight_code(request.length, request.weight)
 
 
 class TestCanonicalConsumers:
     def test_constant_weight_generator_is_source_bound(self) -> None:
-        result = compute_constant_weight(ConstantWeightRequest(length=4, weight=2))
+        result = constant_weight_code(4, 2)
         assert result.length == 4
         assert result.weight == 2
         assert result.count == 6
@@ -662,49 +652,40 @@ class TestCanonicalConsumers:
     def test_constant_weight_admission_derives_the_work_from_length_and_weight(
         self,
     ) -> None:
-        zero = compute_constant_weight(ConstantWeightRequest(length=64, weight=0))
+        zero = constant_weight_code(64, 0)
         assert zero.count == 1
         assert zero.code.codewords == ((0,) * 64,)
-        unit = compute_constant_weight(ConstantWeightRequest(length=64, weight=1))
+        unit = constant_weight_code(64, 1)
         assert unit.count == 64
         assert all(sum(word) == 1 for word in unit.code.codewords)
-        wide = compute_constant_weight(ConstantWeightRequest(length=17, weight=8))
+        wide = constant_weight_code(17, 8)
         assert wide.count == 24310
         assert all(sum(word) == 8 for word in wide.code.codewords)
         serialized = wide.model_dump(mode="json")
         replayed = ConstantWeightResult.model_validate(serialized)
         assert replayed.code == wide.code
-        axis = compute_constant_weight(
-            ConstantWeightRequest(length=MAX_EXPLICIT_CODE_LENGTH, weight=0)
-        )
+        axis = constant_weight_code(MAX_EXPLICIT_CODE_LENGTH, 0)
         assert axis.count == 1
         assert axis.code.codewords == ((0,) * MAX_EXPLICIT_CODE_LENGTH,)
 
     def test_constant_weight_admission_rejects_central_binomial_work(self) -> None:
         request = ConstantWeightRequest.model_validate({"length": 64, "weight": 32})
         with pytest.raises(ValueError, match="entry bound"):
-            compute_constant_weight(request)
+            constant_weight_code(request.length, request.weight)
         properties = ConstantWeightRequest.model_json_schema()["properties"]
         assert properties["length"]["maximum"] == MAX_EXPLICIT_CODE_LENGTH
 
     def test_zero_coordinate_generator_returns_the_sole_empty_word(self) -> None:
-        result = compute_constant_weight(ConstantWeightRequest(length=0, weight=0))
+        result = constant_weight_code(0, 0)
         assert result.length == result.weight == 0
         assert result.count == 1
         assert result.code == ExplicitBinaryCode(length=0, codewords=((),))
 
         serialized_code = result.model_dump(mode="json")["code"]
-        explicit = compute_explicit_profile(
-            ExplicitProfileRequest.model_validate({"code": deepcopy(serialized_code)})
-        )
-        constant = compute_constant_weight_profile(
-            ConstantWeightProfileRequest.model_validate(
-                {"code": deepcopy(serialized_code)}
-            )
-        )
-        supports = compute_to_set_system(
-            ToSetSystemRequest.model_validate({"code": deepcopy(serialized_code)})
-        )
+        code = ExplicitBinaryCode.model_validate(deepcopy(serialized_code))
+        explicit = explicit_profile(code)
+        constant = constant_weight_profile(code)
+        supports = to_set_system(code)
         assert explicit.source == constant.source == supports.source == result.code
         assert explicit.weight_distribution == (1,)
         assert constant.intersection_histogram == (0,)

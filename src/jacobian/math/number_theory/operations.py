@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import math
 import operator
+from fractions import Fraction
 from itertools import product
 from time import monotonic
 from typing import Literal, SupportsIndex, cast
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._execution import current_request_execution
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.number_theory._contiguous_sum_admission import (
     require_contiguous_sum_profile_admission,
 )
@@ -21,6 +23,16 @@ from jacobian.math.number_theory._contiguous_sum_kernel import (
 from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileResult,
 )
+from jacobian.math.number_theory._binomial_valuation_models import (
+    _MAX_BINOMIAL_ROWS_FROM_OUTPUT,
+    _MAX_SAFE_JSON_INTEGER,
+    MAX_BINOMIAL_DIGIT_WORK,
+    MAX_BINOMIAL_PROFILE_RESULT_BYTES,
+    BinomialValuationProfileResult,
+    BinomialValuationProfileRow,
+    _base_digit_count,
+    _binomial_result_upper_bound_bytes,
+)
 from jacobian.math.number_theory._derived_models import (
     MAX_FACTORIAL_ARGUMENT,
     MAX_FACTORIAL_BASE,
@@ -28,6 +40,21 @@ from jacobian.math.number_theory._derived_models import (
     FactorialValuationResult,
     FloorSquareRootResult,
     LegendreSymbolResult,
+)
+from jacobian.math.number_theory._divisibility_graph_models import (
+    MAX_FAMILY_SIZE as MAX_GRAPH_FAMILY_SIZE,
+)
+from jacobian.math.number_theory._divisibility_graph_models import (
+    MAX_GRAPH_EDGES,
+    MAX_TOTAL_FAMILY_SIZE,
+    DivisibilityIncidenceGraphResult,
+)
+from jacobian.math.number_theory._divisibility_profile_models import (
+    MAX_FAMILY_SIZE as MAX_PROFILE_FAMILY_SIZE,
+)
+from jacobian.math.number_theory._divisibility_profile_models import (
+    GcdQuotientProfileResult,
+    ProductDivisibilityProfileResult,
 )
 from jacobian.math.number_theory._integer_models import BooleanResult
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
@@ -48,6 +75,15 @@ from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueWitness,
     ModularPolynomialVariable,
 )
+from jacobian.math.number_theory._prime_coverage_models import (
+    MAX_COVERAGE_RESULT_BYTES,
+    MAX_COVERAGE_UPPER,
+    MAX_COVERAGE_WORK,
+    PrimeCoverageProfileResult,
+    PrimeCoverageProfileRow,
+    _coverage_result_upper_bound_bytes,
+    _coverage_work_upper_bound,
+)
 from jacobian.math.number_theory._prime_models import PrimorialResult
 from jacobian.math.number_theory._prime_shift_models import (
     PrimeShiftProfileResult,
@@ -61,11 +97,14 @@ from jacobian.math.number_theory.modular_polynomials import (
 )
 
 __all__ = [
+    "binomial_valuation_profile",
     "chinese_remainder",
     "contiguous_sum_profile",
+    "divisibility_incidence_graph",
     "euler_totient",
     "factorial_valuation",
     "floor_square_root",
+    "gcd_quotient_profile",
     "is_prime",
     "jacobi_symbol",
     "legendre_symbol",
@@ -78,8 +117,10 @@ __all__ = [
     "nth_prime",
     "previous_prime",
     "prime_count",
+    "prime_coverage_profile",
     "prime_shift_profile",
     "primorial",
+    "product_divisibility_profile",
     "quadratic_residues",
 ]
 
@@ -653,3 +694,259 @@ def modular_polynomial_residue_assignments(
     """Return the exact assignment-to-residue table and image summary."""
 
     return _residue_image(modulus, variables, terms, include_table=True)
+
+
+def binomial_valuation_profile(n: int, prime: int) -> BinomialValuationProfileResult:
+    """Return ``v_prime(binomial(n, k))`` for every ``0 <= k <= n``."""
+    if type(n) is not int or n < 0:
+        raise OperationDomainValidationError(
+            location=("n",),
+            code="number_theory.binomial_profile_n_invalid",
+            message="n must be a nonnegative integer",
+        )
+    if type(prime) is not int or not 2 <= prime <= _MAX_SAFE_JSON_INTEGER:
+        raise OperationDomainValidationError(
+            location=("prime",),
+            code="number_theory.binomial_profile_prime_invalid",
+            message="prime must be an integer between 2 and the safe JSON bound",
+        )
+    if n + 1 > _MAX_BINOMIAL_ROWS_FROM_OUTPUT or (
+        _binomial_result_upper_bound_bytes(n, prime) > MAX_BINOMIAL_PROFILE_RESULT_BYTES
+    ):
+        raise OperationDomainValidationError(
+            location=("n",),
+            code="number_theory.binomial_profile_output_exceeded",
+            message="valuation profile exceeds the canonical output budget",
+        )
+    digit_work = (n + 1) * max(1, _base_digit_count(n, prime))
+    if digit_work > MAX_BINOMIAL_DIGIT_WORK:
+        raise OperationDomainValidationError(
+            location=("n",),
+            code="number_theory.binomial_profile_work_exceeded",
+            message=(
+                "valuation profile exceeds the digitwise work budget of "
+                f"{MAX_BINOMIAL_DIGIT_WORK} steps"
+            ),
+        )
+    from sympy import isprime
+
+    if not isprime(prime):
+        raise OperationDomainValidationError(
+            location=("prime",),
+            code="number_theory.binomial_profile_base_not_prime",
+            message="prime must be a prime number",
+        )
+    rows = []
+    for k in range(n + 1):
+        left = k
+        right = n - k
+        carries = 0
+        carry = 0
+        while left > 0 or right > 0 or carry > 0:
+            total = left % prime + right % prime + carry
+            if total >= prime:
+                carries += 1
+                carry = 1
+            else:
+                carry = 0
+            left //= prime
+            right //= prime
+        rows.append(BinomialValuationProfileRow(k=k, valuation=carries))
+    return BinomialValuationProfileResult(n=n, prime=prime, rows=rows)
+
+
+def _require_positive_family(
+    family: tuple[int, ...], *, location: tuple[str, ...], max_size: int
+) -> None:
+    if not isinstance(family, tuple) or any(type(value) is not int for value in family):
+        raise TypeError("families must be tuples of integers")
+    if len(family) > max_size:
+        raise OperationDomainValidationError(
+            location=location,
+            code="number_theory.family_size_exceeded",
+            message=f"families may contain at most {max_size} values",
+        )
+    if any(value <= 0 for value in family):
+        raise OperationDomainValidationError(
+            location=location,
+            code="number_theory.non_positive_family",
+            message="family values must be positive integers",
+        )
+
+
+def divisibility_incidence_graph(
+    left_family: tuple[int, ...], right_family: tuple[int, ...]
+) -> DivisibilityIncidenceGraphResult:
+    """Build the bipartite graph whose edges represent divisibility."""
+    _require_positive_family(
+        left_family, location=("left_family",), max_size=MAX_GRAPH_FAMILY_SIZE
+    )
+    _require_positive_family(
+        right_family, location=("right_family",), max_size=MAX_GRAPH_FAMILY_SIZE
+    )
+    if len(set(left_family)) != len(left_family):
+        raise OperationDomainValidationError(
+            location=("left_family",),
+            code="number_theory.duplicate_left_family",
+            message="left_family values must be unique",
+        )
+    if len(set(right_family)) != len(right_family):
+        raise OperationDomainValidationError(
+            location=("right_family",),
+            code="number_theory.duplicate_right_family",
+            message="right_family values must be unique",
+        )
+    if len(left_family) + len(right_family) > MAX_TOTAL_FAMILY_SIZE:
+        raise OperationDomainValidationError(
+            location=("left_family", "right_family"),
+            code="number_theory.graph_vertex_budget",
+            message=f"families must contain at most {MAX_TOTAL_FAMILY_SIZE} total values",
+        )
+    if len(left_family) * len(right_family) > MAX_GRAPH_EDGES:
+        raise OperationDomainValidationError(
+            location=("left_family", "right_family"),
+            code="number_theory.graph_edge_budget",
+            message=f"the incidence graph may contain at most {MAX_GRAPH_EDGES} edges",
+        )
+    vertices = tuple(
+        [f"L{index}" for index in range(len(left_family))]
+        + [f"R{index}" for index in range(len(right_family))]
+    )
+    edges = tuple(
+        (f"L{left_index}", f"R{right_index}")
+        for left_index, left in enumerate(left_family)
+        for right_index, right in enumerate(right_family)
+        if right % left == 0
+    )
+    return DivisibilityIncidenceGraphResult(
+        left_family=tuple(format_canonical_integer(value) for value in left_family),
+        right_family=tuple(format_canonical_integer(value) for value in right_family),
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+    )
+
+
+def gcd_quotient_profile(
+    elements: tuple[int, ...],
+) -> GcdQuotientProfileResult:
+    """Return the pairwise normalized gcd quotient matrix."""
+    _require_positive_family(
+        elements, location=("elements",), max_size=MAX_PROFILE_FAMILY_SIZE
+    )
+    quotients: list[tuple[CanonicalRational, ...]] = []
+    for left in elements:
+        row = tuple(
+            CanonicalRational.from_fraction(
+                Fraction(math.gcd(left, right), max(left, right))
+            )
+            for right in elements
+        )
+        quotients.append(row)
+    return GcdQuotientProfileResult(
+        elements=tuple(format_canonical_integer(value) for value in elements),
+        quotients=tuple(quotients),
+    )
+
+
+def product_divisibility_profile(
+    elements: tuple[int, ...],
+) -> ProductDivisibilityProfileResult:
+    """Return whether each ordered pair product divides the family product."""
+    _require_positive_family(
+        elements, location=("elements",), max_size=MAX_PROFILE_FAMILY_SIZE
+    )
+    total_product = math.prod(elements)
+    matrix = tuple(
+        tuple(total_product % (left * right) == 0 for right in elements)
+        for left in elements
+    )
+    return ProductDivisibilityProfileResult(
+        elements=tuple(format_canonical_integer(value) for value in elements),
+        divisibility_matrix=matrix,
+    )
+
+
+def _simple_prime_sieve(limit: int) -> list[int]:
+    if limit < 2:
+        return []
+    is_prime = bytearray(b"\x01") * (limit + 1)
+    is_prime[0] = is_prime[1] = 0
+    for value in range(2, math.isqrt(limit) + 1):
+        if is_prime[value]:
+            for multiple in range(value * value, limit + 1, value):
+                is_prime[multiple] = 0
+    return [value for value in range(2, limit + 1) if is_prime[value]]
+
+
+def _segmented_distinct_prime_counts(lower_bound: int, upper_bound: int) -> list[int]:
+    width = upper_bound - lower_bound + 1
+    residuals = list(range(lower_bound, upper_bound + 1))
+    counts = bytearray(width)
+    for prime in _simple_prime_sieve(math.isqrt(upper_bound)):
+        first = max(prime * prime, ((lower_bound + prime - 1) // prime) * prime)
+        for multiple in range(first, upper_bound + 1, prime):
+            index = multiple - lower_bound
+            residual = residuals[index]
+            if residual % prime:
+                continue
+            counts[index] += 1
+            while residual % prime == 0:
+                residual //= prime
+            residuals[index] = residual
+    for index, residual in enumerate(residuals):
+        if residual > 1:
+            counts[index] += 1
+    return list(counts)
+
+
+def prime_coverage_profile(
+    lower_bound: int, upper_bound: int
+) -> PrimeCoverageProfileResult:
+    """Return the distinct-prime-factor count for every integer in an interval."""
+    if (
+        type(lower_bound) is not int
+        or type(upper_bound) is not int
+        or lower_bound < 1
+        or upper_bound < 1
+        or lower_bound > MAX_COVERAGE_UPPER
+        or upper_bound > MAX_COVERAGE_UPPER
+    ):
+        raise OperationDomainValidationError(
+            location=("lower_bound", "upper_bound"),
+            code="number_theory.prime_coverage_interval_invalid",
+            message="interval bounds must be positive safe JSON integers",
+        )
+    if upper_bound < lower_bound:
+        raise OperationDomainValidationError(
+            location=("upper_bound",),
+            code="number_theory.prime_coverage_interval_reversed",
+            message="upper_bound must be >= lower_bound",
+        )
+    if (
+        _coverage_result_upper_bound_bytes(lower_bound, upper_bound)
+        > MAX_COVERAGE_RESULT_BYTES
+    ):
+        raise OperationDomainValidationError(
+            location=("lower_bound", "upper_bound"),
+            code="number_theory.prime_coverage_output_exceeded",
+            message="interval result exceeds the canonical output budget of "
+            f"{MAX_COVERAGE_RESULT_BYTES} bytes",
+        )
+    work = _coverage_work_upper_bound(lower_bound, upper_bound)
+    if work > MAX_COVERAGE_WORK:
+        raise OperationDomainValidationError(
+            location=("lower_bound", "upper_bound"),
+            code="number_theory.prime_coverage_work_exceeded",
+            message="interval exceeds the segmented prime-coverage work budget of "
+            f"{MAX_COVERAGE_WORK} steps",
+        )
+    counts = _segmented_distinct_prime_counts(lower_bound, upper_bound)
+    return PrimeCoverageProfileResult(
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        rows=[
+            PrimeCoverageProfileRow(n=value, distinct_prime_count=count)
+            for value, count in zip(
+                range(lower_bound, upper_bound + 1), counts, strict=True
+            )
+        ],
+    )

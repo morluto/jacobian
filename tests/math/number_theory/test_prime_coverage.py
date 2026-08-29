@@ -3,17 +3,19 @@
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory._additional_ops import (
+    compute_binomial_valuation_profile,
+    compute_prime_coverage_profile,
+)
 from jacobian.math.number_theory._binomial_valuation_models import (
     BinomialValuationProfileRequest,
-)
-from jacobian.math.number_theory._binomial_valuation_operations import (
-    compute_binomial_valuation_profile,
 )
 from jacobian.math.number_theory._prime_coverage_models import (
     PrimeCoverageProfileRequest,
 )
-from jacobian.math.number_theory._prime_coverage_operations import (
-    compute_prime_coverage_profile,
+from jacobian.math.number_theory.operations import (
+    binomial_valuation_profile,
+    prime_coverage_profile,
 )
 
 
@@ -24,6 +26,17 @@ def test_prime_coverage_small() -> None:
     counts = [r.distinct_prime_count for r in result.rows]
     # omega(1)=0, omega(2)=1, omega(3)=1, omega(4)=1, omega(5)=1, omega(6)=2, omega(7)=1, omega(8)=1, omega(9)=1, omega(10)=2
     assert counts == [0, 1, 1, 1, 1, 2, 1, 1, 1, 2]
+
+
+def test_native_profiles_accept_canonical_values() -> None:
+    assert len(prime_coverage_profile(1, 3).rows) == 3
+    assert [row.valuation for row in binomial_valuation_profile(4, 2).rows] == [
+        0,
+        2,
+        1,
+        2,
+        0,
+    ]
 
 
 def test_prime_coverage_primes() -> None:

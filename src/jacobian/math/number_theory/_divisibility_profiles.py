@@ -1,5 +1,6 @@
 """Declarations for gcd-quotient and product-divisibility profiles."""
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.number_theory._divisibility_profile_models import (
     GcdQuotientProfileRequest,
@@ -7,11 +8,30 @@ from jacobian.math.number_theory._divisibility_profile_models import (
     ProductDivisibilityProfileRequest,
     ProductDivisibilityProfileResult,
 )
-from jacobian.math.number_theory._divisibility_profile_operations import (
-    compute_gcd_quotient_profile,
-    compute_product_divisibility_profile,
-)
 from jacobian.math.number_theory._support import number_theory_operation
+from jacobian.math.number_theory.operations import (
+    gcd_quotient_profile,
+    product_divisibility_profile,
+)
+
+
+def compute_gcd_quotient_profile(
+    request: GcdQuotientProfileRequest,
+) -> GcdQuotientProfileResult:
+    """Project a wire request into the canonical gcd profile operation."""
+    return gcd_quotient_profile(
+        tuple(parse_canonical_integer(value) for value in request.elements)
+    )
+
+
+def compute_product_divisibility_profile(
+    request: ProductDivisibilityProfileRequest,
+) -> ProductDivisibilityProfileResult:
+    """Project a wire request into the canonical divisibility operation."""
+    return product_divisibility_profile(
+        tuple(parse_canonical_integer(value) for value in request.elements)
+    )
+
 
 DIVISIBILITY_PROFILE_OPERATIONS = (
     number_theory_operation(

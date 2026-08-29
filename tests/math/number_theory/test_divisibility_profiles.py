@@ -9,9 +9,13 @@ from jacobian.math.number_theory._divisibility_profile_models import (
     GcdQuotientProfileRequest,
     ProductDivisibilityProfileRequest,
 )
-from jacobian.math.number_theory._divisibility_profile_operations import (
+from jacobian.math.number_theory._divisibility_profiles import (
     compute_gcd_quotient_profile,
     compute_product_divisibility_profile,
+)
+from jacobian.math.number_theory.operations import (
+    gcd_quotient_profile,
+    product_divisibility_profile,
 )
 
 
@@ -25,6 +29,14 @@ def test_gcd_quotient_basic() -> None:
     assert result.quotients[0][1].as_fraction() == Fraction(1, 5)  # gcd(6,10) / 10
     assert result.quotients[1][2].as_fraction() == Fraction(1, 3)  # gcd(10,15) / 15
     assert result.quotients[0][2].as_fraction() == Fraction(1, 5)  # gcd(6,15) / 15
+
+
+def test_native_profiles_accept_canonical_values() -> None:
+    assert gcd_quotient_profile((6, 10)).elements == ("6", "10")
+    assert product_divisibility_profile((2, 3)).divisibility_matrix == (
+        (False, True),
+        (True, False),
+    )
 
 
 def test_gcd_quotient_symmetric() -> None:

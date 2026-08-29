@@ -5,17 +5,30 @@ from jacobian.math.number_theory._binomial_valuation_models import (
     BinomialValuationProfileRequest,
     BinomialValuationProfileResult,
 )
-from jacobian.math.number_theory._binomial_valuation_operations import (
-    compute_binomial_valuation_profile,
-)
 from jacobian.math.number_theory._prime_coverage_models import (
     PrimeCoverageProfileRequest,
     PrimeCoverageProfileResult,
 )
-from jacobian.math.number_theory._prime_coverage_operations import (
-    compute_prime_coverage_profile,
-)
 from jacobian.math.number_theory._support import number_theory_operation
+from jacobian.math.number_theory.operations import (
+    binomial_valuation_profile,
+    prime_coverage_profile,
+)
+
+
+def compute_prime_coverage_profile(
+    request: PrimeCoverageProfileRequest,
+) -> PrimeCoverageProfileResult:
+    """Project a wire request into the canonical coverage operation."""
+    return prime_coverage_profile(request.lower_bound, request.upper_bound)
+
+
+def compute_binomial_valuation_profile(
+    request: BinomialValuationProfileRequest,
+) -> BinomialValuationProfileResult:
+    """Project a wire request into the canonical binomial operation."""
+    return binomial_valuation_profile(request.n, request.prime)
+
 
 ADDITIONAL_NT_OPERATIONS = (
     number_theory_operation(

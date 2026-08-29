@@ -6,12 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory._divisibility_graph import (
+    compute_divisibility_incidence_graph,
+)
 from jacobian.math.number_theory._divisibility_graph_models import (
     DivisibilityIncidenceGraphRequest,
 )
-from jacobian.math.number_theory._divisibility_graph_operations import (
-    compute_divisibility_incidence_graph,
-)
+from jacobian.math.number_theory.operations import divisibility_incidence_graph
 
 
 def test_basic() -> None:
@@ -28,6 +29,11 @@ def test_basic() -> None:
     assert len(result.graph.edges) == 4
     assert result.left_family == ("2", "3")
     assert result.right_family == ("6", "12", "5")
+
+
+def test_native_graph_accepts_canonical_values() -> None:
+    result = divisibility_incidence_graph((2,), (4,))
+    assert result.graph.edges == (("L0", "R0"),)
 
 
 def test_request_families_are_immutable() -> None:

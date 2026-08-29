@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from fractions import Fraction
 from itertools import pairwise
 from typing import Literal
@@ -80,19 +81,42 @@ def _bounded_sparse_counting_index(value: int, *, name: str) -> int:
     return value
 
 
+def _binomial_coefficient_digit_bound(n: int, k: int) -> int:
+    """Return a safe upper bound on the decimal digit length of ``C(n, k)``.
+
+    Uses the cancelled product ``∏_{i=1}^{k} (n - k + i) / i`` rather than the
+    undivided numerator, so off-center coefficients are not charged as if they
+    were near ``2^n``.  Float accumulation over the admitted step budget stays
+    far below one digit; the final ``+ 1`` keeps the bound from underestimating.
+    """
+
+    if k < 0 or k > n:
+        return 1
+    steps = min(k, n - k)
+    if steps == 0:
+        return 1
+    log10_value = 0.0
+    for index in range(1, steps + 1):
+        log10_value += math.log10(n - steps + index) - math.log10(index)
+    if log10_value <= 0.0:
+        return 1
+    return math.ceil(log10_value + 1e-12) + 1
+
+
 def _admit_multiplicative_count(
     *,
     maximum_factor: int,
     steps: int,
-    cancellation_bit_bound: int | None = None,
+    result_digit_bound: int | None = None,
 ) -> None:
-    # Every multiplicative factor is at most ``maximum_factor``.  The rational
-    # 30103 / 100000 is a strict upper bound for log10(2), so this cannot
-    # underestimate the decimal width of that product envelope.
-    bit_bound = steps * max(1, maximum_factor.bit_length())
-    if cancellation_bit_bound is not None:
-        bit_bound = min(bit_bound, cancellation_bit_bound)
-    digit_bound = (bit_bound * 30_103 + 99_999) // 100_000
+    if result_digit_bound is None:
+        # Every multiplicative factor is at most ``maximum_factor``.  The
+        # rational 30103 / 100000 is a strict upper bound for log10(2), so this
+        # cannot underestimate the decimal width of that product envelope.
+        bit_bound = steps * max(1, maximum_factor.bit_length())
+        digit_bound = (bit_bound * 30_103 + 99_999) // 100_000
+    else:
+        digit_bound = result_digit_bound
     # Canonical integer formatting performs one base-10**9 division per output
     # chunk.  Charge that mandatory result-construction phase alongside the
     # multiplicative kernel so an accepted result cannot hide substantially
@@ -121,34 +145,28 @@ def _admit_multiplicative_count(
 
 def factorial(n: int) -> int:
     """Return the factorial of a bounded nonnegative integer."""
-    import math
 
     return math.factorial(_bounded_counting_index(n, name="n"))
 
 
 def binomial(n: int, k: int) -> int:
     """Return the exact binomial coefficient, with zero for ``k > n``."""
-    import math
 
     first = _bounded_sparse_counting_index(n, name="n")
     second = _bounded_sparse_counting_index(k, name="k")
     if second > first:
         return 0
     steps = min(second, first - second)
-    # The coefficient is also at most the sum of all coefficients of
-    # (1 + x)^n, namely 2^n.  Taking the smaller bound retains cancellation
-    # near the center without weakening the sparse product envelope.
     _admit_multiplicative_count(
         maximum_factor=first,
         steps=steps,
-        cancellation_bit_bound=first,
+        result_digit_bound=_binomial_coefficient_digit_bound(first, second),
     )
     return math.comb(first, second)
 
 
 def multinomial(values: tuple[int, ...]) -> int:
     """Return the exact multinomial coefficient for nonnegative part sizes."""
-    import math
 
     if not isinstance(values, tuple) or not values:
         raise OperationDomainValidationError(
@@ -180,7 +198,6 @@ def multinomial(values: tuple[int, ...]) -> int:
 
 def permutations(n: int, k: int) -> int:
     """Return the exact number of ordered ``k``-selections from ``n``."""
-    import math
 
     first = _bounded_sparse_counting_index(n, name="n")
     second = _bounded_sparse_counting_index(k, name="k")
@@ -192,7 +209,6 @@ def permutations(n: int, k: int) -> int:
 
 def central_binomial(n: int) -> int:
     """Return the exact central binomial coefficient ``binomial(2n, n)``."""
-    import math
 
     value = _bounded_counting_index(n, name="n")
     return math.comb(2 * value, value)
@@ -200,7 +216,6 @@ def central_binomial(n: int) -> int:
 
 def compositions(n: int, k: int) -> int:
     """Count ordered compositions of ``n`` into ``k`` positive parts."""
-    import math
 
     total = _bounded_sparse_counting_index(n, name="n")
     parts = _bounded_sparse_counting_index(k, name="k")
@@ -212,7 +227,7 @@ def compositions(n: int, k: int) -> int:
     _admit_multiplicative_count(
         maximum_factor=total - 1,
         steps=steps,
-        cancellation_bit_bound=total - 1,
+        result_digit_bound=_binomial_coefficient_digit_bound(total - 1, parts - 1),
     )
     return math.comb(total - 1, parts - 1)
 

@@ -100,6 +100,11 @@ def test_central_binomial_admission_accounts_for_cancellation() -> None:
     assert len(result.value) == 30_101
 
 
+def test_off_center_binomial_admission_accounts_for_cancellation() -> None:
+    result = compute_binomial(SparseCountingPairRequest(n=1_000_000, k=80_000))
+    assert len(result.value) == 121_066
+
+
 def test_long_permutation_uses_the_actual_string_transport_envelope() -> None:
     result = compute_permutations(SparseCountingPairRequest(n=20_000, k=20_000))
     assert len(result.value) == 77_338

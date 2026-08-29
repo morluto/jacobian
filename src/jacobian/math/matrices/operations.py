@@ -477,10 +477,13 @@ def _product_cell_digit_bound(
     for left_value, right_value in zip(left_row, right_column, strict=True):
         if left_value.num == "0" or right_value.num == "0":
             continue
-        key = (left_value.den, right_value.den)
-        combined_numerators[key] = combined_numerators.get(key, 0) + int(
-            left_value.num
-        ) * int(right_value.num)
+        left_fraction = left_value.as_fraction()
+        right_fraction = right_value.as_fraction()
+        key = (str(left_fraction.denominator), str(right_fraction.denominator))
+        combined_numerators[key] = (
+            combined_numerators.get(key, 0)
+            + left_fraction.numerator * right_fraction.numerator
+        )
     remaining = tuple(
         (key, numerator)
         for key, numerator in combined_numerators.items()

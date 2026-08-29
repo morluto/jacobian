@@ -11,19 +11,17 @@ from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.combinatorics._models import _combinatorics_validation_error
 from jacobian.math.combinatorics.operations import (
-    MAX_COUNTING_INDEX,
     MAX_MULTINOMIAL_PARTS,
     MAX_MULTINOMIAL_TOTAL,
+    MAX_SPARSE_COUNTING_INDEX,
 )
 
-MAX_BINOMIAL_N = MAX_COUNTING_INDEX
 
+class SparseCountingPairRequest(StrictModel):
+    """Indices for result-sensitive exact binomial-product counting."""
 
-class BinomialRequest(StrictModel):
-    """A wider safe bound for Python's efficient exact ``math.comb`` path."""
-
-    n: StrictInt = Field(ge=0, le=MAX_BINOMIAL_N)
-    k: StrictInt = Field(ge=0, le=MAX_BINOMIAL_N)
+    n: StrictInt = Field(ge=0, le=MAX_SPARSE_COUNTING_INDEX)
+    k: StrictInt = Field(ge=0, le=MAX_SPARSE_COUNTING_INDEX)
 
 
 class IntegerListRequest(StrictModel):

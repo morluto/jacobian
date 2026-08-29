@@ -716,7 +716,7 @@ class BarycentricSubdivisionResult(StrictModel):
     subdivision_vertices: tuple[str, ...]
     subdivision_facets: tuple[tuple[str, ...], ...]
     num_new_vertices: int
-    complex: SimplicialComplexRequest
+    complex: FiniteSimplicialComplex
     subdivision_complex: FiniteSimplicialComplex | None = None
     subdivision_vertex_faces: tuple[tuple[str, ...], ...] = Field(default=())
 
@@ -787,7 +787,7 @@ class ShellingCheckRequest(StrictModel):
 class ShellingCheckResult(StrictModel):
     """Result of checking a shelling order, bound to its checked source."""
 
-    complex: SimplicialComplexRequest
+    complex: FiniteSimplicialComplex
     facet_order: tuple[int, ...] = Field(
         min_length=1,
         max_length=MAX_TOPOLOGY_FACETS,

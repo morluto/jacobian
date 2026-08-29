@@ -18,12 +18,6 @@ from jacobian.math.topology._models import (
 from jacobian.math.topology._pseudomanifold import (
     PseudomanifoldRequest,
 )
-from jacobian.math.topology._simplicial_operations import (
-    _CANONICAL_CIRCLE,
-    compute_barycentric_subdivision,
-    compute_pseudomanifold_decision,
-    compute_shelling_check,
-)
 from jacobian.math.topology._structural import (
     ElementaryCollapseRequest,
     ElementaryCollapseResult,
@@ -41,7 +35,13 @@ from jacobian.math.topology._structural import (
     compute_star,
     compute_vertex_deletion,
 )
-from jacobian.math.topology._tools import TOOLS
+from jacobian.math.topology._tools import (
+    _CANONICAL_CIRCLE,
+    TOOLS,
+    compute_barycentric_subdivision,
+    compute_pseudomanifold_decision,
+    compute_shelling_check,
+)
 
 
 class ComplexWire(TypedDict):
@@ -269,7 +269,9 @@ class TestBarycentricSubdivision:
     def test_result_retains_source_and_roundtrips(self) -> None:
         request = BarycentricSubdivisionRequest(complex=_complex(CIRCLE))
         result = compute_barycentric_subdivision(request)
-        assert result.complex == request.complex
+        assert result.complex == canonical_complex(
+            request.complex.vertices, request.complex.facets
+        )
         assert (
             BarycentricSubdivisionResult.model_validate(result.model_dump()) == result
         )
@@ -480,7 +482,9 @@ class TestShellingCheck:
     def test_result_retains_shelling_branch_consistency(self) -> None:
         with pytest.raises(ValidationError, match="cannot carry failure diagnostics"):
             ShellingCheckResult(
-                complex=_complex(EDGE),
+                complex=canonical_complex(
+                    tuple(EDGE["vertices"]), tuple(tuple(f) for f in EDGE["facets"])
+                ),
                 facet_order=(0,),
                 is_shelling=True,
                 failed_at=0,
@@ -488,7 +492,9 @@ class TestShellingCheck:
             )
         with pytest.raises(ValidationError, match="requires a valid position"):
             ShellingCheckResult(
-                complex=_complex(EDGE),
+                complex=canonical_complex(
+                    tuple(EDGE["vertices"]), tuple(tuple(f) for f in EDGE["facets"])
+                ),
                 facet_order=(0,),
                 is_shelling=False,
             )
@@ -772,7 +778,9 @@ class TestShellingSourceBinding:
     def test_result_binds_to_complex_and_order(self) -> None:
         request = ShellingCheckRequest(complex=_complex(CIRCLE), facet_order=(0, 1, 2))
         result = compute_shelling_check(request)
-        assert result.complex == request.complex
+        assert result.complex == canonical_complex(
+            request.complex.vertices, request.complex.facets
+        )
         assert result.facet_order == (0, 1, 2)
         payload = result.model_dump()
         assert ShellingCheckResult.model_validate(payload) == result
@@ -783,7 +791,10 @@ class TestShellingSourceBinding:
             "facets": [["a", "b"], ["c", "d"]],
         }
         result = ShellingCheckResult(
-            complex=_complex(two_edges),
+            complex=canonical_complex(
+                tuple(two_edges["vertices"]),
+                tuple(tuple(f) for f in two_edges["facets"]),
+            ),
             facet_order=(0, 1),
             is_shelling=True,
             failed_at=None,
@@ -884,7 +895,10 @@ class TestResultDomainMirrorsRequest:
             "vertices": ["v0", "v1", "v2", "v3", "v4", "p"],
             "facets": [["v0", "v1", "v2", "v3", "v4"], ["p"]],
         }
-        payload["complex"] = simplex4_plus_point
+        payload["complex"] = canonical_complex(
+            tuple(simplex4_plus_point["vertices"]),
+            tuple(tuple(facet) for facet in simplex4_plus_point["facets"]),
+        ).model_dump()
         assert BarycentricSubdivisionResult.model_validate(payload)
 
     def test_subdivision_roundtrip_still_admitted(self) -> None:

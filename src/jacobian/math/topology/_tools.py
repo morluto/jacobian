@@ -2,21 +2,26 @@
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.topology._homology import (
+    IntegralSimplicialHomologyRequest,
+    IntegralSimplicialHomologyResult,
+    SimplicialHomologyRequest,
+    SimplicialHomologyResult,
+)
 from jacobian.math.topology._models import (
     BarycentricSubdivisionRequest,
     BarycentricSubdivisionResult,
+    ChainComplexRequest,
+    ChainComplexResult,
+    FiniteSimplicialComplex,
     ShellingCheckRequest,
     ShellingCheckResult,
+    SimplicialComplexCanonicalizationResult,
+    SimplicialComplexRequest,
 )
 from jacobian.math.topology._pseudomanifold import (
     PseudomanifoldRequest,
     PseudomanifoldResult,
-)
-from jacobian.math.topology._simplicial_operations import (
-    TOPOLOGY_OPERATIONS,
-    compute_barycentric_subdivision,
-    compute_pseudomanifold_decision,
-    compute_shelling_check,
 )
 from jacobian.math.topology._structural import (
     ElementaryCollapseRequest,
@@ -41,12 +46,261 @@ from jacobian.math.topology._structural import (
     compute_star,
     compute_vertex_deletion,
 )
+from jacobian.math.topology.operations import (
+    barycentric_subdivision as _barycentric_subdivision,
+)
+from jacobian.math.topology.operations import (
+    canonicalize as _canonicalize,
+)
+from jacobian.math.topology.operations import (
+    chain_complex as _chain_complex,
+)
+from jacobian.math.topology.operations import (
+    homology as _homology,
+)
+from jacobian.math.topology.operations import (
+    integral_homology as _integral_homology,
+)
+from jacobian.math.topology.operations import (
+    pseudomanifold as _pseudomanifold,
+)
+from jacobian.math.topology.operations import (
+    shelling_check as _shelling_check,
+)
 
 __all__ = ["TOOLS"]
+
+
+def _canonical_complex(request: SimplicialComplexRequest) -> FiniteSimplicialComplex:
+    return _canonicalize(request.vertices, request.facets).complex
+
+
+def compute_canonicalize(
+    request: SimplicialComplexRequest,
+) -> SimplicialComplexCanonicalizationResult:
+    return _canonicalize(request.vertices, request.facets)
+
+
+def compute_chain_complex(request: ChainComplexRequest) -> ChainComplexResult:
+    return _chain_complex(
+        request.complex,
+        request.coefficient_ring,
+        request.prime,
+        request.convention,
+    )
+
+
+def compute_homology(request: SimplicialHomologyRequest) -> SimplicialHomologyResult:
+    return _homology(request.complex, request.prime, request.convention)
+
+
+def compute_integral_homology(
+    request: IntegralSimplicialHomologyRequest,
+) -> IntegralSimplicialHomologyResult:
+    return _integral_homology(request.complex, request.convention)
+
+
+def compute_barycentric_subdivision(
+    request: BarycentricSubdivisionRequest,
+) -> BarycentricSubdivisionResult:
+    return _barycentric_subdivision(_canonical_complex(request.complex))
+
+
+def compute_pseudomanifold_decision(
+    request: PseudomanifoldRequest,
+) -> PseudomanifoldResult:
+    return _pseudomanifold(_canonical_complex(request.complex))
+
+
+def compute_shelling_check(request: ShellingCheckRequest) -> ShellingCheckResult:
+    return _shelling_check(_canonical_complex(request.complex), request.facet_order)
+
+
+TOPOLOGY_OPERATIONS: MathTools = (
+    MathTool(
+        operation_id="topology.simplicial_complex.canonicalize",
+        title="Canonicalize a finite simplicial complex",
+        description=(
+            "Validate bounded maximal facets, close them under every non-empty "
+            "face, and return canonical oriented simplex bases and the exact "
+            "f-vector."
+        ),
+        request_type=SimplicialComplexRequest,
+        result_type=SimplicialComplexCanonicalizationResult,
+        run=compute_canonicalize,
+        tags=(
+            "topology",
+            "simplicial-complex",
+            "facets",
+            "face-closure",
+            "f-vector",
+            "exact",
+        ),
+        examples=(
+            example(
+                "triangle_boundary",
+                "Canonicalize the three-edge simplicial model of a circle.",
+                {
+                    "vertices": ["a", "b", "c"],
+                    "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="topology.simplicial_complex.chain_complex.compute",
+        title="Compute an oriented simplicial chain complex",
+        description=(
+            "Construct every oriented sparse boundary matrix for one canonical "
+            "finite simplicial complex over the integers or a bounded prime field."
+        ),
+        request_type=ChainComplexRequest,
+        result_type=ChainComplexResult,
+        run=compute_chain_complex,
+        tags=(
+            "topology",
+            "simplicial-complex",
+            "chain-complex",
+            "boundary-matrix",
+            "exact",
+        ),
+        examples=(
+            example(
+                "circle_integer_chain_complex",
+                "Construct the oriented integer boundary matrices of a circle.",
+                {
+                    "complex": {
+                        "vertices": ["a", "b", "c"],
+                        "maximal_simplices": [["a", "b"], ["a", "c"], ["b", "c"]],
+                        "faces_by_dimension": [
+                            {"dimension": 0, "faces": [["a"], ["b"], ["c"]]},
+                            {
+                                "dimension": 1,
+                                "faces": [["a", "b"], ["a", "c"], ["b", "c"]],
+                            },
+                        ],
+                        "dimension": 1,
+                        "f_vector": [3, 3],
+                        "closure_size": 6,
+                        "complex_digest": "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647",
+                    },
+                    "coefficient_ring": "INTEGER",
+                    "convention": "UNREDUCED",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="topology.simplicial_homology.compute",
+        title="Compute finite-field simplicial homology",
+        description=(
+            "Compute every Betti number and inspectable cycle, boundary, and "
+            "quotient basis of a bounded finite simplicial complex over F_p."
+        ),
+        request_type=SimplicialHomologyRequest,
+        result_type=SimplicialHomologyResult,
+        run=compute_homology,
+        tags=(
+            "topology",
+            "simplicial-homology",
+            "betti-number",
+            "cycle-basis",
+            "prime-field",
+            "exact",
+        ),
+        examples=(
+            example(
+                "circle_homology_mod_two",
+                "Compute H_0 and H_1 over F_2 for a triangle boundary.",
+                {
+                    "complex": {
+                        "vertices": ["a", "b", "c"],
+                        "maximal_simplices": [["a", "b"], ["a", "c"], ["b", "c"]],
+                        "faces_by_dimension": [
+                            {"dimension": 0, "faces": [["a"], ["b"], ["c"]]},
+                            {
+                                "dimension": 1,
+                                "faces": [["a", "b"], ["a", "c"], ["b", "c"]],
+                            },
+                        ],
+                        "dimension": 1,
+                        "f_vector": [3, 3],
+                        "closure_size": 6,
+                        "complex_digest": "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647",
+                    },
+                    "prime": 2,
+                    "convention": "UNREDUCED",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="topology.simplicial_homology.integral.compute",
+        title="Compute transformation-certified integral simplicial homology",
+        description=(
+            "Compute the free rank, torsion invariant factors, and simplex-basis "
+            "cycle generators of every integral homology group, with explicit "
+            "Smith transformations and bounding chains. Each chain group is "
+            "bounded by the certified Smith-certificate dimension."
+        ),
+        request_type=IntegralSimplicialHomologyRequest,
+        result_type=IntegralSimplicialHomologyResult,
+        run=compute_integral_homology,
+        tags=(
+            "topology",
+            "simplicial-homology",
+            "integer-homology",
+            "torsion",
+            "betti-number",
+            "cycle-generator",
+            "smith-normal-form",
+            "certificate",
+            "exact",
+        ),
+        examples=(
+            example(
+                "integral_circle_homology",
+                "Compute H_0 and H_1 over the integers for a triangle boundary.",
+                {
+                    "complex": {
+                        "vertices": ["a", "b", "c"],
+                        "maximal_simplices": [["a", "b"], ["a", "c"], ["b", "c"]],
+                        "faces_by_dimension": [
+                            {"dimension": 0, "faces": [["a"], ["b"], ["c"]]},
+                            {
+                                "dimension": 1,
+                                "faces": [["a", "b"], ["a", "c"], ["b", "c"]],
+                            },
+                        ],
+                        "dimension": 1,
+                        "f_vector": [3, 3],
+                        "closure_size": 6,
+                        "complex_digest": "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647",
+                    }
+                },
+            ),
+        ),
+    ),
+)
 
 _CIRCLE = {
     "vertices": ["a", "b", "c"],
     "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
+}
+
+_CANONICAL_CIRCLE = {
+    "vertices": ["a", "b", "c"],
+    "maximal_simplices": [["a", "b"], ["a", "c"], ["b", "c"]],
+    "faces_by_dimension": [
+        {"dimension": 0, "faces": [["a"], ["b"], ["c"]]},
+        {"dimension": 1, "faces": [["a", "b"], ["a", "c"], ["b", "c"]]},
+    ],
+    "dimension": 1,
+    "f_vector": [3, 3],
+    "closure_size": 6,
+    "complex_digest": (
+        "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647"
+    ),
 }
 
 _f_vector_tool = MathTool(

@@ -9,6 +9,7 @@ from pydantic import model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.topology._models import (
+    FiniteSimplicialComplex,
     Simplex,
     SimplicialComplexRequest,
     _validation_error,
@@ -75,7 +76,7 @@ class PseudomanifoldRequest(StrictModel):
 class PseudomanifoldResult(StrictModel):
     """Pseudomanifold decision result produced for one source complex."""
 
-    complex: SimplicialComplexRequest
+    complex: FiniteSimplicialComplex
     is_pseudomanifold: bool
     is_closed: bool
     dimension: int
@@ -93,10 +94,10 @@ class PseudomanifoldResult(StrictModel):
 
     @classmethod
     def _from_kernel(
-        cls, request: PseudomanifoldRequest, *, decision: _PseudomanifoldDecision
+        cls, *, complex_: FiniteSimplicialComplex, decision: _PseudomanifoldDecision
     ) -> Self:
         return cls.model_construct(
-            complex=request.complex,
+            complex=complex_,
             is_pseudomanifold=decision.is_pseudomanifold,
             is_closed=decision.is_closed,
             dimension=decision.dimension,

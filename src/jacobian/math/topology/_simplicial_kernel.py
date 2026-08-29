@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from itertools import pairwise
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.certified_snf.operations import (
     certificate_from_reduction,
     inverse_unimodular,
@@ -17,7 +16,9 @@ from jacobian.math.matrices.certified_snf.operations import (
 )
 from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
 from jacobian.math.matrices.finite_fields import linear_algebra as prime_field
-from jacobian.math.topology._barycentric import barycentric_subdivision
+from jacobian.math.topology._barycentric import (
+    barycentric_subdivision as _barycentric_kernel,
+)
 from jacobian.math.topology._chain_conversion import (
     canonical_chain_complex_value_from_parts,
 )
@@ -29,104 +30,90 @@ from jacobian.math.topology._homology import (
     HomologyGroupResult,
     IntegralFreeGenerator,
     IntegralHomologyGroupResult,
-    IntegralSimplicialHomologyRequest,
     IntegralSimplicialHomologyResult,
     IntegralTorsionGenerator,
     IntegralVector,
     ModularVector,
-    SimplicialHomologyRequest,
     SimplicialHomologyResult,
 )
 from jacobian.math.topology._models import (
     MAX_BARYCENTRIC_SOURCE_FACES,
     MAX_TOPOLOGY_FACETS,
-    BarycentricSubdivisionRequest,
     BarycentricSubdivisionResult,
     BoundarySquareLedgerEntry,
     ChainCoefficientRing,
-    ChainComplexRequest,
     ChainComplexResult,
     FiniteSimplicialComplex,
     HomologyConvention,
-    ShellingCheckRequest,
     ShellingCheckResult,
     SimplexBasis,
     SimplicialComplexCanonicalizationResult,
-    SimplicialComplexRequest,
     SparseBoundaryMatrix,
     SparseMatrixEntry,
     _all_faces,
     _require_canonical_conversion_bounds,
+    _require_request_complex,
     canonical_complex,
     is_bounded_prime,
     require_linear_algebra_bounds,
 )
 from jacobian.math.topology._pseudomanifold import (
-    PseudomanifoldRequest,
     PseudomanifoldResult,
     pseudomanifold_decision,
 )
-from jacobian.math.topology._request_admission import (
-    require_complex_admission,
-    run_topology_admission,
-)
+from jacobian.math.topology._request_admission import run_topology_admission
 from jacobian.math.topology._shelling import evaluate_shelling
 
 
-def _admit_chain_request(request: ChainComplexRequest) -> None:
-    require_complex_admission(
-        SimplicialComplexRequest(
-            vertices=request.complex.vertices,
-            facets=request.complex.maximal_simplices,
-        )
-    )
-    if request.coefficient_ring is ChainCoefficientRing.INTEGER:
-        if request.prime is not None:
+def _admit_chain(
+    complex_: FiniteSimplicialComplex,
+    coefficient_ring: ChainCoefficientRing,
+    prime: int | None,
+    convention: HomologyConvention,
+) -> None:
+    if coefficient_ring is ChainCoefficientRing.INTEGER:
+        if prime is not None:
             raise ValueError("integer chain complexes must not declare a prime")
-    elif request.prime is None or not is_bounded_prime(request.prime):
+    elif prime is None or not is_bounded_prime(prime):
         raise ValueError("prime-field chain complexes require a bounded prime")
-    require_linear_algebra_bounds(request.complex)
+    require_linear_algebra_bounds(complex_)
     if (
-        request.coefficient_ring is ChainCoefficientRing.PRIME_FIELD
-        and request.convention is HomologyConvention.UNREDUCED
+        coefficient_ring is ChainCoefficientRing.PRIME_FIELD
+        and convention is HomologyConvention.UNREDUCED
     ):
-        _require_canonical_conversion_bounds(request.complex)
+        _require_canonical_conversion_bounds(complex_)
 
 
-def _admit_homology_request(request: SimplicialHomologyRequest) -> None:
-    if not is_bounded_prime(request.prime):
+def _admit_homology(
+    complex_: FiniteSimplicialComplex,
+    prime: int,
+    convention: HomologyConvention,
+) -> None:
+    if not is_bounded_prime(prime):
         raise ValueError("homology coefficients require a bounded prime")
-    if any(size > MAX_INLINE_HOMOLOGY_CHAIN_GROUP for size in request.complex.f_vector):
+    if any(size > MAX_INLINE_HOMOLOGY_CHAIN_GROUP for size in complex_.f_vector):
         raise ValueError(
             "inline homology bases require at most "
             f"{MAX_INLINE_HOMOLOGY_CHAIN_GROUP} simplices in each chain group"
         )
-    _admit_chain_request(
-        ChainComplexRequest(
-            complex=request.complex,
-            coefficient_ring=ChainCoefficientRing.PRIME_FIELD,
-            prime=request.prime,
-            convention=request.convention,
-        )
-    )
+    _admit_chain(complex_, ChainCoefficientRing.PRIME_FIELD, prime, convention)
 
 
-def _admit_integral_homology_request(
-    request: IntegralSimplicialHomologyRequest,
+def _admit_integral_homology(
+    complex_: FiniteSimplicialComplex,
+    convention: HomologyConvention,
 ) -> None:
-    if any(
-        size > MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP for size in request.complex.f_vector
-    ):
+    if any(size > MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP for size in complex_.f_vector):
         raise ValueError(
             "integral homology requires at most "
             f"{MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP} simplices in each chain group"
         )
-    if sum(request.complex.f_vector) > MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK:
+    if sum(complex_.f_vector) > MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK:
         raise ValueError(
             "integral homology requires total chain rank at most "
             f"{MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK}"
         )
-    padded = (0, *request.complex.f_vector)
+    padded = (0, *complex_.f_vector)
     if any(
         rows * columns > MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS
         for rows, columns in pairwise(padded)
@@ -135,21 +122,18 @@ def _admit_integral_homology_request(
             "integral homology boundary exceeds the "
             f"{MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS}-cell bound"
         )
-    _admit_chain_request(
-        ChainComplexRequest(
-            complex=request.complex,
-            coefficient_ring=ChainCoefficientRing.INTEGER,
-            convention=request.convention,
-        )
-    )
+    _admit_chain(complex_, ChainCoefficientRing.INTEGER, None, convention)
 
 
-def _canonicalize(
-    request: SimplicialComplexRequest,
+def canonicalize(
+    vertices: tuple[str, ...],
+    facets: tuple[tuple[str, ...], ...],
 ) -> SimplicialComplexCanonicalizationResult:
-    require_complex_admission(request)
+    run_topology_admission(
+        lambda: _require_request_complex(vertices, facets), location=("facets",)
+    )
     return SimplicialComplexCanonicalizationResult(
-        complex=canonical_complex(request.vertices, request.facets)
+        complex=canonical_complex(vertices, facets)
     )
 
 
@@ -248,14 +232,19 @@ def _product_is_zero(
     return True
 
 
-def _chain_result(
-    request: ChainComplexRequest, *, admitted: bool = False
+def chain_complex(
+    complex_: FiniteSimplicialComplex,
+    coefficient_ring: ChainCoefficientRing,
+    prime: int | None,
+    convention: HomologyConvention,
+    *,
+    admitted: bool = False,
 ) -> ChainComplexResult:
     if not admitted:
         run_topology_admission(
-            lambda: _admit_chain_request(request), location=("complex",)
+            lambda: _admit_chain(complex_, coefficient_ring, prime, convention),
+            location=("complex",),
         )
-    complex_ = request.complex
     bases = tuple(
         SimplexBasis(dimension=item.dimension, simplices=item.faces)
         for item in complex_.faces_by_dimension
@@ -264,21 +253,17 @@ def _chain_result(
         _boundary_matrix(
             complex_,
             dimension,
-            coefficient_ring=request.coefficient_ring,
-            prime=request.prime,
+            coefficient_ring=coefficient_ring,
+            prime=prime,
         )
         for dimension in range(complex_.dimension + 1)
     )
     augmentation = (
         _augmentation(len(complex_.vertices))
-        if request.convention is HomologyConvention.REDUCED
+        if convention is HomologyConvention.REDUCED
         else None
     )
-    modulus = (
-        request.prime
-        if request.coefficient_ring is ChainCoefficientRing.PRIME_FIELD
-        else None
-    )
+    modulus = prime if coefficient_ring is ChainCoefficientRing.PRIME_FIELD else None
     ledger: list[BoundarySquareLedgerEntry] = []
     for upper_dimension in range(1, complex_.dimension + 1):
         lower = (
@@ -300,17 +285,17 @@ def _chain_result(
         )
     return ChainComplexResult._from_kernel(
         complex_digest=complex_.complex_digest,
-        coefficient_ring=request.coefficient_ring,
-        prime=request.prime,
-        convention=request.convention,
+        coefficient_ring=coefficient_ring,
+        prime=prime,
+        convention=convention,
         simplex_bases=bases,
         boundary_matrices=boundaries,
         augmentation=augmentation,
         boundary_squared_zero=tuple(ledger),
         canonical_value=canonical_chain_complex_value_from_parts(
-            request.coefficient_ring,
-            request.convention,
-            request.prime,
+            coefficient_ring,
+            convention,
+            prime,
             bases,
             boundaries,
         ),
@@ -337,28 +322,28 @@ def _vector_rank(vectors: Sequence[Sequence[int]], *, prime: int) -> int:
     return prime_field.rank(_prime_matrix(rows, columns=len(vectors), prime=prime))
 
 
-def _homology(
-    request: SimplicialHomologyRequest,
+def homology(
+    complex_: FiniteSimplicialComplex,
+    prime: int,
+    convention: HomologyConvention,
 ) -> SimplicialHomologyResult:
     run_topology_admission(
-        lambda: _admit_homology_request(request), location=("complex",)
+        lambda: _admit_homology(complex_, prime, convention), location=("complex",)
     )
-    chain = _chain_result(
-        ChainComplexRequest(
-            complex=request.complex,
-            coefficient_ring=ChainCoefficientRing.PRIME_FIELD,
-            prime=request.prime,
-            convention=request.convention,
-        ),
+    chain = chain_complex(
+        complex_,
+        ChainCoefficientRing.PRIME_FIELD,
+        prime,
+        convention,
         admitted=True,
     )
     boundaries = tuple(
-        _dense(matrix, modulus=request.prime) for matrix in chain.boundary_matrices
+        _dense(matrix, modulus=prime) for matrix in chain.boundary_matrices
     )
     augmentation = (
         None
         if chain.augmentation is None
-        else _dense(chain.augmentation, modulus=request.prime)
+        else _dense(chain.augmentation, modulus=prime)
     )
     groups: list[HomologyGroupResult] = []
     for dimension, basis in enumerate(chain.simplex_bases):
@@ -370,12 +355,10 @@ def _homology(
         )
         if outgoing is None:
             raise ValueError("boundary for dimension is unexpectedly None")
-        outgoing_matrix = _prime_matrix(
-            outgoing, columns=chain_dimension, prime=request.prime
-        )
+        outgoing_matrix = _prime_matrix(outgoing, columns=chain_dimension, prime=prime)
         cycles = prime_field.nullspace(outgoing_matrix)
         outgoing_rank = prime_field.rank(outgoing_matrix)
-        if dimension < request.complex.dimension:
+        if dimension < complex_.dimension:
             incoming = boundaries[dimension + 1]
             incoming_columns = len(chain.simplex_bases[dimension + 1].simplices)
         else:
@@ -385,17 +368,17 @@ def _homology(
             _prime_matrix(
                 incoming,
                 columns=incoming_columns,
-                prime=request.prime,
+                prime=prime,
             )
         )
         homology_basis = prime_field.quotient_basis(
             cycles,
             boundary_basis,
-            prime=request.prime,
+            prime=prime,
         )
         quotient_span_rank = _vector_rank(
             (*boundary_basis, *homology_basis),
-            prime=request.prime,
+            prime=prime,
         )
         groups.append(
             HomologyGroupResult(
@@ -418,10 +401,10 @@ def _homology(
             )
         )
     return SimplicialHomologyResult.model_construct(
-        complex_digest=request.complex.complex_digest,
-        prime=request.prime,
-        convention=request.convention,
-        dimension_range=(0, request.complex.dimension),
+        complex_digest=complex_.complex_digest,
+        prime=prime,
+        convention=convention,
+        dimension_range=(0, complex_.dimension),
         groups=tuple(groups),
     )
 
@@ -443,18 +426,19 @@ def _integral_vector(values: list[int]) -> IntegralVector:
     return IntegralVector(coefficients=tuple(str(value) for value in values))
 
 
-def _integral_homology(
-    request: IntegralSimplicialHomologyRequest,
+def integral_homology(
+    complex_: FiniteSimplicialComplex,
+    convention: HomologyConvention,
 ) -> IntegralSimplicialHomologyResult:
     run_topology_admission(
-        lambda: _admit_integral_homology_request(request), location=("complex",)
+        lambda: _admit_integral_homology(complex_, convention),
+        location=("complex",),
     )
-    chain = _chain_result(
-        ChainComplexRequest(
-            complex=request.complex,
-            coefficient_ring=ChainCoefficientRing.INTEGER,
-            convention=request.convention,
-        ),
+    chain = chain_complex(
+        complex_,
+        ChainCoefficientRing.INTEGER,
+        None,
+        convention,
         admitted=True,
     )
     boundaries = tuple(
@@ -482,7 +466,7 @@ def _integral_homology(
         )
         right_inverse = inverse_unimodular(outgoing_reduction.right)
 
-        if dimension < request.complex.dimension:
+        if dimension < complex_.dimension:
             incoming = boundaries[dimension + 1]
             incoming_chain_dimension = len(chain.simplex_bases[dimension + 1].simplices)
         else:
@@ -575,201 +559,20 @@ def _integral_homology(
             )
         )
     return IntegralSimplicialHomologyResult.model_construct(
-        complex_digest=request.complex.complex_digest,
-        convention=request.convention,
-        dimension_range=(0, request.complex.dimension),
+        complex_digest=complex_.complex_digest,
+        convention=convention,
+        dimension_range=(0, complex_.dimension),
         groups=tuple(groups),
     )
 
 
-_CIRCLE = {
-    "vertices": ["a", "b", "c"],
-    "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
-}
-
-_CANONICAL_CIRCLE = {
-    "vertices": ["a", "b", "c"],
-    "maximal_simplices": [["a", "b"], ["a", "c"], ["b", "c"]],
-    "faces_by_dimension": [
-        {"dimension": 0, "faces": [["a"], ["b"], ["c"]]},
-        {"dimension": 1, "faces": [["a", "b"], ["a", "c"], ["b", "c"]]},
-    ],
-    "dimension": 1,
-    "f_vector": [3, 3],
-    "closure_size": 6,
-    "complex_digest": (
-        "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647"
-    ),
-}
-
-type TopologyOperation = (
-    MathTool[SimplicialComplexRequest, SimplicialComplexCanonicalizationResult]
-    | MathTool[ChainComplexRequest, ChainComplexResult]
-    | MathTool[SimplicialHomologyRequest, SimplicialHomologyResult]
-    | MathTool[IntegralSimplicialHomologyRequest, IntegralSimplicialHomologyResult]
-)
-
-
-TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
-    MathTool(
-        operation_id="topology.simplicial_complex.canonicalize",
-        title="Canonicalize a finite simplicial complex",
-        description=(
-            "Validate bounded maximal facets, close them under every non-empty "
-            "face, and return canonical oriented simplex bases and the exact "
-            "f-vector."
-        ),
-        request_type=SimplicialComplexRequest,
-        result_type=SimplicialComplexCanonicalizationResult,
-        run=_canonicalize,
-        tags=(
-            "topology",
-            "simplicial-complex",
-            "facets",
-            "face-closure",
-            "f-vector",
-            "exact",
-        ),
-        examples=(
-            example(
-                "triangle_boundary",
-                "Canonicalize the three-edge simplicial model of a circle.",
-                _CIRCLE,
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="topology.simplicial_complex.chain_complex.compute",
-        title="Compute an oriented simplicial chain complex",
-        description=(
-            "Construct every oriented sparse boundary matrix for one canonical "
-            "finite simplicial complex over the integers or a bounded prime field."
-        ),
-        request_type=ChainComplexRequest,
-        result_type=ChainComplexResult,
-        run=_chain_result,
-        tags=(
-            "topology",
-            "simplicial-complex",
-            "chain-complex",
-            "boundary-matrix",
-            "exact",
-        ),
-        examples=(
-            example(
-                "circle_integer_chain_complex",
-                "Construct the oriented integer boundary matrices of a circle.",
-                {
-                    "complex": _CANONICAL_CIRCLE,
-                    "coefficient_ring": "INTEGER",
-                    "convention": "UNREDUCED",
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="topology.simplicial_homology.compute",
-        title="Compute finite-field simplicial homology",
-        description=(
-            "Compute every Betti number and inspectable cycle, boundary, and "
-            "quotient basis of a bounded finite simplicial complex over F_p."
-        ),
-        request_type=SimplicialHomologyRequest,
-        result_type=SimplicialHomologyResult,
-        run=_homology,
-        tags=(
-            "topology",
-            "simplicial-homology",
-            "betti-number",
-            "cycle-basis",
-            "prime-field",
-            "exact",
-        ),
-        examples=(
-            example(
-                "circle_homology_mod_two",
-                "Compute H_0 and H_1 over F_2 for a triangle boundary.",
-                {
-                    "complex": _CANONICAL_CIRCLE,
-                    "prime": 2,
-                    "convention": "UNREDUCED",
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="topology.simplicial_homology.integral.compute",
-        title="Compute transformation-certified integral simplicial homology",
-        description=(
-            "Compute the free rank, torsion invariant factors, and simplex-basis "
-            "cycle generators of every integral homology group, with explicit "
-            "Smith transformations and bounding chains. Each chain group is "
-            "bounded by the certified Smith-certificate dimension."
-        ),
-        request_type=IntegralSimplicialHomologyRequest,
-        result_type=IntegralSimplicialHomologyResult,
-        run=_integral_homology,
-        tags=(
-            "topology",
-            "simplicial-homology",
-            "integer-homology",
-            "torsion",
-            "betti-number",
-            "cycle-generator",
-            "smith-normal-form",
-            "certificate",
-            "exact",
-        ),
-        examples=(
-            example(
-                "integral_circle_homology",
-                "Compute H_0 and H_1 over the integers for a triangle boundary.",
-                {
-                    "complex": {
-                        "vertices": ["a", "b", "c"],
-                        "maximal_simplices": [
-                            ["a", "b"],
-                            ["a", "c"],
-                            ["b", "c"],
-                        ],
-                        "faces_by_dimension": [
-                            {
-                                "dimension": 0,
-                                "faces": [["a"], ["b"], ["c"]],
-                            },
-                            {
-                                "dimension": 1,
-                                "faces": [
-                                    ["a", "b"],
-                                    ["a", "c"],
-                                    ["b", "c"],
-                                ],
-                            },
-                        ],
-                        "dimension": 1,
-                        "f_vector": [3, 3],
-                        "closure_size": 6,
-                        "complex_digest": (
-                            "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647"
-                        ),
-                    }
-                },
-            ),
-        ),
-    ),
-)
-
-__all__ = ["TOPOLOGY_OPERATIONS"]
-
-
-def compute_barycentric_subdivision(
-    request: BarycentricSubdivisionRequest,
+def barycentric_subdivision(
+    complex_: FiniteSimplicialComplex,
 ) -> BarycentricSubdivisionResult:
     """Compute the barycentric subdivision of a simplicial complex."""
-    require_complex_admission(request.complex)
 
     sorted_faces = sorted(
-        _all_faces(request.complex.facets), key=lambda face: (len(face), face)
+        _all_faces(complex_.maximal_simplices), key=lambda face: (len(face), face)
     )
     if len(sorted_faces) > MAX_BARYCENTRIC_SOURCE_FACES:
         raise OperationDomainValidationError(
@@ -781,15 +584,15 @@ def compute_barycentric_subdivision(
                 f"more than {MAX_TOPOLOGY_FACETS} subdivision facets"
             ),
         )
-    subdivision = barycentric_subdivision(sorted_faces)
+    subdivision = _barycentric_kernel(sorted_faces)
     facets = tuple(sorted(tuple(sorted(facet)) for facet in subdivision.facets))
     return BarycentricSubdivisionResult._from_kernel(
-        original_vertices=request.complex.vertices,
-        original_dimension=max(len(facet) - 1 for facet in request.complex.facets),
+        original_vertices=complex_.vertices,
+        original_dimension=max(len(facet) - 1 for facet in complex_.maximal_simplices),
         subdivision_vertices=subdivision.vertices,
         subdivision_facets=subdivision.facets,
         num_new_vertices=len(subdivision.vertices),
-        complex=request.complex,
+        complex=complex_,
         subdivision_complex=(
             canonical_complex(tuple(sorted(subdivision.vertices)), facets)
             if facets
@@ -799,20 +602,19 @@ def compute_barycentric_subdivision(
     )
 
 
-def compute_pseudomanifold_decision(
-    request: PseudomanifoldRequest,
-) -> PseudomanifoldResult:
+def pseudomanifold(complex_: FiniteSimplicialComplex) -> PseudomanifoldResult:
     """Decide whether a complex is a pseudomanifold."""
-    require_complex_admission(request.complex)
 
-    decision = pseudomanifold_decision(request.complex.facets)
-    return PseudomanifoldResult._from_kernel(request, decision=decision)
+    decision = pseudomanifold_decision(complex_.maximal_simplices)
+    return PseudomanifoldResult._from_kernel(complex_=complex_, decision=decision)
 
 
-def compute_shelling_check(request: ShellingCheckRequest) -> ShellingCheckResult:
+def shelling_check(
+    complex_: FiniteSimplicialComplex,
+    facet_order: tuple[int, ...],
+) -> ShellingCheckResult:
     """Check whether a submitted facet order is a valid shelling order."""
-    require_complex_admission(request.complex)
-    if sorted(request.facet_order) != list(range(len(request.complex.facets))):
+    if sorted(facet_order) != list(range(len(complex_.maximal_simplices))):
         raise OperationDomainValidationError(
             location=("facet_order",),
             code="topology.shelling_facet_order",
@@ -820,11 +622,11 @@ def compute_shelling_check(request: ShellingCheckRequest) -> ShellingCheckResult
         )
 
     is_shelling, failed_at, failure_reason = evaluate_shelling(
-        request.complex.facets, request.facet_order
+        complex_.maximal_simplices, facet_order
     )
     return ShellingCheckResult._from_kernel(
-        complex=request.complex,
-        facet_order=request.facet_order,
+        complex=complex_,
+        facet_order=facet_order,
         is_shelling=is_shelling,
         failed_at=failed_at,
         failure_reason=failure_reason,

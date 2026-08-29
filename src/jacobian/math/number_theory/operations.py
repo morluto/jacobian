@@ -75,15 +75,6 @@ from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueWitness,
     ModularPolynomialVariable,
 )
-from jacobian.math.number_theory._prime_coverage_models import (
-    MAX_COVERAGE_RESULT_BYTES,
-    MAX_COVERAGE_UPPER,
-    MAX_COVERAGE_WORK,
-    PrimeCoverageProfileResult,
-    PrimeCoverageProfileRow,
-    _coverage_result_upper_bound_bytes,
-    _coverage_work_upper_bound,
-)
 from jacobian.math.number_theory._periodic_kernel import (
     _ExecutionPlan,
     materialize_periodic_union,
@@ -106,6 +97,15 @@ from jacobian.math.number_theory._preimage_models import (
     KSigmaPreimageResult,
     PAdicIntervalProfileResult,
     PAdicIntervalProfileRow,
+)
+from jacobian.math.number_theory._prime_coverage_models import (
+    MAX_COVERAGE_RESULT_BYTES,
+    MAX_COVERAGE_UPPER,
+    MAX_COVERAGE_WORK,
+    PrimeCoverageProfileResult,
+    PrimeCoverageProfileRow,
+    _coverage_result_upper_bound_bytes,
+    _coverage_work_upper_bound,
 )
 from jacobian.math.number_theory._prime_models import PrimorialResult
 from jacobian.math.number_theory._prime_shift_models import (

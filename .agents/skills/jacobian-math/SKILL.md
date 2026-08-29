@@ -8,9 +8,8 @@ description: Use when solving nontrivial mathematical problems or investigating 
 Jacobian is a local library of typed mathematical operations for computation and
 structural analysis.
 
-Use `math.find` as the library-navigation tool: search for a desired outcome,
-browse an unfamiliar domain, or inspect an operation's schema and examples.
-Use `math.run` to execute a selected operation and obtain its typed result.
+Select the direct MCP operation whose description and request schema match the
+task, then call that operation by its tool name to obtain its typed result.
 Feed results into later reasoning, further Jacobian operations, or Python
 scratch work as useful.
 

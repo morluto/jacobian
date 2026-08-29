@@ -19,6 +19,7 @@ from benchmarks.tooling.observation_results import (
     _validate_contract,
     build_observation_evidence,
 )
+from jacobian.catalog.builtins import BUILTIN_TOOLS
 
 
 def normalize_treatment_comparison_job(job: dict[str, Any]) -> dict[str, Any]:
@@ -160,7 +161,7 @@ def _heldout_runtime_invariants(plan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-_MATH_RUN_TOOL = "math.run"
+_DIRECT_OPERATION_IDS = frozenset(tool.operation_id for tool in BUILTIN_TOOLS)
 
 
 def _mark_invoked_if_operation_used(
@@ -175,14 +176,21 @@ def _mark_invoked_if_operation_used(
     preflight proves AVAILABLE_UNUSED and the runner must not override it.
     Persists the updated contract to ``routing-status-c2.json``.
 
-    Fail closed: a trial with ``math.run`` calls but non-COMPLETED
+    Fail closed: a trial with direct operation calls but non-COMPLETED
     status or nonzero ``tool_errors`` does not evidence a successful
     invocation and must not transition the routing status.
     """
 
     invoked = any(
         isinstance(trial.get("tool_calls"), dict)
-        and trial["tool_calls"].get(_MATH_RUN_TOOL, 0) > 0
+        and any(
+            isinstance(tool, str)
+            and tool in _DIRECT_OPERATION_IDS
+            and isinstance(count, int)
+            and not isinstance(count, bool)
+            and count > 0
+            for tool, count in trial["tool_calls"].items()
+        )
         and trial.get("status") == "COMPLETED"
         and trial.get("tool_errors") == 0
         for trial in trials

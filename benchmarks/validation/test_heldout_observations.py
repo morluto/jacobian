@@ -73,7 +73,7 @@ def test_mark_invoked_transitions_on_successful_operation_invoke(
     trials = [
         {
             "status": "COMPLETED",
-            "tool_calls": {"math.run": 1},
+            "tool_calls": {"integer.compute.extended_gcd": 1},
             "tool_errors": 0,
         }
     ]
@@ -84,13 +84,13 @@ def test_mark_invoked_transitions_on_successful_operation_invoke(
 
 
 def test_mark_invoked_fail_closed_on_errored_invocation(tmp_path: Path) -> None:
-    """A failed/errored math.run must not transition to AVAILABLE_INVOKED."""
+    """A failed/errored direct operation must not transition."""
 
     ledger = {"routing_status": {"C2": _c2_routing_contract()}}
     trials = [
         {
             "status": "COMPLETED",
-            "tool_calls": {"math.run": 1},
+            "tool_calls": {"integer.compute.extended_gcd": 1},
             "tool_errors": 2,
         }
     ]
@@ -101,13 +101,13 @@ def test_mark_invoked_fail_closed_on_errored_invocation(tmp_path: Path) -> None:
 
 
 def test_mark_invoked_fail_closed_on_non_completed_trial(tmp_path: Path) -> None:
-    """A non-COMPLETED trial with math.run must not transition."""
+    """A non-COMPLETED trial with a direct operation must not transition."""
 
     ledger = {"routing_status": {"C2": _c2_routing_contract()}}
     trials = [
         {
             "status": "ERROR",
-            "tool_calls": {"math.run": 1},
+            "tool_calls": {"integer.compute.extended_gcd": 1},
             "tool_errors": 0,
         }
     ]
@@ -117,13 +117,13 @@ def test_mark_invoked_fail_closed_on_non_completed_trial(tmp_path: Path) -> None
 
 
 def test_mark_invoked_fail_closed_on_timeout_trial(tmp_path: Path) -> None:
-    """A timed-out trial with math.run must not transition."""
+    """A timed-out trial with a direct operation must not transition."""
 
     ledger = {"routing_status": {"C2": _c2_routing_contract()}}
     trials = [
         {
             "status": "TIMEOUT",
-            "tool_calls": {"math.run": 3},
+            "tool_calls": {"integer.compute.extended_gcd": 3},
             "tool_errors": 0,
         }
     ]
@@ -139,7 +139,7 @@ def test_mark_invoked_no_transition_when_already_invoked(tmp_path: Path) -> None
     trials = [
         {
             "status": "COMPLETED",
-            "tool_calls": {"math.run": 1},
+            "tool_calls": {"integer.compute.extended_gcd": 1},
             "tool_errors": 0,
         }
     ]
@@ -156,12 +156,12 @@ def test_mark_invoked_mixed_trials_one_success_transitions(tmp_path: Path) -> No
     trials = [
         {
             "status": "COMPLETED",
-            "tool_calls": {"math.run": 1},
+            "tool_calls": {"integer.compute.extended_gcd": 1},
             "tool_errors": 2,
         },
         {
             "status": "COMPLETED",
-            "tool_calls": {"math.run": 1},
+            "tool_calls": {"integer.compute.extended_gcd": 1},
             "tool_errors": 0,
         },
     ]

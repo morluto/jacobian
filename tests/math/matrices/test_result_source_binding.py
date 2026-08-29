@@ -382,6 +382,37 @@ def test_product_admits_cancelling_order_32_dot_product_terms() -> None:
     )
 
 
+def test_product_admits_cancelling_swapped_denominator_pairs() -> None:
+    denominator_a = 10**255 + 1
+    denominator_b = 10**255 + 3
+    left = RationalMatrix(
+        entries=(
+            tuple(
+                CanonicalRational(
+                    num="1" if index % 2 == 0 else "-1",
+                    den=str(denominator_a if index % 2 == 0 else denominator_b),
+                )
+                for index in range(128)
+            ),
+        )
+    )
+    right = RationalMatrix(
+        entries=tuple(
+            (
+                CanonicalRational(
+                    num="1",
+                    den=str(denominator_b if index % 2 == 0 else denominator_a),
+                ),
+            )
+            for index in range(128)
+        )
+    )
+
+    result = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    assert result.product.entries == ((CanonicalRational(num="0", den="1"),),)
+
+
 def test_product_admits_sparse_order_32_with_one_large_entry() -> None:
     order = 32
     denominator = str(10**255 + 1)

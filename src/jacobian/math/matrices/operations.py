@@ -468,22 +468,21 @@ def _product_cell_digit_bound(
 ) -> int:
     """Bound one output cell after combining equal-denominator terms.
 
-    Zero factors do not contribute. Terms that share a denominator pair are
-    combined by summing numerator products before charging, so cancelling
-    pairs do not inflate the coprime-digit LCM bound.
+    Zero factors do not contribute. Terms that share a reduced product
+    denominator are combined by summing their numerators before charging, so
+    equivalent products with swapped factors and cancelling pairs do not
+    inflate the denominator bound.
     """
 
-    combined_numerators: dict[tuple[str, str], int] = {}
+    combined_numerators: dict[str, int] = {}
     for left_value, right_value in zip(left_row, right_column, strict=True):
         if left_value.num == "0" or right_value.num == "0":
             continue
         left_fraction = left_value.as_fraction()
         right_fraction = right_value.as_fraction()
-        key = (str(left_fraction.denominator), str(right_fraction.denominator))
-        combined_numerators[key] = (
-            combined_numerators.get(key, 0)
-            + left_fraction.numerator * right_fraction.numerator
-        )
+        product = left_fraction * right_fraction
+        key = str(product.denominator)
+        combined_numerators[key] = combined_numerators.get(key, 0) + product.numerator
     remaining = tuple(
         (key, numerator)
         for key, numerator in combined_numerators.items()
@@ -493,10 +492,8 @@ def _product_cell_digit_bound(
         return 1
     denominator_digits = 0
     max_numerator_digits = 1
-    for (left_den, right_den), numerator in remaining:
-        denominator_digits += _denominator_digits(left_den) + _denominator_digits(
-            right_den
-        )
+    for denominator, numerator in remaining:
+        denominator_digits += _denominator_digits(denominator)
         max_numerator_digits = max(
             max_numerator_digits, _positive_decimal_digits(numerator)
         )
@@ -672,9 +669,7 @@ def _characteristic_polynomial_component_digit_bound(
     numerator_bits = 0
     denominator_bits = 0
     is_upper_triangular = all(
-        fractions[row][column] == 0
-        for row in range(order)
-        for column in range(row)
+        fractions[row][column] == 0 for row in range(order) for column in range(row)
     )
     is_lower_triangular = all(
         fractions[row][column] == 0

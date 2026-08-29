@@ -23,8 +23,7 @@ def compute_cyclic_sumset_profile(
             counts[c] = counts.get(c, 0) + 1
 
     entries = tuple(
-        CyclicSumsetEntry(residue=r, count=ct)
-        for r, ct in sorted(counts.items())
+        CyclicSumsetEntry(residue=r, count=ct) for r, ct in sorted(counts.items())
     )
 
     return CyclicSumsetResult(

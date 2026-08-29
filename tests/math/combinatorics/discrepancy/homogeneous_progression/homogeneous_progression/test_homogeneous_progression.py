@@ -35,10 +35,8 @@ def test_all_sets_are_progressions() -> None:
     for subset in result.set_system.sets:
         if len(subset) == 1:
             continue
-        diffs = [subset[i+1] - subset[i] for i in range(len(subset)-1)]
+        diffs = [subset[i + 1] - subset[i] for i in range(len(subset) - 1)]
         assert len(set(diffs)) == 1, f"Non-constant difference in {subset}"
-        d = diffs[0]
-        # d is the progression difference in 1-based terms
         assert all(0 <= x < 10 for x in subset)
 
 

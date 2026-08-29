@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import parse_canonical_integer
+from jacobian.math.number_theory._periodic_models import (
+    PeriodicCongruenceUnionSource,
+)
 from jacobian.math.number_theory.periodic_interval_count._models import (
     PeriodicIntervalCountResult,
 )
@@ -10,7 +14,7 @@ __all__ = ["compute_periodic_interval_count"]
 
 
 def compute_periodic_interval_count(
-    source,
+    source: PeriodicCongruenceUnionSource,
     lower: int,
     upper: int,
 ) -> PeriodicIntervalCountResult:
@@ -34,9 +38,9 @@ def compute_periodic_interval_count(
     for x in range(lower, upper + 1):
         in_set = False
         for subset in subsets:
-            modulus = int(subset.modulus)
-            residues = set(int(r) for r in subset.residues)
-            if (x % modulus) in residues or (x % modulus) in residues:
+            modulus = parse_canonical_integer(subset.modulus)
+            residues = {parse_canonical_integer(r) for r in subset.residues}
+            if (x % modulus) in residues:
                 in_set = True
                 break
         if complement:

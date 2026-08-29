@@ -1,7 +1,7 @@
 """Typed contracts for the weighted-antichain operation."""
 
-from jacobian._models import StrictModel
 from jacobian._exact import CanonicalRational
+from jacobian._models import StrictModel
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
 
 

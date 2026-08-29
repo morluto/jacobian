@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from jacobian.math.number_theory._periodic_models import (
-    PeriodicCongruenceUnionSource,
     PeriodicCongruenceSubset,
+    PeriodicCongruenceUnionSource,
 )
 from jacobian.math.number_theory.periodic_interval_count.operations import (
     compute_periodic_interval_count,
@@ -11,7 +11,11 @@ from jacobian.math.number_theory.periodic_interval_count.operations import (
 
 def _source(modulus, residues, complement=False):
     return PeriodicCongruenceUnionSource(
-        subsets=(PeriodicCongruenceSubset(modulus=str(modulus), residues=tuple(str(r) for r in residues)),),
+        subsets=(
+            PeriodicCongruenceSubset(
+                modulus=str(modulus), residues=tuple(str(r) for r in residues)
+            ),
+        ),
         complement=complement,
     )
 

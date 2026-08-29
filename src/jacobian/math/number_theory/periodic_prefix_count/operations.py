@@ -1,13 +1,12 @@
 """Periodic congruence union prefix count kernel."""
 
-from jacobian._exact import parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceUnionSource,
 )
 from jacobian.math.number_theory.operations import (
     periodic_congruence_union_profile,
 )
-
 from jacobian.math.number_theory.periodic_prefix_count._models import (
     PeriodicUnionPrefixCountResult,
 )

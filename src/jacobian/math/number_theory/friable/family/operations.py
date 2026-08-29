@@ -5,10 +5,10 @@ from __future__ import annotations
 from math import isqrt
 
 from jacobian.canonical import parse_canonical_integer
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 from jacobian.math.number_theory.friable.family._models import (
     plan_friable_family,
 )
-from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
 def _family_materialized(x: int, y: int) -> list[int]:

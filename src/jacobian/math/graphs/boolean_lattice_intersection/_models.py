@@ -11,7 +11,11 @@ class BooleanLatticeIntersectionRequest(StrictModel):
 
     n: int
     intersection_cardinality: int
-    relation: Literal["INTERSECTION_EQ_THRESHOLD", "INTERSECTION_LT_THRESHOLD", "INTERSECTION_GT_THRESHOLD"]
+    relation: Literal[
+        "INTERSECTION_EQ_THRESHOLD",
+        "INTERSECTION_LT_THRESHOLD",
+        "INTERSECTION_GT_THRESHOLD",
+    ]
 
 
 class BooleanLatticeIntersectionResult(StrictModel):

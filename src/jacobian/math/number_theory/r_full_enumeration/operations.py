@@ -42,7 +42,7 @@ def enumerate_r_full(bound: int, minimum_exponent: int) -> RFullEnumerationResul
             values.add(current)
         for i in range(idx, len(primes)):
             p = primes[i]
-            power = p ** minimum_exponent
+            power = p**minimum_exponent
             if current == 0:
                 pass
             if current > bound // power and current > 0:
@@ -51,13 +51,13 @@ def enumerate_r_full(bound: int, minimum_exponent: int) -> RFullEnumerationResul
             n = current
             if n == 0:
                 n = 1
-            pe = p ** minimum_exponent
+            pe = p**minimum_exponent
             if n * pe > bound:
                 continue
             # Use p^r, p^(r+1), ...
             e = minimum_exponent
-            while n * (p ** e) <= bound:
-                _generate(i + 1, n * (p ** e))
+            while n * (p**e) <= bound:
+                _generate(i + 1, n * (p**e))
                 e += 1
 
     # Generate all r-full numbers
@@ -86,7 +86,7 @@ def _enumerate_recursive(
     values.add(current)
     for i in range(prime_idx, len(primes)):
         p = primes[i]
-        pe = p ** r
+        pe = p**r
         if current > bound // pe:
             break
         # Add this prime with exponent >= r

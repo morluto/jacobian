@@ -24,6 +24,7 @@ from jacobian.math.probability._models import MAX_RESULT_RATIONAL_DIGITS
 from jacobian.math.probability.operations import (
     MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS,
     _admit_convolution_peak,
+    _lcm_within_result_digits,
     condition,
     convolution,
     convolution_peak,
@@ -293,6 +294,20 @@ def test_power_rejects_coprime_support_denominator_lcm_growth() -> None:
     ):
         convolution_power(_distribution(atoms), 1)
     assert perf_counter() - started < 2.0
+
+
+def test_lcm_height_guard_rejects_before_over_budget_product() -> None:
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="lattice denominators exceed",
+    ):
+        _lcm_within_result_digits(
+            10**256,
+            10**256 + 1,
+            location=("distribution",),
+            code="probability.convolution_power.height_bound",
+            message="lattice denominators exceed the result bound",
+        )
 
 
 def test_power_rejects_a_lattice_value_over_the_exact_decimal_bound() -> None:

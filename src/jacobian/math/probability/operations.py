@@ -303,14 +303,17 @@ def _lcm_within_result_digits(
 ) -> int:
     """Fold one positive integer into an LCM without exceeding the result height."""
 
-    combined = lcm(left, right)
-    if combined > _MAX_RESULT_RATIONAL_VALUE:
+    # Divide before multiplying so a rejected LCM is never materialized.  This
+    # matters for a large source support whose pairwise-coprime denominators
+    # would otherwise allocate an over-budget intermediate before the guard.
+    reduced_left = left // gcd(left, right)
+    if reduced_left > _MAX_RESULT_RATIONAL_VALUE // right:
         raise OperationDomainValidationError(
             location=location,
             code=code,
             message=message,
         )
-    return combined
+    return reduced_left * right
 
 
 def _power_multiplication_shapes(

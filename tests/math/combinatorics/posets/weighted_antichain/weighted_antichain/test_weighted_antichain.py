@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+from fractions import Fraction
+
+from jacobian._exact import CanonicalRational
+from jacobian.math.combinatorics.posets.core._models import (
+    PresentationPair,
+    RelationInterpretation,
+    ReflexivePairPolicy,
+)
+from jacobian.math.combinatorics.posets.core.operations import (
+    materialize_finite_poset,
+)
+from jacobian.math.combinatorics.posets.weighted_antichain.operations import (
+    compute_maximum_weight_antichain,
+)
+
+
+def _cr(num, den=1):
+    return CanonicalRational.from_fraction(Fraction(num, den))
+
+
+def _make_chain(n):
+    elements = tuple(str(i) for i in range(n))
+    relation = tuple(
+        PresentationPair(lower=str(i), upper=str(j))
+        for i in range(n)
+        for j in range(i + 1, n)
+    )
+    return materialize_finite_poset(
+        elements, relation,
+        RelationInterpretation.COMPARABLE_PAIRS,
+        ReflexivePairPolicy.FORBIDDEN,
+    )
+
+
+def _make_antichain(n):
+    elements = tuple(str(i) for i in range(n))
+    return materialize_finite_poset(
+        elements, (),
+        RelationInterpretation.COMPARABLE_PAIRS,
+        ReflexivePairPolicy.FORBIDDEN,
+    )
+
+
+def test_chain_picks_max_weight() -> None:
+    poset = _make_chain(3)
+    weights = (_cr(1), _cr(3), _cr(2))
+    result = compute_maximum_weight_antichain(poset, weights)
+    assert result.maximum_weight.as_fraction() == Fraction(3)
+    assert result.maximum_antichain == ("1",)
+
+
+def test_antichain_all() -> None:
+    poset = _make_antichain(3)
+    weights = (_cr(1), _cr(2), _cr(3))
+    result = compute_maximum_weight_antichain(poset, weights)
+    assert result.maximum_weight.as_fraction() == Fraction(6)
+    assert set(result.maximum_antichain) == {"0", "1", "2"}
+
+
+def test_zero_weights() -> None:
+    poset = _make_chain(3)
+    weights = (_cr(0), _cr(0), _cr(0))
+    result = compute_maximum_weight_antichain(poset, weights)
+    assert result.maximum_weight.as_fraction() == Fraction(0)
+
+
+def test_v_poset() -> None:
+    elements = ("0", "1", "2")
+    relation = (
+        PresentationPair(lower="0", upper="1"),
+        PresentationPair(lower="0", upper="2"),
+    )
+    poset = materialize_finite_poset(
+        elements, relation,
+        RelationInterpretation.COMPARABLE_PAIRS,
+        ReflexivePairPolicy.FORBIDDEN,
+    )
+    # 0 < 1, 0 < 2, 1 and 2 incomparable
+    weights = (_cr(5), _cr(3), _cr(4))
+    result = compute_maximum_weight_antichain(poset, weights)
+    # Best antichain: {1, 2} with weight 7
+    assert result.maximum_weight.as_fraction() == Fraction(7)
+    assert set(result.maximum_antichain) == {"1", "2"}
+
+
+def test_method() -> None:
+    poset = _make_chain(2)
+    result = compute_maximum_weight_antichain(poset, (_cr(1), _cr(1)))
+    assert result.method == "EXACT_WEIGHTED_DILWORTH_REDUCTION"

@@ -888,6 +888,8 @@ def gaussian_polynomial_moment(
 __all__ = [
     "condition",
     "convolution",
+    "convolution_peak",
+    "convolution_power",
     "event_probability",
     "gaussian_polynomial_moment",
     "pushforward",

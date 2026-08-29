@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from fractions import Fraction
 from math import gcd
-from typing import Any
+from typing import Any, Literal
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import CanonicalLimits, format_canonical_integer
@@ -64,7 +64,9 @@ def _reject(message: str) -> None:
     )
 
 
-def _admit_system(system: LinearRationalSystem) -> _LinearPlan:
+def _admit_system(
+    system: LinearRationalSystem, *, outcome: Literal["solution", "witness"]
+) -> _LinearPlan:
     rows = system.coefficients.row_count
     columns = system.coefficients.column_count
     entries = {
@@ -78,36 +80,36 @@ def _admit_system(system: LinearRationalSystem) -> _LinearPlan:
         + system.rhs
         for component in (value.num, value.den)
     )
-    solution_work = rows * (columns + 1) * min(rows, columns + 1)
-    witness_work = (columns + 1) * (rows + 1) * min(columns + 1, rows + 1)
-    if max(solution_work, witness_work) * scalar_digits > MAX_LINEAR_SCALAR_WORK:
+    if outcome == "solution":
+        work = rows * (columns + 1) * min(rows, columns + 1)
+        grouped: dict[int, list[Fraction]] = {row: [] for row in range(rows)}
+        for (row, _column), fraction in entries.items():
+            grouped[row].append(fraction)
+        for row, bound in enumerate(bounds):
+            if bound:
+                grouped[row].append(bound)
+        minor_rows = tuple(tuple(grouped[row]) for row in range(rows))
+        minor_columns = columns + 1
+        output_count = columns
+    else:
+        work = (columns + 1) * (rows + 1) * min(columns + 1, rows + 1)
+        grouped = {column: [] for column in range(columns)}
+        for (_row, column), fraction in entries.items():
+            grouped[column].append(fraction)
+        minor_rows = (
+            *(tuple(grouped[column]) for column in range(columns)),
+            tuple(bound for bound in bounds if bound),
+        )
+        minor_columns = rows + 1
+        output_count = rows + 1
+    if work * scalar_digits > MAX_LINEAR_SCALAR_WORK:
         _reject(
             "sparse exact linear algebra exceeds the "
             f"{MAX_LINEAR_SCALAR_WORK:,}-unit scalar-work budget"
         )
 
-    solution_values: dict[int, list[Fraction]] = {row: [] for row in range(rows)}
-    witness_values: dict[int, list[Fraction]] = {
-        column: [] for column in range(columns)
-    }
-    for (row, column), fraction in entries.items():
-        solution_values[row].append(fraction)
-        witness_values[column].append(fraction)
-    for row, bound in enumerate(bounds):
-        if bound:
-            solution_values[row].append(bound)
-    solution_rows = tuple(tuple(solution_values[row]) for row in range(rows))
-    witness_rows = (
-        *(tuple(witness_values[column]) for column in range(columns)),
-        tuple(bound for bound in bounds if bound),
-    )
-    result_digits = max(
-        _decimal_digits_from_bits(
-            _minor_component_bits(solution_rows, column_count=columns + 1)
-        ),
-        _decimal_digits_from_bits(
-            _minor_component_bits(witness_rows, column_count=rows + 1)
-        ),
+    result_digits = _decimal_digits_from_bits(
+        _minor_component_bits(minor_rows, column_count=minor_columns)
     )
     if result_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         _reject("sparse exact linear algebra exceeds the canonical result-height bound")
@@ -122,7 +124,7 @@ def _admit_system(system: LinearRationalSystem) -> _LinearPlan:
         for item in system.coefficients.entries
     )
     source_bytes += sum(len(value.num) + len(value.den) + 24 for value in system.rhs)
-    result_bytes = source_bytes + max(rows, columns) * (2 * result_digits + 32) + 4_096
+    result_bytes = source_bytes + output_count * (2 * result_digits + 32) + 4_096
     if result_bytes > MAX_LINEAR_RESULT_BYTES:
         _reject(
             "sparse exact linear algebra exceeds the "
@@ -177,7 +179,7 @@ def _solve_sparse(
 def solve(system: LinearRationalSystem) -> tuple[CanonicalRational, ...] | None:
     """Return one exact solution, or ``None`` when the system is inconsistent."""
 
-    plan = _admit_system(system)
+    plan = _admit_system(system, outcome="solution")
     values = _solve_sparse(
         plan.entries,
         row_count=plan.row_count,
@@ -194,7 +196,7 @@ def inconsistency_witness(
 ) -> tuple[tuple[CanonicalRational, ...], CanonicalRational] | None:
     """Return a separating left witness and nonzero RHS pairing, if any."""
 
-    plan = _admit_system(system)
+    plan = _admit_system(system, outcome="witness")
     dual = {(column, row): value for (row, column), value in plan.entries.items()}
     dual.update(
         {

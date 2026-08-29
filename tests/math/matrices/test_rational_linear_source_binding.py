@@ -6,6 +6,7 @@ import copy
 import json
 from fractions import Fraction
 from itertools import islice
+from math import log10
 from typing import Any, cast
 
 import pytest
@@ -13,9 +14,10 @@ from pydantic import ValidationError
 from sympy import primerange
 from tests.support.rationals import rational_payload as q
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.rational_linear._models import (
+    MAX_LINEAR_DIMENSION,
     LinearRationalInconsistencyFindRequest,
     LinearRationalInconsistencyResult,
     LinearRationalSolutionFindRequest,
@@ -547,5 +549,85 @@ def test_sparse_result_height_rejects_before_backend_expansion() -> None:
             "rhs": [_q(Fraction(0)) for _ in range(64)],
         }
     )
+    with pytest.raises(OperationDomainValidationError, match="result-height bound"):
+        compute_rational_solution(LinearRationalSolutionFindRequest(system=system))
+
+
+def _primes_whose_product_exceeds_result_height() -> tuple[int, ...]:
+    """Distinct small primes whose primorial exceeds the canonical height cap."""
+
+    primes: list[int] = []
+    log10_product = 0.0
+    for prime in primerange(2, 200_000):
+        primes.append(int(prime))
+        log10_product += log10(prime)
+        if (
+            log10_product > MAX_CANONICAL_RATIONAL_DIGITS
+            and len(primes) <= MAX_LINEAR_DIMENSION
+        ):
+            return tuple(primes)
+    raise AssertionError("could not assemble a dual-height-exceeding prime list")
+
+
+def _tall_reciprocal_prime_system() -> dict[str, object]:
+    """One-variable system ``(1/p_i) x = 1/p_i``; the exact solution is ``x = 1``."""
+
+    primes = _primes_whose_product_exceeds_result_height()
+    return {
+        "variables": ["x"],
+        "coefficients": {
+            "row_count": len(primes),
+            "column_count": 1,
+            "entries": [
+                {"row": index, "column": 0, "value": _q(Fraction(1, prime))}
+                for index, prime in enumerate(primes)
+            ],
+        },
+        "rhs": [_q(Fraction(1, prime)) for prime in primes],
+    }
+
+
+def test_solution_admission_excludes_dual_witness_height() -> None:
+    """A tall reciprocal-prime identity is admitted for the solution postcondition."""
+
+    system = LinearRationalSystem.model_validate(_tall_reciprocal_prime_system())
+    result = compute_rational_solution(LinearRationalSolutionFindRequest(system=system))
+
+    assert result.status == "SOLUTION"
+    assert result.values == (CanonicalRational(num="1", den="1"),)
+
+
+def test_inconsistency_admission_still_enforces_witness_height() -> None:
+    """The same dual primorial still rejects the left-witness postcondition."""
+
+    system = LinearRationalSystem.model_validate(_tall_reciprocal_prime_system())
+    with pytest.raises(OperationDomainValidationError, match="result-height bound"):
+        compute_rational_inconsistency(
+            LinearRationalInconsistencyFindRequest(system=system)
+        )
+
+
+def test_witness_admission_excludes_primal_solution_height() -> None:
+    """A wide reciprocal-prime row is admitted for the inconsistency postcondition."""
+
+    primes = _primes_whose_product_exceeds_result_height()
+    payload = {
+        "variables": [f"x_{index}" for index in range(len(primes))],
+        "coefficients": {
+            "row_count": 1,
+            "column_count": len(primes),
+            "entries": [
+                {"row": 0, "column": index, "value": _q(Fraction(1, prime))}
+                for index, prime in enumerate(primes)
+            ],
+        },
+        "rhs": [_q(Fraction(1, primes[0]))],
+    }
+    system = LinearRationalSystem.model_validate(payload)
+    result = compute_rational_inconsistency(
+        LinearRationalInconsistencyFindRequest(system=system)
+    )
+
+    assert result.status == "CONSISTENT"
     with pytest.raises(OperationDomainValidationError, match="result-height bound"):
         compute_rational_solution(LinearRationalSolutionFindRequest(system=system))

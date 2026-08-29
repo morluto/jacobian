@@ -25,6 +25,7 @@ from jacobian.math.combinatorics.operations import (
     multinomial,
     partition_number,
     permutations,
+    progression_hypergraph,
     stirling_first,
     stirling_second,
 )
@@ -59,6 +60,7 @@ __all__ = [
     "multinomial",
     "partition_number",
     "permutations",
+    "progression_hypergraph",
     "recurrence_table_residuals",
     "stirling_first",
     "stirling_second",

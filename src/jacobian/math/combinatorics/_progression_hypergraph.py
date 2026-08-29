@@ -5,10 +5,14 @@ from jacobian.math.combinatorics._progression_hypergraph_models import (
     ProgressionHypergraphRequest,
     ProgressionHypergraphResult,
 )
-from jacobian.math.combinatorics._progression_hypergraph_operations import (
-    construct_3term_progression_hypergraph,
-)
 from jacobian.math.combinatorics._support import combinatorics_operation
+from jacobian.math.combinatorics.operations import progression_hypergraph
+
+
+def construct_3term_progression_hypergraph(
+    request: ProgressionHypergraphRequest,
+) -> ProgressionHypergraphResult:
+    return progression_hypergraph(request.group_order)
 
 PROGRESSION_HYPERGRAPH_OPERATION = combinatorics_operation(
     "combinatorics.finite_abelian.3term_progression_hypergraph.construct",

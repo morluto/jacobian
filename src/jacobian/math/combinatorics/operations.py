@@ -4,6 +4,15 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics._progression_hypergraph_models import (
+    MAX_GROUP_ORDER,
+    ProgressionHypergraphResult,
+)
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    FiniteHypergraph,
+)
+
 
 def _nonnegative(value: int, *, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -208,6 +217,37 @@ def stirling_second(n: int, k: int) -> int:
     return int(stirling(first, second, kind=2))
 
 
+def progression_hypergraph(group_order: int) -> ProgressionHypergraphResult:
+    """Return the 3-term progression hypergraph of ``Z/group_order Z``."""
+
+    if not 2 <= group_order <= MAX_GROUP_ORDER:
+        raise OperationDomainValidationError(
+            location=("group_order",),
+            code="combinatorics.progression_hypergraph.group_order",
+            message=f"group order must be between 2 and {MAX_GROUP_ORDER}",
+        )
+    vertices = tuple(str(index) for index in range(group_order))
+    edge_sets = {
+        frozenset(
+            (start, (start + step) % group_order, (start + 2 * step) % group_order)
+        )
+        for step in range(1, group_order)
+        for start in range(group_order)
+    }
+    nondegenerate_edges = sorted(
+        (edge for edge in edge_sets if len(edge) == 3),
+        key=lambda edge: tuple(sorted(edge)),
+    )
+    edges = tuple(
+        (f"e{index}", tuple(sorted(str(vertex) for vertex in edge)))
+        for index, edge in enumerate(nondegenerate_edges)
+    )
+    return ProgressionHypergraphResult(
+        group_order=group_order,
+        hypergraph=FiniteHypergraph(vertices=vertices, edges=edges),
+    )
+
+
 __all__ = [
     "bell_number",
     "bernoulli_number",
@@ -225,6 +265,7 @@ __all__ = [
     "multinomial",
     "partition_number",
     "permutations",
+    "progression_hypergraph",
     "stirling_first",
     "stirling_second",
 ]

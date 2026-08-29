@@ -19,12 +19,32 @@ from jacobian.math.combinatorics.greedoids._models import (
     RecognizeResult,
 )
 from jacobian.math.combinatorics.greedoids.operations import (
-    compute_bases,
-    compute_basic_word_profile,
-    compute_convex_geometry,
-    compute_rank,
-    compute_recognize,
+    bases_profile,
+    basic_word_outcome,
+    convex_geometry_profile,
+    rank_profile,
+    recognize,
 )
+
+
+def _recognize(request: RecognizeRequest) -> RecognizeResult:
+    return recognize(request.system)
+
+
+def _rank(request: RankRequest) -> RankResult:
+    return rank_profile(request.system, request.subset)
+
+
+def _bases(request: BasesRequest) -> BasesResult:
+    return bases_profile(request.system, request.subset)
+
+
+def _basic_word_profile(request: BasicWordProfileRequest) -> BasicWordProfileResult:
+    return basic_word_outcome(request.system, request.word)
+
+
+def _convex_geometry(request: ConvexGeometryRequest) -> ConvexGeometryResult:
+    return convex_geometry_profile(request.system)
 
 
 def _op[
@@ -70,7 +90,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "order. A sample of exchange pairs cannot return GREEDOID.",
         RecognizeRequest,
         RecognizeResult,
-        compute_recognize,
+        _recognize,
         "greedoid",
         "recognition",
         "exact",
@@ -90,7 +110,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "bases).",
         RankRequest,
         RankResult,
-        compute_rank,
+        _rank,
         "greedoid",
         "rank",
         "exact",
@@ -109,7 +129,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "For a subset-local variant, return all bases of the supplied subset.",
         BasesRequest,
         BasesResult,
-        compute_bases,
+        _bases,
         "greedoid",
         "bases",
         "exact",
@@ -130,7 +150,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "elements are boundary-invalid.",
         BasicWordProfileRequest,
         BasicWordProfileResult,
-        compute_basic_word_profile,
+        _basic_word_profile,
         "greedoid",
         "basic-word",
         "exact",
@@ -150,7 +170,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "plus the feasible->closed complement map.",
         ConvexGeometryRequest,
         ConvexGeometryResult,
-        compute_convex_geometry,
+        _convex_geometry,
         "greedoid",
         "convex-geometry",
         "exact",

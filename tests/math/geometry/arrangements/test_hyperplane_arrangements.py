@@ -219,12 +219,26 @@ def test_characteristic_rejects_coefficient_work_before_construction() -> None:
 def test_characteristic_accounts_for_zero_coefficient_tail() -> None:
     result = compute_characteristic_polynomial(
         CharacteristicPolynomialRequest(
-            ambient_dimension=MAX_GENERIC_FORMULA_WORK,
-            hyperplane_count=1_000,
+            ambient_dimension=5_000,
+            hyperplane_count=10,
         )
     )
-    assert len(result.coefficients) == MAX_GENERIC_FORMULA_WORK + 1
-    assert sum(coefficient != "0" for coefficient in result.coefficients) == 1_001
+    assert len(result.coefficients) == 5_001
+    assert sum(coefficient != "0" for coefficient in result.coefficients) == 11
+
+
+def test_characteristic_rejects_oversized_coefficient_formatting() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        compute_characteristic_polynomial(
+            CharacteristicPolynomialRequest(
+                ambient_dimension=800,
+                hyperplane_count=10**15,
+            )
+        )
+    assert (
+        error.value.errors()[0]["type"]
+        == "hyperplane_arrangement.characteristic_formatting_work_exceeded"
+    )
 
 
 def test_characteristic_rejects_aggregate_output_before_construction() -> None:

@@ -124,6 +124,16 @@ def characteristic_polynomial(
             "characteristic_result_bytes_exceeded",
             "characteristic polynomial exceeds the canonical output-byte limit",
         )
+    conversion_work = (
+        nonzero_coefficients * _canonical_integer_conversion_work(coefficient_digits)
+        + zero_coefficients
+    )
+    if conversion_work > MAX_GENERIC_FORMULA_WORK:
+        _reject(
+            ("ambient_dimension", "hyperplane_count"),
+            "characteristic_formatting_work_exceeded",
+            "characteristic polynomial exceeds the canonical integer-conversion work budget",
+        )
 
     inner = _signed_binomial_prefix(m - 1, n)
     descending = (

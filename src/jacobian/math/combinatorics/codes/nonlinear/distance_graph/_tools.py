@@ -47,7 +47,7 @@ def bcdg_operation[
 
 TOOLS: MathTools = (
     bcdg_operation(
-        "code.binary.constant_weight.distance_graph.compute",
+        "code.binary.explicit.distance_graph.compute",
         "Construct the Hamming distance graph of a binary code",
         (
             "For a bounded explicit binary code and selected Hamming distance, "

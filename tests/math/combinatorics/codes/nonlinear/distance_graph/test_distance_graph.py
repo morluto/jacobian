@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes.nonlinear.distance_graph._models import (
     BinaryCodeDistanceGraphRequest,
 )
@@ -76,6 +77,26 @@ def test_rejects_distance_exceeds_length() -> None:
     code = _code(2, [[0, 0], [1, 1]])
     with pytest.raises(ValidationError):
         BinaryCodeDistanceGraphRequest(source=code, target_distance=3)
+
+
+def test_native_admission_rejects_invalid_distance() -> None:
+    code = _code(2, [[0, 0], [1, 1]])
+    with pytest.raises(OperationDomainValidationError) as error:
+        compute_distance_graph(code, -1)
+    assert error.value.errors()[0]["type"] == "code.distance_must_be_nonnegative"
+
+
+def test_result_rejects_inconsistent_edge_count() -> None:
+    code = _code(2, [[0, 0], [1, 1]])
+    result = compute_distance_graph(code, 2)
+    payload = result.model_dump(mode="json")
+    payload["edge_count"] = 0
+    from jacobian.math.combinatorics.codes.nonlinear.distance_graph._models import (
+        BinaryCodeDistanceGraphResult,
+    )
+
+    with pytest.raises(ValidationError, match="edge_count"):
+        BinaryCodeDistanceGraphResult.model_validate(payload)
 
 
 def test_result_preserves_source() -> None:

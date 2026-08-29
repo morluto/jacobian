@@ -9,6 +9,7 @@ from math import gcd, prod
 from time import perf_counter
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -364,6 +365,53 @@ def test_power_rejects_an_interior_value_with_a_larger_reduced_numerator() -> No
 
     with pytest.raises(OperationDomainValidationError, match="512-digit"):
         convolution_power(source, 2)
+
+
+def test_peak_admits_when_a_nonmaximal_lattice_value_exceeds_height_bound() -> None:
+    numerator = 2 * 10**511 + 3
+    denominator = 18 * (10**510 + 1)
+    source = _distribution(
+        (
+            (Fraction(0), Fraction(499, 500)),
+            (Fraction(numerator, denominator), Fraction(1, 1000)),
+            (Fraction(9 * numerator, denominator), Fraction(1, 1000)),
+        )
+    )
+
+    peak = convolution_peak(source, 2)
+
+    assert peak.maximum_probability.as_fraction() == Fraction(249001, 250000)
+    assert tuple(value.as_fraction() for value in peak.maximizing_values) == (
+        Fraction(0),
+    )
+
+
+def test_distribution_normalization_bounds_intermediate_denominators() -> None:
+    denominators = tuple(10**100 + offset for offset in (1, 3, 7, 9, 13, 19))
+    assert all(
+        gcd(left, right) == 1
+        for index, left in enumerate(denominators)
+        for right in denominators[index + 1 :]
+    )
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(index)),
+            probability=CanonicalRational.from_fraction(probability),
+        )
+        for index, probability in enumerate(
+            probability
+            for probability in tuple(
+                Fraction(1, 6 * denominator) for denominator in denominators
+            )
+            + tuple(
+                Fraction(denominator - 1, 6 * denominator)
+                for denominator in denominators
+            )
+        )
+    )
+
+    with pytest.raises(ValidationError, match="intermediate bound"):
+        FiniteRationalDistribution(atoms=atoms)
 
 
 def test_result_deserialization_does_not_repeat_power_admission() -> None:

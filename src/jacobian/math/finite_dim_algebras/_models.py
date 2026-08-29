@@ -9,8 +9,11 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
-MAX_STRUCTURE_CONSTANT_ENTRIES = 4_096_000
-MAX_DIM = 160
+# Worst-case structure tensors (field_order=251, every coefficient 250) must fit
+# the 10 MiB CanonicalLimits request envelope before Pydantic validation.
+# Dimension 137 encodes to about 9.84 MiB; 138 exceeds 10 MiB.
+MAX_DIM = 137
+MAX_STRUCTURE_CONSTANT_ENTRIES = MAX_DIM**3
 MAX_COMMUTATOR_ENTRIES = MAX_STRUCTURE_CONSTANT_ENTRIES
 MAX_CENTER_BASIS_ENTRIES = MAX_DIM * MAX_DIM
 

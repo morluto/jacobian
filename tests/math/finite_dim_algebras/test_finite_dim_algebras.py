@@ -157,6 +157,41 @@ def test_dimension_limit_is_derived_from_structure_constant_budget() -> None:
     assert MAX_DIM**3 == MAX_STRUCTURE_CONSTANT_ENTRIES
 
 
+def test_published_dimension_fits_canonical_request_byte_limit() -> None:
+    """Worst-case valid tensors must encode under the 10 MiB transport envelope."""
+    from jacobian.canonical import (
+        CanonicalLimits,
+        CanonicalizationError,
+        encode_strict_json,
+    )
+
+    n = MAX_DIM
+    residue = 250
+    inner = [residue] * n
+    row = [inner] * n
+    payload = {
+        "algebra": {
+            "dimension": n,
+            "field_order": 251,
+            "multiplication": [row] * n,
+        }
+    }
+    encoded = encode_strict_json(payload)
+    assert len(encoded) <= CanonicalLimits().max_input_bytes
+
+    oversized_inner = [residue] * (n + 1)
+    oversized_row = [oversized_inner] * (n + 1)
+    oversized = {
+        "algebra": {
+            "dimension": n + 1,
+            "field_order": 251,
+            "multiplication": [oversized_row] * (n + 1),
+        }
+    }
+    with pytest.raises(CanonicalizationError):
+        encode_strict_json(oversized)
+
+
 def test_structure_constants_rejects_above_its_own_field_cap() -> None:
     """The structure tensor cannot exceed its materialization budget."""
     from pydantic import ValidationError

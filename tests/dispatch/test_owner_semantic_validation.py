@@ -161,8 +161,38 @@ def test_euclidean_segment_admission_is_typed() -> None:
     with pytest.raises(OperationDomainValidationError) as caught:
         invoke_operation(operation_id, payload, Catalog.open())
 
-    assert caught.value.errors()[0]["loc"] == ("second",)
+    assert caught.value.errors()[0]["loc"] == ("segment2",)
     assert caught.value.errors()[0]["type"] == "geometry.second_segment_nonzero"
+
+
+@pytest.mark.parametrize(
+    ("operation_id", "payload"),
+    (
+        (
+            "diophantine.continued_fraction.compute",
+            {"discriminant": 9, "term_count": 5},
+        ),
+        (
+            "diophantine.convergents.compute",
+            {"discriminant": 9, "convergent_count": 5},
+        ),
+        ("diophantine.pell_equation.solve", {"discriminant": 9}),
+    ),
+)
+def test_diophantine_square_admission_is_typed(
+    operation_id: str, payload: dict[str, object]
+) -> None:
+    with pytest.raises(OperationDomainValidationError, match="perfect square"):
+        invoke_operation(operation_id, payload, Catalog.open())
+
+
+def test_modular_form_work_admission_is_typed() -> None:
+    with pytest.raises(OperationDomainValidationError, match="exact work bound"):
+        invoke_operation(
+            "modular_form.level_one.named_q_expansion.compute",
+            {"form": "DELTA", "truncation_order": 999_999},
+            Catalog.open(),
+        )
 
 
 @pytest.mark.parametrize(

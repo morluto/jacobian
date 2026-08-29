@@ -86,6 +86,7 @@ def test_exact_public_api_symbols() -> None:
         "integer_polynomial_primitive_part",
         "integer_polynomial_shift",
         "integral",
+        "multiply",
         "partial_fractions",
         "polynomial_discriminant",
         "polynomial_factorization",

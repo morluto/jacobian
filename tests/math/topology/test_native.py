@@ -22,13 +22,9 @@ from jacobian.math.topology._models import (
     SimplicialComplexRequest,
 )
 from jacobian.math.topology._tools import TOOLS
-from jacobian.math.topology.chain_complexes._models import (
-    ComputeHomologyRequest,
-    TensorProductRequest,
-)
 from jacobian.math.topology.chain_complexes.operations import (
-    compute_homology,
-    compute_tensor_product,
+    homology_groups,
+    tensor_product_complex,
 )
 from jacobian.math.topology.chain_complexes.values import CoefficientField
 from jacobian.math.topology.operations import simplicial_chain_complex_value
@@ -85,7 +81,7 @@ def test_gf_p_chain_result_enters_homology_unchanged() -> None:
     assert value.prime == 2
     assert value.basis_sizes == (3, 3)
 
-    result = compute_homology(ComputeHomologyRequest(complex=value))
+    result = homology_groups(value)
     assert [(group.degree, group.betti_number) for group in result.homology_groups] == [
         (0, 1),
         (1, 1),
@@ -98,7 +94,7 @@ def test_producer_result_carries_its_canonical_value() -> None:
     result = _prime_field_chain(_circle(), 2)
     assert result.canonical_value is not None
     assert result.canonical_value == simplicial_chain_complex_value(result)
-    homology = compute_homology(ComputeHomologyRequest(complex=result.canonical_value))
+    homology = homology_groups(result.canonical_value)
     assert [group.betti_number for group in homology.homology_groups] == [1, 1]
 
 
@@ -121,7 +117,7 @@ def test_converted_profile_matches_topology_homology_producer() -> None:
     homology of the same complex over the same field."""
     complex_ = _circle()
     value = simplicial_chain_complex_value(_prime_field_chain(complex_, 3))
-    composed = compute_homology(ComputeHomologyRequest(complex=value))
+    composed = homology_groups(value)
     topology = _operation("topology.simplicial_homology.compute").run(
         SimplicialHomologyRequest(complex=complex_, prime=3)
     )
@@ -138,9 +134,9 @@ def test_serialized_value_round_trips_into_consumers() -> None:
 
     payload = simplicial_chain_complex_value(_prime_field_chain(_circle(), 2))
     value = ChainComplexValue.model_validate(payload.model_dump())
-    result = compute_homology(ComputeHomologyRequest(complex=value))
+    result = homology_groups(value)
     assert result.homology_groups[1].betti_number == 1
-    tensor = compute_tensor_product(TensorProductRequest(left=value, right=value))
+    tensor = tensor_product_complex(value, value)
     assert tensor.value.basis_sizes == (9, 18, 9)
 
 
@@ -153,7 +149,7 @@ def test_point_complex_degenerate_value_keeps_full_context() -> None:
     assert value.basis_sizes == (1,)
     assert value.differential_matrices == ()
     assert (value.degree_min, value.degree_max) == (0, 0)
-    result = compute_homology(ComputeHomologyRequest(complex=value))
+    result = homology_groups(value)
     assert result.homology_groups[0].betti_number == 1
 
 

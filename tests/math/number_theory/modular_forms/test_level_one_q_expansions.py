@@ -8,9 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.modular_forms import kernel as level_one_kernel
 from jacobian.math.number_theory.modular_forms._models import (
     LevelOneNamedQExpansionRequest,
@@ -123,15 +121,6 @@ def test_requests_above_the_serialized_budget_name_the_controlling_quantity() ->
         level_one_named_q_expansion(request.form, request.truncation_order)
     with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
         require_level_one_admission("E4", 1478)
-
-
-def test_dispatch_projects_admission_work_failure_as_typed_domain_error() -> None:
-    with pytest.raises(OperationDomainValidationError, match="exact work bound"):
-        invoke_operation(
-            "modular_form.level_one.named_q_expansion.compute",
-            {"form": "DELTA", "truncation_order": 999_999},
-            Catalog.open(),
-        )
 
 
 def test_delta_above_the_serialized_budget_names_the_controlling_quantity() -> None:

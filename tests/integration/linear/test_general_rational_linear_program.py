@@ -414,17 +414,19 @@ def test_general_lp_rejects_constraints_beyond_the_public_row_envelope() -> None
         )
 
 
-def test_general_lp_defers_upper_expansion_rows_to_normalized_admission() -> None:
+def test_general_lp_presolves_one_variable_equality_program() -> None:
     constraints = [_row(f"row_{index}", [q(1)], "EQ", q(0)) for index in range(64)]
-    with pytest.raises(OperationDomainValidationError):
-        _run(
-            _program(
-                variables=[_variable("x", q(0), q(1))],
-                sense="MINIMIZE",
-                objective=[q(1)],
-                constraints=constraints,
-            )
+    result = _run(
+        _program(
+            variables=[_variable("x", q(0), q(1))],
+            sense="MINIMIZE",
+            objective=[q(1)],
+            constraints=constraints,
         )
+    )
+
+    assert result.status == "OPTIMAL"
+    assert _fractions(result.primal_candidate) == (Fraction(0),)
 
 
 def test_general_lp_admits_generated_intermediates_from_admitted_source_heights() -> (

@@ -97,9 +97,7 @@ def _prefix_union_count(
     return _union_prefix_count(source, upper)
 
 
-def _admit_source(
-    source: PeriodicCongruenceUnionSource, cutoff: int
-) -> _ExecutionPlan:
+def _admit_source(source: PeriodicCongruenceUnionSource, cutoff: int) -> _ExecutionPlan:
     if not isinstance(source, PeriodicCongruenceUnionSource):
         _reject("invalid_source", "source must be a canonical periodic union")
     if isinstance(cutoff, bool) or not isinstance(cutoff, int):

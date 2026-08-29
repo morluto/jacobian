@@ -118,7 +118,9 @@ projection is the final MCP/JSON delivery step.
 - Intentional changes of ring, field, parent, or axis require explicit typed
   maps; implicit coercion is forbidden.
 - Exact results retain all information needed for reconstruction and downstream
-  composition.
+  composition. Before admitting an operation, apply the
+  [codomain-closure](docs/reference/domain-operation-library.md#codomain-closure)
+  rule to its complete advertised result domain.
 
 A `MathTool` is a bounded mathematical instrument, not a lesson, proof recipe,
 or workflow. Add an operation only when it exposes a stable bounded computation

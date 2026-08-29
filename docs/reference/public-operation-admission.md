@@ -123,19 +123,23 @@ A public operation must satisfy every gate:
    strategy, and stopping decisions.
 3. It returns a reusable typed value, witness, or certificate rather than a
    report or suggested next action.
-4. It is exact and bounded, or its result has explicit typed
+4. Its canonical public types represent every value in the advertised codomain,
+   preserve mathematically relevant distinctions through serialization, and
+   carry any parent or interpretation required for downstream composition. See
+   [codomain closure](domain-operation-library.md#codomain-closure).
+5. It is exact and bounded, or its result has explicit typed
    `INCOMPLETE`, `UNKNOWN`, or `TRUNCATED` semantics.
-5. Its mathematical identity is durable and independent of a benchmark,
+6. Its mathematical identity is durable and independent of a benchmark,
    conjecture, theorem instance, or current model behavior.
-6. It supplies material computation or reliability leverage over ordinary
+7. It supplies material computation or reliability leverage over ordinary
    model-authored Python.
-7. It is not merely a cheap deterministic projection of another public result.
+8. It is not merely a cheap deterministic projection of another public result.
    Useful projections normally belong only in the native API.
-8. Its schema contains no benchmark constants, theorem-specific answer shape,
+9. Its schema contains no benchmark constants, theorem-specific answer shape,
    or frozen research workflow.
-9. It has a distinct discovery intent and does not create a near-duplicate
+10. It has a distinct discovery intent and does not create a near-duplicate
    result that degrades retrieval.
-10. Its admitted representation does not hide an unbounded expansion or a
+11. Its admitted representation does not hide an unbounded expansion or a
     materially different computational problem. The request bounds name
     and bound any expansion before execution.
 

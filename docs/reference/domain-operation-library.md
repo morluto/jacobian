@@ -75,6 +75,30 @@ The logic family illustrates the boundary. `sat.cnf.canonicalize` returns a
 canonical CNF value; `sat.assignment.check` and `sat.solve` accept that value
 directly. `smt.solve` accepts one bounded QF SMT-LIB query.
 
+## Codomain closure
+
+Before admitting an exact operation, verify that canonical public value types
+can represent every value in its advertised codomain. Each returned value must
+have a backend-independent identity, an explicit mathematical parent and
+interpretation when those affect its meaning, and enough information for exact
+reconstruction and producer-consumer composition. Mathematically distinct
+values must remain distinguishable after serialization.
+
+A backend expression or ambient symbol is not a public mathematical identity.
+Values that depend on a field, ring, module, coordinate system, embedding,
+analytic branch, orientation, or basis must carry that context or bind to a
+canonical domain-owned presentation of it. Evidence such as an isolating
+interval, isolating rectangle, certificate, or decomposition may establish a
+value's identity, but incidental choices of evidence must not create different
+canonical values.
+
+When the current value vocabulary cannot represent the complete codomain, add
+the missing domain-owned carrier first. Do not narrow an advertised complete
+result to representable cases, expose backend-relative expressions, collapse
+conjugate or branch-dependent values, or report completeness after omitting
+unrepresentable results. Intentional changes of parent or interpretation remain
+explicit typed maps.
+
 ## Implementation selection
 
 Choose the smallest operational surface that can establish the admitted
@@ -128,6 +152,7 @@ below for subtype trust, boundedness, a backend adapter, or a process boundary.
 ### Public operation contract
 
 - Semantic mathematical domain and postcondition:
+- Codomain closure and required parent, embedding, branch, or coordinate data:
 - Canonical public value type:
 - Result type:
 - Reconstruction or defining invariant:

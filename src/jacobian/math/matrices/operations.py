@@ -572,7 +572,9 @@ def characteristic_polynomial_result(
 
     order = len(matrix.entries)
     entries = [
-        fmpq(int(value.num), int(value.den)) for row in matrix.entries for value in row
+        fmpq(*value.as_integer_ratio())
+        for row in matrix.entries
+        for value in row
     ]
     polynomial = fmpq_mat(order, order, entries).charpoly()
     return CharacteristicPolynomialResult(

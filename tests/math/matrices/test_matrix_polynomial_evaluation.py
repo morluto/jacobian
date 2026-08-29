@@ -684,9 +684,12 @@ def test_triangular_characteristic_polynomial_ignores_off_diagonal_height() -> N
         CharacteristicPolynomialRequest(matrix=_matrix(*source))
     )
 
-    assert tuple(
-        coefficient.as_fraction() for coefficient in result.coefficients_descending
-    ) == (Fraction(1),) + (Fraction(0),) * order
+    assert (
+        tuple(
+            coefficient.as_fraction() for coefficient in result.coefficients_descending
+        )
+        == (Fraction(1),) + (Fraction(0),) * order
+    )
 
 
 def test_native_characteristic_polynomial_shares_widened_flint_kernel() -> None:

@@ -78,9 +78,7 @@ def test_direct_schemas_are_owner_contracts_with_only_mcp_root_projection() -> N
         for operation in operations:
             direct = listed[operation.operation_id]
             direct_input_schema = dict(direct.input_schema)
-            assert direct_input_schema.pop("examples") == [
-                operation.examples[0].input
-            ]
+            assert direct_input_schema.pop("examples") == [operation.examples[0].input]
             assert direct_input_schema == _operation_input_schema(operation)
             assert direct.output_schema == operation.result_type.model_json_schema()
             assert direct.annotations is not None

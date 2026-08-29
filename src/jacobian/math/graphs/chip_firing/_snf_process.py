@@ -10,7 +10,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from jacobian._execution import bind_request_deadline, current_request_execution
-from jacobian.dispatch import OperationExecutionTimeoutError
 
 _SNF_WORKER = Path(__file__).resolve().with_name("_snf_worker.py")
 # Admitted reduced Laplacians satisfy dimension**3 <= 1_500_000. FLINT's
@@ -43,7 +42,7 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
     bind_request_deadline(deadline)
     remaining = deadline - time.monotonic()
     if remaining <= 0:
-        raise OperationExecutionTimeoutError(
+        raise TimeoutError(
             "request deadline expired before reduced-Laplacian SNF"
         )
 
@@ -71,7 +70,7 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
         ) from exc
 
     if completed.timed_out or completed.cancelled:
-        raise OperationExecutionTimeoutError(
+        raise TimeoutError(
             "request deadline expired during reduced-Laplacian SNF"
         )
     if (

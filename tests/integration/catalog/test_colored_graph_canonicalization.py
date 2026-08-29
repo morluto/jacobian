@@ -2,9 +2,9 @@
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
+from jacobian.math.graphs import ColoredUndirectedGraph
 from jacobian.math.graphs.isomorphism import (
     ColoredGraphCanonicalizationResult,
-    ColoredUndirectedGraph,
     canonicalize_colored_graph,
 )
 

@@ -1,0 +1,45 @@
+"""Private python-flint adapters for dense exact matrices."""
+
+from fractions import Fraction
+
+
+def rational_determinant(entries: tuple[tuple[Fraction, ...], ...]) -> Fraction:
+    """Return the exact determinant through FLINT's dense rational kernel."""
+
+    from flint import fmpq, fmpq_mat
+
+    backend = fmpq_mat(
+        [[fmpq(value.numerator, value.denominator) for value in row] for row in entries]
+    )
+    result = backend.det()
+    return Fraction(int(result.numerator), int(result.denominator))
+
+
+def rational_matrix_product(
+    left: tuple[tuple[Fraction, ...], ...],
+    right: tuple[tuple[Fraction, ...], ...],
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Return the exact dense rational matrix product through FLINT."""
+
+    from flint import fmpq, fmpq_mat
+
+    left_rows = len(left)
+    inner_dimension = len(left[0])
+    right_columns = len(right[0])
+    left_backend = fmpq_mat(
+        [[fmpq(value.numerator, value.denominator) for value in row] for row in left]
+    )
+    right_backend = fmpq_mat(
+        [[fmpq(value.numerator, value.denominator) for value in row] for row in right]
+    )
+    product = left_backend * right_backend
+    return tuple(
+        tuple(
+            Fraction(int(product[row, column].p), int(product[row, column].q))
+            for column in range(right_columns)
+        )
+        for row in range(left_rows)
+    )
+
+
+__all__ = ["rational_determinant", "rational_matrix_product"]

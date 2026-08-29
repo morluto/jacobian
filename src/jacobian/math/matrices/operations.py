@@ -9,6 +9,8 @@ lazily so importing ``jacobian.math`` does not eagerly load packaged backends.
 from __future__ import annotations
 
 from collections.abc import Callable
+from fractions import Fraction
+from math import lcm
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic_core import PydanticCustomError
@@ -20,8 +22,10 @@ from jacobian.math.matrices import _conversions as conversions
 from jacobian.math.matrices._operation_models import (
     MAX_CHARACTERISTIC_POLYNOMIAL_ORDER,
     MAX_DETERMINANT_MATRIX_DIMENSION,
+    MAX_DETERMINANT_SCALAR_WORK,
     MAX_INPUT_SCALAR_DIGITS,
     MAX_KRONECKER_PRODUCT_AXIS,
+    MAX_MATRIX_PRODUCT_AXIS,
     MAX_MATRIX_PRODUCT_MULTIPLY_ADDS,
     MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK,
     MAX_PERMANENT_RYSER_SUBSETS,
@@ -42,7 +46,12 @@ from jacobian.math.matrices._operation_models import (
     _require_square_system_admission,
     _validation_error,
 )
-from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix, SmithNormalForm
+from jacobian.math.matrices.values import (
+    MAX_MATRIX_SCALAR_DIGITS,
+    IntegerMatrix,
+    RationalMatrix,
+    SmithNormalForm,
+)
 
 if TYPE_CHECKING:
     from sympy.matrices.matrixbase import MatrixBase
@@ -155,7 +164,13 @@ def smith_normal_form(matrix: MatrixBase) -> MatrixBase:
 
 
 def multiply(left: MatrixBase, right: MatrixBase) -> MatrixBase:
-    return _exact_matrix(left) * _exact_matrix(right)
+    left_source = _exact_matrix(left, maximum_dimension=MAX_MATRIX_PRODUCT_AXIS)
+    right_source = _exact_matrix(right, maximum_dimension=MAX_MATRIX_PRODUCT_AXIS)
+    result = product_result(
+        conversions.rational_matrix_from_sympy(left_source),
+        conversions.rational_matrix_from_sympy(right_source),
+    )
+    return conversions.rational_matrix_to_sympy(result.product)
 
 
 def solve_linear_system(
@@ -232,11 +247,11 @@ def permanent(matrix: MatrixBase) -> Any:
     return Permanent(source).doit()
 
 
-def _admit(
-    check: Callable[..., None], *values: Any, location: tuple[str, ...] = ("matrix",)
-) -> None:
+def _admit[T](
+    check: Callable[..., T], *values: Any, location: tuple[str, ...] = ("matrix",)
+) -> T:
     try:
-        check(*values)
+        return check(*values)
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=location, code=exc.type, message=exc.message()
@@ -313,47 +328,58 @@ def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
     left_rows = len(left.entries)
     inner_dimension = len(left.entries[0])
     right_columns = len(right.entries[0])
+    if (
+        left_rows > MAX_MATRIX_PRODUCT_AXIS
+        or inner_dimension > MAX_MATRIX_PRODUCT_AXIS
+        or right_columns > MAX_MATRIX_PRODUCT_AXIS
+        or len(right.entries) > MAX_MATRIX_PRODUCT_AXIS
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "matrix product axes are limited to "
+            f"{MAX_MATRIX_PRODUCT_AXIS} rows and columns",
+        )
     if left_rows * inner_dimension * right_columns > MAX_MATRIX_PRODUCT_MULTIPLY_ADDS:
         raise _validation_error(
             "budget_exceeded",
             "matrix product exceeds the exact multiply-add work budget",
         )
 
-    def component_digits(matrix: RationalMatrix) -> tuple[int, int]:
-        numerator = max(
-            len(value.num.lstrip("-")) for row in matrix.entries for value in row
-        )
-        denominator = max(
-            (
-                len(value.den)
-                for row in matrix.entries
-                for value in row
-                if value.den != "1"
-            ),
-            default=0,
-        )
+    def entry_digits(value: CanonicalRational) -> tuple[int, int]:
+        return len(value.num.lstrip("-")), 0 if value.den == "1" else len(value.den)
+
+    def vector_digits(
+        values: tuple[CanonicalRational, ...],
+    ) -> tuple[int, int]:
+        numerator = max((entry_digits(value)[0] for value in values), default=1)
+        denominator = max((entry_digits(value)[1] for value in values), default=0)
         return numerator, denominator
 
-    left_numerator, left_denominator = component_digits(left)
-    right_numerator, right_denominator = component_digits(right)
-    denominator_pair = left_denominator + right_denominator
-    numerator_digits = (
-        left_numerator
-        + right_numerator
-        + max(0, inner_dimension - 1) * denominator_pair
-        + len(str(inner_dimension))
+    right_columns_entries = tuple(
+        tuple(right.entries[row][column] for row in range(inner_dimension))
+        for column in range(right_columns)
     )
-    denominator_digits = max(1, inner_dimension * denominator_pair)
-    output_component_digits = max(numerator_digits, denominator_digits)
-    if output_component_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise _validation_error(
-            "budget_exceeded",
-            "matrix product components exceed the canonical digit budget",
-        )
-    if (
-        left_rows * right_columns * output_component_digits
-        > MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK
-    ):
+    output_digit_work = 0
+    for left_row in left.entries:
+        left_numerator, left_denominator = vector_digits(left_row)
+        for right_column in right_columns_entries:
+            right_numerator, right_denominator = vector_digits(right_column)
+            denominator_pair = left_denominator + right_denominator
+            numerator_digits = (
+                left_numerator
+                + right_numerator
+                + max(0, inner_dimension - 1) * denominator_pair
+                + len(str(inner_dimension))
+            )
+            denominator_digits = max(1, inner_dimension * denominator_pair)
+            cell_digits = max(numerator_digits, denominator_digits)
+            if cell_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "matrix product components exceed the canonical digit budget",
+                )
+            output_digit_work += cell_digits
+    if output_digit_work > MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK:
         raise _validation_error(
             "budget_exceeded",
             "matrix product exceeds the exact dense-output digit budget",
@@ -386,7 +412,13 @@ def _admit_partial_trace(
         )
 
 
-def _admit_determinant(matrix: RationalMatrix) -> None:
+def _bit_bound_decimal_digits(bits: int) -> int:
+    return max(1, (bits * 30_103 + 99_999) // 100_000)
+
+
+def _admit_determinant(
+    matrix: RationalMatrix,
+) -> tuple[tuple[Fraction, ...], ...]:
     from jacobian.math.matrices.values import require_matrix_scalar_digits
 
     require_matrix_scalar_digits(
@@ -400,6 +432,44 @@ def _admit_determinant(matrix: RationalMatrix) -> None:
             "determinant matrices are limited to order "
             f"{MAX_DETERMINANT_MATRIX_DIMENSION}",
         )
+    entries = tuple(
+        tuple(value.as_fraction() for value in row) for row in matrix.entries
+    )
+    order = len(entries)
+    input_digits = max(
+        max(len(str(abs(value.numerator))), len(str(value.denominator)))
+        for row in entries
+        for value in row
+    )
+    scalar_work = order**3 * input_digits
+    if scalar_work > MAX_DETERMINANT_SCALAR_WORK:
+        raise _validation_error(
+            "budget_exceeded",
+            "determinant exceeds the "
+            f"{MAX_DETERMINANT_SCALAR_WORK:,}-unit scalar-work budget",
+        )
+    numerator_bits = 0
+    denominator_bits = 0
+    for row in entries:
+        row_denominator = lcm(*(value.denominator for value in row))
+        denominator_bits += row_denominator.bit_length()
+        squared_norm = sum(
+            (value.numerator * (row_denominator // value.denominator)) ** 2
+            for value in row
+        )
+        numerator_bits += (squared_norm.bit_length() + 1) // 2
+    if (
+        max(
+            _bit_bound_decimal_digits(numerator_bits),
+            _bit_bound_decimal_digits(denominator_bits),
+        )
+        > MAX_MATRIX_SCALAR_DIGITS
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "determinant exceeds the canonical rational result-height bound",
+        )
+    return entries
 
 
 def _characteristic_polynomial_component_digit_bound(
@@ -463,9 +533,11 @@ def _admit_linear_solve(
 
 
 def determinant_result(matrix: RationalMatrix) -> MatrixDeterminantResult:
-    _admit(_admit_determinant, matrix)
-    value = determinant(conversions.rational_matrix_to_sympy(matrix))
-    return MatrixDeterminantResult(determinant=conversions.rational_from_sympy(value))
+    entries = _admit(_admit_determinant, matrix)
+    from jacobian.math.matrices._flint import rational_determinant
+
+    value = rational_determinant(entries)
+    return MatrixDeterminantResult(determinant=CanonicalRational.from_fraction(value))
 
 
 def rank_result(matrix: RationalMatrix) -> MatrixRankResult:
@@ -576,33 +648,25 @@ def trace_result(matrix: IntegerMatrix) -> MatrixTraceResult:
 
 def product_result(left: RationalMatrix, right: RationalMatrix) -> MatrixProductResult:
     _admit(_admit_product, left, right, location=("left", "right"))
-    from flint import fmpq, fmpq_mat
+    from jacobian.math.matrices._flint import rational_matrix_product
 
     left_rows = len(left.entries)
     inner_dimension = len(left.entries[0])
     right_columns = len(right.entries[0])
-
-    def to_flint(matrix: RationalMatrix) -> Any:
-        rows = len(matrix.entries)
-        columns = len(matrix.entries[0])
-        entries = [
-            fmpq(int(value.num), int(value.den))
-            for row in matrix.entries
-            for value in row
-        ]
-        return fmpq_mat(rows, columns, entries)
-
-    product = to_flint(left) * to_flint(right)
+    product = rational_matrix_product(
+        tuple(tuple(value.as_fraction() for value in row) for row in left.entries),
+        tuple(tuple(value.as_fraction() for value in row) for row in right.entries),
+    )
     return MatrixProductResult(
         product=RationalMatrix(
             entries=tuple(
                 tuple(
                     CanonicalRational.from_integer_ratio(
-                        int(product[row, column].p), int(product[row, column].q)
+                        value.numerator, value.denominator
                     )
-                    for column in range(right_columns)
+                    for value in row
                 )
-                for row in range(left_rows)
+                for row in product
             )
         ),
         left_rows=left_rows,

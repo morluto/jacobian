@@ -19,6 +19,7 @@ from jacobian.math.combinatorics._recurrence_admission import (
     _admit_series,
 )
 from jacobian.math.combinatorics._recurrence_models import (
+    MAX_RATIONAL_SERIES_TRUNCATION_ORDER,
     IndexedRationalValue,
     LinearRecurrenceEvaluationResult,
     PolynomialCoefficientRecurrenceEvaluationResult,
@@ -512,7 +513,10 @@ def rational_generating_function_coefficients(
             code="combinatorics.polynomial_invariant",
             message="polynomial degree is outside the bound",
         )
-    if type(truncation_order) is not int or not 1 <= truncation_order <= 512:
+    if (
+        type(truncation_order) is not int
+        or not 1 <= truncation_order <= MAX_RATIONAL_SERIES_TRUNCATION_ORDER
+    ):
         raise OperationDomainValidationError(
             location=("truncation_order",),
             code="combinatorics.result_bound",

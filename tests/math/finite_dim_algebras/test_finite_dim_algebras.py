@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.finite_dim_algebras import center_basis
 from jacobian.math.finite_dim_algebras._models import (
     MAX_COMMUTATOR_ELIMINATION_WORK,
@@ -188,6 +189,39 @@ def test_dimension_limit_is_derived_from_elimination_work_and_encoding() -> None
     )
     assert min(MAX_REQUEST_ENCODING_DIM, work_limited) == MAX_DIM
     assert MAX_DIM**3 == MAX_STRUCTURE_CONSTANT_ENTRIES
+
+
+def test_published_dimension_fits_canonical_request_byte_limit() -> None:
+    """Worst-case valid tensors fit the canonical request byte limit."""
+    n = MAX_DIM
+    residue = 250
+    inner = [residue] * n
+    row = [inner] * n
+    payload = {
+        "algebra": {
+            "dimension": n,
+            "field_order": 251,
+            "multiplication": [row] * n,
+        }
+    }
+    encoded = encode_strict_json(payload)
+    assert len(encoded) <= CanonicalLimits().max_input_bytes
+    parsed = CenterRequest.model_validate(payload)
+    assert parsed.algebra.dimension == n
+    schema = StructureConstants.model_json_schema()
+    assert schema["properties"]["dimension"]["maximum"] == n
+
+    oversized_inner = [residue] * (n + 1)
+    oversized_row = [oversized_inner] * (n + 1)
+    oversized = {
+        "algebra": {
+            "dimension": n + 1,
+            "field_order": 251,
+            "multiplication": [oversized_row] * (n + 1),
+        }
+    }
+    with pytest.raises(ValidationError):
+        CenterRequest.model_validate(oversized)
 
 
 def test_structure_constants_rejects_above_its_own_field_cap() -> None:

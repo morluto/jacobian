@@ -154,6 +154,10 @@ def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
     if source.rows != source.cols:
         raise ValueError("characteristic polynomial requires a square matrix")
     if not all(entry.is_Rational is True for entry in source):
+        if source.rows > MAX_MATRIX_DIMENSION:
+            raise ValueError(
+                f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+            )
         return source.charpoly(variable)
     result = characteristic_polynomial_result(
         conversions.rational_matrix_from_sympy(source)
@@ -559,15 +563,15 @@ def _characteristic_polynomial_component_digit_bound(
     seen_rows: set[tuple[Fraction, ...]] = set()
     for row in fractions:
         row_denominator = 1
+        if row in seen_rows:
+            continue
+        seen_rows.add(row)
         for value in row:
             row_denominator = lcm(row_denominator, value.denominator)
             if _exceeds_canonical_rational_digits(
                 denominator_bits + row_denominator.bit_length()
             ):
                 return over_budget
-        if row in seen_rows:
-            continue
-        seen_rows.add(row)
         denominator_bits += row_denominator.bit_length()
         squared_norm = sum(
             (value.numerator * (row_denominator // value.denominator)) ** 2

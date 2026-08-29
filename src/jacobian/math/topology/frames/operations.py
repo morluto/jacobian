@@ -84,7 +84,6 @@ def _admit_frame(value: VectorFamily, *, rank: int) -> None:
 
 def gram(value: VectorFamily) -> GramResult:
     """Compute the exact Gram matrix of a vector family."""
-    _require_result_budget(_gram_result_bound(value))
     matrix = integer_gram(value.vectors)
     return GramResult._from_kernel(vectors=value.vectors, gram=matrix)
 

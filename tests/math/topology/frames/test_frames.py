@@ -157,8 +157,9 @@ def test_dense_high_height_gram_is_rejected_before_backend_expansion() -> None:
     vectors = basis * 2
     family = VectorFamily(vectors=vectors)
 
+    assert _gram_result_bound(family) > CanonicalLimits().max_output_bytes
     with pytest.raises(OperationDomainValidationError) as error:
-        gram(family)
+        _gram(VectorFamilyRequest(vectors=vectors))
     assert error.value.errors()[0]["type"] == "frames.result_byte_budget"
 
     potential = _frame_potential(FiniteFrameRequest(vectors=vectors))

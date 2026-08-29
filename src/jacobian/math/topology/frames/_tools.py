@@ -10,10 +10,17 @@ from jacobian.math.topology.frames._models import (
     GramResult,
     VectorFamilyRequest,
 )
-from jacobian.math.topology.frames.operations import coherence, frame_potential, gram
+from jacobian.math.topology.frames.operations import (
+    _gram_result_bound,
+    _require_result_budget,
+    coherence,
+    frame_potential,
+    gram,
+)
 
 
 def _gram(request: VectorFamilyRequest) -> GramResult:
+    _require_result_budget(_gram_result_bound(request))
     return gram(request)
 
 

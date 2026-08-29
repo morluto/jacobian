@@ -4,13 +4,17 @@ from collections.abc import Callable
 
 import pytest
 
+from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.frames import VectorFamily, coherence, frame_potential, gram
 from jacobian.math.topology.frames._models import (
     CoherenceRequest,
     FiniteFrameRequest,
+    VectorFamilyRequest,
 )
-from jacobian.math.topology.frames._tools import _coherence, _frame_potential
+from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
+from jacobian.math.topology.frames.operations import _gram_result_bound
+from jacobian.math.topology.frames.values import MAX_DIM, MAX_VECTORS
 
 
 def test_native_gram_and_potential_match_wire_adapters() -> None:
@@ -39,3 +43,28 @@ def test_native_frame_operations_keep_semantic_admission(
     with pytest.raises(OperationDomainValidationError) as error:
         operation(VectorFamily(vectors=((1, 0), (2, 0))))
     assert error.value.errors()[0]["type"] == "frames.frame_does_not_span"
+
+
+def test_native_gram_returns_exact_matrix_beyond_mcp_byte_cap() -> None:
+    """MCP output size is a transport-only constraint; native gram stays exact."""
+    dimension = MAX_DIM
+    basis = tuple(
+        tuple(1_000 if row == column else 999 for column in range(dimension))
+        for row in range(dimension)
+    )
+    vectors = basis * 2
+    family = VectorFamily(vectors=vectors)
+    diagonal = 1_000**2 + (dimension - 1) * 999**2
+    off_diagonal = 2 * 1_000 * 999 + (dimension - 2) * 999**2
+
+    assert len(vectors) == MAX_VECTORS
+    assert _gram_result_bound(family) > CanonicalLimits().max_output_bytes
+    with pytest.raises(OperationDomainValidationError) as error:
+        _gram(VectorFamilyRequest(vectors=vectors))
+    assert error.value.errors()[0]["type"] == "frames.result_byte_budget"
+
+    result = gram(family)
+    assert result.gram[0][0] == diagonal
+    assert result.gram[0][1] == off_diagonal
+    assert result.gram[0][dimension] == diagonal
+    assert result.gram[1][dimension] == off_diagonal

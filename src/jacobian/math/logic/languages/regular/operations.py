@@ -59,43 +59,96 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
         return 0
     if word_length == 0:
         return 1 if dfa.initial_state in dfa.accepting_states else 0
-    count_digits = _accepted_count_digit_bound(dfa.alphabet_size, word_length)
-    matrix_bit_work = state_count**3 * max(1, word_length.bit_length()) * count_digits
+    accepted_paths = _accepted_path_matrix(dfa)
+    if accepted_paths is None:
+        return 0
+    matrix, accepting_states = accepted_paths
+    state_count = len(matrix)
+    row_sum_bound = max(sum(row) for row in matrix)
+    count_bound = _power_capped(
+        row_sum_bound,
+        word_length,
+        10**MAX_COUNT_RESULT_DIGITS,
+    )
+    if count_bound == 10**MAX_COUNT_RESULT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("dfa", "word_length"),
+            code="regular_language.count_result_bound",
+            message="accepted-word count may exceed the canonical result digit bound",
+        )
+    matrix_bit_work = (
+        state_count**3
+        * max(1, word_length.bit_length())
+        * max(1, count_bound.bit_length())
+    )
     if matrix_bit_work > MAX_COUNT_MATRIX_BIT_WORK:
         raise OperationDomainValidationError(
             location=("dfa", "word_length"),
             code="regular_language.count_work_bound",
             message="DFA matrix powering exceeds the exact work bound",
         )
-    if count_digits > MAX_COUNT_RESULT_DIGITS:
-        raise OperationDomainValidationError(
-            location=("dfa", "word_length"),
-            code="regular_language.count_result_bound",
-            message="accepted-word count exceeds the canonical result digit bound",
-        )
-    matrix = [[0] * state_count for _ in range(state_count)]
-    for (source, _symbol), target in _transition_map(dfa).items():
-        matrix[source][target] += 1
     from jacobian.math.logic.languages.regular._flint import accepted_word_count
 
     return accepted_word_count(
-        tuple(tuple(row) for row in matrix),
-        dfa.initial_state,
-        dfa.accepting_states,
+        matrix,
+        0,
+        accepting_states,
         word_length,
     )
 
 
-def _accepted_count_digit_bound(alphabet_size: int, word_length: int) -> int:
-    """Return a safe decimal-digit bound for ``alphabet_size ** word_length``."""
+def _accepted_path_matrix(
+    dfa: DFA,
+) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]] | None:
+    transitions = _transition_map(dfa)
+    reachable = {dfa.initial_state}
+    frontier = [dfa.initial_state]
+    while frontier:
+        source = frontier.pop()
+        for symbol in range(dfa.alphabet_size):
+            target = transitions[(source, symbol)]
+            if target not in reachable:
+                reachable.add(target)
+                frontier.append(target)
 
-    if alphabet_size == 1:
-        return 1
-    chunk_length = 1_024
-    chunks, remainder = divmod(word_length, chunk_length)
-    chunk_digits = len(str(alphabet_size**chunk_length))
-    remainder_digits = len(str(alphabet_size**remainder))
-    return max(1, chunks * chunk_digits + remainder_digits)
+    predecessors: list[set[int]] = [set() for _ in range(dfa.state_count)]
+    for (source, _symbol), target in transitions.items():
+        predecessors[target].add(source)
+    coreachable = set(dfa.accepting_states)
+    frontier = list(dfa.accepting_states)
+    while frontier:
+        target = frontier.pop()
+        for source in predecessors[target]:
+            if source not in coreachable:
+                coreachable.add(source)
+                frontier.append(source)
+    if dfa.initial_state not in coreachable:
+        return None
+    useful = reachable & coreachable
+    states = (dfa.initial_state, *sorted(useful - {dfa.initial_state}))
+    index = {state: position for position, state in enumerate(states)}
+    matrix = [[0] * len(states) for _ in states]
+    for (source, _symbol), target in _transition_map(dfa).items():
+        if source in useful and target in useful:
+            matrix[index[source]][index[target]] += 1
+    accepting_states = tuple(
+        index[state] for state in states if state in dfa.accepting_states
+    )
+    return tuple(tuple(row) for row in matrix), accepting_states
+
+
+def _power_capped(base: int, exponent: int, cap: int) -> int:
+    """Return ``min(base ** exponent, cap)`` without exceeding ``cap``."""
+
+    result = 1
+    factor = min(base, cap)
+    while exponent:
+        if exponent & 1:
+            result = min(result * factor, cap)
+        exponent >>= 1
+        if exponent:
+            factor = min(factor * factor, cap)
+    return result
 
 
 def dfa_complement(dfa: DFA) -> DFA:

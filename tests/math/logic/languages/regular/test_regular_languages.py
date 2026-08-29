@@ -112,6 +112,26 @@ def _dfa_rotating_binary(accepting_states: tuple[int, ...]) -> DFA:
     )
 
 
+def _dfa_accepting_only_zeros() -> DFA:
+    """A 32-symbol DFA accepting exactly one word at every length."""
+
+    return DFA(
+        state_count=2,
+        alphabet_size=32,
+        transitions=tuple(
+            DFATransition(
+                source=state,
+                symbol=symbol,
+                target=0 if state == 0 and symbol == 0 else 1,
+            )
+            for state in range(2)
+            for symbol in range(32)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+
 def test_run_accepts_word_ending_in_1() -> None:
     dfa = _dfa_ends_in_1()
     result = compute_run(RunRequest(dfa=dfa, word=(1, 0, 1)))
@@ -209,6 +229,14 @@ def test_count_uses_flint_powering_above_the_previous_length_ceiling() -> None:
 def test_count_rejects_projected_result_digits_before_powering() -> None:
     with pytest.raises(OperationDomainValidationError, match="result digit bound"):
         count_accepted_words(_dfa_full_alphabet_accepting(), 22_000)
+
+
+def test_count_admits_value_just_below_result_digit_bound() -> None:
+    assert count_accepted_words(_dfa_full_alphabet_accepting(), 21_761) == 32**21_761
+
+
+def test_count_prunes_rejecting_growth_before_admission() -> None:
+    assert count_accepted_words(_dfa_accepting_only_zeros(), 22_000) == 1
 
 
 def test_count_empty_accepting_set_short_circuits_before_result_bound() -> None:

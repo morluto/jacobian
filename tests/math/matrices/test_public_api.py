@@ -1,12 +1,19 @@
 import importlib
+from fractions import Fraction
 
 import pytest
 import sympy
 from hypothesis import given
 from hypothesis import strategies as st
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import matrices
-from jacobian.math.matrices.values import MAX_EXACT_LINEAR_MATRIX_AXIS
+from jacobian.math.matrices._operation_models import MatrixDeterminantRequest
+from jacobian.math.matrices._tools import compute_determinant
+from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
+    rational_matrix_from_fractions,
+)
 
 
 def test_orphan_combinatorial_matrix_models_are_not_importable() -> None:
@@ -48,6 +55,41 @@ def test_characteristic_polynomial_preserves_exact_algebraic_inputs() -> None:
         -1 - sympy.sqrt(2),
         sympy.sqrt(2),
     ]
+
+
+def test_native_determinant_preserves_exact_algebraic_inputs() -> None:
+    source = sympy.Matrix([[sympy.sqrt(2), 0], [0, 1]])
+
+    assert matrices.determinant(source) == sympy.sqrt(2)
+
+
+def test_native_determinant_shares_admission_and_flint_kernel_above_order_64() -> None:
+    order = 65
+    entries = tuple(
+        tuple(
+            Fraction(1, row + 1) if row == column else Fraction(0)
+            for column in range(order)
+        )
+        for row in range(order)
+    )
+    source = sympy.diag(*[sympy.Rational(1, row + 1) for row in range(order)])
+
+    native = matrices.determinant(source)
+    wire = compute_determinant(
+        MatrixDeterminantRequest(matrix=rational_matrix_from_fractions(entries))
+    )
+
+    assert native == sympy.Rational(wire.determinant.num, wire.determinant.den)
+    assert native == sympy.Rational(1, sympy.factorial(order))
+
+
+def test_native_determinant_rejects_input_scalars_above_the_shared_digit_bound() -> (
+    None
+):
+    source = sympy.diag(10**256, *[1] * 64)
+
+    with pytest.raises(OperationDomainValidationError, match="256 decimal digits"):
+        matrices.determinant(source)
 
 
 def test_multiply_preserves_exact_algebraic_inputs() -> None:

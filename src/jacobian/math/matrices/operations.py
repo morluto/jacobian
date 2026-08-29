@@ -218,6 +218,12 @@ def determinant(matrix: MatrixBase) -> Any:
     source = _exact_matrix(matrix, maximum_dimension=MAX_DETERMINANT_MATRIX_DIMENSION)
     if source.rows != source.cols:
         raise ValueError("determinant requires a square matrix")
+    if not all(entry.is_Rational is True for entry in source):
+        if source.rows > MAX_MATRIX_DIMENSION:
+            raise ValueError(
+                f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+            )
+        return source.det(method="bareiss")
     result = determinant_result(conversions.rational_matrix_from_sympy(source))
     value = result.determinant.as_fraction()
     return sympy.Rational(value.numerator, value.denominator)
@@ -535,7 +541,7 @@ def _admit_inverse(matrix: IntegerMatrix) -> None:
             raise _validation_error(
                 "budget_exceeded",
                 "diagonal inverse coefficient work exceeds the exact output budget",
-        )
+            )
         return
     rank_one_digit_work = _rank_one_inverse_digit_work(entries)
     if (
@@ -750,10 +756,6 @@ def _bit_bound_decimal_digits(bits: int) -> int:
     return max(1, (bits * 30_103 + 99_999) // 100_000)
 
 
-def _exceeds_canonical_rational_digits(bits: int) -> bool:
-    return _bit_bound_decimal_digits(bits) > MAX_CANONICAL_RATIONAL_DIGITS
-
-
 def _positive_decimal_digits(value: int) -> int:
     """Count decimal digits exactly without converting the integer to a string."""
 
@@ -787,6 +789,10 @@ def _hadamard_axis_bits(squared_norms: tuple[int, ...]) -> tuple[int, int]:
     if len(axis_bits) <= 1:
         return determinant_bits, 0
     return determinant_bits, determinant_bits - min(axis_bits)
+
+
+def _exceeds_canonical_rational_digits(bits: int) -> bool:
+    return _bit_bound_decimal_digits(bits) > MAX_CANONICAL_RATIONAL_DIGITS
 
 
 def _admit_determinant(
@@ -848,7 +854,16 @@ def _admit_determinant(
 def _characteristic_polynomial_component_digit_bound(
     matrix: RationalMatrix,
 ) -> int:
-    """Bound coefficients from row-cleared principal-minor envelopes."""
+    """Bound every coefficient from the row-cleared principal-minor envelope.
+
+    Coefficients are sums of principal minors. Clearing row ``i`` by the LCM
+    ``d_i`` of its denominators, Hadamard bounds the cleared numerator of any
+    minor that includes that row, and the product of the participating ``d_i``
+    bounds that minor's denominator. ``2^n`` bounds the number of minors of
+    any fixed order. Unreduced coefficients written over the product of all
+    row denominators therefore fit in ``2^n`` times the full-order Hadamard
+    bound times that product.
+    """
     fractions = tuple(
         tuple(value.as_fraction() for value in row) for row in matrix.entries
     )
@@ -872,11 +887,11 @@ def _characteristic_polynomial_component_digit_bound(
     )
     seen_rows: set[tuple[Fraction, ...]] = set()
     for row in bound_rows:
+        row_denominator = 1
         if not triangular and row in seen_rows:
             continue
         if not triangular:
             seen_rows.add(row)
-        row_denominator = 1
         for value in row:
             row_denominator = lcm(row_denominator, value.denominator)
             if _exceeds_canonical_rational_digits(

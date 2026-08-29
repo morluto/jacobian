@@ -3,13 +3,14 @@ from __future__ import annotations
 import random
 from copy import deepcopy
 from fractions import Fraction
-from math import ceil, comb, log10
+from math import ceil, comb, log10, prod
 from typing import Any
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
+from sympy import nextprime
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import (
@@ -48,6 +49,7 @@ from jacobian.math.matrices.canonical_forms.operations import (
     _evaluate_polynomial,
     _HornerEvaluationMetrics,
 )
+from jacobian.math.matrices.operations import _admit_characteristic_polynomial
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -98,6 +100,28 @@ def _pairwise_coprime_denominators(count: int, digits: int) -> list[int]:
             value = prime**exponent
         denominators.append(value)
     return denominators
+
+
+def _distinct_primes(count: int, *, digits: int) -> tuple[int, ...]:
+    primes: list[int] = []
+    candidate = 10 ** (digits - 1)
+    for _ in range(count):
+        candidate = int(nextprime(candidate))
+        primes.append(candidate)
+    return tuple(primes)
+
+
+def _diagonal_reciprocals(denominators: tuple[int, ...]) -> RationalMatrix:
+    order = len(denominators)
+    return _matrix(
+        *tuple(
+            tuple(
+                (1, denominators[row]) if row == column else 0
+                for column in range(order)
+            )
+            for row in range(order)
+        )
+    )
 
 
 def _polynomial(*terms: tuple[RationalInput, int]) -> RationalPolynomial:
@@ -721,6 +745,99 @@ def test_characteristic_polynomial_admits_shared_denominator_scaled_identity() -
     )
     assert result.degree == order
     assert coefficients == expected
+
+
+def test_characteristic_polynomial_admits_heterogeneous_100_digit_prime_diagonals() -> (
+    None
+):
+    order = 32
+    primes = _distinct_primes(order, digits=100)
+    source = _diagonal_reciprocals(primes)
+
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(matrix=source)
+    )
+
+    coefficients = tuple(
+        coefficient.as_fraction() for coefficient in result.coefficients_descending
+    )
+    assert result.degree == order
+    assert coefficients[0] == 1
+    assert coefficients[1] == -sum(Fraction(1, prime) for prime in primes)
+    assert coefficients[-1] == Fraction((-1) ** order, prod(primes))
+
+    _admit_characteristic_polynomial(
+        _diagonal_reciprocals(
+            _distinct_primes(MAX_CHARACTERISTIC_POLYNOMIAL_ORDER, digits=100)
+        )
+    )
+
+
+def test_characteristic_polynomial_admits_repeated_heterogeneous_rows() -> None:
+    primes = _distinct_primes(32, digits=40)
+    row = tuple((1, prime) for prime in primes)
+    source = _matrix(*tuple(row for _ in range(32)))
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(matrix=source)
+    )
+    total = sum(Fraction(1, prime) for prime in primes)
+    coefficients = tuple(
+        coefficient.as_fraction() for coefficient in result.coefficients_descending
+    )
+    assert coefficients[0] == 1
+    assert coefficients[1] == -total
+    assert all(coefficient == 0 for coefficient in coefficients[2:])
+
+
+def test_characteristic_polynomial_stops_denominator_lcm_once_rejection_is_certain() -> (
+    None
+):
+    order = MAX_CHARACTERISTIC_POLYNOMIAL_ORDER
+    denominators = _pairwise_coprime_denominators(2 * order, digits=256)
+    source = _matrix(
+        *tuple(
+            tuple(
+                (1, denominators[row * order + column]) if row < 2 else 0
+                for column in range(order)
+            )
+            for row in range(order)
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="canonical digit budget"):
+        compute_characteristic_polynomial(
+            CharacteristicPolynomialRequest(matrix=source)
+        )
+
+
+def test_native_characteristic_polynomial_shares_widened_flint_kernel() -> None:
+    import sympy
+
+    from jacobian.math import matrices
+
+    order = 96
+    source = sympy.diag(*range(1, order + 1))
+
+    polynomial = matrices.characteristic_polynomial(source, "lambda")
+    wire = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(
+            matrix=RationalMatrix(
+                entries=tuple(
+                    tuple(
+                        CanonicalRational.from_integer_ratio(
+                            int(source[row, column]), 1
+                        )
+                        for column in range(order)
+                    )
+                    for row in range(order)
+                )
+            )
+        )
+    )
+
+    assert polynomial.all_coeffs() == [
+        coefficient.as_fraction() for coefficient in wire.coefficients_descending
+    ]
 
 
 def test_adapter_preserves_canonical_coefficients_above_python_digit_limit() -> None:

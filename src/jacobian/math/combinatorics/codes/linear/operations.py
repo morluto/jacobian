@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from itertools import product
-from typing import NamedTuple
+from math import comb
+from typing import Literal, NamedTuple
 
 from pydantic_core import PydanticCustomError
 
@@ -12,28 +13,20 @@ from jacobian.math.combinatorics.codes.linear._models import (
     MAX_CODEWORDS,
     MAX_RECEIVED_PROFILE_EXECUTION_WORK,
     MAX_RECEIVED_PROFILE_WITNESS_CELLS,
-    CodeEqualRequest,
     CodeEqualResult,
-    CodewordCheckRequest,
     CodewordCheckResult,
-    DualCodeRequest,
     DualCodeResult,
     FromGeneratorResult,
-    GeneratorMatrixRequest,
-    MacWilliamsRequest,
     MacWilliamsResult,
     ParityCheckMatrix,
-    ParityCheckRequest,
     ParityCheckResult,
-    PunctureRequest,
     PunctureResult,
-    ReceivedWordProfileRequest,
     ReceivedWordProfileResult,
+    ReceivedWordThreshold,
     ReceivedWordWitness,
-    ShortenRequest,
     ShortenResult,
-    SyndromeRequest,
     SyndromeResult,
+    _require_selected_coordinate,
     _threshold_matches_distance,
     _validate_coordinate_axis,
     _validate_prime_matrix,
@@ -45,6 +38,19 @@ from jacobian.math.matrices.finite_fields.linear_algebra import (
     rref,
 )
 
+__all__ = [
+    "code_equal",
+    "codeword_check",
+    "dual_code",
+    "from_generator",
+    "macwilliams_transform",
+    "parity_check",
+    "puncture",
+    "received_word_profile",
+    "shorten",
+    "syndrome",
+]
+
 
 class _ReceivedWordProfileData(NamedTuple):
     distance_histogram: tuple[int, ...]
@@ -55,10 +61,206 @@ class _ReceivedWordProfileData(NamedTuple):
     witnesses: tuple[ReceivedWordWitness, ...]
 
 
+WitnessMode = Literal["NONE", "COUNT", "FIRST", "ALL"]
+
+
+def _domain_error(location: tuple[str, ...], error: PydanticCustomError) -> None:
+    raise OperationDomainValidationError(
+        location=location,
+        code=error.type,
+        message=error.message(),
+    )
+
+
+def _fail(location: tuple[str, ...], code: str, message: str) -> None:
+    _domain_error(location, PydanticCustomError(f"code_linear.{code}", message))
+
+
+def _admit_word(encoder: PrimeFieldLinearEncoder, word: tuple[int, ...]) -> None:
+    if len(word) != len(encoder.coordinate_axis):
+        _fail(
+            ("word",),
+            "word_length_must_match_the_encoder_coordinate_axis",
+            "word length must match the encoder coordinate axis",
+        )
+    if any(value < 0 or value >= encoder.field_order for value in word):
+        _fail(
+            ("word",),
+            "word_entries_must_be_canonical_field_residues",
+            "word entries must be canonical field residues",
+        )
+
+
+def _admit_syndrome(
+    parity_check: ParityCheckMatrix,
+    coordinate_axis: tuple[str, ...],
+    word: tuple[int, ...],
+) -> None:
+    if coordinate_axis != parity_check.coordinate_axis:
+        _fail(
+            ("coordinate_axis",),
+            "word_axis_must_match_the_parity_check_column_axis",
+            "word axis must match the parity-check column axis",
+        )
+    if len(word) != len(coordinate_axis):
+        _fail(
+            ("word",),
+            "word_length_must_match_code_length",
+            "word length must match code length",
+        )
+    if any(value < 0 or value >= parity_check.field_order for value in word):
+        _fail(
+            ("word",),
+            "word_entries_must_be_canonical_field_residues",
+            "word entries must be canonical field residues",
+        )
+
+
+def _admit_comparable_encoders(
+    encoder_a: PrimeFieldLinearEncoder, encoder_b: PrimeFieldLinearEncoder
+) -> None:
+    if encoder_a.field_order != encoder_b.field_order:
+        _fail(
+            ("encoder_b",),
+            "encoders_must_share_one_prime_field_order",
+            "encoders must share one prime field order",
+        )
+    if encoder_a.coordinate_axis != encoder_b.coordinate_axis:
+        _fail(
+            ("encoder_b",),
+            "encoders_must_share_one_ordered_coordinate_axis",
+            "encoders must share one ordered coordinate axis",
+        )
+
+
+def _admit_macwilliams(
+    field_order: int, code_cardinality: int, length: int, weights: tuple[int, ...]
+) -> None:
+    from sympy import isprime
+
+    if not isprime(field_order):
+        _fail(
+            ("field_order",), "field_order_must_be_prime", "field_order must be prime"
+        )
+    if code_cardinality < 1:
+        _fail(
+            ("code_cardinality",),
+            "code_cardinality_positive",
+            "code cardinality must be positive",
+        )
+    if not 1 <= length <= 64:
+        _fail(("length",), "length_out_of_range", "length must be between 1 and 64")
+    if len(weights) != length + 1:
+        _fail(
+            ("weights",),
+            "weights_must_have_length_1_entries",
+            "weights must have length + 1 entries",
+        )
+    if any(weight < 0 for weight in weights):
+        _fail(
+            ("weights",),
+            "weight_counts_must_be_non_negative",
+            "weight counts must be non-negative",
+        )
+    if not weights or weights[0] != 1:
+        _fail(
+            ("weights",),
+            "first_weight_count_must_be_1_zero_codeword",
+            "first weight count must be 1 (zero codeword)",
+        )
+    if sum(weights) != code_cardinality:
+        _fail(
+            ("weights",),
+            "weight_counts_must_sum_to_code_cardinality",
+            "weight counts must sum to code cardinality",
+        )
+
+
+def _admit_coordinate(encoder: PrimeFieldLinearEncoder, coordinate: int) -> None:
+    if coordinate < 0:
+        _fail(
+            ("coordinate",),
+            "coordinate_index_out_of_range",
+            "coordinate index out of range",
+        )
+    try:
+        _require_selected_coordinate(encoder, coordinate)
+    except PydanticCustomError as error:
+        _domain_error(("coordinate",), error)
+
+
+def _admit_received_word_profile(
+    encoder: PrimeFieldLinearEncoder,
+    received_word: tuple[int, ...],
+    threshold: ReceivedWordThreshold | None,
+    witness_mode: WitnessMode,
+) -> None:
+    length = len(encoder.coordinate_axis)
+    if len(received_word) != length:
+        _domain_error(
+            ("received_word",),
+            PydanticCustomError(
+                "code_linear.received_word_must_match_the_encoder_coordinate_axis",
+                "received word must match the encoder coordinate axis",
+            ),
+        )
+    if any(value < 0 or value >= encoder.field_order for value in received_word):
+        _domain_error(
+            ("received_word",),
+            PydanticCustomError(
+                "code_linear.received_word_entries_must_be_canonical_field_residues",
+                "received-word entries must be canonical field residues",
+            ),
+        )
+    if threshold is None and witness_mode != "NONE":
+        _domain_error(
+            ("witness_mode",),
+            PydanticCustomError(
+                "code_linear.a_witness_mode_requires_an_exact_threshold",
+                "a witness mode requires an exact threshold",
+            ),
+        )
+    if threshold is not None:
+        if witness_mode == "NONE":
+            _domain_error(
+                ("witness_mode",),
+                PydanticCustomError(
+                    "code_linear.a_threshold_requires_count_first_or_all_mode",
+                    "a threshold requires COUNT, FIRST, or ALL mode",
+                ),
+            )
+        if threshold.value > length:
+            _domain_error(
+                ("threshold",),
+                PydanticCustomError(
+                    "code_linear.threshold_value_cannot_exceed_the_code_length",
+                    "threshold value cannot exceed the code length",
+                ),
+            )
+
+
+def _maximum_witness_cells(
+    encoder: PrimeFieldLinearEncoder, threshold: ReceivedWordThreshold | None
+) -> int:
+    if threshold is None:
+        return 0
+    length = len(encoder.coordinate_axis)
+    field_order = int(encoder.field_order)
+    row_width = len(encoder.message_axis) + length + 2
+    ambient_match_count: int = sum(
+        comb(length, distance) * (field_order - 1) ** distance
+        for distance in range(length + 1)
+        if _threshold_matches_distance(threshold, distance=distance, length=length)
+    )
+    return min(int(encoder.codeword_count), ambient_match_count) * row_width
+
+
 def _received_word_profile_data(
-    request: ReceivedWordProfileRequest,
+    encoder: PrimeFieldLinearEncoder,
+    received_word: tuple[int, ...],
+    threshold: ReceivedWordThreshold | None,
+    witness_mode: WitnessMode,
 ) -> _ReceivedWordProfileData:
-    encoder = request.encoder
     field_order = encoder.field_order
     dimension = len(encoder.message_axis)
     length = len(encoder.coordinate_axis)
@@ -76,23 +278,20 @@ def _received_word_profile_data(
             for column in range(length)
         )
         distance = sum(
-            left != right
-            for left, right in zip(codeword, request.received_word, strict=True)
+            left != right for left, right in zip(codeword, received_word, strict=True)
         )
         agreement = length - distance
         histogram[distance] += 1
 
-        if request.threshold is None or not _threshold_matches_distance(
-            request.threshold,
+        if threshold is None or not _threshold_matches_distance(
+            threshold,
             distance=distance,
             length=length,
         ):
             continue
 
         threshold_match_count += 1
-        if request.witness_mode == "ALL" or (
-            request.witness_mode == "FIRST" and not witnesses
-        ):
+        if witness_mode == "ALL" or (witness_mode == "FIRST" and not witnesses):
             witnesses.append(
                 ReceivedWordWitness(
                     message=message,
@@ -109,33 +308,47 @@ def _received_word_profile_data(
         minimum_distance=minimum_distance,
         maximum_agreement=length - minimum_distance,
         threshold_match_count=(
-            threshold_match_count if request.threshold is not None else None
+            threshold_match_count if threshold is not None else None
         ),
         witnesses=tuple(witnesses),
     )
 
 
-def compute_received_word_profile(
-    request: ReceivedWordProfileRequest,
+def received_word_profile(
+    encoder: PrimeFieldLinearEncoder,
+    received_word: tuple[int, ...],
+    threshold: ReceivedWordThreshold | None = None,
+    witness_mode: WitnessMode = "NONE",
 ) -> ReceivedWordProfileResult:
-    if request.profile_execution_work > MAX_RECEIVED_PROFILE_EXECUTION_WORK:
+    _admit_received_word_profile(encoder, received_word, threshold, witness_mode)
+    execution_work = (
+        2
+        * encoder.codeword_count
+        * len(encoder.coordinate_axis)
+        * (len(encoder.message_axis) + 1)
+    )
+    if execution_work > MAX_RECEIVED_PROFILE_EXECUTION_WORK:
         raise OperationDomainValidationError(
             location=("encoder",),
             code="code_linear.profile_execution_work_exceeded",
             message="received-word profile execution work exceeds its bound",
         )
     if (
-        request.witness_mode == "ALL"
-        and request.maximum_witness_cells > MAX_RECEIVED_PROFILE_WITNESS_CELLS
+        witness_mode == "ALL"
+        and _maximum_witness_cells(encoder, threshold)
+        > MAX_RECEIVED_PROFILE_WITNESS_CELLS
     ):
         raise OperationDomainValidationError(
             location=("witness_mode",),
             code="code_linear.witness_cells_exceeded",
             message="all-witness result exceeds its aggregate witness-cell bound",
         )
-    data = _received_word_profile_data(request)
+    data = _received_word_profile_data(encoder, received_word, threshold, witness_mode)
     return ReceivedWordProfileResult._from_kernel(
-        source=request,
+        encoder=encoder,
+        received_word=received_word,
+        threshold=threshold,
+        witness_mode=witness_mode,
         distance_histogram=data.distance_histogram,
         codeword_count=data.codeword_count,
         minimum_distance=data.minimum_distance,
@@ -196,37 +409,38 @@ def _mat_mul_vec(
 ) -> list[int]:
     return [
         sum(row[j] * vec[j] for j in range(len(vec))) % field_order for row in matrix
-]
+    ]
+
 
 def _hamming_weight(word: list[int] | tuple[int, ...]) -> int:
     return sum(1 for v in word if v != 0)
 
 
-def compute_from_generator(request: GeneratorMatrixRequest) -> FromGeneratorResult:
+def from_generator(
+    field_order: int,
+    generator_matrix: tuple[tuple[int, ...], ...],
+    coordinate_axis: tuple[str, ...],
+) -> FromGeneratorResult:
     try:
-        width = _validate_prime_matrix(request.field_order, request.generator_matrix)
-        _validate_coordinate_axis(request.coordinate_axis, width=width)
+        width = _validate_prime_matrix(field_order, generator_matrix)
+        _validate_coordinate_axis(coordinate_axis, width=width)
     except PydanticCustomError as error:
-        raise OperationDomainValidationError(
-            location=("generator_matrix", "coordinate_axis"),
-            code=error.type,
-            message=error.message(),
-        ) from error
-    if request.field_order ** len(request.generator_matrix) > MAX_CODEWORDS:
+        _domain_error(("generator_matrix", "coordinate_axis"), error)
+    if field_order ** len(generator_matrix) > MAX_CODEWORDS:
         raise OperationDomainValidationError(
             location=("generator_matrix",),
             code="code_linear.generator_matrix_exceeds_exact_enumeration_bound",
             message="generator matrix exceeds exact enumeration bound",
         )
-    matrix = [list(row) for row in request.generator_matrix]
-    canonical = _canonical_generator(matrix, request.field_order)
+    matrix = [list(row) for row in generator_matrix]
+    canonical = _canonical_generator(matrix, field_order)
     dim = len(canonical)
-    length = len(request.generator_matrix[0])
-    cardinality = request.field_order**dim
+    length = len(generator_matrix[0])
+    cardinality = field_order**dim
     return FromGeneratorResult(
         encoder=_canonical_encoder(
-            field_order=request.field_order,
-            coordinate_axis=request.coordinate_axis,
+            field_order=field_order,
+            coordinate_axis=coordinate_axis,
             generator_matrix=canonical,
         ),
         dimension=dim,
@@ -235,8 +449,7 @@ def compute_from_generator(request: GeneratorMatrixRequest) -> FromGeneratorResu
     )
 
 
-def compute_dual_code(request: DualCodeRequest) -> DualCodeResult:
-    encoder = request.encoder
+def dual_code(encoder: PrimeFieldLinearEncoder) -> DualCodeResult:
     q = encoder.field_order
     length = len(encoder.coordinate_axis)
     matrix = [list(row) for row in encoder.generator_matrix]
@@ -260,8 +473,7 @@ def compute_dual_code(request: DualCodeRequest) -> DualCodeResult:
     )
 
 
-def compute_parity_check(request: ParityCheckRequest) -> ParityCheckResult:
-    encoder = request.encoder
+def parity_check(encoder: PrimeFieldLinearEncoder) -> ParityCheckResult:
     q = encoder.field_order
     length = len(encoder.coordinate_axis)
     matrix = [list(row) for row in encoder.generator_matrix]
@@ -279,12 +491,12 @@ def compute_parity_check(request: ParityCheckRequest) -> ParityCheckResult:
     )
 
 
-def compute_codeword_check(
-    request: CodewordCheckRequest,
+def codeword_check(
+    encoder: PrimeFieldLinearEncoder, word: tuple[int, ...]
 ) -> CodewordCheckResult:
-    encoder = request.encoder
     matrix = [list(row) for row in encoder.generator_matrix]
-    word = list(request.word)
+    _admit_word(encoder, word)
+    word_values = list(word)
     q = encoder.field_order
     length = len(encoder.coordinate_axis)
 
@@ -292,7 +504,7 @@ def compute_codeword_check(
     # Augment the generator with the word as a new row and check
     # whether rank increases.
     _, rank_g = _rref([list(row) for row in matrix], q)
-    augmented = [list(row) for row in matrix] + [word]
+    augmented = [list(row) for row in matrix] + [word_values]
     _, rank_aug = _rref(augmented, q)
     is_member = rank_aug == rank_g
 
@@ -301,7 +513,7 @@ def compute_codeword_check(
         # Solve x * G = word over GF(q) by RREF on the augmented
         # transpose [G^T | word^T].
         gt = [[matrix[r][c] % q for r in range(len(matrix))] for c in range(length)]
-        aug_t = [gt[c] + [word[c] % q] for c in range(length)]
+        aug_t = [gt[c] + [word_values[c] % q] for c in range(length)]
         rref_aug, rank_aug2 = _rref(aug_t, q)
         # Extract solution from augmented column
         coeffs: list[int] = [0] * len(matrix)
@@ -318,8 +530,8 @@ def compute_codeword_check(
                     break
         coefficients = tuple(coeffs)
 
-    syndrome_vec = _mat_mul_vec(_nullspace(matrix, q, length), word, q)
-    hamming = _hamming_weight(word)
+    syndrome_vec = _mat_mul_vec(_nullspace(matrix, q, length), word_values, q)
+    hamming = _hamming_weight(word_values)
     return CodewordCheckResult(
         is_member=is_member,
         hamming_weight=hamming,
@@ -328,11 +540,16 @@ def compute_codeword_check(
     )
 
 
-def compute_syndrome(request: SyndromeRequest) -> SyndromeResult:
-    h = [list(row) for row in request.parity_check.rows]
-    word = list(request.word)
-    q = request.parity_check.field_order
-    syndrome = _mat_mul_vec(h, word, q)
+def syndrome(
+    parity_check_matrix: ParityCheckMatrix,
+    coordinate_axis: tuple[str, ...],
+    word: tuple[int, ...],
+) -> SyndromeResult:
+    _admit_syndrome(parity_check_matrix, coordinate_axis, word)
+    h = [list(row) for row in parity_check_matrix.rows]
+    word_values = list(word)
+    q = parity_check_matrix.field_order
+    syndrome = _mat_mul_vec(h, word_values, q)
     is_member = all(v == 0 for v in syndrome)
     return SyndromeResult(
         syndrome=tuple(syndrome),
@@ -368,19 +585,22 @@ def _enumerate_code(
     return code
 
 
-def compute_code_equal(request: CodeEqualRequest) -> CodeEqualResult:
+def code_equal(
+    encoder_a: PrimeFieldLinearEncoder, encoder_b: PrimeFieldLinearEncoder
+) -> CodeEqualResult:
     if (
-        request.encoder_a.codeword_count > MAX_CODEWORDS
-        or request.encoder_b.codeword_count > MAX_CODEWORDS
+        encoder_a.codeword_count > MAX_CODEWORDS
+        or encoder_b.codeword_count > MAX_CODEWORDS
     ):
         raise OperationDomainValidationError(
             location=("encoder",),
             code="code_linear.code_cardinality_exceeds_exact_enumeration_bound",
             message="code cardinality exceeds exact enumeration bound",
         )
-    q = request.encoder_a.field_order
-    mat_a = [list(row) for row in request.encoder_a.generator_matrix]
-    mat_b = [list(row) for row in request.encoder_b.generator_matrix]
+    _admit_comparable_encoders(encoder_a, encoder_b)
+    q = encoder_a.field_order
+    mat_a = [list(row) for row in encoder_a.generator_matrix]
+    mat_b = [list(row) for row in encoder_b.generator_matrix]
 
     rref_a, rank_a = _rref([list(r) for r in mat_a], q)
     rref_b, rank_b = _rref([list(r) for r in mat_b], q)
@@ -391,7 +611,7 @@ def compute_code_equal(request: CodeEqualRequest) -> CodeEqualResult:
 
     witness = None
     if not equal:
-        n = len(request.encoder_a.coordinate_axis)
+        n = len(encoder_a.coordinate_axis)
         code_a = _enumerate_code(rref_a, rank_a, n, q)
         code_b = _enumerate_code(rref_b, rank_b, n, q)
         diff = code_a.symmetric_difference(code_b)
@@ -406,12 +626,16 @@ def compute_code_equal(request: CodeEqualRequest) -> CodeEqualResult:
     )
 
 
-def compute_macwilliams_transform(request: MacWilliamsRequest) -> MacWilliamsResult:
-    from math import comb
-
-    q = request.field_order
-    primal = list(request.weights)
-    n = request.length
+def macwilliams_transform(
+    field_order: int,
+    code_cardinality: int,
+    length: int,
+    weights: tuple[int, ...],
+) -> MacWilliamsResult:
+    _admit_macwilliams(field_order, code_cardinality, length, weights)
+    q = field_order
+    primal = list(weights)
+    n = length
     dual: list[int] = []
     for k in range(n + 1):
         s = 0
@@ -425,13 +649,13 @@ def compute_macwilliams_transform(request: MacWilliamsRequest) -> MacWilliamsRes
                         * (q - 1) ** (k - j)
                     )
                     s += primal[i] * term
-        dual.append(s // request.code_cardinality)
+        dual.append(s // code_cardinality)
     return MacWilliamsResult(dual_weights=tuple(dual))
 
 
-def compute_puncture(request: PunctureRequest) -> PunctureResult:
-    encoder = request.encoder
-    column = request.coordinate
+def puncture(encoder: PrimeFieldLinearEncoder, coordinate: int) -> PunctureResult:
+    _admit_coordinate(encoder, coordinate)
+    column = coordinate
     punctured = [
         list(row[:column] + row[column + 1 :]) for row in encoder.generator_matrix
     ]
@@ -450,10 +674,10 @@ def compute_puncture(request: PunctureRequest) -> PunctureResult:
     )
 
 
-def compute_shorten(request: ShortenRequest) -> ShortenResult:
-    encoder = request.encoder
+def shorten(encoder: PrimeFieldLinearEncoder, coordinate: int) -> ShortenResult:
+    _admit_coordinate(encoder, coordinate)
     q = encoder.field_order
-    col = request.coordinate
+    col = coordinate
 
     # Shortening: keep codewords c with c[col] = 0, then delete col.
     # RREF the generator to get a basis, then find the subcode vanishing at col.

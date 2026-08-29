@@ -21,7 +21,7 @@ from jacobian.math.combinatorics.codes.linear._models import (
     ReceivedWordThreshold,
     ShortenRequest,
 )
-from jacobian.math.combinatorics.codes.linear.operations import (
+from jacobian.math.combinatorics.codes.linear._tools import (
     compute_dual_code,
     compute_from_generator,
     compute_puncture,

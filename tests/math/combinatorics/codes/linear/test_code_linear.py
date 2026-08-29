@@ -18,8 +18,8 @@ from jacobian.math.combinatorics.codes.linear._models import (
     ShortenRequest,
     SyndromeRequest,
 )
-from jacobian.math.combinatorics.codes.linear._tools import TOOLS
-from jacobian.math.combinatorics.codes.linear.operations import (
+from jacobian.math.combinatorics.codes.linear._tools import (
+    TOOLS,
     compute_code_equal,
     compute_codeword_check,
     compute_dual_code,

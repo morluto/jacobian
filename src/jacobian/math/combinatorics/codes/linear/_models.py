@@ -182,13 +182,16 @@ class ReceivedWordWitness(StrictModel):
 
 
 class ReceivedWordProfileResult(StrictModel):
-    """A bounded received-word profile in the request's canonical coordinates.
+    """A bounded received-word profile in its canonical source coordinates.
 
     Construction checks only the result's own shape and declared relations;
     the defining profile computation belongs to the producer operation.
     """
 
-    source: ReceivedWordProfileRequest
+    encoder: PrimeFieldLinearEncoder
+    received_word: tuple[_FieldElement, ...] = Field(max_length=MAX_LINEAR_CODE_LENGTH)
+    threshold: ReceivedWordThreshold | None = None
+    witness_mode: Literal["NONE", "COUNT", "FIRST", "ALL"] = "NONE"
     distance_histogram: tuple[_HistogramCount, ...] = Field(
         min_length=1,
         max_length=MAX_LINEAR_CODE_LENGTH + 1,
@@ -220,9 +223,9 @@ class ReceivedWordProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_profile_relations(self) -> Self:
-        length = len(self.source.encoder.coordinate_axis)
-        dimension = len(self.source.encoder.message_axis)
-        field_order = self.source.encoder.field_order
+        length = len(self.encoder.coordinate_axis)
+        dimension = len(self.encoder.message_axis)
+        field_order = self.encoder.field_order
         if len(self.distance_histogram) != length + 1:
             raise _validation_error(
                 "distance_histogram_must_cover_every_possible_distance",
@@ -238,7 +241,7 @@ class ReceivedWordProfileResult(StrictModel):
                 "maximum_agreement_must_complement_minimum_distance",
                 "maximum agreement must complement minimum distance",
             )
-        threshold = self.source.threshold
+        threshold = self.threshold
         if threshold is None:
             if self.threshold_match_count is not None or self.witnesses:
                 raise _validation_error(
@@ -251,12 +254,12 @@ class ReceivedWordProfileResult(StrictModel):
                 "threshold_profile_must_report_a_match_count",
                 "a threshold profile must report a match count",
             )
-        if self.source.witness_mode == "COUNT" and self.witnesses:
+        if self.witness_mode == "COUNT" and self.witnesses:
             raise _validation_error(
                 "count_mode_cannot_contain_witnesses",
                 "COUNT mode cannot contain witnesses",
             )
-        if self.source.witness_mode == "FIRST" and len(self.witnesses) > 1:
+        if self.witness_mode == "FIRST" and len(self.witnesses) > 1:
             raise _validation_error(
                 "first_mode_can_contain_at_most_one_witness",
                 "FIRST mode can contain at most one witness",
@@ -286,11 +289,50 @@ class ReceivedWordProfileResult(StrictModel):
                 )
         return self
 
+    @model_validator(mode="after")
+    def require_received_word_alignment(self) -> Self:
+        length = len(self.encoder.coordinate_axis)
+        if len(self.received_word) != length:
+            raise _validation_error(
+                "received_word_must_match_the_encoder_coordinate_axis",
+                "received word must match the encoder coordinate axis",
+            )
+        if any(value >= self.encoder.field_order for value in self.received_word):
+            raise _validation_error(
+                "received_word_entries_must_be_canonical_field_residues",
+                "received-word entries must be canonical field residues",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_source_threshold_mode(self) -> Self:
+        if self.threshold is None and self.witness_mode != "NONE":
+            raise _validation_error(
+                "a_witness_mode_requires_an_exact_threshold",
+                "a witness mode requires an exact threshold",
+            )
+        if self.threshold is not None and self.witness_mode == "NONE":
+            raise _validation_error(
+                "a_threshold_requires_count_first_or_all_mode",
+                "a threshold requires COUNT, FIRST, or ALL mode",
+            )
+        if self.threshold is not None and self.threshold.value > len(
+            self.encoder.coordinate_axis
+        ):
+            raise _validation_error(
+                "threshold_value_cannot_exceed_the_code_length",
+                "threshold value cannot exceed the code length",
+            )
+        return self
+
     @classmethod
     def _from_kernel(
         cls,
         *,
-        source: ReceivedWordProfileRequest,
+        encoder: PrimeFieldLinearEncoder,
+        received_word: tuple[int, ...],
+        threshold: ReceivedWordThreshold | None,
+        witness_mode: Literal["NONE", "COUNT", "FIRST", "ALL"],
         distance_histogram: tuple[int, ...],
         codeword_count: int,
         minimum_distance: int,
@@ -301,7 +343,10 @@ class ReceivedWordProfileResult(StrictModel):
         """Build a profile produced by the owner-local enumeration kernel."""
 
         return cls.model_construct(
-            source=source,
+            encoder=encoder,
+            received_word=received_word,
+            threshold=threshold,
+            witness_mode=witness_mode,
             distance_histogram=distance_histogram,
             codeword_count=codeword_count,
             minimum_distance=minimum_distance,

@@ -29,17 +29,73 @@ from jacobian.math.combinatorics.codes.linear._models import (
     SyndromeResult,
 )
 from jacobian.math.combinatorics.codes.linear.operations import (
-    compute_code_equal,
-    compute_codeword_check,
-    compute_dual_code,
-    compute_from_generator,
-    compute_macwilliams_transform,
-    compute_parity_check,
-    compute_puncture,
-    compute_received_word_profile,
-    compute_shorten,
-    compute_syndrome,
+    code_equal,
+    codeword_check,
+    dual_code,
+    from_generator,
+    macwilliams_transform,
+    parity_check,
+    puncture,
+    received_word_profile,
+    shorten,
+    syndrome,
 )
+
+
+def compute_received_word_profile(
+    request: ReceivedWordProfileRequest,
+) -> ReceivedWordProfileResult:
+    return received_word_profile(
+        request.encoder,
+        request.received_word,
+        request.threshold,
+        request.witness_mode,
+    )
+
+
+def compute_from_generator(request: GeneratorMatrixRequest) -> FromGeneratorResult:
+    return from_generator(
+        request.field_order,
+        request.generator_matrix,
+        request.coordinate_axis,
+    )
+
+
+def compute_dual_code(request: DualCodeRequest) -> DualCodeResult:
+    return dual_code(request.encoder)
+
+
+def compute_parity_check(request: ParityCheckRequest) -> ParityCheckResult:
+    return parity_check(request.encoder)
+
+
+def compute_codeword_check(request: CodewordCheckRequest) -> CodewordCheckResult:
+    return codeword_check(request.encoder, request.word)
+
+
+def compute_syndrome(request: SyndromeRequest) -> SyndromeResult:
+    return syndrome(request.parity_check, request.coordinate_axis, request.word)
+
+
+def compute_code_equal(request: CodeEqualRequest) -> CodeEqualResult:
+    return code_equal(request.encoder_a, request.encoder_b)
+
+
+def compute_macwilliams_transform(request: MacWilliamsRequest) -> MacWilliamsResult:
+    return macwilliams_transform(
+        request.field_order,
+        request.code_cardinality,
+        request.length,
+        request.weights,
+    )
+
+
+def compute_puncture(request: PunctureRequest) -> PunctureResult:
+    return puncture(request.encoder, request.coordinate)
+
+
+def compute_shorten(request: ShortenRequest) -> ShortenResult:
+    return shorten(request.encoder, request.coordinate)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](

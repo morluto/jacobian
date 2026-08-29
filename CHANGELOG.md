@@ -3,6 +3,14 @@
 ## [0.15.2](https://github.com/morluto/jacobian/compare/jacobian-v0.15.1...jacobian-v0.15.2) (2026-08-29)
 
 
+### Features
+
+* **combinatorics:** make rational generating-function admission degree-sensitive ([ca41d9c](https://github.com/morluto/jacobian/commit/ca41d9c0a9d59623282431da0e37948434831182))
+* **math:** restore unpublished mathematical operation families ([17fdc12](https://github.com/morluto/jacobian/commit/17fdc12ca073fec1057af91d7c533a30c6421b79))
+* **matrices:** use FLINT for bounded rational determinants ([c80d69d](https://github.com/morluto/jacobian/commit/c80d69dcf9315f7353173baec1d454184241abb9))
+* **topology:** use FLINT for larger homology ranks ([44aa674](https://github.com/morluto/jacobian/commit/44aa674a189b57cc28e9d53ce1050cd82fff92a7))
+
+
 ### Bug Fixes
 
 * **arrangements:** combine chamber work and use 2^m-2 near-full prefixes ([#3020](https://github.com/morluto/jacobian/issues/3020)) ([9f4ebd9](https://github.com/morluto/jacobian/commit/9f4ebd90ea75b39738fa35e06d02ce3b9492f15c))

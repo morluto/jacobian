@@ -18,7 +18,11 @@ from jacobian.math.topology.frames.operations import (
     _gram_result_bytes,
     gram,
 )
-from jacobian.math.topology.frames.values import MAX_VECTORS, VectorFamily
+from jacobian.math.topology.frames.values import (
+    MAX_VECTOR_CELLS,
+    MAX_VECTORS,
+    VectorFamily,
+)
 
 
 def _repeated_standard_basis(
@@ -38,6 +42,14 @@ def test_gram_accepts_nonspanning_vector_family() -> None:
         (1, 2),
         (2, 4),
     )
+
+
+def test_vector_family_schema_advertises_cell_budget() -> None:
+    description = VectorFamily.model_json_schema()["properties"]["vectors"][
+        "description"
+    ]
+
+    assert f"len(vectors) * dimension <= {MAX_VECTOR_CELLS}" in description
 
 
 def test_gram_accepts_a_single_vector_beyond_the_old_side_cap() -> None:

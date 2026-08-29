@@ -24,7 +24,14 @@ class VectorFamily(StrictModel):
     decisions made by the native kernels.
     """
 
-    vectors: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_VECTORS)
+    vectors: tuple[tuple[int, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_VECTORS,
+        description=(
+            "Ordered vectors with len(vectors) * dimension <= "
+            f"{MAX_VECTOR_CELLS} materialized cells."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_rectangular_family(self) -> Self:

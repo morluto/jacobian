@@ -13,9 +13,19 @@ from jacobian.math.number_theory.p_adic._models import (
     PAdicRootsResult,
 )
 from jacobian.math.number_theory.p_adic.operations import (
-    compute_hensel_lift_root,
-    compute_padic_roots,
+    find_padic_roots,
+    hensel_lift_root,
 )
+
+
+def _hensel_lift_root(request: HenselRootRequest) -> HenselRootResult:
+    return hensel_lift_root(
+        request.polynomial, request.prime, request.root_mod_p, request.precision
+    )
+
+
+def _find_padic_roots(request: PAdicRootsRequest) -> PAdicRootsResult:
+    return find_padic_roots(request.polynomial, request.prime, request.precision)
 
 
 def padic_operation[
@@ -67,7 +77,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "the root is simple.",
         HenselRootRequest,
         HenselRootResult,
-        compute_hensel_lift_root,
+        _hensel_lift_root,
         "p-adic",
         "hensel",
         "root-lifting",
@@ -90,7 +100,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "their mod-p^k root sets can grow unboundedly.",
         PAdicRootsRequest,
         PAdicRootsResult,
-        compute_padic_roots,
+        _find_padic_roots,
         "p-adic",
         "root-finding",
         "hensel",

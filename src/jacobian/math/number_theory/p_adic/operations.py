@@ -8,14 +8,12 @@ from math import isqrt
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.p_adic._models import (
+    MAX_PRECISION,
     MAX_PRIME,
-    HenselFactorLiftRequest,
     HenselFactorLiftResult,
-    HenselRootRequest,
     HenselRootResult,
     IntegerPolynomial,
     PAdicRootEntry,
-    PAdicRootsRequest,
     PAdicRootsResult,
     _kernel_coefficients,
 )
@@ -38,6 +36,15 @@ def _require_prime(value: int) -> None:
         or any(value % divisor == 0 for divisor in range(2, isqrt(value) + 1))
     ):
         _domain_error(("prime",), "prime_not_prime", "prime must be a prime modulus")
+
+
+def _require_precision(precision: int) -> None:
+    if not 1 <= precision <= MAX_PRECISION:
+        _domain_error(
+            ("precision",),
+            "precision_out_of_range",
+            f"precision must lie in 1..{MAX_PRECISION}",
+        )
 
 
 def _require_polynomial_budget(polynomial: IntegerPolynomial, field: str) -> None:
@@ -63,24 +70,24 @@ def _poly_deriv_mod_p(coeffs: tuple[int, ...], x: int, p: int) -> int:
     return _poly_eval_mod_p(tuple(i * coeffs[i] for i in range(1, len(coeffs))), x, p)
 
 
-def _admit_root(request: HenselRootRequest) -> tuple[int, ...]:
-    _require_polynomial_budget(request.polynomial, "polynomial")
-    _require_prime(request.prime)
-    if request.root_mod_p >= request.prime:
+def _admit_root(
+    polynomial: IntegerPolynomial, prime: int, root_mod_p: int, precision: int
+) -> tuple[int, ...]:
+    _require_polynomial_budget(polynomial, "polynomial")
+    _require_prime(prime)
+    _require_precision(precision)
+    if root_mod_p < 0 or root_mod_p >= prime:
         _domain_error(
             ("root_mod_p",), "root_out_of_range", "root_mod_p must be in 0..p-1"
         )
-    coeffs = _kernel_coefficients(request.polynomial)
-    if _poly_eval_mod_p(coeffs, request.root_mod_p, request.prime) != 0:
+    coeffs = _kernel_coefficients(polynomial)
+    if _poly_eval_mod_p(coeffs, root_mod_p, prime) != 0:
         _domain_error(
             ("root_mod_p",),
             "root_not_root",
             "root_mod_p must satisfy f(root_mod_p) = 0 mod p",
         )
-    if (
-        _poly_deriv_mod_p(coeffs, request.root_mod_p, request.prime) % request.prime
-        == 0
-    ):
+    if _poly_deriv_mod_p(coeffs, root_mod_p, prime) % prime == 0:
         _domain_error(
             ("root_mod_p",),
             "root_not_simple",
@@ -89,14 +96,21 @@ def _admit_root(request: HenselRootRequest) -> tuple[int, ...]:
     return coeffs
 
 
-def _admit_factors(request: HenselFactorLiftRequest) -> None:
-    for field, polynomial in (
-        ("polynomial", request.polynomial),
-        ("factor_g", request.factor_g),
-        ("factor_h", request.factor_h),
+def _admit_factors(
+    polynomial: IntegerPolynomial,
+    factor_g: IntegerPolynomial,
+    factor_h: IntegerPolynomial,
+    prime: int,
+    precision: int,
+) -> None:
+    for field, candidate in (
+        ("polynomial", polynomial),
+        ("factor_g", factor_g),
+        ("factor_h", factor_h),
     ):
-        _require_polynomial_budget(polynomial, field)
-    _require_prime(request.prime)
+        _require_polynomial_budget(candidate, field)
+    _require_prime(prime)
+    _require_precision(precision)
 
 
 def _trim_asc(coefficients: Sequence[int]) -> list[int]:
@@ -178,17 +192,11 @@ def hensel_lift_root(
     precision: int,
 ) -> HenselRootResult:
     """Normalize, admit, and lift one simple root of ``f`` modulo ``p``."""
-    request = HenselRootRequest.model_construct(
-        polynomial=polynomial,
-        prime=prime,
-        root_mod_p=root_mod_p,
-        precision=precision,
+    coeffs = _admit_root(polynomial, prime, root_mod_p, precision)
+    lifted = _hensel_lift_root(coeffs, prime, root_mod_p, precision)
+    return HenselRootResult._from_kernel(
+        polynomial, prime, root_mod_p, precision, lifted
     )
-    coeffs = _admit_root(request)
-    lifted = _hensel_lift_root(
-        coeffs, request.prime, request.root_mod_p, request.precision
-    )
-    return HenselRootResult._from_kernel(request, lifted)
 
 
 def _poly_mul_exact_mod(
@@ -301,32 +309,40 @@ def hensel_lift_factors(
     preserving the product congruence exactly. The reconstructed product
     is validated against ``f`` modulo ``p^k`` before returning.
     """
-    request = HenselFactorLiftRequest.model_construct(
-        polynomial=polynomial,
-        factor_g=factor_g,
-        factor_h=factor_h,
-        prime=prime,
-        precision=precision,
-    )
-    _admit_factors(request)
-    f_asc = _kernel_coefficients(request.polynomial)
-    g_asc = _kernel_coefficients(request.factor_g)
-    h_asc = _kernel_coefficients(request.factor_h)
-    p = request.prime
-    k = request.precision
+    _admit_factors(polynomial, factor_g, factor_h, prime, precision)
+    f_asc = _kernel_coefficients(polynomial)
+    g_asc = _kernel_coefficients(factor_g)
+    h_asc = _kernel_coefficients(factor_h)
+    p = prime
+    k = precision
 
     g_bar = _trim_asc([coefficient % p for coefficient in g_asc])
     h_bar = _trim_asc([coefficient % p for coefficient in h_asc])
     if len(g_bar) == 1 and g_bar[0] == 0:
-        raise ValueError("factor_g must be nonzero mod p")
+        _domain_error(
+            ("factor_g",), "factor_zero_mod_prime", "factor_g must be nonzero mod p"
+        )
     if len(h_bar) == 1 and h_bar[0] == 0:
-        raise ValueError("factor_h must be nonzero mod p")
+        _domain_error(
+            ("factor_h",), "factor_zero_mod_prime", "factor_h must be nonzero mod p"
+        )
     f_bar = _trim_asc([coefficient % p for coefficient in f_asc])
     residue = _poly_sub_mod(f_bar, _poly_mul_exact_mod(g_bar, h_bar, p), p)
     if not _is_zero_polynomial(residue):
-        raise ValueError("factor_g * factor_h is not congruent to polynomial mod p")
+        _domain_error(
+            ("factor_g", "factor_h"),
+            "factorization_not_congruent",
+            "factor_g * factor_h is not congruent to polynomial mod p",
+        )
 
-    bezout_s, bezout_t = _bezout_unit_mod_p(g_bar, h_bar, p)
+    try:
+        bezout_s, bezout_t = _bezout_unit_mod_p(g_bar, h_bar, p)
+    except ValueError as exc:
+        _domain_error(
+            ("factor_g", "factor_h"),
+            "factors_not_coprime",
+            str(exc),
+        )
 
     g = [coefficient % p for coefficient in g_bar]
     h = [coefficient % p for coefficient in h_bar]
@@ -392,14 +408,12 @@ def find_padic_roots(
     their mod-p^k solution sets can grow unboundedly (x^2 has five roots mod
     25), so enumerating them would not be bounded.
     """
-    request = PAdicRootsRequest.model_construct(
-        polynomial=polynomial, prime=prime, precision=precision
-    )
-    _require_polynomial_budget(request.polynomial, "polynomial")
-    _require_prime(request.prime)
-    coeffs = _kernel_coefficients(request.polynomial)
-    p = request.prime
-    k = request.precision
+    _require_polynomial_budget(polynomial, "polynomial")
+    _require_prime(prime)
+    _require_precision(precision)
+    coeffs = _kernel_coefficients(polynomial)
+    p = prime
+    k = precision
 
     lifted_roots: list[PAdicRootEntry] = []
     multiple_residues: list[int] = []
@@ -413,39 +427,11 @@ def find_padic_roots(
         lifted_roots.append(PAdicRootEntry(root=lifted, root_type="SIMPLE"))
 
     return PAdicRootsResult._from_kernel(
-        request, tuple(lifted_roots), tuple(multiple_residues)
-    )
-
-
-def compute_hensel_lift_root(request: HenselRootRequest) -> HenselRootResult:
-    """Project a wire request onto the native Hensel-root operation."""
-    return hensel_lift_root(
-        request.polynomial, request.prime, request.root_mod_p, request.precision
-    )
-
-
-def compute_padic_roots(request: PAdicRootsRequest) -> PAdicRootsResult:
-    """Project a wire request onto the native p-adic-roots operation."""
-    return find_padic_roots(request.polynomial, request.prime, request.precision)
-
-
-def compute_hensel_lift_factors(
-    request: HenselFactorLiftRequest,
-) -> HenselFactorLiftResult:
-    """Project a wire request onto the native factor-lifting operation."""
-    return hensel_lift_factors(
-        request.polynomial,
-        request.factor_g,
-        request.factor_h,
-        request.prime,
-        request.precision,
+        polynomial, prime, precision, tuple(lifted_roots), tuple(multiple_residues)
     )
 
 
 __all__ = [
-    "compute_hensel_lift_factors",
-    "compute_hensel_lift_root",
-    "compute_padic_roots",
     "find_padic_roots",
     "hensel_lift_factors",
     "hensel_lift_root",

@@ -81,13 +81,20 @@ class HenselRootResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, request: HenselRootRequest, lifted_root: int) -> Self:
+    def _from_kernel(
+        cls,
+        polynomial: IntegerPolynomial,
+        prime: int,
+        root_mod_p: int,
+        precision: int,
+        lifted_root: int,
+    ) -> Self:
         return cls.model_construct(
-            polynomial=request.polynomial,
+            polynomial=polynomial,
             lifted_root=lifted_root,
-            prime=request.prime,
-            root_mod_p=request.root_mod_p,
-            precision=request.precision,
+            prime=prime,
+            root_mod_p=root_mod_p,
+            precision=precision,
             is_simple_root=True,
         )
 
@@ -181,15 +188,17 @@ class PAdicRootsResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: PAdicRootsRequest,
+        polynomial: IntegerPolynomial,
+        prime: int,
+        precision: int,
         roots: tuple[PAdicRootEntry, ...],
         multiple_residues: tuple[int, ...],
     ) -> Self:
         return cls.model_construct(
-            polynomial=request.polynomial,
+            polynomial=polynomial,
             roots=roots,
-            prime=request.prime,
-            precision=request.precision,
+            prime=prime,
+            precision=precision,
             root_count=len(roots),
             multiple_residues=multiple_residues,
         )

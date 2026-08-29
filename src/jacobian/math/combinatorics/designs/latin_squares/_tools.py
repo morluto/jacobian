@@ -38,7 +38,9 @@ def compute_orthogonality(request: OrthogonalityRequest) -> OrthogonalityResult:
 def compute_latin_square_transpose(
     request: TransposeRequest,
 ) -> LatinSquareTransposeResult:
-    return LatinSquareTransposeResult(transposed=transpose(request.square))
+    return LatinSquareTransposeResult.model_construct(
+        transposed=transpose(request.square),
+    )
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](

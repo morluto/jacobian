@@ -10,8 +10,16 @@ import pytest
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
-from jacobian.math.number_theory._derived import compute_legendre_symbol
-from jacobian.math.number_theory._derived_models import LegendreSymbolRequest
+from jacobian.math.number_theory._derived import (
+    compute_binomial_prime_valuation,
+    compute_factorial_valuation,
+    compute_legendre_symbol,
+)
+from jacobian.math.number_theory._derived_models import (
+    BinomialPrimeValuationRequest,
+    FactorialValuationRequest,
+    LegendreSymbolRequest,
+)
 from jacobian.math.number_theory._direct_factorization_models import (
     FactorizationRequest,
 )
@@ -54,6 +62,20 @@ from jacobian.math.number_theory.operations import (
             {"value": "1", "prime": "4"},
             ValuationRequest(value="1", prime="4"),
             compute_valuation,
+            (),
+        ),
+        (
+            "number_theory.binomial_valuation.compute",
+            {"n": "20", "k": "7", "prime": "4"},
+            BinomialPrimeValuationRequest(n="20", k="7", prime="4"),
+            compute_binomial_prime_valuation,
+            (),
+        ),
+        (
+            "number_theory.compute.factorial_valuation",
+            {"n": "1", "base": "1000001"},
+            FactorialValuationRequest(n="1", base="1000001"),
+            compute_factorial_valuation,
             (),
         ),
         (

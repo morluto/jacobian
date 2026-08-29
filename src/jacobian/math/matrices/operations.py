@@ -141,7 +141,7 @@ def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
 
 
 def determinant(matrix: MatrixBase) -> Any:
-    source = _exact_matrix(matrix, maximum_dimension=64)
+    source = _exact_matrix(matrix, maximum_dimension=MAX_DETERMINANT_MATRIX_DIMENSION)
     if source.rows != source.cols:
         raise ValueError("determinant requires a square matrix")
     return source.det(method="bareiss")

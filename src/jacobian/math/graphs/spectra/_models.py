@@ -10,7 +10,9 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    IndexedSimpleUndirectedGraph,
+)
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -19,12 +21,36 @@ from jacobian.math.polynomials.values import (
 )
 
 _VARIABLE = "x"
-_MAX_CHARPOLY_TERMS = 33
-_MAX_CHARPOLY_EXPONENT = 32
-_MAX_CHARPOLY_COEFFICIENT_DIGITS = 128
+# Every order-k Laplacian principal minor is at most n**k by Hadamard, and
+# each coefficient sums at most binomial(n, k) such minors. The uniform
+# (2n)**n bound therefore covers every coefficient for n <= 256.
+_MAX_CHARPOLY_VERTICES = 256
+_MAX_CHARPOLY_MATRIX_CELLS = _MAX_CHARPOLY_VERTICES**2
+_MAX_CHARPOLY_WORK = _MAX_CHARPOLY_VERTICES**4
+_MAX_CHARPOLY_EDGES = _MAX_CHARPOLY_VERTICES * (_MAX_CHARPOLY_VERTICES - 1) // 2
 
 
 _MAX_SPECTRAL_VERTICES = 32
+
+
+def _charpoly_coefficient_digit_bound(order: int) -> int:
+    return 1 if order == 0 else len(str((2 * order) ** order))
+
+
+def _require_characteristic_polynomial_graph(
+    graph: IndexedSimpleUndirectedGraph,
+) -> None:
+    order = graph.vertex_count
+    if order > _MAX_CHARPOLY_VERTICES:
+        raise PydanticCustomError(
+            "graph.characteristic_polynomial_vertex_count_exceeds_operation_bound",
+            "characteristic-polynomial operations support at most 256 vertices",
+        )
+    if order**2 > _MAX_CHARPOLY_MATRIX_CELLS or order**4 > _MAX_CHARPOLY_WORK:
+        raise PydanticCustomError(
+            "graph.characteristic_polynomial_work_exceeds_operation_bound",
+            "characteristic-polynomial matrix work exceeds the operation bound",
+        )
 
 
 def _require_spectral_graph(graph: IndexedSimpleUndirectedGraph) -> None:
@@ -54,8 +80,32 @@ SpectralGraph = Annotated[
 ]
 
 
+def _characteristic_polynomial_graph_schema() -> JsonSchemaValue:
+    schema = IndexedSimpleUndirectedGraph.model_json_schema()
+    schema["description"] = (
+        "An integer-indexed simple undirected graph accepted by exact "
+        "characteristic-polynomial operations: at most 256 vertices and "
+        "at most 32640 canonical edges."
+    )
+    schema["properties"]["vertex_count"].update(maximum=_MAX_CHARPOLY_VERTICES)
+    schema["properties"]["edges"].update(maxItems=_MAX_CHARPOLY_EDGES)
+    return schema
+
+
+CharacteristicPolynomialGraph = Annotated[
+    IndexedSimpleUndirectedGraph,
+    WithJsonSchema(_characteristic_polynomial_graph_schema()),
+]
+
+
 class GraphSpectrumRequest(StrictModel):
     graph: SpectralGraph
+
+
+class GraphCharacteristicPolynomialRequest(StrictModel):
+    """A graph whose dense integer matrix and exact polynomial are bounded."""
+
+    graph: CharacteristicPolynomialGraph
 
 
 class GraphSpectrumResult(StrictModel):
@@ -144,13 +194,13 @@ class GraphCharacteristicPolynomialResult(StrictModel):
     source graph and convention.
     """
 
-    graph: SpectralGraph
+    graph: CharacteristicPolynomialGraph
     convention: Literal["ADJACENCY", "LAPLACIAN"]
     polynomial: RationalPolynomial
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
-        _require_spectral_graph(self.graph)
+        _require_characteristic_polynomial_graph(self.graph)
         if self.polynomial.variables != (_VARIABLE,):
             raise PydanticCustomError(
                 "graph.characteristic_polynomial_must_be_univariate_in_",
@@ -158,9 +208,11 @@ class GraphCharacteristicPolynomialResult(StrictModel):
             )
         require_polynomial_budget(
             self.polynomial,
-            maximum_terms=_MAX_CHARPOLY_TERMS,
-            maximum_exponent=_MAX_CHARPOLY_EXPONENT,
-            maximum_coefficient_digits=_MAX_CHARPOLY_COEFFICIENT_DIGITS,
+            maximum_terms=self.graph.vertex_count + 1,
+            maximum_exponent=self.graph.vertex_count,
+            maximum_coefficient_digits=_charpoly_coefficient_digit_bound(
+                self.graph.vertex_count
+            ),
             label="characteristic polynomial",
         )
         return self
@@ -181,6 +233,7 @@ class GraphCharacteristicPolynomialResult(StrictModel):
 
 
 __all__ = [
+    "GraphCharacteristicPolynomialRequest",
     "GraphCharacteristicPolynomialResult",
     "GraphSpectrumRequest",
     "GraphSpectrumResult",

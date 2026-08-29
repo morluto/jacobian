@@ -12,13 +12,17 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationExample,
 )
+from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.graphs.electrical_networks import operations as native
 from jacobian.math.graphs.electrical_networks._models import (
     MAX_CONDUCTANCE_DIGITS,
+    MAX_NETWORK_SOLVE_WORK,
+    MAX_NETWORK_VERTICES,
     ConductanceNetwork,
     EffectiveResistanceRequest,
     EffectiveResistanceResult,
     LaplacianEntry,
+    LaplacianNetwork,
     LaplacianRequest,
     LaplacianResult,
     NodePotentialRequest,
@@ -35,7 +39,7 @@ def _domain_error(location: tuple[str | int, ...], code: str, message: str) -> N
     )
 
 
-def _admit_network(network: ConductanceNetwork) -> None:
+def _admit_network(network: ConductanceNetwork | LaplacianNetwork) -> None:
     """Check mathematical graph and conductance preconditions once per call."""
     seen: set[tuple[int, int]] = set()
     for index, edge in enumerate(network.edges):
@@ -102,6 +106,53 @@ def _require_connected(network: ConductanceNetwork) -> None:
         )
 
 
+def _accumulated_coefficient_height(network: ConductanceNetwork) -> int:
+    """Bound Laplacian diagonal height from incident conductance sums.
+
+    Off-diagonal entries copy one conductance. Each diagonal is the sum of the
+    incident conductances, so distinct denominators accumulate before FLINT
+    constructs or solves the reduced system.
+    """
+
+    incident: list[list[RationalHeight]] = [[] for _ in range(network.vertex_count)]
+    for edge in network.edges:
+        height = RationalHeight.from_canonical(edge.conductance)
+        incident[edge.source].append(height)
+        incident[edge.target].append(height)
+    tallest = 1
+    for heights in incident:
+        if not heights:
+            continue
+        combined = sum_heights(heights)
+        tallest = max(
+            tallest,
+            combined.numerator_digits,
+            combined.denominator_digits,
+        )
+    return tallest
+
+
+def _admit_solve(network: ConductanceNetwork) -> None:
+    dimension = network.vertex_count - 1
+    coefficient_height = _accumulated_coefficient_height(network)
+    scalar_work = dimension**3 * coefficient_height
+    if scalar_work > MAX_NETWORK_SOLVE_WORK:
+        _domain_error(
+            ("network",),
+            "solve_work_bound",
+            "reduced Laplacian exceeds the exact solve-work bound",
+        )
+    result_digits = len(network.edges) * MAX_CONDUCTANCE_DIGITS + max(
+        0, network.vertex_count - 2
+    ) * len(str(MAX_NETWORK_VERTICES))
+    if result_digits > 32_768:
+        _domain_error(
+            ("network",),
+            "solve_result_bound",
+            "reduced Laplacian solution exceeds the canonical rational bound",
+        )
+
+
 def _admit_terminals(
     network: ConductanceNetwork,
     first: int,
@@ -128,7 +179,7 @@ def _admit_terminals(
 
 
 def _edge_triples(
-    network: ConductanceNetwork,
+    network: ConductanceNetwork | LaplacianNetwork,
 ) -> tuple[tuple[int, int, Fraction], ...]:
     return tuple(
         (edge.source, edge.target, edge.conductance.as_fraction())
@@ -145,6 +196,7 @@ def compute_effective_resistance(
         network, request.terminal_a, request.terminal_b, ("terminal_a", "terminal_b")
     )
     _require_connected(network)
+    _admit_solve(network)
     value = native.effective_resistance(
         network.vertex_count,
         _edge_triples(network),
@@ -163,6 +215,7 @@ def compute_node_potentials(request: NodePotentialRequest) -> NodePotentialResul
     _admit_network(network)
     _admit_terminals(network, request.source, request.sink, ("source", "sink"))
     _require_connected(network)
+    _admit_solve(network)
     potentials = native.node_potentials(
         network.vertex_count,
         _edge_triples(network),

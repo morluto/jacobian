@@ -8,9 +8,11 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.electrical_networks._models import (
+    MAX_LAPLACIAN_VERTICES,
     ConductanceEdge,
     ConductanceNetwork,
     EffectiveResistanceRequest,
+    LaplacianNetwork,
     LaplacianRequest,
     NodePotentialRequest,
 )
@@ -31,6 +33,22 @@ def _edge(source: int, target: int, num: str, den: str) -> ConductanceEdge:
 
 def _net(vertex_count: int, *edges: ConductanceEdge) -> ConductanceNetwork:
     return ConductanceNetwork(vertex_count=vertex_count, edges=edges)
+
+
+def _laplacian_net(vertex_count: int, *edges: ConductanceEdge) -> LaplacianNetwork:
+    return LaplacianNetwork(vertex_count=vertex_count, edges=edges)
+
+
+def _star_of_distinct_fifty_digit_dens(leaf_count: int = 215) -> ConductanceNetwork:
+    """Connected star whose hub diagonal sums ``leaf_count`` distinct 50-digit dens."""
+
+    return _net(
+        leaf_count + 1,
+        *(
+            _edge(0, leaf + 1, "1", str(10**49 + 2 * leaf + 1))
+            for leaf in range(leaf_count)
+        ),
+    )
 
 
 # ------------------------------------------------------------------ effective resistance
@@ -128,11 +146,88 @@ def test_node_potentials_satisfy_kirchhoff_current() -> None:
     assert result.potentials[1].potential.as_fraction() == Fraction(0)
 
 
+def test_flint_solves_a_path_above_the_previous_vertex_ceiling() -> None:
+    vertex_count = 200
+    net = _net(
+        vertex_count,
+        *(_edge(node, node + 1, "1", "1") for node in range(vertex_count - 1)),
+    )
+
+    resistance = compute_effective_resistance(
+        EffectiveResistanceRequest(
+            network=net, terminal_a=0, terminal_b=vertex_count - 1
+        )
+    )
+    potentials = compute_node_potentials(
+        NodePotentialRequest(network=net, source=0, sink=vertex_count - 1)
+    )
+
+    assert resistance.effective_resistance.as_fraction() == vertex_count - 1
+    assert tuple(
+        value.potential.as_fraction() for value in potentials.potentials
+    ) == tuple(Fraction(vertex_count - 1 - node) for node in range(vertex_count))
+
+
+def test_flint_solves_the_wide_carrier_unit_path() -> None:
+    vertex_count = 256
+    net = _net(
+        vertex_count,
+        *(_edge(node, node + 1, "1", "1") for node in range(vertex_count - 1)),
+    )
+
+    resistance = compute_effective_resistance(
+        EffectiveResistanceRequest(
+            network=net, terminal_a=0, terminal_b=vertex_count - 1
+        )
+    )
+    potentials = compute_node_potentials(
+        NodePotentialRequest(network=net, source=0, sink=vertex_count - 1)
+    )
+
+    assert resistance.effective_resistance.as_fraction() == vertex_count - 1
+    assert potentials.potentials[-1].potential.as_fraction() == Fraction(0)
+    assert potentials.potentials[0].potential.as_fraction() == vertex_count - 1
+
+
+def test_solve_work_rejects_accumulated_star_height_on_both_ops() -> None:
+    """Hub incidence of 215 distinct 50-digit dens exceeds the solve-work bound."""
+
+    net = _star_of_distinct_fifty_digit_dens()
+    with pytest.raises(
+        OperationDomainValidationError, match="solve-work bound"
+    ) as resistance:
+        compute_effective_resistance(
+            EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
+        )
+    with pytest.raises(
+        OperationDomainValidationError, match="solve-work bound"
+    ) as potentials:
+        compute_node_potentials(NodePotentialRequest(network=net, source=0, sink=1))
+    assert resistance.value.errors()[0]["type"] == "electrical_network.solve_work_bound"
+    assert potentials.value.errors()[0]["type"] == "electrical_network.solve_work_bound"
+
+
+def test_laplacian_keeps_its_separate_materialized_matrix_ceiling() -> None:
+    with pytest.raises(ValidationError):
+        LaplacianNetwork(
+            vertex_count=MAX_LAPLACIAN_VERTICES + 1,
+            edges=(_edge(0, 1, "1", "1"),),
+        )
+
+
+def test_laplacian_request_schema_exposes_vertex_ceiling() -> None:
+    laplacian_schema = LaplacianRequest.model_json_schema()
+    network = laplacian_schema["$defs"]["LaplacianNetwork"]
+    assert network["properties"]["vertex_count"]["maximum"] == MAX_LAPLACIAN_VERTICES
+    solve_schema = ConductanceNetwork.model_json_schema()
+    assert solve_schema["properties"]["vertex_count"]["maximum"] == 256
+
+
 # ------------------------------------------------------------------ Laplacian
 
 
 def test_laplacian_single_edge() -> None:
-    net = _net(2, _edge(0, 1, "1", "1"))
+    net = _laplacian_net(2, _edge(0, 1, "1", "1"))
     req = LaplacianRequest(network=net)
     result = compute_laplacian(req)
     assert result.vertex_count == 2
@@ -146,7 +241,7 @@ def test_laplacian_single_edge() -> None:
 
 
 def test_laplacian_triangle_diagonal_sums_conductances() -> None:
-    net = _net(
+    net = _laplacian_net(
         3,
         _edge(0, 1, "1", "1"),
         _edge(1, 2, "1", "1"),
@@ -167,7 +262,7 @@ def test_laplacian_triangle_diagonal_sums_conductances() -> None:
 
 
 def test_laplacian_rows_sum_to_zero() -> None:
-    net = _net(
+    net = _laplacian_net(
         4,
         _edge(0, 1, "1", "1"),
         _edge(1, 2, "3", "2"),
@@ -183,7 +278,7 @@ def test_laplacian_rows_sum_to_zero() -> None:
 
 def test_laplacian_accepts_disconnected_network() -> None:
     """The Laplacian is well-defined without connectivity."""
-    net = _net(4, _edge(0, 1, "1", "1"), _edge(2, 3, "1", "1"))
+    net = _laplacian_net(4, _edge(0, 1, "1", "1"), _edge(2, 3, "1", "1"))
     result = compute_laplacian(LaplacianRequest(network=net))
     assert result.vertex_count == 4
     assert len(result.entries) == 16
@@ -195,7 +290,7 @@ def test_laplacian_accepts_disconnected_network() -> None:
 def test_contract_rejects_nonpositive_conductance() -> None:
     edge = ConductanceEdge(source=0, target=1, conductance=C(num="0", den="1"))
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_laplacian(LaplacianRequest(network=_net(2, edge)))
+        compute_laplacian(LaplacianRequest(network=_laplacian_net(2, edge)))
     assert (
         error.value.errors()[0]["type"] == "electrical_network.conductance_not_positive"
     )
@@ -204,7 +299,7 @@ def test_contract_rejects_nonpositive_conductance() -> None:
 def test_contract_rejects_self_loop() -> None:
     edge = ConductanceEdge(source=0, target=0, conductance=C(num="1", den="1"))
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_laplacian(LaplacianRequest(network=_net(2, edge)))
+        compute_laplacian(LaplacianRequest(network=_laplacian_net(2, edge)))
     assert (
         error.value.errors()[0]["type"]
         == "electrical_network.edge_endpoints_not_distinct"
@@ -212,7 +307,7 @@ def test_contract_rejects_self_loop() -> None:
 
 
 def test_contract_rejects_duplicate_edges() -> None:
-    net = _net(3, _edge(0, 1, "1", "1"), _edge(1, 0, "2", "1"))
+    net = _laplacian_net(3, _edge(0, 1, "1", "1"), _edge(1, 0, "2", "1"))
     with pytest.raises(OperationDomainValidationError) as error:
         compute_laplacian(LaplacianRequest(network=net))
     assert error.value.errors()[0]["type"] == "electrical_network.duplicate_edges"
@@ -235,7 +330,7 @@ def test_contract_rejects_same_terminals() -> None:
 
 
 def test_contract_rejects_vertex_out_of_range() -> None:
-    net = _net(2, _edge(0, 5, "1", "1"))
+    net = _laplacian_net(2, _edge(0, 5, "1", "1"))
     with pytest.raises(OperationDomainValidationError) as error:
         compute_laplacian(LaplacianRequest(network=net))
     assert (
@@ -278,7 +373,7 @@ def test_contract_rejects_oversized_conductance() -> None:
         conductance=C(num="9" * 51, den="1"),
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_laplacian(LaplacianRequest(network=_net(2, edge)))
+        compute_laplacian(LaplacianRequest(network=_laplacian_net(2, edge)))
     assert (
         error.value.errors()[0]["type"]
         == "electrical_network.conductance_exceeds_digit_bound"

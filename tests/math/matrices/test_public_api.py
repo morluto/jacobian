@@ -10,7 +10,10 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import matrices
 from jacobian.math.matrices._operation_models import MatrixDeterminantRequest
 from jacobian.math.matrices._tools import compute_determinant
-from jacobian.math.matrices.values import rational_matrix_from_fractions
+from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
+    rational_matrix_from_fractions,
+)
 
 
 def test_orphan_combinatorial_matrix_models_are_not_importable() -> None:
@@ -146,7 +149,14 @@ def test_rref_rejects_non_matrix_inputs() -> None:
 
 def test_rref_rejects_oversized_matrices() -> None:
     with pytest.raises(ValueError):
-        matrices.rref(sympy.zeros(33, 1))
+        matrices.rref(sympy.zeros(MAX_EXACT_LINEAR_MATRIX_AXIS + 1, 1))
+
+
+def test_rref_admits_an_axis_above_the_square_computation_dimension() -> None:
+    reduced, pivots = matrices.rref(sympy.ones(33, 1))
+    assert pivots == (0,)
+    assert reduced[0, 0] == 1
+    assert all(reduced[row, 0] == 0 for row in range(1, 33))
 
 
 def test_matrix_input_errors_are_stable() -> None:

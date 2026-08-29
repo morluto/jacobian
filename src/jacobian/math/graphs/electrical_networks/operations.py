@@ -1,4 +1,4 @@
-"""Exact electrical-network kernels backed by SymPy."""
+"""Exact electrical-network kernels with private maintained backends."""
 
 from __future__ import annotations
 
@@ -57,26 +57,10 @@ def effective_resistance(
     resistance.
     """
 
-    from sympy import Matrix, Rational
+    from jacobian.math.graphs.electrical_networks._flint import solve_potentials
 
-    lap = _laplacian(vertex_count, edges)
-    fixed = 0
-    free = [node for node in range(vertex_count) if node != fixed]
-    reduced = lap[free, free]
-    rhs = Matrix.zeros(len(free), 1)
-    for idx, node in enumerate(free):
-        if node == terminal_a:
-            rhs[idx, 0] += Rational(1)
-        if node == terminal_b:
-            rhs[idx, 0] -= Rational(1)
-
-    sol = reduced.solve(rhs)
-    potentials = [Rational(0)] * vertex_count
-    for idx, node in enumerate(free):
-        potentials[node] = sol[idx, 0]
-
-    value = potentials[terminal_a] - potentials[terminal_b]
-    return Fraction(int(value.p), int(value.q))
+    potentials = solve_potentials(vertex_count, edges, terminal_a, terminal_b, fixed=0)
+    return potentials[terminal_a] - potentials[terminal_b]
 
 
 def node_potentials(
@@ -91,19 +75,6 @@ def node_potentials(
     sink gauge fixed to zero, returning exact rational node potentials.
     """
 
-    from sympy import Matrix, Rational
+    from jacobian.math.graphs.electrical_networks._flint import solve_potentials
 
-    lap = _laplacian(vertex_count, edges)
-    free = [node for node in range(vertex_count) if node != sink]
-    reduced = lap[free, free]
-    rhs = Matrix.zeros(len(free), 1)
-    for idx, node in enumerate(free):
-        if node == source:
-            rhs[idx, 0] += Rational(1)
-
-    sol = reduced.solve(rhs)
-    potentials = [Rational(0)] * vertex_count
-    for idx, node in enumerate(free):
-        potentials[node] = sol[idx, 0]
-    potentials[sink] = Rational(0)
-    return [Fraction(int(value.p), int(value.q)) for value in potentials]
+    return list(solve_potentials(vertex_count, edges, source, sink, fixed=sink))

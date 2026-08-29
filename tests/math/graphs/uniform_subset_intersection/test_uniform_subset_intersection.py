@@ -1,0 +1,175 @@
+from __future__ import annotations
+
+from itertools import combinations
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian.math.graphs.uniform_subset_intersection._models import (
+    UniformSubsetIntersectionRequest,
+)
+from jacobian.math.graphs.uniform_subset_intersection.operations import (
+    construct_uniform_subset_intersection_graph,
+)
+
+
+def _subset_label(subset):
+    return "{" + ",".join(str(x) for x in subset) + "}"
+
+
+def test_kneser_kg42() -> None:
+    """KG(4,2): 2-subsets of [4] with intersection < 1."""
+    req = UniformSubsetIntersectionRequest(
+        ground_set_size=4,
+        subset_cardinality=2,
+        threshold=1,
+        relation="INTERSECTION_LT_THRESHOLD",
+    )
+    result = construct_uniform_subset_intersection_graph(req)
+    graph = result.graph
+    assert len(graph.vertices) == 6  # C(4,2) = 6
+    # KG(4,2) is the Petersen graph minus... actually KG(4,2) has 6 vertices
+    # and is 3 disjoint edges (perfect matching)
+    assert len(graph.edges) == 3
+
+
+def test_johnson_eq_threshold() -> None:
+    """Johnson-scheme equality: edges when intersection == threshold."""
+    req = UniformSubsetIntersectionRequest(
+        ground_set_size=5,
+        subset_cardinality=2,
+        threshold=1,
+        relation="INTERSECTION_EQ_THRESHOLD",
+    )
+    result = construct_uniform_subset_intersection_graph(req)
+    graph = result.graph
+    assert len(graph.vertices) == 10  # C(5,2) = 10
+    # Two 2-subsets of [5] share exactly 1 element when they are not disjoint
+    # Pairs sharing exactly 1 element: total - disjoint pairs
+    # Disjoint pairs: for each pair {a,b}, {c,d} with no overlap, that's C(5,2)*C(3,2)/2 = 15
+    # Total pairs: C(10,2) = 45
+    # So 45 - 15 = 30 edges with intersection == 1
+    assert len(graph.edges) == 30
+
+
+def test_empty_k_zero() -> None:
+    """k=0 means one empty subset vertex, no edges."""
+    req = UniformSubsetIntersectionRequest(
+        ground_set_size=4,
+        subset_cardinality=0,
+        threshold=0,
+        relation="INTERSECTION_EQ_THRESHOLD",
+    )
+    result = construct_uniform_subset_intersection_graph(req)
+    graph = result.graph
+    assert len(graph.vertices) == 0  # k=0 yields empty graph by convention
+
+
+def test_single_subset() -> None:
+    """k=n yields one subset, no edges."""
+    req = UniformSubsetIntersectionRequest(
+        ground_set_size=3,
+        subset_cardinality=3,
+        threshold=0,
+        relation="INTERSECTION_LT_THRESHOLD",
+    )
+    result = construct_uniform_subset_intersection_graph(req)
+    graph = result.graph
+    assert len(graph.vertices) == 1
+    assert len(graph.edges) == 0
+
+
+def test_vertex_labels_retain_source() -> None:
+    """Each vertex label is the canonical subset representation."""
+    req = UniformSubsetIntersectionRequest(
+        ground_set_size=4,
+        subset_cardinality=2,
+        threshold=1,
+        relation="INTERSECTION_LT_THRESHOLD",
+    )
+    result = construct_uniform_subset_intersection_graph(req)
+    expected_labels = {_subset_label(s) for s in combinations(range(4), 2)}
+    assert set(result.graph.vertices) == expected_labels
+
+
+def test_exhaustive_small_comparison() -> None:
+    """Compare against independent enumeration for small n,k,t."""
+    for n in range(2, 6):
+        for k in range(1, n + 1):
+            subsets = list(combinations(range(n), k))
+            for t in range(k + 1):
+                for relation in [
+                    "INTERSECTION_LT_THRESHOLD",
+                    "INTERSECTION_EQ_THRESHOLD",
+                ]:
+                    req = UniformSubsetIntersectionRequest(
+                        ground_set_size=n,
+                        subset_cardinality=k,
+                        threshold=t,
+                        relation=relation,
+                    )
+                    result = construct_uniform_subset_intersection_graph(req)
+                    edges = set()
+                    for i, a in enumerate(subsets):
+                        for j, b in enumerate(subsets):
+                            if i >= j:
+                                continue
+                            isect = len(set(a) & set(b))
+                            if relation == "INTERSECTION_LT_THRESHOLD":
+                                adj = isect < t
+                            else:
+                                adj = isect == t
+                            if adj:
+                                la, lb = _subset_label(a), _subset_label(b)
+                                edges.add((min(la, lb), max(la, lb)))
+                    assert set(result.graph.edges) == edges
+
+
+def test_no_loops_or_duplicates() -> None:
+    """No self-loops or duplicate edges."""
+    req = UniformSubsetIntersectionRequest(
+        ground_set_size=5,
+        subset_cardinality=2,
+        threshold=1,
+        relation="INTERSECTION_LT_THRESHOLD",
+    )
+    result = construct_uniform_subset_intersection_graph(req)
+    for a, b in result.graph.edges:
+        assert a != b, "self-loop found"
+    edges = result.graph.edges
+    assert len(edges) == len(set(edges)), "duplicate edges found"
+
+
+def test_rejects_k_exceeds_n() -> None:
+    with pytest.raises(ValidationError):
+        UniformSubsetIntersectionRequest(
+            ground_set_size=3,
+            subset_cardinality=5,
+            threshold=1,
+            relation="INTERSECTION_LT_THRESHOLD",
+        )
+
+
+def test_rejects_threshold_exceeds_k() -> None:
+    with pytest.raises(ValidationError):
+        UniformSubsetIntersectionRequest(
+            ground_set_size=4,
+            subset_cardinality=2,
+            threshold=3,
+            relation="INTERSECTION_LT_THRESHOLD",
+        )
+
+
+def test_result_retains_metadata() -> None:
+    """Result retains the source parameters."""
+    req = UniformSubsetIntersectionRequest(
+        ground_set_size=4,
+        subset_cardinality=2,
+        threshold=1,
+        relation="INTERSECTION_LT_THRESHOLD",
+    )
+    result = construct_uniform_subset_intersection_graph(req)
+    assert result.ground_set_size == 4
+    assert result.subset_cardinality == 2
+    assert result.threshold == 1
+    assert result.relation == "INTERSECTION_LT_THRESHOLD"

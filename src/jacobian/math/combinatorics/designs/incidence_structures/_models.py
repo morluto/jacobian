@@ -689,15 +689,7 @@ class LeviGraphResult(StrictModel):
 
 class GramRequest(StrictModel):
     incidence: IncidenceStructure
-    axis: str = Field(default="point")
-
-    @model_validator(mode="after")
-    def require_valid_axis(self) -> Self:
-        if self.axis not in ("point", "block"):
-            raise _validation_error(
-                "gram_axis_invalid", "axis must be 'point' or 'block'"
-            )
-        return self
+    axis: Literal["point", "block"] = "point"
 
 
 class GramResult(StrictModel):

@@ -22,9 +22,11 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IncidenceMultiplicityDifference,
     IncidenceTradeRequest,
 )
+from jacobian.math.combinatorics.designs.incidence_structures._tools import (
+    _containment_profile,
+    _incidence_trade,
+)
 from jacobian.math.combinatorics.designs.incidence_structures.operations import (
-    compute_containment_profile,
-    compute_incidence_trade,
     verify_incidence_moment_comparison,
 )
 
@@ -208,7 +210,7 @@ def test_profile_admission_uses_the_complete_subset_count() -> None:
     rejected_points = tuple(f"p{index}" for index in range(33))
     rejected = _family(((),), "b", points=rejected_points)
     with pytest.raises(ValueError):
-        compute_containment_profile(ContainmentProfileRequest(incidence=rejected, t=3))
+        _containment_profile(ContainmentProfileRequest(incidence=rejected, t=3))
 
 
 def test_profile_admission_reserves_output_for_repeated_labels() -> None:
@@ -216,7 +218,7 @@ def test_profile_admission_reserves_output_for_repeated_labels() -> None:
     incidence = _family(((),), "b", points=points)
 
     with pytest.raises(ValueError):
-        compute_containment_profile(ContainmentProfileRequest(incidence=incidence, t=2))
+        _containment_profile(ContainmentProfileRequest(incidence=incidence, t=2))
 
 
 def test_trade_admission_is_budget_derived_with_conservative_order_ceiling() -> None:
@@ -227,9 +229,7 @@ def test_trade_admission_is_budget_derived_with_conservative_order_ceiling() -> 
     assert IncidenceTradeRequest(left=left, right=right, max_order=2)
 
     with pytest.raises(ValueError):
-        compute_incidence_trade(
-            IncidenceTradeRequest(left=left, right=right, max_order=3)
-        )
+        _incidence_trade(IncidenceTradeRequest(left=left, right=right, max_order=3))
 
     tiny_left = _family((("a",),), "l", points=("a", "b"))
     tiny_right = _family((("b",),), "r", points=("a", "b"))
@@ -252,7 +252,7 @@ def test_trade_admission_charges_each_profile_once() -> None:
     left = _family(blocks, "l", points=points)
     right = _family(blocks, "r", points=points)
 
-    result = compute_incidence_trade(
+    result = _incidence_trade(
         IncidenceTradeRequest(left=left, right=right, max_order=2)
     )
 
@@ -265,9 +265,7 @@ def test_trade_requires_identical_ordered_point_parents() -> None:
     right = _family((("a",),), "r", points=("b", "a"))
 
     with pytest.raises(OperationDomainValidationError) as caught:
-        compute_incidence_trade(
-            IncidenceTradeRequest(left=left, right=right, max_order=1)
-        )
+        _incidence_trade(IncidenceTradeRequest(left=left, right=right, max_order=1))
     assert caught.value.errors()[0]["type"] == (
         "incidence_structure.trade_point_axis_mismatch"
     )
@@ -289,9 +287,7 @@ def test_trade_admission_reserves_output_for_every_source_echo() -> None:
     right = _long_id_family("r", "y", 3_000)
 
     with pytest.raises(ValueError):
-        compute_incidence_trade(
-            IncidenceTradeRequest(left=left, right=right, max_order=1)
-        )
+        _incidence_trade(IncidenceTradeRequest(left=left, right=right, max_order=1))
 
 
 def test_admitted_trade_returns_typed_result_within_output_budget() -> None:
@@ -1011,4 +1007,4 @@ def test_catalog_adapter_returns_the_native_result() -> None:
     right = _family((("a", "b"),), "r", points=("a", "b"))
     request = IncidenceTradeRequest(left=left, right=right, max_order=1)
 
-    assert compute_incidence_trade(request) == check_incidence_trade(left, right, 1)
+    assert _incidence_trade(request) == check_incidence_trade(left, right, 1)

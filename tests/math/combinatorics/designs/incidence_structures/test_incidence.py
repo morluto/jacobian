@@ -18,17 +18,17 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     LeviGraphRequest,
     RestrictionRequest,
 )
-from jacobian.math.combinatorics.designs.incidence_structures.operations import (
-    compute_complement,
-    compute_containment_profile,
-    compute_degree_profile,
-    compute_derived_residual,
-    compute_dual,
-    compute_gram,
-    compute_incidence_matrix,
-    compute_intersections,
-    compute_levi_graph,
-    compute_restriction,
+from jacobian.math.combinatorics.designs.incidence_structures._tools import (
+    _complement,
+    _containment_profile,
+    _degree_profile,
+    _derived_residual,
+    _dual,
+    _gram,
+    _incidence_matrix,
+    _intersections,
+    _levi_graph,
+    _restriction,
 )
 
 STRUCTURE = IncidenceStructure.model_validate(
@@ -66,7 +66,7 @@ FANO = IncidenceStructure.model_validate(
 
 class TestIncidenceMatrix:
     def test_matrix(self) -> None:
-        result = compute_incidence_matrix(IncidenceMatrixRequest(incidence=STRUCTURE))
+        result = _incidence_matrix(IncidenceMatrixRequest(incidence=STRUCTURE))
         assert result.matrix == ((1, 0), (1, 1), (0, 1))
         assert result.points == ("p1", "p2", "p3")
         assert result.block_ids == ("b1", "b2")
@@ -155,13 +155,13 @@ class TestIncidenceStructureCanonicalization:
 
 class TestDegreeProfile:
     def test_degrees(self) -> None:
-        result = compute_degree_profile(IncidenceMatrixRequest(incidence=STRUCTURE))
+        result = _degree_profile(IncidenceMatrixRequest(incidence=STRUCTURE))
         assert result.point_degrees == (("p1", 1), ("p2", 2), ("p3", 1))
         assert result.block_degrees == (("b1", 2), ("b2", 2))
         assert result.total_incidences == 4
 
     def test_single_point(self) -> None:
-        result = compute_degree_profile(
+        result = _degree_profile(
             IncidenceMatrixRequest.model_validate(
                 {
                     "incidence": {
@@ -177,7 +177,7 @@ class TestDegreeProfile:
 
 class TestContainmentProfile:
     def test_t1_triangle(self) -> None:
-        result = compute_containment_profile(
+        result = _containment_profile(
             ContainmentProfileRequest(incidence=STRUCTURE, t=1)
         )
         assert result.t == 1
@@ -195,7 +195,7 @@ class TestContainmentProfile:
         assert not result.is_constant
 
     def test_t2_triangle(self) -> None:
-        result = compute_containment_profile(
+        result = _containment_profile(
             ContainmentProfileRequest(incidence=STRUCTURE, t=2)
         )
         assert len(result.subset_profile) == 3
@@ -210,23 +210,19 @@ class TestContainmentProfile:
         assert result.total_multiplicity == 2
 
     def test_t1_fano_constant(self) -> None:
-        result = compute_containment_profile(
-            ContainmentProfileRequest(incidence=FANO, t=1)
-        )
+        result = _containment_profile(ContainmentProfileRequest(incidence=FANO, t=1))
         assert result.is_constant
         assert result.constant_lambda == 3
 
     def test_t2_fano_constant(self) -> None:
-        result = compute_containment_profile(
-            ContainmentProfileRequest(incidence=FANO, t=2)
-        )
+        result = _containment_profile(ContainmentProfileRequest(incidence=FANO, t=2))
         assert result.is_constant
         assert result.constant_lambda == 1
 
 
 class TestIntersections:
     def test_triangle_intersections(self) -> None:
-        result = compute_intersections(IntersectionsRequest(incidence=STRUCTURE))
+        result = _intersections(IntersectionsRequest(incidence=STRUCTURE))
         assert len(result.pairwise) == 1
         bid, bid2, inter, size = result.pairwise[0]
         assert bid == "b1"
@@ -236,7 +232,7 @@ class TestIntersections:
         assert result.histogram == ((1, 1),)
 
     def test_fano_intersections(self) -> None:
-        result = compute_intersections(IntersectionsRequest(incidence=FANO))
+        result = _intersections(IntersectionsRequest(incidence=FANO))
         # Fano plane: every pair of lines meets in exactly 1 point
         assert len(result.pairwise) == 21  # C(7,2)
         assert all(size == 1 for _, _, _, size in result.pairwise)
@@ -245,7 +241,7 @@ class TestIntersections:
 
 class TestDual:
     def test_triangle_dual(self) -> None:
-        result = compute_dual(DualRequest(incidence=STRUCTURE))
+        result = _dual(DualRequest(incidence=STRUCTURE))
         # Dual points = block IDs, dual blocks = per original point
         assert result.points == ("b1", "b2")
         assert result.block_ids == ("p1", "p2", "p3")
@@ -255,9 +251,9 @@ class TestDual:
         assert result.blocks == (("b1",), ("b1", "b2"), ("b2",))
 
     def test_dual_of_dual(self) -> None:
-        first = compute_dual(DualRequest(incidence=STRUCTURE))
+        first = _dual(DualRequest(incidence=STRUCTURE))
         # Build a new structure from the dual and dual again
-        second = compute_dual(
+        second = _dual(
             DualRequest.model_validate(
                 {
                     "incidence": {
@@ -276,7 +272,7 @@ class TestDual:
 
 class TestComplement:
     def test_triangle_complement(self) -> None:
-        result = compute_complement(ComplementRequest(incidence=STRUCTURE))
+        result = _complement(ComplementRequest(incidence=STRUCTURE))
         assert result.points == ("p1", "p2", "p3")
         assert result.block_ids == ("b1", "b2")
         # b1 = {p1,p2}, complement = {p3}
@@ -290,7 +286,7 @@ class TestComplement:
 
     def test_complement_size_identity(self) -> None:
         """Complement maps block size k to v-k."""
-        result = compute_complement(ComplementRequest(incidence=STRUCTURE))
+        result = _complement(ComplementRequest(incidence=STRUCTURE))
         v = len(STRUCTURE.points)
         # b1 size 2 -> complement size v-2 = 1
         # b2 size 2 -> complement size v-2 = 1
@@ -300,7 +296,7 @@ class TestComplement:
 
 class TestRestriction:
     def test_restrict_points(self) -> None:
-        result = compute_restriction(
+        result = _restriction(
             RestrictionRequest(
                 incidence=STRUCTURE,
                 points=("p1", "p2"),
@@ -313,7 +309,7 @@ class TestRestriction:
         assert result.blocks[1] == ("p2",)
 
     def test_restrict_blocks(self) -> None:
-        result = compute_restriction(
+        result = _restriction(
             RestrictionRequest(
                 incidence=STRUCTURE,
                 block_ids=("b1",),
@@ -324,7 +320,7 @@ class TestRestriction:
         assert result.points == ("p1", "p2", "p3")
 
     def test_restrict_both(self) -> None:
-        result = compute_restriction(
+        result = _restriction(
             RestrictionRequest(
                 incidence=STRUCTURE,
                 points=("p2",),
@@ -339,7 +335,7 @@ class TestRestriction:
 
 class TestDerivedResidual:
     def test_derived_at_p2(self) -> None:
-        result = compute_derived_residual(
+        result = _derived_residual(
             DerivedResidualRequest(incidence=STRUCTURE, point="p2", kind="derived")
         )
         assert result.kind == "derived"
@@ -352,7 +348,7 @@ class TestDerivedResidual:
         assert result.source_blocks == ("b1", "b2")
 
     def test_residual_at_p1(self) -> None:
-        result = compute_derived_residual(
+        result = _derived_residual(
             DerivedResidualRequest(incidence=STRUCTURE, point="p1", kind="residual")
         )
         assert result.kind == "residual"
@@ -392,7 +388,7 @@ class TestDerivedResidual:
         point: str,
         kind: Literal["derived", "residual"],
     ) -> None:
-        result = compute_derived_residual(
+        result = _derived_residual(
             DerivedResidualRequest(incidence=incidence, point=point, kind=kind)
         )
 
@@ -403,12 +399,12 @@ class TestDerivedResidual:
     def test_derived_at_nonexistent_point(self) -> None:
         request = DerivedResidualRequest(incidence=STRUCTURE, point="pX")
         with pytest.raises(OperationDomainValidationError, match="declared point"):
-            compute_derived_residual(request)
+            _derived_residual(request)
 
 
 class TestLeviGraph:
     def test_triangle_levi(self) -> None:
-        result = compute_levi_graph(LeviGraphRequest(incidence=STRUCTURE))
+        result = _levi_graph(LeviGraphRequest(incidence=STRUCTURE))
         assert result.left_vertices == ("p:p1", "p:p2", "p:p3")
         assert result.right_vertices == ("b:b1", "b:b2")
         assert ("p:p1", "b:b1") in result.edges
@@ -419,7 +415,7 @@ class TestLeviGraph:
 
     def test_label_collision(self) -> None:
         """Point and block labels with same raw string stay distinct."""
-        result = compute_levi_graph(
+        result = _levi_graph(
             LeviGraphRequest.model_validate(
                 {
                     "incidence": {
@@ -437,7 +433,7 @@ class TestLeviGraph:
 
 class TestGram:
     def test_gram_point_axis(self) -> None:
-        result = compute_gram(GramRequest(incidence=STRUCTURE, axis="point"))
+        result = _gram(GramRequest(incidence=STRUCTURE, axis="point"))
         assert result.axis == "point"
         assert result.labels == ("p1", "p2", "p3")
         # N = [[1,0],[1,1],[0,1]]
@@ -456,7 +452,7 @@ class TestGram:
         )
 
     def test_gram_block_axis(self) -> None:
-        result = compute_gram(GramRequest(incidence=STRUCTURE, axis="block"))
+        result = _gram(GramRequest(incidence=STRUCTURE, axis="block"))
         assert result.axis == "block"
         assert result.labels == ("b1", "b2")
         # N^T N:

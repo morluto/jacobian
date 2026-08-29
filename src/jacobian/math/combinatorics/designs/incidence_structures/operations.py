@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Literal
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.designs.incidence_structures._kernel import (
@@ -10,29 +11,19 @@ from jacobian.math.combinatorics.designs.incidence_structures._kernel import (
     incidence_trade_data,
 )
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
-    ComplementRequest,
     ComplementResult,
-    ContainmentProfileRequest,
     ContainmentProfileResult,
     DegreeProfileResult,
-    DerivedResidualRequest,
     DerivedResidualResult,
-    DualRequest,
     DualResult,
-    GramRequest,
     GramResult,
-    IncidenceMatrixRequest,
     IncidenceMatrixResult,
     IncidenceMomentComparison,
     IncidenceStructure,
     IncidenceStructureAdmissionError,
-    IncidenceTradeRequest,
     IncidenceTradeResult,
-    IntersectionsRequest,
     IntersectionsResult,
-    LeviGraphRequest,
     LeviGraphResult,
-    RestrictionRequest,
     RestrictionResult,
     _require_containment_profile_admitted,
     _require_incidence_trade_admitted,
@@ -48,7 +39,14 @@ def containment_profile(
         raise TypeError("incidence must be an IncidenceStructure")
     if type(order) is not int:
         raise TypeError("containment-profile order must be an integer")
-    _require_containment_profile_admitted(incidence, order)
+    try:
+        _require_containment_profile_admitted(incidence, order)
+    except IncidenceStructureAdmissionError as exc:
+        raise OperationDomainValidationError(
+            location=("incidence", "order"),
+            code=f"incidence_structure.{exc.reason}",
+            message=str(exc),
+        ) from exc
     return ContainmentProfileResult._from_kernel(
         incidence, order, containment_profile_data(incidence, order)
     )
@@ -65,7 +63,14 @@ def check_incidence_trade(
         raise TypeError("trade sides must be IncidenceStructure values")
     if type(max_order) is not int:
         raise TypeError("trade comparison order must be an integer")
-    _require_incidence_trade_admitted(left, right, max_order)
+    try:
+        _require_incidence_trade_admitted(left, right, max_order)
+    except IncidenceStructureAdmissionError as exc:
+        raise OperationDomainValidationError(
+            location=("left", "right", "max_order"),
+            code=f"incidence_structure.{exc.reason}",
+            message=str(exc),
+        ) from exc
     zeroth_difference, comparisons, _positive_moments_equal = incidence_trade_data(
         left, right, max_order
     )
@@ -106,18 +111,16 @@ def verify_incidence_moment_comparison(
 
 __all__ = [
     "check_incidence_trade",
-    "compute_complement",
-    "compute_containment_profile",
-    "compute_degree_profile",
-    "compute_derived_residual",
-    "compute_dual",
-    "compute_gram",
-    "compute_incidence_matrix",
-    "compute_incidence_trade",
-    "compute_intersections",
-    "compute_levi_graph",
-    "compute_restriction",
+    "complement",
     "containment_profile",
+    "degree_profile",
+    "derived_residual",
+    "dual",
+    "gram",
+    "incidence_matrix",
+    "intersections",
+    "levi_graph",
+    "restriction",
     "verify_incidence_moment_comparison",
 ]
 
@@ -128,9 +131,8 @@ def _point_sort_key(points: tuple[str, ...]) -> Callable[[str], int]:
     return lambda point: index[point]
 
 
-def compute_incidence_matrix(request: IncidenceMatrixRequest) -> IncidenceMatrixResult:
+def incidence_matrix(incidence: IncidenceStructure) -> IncidenceMatrixResult:
     """Compute the exact 0/1 incidence matrix."""
-    incidence = request.incidence
     matrix = tuple(
         tuple(int(point in block) for block in incidence.blocks)
         for point in incidence.points
@@ -142,18 +144,15 @@ def compute_incidence_matrix(request: IncidenceMatrixRequest) -> IncidenceMatrix
     )
 
 
-def compute_degree_profile(request: IncidenceMatrixRequest) -> DegreeProfileResult:
+def degree_profile(incidence: IncidenceStructure) -> DegreeProfileResult:
     """Compute per-point and per-block degree profiles."""
-    incidence = request.incidence
     point_degrees = tuple(
         (point, sum(point in block for block in incidence.blocks))
         for point in incidence.points
     )
     block_degrees = tuple(
         (block_id, len(block))
-        for block_id, block in zip(
-            incidence.block_ids, incidence.blocks, strict=True
-        )
+        for block_id, block in zip(incidence.block_ids, incidence.blocks, strict=True)
     )
     return DegreeProfileResult(
         point_degrees=point_degrees,
@@ -162,45 +161,8 @@ def compute_degree_profile(request: IncidenceMatrixRequest) -> DegreeProfileResu
     )
 
 
-def compute_containment_profile(
-    request: ContainmentProfileRequest,
-) -> ContainmentProfileResult:
-    """Compute t-subset containment multiplicity profiles."""
-    _require_containment_profile_admitted(request.incidence, request.t)
-    return ContainmentProfileResult._from_kernel(
-        request.incidence,
-        request.t,
-        containment_profile_data(request.incidence, request.t),
-    )
-
-
-def compute_incidence_trade(request: IncidenceTradeRequest) -> IncidenceTradeResult:
-    """Compare two indexed block families through a positive subset order."""
-    try:
-        _require_incidence_trade_admitted(
-            request.left, request.right, request.max_order
-        )
-    except IncidenceStructureAdmissionError as exc:
-        raise OperationDomainValidationError(
-            location=("left", "right", "max_order"),
-            code=f"incidence_structure.{exc.reason}",
-            message=str(exc),
-        ) from exc
-    zeroth_difference, comparisons, _positive_moments_equal = incidence_trade_data(
-        request.left, request.right, request.max_order
-    )
-    return IncidenceTradeResult._from_kernel(
-        request.left,
-        request.right,
-        request.max_order,
-        zeroth_difference,
-        comparisons,
-    )
-
-
-def compute_intersections(request: IntersectionsRequest) -> IntersectionsResult:
+def intersections(incidence: IncidenceStructure) -> IntersectionsResult:
     """Compute block intersection profiles."""
-    incidence = request.incidence
     sort_key = _point_sort_key(incidence.points)
     pairwise: list[tuple[str, str, tuple[str, ...], int]] = []
     histogram: dict[int, int] = {}
@@ -224,9 +186,8 @@ def compute_intersections(request: IntersectionsRequest) -> IntersectionsResult:
     )
 
 
-def compute_dual(request: DualRequest) -> DualResult:
+def dual(incidence: IncidenceStructure) -> DualResult:
     """Compute the dual incidence structure (swap points and blocks)."""
-    incidence = request.incidence
     sort_key = _point_sort_key(incidence.block_ids)
     dual_points = incidence.block_ids
     dual_block_ids = incidence.points
@@ -259,9 +220,8 @@ def compute_dual(request: DualRequest) -> DualResult:
     )
 
 
-def compute_complement(request: ComplementRequest) -> ComplementResult:
+def complement(incidence: IncidenceStructure) -> ComplementResult:
     """Compute the complement incidence structure."""
-    incidence = request.incidence
     point_set = set(incidence.points)
     sort_key = _point_sort_key(incidence.points)
     complement_blocks = tuple(
@@ -282,19 +242,20 @@ def compute_complement(request: ComplementRequest) -> ComplementResult:
     )
 
 
-def compute_restriction(request: RestrictionRequest) -> RestrictionResult:
+def restriction(
+    incidence: IncidenceStructure,
+    points: tuple[str, ...],
+    block_ids: tuple[str, ...],
+) -> RestrictionResult:
     """Restrict to a point subset and/or block subset."""
-    incidence = request.incidence
     sort_key = _point_sort_key(incidence.points)
-    selected_block_ids = (
-        request.block_ids or incidence.block_ids
-    )
+    selected_block_ids = block_ids or incidence.block_ids
     blocks_by_id = dict(zip(incidence.block_ids, incidence.blocks, strict=True))
     selected_blocks = [blocks_by_id[block_id] for block_id in selected_block_ids]
-    retained_point_set = set(request.points)
+    retained_point_set = set(points)
     retained_points = (
         tuple(point for point in incidence.points if point in retained_point_set)
-        if request.points
+        if points
         else incidence.points
     )
     retained_point_set = set(retained_points)
@@ -309,12 +270,10 @@ def compute_restriction(request: RestrictionRequest) -> RestrictionResult:
     )
 
 
-def compute_derived_residual(
-    request: DerivedResidualRequest,
+def derived_residual(
+    incidence: IncidenceStructure, point: str, kind: Literal["derived", "residual"]
 ) -> DerivedResidualResult:
     """Compute the derived or residual incidence structure at a point."""
-    incidence = request.incidence
-    point = request.point
     if point not in incidence.points:
         raise OperationDomainValidationError(
             location=("point",),
@@ -323,21 +282,19 @@ def compute_derived_residual(
         )
     selected = tuple(
         (block_id, block)
-        for block_id, block in zip(
-            incidence.block_ids, incidence.blocks, strict=True
-        )
-        if (point in block) == (request.kind == "derived")
+        for block_id, block in zip(incidence.block_ids, incidence.blocks, strict=True)
+        if (point in block) == (kind == "derived")
     )
     sort_key = _point_sort_key(incidence.points)
     blocks = tuple(
         tuple(sorted((member for member in block if member != point), key=sort_key))
-        if request.kind == "derived"
+        if kind == "derived"
         else block
         for _, block in selected
     )
     block_ids = tuple(block_id for block_id, _ in selected)
     return DerivedResidualResult(
-        kind=request.kind,
+        kind=kind,
         anchor_point=point,
         points=tuple(member for member in incidence.points if member != point),
         block_ids=block_ids,
@@ -346,16 +303,13 @@ def compute_derived_residual(
     )
 
 
-def compute_levi_graph(request: LeviGraphRequest) -> LeviGraphResult:
+def levi_graph(incidence: IncidenceStructure) -> LeviGraphResult:
     """Compute the Levi graph (bipartite incidence graph)."""
-    incidence = request.incidence
     left_vertices = tuple(f"p:{point}" for point in incidence.points)
     right_vertices = tuple(f"b:{block_id}" for block_id in incidence.block_ids)
     edges = tuple(
         (f"p:{point}", f"b:{block_id}")
-        for block_id, block in zip(
-            incidence.block_ids, incidence.blocks, strict=True
-        )
+        for block_id, block in zip(incidence.block_ids, incidence.blocks, strict=True)
         for point in block
     )
     return LeviGraphResult(
@@ -365,20 +319,18 @@ def compute_levi_graph(request: LeviGraphRequest) -> LeviGraphResult:
     )
 
 
-def compute_gram(request: GramRequest) -> GramResult:
+def gram(incidence: IncidenceStructure, axis: Literal["point", "block"]) -> GramResult:
     """Compute the Gram / concordance matrix."""
-    incidence = request.incidence
     incidence_matrix = tuple(
         tuple(int(point in block) for block in incidence.blocks)
         for point in incidence.points
     )
-    if request.axis == "point":
+    if axis == "point":
         labels = incidence.points
         matrix = tuple(
             tuple(
                 sum(
-                    incidence_matrix[left][column]
-                    * incidence_matrix[right][column]
+                    incidence_matrix[left][column] * incidence_matrix[right][column]
                     for column in range(len(incidence.blocks))
                 )
                 for right in range(len(incidence.points))
@@ -397,4 +349,4 @@ def compute_gram(request: GramRequest) -> GramResult:
             )
             for left in range(len(incidence.blocks))
         )
-    return GramResult(axis=request.axis, labels=labels, matrix=matrix)
+    return GramResult(axis=axis, labels=labels, matrix=matrix)

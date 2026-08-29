@@ -30,18 +30,64 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     RestrictionResult,
 )
 from jacobian.math.combinatorics.designs.incidence_structures.operations import (
-    compute_complement,
-    compute_containment_profile,
-    compute_degree_profile,
-    compute_derived_residual,
-    compute_dual,
-    compute_gram,
-    compute_incidence_matrix,
-    compute_incidence_trade,
-    compute_intersections,
-    compute_levi_graph,
-    compute_restriction,
+    check_incidence_trade,
+    complement,
+    containment_profile,
+    degree_profile,
+    derived_residual,
+    dual,
+    gram,
+    incidence_matrix,
+    intersections,
+    levi_graph,
+    restriction,
 )
+
+
+def _incidence_matrix(request: IncidenceMatrixRequest) -> IncidenceMatrixResult:
+    return incidence_matrix(request.incidence)
+
+
+def _degree_profile(request: IncidenceMatrixRequest) -> DegreeProfileResult:
+    return degree_profile(request.incidence)
+
+
+def _containment_profile(
+    request: ContainmentProfileRequest,
+) -> ContainmentProfileResult:
+    return containment_profile(request.incidence, request.t)
+
+
+def _incidence_trade(request: IncidenceTradeRequest) -> IncidenceTradeResult:
+    return check_incidence_trade(request.left, request.right, request.max_order)
+
+
+def _intersections(request: IntersectionsRequest) -> IntersectionsResult:
+    return intersections(request.incidence)
+
+
+def _dual(request: DualRequest) -> DualResult:
+    return dual(request.incidence)
+
+
+def _complement(request: ComplementRequest) -> ComplementResult:
+    return complement(request.incidence)
+
+
+def _restriction(request: RestrictionRequest) -> RestrictionResult:
+    return restriction(request.incidence, request.points, request.block_ids)
+
+
+def _derived_residual(request: DerivedResidualRequest) -> DerivedResidualResult:
+    return derived_residual(request.incidence, request.point, request.kind)
+
+
+def _levi_graph(request: LeviGraphRequest) -> LeviGraphResult:
+    return levi_graph(request.incidence)
+
+
+def _gram(request: GramRequest) -> GramResult:
+    return gram(request.incidence, request.axis)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -82,7 +128,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "structure, with labelled point rows and block columns.",
         IncidenceMatrixRequest,
         IncidenceMatrixResult,
-        compute_incidence_matrix,
+        _incidence_matrix,
         "combinatorics",
         "incidence",
         "exact",
@@ -103,7 +149,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "incidence count.",
         IncidenceMatrixRequest,
         DegreeProfileResult,
-        compute_degree_profile,
+        _degree_profile,
         "combinatorics",
         "incidence",
         "exact",
@@ -124,7 +170,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "multiplicity histogram and whether the profile is constant.",
         ContainmentProfileRequest,
         ContainmentProfileResult,
-        compute_containment_profile,
+        _containment_profile,
         "combinatorics",
         "incidence",
         "exact",
@@ -150,7 +196,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "zeroth block-count difference separately.",
         IncidenceTradeRequest,
         IncidenceTradeResult,
-        compute_incidence_trade,
+        _incidence_trade,
         "combinatorics",
         "incidence",
         "design-trade",
@@ -184,7 +230,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "subset and cardinality, plus the intersection-size histogram.",
         IntersectionsRequest,
         IntersectionsResult,
-        compute_intersections,
+        _intersections,
         "combinatorics",
         "incidence",
         "exact",
@@ -204,7 +250,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "original block IDs and dual blocks are one per original point.",
         DualRequest,
         DualResult,
-        compute_dual,
+        _dual,
         "combinatorics",
         "incidence",
         "exact",
@@ -224,7 +270,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "preserving block IDs and returning the exact old/new correspondence.",
         ComplementRequest,
         ComplementResult,
-        compute_complement,
+        _complement,
         "combinatorics",
         "incidence",
         "exact",
@@ -245,7 +291,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "are preserved.",
         RestrictionRequest,
         RestrictionResult,
-        compute_restriction,
+        _restriction,
         "combinatorics",
         "incidence",
         "exact",
@@ -269,7 +315,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "not containing p) on P \\ {p}.",
         DerivedResidualRequest,
         DerivedResidualResult,
-        compute_derived_residual,
+        _derived_residual,
         "combinatorics",
         "incidence",
         "exact",
@@ -290,7 +336,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "edge for each incidence.",
         LeviGraphRequest,
         LeviGraphResult,
-        compute_levi_graph,
+        _levi_graph,
         "combinatorics",
         "incidence",
         "exact",
@@ -310,7 +356,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "integer Gram matrix N N^T (point axis) or N^T N (block axis).",
         GramRequest,
         GramResult,
-        compute_gram,
+        _gram,
         "combinatorics",
         "incidence",
         "exact",

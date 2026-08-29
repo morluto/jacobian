@@ -9,17 +9,17 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError, OperationResult
-from jacobian.math.polynomials.ideals import _operations as operations_module
+from jacobian.math.polynomials.ideals import operations as operations_module
 from jacobian.math.polynomials.ideals._models import (
     MAX_OUTPUT_GENERATORS,
     MAX_OUTPUT_TERMS,
     IdealMinimalPrimesRequest,
     IdealMinimalPrimesResult,
 )
-from jacobian.math.polynomials.ideals._operations import (
-    compute_ideal_minimal_primes,
-)
 from jacobian.math.polynomials.ideals._singular import SingularMinimalPrimesResult
+from jacobian.math.polynomials.ideals.operations import (
+    ideal_minimal_primes,
+)
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialIdeal,
@@ -27,8 +27,13 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
+
+def _run_minimal_primes(request: IdealMinimalPrimesRequest):
+    return ideal_minimal_primes(request.ideal, resource_budget=request.resource_budget)
+
+
 _PRODUCER_TARGET = (
-    "jacobian.math.polynomials.ideals._operations.run_singular_minimal_primes"
+    "jacobian.math.polynomials.ideals.operations.run_singular_minimal_primes"
 )
 
 
@@ -124,7 +129,7 @@ def test_result_construction_is_structural_and_does_not_rerun_the_kernel(
     )
 
     result = IdealMinimalPrimesResult(
-        request=request,
+        ideal=request.ideal,
         outcome="COMPUTED",
         components=components,
         backend_version="4.4.0",
@@ -142,7 +147,7 @@ def test_missing_backend_is_typed_and_makes_no_component_claim(
             outcome="UNAVAILABLE", detail="backend is unavailable"
         ),
     )
-    result = compute_ideal_minimal_primes(_axes_request())
+    result = _run_minimal_primes(_axes_request())
 
     assert result.outcome == "UNAVAILABLE"
     assert result.components is None
@@ -170,7 +175,7 @@ def test_producer_runs_once_without_a_replay_backend_call(
 
     monkeypatch.setattr(_PRODUCER_TARGET, backend)
 
-    result = compute_ideal_minimal_primes(request)
+    result = _run_minimal_primes(request)
 
     assert result.outcome == "COMPUTED"
     assert result.components == components
@@ -204,7 +209,7 @@ def test_duplicate_producer_family_is_a_typed_error_without_a_third_pass(
 
     monkeypatch.setattr(_PRODUCER_TARGET, backend)
 
-    result = compute_ideal_minimal_primes(request)
+    result = _run_minimal_primes(request)
 
     assert calls == 1
     assert result.outcome == "ERROR"
@@ -215,7 +220,7 @@ def test_duplicate_producer_family_is_a_typed_error_without_a_third_pass(
 def test_trusted_factory_preserves_valid_backend_output() -> None:
     request = _axes_request()
     components = _axes_components()
-    computed = IdealMinimalPrimesResult._from_kernel(request, components, "4.4.0")
+    computed = IdealMinimalPrimesResult._from_kernel(request.ideal, components, "4.4.0")
     assert computed.outcome == "COMPUTED"
     assert computed.components == components
     assert computed.backend_version == "4.4.0"
@@ -236,7 +241,7 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
             ),
         ),
     )
-    computed = IdealMinimalPrimesResult._from_kernel(request, wide, "4.4.0")
+    computed = IdealMinimalPrimesResult._from_kernel(request.ideal, wide, "4.4.0")
     assert computed.outcome == "COMPUTED"
     assert computed.components == wide
 
@@ -262,7 +267,7 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
     ):
         IdealMinimalPrimesResult.model_validate(
             {
-                "request": request.model_dump(mode="json"),
+                "ideal": request.ideal.model_dump(mode="json"),
                 "outcome": "COMPUTED",
                 "components": [
                     component.model_dump(mode="json") for component in over_generators
@@ -286,7 +291,7 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
         ValueError, match=rf"{MAX_OUTPUT_TERMS}-term exact-result envelope"
     ):
         IdealMinimalPrimesResult(
-            request=request,
+            ideal=request.ideal,
             outcome="COMPUTED",
             components=oversized,
             backend_version="4.4.0",
@@ -299,7 +304,7 @@ def test_validator_rejects_duplicate_components() -> None:
 
     with pytest.raises(ValidationError):
         IdealMinimalPrimesResult(
-            request=request,
+            ideal=request.ideal,
             outcome="COMPUTED",
             components=duplicated,
             backend_version="4.4.0",
@@ -318,7 +323,7 @@ def test_producer_cancellation_is_a_typed_outcome(
             detail="Singular execution was cancelled before producing a result.",
         ),
     )
-    result = compute_ideal_minimal_primes(_axes_request())
+    result = _run_minimal_primes(_axes_request())
 
     assert result.outcome == "CANCELLED"
     assert result.components is None
@@ -347,7 +352,7 @@ def test_certified_families_above_the_envelope_are_rejected_before_launch(
     for variable_count in (5, 6, 7):
         variables = tuple(f"x{index}" for index in range(1, variable_count + 1))
         with pytest.raises(OperationDomainValidationError):
-            compute_ideal_minimal_primes(
+            _run_minimal_primes(
                 IdealMinimalPrimesRequest(
                     ideal=_product_ideal(variables, (2,) * variable_count)
                 )
@@ -392,9 +397,7 @@ def test_negative_root_certificate_rejects_and_admits_at_the_boundary() -> None:
         )
 
     with pytest.raises(OperationDomainValidationError):
-        compute_ideal_minimal_primes(
-            IdealMinimalPrimesRequest(ideal=unit_offset_ideal(5))
-        )
+        _run_minimal_primes(IdealMinimalPrimesRequest(ideal=unit_offset_ideal(5)))
 
     request = IdealMinimalPrimesRequest(ideal=unit_offset_ideal(4))
 
@@ -515,7 +518,7 @@ def test_coupling_generators_remove_infeasible_root_choices() -> None:
     partially_coupled = coupled_ideal(7, 2)
 
     with pytest.raises(OperationDomainValidationError):
-        compute_ideal_minimal_primes(IdealMinimalPrimesRequest(ideal=partially_coupled))
+        _run_minimal_primes(IdealMinimalPrimesRequest(ideal=partially_coupled))
 
 
 def test_incompatible_extra_generators_block_certification_entirely() -> None:
@@ -631,7 +634,7 @@ def test_request_description_advertises_the_enforced_budgets() -> None:
     reason="Singular 4.4 backend is not installed",
 )
 def test_coordinate_axes_are_the_two_qq_minimal_primes() -> None:
-    result = compute_ideal_minimal_primes(_axes_request())
+    result = _run_minimal_primes(_axes_request())
 
     assert result.outcome == "COMPUTED"
     assert result.components == _axes_components()
@@ -654,7 +657,7 @@ def test_transport_oversize_is_typed_before_operation_result_validation(
             backend_version="4.4.0",
         ),
     )
-    result = compute_ideal_minimal_primes(request)
+    result = _run_minimal_primes(request)
 
     assert result.outcome == "LIMIT_EXCEEDED"
     assert result.components is None
@@ -686,7 +689,7 @@ def test_high_degree_pure_power_source_has_the_single_axis_component() -> None:
         _poly(variables, (1, 1, (0, 1))).model_dump_json(),
     }
 
-    result = compute_ideal_minimal_primes(request)
+    result = _run_minimal_primes(request)
 
     assert result.outcome == "COMPUTED"
     assert result.components is not None
@@ -702,15 +705,15 @@ def test_high_degree_pure_power_source_has_the_single_axis_component() -> None:
 )
 def test_unit_zero_and_embedded_sources_have_their_exact_family_shapes() -> None:
     variables = ("x", "y")
-    zero = compute_ideal_minimal_primes(
+    zero = _run_minimal_primes(
         IdealMinimalPrimesRequest(ideal=_ideal(variables, _poly(variables)))
     )
-    unit = compute_ideal_minimal_primes(
+    unit = _run_minimal_primes(
         IdealMinimalPrimesRequest(
             ideal=_ideal(variables, _poly(variables, (1, 1, (0, 0))))
         )
     )
-    embedded = compute_ideal_minimal_primes(
+    embedded = _run_minimal_primes(
         IdealMinimalPrimesRequest(
             ideal=_ideal(
                 variables,
@@ -752,7 +755,7 @@ def test_prime_wider_than_the_ring_dimension_is_computed() -> None:
         )
     )
 
-    result = compute_ideal_minimal_primes(request)
+    result = _run_minimal_primes(request)
 
     assert result.outcome == "COMPUTED"
     assert result.components is not None
@@ -784,7 +787,7 @@ def test_irreducible_constraint_overflow_is_rejected_before_launch(
 
     variables = tuple(f"x{index}" for index in range(1, 6))
     with pytest.raises(OperationDomainValidationError):
-        compute_ideal_minimal_primes(
+        _run_minimal_primes(
             IdealMinimalPrimesRequest(
                 ideal=_ideal(
                     variables,
@@ -828,7 +831,7 @@ def test_coupled_source_computes_its_two_diagonal_components() -> None:
         )
     )
 
-    result = compute_ideal_minimal_primes(request)
+    result = _run_minimal_primes(request)
 
     expected = (
         _ideal(

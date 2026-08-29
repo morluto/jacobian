@@ -24,16 +24,64 @@ from jacobian.math.polynomials.ideals._models import (
     IdealSaturationRequest,
     IdealSaturationResult,
 )
-from jacobian.math.polynomials.ideals._operations import (
-    compute_elimination_ideal,
-    compute_groebner_basis,
-    compute_ideal_minimal_primes,
-    compute_ideal_normal_form,
-    compute_ideal_quotient,
-    compute_ideal_radical,
-    compute_ideal_radical_membership,
-    compute_ideal_saturation,
+from jacobian.math.polynomials.ideals.operations import (
+    elimination_ideal,
+    groebner_basis,
+    ideal_minimal_primes,
+    ideal_normal_form,
+    ideal_quotient,
+    ideal_radical,
+    ideal_radical_membership,
+    ideal_saturation,
 )
+
+
+def _run_minimal_primes(
+    request: IdealMinimalPrimesRequest,
+) -> IdealMinimalPrimesResult:
+    return ideal_minimal_primes(request.ideal, resource_budget=request.resource_budget)
+
+
+def _run_radical(request: IdealRadicalRequest) -> IdealRadicalResult:
+    return ideal_radical(request.ideal, resource_budget=request.resource_budget)
+
+
+def _run_radical_membership(
+    request: IdealRadicalMembershipRequest,
+) -> IdealRadicalMembershipResult:
+    return ideal_radical_membership(request.ideal, request.polynomial)
+
+
+def _run_quotient(request: IdealQuotientRequest) -> IdealQuotientResult:
+    return ideal_quotient(
+        request.dividend, request.divisor, resource_budget=request.resource_budget
+    )
+
+
+def _run_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
+    return ideal_saturation(
+        request.ideal, request.denominator, resource_budget=request.resource_budget
+    )
+
+
+def _run_groebner(request: GroebnerBasisRequest) -> GroebnerBasisResult:
+    return groebner_basis(
+        request.ideal,
+        request.monomial_order,
+        resource_budget=request.resource_budget,
+    )
+
+
+def _run_normal_form(request: IdealNormalFormRequest) -> IdealNormalFormResult:
+    return ideal_normal_form(request.ideal, request.polynomial, request.monomial_order)
+
+
+def _run_elimination(request: EliminationIdealRequest) -> EliminationIdealResult:
+    return elimination_ideal(
+        request.ideal,
+        request.eliminated_variables,
+        resource_budget=request.resource_budget,
+    )
 
 
 def _polynomial(
@@ -101,7 +149,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "characteristic-set checks.",
         IdealMinimalPrimesRequest,
         IdealMinimalPrimesResult,
-        compute_ideal_minimal_primes,
+        _run_minimal_primes,
         "commutative-algebra",
         "minimal-primes",
         "irreducible-components",
@@ -126,7 +174,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "QQ using the private Singular backend.",
         IdealRadicalRequest,
         IdealRadicalResult,
-        compute_ideal_radical,
+        _run_radical,
         "commutative-algebra",
         "radical",
         "exact",
@@ -153,7 +201,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "trick.",
         IdealRadicalMembershipRequest,
         IdealRadicalMembershipResult,
-        compute_ideal_radical_membership,
+        _run_radical_membership,
         "commutative-algebra",
         "radical-membership",
         "exact",
@@ -176,7 +224,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "using the private Singular backend.",
         IdealQuotientRequest,
         IdealQuotientResult,
-        compute_ideal_quotient,
+        _run_quotient,
         "commutative-algebra",
         "ideal-quotient",
         "exact",
@@ -208,7 +256,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "with all components supported on the zero locus of d removed.",
         IdealSaturationRequest,
         IdealSaturationResult,
-        compute_ideal_saturation,
+        _run_saturation,
         "commutative-algebra",
         "saturation",
         "exact",
@@ -239,7 +287,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "basis as a RationalPolynomialIdeal with the declared monomial order.",
         GroebnerBasisRequest,
         GroebnerBasisResult,
-        compute_groebner_basis,
+        _run_groebner,
         "commutative-algebra",
         "groebner-basis",
         "exact",
@@ -268,7 +316,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "outcome instead of a remainder.",
         IdealNormalFormRequest,
         IdealNormalFormResult,
-        compute_ideal_normal_form,
+        _run_normal_form,
         "commutative-algebra",
         "normal-form",
         "ideal-membership",
@@ -300,7 +348,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "an ideal.",
         EliminationIdealRequest,
         EliminationIdealResult,
-        compute_elimination_ideal,
+        _run_elimination,
         "commutative-algebra",
         "elimination-ideal",
         "exact",

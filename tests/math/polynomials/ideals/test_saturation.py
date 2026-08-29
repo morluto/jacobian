@@ -9,13 +9,19 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.ideals._models import IdealSaturationRequest
-from jacobian.math.polynomials.ideals._operations import compute_ideal_saturation
+from jacobian.math.polynomials.ideals.operations import ideal_saturation
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialIdeal,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+
+
+def _run_saturation(request: IdealSaturationRequest):
+    return ideal_saturation(
+        request.ideal, request.denominator, resource_budget=request.resource_budget
+    )
 
 
 def _polynomial(
@@ -86,7 +92,7 @@ class TestIdealSaturation:
         ideal = _ideal(("x", "y"), {(1, 1): 1})
         denominator = _polynomial(("x", "y"), {(1, 0): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
-        result = compute_ideal_saturation(request)
+        result = _run_saturation(request)
         assert result.outcome == "COMPUTED"
         assert result.saturation is not None
         assert result.backend_version is not None
@@ -102,7 +108,7 @@ class TestIdealSaturation:
         ideal = _ideal(("x", "y"), {(1, 0): 1})
         denominator = _polynomial(("x", "y"), {(0, 1): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
-        result = compute_ideal_saturation(request)
+        result = _run_saturation(request)
         assert result.outcome == "COMPUTED"
         assert result.saturation is not None
         # <x> : <y>^inf = <x> (check ideal equality, not just non-null)
@@ -115,7 +121,7 @@ class TestIdealSaturation:
         ideal = _ideal(("x", "y"), {(2, 0): 1})
         denominator = _polynomial(("x", "y"), {(0, 0): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
-        result = compute_ideal_saturation(request)
+        result = _run_saturation(request)
         assert result.outcome == "COMPUTED"
         assert result.saturation is not None
         assert _ideals_equal(result.saturation, ideal)
@@ -128,7 +134,7 @@ class TestIdealSaturation:
         ideal = _ideal(("x", "y"), {(1, 1): 1})
         denominator = _polynomial(("x", "y"), {(1, 1): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
-        result = compute_ideal_saturation(request)
+        result = _run_saturation(request)
         assert result.outcome == "COMPUTED"
         assert result.saturation is not None
         assert _ideals_equal(result.saturation, _ideal(("x", "y"), {(0, 0): 1})), (
@@ -152,7 +158,7 @@ class TestIdealSaturation:
         denominator = _polynomial(("x", "y"), {})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         with pytest.raises(OperationDomainValidationError):
-            compute_ideal_saturation(request)
+            _run_saturation(request)
 
     def test_mismatched_rings_rejected(self) -> None:
         """Saturation operands must use the same ordered ring."""
@@ -168,7 +174,7 @@ class TestIdealSaturation:
         denominator = _polynomial(("x",), {(21,): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         with pytest.raises(OperationDomainValidationError):
-            compute_ideal_saturation(request)
+            _run_saturation(request)
 
     @requires_singular
     @pytest.mark.requires_backend("singular")
@@ -177,7 +183,7 @@ class TestIdealSaturation:
         ideal = _ideal(("x", "y"), {(1, 1): 1})
         denominator = _polynomial(("x", "y"), {(1, 0): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
-        result = compute_ideal_saturation(request)
+        result = _run_saturation(request)
         assert result.outcome == "COMPUTED"
         assert result.backend_version is not None
         assert result.backend_version != ""

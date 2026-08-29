@@ -464,7 +464,7 @@ class IdealMinimalPrimesResult(StrictModel):
     ideal.
     """
 
-    request: IdealMinimalPrimesRequest
+    ideal: RationalPolynomialIdeal
     outcome: IdealExecutionOutcome
     components: tuple[RationalPolynomialIdeal, ...] | None = None
     backend_version: str | None = None
@@ -490,20 +490,20 @@ class IdealMinimalPrimesResult(StrictModel):
             raise _validation_error(
                 "computed minimal-prime family requires components and backend version"
             )
-        _require_computed_minimal_prime_family(self.request, self.components)
+        _require_computed_minimal_prime_family(self.ideal, self.components)
         return self
 
     @classmethod
     def _from_kernel(
         cls,
-        request: IdealMinimalPrimesRequest,
+        ideal: RationalPolynomialIdeal,
         components: tuple[RationalPolynomialIdeal, ...] | None,
         backend_version: str | None,
     ) -> Self:
         """Build a computed result from the trusted Singular adapter."""
 
         return cls.model_construct(
-            request=request,
+            ideal=ideal,
             outcome="COMPUTED",
             components=components,
             backend_version=backend_version,
@@ -511,12 +511,12 @@ class IdealMinimalPrimesResult(StrictModel):
 
 
 def _require_computed_minimal_prime_family(
-    request: IdealMinimalPrimesRequest,
+    ideal: RationalPolynomialIdeal,
     components: tuple[RationalPolynomialIdeal, ...],
 ) -> None:
     """Gate ring, exact-result envelopes, ordering, and uniqueness."""
 
-    if any(component.variables != request.ideal.variables for component in components):
+    if any(component.variables != ideal.variables for component in components):
         raise _validation_error(
             "every minimal prime must use the source ideal's ordered ring"
         )
@@ -591,7 +591,7 @@ GroebnerExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEO
 class GroebnerBasisResult(StrictModel):
     """A reduced Gröbner basis, or a typed timeout under the enforced budget."""
 
-    request: GroebnerBasisRequest
+    ideal: RationalPolynomialIdeal
     outcome: GroebnerExecutionOutcome = "COMPUTED"
     basis: RationalPolynomialIdeal | None = None
     generator_count: StrictInt = Field(default=0, ge=0, le=MAX_OUTPUT_GENERATORS)
@@ -612,9 +612,7 @@ class GroebnerBasisResult(StrictModel):
                 raise _validation_error(
                     "generator_count must match the basis generator count"
                 )
-            if self.request.monomial_order != self.monomial_order:
-                raise _validation_error("basis must carry its request's monomial order")
-            _require_basis_shape(self.basis, self.request)
+            _require_basis_shape(self.basis, self.ideal)
         elif self.basis is not None or self.detail is None:
             raise _validation_error("timed-out computation carries only a safe detail")
         return self
@@ -622,14 +620,14 @@ class GroebnerBasisResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: GroebnerBasisRequest,
+        ideal: RationalPolynomialIdeal,
         basis: RationalPolynomialIdeal,
         monomial_order: Literal["lex", "grlex", "grevlex"],
     ) -> Self:
         """Build a computed result after the bounded kernel has produced it."""
 
         return cls.model_construct(
-            request=request,
+            ideal=ideal,
             basis=basis,
             generator_count=len(basis.generators),
             monomial_order=monomial_order,
@@ -642,26 +640,19 @@ def _is_zero_polynomial(polynomial: RationalPolynomial) -> bool:
 
 def _require_basis_shape(
     basis: RationalPolynomialIdeal,
-    request: GroebnerBasisRequest,
+    source_ideal: RationalPolynomialIdeal,
 ) -> None:
     """Gate result-local ring, zero, and exact-result envelope invariants."""
 
-    if basis.variables != request.ideal.variables:
+    if basis.variables != source_ideal.variables:
         raise _validation_error("basis must use the source ideal's ordered ring")
     if any(_is_zero_polynomial(generator) for generator in basis.generators) and not (
         len(basis.generators) == 1
-        and all(
-            _is_zero_polynomial(generator) for generator in request.ideal.generators
-        )
+        and all(_is_zero_polynomial(generator) for generator in source_ideal.generators)
     ):
         raise _validation_error(
             "a reduced Gröbner basis contains no zero generator; only "
             "the zero ideal admits the singleton-zero representation"
-        )
-    total_terms = sum(len(generator.polynomial.terms) for generator in basis.generators)
-    if total_terms > request.resource_budget.maximum_output_terms:
-        raise _validation_error(
-            "basis exceeds the declared aggregate exact-result term envelope"
         )
 
 
@@ -691,7 +682,8 @@ NormalFormExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIM
 class IdealNormalFormResult(StrictModel):
     """The exact remainder modulo an ideal, or a typed incomplete outcome."""
 
-    request: IdealNormalFormRequest
+    ideal: RationalPolynomialIdeal
+    polynomial: RationalPolynomial
     outcome: NormalFormExecutionOutcome = "COMPUTED"
     remainder: RationalPolynomial | None = None
     in_ideal: bool | None = None
@@ -704,8 +696,6 @@ class IdealNormalFormResult(StrictModel):
             raise _validation_error(
                 "an incomplete normal-form outcome states no membership conclusion"
             )
-        if self.monomial_order != self.request.monomial_order:
-            raise _validation_error("monomial_order must match the retained request")
         if self.outcome == "COMPUTED":
             if self.remainder is None or self.detail is not None:
                 raise _validation_error(
@@ -727,7 +717,7 @@ class IdealNormalFormResult(StrictModel):
                 raise _validation_error(
                     "a polynomial not in the ideal must have a nonzero remainder"
                 )
-            if self.remainder.variables != self.request.ideal.variables:
+            if self.remainder.variables != self.ideal.variables:
                 raise _validation_error(
                     "remainder must use the retained ideal's ordered ring"
                 )
@@ -738,16 +728,19 @@ class IdealNormalFormResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: IdealNormalFormRequest,
+        ideal: RationalPolynomialIdeal,
+        polynomial: RationalPolynomial,
+        monomial_order: NormalFormMonomialOrder,
         remainder: RationalPolynomial,
     ) -> Self:
         """Build a computed normal form from the bounded kernel output."""
 
         return cls.model_construct(
-            request=request,
+            ideal=ideal,
+            polynomial=polynomial,
             remainder=remainder,
             in_ideal=_is_zero_polynomial(remainder),
-            monomial_order=request.monomial_order,
+            monomial_order=monomial_order,
         )
 
 
@@ -787,7 +780,7 @@ EliminationExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TI
 class EliminationIdealResult(StrictModel):
     """The elimination ideal I ∩ QQ[remaining variables], or a typed timeout under the enforced budget."""
 
-    request: EliminationIdealRequest
+    ideal: RationalPolynomialIdeal
     outcome: EliminationExecutionOutcome = "COMPUTED"
     elimination_ideal: RationalPolynomialIdeal | None = None
     eliminated_variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
@@ -800,10 +793,6 @@ class EliminationIdealResult(StrictModel):
                 raise _validation_error(
                     "computed elimination requires an ideal and no failure detail"
                 )
-            if self.eliminated_variables != self.request.eliminated_variables:
-                raise _validation_error(
-                    "eliminated_variables must match the retained request"
-                )
             for var in self.eliminated_variables:
                 if var in self.elimination_ideal.variables:
                     raise _validation_error(
@@ -811,8 +800,8 @@ class EliminationIdealResult(StrictModel):
                     )
             remaining = tuple(
                 variable
-                for variable in self.request.ideal.variables
-                if variable not in set(self.request.eliminated_variables)
+                for variable in self.ideal.variables
+                if variable not in set(self.eliminated_variables)
             )
             if self.elimination_ideal.variables != remaining:
                 raise _validation_error(
@@ -825,13 +814,14 @@ class EliminationIdealResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: EliminationIdealRequest,
+        ideal: RationalPolynomialIdeal,
+        eliminated_variables: tuple[str, ...],
         elimination_ideal: RationalPolynomialIdeal,
     ) -> Self:
         """Build a computed elimination result from the bounded kernel output."""
 
         return cls.model_construct(
-            request=request,
+            ideal=ideal,
             elimination_ideal=elimination_ideal,
-            eliminated_variables=request.eliminated_variables,
+            eliminated_variables=eliminated_variables,
         )

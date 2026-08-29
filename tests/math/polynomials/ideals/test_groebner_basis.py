@@ -7,7 +7,7 @@ from typing import Literal, NoReturn, TypedDict
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.polynomials.ideals import _operations
+from jacobian.math.polynomials.ideals import operations
 from jacobian.math.polynomials.ideals._models import (
     EliminationIdealRequest,
     GroebnerBasisRequest,
@@ -15,20 +15,38 @@ from jacobian.math.polynomials.ideals._models import (
     IdealComputationBudget,
     IdealNormalFormRequest,
 )
-from jacobian.math.polynomials.ideals._operations import (
-    _SympyKernelError,
-    _SympyKernelTimeoutError,
-    compute_elimination_ideal,
-    compute_groebner_basis,
-    compute_ideal_normal_form,
-)
 from jacobian.math.polynomials.ideals._singular import (
     run_bounded_stdin_python_kernel,
+)
+from jacobian.math.polynomials.ideals.operations import (
+    _SympyKernelError,
+    _SympyKernelTimeoutError,
+    elimination_ideal,
+    groebner_basis,
+    ideal_normal_form,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialIdeal,
 )
+
+
+def _run_groebner(request: GroebnerBasisRequest):
+    return groebner_basis(
+        request.ideal, request.monomial_order, resource_budget=request.resource_budget
+    )
+
+
+def _run_normal_form(request: IdealNormalFormRequest):
+    return ideal_normal_form(request.ideal, request.polynomial, request.monomial_order)
+
+
+def _run_elimination(request: EliminationIdealRequest):
+    return elimination_ideal(
+        request.ideal,
+        request.eliminated_variables,
+        resource_budget=request.resource_budget,
+    )
 
 
 class _CanonicalRationalWire(TypedDict):
@@ -86,7 +104,7 @@ class TestGroebnerBasis:
         g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
         g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
         ideal = _ideal(("x", "y"), (g1, g2))
-        result = compute_groebner_basis(
+        result = _run_groebner(
             GroebnerBasisRequest(ideal=ideal, monomial_order="grevlex")
         )
         assert result.generator_count >= 1
@@ -97,9 +115,7 @@ class TestGroebnerBasis:
         """Gröbner basis of <x> in Q[x] is <x>."""
         g = _poly(("x",), (1, 1, (1,)))
         ideal = _ideal(("x",), (g,))
-        result = compute_groebner_basis(
-            GroebnerBasisRequest(ideal=ideal, monomial_order="lex")
-        )
+        result = _run_groebner(GroebnerBasisRequest(ideal=ideal, monomial_order="lex"))
         assert result.generator_count >= 1
 
     def test_lex_order(self) -> None:
@@ -107,9 +123,7 @@ class TestGroebnerBasis:
         g1 = _poly(("x", "y"), (1, 1, (1, 1)))
         g2 = _poly(("x", "y"), (1, 1, (1, 0)), (-1, 1, (0, 1)))
         ideal = _ideal(("x", "y"), (g1, g2))
-        result = compute_groebner_basis(
-            GroebnerBasisRequest(ideal=ideal, monomial_order="lex")
-        )
+        result = _run_groebner(GroebnerBasisRequest(ideal=ideal, monomial_order="lex"))
         assert result.generator_count >= 1
 
 
@@ -124,7 +138,7 @@ class TestGroebnerBasisValidation:
         forged_basis = RationalPolynomialIdeal(variables=("x",), generators=(g, zero))
         with pytest.raises(ValidationError):
             GroebnerBasisResult(
-                request=request,
+                ideal=request.ideal,
                 outcome="COMPUTED",
                 basis=forged_basis,
                 generator_count=2,
@@ -140,7 +154,7 @@ class TestGroebnerBasisValidation:
         )
         with pytest.raises(ValidationError):
             GroebnerBasisResult(
-                request=request,
+                ideal=request.ideal,
                 outcome="COMPUTED",
                 basis=RationalPolynomialIdeal(variables=("x",), generators=(zero,)),
                 generator_count=1,
@@ -150,9 +164,7 @@ class TestGroebnerBasisValidation:
     def test_zero_ideal_produces_singleton_zero_basis(self) -> None:
         """The producer's canonical zero-ideal basis revalidates end to end."""
         zero = _poly(("x",))
-        result = compute_groebner_basis(
-            GroebnerBasisRequest(ideal=_ideal(("x",), (zero,)))
-        )
+        result = _run_groebner(GroebnerBasisRequest(ideal=_ideal(("x",), (zero,))))
         assert result.outcome == "COMPUTED"
         assert result.generator_count == 1
         assert result.basis is not None
@@ -170,7 +182,7 @@ class TestGroebnerBasisValidation:
         )
         with pytest.raises(ValidationError):
             GroebnerBasisResult(
-                request=request,
+                ideal=request.ideal,
                 outcome="COMPUTED",
                 basis=forged_basis,
                 generator_count=2,
@@ -186,9 +198,7 @@ class TestIdealNormalForm:
         g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
         ideal = _ideal(("x", "y"), (g,))
         poly = _poly(("x", "y"), (1, 1, (2, 0)))
-        result = compute_ideal_normal_form(
-            IdealNormalFormRequest(ideal=ideal, polynomial=poly)
-        )
+        result = _run_normal_form(IdealNormalFormRequest(ideal=ideal, polynomial=poly))
         assert result.in_ideal is False
         assert result.remainder is not None
         assert len(result.remainder.polynomial.terms) > 0
@@ -198,9 +208,7 @@ class TestIdealNormalForm:
         g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
         ideal = _ideal(("x", "y"), (g,))
         poly = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
-        result = compute_ideal_normal_form(
-            IdealNormalFormRequest(ideal=ideal, polynomial=poly)
-        )
+        result = _run_normal_form(IdealNormalFormRequest(ideal=ideal, polynomial=poly))
         assert result.in_ideal is True
         assert result.remainder is not None
         assert len(result.remainder.polynomial.terms) == 0
@@ -210,9 +218,7 @@ class TestIdealNormalForm:
         g = _poly(("x", "y"), (1, 1, (0, 0)))
         ideal = _ideal(("x", "y"), (g,))
         poly = _poly(("x", "y"), (3, 1, (0, 0)))
-        result = compute_ideal_normal_form(
-            IdealNormalFormRequest(ideal=ideal, polynomial=poly)
-        )
+        result = _run_normal_form(IdealNormalFormRequest(ideal=ideal, polynomial=poly))
         assert result.in_ideal is True
 
 
@@ -224,7 +230,7 @@ class TestEliminationIdeal:
         g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
         g2 = _poly(("x", "y"), (1, 1, (1, 0)), (1, 1, (0, 1)))
         ideal = _ideal(("x", "y"), (g1, g2))
-        result = compute_elimination_ideal(
+        result = _run_elimination(
             EliminationIdealRequest(ideal=ideal, eliminated_variables=("x",))
         )
         assert result.elimination_ideal is not None
@@ -236,7 +242,7 @@ class TestEliminationIdeal:
         g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
         g2 = _poly(("x", "y"), (1, 1, (1, 0)), (1, 1, (0, 1)))
         ideal = _ideal(("x", "y"), (g1, g2))
-        result = compute_elimination_ideal(
+        result = _run_elimination(
             EliminationIdealRequest(ideal=ideal, eliminated_variables=("x",))
         )
         assert result.elimination_ideal is not None
@@ -256,9 +262,9 @@ class TestTypedKernelOutcomes:
         def exceed_budget(*args: object, **kwargs: object) -> NoReturn:
             raise _SympyKernelTimeoutError()
 
-        monkeypatch.setattr(_operations, "_run_sympy_kernel", exceed_budget)
+        monkeypatch.setattr(operations, "_run_sympy_kernel", exceed_budget)
         g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
-        result = compute_ideal_normal_form(
+        result = _run_normal_form(
             IdealNormalFormRequest(
                 ideal=_ideal(("x", "y"), (g,)),
                 polynomial=_poly(("x", "y"), (1, 1, (2, 0))),
@@ -277,9 +283,9 @@ class TestTypedKernelOutcomes:
         def exceed_budget(*args: object, **kwargs: object) -> NoReturn:
             raise _SympyKernelTimeoutError()
 
-        monkeypatch.setattr(_operations, "_run_sympy_kernel", exceed_budget)
+        monkeypatch.setattr(operations, "_run_sympy_kernel", exceed_budget)
         g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
-        result = compute_elimination_ideal(
+        result = _run_elimination(
             EliminationIdealRequest(
                 ideal=_ideal(("x", "y"), (g,)),
                 eliminated_variables=("x",),
@@ -298,12 +304,10 @@ class TestTypedKernelOutcomes:
         def exceed_budget(*args: object, **kwargs: object) -> NoReturn:
             raise _SympyKernelTimeoutError()
 
-        monkeypatch.setattr(_operations, "_run_sympy_kernel", exceed_budget)
+        monkeypatch.setattr(operations, "_run_sympy_kernel", exceed_budget)
         g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
         g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
-        result = compute_groebner_basis(
-            GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g1, g2)))
-        )
+        result = _run_groebner(GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g1, g2))))
         assert result.outcome == "TIMEOUT"
         assert result.basis is None
         assert result.detail is not None
@@ -317,11 +321,9 @@ class TestTypedKernelOutcomes:
         def failing_kernel(*args: object, **kwargs: object) -> NoReturn:
             raise _SympyKernelError("worker crashed")
 
-        monkeypatch.setattr(_operations, "_run_sympy_kernel", failing_kernel)
+        monkeypatch.setattr(operations, "_run_sympy_kernel", failing_kernel)
         g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
-        result = compute_groebner_basis(
-            GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g,)))
-        )
+        result = _run_groebner(GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g,))))
         assert result.outcome == "ERROR"
         assert result.basis is None
         assert "worker crashed" in (result.detail or "")
@@ -359,10 +361,10 @@ class TestKillableWorkerContract:
                 stderr_limit=stderr_limit,
             )
 
-        monkeypatch.setattr(_operations, "run_bounded_stdin_python_kernel", spy)
+        monkeypatch.setattr(operations, "run_bounded_stdin_python_kernel", spy)
         g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
         g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
-        result = compute_groebner_basis(
+        result = _run_groebner(
             GroebnerBasisRequest(
                 ideal=_ideal(("x", "y"), (g1, g2)),
                 resource_budget=IdealComputationBudget(wall_seconds=10),
@@ -380,12 +382,10 @@ class TestKillableWorkerContract:
             raise _SympyKernelTimeoutError()
 
         baseline = __import__("threading").active_count()
-        monkeypatch.setattr(_operations, "_run_sympy_kernel", exceed_budget)
+        monkeypatch.setattr(operations, "_run_sympy_kernel", exceed_budget)
         g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
         g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
-        result = compute_groebner_basis(
-            GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g1, g2)))
-        )
+        result = _run_groebner(GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g1, g2))))
         assert result.outcome == "TIMEOUT"
         assert __import__("threading").active_count() == baseline
 
@@ -412,7 +412,7 @@ class TestBoundedResultValidation:
                     (-1, 1, tuple(exps_lo)),
                 )
             )
-        result = compute_groebner_basis(
+        result = _run_groebner(
             GroebnerBasisRequest(
                 ideal=_ideal(names, tuple(gens)),
                 monomial_order="lex",
@@ -451,7 +451,7 @@ class TestBoundedResultValidation:
             _poly(names, (1, 1, exps(z=1)), (-1, 1, exps(y=5))),
             _poly(names, (1, 1, exps(w=1)), (-1, 1, exps(y=6))),
         )
-        result = compute_groebner_basis(
+        result = _run_groebner(
             GroebnerBasisRequest(ideal=_ideal(names, gens), monomial_order="lex")
         )
         assert result.outcome == "LIMIT_EXCEEDED"
@@ -463,15 +463,13 @@ class TestBoundedResultValidation:
     ) -> None:
         """A killed worker whose output exceeded the transport cap yields
         LIMIT_EXCEEDED, not ERROR."""
-        from jacobian.math.polynomials.ideals import _operations as ops
+        from jacobian.math.polynomials.ideals import operations as ops
 
         def fake_kernel(*args: object, **kwargs: object) -> tuple[bool, bytes, bool]:
             return False, b"", True  # not timed out; empty output; limit hit
 
         monkeypatch.setattr(ops, "run_bounded_stdin_python_kernel", fake_kernel)
         g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
-        result = compute_groebner_basis(
-            GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g,)))
-        )
+        result = _run_groebner(GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g,))))
         assert result.outcome == "LIMIT_EXCEEDED"
         assert "transport bound" in (result.detail or "")

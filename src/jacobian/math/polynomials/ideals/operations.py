@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Literal
 
 import sympy
 from pydantic_core import PydanticCustomError
@@ -18,21 +18,14 @@ from jacobian.math.polynomials.ideals._models import (
     MAX_COEFFICIENT_DIGITS,
     MAX_INPUT_EXPONENT,
     MAX_INPUT_TERMS,
-    EliminationIdealRequest,
     EliminationIdealResult,
-    GroebnerBasisRequest,
     GroebnerBasisResult,
-    IdealMinimalPrimesRequest,
+    IdealComputationBudget,
     IdealMinimalPrimesResult,
-    IdealNormalFormRequest,
     IdealNormalFormResult,
-    IdealQuotientRequest,
     IdealQuotientResult,
-    IdealRadicalMembershipRequest,
     IdealRadicalMembershipResult,
-    IdealRadicalRequest,
     IdealRadicalResult,
-    IdealSaturationRequest,
     IdealSaturationResult,
     _require_computed_minimal_prime_family,
     _require_ideal_budget,
@@ -70,10 +63,12 @@ def _admit_source(ideal: RationalPolynomialIdeal, *, label: str) -> None:
     _require_ideal_budget(ideal, label=label)
 
 
-def _admit_membership(request: IdealRadicalMembershipRequest) -> None:
-    _admit_source(request.ideal, label="ideal")
+def _admit_membership(
+    ideal: RationalPolynomialIdeal, polynomial: RationalPolynomial
+) -> None:
+    _admit_source(ideal, label="ideal")
     require_polynomial_budget(
-        request.polynomial,
+        polynomial,
         maximum_terms=MAX_INPUT_TERMS,
         maximum_exponent=MAX_INPUT_EXPONENT,
         maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
@@ -81,12 +76,14 @@ def _admit_membership(request: IdealRadicalMembershipRequest) -> None:
     )
 
 
-def _admit_saturation(request: IdealSaturationRequest) -> None:
-    _admit_source(request.ideal, label="ideal")
-    if not request.denominator.polynomial.terms:
+def _admit_saturation(
+    ideal: RationalPolynomialIdeal, denominator: RationalPolynomial
+) -> None:
+    _admit_source(ideal, label="ideal")
+    if not denominator.polynomial.terms:
         raise _validation_error("saturation denominator must be nonzero")
     require_polynomial_budget(
-        request.denominator,
+        denominator,
         maximum_terms=MAX_INPUT_TERMS,
         maximum_exponent=MAX_INPUT_EXPONENT,
         maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
@@ -94,26 +91,30 @@ def _admit_saturation(request: IdealSaturationRequest) -> None:
     )
 
 
-def _admit_quotient(request: IdealQuotientRequest) -> None:
-    _admit_source(request.dividend, label="dividend ideal")
-    _admit_source(request.divisor, label="divisor ideal")
+def _admit_quotient(
+    dividend: RationalPolynomialIdeal, divisor: RationalPolynomialIdeal
+) -> None:
+    _admit_source(dividend, label="dividend ideal")
+    _admit_source(divisor, label="divisor ideal")
 
 
-def _admit_minimal_primes(request: IdealMinimalPrimesRequest) -> None:
-    _admit_source(request.ideal, label="ideal")
-    _require_provable_family_fit(request.ideal)
+def _admit_minimal_primes(ideal: RationalPolynomialIdeal) -> None:
+    _admit_source(ideal, label="ideal")
+    _require_provable_family_fit(ideal)
 
 
-def _admit_groebner(request: GroebnerBasisRequest) -> None:
-    _admit_source(request.ideal, label="ideal")
+def _admit_groebner(ideal: RationalPolynomialIdeal) -> None:
+    _admit_source(ideal, label="ideal")
 
 
-def _admit_normal_form(request: IdealNormalFormRequest) -> None:
-    _admit_source(request.ideal, label="ideal")
-    if request.polynomial.variables != request.ideal.variables:
+def _admit_normal_form(
+    ideal: RationalPolynomialIdeal, polynomial: RationalPolynomial
+) -> None:
+    _admit_source(ideal, label="ideal")
+    if polynomial.variables != ideal.variables:
         raise _validation_error("polynomial must use the ideal's ordered ring")
     require_polynomial_budget(
-        request.polynomial,
+        polynomial,
         maximum_terms=MAX_INPUT_TERMS,
         maximum_exponent=MAX_INPUT_EXPONENT,
         maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
@@ -121,14 +122,16 @@ def _admit_normal_form(request: IdealNormalFormRequest) -> None:
     )
 
 
-def _admit_elimination(request: EliminationIdealRequest) -> None:
-    _admit_source(request.ideal, label="ideal")
-    eliminated = set(request.eliminated_variables)
-    if any(var not in request.ideal.variables for var in eliminated):
+def _admit_elimination(
+    ideal: RationalPolynomialIdeal, eliminated_variables: tuple[str, ...]
+) -> None:
+    _admit_source(ideal, label="ideal")
+    eliminated = set(eliminated_variables)
+    if any(var not in ideal.variables for var in eliminated):
         raise _validation_error(
             "eliminated variables must be a subset of the ideal's variables"
         )
-    if not tuple(v for v in request.ideal.variables if v not in eliminated):
+    if not tuple(v for v in ideal.variables if v not in eliminated):
         raise _validation_error(
             "elimination cannot remove every variable; at least one must remain"
         )
@@ -496,16 +499,21 @@ def _run_sympy_kernel(payload: dict[str, Any], wall_seconds: float) -> dict[str,
     return typed
 
 
-def compute_ideal_radical(request: IdealRadicalRequest) -> IdealRadicalResult:
+def ideal_radical(
+    ideal: RationalPolynomialIdeal,
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> IdealRadicalResult:
     """Compute an exact ideal radical through the bounded Singular backend."""
 
-    _run_admission(lambda: _admit_source(request.ideal, label="ideal"))
+    resource_budget = resource_budget or IdealComputationBudget()
+    _run_admission(lambda: _admit_source(ideal, label="ideal"))
 
     backend = run_singular_ideal_operation(
         "radical",
-        request.ideal,
+        ideal,
         None,
-        request.resource_budget,
+        resource_budget,
     )
     return IdealRadicalResult(
         outcome=backend.outcome,
@@ -515,18 +523,21 @@ def compute_ideal_radical(request: IdealRadicalRequest) -> IdealRadicalResult:
     )
 
 
-def compute_ideal_minimal_primes(
-    request: IdealMinimalPrimesRequest,
+def ideal_minimal_primes(
+    ideal: RationalPolynomialIdeal,
+    *,
+    resource_budget: IdealComputationBudget | None = None,
 ) -> IdealMinimalPrimesResult:
     """Compute the complete minimal-prime family over ``QQ``."""
 
-    _run_admission(lambda: _admit_minimal_primes(request))
+    resource_budget = resource_budget or IdealComputationBudget()
+    _run_admission(lambda: _admit_minimal_primes(ideal))
 
-    backend = run_singular_minimal_primes(request.ideal, request.resource_budget)
+    backend = run_singular_minimal_primes(ideal, resource_budget)
     components = backend.components
     if backend.outcome != "COMPUTED" or components is None:
         return IdealMinimalPrimesResult(
-            request=request,
+            ideal=ideal,
             outcome=backend.outcome,
             components=None,
             backend_version=None,
@@ -534,9 +545,9 @@ def compute_ideal_minimal_primes(
         )
 
     try:
-        _require_computed_minimal_prime_family(request, components)
+        _require_computed_minimal_prime_family(ideal, components)
         result = IdealMinimalPrimesResult._from_kernel(
-            request=request,
+            ideal=ideal,
             components=components,
             backend_version=backend.backend_version,
         )
@@ -544,7 +555,7 @@ def compute_ideal_minimal_primes(
         return result
     except _ResultLimitExceededError as error:
         return IdealMinimalPrimesResult(
-            request=request,
+            ideal=ideal,
             outcome="LIMIT_EXCEEDED",
             components=None,
             backend_version=None,
@@ -552,7 +563,7 @@ def compute_ideal_minimal_primes(
         )
     except ValueError:
         return IdealMinimalPrimesResult(
-            request=request,
+            ideal=ideal,
             outcome="ERROR",
             components=None,
             backend_version=None,
@@ -563,22 +574,22 @@ def compute_ideal_minimal_primes(
         )
 
 
-def compute_ideal_radical_membership(
-    request: IdealRadicalMembershipRequest,
+def ideal_radical_membership(
+    ideal: RationalPolynomialIdeal, polynomial: RationalPolynomial
 ) -> IdealRadicalMembershipResult:
     """Decide radical membership by the exact Rabinowitsch criterion."""
 
-    _run_admission(lambda: _admit_membership(request))
+    _run_admission(lambda: _admit_membership(ideal, polynomial))
 
-    variable_symbols = symbols_for_variables(request.ideal.variables)
+    variable_symbols = symbols_for_variables(ideal.variables)
     ideal_generators = [
         rational_polynomial_to_sympy(generator).as_expr()
-        for generator in request.ideal.generators
+        for generator in ideal.generators
     ]
-    polynomial = rational_polynomial_to_sympy(request.polynomial).as_expr()
+    polynomial_expr = rational_polynomial_to_sympy(polynomial).as_expr()
     auxiliary = sympy.Dummy("jacobian_rabinowitsch")
     basis = sympy.groebner(
-        [*ideal_generators, 1 - auxiliary * polynomial],
+        [*ideal_generators, 1 - auxiliary * polynomial_expr],
         *variable_symbols,
         auxiliary,
         order="grevlex",
@@ -587,16 +598,22 @@ def compute_ideal_radical_membership(
     return IdealRadicalMembershipResult(in_radical=len(basis) == 1 and basis[0] == 1)
 
 
-def compute_ideal_quotient(request: IdealQuotientRequest) -> IdealQuotientResult:
+def ideal_quotient(
+    dividend: RationalPolynomialIdeal,
+    divisor: RationalPolynomialIdeal,
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> IdealQuotientResult:
     """Compute an exact ideal quotient through the bounded Singular backend."""
 
-    _run_admission(lambda: _admit_quotient(request))
+    resource_budget = resource_budget or IdealComputationBudget()
+    _run_admission(lambda: _admit_quotient(dividend, divisor))
 
     backend = run_singular_ideal_operation(
         "quotient",
-        request.dividend,
-        request.divisor,
-        request.resource_budget,
+        dividend,
+        divisor,
+        resource_budget,
     )
     return IdealQuotientResult(
         outcome=backend.outcome,
@@ -606,20 +623,26 @@ def compute_ideal_quotient(request: IdealQuotientRequest) -> IdealQuotientResult
     )
 
 
-def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
+def ideal_saturation(
+    ideal: RationalPolynomialIdeal,
+    denominator: RationalPolynomial,
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> IdealSaturationResult:
     """Compute I : <d>^infinity through the bounded Singular backend."""
 
-    _run_admission(lambda: _admit_saturation(request))
+    resource_budget = resource_budget or IdealComputationBudget()
+    _run_admission(lambda: _admit_saturation(ideal, denominator))
 
-    denominator = RationalPolynomialIdeal(
-        variables=request.denominator.variables,
-        generators=(request.denominator,),
+    denominator_ideal = RationalPolynomialIdeal(
+        variables=denominator.variables,
+        generators=(denominator,),
     )
     backend = run_singular_ideal_operation(
         "saturation",
-        request.ideal,
-        denominator,
-        request.resource_budget,
+        ideal,
+        denominator_ideal,
+        resource_budget,
     )
     return IdealSaturationResult(
         outcome=backend.outcome,
@@ -630,35 +653,37 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
 
 
 __all__ = [
-    "compute_elimination_ideal",
-    "compute_groebner_basis",
-    "compute_ideal_minimal_primes",
-    "compute_ideal_normal_form",
-    "compute_ideal_quotient",
-    "compute_ideal_radical",
-    "compute_ideal_radical_membership",
-    "compute_ideal_saturation",
+    "elimination_ideal",
+    "groebner_basis",
+    "ideal_minimal_primes",
+    "ideal_normal_form",
+    "ideal_quotient",
+    "ideal_radical",
+    "ideal_radical_membership",
+    "ideal_saturation",
 ]
 
 
-def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult:
+def groebner_basis(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> GroebnerBasisResult:
     """Compute a reduced Gröbner basis for a bounded ideal over QQ using SymPy."""
-    _run_admission(lambda: _admit_groebner(request))
-    from jacobian.math.polynomials.ideals._models import GroebnerBasisResult
-    from jacobian.math.polynomials.values import (
-        RationalPolynomialIdeal,
-    )
-
-    variables = request.ideal.variables
+    resource_budget = resource_budget or IdealComputationBudget()
+    _run_admission(lambda: _admit_groebner(ideal))
+    source_ideal = ideal
+    variables = source_ideal.variables
     order_map = {"lex": "lex", "grlex": "grlex", "grevlex": "grevlex"}
-    order = order_map.get(request.monomial_order, "grevlex")
+    order = order_map[monomial_order]
     payload = {
         "mode": "groebner",
         "variables": list(variables),
         "order": order,
-        "maximum_terms": request.resource_budget.maximum_output_terms,
+        "maximum_terms": resource_budget.maximum_output_terms,
         "generators": [
-            generator.model_dump(mode="json") for generator in request.ideal.generators
+            generator.model_dump(mode="json") for generator in source_ideal.generators
         ],
     }
 
@@ -666,24 +691,22 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
     # wall-time budget; result assembly then operates only on the declared
     # output limits.
     try:
-        result_payload = _run_sympy_kernel(
-            payload, request.resource_budget.wall_seconds
-        )
+        result_payload = _run_sympy_kernel(payload, resource_budget.wall_seconds)
     except _SympyKernelTimeoutError:
         return GroebnerBasisResult(
-            request=request,
+            ideal=ideal,
             outcome="TIMEOUT",
-            monomial_order=request.monomial_order,
+            monomial_order=monomial_order,
             detail=(
                 "groebner computation exceeded the enforced "
-                f"{request.resource_budget.wall_seconds}s budget"
+                f"{resource_budget.wall_seconds}s budget"
             ),
         )
     except _ResultLimitExceededError as error:
         return GroebnerBasisResult(
-            request=request,
+            ideal=ideal,
             outcome="LIMIT_EXCEEDED",
-            monomial_order=request.monomial_order,
+            monomial_order=monomial_order,
             detail=(
                 "the exact reduced Gröbner basis exceeds the declared "
                 f"exact-result limit: {error}"
@@ -691,9 +714,9 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
         )
     except _SympyKernelError as error:
         return GroebnerBasisResult(
-            request=request,
+            ideal=ideal,
             outcome="ERROR",
-            monomial_order=request.monomial_order,
+            monomial_order=monomial_order,
             detail=(
                 "the bounded Groebner kernel failed without producing an "
                 f"exact basis: {error}"
@@ -712,27 +735,31 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
         )
         basis_generators.append(zero)
 
-    ideal = RationalPolynomialIdeal(
+    basis_ideal = RationalPolynomialIdeal(
         variables=variables,
         generators=tuple(basis_generators),
     )
 
-    return GroebnerBasisResult._from_kernel(request, ideal, request.monomial_order)
+    return GroebnerBasisResult._from_kernel(source_ideal, basis_ideal, monomial_order)
 
 
-def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFormResult:
+def ideal_normal_form(
+    ideal: RationalPolynomialIdeal,
+    polynomial: RationalPolynomial,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
+) -> IdealNormalFormResult:
     """Reduce one polynomial modulo an ideal using a Gröbner basis remainder."""
-    _run_admission(lambda: _admit_normal_form(request))
+    _run_admission(lambda: _admit_normal_form(ideal, polynomial))
     from jacobian.math.polynomials.ideals._models import IdealNormalFormResult
 
     payload = {
         "mode": "normal_form",
-        "variables": list(request.ideal.variables),
-        "order": request.monomial_order,
+        "variables": list(ideal.variables),
+        "order": monomial_order,
         "generators": [
-            generator.model_dump(mode="json") for generator in request.ideal.generators
+            generator.model_dump(mode="json") for generator in ideal.generators
         ],
-        "polynomial": request.polynomial.model_dump(mode="json"),
+        "polynomial": polynomial.model_dump(mode="json"),
     }
 
     # A conservative 10-second budget bounds the killable kernel that runs
@@ -742,13 +769,17 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
         result_payload = _run_sympy_kernel(payload, 10)
     except _SympyKernelTimeoutError:
         return IdealNormalFormResult(
-            request=request,
+            ideal=ideal,
+            polynomial=polynomial,
+            monomial_order=monomial_order,
             outcome="TIMEOUT",
             detail=("the Gröbner reduction exceeded the enforced 10s wall-time bound"),
         )
     except _ResultLimitExceededError as error:
         return IdealNormalFormResult(
-            request=request,
+            ideal=ideal,
+            polynomial=polynomial,
+            monomial_order=monomial_order,
             outcome="LIMIT_EXCEEDED",
             detail=(
                 "the exact normal form exceeds the declared exact-result "
@@ -757,7 +788,9 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
         )
     except _SympyKernelError as error:
         return IdealNormalFormResult(
-            request=request,
+            ideal=ideal,
+            polynomial=polynomial,
+            monomial_order=monomial_order,
             outcome="ERROR",
             detail=(
                 "the bounded reduction kernel failed without producing an "
@@ -766,7 +799,9 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
         )
 
     remainder_poly = RationalPolynomial.model_validate(result_payload["remainder"])
-    return IdealNormalFormResult._from_kernel(request, remainder_poly)
+    return IdealNormalFormResult._from_kernel(
+        ideal, polynomial, monomial_order, remainder_poly
+    )
 
 
 def _elimination_ideal_from_payload(
@@ -814,20 +849,24 @@ def _elimination_ideal_from_payload(
     )
 
 
-def compute_elimination_ideal(
-    request: EliminationIdealRequest,
+def elimination_ideal(
+    ideal: RationalPolynomialIdeal,
+    eliminated_variables: tuple[str, ...],
+    *,
+    resource_budget: IdealComputationBudget | None = None,
 ) -> EliminationIdealResult:
     """Compute the elimination ideal I ∩ QQ[remaining variables] using a lex Gröbner basis."""
 
-    _run_admission(lambda: _admit_elimination(request))
+    resource_budget = resource_budget or IdealComputationBudget()
+    _run_admission(lambda: _admit_elimination(ideal, eliminated_variables))
 
-    variables = list(request.ideal.variables)
+    variables = list(ideal.variables)
     payload = {
         "mode": "elimination",
         "variables": variables,
-        "eliminated": list(request.eliminated_variables),
+        "eliminated": list(eliminated_variables),
         "generators": [
-            generator.model_dump(mode="json") for generator in request.ideal.generators
+            generator.model_dump(mode="json") for generator in ideal.generators
         ],
     }
 
@@ -835,24 +874,22 @@ def compute_elimination_ideal(
     # wall-time budget; canonicalization then operates only on the declared
     # output limits.
     try:
-        result_payload = _run_sympy_kernel(
-            payload, request.resource_budget.wall_seconds
-        )
+        result_payload = _run_sympy_kernel(payload, resource_budget.wall_seconds)
     except _SympyKernelTimeoutError:
         return EliminationIdealResult(
-            request=request,
+            ideal=ideal,
             outcome="TIMEOUT",
-            eliminated_variables=tuple(request.eliminated_variables),
+            eliminated_variables=tuple(eliminated_variables),
             detail=(
                 "the lex Gröbner elimination exceeded the enforced "
-                f"{request.resource_budget.wall_seconds}s wall-time budget"
+                f"{resource_budget.wall_seconds}s wall-time budget"
             ),
         )
     except _ResultLimitExceededError as error:
         return EliminationIdealResult(
-            request=request,
+            ideal=ideal,
             outcome="LIMIT_EXCEEDED",
-            eliminated_variables=tuple(request.eliminated_variables),
+            eliminated_variables=tuple(eliminated_variables),
             detail=(
                 "the exact elimination ideal exceeds the declared "
                 f"exact-result limit: {error}"
@@ -860,9 +897,9 @@ def compute_elimination_ideal(
         )
     except _SympyKernelError as error:
         return EliminationIdealResult(
-            request=request,
+            ideal=ideal,
             outcome="ERROR",
-            eliminated_variables=tuple(request.eliminated_variables),
+            eliminated_variables=tuple(eliminated_variables),
             detail=(
                 "the bounded elimination kernel failed without producing "
                 f"an exact ideal: {error}"
@@ -870,5 +907,7 @@ def compute_elimination_ideal(
         )
 
     return EliminationIdealResult._from_kernel(
-        request, _elimination_ideal_from_payload(result_payload)
+        ideal,
+        eliminated_variables,
+        _elimination_ideal_from_payload(result_payload),
     )

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import math
+import time
 from fractions import Fraction
 from itertools import pairwise
-from typing import Literal
+from typing import Literal, NoReturn
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian._execution import bind_request_deadline, current_request_execution
+from jacobian.canonical import CanonicalLimits, format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._progression_hypergraph_models import (
     MAX_GROUP_ORDER,
@@ -45,6 +48,12 @@ def _pair(n: int, k: int) -> tuple[int, int]:
 
 
 MAX_COUNTING_INDEX = 10_000
+MAX_SPARSE_COUNTING_INDEX = 10**15
+MAX_COUNTING_MULTIPLICATIVE_STEPS = 100_000
+_COUNTING_RESULT_RESERVE_BYTES = 4_096
+MAX_COUNTING_RESULT_DIGITS = (
+    CanonicalLimits().max_output_bytes - _COUNTING_RESULT_RESERVE_BYTES
+)
 MAX_MULTINOMIAL_PARTS = 256
 MAX_MULTINOMIAL_TOTAL = MAX_COUNTING_INDEX
 
@@ -60,25 +69,137 @@ def _bounded_counting_index(value: int, *, name: str) -> int:
     return value
 
 
+def _bounded_sparse_counting_index(value: int, *, name: str) -> int:
+    value = _nonnegative(value, name=name)
+    if value > MAX_SPARSE_COUNTING_INDEX:
+        raise OperationDomainValidationError(
+            location=(name,),
+            code="combinatorics.sparse_counting_index_out_of_range",
+            message=(
+                f"{name} exceeds the {MAX_SPARSE_COUNTING_INDEX}-element "
+                "sparse-counting bound"
+            ),
+        )
+    return value
+
+
+def _reject_counting_work() -> NoReturn:
+    raise OperationDomainValidationError(
+        location=("k",),
+        code="combinatorics.counting_work_exceeded",
+        message=(
+            "counting request exceeds the "
+            f"{MAX_COUNTING_MULTIPLICATIVE_STEPS}-step construction and "
+            "canonical-formatting budget"
+        ),
+    )
+
+
+def _require_counting_step_budget(steps: int) -> None:
+    if steps > MAX_COUNTING_MULTIPLICATIVE_STEPS:
+        _reject_counting_work()
+
+
+def _binomial_coefficient_digit_bound(n: int, k: int) -> int:
+    """Return a safe upper bound on the decimal digit length of ``C(n, k)``.
+
+    Uses the cancelled product ``∏_{i=1}^{k} (n - k + i) / i`` rather than the
+    undivided numerator, so off-center coefficients are not charged as if they
+    were near ``2^n``.  ``math.lgamma`` estimates the cancelled product in
+    constant work; two extra digits keep the bound from underestimating.
+    """
+
+    if k < 0 or k > n:
+        return 1
+    steps = min(k, n - k)
+    if steps == 0:
+        return 1
+    log10_e = 0.43429448190325182765
+    log10_value = (
+        math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1)
+    ) * log10_e
+    if log10_value <= 0.0:
+        return 1
+    return math.ceil(log10_value + 1e-6) + 2
+
+
+def _bind_counting_deadline() -> None:
+    execution = current_request_execution()
+    started = execution.started_at if execution is not None else time.monotonic()
+    bind_request_deadline(started + 120.0)
+
+
+def _admit_multiplicative_count(
+    *,
+    maximum_factor: int,
+    steps: int,
+    result_digit_bound: int | None = None,
+) -> None:
+    _require_counting_step_budget(steps)
+    _bind_counting_deadline()
+    if result_digit_bound is None:
+        # Every multiplicative factor is at most ``maximum_factor``.  The
+        # rational 30103 / 100000 is a strict upper bound for log10(2), so this
+        # cannot underestimate the decimal width of that product envelope.
+        bit_bound = steps * max(1, maximum_factor.bit_length())
+        digit_bound = (bit_bound * 30_103 + 99_999) // 100_000
+    else:
+        digit_bound = result_digit_bound
+    # Canonical integer formatting performs one base-10**9 division per output
+    # chunk.  Charge that mandatory result-construction phase alongside the
+    # multiplicative kernel so an accepted result cannot hide substantially
+    # more non-interruptible work than its coefficient construction.
+    formatting_steps = (digit_bound + 8) // 9
+    if steps + formatting_steps > MAX_COUNTING_MULTIPLICATIVE_STEPS:
+        _reject_counting_work()
+    if digit_bound > MAX_COUNTING_RESULT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("n", "k"),
+            code="combinatorics.counting_result_digits_exceeded",
+            message=(
+                "predicted exact count exceeds the "
+                f"{MAX_COUNTING_RESULT_DIGITS}-digit result budget"
+            ),
+        )
+
+
+def _admit_cancelled_binomial_count(n: int, k: int) -> None:
+    """Admit ``C(n, k)`` after checking the step budget, then the digit bound.
+
+    The published sparse-counting schema accepts ``n, k <= 10**15``.  Checking
+    ``min(k, n-k)`` against the multiplicative-step budget first keeps
+    ``binomial(10**15, 5 * 10**14)`` from iterating half a quadrillion times
+    while estimating digits.
+    """
+
+    steps = min(k, n - k)
+    _require_counting_step_budget(steps)
+    _admit_multiplicative_count(
+        maximum_factor=n,
+        steps=steps,
+        result_digit_bound=_binomial_coefficient_digit_bound(n, k),
+    )
+
+
 def factorial(n: int) -> int:
     """Return the factorial of a bounded nonnegative integer."""
-    import math
 
     return math.factorial(_bounded_counting_index(n, name="n"))
 
 
 def binomial(n: int, k: int) -> int:
     """Return the exact binomial coefficient, with zero for ``k > n``."""
-    import math
 
-    first = _bounded_counting_index(n, name="n")
-    second = _bounded_counting_index(k, name="k")
-    return 0 if second > first else math.comb(first, second)
+    first = _bounded_sparse_counting_index(n, name="n")
+    second = _bounded_sparse_counting_index(k, name="k")
+    if second > first:
+        return 0
+    _admit_cancelled_binomial_count(first, second)
+    return math.comb(first, second)
 
 
 def multinomial(values: tuple[int, ...]) -> int:
     """Return the exact multinomial coefficient for nonnegative part sizes."""
-    import math
 
     if not isinstance(values, tuple) or not values:
         raise OperationDomainValidationError(
@@ -110,16 +231,17 @@ def multinomial(values: tuple[int, ...]) -> int:
 
 def permutations(n: int, k: int) -> int:
     """Return the exact number of ordered ``k``-selections from ``n``."""
-    import math
 
-    first = _bounded_counting_index(n, name="n")
-    second = _bounded_counting_index(k, name="k")
-    return 0 if second > first else math.perm(first, second)
+    first = _bounded_sparse_counting_index(n, name="n")
+    second = _bounded_sparse_counting_index(k, name="k")
+    if second > first:
+        return 0
+    _admit_multiplicative_count(maximum_factor=first, steps=second)
+    return math.perm(first, second)
 
 
 def central_binomial(n: int) -> int:
     """Return the exact central binomial coefficient ``binomial(2n, n)``."""
-    import math
 
     value = _bounded_counting_index(n, name="n")
     return math.comb(2 * value, value)
@@ -127,13 +249,15 @@ def central_binomial(n: int) -> int:
 
 def compositions(n: int, k: int) -> int:
     """Count ordered compositions of ``n`` into ``k`` positive parts."""
-    import math
 
-    total = _bounded_counting_index(n, name="n")
-    parts = _bounded_counting_index(k, name="k")
+    total = _bounded_sparse_counting_index(n, name="n")
+    parts = _bounded_sparse_counting_index(k, name="k")
     if total == parts == 0:
         return 1
-    return math.comb(total - 1, parts - 1) if 0 < parts <= total else 0
+    if parts == 0 or parts > total:
+        return 0
+    _admit_cancelled_binomial_count(total - 1, parts - 1)
+    return math.comb(total - 1, parts - 1)
 
 
 def bell_number(n: int) -> int:

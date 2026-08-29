@@ -23,13 +23,17 @@ from jacobian.math.optimization._models import (
 )
 from jacobian.math.optimization.operations import linear_program
 
-pytestmark = pytest.mark.requires_backend("flint")
-
 
 def _system(rhs: list[dict[str, str]]) -> dict[str, object]:
     return {
         "variables": ["x"],
-        "coefficients": {"entries": [[q(1)] for _ in rhs]},
+        "coefficients": {
+            "row_count": len(rhs),
+            "column_count": 1,
+            "entries": [
+                {"row": row, "column": 0, "value": q(1)} for row in range(len(rhs))
+            ],
+        },
         "rhs": rhs,
     }
 
@@ -115,6 +119,12 @@ def test_rational_linear_program_returns_a_source_bound_optimum() -> None:
             }
         ).program
     )
+    assert result.primal_candidate is not None
+    assert result.dual_candidate is not None
+    assert result.primal_objective is not None
+    assert result.dual_objective is not None
+    assert result.primal_residuals is not None
+    assert result.dual_slacks is not None
     assert [v.model_dump(mode="json") for v in result.primal_candidate] == [q(1)]
     assert [v.model_dump(mode="json") for v in result.dual_candidate] == [q(1)]
     assert result.primal_objective.model_dump(mode="json") == q(1)
@@ -137,6 +147,8 @@ def test_rational_linear_program_handles_multiple_equalities() -> None:
     result = linear_program(request.program)
 
     assert result.status == "OPTIMAL"
+    assert result.primal_candidate is not None
+    assert result.primal_residuals is not None
     assert [v.model_dump(mode="json") for v in result.primal_candidate] == [q(1), q(2)]
     assert [v.model_dump(mode="json") for v in result.primal_residuals] == [q(0), q(0)]
 

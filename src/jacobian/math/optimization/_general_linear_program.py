@@ -8,6 +8,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.optimization._arithmetic import rational_dot
 from jacobian.math.optimization._general_models import (
+    MAX_GENERAL_RATIONAL_INPUT_DIGITS,
     GeneralFormRationalLinearProgram,
     GeneralRationalLinearProgramResult,
     _source_arrays,
@@ -20,6 +21,8 @@ from jacobian.math.optimization._general_normalization import (
     admit_general_normalization,
 )
 from jacobian.math.optimization._models import RationalLinearProgramResult
+
+_INTERVAL_RESULT_DIGITS = 4 * MAX_GENERAL_RATIONAL_INPUT_DIGITS + 1
 
 
 def _wire(value: Fraction, *, max_digits: int) -> CanonicalRational | None:
@@ -225,6 +228,178 @@ def _primal_feasible(
         constraint_slacks=constraint_slacks,
         lower_bound_slacks=lower_slacks,
         upper_bound_slacks=upper_slacks,
+    )
+
+
+type _IntervalBound = tuple[Fraction, str, int | None]
+
+
+def _one_variable_bounds(
+    program: GeneralFormRationalLinearProgram,
+) -> tuple[bool, _IntervalBound | None, _IntervalBound | None]:
+    variable = program.variables[0]
+    lower: _IntervalBound | None = (
+        (variable.lower_bound.as_fraction(), "lower", None)
+        if variable.lower_bound is not None
+        else None
+    )
+    upper: _IntervalBound | None = (
+        (variable.upper_bound.as_fraction(), "upper", None)
+        if variable.upper_bound is not None
+        else None
+    )
+    for index, row in enumerate(program.constraints):
+        coefficient = row.coefficients[0].as_fraction()
+        rhs = row.rhs.as_fraction()
+        if coefficient == 0:
+            holds = {
+                "LE": Fraction() <= rhs,
+                "GE": Fraction() >= rhs,
+                "EQ": rhs == 0,
+            }[row.relation]
+            if not holds:
+                return False, lower, upper
+            continue
+        boundary = rhs / coefficient
+        is_lower = (row.relation == "GE") == (coefficient > 0)
+        candidates = (
+            ("lower", "upper")
+            if row.relation == "EQ"
+            else (("lower",) if is_lower else ("upper",))
+        )
+        for kind in candidates:
+            candidate = (boundary, "constraint", index)
+            if kind == "lower" and (lower is None or boundary > lower[0]):
+                lower = candidate
+            if kind == "upper" and (upper is None or boundary < upper[0]):
+                upper = candidate
+    feasible = not (lower is not None and upper is not None and lower[0] > upper[0])
+    return feasible, lower, upper
+
+
+def _one_variable_interval_result(
+    program: GeneralFormRationalLinearProgram,
+) -> GeneralRationalLinearProgramResult | None:
+    """Solve a feasible one-variable bound system in source coordinates."""
+
+    if len(program.variables) != 1:
+        return None
+    feasible, lower, upper = _one_variable_bounds(program)
+    if not feasible:
+        return None
+
+    objective_coefficient = program.objective.coefficients[0].as_fraction()
+    effective = (
+        objective_coefficient
+        if program.objective.sense == "MINIMIZE"
+        else -objective_coefficient
+    )
+    active = lower if effective > 0 else upper if effective < 0 else None
+    if active is None and effective != 0:
+        point_value = (
+            lower[0] if lower is not None else upper[0] if upper else Fraction()
+        )
+        primal = _primal_data(program, (point_value,))
+        direction = Fraction(-1 if effective > 0 else 1)
+        wires = _wire_vector((point_value,), max_digits=_INTERVAL_RESULT_DIGITS)
+        ray = _wire_vector((direction,), max_digits=_INTERVAL_RESULT_DIGITS)
+        fields = tuple(
+            _wire_vector(values, max_digits=_INTERVAL_RESULT_DIGITS)
+            for values in primal[1:]
+        )
+        objective = _wire(primal[0], max_digits=_INTERVAL_RESULT_DIGITS)
+        if (
+            wires is None
+            or ray is None
+            or objective is None
+            or any(v is None for v in fields)
+        ):
+            return None
+        residuals, constraint_slacks, lower_slacks, upper_slacks = fields
+        return GeneralRationalLinearProgramResult._from_kernel(
+            program=program,
+            status="UNBOUNDED",
+            primal_candidate=wires,
+            primal_objective=objective,
+            primal_residuals=residuals,
+            constraint_slacks=constraint_slacks,
+            lower_bound_slacks=lower_slacks,
+            upper_bound_slacks=upper_slacks,
+            recession_direction=ray,
+        )
+
+    point_value = (
+        active[0]
+        if active is not None
+        else (
+            lower[0]
+            if lower is not None
+            else upper[0]
+            if upper is not None
+            else Fraction()
+        )
+    )
+    primal = _primal_data(program, (point_value,))
+    constraint_dual = [Fraction()] * len(program.constraints)
+    lower_dual = Fraction()
+    upper_dual = Fraction()
+    if active is not None:
+        _, kind, active_index = active
+        if kind == "constraint":
+            assert active_index is not None
+            coefficient = (
+                program.constraints[active_index].coefficients[0].as_fraction()
+            )
+            constraint_dual[active_index] = objective_coefficient / coefficient
+        elif kind == "lower":
+            lower_dual = objective_coefficient
+        else:
+            upper_dual = objective_coefficient
+    stationarity = (
+        objective_coefficient
+        - sum(
+            row.coefficients[0].as_fraction() * multiplier
+            for row, multiplier in zip(
+                program.constraints, constraint_dual, strict=True
+            )
+        )
+        - lower_dual
+        - upper_dual
+    )
+    vector_values: tuple[tuple[Fraction, ...], ...] = (
+        (point_value,),
+        primal[1],
+        primal[2],
+        primal[3],
+        primal[4],
+        tuple(constraint_dual),
+        (lower_dual,),
+        (upper_dual,),
+        (stationarity,),
+    )
+    wire_vectors: list[tuple[CanonicalRational, ...]] = []
+    for values in vector_values:
+        wire_vector = _wire_vector(values, max_digits=_INTERVAL_RESULT_DIGITS)
+        if wire_vector is None:
+            return None
+        wire_vectors.append(wire_vector)
+    wire_objective = _wire(primal[0], max_digits=_INTERVAL_RESULT_DIGITS)
+    if wire_objective is None:
+        return None
+    return GeneralRationalLinearProgramResult._from_kernel(
+        program=program,
+        status="OPTIMAL",
+        primal_candidate=wire_vectors[0],
+        primal_objective=wire_objective,
+        primal_residuals=wire_vectors[1],
+        constraint_slacks=wire_vectors[2],
+        lower_bound_slacks=wire_vectors[3],
+        upper_bound_slacks=wire_vectors[4],
+        constraint_dual=wire_vectors[5],
+        lower_bound_dual=wire_vectors[6],
+        upper_bound_dual=wire_vectors[7],
+        dual_objective=wire_objective,
+        stationarity_residuals=wire_vectors[8],
     )
 
 
@@ -452,6 +627,9 @@ def general_linear_program(
     program: GeneralFormRationalLinearProgram,
 ) -> GeneralRationalLinearProgramResult:
     from jacobian.math.optimization.operations import linear_program
+
+    if (presolved := _one_variable_interval_result(program)) is not None:
+        return presolved
 
     try:
         normalization = admit_general_normalization(program)

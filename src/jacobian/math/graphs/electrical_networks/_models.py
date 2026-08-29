@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 
-MAX_NETWORK_VERTICES = 128
+MAX_NETWORK_VERTICES = 256
+MAX_LAPLACIAN_VERTICES = 128
 MAX_NETWORK_EDGES = 512
+MAX_NETWORK_SOLVE_WORK = 500_000_000
+# Solve work is reduced-order cubic elimination times the accumulated
+# Laplacian-diagonal height. Incident distinct denominators raise that height
+# before FLINT constructs or solves the system.
 
 # Each conductance is reduced and has numerator and denominator at most this many
 # decimal digits. Results (effective resistance, node potentials, Laplacian
-# entries) are ratios of degree-at-most-127 weighted spanning-forest/tree
+# entries) are ratios of degree-at-most-255 weighted spanning-forest/tree
 # polynomials: after clearing the common denominator, each component is bounded
-# by MAX_NETWORK_EDGES * MAX_CONDUCTANCE_DIGITS + log10(128**126) digits
-# (512 * 50 + 266 = 25,866), comfortably inside the canonical 32,768-digit
+# by MAX_NETWORK_EDGES * MAX_CONDUCTANCE_DIGITS + log10(256**254) digits
+# (512 * 50 + 612 = 26,212), comfortably inside the canonical 32,768-digit
 # rational ceiling.
 MAX_CONDUCTANCE_DIGITS = 50
 
@@ -35,6 +40,25 @@ class ConductanceNetwork(StrictModel):
     edges: tuple[ConductanceEdge, ...] = Field(
         min_length=1, max_length=MAX_NETWORK_EDGES
     )
+
+
+class LaplacianNetwork(StrictModel):
+    """A conductance network whose Laplacian matrix fits the materialization bound."""
+
+    vertex_count: int = Field(ge=2, le=MAX_LAPLACIAN_VERTICES)
+    edges: tuple[ConductanceEdge, ...] = Field(
+        min_length=1, max_length=MAX_NETWORK_EDGES
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_shared_conductance_network(cls, data: object) -> object:
+        if isinstance(data, ConductanceNetwork):
+            return {
+                "vertex_count": data.vertex_count,
+                "edges": data.edges,
+            }
+        return canonicalize_json_containers(data)
 
 
 class EffectiveResistanceRequest(StrictModel):
@@ -81,21 +105,21 @@ class NodePotentialResult(StrictModel):
 class LaplacianEntry(StrictModel):
     """One entry of the exact conductance-weighted Laplacian matrix."""
 
-    row: int = Field(ge=0, le=MAX_NETWORK_VERTICES - 1)
-    col: int = Field(ge=0, le=MAX_NETWORK_VERTICES - 1)
+    row: int = Field(ge=0, le=MAX_LAPLACIAN_VERTICES - 1)
+    col: int = Field(ge=0, le=MAX_LAPLACIAN_VERTICES - 1)
     value: CanonicalRational
 
 
 class LaplacianRequest(StrictModel):
     """Compute the conductance-weighted Laplacian matrix of a network."""
 
-    network: ConductanceNetwork
+    network: LaplacianNetwork
 
 
 class LaplacianResult(StrictModel):
     """Exact Laplacian matrix as a flat list of (row, col, value) entries."""
 
-    vertex_count: int = Field(ge=2, le=MAX_NETWORK_VERTICES)
+    vertex_count: int = Field(ge=2, le=MAX_LAPLACIAN_VERTICES)
     entries: tuple[LaplacianEntry, ...] = Field(min_length=1)
 
 
@@ -105,6 +129,7 @@ __all__ = [
     "EffectiveResistanceRequest",
     "EffectiveResistanceResult",
     "LaplacianEntry",
+    "LaplacianNetwork",
     "LaplacianRequest",
     "LaplacianResult",
     "NodePotentialRequest",

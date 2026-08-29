@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import Field
 
 from jacobian._models import StrictModel
+from jacobian.math.combinatorics.codes.nonlinear._models import ToSetSystemResult
 from jacobian.math.combinatorics.extremal_sets.values import (
     MAX_FAMILY_SIZE,
     IndexedFiniteSetFamily,
@@ -18,7 +19,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 class BinaryUnionRelationRequest(StrictModel):
     """Request to compute the binary-union relation of an indexed family."""
 
-    source: IndexedFiniteSetFamily
+    source: IndexedFiniteSetFamily | ToSetSystemResult
 
 
 class UnionRelationRow(StrictModel):

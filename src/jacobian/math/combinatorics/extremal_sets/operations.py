@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.codes.nonlinear._models import ToSetSystemResult
 from jacobian.math.combinatorics.extremal_sets._models import (
     BinaryUnionRelationResult,
     UnionRelationRow,
@@ -25,10 +26,11 @@ class _UnionRelationPlan:
 
 
 def construct_binary_union_relation(
-    source: IndexedFiniteSetFamily,
+    source: IndexedFiniteSetFamily | ToSetSystemResult,
 ) -> BinaryUnionRelationResult:
     """Return every distinct-member equation ``S_i union S_j = S_k``."""
 
+    source = _canonical_source(source)
     plan = _admit_union_relation(source)
     rows = tuple(
         UnionRelationRow(
@@ -52,6 +54,18 @@ def construct_binary_union_relation(
         rows=rows,
         hypergraph=FiniteHypergraph(vertices=vertices, edges=edges),
     )
+
+
+def _canonical_source(
+    source: IndexedFiniteSetFamily | ToSetSystemResult,
+) -> IndexedFiniteSetFamily:
+    """Convert the code-support producer's value to the shared family type."""
+    if isinstance(source, ToSetSystemResult):
+        return IndexedFiniteSetFamily(
+            ground_set_size=source.length,
+            members=source.supports,
+        )
+    return source
 
 
 def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:

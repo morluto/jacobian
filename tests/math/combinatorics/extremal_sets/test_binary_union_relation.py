@@ -6,6 +6,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.codes.nonlinear._models import ExplicitBinaryCode
+from jacobian.math.combinatorics.codes.nonlinear.operations import to_set_system
 from jacobian.math.combinatorics.extremal_sets.operations import (
     construct_binary_union_relation,
 )
@@ -125,3 +127,25 @@ def test_large_sparse_family_remains_admitted() -> None:
     result = construct_binary_union_relation(source)
     assert result.rows == ()
     assert len(result.hypergraph.vertices) == 200
+
+
+def test_code_support_producer_composes_without_reconstruction() -> None:
+    code = ExplicitBinaryCode(
+        length=2,
+        codewords=((0, 0), (1, 0), (0, 1), (1, 1)),
+    )
+    result = construct_binary_union_relation(to_set_system(code))
+    assert result.source.ground_set_size == 2
+    assert result.rows[0].model_dump(exclude={"edge_id"}) == {
+        "operand_i": 1,
+        "operand_j": 2,
+        "result_k": 3,
+    }
+
+
+def test_ground_axis_is_independent_of_relation_vertex_count() -> None:
+    result = construct_binary_union_relation(
+        _source(((256,),), ground_set_size=257)
+    )
+    assert result.source.ground_set_size == 257
+    assert result.rows == ()

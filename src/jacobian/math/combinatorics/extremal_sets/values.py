@@ -12,7 +12,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_VERTICES,
 )
 
-MAX_GROUND_SET_SIZE = MAX_VERTICES
+MAX_GROUND_SET_SIZE = (1 << 53) - 1
 MAX_FAMILY_SIZE = MAX_VERTICES
 
 

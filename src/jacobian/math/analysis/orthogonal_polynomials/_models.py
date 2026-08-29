@@ -31,7 +31,7 @@ class ShiftedHankelRequest(StrictModel):
 
     prefix: MomentFunctionalPrefix
     # A shifted matrix of order r consumes mu_1..mu_(2r+1); the canonical
-    # prefix holds at most 65 moments, so r = 32 could never validate and
+    # prefix holds at most 129 moments, so r = 64 could never validate and
     # must not be advertised as supported.
     order: int = Field(ge=0, le=MAX_HANKEL_ORDER - 1)
 

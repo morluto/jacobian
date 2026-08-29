@@ -1,17 +1,23 @@
 """Exact number-theory operations with structured, argument-bound results."""
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.number_theory._derived_models import (
+    BinomialPrimeValuationRequest,
+    BinomialPrimeValuationResult,
     FactorialValuationRequest,
     FactorialValuationResult,
     FloorSquareRootRequest,
     FloorSquareRootResult,
     LegendreSymbolRequest,
     LegendreSymbolResult,
+    admit_binomial_prime_valuation,
+    admit_factorial_valuation,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.operations import (
-    factorial_valuation,
+    _binomial_prime_valuation,
+    _factorial_valuation,
     floor_square_root,
     legendre_symbol,
 )
@@ -28,10 +34,46 @@ def compute_legendre_symbol(request: LegendreSymbolRequest) -> LegendreSymbolRes
 def compute_factorial_valuation(
     request: FactorialValuationRequest,
 ) -> FactorialValuationResult:
-    return factorial_valuation(request.n, request.base)
+    return _factorial_valuation(
+        admit_factorial_valuation(
+            parse_canonical_integer(request.n),
+            parse_canonical_integer(request.base),
+        )
+    )
+
+
+def compute_binomial_prime_valuation(
+    request: BinomialPrimeValuationRequest,
+) -> BinomialPrimeValuationResult:
+    return _binomial_prime_valuation(
+        admit_binomial_prime_valuation(
+            parse_canonical_integer(request.n),
+            parse_canonical_integer(request.k),
+            parse_canonical_integer(request.prime),
+        )
+    )
 
 
 DERIVED_NUMBER_THEORY_OPERATIONS = (
+    number_theory_operation(
+        "number_theory.binomial_valuation.compute",
+        "Compute one binomial prime valuation",
+        "Return the exact exponent of a prime in C(n, k) using Kummer carries without constructing the binomial coefficient.",
+        BinomialPrimeValuationRequest,
+        BinomialPrimeValuationResult,
+        compute_binomial_prime_valuation,
+        "number-theory",
+        "valuation",
+        "binomial",
+        discovery_terms=("Kummer theorem", "p-adic valuation of n choose k"),
+        examples=(
+            example(
+                "valuation_of_8_choose_3_at_2",
+                "Compute the exponent of 2 in C(8, 3).",
+                {"n": "8", "k": "3", "prime": "2"},
+            ),
+        ),
+    ),
     number_theory_operation(
         "integer.compute.floor_square_root",
         "Compute an integer floor square root",
@@ -78,7 +120,7 @@ DERIVED_NUMBER_THEORY_OPERATIONS = (
             example(
                 "valuation_10_factorial_base_2",
                 "Compute the exponent of 2 in 10!.",
-                {"n": 10, "base": 2},
+                {"n": "10", "base": "2"},
             ),
         ),
     ),

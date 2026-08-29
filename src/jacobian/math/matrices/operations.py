@@ -125,9 +125,18 @@ def rref(matrix: MatrixBase) -> tuple[MatrixBase, tuple[int, ...]]:
 
 
 def inverse(matrix: MatrixBase) -> MatrixBase:
-    source = _exact_matrix(matrix)
+    import sympy
+
+    source = _exact_matrix(matrix, maximum_dimension=MAX_INVERSE_MATRIX_ORDER)
     if source.rows != source.cols:
         raise ValueError("inverse requires a square matrix")
+    if all(entry.is_Integer is True for entry in source):
+        result = inverse_result(conversions.integer_matrix_from_sympy(source))
+        return conversions.rational_matrix_to_sympy(result.inverse)
+    if source.rows > MAX_MATRIX_DIMENSION:
+        raise ValueError(
+            f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+        )
     from sympy.polys.matrices import DomainMatrix
     from sympy.polys.matrices.exceptions import DMNonInvertibleMatrixError
 
@@ -148,10 +157,29 @@ def trace(matrix: MatrixBase) -> Any:
 
 
 def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
-    source = _exact_matrix(matrix)
+    import sympy
+
+    source = _exact_matrix(
+        matrix, maximum_dimension=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER
+    )
     if source.rows != source.cols:
         raise ValueError("characteristic polynomial requires a square matrix")
-    return source.charpoly(variable)
+    if not all(entry.is_Rational is True for entry in source):
+        if source.rows > MAX_MATRIX_DIMENSION:
+            raise ValueError(
+                f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+            )
+        return source.charpoly(variable)
+    result = characteristic_polynomial_result(
+        conversions.rational_matrix_from_sympy(source)
+    )
+    return sympy.Poly(
+        [
+            sympy.Rational(coefficient.num, coefficient.den)
+            for coefficient in result.coefficients_descending
+        ],
+        sympy.Symbol(variable),
+    )
 
 
 def determinant(matrix: MatrixBase) -> Any:

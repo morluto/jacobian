@@ -13,6 +13,11 @@ import pytest
 from tests.math.number_theory._validation import expect_validation
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory._periodic import (
+    compute_periodic_congruence_union_measure,
+    compute_periodic_congruence_union_profile,
+    normalize_periodic_source,
+)
 from jacobian.math.number_theory._periodic_kernel import (
     require_admitted_periodic_source,
 )
@@ -35,10 +40,11 @@ from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceUnionProfileResult,
     PeriodicCongruenceUnionRequest,
 )
-from jacobian.math.number_theory._periodic_operations import (
-    compute_periodic_congruence_union_measure,
-    compute_periodic_congruence_union_profile,
-    normalize_periodic_source,
+from jacobian.math.number_theory.operations import (
+    periodic_congruence_union_measure as native_periodic_measure,
+)
+from jacobian.math.number_theory.operations import (
+    periodic_congruence_union_profile as native_periodic_profile,
 )
 
 
@@ -50,6 +56,21 @@ def _measure(payload: dict[str, object]) -> PeriodicCongruenceUnionMeasureResult
 def _profile(payload: dict[str, object]) -> PeriodicCongruenceUnionProfileResult:
     request = PeriodicCongruenceUnionProfileRequest.model_validate(payload)
     return compute_periodic_congruence_union_profile(request)
+
+
+def test_native_periodic_operations_accept_canonical_source() -> None:
+    request = PeriodicCongruenceUnionRequest.model_validate(
+        {
+            "subsets": [{"modulus": "4", "residues": ["1"]}],
+            "complement": False,
+        }
+    )
+    source = normalize_periodic_source(request)
+
+    measure = native_periodic_measure(source)
+    profile = native_periodic_profile(source)
+    assert measure.occupied_count == profile.occupied_count == "1"
+    assert profile.occupied_residues == ("1",)
 
 
 def _powerset(values: range) -> tuple[tuple[int, ...], ...]:

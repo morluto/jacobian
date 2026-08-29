@@ -84,6 +84,29 @@ from jacobian.math.number_theory._prime_coverage_models import (
     _coverage_result_upper_bound_bytes,
     _coverage_work_upper_bound,
 )
+from jacobian.math.number_theory._periodic_kernel import (
+    _ExecutionPlan,
+    materialize_periodic_union,
+    measure_periodic_union,
+    require_admitted_periodic_source,
+    require_materializable_periodic_source,
+)
+from jacobian.math.number_theory._periodic_models import (
+    PeriodicCongruenceUnionMeasureResult,
+    PeriodicCongruenceUnionProfileResult,
+    PeriodicCongruenceUnionSource,
+)
+from jacobian.math.number_theory._preimage_kernel import (
+    ksigma_preimages,
+)
+from jacobian.math.number_theory._preimage_kernel import (
+    p_adic_interval_profile as admit_p_adic_interval_profile,
+)
+from jacobian.math.number_theory._preimage_models import (
+    KSigmaPreimageResult,
+    PAdicIntervalProfileResult,
+    PAdicIntervalProfileRow,
+)
 from jacobian.math.number_theory._prime_models import PrimorialResult
 from jacobian.math.number_theory._prime_shift_models import (
     PrimeShiftProfileResult,
@@ -107,6 +130,7 @@ __all__ = [
     "gcd_quotient_profile",
     "is_prime",
     "jacobi_symbol",
+    "ksigma_preimage",
     "legendre_symbol",
     "mobius",
     "modular_inverse",
@@ -115,6 +139,9 @@ __all__ = [
     "multiplicative_order",
     "next_prime",
     "nth_prime",
+    "p_adic_interval_profile",
+    "periodic_congruence_union_measure",
+    "periodic_congruence_union_profile",
     "previous_prime",
     "prime_count",
     "prime_coverage_profile",
@@ -949,4 +976,104 @@ def prime_coverage_profile(
                 range(lower_bound, upper_bound + 1), counts, strict=True
             )
         ],
+    )
+
+
+def _admit_periodic_source(
+    source: PeriodicCongruenceUnionSource, *, materializable: bool = False
+) -> _ExecutionPlan:
+    try:
+        plan = require_admitted_periodic_source(source)
+        if materializable:
+            return require_materializable_periodic_source(source, plan)
+        return plan
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="number_theory.periodic.execution_bound",
+            message=str(exc),
+        ) from exc
+
+
+def _periodic_measure_values(
+    period: int,
+    occupied_count: int,
+) -> tuple[str, str, CanonicalRational]:
+    return (
+        format_canonical_integer(period),
+        format_canonical_integer(occupied_count),
+        CanonicalRational.from_fraction(Fraction(occupied_count, period)),
+    )
+
+
+def periodic_congruence_union_measure(
+    source: PeriodicCongruenceUnionSource,
+) -> PeriodicCongruenceUnionMeasureResult:
+    """Measure one canonical finite periodic congruence union exactly."""
+
+    plan = _admit_periodic_source(source)
+    period, occupied_count, density = _periodic_measure_values(
+        plan.common_period, measure_periodic_union(source, plan)
+    )
+    return PeriodicCongruenceUnionMeasureResult._from_kernel(
+        source=source,
+        common_period=period,
+        occupied_count=occupied_count,
+        density=density,
+    )
+
+
+def periodic_congruence_union_profile(
+    source: PeriodicCongruenceUnionSource,
+) -> PeriodicCongruenceUnionProfileResult:
+    """Materialize one canonical finite periodic congruence union exactly."""
+
+    plan = _admit_periodic_source(source, materializable=True)
+    residues = materialize_periodic_union(source, plan)
+    period, occupied_count, density = _periodic_measure_values(
+        plan.common_period, len(residues)
+    )
+    return PeriodicCongruenceUnionProfileResult._from_profile_kernel(
+        source=source,
+        common_period=period,
+        occupied_count=occupied_count,
+        density=density,
+        occupied_residues=tuple(
+            format_canonical_integer(residue) for residue in residues
+        ),
+    )
+
+
+def ksigma_preimage(k: int, target: int) -> KSigmaPreimageResult:
+    """Return the complete positive fiber of ``n -> k * sigma(n)``."""
+
+    preimages = ksigma_preimages(k, target)
+    return KSigmaPreimageResult._from_kernel(
+        k=k,
+        target_value=format_canonical_integer(target),
+        preimages=preimages,
+    )
+
+
+def p_adic_interval_profile(
+    start: int,
+    length: int,
+    prime: int,
+) -> PAdicIntervalProfileResult:
+    """Return the exact valuation histogram on ``[start + 1, start + length]``."""
+
+    plan = admit_p_adic_interval_profile(start, length, prime)
+    return PAdicIntervalProfileResult._from_kernel(
+        start=format_canonical_integer(start),
+        length=format_canonical_integer(length),
+        prime=format_canonical_integer(prime),
+        rows=tuple(
+            PAdicIntervalProfileRow(
+                valuation=valuation,
+                count=format_canonical_integer(count),
+            )
+            for valuation, count in plan.rows
+        ),
+        total_valuation=plan.total_valuation,
+        maximum_valuation=plan.maximum_valuation,
     )

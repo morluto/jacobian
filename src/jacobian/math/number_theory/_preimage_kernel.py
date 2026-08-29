@@ -9,7 +9,6 @@ from jacobian.canonical import (
     CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
-    parse_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
@@ -17,14 +16,10 @@ from jacobian.math.number_theory._preimage_models import (
     MAX_INTERVAL_PROFILE_RESULT_BYTES,
     MAX_INTERVAL_PROFILE_ROWS,
     MAX_INTERVAL_PROFILE_WORK,
+    MAX_KSIGMA_MULTIPLIER,
     MAX_KSIGMA_SEARCH,
     MAX_KSIGMA_TARGET,
     PRIMALITY_WORK_DIGIT_EXPONENT,
-    KSigmaPreimageRequest,
-    KSigmaPreimageResult,
-    PAdicIntervalProfileRequest,
-    PAdicIntervalProfileResult,
-    PAdicIntervalProfileRow,
 )
 
 
@@ -50,7 +45,9 @@ def _primality_work_units(prime: int) -> int:
 
 
 def _profile_result_payload(
-    request: PAdicIntervalProfileRequest,
+    start: int,
+    length: int,
+    prime: int,
     *,
     rows: tuple[tuple[int, int], ...],
     total_valuation: int,
@@ -59,9 +56,9 @@ def _profile_result_payload(
     """Build the canonical payload whose size is part of request admission."""
 
     return {
-        "start": request.start,
-        "length": request.length,
-        "prime": request.prime,
+        "start": format_canonical_integer(start),
+        "length": format_canonical_integer(length),
+        "prime": format_canonical_integer(prime),
         "rows": [
             {
                 "valuation": valuation,
@@ -75,13 +72,12 @@ def _profile_result_payload(
 
 
 def _admit_p_adic_interval_profile(
-    request: PAdicIntervalProfileRequest,
+    start: int,
+    length: int,
+    prime: int,
 ) -> _PAdicIntervalProfilePlan:
-    """Admit one parsed request and retain the powers needed by the kernel."""
+    """Admit one interval and retain the derived profile for its result."""
 
-    start = parse_canonical_integer(request.start)
-    length = parse_canonical_integer(request.length)
-    prime = parse_canonical_integer(request.prime)
     if start < 0:
         raise OperationDomainValidationError(
             location=("start",),
@@ -165,7 +161,9 @@ def _admit_p_adic_interval_profile(
 
     maximum_valuation = rows[-1][0] if rows else 0
     payload = _profile_result_payload(
-        request,
+        start,
+        length,
+        prime,
         rows=rows,
         total_valuation=total_valuation,
         maximum_valuation=maximum_valuation,
@@ -205,23 +203,26 @@ def _admit_p_adic_interval_profile(
     )
 
 
-def compute_ksigma_preimage(
-    request: KSigmaPreimageRequest,
-) -> KSigmaPreimageResult:
-    """Compute every positive ``n`` with ``k * sigma(n) == target_value``."""
+def ksigma_preimages(k: int, target: int) -> tuple[int, ...]:
+    """Compute every positive ``n`` with ``k * sigma(n) == target``."""
     from sympy import divisor_sigma
 
-    target = parse_canonical_integer(request.target_value)
     if not 1 <= target <= MAX_KSIGMA_TARGET:
         raise OperationDomainValidationError(
             location=("target_value",),
             code="number_theory.ksigma_target_bound",
             message=f"target_value must be between 1 and {MAX_KSIGMA_TARGET}",
         )
-    if target % request.k:
-        return KSigmaPreimageResult._from_kernel(request, preimages=())
+    if not 1 <= k <= MAX_KSIGMA_MULTIPLIER:
+        raise OperationDomainValidationError(
+            location=("k",),
+            code="number_theory.ksigma_multiplier_bound",
+            message=f"k must be between 1 and {MAX_KSIGMA_MULTIPLIER}",
+        )
+    if target % k:
+        return ()
 
-    sigma_target = target // request.k
+    sigma_target = target // k
     if sigma_target > MAX_KSIGMA_SEARCH:
         raise OperationDomainValidationError(
             location=("target_value",),
@@ -237,33 +238,21 @@ def compute_ksigma_preimage(
     preimages = tuple(
         n for n in range(1, sigma_target + 1) if int(divisor_sigma(n)) == sigma_target
     )
-    return KSigmaPreimageResult._from_kernel(
-        request,
-        preimages=preimages,
-    )
+    return preimages
 
 
-def compute_p_adic_interval_profile(
-    request: PAdicIntervalProfileRequest,
-) -> PAdicIntervalProfileResult:
-    """Compute the valuation histogram on ``[start + 1, start + length]``."""
-    plan = _admit_p_adic_interval_profile(request)
+def p_adic_interval_profile(
+    start: int,
+    length: int,
+    prime: int,
+) -> _PAdicIntervalProfilePlan:
+    """Admit an interval and return its exact derived valuation profile."""
 
-    return PAdicIntervalProfileResult._from_kernel(
-        request,
-        rows=tuple(
-            PAdicIntervalProfileRow(
-                valuation=valuation,
-                count=format_canonical_integer(count),
-            )
-            for valuation, count in plan.rows
-        ),
-        total_valuation=plan.total_valuation,
-        maximum_valuation=plan.maximum_valuation,
-    )
+    return _admit_p_adic_interval_profile(start, length, prime)
 
 
 __all__ = [
-    "compute_ksigma_preimage",
-    "compute_p_adic_interval_profile",
+    "_PAdicIntervalProfilePlan",
+    "ksigma_preimages",
+    "p_adic_interval_profile",
 ]

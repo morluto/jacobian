@@ -87,13 +87,14 @@ class KSigmaPreimageResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: KSigmaPreimageRequest,
         *,
+        k: int,
+        target_value: BoundedInteger,
         preimages: tuple[int, ...],
     ) -> Self:
         return cls.model_construct(
-            k=request.k,
-            target_value=request.target_value,
+            k=k,
+            target_value=target_value,
             preimages=tuple(str(value) for value in preimages),
             count=len(preimages),
         )
@@ -215,16 +216,18 @@ class PAdicIntervalProfileResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: PAdicIntervalProfileRequest,
         *,
+        start: BoundedInteger,
+        length: BoundedInteger,
+        prime: BoundedInteger,
         rows: tuple[PAdicIntervalProfileRow, ...],
         total_valuation: int,
         maximum_valuation: int,
     ) -> Self:
         return cls.model_construct(
-            start=request.start,
-            length=request.length,
-            prime=request.prime,
+            start=start,
+            length=length,
+            prime=prime,
             rows=rows,
             total_valuation=str(total_valuation),
             maximum_valuation=maximum_valuation,

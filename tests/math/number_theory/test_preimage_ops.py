@@ -12,11 +12,24 @@ from jacobian.math.number_theory._preimage_models import (
     KSigmaPreimageRequest,
     PAdicIntervalProfileRequest,
 )
-from jacobian.math.number_theory._preimage_operations import (
+from jacobian.math.number_theory._preimage_ops import (
+    PREIMAGE_OPERATIONS,
     compute_ksigma_preimage,
     compute_p_adic_interval_profile,
 )
-from jacobian.math.number_theory._preimage_ops import PREIMAGE_OPERATIONS
+from jacobian.math.number_theory.operations import (
+    ksigma_preimage as native_ksigma_preimage,
+)
+from jacobian.math.number_theory.operations import (
+    p_adic_interval_profile as native_p_adic_interval_profile,
+)
+
+
+def test_native_preimage_operations_accept_canonical_values() -> None:
+    sigma_result = native_ksigma_preimage(2, 8)
+    profile_result = native_p_adic_interval_profile(0, 10, 2)
+    assert sigma_result.preimages == ("3",)
+    assert profile_result.total_valuation == "8"
 
 
 def test_ksigma_preimage_preserves_multiplier_contract() -> None:

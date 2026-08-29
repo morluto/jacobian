@@ -7,11 +7,34 @@ from jacobian.math.number_theory._preimage_models import (
     PAdicIntervalProfileRequest,
     PAdicIntervalProfileResult,
 )
-from jacobian.math.number_theory._preimage_operations import (
-    compute_ksigma_preimage,
-    compute_p_adic_interval_profile,
-)
 from jacobian.math.number_theory._support import number_theory_operation
+from jacobian.math.number_theory.operations import (
+    ksigma_preimage,
+    p_adic_interval_profile,
+)
+
+
+def compute_ksigma_preimage(
+    request: KSigmaPreimageRequest,
+) -> KSigmaPreimageResult:
+    """Project a wire request onto the canonical preimage operation."""
+
+    return ksigma_preimage(
+        request.k,
+        int(request.target_value),
+    )
+
+
+def compute_p_adic_interval_profile(
+    request: PAdicIntervalProfileRequest,
+) -> PAdicIntervalProfileResult:
+    """Project a wire request onto the canonical valuation operation."""
+
+    return p_adic_interval_profile(
+        int(request.start),
+        int(request.length),
+        int(request.prime),
+    )
 
 PREIMAGE_OPERATIONS = (
     number_theory_operation(

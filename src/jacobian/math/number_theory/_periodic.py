@@ -1,17 +1,62 @@
 """Declarations for finite periodic congruence unions."""
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.number_theory._periodic_models import (
+    PeriodicCongruenceSubset,
     PeriodicCongruenceUnionMeasureResult,
     PeriodicCongruenceUnionProfileRequest,
     PeriodicCongruenceUnionProfileResult,
     PeriodicCongruenceUnionRequest,
-)
-from jacobian.math.number_theory._periodic_operations import (
-    compute_periodic_congruence_union_measure,
-    compute_periodic_congruence_union_profile,
+    PeriodicCongruenceUnionSource,
 )
 from jacobian.math.number_theory._support import number_theory_operation
+from jacobian.math.number_theory.operations import (
+    periodic_congruence_union_measure,
+    periodic_congruence_union_profile,
+)
+
+
+def normalize_periodic_source(
+    request: PeriodicCongruenceUnionRequest,
+) -> PeriodicCongruenceUnionSource:
+    """Project wire rows into the canonical periodic-union source value."""
+
+    merged: dict[int, set[int]] = {}
+    for subset in request.subsets:
+        modulus = parse_canonical_integer(subset.modulus)
+        residues = merged.setdefault(modulus, set())
+        residues.update(
+            parse_canonical_integer(residue) % modulus for residue in subset.residues
+        )
+    return PeriodicCongruenceUnionSource(
+        subsets=tuple(
+            PeriodicCongruenceSubset(
+                modulus=format_canonical_integer(modulus),
+                residues=tuple(
+                    format_canonical_integer(residue) for residue in sorted(residues)
+                ),
+            )
+            for modulus, residues in sorted(merged.items())
+        ),
+        complement=request.complement,
+    )
+
+
+def compute_periodic_congruence_union_measure(
+    request: PeriodicCongruenceUnionRequest,
+) -> PeriodicCongruenceUnionMeasureResult:
+    """Project a wire request onto the canonical measure operation."""
+
+    return periodic_congruence_union_measure(normalize_periodic_source(request))
+
+
+def compute_periodic_congruence_union_profile(
+    request: PeriodicCongruenceUnionProfileRequest,
+) -> PeriodicCongruenceUnionProfileResult:
+    """Project a wire request onto the canonical profile operation."""
+
+    return periodic_congruence_union_profile(normalize_periodic_source(request))
 
 PERIODIC_CONGRUENCE_OPERATIONS = (
     number_theory_operation(

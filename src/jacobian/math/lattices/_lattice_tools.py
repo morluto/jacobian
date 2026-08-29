@@ -6,17 +6,6 @@ from typing import Any
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
-from jacobian.math.lattices._lattice_operations import (
-    compute_canonical_basis,
-    compute_direct_sum,
-    compute_discriminant_group,
-    compute_dual,
-    compute_orthogonal_complement,
-    compute_orthogonal_sum,
-    compute_rank_gram,
-    compute_saturation,
-    compute_sublattice_index,
-)
 from jacobian.math.lattices._models import (
     CanonicalBasisResult,
     DirectSumRequest,
@@ -36,6 +25,68 @@ from jacobian.math.lattices._models import (
     SublatticeIndexRequest,
     SublatticeIndexResult,
 )
+from jacobian.math.lattices.operations import (
+    compute_canonical_basis as _compute_canonical_basis_native,
+)
+from jacobian.math.lattices.operations import (
+    compute_direct_sum as _compute_direct_sum_native,
+)
+from jacobian.math.lattices.operations import (
+    compute_discriminant_group as _compute_discriminant_group_native,
+)
+from jacobian.math.lattices.operations import (
+    compute_dual as _compute_dual_native,
+)
+from jacobian.math.lattices.operations import (
+    compute_orthogonal_complement as _compute_orthogonal_complement_native,
+)
+from jacobian.math.lattices.operations import (
+    compute_orthogonal_sum as _compute_orthogonal_sum_native,
+)
+from jacobian.math.lattices.operations import (
+    compute_rank_gram as _compute_rank_gram_native,
+)
+from jacobian.math.lattices.operations import (
+    compute_saturation as _compute_saturation_native,
+)
+from jacobian.math.lattices.operations import (
+    compute_sublattice_index as _compute_sublattice_index_native,
+)
+
+
+def compute_rank_gram(request: RankGramRequest) -> RankGramResult:
+    return _compute_rank_gram_native(request.lattice)
+
+
+def compute_dual(request: DualRequest) -> DualResult:
+    return _compute_dual_native(request.lattice)
+
+
+def compute_sublattice_index(request: SublatticeIndexRequest) -> SublatticeIndexResult:
+    return _compute_sublattice_index_native(
+        request.sublattice, request.parent, request.embedding
+    )
+
+
+def compute_discriminant_group(
+    request: DiscriminantGroupRequest,
+) -> DiscriminantGroupResult:
+    return _compute_discriminant_group_native(request.lattice)
+
+
+def compute_orthogonal_complement(
+    request: OrthogonalComplementRequest,
+) -> OrthogonalComplementResult:
+    return _compute_orthogonal_complement_native(request.lattice)
+
+
+def compute_direct_sum(request: DirectSumRequest) -> DirectSumResult:
+    return _compute_direct_sum_native(request.first, request.second)
+
+
+def compute_orthogonal_sum(request: OrthogonalSumRequest) -> OrthogonalSumResult:
+    return _compute_orthogonal_sum_native(request.first, request.second)
+
 
 __all__ = ["LATTICE_STRUCTURE_OPERATIONS"]
 
@@ -78,7 +129,7 @@ CANONICAL_BASIS_OPERATION: MathTool[Any, Any] = MathTool(
     ),
     request_type=IntegerLattice,
     result_type=CanonicalBasisResult,
-    run=compute_canonical_basis,
+    run=_compute_canonical_basis_native,
     tags=("lattice", "hermite-normal-form", "canonical-basis", "exact-integer"),
     examples=(
         example(
@@ -118,7 +169,7 @@ SATURATION_OPERATION: MathTool[Any, Any] = MathTool(
     ),
     request_type=IntegerLattice,
     result_type=SaturationResult,
-    run=compute_saturation,
+    run=_compute_saturation_native,
     tags=("lattice", "saturation", "exact-integer", "bounded"),
     examples=(
         example(

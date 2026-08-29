@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.lattices._lattice_operations import (
+from jacobian.math.lattices._models import (
+    IntegerLattice,
+    SublatticeIndexRequest,
+)
+from jacobian.math.lattices.operations import (
     compute_canonical_basis,
     compute_direct_sum,
     compute_discriminant_group,
@@ -16,16 +20,7 @@ from jacobian.math.lattices._lattice_operations import (
     compute_saturation,
     compute_sublattice_index,
 )
-from jacobian.math.lattices._models import (
-    DirectSumRequest,
-    DiscriminantGroupRequest,
-    DualRequest,
-    IntegerLattice,
-    OrthogonalComplementRequest,
-    OrthogonalSumRequest,
-    RankGramRequest,
-    SublatticeIndexRequest,
-)
+from jacobian.math.matrices.values import IntegerMatrix
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -72,7 +67,7 @@ def test_integer_lattice_rejects_empty_basis() -> None:
 
 
 def test_rank_gram_of_identity_is_identity() -> None:
-    result = compute_rank_gram(RankGramRequest(lattice=_lattice(2, [[1, 0], [0, 1]])))
+    result = compute_rank_gram(_lattice(2, [[1, 0], [0, 1]]))
     assert result.rank == 2
     assert result.ambient_dimension == 2
     assert result.squared_covolume == "1"
@@ -83,7 +78,7 @@ def test_rank_gram_of_identity_is_identity() -> None:
 
 def test_rank_gram_of_scaled_lattice() -> None:
     """Gram of diag(2,3) is diag(4,9) with squared covolume 36."""
-    result = compute_rank_gram(RankGramRequest(lattice=_lattice(2, [[2, 0], [0, 3]])))
+    result = compute_rank_gram(_lattice(2, [[2, 0], [0, 3]]))
     assert result.rank == 2
     gram = result.gram_matrix.entries
     assert gram == (("4", "0"), ("0", "9"))
@@ -93,7 +88,7 @@ def test_rank_gram_of_scaled_lattice() -> None:
 def test_rank_gram_rank_deficient_reports_rational_covolume() -> None:
     """A rank-1 lattice in ambient 2 has a rational (non-finite) covolume."""
     with pytest.raises(ValueError, match="full row rank"):
-        compute_rank_gram(RankGramRequest(lattice=_lattice(2, [[1, 0], [2, 0]])))
+        compute_rank_gram(_lattice(2, [[1, 0], [2, 0]]))
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +130,7 @@ def test_canonical_basis_transformation_binds() -> None:
 
 
 def test_dual_of_unimodular_is_itself() -> None:
-    result = compute_dual(DualRequest(lattice=_lattice(2, [[1, 0], [0, 1]])))
+    result = compute_dual(_lattice(2, [[1, 0], [0, 1]]))
     dual = result.dual_basis.entries
     assert dual[0][0].num == "1" and dual[0][0].den == "1"
     assert dual[0][1].num == "0" and dual[0][1].den == "1"
@@ -145,7 +140,7 @@ def test_dual_of_unimodular_is_itself() -> None:
 
 def test_dual_pairing_is_integer() -> None:
     """The dual basis times the basis transpose should be the identity."""
-    result = compute_dual(DualRequest(lattice=_lattice(2, [[2, 0], [0, 3]])))
+    result = compute_dual(_lattice(2, [[2, 0], [0, 3]]))
     # B* = B (B B^T)^{-1}; B* B^T = I
     # B B^T = diag(4, 9), so B* = diag(1/2, 1/3)
     dual = result.dual_basis.entries
@@ -209,13 +204,9 @@ def test_saturation_of_coordinate_plane_does_not_gain_ambient_generator() -> Non
 def test_sublattice_index_double() -> None:
     """Index of 2ZZ inside ZZ is 2."""
     result = compute_sublattice_index(
-        SublatticeIndexRequest.model_validate(
-            {
-                "sublattice": _lattice(1, [[2]]),
-                "parent": _lattice(1, [[1]]),
-                "embedding": {"entries": [["2"]]},
-            }
-        )
+        _lattice(1, [[2]]),
+        _lattice(1, [[1]]),
+        IntegerMatrix.model_validate({"entries": [["2"]]}),
     )
     assert result.index == 2
     assert result.invariant_factors == ("2",)
@@ -225,13 +216,9 @@ def test_sublattice_index_double() -> None:
 def test_sublattice_index_quadratic() -> None:
     """Index of <(2,0),(0,2)> inside <(1,0),(0,1)> is 4."""
     result = compute_sublattice_index(
-        SublatticeIndexRequest.model_validate(
-            {
-                "sublattice": _lattice(2, [[2, 0], [0, 2]]),
-                "parent": _lattice(2, [[1, 0], [0, 1]]),
-                "embedding": {"entries": [["2", "0"], ["0", "2"]]},
-            }
-        )
+        _lattice(2, [[2, 0], [0, 2]]),
+        _lattice(2, [[1, 0], [0, 1]]),
+        IntegerMatrix.model_validate({"entries": [["2", "0"], ["0", "2"]]}),
     )
     assert result.index == 4
     assert result.invariant_factors == ("2", "2")
@@ -256,28 +243,22 @@ def test_sublattice_index_rejects_dimension_mismatch() -> None:
 
 
 def test_discriminant_group_of_unimodular_is_trivial() -> None:
-    result = compute_discriminant_group(
-        DiscriminantGroupRequest(lattice=_lattice(2, [[1, 0], [0, 1]]))
-    )
+    result = compute_discriminant_group(_lattice(2, [[1, 0], [0, 1]]))
     assert result.discriminant_order == 1
     assert result.invariant_factors == ()
 
 
 def test_discriminant_group_of_2z_squared() -> None:
     """disc group of 2 ZZ^2 has order |det diag(4,4)| = 16."""
-    result = compute_discriminant_group(
-        DiscriminantGroupRequest(lattice=_lattice(2, [[2, 0], [0, 2]]))
-    )
+    result = compute_discriminant_group(_lattice(2, [[2, 0], [0, 2]]))
     assert result.discriminant_order == 16
     assert result.invariant_factors == ("4", "4")
 
 
 def test_discriminant_group_order_matches_gram_det() -> None:
     """discriminant_order equals |det(B B^T)|."""
-    rg = compute_rank_gram(RankGramRequest(lattice=_lattice(2, [[3, 1], [1, 2]])))
-    dg = compute_discriminant_group(
-        DiscriminantGroupRequest(lattice=_lattice(2, [[3, 1], [1, 2]]))
-    )
+    rg = compute_rank_gram(_lattice(2, [[3, 1], [1, 2]]))
+    dg = compute_discriminant_group(_lattice(2, [[3, 1], [1, 2]]))
     assert int(rg.squared_covolume) == dg.discriminant_order
 
 
@@ -288,16 +269,12 @@ def test_discriminant_group_order_matches_gram_det() -> None:
 
 def test_orthogonal_complement_of_line() -> None:
     """Complement of <(1,0)> in QQ^2 is <(0,1)>."""
-    result = compute_orthogonal_complement(
-        OrthogonalComplementRequest(lattice=_lattice(2, [[1, 0]]))
-    )
+    result = compute_orthogonal_complement(_lattice(2, [[1, 0]]))
     assert result.complement_rank == 1
 
 
 def test_orthogonal_complement_of_full_rank_is_zero() -> None:
-    result = compute_orthogonal_complement(
-        OrthogonalComplementRequest(lattice=_lattice(2, [[1, 0], [0, 1]]))
-    )
+    result = compute_orthogonal_complement(_lattice(2, [[1, 0], [0, 1]]))
     assert result.complement_rank == 0
     assert result.complement_basis.ambient_dimension == 2
     assert result.complement_basis.vectors == ()
@@ -305,9 +282,7 @@ def test_orthogonal_complement_of_full_rank_is_zero() -> None:
 
 def test_orthogonal_complement_of_plane_in_3d() -> None:
     """Complement of <(1,0,0),(0,1,0)> in QQ^3 is <(0,0,1)>."""
-    result = compute_orthogonal_complement(
-        OrthogonalComplementRequest(lattice=_lattice(3, [[1, 0, 0], [0, 1, 0]]))
-    )
+    result = compute_orthogonal_complement(_lattice(3, [[1, 0, 0], [0, 1, 0]]))
     assert result.complement_rank == 1
     assert result.complement_basis.ambient_dimension == 3
     assert len(result.complement_basis.vectors[0]) == 3
@@ -320,10 +295,8 @@ def test_orthogonal_complement_of_plane_in_3d() -> None:
 
 def test_direct_sum_of_two_identity() -> None:
     result = compute_direct_sum(
-        DirectSumRequest(
-            first=_lattice(2, [[1, 0], [0, 1]]),
-            second=_lattice(2, [[1, 0], [0, 1]]),
-        )
+        _lattice(2, [[1, 0], [0, 1]]),
+        _lattice(2, [[1, 0], [0, 1]]),
     )
     assert result.ambient_dimension == 4
     assert result.direct_sum_basis.entries == (
@@ -336,10 +309,8 @@ def test_direct_sum_of_two_identity() -> None:
 
 def test_direct_sum_block_diagonal() -> None:
     result = compute_direct_sum(
-        DirectSumRequest(
-            first=_lattice(1, [[2]]),
-            second=_lattice(1, [[3]]),
-        )
+        _lattice(1, [[2]]),
+        _lattice(1, [[3]]),
     )
     assert result.ambient_dimension == 2
     assert result.direct_sum_basis.entries == (("2", "0"), ("0", "3"))
@@ -347,10 +318,8 @@ def test_direct_sum_block_diagonal() -> None:
 
 def test_orthogonal_sum_of_two_identity() -> None:
     result = compute_orthogonal_sum(
-        OrthogonalSumRequest(
-            first=_lattice(2, [[1, 0], [0, 1]]),
-            second=_lattice(1, [[3]]),
-        )
+        _lattice(2, [[1, 0], [0, 1]]),
+        _lattice(1, [[3]]),
     )
     assert result.ambient_dimension == 3
     assert result.orthogonal_sum_basis.entries == (

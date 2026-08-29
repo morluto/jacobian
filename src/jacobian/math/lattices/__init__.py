@@ -1,13 +1,31 @@
-"""Supported exact lattice API.
+"""Supported exact lattice values and native operations."""
 
-Lattice mathematics is owned separately from matrix mathematics.  This module
-exposes bounded LLL reduction over integer lattices backed by Python-FLINT,
-and the row Hermite normal form.
-"""
-
-from jacobian.math.lattices.operations import hermite_normal_form, reduce_basis
+from jacobian.math.lattices._models import IntegerLattice
+from jacobian.math.lattices.operations import (
+    compute_canonical_basis,
+    compute_direct_sum,
+    compute_discriminant_group,
+    compute_dual,
+    compute_orthogonal_complement,
+    compute_orthogonal_sum,
+    compute_rank_gram,
+    compute_saturation,
+    compute_sublattice_index,
+    hermite_normal_form,
+    reduce_basis,
+)
 
 __all__ = [
+    "IntegerLattice",
+    "compute_canonical_basis",
+    "compute_direct_sum",
+    "compute_discriminant_group",
+    "compute_dual",
+    "compute_orthogonal_complement",
+    "compute_orthogonal_sum",
+    "compute_rank_gram",
+    "compute_saturation",
+    "compute_sublattice_index",
     "hermite_normal_form",
     "reduce_basis",
 ]

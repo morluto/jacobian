@@ -408,7 +408,10 @@ def test_constant_one_inverse_admits_widened_prefix() -> None:
     assert len(result) == _MAX_DIVISOR_PREFIX_LENGTH
     assert result[0] == CanonicalRational(num="1", den="1")
     assert result[1].as_fraction() == Fraction(-1)
-    assert all(entry.as_fraction() in {Fraction(-1), Fraction(0), Fraction(1)} for entry in result)
+    assert all(
+        entry.as_fraction() in {Fraction(-1), Fraction(0), Fraction(1)}
+        for entry in result
+    )
     source = tuple(
         CanonicalRational.from_fraction(Fraction(index, index + 1))
         for index in range(1, 33)

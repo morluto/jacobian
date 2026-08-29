@@ -321,10 +321,6 @@ def _bind_budget_reason(
         raise _validation_error(
             "only MAX_EVALUATIONS may stop an incomplete precision schedule"
         )
-    if reason == "MAX_LEAVES" and len(result.leaves) != result.max_leaves:
-        raise _validation_error(
-            "MAX_LEAVES requires the requested leaf budget to be full"
-        )
     if reason == "MAX_EVALUATIONS":
         remaining = result.max_evaluations - result.evaluations_used
         required = 1 if root_evaluations < len(schedule) else 2
@@ -332,12 +328,23 @@ def _bind_budget_reason(
             raise _validation_error(
                 "MAX_EVALUATIONS must lack the next complete evaluation action"
             )
-    if reason not in ("MAX_DEPTH", "MAX_PRECISION"):
-        return
+        if root_evaluations < len(schedule):
+            return
+
     splittable = any(
         len(leaf.path) < result.max_depth and _widest_coordinate(leaf.box) is not None
         for leaf in result.leaves
     )
+    if reason in ("MAX_LEAVES", "MAX_EVALUATIONS"):
+        if not splittable:
+            raise _validation_error(
+                f"{reason} cannot stop when no retained leaf is splittable"
+            )
+        if reason == "MAX_LEAVES" and len(result.leaves) != result.max_leaves:
+            raise _validation_error(
+                "MAX_LEAVES requires the requested leaf budget to be full"
+            )
+        return
     if splittable:
         raise _validation_error(f"{reason} cannot stop while a leaf remains splittable")
     has_positive_coordinate = any(
@@ -741,13 +748,6 @@ def _compute_adaptive_range_enclosure(
 
     while True:
         _require_deadline(admission.deadline, "before partition refinement")
-        if len(leaves) >= request.max_leaves:
-            reason: AdaptiveRangeBudgetReason = "MAX_LEAVES"
-            break
-        if request.max_evaluations - evaluations < 2:
-            reason = "MAX_EVALUATIONS"
-            break
-
         candidates = tuple(
             leaf
             for leaf in leaves
@@ -759,6 +759,12 @@ def _compute_adaptive_range_enclosure(
                 _widest_coordinate(leaf.box) is not None for leaf in leaves
             )
             reason = "MAX_DEPTH" if any_positive_coordinate else "MAX_PRECISION"
+            break
+        if len(leaves) >= request.max_leaves:
+            reason = "MAX_LEAVES"
+            break
+        if request.max_evaluations - evaluations < 2:
+            reason = "MAX_EVALUATIONS"
             break
         selected = min(
             candidates,

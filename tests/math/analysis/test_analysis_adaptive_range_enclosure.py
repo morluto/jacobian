@@ -42,8 +42,8 @@ def _var(name: str) -> dict[str, Any]:
     return {"op": "var", "variable": name}
 
 
-def _const(value: int) -> dict[str, Any]:
-    return {"op": "const", "value": _q(value)}
+def _const(value: int, denominator: int = 1) -> dict[str, Any]:
+    return {"op": "const", "value": _q(value, denominator)}
 
 
 def _request(
@@ -248,38 +248,60 @@ def test_leaf_and_coordinate_ties_follow_path_then_source_axis_order() -> None:
     )
 
 
-def test_small_matrix_norm_squared_fixture_certifies_a_strict_upper_bound() -> None:
-    # For the real symmetric matrix [[sin x, cos y], [cos y, -sin x]], the
-    # squared operator norm is sin(x)^2 + cos(y)^2.
+def test_reduced_matrix_norm_fixture_needs_refinement_for_one_third_bound() -> None:
+    # For the real symmetric matrix [[a, b], [b, -a]], the squared operator
+    # norm is a^2+b^2.  This reduced HRT-shaped fixture uses a=sin(x)-x and
+    # b=cos(x)-1, so the source's strict norm < 1/3 target is upper^2 < 1/9.
+    sine_remainder = {
+        "op": "sub",
+        "children": [{"op": "sin", "children": [_var("x")]}, _var("x")],
+    }
+    cosine_remainder = {
+        "op": "sub",
+        "children": [{"op": "cos", "children": [_var("x")]}, _const(1)],
+    }
     expression = {
         "op": "add",
         "children": [
             {
                 "op": "pow",
                 "exponent": 2,
-                "children": [{"op": "sin", "children": [_var("x")]}],
+                "children": [sine_remainder],
             },
             {
                 "op": "pow",
                 "exponent": 2,
-                "children": [{"op": "cos", "children": [_var("y")]}],
+                "children": [cosine_remainder],
             },
         ],
     }
+    source_box = ("x", Fraction(0), Fraction(1, 2))
+    one_box = _box_expression_enclosure(
+        IntervalExpressionBoxEnclosureRequest.model_validate(
+            {
+                "expression": expression,
+                "box": {
+                    "variables": ["x"],
+                    "intervals": [{"lower": _q(0), "upper": _q(1, 2)}],
+                },
+                "precision_bits": 128,
+            }
+        )
+    )
     result = _run(
         expression,
-        (
-            ("x", Fraction(0), Fraction(1)),
-            ("y", Fraction(0), Fraction(1)),
-        ),
-        target_width=Fraction(3),
+        (source_box,),
+        target_width=Fraction(1, 8),
         max_leaves=4,
         max_depth=2,
         max_evaluations=7,
     )
 
-    assert result.enclosure.lower.as_fraction() <= 0
-    assert result.enclosure.upper.as_fraction() < 3
+    assert one_box.status == "ENCLOSED"
+    assert one_box.upper.as_fraction() >= Fraction(1, 9)
+    assert isinstance(result.disposition, AdaptiveRangeTargetMet)
+    assert len(result.leaves) == 4
+    assert result.enclosure.upper.as_fraction() < Fraction(1, 9)
 
 
 @pytest.mark.parametrize(
@@ -327,6 +349,97 @@ def test_zero_dimensional_precision_schedule_has_a_typed_exhaustion() -> None:
     assert result.maximum_precision_bits_used == 100
     assert result.leaves[0].path == ()
     assert result.leaves[0].box.variables == ()
+
+
+@pytest.mark.parametrize(
+    ("max_leaves", "max_evaluations"),
+    [(1, 5), (2, 3)],
+)
+def test_no_split_precision_cause_precedes_irrelevant_budget_caps(
+    max_leaves: int, max_evaluations: int
+) -> None:
+    result = _run(
+        {"op": "exp", "children": [_const(1)]},
+        (),
+        target_width=Fraction(1, 10**60),
+        precision_bits=32,
+        maximum_precision_bits=100,
+        max_leaves=max_leaves,
+        max_depth=4,
+        max_evaluations=max_evaluations,
+    )
+
+    assert isinstance(result.disposition, AdaptiveRangeBudgetExhausted)
+    assert result.disposition.reason == "MAX_PRECISION"
+
+
+@pytest.mark.parametrize(
+    ("max_leaves", "max_evaluations"),
+    [(1, 1), (4, 1)],
+)
+def test_no_split_depth_cause_precedes_irrelevant_budget_caps(
+    max_leaves: int, max_evaluations: int
+) -> None:
+    result = _run(
+        _var("x"),
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(1, 8),
+        max_leaves=max_leaves,
+        max_depth=0,
+        max_evaluations=max_evaluations,
+    )
+
+    assert isinstance(result.disposition, AdaptiveRangeBudgetExhausted)
+    assert result.disposition.reason == "MAX_DEPTH"
+
+
+@pytest.mark.parametrize(
+    ("coordinates", "request_overrides", "forged_reason"),
+    [
+        (
+            (),
+            {
+                "expression": {"op": "exp", "children": [_const(1)]},
+                "precision_bits": 32,
+                "maximum_precision_bits": 100,
+                "max_leaves": 1,
+                "max_depth": 4,
+                "max_evaluations": 5,
+            },
+            "MAX_LEAVES",
+        ),
+        (
+            (("x", Fraction(0), Fraction(1)),),
+            {
+                "expression": _var("x"),
+                "max_leaves": 4,
+                "max_depth": 0,
+                "max_evaluations": 1,
+            },
+            "MAX_EVALUATIONS",
+        ),
+    ],
+)
+def test_round_trip_rejects_an_irrelevant_no_split_budget_reason(
+    coordinates: tuple[tuple[str, Fraction, Fraction], ...],
+    request_overrides: dict[str, Any],
+    forged_reason: str,
+) -> None:
+    expression = request_overrides.pop("expression")
+    result = _run(
+        expression,
+        coordinates,
+        target_width=Fraction(1, 10**60),
+        **request_overrides,
+    )
+    payload = result.model_dump(mode="json")
+    payload["disposition"] = {
+        "status": "BUDGET_EXHAUSTED",
+        "reason": forged_reason,
+    }
+
+    with pytest.raises(ValidationError):
+        AdaptiveRangeEnclosureResult.model_validate(payload)
 
 
 @pytest.mark.parametrize(

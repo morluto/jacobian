@@ -666,6 +666,29 @@ def test_characteristic_polynomial_admits_shared_denominator_order_32() -> None:
     assert coefficients[-1] == 0
 
 
+def test_triangular_characteristic_polynomial_ignores_off_diagonal_height() -> None:
+    order = 32
+    entry = 0
+    source = []
+    for row in range(order):
+        current = []
+        for column in range(order):
+            if column <= row:
+                current.append(0)
+            else:
+                current.append((1, 10**70 + 2 * entry + 1))
+                entry += 1
+        source.append(tuple(current))
+
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(matrix=_matrix(*source))
+    )
+
+    assert tuple(
+        coefficient.as_fraction() for coefficient in result.coefficients_descending
+    ) == (Fraction(1),) + (Fraction(0),) * order
+
+
 def test_native_characteristic_polynomial_shares_widened_flint_kernel() -> None:
     import sympy
 

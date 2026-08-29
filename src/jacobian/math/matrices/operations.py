@@ -671,11 +671,28 @@ def _characteristic_polynomial_component_digit_bound(
     over_budget = MAX_CANONICAL_RATIONAL_DIGITS + 1
     numerator_bits = 0
     denominator_bits = 0
+    is_upper_triangular = all(
+        fractions[row][column] == 0
+        for row in range(order)
+        for column in range(row)
+    )
+    is_lower_triangular = all(
+        fractions[row][column] == 0
+        for row in range(order)
+        for column in range(row + 1, order)
+    )
+    triangular = is_upper_triangular or is_lower_triangular
+    bound_rows = (
+        tuple((fractions[index][index],) for index in range(order))
+        if triangular
+        else fractions
+    )
     seen_rows: set[tuple[Fraction, ...]] = set()
-    for row in fractions:
-        if row in seen_rows:
+    for row in bound_rows:
+        if not triangular and row in seen_rows:
             continue
-        seen_rows.add(row)
+        if not triangular:
+            seen_rows.add(row)
         row_denominator = 1
         for value in row:
             row_denominator = lcm(row_denominator, value.denominator)

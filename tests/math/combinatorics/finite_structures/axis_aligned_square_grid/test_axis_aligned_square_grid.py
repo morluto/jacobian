@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.axis_aligned_square_grid.operations import (
     construct_axis_aligned_square_grid,
 )
@@ -82,3 +85,15 @@ def test_exhaustive_comparison() -> None:
 def test_result_preserves_n() -> None:
     result = construct_axis_aligned_square_grid(3)
     assert result.side_length == 3
+
+
+def test_n16_is_admitted_by_carrier_bounds() -> None:
+    """The largest grid has 256 vertices and remains a bounded result."""
+    result = construct_axis_aligned_square_grid(16)
+    assert len(result.hypergraph.vertices) == 256
+    assert len(result.hypergraph.edges) == 1240
+
+
+def test_native_admission_rejects_n17_before_enumeration() -> None:
+    with pytest.raises(OperationDomainValidationError, match="between 1 and 16"):
+        construct_axis_aligned_square_grid(17)

@@ -2,33 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import Field, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field, StrictInt
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-MAX_SIDE_LENGTH = 9
+MAX_SIDE_LENGTH = 16
 
 
 class AxisAlignedSquareGridRequest(StrictModel):
     """Request to construct the axis-aligned-square hypergraph of [N]^2."""
 
-    side_length: int = Field(ge=1, le=MAX_SIDE_LENGTH)
-
-    @model_validator(mode="after")
-    def validate_request(self) -> Self:
-        vertices = self.side_length**2
-        if vertices > 256:
-            raise PydanticCustomError(
-                "square_grid.too_many_vertices",
-                f"N^2 = {vertices} exceeds the 256-vertex limit",
-            )
-        return self
+    side_length: StrictInt = Field(ge=1, le=MAX_SIDE_LENGTH)
 
 
 class AxisAlignedSquareGridResult(StrictModel):

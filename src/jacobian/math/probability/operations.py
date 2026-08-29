@@ -353,9 +353,7 @@ def _admit_identity_convolution(distribution: FiniteRationalDistribution) -> Non
                 f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
             ),
         )
-    offsets = tuple(
-        int((value - origin) * value_denominator) for value in values
-    )
+    offsets = tuple(int((value - origin) * value_denominator) for value in values)
     lattice_gcd = max(1, gcd(*offsets[1:])) if len(offsets) > 1 else 1
     output_slots = offsets[-1] // lattice_gcd + 1
     if output_slots > MAX_FINITE_DISTRIBUTION_ATOMS:
@@ -855,9 +853,7 @@ def convolution_peak(
 
     if type(exponent) is int and exponent == 1:
         _admit_identity_convolution(distribution)
-        maximum = max(
-            atom.probability.as_fraction() for atom in distribution.atoms
-        )
+        maximum = max(atom.probability.as_fraction() for atom in distribution.atoms)
         return FiniteConvolutionPeakResult._from_kernel(
             source=distribution,
             exponent=exponent,

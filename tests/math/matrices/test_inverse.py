@@ -233,6 +233,27 @@ def test_inverse_admits_diagonal_max_height_output() -> None:
     assert inverse == expected
 
 
+def test_inverse_admits_bounded_rank_one_update() -> None:
+    order = 100
+    height = 10**255
+    vector = tuple(height if index % 2 == 0 else -height for index in range(order))
+    source = [
+        [str((1 if row == column else 0) + vector[column]) for column in range(order)]
+        for row in range(order)
+    ]
+
+    inverse = _result_entries(_run_inverse(source))
+    expected = tuple(
+        tuple(
+            Fraction((1 if row == column else 0) - vector[column])
+            for column in range(order)
+        )
+        for row in range(order)
+    )
+
+    assert inverse == expected
+
+
 def test_inverse_rejects_dense_output_work_before_backend() -> None:
     order = 128
     tall = "1" + "0" * 99

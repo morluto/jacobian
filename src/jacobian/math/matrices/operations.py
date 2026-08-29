@@ -535,7 +535,13 @@ def _admit_inverse(matrix: IntegerMatrix) -> None:
             raise _validation_error(
                 "budget_exceeded",
                 "diagonal inverse coefficient work exceeds the exact output budget",
-            )
+        )
+        return
+    rank_one_digit_work = _rank_one_inverse_digit_work(entries)
+    if (
+        rank_one_digit_work is not None
+        and rank_one_digit_work <= MAX_INVERSE_OUTPUT_DIGIT_WORK
+    ):
         return
     row_squared_norms = tuple(sum(value * value for value in row) for row in entries)
     column_squared_norms = tuple(
@@ -556,6 +562,57 @@ def _admit_inverse(matrix: IntegerMatrix) -> None:
             "budget_exceeded",
             "dense inverse coefficient work exceeds the exact output budget",
         )
+
+
+def _rank_one_inverse_digit_work(
+    entries: tuple[tuple[int, ...], ...],
+) -> int | None:
+    """Bound an inverse of ``I + B`` when ``B`` has rank one.
+
+    For rank-one ``B``, ``B² = trace(B) B``.  If ``1 + trace(B)`` is
+    nonzero, Sherman--Morrison gives ``(I + B)⁻¹ = I - B/(1 + trace(B))``.
+    Returning the exact component-height bound for this structural case avoids
+    charging the generic dense Hadamard estimate to a reconstructible result.
+    """
+
+    order = len(entries)
+    perturbation = tuple(
+        tuple(value - int(row == column) for column, value in enumerate(values))
+        for row, values in enumerate(entries)
+    )
+    pivot_row: tuple[int, ...] | None = None
+    pivot_column = 0
+    for row in perturbation:
+        for column, value in enumerate(row):
+            if value != 0:
+                pivot_row = row
+                pivot_column = column
+                break
+        if pivot_row is not None:
+            break
+    if pivot_row is None:
+        return order * order
+    pivot = pivot_row[pivot_column]
+    for row in perturbation:
+        if any(
+            row[column] * pivot != row[pivot_column] * pivot_row[column]
+            for column in range(order)
+        ):
+            return None
+    denominator = 1 + sum(perturbation[index][index] for index in range(order))
+    if denominator == 0:
+        return None
+    component_digits = max(
+        max(
+            _positive_decimal_digits(
+                (denominator if row == column else 0) - perturbation[row][column]
+            ),
+            _positive_decimal_digits(denominator),
+        )
+        for row in range(order)
+        for column in range(order)
+    )
+    return order * order + order * order * component_digits
 
 
 def _admit_permanent(matrix: RationalMatrix) -> None:

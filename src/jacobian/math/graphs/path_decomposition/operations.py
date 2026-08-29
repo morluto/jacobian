@@ -2,12 +2,83 @@
 
 from __future__ import annotations
 
+import math
+from typing import NoReturn
+
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    strict_json_object_size,
+)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.path_decomposition._models import (
+    MAX_VERTICES,
     PathDecompositionResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 __all__ = ["compute_minimum_path_decomposition"]
+
+MAX_SEARCH_STATES = 1_000_000
+MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+
+def _array_size(item_sizes: list[int]) -> int:
+    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
+
+
+def _reject(code: str, message: str) -> NoReturn:
+    raise OperationDomainValidationError(
+        location=("graph",), code=f"path_decomposition.{code}", message=message
+    )
+
+
+def _admit_graph(graph: SimpleUndirectedGraph) -> None:
+    if not isinstance(graph, SimpleUndirectedGraph):
+        _reject("invalid_graph", "graph must be a simple undirected graph")
+    vertex_count = len(graph.vertices)
+    if vertex_count > MAX_VERTICES:
+        _reject("too_many_vertices", f"at most {MAX_VERTICES} vertices are supported")
+    edge_count = len(graph.edges)
+    if not edge_count:
+        return
+
+    # A simple path on k vertices has at most P(n,k)/2 distinct undirected
+    # orientations.  Raising this candidate bound once per edge gives a
+    # conservative upper bound for the cover recursion, before it is entered.
+    candidate_bound = sum(
+        math.perm(vertex_count, length) // 2 for length in range(2, vertex_count + 1)
+    )
+    search_bound = 1
+    for _ in range(edge_count):
+        search_bound *= max(candidate_bound, 1)
+        if search_bound > MAX_SEARCH_STATES:
+            _reject(
+                "search_work_bound",
+                "the exact path-partition search exceeds its bounded work envelope",
+            )
+
+    try:
+        source_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
+        max_label_bytes = max(
+            (len(encode_strict_json(vertex)) for vertex in graph.vertices), default=2
+        )
+    except ValueError as exc:
+        _reject("source_representation", str(exc))
+    path_bytes = _array_size([max_label_bytes] * vertex_count)
+    paths_bytes = _array_size([path_bytes] * edge_count)
+    result_bytes = strict_json_object_size(
+        (
+            ("graph", source_bytes),
+            ("path_count", 3),
+            ("paths", paths_bytes),
+        )
+    )
+    if result_bytes > MAX_RESULT_BYTES:
+        _reject(
+            "result_size_bound",
+            f"the path decomposition result exceeds the {MAX_RESULT_BYTES}-byte output bound",
+        )
 
 
 def compute_minimum_path_decomposition(
@@ -18,6 +89,7 @@ def compute_minimum_path_decomposition(
     The path number p(G) is the minimum number of edge-disjoint simple
     paths whose union is E(G). Uses exhaustive search over edge partitions.
     """
+    _admit_graph(graph)
     edges = list(graph.edges)
     if not edges:
         return PathDecompositionResult(graph=graph, path_count=0, paths=())

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.path_decomposition.operations import (
     compute_minimum_path_decomposition,
 )
@@ -59,3 +62,14 @@ def test_result_preserves_source() -> None:
     g = _graph(["a", "b"], [("a", "b")])
     result = compute_minimum_path_decomposition(g)
     assert result.graph == g
+
+
+def test_k5_search_is_rejected_before_exhaustive_cover() -> None:
+    """The admitted graph shape must fit the exact cover work envelope."""
+    vertices = ["a", "b", "c", "d", "e"]
+    g = _graph(
+        vertices,
+        [(vertices[i], vertices[j]) for i in range(5) for j in range(i + 1, 5)],
+    )
+    with pytest.raises(OperationDomainValidationError, match="work envelope"):
+        compute_minimum_path_decomposition(g)

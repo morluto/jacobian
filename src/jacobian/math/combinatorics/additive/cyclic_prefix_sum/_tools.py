@@ -63,7 +63,10 @@ TOOLS: MathTools = (
             example(
                 "z5_sequence_113",
                 "In Z/5Z, the sequence (1,1,3) has prefix residues 1,2,0.",
-                {"sequence": [1, 1, 3], "modulus": 5},
+                {
+                    "sequence": {"items": ["1", "1", "3"]},
+                    "modulus": "5",
+                },
             ),
         ),
     ),

@@ -40,6 +40,35 @@ def test_exact_matrix_operations() -> None:
     assert pivots == (0,)
 
 
+def test_characteristic_polynomial_preserves_exact_algebraic_inputs() -> None:
+    source = sympy.Matrix([[sympy.sqrt(2), 0], [0, 1]])
+
+    assert matrices.characteristic_polynomial(source, "lambda").all_coeffs() == [
+        1,
+        -1 - sympy.sqrt(2),
+        sympy.sqrt(2),
+    ]
+
+
+def test_multiply_preserves_exact_algebraic_inputs() -> None:
+    source = sympy.Matrix([[sympy.sqrt(2), 0], [0, 1]])
+
+    assert matrices.multiply(source, sympy.eye(2)) == source
+
+
+def test_multiply_admits_algebraic_inputs_at_shared_axis() -> None:
+    source = sympy.diag(*([sympy.sqrt(2)] * 32))
+
+    assert matrices.multiply(source, sympy.eye(32)) == source
+
+
+def test_multiply_rejects_algebraic_inputs_above_shared_axis() -> None:
+    source = sympy.diag(*([sympy.sqrt(2)] * 33))
+
+    with pytest.raises(ValueError, match="between 1 and 32"):
+        matrices.multiply(source, sympy.eye(33))
+
+
 def test_rref_of_identity_is_identity_with_all_pivots() -> None:
     reduced, pivots = matrices.rref(sympy.eye(3))
     assert reduced == sympy.eye(3)

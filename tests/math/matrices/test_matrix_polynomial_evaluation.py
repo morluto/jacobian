@@ -17,7 +17,7 @@ from jacobian.canonical import (
     format_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.matrices._operation_models import SquareRationalMatrixRequest
+from jacobian.math.matrices._operation_models import CharacteristicPolynomialRequest
 from jacobian.math.matrices._tools import compute_characteristic_polynomial
 from jacobian.math.matrices.canonical_forms._models import (
     _MAX_WORK_BOUND,
@@ -563,13 +563,163 @@ def test_value_composes_unchanged_with_matrix_consumers() -> None:
     )
 
     characteristic = compute_characteristic_polynomial(
-        SquareRationalMatrixRequest(matrix=evaluated.value)
+        CharacteristicPolynomialRequest(matrix=evaluated.value)
     )
 
     assert tuple(
         coefficient.as_fraction()
         for coefficient in characteristic.coefficients_descending
     ) == (Fraction(1), Fraction(-2), Fraction(1))
+
+
+def test_flint_characteristic_polynomial_exceeds_shared_matrix_order() -> None:
+    from math import factorial
+
+    order = 96
+    source = _matrix(
+        *tuple(
+            tuple(row + 1 if row == column else 0 for column in range(order))
+            for row in range(order)
+        )
+    )
+
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(matrix=source)
+    )
+
+    coefficients = tuple(
+        coefficient.as_fraction() for coefficient in result.coefficients_descending
+    )
+    assert result.degree == order
+    assert coefficients[0] == 1
+    assert coefficients[1] == -sum(range(1, order + 1))
+    assert coefficients[-1] == factorial(order)
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        (
+            _matrix(((1, 2), 2), (0, (2, 3))),
+            (Fraction(1), Fraction(-7, 6), Fraction(1, 3)),
+        ),
+        (
+            _matrix((0, 1, 0), (0, 0, 1), (0, 0, 0)),
+            (Fraction(1), Fraction(0), Fraction(0), Fraction(0)),
+        ),
+    ],
+)
+def test_flint_characteristic_polynomial_preserves_exact_conventions(
+    source: RationalMatrix, expected: tuple[Fraction, ...]
+) -> None:
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(matrix=source)
+    )
+
+    assert (
+        tuple(
+            coefficient.as_fraction() for coefficient in result.coefficients_descending
+        )
+        == expected
+    )
+
+
+def test_characteristic_polynomial_rejects_predicted_coefficient_growth() -> None:
+    order = 128
+    denominator = 10**255 + 1
+    numerator = denominator - 1
+    source = _matrix(
+        *tuple(
+            tuple(
+                (numerator, denominator)
+                if row == column
+                else (1, 10**255 + 3)
+                if row == 0 and column == 1
+                else 0
+                for column in range(order)
+            )
+            for row in range(order)
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="canonical digit budget"):
+        compute_characteristic_polynomial(
+            CharacteristicPolynomialRequest(matrix=source)
+        )
+
+
+def test_characteristic_polynomial_admits_shared_denominator_order_32() -> None:
+    order = 32
+    source = _matrix(*tuple(tuple((1, 2) for _ in range(order)) for _ in range(order)))
+
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(matrix=source)
+    )
+
+    coefficients = tuple(
+        coefficient.as_fraction() for coefficient in result.coefficients_descending
+    )
+    assert result.degree == order
+    assert coefficients[0] == 1
+    assert coefficients[1] == Fraction(-16)
+    assert all(coefficient == 0 for coefficient in coefficients[2:-1])
+    assert coefficients[-1] == 0
+
+
+def test_triangular_characteristic_polynomial_ignores_off_diagonal_height() -> None:
+    order = 32
+    entry = 0
+    source = []
+    for row in range(order):
+        current = []
+        for column in range(order):
+            if column <= row:
+                current.append(0)
+            else:
+                current.append((1, 10**70 + 2 * entry + 1))
+                entry += 1
+        source.append(tuple(current))
+
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(matrix=_matrix(*source))
+    )
+
+    assert (
+        tuple(
+            coefficient.as_fraction() for coefficient in result.coefficients_descending
+        )
+        == (Fraction(1),) + (Fraction(0),) * order
+    )
+
+
+def test_native_characteristic_polynomial_shares_widened_flint_kernel() -> None:
+    import sympy
+
+    from jacobian.math import matrices
+
+    order = 96
+    source = sympy.diag(*range(1, order + 1))
+
+    polynomial = matrices.characteristic_polynomial(source, "lambda")
+    wire = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(
+            matrix=RationalMatrix(
+                entries=tuple(
+                    tuple(
+                        CanonicalRational.from_integer_ratio(
+                            int(source[row, column]), 1
+                        )
+                        for column in range(order)
+                    )
+                    for row in range(order)
+                )
+            )
+        )
+    )
+
+    assert polynomial.all_coeffs() == [
+        coefficient.as_fraction() for coefficient in wire.coefficients_descending
+    ]
 
 
 def test_adapter_preserves_canonical_coefficients_above_python_digit_limit() -> None:

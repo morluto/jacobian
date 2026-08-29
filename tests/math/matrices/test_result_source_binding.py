@@ -279,6 +279,51 @@ def test_product_value_feeds_determinant_without_reencoding() -> None:
     )
 
 
+def test_flint_rectangular_product_exceeds_shared_matrix_axis() -> None:
+    left_rows = 96
+    right_columns = 80
+    left = _matrix([[str(row + 1), "1", "-1"] for row in range(left_rows)])
+    right = _matrix(
+        [
+            ["1" for _ in range(right_columns)],
+            [str(column + 1) for column in range(right_columns)],
+            ["2" for _ in range(right_columns)],
+        ]
+    )
+
+    result = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    assert result.left_rows == left_rows
+    assert result.inner_dimension == 3
+    assert result.right_columns == right_columns
+    assert tuple(
+        tuple(value.as_fraction() for value in row) for row in result.product.entries
+    ) == tuple(
+        tuple(Fraction(row + column) for column in range(right_columns))
+        for row in range(left_rows)
+    )
+
+
+def test_product_rejects_coefficient_growth_before_backend() -> None:
+    inner_dimension = 128
+    left = RationalMatrix(
+        entries=(
+            tuple(
+                CanonicalRational(num="1", den=str(10**255 + index + 1))
+                for index in range(inner_dimension)
+            ),
+        )
+    )
+    right = RationalMatrix(
+        entries=tuple(
+            (CanonicalRational(num="1", den="1"),) for _ in range(inner_dimension)
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="canonical digit budget"):
+        compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+
 def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
     one = CanonicalRational(num="1", den="1")
     zero = CanonicalRational(num="0", den="1")
@@ -286,6 +331,175 @@ def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
         tuple(one if index == column else zero for column in range(size))
         for index in range(size)
     )
+
+
+def test_product_admits_dense_shared_denominator_order_32_times_identity() -> None:
+    order = 32
+    huge = CanonicalRational(num="1", den=str(10**255 + 1))
+    left = RationalMatrix(
+        entries=tuple(tuple(huge for _ in range(order)) for _ in range(order))
+    )
+    right = RationalMatrix(entries=_identity_entries(order))
+
+    result = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    assert result.product == left
+
+
+def test_product_admits_shared_denominator_dot_product() -> None:
+    inner_dimension = 128
+    denominator = 10**255 + 1
+    value = CanonicalRational(num="1", den=str(denominator))
+    left = RationalMatrix(entries=(tuple(value for _ in range(inner_dimension)),))
+    right = RationalMatrix(entries=tuple((value,) for _ in range(inner_dimension)))
+
+    result = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    assert result.product.entries == (
+        (CanonicalRational.from_integer_ratio(inner_dimension, denominator**2),),
+    )
+
+
+def test_product_admits_cancelling_order_32_dot_product_terms() -> None:
+    order = 32
+    denominators = tuple(10**255 + 2 * index + 1 for index in range(order // 2))
+    zero = CanonicalRational(num="0", den="1")
+    one = CanonicalRational(num="1", den="1")
+    row = tuple(
+        CanonicalRational(num="1" if offset == 0 else "-1", den=str(denominator))
+        for denominator in denominators
+        for offset in range(2)
+    )
+    left = RationalMatrix(entries=tuple(row for _ in range(order)))
+    right = RationalMatrix(
+        entries=tuple(tuple(one for _ in range(order)) for _ in range(order))
+    )
+
+    result = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    assert result.product.entries == tuple(
+        tuple(zero for _ in range(order)) for _ in range(order)
+    )
+
+
+def test_product_admits_cancelling_swapped_denominator_pairs() -> None:
+    denominator_a = 10**255 + 1
+    denominator_b = 10**255 + 3
+    left = RationalMatrix(
+        entries=(
+            tuple(
+                CanonicalRational(
+                    num="1" if index % 2 == 0 else "-1",
+                    den=str(denominator_a if index % 2 == 0 else denominator_b),
+                )
+                for index in range(128)
+            ),
+        )
+    )
+    right = RationalMatrix(
+        entries=tuple(
+            (
+                CanonicalRational(
+                    num="1",
+                    den=str(denominator_b if index % 2 == 0 else denominator_a),
+                ),
+            )
+            for index in range(128)
+        )
+    )
+
+    result = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    assert result.product.entries == ((CanonicalRational(num="0", den="1"),),)
+
+
+def test_product_admits_sparse_order_32_with_one_large_entry() -> None:
+    order = 32
+    denominator = str(10**255 + 1)
+    one = CanonicalRational(num="1", den="1")
+    zero = CanonicalRational(num="0", den="1")
+    huge = CanonicalRational(num="1", den=denominator)
+    left_entries = [
+        [one if row == column else zero for column in range(order)]
+        for row in range(order)
+    ]
+    left_entries[0][0] = huge
+    left = RationalMatrix(entries=tuple(tuple(row) for row in left_entries))
+    right = RationalMatrix(entries=_identity_entries(order))
+
+    result = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    assert result.product.entries[0][0] == huge
+    assert result.product.entries[1][1] == one
+
+
+def test_native_multiply_shares_widened_flint_product_kernel() -> None:
+    import sympy
+
+    from jacobian.math import matrices
+
+    left_rows = 40
+    right_columns = 33
+    left = sympy.Matrix([[row + 1, 1, -1] for row in range(left_rows)])
+    right = sympy.Matrix(
+        [
+            [1 for _ in range(right_columns)],
+            [column + 1 for column in range(right_columns)],
+            [2 for _ in range(right_columns)],
+        ]
+    )
+
+    native = matrices.multiply(left, right)
+    wire = compute_product(
+        RationalMatrixProductRequest(
+            left=RationalMatrix(
+                entries=tuple(
+                    tuple(
+                        CanonicalRational.from_integer_ratio(int(left[row, column]), 1)
+                        for column in range(3)
+                    )
+                    for row in range(left_rows)
+                )
+            ),
+            right=RationalMatrix(
+                entries=tuple(
+                    tuple(
+                        CanonicalRational.from_integer_ratio(int(right[row, column]), 1)
+                        for column in range(right_columns)
+                    )
+                    for row in range(3)
+                )
+            ),
+        )
+    )
+
+    assert native == sympy.Matrix(
+        [[value.as_fraction() for value in row] for row in wire.product.entries]
+    )
+
+
+def test_native_matrix_operations_keep_large_exact_scalar_fallbacks() -> None:
+    import sympy
+
+    from jacobian.math import matrices
+
+    huge = 10**256
+    source = sympy.Matrix([[huge]])
+
+    assert matrices.multiply(source, sympy.ones(1)) == source
+    assert matrices.characteristic_polynomial(source, "lambda").as_expr() == (
+        sympy.Symbol("lambda") - huge
+    )
+
+
+def test_request_admission_rejects_matrices_above_the_computation_dimension() -> None:
+    oversized = RationalMatrix(
+        entries=_identity_entries(MAX_EXACT_LINEAR_MATRIX_AXIS + 1)
+    )
+    with pytest.raises(ValidationError):
+        RationalMatrixRequest(matrix=oversized)
+    with pytest.raises(ValidationError):
+        MatrixRankRequest(matrix=oversized)
 
 
 def test_exact_linear_requests_admit_tall_matrices_above_the_square_dimension() -> None:
@@ -343,9 +557,9 @@ def test_request_admission_keeps_the_boundary_computation_dimension() -> None:
     assert rank.matrix == boundary
 
 
-def test_determinant_accepts_the_canonical_matrix_boundary() -> None:
-    assert MAX_RATIONAL_MATRIX_ORDER == MAX_DETERMINANT_MATRIX_DIMENSION
-    matrix = RationalMatrix(entries=_identity_entries(MAX_RATIONAL_MATRIX_ORDER))
+def test_determinant_accepts_its_operation_specific_matrix_boundary() -> None:
+    assert MAX_RATIONAL_MATRIX_ORDER >= MAX_DETERMINANT_MATRIX_DIMENSION
+    matrix = RationalMatrix(entries=_identity_entries(MAX_DETERMINANT_MATRIX_DIMENSION))
     assert MatrixDeterminantRequest(matrix=matrix).matrix is matrix
 
 

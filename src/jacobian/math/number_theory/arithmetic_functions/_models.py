@@ -10,9 +10,11 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
-# Bounds shared by every arithmetic-function operation.
 _MIN_LENGTH = 1
-_MAX_LENGTH = 10_000
+# Largest prefix whose complete divisor-incidence traversal stays within the
+# owner-local 600,000-incidence work budget.
+_MAX_DIVISOR_PREFIX_LENGTH = 54_269
+_MAX_SUMMATORY_LENGTH = 10_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -32,10 +34,11 @@ class DirichletConvolutionRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_matching_lengths(self) -> Self:
-        if not (_MIN_LENGTH <= len(self.f) <= _MAX_LENGTH):
+        if not (_MIN_LENGTH <= len(self.f) <= _MAX_DIVISOR_PREFIX_LENGTH):
             raise _validation_error(
                 "invalid_length",
-                f"f must have between {_MIN_LENGTH} and {_MAX_LENGTH} values",
+                "f must have between "
+                f"{_MIN_LENGTH} and {_MAX_DIVISOR_PREFIX_LENGTH} values",
             )
         if len(self.f) != len(self.g):
             raise _validation_error(
@@ -76,10 +79,11 @@ class MobiusTransformRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_length(self) -> Self:
-        if not (_MIN_LENGTH <= len(self.values) <= _MAX_LENGTH):
+        if not (_MIN_LENGTH <= len(self.values) <= _MAX_DIVISOR_PREFIX_LENGTH):
             raise _validation_error(
                 "invalid_length",
-                f"values must have between {_MIN_LENGTH} and {_MAX_LENGTH} entries",
+                "values must have between "
+                f"{_MIN_LENGTH} and {_MAX_DIVISOR_PREFIX_LENGTH} entries",
             )
         return self
 
@@ -108,10 +112,11 @@ class SummatoryFunctionRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_length(self) -> Self:
-        if not (_MIN_LENGTH <= len(self.values) <= _MAX_LENGTH):
+        if not (_MIN_LENGTH <= len(self.values) <= _MAX_SUMMATORY_LENGTH):
             raise _validation_error(
                 "invalid_length",
-                f"values must have between {_MIN_LENGTH} and {_MAX_LENGTH} entries",
+                "values must have between "
+                f"{_MIN_LENGTH} and {_MAX_SUMMATORY_LENGTH} entries",
             )
         return self
 
@@ -142,10 +147,11 @@ class DirichletInverseRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_length_and_nonzero_unit(self) -> Self:
-        if not (_MIN_LENGTH <= len(self.values) <= _MAX_LENGTH):
+        if not (_MIN_LENGTH <= len(self.values) <= _MAX_DIVISOR_PREFIX_LENGTH):
             raise _validation_error(
                 "invalid_length",
-                f"values must have between {_MIN_LENGTH} and {_MAX_LENGTH} entries",
+                "values must have between "
+                f"{_MIN_LENGTH} and {_MAX_DIVISOR_PREFIX_LENGTH} entries",
             )
         if self.values[0].as_fraction() == 0:
             raise _validation_error("zero_unit", "f(1) must be nonzero")

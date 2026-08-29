@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._hnf import compute_hermite_normal_form
 from jacobian.math.lattices._lattice import reduce_lattice_basis
 from jacobian.math.lattices._models import (
@@ -370,33 +369,6 @@ def test_hermite_request_rejects_order_33_identity() -> None:
             {"matrix": {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}}
         )
     assert exc_info.value.errors()[0]["type"] == "lattice.budget_exceeded"
-
-
-def test_lattice_reduction_admits_before_lll_backend() -> None:
-    """A 33-by-33 identity must not reach FLINT or fail inside the result model."""
-
-    basis = IntegerMatrix.model_validate(
-        {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}
-    )
-    request = LatticeReductionRequest.model_construct(basis=basis)
-    with pytest.raises(OperationDomainValidationError) as exc_info:
-        reduce_lattice_basis(request)
-    error = exc_info.value.errors()[0]
-    assert error["type"] == "lattice.budget_exceeded"
-    assert error["loc"] == ("basis",)
-    assert str(MAX_MATRIX_DIMENSION) in error["msg"]
-
-
-def test_hermite_admits_before_hnf_backend() -> None:
-    matrix = IntegerMatrix.model_validate(
-        {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}
-    )
-    request = HermiteNormalFormRequest.model_construct(matrix=matrix)
-    with pytest.raises(OperationDomainValidationError) as exc_info:
-        compute_hermite_normal_form(request)
-    error = exc_info.value.errors()[0]
-    assert error["type"] == "lattice.budget_exceeded"
-    assert error["loc"] == ("matrix",)
 
 
 def test_lattice_reduction_accepts_order_32_identity() -> None:

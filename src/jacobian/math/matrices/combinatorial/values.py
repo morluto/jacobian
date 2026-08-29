@@ -5,8 +5,8 @@ A *sign matrix* is a rectangular matrix whose entries are structurally in
 ``H H^T = n I_n`` exactly.
 
 Orthogonality is a construction invariant of the :class:`HadamardMatrix`
-value.  Untrusted external JSON first produces a sign matrix/profile; only a
-successful exact profile constructs a :class:`HadamardMatrix`.
+value.  Untrusted external JSON first produces a sign matrix; only a
+successful exact recognition constructs a :class:`HadamardMatrix`.
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
-MAX_MATRIX_ORDER = 128
+MAX_MATERIALIZED_SIGN_MATRIX_AXIS = 1_024
+MAX_HADAMARD_ORDER = 512
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -43,7 +44,7 @@ class SignMatrix(StrictModel):
 
     @model_validator(mode="after")
     def require_well_formed(self) -> Self:
-        if len(self.rows) > MAX_MATRIX_ORDER:
+        if len(self.rows) > MAX_MATERIALIZED_SIGN_MATRIX_AXIS:
             raise _validation_error(
                 "row_count_exceeds_budget", "row count exceeds the bounded budget"
             )
@@ -55,7 +56,7 @@ class SignMatrix(StrictModel):
                 raise _validation_error(
                     "row_length_mismatch", "sign matrix rows must have equal length"
                 )
-            if len(row) > MAX_MATRIX_ORDER:
+            if len(row) > MAX_MATERIALIZED_SIGN_MATRIX_AXIS:
                 raise _validation_error(
                     "column_count_exceeds_budget",
                     "column count exceeds the bounded budget",
@@ -67,15 +68,17 @@ class SignMatrix(StrictModel):
 class HadamardMatrix(StrictModel):
     """A square sign matrix ``H`` satisfying ``H H^T = n I_n`` exactly.
 
-    Orthogonality is a construction invariant of this value.  The validator
-    replays the exact Gram product and rejects non-Hadamard matrices.
+    Deserialization checks only the structural envelope: square shape, sign
+    entries, and the admitted order. Exact orthogonality is an owner
+    recognition operation. Kernel producers use :meth:`_from_kernel` after
+    that invariant is established.
     """
 
     rows: tuple[tuple[int, ...], ...] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def require_hadamard(self) -> Self:
-        if len(self.rows) > MAX_MATRIX_ORDER:
+    def require_structural_square_sign_matrix(self) -> Self:
+        if len(self.rows) > MAX_HADAMARD_ORDER:
             raise _validation_error(
                 "row_count_exceeds_budget", "row count exceeds the bounded budget"
             )
@@ -86,21 +89,18 @@ class HadamardMatrix(StrictModel):
                     "not_square", "Hadamard matrices must be square"
                 )
         _validate_sign_entries(self.rows)
-        h = [list(row) for row in self.rows]
-        for i in range(n):
-            for j in range(i, n):
-                inner = sum(h[i][k] * h[j][k] for k in range(n))
-                expected = n if i == j else 0
-                if inner != expected:
-                    raise _validation_error(
-                        "orthogonality_violation",
-                        "Hadamard orthogonality H H^T = n I_n is violated",
-                    )
         return self
+
+    @classmethod
+    def _from_kernel(cls, *, rows: tuple[tuple[int, ...], ...]) -> Self:
+        """Construct after exact orthogonality or a Hadamard-preserving map."""
+
+        return cls.model_construct(rows=rows)
 
 
 __all__ = [
-    "MAX_MATRIX_ORDER",
+    "MAX_HADAMARD_ORDER",
+    "MAX_MATERIALIZED_SIGN_MATRIX_AXIS",
     "HadamardMatrix",
     "SignMatrix",
 ]

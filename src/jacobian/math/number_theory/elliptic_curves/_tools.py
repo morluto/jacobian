@@ -17,11 +17,35 @@ from jacobian.math.number_theory.elliptic_curves._models import (
     ScalarMultiplicationResult,
 )
 from jacobian.math.number_theory.elliptic_curves.operations import (
-    check_point_on_curve,
-    compute_add_points,
-    compute_discriminant,
-    compute_scalar_multiply,
+    add_points,
+    discriminant,
+    point_on_curve,
+    scalar_multiply,
 )
+
+
+def compute_discriminant(request: EllipticCurveRequest) -> CurveDiscriminantResult:
+    """Unpack a wire request for the native discriminant operation."""
+    return discriminant(request.curve)
+
+
+def check_point_on_curve(request: CurvePointRequest) -> PointOnCurveResult:
+    """Unpack a wire request for the native point-membership operation."""
+    return point_on_curve(request.curve, request.point)
+
+
+def compute_add_points(
+    request: EllipticCurvePointAdditionRequest,
+) -> EllipticCurvePointResult:
+    """Unpack a wire request for the native point-addition operation."""
+    return add_points(request.curve, request.first, request.second)
+
+
+def compute_scalar_multiply(
+    request: ScalarMultiplicationRequest,
+) -> ScalarMultiplicationResult:
+    """Unpack a wire request for the native scalar-multiplication operation."""
+    return scalar_multiply(request.curve, request.point, request.scalar)
 
 
 def elliptic_curve_operation[

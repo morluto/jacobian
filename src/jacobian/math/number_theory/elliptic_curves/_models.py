@@ -35,9 +35,9 @@ class EllipticCurveRequest(StrictModel):
 
 
 class CurveDiscriminantResult(StrictModel):
-    """The discriminant Δ = -16(4A^3 + 27B^2) of its retained source curve."""
+    """The discriminant Δ = -16(4A^3 + 27B^2) of a source curve."""
 
-    request: EllipticCurveRequest
+    curve: ShortWeierstrassCurve
     discriminant: CanonicalRational
     is_nonsingular: bool
 
@@ -45,12 +45,12 @@ class CurveDiscriminantResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        request: EllipticCurveRequest,
+        curve: ShortWeierstrassCurve,
         discriminant: CanonicalRational,
         is_nonsingular: bool,
     ) -> Self:
         return cls.model_construct(
-            request=request,
+            curve=curve,
             discriminant=discriminant,
             is_nonsingular=is_nonsingular,
         )
@@ -71,14 +71,21 @@ class CurvePointRequest(StrictModel):
 
 
 class PointOnCurveResult(StrictModel):
-    """Whether a point lies on its retained source curve."""
+    """Whether a point lies on a source curve."""
 
-    request: CurvePointRequest
+    curve: ShortWeierstrassCurve
+    point: RationalAffinePoint
     on_curve: bool
 
     @classmethod
-    def _from_kernel(cls, *, request: CurvePointRequest, on_curve: bool) -> Self:
-        return cls.model_construct(request=request, on_curve=on_curve)
+    def _from_kernel(
+        cls,
+        *,
+        curve: ShortWeierstrassCurve,
+        point: RationalAffinePoint,
+        on_curve: bool,
+    ) -> Self:
+        return cls.model_construct(curve=curve, point=point, on_curve=on_curve)
 
 
 def _require_group_law(

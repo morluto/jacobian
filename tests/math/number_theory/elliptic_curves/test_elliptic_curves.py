@@ -21,13 +21,17 @@ from jacobian.math.number_theory.elliptic_curves._models import (
     ScalarMultiplicationRequest,
     ShortWeierstrassCurve,
 )
-from jacobian.math.number_theory.elliptic_curves.operations import (
+from jacobian.math.number_theory.elliptic_curves._tools import (
     check_point_on_curve,
     compute_add_points,
     compute_discriminant,
     compute_scalar_multiply,
+)
+from jacobian.math.number_theory.elliptic_curves.operations import (
+    add_points,
     discriminant,
     point_on_curve,
+    scalar_multiply,
 )
 
 
@@ -156,6 +160,13 @@ def _operand(
 
 
 class TestPointAddition:
+    def test_native_surface_accepts_parent_bearing_points(self) -> None:
+        curve = ShortWeierstrassCurve(coefficient_a=_pt("-2"), coefficient_b=_pt("0"))
+        point = RationalAffinePoint(x=_pt("2"), y=_pt("2"))
+        result = add_points(curve, _operand(curve, point), _operand(curve, point))
+        assert result.point is not None
+        assert result.point.x.as_fraction() == Fraction(9, 4)
+
     def test_double_y_zero(self) -> None:
         curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))
         point = RationalAffinePoint(x=_pt("0"), y=_pt("0"))
@@ -191,6 +202,13 @@ class TestPointAddition:
 
 
 class TestScalarMultiplication:
+    def test_native_surface_accepts_parent_bearing_point(self) -> None:
+        curve = ShortWeierstrassCurve(coefficient_a=_pt("-2"), coefficient_b=_pt("0"))
+        point = RationalAffinePoint(x=_pt("2"), y=_pt("2"))
+        result = scalar_multiply(curve, _operand(curve, point), 2)
+        assert result.point is not None
+        assert result.point.x.as_fraction() == Fraction(9, 4)
+
     def test_zero_times_point(self) -> None:
         curve = ShortWeierstrassCurve(coefficient_a=_pt("-2"), coefficient_b=_pt("0"))
         p = RationalAffinePoint(x=_pt("2"), y=_pt("2"))
@@ -378,7 +396,7 @@ class TestResultSourceBinding:
     def test_discriminant_result_retains_and_reparses_the_curve(self) -> None:
         request = EllipticCurveRequest(curve=self._curve())
         result = compute_discriminant(request)
-        assert result.request == request
+        assert result.curve == request.curve
         reparsed = CurveDiscriminantResult.model_validate(
             result.model_dump(mode="json")
         )
@@ -386,7 +404,7 @@ class TestResultSourceBinding:
 
     def test_discriminant_result_satisfies_the_defining_invariant(self) -> None:
         result = compute_discriminant(EllipticCurveRequest(curve=self._curve()))
-        assert result.discriminant.as_fraction() == result.request.curve.discriminant()
+        assert result.discriminant.as_fraction() == result.curve.discriminant()
         assert result.is_nonsingular is (result.discriminant.as_fraction() != 0)
 
     def test_point_on_curve_result_retains_and_reparses_the_source(self) -> None:

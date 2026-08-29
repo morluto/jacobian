@@ -157,6 +157,10 @@ def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
     if source.rows != source.cols:
         raise ValueError("characteristic polynomial requires a square matrix")
     if not all(entry.is_Rational is True for entry in source):
+        if source.rows > MAX_MATRIX_DIMENSION:
+            raise ValueError(
+                f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+            )
         return source.charpoly(variable)
     result = characteristic_polynomial_result(
         conversions.rational_matrix_from_sympy(source)
@@ -585,6 +589,10 @@ def _bit_bound_decimal_digits(bits: int) -> int:
     return max(1, (bits * 30_103 + 99_999) // 100_000)
 
 
+def _exceeds_canonical_rational_digits(bits: int) -> bool:
+    return _bit_bound_decimal_digits(bits) > MAX_CANONICAL_RATIONAL_DIGITS
+
+
 def _positive_decimal_digits(value: int) -> int:
     """Upper-bound decimal length without converting the integer to a string."""
 
@@ -653,40 +661,39 @@ def _admit_determinant(
 def _characteristic_polynomial_component_digit_bound(
     matrix: RationalMatrix,
 ) -> int:
-    """Bound every coefficient after clearing a common input denominator.
-
-    Coefficients are sums of principal minors. Writing ``A = N / D`` with
-    common positive denominator ``D = lcm`` of all entry denominators, the
-    cleared integer matrix ``N`` has Hadamard-bounded minors; ``2^n`` bounds
-    the number of minors of any fixed order.
-    """
-    order = len(matrix.entries)
     fractions = tuple(
         tuple(value.as_fraction() for value in row) for row in matrix.entries
     )
-    common_denominator = 1
+    order = len(fractions)
+    over_budget = MAX_CANONICAL_RATIONAL_DIGITS + 1
+    numerator_bits = 0
+    denominator_bits = 0
+    seen_rows: set[tuple[Fraction, ...]] = set()
     for row in fractions:
+        if row in seen_rows:
+            continue
+        seen_rows.add(row)
+        row_denominator = 1
         for value in row:
-            common_denominator = lcm(common_denominator, value.denominator)
-    row_denominator_growth = sum(
-        _positive_decimal_digits(lcm(*(value.denominator for value in row)))
-        for row in fractions
-    )
-    cleared_height = max(
-        (
-            _positive_decimal_digits(
-                value.numerator * (common_denominator // value.denominator)
-            )
-            for row in fractions
+            row_denominator = lcm(row_denominator, value.denominator)
+            if _exceeds_canonical_rational_digits(
+                denominator_bits + row_denominator.bit_length()
+            ):
+                return over_budget
+        denominator_bits += row_denominator.bit_length()
+        squared_norm = sum(
+            (value.numerator * (row_denominator // value.denominator)) ** 2
             for value in row
-        ),
-        default=1,
+        )
+        numerator_bits += (squared_norm.bit_length() + 1) // 2
+        if _exceeds_canonical_rational_digits(
+            numerator_bits + denominator_bits + order
+        ):
+            return over_budget
+    return max(
+        _bit_bound_decimal_digits(numerator_bits + denominator_bits + order),
+        _bit_bound_decimal_digits(max(1, denominator_bits)),
     )
-    numerator_digits = (
-        order * (cleared_height + _positive_decimal_digits(order)) + order
-    )
-    denominator_digits = max(1, row_denominator_growth)
-    return max(numerator_digits, denominator_digits)
 
 
 def _admit_characteristic_polynomial(matrix: RationalMatrix) -> None:

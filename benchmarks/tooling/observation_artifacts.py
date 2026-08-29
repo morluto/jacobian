@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from benchmarks.tooling.errors import HarborSuiteError
+from jacobian.catalog.builtins import BUILTIN_TOOLS
 
 _MCP_TOOL_CALL = re.compile(
     r"\bMCP tool call tool=(math\.(?:find|run))\b"
@@ -30,6 +31,7 @@ _MCP_OPERATION_ATTEMPT = re.compile(
     r".{0,2048}?\bexecution_status=([A-Z_]+)\b",
     re.DOTALL,
 )
+_DIRECT_OPERATION_IDS = frozenset(tool.operation_id for tool in BUILTIN_TOOLS)
 
 
 def _canonical_tool_name(value: str) -> str:
@@ -37,7 +39,13 @@ def _canonical_tool_name(value: str) -> str:
         "mcp__jacobian__math_find": "math.find",
         "mcp__jacobian__math_run": "math.run",
     }
-    return aliases.get(value, value)
+    canonical = aliases.get(value, value)
+    for prefix in ("jacobian.", "mcp__jacobian__"):
+        if canonical.startswith(prefix):
+            candidate = canonical.removeprefix(prefix)
+            if candidate in _DIRECT_OPERATION_IDS:
+                return candidate
+    return canonical
 
 
 def _read_mcp_runtime_log(path: Path, calls: Counter[str]) -> int:

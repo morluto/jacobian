@@ -200,15 +200,15 @@ def kronecker(left: HadamardMatrix, right: HadamardMatrix) -> KroneckerProductRe
     """Return the Kronecker product of two Hadamard matrices as a Hadamard
     matrix, factor-to-product row/column maps, and the exact Gram
     factorization."""
-    left_h = recognize_hadamard(_sign_matrix_from_hadamard(left))
-    right_h = recognize_hadamard(_sign_matrix_from_hadamard(right))
-    a = [list(row) for row in left_h.rows]
-    b = [list(row) for row in right_h.rows]
-    n, m = len(a), len(b)
+    n, m = len(left.rows), len(right.rows)
     if n * m > MAX_KRONECKER_ORDER:
         raise ValueError(
             f"Kronecker product order {n * m} exceeds maximum {MAX_KRONECKER_ORDER}"
         )
+    left_h = recognize_hadamard(_sign_matrix_from_hadamard(left))
+    right_h = recognize_hadamard(_sign_matrix_from_hadamard(right))
+    a = [list(row) for row in left_h.rows]
+    b = [list(row) for row in right_h.rows]
     result: list[list[int]] = []
     row_map: list[tuple[int, int]] = []
     for i in range(n):

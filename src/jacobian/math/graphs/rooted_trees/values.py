@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
@@ -37,6 +38,35 @@ def _require_sorted_unique_edges(values: tuple[_Edge, ...], *, field: str) -> No
             f"canonical_{field.replace(' ', '_')}",
             f"{field} must be unique and lexically sorted",
         )
+
+
+def _graph_topology(
+    graph: SimpleUndirectedGraph,
+    root: str,
+) -> tuple[bool, bool, int, dict[str, int]]:
+    adjacency = {vertex: set[str]() for vertex in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+
+    component_count = 0
+    depths: dict[str, int] = {}
+    for start in (root, *graph.vertices):
+        if start in depths:
+            continue
+        component_count += 1
+        depths[start] = 0
+        queue = deque([start])
+        while queue:
+            vertex = queue.popleft()
+            for neighbor in adjacency[vertex]:
+                if neighbor not in depths:
+                    depths[neighbor] = depths[vertex] + 1
+                    queue.append(neighbor)
+
+    connected = component_count == 1
+    has_cycle = len(graph.edges) > len(graph.vertices) - component_count
+    return connected, has_cycle, component_count, depths
 
 
 class RootedTreeShrub(StrictModel):
@@ -169,7 +199,7 @@ class RootedTreeFinePartition(StrictModel):
         )
 
     @model_validator(mode="after")
-    def require_source_representation(self) -> Self:
+    def require_source_representation(self) -> Self:  # noqa: C901
         graph_vertices = set(self.graph.vertices)
         if self.root not in graph_vertices:
             raise _fine_partition_error(
@@ -197,6 +227,207 @@ class RootedTreeFinePartition(StrictModel):
                     "graph vertex labels must use at most "
                     f"{MAX_GRAPH_LABEL_BYTES} UTF-8 bytes",
                 )
+
+        connected, has_cycle, component_count, depths = _graph_topology(
+            self.graph, self.root
+        )
+        outcome = self.outcome
+        if isinstance(outcome, RootedTreeNotATree):
+            if (
+                outcome.connected != connected
+                or outcome.has_cycle != has_cycle
+                or outcome.component_count != component_count
+            ):
+                raise _fine_partition_error(
+                    "non_tree_diagnostic",
+                    "the NOT_A_TREE diagnostic must match the retained graph",
+                )
+            return self
+
+        if not connected or has_cycle:
+            raise _fine_partition_error(
+                "constructed_graph_topology",
+                "a CONSTRUCTED outcome requires a connected acyclic graph",
+            )
+
+        seeds_x = set(outcome.seeds_x)
+        seeds_y = set(outcome.seeds_y)
+        seeds = seeds_x | seeds_y
+        if not seeds <= graph_vertices:
+            raise _fine_partition_error(
+                "seed_source_membership",
+                "every seed must be a retained graph vertex",
+            )
+        if self.root not in seeds_x:
+            raise _fine_partition_error(
+                "root_seed", "the retained root must be an X seed"
+            )
+        if any(depths[seed] % 2 for seed in seeds_x) or any(
+            depths[seed] % 2 == 0 for seed in seeds_y
+        ):
+            raise _fine_partition_error(
+                "seed_parity",
+                "X and Y seeds must match their rooted graph depth parity",
+            )
+        if len(seeds_x) * self.component_size_limit > 12 * (
+            len(graph_vertices) - 1
+        ) or len(seeds_y) * self.component_size_limit > 12 * (len(graph_vertices) - 1):
+            raise _fine_partition_error(
+                "seed_bound",
+                "each seed side must satisfy the fine-partition size bound",
+            )
+
+        reported_vertices: set[str] = set()
+        reported_edges: set[_Edge] = set()
+
+        def report_edge(edge: _Edge, *, field: str) -> None:
+            if edge not in self.graph.edges:
+                raise _fine_partition_error(
+                    f"{field}_source_membership",
+                    f"every {field.replace('_', ' ')} must belong to the graph",
+                )
+            if edge in reported_edges:
+                raise _fine_partition_error(
+                    "edge_partition",
+                    "each source edge must occur in exactly one outcome row",
+                )
+            reported_edges.add(edge)
+
+        for edge in outcome.seed_edges:
+            report_edge(edge, field="seed_edge")
+            if not set(edge) <= seeds:
+                raise _fine_partition_error(
+                    "seed_edge_membership",
+                    "seed edges must have both endpoints in the seed set",
+                )
+
+        for shrub in outcome.shrubs:
+            vertices = set(shrub.vertices)
+            if not vertices <= graph_vertices:
+                raise _fine_partition_error(
+                    "shrub_source_membership",
+                    "every shrub vertex must be a retained graph vertex",
+                )
+            if vertices & seeds:
+                raise _fine_partition_error(
+                    "shrub_seed_disjoint",
+                    "shrub vertices must be disjoint from all seeds",
+                )
+            if reported_vertices & vertices:
+                raise _fine_partition_error(
+                    "shrub_vertex_partition",
+                    "shrub vertices must be pairwise disjoint",
+                )
+            reported_vertices.update(vertices)
+            if len(vertices) > self.component_size_limit:
+                raise _fine_partition_error(
+                    "shrub_size",
+                    "a shrub must not exceed component_size_limit",
+                )
+            shrub_adjacency = {vertex: set[str]() for vertex in vertices}
+            for left, right in shrub.edges:
+                if left in vertices and right in vertices:
+                    shrub_adjacency[left].add(right)
+                    shrub_adjacency[right].add(left)
+            reached = {shrub.root_vertex}
+            queue = deque([shrub.root_vertex])
+            while queue:
+                vertex = queue.popleft()
+                for neighbor in shrub_adjacency[vertex]:
+                    if neighbor not in reached:
+                        reached.add(neighbor)
+                        queue.append(neighbor)
+            if reached != vertices:
+                raise _fine_partition_error(
+                    "shrub_connected",
+                    "each shrub must be one connected source component",
+                )
+            if shrub.root_vertex != min(
+                vertices, key=lambda vertex: (depths[vertex], vertex)
+            ):
+                raise _fine_partition_error(
+                    "shrub_root_vertex",
+                    "a shrub root_vertex must be its rootward vertex",
+                )
+            if depths[shrub.upper_seed] != depths[shrub.root_vertex] - 1:
+                raise _fine_partition_error(
+                    "shrub_upper_seed",
+                    "a shrub upper_seed must be the parent of root_vertex",
+                )
+
+            for edge in shrub.edges:
+                report_edge(edge, field="shrub_edge")
+                if not set(edge) <= vertices:
+                    raise _fine_partition_error(
+                        "shrub_edge_membership",
+                        "shrub edges must have both endpoints in that shrub",
+                    )
+
+            boundary_seed_values: set[str] = set()
+            for edge in shrub.boundary_edges:
+                report_edge(edge, field="boundary_edge")
+                endpoints = set(edge)
+                if (
+                    len(endpoints & vertices) != 1
+                    or len(endpoints - vertices) != 1
+                    or not (endpoints - vertices) <= seeds
+                ):
+                    raise _fine_partition_error(
+                        "boundary_edge_membership",
+                        "boundary edges must join one shrub vertex to one seed",
+                    )
+                boundary_seed_values.update(endpoints - vertices)
+            if set(shrub.boundary_seeds) != boundary_seed_values:
+                raise _fine_partition_error(
+                    "boundary_seed_coverage",
+                    "boundary_seeds must be exactly the seed endpoints of boundary_edges",
+                )
+            expected_route_side = (
+                "X" if all(seed in seeds_x for seed in boundary_seed_values) else "Y"
+            )
+            if (
+                not boundary_seed_values
+                or (
+                    not boundary_seed_values <= seeds_x
+                    and not boundary_seed_values <= seeds_y
+                )
+                or shrub.route_side != expected_route_side
+            ):
+                raise _fine_partition_error(
+                    "boundary_seed_side",
+                    "a shrub boundary must be nonempty and lie in one seed side",
+                )
+            if shrub.upper_seed not in boundary_seed_values:
+                raise _fine_partition_error(
+                    "upper_seed_boundary",
+                    "a shrub upper_seed must be incident to its boundary",
+                )
+            root_boundary_edge = tuple(sorted((shrub.upper_seed, shrub.root_vertex)))
+            if root_boundary_edge not in shrub.boundary_edges:
+                raise _fine_partition_error(
+                    "upper_seed_parent",
+                    "a shrub upper_seed must be the parent of root_vertex",
+                )
+
+        shrub_order = tuple(
+            (depths[shrub.root_vertex], shrub.vertices) for shrub in outcome.shrubs
+        )
+        if shrub_order != tuple(sorted(shrub_order)):
+            raise _fine_partition_error(
+                "shrub_order",
+                "shrubs must be ordered by root distance and vertex tuple",
+            )
+
+        if reported_vertices != graph_vertices - seeds:
+            raise _fine_partition_error(
+                "vertex_partition",
+                "seeds and shrubs must partition all graph vertices",
+            )
+        if reported_edges != set(self.graph.edges):
+            raise _fine_partition_error(
+                "edge_partition",
+                "seed, shrub, and boundary rows must partition all graph edges",
+            )
         return self
 
 

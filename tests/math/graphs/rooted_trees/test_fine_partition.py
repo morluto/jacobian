@@ -243,6 +243,41 @@ def test_non_tree_inputs_return_source_bound_diagnostics(
     )
 
 
+def test_result_parsing_rejects_constructed_rows_not_bound_to_source() -> None:
+    payload = {
+        "graph": {"vertices": ["a", "b"], "edges": [["a", "b"]]},
+        "root": "a",
+        "component_size_limit": 1,
+        "outcome": {
+            "status": "CONSTRUCTED",
+            "seeds_x": ["a"],
+            "seeds_y": [],
+            "seed_edges": [],
+            "shrubs": [],
+        },
+    }
+
+    with pytest.raises(ValidationError, match="partition all graph vertices"):
+        RootedTreeFinePartition.model_validate(payload)
+
+
+def test_result_parsing_rejects_contradictory_non_tree_diagnostic() -> None:
+    payload = {
+        "graph": {"vertices": ["a", "b"], "edges": [["a", "b"]]},
+        "root": "a",
+        "component_size_limit": 1,
+        "outcome": {
+            "status": "NOT_A_TREE",
+            "connected": False,
+            "has_cycle": True,
+            "component_count": 2,
+        },
+    }
+
+    with pytest.raises(ValidationError, match="diagnostic must match"):
+        RootedTreeFinePartition.model_validate(payload)
+
+
 @pytest.mark.parametrize(
     ("root", "size_limit", "code"),
     [

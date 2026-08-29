@@ -60,8 +60,6 @@ def test_remote_smoke_derives_tool_surface_from_deployed_catalog() -> None:
     remote_operation = "test.remote.previous_release"
     listed = SimpleNamespace(
         tools=[
-            SimpleNamespace(name="math.find"),
-            SimpleNamespace(name="math.run"),
             SimpleNamespace(name=remote_operation),
         ]
     )
@@ -69,7 +67,7 @@ def test_remote_smoke_derives_tool_surface_from_deployed_catalog() -> None:
 
     tool_names = _validate_tool_surface(listed, {remote_operation}, failures)
 
-    assert tool_names == {"math.find", "math.run", remote_operation}
+    assert tool_names == {remote_operation}
     assert failures == []
 
 

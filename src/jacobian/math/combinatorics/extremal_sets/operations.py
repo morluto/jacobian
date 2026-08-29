@@ -2,55 +2,80 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.extremal_sets._models import (
     BinaryUnionRelationResult,
     UnionRelationRow,
 )
+from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGES,
+    MAX_TOTAL_INCIDENCES,
     FiniteHypergraph,
 )
 
 __all__ = ["construct_binary_union_relation"]
 
 
+@dataclass(frozen=True)
+class _UnionRelationPlan:
+    rows: tuple[tuple[int, int, int], ...]
+
+
 def construct_binary_union_relation(
-    family: tuple[tuple[int, ...], ...],
+    source: IndexedFiniteSetFamily,
 ) -> BinaryUnionRelationResult:
-    """Compute the complete binary-union relation of a set family.
+    """Return every distinct-member equation ``S_i union S_j = S_k``."""
 
-    For every pair of distinct source indices (i, j) with i < j, compute
-    S_i union S_j and check whether the result equals any source member S_k
-    with k distinct from both i and j. If so, record the triple (i, j, k).
-    """
-    m = len(family)
-    sets = [frozenset(s) for s in family]
-    union_to_index: dict[frozenset[int], int] = {}
-    for i, s in enumerate(sets):
-        union_to_index.setdefault(s, i)
-
-    rows: list[UnionRelationRow] = []
-    for i in range(m):
-        for j in range(i + 1, m):
-            union = sets[i] | sets[j]
-            k = union_to_index.get(union)
-            if k is not None and k != i and k != j:
-                rows.append(UnionRelationRow(operand_i=i, operand_j=j, result_k=k))
-
-    vertices = tuple(str(i) for i in range(m))
-    hyper_edges: list[tuple[str, tuple[str, ...]]] = []
-    for idx, row in enumerate(rows):
-        edge_id = f"edge_{idx}"
-        members = tuple(
-            sorted([str(row.operand_i), str(row.operand_j), str(row.result_k)])
+    plan = _admit_union_relation(source)
+    rows = tuple(
+        UnionRelationRow(
+            edge_id=_edge_id(i, j, k),
+            operand_i=i,
+            operand_j=j,
+            result_k=k,
         )
-        hyper_edges.append((edge_id, members))
-
-    hypergraph = FiniteHypergraph(
-        vertices=vertices,
-        edges=tuple(hyper_edges),
+        for i, j, k in plan.rows
+    )
+    vertices = tuple(str(index) for index in range(len(source.members)))
+    edges = tuple(
+        (
+            row.edge_id,
+            tuple(sorted((str(row.operand_i), str(row.operand_j), str(row.result_k)))),
+        )
+        for row in rows
     )
     return BinaryUnionRelationResult(
-        family=family,
-        rows=tuple(rows),
-        hypergraph=hypergraph,
+        source=source,
+        rows=rows,
+        hypergraph=FiniteHypergraph(vertices=vertices, edges=edges),
     )
+
+
+def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:
+    sets = tuple(frozenset(member) for member in source.members)
+    source_index = {member: index for index, member in enumerate(sets)}
+    rows: list[tuple[int, int, int]] = []
+    for i, left in enumerate(sets):
+        for j in range(i + 1, len(sets)):
+            result = source_index.get(left | sets[j])
+            if result is not None and result not in (i, j):
+                rows.append((i, j, result))
+
+    row_count = len(rows)
+    if row_count > MAX_EDGES or 3 * row_count > MAX_TOTAL_INCIDENCES:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="set_system.binary_union_relation.result_exceeds_carrier",
+            message=(
+                f"the exact relation has {row_count} rows, exceeding the "
+                f"{MAX_EDGES}-edge or {MAX_TOTAL_INCIDENCES}-incidence carrier limit"
+            ),
+        )
+    return _UnionRelationPlan(rows=tuple(rows))
+
+
+def _edge_id(operand_i: int, operand_j: int, result_k: int) -> str:
+    return f"union_{operand_i}_{operand_j}_to_{result_k}"

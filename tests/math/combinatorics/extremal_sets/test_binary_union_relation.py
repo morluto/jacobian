@@ -1,117 +1,127 @@
 from __future__ import annotations
 
+from itertools import combinations
+
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.combinatorics.extremal_sets._models import (
-    BinaryUnionRelationRequest,
-)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.extremal_sets.operations import (
     construct_binary_union_relation,
 )
+from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
 
 
-def test_fixture_boolean_lattice() -> None:
-    """Fixture: {empty, {a}, {b}, {a,b}} has one union: {a} U {b} = {a,b}."""
-    family = ((), (0,), (1,), (0, 1))
-    result = construct_binary_union_relation(family)
-    assert len(result.rows) == 1
-    row = result.rows[0]
-    assert row.operand_i == 1
-    assert row.operand_j == 2
-    assert row.result_k == 3
+def _source(
+    members: tuple[tuple[int, ...], ...], ground_set_size: int = 3
+) -> IndexedFiniteSetFamily:
+    return IndexedFiniteSetFamily(
+        ground_set_size=ground_set_size,
+        members=members,
+    )
 
 
-def test_empty_family_rejected() -> None:
+def test_boolean_lattice_fixture_preserves_orientation() -> None:
+    source = _source(((), (0,), (1,), (0, 1)), ground_set_size=2)
+    result = construct_binary_union_relation(source)
+    assert result.source == source
+    assert result.rows[0].model_dump() == {
+        "edge_id": "union_1_2_to_3",
+        "operand_i": 1,
+        "operand_j": 2,
+        "result_k": 3,
+    }
+    assert result.hypergraph.edges == (("union_1_2_to_3", ("1", "2", "3")),)
+
+
+def test_empty_family_is_an_exact_empty_relation() -> None:
+    source = _source((), ground_set_size=2)
+    result = construct_binary_union_relation(source)
+    assert result.source == source
+    assert result.rows == ()
+    assert result.hypergraph.vertices == ()
+    assert result.hypergraph.edges == ()
+
+
+def test_unused_ground_axis_is_retained() -> None:
+    source = _source(((0,), (1,)), ground_set_size=3)
+    result = construct_binary_union_relation(source)
+    assert result.source.ground_set_size == 3
+    assert result.rows == ()
+
+
+@pytest.mark.parametrize(
+    "members",
+    [
+        ((0,), (0,)),
+        ((1, 0),),
+        ((0, 0),),
+        ((3,),),
+    ],
+)
+def test_source_rejects_noncanonical_members(
+    members: tuple[tuple[int, ...], ...],
+) -> None:
     with pytest.raises(ValidationError):
-        BinaryUnionRelationRequest(family=())
+        _source(members)
 
 
-def test_single_member() -> None:
-    """A singleton family has no union relations."""
-    result = construct_binary_union_relation(((),))
-    assert len(result.rows) == 0
+def test_every_row_replays_and_the_relation_is_complete() -> None:
+    source = _source(((), (0,), (1,), (2,), (0, 1), (0, 2), (1, 2), (0, 1, 2)))
+    result = construct_binary_union_relation(source)
+    sets = tuple(frozenset(member) for member in source.members)
+    expected = tuple(
+        (i, j, k)
+        for i, j in combinations(range(len(sets)), 2)
+        for k in range(len(sets))
+        if k not in (i, j) and sets[i] | sets[j] == sets[k]
+    )
+    actual = tuple((row.operand_i, row.operand_j, row.result_k) for row in result.rows)
+    assert actual == expected
+    assert len({row.edge_id for row in result.rows}) == len(result.rows)
+    assert {edge_id for edge_id, _ in result.hypergraph.edges} == {
+        row.edge_id for row in result.rows
+    }
 
 
-def test_two_members_no_relation() -> None:
-    """Two distinct sets with no third member: no union relation."""
-    result = construct_binary_union_relation(((0,), (1,)))
-    assert len(result.rows) == 0
+def test_input_permutation_covariance() -> None:
+    first = _source(((0,), (1,), (0, 1)), ground_set_size=2)
+    second = _source(((0, 1), (1,), (0,)), ground_set_size=2)
+    first_result = construct_binary_union_relation(first)
+    second_result = construct_binary_union_relation(second)
+    assert first_result.rows[0].model_dump(exclude={"edge_id"}) == {
+        "operand_i": 0,
+        "operand_j": 1,
+        "result_k": 2,
+    }
+    assert second_result.rows[0].model_dump(exclude={"edge_id"}) == {
+        "operand_i": 1,
+        "operand_j": 2,
+        "result_k": 0,
+    }
 
 
-def test_positive_relation() -> None:
-    """{0} U {1} = {0,1}."""
-    family = ((0,), (1,), (0, 1))
-    result = construct_binary_union_relation(family)
-    assert len(result.rows) == 1
-    row = result.rows[0]
-    assert row.operand_i == 0
-    assert row.operand_j == 1
-    assert row.result_k == 2
+def test_dense_relation_exceeding_hypergraph_carrier_rejects_before_result() -> None:
+    members = tuple(
+        combination
+        for size in range(9)
+        if size != 3
+        for combination in combinations(range(8), size)
+    )
+    source = IndexedFiniteSetFamily(ground_set_size=8, members=members)
+    assert len(source.members) == 200
+    with pytest.raises(OperationDomainValidationError) as error:
+        construct_binary_union_relation(source)
+    assert error.value.errors()[0]["type"] == (
+        "set_system.binary_union_relation.result_exceeds_carrier"
+    )
 
 
-def test_no_relation_chains() -> None:
-    """Family with no union triples."""
-    family = ((0,), (1,), (2,))
-    result = construct_binary_union_relation(family)
-    assert len(result.rows) == 0
-
-
-def test_rejects_duplicate_members() -> None:
-    with pytest.raises(ValidationError):
-        BinaryUnionRelationRequest(family=((0,), (0,)))
-
-
-def test_rejects_unsorted_elements() -> None:
-    with pytest.raises(ValidationError):
-        BinaryUnionRelationRequest(family=((1, 0),))
-
-
-def test_rejects_duplicate_elements() -> None:
-    with pytest.raises(ValidationError):
-        BinaryUnionRelationRequest(family=((0, 0),))
-
-
-def test_row_replay() -> None:
-    """Replay: S_i union S_j = S_k for every row."""
-    family = ((), (0,), (1,), (0, 1), (0, 1, 2))
-    result = construct_binary_union_relation(family)
-    sets = [frozenset(s) for s in family]
-    for row in result.rows:
-        assert sets[row.operand_i] | sets[row.operand_j] == sets[row.result_k]
-        assert row.operand_i < row.operand_j
-        assert row.result_k != row.operand_i
-        assert row.result_k != row.operand_j
-
-
-def test_exhaustive_comparison() -> None:
-    """Compare against independent nested pair loop."""
-    family = ((), (0,), (1,), (0, 1))
-    result = construct_binary_union_relation(family)
-    sets = [frozenset(s) for s in family]
-    expected = []
-    for i in range(len(family)):
-        for j in range(i + 1, len(family)):
-            union = sets[i] | sets[j]
-            for k in range(len(family)):
-                if k != i and k != j and sets[k] == union:
-                    expected.append((i, j, k))
-    assert len(result.rows) == len(expected)
-    for row, exp in zip(result.rows, expected, strict=True):
-        assert (row.operand_i, row.operand_j, row.result_k) == exp
-
-
-def test_hypergraph_edges() -> None:
-    """The hypergraph has one 3-edge per union row."""
-    family = ((), (0,), (1,), (0, 1))
-    result = construct_binary_union_relation(family)
-    assert len(result.hypergraph.edges) == 1
-    _, members = next(iter(result.hypergraph.edges))
-    assert set(members) == {"1", "2", "3"}
-
-
-def test_source_preserved() -> None:
-    """Result retains the original family."""
-    family = ((0,), (1,))
-    result = construct_binary_union_relation(family)
-    assert result.family == family
+def test_large_sparse_family_remains_admitted() -> None:
+    source = IndexedFiniteSetFamily(
+        ground_set_size=200,
+        members=tuple((index,) for index in range(200)),
+    )
+    result = construct_binary_union_relation(source)
+    assert result.rows == ()
+    assert len(result.hypergraph.vertices) == 200

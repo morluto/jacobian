@@ -355,6 +355,15 @@ def _bit_bound_decimal_digits(bits: int) -> int:
     return max(1, (bits * 30_103 + 99_999) // 100_000)
 
 
+def _positive_decimal_digits(value: int) -> int:
+    """Upper-bound decimal length without converting the integer to a string."""
+
+    magnitude = abs(value)
+    if magnitude <= 9:
+        return 1
+    return _bit_bound_decimal_digits(magnitude.bit_length())
+
+
 def _admit_determinant(
     matrix: RationalMatrix,
 ) -> tuple[tuple[Fraction, ...], ...]:
@@ -429,16 +438,18 @@ def _characteristic_polynomial_component_digit_bound(
     for row in fractions:
         for value in row:
             common_denominator = lcm(common_denominator, value.denominator)
-    denominator_growth = len(str(common_denominator))
+    denominator_growth = _positive_decimal_digits(common_denominator)
     cleared_height = max(
         (
-            len(str(abs(value.numerator * (common_denominator // value.denominator))))
+            _positive_decimal_digits(
+                value.numerator * (common_denominator // value.denominator)
+            )
             for row in fractions
             for value in row
         ),
         default=1,
     )
-    numerator_digits = order * (cleared_height + len(str(order))) + order
+    numerator_digits = order * (cleared_height + _positive_decimal_digits(order)) + order
     denominator_digits = max(1, order * denominator_growth)
     return max(numerator_digits, denominator_digits)
 

@@ -142,7 +142,9 @@ def test_sparse_high_height_gram_is_admitted_by_occupancy() -> None:
     assert naive_bytes > CanonicalLimits().max_output_bytes
     result = gram(family)
     encoded = encode_strict_json(result.model_dump(mode="json"))
-    assert _gram_result_bytes(_gram_result(family)) <= CanonicalLimits().max_output_bytes
+    assert (
+        _gram_result_bytes(_gram_result(family)) <= CanonicalLimits().max_output_bytes
+    )
     assert result.gram[0][0] == 1_000_000
     assert result.gram[0][1] == 0
     assert result.gram[0][MAX_DIM] == 1_000_000

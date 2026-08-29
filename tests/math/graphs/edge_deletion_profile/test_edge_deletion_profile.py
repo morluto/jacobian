@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+from itertools import combinations
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian.math.graphs.edge_deletion_profile._models import (
+    EdgeDeletionProfileRequest,
+)
+from jacobian.math.graphs.edge_deletion_profile.operations import (
+    compute_edge_deletion_profile,
+)
+from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+
+def _graph(vertices, edges):
+    return SimpleUndirectedGraph(
+        vertices=tuple(vertices),
+        edges=tuple((a, b) for a, b in edges),
+    )
+
+
+def test_k3_order0() -> None:
+    """K3 with deletion order 0: one row, chromatic number 3."""
+    g = _graph(["a", "b", "c"], [("a", "b"), ("a", "c"), ("b", "c")])
+    result = compute_edge_deletion_profile(g, 0)
+    assert len(result.rows) == 1
+    assert result.rows[0].chromatic_number == 3
+    assert result.rows[0].deleted_edge_indices == ()
+
+
+def test_k3_order1() -> None:
+    """K3 with deletion order 1: 4 rows (no deletion + 3 single-edge deletions)."""
+    g = _graph(["a", "b", "c"], [("a", "b"), ("a", "c"), ("b", "c")])
+    result = compute_edge_deletion_profile(g, 1)
+    assert len(result.rows) == 4  # C(3,0) + C(3,1) = 1 + 3
+    # No deletion: chromatic number 3
+    no_del = next(r for r in result.rows if r.deleted_edge_indices == ())
+    assert no_del.chromatic_number == 3
+    # Deleting one edge: chromatic number 2 (becomes a path)
+    for row in result.rows:
+        if row.deleted_edge_indices != ():
+            assert row.chromatic_number == 2
+
+
+def test_k3_order3() -> None:
+    """K3 with deletion order 3: deleting all edges yields chromatic number 1."""
+    g = _graph(["a", "b", "c"], [("a", "b"), ("a", "c"), ("b", "c")])
+    result = compute_edge_deletion_profile(g, 3)
+    # Find the row deleting all 3 edges
+    all_deleted = next(r for r in result.rows if len(r.deleted_edge_indices) == 3)
+    assert all_deleted.chromatic_number == 1
+
+
+def test_edgeless_graph() -> None:
+    """Edgeless graph with deletion order 0: chromatic number 1."""
+    g = _graph(["a", "b"], [])
+    result = compute_edge_deletion_profile(g, 0)
+    assert len(result.rows) == 1
+    assert result.rows[0].chromatic_number == 1
+
+
+def test_row_count() -> None:
+    """Row count = sum_{i=0}^{b} C(m, i)."""
+    g = _graph(["a", "b", "c", "d"], [("a", "b"), ("b", "c"), ("c", "d")])
+    m = len(g.edges)
+    for b in range(m + 1):
+        result = compute_edge_deletion_profile(g, b)
+        expected = sum(len(list(combinations(range(m), i))) for i in range(b + 1))
+        assert len(result.rows) == expected
+
+
+def test_rejects_order_exceeds_edges() -> None:
+    g = _graph(["a", "b"], [("a", "b")])
+    with pytest.raises(ValidationError):
+        EdgeDeletionProfileRequest(graph=g, deletion_order=2)
+
+
+def test_result_preserves_source() -> None:
+    g = _graph(["a", "b", "c"], [("a", "b"), ("b", "c")])
+    result = compute_edge_deletion_profile(g, 1)
+    assert result.graph == g
+    assert result.deletion_order == 1

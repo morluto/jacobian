@@ -14,7 +14,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"combinatorics.latin_square.{reason}", message)
 
 
-MAX_N = 32
+MAX_LATIN_SQUARE_ORDER = 1_024
 
 
 def _validate_square_matrix(
@@ -55,8 +55,10 @@ class LatinSquare(StrictModel):
     """A validated Latin square: an n x n matrix of symbols 0..n-1
     where each symbol appears exactly once in every row and column."""
 
-    order: int = Field(ge=1, le=MAX_N)
-    cells: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_N)
+    order: int = Field(ge=1, le=MAX_LATIN_SQUARE_ORDER)
+    cells: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_LATIN_SQUARE_ORDER
+    )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -68,8 +70,10 @@ class LatinSquare(StrictModel):
 class LatinSquareCandidate(StrictModel):
     """A candidate square matrix of symbols 0..n-1, not yet verified Latin."""
 
-    order: int = Field(ge=1, le=MAX_N)
-    cells: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_N)
+    order: int = Field(ge=1, le=MAX_LATIN_SQUARE_ORDER)
+    cells: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_LATIN_SQUARE_ORDER
+    )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -113,4 +117,10 @@ class OrthogonalityResult(StrictModel):
 
 
 class LatinSquareTransposeResult(StrictModel):
-    transposed: tuple[tuple[int, ...], ...]
+    transposed: LatinSquare
+
+    @classmethod
+    def _from_kernel(cls, *, order: int, cells: tuple[tuple[int, ...], ...]) -> Self:
+        return cls.model_construct(
+            transposed=LatinSquare.model_construct(order=order, cells=cells)
+        )

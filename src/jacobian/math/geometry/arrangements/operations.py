@@ -47,6 +47,20 @@ def _bit_bound_to_decimal_digits(bit_bound: int) -> int:
     return (bit_bound * 30_103 + 99_999) // 100_000
 
 
+def _canonical_integer_conversion_work(digit_bound: int) -> int:
+    """Limb work for ``format_canonical_integer`` plus positivity reparse.
+
+    Each helper walks base-``10**9`` chunks. Every ``divmod`` or multiply-add
+    processes the whole remaining or growing operand, so the pair of
+    conversions costs the sum of operand widths ``1..chunks`` twice, which
+    is ``chunks * (chunks + 1)``.
+    """
+    if digit_bound <= 0:
+        return 0
+    chunks = (digit_bound + 8) // 9
+    return chunks * (chunks + 1)
+
+
 def _binomial_prefix_bit_bound(upper: int, length: int) -> int:
     if length <= 1 or upper == 0:
         return 1
@@ -142,10 +156,9 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
                 "chamber count exceeds the canonical output-byte limit",
             )
         # Closed-form ``2^m`` construction is cheap, but canonical formatting
-        # and the positivity parse each perform one base-10**9 limb operation
-        # per output chunk.  Charge both against the shared work ledger.
-        conversion_steps = 2 * ((result_digits + 8) // 9)
-        if conversion_steps > MAX_GENERIC_FORMULA_WORK:
+        # and the positivity parse are quadratic in the 9-digit chunk count.
+        conversion_work = _canonical_integer_conversion_work(result_digits)
+        if conversion_work > MAX_GENERIC_FORMULA_WORK:
             _reject(
                 ("hyperplane_count",),
                 "chamber_formatting_work_exceeded",
@@ -171,8 +184,8 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
                 "chamber_result_bytes_exceeded",
                 "chamber count exceeds the canonical output-byte limit",
             )
-        conversion_steps = 2 * ((result_digits + 8) // 9)
-        if n + conversion_steps > MAX_GENERIC_FORMULA_WORK:
+        conversion_work = _canonical_integer_conversion_work(result_digits)
+        if n + conversion_work > MAX_GENERIC_FORMULA_WORK:
             _reject(
                 ("ambient_dimension", "hyperplane_count"),
                 "chamber_formatting_work_exceeded",

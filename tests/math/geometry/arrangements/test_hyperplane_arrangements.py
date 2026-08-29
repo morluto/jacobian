@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.arrangements._models import (
     MAX_GENERIC_FORMULA_INDEX,
@@ -244,6 +245,13 @@ def test_chamber_count_uses_the_requested_binomial_prefix() -> None:
     assert compute_chamber_count(request).chamber_count == "2"
 
 
+def test_characteristic_uses_the_requested_binomial_prefix() -> None:
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(ambient_dimension=1, hyperplane_count=200_000)
+    )
+    assert result.coefficients == ("-1", "1")
+
+
 def test_chamber_count_rejects_actual_output_bytes() -> None:
     request = ChamberCountRequest(
         ambient_dimension=40_000_000,
@@ -254,6 +262,28 @@ def test_chamber_count_rejects_actual_output_bytes() -> None:
     assert (
         error.value.errors()[0]["type"]
         == "hyperplane_arrangement.chamber_result_bytes_exceeded"
+    )
+
+
+def test_chamber_count_closed_form_converts_within_quadratic_work() -> None:
+    result = compute_chamber_count(
+        ChamberCountRequest(ambient_dimension=8_000, hyperplane_count=8_000)
+    )
+    assert result.chamber_count == format_canonical_integer(1 << 8_000)
+
+
+def test_chamber_count_rejects_quadratic_closed_form_conversion_work() -> None:
+    # n = m = 10_000 yields ~3011 digits. A constant-cost chunk count is 670,
+    # under the 100_000 work ledger; cumulative limb widths are 112_560.
+    request = ChamberCountRequest(
+        ambient_dimension=10_000,
+        hyperplane_count=10_000,
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        compute_chamber_count(request)
+    assert (
+        error.value.errors()[0]["type"]
+        == "hyperplane_arrangement.chamber_formatting_work_exceeded"
     )
 
 

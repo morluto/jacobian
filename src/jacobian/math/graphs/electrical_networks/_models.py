@@ -39,19 +39,13 @@ class ConductanceNetwork(StrictModel):
     )
 
 
-class LaplacianEdge(StrictModel):
-    """One undirected edge admitted by Laplacian materialization."""
-
-    source: int = Field(ge=0, le=MAX_LAPLACIAN_VERTICES - 1)
-    target: int = Field(ge=0, le=MAX_LAPLACIAN_VERTICES - 1)
-    conductance: CanonicalRational
-
-
 class LaplacianNetwork(StrictModel):
     """A conductance network whose Laplacian matrix fits the materialization bound."""
 
     vertex_count: int = Field(ge=2, le=MAX_LAPLACIAN_VERTICES)
-    edges: tuple[LaplacianEdge, ...] = Field(min_length=1, max_length=MAX_NETWORK_EDGES)
+    edges: tuple[ConductanceEdge, ...] = Field(
+        min_length=1, max_length=MAX_NETWORK_EDGES
+    )
 
 
 class EffectiveResistanceRequest(StrictModel):
@@ -121,7 +115,6 @@ __all__ = [
     "ConductanceNetwork",
     "EffectiveResistanceRequest",
     "EffectiveResistanceResult",
-    "LaplacianEdge",
     "LaplacianEntry",
     "LaplacianNetwork",
     "LaplacianRequest",

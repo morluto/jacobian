@@ -12,7 +12,6 @@ from jacobian.math.graphs.electrical_networks._models import (
     ConductanceEdge,
     ConductanceNetwork,
     EffectiveResistanceRequest,
-    LaplacianEdge,
     LaplacianNetwork,
     LaplacianRequest,
     NodePotentialRequest,
@@ -32,15 +31,11 @@ def _edge(source: int, target: int, num: str, den: str) -> ConductanceEdge:
     )
 
 
-def _laplacian_edge(source: int, target: int, num: str, den: str) -> LaplacianEdge:
-    return LaplacianEdge(source=source, target=target, conductance=C(num=num, den=den))
-
-
 def _net(vertex_count: int, *edges: ConductanceEdge) -> ConductanceNetwork:
     return ConductanceNetwork(vertex_count=vertex_count, edges=edges)
 
 
-def _laplacian_net(vertex_count: int, *edges: LaplacianEdge) -> LaplacianNetwork:
+def _laplacian_net(vertex_count: int, *edges: ConductanceEdge) -> LaplacianNetwork:
     return LaplacianNetwork(vertex_count=vertex_count, edges=edges)
 
 
@@ -180,7 +175,7 @@ def test_laplacian_keeps_its_separate_materialized_matrix_ceiling() -> None:
     with pytest.raises(ValidationError):
         LaplacianNetwork(
             vertex_count=MAX_LAPLACIAN_VERTICES + 1,
-            edges=(_laplacian_edge(0, 1, "1", "1"),),
+            edges=(_edge(0, 1, "1", "1"),),
         )
 
 
@@ -196,7 +191,7 @@ def test_laplacian_request_schema_exposes_vertex_ceiling() -> None:
 
 
 def test_laplacian_single_edge() -> None:
-    net = _laplacian_net(2, _laplacian_edge(0, 1, "1", "1"))
+    net = _laplacian_net(2, _edge(0, 1, "1", "1"))
     req = LaplacianRequest(network=net)
     result = compute_laplacian(req)
     assert result.vertex_count == 2
@@ -212,9 +207,9 @@ def test_laplacian_single_edge() -> None:
 def test_laplacian_triangle_diagonal_sums_conductances() -> None:
     net = _laplacian_net(
         3,
-        _laplacian_edge(0, 1, "1", "1"),
-        _laplacian_edge(1, 2, "1", "1"),
-        _laplacian_edge(0, 2, "2", "1"),
+        _edge(0, 1, "1", "1"),
+        _edge(1, 2, "1", "1"),
+        _edge(0, 2, "2", "1"),
     )
     req = LaplacianRequest(network=net)
     result = compute_laplacian(req)
@@ -233,10 +228,10 @@ def test_laplacian_triangle_diagonal_sums_conductances() -> None:
 def test_laplacian_rows_sum_to_zero() -> None:
     net = _laplacian_net(
         4,
-        _laplacian_edge(0, 1, "1", "1"),
-        _laplacian_edge(1, 2, "3", "2"),
-        _laplacian_edge(2, 3, "5", "3"),
-        _laplacian_edge(0, 3, "7", "4"),
+        _edge(0, 1, "1", "1"),
+        _edge(1, 2, "3", "2"),
+        _edge(2, 3, "5", "3"),
+        _edge(0, 3, "7", "4"),
     )
     req = LaplacianRequest(network=net)
     result = compute_laplacian(req)
@@ -247,9 +242,7 @@ def test_laplacian_rows_sum_to_zero() -> None:
 
 def test_laplacian_accepts_disconnected_network() -> None:
     """The Laplacian is well-defined without connectivity."""
-    net = _laplacian_net(
-        4, _laplacian_edge(0, 1, "1", "1"), _laplacian_edge(2, 3, "1", "1")
-    )
+    net = _laplacian_net(4, _edge(0, 1, "1", "1"), _edge(2, 3, "1", "1"))
     result = compute_laplacian(LaplacianRequest(network=net))
     assert result.vertex_count == 4
     assert len(result.entries) == 16
@@ -259,7 +252,7 @@ def test_laplacian_accepts_disconnected_network() -> None:
 
 
 def test_contract_rejects_nonpositive_conductance() -> None:
-    edge = LaplacianEdge(source=0, target=1, conductance=C(num="0", den="1"))
+    edge = ConductanceEdge(source=0, target=1, conductance=C(num="0", den="1"))
     with pytest.raises(OperationDomainValidationError) as error:
         compute_laplacian(LaplacianRequest(network=_laplacian_net(2, edge)))
     assert (
@@ -268,7 +261,7 @@ def test_contract_rejects_nonpositive_conductance() -> None:
 
 
 def test_contract_rejects_self_loop() -> None:
-    edge = LaplacianEdge(source=0, target=0, conductance=C(num="1", den="1"))
+    edge = ConductanceEdge(source=0, target=0, conductance=C(num="1", den="1"))
     with pytest.raises(OperationDomainValidationError) as error:
         compute_laplacian(LaplacianRequest(network=_laplacian_net(2, edge)))
     assert (
@@ -278,9 +271,7 @@ def test_contract_rejects_self_loop() -> None:
 
 
 def test_contract_rejects_duplicate_edges() -> None:
-    net = _laplacian_net(
-        3, _laplacian_edge(0, 1, "1", "1"), _laplacian_edge(1, 0, "2", "1")
-    )
+    net = _laplacian_net(3, _edge(0, 1, "1", "1"), _edge(1, 0, "2", "1"))
     with pytest.raises(OperationDomainValidationError) as error:
         compute_laplacian(LaplacianRequest(network=net))
     assert error.value.errors()[0]["type"] == "electrical_network.duplicate_edges"
@@ -303,7 +294,7 @@ def test_contract_rejects_same_terminals() -> None:
 
 
 def test_contract_rejects_vertex_out_of_range() -> None:
-    net = _laplacian_net(2, _laplacian_edge(0, 5, "1", "1"))
+    net = _laplacian_net(2, _edge(0, 5, "1", "1"))
     with pytest.raises(OperationDomainValidationError) as error:
         compute_laplacian(LaplacianRequest(network=net))
     assert (
@@ -340,7 +331,7 @@ def test_contract_rejects_isolated_vertex() -> None:
 
 
 def test_contract_rejects_oversized_conductance() -> None:
-    edge = LaplacianEdge(
+    edge = ConductanceEdge(
         source=0,
         target=1,
         conductance=C(num="9" * 51, den="1"),

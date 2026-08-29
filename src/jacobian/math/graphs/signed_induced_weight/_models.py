@@ -2,48 +2,62 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Any, Self
 
-from pydantic import model_validator
+from pydantic import GetJsonSchemaHandler, model_validator
+from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.graphs.optimization._models import (
-    MAX_GRAPH_WEIGHT_DIGITS,
     RationalWeightedGraph,
-    require_bounded_rational,
+)
+from jacobian.math.graphs.signed_induced_weight._bounds import (
+    MAX_SIGNED_WEIGHT_EDGES,
+    MAX_SIGNED_WEIGHT_VERTICES,
 )
 
-MAX_SIGNED_WEIGHT_VERTICES = 20
-MAX_SIGNED_WEIGHT_EDGES = 496  # C(20,2)
-MAX_SUBSET_ENUMERATION = 1 << MAX_SIGNED_WEIGHT_VERTICES  # 2^20
+
+class _SignedWeightGraphSchema:
+    """Project this operation's envelope onto its shared graph carrier."""
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls,
+        core_schema: Any,
+        handler: GetJsonSchemaHandler,
+    ) -> JsonSchemaValue:
+        schema = handler.resolve_ref_schema(handler(core_schema)).copy()
+        schema["description"] = (
+            "A canonical rational-weighted simple graph admitted for exhaustive "
+            "signed induced-weight optimization: at most "
+            f"{MAX_SIGNED_WEIGHT_VERTICES} vertices and "
+            f"{MAX_SIGNED_WEIGHT_EDGES} edges, subject to the published arithmetic "
+            "work and exact-result height budgets."
+        )
+        properties = schema["properties"]
+        properties["vertices"] = {
+            **properties["vertices"],
+            "maxItems": MAX_SIGNED_WEIGHT_VERTICES,
+        }
+        properties["edges"] = {
+            **properties["edges"],
+            "maxItems": MAX_SIGNED_WEIGHT_EDGES,
+        }
+        return schema
+
+
+SignedInducedWeightGraph = Annotated[
+    RationalWeightedGraph,
+    _SignedWeightGraphSchema,
+]
 
 
 class SignedInducedWeightRequest(StrictModel):
     """Request for exact signed induced-edge weight extrema."""
 
-    graph: RationalWeightedGraph
-
-    @model_validator(mode="after")
-    def validate_bounds(self) -> Self:
-        if len(self.graph.vertices) > MAX_SIGNED_WEIGHT_VERTICES:
-            raise PydanticCustomError(
-                "graph.signed_induced_weight_too_many_vertices",
-                f"at most {MAX_SIGNED_WEIGHT_VERTICES} vertices are supported",
-            )
-        if len(self.graph.edges) > MAX_SIGNED_WEIGHT_EDGES:
-            raise PydanticCustomError(
-                "graph.signed_induced_weight_too_many_edges",
-                f"at most {MAX_SIGNED_WEIGHT_EDGES} edges are supported",
-            )
-        for edge in self.graph.edges:
-            require_bounded_rational(
-                edge.weight,
-                max_digits=MAX_GRAPH_WEIGHT_DIGITS,
-                label="edge weight",
-            )
-        return self
+    graph: SignedInducedWeightGraph
 
 
 class WeightExtremum(StrictModel):
@@ -59,6 +73,19 @@ class SignedInducedWeightResult(StrictModel):
     graph: RationalWeightedGraph
     minimum: WeightExtremum
     maximum: WeightExtremum
+
+    @model_validator(mode="after")
+    def require_canonical_witness_axes(self) -> Self:
+        for name, extremum in (("minimum", self.minimum), ("maximum", self.maximum)):
+            witness = set(extremum.witness_vertices)
+            if extremum.witness_vertices != tuple(
+                vertex for vertex in self.graph.vertices if vertex in witness
+            ):
+                raise PydanticCustomError(
+                    "graph.signed_induced_weight.witness_axis",
+                    f"{name} witness vertices must be a subset in source-vertex order",
+                )
+        return self
 
 
 __all__ = [

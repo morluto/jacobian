@@ -54,7 +54,9 @@ TOOLS: MathTools = (
             "return the minimum and maximum of the signed induced-edge total "
             "sum(weight(u,v) : {u,v} is an edge and both endpoints are selected) "
             "over all vertex subsets, with one deterministic witness subset for "
-            "each extremum. Empty and singleton subsets have weight zero."
+            "each extremum. Empty and singleton subsets have weight zero. The "
+            "current exhaustive envelope admits at most 20 vertices and applies "
+            "digit-sensitive arithmetic work and exact-result height bounds."
         ),
         SignedInducedWeightRequest,
         SignedInducedWeightResult,

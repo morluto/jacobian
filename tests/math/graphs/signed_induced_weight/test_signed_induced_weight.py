@@ -1,17 +1,27 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import combinations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.optimization._models import (
     RationalWeightedEdge,
     RationalWeightedGraph,
 )
+from jacobian.math.graphs.signed_induced_weight._bounds import (
+    MAX_SIGNED_WEIGHT_WORK_UNITS,
+    admit_signed_induced_weight,
+)
 from jacobian.math.graphs.signed_induced_weight._models import (
+    MAX_SIGNED_WEIGHT_EDGES,
+    MAX_SIGNED_WEIGHT_VERTICES,
     SignedInducedWeightRequest,
+)
+from jacobian.math.graphs.signed_induced_weight._tools import (
+    compute_signed_induced_weight_extrema,
 )
 from jacobian.math.graphs.signed_induced_weight.operations import (
     signed_induced_weight_extrema,
@@ -39,7 +49,7 @@ def _simple_graph(vertices, edge_specs) -> RationalWeightedGraph:
 
 def test_empty_graph() -> None:
     """Empty graph has min=max=0."""
-    g = _simple_graph(["a"], [])
+    g = _simple_graph([], [])
     result = signed_induced_weight_extrema(g)
     assert result.minimum.value.as_fraction() == Fraction(0)
     assert result.maximum.value.as_fraction() == Fraction(0)
@@ -74,6 +84,23 @@ def test_mixed_weights_fixture() -> None:
     result = signed_induced_weight_extrema(g)
     assert result.maximum.value.as_fraction() == Fraction(2)
     assert result.minimum.value.as_fraction() == Fraction(-1)
+
+    attained = []
+    for size in range(len(g.vertices) + 1):
+        for selected in combinations(g.vertices, size):
+            selected_set = set(selected)
+            attained.append(
+                sum(
+                    (
+                        edge.weight.as_fraction()
+                        for edge in g.edges
+                        if set(edge.endpoints) <= selected_set
+                    ),
+                    start=Fraction(0),
+                )
+            )
+    assert result.minimum.value.as_fraction() == min(attained)
+    assert result.maximum.value.as_fraction() == max(attained)
 
 
 def test_edgeless_graph() -> None:
@@ -113,19 +140,77 @@ def test_witness_replay() -> None:
 
 
 def test_tie_breaking_lexicographic() -> None:
-    """Ties are broken by lexicographically least witness."""
-    g = _simple_graph(
-        ["a", "b", "c"],
-        [("a", "b", 1), ("a", "c", 1), ("b", "c", 1)],
-    )
+    """Ties use tuple lexicographic order, not cardinality or search order."""
+    g = _simple_graph(["a", "b", "c"], [("b", "c", -1)])
     result = signed_induced_weight_extrema(g)
-    assert result.maximum.value.as_fraction() == Fraction(3)
-    assert set(result.maximum.witness_vertices) == {"a", "b", "c"}
+    assert result.minimum.value.as_fraction() == Fraction(-1)
+    assert result.minimum.witness_vertices == ("a", "b", "c")
 
 
 def test_rejects_too_many_vertices() -> None:
-    """Graph with >20 vertices should be rejected."""
+    """The native path enforces the exhaustive-search vertex envelope."""
     vertices = [str(i) for i in range(21)]
     g = _graph(vertices, [])
-    with pytest.raises(ValidationError):
-        SignedInducedWeightRequest(graph=g)
+    request = SignedInducedWeightRequest(graph=g)
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"at most {MAX_SIGNED_WEIGHT_VERTICES} vertices",
+    ):
+        signed_induced_weight_extrema(g)
+    with pytest.raises(OperationDomainValidationError):
+        compute_signed_induced_weight_extrema(request)
+
+
+def test_request_schema_publishes_the_operation_specific_graph_envelope() -> None:
+    graph_schema = SignedInducedWeightRequest.model_json_schema()["properties"]["graph"]
+    assert graph_schema["properties"]["vertices"]["maxItems"] == (
+        MAX_SIGNED_WEIGHT_VERTICES
+    )
+    assert graph_schema["properties"]["edges"]["maxItems"] == MAX_SIGNED_WEIGHT_EDGES
+    assert str(MAX_SIGNED_WEIGHT_VERTICES) in graph_schema["description"]
+
+
+def test_complete_twenty_vertex_integer_graph_fits_the_derived_work_budget() -> None:
+    vertices = tuple(f"v{index:02d}" for index in range(MAX_SIGNED_WEIGHT_VERTICES))
+    graph = _simple_graph(
+        vertices,
+        [(left, right, 1) for left, right in combinations(vertices, 2)],
+    )
+    admission = admit_signed_induced_weight(graph)
+    assert admission.candidate_subsets == 1 << MAX_SIGNED_WEIGHT_VERTICES
+    assert admission.work_units <= MAX_SIGNED_WEIGHT_WORK_UNITS
+
+
+def _first_primes(count: int) -> list[int]:
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < count:
+        if all(candidate % prime for prime in primes if prime * prime <= candidate):
+            primes.append(candidate)
+        candidate += 1
+    return primes
+
+
+def test_rejects_unrepresentable_rational_height_before_search() -> None:
+    vertices = tuple(f"v{index:02d}" for index in range(17))
+    endpoint_pairs = tuple(combinations(vertices, 2))[:129]
+    edges = []
+    for (left, right), prime in zip(
+        endpoint_pairs, _first_primes(len(endpoint_pairs)), strict=True
+    ):
+        exponent = 1
+        while len(str(prime ** (exponent + 1))) <= 256:
+            exponent += 1
+        edges.append(
+            RationalWeightedEdge(
+                endpoints=(left, right),
+                weight=CanonicalRational(num="1", den=str(prime**exponent)),
+            )
+        )
+    graph = _graph(vertices, edges)
+
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=r"common denominator.*32,768-digit rational bound",
+    ):
+        signed_induced_weight_extrema(graph)

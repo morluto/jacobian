@@ -81,3 +81,14 @@ def test_result_preserves_metadata() -> None:
     assert result.ground_set_size == 2
     assert result.threshold == 1
     assert result.relation == "INTERSECTION_EQ"
+
+
+def test_n8_is_the_carrier_boundary() -> None:
+    result = construct_boolean_lattice_intersection_graph(8, 0, "INTERSECTION_EQ")
+    assert len(result.graph.vertices) == 256
+    assert len(result.graph.edges) == 3_280
+
+
+def test_native_rejects_negative_ground_set_size() -> None:
+    with pytest.raises(ValueError, match="between 0"):
+        construct_boolean_lattice_intersection_graph(-1, 0, "INTERSECTION_EQ")

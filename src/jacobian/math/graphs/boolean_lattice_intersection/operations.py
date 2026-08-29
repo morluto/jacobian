@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from pydantic_core import PydanticCustomError
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.boolean_lattice_intersection._models import (
     BooleanLatticeIntersectionResult,
+    IntersectionRelation,
+    _validate_intersection_request,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -13,7 +18,7 @@ __all__ = ["construct_boolean_lattice_intersection_graph"]
 def construct_boolean_lattice_intersection_graph(
     ground_set_size: int,
     threshold: int,
-    relation: str,
+    relation: IntersectionRelation,
 ) -> BooleanLatticeIntersectionResult:
     """Construct a graph on the Boolean lattice 2^[n].
 
@@ -21,6 +26,13 @@ def construct_boolean_lattice_intersection_graph(
     An edge joins two distinct subsets when their intersection size
     satisfies the declared relation with the threshold.
     """
+    try:
+        _validate_intersection_request(ground_set_size, threshold, relation)
+    except PydanticCustomError as error:
+        raise OperationDomainValidationError(
+            location=(), code=error.type, message=str(error)
+        ) from error
+
     n = ground_set_size
     all_subsets = [_subset_label(s) for s in _all_subsets(n)]
 
@@ -34,8 +46,10 @@ def construct_boolean_lattice_intersection_graph(
                 adjacent = intersection_size == threshold
             elif relation == "INTERSECTION_LT":
                 adjacent = intersection_size < threshold
-            else:
+            elif relation == "INTERSECTION_GT":
                 adjacent = intersection_size > threshold
+            else:
+                adjacent = False
             if adjacent:
                 a, b = all_subsets[i], all_subsets[j]
                 if a < b:

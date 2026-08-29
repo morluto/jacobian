@@ -8,10 +8,8 @@ from jacobian.math.number_theory._prime_shift_models import (
     PrimeShiftProfileRequest,
     PrimeShiftProfileResult,
 )
-from jacobian.math.number_theory._prime_shift_operations import (
-    prime_shift_profile,
-)
 from jacobian.math.number_theory._support import number_theory_operation
+from jacobian.math.number_theory.operations import prime_shift_profile
 
 
 def compute_prime_shift_profile(

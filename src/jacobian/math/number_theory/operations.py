@@ -38,6 +38,11 @@ from jacobian.math.number_theory._modular_models import (
     ModularPolynomialVariable,
 )
 from jacobian.math.number_theory._prime_models import PrimorialResult
+from jacobian.math.number_theory._prime_shift_models import (
+    PrimeShiftProfileResult,
+    _PrimeShiftProfileExecutionPlan,
+    require_prime_shift_profile_admission,
+)
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 from jacobian.math.number_theory.modular_polynomials import (
     ModularPolynomialTerm,
@@ -50,8 +55,8 @@ __all__ = [
     "factorial_valuation",
     "floor_square_root",
     "is_prime",
-    "legendre_symbol",
     "jacobi_symbol",
+    "legendre_symbol",
     "mobius",
     "modular_inverse",
     "modular_polynomial_residue_assignments",
@@ -61,6 +66,7 @@ __all__ = [
     "nth_prime",
     "previous_prime",
     "prime_count",
+    "prime_shift_profile",
     "primorial",
     "quadratic_residues",
 ]
@@ -143,6 +149,67 @@ def mobius(value: SupportsIndex | CanonicalInteger | IntegerValue) -> IntegerVal
 
     return IntegerValue(
         value=format_canonical_integer(int(sympy_mobius(_integer(value))))
+    )
+
+
+def _simple_sieve(limit: int) -> tuple[int, ...]:
+    if limit < 2:
+        return ()
+    flags = bytearray(b"\x01") * (limit + 1)
+    flags[0] = flags[1] = 0
+    for candidate in range(2, math.isqrt(limit) + 1):
+        if flags[candidate]:
+            for composite in range(candidate * candidate, limit + 1, candidate):
+                flags[composite] = 0
+    return tuple(candidate for candidate in range(2, limit + 1) if flags[candidate])
+
+
+def _segmented_sieve(
+    lower_bound: int, upper_bound: int, base_primes: tuple[int, ...]
+) -> bytearray:
+    flags = bytearray(b"\x01") * (upper_bound - lower_bound + 1)
+    for prime in base_primes:
+        if prime * prime > upper_bound:
+            break
+        first = max(
+            prime * prime,
+            ((lower_bound + prime - 1) // prime) * prime,
+        )
+        if first <= upper_bound:
+            flags[first - lower_bound :: prime] = b"\x00" * (
+                (upper_bound - first) // prime + 1
+            )
+    return flags
+
+
+def _compute_prime_shift_profile(
+    plan: _PrimeShiftProfileExecutionPlan,
+) -> PrimeShiftProfileResult:
+    counts = [0] * (plan.upper_bound - plan.lower_bound + 1)
+    base_primes = _simple_sieve(plan.base_limit)
+    for power, candidate_lower, candidate_upper in plan.candidate_intervals:
+        flags = _segmented_sieve(candidate_lower, candidate_upper, base_primes)
+        for offset, candidate_is_prime in enumerate(flags):
+            if candidate_is_prime:
+                counts[candidate_lower + offset + power - plan.lower_bound] += 1
+    return PrimeShiftProfileResult._from_kernel(
+        lower_bound=plan.lower_bound,
+        upper_bound=plan.upper_bound,
+        counts=tuple(counts),
+        plan=plan,
+    )
+
+
+def prime_shift_profile(
+    lower_bound: SupportsIndex | IntegerValue,
+    upper_bound: SupportsIndex | IntegerValue,
+) -> PrimeShiftProfileResult:
+    """Return the exact translated-prime profile on a closed interval."""
+
+    lower = _integer(lower_bound)
+    upper = _integer(upper_bound)
+    return _compute_prime_shift_profile(
+        require_prime_shift_profile_admission(lower, upper)
     )
 
 

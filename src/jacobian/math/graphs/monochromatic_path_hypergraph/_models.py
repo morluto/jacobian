@@ -28,7 +28,7 @@ class MonochromaticPathHypergraphResult(StrictModel):
 
 
 __all__ = [
-    "MonochromaticPathRequest",
     "MonochromaticPathHypergraphResult",
+    "MonochromaticPathRequest",
     "MonochromaticPathResult",
 ]

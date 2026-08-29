@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from itertools import chain, combinations
+from itertools import combinations
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.optimization.signed_induced_weight._models import (
@@ -45,14 +45,14 @@ def compute_signed_induced_weight_extrema(
     best_max_witness: tuple[str, ...] = ()
 
     indices = list(range(n))
-    for size in range(0, n + 1):
+    for size in range(n + 1):
         for subset in combinations(indices, size):
-            w = subset_weight(subset)
-            if w < best_min:
-                best_min = w
+            weight = subset_weight(subset)
+            if weight < best_min:
+                best_min = weight
                 best_min_witness = tuple(vertices[i] for i in subset)
-            if w > best_max:
-                best_max = w
+            if weight > best_max:
+                best_max = weight
                 best_max_witness = tuple(vertices[i] for i in subset)
 
     return SignedInducedWeightResult(

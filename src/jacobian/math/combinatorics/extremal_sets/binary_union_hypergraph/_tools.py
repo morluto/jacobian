@@ -22,7 +22,7 @@ TOOLS: MathTools = (
         description=(
             "Given a finite indexed family of distinct finite sets, return the "
             "complete canonical 3-uniform relation hypergraph whose edge "
-            "{i,j,k} records S_i ∪ S_j = S_k among three distinct source members."
+            "{i,j,k} records S_i union S_j = S_k among three distinct source members."
         ),
         request_type=BinaryUnionHypergraphRequest,
         result_type=BinaryUnionHypergraphResult,

@@ -22,18 +22,14 @@ def _graph(vertices, edges):
 
 def test_empty_subset() -> None:
     graph = _graph(["a", "b"], [["a", "b"]])
-    result = compute_signed_induced_weight_extrema(
-        graph, (("a", "b", _cr(1)),)
-    )
+    result = compute_signed_induced_weight_extrema(graph, (("a", "b", _cr(1)),))
     # Empty subset has weight 0
     assert result.minimum_weight.as_fraction() == Fraction(0)
 
 
 def test_positive_weight() -> None:
     graph = _graph(["a", "b"], [["a", "b"]])
-    result = compute_signed_induced_weight_extrema(
-        graph, (("a", "b", _cr(5)),)
-    )
+    result = compute_signed_induced_weight_extrema(graph, (("a", "b", _cr(5)),))
     # Best: include both a and b -> weight 5
     assert result.maximum_weight.as_fraction() == Fraction(5)
     assert result.maximum_witness == ("a", "b")
@@ -41,9 +37,7 @@ def test_positive_weight() -> None:
 
 def test_negative_weight() -> None:
     graph = _graph(["a", "b"], [["a", "b"]])
-    result = compute_signed_induced_weight_extrema(
-        graph, (("a", "b", _cr(-5)),)
-    )
+    result = compute_signed_induced_weight_extrema(graph, (("a", "b", _cr(-5)),))
     # Best: include both -> weight -5
     assert result.minimum_weight.as_fraction() == Fraction(-5)
     assert result.minimum_witness == ("a", "b")
@@ -61,7 +55,5 @@ def test_mixed_weights() -> None:
 
 def test_result_preserves_source() -> None:
     graph = _graph(["a", "b"], [["a", "b"]])
-    result = compute_signed_induced_weight_extrema(
-        graph, (("a", "b", _cr(1)),)
-    )
+    result = compute_signed_induced_weight_extrema(graph, (("a", "b", _cr(1)),))
     assert result.graph == graph

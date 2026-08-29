@@ -21,10 +21,12 @@ def compute_spanned_line_profile(
     points = configuration.points
     n = len(points)
 
-    def get_coords(i):
+    def get_coords(i: int) -> tuple[Fraction, ...]:
         return tuple(c.as_fraction() for c in points[i].coordinates)
 
-    line_to_pairs: dict[tuple, list[tuple[int, int]]] = {}
+    line_to_pairs: dict[
+        tuple[tuple[Fraction, ...], tuple[Fraction, ...]], list[tuple[int, int]]
+    ] = {}
 
     for i, j in combinations(range(n), 2):
         ci = get_coords(i)
@@ -37,7 +39,7 @@ def compute_spanned_line_profile(
             line_to_pairs.setdefault(key, []).append((i, j))
 
     entries: list[SpannedLineEntry] = []
-    for key, pairs in line_to_pairs.items():
+    for _key, pairs in line_to_pairs.items():
         all_indices: set[int] = set()
         for i, j in pairs:
             all_indices.add(i)
@@ -58,7 +60,10 @@ def compute_spanned_line_profile(
     )
 
 
-def _canonical_line(ci, cj):
+def _canonical_line(
+    ci: tuple[Fraction, ...],
+    cj: tuple[Fraction, ...],
+) -> tuple[tuple[Fraction, ...], tuple[Fraction, ...]] | None:
     """Return a canonical key for the line through ci and cj.
 
     The key is (direction, anchor_on_line) where direction is normalized

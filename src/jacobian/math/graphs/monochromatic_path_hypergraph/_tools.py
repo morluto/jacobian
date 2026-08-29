@@ -3,8 +3,8 @@
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
 from jacobian.math.graphs.monochromatic_path_hypergraph._models import (
-    MonochromaticPathRequest,
     MonochromaticPathHypergraphResult,
+    MonochromaticPathRequest,
 )
 from jacobian.math.graphs.monochromatic_path_hypergraph.operations import (
     construct_monochromatic_path_hypergraphs,
@@ -34,11 +34,11 @@ TOOLS: MathTools = (
                 "Two-colour path graph.",
                 {
                     "graph": {
-                        "vertices": ["a", "b", "c"],
-                        "edges": [
-                            {"left": "a", "right": "b", "color": "red"},
-                            {"left": "b", "right": "c", "color": "blue"},
-                        ],
+                        "graph": {
+                            "vertices": ["a", "b", "c"],
+                            "edges": [["a", "b"], ["b", "c"]],
+                        },
+                        "edge_colors": ["red", "blue"],
                     },
                 },
             ),

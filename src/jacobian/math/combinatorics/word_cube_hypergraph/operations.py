@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from itertools import product
 
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -58,9 +59,7 @@ def compute_word_cube_hypergraph(
             seen.add(line)
             unique_lines.append(line)
 
-    edges = tuple(
-        (f"line_{i}", line) for i, line in enumerate(unique_lines)
-    )
+    edges = tuple((f"line_{i}", line) for i, line in enumerate(unique_lines))
 
     hypergraph = FiniteHypergraph(
         vertices=vertex_labels,
@@ -74,12 +73,12 @@ def compute_word_cube_hypergraph(
     )
 
 
-def _all_patterns(q: int, d: int):
+def _all_patterns(q: int, d: int) -> Iterator[tuple[int | None, ...]]:
     """Generate all patterns with at least one wildcard."""
     if d == 0:
         return
     # Each position can be 0..q-1 or None (wildcard)
-    options = list(range(q)) + [None]
+    options = [*range(q), None]
     for pattern in product(options, repeat=d):
         if None in pattern:  # At least one wildcard
             yield pattern

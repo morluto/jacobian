@@ -24,7 +24,7 @@ def compute_gowers_cube_profile(
 
     For Z/mZ, we enumerate over all bases and directions.
     """
-    A = set(subset)
+    subset_values = set(subset)
     n = modulus
 
     cube_count = 0
@@ -35,7 +35,11 @@ def compute_gowers_cube_profile(
 
     if order < 1:
         return GowersCubeResult(
-            modulus=modulus, subset=subset, order=order, cube_count=0, normalized_count=0
+            modulus=modulus,
+            subset=subset,
+            order=order,
+            cube_count=0,
+            normalized_count=0,
         )
 
     # Enumerate all possible base points and direction combinations
@@ -49,7 +53,7 @@ def compute_gowers_cube_profile(
                 for bit in range(order):
                     if mask & (1 << bit):
                         vertex = (vertex + e_tuple[bit]) % n
-                if vertex not in A:
+                if vertex not in subset_values:
                     all_in = False
                     break
             if all_in:

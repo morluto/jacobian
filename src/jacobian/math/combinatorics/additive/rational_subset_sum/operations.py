@@ -31,7 +31,7 @@ def compute_rational_subset_sum_profile(
     if n > 0:
         for size in range(1, n + 1):
             for subset in combinations(range(n), size):
-                s = sum(fracs[i] for i in subset)
+                s = sum((fracs[i] for i in subset), Fraction(0))
                 sums[s] = sums.get(s, 0) + 1
 
     entries = tuple(

@@ -83,9 +83,11 @@ make codex-visibility
 ```
 
 `codex-visibility` is a separate opt-in agent-adoption diagnostic, not a Harbor
-mathematical correctness task. It compares no Jacobian with Jacobian MCP only
-and measures whether Codex discovers, inspects, invokes, completes, or
-independently checks relevant operations. See
+mathematical correctness task. In addition to no-Jacobian comparisons, it can
+freeze exact legacy, direct-tool, direct-plus-find, and find-only MCP surfaces.
+It measures discovery, inspection, typed invocation, completion, composition,
+and recovery while keeping client tool discovery separate from mathematical
+vocabulary discovery. See
 [Run the MCP visibility evaluation](docs/run-codex-visibility-evaluation.md).
 
 `symbolic-coordination-v1` keeps its deterministic 26-case pilot separate

@@ -172,6 +172,23 @@ def run_direct_math_tool(
         raise ToolError("operation execution failed") from exc
 
 
+def _invalid_request_error(
+    operation_id: str,
+    error: OperationRequestValidationError | OperationDomainValidationError,
+) -> MCPError:
+    """Project one owner-bound rejection without reflecting caller values."""
+
+    data = OperationInvalidRequestData(
+        operation_id=operation_id,
+        errors=_bounded_validation_issues(error.errors()),
+    )
+    return MCPError(
+        code=INVALID_PARAMS,
+        message="operation payload failed validation",
+        data=data.model_dump(mode="json"),
+    )
+
+
 def _request_cancellation(ctx: Context[AppState, Any]) -> _CancellationSignal:
     """Return MCP 2.1's request signal through its only available SDK seam."""
 

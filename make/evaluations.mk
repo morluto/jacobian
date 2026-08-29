@@ -1,4 +1,4 @@
-.PHONY: agent-eval agent-eval-proxy-builder-create agent-eval-validate agent-eval-compare codex-visibility codex-tool-context
+.PHONY: agent-eval agent-eval-proxy-builder-create agent-eval-validate agent-eval-compare codex-visibility codex-tool-context direct-mcp-catalog-eval
 
 JACOBIAN_ENABLED ?= 1
 ifneq ($(filter 0 1,$(JACOBIAN_ENABLED)),$(JACOBIAN_ENABLED))
@@ -141,6 +141,7 @@ VISIBILITY_CASES ?= benchmarks/config/codex-visibility-v2.json
 VISIBILITY_REPETITIONS ?= 1
 VISIBILITY_REASONING_EFFORT ?= high
 VISIBILITY_TOOL_MODE ?= direct
+VISIBILITY_SURFACE_ARM ?= full
 
 codex-visibility: ## Measure Codex adoption of Jacobian (VISIBILITY_EXECUTE=1, VISIBILITY_MCP_URL=..., VISIBILITY_MODEL=..., VISIBILITY_OUTPUT=...).
 	@set -e; \
@@ -156,8 +157,19 @@ codex-visibility: ## Measure Codex adoption of Jacobian (VISIBILITY_EXECUTE=1, V
 		--execute --cases "$(VISIBILITY_CASES)" --mcp-url "$(VISIBILITY_MCP_URL)" \
 		--model "$(VISIBILITY_MODEL)" --reasoning-effort "$(VISIBILITY_REASONING_EFFORT)" \
 		--tool-mode "$(VISIBILITY_TOOL_MODE)" \
+		--surface-arm "$(VISIBILITY_SURFACE_ARM)" \
 		--repetitions "$(VISIBILITY_REPETITIONS)" --output "$(VISIBILITY_OUTPUT)" \
 		$(foreach case,$(VISIBILITY_CASES_SELECTED),--case "$(case)")
+
+DIRECT_MCP_EVAL_SUITE ?= benchmarks/config/direct-mcp-catalog-evaluation-v1.json
+DIRECT_MCP_EVAL_OUTPUT ?= tmp/direct-mcp-catalog-evaluation.json
+DIRECT_MCP_LIST_REPETITIONS ?= 7
+
+direct-mcp-catalog-eval: ## Run deterministic catalog-scale direct MCP controls.
+	$(UV_RUN) python -m benchmarks.tooling.mcp_catalog_evaluation \
+		--suite "$(DIRECT_MCP_EVAL_SUITE)" \
+		--output "$(DIRECT_MCP_EVAL_OUTPUT)" \
+		--list-repetitions "$(DIRECT_MCP_LIST_REPETITIONS)"
 
 codex-tool-context: ## Measure ALL_TOOLS projection cost in Codex ATIF traces (TRAJECTORIES="...").
 	@test -n "$(TRAJECTORIES)" || { echo "TRAJECTORIES is required" >&2; exit 2; }

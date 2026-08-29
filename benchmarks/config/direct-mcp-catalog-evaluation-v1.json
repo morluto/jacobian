@@ -1,0 +1,266 @@
+{
+  "schema_version": "1",
+  "suite_id": "direct-mcp-catalog-evaluation-v1",
+  "question": "Do direct typed catalog tools preserve typed execution and composition while reducing client routing cost enough to replace math.run, and does math.find provide distinct semantic mathematical-vocabulary discovery value?",
+  "required_categories": [
+    "STRAIGHTFORWARD",
+    "ALTERNATE_TERMINOLOGY",
+    "POSTCONDITION_DISTINCTION",
+    "STRUCTURAL_AMBIGUITY",
+    "MULTI_OPERATION"
+  ],
+  "decision_policy": {
+    "minimum_external_repetitions_per_execution_case": 2,
+    "require_complete_catalog_schema_coverage": true,
+    "require_all_local_execution_parity": true,
+    "require_all_local_compositions": true,
+    "require_observed_deferred_client_discovery": true,
+    "require_exact_loaded_definition_bytes": true,
+    "maximum_direct_to_legacy_loaded_definition_bytes_ratio": 1.0,
+    "minimum_direct_end_to_end_success_rate_per_case": 1.0,
+    "maximum_direct_minus_legacy_failure_rate_per_case": 0.0,
+    "minimum_math_find_unique_improvement_families": 2
+  },
+  "tasks": [
+    {
+      "case_id": "straightforward-determinant",
+      "category": "STRAIGHTFORWARD",
+      "prompt": "Use Jacobian to compute the exact determinant of [[0,2],[3,4]]. Return the determinant and the operation ID used.",
+      "discovery_probes": [
+        {
+          "query": "exact determinant of a rational matrix",
+          "namespace": "matrix",
+          "limit": 5,
+          "required_operation_ids": [
+            "matrix.determinant.compute"
+          ],
+          "maximum_rank": 1
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "determinant",
+          "operation_id": "matrix.determinant.compute",
+          "input": {
+            "matrix": {
+              "entries": [
+                [
+                  {"num": "0", "den": "1"},
+                  {"num": "2", "den": "1"}
+                ],
+                [
+                  {"num": "3", "den": "1"},
+                  {"num": "4", "den": "1"}
+                ]
+              ]
+            }
+          },
+          "expected_output_fields": {
+            "determinant.num": "-6",
+            "determinant.den": "1"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "alternate-term-sandpile-group",
+      "category": "ALTERNATE_TERMINOLOGY",
+      "prompt": "Use Jacobian to compute the sandpile group of the triangle graph with vertices a,b,c and sink a. Return its invariant factors, order, and the operation ID used.",
+      "discovery_probes": [
+        {
+          "query": "sandpile group of a graph",
+          "namespace": "graph",
+          "limit": 5,
+          "required_operation_ids": [
+            "graph.chip_firing.critical_group.compute"
+          ],
+          "maximum_rank": 1
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "sandpile",
+          "operation_id": "graph.chip_firing.critical_group.compute",
+          "input": {
+            "graph": {
+              "vertices": ["a", "b", "c"],
+              "edges": [["a", "b"], ["b", "c"], ["a", "c"]]
+            },
+            "sink": "a"
+          },
+          "expected_output_fields": {
+            "sink": "a",
+            "nonsink_vertices": ["b", "c"],
+            "invariant_factors": [1, 3],
+            "order": 3
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "complete-subset-sum-profile",
+      "category": "POSTCONDITION_DISTINCTION",
+      "prompt": "Use Jacobian on the indexed sequence [1,1] to return the complete multiplicity of every attainable subset sum, including the empty subset. Do not substitute a collision or Sidon decision. Return the profile and operation ID.",
+      "discovery_probes": [
+        {
+          "query": "all subset sums and repeated representations of a finite integer sequence",
+          "namespace": "additive",
+          "limit": 20,
+          "required_operation_ids": [
+            "additive.subset_sum.profile.compute"
+          ],
+          "maximum_rank": 1
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "profile",
+          "operation_id": "additive.subset_sum.profile.compute",
+          "input": {
+            "source": {"items": ["1", "1"]}
+          },
+          "expected_output_fields": {
+            "entries": [
+              {"sum": "0", "multiplicity": "1"},
+              {"sum": "1", "multiplicity": "2"},
+              {"sum": "2", "multiplicity": "1"}
+            ],
+            "support_size": 3,
+            "total_subsets": "4"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "structured-polynomial-gcd",
+      "category": "STRUCTURAL_AMBIGUITY",
+      "prompt": "Use Jacobian to compute the monic gcd over QQ[x] of x^2-1 and x-1, including exact Bezout multipliers. Select the polynomial rather than integer operation and construct the required sparse typed input. Return the gcd and operation ID.",
+      "discovery_probes": [
+        {
+          "query": "monic polynomial gcd Bezout identity over rational numbers",
+          "namespace": "polynomial",
+          "limit": 5,
+          "required_operation_ids": [
+            "polynomial.compute.gcd"
+          ],
+          "maximum_rank": 1
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "polynomial-gcd",
+          "operation_id": "polynomial.compute.gcd",
+          "input": {
+            "left": {
+              "domain": "QQ",
+              "variables": ["x"],
+              "polynomial": {
+                "terms": [
+                  {"coefficient": {"num": "1", "den": "1"}, "exponents": [2]},
+                  {"coefficient": {"num": "-1", "den": "1"}, "exponents": [0]}
+                ]
+              }
+            },
+            "right": {
+              "domain": "QQ",
+              "variables": ["x"],
+              "polynomial": {
+                "terms": [
+                  {"coefficient": {"num": "1", "den": "1"}, "exponents": [1]},
+                  {"coefficient": {"num": "-1", "den": "1"}, "exponents": [0]}
+                ]
+              }
+            }
+          },
+          "expected_output_fields": {
+            "gcd.domain": "QQ",
+            "gcd.variables": ["x"],
+            "gcd.polynomial.terms": [
+              {"coefficient": {"num": "1", "den": "1"}, "exponents": [1]},
+              {"coefficient": {"num": "-1", "den": "1"}, "exponents": [0]}
+            ],
+            "normalization": "MONIC"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "canonical-cnf-composition",
+      "category": "MULTI_OPERATION",
+      "prompt": "Use Jacobian to canonicalize the CNF with variable names [b,a] and clauses [[1,-2],[2]], then pass the returned canonical CNF unchanged into the assignment checker for assignment [true,true]. Return the canonical CNF, whether it satisfies, and both operation IDs.",
+      "discovery_probes": [
+        {
+          "query": "canonicalize a named CNF",
+          "namespace": "sat",
+          "limit": 5,
+          "required_operation_ids": [
+            "sat.cnf.canonicalize"
+          ],
+          "maximum_rank": 1
+        },
+        {
+          "query": "check a total SAT assignment against canonical CNF",
+          "namespace": "sat",
+          "limit": 5,
+          "required_operation_ids": [
+            "sat.assignment.check"
+          ],
+          "maximum_rank": 1
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "canonicalize",
+          "operation_id": "sat.cnf.canonicalize",
+          "input": {
+            "variable_names": ["b", "a"],
+            "clauses": [[1, -2], [2]]
+          },
+          "expected_output_fields": {
+            "cnf.variables": ["a", "b"],
+            "cnf.clauses": [[-1, 2], [1]]
+          }
+        },
+        {
+          "step_id": "check",
+          "operation_id": "sat.assignment.check",
+          "input": {
+            "cnf": {"$from_step": "canonicalize", "path": "cnf"},
+            "assignment": [true, true]
+          },
+          "expected_output_fields": {
+            "satisfies": true,
+            "first_unsatisfied_clause": null
+          }
+        }
+      ]
+    }
+  ],
+  "semantic_discovery_cases": [
+    {
+      "case_id": "semantic-sandpile-synonym",
+      "family": "ALTERNATE_TERMINOLOGY",
+      "prompt": "Use only Jacobian semantic catalog search, without executing an operation, to identify the installed operation for a graph's sandpile group and summarize its mathematical postcondition.",
+      "query": "sandpile group of a graph",
+      "namespace": "graph",
+      "limit": 5,
+      "required_operation_ids": [
+        "graph.chip_firing.critical_group.compute"
+      ],
+      "maximum_rank": 1
+    },
+    {
+      "case_id": "semantic-chip-firing-neighborhood",
+      "family": "POSTCONDITION_DISTINCTION",
+      "prompt": "Use only Jacobian semantic catalog search, without executing an operation, to identify installed vocabulary around chip-firing divisors. Include the sandpile group operation and the q-reduced divisor operation, and distinguish their postconditions.",
+      "query": "chip firing divisor sandpile group q reduced",
+      "namespace": "graph",
+      "limit": 20,
+      "required_operation_ids": [
+        "graph.chip_firing.critical_group.compute",
+        "graph.chip_firing.q_reduced.compute"
+      ],
+      "maximum_rank": 20
+    }
+  ]
+}

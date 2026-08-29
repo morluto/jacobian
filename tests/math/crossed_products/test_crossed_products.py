@@ -8,6 +8,7 @@ from math import isqrt
 import pytest
 
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.crossed_products._budget import MAX_CONVOLUTION_PAIRS
 from jacobian.math.crossed_products._models import (
     CrossedProductMultiplyRequest,
@@ -413,8 +414,22 @@ def test_request_rejects_pairwise_convolution_before_expansion() -> None:
     )
 
     request = CrossedProductMultiplyRequest(left=left, right=right)
-    with pytest.raises(ValueError, match=rf"{MAX_CONVOLUTION_PAIRS}-pair"):
+    with pytest.raises(
+        OperationDomainValidationError, match=rf"{MAX_CONVOLUTION_PAIRS}-pair"
+    ):
         compute_product(request)
+
+
+def test_request_rejects_mismatched_presentations_with_a_typed_error() -> None:
+    left = _element(_c2_presentation(characteristic=3), {"e": {(0,)}})
+    right = _element(_c2_presentation(characteristic=5), {"e": {(0,)}})
+
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        compute_product(CrossedProductMultiplyRequest(left=left, right=right))
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "crossed_product.presentation_mismatch"
+    )
 
 
 def test_request_rejects_scalar_work_before_expansion() -> None:
@@ -432,7 +447,7 @@ def test_request_rejects_scalar_work_before_expansion() -> None:
     right = _element(presentation, {"a": support})
 
     request = CrossedProductMultiplyRequest(left=left, right=right)
-    with pytest.raises(ValueError, match="scalar-work"):
+    with pytest.raises(OperationDomainValidationError, match="scalar-work"):
         compute_product(request)
 
 
@@ -443,7 +458,9 @@ def test_request_rejects_predicted_exponent_growth_before_expansion() -> None:
     right = _element(presentation, {"e": {(0, int("9" * 64))}})
 
     request = CrossedProductMultiplyRequest(left=left, right=right)
-    with pytest.raises(ValueError, match="predicted product exponents"):
+    with pytest.raises(
+        OperationDomainValidationError, match="predicted product exponents"
+    ):
         compute_product(request)
 
 

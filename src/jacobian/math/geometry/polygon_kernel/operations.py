@@ -23,6 +23,14 @@ from jacobian.math.geometry.polygon_kernel._models import (
 )
 
 
+def _reject_visibility_kernel(message: str) -> None:
+    raise OperationDomainValidationError(
+        location=("polygon",),
+        code="geometry.visibility_kernel_not_admitted",
+        message=message,
+    )
+
+
 def _admit_visibility_kernel(
     polygon: KernelPolygon,
 ) -> tuple[OrientedEdgeHalfPlane, ...]:
@@ -33,13 +41,9 @@ def _admit_visibility_kernel(
         for component in (point.x, point.y)
     )
     if max_coordinate_digits > MAX_KERNEL_COORDINATE_DIGITS:
-        raise OperationDomainValidationError(
-            location=("polygon",),
-            code="geometry.polygon_kernel.coordinate_digits",
-            message=(
-                "polygon coordinates exceed the "
-                f"{MAX_KERNEL_COORDINATE_DIGITS}-digit visibility-kernel bound"
-            ),
+        _reject_visibility_kernel(
+            "polygon coordinates exceed the "
+            f"{MAX_KERNEL_COORDINATE_DIGITS}-digit visibility-kernel bound"
         )
 
     half_planes = oriented_half_planes(polygon)
@@ -49,23 +53,15 @@ def _admit_visibility_kernel(
         for value in (half_plane.a, half_plane.b, half_plane.c)
     )
     if coefficient_digits > MAX_HALF_PLANE_COEFFICIENT_DIGITS:
-        raise OperationDomainValidationError(
-            location=("polygon",),
-            code="geometry.polygon_kernel.half_plane_digits",
-            message=(
-                "oriented half-plane coefficients exceed the "
-                f"{MAX_HALF_PLANE_COEFFICIENT_DIGITS}-digit bound"
-            ),
+        _reject_visibility_kernel(
+            "oriented half-plane coefficients exceed the "
+            f"{MAX_HALF_PLANE_COEFFICIENT_DIGITS}-digit bound"
         )
     intersection_digits = 8 * coefficient_digits + 8
     if intersection_digits > MAX_INTERSECTION_COMPONENT_DIGITS:
-        raise OperationDomainValidationError(
-            location=("polygon",),
-            code="geometry.polygon_kernel.intersection_digits",
-            message=(
-                "a boundary-line intersection can exceed the "
-                f"{MAX_INTERSECTION_COMPONENT_DIGITS}-digit component bound"
-            ),
+        _reject_visibility_kernel(
+            "a boundary-line intersection can exceed the "
+            f"{MAX_INTERSECTION_COMPONENT_DIGITS}-digit component bound"
         )
 
     vertex_count = len(polygon.points)
@@ -76,26 +72,17 @@ def _admit_visibility_kernel(
         intersection_digits,
     )
     if estimated_result_chars > MAX_KERNEL_RESULT_CHARS:
-        raise OperationDomainValidationError(
-            location=("polygon",),
-            code="geometry.polygon_kernel.result_size",
-            message=(
-                "visibility-kernel result can require "
-                f"{estimated_result_chars} characters, exceeding the "
-                f"{MAX_KERNEL_RESULT_CHARS}-character bound"
-            ),
+        _reject_visibility_kernel(
+            "visibility-kernel result can require "
+            f"{estimated_result_chars} characters, exceeding the "
+            f"{MAX_KERNEL_RESULT_CHARS}-character bound"
         )
     feasibility_work = (
         comb(vertex_count, 2) * vertex_count * coefficient_digits * coefficient_digits
     )
     if feasibility_work > MAX_KERNEL_FEASIBILITY_WORK:
-        raise OperationDomainValidationError(
-            location=("polygon",),
-            code="geometry.polygon_kernel.feasibility_work",
-            message=(
-                "visibility-kernel feasibility work exceeds "
-                f"{MAX_KERNEL_FEASIBILITY_WORK}"
-            ),
+        _reject_visibility_kernel(
+            f"visibility-kernel feasibility work exceeds {MAX_KERNEL_FEASIBILITY_WORK}"
         )
     return half_planes
 

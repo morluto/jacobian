@@ -25,6 +25,7 @@ from jacobian.math.algebra.affine_map_word_collision._models import (
 
 __all__ = ["compute_word_collision_profile"]
 
+
 @dataclass(frozen=True, slots=True)
 class WordCollisionAdmission:
     """Derived work, coefficient, and output bounds for one invocation."""
@@ -79,9 +80,7 @@ def _admit_word_collision_profile(
         raise OperationDomainValidationError(
             location=("depth",),
             code="affine_map.invalid_depth",
-            message=(
-                "depth must be an integer between 1 and " f"{MAX_DEPTH}"
-            ),
+            message=(f"depth must be an integer between 1 and {MAX_DEPTH}"),
         )
     if len(generators) > MAX_GENERATORS:
         raise OperationDomainValidationError(
@@ -111,10 +110,7 @@ def _admit_word_collision_profile(
         raise OperationDomainValidationError(
             location=("depth",),
             code="affine_map.word_count_exceeds_bound",
-            message=(
-                "the complete word profile exceeds the "
-                f"{MAX_WORDS:,}-word limit"
-            ),
+            message=(f"the complete word profile exceeds the {MAX_WORDS:,}-word limit"),
         )
 
     slope_heights = tuple(_fraction_height(slope) for slope, _ in canonical_generators)
@@ -178,9 +174,7 @@ def _admit_word_collision_profile(
             ("words", 0),
         )
     )
-    rows_bytes = _array_size(
-        (row_fixed_bytes,) * word_count
-    ) + total_words_bytes
+    rows_bytes = _array_size((row_fixed_bytes,) * word_count) + total_words_bytes
     result_bytes = strict_json_object_size(
         (
             ("generators", generators_bytes),

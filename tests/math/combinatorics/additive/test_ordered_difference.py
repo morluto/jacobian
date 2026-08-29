@@ -5,12 +5,14 @@ from pydantic import ValidationError
 
 from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math.combinatorics.additive._models import (
+    _MAX_DIMENSION,
     _MAX_PROFILE_RESULT_BUDGET_BYTES,
     _MAX_VECTOR_SET_SIZE,
     IntegerVector,
     OrderedDifferenceProfileRequest,
     OrderedDifferenceProfileResult,
 )
+from jacobian.math.combinatorics.additive._tools import TOOLS
 from jacobian.math.combinatorics.additive.operations import (
     ordered_difference_profile,
 )
@@ -265,6 +267,24 @@ class TestOrderedDifferenceProfile:
         )
         vector_schema = request_schema["$defs"]["IntegerVector"]
         assert vector_schema["properties"]["coordinates"]["items"]["maxLength"] == 8
+
+    def test_published_dimension_limit_matches_parser_ceiling(self) -> None:
+        """Discovery metadata must advertise the widened 1..1024 dimension range."""
+        request_schema = OrderedDifferenceProfileRequest.model_json_schema()
+        vectors_description = request_schema["properties"]["vectors"]["description"]
+        assert f"1<=d<={_MAX_DIMENSION}" in vectors_description
+        assert "1<=d<=8" not in vectors_description
+
+        operation = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "additive.ordered_difference_profile.compute"
+        )
+        assert f"1<=d<={_MAX_DIMENSION}" in operation.description
+        assert "1<=d<=8" not in operation.description
+        example_description = operation.examples[0].description
+        assert f"1..{_MAX_DIMENSION}" in example_description
+        assert "1..8" not in example_description
 
     def test_set_size_above_derived_bound_rejected(self) -> None:
         vectors = [

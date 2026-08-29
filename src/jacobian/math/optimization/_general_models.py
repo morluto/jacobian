@@ -31,6 +31,7 @@ type RationalObjectiveSense = Literal["MINIMIZE", "MAXIMIZE"]
 
 MAX_GENERAL_LINEAR_PROGRAM_VARIABLES = 32
 MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS = 64
+MAX_GENERAL_RATIONAL_INPUT_DIGITS = 128
 
 
 def _prepare_raw_general_program(value: object) -> object:
@@ -137,7 +138,7 @@ class RationalLinearProgramVariable(StrictModel):
                 try:
                     require_bounded_rational(
                         bound,
-                        max_digits=128,
+                        max_digits=MAX_GENERAL_RATIONAL_INPUT_DIGITS,
                         label="general linear-program input",
                     )
                 except ValueError as error:
@@ -171,7 +172,7 @@ class RationalLinearObjective(StrictModel):
             try:
                 require_bounded_rational(
                     coefficient,
-                    max_digits=128,
+                    max_digits=MAX_GENERAL_RATIONAL_INPUT_DIGITS,
                     label="general linear-program input",
                 )
             except ValueError as error:
@@ -203,7 +204,7 @@ class RationalLinearConstraint(StrictModel):
             try:
                 require_bounded_rational(
                     value,
-                    max_digits=128,
+                    max_digits=MAX_GENERAL_RATIONAL_INPUT_DIGITS,
                     label="general linear-program input",
                 )
             except ValueError as error:

@@ -270,11 +270,12 @@ def test_power_rejects_dense_lattice_span_before_backend_execution() -> None:
             (Fraction(MAX_FINITE_DISTRIBUTION_ATOMS), Fraction(1, 3)),
         )
     )
+    assert convolution_power(source, 1).distribution == source
     with pytest.raises(
         OperationDomainValidationError,
         match=rf"at most {MAX_FINITE_DISTRIBUTION_ATOMS} lattice positions",
     ):
-        convolution_power(source, 1)
+        convolution_power(source, 2)
 
 
 def test_power_rejects_work_and_height_envelopes_separately() -> None:
@@ -318,7 +319,7 @@ def test_power_rejects_coprime_support_denominator_lcm_growth() -> None:
         OperationDomainValidationError,
         match="lattice denominators exceed",
     ):
-        convolution_power(_distribution(atoms), 1)
+        convolution_power(_distribution(atoms), 2)
     assert perf_counter() - started < 2.0
 
 

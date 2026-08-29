@@ -336,35 +336,17 @@ def _power_multiplication_shapes(
     return tuple(shapes)
 
 
-def _admit_identity_convolution(distribution: FiniteRationalDistribution) -> None:
-    """Admit exponent one without building an unnecessary probability LCM."""
+def _admit_identity_convolution(distribution: FiniteRationalDistribution) -> int:
+    """Measure the retained source without constructing a private power lattice."""
 
-    values = _support_values(distribution)
-    origin = values[0]
-    value_denominator = 1
-    for value in values[1:]:
-        value_denominator = _lcm_within_result_digits(
-            value_denominator,
-            (value - origin).denominator,
-            location=("distribution",),
-            code="probability.convolution_power.height_bound",
-            message=(
-                "convolution-power lattice denominators exceed the "
-                f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
-            ),
-        )
-    offsets = tuple(int((value - origin) * value_denominator) for value in values)
-    lattice_gcd = max(1, gcd(*offsets[1:])) if len(offsets) > 1 else 1
-    output_slots = offsets[-1] // lattice_gcd + 1
-    if output_slots > MAX_FINITE_DISTRIBUTION_ATOMS:
-        raise OperationDomainValidationError(
-            location=("distribution", "exponent"),
-            code="probability.convolution_power.support_bound",
-            message=(
-                "convolution power can occupy at most "
-                f"{MAX_FINITE_DISTRIBUTION_ATOMS} lattice positions"
-            ),
-        )
+    return sum(
+        len(atom.value.num)
+        + len(atom.value.den)
+        + len(atom.probability.num)
+        + len(atom.probability.den)
+        + 64
+        for atom in distribution.atoms
+    )
 
 
 def _plan_convolution_power(
@@ -817,7 +799,16 @@ def convolution_power(
     """Return the complete exact law of a positive i.i.d. convolution power."""
 
     if type(exponent) is int and exponent == 1:
-        _admit_identity_convolution(distribution)
+        source_bytes = _admit_identity_convolution(distribution)
+        if source_bytes * 2 + 4_096 > MAX_CONVOLUTION_POWER_RESULT_BYTES:
+            raise OperationDomainValidationError(
+                location=("distribution", "exponent"),
+                code="probability.convolution_power.result_bound",
+                message=(
+                    "convolution-power profile exceeds the "
+                    f"{MAX_CONVOLUTION_POWER_RESULT_BYTES:,}-byte result bound"
+                ),
+            )
         return FiniteConvolutionPowerResult._from_kernel(
             source=distribution,
             exponent=exponent,
@@ -852,8 +843,25 @@ def convolution_peak(
     """Return the exact largest atom mass and all values attaining it."""
 
     if type(exponent) is int and exponent == 1:
-        _admit_identity_convolution(distribution)
+        source_bytes = _admit_identity_convolution(distribution)
         maximum = max(atom.probability.as_fraction() for atom in distribution.atoms)
+        maximum_value_bytes = max(
+            len(atom.value.num) + len(atom.value.den) for atom in distribution.atoms
+        )
+        if (
+            source_bytes
+            + len(distribution.atoms) * (maximum_value_bytes + 48)
+            + 4_096
+            > MAX_CONVOLUTION_POWER_RESULT_BYTES
+        ):
+            raise OperationDomainValidationError(
+                location=("distribution", "exponent"),
+                code="probability.convolution_power.result_bound",
+                message=(
+                    "convolution-power peak ties exceed the "
+                    f"{MAX_CONVOLUTION_POWER_RESULT_BYTES:,}-byte result bound"
+                ),
+            )
         return FiniteConvolutionPeakResult._from_kernel(
             source=distribution,
             exponent=exponent,

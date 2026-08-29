@@ -49,6 +49,12 @@ def test_characteristic_polynomial_preserves_exact_algebraic_inputs() -> None:
     ]
 
 
+def test_multiply_preserves_exact_algebraic_inputs() -> None:
+    source = sympy.Matrix([[sympy.sqrt(2), 0], [0, 1]])
+
+    assert matrices.multiply(source, sympy.eye(2)) == source
+
+
 def test_rref_of_identity_is_identity_with_all_pivots() -> None:
     reduced, pivots = matrices.rref(sympy.eye(3))
     assert reduced == sympy.eye(3)

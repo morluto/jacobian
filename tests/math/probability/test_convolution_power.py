@@ -19,6 +19,8 @@ from jacobian.math.probability._distribution import (
     FiniteRationalDistribution,
 )
 from jacobian.math.probability.operations import (
+    MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS,
+    _admit_convolution_power,
     convolution,
     convolution_peak,
     convolution_power,
@@ -48,6 +50,18 @@ def _fair_bit() -> FiniteRationalDistribution:
         (
             (Fraction(0), Fraction(1, 2)),
             (Fraction(1), Fraction(1, 2)),
+        )
+    )
+
+
+def _three_point_lattice(
+    degree: int, denominator: int = 3
+) -> FiniteRationalDistribution:
+    return _distribution(
+        (
+            (Fraction(0), Fraction(1, denominator)),
+            (Fraction(1), Fraction(1, denominator)),
+            (Fraction(degree), Fraction(denominator - 2, denominator)),
         )
     )
 
@@ -191,19 +205,29 @@ def test_power_rejects_dense_lattice_span_before_backend_execution() -> None:
 
 
 def test_power_rejects_work_and_height_envelopes_separately() -> None:
-    wide = _distribution(
-        (
-            (Fraction(0), Fraction(1, 3)),
-            (Fraction(1), Fraction(1, 3)),
-            (Fraction(1_000), Fraction(1, 3)),
-        )
-    )
+    admitted = _three_point_lattice(971)
+    plan = _admit_convolution_power(admitted, 12, complete_profile=False)
+    charged_products = sum(left * right for left, right in plan.multiplication_shapes)
+    assert charged_products == MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS - 292
+    assert convolution_peak(admitted, 12).maximum_probability.as_fraction() > 0
+
     with pytest.raises(OperationDomainValidationError, match="product work bound"):
-        convolution_power(wide, 32)
+        convolution_peak(_three_point_lattice(121), 96)
 
     assert convolution_peak(_fair_bit(), 1_700).maximum_probability.as_fraction() > 0
     with pytest.raises(OperationDomainValidationError, match="digit result bound"):
         convolution_power(_fair_bit(), 1_701)
+
+
+def test_complete_power_result_byte_envelope_has_useful_boundary() -> None:
+    accepted = convolution_power(_three_point_lattice(100, 10_000), 100)
+    assert len(accepted.distribution.atoms) > 256
+
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=r"profile exceed.*result bound",
+    ):
+        convolution_power(_three_point_lattice(100, 100_000), 100)
 
 
 def test_result_deserialization_does_not_repeat_power_admission() -> None:

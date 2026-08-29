@@ -63,6 +63,7 @@ class _ConvolutionPowerPlan:
     powered_probability_denominator: int
     exponent: int
     degree: int
+    multiplication_shapes: tuple[tuple[int, int], ...]
 
 
 def _wire(value: Any) -> CanonicalRational:
@@ -257,22 +258,24 @@ def _power_at_most(base: int, exponent: int, limit: int) -> int | None:
     return result
 
 
-def _power_multiplication_products(base_degree: int, exponent: int) -> int:
-    """Bound dense coefficient products in binary polynomial exponentiation."""
+def _power_multiplication_shapes(
+    base_degree: int, exponent: int
+) -> tuple[tuple[int, int], ...]:
+    """Plan every dense operand shape in binary polynomial exponentiation."""
 
     result_degree = 0
     powered_degree = base_degree
     remaining = exponent
-    products = 0
+    shapes: list[tuple[int, int]] = []
     while remaining:
         if remaining & 1:
-            products += (result_degree + 1) * (powered_degree + 1)
+            shapes.append((result_degree + 1, powered_degree + 1))
             result_degree += powered_degree
         remaining >>= 1
         if remaining:
-            products += (powered_degree + 1) ** 2
+            shapes.append((powered_degree + 1, powered_degree + 1))
             powered_degree *= 2
-    return products
+    return tuple(shapes)
 
 
 def _admit_convolution_power(
@@ -327,7 +330,8 @@ def _admit_convolution_power(
             ),
         )
 
-    products = _power_multiplication_products(positions[-1], exponent)
+    multiplication_shapes = _power_multiplication_shapes(positions[-1], exponent)
+    products = sum(left * right for left, right in multiplication_shapes)
     if products > MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS:
         raise OperationDomainValidationError(
             location=("distribution", "exponent"),
@@ -411,6 +415,7 @@ def _admit_convolution_power(
         powered_probability_denominator=powered_probability_denominator,
         exponent=exponent,
         degree=degree,
+        multiplication_shapes=multiplication_shapes,
     )
 
 
@@ -639,12 +644,25 @@ def _convolution_power_coefficients(plan: _ConvolutionPowerPlan) -> tuple[int, .
     powered = fmpz_poly([1])
     base = fmpz_poly(coefficients)
     remaining = plan.exponent
+    shapes = iter(plan.multiplication_shapes)
     while remaining:
         if remaining & 1:
+            expected = next(shapes)
+            if (len(powered), len(base)) != expected:
+                raise RuntimeError(
+                    "FLINT polynomial shape disagrees with admission plan"
+                )
             powered *= base
         remaining >>= 1
         if remaining:
+            expected = next(shapes)
+            if (len(base), len(base)) != expected:
+                raise RuntimeError(
+                    "FLINT polynomial shape disagrees with admission plan"
+                )
             base *= base
+    if next(shapes, None) is not None:
+        raise RuntimeError("convolution-power admission plan contains unused work")
     return tuple(int(value) for value in powered.coeffs())
 
 

@@ -492,14 +492,31 @@ def test_native_matrix_operations_keep_large_exact_scalar_fallbacks() -> None:
     )
 
 
+def test_native_matrix_operations_admit_exact_256_digit_scalars() -> None:
+    import sympy
+
+    from jacobian.math import matrices
+
+    boundary = 10**256 - 1
+    source = sympy.diag(boundary, *([1] * 32))
+
+    assert matrices.multiply(source, sympy.eye(33)) == source
+    polynomial = matrices.characteristic_polynomial(source, "lambda")
+    assert polynomial.degree() == 33
+    assert polynomial.LC() == 1
+
+
 def test_request_admission_rejects_matrices_above_the_computation_dimension() -> None:
     oversized = RationalMatrix(
         entries=_identity_entries(MAX_EXACT_LINEAR_MATRIX_AXIS + 1)
     )
-    with pytest.raises(ValidationError):
-        RationalMatrixRequest(matrix=oversized)
-    with pytest.raises(ValidationError):
-        MatrixRankRequest(matrix=oversized)
+    rref_request = RationalMatrixRequest(matrix=oversized)
+    rank_request = MatrixRankRequest(matrix=oversized)
+
+    with pytest.raises(OperationDomainValidationError, match="64 rows and columns"):
+        compute_rref(rref_request)
+    with pytest.raises(OperationDomainValidationError, match="64 rows and columns"):
+        compute_rank(rank_request)
 
 
 def test_exact_linear_requests_admit_tall_matrices_above_the_square_dimension() -> None:
@@ -531,21 +548,6 @@ def test_exact_linear_admission_rejects_an_axis_above_the_operation_envelope() -
 
     assert excinfo.value.errors()[0]["type"] == "matrix.budget_exceeded"
     assert "64 rows and columns" in excinfo.value.errors()[0]["msg"]
-
-
-def test_exact_linear_requests_reject_an_axis_above_the_operation_envelope() -> None:
-    tall = RationalMatrix(
-        entries=tuple(
-            tuple(
-                CanonicalRational(num=str(column + 1), den="1") for column in range(2)
-            )
-            for _ in range(MAX_EXACT_LINEAR_MATRIX_AXIS + 1)
-        )
-    )
-    with pytest.raises(ValidationError):
-        RationalMatrixRequest(matrix=tall)
-    with pytest.raises(ValidationError):
-        MatrixRankRequest(matrix=tall)
 
 
 def test_request_admission_keeps_the_boundary_computation_dimension() -> None:
@@ -654,10 +656,11 @@ def test_raw_preflight_keeps_exact_linear_and_determinant_axis_boundaries() -> N
     assert MatrixRankRequest.model_validate(
         rank_boundary
     ).matrix.entries == _identity_entries(MAX_EXACT_LINEAR_MATRIX_AXIS)
-    with pytest.raises(ValidationError):
-        MatrixRankRequest.model_validate(
-            {"matrix": {"entries": wire_identity(MAX_EXACT_LINEAR_MATRIX_AXIS + 1)}}
-        )
+    rank_above_operation_axis = MatrixRankRequest.model_validate(
+        {"matrix": {"entries": wire_identity(MAX_EXACT_LINEAR_MATRIX_AXIS + 1)}}
+    )
+    with pytest.raises(OperationDomainValidationError, match="64 rows and columns"):
+        compute_rank(rank_above_operation_axis)
 
     determinant_boundary = {
         "matrix": {"entries": wire_identity(MAX_DETERMINANT_MATRIX_DIMENSION)}

@@ -13,6 +13,7 @@ from jacobian.math.matrices.values import (
     MAX_EXACT_LINEAR_MATRIX_AXIS,
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
+    MAX_RATIONAL_MATRIX_ORDER,
     IntegerMatrix,
     RationalMatrix,
     require_matrix_scalar_digits,
@@ -167,7 +168,7 @@ def _require_square_system_admission(
 
 class RationalMatrixRequest(_MatrixRequest):
     matrix: RationalMatrix
-    _raw_matrix_axis_limit: ClassVar[int] = MAX_EXACT_LINEAR_MATRIX_AXIS
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_RATIONAL_MATRIX_ORDER
 
 
 class RationalMatrixProductRequest(_MatrixRequest):
@@ -207,7 +208,7 @@ class MatrixRankRequest(_MatrixRequest):
     """One bounded rectangular matrix whose exact rank is requested."""
 
     matrix: RationalMatrix
-    _raw_matrix_axis_limit: ClassVar[int] = MAX_EXACT_LINEAR_MATRIX_AXIS
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_RATIONAL_MATRIX_ORDER
 
 
 class IntegerMatrixRequest(_MatrixRequest):

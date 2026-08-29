@@ -162,6 +162,12 @@ def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
                 f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
             )
         return source.charpoly(variable)
+    if not _rational_scalars_within_kernel_limit(source):
+        if source.rows > MAX_MATRIX_DIMENSION:
+            raise ValueError(
+                f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+            )
+        return source.charpoly(variable)
     result = characteristic_polynomial_result(
         conversions.rational_matrix_from_sympy(source)
     )
@@ -599,12 +605,22 @@ def _bit_bound_decimal_digits(bits: int) -> int:
 
 
 def _positive_decimal_digits(value: int) -> int:
-    """Upper-bound decimal length without converting the integer to a string."""
+    """Count decimal digits exactly without converting the integer to a string."""
 
     magnitude = abs(value)
     if magnitude <= 9:
         return 1
-    return _bit_bound_decimal_digits(magnitude.bit_length())
+    digits = _bit_bound_decimal_digits(magnitude.bit_length())
+    lower_bound = 10 ** (digits - 1)
+    while magnitude < lower_bound:
+        digits -= 1
+        lower_bound //= 10
+    upper_bound = lower_bound * 10
+    while magnitude >= upper_bound:
+        digits += 1
+        lower_bound = upper_bound
+        upper_bound *= 10
+    return digits
 
 
 def _rational_scalars_within_kernel_limit(value: MatrixBase) -> bool:

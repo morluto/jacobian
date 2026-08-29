@@ -9,6 +9,7 @@ from jacobian.math.finite_fields import (
     FiniteLinearMap,
     FiniteMapTable,
     OrbitDistribution,
+    PaleyTournamentResult,
     PermutationResult,
     ProjectiveLine,
     RankResult,
@@ -19,6 +20,7 @@ from jacobian.math.finite_fields import (
     finite_map_table,
     linear_map_rank,
     orbit_distribution,
+    paley_tournament,
     projective_line,
     restrict_scalars,
 )
@@ -29,6 +31,7 @@ from jacobian.math.finite_fields._models import (
     FiniteMapTableRequest,
     LinearMapRankRequest,
     OrbitDistributionRequest,
+    PaleyTournamentRequest,
     PermutationRequest,
     ProjectiveLineRequest,
     RestrictScalarsRequest,
@@ -161,6 +164,10 @@ def _analyze_collisions(request: CollisionRequest) -> CollisionResult:
 
 def _analyze_permutation(request: PermutationRequest) -> PermutationResult:
     return analyze_permutation(request.table)
+
+
+def _paley_tournament(request: PaleyTournamentRequest) -> PaleyTournamentResult:
+    return paley_tournament(request.presentation)
 
 
 def _build_tools() -> MathTools:
@@ -308,6 +315,31 @@ def _build_tools() -> MathTools:
             ),
         ),
     )
+    paley_tournament_operation = MathTool(
+        operation_id="finite_field.paley_tournament.construct",
+        request_type=PaleyTournamentRequest,
+        result_type=PaleyTournamentResult,
+        run=_paley_tournament,
+        title="Construct a finite-field Paley tournament",
+        description=(
+            "Return the complete directed tournament on the presentation's "
+            "power-basis encoding, with x -> y exactly when y - x is a nonzero square."
+        ),
+        tags=("finite-field", "graph", "tournament", "quadratic-residue", "exact"),
+        examples=(
+            example(
+                "paley_tournament_over_f3",
+                "Construct the directed three-cycle from the canonical F_3 presentation.",
+                {
+                    "presentation": {
+                        "characteristic": 3,
+                        "modulus_coefficients": [0, 1],
+                        "generator": "a",
+                    }
+                },
+            ),
+        ),
+    )
     return (
         projective_line_operation,
         restrict_operation,
@@ -318,6 +350,7 @@ def _build_tools() -> MathTools:
         fiber_operation,
         collision_operation,
         permutation_operation,
+        paley_tournament_operation,
     )
 
 

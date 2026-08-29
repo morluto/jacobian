@@ -166,12 +166,12 @@ def test_valuation_request_schemas_publish_semantic_bounds() -> None:
     assert str(2**64 - 1) in binomial["prime"]["description"]
 
 
-def test_valuation_admission_runs_once_after_parse() -> None:
+def test_valuation_admission_follows_copied_request_fields() -> None:
     request = BinomialPrimeValuationRequest(n="8", k="3", prime="2")
-    first = request.admitted
-    second = request.admitted
-    assert first is second
     assert compute_binomial_prime_valuation(request).valuation == "3"
+    copied = request.model_copy(update={"n": "20", "k": "7"})
+    assert compute_binomial_prime_valuation(copied).valuation == "4"
+    assert copied.n == "20"
 
 
 def test_chinese_remainder_rejects_combined_modulus_beyond_result_budget() -> None:

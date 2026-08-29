@@ -7,15 +7,13 @@ from typing import Any
 import networkx as nx
 
 from jacobian.math.graphs.realization._models import (
-    DegreeSequenceRequest,
+    DegreeSequence,
     DegreeSequenceResult,
-    GraphicalityCheckRequest,
     GraphicalityCheckResult,
-    GraphRealizationRequest,
     GraphRealizationResult,
-    RealizationCheckRequest,
     RealizationCheckResult,
 )
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 
 def _is_graphical_erdos_gallai(degrees: tuple[int, ...]) -> bool:
@@ -38,11 +36,9 @@ def _is_graphical_erdos_gallai(degrees: tuple[int, ...]) -> bool:
     return True
 
 
-def compute_degree_sequence(
-    request: DegreeSequenceRequest,
-) -> DegreeSequenceResult:
+def degree_sequence_profile(sequence: DegreeSequence) -> DegreeSequenceResult:
     """Determine if a degree sequence is graphical."""
-    degrees = request.sequence.degrees
+    degrees = sequence.degrees
     return DegreeSequenceResult(
         is_graphical=_is_graphical_erdos_gallai(degrees),
         degree_sum=sum(degrees),
@@ -50,11 +46,9 @@ def compute_degree_sequence(
     )
 
 
-def compute_graph_realization(
-    request: GraphRealizationRequest,
-) -> GraphRealizationResult:
+def graph_realization(sequence: DegreeSequence) -> GraphRealizationResult:
     """Construct a simple graph realizing the degree sequence."""
-    degrees = request.sequence.degrees
+    degrees = sequence.degrees
     if not _is_graphical_erdos_gallai(degrees):
         return GraphRealizationResult(
             is_graphical=False, vertex_count=len(degrees), edges=()
@@ -67,11 +61,9 @@ def compute_graph_realization(
     )
 
 
-def compute_graphicality_check(
-    request: GraphicalityCheckRequest,
-) -> GraphicalityCheckResult:
+def graphicality_check(sequence: DegreeSequence) -> GraphicalityCheckResult:
     """Check graphicality and return a deterministic Erdos-Gallai certificate."""
-    degrees = request.sequence.degrees
+    degrees = sequence.degrees
     vertex_count = len(degrees)
     degree_sum = sum(degrees)
     if degree_sum % 2:
@@ -116,26 +108,27 @@ def compute_graphicality_check(
     )
 
 
-def compute_realization_check(
-    request: RealizationCheckRequest,
+def realization_check(
+    graph_value: IndexedSimpleUndirectedGraph,
+    sequence: DegreeSequence,
 ) -> RealizationCheckResult:
     """Verify that a graph realizes a given degree sequence."""
     graph: nx.Graph[Any] = nx.Graph()
-    graph.add_nodes_from(range(request.graph.vertex_count))
-    graph.add_edges_from(request.graph.edges)
+    graph.add_nodes_from(range(graph_value.vertex_count))
+    graph.add_edges_from(graph_value.edges)
     actual = tuple(
-        len(graph[vertex]) for vertex in range(request.graph.vertex_count)
+        len(graph[vertex]) for vertex in range(graph_value.vertex_count)
     )
     return RealizationCheckResult(
-        is_realization=actual == request.sequence.degrees,
-        expected_degrees=request.sequence.degrees,
+        is_realization=actual == sequence.degrees,
+        expected_degrees=sequence.degrees,
         actual_degrees=actual,
     )
 
 
 __all__ = [
-    "compute_degree_sequence",
-    "compute_graph_realization",
-    "compute_graphicality_check",
-    "compute_realization_check",
+    "degree_sequence_profile",
+    "graph_realization",
+    "graphicality_check",
+    "realization_check",
 ]

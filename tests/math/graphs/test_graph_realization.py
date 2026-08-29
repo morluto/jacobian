@@ -16,10 +16,10 @@ from jacobian.math.graphs.realization._models import (
     RealizationCheckResult,
 )
 from jacobian.math.graphs.realization.operations import (
-    compute_degree_sequence,
-    compute_graph_realization,
-    compute_graphicality_check,
-    compute_realization_check,
+    degree_sequence_profile,
+    graph_realization,
+    graphicality_check,
+    realization_check,
 )
 
 # ---------------------------------------------------------------------------
@@ -28,21 +28,22 @@ from jacobian.math.graphs.realization.operations import (
 
 
 def _is_graphical(degrees: list[int]) -> DegreeSequenceResult:
-    return compute_degree_sequence(
-        DegreeSequenceRequest.model_validate({"sequence": {"degrees": degrees}})
-    )
+    request = DegreeSequenceRequest.model_validate({"sequence": {"degrees": degrees}})
+    return degree_sequence_profile(request.sequence)
 
 
 def _realize(degrees: list[int]) -> GraphRealizationResult:
-    return compute_graph_realization(
-        GraphRealizationRequest.model_validate({"sequence": {"degrees": degrees}})
+    request = GraphRealizationRequest.model_validate(
+        {"sequence": {"degrees": degrees}}
     )
+    return graph_realization(request.sequence)
 
 
 def _graphicality_check(degrees: list[int]) -> GraphicalityCheckResult:
-    return compute_graphicality_check(
-        GraphicalityCheckRequest.model_validate({"sequence": {"degrees": degrees}})
+    request = GraphicalityCheckRequest.model_validate(
+        {"sequence": {"degrees": degrees}}
     )
+    return graphicality_check(request.sequence)
 
 
 def _check(
@@ -50,14 +51,13 @@ def _check(
     vertex_count: int,
     edges: list[tuple[int, int]],
 ) -> RealizationCheckResult:
-    return compute_realization_check(
-        RealizationCheckRequest.model_validate(
-            {
-                "sequence": {"degrees": degrees},
-                "graph": {"vertex_count": vertex_count, "edges": edges},
-            }
-        )
+    request = RealizationCheckRequest.model_validate(
+        {
+            "sequence": {"degrees": degrees},
+            "graph": {"vertex_count": vertex_count, "edges": edges},
+        }
     )
+    return realization_check(request.graph, request.sequence)
 
 
 # ---------------------------------------------------------------------------

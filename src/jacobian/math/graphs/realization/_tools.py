@@ -15,10 +15,22 @@ from jacobian.math.graphs.realization._models import (
     RealizationCheckResult,
 )
 from jacobian.math.graphs.realization.operations import (
-    compute_degree_sequence,
-    compute_graph_realization,
-    compute_realization_check,
+    degree_sequence_profile,
+    graph_realization,
+    realization_check,
 )
+
+
+def _run_degree_sequence(request: DegreeSequenceRequest) -> DegreeSequenceResult:
+    return degree_sequence_profile(request.sequence)
+
+
+def _run_graph_realization(request: GraphRealizationRequest) -> GraphRealizationResult:
+    return graph_realization(request.sequence)
+
+
+def _run_realization_check(request: RealizationCheckRequest) -> RealizationCheckResult:
+    return realization_check(request.graph, request.sequence)
 
 
 def graph_realization_operation[
@@ -53,7 +65,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Determine whether a degree sequence is realized by a simple graph using the Erdos-Gallai theorem.",
         DegreeSequenceRequest,
         DegreeSequenceResult,
-        compute_degree_sequence,
+        _run_degree_sequence,
         "graph",
         "realization",
         "graphicality",
@@ -74,7 +86,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "realized graph; if the sequence is not graphical, no edges are returned.",
         GraphRealizationRequest,
         GraphRealizationResult,
-        compute_graph_realization,
+        _run_graph_realization,
         "graph",
         "realization",
         "construction",
@@ -100,7 +112,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "comparing them to the expected sequence.",
         RealizationCheckRequest,
         RealizationCheckResult,
-        compute_realization_check,
+        _run_realization_check,
         "graph",
         "realization",
         "check",

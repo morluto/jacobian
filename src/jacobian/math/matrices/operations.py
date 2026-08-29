@@ -459,6 +459,22 @@ def _admit_inverse(matrix: IntegerMatrix) -> None:
             f"inverse matrices are limited to order {MAX_INVERSE_MATRIX_ORDER}",
         )
     entries = tuple(tuple(int(value) for value in row) for row in matrix.entries)
+    diagonal = tuple(entries[index][index] for index in range(order))
+    if all(
+        entries[row][column] == 0
+        for row in range(order)
+        for column in range(order)
+        if row != column
+    ) and all(value != 0 for value in diagonal):
+        output_digit_work = order * order + sum(
+            _positive_decimal_digits(value) for value in diagonal
+        )
+        if output_digit_work > MAX_INVERSE_OUTPUT_DIGIT_WORK:
+            raise _validation_error(
+                "budget_exceeded",
+                "diagonal inverse coefficient work exceeds the exact output budget",
+            )
+        return
     row_squared_norms = tuple(sum(value * value for value in row) for row in entries)
     column_squared_norms = tuple(
         sum(row[column] * row[column] for row in entries) for column in range(order)
@@ -533,6 +549,10 @@ def _admit_partial_trace(
 
 def _bit_bound_decimal_digits(bits: int) -> int:
     return max(1, (bits * 30_103 + 99_999) // 100_000)
+
+
+def _exceeds_canonical_rational_digits(bits: int) -> bool:
+    return _bit_bound_decimal_digits(bits) > MAX_CANONICAL_RATIONAL_DIGITS
 
 
 def _positive_decimal_digits(value: int) -> int:
@@ -619,47 +639,40 @@ def _admit_determinant(
 def _characteristic_polynomial_component_digit_bound(
     matrix: RationalMatrix,
 ) -> int:
-    """Bound every coefficient after clearing a common input denominator.
-
-    Coefficients are sums of principal minors. Writing ``A = N / D`` with
-    common positive denominator ``D = lcm`` of nonzero-entry denominators, the
-    cleared integer matrix ``N`` has Hadamard-bounded minors; ``2^n`` bounds
-    the number of minors of any fixed order. Zero entries do not contribute to
-    ``D`` or to the cleared height.
-
-    ``order * digits(D)`` is monotone in ``D``. Once that quantity exceeds the
-    canonical digit budget, the coefficient bound is already over budget, so
-    folding stops without materializing a larger LCM or clearing numerators
-    against it.
-    """
-    order = len(matrix.entries)
-    common_denominator = 1
-    nonzero: list[Fraction] = []
-    for row in matrix.entries:
+    """Bound coefficients from row-cleared principal-minor envelopes."""
+    fractions = tuple(
+        tuple(value.as_fraction() for value in row) for row in matrix.entries
+    )
+    order = len(fractions)
+    over_budget = MAX_CANONICAL_RATIONAL_DIGITS + 1
+    numerator_bits = 0
+    denominator_bits = 0
+    seen_rows: set[tuple[Fraction, ...]] = set()
+    for row in fractions:
+        if row in seen_rows:
+            continue
+        seen_rows.add(row)
+        row_denominator = 1
         for value in row:
-            if value.num.lstrip("-") == "0":
-                continue
-            fraction = value.as_fraction()
-            common_denominator = lcm(common_denominator, fraction.denominator)
-            denominator_growth = _positive_decimal_digits(common_denominator)
-            if order * denominator_growth > MAX_CANONICAL_RATIONAL_DIGITS:
-                return max(1, order * denominator_growth)
-            nonzero.append(fraction)
-    denominator_growth = _positive_decimal_digits(common_denominator)
-    cleared_height = max(
-        (
-            _positive_decimal_digits(
-                value.numerator * (common_denominator // value.denominator)
-            )
-            for value in nonzero
-        ),
-        default=1,
+            row_denominator = lcm(row_denominator, value.denominator)
+            if _exceeds_canonical_rational_digits(
+                denominator_bits + row_denominator.bit_length()
+            ):
+                return over_budget
+        denominator_bits += row_denominator.bit_length()
+        squared_norm = sum(
+            (value.numerator * (row_denominator // value.denominator)) ** 2
+            for value in row
+        )
+        numerator_bits += (squared_norm.bit_length() + 1) // 2
+        if _exceeds_canonical_rational_digits(
+            numerator_bits + denominator_bits + order
+        ):
+            return over_budget
+    return max(
+        _bit_bound_decimal_digits(numerator_bits + denominator_bits + order),
+        _bit_bound_decimal_digits(max(1, denominator_bits)),
     )
-    numerator_digits = (
-        order * (cleared_height + _positive_decimal_digits(order)) + order
-    )
-    denominator_digits = max(1, order * denominator_growth)
-    return max(numerator_digits, denominator_digits)
 
 
 def _admit_characteristic_polynomial(matrix: RationalMatrix) -> None:

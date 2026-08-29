@@ -214,6 +214,25 @@ def test_inverse_admits_sparse_identity_with_tiny_output() -> None:
     assert _multiply(inverse, _fraction_entries(source)) == identity
 
 
+def test_inverse_admits_diagonal_max_height_output() -> None:
+    order = 100
+    diagonal = "1" + "0" * 255
+    source = [
+        [diagonal if row == column else "0" for column in range(order)]
+        for row in range(order)
+    ]
+
+    inverse = _result_entries(_run_inverse(source))
+    expected = tuple(
+        tuple(
+            Fraction(1, 10**255) if row == column else Fraction(0)
+            for column in range(order)
+        )
+        for row in range(order)
+    )
+    assert inverse == expected
+
+
 def test_inverse_rejects_dense_output_work_before_backend() -> None:
     order = 128
     tall = "1" + "0" * 99

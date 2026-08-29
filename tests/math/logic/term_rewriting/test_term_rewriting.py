@@ -44,8 +44,8 @@ from jacobian.math.logic.term_rewriting._models import (
     UnificationRequest,
     UnificationResult,
 )
-from jacobian.math.logic.term_rewriting._tools import TOOLS
-from jacobian.math.logic.term_rewriting.operations import (
+from jacobian.math.logic.term_rewriting._tools import (
+    TOOLS,
     compute_critical_pairs,
     compute_normal_form,
     compute_rewrite_step,

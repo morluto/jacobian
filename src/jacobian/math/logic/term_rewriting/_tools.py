@@ -11,17 +11,67 @@ from jacobian.math.logic.term_rewriting._models import (
     CriticalPairsResult,
     MatchingRequest,
     MatchingResult,
+    NormalFormRequest,
+    NormalFormResult,
     RewriteStepRequest,
     RewriteStepResult,
+    SubstitutionRequest,
+    SubstitutionResult,
     UnificationRequest,
     UnificationResult,
 )
 from jacobian.math.logic.term_rewriting.operations import (
-    compute_critical_pairs,
-    compute_matching,
-    compute_rewrite_step,
-    compute_unification,
+    critical_pairs_result,
+    matching_result,
+    normal_form_result,
+    rewrite_step_result,
+    substitution_result,
+    unification_result,
 )
+
+
+def compute_substitution(request: SubstitutionRequest) -> SubstitutionResult:
+    """Unpack a wire request for the native substitution operation."""
+
+    return substitution_result(request.signature, request.term, request.substitution)
+
+
+def compute_matching(request: MatchingRequest) -> MatchingResult:
+    """Unpack a wire request for the native matching operation."""
+
+    return matching_result(request.signature, request.pattern, request.subject)
+
+
+def compute_unification(request: UnificationRequest) -> UnificationResult:
+    """Unpack a wire request for the native unification operation."""
+
+    return unification_result(request.signature, request.left, request.right)
+
+
+def compute_rewrite_step(request: RewriteStepRequest) -> RewriteStepResult:
+    """Unpack a wire request for the native rewrite-step operation."""
+
+    return rewrite_step_result(
+        request.signature, request.term, request.rules, request.selection
+    )
+
+
+def compute_normal_form(request: NormalFormRequest) -> NormalFormResult:
+    """Unpack a wire request for the native normal-form operation."""
+
+    return normal_form_result(
+        request.signature,
+        request.term,
+        request.rules,
+        request.strategy,
+        request.max_steps,
+    )
+
+
+def compute_critical_pairs(request: CriticalPairsRequest) -> CriticalPairsResult:
+    """Unpack a wire request for the native critical-pair operation."""
+
+    return critical_pairs_result(request.signature, request.rules)
 
 
 def _op[

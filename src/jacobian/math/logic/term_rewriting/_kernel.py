@@ -659,13 +659,21 @@ def _overlap_unification_terms(
 def critical_pairs(
     signature: RankedSignature, rules: tuple[RewriteRule, ...]
 ) -> CriticalPairProfile:
+    """Validate and enumerate all unifiable nonvariable overlaps."""
+
+    _validate_critical_pair_source(signature, rules)
+    return _critical_pairs(signature, rules)
+
+
+def _critical_pairs(
+    signature: RankedSignature, rules: tuple[RewriteRule, ...]
+) -> CriticalPairProfile:
     """Enumerate all unifiable nonvariable overlaps of a finite TRS.
 
     Rows are ordered by outer rule, position, then inner rule.  The tautological
     root overlap of a rule with itself is excluded; all other source-indexed
     overlaps are retained, even if their displayed reducts coincide.
     """
-    _validate_critical_pair_source(signature, rules)
     candidates: list[CriticalOverlapCandidate] = []
     pairs: list[CriticalPair] = []
     for outer_index, outer in enumerate(rules):

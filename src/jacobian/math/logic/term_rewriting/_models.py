@@ -28,28 +28,6 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"term_rewriting.{reason}", message)
 
 
-def _require_transport_safe_depth(*terms: Term) -> None:
-    """Reject term paths deeper than strict JSON transport can carry.
-
-    The shared canonical profile caps JSON nesting at 64 levels and each
-    serialized term node costs one object level plus one ``children`` array
-    level inside a request, so any root-to-leaf path carries at most
-    ``MAX_TERM_DEPTH`` nodes. Wire contracts enforce this iteratively so
-    rejection stays typed instead of surfacing as a transport failure after
-    schema admission.
-    """
-    stack = [(term, 1) for term in terms]
-    while stack:
-        current, depth = stack.pop()
-        if depth > MAX_TERM_DEPTH:
-            raise _validation_error(
-                "transport_depth",
-                "term depth exceeds the transport-safe bound; any "
-                f"root-to-leaf path carries at most {MAX_TERM_DEPTH} nodes",
-            )
-        stack.extend((child, depth + 1) for child in current.children)
-
-
 class SubstitutionRequest(StrictModel):
     """Apply a substitution to a term."""
 
@@ -64,11 +42,18 @@ class SubstitutionResult(SubstitutionRequest):
     result: Term
 
     @classmethod
-    def _from_kernel(cls, request: SubstitutionRequest, result: Term) -> Self:
+    def _from_kernel(
+        cls,
+        *,
+        signature: RankedSignature,
+        term: Term,
+        substitution: Substitution,
+        result: Term,
+    ) -> Self:
         return cls.model_construct(
-            signature=request.signature,
-            term=request.term,
-            substitution=request.substitution,
+            signature=signature,
+            term=term,
+            substitution=substitution,
             result=result,
         )
 
@@ -97,12 +82,18 @@ class MatchingResult(MatchingRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: MatchingRequest, matched: bool, substitution: dict[int, Term]
+        cls,
+        *,
+        signature: RankedSignature,
+        pattern: Term,
+        subject: Term,
+        matched: bool,
+        substitution: dict[int, Term],
     ) -> Self:
         return cls.model_construct(
-            signature=request.signature,
-            pattern=request.pattern,
-            subject=request.subject,
+            signature=signature,
+            pattern=pattern,
+            subject=subject,
             matched=matched,
             substitution=substitution,
         )
@@ -132,12 +123,18 @@ class UnificationResult(UnificationRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: UnificationRequest, unified: bool, substitution: dict[int, Term]
+        cls,
+        *,
+        signature: RankedSignature,
+        left: Term,
+        right: Term,
+        unified: bool,
+        substitution: dict[int, Term],
     ) -> Self:
         return cls.model_construct(
-            signature=request.signature,
-            left=request.left,
-            right=request.right,
+            signature=signature,
+            left=left,
+            right=right,
             unified=unified,
             substitution=substitution,
         )
@@ -191,15 +188,19 @@ class RewriteStepResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: RewriteStepRequest,
+        *,
+        signature: RankedSignature,
+        source_term: Term,
+        rules: tuple[RewriteRule, ...],
+        selection: RewriteStepSelection | None,
         scope: Literal["ALL_APPLICABLE_STEPS", "SELECTED_STEP"],
         applications: tuple[RewriteApplication, ...],
     ) -> Self:
         return cls.model_construct(
-            signature=request.signature,
-            source_term=request.term,
-            rules=request.rules,
-            selection=request.selection,
+            signature=signature,
+            source_term=source_term,
+            rules=rules,
+            selection=selection,
             scope=scope,
             applications=applications,
         )
@@ -239,18 +240,23 @@ class NormalFormResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: NormalFormRequest,
+        *,
+        signature: RankedSignature,
+        source_term: Term,
+        rules: tuple[RewriteRule, ...],
+        strategy: Literal["LEFTMOST_OUTERMOST_RULE_ORDER"],
+        max_steps: int,
         term: Term,
         status: Literal["NORMAL_FORM", "STEP_LIMIT"],
         steps: int,
         next_step: RewriteApplication | None,
     ) -> Self:
         return cls.model_construct(
-            signature=request.signature,
-            source_term=request.term,
-            rules=request.rules,
-            strategy=request.strategy,
-            max_steps=request.max_steps,
+            signature=signature,
+            source_term=source_term,
+            rules=rules,
+            strategy=strategy,
+            max_steps=max_steps,
             term=term,
             status=status,
             steps=steps,
@@ -302,11 +308,13 @@ class CriticalPairsResult(CriticalPairsRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: CriticalPairsRequest, profile: CriticalPairProfile
+        cls,
+        *,
+        signature: RankedSignature,
+        rules: tuple[RewriteRule, ...],
+        profile: CriticalPairProfile,
     ) -> Self:
-        return cls.model_construct(
-            signature=request.signature, rules=request.rules, profile=profile
-        )
+        return cls.model_construct(signature=signature, rules=rules, profile=profile)
 
 
 __all__ = [

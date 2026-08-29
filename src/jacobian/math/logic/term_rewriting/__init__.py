@@ -1,13 +1,20 @@
 """Supported native first-order term-rewriting API."""
 
+from jacobian.math.logic.term_rewriting._models import RewriteStepSelection
 from jacobian.math.logic.term_rewriting.operations import (
     apply_substitution,
     critical_pairs,
+    critical_pairs_result,
     match,
+    matching_result,
     normal_form,
+    normal_form_result,
+    rewrite_step_result,
     rewrite_steps,
     selected_rewrite_step,
+    substitution_result,
     term_at_position,
+    unification_result,
     unify,
 )
 from jacobian.math.logic.term_rewriting.values import (
@@ -17,6 +24,7 @@ from jacobian.math.logic.term_rewriting.values import (
     RankedSignature,
     RewriteApplication,
     RewriteRule,
+    Substitution,
     Term,
 )
 
@@ -27,13 +35,21 @@ __all__ = [
     "RankedSignature",
     "RewriteApplication",
     "RewriteRule",
+    "RewriteStepSelection",
+    "Substitution",
     "Term",
     "apply_substitution",
     "critical_pairs",
+    "critical_pairs_result",
     "match",
+    "matching_result",
     "normal_form",
+    "normal_form_result",
+    "rewrite_step_result",
     "rewrite_steps",
     "selected_rewrite_step",
+    "substitution_result",
     "term_at_position",
+    "unification_result",
     "unify",
 ]

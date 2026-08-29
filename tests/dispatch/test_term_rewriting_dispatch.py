@@ -12,7 +12,7 @@ from jacobian.math.logic.term_rewriting._models import (
     CriticalPairsRequest,
     CriticalPairsResult,
 )
-from jacobian.math.logic.term_rewriting.operations import compute_critical_pairs
+from jacobian.math.logic.term_rewriting._tools import compute_critical_pairs
 from jacobian.math.logic.term_rewriting.values import MAX_VARIABLE_LABEL, Term
 
 

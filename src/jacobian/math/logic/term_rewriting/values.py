@@ -171,6 +171,21 @@ class CriticalPairProfile(StrictModel):
 Term.model_rebuild()
 
 
+def _require_transport_safe_depth(*terms: Term) -> None:
+    """Reject terms deeper than strict JSON transport can carry."""
+
+    stack = [(term, 1) for term in terms]
+    while stack:
+        current, depth = stack.pop()
+        if depth > MAX_TERM_DEPTH:
+            raise _validation_error(
+                "transport_depth",
+                "term depth exceeds the transport-safe bound; any "
+                f"root-to-leaf path carries at most {MAX_TERM_DEPTH} nodes",
+            )
+        stack.extend((child, depth + 1) for child in current.children)
+
+
 class Substitution(StrictModel):
     """A variable substitution mapping variable IDs to terms."""
 

@@ -30,7 +30,9 @@ def _request(*vectors: tuple[int, ...]) -> OrderedDifferenceProfileRequest:
     )
 
 
-def _run_ordered(request: OrderedDifferenceProfileRequest):
+def _run_ordered(
+    request: OrderedDifferenceProfileRequest,
+) -> OrderedDifferenceProfileResult:
     return ordered_difference_profile(request.vectors)
 
 
@@ -45,6 +47,31 @@ class TestOrderedDifferenceProfile:
         assert result.support_size > 0
         for entry in result.entries:
             assert entry.multiplicity == len(entry.pairs)
+
+    def test_small_set_is_admitted_in_nine_dimensions(self) -> None:
+        zero = (0,) * 9
+        first = (1,) + (0,) * 8
+        second = (0, 1) + (0,) * 7
+
+        result = _run_ordered(_request(zero, first, second))
+
+        assert result.dimension == 9
+        assert result.total_ordered_pairs == 6
+        assert result.support_size == 6
+
+    def test_low_cardinality_profile_admits_parser_scale_dimension(self) -> None:
+        dimension = 1_024
+        result = _run_ordered(_request((0,) * dimension, (1,) + (0,) * (dimension - 1)))
+
+        assert result.dimension == dimension
+        assert result.total_ordered_pairs == 2
+
+    def test_pair_coordinate_work_rejects_before_expansion(self) -> None:
+        dimension = 1_024
+        request = _request(*((index,) + (0,) * (dimension - 1) for index in range(33)))
+
+        with pytest.raises(ValueError, match="1,000,000-coordinate work budget"):
+            _run_ordered(request)
 
     def test_no_repeated(self) -> None:
         """A Sidon set has no repeated differences."""

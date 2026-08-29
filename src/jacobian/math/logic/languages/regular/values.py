@@ -20,10 +20,10 @@ MAX_DFA_STATES = 64
 MAX_DFA_ALPHABET = 32
 MAX_DFA_TRANSITIONS = 4096
 MAX_WORD_LENGTH = 1000
-# Binary powering needs only this exponent's bit length; owner-local work and
-# exact result-digit admission reject expensive/high-growth cases earlier.
-MAX_COUNT_WORD_LENGTH = 1_000_000
-MAX_COUNT_MATRIX_WORK = 5_000_000
+# python-flint 0.9 accepts an unsigned-long exponent. Binary powering needs
+# only its bit length; owner-local work and result admission narrow this range.
+MAX_COUNT_WORD_LENGTH = (1 << 64) - 1
+MAX_COUNT_MATRIX_BIT_WORK = 10_000_000_000
 MAX_COUNT_RESULT_DIGITS = 32_768
 
 # A materialized state axis is cheap relative to the transition/profile data;

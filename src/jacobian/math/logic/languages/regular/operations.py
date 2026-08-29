@@ -10,7 +10,7 @@ from jacobian.math.logic.languages.regular._profile_admission import (
 )
 from jacobian.math.logic.languages.regular.values import (
     DFA,
-    MAX_COUNT_MATRIX_WORK,
+    MAX_COUNT_MATRIX_BIT_WORK,
     MAX_COUNT_RESULT_DIGITS,
     MAX_COUNT_WORD_LENGTH,
     AutomatonTransition,
@@ -59,15 +59,16 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
         return 0
     if word_length == 0:
         return 1 if dfa.initial_state in dfa.accepting_states else 0
-    matrix_work = state_count**3 * max(1, word_length.bit_length())
-    if matrix_work > MAX_COUNT_MATRIX_WORK:
+    count_digits = _accepted_count_digit_bound(dfa.alphabet_size, word_length)
+    matrix_bit_work = (
+        state_count**3 * max(1, word_length.bit_length()) * count_digits
+    )
+    if matrix_bit_work > MAX_COUNT_MATRIX_BIT_WORK:
         raise OperationDomainValidationError(
             location=("dfa", "word_length"),
             code="regular_language.count_work_bound",
             message="DFA matrix powering exceeds the exact work bound",
         )
-    count_bits = 1 + word_length * (dfa.alphabet_size - 1).bit_length()
-    count_digits = max(1, (count_bits * 30_103 + 99_999) // 100_000)
     if count_digits > MAX_COUNT_RESULT_DIGITS:
         raise OperationDomainValidationError(
             location=("dfa", "word_length"),
@@ -85,6 +86,18 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
         dfa.accepting_states,
         word_length,
     )
+
+
+def _accepted_count_digit_bound(alphabet_size: int, word_length: int) -> int:
+    """Return a safe decimal-digit bound for ``alphabet_size ** word_length``."""
+
+    if alphabet_size == 1:
+        return 1
+    chunk_length = 1_024
+    chunks, remainder = divmod(word_length, chunk_length)
+    chunk_digits = len(str(alphabet_size**chunk_length))
+    remainder_digits = len(str(alphabet_size**remainder))
+    return max(1, chunks * chunk_digits + remainder_digits)
 
 
 def dfa_complement(dfa: DFA) -> DFA:

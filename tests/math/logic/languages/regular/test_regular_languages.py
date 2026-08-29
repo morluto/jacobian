@@ -21,7 +21,11 @@ from jacobian.math.logic.languages.regular.operations import (
     dfa_complement,
     dfa_run,
 )
-from jacobian.math.logic.languages.regular.values import DFA, DFATransition
+from jacobian.math.logic.languages.regular.values import (
+    DFA,
+    MAX_COUNT_WORD_LENGTH,
+    DFATransition,
+)
 
 
 def _error_type(exc_info: pytest.ExceptionInfo[ValidationError]) -> str:
@@ -85,6 +89,26 @@ def _dfa_full_alphabet_rejecting() -> DFA:
         ),
         initial_state=0,
         accepting_states=(),
+    )
+
+
+def _dfa_rotating_binary(accepting_states: tuple[int, ...]) -> DFA:
+    """A 64-state DFA whose symbols advance by zero or one state."""
+
+    return DFA(
+        state_count=64,
+        alphabet_size=2,
+        transitions=tuple(
+            DFATransition(
+                source=state,
+                symbol=symbol,
+                target=(state + symbol) % 64,
+            )
+            for state in range(64)
+            for symbol in range(2)
+        ),
+        initial_state=0,
+        accepting_states=accepting_states,
     )
 
 
@@ -197,6 +221,17 @@ def test_count_empty_accepting_set_short_circuits_before_result_bound() -> None:
 
 
 def test_count_rejects_large_state_powering_work() -> None:
+    with pytest.raises(OperationDomainValidationError, match="matrix powering"):
+        count_accepted_words(_dfa_rotating_binary((0,)), 10_000)
+
+
+def test_count_admits_large_state_powering_within_work_bound() -> None:
+    dfa = _dfa_rotating_binary(tuple(range(64)))
+
+    assert count_accepted_words(dfa, 5_000) == 2**5_000
+
+
+def test_count_accepts_maximum_exponent_for_compact_unary_automaton() -> None:
     state_count = 64
     dfa = DFA(
         state_count=state_count,
@@ -206,11 +241,18 @@ def test_count_rejects_large_state_powering_work() -> None:
             for state in range(state_count)
         ),
         initial_state=0,
-        accepting_states=(0,),
+        accepting_states=(MAX_COUNT_WORD_LENGTH % state_count,),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="matrix powering"):
-        count_accepted_words(dfa, 1_000_000)
+    assert count_accepted_words(dfa, MAX_COUNT_WORD_LENGTH) == 1
+
+
+def test_count_request_rejects_exponent_above_flint_range() -> None:
+    with pytest.raises(ValidationError):
+        CountRequest(
+            dfa=_dfa_even_zeros(),
+            word_length=MAX_COUNT_WORD_LENGTH + 1,
+        )
 
 
 def test_run_and_count_results_remain_structural() -> None:

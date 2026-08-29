@@ -53,10 +53,14 @@ def _require_divisor_work(length: int) -> None:
 class _HeightSums:
     """Incremental form of ``sum_heights`` for one dense result vector."""
 
-    def __init__(self, length: int) -> None:
+    def __init__(
+        self, length: int, *, shared_denominator_digits: int | None = None
+    ) -> None:
         self.denominator_digits = [0] * length
         self.maximum_adjusted_numerator = [0] * length
+        self.maximum_numerator = [0] * length
         self.term_counts = [0] * length
+        self.shared_denominator_digits = shared_denominator_digits
 
     def add(self, index: int, height: RationalHeight) -> None:
         self.denominator_digits[index] += height.denominator_digits
@@ -64,12 +68,20 @@ class _HeightSums:
             self.maximum_adjusted_numerator[index],
             height.numerator_digits - height.denominator_digits,
         )
+        self.maximum_numerator[index] = max(
+            self.maximum_numerator[index], height.numerator_digits
+        )
         self.term_counts[index] += 1
 
     def height(self, index: int) -> RationalHeight:
         count = self.term_counts[index]
         if count == 0:
             return RationalHeight(1, 1)
+        if self.shared_denominator_digits is not None:
+            return RationalHeight(
+                self.maximum_numerator[index] + len(str(count)),
+                self.shared_denominator_digits,
+            )
         denominator_digits = self.denominator_digits[index]
         return RationalHeight(
             self.maximum_adjusted_numerator[index]
@@ -146,7 +158,14 @@ def _admit_mobius(values: tuple[CanonicalRational, ...]) -> None:
     _require_length(values, "values", _MAX_DIVISOR_PREFIX_LENGTH)
     _require_divisor_work(len(values))
     heights = _heights(values)
-    sums = _HeightSums(len(heights))
+    shared_denominator_digits = (
+        len(values[0].den)
+        if all(value.den == values[0].den for value in values)
+        else None
+    )
+    sums = _HeightSums(
+        len(heights), shared_denominator_digits=shared_denominator_digits
+    )
     for divisor, multiple in _divisor_incidences(len(heights)):
         sums.add(multiple - 1, heights[multiple // divisor - 1])
     _require_result_envelope(sums.heights(), "Möbius transform")

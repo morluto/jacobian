@@ -374,6 +374,16 @@ def test_materialized_prefix_above_former_cap_is_exact() -> None:
     assert result[-1].as_fraction() == Fraction(30)
 
 
+def test_mobius_admission_preserves_a_shared_denominator() -> None:
+    length = _MAX_DIVISOR_PREFIX_LENGTH
+    value = CanonicalRational(num="1", den="1000000007")
+
+    result = compute_mobius_transform(MobiusTransformRequest(values=(value,) * length))
+
+    assert result.values[0] == value
+    assert all(entry.num == "0" and entry.den == "1" for entry in result.values[1:])
+
+
 def test_divisor_sieve_operations_match_direct_formulas_on_small_prefix() -> None:
     source = tuple(
         CanonicalRational.from_fraction(Fraction(index, index + 1))

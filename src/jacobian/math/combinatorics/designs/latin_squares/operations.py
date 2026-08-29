@@ -68,9 +68,7 @@ def orthogonality_profile(
     pair_count = 0
     for row in range(left.order):
         for column in range(left.order):
-            pair_index = (
-                left.cells[row][column] * left.order + right.cells[row][column]
-            )
+            pair_index = left.cells[row][column] * left.order + right.cells[row][column]
             if seen[pair_index]:
                 return False, pair_count
             seen[pair_index] = 1

@@ -18,8 +18,7 @@ from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, IntegerMatrix
 
 def _identity_entries(size: int) -> list[list[str]]:
     return [
-        ["1" if row == column else "0" for column in range(size)]
-        for row in range(size)
+        ["1" if row == column else "0" for column in range(size)] for row in range(size)
     ]
 
 

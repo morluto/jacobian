@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.15.2](https://github.com/morluto/jacobian/compare/jacobian-v0.15.1...jacobian-v0.15.2) (2026-08-29)
+
+
+### Features
+
+* **combinatorics:** make rational generating-function admission degree-sensitive ([ca41d9c](https://github.com/morluto/jacobian/commit/ca41d9c0a9d59623282431da0e37948434831182))
+* **math:** restore unpublished mathematical operation families ([17fdc12](https://github.com/morluto/jacobian/commit/17fdc12ca073fec1057af91d7c533a30c6421b79))
+* **matrices:** use FLINT for bounded rational determinants ([c80d69d](https://github.com/morluto/jacobian/commit/c80d69dcf9315f7353173baec1d454184241abb9))
+* **topology:** use FLINT for larger homology ranks ([44aa674](https://github.com/morluto/jacobian/commit/44aa674a189b57cc28e9d53ce1050cd82fff92a7))
+
+
+### Bug Fixes
+
+* **arrangements:** combine chamber work and use 2^m-2 near-full prefixes ([#3020](https://github.com/morluto/jacobian/issues/3020)) ([9f4ebd9](https://github.com/morluto/jacobian/commit/9f4ebd90ea75b39738fa35e06d02ce3b9492f15c))
+* **ci:** align validation tests with operation admission ([0c002ed](https://github.com/morluto/jacobian/commit/0c002edf6bdfed3cd55a92ffc2c05aa051bad8d8))
+* **combinatorics:** killable counts and tighter digit admission ([#3019](https://github.com/morluto/jacobian/issues/3019)) ([2e3d65d](https://github.com/morluto/jacobian/commit/2e3d65dc7dda2b2b6520ce5254f6cc14e4e93343))
+* **counting:** count congruence boxes by residue class ([#2986](https://github.com/morluto/jacobian/issues/2986)) ([211c1d1](https://github.com/morluto/jacobian/commit/211c1d15975335457fcd0f30b13eb5995ccd5803))
+* **finite-fields:** authenticate external map analyses ([88617f8](https://github.com/morluto/jacobian/commit/88617f826560488464ba4d6cab19962e61811b57))
+* **geometry:** preserve structural point uniqueness checks ([985b058](https://github.com/morluto/jacobian/commit/985b058616ee098be1863f033c3a0d6501d2e507))
+* **geometry:** project projective admission errors ([cf006d1](https://github.com/morluto/jacobian/commit/cf006d11cddb3d45c99d975e658517abd917dbd6))
+* **geometry:** type Euclidean triangulation admission ([db9114a](https://github.com/morluto/jacobian/commit/db9114a601cc11333228ae2013de78d9362c3138))
+* **graphs:** restore nested owner test coverage ([39426d7](https://github.com/morluto/jacobian/commit/39426d749e3234c08876f82965266b31b6eaae8f))
+* **graphs:** type optimization admission failures ([1b49b5a](https://github.com/morluto/jacobian/commit/1b49b5a2075dd91606200f7269ee7d8f29a57f9e))
+* **math:** authenticate exact profile results ([5436ba0](https://github.com/morluto/jacobian/commit/5436ba00c61c96a1bdcdaf300ac403991c17018a))
+* **math:** authenticate external exact result claims ([4629323](https://github.com/morluto/jacobian/commit/4629323e4d93c85dd574beb30f13a159c0deac7d))
+* **math:** authenticate external geometry and group results ([9766018](https://github.com/morluto/jacobian/commit/9766018db4ca24d424efd7f717f6eb9850fcabce))
+* **math:** authenticate ingested exact results ([f72afed](https://github.com/morluto/jacobian/commit/f72afedf803eef46e559306eea031b9f0b2d3b87))
+* **math:** move semantic admissions into operations ([d26fc17](https://github.com/morluto/jacobian/commit/d26fc17f2c6166ca4b481b288a6c5b31fcde0093))
+* **math:** type finite-group admission errors ([b92bf4d](https://github.com/morluto/jacobian/commit/b92bf4d8178b5e01f5e7c87f76d225f282eee667))
+* **math:** type graph and LPR admission failures ([1e51190](https://github.com/morluto/jacobian/commit/1e511907a0ac5087c9d6aa19e9d1c3e9f2bffa8c))
+* **math:** type migrated admission failures ([1d0274c](https://github.com/morluto/jacobian/commit/1d0274c80f7d8fb934863547609601ed394be86f))
+* **math:** type owner semantic rejections ([d44f63b](https://github.com/morluto/jacobian/commit/d44f63b89a6d885b49e73a1db4b138de16b7164a))
+* **math:** type remaining owner admission failures ([97f0e31](https://github.com/morluto/jacobian/commit/97f0e319b6bbee877623322bef88a8b0459065b1))
+* **math:** type symbolic and Gaussian admission ([b89cd70](https://github.com/morluto/jacobian/commit/b89cd7050a355492bc890262c83163b7ef7c6699))
+* **mcp:** isolate remaining native solver paths ([#2969](https://github.com/morluto/jacobian/issues/2969)) ([ba66bda](https://github.com/morluto/jacobian/commit/ba66bda5475de803ab4440732718112db3db2099))
+* **number-theory:** authenticate parsed exact results ([ae0d936](https://github.com/morluto/jacobian/commit/ae0d93608c84673c14f345f1c0a563f6a0c1fe64))
+* **number-theory:** classify zero as non-squarefree ([ef1230d](https://github.com/morluto/jacobian/commit/ef1230d963f697ca5c0d0eb173855883121e5d3c))
+* **number-theory:** restore k-sigma preimage contract ([e56ed0b](https://github.com/morluto/jacobian/commit/e56ed0b317990e6277e54bdd5106b4483e6dd727))
+* **words:** preserve typed values in trusted results ([757e150](https://github.com/morluto/jacobian/commit/757e15041c76af4f0b2228810828c07148d8495a))
+
+
+### Documentation
+
+* **architecture:** define math package taxonomy ([a0f1125](https://github.com/morluto/jacobian/commit/a0f112530cca53ae439f587713f5db5b6457e2e7))
+* **architecture:** distinguish validation boundaries ([2cfa244](https://github.com/morluto/jacobian/commit/2cfa2444ccdfc00200622c6d650fd941d4b12dae))
+* **architecture:** make tool manifests the publication boundary ([4eda76f](https://github.com/morluto/jacobian/commit/4eda76f3f51ac9e6df6deeb762252debe4ab7a37))
+
 ## [0.15.1](https://github.com/morluto/jacobian/compare/jacobian-v0.15.0...jacobian-v0.15.1) (2026-08-27)
 
 

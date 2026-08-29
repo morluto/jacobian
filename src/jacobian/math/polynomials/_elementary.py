@@ -4,6 +4,7 @@ from jacobian.catalog._examples import example
 from jacobian.math.polynomials._elementary_kernel import (
     integer_polynomial_evaluate,
     integer_polynomial_gcd,
+    rational_polynomial_derivative,
     rational_polynomial_evaluate,
 )
 from jacobian.math.polynomials._models import (
@@ -11,8 +12,10 @@ from jacobian.math.polynomials._models import (
     IntegerPolynomialEvaluationResult,
     IntegerPolynomialGcdResult,
     IntegerPolynomialPairRequest,
+    RationalPolynomialDerivativeResult,
     RationalPolynomialEvaluationRequest,
     RationalPolynomialEvaluationResult,
+    RationalPolynomialRequest,
 )
 from jacobian.math.polynomials._support import polynomial_operation
 
@@ -33,6 +36,12 @@ def _run_rational_evaluation(
     request: RationalPolynomialEvaluationRequest,
 ) -> RationalPolynomialEvaluationResult:
     return rational_polynomial_evaluate(request.polynomial, request.point)
+
+
+def _run_rational_derivative(
+    request: RationalPolynomialRequest,
+) -> RationalPolynomialDerivativeResult:
+    return rational_polynomial_derivative(request.polynomial)
 
 
 INTEGER_POLYNOMIAL_OPERATIONS = (
@@ -110,6 +119,41 @@ INTEGER_POLYNOMIAL_OPERATIONS = (
                         },
                     },
                     "point": {"num": "2", "den": "1"},
+                },
+            ),
+        ),
+    ),
+    polynomial_operation(
+        "polynomial.rational.compute.derivative",
+        "Differentiate a rational polynomial",
+        "Compute the formal derivative of one bounded polynomial in QQ[x].",
+        RationalPolynomialRequest,
+        RationalPolynomialDerivativeResult,
+        _run_rational_derivative,
+        "polynomial",
+        "rational",
+        "derivative",
+        examples=(
+            example(
+                "cubic_derivative",
+                "Differentiate one half x³ minus 2x.",
+                {
+                    "polynomial": {
+                        "domain": "QQ",
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "2"},
+                                    "exponents": [3],
+                                },
+                                {
+                                    "coefficient": {"num": "-2", "den": "1"},
+                                    "exponents": [1],
+                                },
+                            ]
+                        },
+                    }
                 },
             ),
         ),

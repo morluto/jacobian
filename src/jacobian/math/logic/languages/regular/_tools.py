@@ -30,7 +30,14 @@ from jacobian.math.logic.languages.regular._models import (
 
 
 def compute_run(request: RunRequest) -> RunResult:
-    accepted, final_state = dfa_run(request.dfa, request.word)
+    try:
+        accepted, final_state = dfa_run(request.dfa, request.word)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("word",),
+            code="regular_language.word_symbol_out_of_range",
+            message=str(exc),
+        ) from exc
     transitions = {
         (item.source, item.symbol): item.target for item in request.dfa.transitions
     }

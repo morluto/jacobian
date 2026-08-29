@@ -23,7 +23,9 @@ from jacobian.math.number_theory.sequences.recurrence_solving._models import (
 )
 
 
-def _run_admitted[ResultT](operation: Callable[[], ResultT], *, location: tuple[str, ...]) -> ResultT:
+def _run_admitted[ResultT](
+    operation: Callable[[], ResultT], *, location: tuple[str, ...]
+) -> ResultT:
     try:
         return operation()
     except ValueError as exc:
@@ -60,7 +62,10 @@ def compute_prime_field_find_recurrence(
     request: PrimeFieldRecurrenceFindRequest,
 ) -> PrimeFieldRecurrenceFindResult:
     """Find the minimal LFSR over ``GF(p)`` via Berlekamp-Massey."""
-    rec = native.berlekamp_massey(list(request.sequence), request.prime)
+    rec = _run_admitted(
+        lambda: native.berlekamp_massey(list(request.sequence), request.prime),
+        location=("prime", "sequence"),
+    )
     return PrimeFieldRecurrenceFindResult._from_kernel(
         sequence=request.sequence,
         recurrence=rec,

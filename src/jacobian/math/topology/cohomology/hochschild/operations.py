@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.math.matrices.finite_fields.linear_algebra import (
-    PrimeFieldMatrix,
-)
+from collections.abc import Callable
+
+from pydantic_core import PydanticCustomError
+
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 from jacobian.math.topology.cohomology.hochschild._bar import bar_differential_entries
 from jacobian.math.topology.cohomology.hochschild._models import (
     MAX_HOCHSCHILD_TENSOR_ELEMENTS,
@@ -14,6 +17,21 @@ from jacobian.math.topology.cohomology.hochschild._models import (
     HochschildHomologyGroup,
     HochschildHomologyResult,
 )
+
+
+def _admit(operation: Callable[[], None], *, location: tuple[str, ...]) -> None:
+    try:
+        operation()
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=location, code=exc.type, message=exc.message()
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=location,
+            code="hochschild.invalid_domain",
+            message=str(exc),
+        ) from exc
 
 
 def _boundary_rank(
@@ -94,8 +112,11 @@ def hochschild_chain_complex(
         require_hochschild_budget,
     )
 
-    require_algebra_admission(algebra)
-    require_hochschild_budget(algebra.dimension, max_degree)
+    _admit(lambda: require_algebra_admission(algebra), location=("algebra",))
+    _admit(
+        lambda: require_hochschild_budget(algebra.dimension, max_degree),
+        location=("max_degree",),
+    )
     alg = algebra
     n = alg.dimension
     p = alg.prime
@@ -174,8 +195,11 @@ def hochschild_homology(
         require_hochschild_budget,
     )
 
-    require_algebra_admission(algebra)
-    require_hochschild_budget(algebra.dimension, max_degree)
+    _admit(lambda: require_algebra_admission(algebra), location=("algebra",))
+    _admit(
+        lambda: require_hochschild_budget(algebra.dimension, max_degree),
+        location=("max_degree",),
+    )
     alg = algebra
 
     return HochschildHomologyResult._from_kernel(

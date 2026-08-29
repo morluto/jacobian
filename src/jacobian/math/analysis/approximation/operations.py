@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from fractions import Fraction
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.approximation._models import (
     LagrangeBasisPolynomial,
     LagrangeBasisResult,
@@ -77,7 +80,18 @@ def _interpolate(
 def lagrange_interpolate(
     nodes: Sequence[CanonicalRational], values: Sequence[CanonicalRational]
 ) -> RationalPolynomial:
-    return _interpolate(RationalNodeSet(nodes=tuple(nodes)), tuple(values))
+    try:
+        return _interpolate(RationalNodeSet(nodes=tuple(nodes)), tuple(values))
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("nodes", "values"), code=exc.type, message=exc.message()
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("nodes", "values"),
+            code="approximation.interpolation_invalid_domain",
+            message=str(exc),
+        ) from exc
 
 
 def lagrange_basis(nodes: RationalNodeSet) -> LagrangeBasisResult:

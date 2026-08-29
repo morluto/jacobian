@@ -849,9 +849,7 @@ def convolution_peak(
             len(atom.value.num) + len(atom.value.den) for atom in distribution.atoms
         )
         if (
-            source_bytes
-            + len(distribution.atoms) * (maximum_value_bytes + 48)
-            + 4_096
+            source_bytes + len(distribution.atoms) * (maximum_value_bytes + 48) + 4_096
             > MAX_CONVOLUTION_POWER_RESULT_BYTES
         ):
             raise OperationDomainValidationError(

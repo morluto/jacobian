@@ -5,8 +5,15 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+from jacobian.math.lattices._hnf import compute_hermite_normal_form
+from jacobian.math.lattices._lattice import reduce_lattice_basis
 from jacobian.math.lattices._models import (
+    HermiteNormalFormRequest,
     IntegerLattice,
+    LatticeReductionRequest,
     SublatticeIndexRequest,
 )
 from jacobian.math.lattices.operations import (
@@ -20,7 +27,7 @@ from jacobian.math.lattices.operations import (
     compute_saturation,
     compute_sublattice_index,
 )
-from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, IntegerMatrix
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -34,6 +41,13 @@ def _lattice(ambient: int, basis: list[list[int]]) -> IntegerLattice:
             "basis": {"entries": [[str(v) for v in row] for row in basis]},
         }
     )
+
+
+def _identity_entries(order: int) -> list[list[str]]:
+    return [
+        ["1" if row == column else "0" for column in range(order)]
+        for row in range(order)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -326,6 +340,97 @@ def test_orthogonal_sum_of_two_identity() -> None:
         ("1", "0", "0"),
         ("0", "1", "0"),
         ("0", "0", "3"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# lattice.basis.reduce and lattice.hermite_normal_form.compute
+# ---------------------------------------------------------------------------
+
+
+def test_integer_matrix_still_parses_order_33_identity() -> None:
+    """Shared IntegerMatrix is the exact-linear envelope, not the LLL bound."""
+
+    matrix = IntegerMatrix.model_validate(
+        {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}
+    )
+    assert len(matrix.entries) == MAX_MATRIX_DIMENSION + 1
+    assert len(matrix.entries[0]) == MAX_MATRIX_DIMENSION + 1
+
+
+def test_lattice_reduction_request_rejects_order_33_identity() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        LatticeReductionRequest.model_validate(
+            {"basis": {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}}
+        )
+    assert exc_info.value.errors()[0]["type"] == "lattice.budget_exceeded"
+
+
+def test_hermite_request_rejects_order_33_identity() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        HermiteNormalFormRequest.model_validate(
+            {"matrix": {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}}
+        )
+    assert exc_info.value.errors()[0]["type"] == "lattice.budget_exceeded"
+
+
+def test_lattice_reduction_admits_before_lll_backend() -> None:
+    """A 33-by-33 identity must not reach FLINT or fail inside the result model."""
+
+    basis = IntegerMatrix.model_validate(
+        {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}
+    )
+    request = LatticeReductionRequest.model_construct(basis=basis)
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        reduce_lattice_basis(request)
+    error = exc_info.value.errors()[0]
+    assert error["type"] == "lattice.budget_exceeded"
+    assert error["loc"] == ("basis",)
+    assert str(MAX_MATRIX_DIMENSION) in error["msg"]
+
+
+def test_hermite_admits_before_hnf_backend() -> None:
+    matrix = IntegerMatrix.model_validate(
+        {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}
+    )
+    request = HermiteNormalFormRequest.model_construct(matrix=matrix)
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        compute_hermite_normal_form(request)
+    error = exc_info.value.errors()[0]
+    assert error["type"] == "lattice.budget_exceeded"
+    assert error["loc"] == ("matrix",)
+
+
+def test_lattice_reduction_accepts_order_32_identity() -> None:
+    request = LatticeReductionRequest.model_validate(
+        {"basis": {"entries": _identity_entries(MAX_MATRIX_DIMENSION)}}
+    )
+    result = reduce_lattice_basis(request)
+    assert result.rank == MAX_MATRIX_DIMENSION
+    assert result.reduced_basis.entries == tuple(
+        tuple(row) for row in _identity_entries(MAX_MATRIX_DIMENSION)
+    )
+
+
+def test_hermite_accepts_order_32_identity() -> None:
+    request = HermiteNormalFormRequest.model_validate(
+        {"matrix": {"entries": _identity_entries(MAX_MATRIX_DIMENSION)}}
+    )
+    result = compute_hermite_normal_form(request)
+    assert result.normal_form.entries == tuple(
+        tuple(row) for row in _identity_entries(MAX_MATRIX_DIMENSION)
+    )
+
+
+def test_dispatch_rejects_lll_above_the_lattice_axis() -> None:
+    with pytest.raises(OperationRequestValidationError) as exc_info:
+        invoke_operation(
+            "lattice.basis.reduce",
+            {"basis": {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}},
+            Catalog.open(),
+        )
+    assert f"limited to {MAX_MATRIX_DIMENSION} rows and columns" in str(
+        exc_info.value.cause
     )
 
 

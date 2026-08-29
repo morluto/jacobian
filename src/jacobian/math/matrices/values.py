@@ -26,6 +26,8 @@ MAX_MATRIX_DIMENSION = 32
 # that complete public domain representable by the one canonical QQ matrix
 # value so a determinant consumer can accept a produced matrix unchanged.
 MAX_RATIONAL_MATRIX_ORDER = 128
+MAX_SPARSE_RATIONAL_MATRIX_AXIS = 8_192
+MAX_SPARSE_RATIONAL_MATRIX_NONZEROS = 32_768
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 
@@ -144,6 +146,110 @@ def rational_matrix_from_fractions(
         entries=tuple(
             tuple(CanonicalRational.from_fraction(value) for value in row)
             for row in entries
+        )
+    )
+
+
+class SparseRationalMatrixEntry(StrictModel):
+    """One nonzero entry at a stable zero-based matrix coordinate."""
+
+    row: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS - 1)
+    column: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS - 1)
+    value: CanonicalRational
+
+
+class SparseRationalMatrix(StrictModel):
+    """A dimension-retaining coordinate-sparse matrix over QQ."""
+
+    domain: Literal["QQ"] = "QQ"
+    row_count: int = Field(ge=1, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
+    column_count: int = Field(ge=1, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
+    entries: tuple[SparseRationalMatrixEntry, ...] = Field(
+        default=(), max_length=MAX_SPARSE_RATIONAL_MATRIX_NONZEROS
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_sparse_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if set(data).difference({"domain", "row_count", "column_count", "entries"}):
+            raise _validation_error(
+                "shape_mismatch", "sparse matrix contains unknown fields"
+            )
+        entries = data.get("entries")
+        if (
+            isinstance(entries, (list, tuple))
+            and len(entries) > MAX_SPARSE_RATIONAL_MATRIX_NONZEROS
+        ):
+            raise _validation_error(
+                "budget_exceeded",
+                "sparse matrix stores at most "
+                f"{MAX_SPARSE_RATIONAL_MATRIX_NONZEROS} nonzeros",
+            )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_canonical_coordinates(self) -> Self:
+        coordinates = tuple((entry.row, entry.column) for entry in self.entries)
+        if coordinates != tuple(sorted(set(coordinates))):
+            raise _validation_error(
+                "shape_mismatch",
+                "sparse matrix coordinates must be unique and row-major sorted",
+            )
+        if any(
+            entry.row >= self.row_count or entry.column >= self.column_count
+            for entry in self.entries
+        ):
+            raise _validation_error(
+                "shape_mismatch", "sparse matrix coordinates exceed declared axes"
+            )
+        if any(entry.value.as_fraction() == 0 for entry in self.entries):
+            raise _validation_error(
+                "shape_mismatch", "sparse matrices must not store explicit zeros"
+            )
+        require_matrix_scalar_digits(
+            tuple((entry.value,) for entry in self.entries),
+            maximum=MAX_MATRIX_SCALAR_DIGITS,
+            label="sparse matrix",
+        )
+        return self
+
+
+def sparse_rational_matrix_from_dense(matrix: RationalMatrix) -> SparseRationalMatrix:
+    """Convert the canonical dense QQ matrix to dimension-retaining coordinates."""
+
+    return SparseRationalMatrix(
+        row_count=len(matrix.entries),
+        column_count=len(matrix.entries[0]),
+        entries=tuple(
+            SparseRationalMatrixEntry(row=row, column=column, value=value)
+            for row, values in enumerate(matrix.entries)
+            for column, value in enumerate(values)
+            if value.as_fraction()
+        ),
+    )
+
+
+def dense_rational_matrix_from_sparse(matrix: SparseRationalMatrix) -> RationalMatrix:
+    """Convert bounded sparse coordinates to the canonical dense QQ matrix."""
+
+    if (
+        matrix.row_count > MAX_RATIONAL_MATRIX_ORDER
+        or matrix.column_count > MAX_RATIONAL_MATRIX_ORDER
+    ):
+        raise ValueError(
+            "sparse matrix axes exceed the canonical dense matrix representation"
+        )
+    zero = CanonicalRational(num="0", den="1")
+    coordinates = {(entry.row, entry.column): entry.value for entry in matrix.entries}
+    return RationalMatrix(
+        entries=tuple(
+            tuple(
+                coordinates.get((row, column), zero)
+                for column in range(matrix.column_count)
+            )
+            for row in range(matrix.row_count)
         )
     )
 
@@ -326,14 +432,20 @@ __all__ = [
     "MAX_MATRIX_DIMENSION",
     "MAX_MATRIX_SCALAR_DIGITS",
     "MAX_RATIONAL_MATRIX_ORDER",
+    "MAX_SPARSE_RATIONAL_MATRIX_AXIS",
+    "MAX_SPARSE_RATIONAL_MATRIX_NONZEROS",
     "IntegerMatrix",
     "RationalMatrix",
     "RationalVectorSpaceBasis",
     "RealQuadraticMatrix",
     "SmithNormalForm",
+    "SparseRationalMatrix",
+    "SparseRationalMatrixEntry",
+    "dense_rational_matrix_from_sparse",
     "rational_matrix_from_fractions",
     "rational_vector_space_basis_from_fractions",
     "require_matrix_scalar_digits",
+    "sparse_rational_matrix_from_dense",
 ]
 
 

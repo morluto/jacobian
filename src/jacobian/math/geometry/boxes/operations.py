@@ -16,7 +16,6 @@ from jacobian.math.geometry.boxes._models import (
     MAX_BOX_UNION_RESULT_RATIONAL_DIGITS,
     MAX_INTERSECTION_CANDIDATES,
     BoxIntersectionLedgerEntry,
-    BoxUnionVolumeRequest,
     BoxUnionVolumeResult,
 )
 from jacobian.math.geometry.boxes.values import RationalAxisAlignedBox
@@ -61,7 +60,10 @@ def _digit_bounds(
             len(value) for value in {endpoint.den for endpoint in endpoints}
         )
     union_numerator_digits = (
-        volume_numerator_digits + common_denominator_digits + len(str(candidate_count)) + 2
+        volume_numerator_digits
+        + common_denominator_digits
+        + len(str(candidate_count))
+        + 2
     )
     union_denominator_digits = common_denominator_digits + 1
     return (
@@ -73,7 +75,7 @@ def _digit_bounds(
 
 
 def _maximum_result_bytes(
-    request: BoxUnionVolumeRequest,
+    boxes: tuple[RationalAxisAlignedBox, ...],
     *,
     candidate_count: int,
     endpoint_numerator_digits: int,
@@ -87,16 +89,15 @@ def _maximum_result_bytes(
     }
     interval = {"lower": endpoint, "upper": endpoint}
     maximum_entry = {
-        "box_indices": [len(request.boxes) - 1]
-        * sum(not box.is_empty for box in request.boxes),
+        "box_indices": [len(boxes) - 1] * sum(not box.is_empty for box in boxes),
         "intersection": {
-            "dimension": request.boxes[0].dimension,
-            "intervals": [interval] * request.boxes[0].dimension,
+            "dimension": boxes[0].dimension,
+            "intervals": [interval] * boxes[0].dimension,
         },
         "volume": {"num": "-" + "9" * volume_digits, "den": "9" * volume_digits},
     }
     result_header = {
-        "source": request.model_dump(mode="json"),
+        "source": [box.model_dump(mode="json") for box in boxes],
         "union_volume": {
             "num": "-" + "9" * union_digits,
             "den": "9" * union_digits,
@@ -110,14 +111,18 @@ def _maximum_result_bytes(
     )
 
 
-def admit_box_union_volume(source: BoxUnionVolumeRequest) -> None:
-    dimension = source.boxes[0].dimension
-    if any(box.dimension != dimension for box in source.boxes):
+def admit_box_union_volume(boxes: tuple[RationalAxisAlignedBox, ...]) -> None:
+    if not boxes:
+        raise _validation_error(
+            "box_union_source_empty", "box union requires at least one source box"
+        )
+    dimension = boxes[0].dimension
+    if any(box.dimension != dimension for box in boxes):
         raise _validation_error(
             "box_union_sources_same_dimension",
             "all box-union sources must have the same dimension",
         )
-    active_box_count = sum(not box.is_empty for box in source.boxes)
+    active_box_count = sum(not box.is_empty for box in boxes)
     candidate_count = (1 << active_box_count) - 1
     if candidate_count > MAX_INTERSECTION_CANDIDATES:
         raise _validation_error(
@@ -127,7 +132,7 @@ def admit_box_union_volume(source: BoxUnionVolumeRequest) -> None:
             f"{MAX_INTERSECTION_CANDIDATES}-candidate bound",
         )
     endpoint_num, endpoint_den, volume_digits, union_digits = _digit_bounds(
-        source.boxes, dimension, candidate_count
+        boxes, dimension, candidate_count
     )
     result_digits = max(volume_digits, union_digits)
     if result_digits > min(
@@ -139,7 +144,7 @@ def admit_box_union_volume(source: BoxUnionVolumeRequest) -> None:
             f"({result_digits} digits > {MAX_BOX_UNION_RESULT_RATIONAL_DIGITS})",
         )
     estimated_bytes = _maximum_result_bytes(
-        source,
+        boxes,
         candidate_count=candidate_count,
         endpoint_numerator_digits=endpoint_num,
         endpoint_denominator_digits=endpoint_den,
@@ -154,21 +159,23 @@ def admit_box_union_volume(source: BoxUnionVolumeRequest) -> None:
         )
 
 
-def _admit(source: BoxUnionVolumeRequest) -> None:
+def _admit(boxes: tuple[RationalAxisAlignedBox, ...]) -> None:
     try:
-        admit_box_union_volume(source)
+        admit_box_union_volume(boxes)
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("boxes",), code=exc.type, message=exc.message()
         ) from exc
 
 
-def _union_volume_from_source(source: BoxUnionVolumeRequest) -> BoxUnionVolumeResult:
+def _union_volume_from_source(
+    boxes: tuple[RationalAxisAlignedBox, ...],
+) -> BoxUnionVolumeResult:
     """Compute the complete ledger for one admitted box family."""
-    _admit(source)
-    records, union_volume = complete_intersection_ledger(source.boxes)
+    _admit(boxes)
+    records, union_volume = complete_intersection_ledger(boxes)
     return BoxUnionVolumeResult._from_kernel(
-        source=source,
+        source=boxes,
         intersections=tuple(
             BoxIntersectionLedgerEntry(
                 box_indices=record.box_indices,
@@ -185,14 +192,7 @@ def compute_box_union_volume(
     boxes: tuple[RationalAxisAlignedBox, ...],
 ) -> BoxUnionVolumeResult:
     """Return exact union volume and the complete inclusion-exclusion ledger."""
-    return _union_volume_from_source(BoxUnionVolumeRequest(boxes=boxes))
-
-
-def _box_union_volume_from_request(
-    request: BoxUnionVolumeRequest,
-) -> BoxUnionVolumeResult:
-    """Run one parsed catalog request."""
-    return _union_volume_from_source(request)
+    return _union_volume_from_source(boxes)
 
 
 __all__ = ["compute_box_union_volume"]

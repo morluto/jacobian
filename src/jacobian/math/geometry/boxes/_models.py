@@ -107,7 +107,7 @@ class BoxIntersectionLedgerEntry(StrictModel):
 class BoxUnionVolumeResult(StrictModel):
     """Exact union volume with a complete source-bound intersection ledger."""
 
-    source: BoxUnionVolumeRequest
+    source: tuple[RationalAxisAlignedBox, ...] = Field(min_length=1)
     intersections: tuple[BoxIntersectionLedgerEntry, ...] = Field(
         max_length=MAX_INTERSECTION_CANDIDATES,
         description=(
@@ -120,7 +120,7 @@ class BoxUnionVolumeResult(StrictModel):
     @model_validator(mode="after")
     def require_structural_ledger(self) -> Self:
         if any(
-            index >= len(self.source.boxes)
+            index >= len(self.source)
             for entry in self.intersections
             for index in entry.box_indices
         ):
@@ -134,7 +134,7 @@ class BoxUnionVolumeResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        source: BoxUnionVolumeRequest,
+        source: tuple[RationalAxisAlignedBox, ...],
         intersections: tuple[BoxIntersectionLedgerEntry, ...],
         union_volume: CanonicalRational,
     ) -> Self:

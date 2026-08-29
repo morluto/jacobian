@@ -129,7 +129,7 @@ def test_disjoint_intersections_are_omitted() -> None:
     boxes = (_box((0, 1)), _box((2, 4)))
     result = compute_box_union_volume(boxes)
 
-    assert result.source == BoxUnionVolumeRequest(boxes=boxes)
+    assert result.source == boxes
     assert result.union_volume.as_fraction() == 3
     assert tuple(entry.box_indices for entry in result.intersections) == ((0,), (1,))
 
@@ -152,7 +152,7 @@ def test_empty_boxes_are_pruned_without_losing_source_indices() -> None:
     request = BoxUnionVolumeRequest(boxes=boxes)
     result = compute_box_union_volume(boxes)
 
-    assert result.source == request
+    assert result.source == request.boxes
     assert result.union_volume.as_fraction() == 3
     assert tuple(entry.box_indices for entry in result.intersections) == (
         (1,),
@@ -172,7 +172,7 @@ def test_one_nonempty_box_with_empties_beyond_fixed_cap_is_admitted() -> None:
     boxes = (_box((0, 2)), *(_empty_box(1) for _ in range(64)))
     result = compute_box_union_volume(boxes)
 
-    assert len(result.source.boxes) == 65
+    assert len(result.source) == 65
     assert result.union_volume.as_fraction() == 2
     assert tuple(entry.box_indices for entry in result.intersections) == ((0,),)
     assert result.intersections[0].volume.as_fraction() == 2
@@ -222,7 +222,7 @@ def test_native_api_accepts_canonical_box_tuple_without_request_wrapper() -> Non
 
     result = compute_box_union_volume(boxes)
 
-    assert result.source == BoxUnionVolumeRequest(boxes=boxes)
+    assert result.source == boxes
     assert result.union_volume.as_fraction() == 3
     assert tuple(entry.box_indices for entry in result.intersections) == (
         (0,),
@@ -236,10 +236,7 @@ def test_native_call_admits_the_family_before_the_kernel() -> None:
         compute_box_union_volume((_box((0, 1)), _box((0, 1), (0, 1))))
 
 
-def test_math_tool_consumes_parsed_request_without_reconstruction(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import jacobian.math.geometry.boxes.operations as operations
+def test_math_tool_projects_the_parsed_request_to_the_native_box_family() -> None:
     from jacobian.math.geometry.boxes._tools import TOOLS
 
     tool = next(
@@ -249,24 +246,11 @@ def test_math_tool_consumes_parsed_request_without_reconstruction(
     )
     request = _three_box_source()
 
-    constructions = 0
-
-    def counting_request(*args: object, **kwargs: object) -> BoxUnionVolumeRequest:
-        nonlocal constructions
-        constructions += 1
-        assert not args
-        return BoxUnionVolumeRequest.model_validate(kwargs)
-
-    monkeypatch.setattr(operations, "BoxUnionVolumeRequest", counting_request)
     tool_result = tool.run(request)
-    assert constructions == 0
-
     native_result = compute_box_union_volume(request.boxes)
-    assert constructions == 1
-    monkeypatch.undo()
 
     assert tool_result == native_result
-    assert native_result.source == request
+    assert native_result.source == request.boxes
 
 
 def test_returned_intersections_compose_unchanged_as_box_inputs() -> None:
@@ -279,7 +263,7 @@ def test_returned_intersections_compose_unchanged_as_box_inputs() -> None:
 
     replay = compute_box_union_volume(pair_intersections)
 
-    assert replay.source.boxes == pair_intersections
+    assert replay.source == pair_intersections
     assert replay.union_volume.as_fraction() == 2
 
 
@@ -352,7 +336,7 @@ def test_boxes_admit_the_full_canonical_dimension_range_and_no_more() -> None:
     result = compute_box_union_volume((_box(*((0, 1),) * MAX_CANONICAL_BOX_DIMENSION),))
 
     assert result.union_volume.as_fraction() == 1
-    assert result.source.boxes[0].dimension == MAX_CANONICAL_BOX_DIMENSION
+    assert result.source[0].dimension == MAX_CANONICAL_BOX_DIMENSION
 
     with pytest.raises(ValidationError):
         _empty_box(MAX_CANONICAL_BOX_DIMENSION + 1)

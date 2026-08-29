@@ -7,7 +7,12 @@ from jacobian.math.geometry.boxes._models import (
     BoxUnionVolumeRequest,
     BoxUnionVolumeResult,
 )
-from jacobian.math.geometry.boxes.operations import _box_union_volume_from_request
+from jacobian.math.geometry.boxes.operations import compute_box_union_volume
+
+
+def _box_union_volume(request: BoxUnionVolumeRequest) -> BoxUnionVolumeResult:
+    return compute_box_union_volume(request.boxes)
+
 
 TOOLS: MathTools = (
     geometry_operation(
@@ -25,7 +30,7 @@ TOOLS: MathTools = (
         "replay work, rational growth, and worst-case ledger bytes.",
         BoxUnionVolumeRequest,
         BoxUnionVolumeResult,
-        _box_union_volume_from_request,
+        _box_union_volume,
         "geometry",
         "measure",
         "box-union",

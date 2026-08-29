@@ -39,6 +39,18 @@ def _laplacian_net(vertex_count: int, *edges: ConductanceEdge) -> LaplacianNetwo
     return LaplacianNetwork(vertex_count=vertex_count, edges=edges)
 
 
+def _star_of_distinct_fifty_digit_dens(leaf_count: int = 215) -> ConductanceNetwork:
+    """Connected star whose hub diagonal sums ``leaf_count`` distinct 50-digit dens."""
+
+    return _net(
+        leaf_count + 1,
+        *(
+            _edge(0, leaf + 1, "1", str(10**49 + 2 * leaf + 1))
+            for leaf in range(leaf_count)
+        ),
+    )
+
+
 # ------------------------------------------------------------------ effective resistance
 
 
@@ -156,19 +168,45 @@ def test_flint_solves_a_path_above_the_previous_vertex_ceiling() -> None:
     ) == tuple(Fraction(vertex_count - 1 - node) for node in range(vertex_count))
 
 
-def test_exact_solve_work_rejects_the_wide_carrier_boundary() -> None:
+def test_flint_solves_the_wide_carrier_unit_path() -> None:
     vertex_count = 256
     net = _net(
         vertex_count,
         *(_edge(node, node + 1, "1", "1") for node in range(vertex_count - 1)),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="solve-work bound"):
-        compute_effective_resistance(
-            EffectiveResistanceRequest(
-                network=net, terminal_a=0, terminal_b=vertex_count - 1
-            )
+    resistance = compute_effective_resistance(
+        EffectiveResistanceRequest(
+            network=net, terminal_a=0, terminal_b=vertex_count - 1
         )
+    )
+    potentials = compute_node_potentials(
+        NodePotentialRequest(network=net, source=0, sink=vertex_count - 1)
+    )
+
+    assert resistance.effective_resistance.as_fraction() == vertex_count - 1
+    assert potentials.potentials[-1].potential.as_fraction() == Fraction(0)
+    assert potentials.potentials[0].potential.as_fraction() == vertex_count - 1
+
+
+def test_solve_work_rejects_accumulated_star_height_on_both_ops() -> None:
+    """Hub incidence of 215 distinct 50-digit dens exceeds the solve-work bound."""
+
+    net = _star_of_distinct_fifty_digit_dens()
+    with pytest.raises(
+        OperationDomainValidationError, match="solve-work bound"
+    ) as resistance:
+        compute_effective_resistance(
+            EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
+        )
+    with pytest.raises(
+        OperationDomainValidationError, match="solve-work bound"
+    ) as potentials:
+        compute_node_potentials(
+            NodePotentialRequest(network=net, source=0, sink=1)
+        )
+    assert resistance.value.errors()[0]["type"] == "electrical_network.solve_work_bound"
+    assert potentials.value.errors()[0]["type"] == "electrical_network.solve_work_bound"
 
 
 def test_laplacian_keeps_its_separate_materialized_matrix_ceiling() -> None:

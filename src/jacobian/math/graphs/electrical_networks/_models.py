@@ -11,6 +11,9 @@ MAX_NETWORK_VERTICES = 256
 MAX_LAPLACIAN_VERTICES = 128
 MAX_NETWORK_EDGES = 512
 MAX_NETWORK_SOLVE_WORK = 500_000_000
+# Solve work is reduced-order cubic elimination times the accumulated
+# Laplacian-diagonal height. Incident distinct denominators raise that height
+# before FLINT constructs or solves the system.
 
 # Each conductance is reduced and has numerator and denominator at most this many
 # decimal digits. Results (effective resistance, node potentials, Laplacian

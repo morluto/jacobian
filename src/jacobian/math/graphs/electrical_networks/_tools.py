@@ -12,6 +12,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationExample,
 )
+from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.graphs.electrical_networks import operations as native
 from jacobian.math.graphs.electrical_networks._models import (
     MAX_CONDUCTANCE_DIGITS,
@@ -105,9 +106,36 @@ def _require_connected(network: ConductanceNetwork) -> None:
         )
 
 
+def _accumulated_coefficient_height(network: ConductanceNetwork) -> int:
+    """Bound Laplacian diagonal height from incident conductance sums.
+
+    Off-diagonal entries copy one conductance. Each diagonal is the sum of the
+    incident conductances, so distinct denominators accumulate before FLINT
+    constructs or solves the reduced system.
+    """
+
+    incident: list[list[RationalHeight]] = [[] for _ in range(network.vertex_count)]
+    for edge in network.edges:
+        height = RationalHeight.from_canonical(edge.conductance)
+        incident[edge.source].append(height)
+        incident[edge.target].append(height)
+    tallest = 1
+    for heights in incident:
+        if not heights:
+            continue
+        combined = sum_heights(heights)
+        tallest = max(
+            tallest,
+            combined.numerator_digits,
+            combined.denominator_digits,
+        )
+    return tallest
+
+
 def _admit_solve(network: ConductanceNetwork) -> None:
     dimension = network.vertex_count - 1
-    scalar_work = dimension**3 * MAX_CONDUCTANCE_DIGITS
+    coefficient_height = _accumulated_coefficient_height(network)
+    scalar_work = dimension**3 * coefficient_height
     if scalar_work > MAX_NETWORK_SOLVE_WORK:
         _domain_error(
             ("network",),

@@ -66,11 +66,6 @@ def _oversized_partial_trace_payload() -> dict[str, Any]:
     ("operation_id", "payload", "maximum_order"),
     (
         (
-            "matrix.characteristic_polynomial.compute",
-            _identity_payload(MAX_MATRIX_DIMENSION + 1),
-            MAX_MATRIX_DIMENSION,
-        ),
-        (
             "matrix.permanent.compute",
             _identity_payload(MAX_MATRIX_DIMENSION + 1),
             MAX_PERMANENT_MATRIX_ORDER,

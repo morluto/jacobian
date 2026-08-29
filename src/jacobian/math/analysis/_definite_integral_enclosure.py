@@ -512,7 +512,7 @@ def _bind_partition(
         )
 
     source = result.box.intervals[0]
-    source_is_degenerate = _interval_width(source) == 0
+    source_is_degenerate = source.lower == source.upper
     zero_leaves = tuple(
         leaf for leaf in leaves if isinstance(leaf, DefiniteIntegralZeroMeasureLeaf)
     )
@@ -522,7 +522,7 @@ def _bind_partition(
                 "ZERO_MEASURE is reserved for the unique degenerate source leaf"
             )
         zero = zero_leaves[0].contribution
-        if _dyadic_fraction(zero.lower) != 0 or _dyadic_fraction(zero.upper) != 0:
+        if int(zero.lower.mantissa) != 0 or int(zero.upper.mantissa) != 0:
             raise _validation_error(
                 "the zero-measure contribution must be exactly zero"
             )
@@ -530,27 +530,8 @@ def _bind_partition(
         raise _validation_error(
             "a degenerate source interval requires its exact zero-measure leaf"
         )
-
     for leaf in leaves:
-        interval = _interval_at_path(source, leaf.path)
-        if isinstance(leaf, DefiniteIntegralEnclosedLeaf):
-            if _interval_width(interval) <= 0:
-                raise _validation_error(
-                    "an enclosed integral leaf must have positive source measure"
-                )
-            expected = _leaf_contribution(
-                interval, leaf.range_enclosure, result.precision_bits
-            )
-            if leaf.contribution != expected:
-                raise _validation_error(
-                    "leaf contribution must be the exact outward dyadic product "
-                    "of source width and range enclosure"
-                )
-        elif isinstance(leaf, DefiniteIntegralDomainUnprovenLeaf):
-            if _interval_width(interval) <= 0:
-                raise _validation_error(
-                    "a domain-unproven integral leaf must have positive source measure"
-                )
+        if isinstance(leaf, DefiniteIntegralDomainUnprovenLeaf):
             _bind_domain_failure_to_expression(result.expression, leaf.domain_failure)
 
 
@@ -560,7 +541,7 @@ class DefiniteIntegralEnclosureResult(DefiniteIntegralEnclosureRequest):
     outcome: DefiniteIntegralOutcome
 
     @model_validator(mode="after")
-    def bind_partition_contributions_and_sum(self) -> Self:
+    def bind_partition_and_outcome_state(self) -> Self:
         leaves = self.outcome.leaves
         _bind_partition(self, leaves)
         unproven = tuple(
@@ -582,25 +563,6 @@ class DefiniteIntegralEnclosureResult(DefiniteIntegralEnclosureRequest):
         if unproven:
             raise _validation_error(
                 "a domain-unproven leaf requires DOMAIN_UNPROVEN outcome"
-            )
-        contributions = tuple(
-            leaf.contribution
-            for leaf in leaves
-            if isinstance(
-                leaf,
-                (DefiniteIntegralEnclosedLeaf, DefiniteIntegralZeroMeasureLeaf),
-            )
-        )
-        expected = _summed_enclosure(contributions, self.precision_bits)
-        if self.outcome.enclosure != expected:
-            raise _validation_error(
-                "global integral enclosure must be the outward-rounded exact sum "
-                "of every retained leaf contribution"
-            )
-        target_met = _target_met(expected, self.target_width)
-        if target_met != isinstance(self.outcome, DefiniteIntegralTargetMet):
-            raise _validation_error(
-                "definite-integral outcome must agree with the requested target"
             )
         if (
             isinstance(self.outcome, DefiniteIntegralBudgetExhausted)
@@ -635,13 +597,6 @@ class DefiniteIntegralEnclosureResult(DefiniteIntegralEnclosureRequest):
 class _DefiniteIntegralAdmission:
     deadline: float
     root_preflight: _BoxPreflight | None
-    maximum_leaves: int
-    maximum_splits: int
-    maximum_subproblems: int
-    node_work: int
-    precision_work: int
-    selection_comparisons: int
-    summation_units: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -717,7 +672,6 @@ def _admit_definite_integral(
     _require_deadline(deadline, "before semantic preflight")
 
     nodes = _bounded_expression_nodes(request.expression)
-    maximum_splits = request.max_leaves - 1
     maximum_subproblems = 2 * request.max_leaves - 1
     node_work = 2 * len(nodes) * maximum_subproblems
     if node_work > MAX_DEFINITE_INTEGRAL_NODE_WORK:
@@ -791,13 +745,6 @@ def _admit_definite_integral(
     return _DefiniteIntegralAdmission(
         deadline=deadline,
         root_preflight=root_preflight,
-        maximum_leaves=request.max_leaves,
-        maximum_splits=maximum_splits,
-        maximum_subproblems=maximum_subproblems,
-        node_work=node_work,
-        precision_work=precision_work,
-        selection_comparisons=selection_comparisons,
-        summation_units=summation_units,
     )
 
 
@@ -1079,7 +1026,7 @@ def _compute_definite_integral_enclosure(
                     enclosure=enclosure,
                     deadline=admission.deadline,
                 )
-        if len(leaves) >= admission.maximum_leaves:
+        if len(leaves) >= request.max_leaves:
             public = _public_leaves(leaves)
             _require_deadline(admission.deadline, "after leaf result construction")
             return _finish_result(

@@ -181,6 +181,16 @@ def test_linear_integral_contains_one_half_and_reconstructs_each_leaf() -> None:
                 interval.lower.as_fraction(), interval.upper.as_fraction()
             ),
         )
+    summed_lower = sum(
+        (leaf.contribution.lower.as_fraction() for leaf in result.outcome.leaves),
+        Fraction(),
+    )
+    summed_upper = sum(
+        (leaf.contribution.upper.as_fraction() for leaf in result.outcome.leaves),
+        Fraction(),
+    )
+    assert result.outcome.enclosure.lower.as_fraction() <= summed_lower
+    assert result.outcome.enclosure.upper.as_fraction() >= summed_upper
 
 
 def _interval_width(interval: ClosedRationalInterval) -> Fraction:
@@ -517,30 +527,37 @@ def test_result_round_trips_through_public_json() -> None:
     )
 
 
-@pytest.mark.parametrize("mutation", ["path", "range", "contribution", "sum"])
-def test_structural_replay_rejects_forged_partition_arithmetic(mutation: str) -> None:
+def test_structural_validation_rejects_an_invalid_partition_path() -> None:
     result = _run(_var(), max_leaves=4)
     payload = deepcopy(result.model_dump(mode="json"))
-    if mutation == "path":
-        payload["outcome"]["leaves"][0]["path"] = []
-    elif mutation == "range":
-        payload["outcome"]["leaves"][0]["range_enclosure"]["upper"] = {
-            "mantissa": "1",
-            "exponent": 4,
-        }
-    elif mutation == "contribution":
-        payload["outcome"]["leaves"][0]["contribution"]["upper"] = {
-            "mantissa": "1",
-            "exponent": 4,
-        }
-    else:
-        payload["outcome"]["enclosure"]["upper"] = {
-            "mantissa": "1",
-            "exponent": 4,
-        }
+    payload["outcome"]["leaves"][0]["path"] = []
 
     with pytest.raises(ValidationError):
         DefiniteIntegralEnclosureResult.model_validate(payload)
+
+
+def test_result_deserialization_does_not_replay_computed_math(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.analysis._definite_integral_enclosure as integral
+
+    result = _run(_var(), max_leaves=4)
+
+    def replayed(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("computed mathematics was replayed during deserialization")
+
+    for name in (
+        "_interval_at_path",
+        "_leaf_contribution",
+        "_summed_enclosure",
+        "_target_met",
+    ):
+        monkeypatch.setattr(integral, name, replayed)
+
+    parsed = DefiniteIntegralEnclosureResult.model_validate(
+        result.model_dump(mode="json")
+    )
+    assert parsed == result
 
 
 def test_result_rejects_a_leaf_deeper_than_the_requested_budget() -> None:
@@ -549,15 +566,6 @@ def test_result_rejects_a_leaf_deeper_than_the_requested_budget() -> None:
     payload["outcome"]["leaves"][0]["path"] = [0, 0, 0]
 
     with pytest.raises(ValidationError, match="requested partition-depth"):
-        DefiniteIntegralEnclosureResult.model_validate(payload)
-
-
-def test_result_rejects_an_outcome_that_disagrees_with_target_width() -> None:
-    result = _run(_var(), max_leaves=4)
-    payload = deepcopy(result.model_dump(mode="json"))
-    payload["outcome"]["status"] = "BUDGET_EXHAUSTED"
-
-    with pytest.raises(ValidationError, match="agree with the requested target"):
         DefiniteIntegralEnclosureResult.model_validate(payload)
 
 
@@ -701,7 +709,7 @@ def test_admission_charges_every_executed_partition_primitive(
         "subproblem": 0,
         "summation_endpoint": 0,
     }
-    admissions: list[Any] = []
+    admissions = 0
     expression = {
         "op": "mul",
         "children": [
@@ -721,9 +729,9 @@ def test_admission_charges_every_executed_partition_primitive(
     original_sum = integral._summed_enclosure
 
     def admitting(*args: Any, **kwargs: Any) -> Any:
-        admission = original_admit(*args, **kwargs)
-        admissions.append(admission)
-        return admission
+        nonlocal admissions
+        admissions += 1
+        return original_admit(*args, **kwargs)
 
     def evaluating(*args: Any, **kwargs: Any) -> Any:
         executed["subproblem"] += 1
@@ -759,18 +767,18 @@ def test_admission_charges_every_executed_partition_primitive(
     monkeypatch.setattr(integral, "_summed_enclosure", summing)
 
     result = _compute_definite_integral_enclosure(request)
-    assert len(admissions) == 1
-    admission = admissions[0]
+    assert admissions == 1
     executed["output_leaf"] = len(result.outcome.leaves)
+    maximum_subproblems = 2 * request.max_leaves - 1
     assert_charged_work_parity(
         charged={
-            "arb_node_bit": admission.precision_work,
-            "expression_node": admission.node_work,
-            "midpoint_split": admission.maximum_splits,
-            "output_leaf": admission.maximum_leaves,
-            "selection_candidate": admission.selection_comparisons,
-            "subproblem": admission.maximum_subproblems,
-            "summation_endpoint": admission.summation_units,
+            "arb_node_bit": (node_count * maximum_subproblems * request.precision_bits),
+            "expression_node": 2 * node_count * maximum_subproblems,
+            "midpoint_split": request.max_leaves - 1,
+            "output_leaf": request.max_leaves,
+            "selection_candidate": (request.max_leaves * (request.max_leaves - 1) // 2),
+            "subproblem": maximum_subproblems,
+            "summation_endpoint": (request.max_leaves * (request.max_leaves + 1)),
         },
         executed=executed,
     )

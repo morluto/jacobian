@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.divisibility_sum_triples._models import (
+    MAX_DIVISIBILITY_SUM_INTERVAL_SIZE,
     DivisibilitySumTriplesResult,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -21,6 +23,18 @@ def construct_divisibility_sum_triples(
     On an integer interval [L,U], for every triple (a,b,c) with a < b < c
     and a | (b+c), create one hyperedge.
     """
+    if lower < 1 or upper < lower:
+        raise OperationDomainValidationError(
+            location=("lower", "upper"),
+            code="divisibility_sum_triples.positive_ordered_interval",
+            message="divisibility-sum triples require 1 <= lower <= upper",
+        )
+    if upper - lower + 1 > MAX_DIVISIBILITY_SUM_INTERVAL_SIZE:
+        raise OperationDomainValidationError(
+            location=("lower", "upper"),
+            code="divisibility_sum_triples.interval_size",
+            message="divisibility-sum triples admit at most 42 interval values",
+        )
     vertices = tuple(str(i) for i in range(lower, upper + 1))
     edges: list[tuple[str, tuple[str, ...]]] = []
 

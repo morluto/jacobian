@@ -11,8 +11,8 @@ from jacobian.math.logic.games.finite._models import (
     ZeroSumGameRequest,
 )
 from jacobian.math.logic.games.finite.operations import (
-    compute_best_response,
-    compute_nash_equilibrium,
+    best_response,
+    nash_equilibrium,
 )
 
 
@@ -34,7 +34,7 @@ class TestBestResponse:
                 ),
             ),
         )
-        result = compute_best_response(req)
+        result = best_response(req.payoff_matrix)
         assert result.best_row == 0  # Row 0 has minimum 0, Row 1 has minimum 0
 
     def test_payoffs_beyond_the_equilibrium_bound_still_admit_best_response(
@@ -53,7 +53,7 @@ class TestBestResponse:
                 ),
             ),
         )
-        result = compute_best_response(req)
+        result = best_response(req.payoff_matrix)
         assert result.best_row == 1
         assert result.value.as_fraction() == Fraction(1, large - 3)
 
@@ -74,7 +74,7 @@ class TestNashEquilibrium:
             )
         )
         with pytest.raises(ValueError, match="exact-equilibrium work bound"):
-            compute_nash_equilibrium(request)
+            nash_equilibrium(request.payoff_matrix)
 
     def test_pure_strategy(self) -> None:
         req = NashEquilibriumRequest(
@@ -89,7 +89,7 @@ class TestNashEquilibrium:
                 ),
             ),
         )
-        result = compute_nash_equilibrium(req)
+        result = nash_equilibrium(req.payoff_matrix)
         assert result.value.as_fraction() == 1  # (0,0) is the pure equilibrium
 
     def test_mixed_equilibrium(self) -> None:
@@ -105,7 +105,7 @@ class TestNashEquilibrium:
                 ),
             ),
         )
-        result = compute_nash_equilibrium(req)
+        result = nash_equilibrium(req.payoff_matrix)
         assert tuple(value.as_fraction() for value in result.row_strategy) == (
             Fraction(2, 3),
             Fraction(1, 3),
@@ -125,7 +125,7 @@ class TestNashEquilibrium:
             ),
         )
 
-        result = compute_nash_equilibrium(req)
+        result = nash_equilibrium(req.payoff_matrix)
 
         assert result.value.as_fraction() == 0
         assert sum(value.as_fraction() for value in result.row_strategy) == 1
@@ -140,7 +140,7 @@ class TestNashEquilibrium:
             ),
         )
 
-        result = compute_nash_equilibrium(req)
+        result = nash_equilibrium(req.payoff_matrix)
 
         assert tuple(value.as_fraction() for value in result.row_strategy) == (
             Fraction(1),
@@ -164,7 +164,7 @@ class TestNashEquilibrium:
             ),
         )
 
-        result = compute_nash_equilibrium(req)
+        result = nash_equilibrium(req.payoff_matrix)
 
         assert tuple(value.as_fraction() for value in result.row_strategy) == (
             Fraction(0),
@@ -184,5 +184,5 @@ class TestNashEquilibrium:
                 entries=(_r(-100000000000000000000),),
             ),
         )
-        result = compute_best_response(req)
+        result = best_response(req.payoff_matrix)
         assert result.value.as_fraction() == -100000000000000000000

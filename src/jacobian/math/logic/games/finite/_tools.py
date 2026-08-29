@@ -15,11 +15,25 @@ from jacobian.math.logic.games.finite._models import (
     ZeroSumGameRequest,
 )
 from jacobian.math.logic.games.finite.operations import (
-    compute_best_response,
-    compute_deterministic_terminal_game,
-    compute_nash_equilibrium,
+    best_response,
+    nash_equilibrium,
+    solve_terminal_game,
 )
 from jacobian.math.logic.games.finite.values import DeterministicTerminalGameSolution
+
+
+def _run_best_response(request: ZeroSumGameRequest) -> BestResponseResult:
+    return best_response(request.payoff_matrix)
+
+
+def _run_nash_equilibrium(request: NashEquilibriumRequest) -> NashEquilibriumResult:
+    return nash_equilibrium(request.payoff_matrix)
+
+
+def _run_deterministic_terminal_game(
+    request: DeterministicTerminalGameRequest,
+) -> DeterministicTerminalGameSolution:
+    return solve_terminal_game(request.game)
 
 
 def _op[
@@ -97,7 +111,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "for a finite zero-sum payoff matrix.",
         ZeroSumGameRequest,
         BestResponseResult,
-        compute_best_response,
+        _run_best_response,
         "game-theory",
         "best-response",
         "zero-sum",
@@ -120,7 +134,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         f"{MAX_EXACT_EQUILIBRIUM_WORK}.",
         NashEquilibriumRequest,
         NashEquilibriumResult,
-        compute_nash_equilibrium,
+        _run_nash_equilibrium,
         "game-theory",
         "nash-equilibrium",
         "zero-sum",
@@ -142,7 +156,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "MAX, and every infinite play has the declared draw payoff.",
         DeterministicTerminalGameRequest,
         DeterministicTerminalGameSolution,
-        compute_deterministic_terminal_game,
+        _run_deterministic_terminal_game,
         "game-theory",
         "deterministic-game",
         "terminal-payoff",

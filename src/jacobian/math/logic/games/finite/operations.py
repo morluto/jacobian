@@ -15,10 +15,8 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.games.finite._models import (
     MAX_EXACT_EQUILIBRIUM_WORK,
     BestResponseResult,
-    DeterministicTerminalGameRequest,
-    NashEquilibriumRequest,
     NashEquilibriumResult,
-    ZeroSumGameRequest,
+    PayoffMatrix,
 )
 from jacobian.math.logic.games.finite.values import (
     DeterministicTerminalGame,
@@ -245,6 +243,7 @@ def solve_terminal_game(
 ) -> DeterministicTerminalGameSolution:
     """Solve one exact finite deterministic terminal-payoff game."""
 
+    _run_admission(lambda: _require_terminal_game_envelope(game))
     value_classes, max_strategy, min_strategy = _solve_terminal_game_data(game)
     return DeterministicTerminalGameSolution._from_kernel(
         game, value_classes, max_strategy, min_strategy
@@ -255,8 +254,7 @@ def _wire_rational(value: Fraction) -> CanonicalRational:
     return CanonicalRational.from_fraction(value)
 
 
-def _payoff_matrix(request: ZeroSumGameRequest) -> list[list[Fraction]]:
-    matrix = request.payoff_matrix
+def _payoff_matrix(matrix: PayoffMatrix) -> list[list[Fraction]]:
     entries = [entry.as_fraction() for entry in matrix.entries]
     return [
         [entries[row * matrix.n_cols + col] for col in range(matrix.n_cols)]
@@ -281,9 +279,9 @@ def _run_admission(admission: Callable[[], None]) -> None:
         ) from exc
 
 
-def compute_best_response(request: ZeroSumGameRequest) -> BestResponseResult:
+def best_response(payoff_matrix: PayoffMatrix) -> BestResponseResult:
     """Compute the maximin value and a maximizing row for the row player."""
-    matrix = _payoff_matrix(request)
+    matrix = _payoff_matrix(payoff_matrix)
     best_row = 0
     best_value = min(matrix[0])
     for row_index, row in enumerate(matrix[1:], start=1):
@@ -296,12 +294,10 @@ def compute_best_response(request: ZeroSumGameRequest) -> BestResponseResult:
     )
 
 
-def compute_nash_equilibrium(
-    request: NashEquilibriumRequest,
-) -> NashEquilibriumResult:
+def nash_equilibrium(payoff_matrix: PayoffMatrix) -> NashEquilibriumResult:
     """Compute one exact saddle point of a finite 2-player zero-sum game."""
 
-    matrix_value = request.payoff_matrix
+    matrix_value = payoff_matrix
     denominator_digits = sum(len(value.den) for value in matrix_value.entries)
     numerator_digits = max(len(value.num.lstrip("-")) for value in matrix_value.entries)
     elimination_dimension = max(matrix_value.n_rows, matrix_value.n_cols) + 2
@@ -316,7 +312,7 @@ def compute_nash_equilibrium(
     import sympy
     from sympy.solvers.simplex import lpmax, lpmin
 
-    matrix = _payoff_matrix(request)
+    matrix = _payoff_matrix(payoff_matrix)
     n_rows = len(matrix)
     n_cols = len(matrix[0])
     denominator_scale = lcm(*(value.denominator for row in matrix for value in row))
@@ -385,16 +381,4 @@ def compute_nash_equilibrium(
     )
 
 
-def compute_deterministic_terminal_game(
-    request: DeterministicTerminalGameRequest,
-) -> DeterministicTerminalGameSolution:
-    """Compute every value and canonical optimal stationary strategy pair."""
-
-    _run_admission(lambda: _require_terminal_game_envelope(request.game))
-    value_classes, max_strategy, min_strategy = _solve_terminal_game_data(request.game)
-    return DeterministicTerminalGameSolution._from_kernel(
-        request.game, value_classes, max_strategy, min_strategy
-    )
-
-
-__all__ = ["solve_terminal_game"]
+__all__ = ["best_response", "nash_equilibrium", "solve_terminal_game"]

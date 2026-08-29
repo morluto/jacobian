@@ -27,9 +27,6 @@ from jacobian.math.logic.games.finite._models import (
     DeterministicTerminalGameRequest,
 )
 from jacobian.math.logic.games.finite._tools import TOOLS
-from jacobian.math.logic.games.finite.operations import (
-    compute_deterministic_terminal_game,
-)
 
 
 def _r(numerator: int, denominator: int = 1) -> CanonicalRational:
@@ -362,12 +359,10 @@ def test_threshold_work_is_admitted_and_rejected_before_solving() -> None:
         }
 
     admitted = DeterministicTerminalGame.model_validate(terminal_game(400))
-    compute_deterministic_terminal_game(DeterministicTerminalGameRequest(game=admitted))
+    solve_terminal_game(admitted)
     rejected = DeterministicTerminalGame.model_validate(terminal_game(500))
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        compute_deterministic_terminal_game(
-            DeterministicTerminalGameRequest(game=rejected)
-        )
+        solve_terminal_game(rejected)
     assert exc_info.value.errors()[0]["type"] == "finite_game.threshold_work_exceeded"
 
 
@@ -386,7 +381,7 @@ def test_result_size_is_rejected_independently_of_threshold_work() -> None:
 
     game = DeterministicTerminalGame.model_validate(payload)
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        compute_deterministic_terminal_game(DeterministicTerminalGameRequest(game=game))
+        solve_terminal_game(game)
     assert exc_info.value.errors()[0]["type"] == "finite_game.result_size_exceeded"
 
 
@@ -400,7 +395,7 @@ def test_public_request_and_example_return_the_declared_result() -> None:
         operation.examples[0].input
     )
 
-    result = compute_deterministic_terminal_game(request)
+    result = solve_terminal_game(request.game)
 
     assert isinstance(result, DeterministicTerminalGameSolution)
     assert result.value_classes[0].payoff.as_fraction() == 1
@@ -441,7 +436,7 @@ def test_trusted_terminal_game_producers_run_the_minimax_kernel_once(
         return original(game)
 
     monkeypatch.setattr(operations, "_solve_terminal_game_data", counted_projection)
-    compute_deterministic_terminal_game(request)
+    solve_terminal_game(request.game)
     assert calls == 1
 
 

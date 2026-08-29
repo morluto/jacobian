@@ -99,7 +99,7 @@ class TestHankel:
             for column in range(65)
         )
 
-    def test_maximum_order_rejects_nonrepresentable_determinant_height(self) -> None:
+    def test_maximum_order_rejects_moment_above_derived_height_bound(self) -> None:
         moments = (
             CanonicalRational(num="1", den="10000019"),
             *(CanonicalRational(num="1", den="1") for _ in range(128)),

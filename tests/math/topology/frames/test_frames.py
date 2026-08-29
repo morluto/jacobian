@@ -12,7 +12,11 @@ from jacobian.math.topology.frames._models import (
     VectorFamilyRequest,
 )
 from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
-from jacobian.math.topology.frames.operations import gram
+from jacobian.math.topology.frames.operations import (
+    _RESULT_RESERVE_BYTES,
+    _gram_result_bound,
+    gram,
+)
 from jacobian.math.topology.frames.values import MAX_DIM, MAX_VECTORS, VectorFamily
 
 
@@ -117,6 +121,31 @@ def test_result_sensitive_operations_diverge_at_full_carrier_boundary() -> None:
         len(encode_strict_json(potential.model_dump(mode="json")))
         <= CanonicalLimits().max_output_bytes
     )
+
+
+def test_sparse_high_height_gram_is_admitted_by_occupancy() -> None:
+    vectors = tuple(
+        tuple(1_000 * entry for entry in vector)
+        for vector in _repeated_standard_basis(dimension=MAX_DIM, repeats=2)
+    )
+    family = VectorFamily(vectors=vectors)
+    naive_entry_bound = MAX_DIM * 1_000**2
+    naive_chars = len(str(naive_entry_bound)) + int(naive_entry_bound > 0)
+    naive_bytes = (
+        MAX_VECTORS**2 * (naive_chars + 1)
+        + 2 * MAX_VECTORS
+        + len(encode_strict_json(family.model_dump(mode="json")))
+        + _RESULT_RESERVE_BYTES
+    )
+
+    assert naive_bytes > CanonicalLimits().max_output_bytes
+    assert _gram_result_bound(family) <= CanonicalLimits().max_output_bytes
+    result = gram(family)
+    encoded = encode_strict_json(result.model_dump(mode="json"))
+    assert result.gram[0][0] == 1_000_000
+    assert result.gram[0][1] == 0
+    assert result.gram[0][MAX_DIM] == 1_000_000
+    assert len(encoded) <= CanonicalLimits().max_output_bytes
 
 
 def test_dense_high_height_gram_is_rejected_before_backend_expansion() -> None:

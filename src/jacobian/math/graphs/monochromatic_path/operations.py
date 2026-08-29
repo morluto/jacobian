@@ -77,17 +77,19 @@ def _admit_monochromatic_path_graph(graph: ColoredUndirectedGraph) -> tuple[str,
     vertex_sizes = [len(encode_strict_json(vertex)) for vertex in graph.graph.vertices]
     vertices_bytes = _json_array_size(vertex_sizes)
     edge_id_size = len(encode_strict_json(f"path_{max(0, subset_count - 1)}"))
-    edge_entry_size = _json_array_size(
-        [edge_id_size, _json_array_size(vertex_sizes)]
-    )
+    edge_entry_size = _json_array_size([edge_id_size, _json_array_size(vertex_sizes)])
     hypergraph_bytes = strict_json_object_size(
         (
             ("vertices", vertices_bytes),
             ("edges", _json_array_size([edge_entry_size] * subset_count)),
         )
     )
-    map_bytes = 2 + max(len(colours) - 1, 0) + sum(
-        len(encode_strict_json(colour)) + 1 + hypergraph_bytes for colour in colours
+    map_bytes = (
+        2
+        + max(len(colours) - 1, 0)
+        + sum(
+            len(encode_strict_json(colour)) + 1 + hypergraph_bytes for colour in colours
+        )
     )
     result_bytes = strict_json_object_size(
         (("graph", graph_bytes), ("colour_to_hypergraph", map_bytes))

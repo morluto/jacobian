@@ -25,7 +25,9 @@ def _monochromatic_graph_schema() -> JsonSchemaValue:
     if definition is None:
         raise AssertionError("colored graph schema lost its simple-graph definition")
     definition["properties"]["vertices"]["maxItems"] = MAX_VERTICES
-    definition["properties"]["edges"]["maxItems"] = MAX_VERTICES * (MAX_VERTICES - 1) // 2
+    definition["properties"]["edges"]["maxItems"] = (
+        MAX_VERTICES * (MAX_VERTICES - 1) // 2
+    )
     schema["properties"]["graph"] = definition
     del schema["$defs"]
     schema["properties"]["edge_colors"]["maxItems"] = (

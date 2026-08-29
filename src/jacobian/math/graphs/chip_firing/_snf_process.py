@@ -66,7 +66,9 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
                 cwd=worker_directory,
             )
     except OSError as exc:
-        raise RuntimeError("bounded chip-firing SNF worker could not be started") from exc
+        raise RuntimeError(
+            "bounded chip-firing SNF worker could not be started"
+        ) from exc
 
     if completed.timed_out or completed.cancelled:
         raise OperationExecutionTimeoutError(
@@ -77,7 +79,9 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
-        raise RuntimeError("bounded chip-firing SNF worker did not establish a diagonal")
+        raise RuntimeError(
+            "bounded chip-firing SNF worker did not establish a diagonal"
+        )
 
     try:
         response = json.loads(completed.stdout.decode("utf-8"))

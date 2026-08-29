@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    strict_json_object_size,
+)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._models import (
     EdgePatternEntry,
     EdgePatternProfileResult,
@@ -11,6 +17,107 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 
 __all__ = ["compute_edge_pattern_profile"]
+
+MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+
+def _strict_json_array_size(item_sizes: tuple[int, ...]) -> int:
+    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
+
+
+def _entry_size(edge_id: str, members: tuple[str, ...], colors: tuple[str, ...]) -> int:
+    color_to_block: dict[str, int] = {}
+    partitions: list[int] = []
+    labels: list[str] = []
+    for color in colors:
+        if color not in color_to_block:
+            color_to_block[color] = len(color_to_block)
+            labels.append(color)
+        partitions.append(color_to_block[color])
+    return strict_json_object_size(
+        (
+            ("edge_id", len(encode_strict_json(edge_id))),
+            (
+                "members",
+                _strict_json_array_size(
+                    tuple(len(encode_strict_json(member)) for member in members)
+                ),
+            ),
+            (
+                "equality_partition",
+                _strict_json_array_size(
+                    tuple(len(encode_strict_json(index)) for index in partitions)
+                ),
+            ),
+            ("num_color_blocks", len(encode_strict_json(len(labels)))),
+            (
+                "color_labels",
+                _strict_json_array_size(
+                    tuple(len(encode_strict_json(color)) for color in labels)
+                ),
+            ),
+        )
+    )
+
+
+def _admit_edge_pattern_profile(
+    hypergraph: FiniteHypergraph, vertex_colors: dict[str, str]
+) -> None:
+    if not isinstance(hypergraph, FiniteHypergraph):
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="edge_pattern.invalid_hypergraph",
+            message="hypergraph must be a FiniteHypergraph value",
+        )
+    if not isinstance(vertex_colors, dict) or set(vertex_colors) != set(
+        hypergraph.vertices
+    ):
+        raise OperationDomainValidationError(
+            location=("vertex_colors",),
+            code="edge_pattern.color_map_must_cover_all_vertices",
+            message="vertex_colors must cover exactly all declared vertices",
+        )
+    if any(
+        not isinstance(key, str) or not isinstance(value, str)
+        for key, value in vertex_colors.items()
+    ):
+        raise OperationDomainValidationError(
+            location=("vertex_colors",),
+            code="edge_pattern.invalid_color_map",
+            message="vertex_colors must be a string-to-string mapping",
+        )
+    entry_sizes = tuple(
+        _entry_size(
+            edge_id,
+            members,
+            tuple(vertex_colors[member] for member in members),
+        )
+        for edge_id, members in hypergraph.edges
+    )
+    id_sizes = tuple(
+        len(encode_strict_json(edge_id)) for edge_id, _ in hypergraph.edges
+    )
+    result_bytes = strict_json_object_size(
+        (
+            (
+                "hypergraph",
+                len(encode_strict_json(hypergraph.model_dump(mode="json"))),
+            ),
+            ("vertex_colors", len(encode_strict_json(vertex_colors))),
+            ("entries", _strict_json_array_size(entry_sizes)),
+            ("monochromatic_edge_ids", _strict_json_array_size(id_sizes)),
+            ("rainbow_edge_ids", _strict_json_array_size(id_sizes)),
+        )
+    )
+    if result_bytes > MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES:
+        raise OperationDomainValidationError(
+            location=("hypergraph", "vertex_colors"),
+            code="edge_pattern.result_too_large",
+            message=(
+                "the complete edge-pattern profile exceeds the "
+                f"{MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES}-byte result envelope"
+            ),
+        )
 
 
 def compute_edge_pattern_profile(
@@ -22,6 +129,7 @@ def compute_edge_pattern_profile(
     For each edge, compute the equality partition of its member colours,
     the number of colour blocks, and classify as monochromatic or rainbow.
     """
+    _admit_edge_pattern_profile(hypergraph, vertex_colors)
     entries: list[EdgePatternEntry] = []
     monochromatic: list[str] = []
     rainbow: list[str] = []

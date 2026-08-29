@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -17,7 +17,12 @@ class EdgePatternProfileRequest(StrictModel):
     """Request for the vertex-colour edge-pattern profile of a hypergraph."""
 
     hypergraph: FiniteHypergraph
-    vertex_colors: dict[str, str]
+    vertex_colors: dict[str, str] = Field(
+        description=(
+            "A total map on the hypergraph vertex labels. The complete result "
+            "is admitted against the canonical output-size envelope."
+        )
+    )
 
     @model_validator(mode="after")
     def validate_colors(self) -> Self:

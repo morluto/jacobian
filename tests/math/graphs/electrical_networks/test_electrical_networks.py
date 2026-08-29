@@ -202,9 +202,7 @@ def test_solve_work_rejects_accumulated_star_height_on_both_ops() -> None:
     with pytest.raises(
         OperationDomainValidationError, match="solve-work bound"
     ) as potentials:
-        compute_node_potentials(
-            NodePotentialRequest(network=net, source=0, sink=1)
-        )
+        compute_node_potentials(NodePotentialRequest(network=net, source=0, sink=1))
     assert resistance.value.errors()[0]["type"] == "electrical_network.solve_work_bound"
     assert potentials.value.errors()[0]["type"] == "electrical_network.solve_work_bound"
 

@@ -1,5 +1,8 @@
 """Typed contracts for the product representation profile operation."""
 
+from pydantic import Field
+
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 
@@ -14,8 +17,8 @@ class ProductRepresentationRequest(StrictModel):
 class RepresentationEntry(StrictModel):
     """One product value and its representation multiplicity."""
 
-    product: int
-    multiplicity: int
+    product: CanonicalInteger
+    multiplicity: int = Field(ge=1, le=100_000)
 
 
 class ProductRepresentationResult(StrictModel):
@@ -24,7 +27,7 @@ class ProductRepresentationResult(StrictModel):
     left: FiniteIntegerSet
     right: FiniteIntegerSet
     entries: tuple[RepresentationEntry, ...]
-    support_cardinality: int
+    support_cardinality: int = Field(ge=0, le=100_000)
 
 
 __all__ = [

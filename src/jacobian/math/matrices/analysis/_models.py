@@ -114,7 +114,8 @@ class RationalSpectrumClaimResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        request: RationalSpectrumClaimRequest,
+        matrix: RationalMatrix,
+        claimed_profile: tuple[RationalSpectrumMultiplicityClaim, ...],
         nullity_ledger: tuple[RationalSpectrumNullityLedgerEntry, ...],
         claimed_multiplicity_sum: int,
         established_multiplicity_sum: int,
@@ -125,10 +126,10 @@ class RationalSpectrumClaimResult(StrictModel):
 
         valid = first_failed_condition is None
         return cls.model_construct(
-            matrix=request.matrix,
-            claimed_profile=request.claimed_profile,
+            matrix=matrix,
+            claimed_profile=claimed_profile,
             nullity_ledger=nullity_ledger,
-            matrix_order=len(request.matrix.entries),
+            matrix_order=len(matrix.entries),
             claimed_multiplicity_sum=claimed_multiplicity_sum,
             established_multiplicity_sum=established_multiplicity_sum,
             outcome="VALID" if valid else "INVALID",

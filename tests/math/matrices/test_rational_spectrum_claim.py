@@ -15,8 +15,11 @@ from jacobian.math.matrices.analysis._models import (
     RationalSpectrumClaimRequest,
     RationalSpectrumClaimResult,
 )
-from jacobian.math.matrices.analysis.operations import (
+from jacobian.math.matrices.analysis._tools import (
     check_rational_spectrum_claim,
+)
+from jacobian.math.matrices.analysis.operations import (
+    check_rational_spectrum_claim as check_rational_spectrum_claim_native,
 )
 
 
@@ -98,6 +101,17 @@ def test_complete_repeated_rational_spectrum_binds_exact_nullities() -> None:
         RationalSpectrumClaimResult.model_validate(result.model_dump(mode="json"))
         == result
     )
+
+
+def test_native_api_accepts_canonical_matrix_and_claim_values() -> None:
+    request = _request(
+        [[_rational(2), _rational(0)], [_rational(0), _rational(-1)]],
+        [_claim(2, 1), _claim(-1, 1)],
+    )
+    result = check_rational_spectrum_claim_native(
+        request.matrix, request.claimed_profile
+    )
+    assert result.valid_complete_rational_spectrum is True
 
 
 def test_zero_matrix_and_nonintegral_rational_spectrum() -> None:

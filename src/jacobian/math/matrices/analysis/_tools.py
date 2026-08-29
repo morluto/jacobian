@@ -13,12 +13,45 @@ from jacobian.math.matrices.analysis._models import (
     RationalSpectrumClaimRequest,
     RationalSpectrumClaimResult,
     SymmetricMatrixRequest,
+    _canonical_source_matrix,
 )
 from jacobian.math.matrices.analysis.operations import (
-    check_farkas_certificate,
-    check_rational_spectrum_claim,
-    compute_inertia,
+    check_farkas_certificate as _check_farkas_certificate_native,
 )
+from jacobian.math.matrices.analysis.operations import (
+    check_rational_spectrum_claim as _check_rational_spectrum_claim_native,
+)
+from jacobian.math.matrices.analysis.operations import (
+    compute_inertia as _compute_inertia_native,
+)
+
+
+def check_rational_spectrum_claim(
+    request: RationalSpectrumClaimRequest,
+) -> RationalSpectrumClaimResult:
+    """Unpack a wire claim for the canonical spectrum checker."""
+
+    return _check_rational_spectrum_claim_native(
+        request.matrix, request.claimed_profile
+    )
+
+
+def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
+    """Normalize a sparse wire matrix for the canonical inertia operation."""
+
+    return _compute_inertia_native(_canonical_source_matrix(request))
+
+
+def check_farkas_certificate(
+    request: FarkasCertificateRequest,
+) -> FarkasCertificateResult:
+    """Unpack a wire certificate for the canonical Farkas checker."""
+
+    return _check_farkas_certificate_native(
+        request.constraint_matrix,
+        request.rhs_vector,
+        request.multipliers,
+    )
 
 
 def _op[

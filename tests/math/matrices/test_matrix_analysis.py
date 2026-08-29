@@ -15,9 +15,15 @@ from jacobian.math.matrices.analysis._models import (
     MatrixEntry,
     SymmetricMatrixRequest,
 )
-from jacobian.math.matrices.analysis.operations import (
+from jacobian.math.matrices.analysis._tools import (
     check_farkas_certificate,
     compute_inertia,
+)
+from jacobian.math.matrices.analysis.operations import (
+    check_farkas_certificate as check_farkas_certificate_native,
+)
+from jacobian.math.matrices.analysis.operations import (
+    compute_inertia as compute_inertia_native,
 )
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
@@ -27,6 +33,12 @@ from jacobian.math.matrices.values import (
 
 
 class TestInertia:
+    def test_native_api_accepts_canonical_matrix(self) -> None:
+        matrix = RationalMatrix(entries=((CanonicalRational(num="1", den="1"),),))
+        result = compute_inertia_native(matrix)
+        assert result.matrix == matrix
+        assert (result.n_positive, result.n_negative, result.n_zero) == (1, 0, 0)
+
     def test_identity(self) -> None:
         req = SymmetricMatrixRequest(
             dimension=3,
@@ -108,6 +120,16 @@ class TestInertia:
 
 
 class TestFarkas:
+    def test_native_api_accepts_canonical_certificate_fields(self) -> None:
+        one = CanonicalRational(num="1", den="1")
+        negative_one = CanonicalRational(num="-1", den="1")
+        result = check_farkas_certificate_native(
+            ((one, one), (negative_one, negative_one)),
+            (negative_one, negative_one),
+            (one, one),
+        )
+        assert result.valid is True
+
     def test_valid_certificate(self) -> None:
         # System: x1 + x2 <= -1, x1 + x2 >= 1 is infeasible.
         # A = [[1, 1], [-1, -1]], b = [-1, -1]

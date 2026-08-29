@@ -192,11 +192,7 @@ def test_dimension_limit_is_derived_from_elimination_work_and_encoding() -> None
 
 
 def test_published_dimension_fits_canonical_request_byte_limit() -> None:
-    """Worst-case valid tensors must encode under the 10 MiB transport envelope.
-
-    The request model must accept the advertised dimension before the operation
-    boundary applies its owner-local execution checks.
-    """
+    """Worst-case valid tensors fit the canonical request byte limit."""
     n = MAX_DIM
     residue = 250
     inner = [residue] * n

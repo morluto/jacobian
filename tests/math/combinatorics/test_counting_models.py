@@ -27,6 +27,9 @@ from jacobian.math.combinatorics._models import IntegerResult
 from jacobian.math.combinatorics.operations import (
     MAX_COUNTING_MULTIPLICATIVE_STEPS,
     MAX_SPARSE_COUNTING_INDEX,
+    _admit_multiplicative_count,
+    _binomial_coefficient_digit_bound,
+    _falling_factorial_digit_bound,
 )
 
 
@@ -135,6 +138,27 @@ def test_decimal_result_construction_is_included_in_work_admission() -> None:
         )
 
     assert error.value.errors()[0]["type"] == "combinatorics.counting_work_exceeded"
+
+
+def test_binomial_digit_bound_rejects_underestimated_lgamma_envelope() -> None:
+    n, k = 663_856_028_889_952, 45_932
+    bound = _binomial_coefficient_digit_bound(n, k)
+    assert bound >= 486_613
+    with pytest.raises(OperationDomainValidationError) as error:
+        compute_binomial(SparseCountingPairRequest(n=n, k=k))
+    assert error.value.errors()[0]["type"] == "combinatorics.counting_work_exceeded"
+
+
+def test_permutation_falling_product_admission_fits_the_stated_ledger() -> None:
+    n, k = 1_048_576, 58_741
+    digits = _falling_factorial_digit_bound(n, k)
+    formatting_steps = (digits + 8) // 9
+    assert k + formatting_steps <= MAX_COUNTING_MULTIPLICATIVE_STEPS
+    _admit_multiplicative_count(
+        maximum_factor=n,
+        steps=k,
+        result_digit_bound=digits,
+    )
 
 
 def test_medium_counts_retain_defining_identities() -> None:

@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Iterable
 from fractions import Fraction
 from itertools import pairwise
 from typing import Literal, NoReturn
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import bind_request_deadline, current_request_execution
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    format_canonical_integer,
+    parse_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics._counting_process import evaluate_count
 from jacobian.math.combinatorics._progression_hypergraph_models import (
     MAX_GROUP_ORDER,
     ProgressionHypergraphResult,
@@ -95,6 +101,35 @@ def _reject_counting_work() -> NoReturn:
     )
 
 
+def _ceil_log10_quotient_digits(
+    numerators: Iterable[int],
+    denominators: Iterable[int],
+) -> int:
+    """Return a digit count that never falls below ``floor(log10(prod))+1``.
+
+    Termwise ``log10`` plus ``math.fsum`` avoids the catastrophic cancellation
+    of three ``lgamma`` values.  A ``steps``-scaled ulp pad and an extra digit
+    keep binary64 rounding from underestimating the exact width.
+    """
+
+    terms: list[float] = []
+    numerator_count = 0
+    for value in numerators:
+        terms.append(math.log10(value))
+        numerator_count += 1
+    denominator_count = 0
+    for value in denominators:
+        terms.append(-math.log10(value))
+        denominator_count += 1
+    if numerator_count == 0:
+        return 1
+    log10_value = math.fsum(terms)
+    if log10_value <= 0.0:
+        return 1
+    pad = (numerator_count + denominator_count + 1) * 1e-12
+    return max(1, math.ceil(log10_value + pad) + 1)
+
+
 def _require_counting_step_budget(steps: int) -> None:
     if steps > MAX_COUNTING_MULTIPLICATIVE_STEPS:
         _reject_counting_work()
@@ -105,8 +140,8 @@ def _binomial_coefficient_digit_bound(n: int, k: int) -> int:
 
     Uses the cancelled product ``∏_{i=1}^{k} (n - k + i) / i`` rather than the
     undivided numerator, so off-center coefficients are not charged as if they
-    were near ``2^n``.  ``math.lgamma`` estimates the cancelled product in
-    constant work; two extra digits keep the bound from underestimating.
+    were near ``2^n``.  Termwise logarithms replace ``lgamma`` so large sparse
+    coefficients cannot lose a digit to binary64 cancellation.
     """
 
     if k < 0 or k > n:
@@ -114,19 +149,67 @@ def _binomial_coefficient_digit_bound(n: int, k: int) -> int:
     steps = min(k, n - k)
     if steps == 0:
         return 1
-    log10_e = 0.43429448190325182765
-    log10_value = (
-        math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1)
-    ) * log10_e
-    if log10_value <= 0.0:
+    return _ceil_log10_quotient_digits(
+        range(n - steps + 1, n + 1),
+        range(1, steps + 1),
+    )
+
+
+def _falling_factorial_digit_bound(n: int, k: int) -> int:
+    """Return a safe upper bound on the digits of ``n (n-1) ... (n-k+1)``."""
+
+    if k <= 0:
         return 1
-    return math.ceil(log10_value + 1e-6) + 2
+    return _ceil_log10_quotient_digits(range(n - k + 1, n + 1), ())
 
 
 def _bind_counting_deadline() -> None:
     execution = current_request_execution()
     started = execution.started_at if execution is not None else time.monotonic()
     bind_request_deadline(started + 120.0)
+
+
+def _canonical_count(operation: str, n: int, k: int) -> str:
+    return evaluate_count(operation, n, k)
+
+
+def canonical_binomial(n: int, k: int) -> str:
+    """Return the canonical decimal of ``C(n, k)`` after admission."""
+
+    first = _bounded_sparse_counting_index(n, name="n")
+    second = _bounded_sparse_counting_index(k, name="k")
+    if second > first:
+        return "0"
+    _admit_cancelled_binomial_count(first, second)
+    return _canonical_count("comb", first, second)
+
+
+def canonical_permutations(n: int, k: int) -> str:
+    """Return the canonical decimal of ``P(n, k)`` after admission."""
+
+    first = _bounded_sparse_counting_index(n, name="n")
+    second = _bounded_sparse_counting_index(k, name="k")
+    if second > first:
+        return "0"
+    _admit_multiplicative_count(
+        maximum_factor=first,
+        steps=second,
+        result_digit_bound=_falling_factorial_digit_bound(first, second),
+    )
+    return _canonical_count("perm", first, second)
+
+
+def canonical_compositions(n: int, k: int) -> str:
+    """Return the canonical decimal of the composition count after admission."""
+
+    total = _bounded_sparse_counting_index(n, name="n")
+    parts = _bounded_sparse_counting_index(k, name="k")
+    if total == parts == 0:
+        return "1"
+    if parts == 0 or parts > total:
+        return "0"
+    _admit_cancelled_binomial_count(total - 1, parts - 1)
+    return _canonical_count("comb", total - 1, parts - 1)
 
 
 def _admit_multiplicative_count(
@@ -190,12 +273,7 @@ def factorial(n: int) -> int:
 def binomial(n: int, k: int) -> int:
     """Return the exact binomial coefficient, with zero for ``k > n``."""
 
-    first = _bounded_sparse_counting_index(n, name="n")
-    second = _bounded_sparse_counting_index(k, name="k")
-    if second > first:
-        return 0
-    _admit_cancelled_binomial_count(first, second)
-    return math.comb(first, second)
+    return parse_canonical_integer(canonical_binomial(n, k))
 
 
 def multinomial(values: tuple[int, ...]) -> int:
@@ -232,12 +310,7 @@ def multinomial(values: tuple[int, ...]) -> int:
 def permutations(n: int, k: int) -> int:
     """Return the exact number of ordered ``k``-selections from ``n``."""
 
-    first = _bounded_sparse_counting_index(n, name="n")
-    second = _bounded_sparse_counting_index(k, name="k")
-    if second > first:
-        return 0
-    _admit_multiplicative_count(maximum_factor=first, steps=second)
-    return math.perm(first, second)
+    return parse_canonical_integer(canonical_permutations(n, k))
 
 
 def central_binomial(n: int) -> int:
@@ -250,14 +323,7 @@ def central_binomial(n: int) -> int:
 def compositions(n: int, k: int) -> int:
     """Count ordered compositions of ``n`` into ``k`` positive parts."""
 
-    total = _bounded_sparse_counting_index(n, name="n")
-    parts = _bounded_sparse_counting_index(k, name="k")
-    if total == parts == 0:
-        return 1
-    if parts == 0 or parts > total:
-        return 0
-    _admit_cancelled_binomial_count(total - 1, parts - 1)
-    return math.comb(total - 1, parts - 1)
+    return parse_canonical_integer(canonical_compositions(n, k))
 
 
 def bell_number(n: int) -> int:

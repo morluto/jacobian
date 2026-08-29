@@ -230,6 +230,7 @@ ignore_imports = [
     "jacobian.math.graphs.chip_firing._snf_process -> jacobian.process",
     "jacobian.math.combinatorics.finite_structures.hypergraphs._independence_z3 -> jacobian.process",
     "jacobian.math.combinatorics.discrepancy._optimum_process -> jacobian.process",
+    "jacobian.math.combinatorics._counting_process -> jacobian.process",
     "jacobian.math.number_theory.number_fields._discriminant_process -> jacobian.process",
     "jacobian.math.number_theory._factorization_kernels -> jacobian.process",
     # Private exact-algebra adapters share one bounded Singular process owner.

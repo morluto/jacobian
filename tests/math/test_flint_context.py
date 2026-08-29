@@ -8,11 +8,13 @@ import pytest
 from flint import arb, ctx
 
 from jacobian._execution import (
+    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     request_execution,
 )
 from jacobian._flint import flint_workprec
+from jacobian.process import bounded_process_cancellation
 
 
 def _exp_one_interval() -> tuple[tuple[int, int], tuple[int, int]]:
@@ -136,5 +138,116 @@ def test_flint_workprec_lock_wait_uses_the_request_deadline() -> None:
         finally:
             release_holder.set()
         holder.result(timeout=1)
+
+    assert ctx.prec == original_precision
+
+
+def test_flint_workprec_queued_wait_observes_request_cancellation() -> None:
+    original_precision = ctx.prec
+    holder_entered = Event()
+    release_holder = Event()
+    waiter_attempting = Event()
+    waiter_entered = Event()
+    cancellation = Event()
+
+    def hold_context() -> tuple[tuple[int, int], tuple[int, int]]:
+        with flint_workprec(96):
+            interval = _exp_one_interval()
+            holder_entered.set()
+            assert release_holder.wait(timeout=2)
+            return interval
+
+    def wait_for_context() -> tuple[tuple[int, int], tuple[int, int]]:
+        assert holder_entered.wait(timeout=1)
+        with bounded_process_cancellation(cancellation):
+            waiter_attempting.set()
+            with flint_workprec(256, deadline=monotonic() + 2.0):
+                waiter_entered.set()
+                return _exp_one_interval()
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        holder = workers.submit(hold_context)
+        assert holder_entered.wait(timeout=1)
+        waiter = workers.submit(wait_for_context)
+        assert waiter_attempting.wait(timeout=1)
+        assert not waiter.done()
+        cancellation.set()
+        try:
+            with pytest.raises(
+                OperationExecutionCancelledError,
+                match="python-flint precision context",
+            ):
+                waiter.result(timeout=1)
+            assert not waiter_entered.is_set()
+        finally:
+            release_holder.set()
+        holder.result(timeout=1)
+        assert not waiter_entered.is_set()
+
+    assert ctx.prec == original_precision
+
+
+def test_flint_workprec_rechecks_cancellation_after_lock_acquisition() -> None:
+    class GatedCancellation:
+        def __init__(self) -> None:
+            self._cancelled = Event()
+            self._allow_first_return = Event()
+            self.first_check_read = Event()
+            self._is_first_check = True
+
+        def is_set(self) -> bool:
+            observed = self._cancelled.is_set()
+            if self._is_first_check:
+                self._is_first_check = False
+                self.first_check_read.set()
+                assert self._allow_first_return.wait(timeout=1)
+            return observed
+
+        def set(self) -> None:
+            self._cancelled.set()
+
+        def allow_first_return(self) -> None:
+            self._allow_first_return.set()
+
+    original_precision = ctx.prec
+    holder_entered = Event()
+    release_holder = Event()
+    waiter_entered = Event()
+    cancellation = GatedCancellation()
+
+    def hold_context() -> tuple[tuple[int, int], tuple[int, int]]:
+        with flint_workprec(96):
+            interval = _exp_one_interval()
+            holder_entered.set()
+            assert release_holder.wait(timeout=2)
+            return interval
+
+    def wait_for_context() -> tuple[tuple[int, int], tuple[int, int]]:
+        with (
+            bounded_process_cancellation(cancellation),
+            flint_workprec(256, deadline=monotonic() + 2.0),
+        ):
+            waiter_entered.set()
+            return _exp_one_interval()
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        holder = workers.submit(hold_context)
+        assert holder_entered.wait(timeout=1)
+        waiter = workers.submit(wait_for_context)
+        try:
+            assert cancellation.first_check_read.wait(timeout=1)
+            cancellation.set()
+            release_holder.set()
+            cancellation.allow_first_return()
+            with pytest.raises(
+                OperationExecutionCancelledError,
+                match="python-flint precision context",
+            ):
+                waiter.result(timeout=1)
+        finally:
+            cancellation.allow_first_return()
+            release_holder.set()
+        holder.result(timeout=1)
+        assert not waiter_entered.is_set()
 
     assert ctx.prec == original_precision

@@ -8,11 +8,13 @@ from threading import RLock
 from time import monotonic
 
 from jacobian._execution import (
+    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     current_request_execution,
 )
 
 _DEFAULT_CONTEXT_WAIT_SECONDS = 120.0
+_CONTEXT_LOCK_POLL_SECONDS = 0.1
 _CONTEXT_LOCK = RLock()
 
 
@@ -25,7 +27,10 @@ def flint_workprec(
     ``deadline`` is an absolute ``time.monotonic`` instant. The earliest caller
     or request deadline bounds lock acquisition. Callers without either get a
     120-second lock-wait ceiling, matching existing bounded backend adapters.
+    A bound request cancellation interrupts a queued acquisition.
     """
+
+    from jacobian.process import bounded_process_cancelled
 
     execution = current_request_execution()
     request_deadline = execution.deadline if execution is not None else None
@@ -38,12 +43,23 @@ def flint_workprec(
     else:
         wait_deadline = monotonic() + _DEFAULT_CONTEXT_WAIT_SECONDS
 
-    remaining = wait_deadline - monotonic()
-    if remaining <= 0.0 or not _CONTEXT_LOCK.acquire(timeout=remaining):
-        raise OperationExecutionTimeoutError(
-            "execution deadline expired waiting for the python-flint precision context"
-        )
+    while True:
+        if bounded_process_cancelled():
+            raise OperationExecutionCancelledError(
+                "operation cancelled waiting for the python-flint precision context"
+            )
+        remaining = wait_deadline - monotonic()
+        if remaining <= 0.0:
+            raise OperationExecutionTimeoutError(
+                "execution deadline expired waiting for the python-flint precision context"
+            )
+        if _CONTEXT_LOCK.acquire(timeout=min(_CONTEXT_LOCK_POLL_SECONDS, remaining)):
+            break
     try:
+        if bounded_process_cancelled():
+            raise OperationExecutionCancelledError(
+                "operation cancelled waiting for the python-flint precision context"
+            )
         from flint import ctx
 
         if monotonic() >= wait_deadline:

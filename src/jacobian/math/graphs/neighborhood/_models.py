@@ -21,6 +21,8 @@ class NeighborhoodRequest(StrictModel):
     selected_vertices: tuple[str, ...] = Field(
         max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES
     )
+
+
 class NeighborhoodResult(StrictModel):
     """The exact open neighbourhood of a selected vertex set."""
 

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.discrepancy.homogeneous_progression.operations import (
     construct_homogeneous_progression_set_system,
 )
@@ -50,3 +53,8 @@ def test_result_preserves_n() -> None:
     result = construct_homogeneous_progression_set_system(5)
     assert result.n == 5
     assert result.set_system.ground_set_size == 5
+
+
+def test_ground_set_carrier_limit_is_enforced_before_construction() -> None:
+    with pytest.raises(OperationDomainValidationError, match="0 through 64"):
+        construct_homogeneous_progression_set_system(65)

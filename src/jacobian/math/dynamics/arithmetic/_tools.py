@@ -1,11 +1,16 @@
 """Arithmetic dynamics operation declarations."""
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, NoReturn
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.dynamics.arithmetic._models import (
     CycleMultiplierRequest,
     CycleMultiplierResult,
@@ -17,14 +22,151 @@ from jacobian.math.dynamics.arithmetic._models import (
     MapIterateResult,
     OrbitPrefixRequest,
     OrbitPrefixResult,
+    OrbitRepeatEvidence,
+    PolynomialCoefficientRequest,
+    _validation_code,
 )
 from jacobian.math.dynamics.arithmetic.operations import (
-    compute_cycle_multiplier,
-    compute_dynatomic_polynomial,
-    compute_finite_field_map,
-    compute_map_iterate,
-    compute_orbit_prefix,
+    cycle_multiplier,
+    dynatomic_polynomial,
+    finite_field_functional_graph,
+    iterate_polynomial,
+    orbit_prefix,
+    polynomial_coefficients,
+    polynomial_from_coefficients,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
+
+
+def _translate_value_error(
+    exc: ValueError, location: tuple[str | int, ...]
+) -> NoReturn:
+    raise OperationDomainValidationError(
+        location=location,
+        code=f"arithmetic_dynamics.{_validation_code(str(exc))}",
+        message=str(exc),
+    ) from exc
+
+
+def _request_polynomial(request: PolynomialCoefficientRequest) -> RationalPolynomial:
+    try:
+        return polynomial_from_coefficients(request.coefficient_values())
+    except ValueError as exc:
+        _translate_value_error(exc, ("coefficients",))
+
+
+def compute_map_iterate(request: MapIterateRequest) -> MapIterateResult:
+    polynomial = _request_polynomial(request)
+    try:
+        result = iterate_polynomial(polynomial, request.n)
+        coefficients = tuple(value for value in polynomial_coefficients(result))
+    except ValueError as exc:
+        location = ("coefficients",) if "coefficient" in str(exc) else ("n",)
+        _translate_value_error(exc, location)
+    return MapIterateResult._from_kernel(
+        source_coefficients=request.coefficients,
+        n=request.n,
+        coefficients=tuple(
+            CanonicalRational.from_fraction(value) for value in coefficients
+        ),
+        degree=0
+        if not result.polynomial.terms
+        else max(term.exponents[0] for term in result.polynomial.terms),
+    )
+
+
+def compute_orbit_prefix(request: OrbitPrefixRequest) -> OrbitPrefixResult:
+    polynomial = _request_polynomial(request)
+    try:
+        result = orbit_prefix(polynomial, request.start, request.max_steps)
+    except ValueError as exc:
+        location = ("start",) if "orbit start" in str(exc) else ("coefficients",)
+        _translate_value_error(exc, location)
+    repeat = (
+        None
+        if result.repeat is None
+        else OrbitRepeatEvidence(
+            first_seen_index=result.repeat.first_seen_index,
+            repeated_at_index=result.repeat.repeated_at_index,
+            preperiod=result.repeat.preperiod,
+            period=result.repeat.period,
+        )
+    )
+    return OrbitPrefixResult._from_kernel(
+        source_coefficients=request.coefficients,
+        start=request.start,
+        requested_steps=request.max_steps,
+        orbit=tuple(CanonicalRational.from_fraction(value) for value in result.orbit),
+        termination=result.termination,
+        repeat=repeat,
+    )
+
+
+def compute_dynatomic_polynomial(
+    request: DynatomicPolynomialRequest,
+) -> DynatomicPolynomialResult:
+    polynomial = _request_polynomial(request)
+    try:
+        result = dynatomic_polynomial(polynomial, request.n)
+        coefficients = polynomial_coefficients(result)
+    except ValueError as exc:
+        location = ("coefficients",) if "coefficient" in str(exc) else ("n",)
+        _translate_value_error(exc, location)
+    return DynatomicPolynomialResult._from_kernel(
+        source_coefficients=request.coefficients,
+        n=request.n,
+        coefficients=tuple(
+            CanonicalRational.from_fraction(value) for value in coefficients
+        ),
+        degree=0
+        if not result.polynomial.terms
+        else max(term.exponents[0] for term in result.polynomial.terms),
+    )
+
+
+def compute_cycle_multiplier(
+    request: CycleMultiplierRequest,
+) -> CycleMultiplierResult:
+    polynomial = _request_polynomial(request)
+    try:
+        multiplier = cycle_multiplier(polynomial, request.cycle)
+    except ValueError as exc:
+        _translate_value_error(exc, ("cycle",))
+    return CycleMultiplierResult._from_kernel(
+        source_coefficients=request.coefficients,
+        cycle=request.cycle,
+        multiplier=multiplier,
+    )
+
+
+def compute_finite_field_map(request: FiniteFieldMapRequest) -> FiniteFieldMapResult:
+    values: list[int] = []
+    for index, value in enumerate(request.coefficients):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            _translate_value_error(
+                ValueError("coefficient must be a canonical integer"),
+                ("coefficients", index),
+            )
+        if str(parsed) != value:
+            _translate_value_error(
+                ValueError("coefficient must be a canonical integer"),
+                ("coefficients", index),
+            )
+        values.append(parsed)
+    try:
+        graph = finite_field_functional_graph(tuple(values), request.prime)
+    except ValueError as exc:
+        location = ("coefficients",) if "coefficient" in str(exc) else ("prime",)
+        _translate_value_error(exc, location)
+    return FiniteFieldMapResult._from_kernel(
+        prime=request.prime,
+        coefficients=request.coefficients,
+        edges=graph.edges,
+        cycles=graph.cycles,
+        tail_lengths=graph.tail_lengths,
+    )
 
 
 def _op[

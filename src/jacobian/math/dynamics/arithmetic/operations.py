@@ -6,10 +6,9 @@ from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Any, Literal, NoReturn
+from typing import Any, Literal
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._rational_height import RationalHeight
 from jacobian.math.dynamics.arithmetic._models import (
     MAX_COEFFICIENT_DIGITS,
@@ -21,26 +20,21 @@ from jacobian.math.dynamics.arithmetic._models import (
     MAX_ORBIT_STEPS,
     MAX_POLYNOMIAL_OUTPUT_DIGITS,
     CoefficientHeight,
-    CycleMultiplierRequest,
-    CycleMultiplierResult,
-    DynatomicPolynomialRequest,
-    DynatomicPolynomialResult,
-    FiniteFieldMapRequest,
-    FiniteFieldMapResult,
-    MapIterateRequest,
-    MapIterateResult,
-    OrbitPrefixRequest,
-    OrbitPrefixResult,
-    OrbitRepeatEvidence,
-    PolynomialCoefficientRequest,
     _add_heights,
     _divide_height_polynomials,
     _fraction_height,
     _iterate_heights,
-    _mobius,
     _multiply_height_polynomials,
     _require_polynomial_height,
-    _validation_code,
+)
+from jacobian.math.polynomials._conversions import (
+    rational_polynomial_from_sympy,
+    rational_polynomial_to_sympy,
+)
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
 )
 
 
@@ -67,11 +61,23 @@ class FunctionalGraph:
     tail_lengths: tuple[int, ...]
 
 
-def polynomial_from_coefficients(coefficients: Sequence[Fraction | int]) -> Any:
+def _canonical_polynomial(values: Sequence[Fraction]) -> RationalPolynomial:
+    terms = tuple(
+        RationalPolynomialTerm(
+            coefficient=CanonicalRational.from_fraction(value), exponents=(index,)
+        )
+        for index, value in reversed(tuple(enumerate(values)))
+        if value
+    )
+    return RationalPolynomial(
+        variables=("x",), polynomial=SparseRationalPolynomial(terms=terms)
+    )
+
+
+def polynomial_from_coefficients(
+    coefficients: Sequence[Fraction | int],
+) -> RationalPolynomial:
     """Build a canonical univariate ``QQ`` polynomial from low-to-high values."""
-
-    import sympy
-
     values = tuple(Fraction(value) for value in coefficients)
     if not 1 <= len(values) <= MAX_DEGREE + 1:
         raise ValueError(
@@ -81,46 +87,53 @@ def polynomial_from_coefficients(coefficients: Sequence[Fraction | int]) -> Any:
         raise ValueError("polynomial coefficient exceeds the input digit bound")
     if len(values) > 1 and values[-1] == 0:
         raise ValueError("polynomial coefficients must omit trailing zeros")
-    x = sympy.Symbol("x")
-    expression = sum(
-        sympy.Rational(value.numerator, value.denominator) * x**i
-        for i, value in enumerate(values)
-    )
-    return sympy.Poly(expression, x, domain=sympy.QQ)
+    return _canonical_polynomial(values)
 
 
-def polynomial_coefficients(polynomial: Any) -> tuple[Fraction, ...]:
+def polynomial_coefficients(polynomial: RationalPolynomial) -> tuple[Fraction, ...]:
     """Return low-to-high exact coefficients of a univariate ``QQ`` polynomial."""
 
-    source = _require_polynomial(polynomial)
-    if not source.is_zero and source.degree() > MAX_ITERATE_DEGREE:
+    _require_polynomial(polynomial)
+    exponents = {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in polynomial.polynomial.terms
+    }
+    degree = max(exponents, default=0)
+    if degree > MAX_ITERATE_DEGREE:
         raise ValueError("polynomial degree exceeds the extraction bound")
-    _require_bounded_output_coefficients(source)
-    if source.is_zero:
+    values = tuple(exponents.get(index, Fraction(0)) for index in range(degree + 1))
+    _require_bounded_output_coefficients(values)
+    if not polynomial.polynomial.terms:
         return (Fraction(0),)
-    return tuple(Fraction(source.nth(index)) for index in range(source.degree() + 1))
+    return values
 
 
-def iterate_polynomial(polynomial: Any, n: int) -> Any:
+def iterate_polynomial(polynomial: RationalPolynomial, n: int) -> RationalPolynomial:
     """Return the exact n-th compositional iterate, with iterate zero the identity."""
 
     import sympy
 
-    source = _require_input_polynomial(polynomial)
     if not 0 <= n <= MAX_ITERATE:
         raise ValueError(f"iterate count must be between 0 and {MAX_ITERATE}")
-    source_degree = 0 if source.is_zero else max(0, int(source.degree()))
+    source_coefficients = polynomial_coefficients(polynomial)
+    source_degree = 0 if len(source_coefficients) == 1 else len(source_coefficients) - 1
     output_degree = 1 if n == 0 else source_degree**n
     if output_degree > MAX_ITERATE_DEGREE:
         raise ValueError("iterate output degree exceeds bound")
+    _require_polynomial_height(
+        _iterate_heights(
+            tuple(_fraction_height(value) for value in source_coefficients), n
+        ),
+        "iterate",
+    )
+    source = _require_input_polynomial(polynomial)
     result = sympy.Poly(source.gens[0], source.gens[0], domain=sympy.QQ)
     for _ in range(n):
         result = source.compose(result)
-        _require_bounded_output_coefficients(result)
-    return result
+    return _from_sympy(result, MAX_ITERATE_DEGREE + 1)
 
 
-def fixed_point_equation(polynomial: Any, n: int) -> Any:
+def fixed_point_equation(polynomial: RationalPolynomial, n: int) -> RationalPolynomial:
     """Return ``f^n(x) - x`` as a native polynomial projection."""
 
     import sympy
@@ -129,42 +142,64 @@ def fixed_point_equation(polynomial: Any, n: int) -> Any:
     if n < 1:
         raise ValueError("fixed-point iterate must be positive")
     identity = sympy.Poly(source.gens[0], source.gens[0], domain=sympy.QQ)
-    return iterate_polynomial(source, n) - identity
+    result = _to_sympy(iterate_polynomial(polynomial, n)) - identity
+    _require_bounded_output_coefficients(result)
+    return _from_sympy(result, MAX_ITERATE_DEGREE + 1)
 
 
-def dynatomic_polynomial(polynomial: Any, n: int) -> Any:
+def dynatomic_polynomial(polynomial: RationalPolynomial, n: int) -> RationalPolynomial:
     """Return the exact n-th Möbius-normalized formal-period polynomial."""
 
     import sympy
 
-    source = _require_input_polynomial(polynomial)
-    if source.degree() < 2:
-        raise ValueError("dynatomic polynomial requires degree at least two")
     if n < 1:
         raise ValueError("dynatomic index must be positive")
-    if int(source.degree()) ** n > MAX_DYNATOMIC_DEGREE:
+    source_coefficients = polynomial_coefficients(polynomial)
+    source_degree = 0 if len(source_coefficients) == 1 else len(source_coefficients) - 1
+    if source_degree < 2:
+        raise ValueError("dynatomic polynomial requires map degree at least two")
+    if source_degree**n > MAX_DYNATOMIC_DEGREE:
         raise ValueError("dynatomic output degree exceeds bound")
+    source_heights = tuple(_fraction_height(value) for value in source_coefficients)
+    numerator_heights: tuple[CoefficientHeight, ...] = (RationalHeight(1, 1),)
+    denominator_heights: tuple[CoefficientHeight, ...] = (RationalHeight(1, 1),)
+    for divisor in sympy.divisors(n):
+        term_heights = list(_iterate_heights(source_heights, int(divisor)))
+        if len(term_heights) < 2:
+            term_heights.extend([None] * (2 - len(term_heights)))
+        term_heights[1] = _add_heights(term_heights[1], RationalHeight(1, 1))
+        if (mobius := int(sympy.mobius(n // divisor))) == 1:
+            numerator_heights = _multiply_height_polynomials(
+                numerator_heights, tuple(term_heights)
+            )
+        elif mobius == -1:
+            denominator_heights = _multiply_height_polynomials(
+                denominator_heights, tuple(term_heights)
+            )
+    _require_polynomial_height(
+        _divide_height_polynomials(numerator_heights, denominator_heights),
+        "dynatomic quotient",
+    )
+    source = _require_input_polynomial(polynomial)
     numerator = sympy.Poly(1, source.gens[0], domain=sympy.QQ)
     denominator = sympy.Poly(1, source.gens[0], domain=sympy.QQ)
     for divisor in sympy.divisors(n):
-        term = fixed_point_equation(source, int(divisor))
+        term = _to_sympy(fixed_point_equation(polynomial, int(divisor)))
         mobius = int(sympy.mobius(n // divisor))
         if mobius == 1:
             numerator *= term
-            _require_bounded_output_coefficients(numerator)
         elif mobius == -1:
             denominator *= term
-            _require_bounded_output_coefficients(denominator)
     quotient, remainder = numerator.div(denominator)
     if not remainder.is_zero:
         raise RuntimeError("dynatomic quotient was not an exact polynomial")
     _require_bounded_output_coefficients(quotient)
-    return quotient
+    return _from_sympy(quotient, MAX_DYNATOMIC_DEGREE + 1)
 
 
 def orbit_prefix(
-    polynomial: Any,
-    start: Fraction,
+    polynomial: RationalPolynomial,
+    start: CanonicalRational,
     max_steps: int,
     *,
     max_value_digits: int = 2_048,
@@ -176,7 +211,7 @@ def orbit_prefix(
         raise ValueError(f"orbit step bound must be between 0 and {MAX_ORBIT_STEPS}")
     if max_value_digits < 1:
         raise ValueError("orbit value digit bound must be positive")
-    initial = Fraction(start)
+    initial = start.as_fraction()
     if _fraction_digits(initial) > MAX_COEFFICIENT_DIGITS:
         raise ValueError("orbit start exceeds the input digit bound")
     values = [initial]
@@ -213,11 +248,13 @@ def orbit_prefix(
     )
 
 
-def validate_cycle(polynomial: Any, cycle: Sequence[Fraction]) -> None:
+def validate_cycle(
+    polynomial: RationalPolynomial, cycle: Sequence[CanonicalRational]
+) -> None:
     """Reject a sequence that is not one exact ordered periodic cycle."""
 
     source = _require_input_polynomial(polynomial)
-    points = tuple(Fraction(point) for point in cycle)
+    points = tuple(point.as_fraction() for point in cycle)
     if not 1 <= len(points) <= MAX_ORBIT_STEPS:
         raise ValueError(f"cycle must contain between 1 and {MAX_ORBIT_STEPS} points")
     if any(_fraction_digits(point) > MAX_COEFFICIENT_DIGITS for point in points):
@@ -229,19 +266,21 @@ def validate_cycle(polynomial: Any, cycle: Sequence[Fraction]) -> None:
             raise ValueError("cycle points do not follow the polynomial map")
 
 
-def cycle_multiplier(polynomial: Any, cycle: Sequence[Fraction]) -> Fraction:
+def cycle_multiplier(
+    polynomial: RationalPolynomial, cycle: Sequence[CanonicalRational]
+) -> CanonicalRational:
     """Return the exact derivative product around a validated periodic cycle."""
 
     source = _require_input_polynomial(polynomial)
-    points = tuple(Fraction(point) for point in cycle)
-    validate_cycle(source, points)
+    points = tuple(point.as_fraction() for point in cycle)
+    validate_cycle(polynomial, cycle)
     derivative = source.diff()
     multiplier = Fraction(1)
     for point in points:
         multiplier *= Fraction(derivative.eval(point))
         if _fraction_digits(multiplier) > MAX_POLYNOMIAL_OUTPUT_DIGITS:
             raise ValueError("cycle multiplier exceeds the output digit bound")
-    return multiplier
+    return CanonicalRational.from_fraction(multiplier)
 
 
 def finite_field_functional_graph(
@@ -327,18 +366,25 @@ def _tail_lengths(
     return tuple(distances)
 
 
-def _require_polynomial(polynomial: Any) -> Any:
-    import sympy
-
-    if not isinstance(polynomial, sympy.Poly):
-        raise TypeError("polynomial must be a SymPy Poly")
-    if len(polynomial.gens) != 1 or not polynomial.domain.is_QQ:
-        raise ValueError("polynomial must be univariate over QQ")
+def _require_polynomial(polynomial: RationalPolynomial) -> RationalPolynomial:
+    if polynomial.domain != "QQ" or polynomial.variables != ("x",):
+        raise ValueError("polynomial must be univariate over QQ in variable x")
     return polynomial
 
 
-def _require_input_polynomial(polynomial: Any) -> Any:
-    source = _require_polynomial(polynomial)
+def _to_sympy(polynomial: RationalPolynomial) -> Any:
+    return rational_polynomial_to_sympy(_require_polynomial(polynomial))
+
+
+def _from_sympy(polynomial: Any, maximum_terms: int) -> RationalPolynomial:
+    return rational_polynomial_from_sympy(
+        polynomial, ("x",), maximum_terms=maximum_terms
+    )
+
+
+def _require_input_polynomial(polynomial: RationalPolynomial) -> Any:
+    _require_polynomial(polynomial)
+    source = _to_sympy(polynomial)
     if not source.is_zero and source.degree() > MAX_DEGREE:
         raise ValueError("polynomial degree exceeds the input bound")
     if any(
@@ -354,210 +400,17 @@ def _fraction_digits(value: Fraction) -> int:
 
 
 def _require_bounded_output_coefficients(polynomial: Any) -> None:
+    if isinstance(polynomial, tuple):
+        coefficients = polynomial
+    else:
+        coefficients = tuple(
+            Fraction(coefficient) for coefficient in polynomial.all_coeffs()
+        )
     if any(
         _fraction_digits(Fraction(coefficient)) > MAX_POLYNOMIAL_OUTPUT_DIGITS
-        for coefficient in polynomial.all_coeffs()
+        for coefficient in coefficients
     ):
         raise ValueError("polynomial coefficient exceeds the output digit bound")
-
-
-def _domain_error(location: tuple[str | int, ...], code: str, message: str) -> NoReturn:
-    raise OperationDomainValidationError(
-        location=location, code=f"arithmetic_dynamics.{code}", message=message
-    )
-
-
-def _translate_value_error(exc: ValueError, location: tuple[str | int, ...]) -> None:
-    message = str(exc)
-    _domain_error(location, _validation_code(message), message)
-
-
-def _polynomial(request: PolynomialCoefficientRequest) -> Any:
-    try:
-        values = request.coefficient_values()
-        return polynomial_from_coefficients(values)
-    except ValueError as exc:
-        _translate_value_error(exc, ("coefficients",))
-
-
-def _admit_iterate(request: MapIterateRequest) -> Any:
-    polynomial = _polynomial(request)
-    degree = 0 if polynomial.is_zero else int(polynomial.degree())
-    output_degree = 1 if request.n == 0 else degree**request.n
-    if output_degree > MAX_ITERATE_DEGREE:
-        _domain_error(
-            ("n",),
-            "iterate_degree_exceeds_bound",
-            "iterate output degree exceeds bound",
-        )
-    try:
-        _iterate_heights(
-            tuple(_fraction_height(value) for value in request.coefficient_values()),
-            request.n,
-        )
-    except ValueError as exc:
-        _translate_value_error(exc, ("coefficients",))
-    return polynomial
-
-
-def _admit_dynatomic(request: DynatomicPolynomialRequest) -> Any:
-    polynomial = _polynomial(request)
-    degree = 0 if polynomial.is_zero else int(polynomial.degree())
-    if degree < 2:
-        _domain_error(
-            ("coefficients",),
-            "dynatomic_degree_too_small",
-            "dynatomic polynomial requires map degree at least two",
-        )
-    if degree**request.n > MAX_DYNATOMIC_DEGREE:
-        _domain_error(
-            ("n",),
-            "dynatomic_degree_exceeds_bound",
-            "dynatomic output degree exceeds bound",
-        )
-    source = tuple(_fraction_height(value) for value in request.coefficient_values())
-    numerator: tuple[CoefficientHeight, ...] = (RationalHeight(1, 1),)
-    denominator: tuple[CoefficientHeight, ...] = (RationalHeight(1, 1),)
-    try:
-        for divisor in range(1, request.n + 1):
-            if request.n % divisor:
-                continue
-            term = list(_iterate_heights(source, divisor))
-            if len(term) < 2:
-                term.extend([None] * (2 - len(term)))
-            term[1] = _add_heights(term[1], RationalHeight(1, 1))
-            mobius = _mobius(request.n // divisor)
-            if mobius == 1:
-                numerator = _multiply_height_polynomials(numerator, tuple(term))
-                _require_polynomial_height(numerator, "dynatomic numerator")
-            elif mobius == -1:
-                denominator = _multiply_height_polynomials(denominator, tuple(term))
-                _require_polynomial_height(denominator, "dynatomic denominator")
-        quotient = _divide_height_polynomials(numerator, denominator)
-        _require_polynomial_height(quotient, "dynatomic quotient")
-    except ValueError as exc:
-        _translate_value_error(exc, ("coefficients",))
-    return polynomial
-
-
-def _admit_cycle(request: CycleMultiplierRequest) -> Any:
-    polynomial = _polynomial(request)
-    for value in request.cycle:
-        try:
-            value.as_fraction()
-        except ValueError as exc:
-            _translate_value_error(exc, ("cycle",))
-    return polynomial
-
-
-def _admit_finite_field(request: FiniteFieldMapRequest) -> tuple[int, ...]:
-    values: list[int] = []
-    for index, value in enumerate(request.coefficients):
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError):
-            _domain_error(
-                ("coefficients", index),
-                "coefficient_not_canonical",
-                "coefficient must be a canonical integer",
-            )
-        if str(parsed) != value:
-            _domain_error(
-                ("coefficients", index),
-                "coefficient_not_canonical",
-                "coefficient must be a canonical integer",
-            )
-        values.append(parsed)
-    return tuple(values)
-
-
-def _format_coefficients(polynomial: Any) -> tuple[CanonicalRational, ...]:
-    return tuple(
-        CanonicalRational.from_fraction(value)
-        for value in polynomial_coefficients(polynomial)
-    )
-
-
-def compute_map_iterate(request: MapIterateRequest) -> MapIterateResult:
-    polynomial = _admit_iterate(request)
-    try:
-        result = iterate_polynomial(polynomial, request.n)
-    except ValueError as exc:
-        _translate_value_error(exc, ("n",))
-    return MapIterateResult._from_kernel(
-        request,
-        coefficients=_format_coefficients(result),
-        degree=0 if result.is_zero else int(result.degree()),
-    )
-
-
-def compute_orbit_prefix(request: OrbitPrefixRequest) -> OrbitPrefixResult:
-    polynomial = _polynomial(request)
-    try:
-        result = orbit_prefix(
-            polynomial, request.start.as_fraction(), request.max_steps
-        )
-    except ValueError as exc:
-        _translate_value_error(exc, ("start",))
-    repeat = (
-        None
-        if result.repeat is None
-        else OrbitRepeatEvidence(
-            first_seen_index=result.repeat.first_seen_index,
-            repeated_at_index=result.repeat.repeated_at_index,
-            preperiod=result.repeat.preperiod,
-            period=result.repeat.period,
-        )
-    )
-    return OrbitPrefixResult._from_kernel(
-        request,
-        orbit=tuple(CanonicalRational.from_fraction(value) for value in result.orbit),
-        termination=result.termination,
-        repeat=repeat,
-    )
-
-
-def compute_dynatomic_polynomial(
-    request: DynatomicPolynomialRequest,
-) -> DynatomicPolynomialResult:
-    polynomial = _admit_dynatomic(request)
-    try:
-        result = dynatomic_polynomial(polynomial, request.n)
-    except ValueError as exc:
-        _translate_value_error(exc, ("n",))
-    return DynatomicPolynomialResult._from_kernel(
-        request,
-        coefficients=_format_coefficients(result),
-        degree=0 if result.is_zero else int(result.degree()),
-    )
-
-
-def compute_cycle_multiplier(
-    request: CycleMultiplierRequest,
-) -> CycleMultiplierResult:
-    polynomial = _admit_cycle(request)
-    points = tuple(value.as_fraction() for value in request.cycle)
-    try:
-        multiplier = cycle_multiplier(polynomial, points)
-    except ValueError as exc:
-        _translate_value_error(exc, ("cycle",))
-    return CycleMultiplierResult._from_kernel(
-        request, multiplier=CanonicalRational.from_fraction(multiplier)
-    )
-
-
-def compute_finite_field_map(request: FiniteFieldMapRequest) -> FiniteFieldMapResult:
-    coefficients = _admit_finite_field(request)
-    try:
-        graph = finite_field_functional_graph(coefficients, request.prime)
-    except ValueError as exc:
-        _translate_value_error(exc, ("prime",))
-    return FiniteFieldMapResult._from_kernel(
-        request,
-        edges=graph.edges,
-        cycles=graph.cycles,
-        tail_lengths=graph.tail_lengths,
-    )
 
 
 __all__ = [

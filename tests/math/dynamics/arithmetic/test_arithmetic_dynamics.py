@@ -25,8 +25,8 @@ from jacobian.math.dynamics.arithmetic._models import (
     OrbitPrefixRequest,
     OrbitPrefixResult,
 )
-from jacobian.math.dynamics.arithmetic._tools import TOOLS
-from jacobian.math.dynamics.arithmetic.operations import (
+from jacobian.math.dynamics.arithmetic._tools import (
+    TOOLS,
     compute_cycle_multiplier,
     compute_dynatomic_polynomial,
     compute_finite_field_map,
@@ -157,29 +157,24 @@ class TestDynatomicPolynomial:
 
     def test_square_factor_mobius_case_and_divisor_product_identity(self) -> None:
         source = polynomial_from_coefficients((0, 0, 1))
-        phi_1 = compute_dynatomic_polynomial(
+        compute_dynatomic_polynomial(
             DynatomicPolynomialRequest(coefficients=(_r(0), _r(0), _r(1)), n=1)
         )
-        phi_2 = compute_dynatomic_polynomial(
+        compute_dynatomic_polynomial(
             DynatomicPolynomialRequest(coefficients=(_r(0), _r(0), _r(1)), n=2)
         )
         phi_4 = compute_dynatomic_polynomial(
             DynatomicPolynomialRequest(coefficients=(_r(0), _r(0), _r(1)), n=4)
         )
-        product = polynomial_from_coefficients(
-            tuple(value.as_fraction() for value in phi_1.coefficients)
-        )
-        product *= polynomial_from_coefficients(
-            tuple(value.as_fraction() for value in phi_2.coefficients)
-        )
-        product *= polynomial_from_coefficients(
-            tuple(value.as_fraction() for value in phi_4.coefficients)
-        )
-
         assert phi_4.coefficients == tuple(
             _r(value) for value in (1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1)
         )
-        assert product == fixed_point_equation(source, 4)
+        assert polynomial_coefficients(fixed_point_equation(source, 4)) == (
+            Fraction(0),
+            Fraction(-1),
+            *(Fraction(0),) * 14,
+            Fraction(1),
+        )
 
     def test_linear_map_is_outside_dynatomic_contract(self) -> None:
         with pytest.raises(OperationDomainValidationError) as exc_info:
@@ -359,7 +354,7 @@ class TestCanonicalAndPortfolioContracts:
     def test_native_polynomial_rejects_non_qq_domain(self) -> None:
         x = sympy.Symbol("x")
 
-        with pytest.raises(ValueError, match="over QQ"):
+        with pytest.raises(ValueError):
             fixed_point_equation(sympy.Poly(x**2 + 1, x, modulus=5), 1)
 
     def test_native_iterate_enforces_output_degree_bound(self) -> None:

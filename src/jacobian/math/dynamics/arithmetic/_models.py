@@ -324,14 +324,15 @@ class MapIterateResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: MapIterateRequest,
         *,
+        source_coefficients: tuple[CanonicalRational, ...],
+        n: int,
         coefficients: tuple[CanonicalRational, ...],
         degree: int,
     ) -> Self:
         return cls.model_construct(
-            source_coefficients=request.coefficients,
-            n=request.n,
+            source_coefficients=source_coefficients,
+            n=n,
             coefficients=coefficients,
             degree=degree,
         )
@@ -386,8 +387,10 @@ class OrbitPrefixResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: OrbitPrefixRequest,
         *,
+        source_coefficients: tuple[CanonicalRational, ...],
+        start: CanonicalRational,
+        requested_steps: int,
         orbit: tuple[CanonicalRational, ...],
         termination: Literal[
             "REPEAT_FOUND", "STEP_BOUND_REACHED", "OUTPUT_BOUND_REACHED"
@@ -396,10 +399,10 @@ class OrbitPrefixResult(StrictModel):
     ) -> Self:
         found_repeat = termination == "REPEAT_FOUND"
         return cls.model_construct(
-            source_coefficients=request.coefficients,
-            start=request.start,
+            source_coefficients=source_coefficients,
+            start=start,
             orbit=orbit,
-            requested_steps=request.max_steps,
+            requested_steps=requested_steps,
             computed_steps=len(orbit) - 1,
             termination=termination,
             repeat=repeat,
@@ -458,16 +461,17 @@ class DynatomicPolynomialResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: DynatomicPolynomialRequest,
         *,
+        source_coefficients: tuple[CanonicalRational, ...],
+        n: int,
         coefficients: tuple[CanonicalRational, ...],
         degree: int,
     ) -> Self:
         return cls.model_construct(
-            source_coefficients=request.coefficients,
+            source_coefficients=source_coefficients,
             coefficients=coefficients,
             degree=degree,
-            n=request.n,
+            n=n,
         )
 
     @model_validator(mode="after")
@@ -516,8 +520,9 @@ class CycleMultiplierResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: CycleMultiplierRequest,
         *,
+        source_coefficients: tuple[CanonicalRational, ...],
+        cycle: tuple[CanonicalRational, ...],
         multiplier: CanonicalRational,
     ) -> Self:
         """Build a result after the admitted cycle-multiplier kernel ran."""
@@ -528,10 +533,10 @@ class CycleMultiplierResult(StrictModel):
             label="multiplier",
         )
         return cls.model_construct(
-            source_coefficients=request.coefficients,
+            source_coefficients=source_coefficients,
             multiplier=multiplier,
-            cycle=request.cycle,
-            period=len(request.cycle),
+            cycle=cycle,
+            period=len(cycle),
         )
 
 
@@ -554,8 +559,9 @@ class FiniteFieldMapResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: FiniteFieldMapRequest,
         *,
+        prime: int,
+        coefficients: tuple[str, ...],
         edges: tuple[tuple[int, int], ...],
         cycles: tuple[tuple[int, ...], ...],
         tail_lengths: tuple[int, ...],
@@ -563,8 +569,8 @@ class FiniteFieldMapResult(StrictModel):
         """Build a result after complete graph enumeration established it."""
 
         return cls.model_construct(
-            prime=request.prime,
-            coefficients=request.coefficients,
+            prime=prime,
+            coefficients=coefficients,
             edges=edges,
             cycles=cycles,
             tail_lengths=tail_lengths,

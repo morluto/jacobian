@@ -2,13 +2,19 @@ from __future__ import annotations
 
 from itertools import combinations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.monochromatic_clique._models import (
+    MonochromaticCliqueHypergraphRequest,
+)
 from jacobian.math.graphs.monochromatic_clique.operations import (
     construct_monochromatic_clique_hypergraph,
 )
 from jacobian.math.graphs.values import ColoredUndirectedGraph, SimpleUndirectedGraph
 
 
-def _k4_red():
+def _k4_red() -> ColoredUndirectedGraph:
     return ColoredUndirectedGraph(
         graph=SimpleUndirectedGraph(
             vertices=("0", "1", "2", "3"),
@@ -25,7 +31,7 @@ def _k4_red():
     )
 
 
-def _k4_mixed():
+def _k4_mixed() -> ColoredUndirectedGraph:
     return ColoredUndirectedGraph(
         graph=SimpleUndirectedGraph(
             vertices=("0", "1", "2", "3"),
@@ -112,3 +118,49 @@ def test_result_preserves_source() -> None:
     result = construct_monochromatic_clique_hypergraph(cg, 2)
     assert result.colored_graph == cg
     assert result.clique_order == 2
+
+
+def test_native_admission_rejects_hypergraph_edge_and_incidence_overflow() -> None:
+    vertices = tuple(f"{index:02}" for index in range(20))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple(
+            (vertices[left], vertices[right])
+            for left in range(20)
+            for right in range(left + 1, 20)
+        ),
+    )
+    colored_graph = ColoredUndirectedGraph(
+        graph=graph, edge_colors=("red",) * len(graph.edges)
+    )
+    with pytest.raises(OperationDomainValidationError, match="hypergraph bound"):
+        construct_monochromatic_clique_hypergraph(colored_graph, 5)
+
+
+def test_native_admission_rejects_missing_total_coloring() -> None:
+    with pytest.raises(OperationDomainValidationError, match="edge_colors"):
+        construct_monochromatic_clique_hypergraph(_k4_red().model_copy(update={"edge_colors": ()}), 3)
+
+
+def test_native_admission_rejects_untransportable_result() -> None:
+    vertices = tuple("x" * 400_000 + str(index) for index in range(4))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple(
+            (vertices[left], vertices[right])
+            for left in range(4)
+            for right in range(left + 1, 4)
+        ),
+    )
+    colored_graph = ColoredUndirectedGraph.model_construct(
+        graph=graph, edge_colors=("red",) * len(graph.edges)
+    )
+    with pytest.raises(OperationDomainValidationError, match="output-byte limit"):
+        construct_monochromatic_clique_hypergraph(colored_graph, 2)
+
+
+def test_request_keeps_structural_validation_separate_from_domain_admission() -> None:
+    request = MonochromaticCliqueHypergraphRequest(
+        colored_graph=_k4_red(), clique_order=3
+    )
+    assert request.clique_order == 3

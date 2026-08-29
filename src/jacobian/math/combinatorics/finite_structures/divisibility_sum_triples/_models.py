@@ -50,6 +50,7 @@ class DivisibilitySumTriplesResult(StrictModel):
     upper_bound: int
     hypergraph: FiniteHypergraph
 
+
 __all__ = [
     "MAX_INTERVAL_SIZE",
     "DivisibilitySumTriplesRequest",

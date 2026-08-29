@@ -70,7 +70,9 @@ def _admit_divisibility_sum_triples(
         )
 
     edges: list[tuple[str, tuple[str, ...]]] = []
-    for edge_index, triple in enumerate(combinations(range(lower_bound, upper_bound + 1), 3)):
+    for edge_index, triple in enumerate(
+        combinations(range(lower_bound, upper_bound + 1), 3)
+    ):
         a, b, c = triple
         if a != 0 and (b + c) % a == 0:
             edges.append((f"edge_{edge_index}", tuple(str(value) for value in triple)))

@@ -184,6 +184,15 @@ def test_product_rejects_coefficient_growth_before_backend() -> None:
         compute_product(RationalMatrixProductRequest(left=left, right=right))
 
 
+def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
+    one = CanonicalRational(num="1", den="1")
+    zero = CanonicalRational(num="0", den="1")
+    return tuple(
+        tuple(one if index == column else zero for column in range(size))
+        for index in range(size)
+    )
+
+
 def test_product_admits_sparse_order_32_with_one_large_entry() -> None:
     order = 32
     denominator = str(10**255 + 1)
@@ -195,9 +204,7 @@ def test_product_admits_sparse_order_32_with_one_large_entry() -> None:
         for row in range(order)
     ]
     left_entries[0][0] = huge
-    left = RationalMatrix(
-        entries=tuple(tuple(row) for row in left_entries)
-    )
+    left = RationalMatrix(entries=tuple(tuple(row) for row in left_entries))
     right = RationalMatrix(entries=_identity_entries(order))
 
     result = compute_product(RationalMatrixProductRequest(left=left, right=right))
@@ -247,19 +254,7 @@ def test_native_multiply_shares_widened_flint_product_kernel() -> None:
     )
 
     assert native == sympy.Matrix(
-        [
-            [value.as_fraction() for value in row]
-            for row in wire.product.entries
-        ]
-    )
-
-
-def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
-    one = CanonicalRational(num="1", den="1")
-    zero = CanonicalRational(num="0", den="1")
-    return tuple(
-        tuple(one if index == column else zero for column in range(size))
-        for index in range(size)
+        [[value.as_fraction() for value in row] for row in wire.product.entries]
     )
 
 

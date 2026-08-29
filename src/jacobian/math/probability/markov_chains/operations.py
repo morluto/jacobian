@@ -85,18 +85,8 @@ def _stationary_distribution_extremes(
     """Return one normalized stationary vector for every closed class."""
 
     import networkx as nx
-    import sympy
 
     n = len(matrix)
-    p = sympy.Matrix(
-        [
-            [
-                sympy.Rational(matrix[i][j].numerator, matrix[i][j].denominator)
-                for j in range(n)
-            ]
-            for i in range(n)
-        ]
-    )
     graph: nx.DiGraph[int] = nx.DiGraph()
     graph.add_nodes_from(range(n))
     graph.add_edges_from(
@@ -118,20 +108,17 @@ def _stationary_distribution_extremes(
         key=lambda component: component,
     )
     extremes: list[tuple[tuple[int, ...], tuple[Fraction, ...]]] = []
+    from jacobian.math.probability.markov_chains._flint import solve_stationary_class
+
     for closed_class in closed_classes:
-        submatrix = p.extract(closed_class, closed_class)
-        equations = submatrix.T - sympy.eye(len(closed_class))
-        equations[len(closed_class) - 1, :] = sympy.ones(1, len(closed_class))
-        rhs = sympy.zeros(len(closed_class), 1)
-        rhs[len(closed_class) - 1, 0] = 1
-        local = equations.inv() * rhs
-        distribution = [sympy.S.Zero] * n
+        local = solve_stationary_class(matrix, closed_class)
+        distribution = [Fraction(0)] * n
         for index, state in enumerate(closed_class):
             distribution[state] = local[index]
         extremes.append(
             (
                 closed_class,
-                tuple(Fraction(int(value.p), int(value.q)) for value in distribution),
+                tuple(distribution),
             )
         )
     return extremes

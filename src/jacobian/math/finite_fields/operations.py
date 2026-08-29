@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields._models import (
     _MAX_DIRECTION_RANK_WORK,
@@ -30,7 +34,10 @@ from jacobian.math.finite_fields.values import (
     RankResult,
     _direction_rank_work,
 )
-from jacobian.math.graphs.directed._models import DirectedGraph
+from jacobian.math.graphs.directed._models import (
+    MAX_DIRECTED_GRAPH_PARSE_EDGES,
+    DirectedGraph,
+)
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 _MAX_FINITE_MAP_WORK = 1_000_000
@@ -147,15 +154,29 @@ def _paley_result_wire_bytes(
 ) -> int:
     """Return the exact canonical result size before allocating its arc tuple."""
 
-    empty_size = len(
-        encode_strict_json(
-            {
-                "presentation": presentation.model_dump(mode="json"),
-                "graph": {"vertex_count": order, "edges": []},
-                "orientation": _PALEY_ORIENTATION,
-            }
+    try:
+        empty_size = len(
+            encode_strict_json(
+                {
+                    "presentation": presentation.model_dump(mode="json"),
+                    "graph": {"vertex_count": order, "edges": []},
+                    "orientation": _PALEY_ORIENTATION,
+                },
+                # The request envelope is at most one canonical input document;
+                # the fixed graph and orientation fields add only a small amount
+                # before the result-size check below.  A relaxed measurement
+                # limit keeps an oversized result on the typed domain path.
+                limits=CanonicalLimits(
+                    max_output_bytes=2 * CanonicalLimits().max_output_bytes
+                ),
+            )
         )
-    )
+    except CanonicalizationError as exc:
+        raise OperationDomainValidationError(
+            location=("presentation",),
+            code="finite_field.paley_tournament_exceeds_output_budget",
+            message="complete Paley tournament exceeds the canonical output budget",
+        ) from exc
     edge_count = order * (order - 1) // 2
     digit_lengths = tuple(len(str(vertex)) for vertex in range(order))
     edge_bytes = 3 * edge_count + sum(
@@ -185,6 +206,12 @@ def paley_tournament(
             location=("presentation",),
             code="finite_field.paley_tournament_exceeds_output_budget",
             message="complete Paley tournament exceeds the canonical output budget",
+        )
+    if edge_count > MAX_DIRECTED_GRAPH_PARSE_EDGES:
+        raise OperationDomainValidationError(
+            location=("presentation",),
+            code="finite_field.paley_tournament_exceeds_graph_edge_envelope",
+            message="Paley tournament exceeds the directed graph edge envelope",
         )
     work = order * presentation.degree + order + 2 * edge_count
     if work > _MAX_PALEY_TOURNAMENT_WORK:

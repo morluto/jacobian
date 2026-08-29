@@ -112,6 +112,28 @@ def test_rejects_a_complete_tournament_beyond_the_output_budget() -> None:
     )
 
 
+def test_rejects_a_tournament_beyond_the_directed_graph_edge_envelope() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        paley_tournament(finite_field(587, (0, 1)))
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_field.paley_tournament_exceeds_graph_edge_envelope"
+    )
+
+
+def test_rejects_oversized_presentation_metadata_as_domain_error() -> None:
+    # This request remains inside the 10 MiB input envelope, while the result
+    # skeleton is just over the canonical output limit before any arcs exist.
+    presentation = finite_field(3, (0, 1), generator="a" * 10_485_600)
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        paley_tournament(presentation)
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_field.paley_tournament_exceeds_output_budget"
+    )
+
+
 def test_result_rejects_wrong_source_binding_and_arc_order() -> None:
     result = paley_tournament(finite_field(3, (0, 1)))
     payload = result.model_dump(mode="json")

@@ -10,6 +10,7 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.matrices._operation_models import (
+    MAX_CHARACTERISTIC_POLYNOMIAL_ORDER,
     MAX_DETERMINANT_MATRIX_DIMENSION,
     MAX_PERMANENT_MATRIX_ORDER,
 )
@@ -67,8 +68,8 @@ def _oversized_partial_trace_payload() -> dict[str, Any]:
     (
         (
             "matrix.characteristic_polynomial.compute",
-            _identity_payload(MAX_MATRIX_DIMENSION + 1),
-            MAX_MATRIX_DIMENSION,
+            _identity_payload(MAX_CHARACTERISTIC_POLYNOMIAL_ORDER + 1),
+            MAX_CHARACTERISTIC_POLYNOMIAL_ORDER,
         ),
         (
             "matrix.permanent.compute",

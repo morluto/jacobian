@@ -25,7 +25,12 @@ MAX_LINEAR_RECURRENCE_INDEX = 512
 MAX_LINEAR_RECURRENCE_REQUESTED_INDICES = 256
 MAX_P_RECURSIVE_POLYNOMIAL_DEGREE = 16
 MAX_RATIONAL_GENERATING_FUNCTION_DEGREE = 32
-MAX_RATIONAL_SERIES_TRUNCATION_ORDER = 512
+# The rational-series recurrence charges one coefficient construction plus
+# every nonconstant denominator product. Its 250,000-unit work ledger therefore
+# permits this many terms only for a constant denominator; higher-degree
+# denominators admit proportionally shorter prefixes.
+MAX_RATIONAL_SERIES_TRUNCATION_ORDER = 250_000
+MAX_RATIONAL_SERIES_WORK_UNITS = 250_000
 MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS = 64
 MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS = 32_768
 MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES = 10 * 1024 * 1024

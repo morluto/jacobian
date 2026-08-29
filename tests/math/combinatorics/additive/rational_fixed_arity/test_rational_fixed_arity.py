@@ -80,3 +80,33 @@ def test_result_preserves_source() -> None:
     result = compute_rational_fixed_arity_sum_profile(values, 2)
     assert result.values == values
     assert result.arity == 2
+
+
+def test_native_admission_rejects_combination_explosion() -> None:
+    """The native path rejects a huge complete profile before enumeration."""
+    import pytest
+
+    values = tuple(_cr(i + 1) for i in range(50))
+    with pytest.raises(ValueError, match="enumeration exceeds"):
+        compute_rational_fixed_arity_sum_profile(values, 10)
+
+
+def test_native_admission_rejects_rational_growth() -> None:
+    """The native path rejects sums whose exact denominator will overflow."""
+    import pytest
+
+    digits = 17_000
+    values = (
+        CanonicalRational(num="1", den="1" + "0" * digits),
+        CanonicalRational(num="1", den="1" + "0" * digits + "1"),
+    )
+    with pytest.raises(ValueError, match="rational digit bound"):
+        compute_rational_fixed_arity_sum_profile(values, 2)
+
+
+def test_native_admission_rejects_negative_arity() -> None:
+    """Negative arity is a typed domain rejection rather than a host error."""
+    import pytest
+
+    with pytest.raises(ValueError, match="arity must be between"):
+        compute_rational_fixed_arity_sum_profile((_cr(1),), -1)

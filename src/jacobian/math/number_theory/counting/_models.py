@@ -18,7 +18,7 @@ from jacobian._models import StrictModel
 _MAX_FLOOR_SUM_N = 10**15
 _MAX_FLOOR_SUM_PARAM = 1_000_000
 _MAX_BOX_COORD = 10_000
-_MAX_BOX_AREA = 250_000
+_MAX_BOX_LINEAR_COEFFICIENT = 10**15
 _MAX_BOX_MODULUS = 10_000
 
 
@@ -60,9 +60,18 @@ class CongruenceBoxCountRequest(StrictModel):
     x_hi: int = Field(ge=-_MAX_BOX_COORD, le=_MAX_BOX_COORD)
     y_lo: int = Field(ge=-_MAX_BOX_COORD, le=_MAX_BOX_COORD)
     y_hi: int = Field(ge=-_MAX_BOX_COORD, le=_MAX_BOX_COORD)
-    u: int
-    v: int
-    c: int
+    u: int = Field(
+        ge=-_MAX_BOX_LINEAR_COEFFICIENT,
+        le=_MAX_BOX_LINEAR_COEFFICIENT,
+    )
+    v: int = Field(
+        ge=-_MAX_BOX_LINEAR_COEFFICIENT,
+        le=_MAX_BOX_LINEAR_COEFFICIENT,
+    )
+    c: int = Field(
+        ge=-_MAX_BOX_LINEAR_COEFFICIENT,
+        le=_MAX_BOX_LINEAR_COEFFICIENT,
+    )
     modulus: int = Field(ge=1, le=_MAX_BOX_MODULUS)
 
     @model_validator(mode="after")

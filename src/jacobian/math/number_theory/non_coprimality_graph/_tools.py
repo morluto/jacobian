@@ -3,6 +3,7 @@
 from collections.abc import Callable
 
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.non_coprimality_graph._models import (
@@ -17,7 +18,9 @@ from jacobian.math.number_theory.non_coprimality_graph.operations import (
 def compute_non_coprimality_graph(
     request: NonCoprimalityGraphRequest,
 ) -> NonCoprimalityGraphResult:
-    return construct_non_coprimality_graph(request.integers)
+    return construct_non_coprimality_graph(
+        tuple(parse_canonical_integer(value) for value in request.integers)
+    )
 
 
 def ncg_operation[

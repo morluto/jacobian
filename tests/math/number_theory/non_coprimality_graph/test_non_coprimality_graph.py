@@ -70,4 +70,14 @@ def test_result_preserves_source() -> None:
     """Result retains the source integers."""
     ints = (3, 5, 7)
     result = construct_non_coprimality_graph(ints)
-    assert result.integers == ints
+    assert result.integers == tuple(str(value) for value in ints)
+
+
+def test_canonical_integer_strings_preserve_large_values() -> None:
+    result = construct_non_coprimality_graph((2**53 + 1, 2**53 + 3))
+    assert result.integers == (str(2**53 + 1), str(2**53 + 3))
+
+
+def test_native_rejects_oversized_integer_before_gcd() -> None:
+    with pytest.raises(ValueError, match="digit bound"):
+        construct_non_coprimality_graph((10**256,))

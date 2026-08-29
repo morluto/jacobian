@@ -19,7 +19,7 @@ from jacobian.math.matrices.canonical_forms._models import (
     MonicPolynomial,
     RationalCanonicalFormResult,
 )
-from jacobian.math.matrices.canonical_forms.operations import (
+from jacobian.math.matrices.canonical_forms._tools import (
     compute_minimal_polynomial,
     compute_primary_decomposition,
     compute_rational_canonical_form,

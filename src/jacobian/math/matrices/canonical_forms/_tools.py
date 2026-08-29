@@ -14,11 +14,13 @@ from jacobian.math.matrices.canonical_forms._models import (
     SquareMatrixRequest,
 )
 from jacobian.math.matrices.canonical_forms.operations import (
-    compute_matrix_polynomial_evaluation,
-    compute_minimal_polynomial,
-    compute_primary_decomposition,
-    compute_rational_canonical_form,
+    _minimal_polynomial_components,
+    _primary_decomposition_components,
+    _rational_canonical_components,
+    evaluate_matrix_polynomial_value,
 )
+from jacobian.math.matrices.values import RationalMatrix
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
 def canonical_form_operation[
@@ -46,23 +48,66 @@ def canonical_form_operation[
     )
 
 
-def _compute_matrix_polynomial_evaluation(
+def compute_matrix_polynomial_evaluation(
+    matrix: RationalMatrix,
+    polynomial: RationalPolynomial,
+) -> MatrixPolynomialEvaluationResult:
+    return MatrixPolynomialEvaluationResult._from_kernel(
+        matrix=matrix,
+        polynomial=polynomial,
+        value=evaluate_matrix_polynomial_value(matrix, polynomial),
+    )
+
+
+def compute_minimal_polynomial(matrix: RationalMatrix) -> MinimalPolynomialResult:
+    minimal, characteristic = _minimal_polynomial_components(matrix)
+    return MinimalPolynomialResult._from_kernel(
+        matrix=matrix,
+        minimal_polynomial=minimal,
+        characteristic_polynomial=characteristic,
+    )
+
+
+def compute_rational_canonical_form(
+    matrix: RationalMatrix,
+) -> RationalCanonicalFormResult:
+    invariant_factors, characteristic, minimal = _rational_canonical_components(matrix)
+    return RationalCanonicalFormResult._from_kernel(
+        matrix=matrix,
+        invariant_factors=invariant_factors,
+        characteristic_polynomial=characteristic,
+        minimal_polynomial=minimal,
+    )
+
+
+def compute_primary_decomposition(
+    matrix: RationalMatrix,
+) -> PrimaryDecompositionResult:
+    components, minimal = _primary_decomposition_components(matrix)
+    return PrimaryDecompositionResult._from_kernel(
+        matrix=matrix,
+        components=components,
+        minimal_polynomial=minimal,
+    )
+
+
+def _run_matrix_polynomial_evaluation(
     request: MatrixPolynomialEvaluationRequest,
 ) -> MatrixPolynomialEvaluationResult:
     return compute_matrix_polynomial_evaluation(request.matrix, request.polynomial)
 
 
-def _compute_minimal_polynomial(request: SquareMatrixRequest) -> MinimalPolynomialResult:
+def _run_minimal_polynomial(request: SquareMatrixRequest) -> MinimalPolynomialResult:
     return compute_minimal_polynomial(request.matrix)
 
 
-def _compute_rational_canonical_form(
+def _run_rational_canonical_form(
     request: SquareMatrixRequest,
 ) -> RationalCanonicalFormResult:
     return compute_rational_canonical_form(request.matrix)
 
 
-def _compute_primary_decomposition(
+def _run_primary_decomposition(
     request: SquareMatrixRequest,
 ) -> PrimaryDecompositionResult:
     return compute_primary_decomposition(request.matrix)
@@ -77,7 +122,7 @@ TOOLS: MathTools = (
         "alongside the exact evaluated matrix.",
         MatrixPolynomialEvaluationRequest,
         MatrixPolynomialEvaluationResult,
-        _compute_matrix_polynomial_evaluation,
+        _run_matrix_polynomial_evaluation,
         "matrix",
         "polynomial",
         "functional-calculus",
@@ -127,7 +172,7 @@ TOOLS: MathTools = (
         "method, returning the exact minimal and characteristic polynomials.",
         SquareMatrixRequest,
         MinimalPolynomialResult,
-        _compute_minimal_polynomial,
+        _run_minimal_polynomial,
         "matrix",
         "minimal-polynomial",
         "exact",
@@ -154,7 +199,7 @@ TOOLS: MathTools = (
         "over QQ[t].",
         SquareMatrixRequest,
         RationalCanonicalFormResult,
-        _compute_rational_canonical_form,
+        _run_rational_canonical_form,
         "matrix",
         "rational-canonical-form",
         "exact",
@@ -180,7 +225,7 @@ TOOLS: MathTools = (
         "components and return each monic component polynomial.",
         SquareMatrixRequest,
         PrimaryDecompositionResult,
-        _compute_primary_decomposition,
+        _run_primary_decomposition,
         "matrix",
         "primary-decomposition",
         "exact",

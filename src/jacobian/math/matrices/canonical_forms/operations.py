@@ -18,11 +18,7 @@ from jacobian.math.matrices.canonical_forms._models import (
     MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
     InvariantFactorEntry,
-    MatrixPolynomialEvaluationResult,
-    MinimalPolynomialResult,
     MonicPolynomial,
-    PrimaryDecompositionResult,
-    RationalCanonicalFormResult,
     _polynomial_degree,
     _require_matrix_polynomial_output_budget,
     _validation_error,
@@ -474,41 +470,29 @@ def _evaluate_matrix_polynomial_value(
     return rational_matrix_from_fractions(evaluated)
 
 
-def compute_matrix_polynomial_evaluation(
+def _minimal_polynomial_components(
     matrix: RationalMatrix,
-    polynomial: RationalPolynomial,
-) -> MatrixPolynomialEvaluationResult:
-    _admit_matrix_polynomial(matrix, polynomial)
-    return MatrixPolynomialEvaluationResult._from_kernel(
-        matrix=matrix,
-        polynomial=polynomial,
-        value=_evaluate_matrix_polynomial_value(matrix, polynomial),
-    )
+) -> tuple[MonicPolynomial, MonicPolynomial]:
+    """Admit one matrix and compute its minimal and characteristic values."""
 
-
-def compute_minimal_polynomial(
-    matrix: RationalMatrix,
-) -> MinimalPolynomialResult:
     _admit_square(matrix)
     entries = _matrix_entries(matrix)
-    minimal = minimal_polynomial(entries)
-    characteristic = characteristic_polynomial(entries)
-    return MinimalPolynomialResult._from_kernel(
-        matrix=matrix,
-        minimal_polynomial=_to_monic_polynomial(minimal),
-        characteristic_polynomial=_to_monic_polynomial(characteristic),
+    return (
+        _to_monic_polynomial(minimal_polynomial(entries)),
+        _to_monic_polynomial(characteristic_polynomial(entries)),
     )
 
 
-def compute_rational_canonical_form(
+def _rational_canonical_components(
     matrix: RationalMatrix,
-) -> RationalCanonicalFormResult:
+) -> tuple[tuple[InvariantFactorEntry, ...], MonicPolynomial, MonicPolynomial]:
+    """Admit one matrix and compute all rational-canonical components."""
+
     _admit_square(matrix)
     entries = _matrix_entries(matrix)
     factors = invariant_factors(entries)
     minimal = minimal_polynomial(entries)
     characteristic = characteristic_polynomial(entries)
-
     invariant_entries = tuple(
         InvariantFactorEntry(
             factor=_to_monic_polynomial(coefficients),
@@ -516,18 +500,18 @@ def compute_rational_canonical_form(
         )
         for coefficients in factors
     )
-
-    return RationalCanonicalFormResult._from_kernel(
-        matrix=matrix,
-        invariant_factors=invariant_entries,
-        characteristic_polynomial=_to_monic_polynomial(characteristic),
-        minimal_polynomial=_to_monic_polynomial(minimal),
+    return (
+        invariant_entries,
+        _to_monic_polynomial(characteristic),
+        _to_monic_polynomial(minimal),
     )
 
 
-def compute_primary_decomposition(
+def _primary_decomposition_components(
     matrix: RationalMatrix,
-) -> PrimaryDecompositionResult:
+) -> tuple[tuple[MonicPolynomial, ...], MonicPolynomial]:
+    """Admit one matrix and compute its primary components and minimal value."""
+
     _admit_square(matrix)
     entries = _matrix_entries(matrix)
     components = primary_decomposition(entries)
@@ -538,10 +522,7 @@ def compute_primary_decomposition(
             for right_index, right in enumerate(component):
                 product[left_index + right_index] += left * right
         minimal_coefficients = product
-    return PrimaryDecompositionResult._from_kernel(
-        matrix=matrix,
-        components=tuple(
-            _to_monic_polynomial(coefficient) for coefficient in components
-        ),
-        minimal_polynomial=_to_monic_polynomial(minimal_coefficients),
+    return (
+        tuple(_to_monic_polynomial(coefficient) for coefficient in components),
+        _to_monic_polynomial(minimal_coefficients),
     )

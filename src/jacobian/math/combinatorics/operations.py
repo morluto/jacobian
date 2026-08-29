@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import math
+import time
 from fractions import Fraction
 from itertools import pairwise
 from typing import Literal, NoReturn
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import bind_request_deadline, current_request_execution
 from jacobian.canonical import CanonicalLimits, format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._progression_hypergraph_models import (
@@ -103,11 +105,8 @@ def _binomial_coefficient_digit_bound(n: int, k: int) -> int:
 
     Uses the cancelled product ``∏_{i=1}^{k} (n - k + i) / i`` rather than the
     undivided numerator, so off-center coefficients are not charged as if they
-    were near ``2^n``.  Callers must reject ``min(k, n-k)`` above the
-    multiplicative-step budget before this loop; the same check is repeated
-    here so a direct call cannot iterate past that budget.  Float
-    accumulation over the admitted step budget stays far below one digit; the
-    final ``+ 1`` keeps the bound from underestimating.
+    were near ``2^n``.  ``math.lgamma`` estimates the cancelled product in
+    constant work; two extra digits keep the bound from underestimating.
     """
 
     if k < 0 or k > n:
@@ -115,13 +114,19 @@ def _binomial_coefficient_digit_bound(n: int, k: int) -> int:
     steps = min(k, n - k)
     if steps == 0:
         return 1
-    _require_counting_step_budget(steps)
-    log10_value = 0.0
-    for index in range(1, steps + 1):
-        log10_value += math.log10(n - steps + index) - math.log10(index)
+    log10_e = 0.43429448190325182765
+    log10_value = (
+        math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1)
+    ) * log10_e
     if log10_value <= 0.0:
         return 1
-    return math.ceil(log10_value + 1e-12) + 1
+    return math.ceil(log10_value + 1e-6) + 2
+
+
+def _bind_counting_deadline() -> None:
+    execution = current_request_execution()
+    started = execution.started_at if execution is not None else time.monotonic()
+    bind_request_deadline(started + 120.0)
 
 
 def _admit_multiplicative_count(
@@ -131,6 +136,7 @@ def _admit_multiplicative_count(
     result_digit_bound: int | None = None,
 ) -> None:
     _require_counting_step_budget(steps)
+    _bind_counting_deadline()
     if result_digit_bound is None:
         # Every multiplicative factor is at most ``maximum_factor``.  The
         # rational 30103 / 100000 is a strict upper bound for log10(2), so this

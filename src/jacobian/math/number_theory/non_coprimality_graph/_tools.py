@@ -67,8 +67,8 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "basic_fixture",
-                "Non-coprimality graph of {2, 3, 4, 6}.",
-                {"integers": [2, 3, 4, 6]},
+                "Non-coprimality graph of {2, 3, 4, 6}; integers are canonical decimal strings.",
+                {"integers": ["2", "3", "4", "6"]},
             ),
         ),
     ),

@@ -3,8 +3,8 @@ from __future__ import annotations
 from math import gcd
 
 import pytest
-from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.non_coprimality_graph._models import (
     NonCoprimalityGraphRequest,
 )
@@ -51,13 +51,20 @@ def test_replay_gcd() -> None:
 
 
 def test_rejects_non_positive() -> None:
-    with pytest.raises(ValidationError):
-        NonCoprimalityGraphRequest(integers=(0, 2))
+    request = NonCoprimalityGraphRequest(integers=("0", "2"))
+    with pytest.raises(OperationDomainValidationError):
+        construct_non_coprimality_graph(tuple(map(int, request.integers)))
 
 
 def test_rejects_duplicates() -> None:
-    with pytest.raises(ValidationError):
-        NonCoprimalityGraphRequest(integers=(2, 2))
+    request = NonCoprimalityGraphRequest(integers=("2", "2"))
+    with pytest.raises(OperationDomainValidationError):
+        construct_non_coprimality_graph(tuple(map(int, request.integers)))
+
+
+def test_request_uses_canonical_integer_strings() -> None:
+    request = NonCoprimalityGraphRequest(integers=("2", "3", "4", "6"))
+    assert request.integers == ("2", "3", "4", "6")
 
 
 def test_vertex_labels_preserve_integers() -> None:

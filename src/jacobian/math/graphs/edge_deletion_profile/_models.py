@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated
 
-from pydantic import Field, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field, WithJsonSchema
+from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -15,30 +15,29 @@ MAX_EDGES = 12
 MAX_DELETION_ORDER = 3
 
 
+def _edge_deletion_graph_schema() -> JsonSchemaValue:
+    """Describe the shared graph axis and the operation's work-sensitive bound."""
+
+    schema = SimpleUndirectedGraph.model_json_schema()
+    schema["description"] = (
+        "A finite simple graph on Jacobian's canonical graph axis. The profile "
+        "operation admits requests by deletion-row count, coloring work, and "
+        "complete-result size."
+    )
+    return schema
+
+
+EdgeDeletionGraph = Annotated[
+    SimpleUndirectedGraph,
+    WithJsonSchema(_edge_deletion_graph_schema()),
+]
+
+
 class EdgeDeletionProfileRequest(StrictModel):
     """Request for the edge deletion chromatic profile of a graph."""
 
-    graph: SimpleUndirectedGraph
-    deletion_order: int = Field(ge=0, le=MAX_DELETION_ORDER)
-
-    @model_validator(mode="after")
-    def validate_request(self) -> Self:
-        if len(self.graph.vertices) > MAX_VERTICES:
-            raise PydanticCustomError(
-                "edge_deletion.too_many_vertices",
-                f"at most {MAX_VERTICES} vertices are supported",
-            )
-        if len(self.graph.edges) > MAX_EDGES:
-            raise PydanticCustomError(
-                "edge_deletion.too_many_edges",
-                f"at most {MAX_EDGES} edges are supported",
-            )
-        if self.deletion_order > len(self.graph.edges):
-            raise PydanticCustomError(
-                "edge_deletion.order_exceeds_edge_count",
-                "deletion_order must not exceed the number of edges",
-            )
-        return self
+    graph: EdgeDeletionGraph
+    deletion_order: int = Field(ge=0, le=MAX_DELETION_ORDER, strict=True)
 
 
 class DeletionRow(StrictModel):
@@ -61,6 +60,7 @@ __all__ = [
     "MAX_EDGES",
     "MAX_VERTICES",
     "DeletionRow",
+    "EdgeDeletionGraph",
     "EdgeDeletionProfileRequest",
     "EdgeDeletionProfileResult",
 ]

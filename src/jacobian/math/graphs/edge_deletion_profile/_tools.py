@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.edge_deletion_profile._models import (
@@ -19,16 +20,16 @@ def compute_edge_deletion_profile_op(
     return compute_edge_deletion_profile(request.graph, request.deletion_order)
 
 
-def edp_action(
+def edp_action[RequestT: StrictModel, ResultT: StrictModel](
     operation_id: str,
     title: str,
     description: str,
-    request_model: type,
-    result_model: type,
-    operation: Callable,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-) -> MathTool:
+) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
         title=title,

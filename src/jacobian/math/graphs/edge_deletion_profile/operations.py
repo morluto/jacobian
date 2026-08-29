@@ -3,12 +3,91 @@
 from __future__ import annotations
 
 from itertools import combinations
+from math import comb
 
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    strict_json_object_size,
+)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.edge_deletion_profile._models import (
+    MAX_DELETION_ORDER,
     DeletionRow,
     EdgeDeletionProfileResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+MAX_EDGE_DELETION_PROFILE_WORK = 50_000_000
+
+
+def _json_array_size(item_size: int, count: int) -> int:
+    return 2 + max(count - 1, 0) + item_size * count
+
+
+def _admit_edge_deletion_profile(
+    graph: SimpleUndirectedGraph,
+    deletion_order: int,
+) -> None:
+    """Admit native inputs before row enumeration and chromatic searches."""
+
+    if type(deletion_order) is not int or not 0 <= deletion_order <= MAX_DELETION_ORDER:
+        raise OperationDomainValidationError(
+            location=("deletion_order",),
+            code="graph.edge_deletion.order_out_of_range",
+            message=(
+                "deletion_order must be an integer between 0 and "
+                f"{MAX_DELETION_ORDER}"
+            ),
+        )
+
+    vertex_count = len(graph.vertices)
+    edge_count = len(graph.edges)
+    if deletion_order > edge_count:
+        raise OperationDomainValidationError(
+            location=("deletion_order",),
+            code="graph.edge_deletion.order_exceeds_edge_count",
+            message="deletion_order must not exceed the number of edges",
+        )
+
+    row_count = sum(comb(edge_count, order) for order in range(deletion_order + 1))
+    coloring_work = 1
+    if graph.edges and vertex_count:
+        coloring_work = vertex_count * sum(
+            colors**vertex_count for colors in range(1, vertex_count + 1)
+        )
+    if row_count * coloring_work > MAX_EDGE_DELETION_PROFILE_WORK:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.edge_deletion.work_exceeds_bound",
+            message="edge-deletion profile search exceeds its exact work bound",
+        )
+
+    graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
+    index_bytes = max(1, len(str(max(edge_count - 1, 0))))
+    row_bytes = strict_json_object_size(
+        (
+            (
+                "deleted_edge_indices",
+                _json_array_size(index_bytes, deletion_order),
+            ),
+            ("chromatic_number", max(1, len(str(vertex_count)))),
+        )
+    )
+    rows_bytes = _json_array_size(row_bytes, row_count)
+    result_bytes = strict_json_object_size(
+        (
+            ("graph", graph_bytes),
+            ("deletion_order", max(1, len(str(deletion_order)))),
+            ("rows", rows_bytes),
+        )
+    )
+    if result_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.edge_deletion.result_exceeds_output_bound",
+            message="edge-deletion profile result exceeds the canonical output bound",
+        )
 
 __all__ = ["compute_edge_deletion_profile"]
 
@@ -22,14 +101,16 @@ def compute_edge_deletion_profile(
     For each subset F of edges with |F| <= deletion_order, compute the
     chromatic number of the graph after deleting those edges.
     """
+    _admit_edge_deletion_profile(graph, deletion_order)
     edges = list(graph.edges)
     vertices = list(graph.vertices)
 
     rows: list[DeletionRow] = []
     for order in range(deletion_order + 1):
         for edge_indices in combinations(range(len(edges)), order):
+            deleted = set(edge_indices)
             remaining_edges = [
-                edges[i] for i in range(len(edges)) if i not in set(edge_indices)
+                edges[i] for i in range(len(edges)) if i not in deleted
             ]
             chromatic = _chromatic_number(vertices, remaining_edges)
             rows.append(

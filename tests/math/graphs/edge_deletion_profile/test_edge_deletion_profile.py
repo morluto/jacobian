@@ -3,11 +3,8 @@ from __future__ import annotations
 from itertools import combinations
 
 import pytest
-from pydantic import ValidationError
 
-from jacobian.math.graphs.edge_deletion_profile._models import (
-    EdgeDeletionProfileRequest,
-)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.edge_deletion_profile.operations import (
     compute_edge_deletion_profile,
 )
@@ -73,8 +70,21 @@ def test_row_count() -> None:
 
 def test_rejects_order_exceeds_edges() -> None:
     g = _graph(["a", "b"], [("a", "b")])
-    with pytest.raises(ValidationError):
-        EdgeDeletionProfileRequest(graph=g, deletion_order=2)
+    with pytest.raises(OperationDomainValidationError):
+        compute_edge_deletion_profile(g, 2)
+
+
+def test_admits_cheap_edgeless_graph_above_old_vertex_cap() -> None:
+    graph = _graph([str(index) for index in range(9)], [])
+    result = compute_edge_deletion_profile(graph, 0)
+    assert len(result.rows) == 1
+    assert result.rows[0].chromatic_number == 1
+
+
+def test_native_negative_order_is_typed() -> None:
+    graph = _graph(["a"], [])
+    with pytest.raises(OperationDomainValidationError):
+        compute_edge_deletion_profile(graph, -1)
 
 
 def test_result_preserves_source() -> None:

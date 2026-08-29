@@ -38,9 +38,8 @@ def compute_orthogonality(request: OrthogonalityRequest) -> OrthogonalityResult:
 def compute_latin_square_transpose(
     request: TransposeRequest,
 ) -> LatinSquareTransposeResult:
-    return LatinSquareTransposeResult._from_kernel(
-        order=request.square.order,
-        cells=transpose(request.square),
+    return LatinSquareTransposeResult.model_construct(
+        transposed=transpose(request.square),
     )
 
 

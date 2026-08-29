@@ -75,7 +75,7 @@ def orthogonality_profile(
     return pair_count == pair_cells, pair_count
 
 
-def transpose(square: LatinSquare) -> tuple[tuple[int, ...], ...]:
+def transpose(square: LatinSquare) -> LatinSquare:
     """Return the exact transpose of one Latin square."""
 
     cells = _square_cells(square)
@@ -97,9 +97,14 @@ def transpose(square: LatinSquare) -> tuple[tuple[int, ...], ...]:
             "transpose_result_bytes_exceeded",
             "Latin-square transpose exceeds the canonical output-byte limit",
         )
-    return tuple(
-        tuple(square.cells[row][column] for row in range(square.order))
-        for column in range(square.order)
+    # The transpose of a Latin square is Latin, so construct the canonical
+    # carrier without re-running the Latin-property validator.
+    return LatinSquare.model_construct(
+        order=square.order,
+        cells=tuple(
+            tuple(square.cells[row][column] for row in range(square.order))
+            for column in range(square.order)
+        ),
     )
 
 

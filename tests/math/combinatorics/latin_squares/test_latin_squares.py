@@ -102,7 +102,13 @@ def test_transpose() -> None:
     request = TransposeRequest(square=Z2)
     result = compute_latin_square_transpose(request)
     assert result.transposed == Z2
-    assert transpose(Z2) == result.transposed.cells
+    native = transpose(Z2)
+    assert native == result.transposed
+    assert isinstance(native, LatinSquare)
+    # Native and MCP producers share the canonical LatinSquare carrier so the
+    # native result composes unchanged into transpose and orthogonality.
+    assert transpose(native) == Z2
+    assert orthogonality_profile(native, Z2) == (False, 2)
     restored = LatinSquareTransposeResult.model_validate(
         loads_strict_json(encode_strict_json(result.model_dump(mode="json")))
     )

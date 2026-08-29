@@ -3,7 +3,10 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import combinations
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_subset_sum.operations import (
     compute_rational_subset_sum_profile,
 )
@@ -72,3 +75,10 @@ def test_result_preserves_source() -> None:
     values = (_cr(1, 2), _cr(1, 3))
     result = compute_rational_subset_sum_profile(values)
     assert result.values == values
+
+
+def test_native_admission_rejects_oversized_profile() -> None:
+    """Native calls reject the exhaustive profile before enumeration."""
+    values = tuple(_cr(1, 2**i) for i in range(20))
+    with pytest.raises(OperationDomainValidationError, match="output bound"):
+        compute_rational_subset_sum_profile(values)

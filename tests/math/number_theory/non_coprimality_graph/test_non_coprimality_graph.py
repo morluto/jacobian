@@ -111,6 +111,14 @@ def test_large_non_coprime_pair() -> None:
     assert graph.edges == (("1000000007", "2000000014"),)
 
 
+def test_canonical_integer_above_python_digit_limit_is_supported() -> None:
+    value = "9" * 5_000
+
+    graph = _graph([value])
+
+    assert graph.vertices == (value,)
+
+
 def test_vertex_order_is_sorted_by_value() -> None:
     # Input is given out of numeric order
     graph = _graph(["10", "2", "6", "3"])

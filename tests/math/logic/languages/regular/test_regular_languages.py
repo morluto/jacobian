@@ -5,6 +5,7 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.languages.regular._models import (
     ComplementRequest,
     CountRequest,
@@ -20,7 +21,11 @@ from jacobian.math.logic.languages.regular.operations import (
     dfa_complement,
     dfa_run,
 )
-from jacobian.math.logic.languages.regular.values import DFA, DFATransition
+from jacobian.math.logic.languages.regular.values import (
+    DFA,
+    MAX_COUNT_WORD_LENGTH,
+    DFATransition,
+)
 
 
 def _error_type(exc_info: pytest.ExceptionInfo[ValidationError]) -> str:
@@ -67,6 +72,142 @@ def _dfa_full_alphabet_accepting() -> DFA:
         alphabet_size=32,
         transitions=tuple(
             DFATransition(source=0, symbol=symbol, target=0) for symbol in range(32)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+
+def _dfa_full_alphabet_rejecting() -> DFA:
+    """One non-accepting state looping on all 32 symbols."""
+
+    return DFA(
+        state_count=1,
+        alphabet_size=32,
+        transitions=tuple(
+            DFATransition(source=0, symbol=symbol, target=0) for symbol in range(32)
+        ),
+        initial_state=0,
+        accepting_states=(),
+    )
+
+
+def _dfa_rotating_binary(accepting_states: tuple[int, ...]) -> DFA:
+    """A 64-state DFA whose symbols advance by zero or one state."""
+
+    return DFA(
+        state_count=64,
+        alphabet_size=2,
+        transitions=tuple(
+            DFATransition(
+                source=state,
+                symbol=symbol,
+                target=(state + symbol) % 64,
+            )
+            for state in range(64)
+            for symbol in range(2)
+        ),
+        initial_state=0,
+        accepting_states=accepting_states,
+    )
+
+
+def _dfa_accepting_only_zeros() -> DFA:
+    """A 32-symbol DFA accepting exactly one word at every length."""
+
+    return DFA(
+        state_count=2,
+        alphabet_size=32,
+        transitions=tuple(
+            DFATransition(
+                source=state,
+                symbol=symbol,
+                target=0 if state == 0 and symbol == 0 else 1,
+            )
+            for state in range(2)
+            for symbol in range(32)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+
+def _dfa_cycle_with_transient_branching() -> DFA:
+    """A 63-state accepting cycle with a 32-way branch only out of state 0.
+
+    Every other cycle state continues on one symbol and sends the rest to a
+    rejecting sink. Useful growth is ``32 ** ceil(length / 63)``, not ``32 ** length``.
+    """
+
+    cycle = 63
+    sink = 63
+    transitions = [
+        DFATransition(source=0, symbol=symbol, target=1) for symbol in range(32)
+    ]
+    for state in range(1, cycle):
+        nxt = (state + 1) % cycle
+        transitions.append(DFATransition(source=state, symbol=0, target=nxt))
+        transitions.extend(
+            DFATransition(source=state, symbol=symbol, target=sink)
+            for symbol in range(1, 32)
+        )
+    transitions.extend(
+        DFATransition(source=sink, symbol=symbol, target=sink) for symbol in range(32)
+    )
+    return DFA(
+        state_count=64,
+        alphabet_size=32,
+        transitions=tuple(transitions),
+        initial_state=0,
+        accepting_states=tuple(range(cycle)),
+    )
+
+
+def _dfa_with_transient_branching() -> DFA:
+    """A DFA accepting 32 words despite a large first-step branch."""
+
+    return DFA(
+        state_count=3,
+        alphabet_size=32,
+        transitions=tuple(
+            DFATransition(
+                source=state,
+                symbol=symbol,
+                target=(1 if state == 0 or (state == 1 and symbol == 0) else 2),
+            )
+            for state in range(3)
+            for symbol in range(32)
+        ),
+        initial_state=0,
+        accepting_states=(1,),
+    )
+
+
+def _dfa_ternary_accepting() -> DFA:
+    """One accepting state looping on three symbols."""
+
+    return DFA(
+        state_count=1,
+        alphabet_size=3,
+        transitions=tuple(
+            DFATransition(source=0, symbol=symbol, target=0) for symbol in range(3)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+
+def _dfa_binary_toggle() -> DFA:
+    """Both symbols swap two states; only the initial state accepts."""
+
+    return DFA(
+        state_count=2,
+        alphabet_size=2,
+        transitions=(
+            DFATransition(source=0, symbol=0, target=1),
+            DFATransition(source=0, symbol=1, target=1),
+            DFATransition(source=1, symbol=0, target=0),
+            DFATransition(source=1, symbol=1, target=0),
         ),
         initial_state=0,
         accepting_states=(0,),
@@ -158,6 +299,105 @@ def test_count_large_value_uses_canonical_string() -> None:
     dfa = _dfa_full_alphabet_accepting()
     result = compute_count(CountRequest(dfa=dfa, word_length=200))
     assert result.count == str(32**200)
+
+
+def test_count_uses_flint_powering_above_the_previous_length_ceiling() -> None:
+    dfa = _dfa_full_alphabet_accepting()
+    result = compute_count(CountRequest(dfa=dfa, word_length=1_000))
+
+    assert result.count == str(32**1_000)
+
+
+def test_count_rejects_projected_result_digits_before_powering() -> None:
+    with pytest.raises(OperationDomainValidationError, match="result digit bound"):
+        count_accepted_words(_dfa_full_alphabet_accepting(), 22_000)
+
+
+def test_count_admits_value_just_below_result_digit_bound() -> None:
+    assert count_accepted_words(_dfa_full_alphabet_accepting(), 21_761) == 32**21_761
+
+
+def test_count_prunes_rejecting_growth_before_admission() -> None:
+    assert count_accepted_words(_dfa_accepting_only_zeros(), 22_000) == 1
+
+
+def test_count_admits_transient_branching_before_sparse_tail() -> None:
+    assert count_accepted_words(_dfa_with_transient_branching(), 22_000) == 32
+
+
+def test_count_admits_cycle_transient_branching_from_path_sensitive_work() -> None:
+    """Length 100000 on the 63-cycle is 32**1588 (2391 digits), not 32**100000."""
+
+    length = 100_000
+    expected = 32 ** ((length + 62) // 63)
+    assert len(str(expected)) == 2391
+    count = count_accepted_words(_dfa_cycle_with_transient_branching(), length)
+    assert count == expected
+
+
+def test_count_uses_tight_alphabet_power_digit_bound() -> None:
+    """3**60000 has 28,628 digits; a ceil(log2) estimate would reject it."""
+
+    assert count_accepted_words(_dfa_ternary_accepting(), 60_000) == 3**60_000
+
+
+def test_count_empty_accepting_set_short_circuits_before_result_bound() -> None:
+    """Empty accepting sets are exactly zero without charging large-n growth."""
+
+    dfa = _dfa_full_alphabet_rejecting()
+    assert compute_count(CountRequest(dfa=dfa, word_length=22_000)).count == "0"
+    assert count_accepted_words(dfa, 22_000) == 0
+    assert count_accepted_words(dfa, 0) == 0
+
+
+def test_count_toggle_dfa_parity_is_exact() -> None:
+    dfa = _dfa_binary_toggle()
+    assert count_accepted_words(dfa, 1) == 0
+    assert count_accepted_words(dfa, 2) == 4
+    assert count_accepted_words(dfa, 3) == 0
+    assert count_accepted_words(dfa, 10) == 2**10
+
+
+def test_count_rejects_toggle_dfa_intermediate_explosion() -> None:
+    """Odd max-length toggle counts are 0, but FLINT off-diagonals are 2**n."""
+
+    with pytest.raises(OperationDomainValidationError, match="intermediate"):
+        count_accepted_words(_dfa_binary_toggle(), MAX_COUNT_WORD_LENGTH)
+
+
+def test_count_rejects_large_state_powering_work() -> None:
+    with pytest.raises(OperationDomainValidationError, match="matrix powering"):
+        count_accepted_words(_dfa_rotating_binary((0,)), 10_000)
+
+
+def test_count_admits_large_state_powering_within_work_bound() -> None:
+    dfa = _dfa_rotating_binary(tuple(range(64)))
+
+    assert count_accepted_words(dfa, 5_000) == 2**5_000
+
+
+def test_count_accepts_maximum_transport_exponent_for_compact_unary_dfa() -> None:
+    state_count = 64
+    dfa = DFA(
+        state_count=state_count,
+        alphabet_size=1,
+        transitions=tuple(
+            DFATransition(source=state, symbol=0, target=(state + 1) % state_count)
+            for state in range(state_count)
+        ),
+        initial_state=0,
+        accepting_states=(MAX_COUNT_WORD_LENGTH % state_count,),
+    )
+
+    assert count_accepted_words(dfa, MAX_COUNT_WORD_LENGTH) == 1
+
+
+def test_count_request_rejects_exponent_above_transport_range() -> None:
+    with pytest.raises(ValidationError):
+        CountRequest(
+            dfa=_dfa_even_zeros(),
+            word_length=MAX_COUNT_WORD_LENGTH + 1,
+        )
 
 
 def test_run_and_count_results_remain_structural() -> None:

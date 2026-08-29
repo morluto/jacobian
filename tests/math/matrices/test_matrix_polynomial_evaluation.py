@@ -627,9 +627,13 @@ def test_flint_characteristic_polynomial_preserves_exact_conventions(
 def test_characteristic_polynomial_rejects_predicted_coefficient_growth() -> None:
     order = 128
     denominator = 10**255 + 1
+    numerator = denominator - 1
     source = _matrix(
         *tuple(
-            tuple((1, denominator) if row == column else 0 for column in range(order))
+            tuple(
+                (numerator, denominator) if row == column else 0
+                for column in range(order)
+            )
             for row in range(order)
         )
     )

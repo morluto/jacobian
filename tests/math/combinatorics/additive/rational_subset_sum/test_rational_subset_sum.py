@@ -82,3 +82,11 @@ def test_native_admission_rejects_oversized_profile() -> None:
     values = tuple(_cr(1, 2**i) for i in range(20))
     with pytest.raises(OperationDomainValidationError, match="output bound"):
         compute_rational_subset_sum_profile(values)
+
+
+def test_repeated_zero_values_use_their_small_support_bound() -> None:
+    """Twenty equal zeroes have one result row, not 2**20 rows."""
+    values = tuple(_cr(0) for _ in range(20))
+    result = compute_rational_subset_sum_profile(values)
+    assert len(result.rows) == 1
+    assert result.rows[0].multiplicity == 2**20

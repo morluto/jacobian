@@ -58,8 +58,18 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
     source_bytes = len(
         encode_strict_json({"values": [v.model_dump(mode="json") for v in values]})
     )
+    # Equal source values can collapse many subset vectors to one row. Group
+    # them before estimating the support; the product of (multiplicity + 1)
+    # bounds the number of distinct sums while retaining the actual
+    # exponential work bound below.
+    multiplicities: dict[Fraction, int] = {}
+    for value in (item.as_fraction() for item in values):
+        multiplicities[value] = multiplicities.get(value, 0) + 1
+    support_upper_bound = 1
+    for multiplicity in multiplicities.values():
+        support_upper_bound *= multiplicity + 1
     row_bytes = 2 * growth_digits + 96
-    predicted_rows = 1 << n
+    predicted_rows = support_upper_bound
     predicted_bytes = source_bytes + 128 + predicted_rows * (row_bytes + 1)
     if predicted_bytes > MAX_RESULT_BYTES:
         _reject(

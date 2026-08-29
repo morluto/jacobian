@@ -11,14 +11,20 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.logic.languages.words.values import FiniteWord
 
-MAX_WORD_LENGTH = 100
+MAX_ENDPOINT_PROFILE_WORK = 250_000
 
 
 class WeightedOrderedWord(StrictModel):
     """A finite word with a nonnegative rational weight per position."""
 
     word: FiniteWord
-    weights: tuple[CanonicalRational, ...] = Field(max_length=MAX_WORD_LENGTH)
+    weights: tuple[CanonicalRational, ...] = Field(
+        max_length=500,
+        description=(
+            "One nonnegative exact rational per word position. The complete "
+            "quadratic profile work and result envelope is checked before execution."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_weights(self) -> Self:
@@ -60,7 +66,7 @@ class EndpointProfileResult(StrictModel):
 
 
 __all__ = [
-    "MAX_WORD_LENGTH",
+    "MAX_ENDPOINT_PROFILE_WORK",
     "EndpointProfileEntry",
     "EndpointProfileRequest",
     "EndpointProfileResult",

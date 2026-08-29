@@ -1,0 +1,1 @@
+"""Algebraic combinatorics operations."""

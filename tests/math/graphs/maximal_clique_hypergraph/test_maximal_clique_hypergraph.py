@@ -260,6 +260,21 @@ def test_rejects_complete_family_above_hypergraph_edge_bound() -> None:
         construct_maximal_clique_hypergraph(graph)
 
 
+def test_rejects_result_before_bounded_encoder_failure() -> None:
+    """An oversized retained result is reported as owner-level admission."""
+    left = [f"{chr(0x1D552) * 60}L{index:03}" for index in range(102)]
+    right = [f"{chr(0x1D553) * 60}R{index:03}" for index in range(102)]
+    graph = _graph(
+        [*left, *right],
+        [(left_vertex, right_vertex) for left_vertex in left for right_vertex in right],
+    )
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="canonical output bound",
+    ):
+        construct_maximal_clique_hypergraph(graph)
+
+
 def test_hypergraph_serializes_unchanged_into_transversal_consumer() -> None:
     graph = _graph(
         ["0", "1", "2", "3"],

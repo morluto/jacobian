@@ -20,7 +20,7 @@ from jacobian.math.combinatorics.posets.core._models import (
     PresentationPair,
     RelationInterpretation,
 )
-from jacobian.math.combinatorics.posets.core._operations import _materialized_poset
+from jacobian.math.combinatorics.posets.core.operations import materialize_finite_poset
 
 
 def make_poset(
@@ -35,7 +35,9 @@ def make_poset(
         ),
         interpretation=RelationInterpretation.COVER_EDGES,
     )
-    return _materialized_poset(req)
+    return materialize_finite_poset(
+        req.elements, req.relation, req.interpretation, req.reflexive_pairs
+    )
 
 
 # ---------------------------------------------------------------------------

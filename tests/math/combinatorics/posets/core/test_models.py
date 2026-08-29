@@ -6,37 +6,39 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import (
     FinitePoset,
-    FinitePosetMaterializationResult,
     FinitePosetRequest,
     LinearExtensionRequest,
     MobiusFunctionRequest,
 )
-from jacobian.math.combinatorics.posets.core._operations import (
-    _linear_extensions,
-    _materialized_poset,
+from jacobian.math.combinatorics.posets.core.operations import (
+    linear_extension_count,
+    materialize_finite_poset,
 )
-from jacobian.math.combinatorics.posets.core._tools import TOOLS
 
 
 def _materialize(elements: list[str], relation: list[tuple[str, str]]) -> FinitePoset:
-    operation = next(
-        operation
-        for operation in TOOLS
-        if operation.operation_id == "poset.finite.compute"
+    request = FinitePosetRequest.model_validate(
+        {
+            "elements": elements,
+            "relation": [{"lower": lower, "upper": upper} for lower, upper in relation],
+            "interpretation": "COVER_EDGES",
+        }
     )
-    outcome = operation.run(
-        FinitePosetRequest.model_validate(
-            {
-                "elements": elements,
-                "relation": [
-                    {"lower": lower, "upper": upper} for lower, upper in relation
-                ],
-                "interpretation": "COVER_EDGES",
-            }
-        )
+    return materialize_finite_poset(
+        request.elements,
+        request.relation,
+        request.interpretation,
+        request.reflexive_pairs,
     )
-    assert isinstance(outcome, FinitePosetMaterializationResult)
-    return outcome.poset
+
+
+def _materialize_request(request: FinitePosetRequest) -> FinitePoset:
+    return materialize_finite_poset(
+        request.elements,
+        request.relation,
+        request.interpretation,
+        request.reflexive_pairs,
+    )
 
 
 def _assert_code(exc: pytest.ExceptionInfo[ValidationError], code: str) -> None:
@@ -51,7 +53,7 @@ def _assert_operation_code(
 
 def test_cover_relation_rejects_cycles_and_redundant_edges() -> None:
     with pytest.raises(OperationDomainValidationError) as exc:
-        _materialized_poset(
+        _materialize_request(
             FinitePosetRequest.model_validate(
                 {
                     "elements": ["a", "b"],
@@ -65,7 +67,7 @@ def test_cover_relation_rejects_cycles_and_redundant_edges() -> None:
         )
     _assert_operation_code(exc, "poset.relation_antisymmetric")
     with pytest.raises(OperationDomainValidationError) as exc:
-        _materialized_poset(
+        _materialize_request(
             FinitePosetRequest.model_validate(
                 {
                     "elements": ["a", "b", "c"],
@@ -83,7 +85,7 @@ def test_cover_relation_rejects_cycles_and_redundant_edges() -> None:
 
 def test_comparable_pairs_require_complete_transitive_relation() -> None:
     with pytest.raises(OperationDomainValidationError) as exc:
-        _materialized_poset(
+        _materialize_request(
             FinitePosetRequest.model_validate(
                 {
                     "elements": ["a", "b", "c"],
@@ -100,7 +102,7 @@ def test_comparable_pairs_require_complete_transitive_relation() -> None:
 
 def test_required_reflexive_policy_binds_the_entire_diagonal() -> None:
     with pytest.raises(OperationDomainValidationError) as exc:
-        _materialized_poset(
+        _materialize_request(
             FinitePosetRequest.model_validate(
                 {
                     "elements": ["a", "b"],
@@ -117,7 +119,7 @@ def test_linear_extension_contract_has_a_separate_exponential_bound() -> None:
     antichain = _materialize([f"x{index}" for index in range(21)], [])
     request = LinearExtensionRequest(poset=antichain)
     with pytest.raises(OperationDomainValidationError) as exc:
-        _linear_extensions(request)
+        linear_extension_count(request.poset)
     _assert_operation_code(exc, "poset.linear_extension_size_bound")
 
 

@@ -6,26 +6,30 @@ import unicodedata
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools, OperationDomainValidationError
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.symmetry._models import (
     _UNCOLORED,
     MAX_GRAPH_SYMMETRY_EDGES,
     MAX_GRAPH_SYMMETRY_VERTICES,
+    GraphAutomorphismGenerator,
     GraphEdgeOrbit,
-    GraphSymmetryOrbitRequest,
     GraphSymmetryOrbitResult,
+    GraphSymmetryOrbitSource,
     GraphVertexOrbit,
     _require_result_output_headroom,
     _validate_automorphism_generator,
 )
 from jacobian.math.graphs.symmetry._orbits import declared_orbit_partitions
+from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 
-def _admit_graph_symmetry_orbit(request: GraphSymmetryOrbitRequest) -> None:
+def _admit_graph_symmetry_orbit(
+    graph: ColoredUndirectedGraph,
+    generators: tuple[GraphAutomorphismGenerator, ...],
+) -> None:
     """Admit graph, generator, and retained-result execution bounds."""
-    vertices = request.graph.graph.vertices
-    edges = request.graph.graph.edges
+    vertices = graph.graph.vertices
+    edges = graph.graph.edges
     try:
         if len(vertices) > MAX_GRAPH_SYMMETRY_VERTICES:
             raise PydanticCustomError(
@@ -38,7 +42,7 @@ def _admit_graph_symmetry_orbit(request: GraphSymmetryOrbitRequest) -> None:
                 f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_EDGES}-edge bound",
             )
         generator_ids = tuple(
-            generator.generator_id for generator in request.generators
+            generator.generator_id for generator in generators
         )
         if len(set(generator_ids)) != len(generator_ids):
             raise PydanticCustomError(
@@ -56,16 +60,16 @@ def _admit_graph_symmetry_orbit(request: GraphSymmetryOrbitRequest) -> None:
         vertex_set = set(vertices)
         edge_set = set(edges)
         vertex_colors = (
-            dict(zip(vertices, request.graph.vertex_colors, strict=True))
-            if request.graph.vertex_colors
+            dict(zip(vertices, graph.vertex_colors, strict=True))
+            if graph.vertex_colors
             else dict.fromkeys(vertices, _UNCOLORED)
         )
         edge_colors = (
-            dict(zip(edges, request.graph.edge_colors, strict=True))
-            if request.graph.edge_colors
+            dict(zip(edges, graph.edge_colors, strict=True))
+            if graph.edge_colors
             else dict.fromkeys(edges, _UNCOLORED)
         )
-        for generator in request.generators:
+        for generator in generators:
             _validate_automorphism_generator(
                 generator,
                 vertices,
@@ -75,7 +79,9 @@ def _admit_graph_symmetry_orbit(request: GraphSymmetryOrbitRequest) -> None:
                 vertex_colors,
                 edge_colors,
             )
-        _require_result_output_headroom(request)
+        _require_result_output_headroom(
+            GraphSymmetryOrbitSource(graph=graph, generators=generators)
+        )
     except PydanticCustomError as error:
         raise OperationDomainValidationError(
             location=("graph",), code=error.type, message=str(error)
@@ -83,25 +89,29 @@ def _admit_graph_symmetry_orbit(request: GraphSymmetryOrbitRequest) -> None:
 
 
 def _declared_orbit_partitions(
-    request: GraphSymmetryOrbitRequest,
+    graph: ColoredUndirectedGraph,
+    generators: tuple[GraphAutomorphismGenerator, ...],
 ) -> tuple[
     tuple[tuple[str, ...], ...],
     tuple[tuple[tuple[str, str], ...], ...],
 ]:
     """Canonical vertex and edge orbit members of the declared generators."""
-    vertices = tuple(sorted(request.graph.graph.vertices))
-    edges = tuple(sorted(request.graph.graph.edges))
-    vertex_actions = tuple(dict(generator.mapping) for generator in request.generators)
+    vertices = tuple(sorted(graph.graph.vertices))
+    edges = tuple(sorted(graph.graph.edges))
+    vertex_actions = tuple(dict(generator.mapping) for generator in generators)
     return declared_orbit_partitions(vertices, edges, vertex_actions)
 
 
-def _generator_orbits(
-    request: GraphSymmetryOrbitRequest,
+def graph_symmetry_orbits(
+    graph: ColoredUndirectedGraph,
+    generators: tuple[GraphAutomorphismGenerator, ...],
 ) -> GraphSymmetryOrbitResult:
-    _admit_graph_symmetry_orbit(request)
-    vertices = tuple(sorted(request.graph.graph.vertices))
-    edges = tuple(sorted(request.graph.graph.edges))
-    vertex_orbit_members, edge_orbit_members = _declared_orbit_partitions(request)
+    _admit_graph_symmetry_orbit(graph, generators)
+    vertices = tuple(sorted(graph.graph.vertices))
+    edges = tuple(sorted(graph.graph.edges))
+    vertex_orbit_members, edge_orbit_members = _declared_orbit_partitions(
+        graph, generators
+    )
     vertex_orbits = tuple(
         GraphVertexOrbit(
             orbit_index=index, representative=members[0], members=members
@@ -115,70 +125,17 @@ def _generator_orbits(
         for index, members in enumerate(edge_orbit_members)
     )
     return GraphSymmetryOrbitResult._from_kernel(
-        source=request,
+        graph=graph,
+        generators=generators,
         vertices=vertices,
         edges=edges,
         generator_ids=tuple(
-            sorted(generator.generator_id for generator in request.generators)
+            sorted(generator.generator_id for generator in generators)
         ),
         vertex_orbits=vertex_orbits,
         edge_orbits=edge_orbits,
-        vertex_color_mode=("DECLARED" if request.graph.vertex_colors else "UNCOLORED"),
-        edge_color_mode="DECLARED" if request.graph.edge_colors else "UNCOLORED",
+        vertex_color_mode=("DECLARED" if graph.vertex_colors else "UNCOLORED"),
+        edge_color_mode="DECLARED" if graph.edge_colors else "UNCOLORED",
     )
 
-
-GRAPH_SYMMETRY_OPERATIONS: MathTools = (
-    MathTool(
-        operation_id="graph.symmetry.generator_orbits.compute",
-        title="Exact declared graph-symmetry orbit partitions",
-        description=(
-            "Validate explicit color-preserving graph automorphism generators "
-            "and compute the complete vertex and edge orbits of their "
-            "generated subgroup. Each generator is a total vertex permutation "
-            "declared as (vertex, image) pairs covering every declared vertex "
-            "once in the graph's declared vertex order; generator identifiers "
-            "and declared colors must already be normalized to Unicode NFC. "
-            "The result retains its complete declared source request, so "
-            "request validation rejects any request whose complete canonical "
-            "result would exceed Jacobian's canonical output limit."
-        ),
-        request_type=GraphSymmetryOrbitRequest,
-        result_type=GraphSymmetryOrbitResult,
-        run=_generator_orbits,
-        tags=(
-            "graph",
-            "symmetry",
-            "automorphism",
-            "group-action",
-            "orbit",
-            "compression",
-            "exact",
-            "bounded",
-        ),
-        examples=(
-            example(
-                "path_reflection_orbits",
-                "Compute path vertex and edge orbits; the generator must be a total vertex permutation preserving colors and edges.",
-                {
-                    "graph": {
-                        "graph": {
-                            "vertices": ["a", "b", "c"],
-                            "edges": [["a", "b"], ["b", "c"]],
-                        },
-                        "vertex_colors": ["endpoint", "middle", "endpoint"],
-                    },
-                    "generators": [
-                        {
-                            "generator_id": "reflection",
-                            "mapping": [["a", "c"], ["b", "b"], ["c", "a"]],
-                        }
-                    ],
-                },
-            ),
-        ),
-    ),
-)
-
-
-__all__ = ["GRAPH_SYMMETRY_OPERATIONS"]
+__all__ = ["graph_symmetry_orbits"]

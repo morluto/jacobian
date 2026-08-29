@@ -130,7 +130,7 @@ def _orbit_result_fixed_frame_bytes() -> int:
     return frame_bytes + sum(_quoted_wire_size(value) for value in constants)
 
 
-def _orbit_result_canonical_wire_bytes(request: GraphSymmetryOrbitRequest) -> int:
+def _orbit_result_canonical_wire_bytes(source: GraphSymmetryOrbitSource) -> int:
     """Exact canonical wire size of this request's orbit result.
 
     Defining invariant: for every admitted request, canonicalizing the
@@ -150,12 +150,12 @@ def _orbit_result_canonical_wire_bytes(request: GraphSymmetryOrbitRequest) -> in
     count values' digit widths, and the two color-mode literals selected by
     the declared colors.
     """
-    vertices = tuple(sorted(request.graph.graph.vertices))
-    edges = tuple(sorted(request.graph.graph.edges))
+    vertices = tuple(sorted(source.graph.graph.vertices))
+    edges = tuple(sorted(source.graph.graph.edges))
     vertex_members, edge_members = declared_orbit_partitions(
         vertices,
         edges,
-        tuple(dict(generator.mapping) for generator in request.generators),
+        tuple(dict(generator.mapping) for generator in source.generators),
     )
 
     vertex_label_sizes = [_quoted_wire_size(vertex) for vertex in vertices]
@@ -163,7 +163,7 @@ def _orbit_result_canonical_wire_bytes(request: GraphSymmetryOrbitRequest) -> in
         _quoted_wire_size(left) + _quoted_wire_size(right) + 3 for left, right in edges
     ]
     generator_id_sizes = [
-        _quoted_wire_size(generator.generator_id) for generator in request.generators
+        _quoted_wire_size(generator.generator_id) for generator in source.generators
     ]
 
     vertex_orbit_count = len(vertex_members)
@@ -191,30 +191,30 @@ def _orbit_result_canonical_wire_bytes(request: GraphSymmetryOrbitRequest) -> in
     color_mode_bytes = sum(
         _quoted_wire_size("DECLARED" if declared else "UNCOLORED")
         for declared in (
-            bool(request.graph.vertex_colors),
-            bool(request.graph.edge_colors),
+            bool(source.graph.vertex_colors),
+            bool(source.graph.edge_colors),
         )
     )
 
     return (
         _orbit_result_fixed_frame_bytes()
-        + len(encode_strict_json(request.model_dump(mode="json")))
+        + len(encode_strict_json(source.model_dump(mode="json")))
         + _json_array_wire_bytes(vertex_label_sizes)
         + _json_array_wire_bytes(edge_pair_sizes)
         + vertex_member_bytes
         + edge_member_bytes
         + _json_array_wire_bytes(generator_id_sizes)
         + orbit_object_bytes
-        + len(str(len(request.generators)))
+        + len(str(len(source.generators)))
         + len(str(vertex_orbit_count))
         + len(str(edge_orbit_count))
         + color_mode_bytes
     )
 
 
-def _require_result_output_headroom(request: GraphSymmetryOrbitRequest) -> None:
+def _require_result_output_headroom(source: GraphSymmetryOrbitSource) -> None:
     output_limit = CanonicalLimits().max_output_bytes
-    if _orbit_result_canonical_wire_bytes(request) > output_limit:
+    if _orbit_result_canonical_wire_bytes(source) > output_limit:
         raise PydanticCustomError(
             "graph.symmetry_orbit_result_retains_its_declared_source",
             "the graph symmetry orbit result retains its declared source and "
@@ -224,7 +224,19 @@ def _require_result_output_headroom(request: GraphSymmetryOrbitRequest) -> None:
         )
 
 
-class GraphSymmetryOrbitRequest(StrictModel):
+class GraphSymmetryOrbitSource(StrictModel):
+    """Canonical source action for a declared graph-symmetry computation."""
+
+    graph: ColoredUndirectedGraph
+    generators: tuple[GraphAutomorphismGenerator, ...] = Field(
+        max_length=MAX_GRAPH_SYMMETRY_GENERATORS
+    )
+    action: Literal["DECLARED_AUTOMORPHISM_GENERATORS"] = (
+        "DECLARED_AUTOMORPHISM_GENERATORS"
+    )
+
+
+class GraphSymmetryOrbitRequest(GraphSymmetryOrbitSource):
     """Declared color-preserving generators of one bounded graph's subgroup.
 
     Admission is aggregate as well as field-level: the result retains this
@@ -253,15 +265,6 @@ class GraphSymmetryOrbitRequest(StrictModel):
             )
         }
     )
-
-    graph: ColoredUndirectedGraph
-    generators: tuple[GraphAutomorphismGenerator, ...] = Field(
-        max_length=MAX_GRAPH_SYMMETRY_GENERATORS
-    )
-    action: Literal["DECLARED_AUTOMORPHISM_GENERATORS"] = (
-        "DECLARED_AUTOMORPHISM_GENERATORS"
-    )
-
 
 class GraphVertexOrbit(StrictModel):
     orbit_index: StrictInt = Field(ge=0, le=MAX_GRAPH_SYMMETRY_VERTICES - 1)
@@ -317,7 +320,7 @@ class GraphSymmetryOrbitResult(StrictModel):
     source binding. The trusted kernel constructs exact partitions.
     """
 
-    source: GraphSymmetryOrbitRequest
+    source: GraphSymmetryOrbitSource
     vertices: tuple[GraphSymmetryLabel, ...] = Field(
         max_length=MAX_GRAPH_SYMMETRY_VERTICES
     )
@@ -436,7 +439,8 @@ class GraphSymmetryOrbitResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        source: GraphSymmetryOrbitRequest,
+        graph: ColoredUndirectedGraph,
+        generators: tuple[GraphAutomorphismGenerator, ...],
         vertices: tuple[GraphSymmetryLabel, ...],
         edges: tuple[GraphSymmetryEdge, ...],
         generator_ids: tuple[GraphSymmetryLabel, ...],
@@ -448,7 +452,7 @@ class GraphSymmetryOrbitResult(StrictModel):
         """Construct an exact source-bound result from the trusted kernel."""
 
         return cls.model_construct(
-            source=source,
+            source=GraphSymmetryOrbitSource(graph=graph, generators=generators),
             vertices=vertices,
             edges=edges,
             generator_ids=generator_ids,
@@ -470,5 +474,6 @@ __all__ = [
     "GraphEdgeOrbit",
     "GraphSymmetryOrbitRequest",
     "GraphSymmetryOrbitResult",
+    "GraphSymmetryOrbitSource",
     "GraphVertexOrbit",
 ]

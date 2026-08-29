@@ -24,9 +24,8 @@ from jacobian.math.graphs.symmetry._models import (
     GraphVertexOrbit,
     _orbit_result_canonical_wire_bytes,
 )
-from jacobian.math.graphs.symmetry.operations import (
-    _generator_orbits,
-)
+from jacobian.math.graphs.symmetry._tools import TOOLS
+from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -74,7 +73,7 @@ def test_graph_symmetry_request_rejects_incomplete_permutation() -> None:
 
     request = GraphSymmetryOrbitRequest.model_validate(payload)
     with pytest.raises(OperationDomainValidationError):
-        _generator_orbits(request)
+        graph_symmetry_orbits(request.graph, request.generators)
 
 
 def test_graph_symmetry_request_requires_declared_vertex_order_mapping() -> None:
@@ -83,7 +82,7 @@ def test_graph_symmetry_request_requires_declared_vertex_order_mapping() -> None
 
     request = GraphSymmetryOrbitRequest.model_validate(payload)
     with pytest.raises(OperationDomainValidationError):
-        _generator_orbits(request)
+        graph_symmetry_orbits(request.graph, request.generators)
 
 
 def test_graph_symmetry_request_rejects_color_breaking_generator() -> None:
@@ -92,7 +91,7 @@ def test_graph_symmetry_request_rejects_color_breaking_generator() -> None:
 
     request = GraphSymmetryOrbitRequest.model_validate(payload)
     with pytest.raises(OperationDomainValidationError):
-        _generator_orbits(request)
+        graph_symmetry_orbits(request.graph, request.generators)
 
 
 def test_graph_symmetry_request_rejects_labels_outside_artifact_budget() -> None:
@@ -140,13 +139,13 @@ def test_graph_symmetry_request_admission_bounds_retained_source_output() -> Non
     actual canonicalized result size.
     """
 
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     payload = _wide_orbit_payload(MAX_GRAPH_SYMMETRY_GENERATORS)
     assert len(encode_strict_json(payload)) <= CanonicalLimits().max_input_bytes
 
     request = GraphSymmetryOrbitRequest.model_validate(payload)
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
     encoded = canonicalize_json(result.model_dump(mode="json"))
     assert _orbit_result_canonical_wire_bytes(request) == len(encoded)
     assert (
@@ -156,10 +155,10 @@ def test_graph_symmetry_request_admission_bounds_retained_source_output() -> Non
 
 
 def test_graph_symmetry_admitted_request_result_fits_canonical_output() -> None:
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     request = GraphSymmetryOrbitRequest.model_validate(_wide_orbit_payload(8))
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
     encoded = canonicalize_json(result.model_dump(mode="json"))
     assert len(encoded) <= CanonicalLimits().max_output_bytes
@@ -167,10 +166,10 @@ def test_graph_symmetry_admitted_request_result_fits_canonical_output() -> None:
 
 
 def test_graph_symmetry_admission_estimate_bounds_actual_result_wire() -> None:
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     request = GraphSymmetryOrbitRequest.model_validate(_path_request())
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
     actual = len(canonicalize_json(result.model_dump(mode="json")))
     assert actual > 0
@@ -185,10 +184,10 @@ def test_graph_symmetry_request_admits_result_near_output_limit() -> None:
     limit, so the boundary case pins the sums-based bound.
     """
 
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     request = GraphSymmetryOrbitRequest.model_validate(_wide_orbit_payload(14))
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
     encoded = canonicalize_json(result.model_dump(mode="json"))
     assert len(encoded) <= CanonicalLimits().max_output_bytes
@@ -205,7 +204,7 @@ def test_transitive_action_charges_only_possible_representatives() -> None:
     output limit even though the exact result keeps over 2 MiB of headroom.
     """
 
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     prefix = "a" * 60
     vertices = [f"{prefix}{index:04d}" for index in range(256)]
@@ -242,7 +241,7 @@ def test_transitive_action_charges_only_possible_representatives() -> None:
         ],
     }
     request = GraphSymmetryOrbitRequest.model_validate(payload)
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
     assert result.vertex_orbit_count == 1
     assert result.edge_orbit_count == 16
@@ -263,7 +262,7 @@ def test_colored_singleton_orbits_price_exact_fixed_structure() -> None:
     per-orbit pricing at each index's digit width and separators.
     """
 
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     payload = _wide_orbit_payload(14)
     payload["graph"]["vertex_colors"] = [  # type: ignore[index]
@@ -271,7 +270,7 @@ def test_colored_singleton_orbits_price_exact_fixed_structure() -> None:
         for vertex in payload["graph"]["graph"]["vertices"]  # type: ignore[index]
     ]
     request = GraphSymmetryOrbitRequest.model_validate(payload)
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
     assert result.vertex_orbit_count == 256
     assert result.edge_orbit_count == 4096
@@ -292,7 +291,7 @@ def test_singleton_orbit_separators_price_from_computed_blocks() -> None:
     computed partition's block sizes instead.
     """
 
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     payload = _wide_orbit_payload(14)
     payload["graph"]["vertex_colors"] = [  # type: ignore[index]
@@ -304,7 +303,7 @@ def test_singleton_orbit_separators_price_from_computed_blocks() -> None:
         for edge in payload["graph"]["graph"]["edges"]  # type: ignore[index]
     ]
     request = GraphSymmetryOrbitRequest.model_validate(payload)
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
     assert result.vertex_orbit_count == 256
     assert result.edge_orbit_count == 4096
@@ -317,7 +316,7 @@ def test_singleton_orbit_separators_price_from_computed_blocks() -> None:
 def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
     """One large label among tiny ones must not inflate the estimate by a maximum."""
 
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     vertices = ["h" * 64] + [f"t{index:03d}" for index in range(255)]
     ring = vertices[1:]
@@ -335,7 +334,7 @@ def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
         ],
     }
     request = GraphSymmetryOrbitRequest.model_validate(payload)
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
     actual = len(canonicalize_json(result.model_dump(mode="json")))
     estimate = _orbit_result_canonical_wire_bytes(request)
@@ -348,7 +347,7 @@ def test_graph_symmetry_request_requires_nfc_generator_identifiers() -> None:
 
     request = GraphSymmetryOrbitRequest.model_validate(payload)
     with pytest.raises(OperationDomainValidationError):
-        _generator_orbits(request)
+        graph_symmetry_orbits(request.graph, request.generators)
 
 
 def test_graph_symmetry_request_requires_nfc_vertex_colors() -> None:
@@ -437,7 +436,7 @@ def test_canonicalization_result_passes_unchanged_into_symmetry_request() -> Non
     assert request.graph is canonical
     assert request.action == "DECLARED_AUTOMORPHISM_GENERATORS"
 
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
     assert tuple(orbit.members for orbit in result.vertex_orbits) == (
         ("v00", "v01"),
         ("v02",),
@@ -448,10 +447,10 @@ def test_canonicalization_result_passes_unchanged_into_symmetry_request() -> Non
 def test_graph_symmetry_nfc_request_wire_matches_canonicalized_result() -> None:
     """NFC-retained strings make the strict measurements canonical-exact."""
 
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     request = GraphSymmetryOrbitRequest.model_validate(_path_request())
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
     dumped = result.model_dump(mode="json")
     assert len(encode_strict_json(dumped)) == len(canonicalize_json(dumped))
@@ -547,12 +546,13 @@ def test_graph_symmetry_result_retains_declared_source_action() -> None:
 
 
 def test_graph_symmetry_operation_produces_source_bound_result() -> None:
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     request = _reflection_path_source()
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
-    assert result.source is request
+    assert result.source.graph == request.graph
+    assert result.source.generators == request.generators
     assert tuple(orbit.members for orbit in result.vertex_orbits) == (
         ("a", "c"),
         ("b",),
@@ -565,10 +565,10 @@ def test_graph_symmetry_operation_produces_source_bound_result() -> None:
 def test_graph_symmetry_retained_source_action_is_deeply_immutable() -> None:
     """A validated result must stay bound to its declared action forever."""
 
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     request = _reflection_path_source()
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
     mapping = result.source.generators[0].mapping
     assert isinstance(mapping, tuple)
@@ -583,7 +583,7 @@ def test_graph_symmetry_retained_source_action_is_deeply_immutable() -> None:
 def test_graph_symmetry_den_num_identity_generator_canonicalizes() -> None:
     """Labels spelling the canonical rational keys must not collide."""
 
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     payload = {
         "graph": {"graph": {"vertices": ["den", "num"], "edges": [["den", "num"]]}},
@@ -595,7 +595,7 @@ def test_graph_symmetry_den_num_identity_generator_canonicalizes() -> None:
         ],
     }
     request = GraphSymmetryOrbitRequest.model_validate(payload)
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
     encoded = canonicalize_json(result.model_dump(mode="json"))
     assert b"vertex_orbit_count" in encoded
@@ -660,7 +660,7 @@ def test_orbit_result_wire_size_is_exact_across_partition_shapes() -> None:
     labels, colored axes, and the empty graph alike.
     """
 
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     def den_num() -> dict[str, Any]:
         return {
@@ -709,7 +709,7 @@ def test_orbit_result_wire_size_is_exact_across_partition_shapes() -> None:
     ]
     for name, payload in payloads:
         request = GraphSymmetryOrbitRequest.model_validate(payload)
-        result = _generator_orbits(request)
+        result = graph_symmetry_orbits(request.graph, request.generators)
         encoded = canonicalize_json(result.model_dump(mode="json"))
         assert _orbit_result_canonical_wire_bytes(request) == len(encoded), name
         assert len(encoded) <= CanonicalLimits().max_output_bytes
@@ -724,7 +724,7 @@ def test_graph_symmetry_admits_fifteen_character_color_boundary() -> None:
     exact pricing rejected such fitting requests.
     """
 
-    from jacobian.math.graphs.symmetry.operations import _generator_orbits
+    from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 
     payload = _wide_orbit_payload(14)
     payload["graph"]["vertex_colors"] = [  # type: ignore[index]
@@ -736,7 +736,7 @@ def test_graph_symmetry_admits_fifteen_character_color_boundary() -> None:
         for edge in payload["graph"]["graph"]["edges"]  # type: ignore[index]
     ]
     request = GraphSymmetryOrbitRequest.model_validate(payload)
-    result = _generator_orbits(request)
+    result = graph_symmetry_orbits(request.graph, request.generators)
 
     assert result.vertex_orbit_count == 256
     assert result.edge_orbit_count == 4096
@@ -774,9 +774,10 @@ def test_graph_symmetry_admission_flips_exactly_at_the_output_limit(
         lambda **kwargs: CanonicalLimits(max_output_bytes=actual - 1),
     )
     with pytest.raises(OperationDomainValidationError):
-        _generator_orbits(
-            GraphSymmetryOrbitRequest.model_validate(_wide_orbit_payload(14))
+        rejected = GraphSymmetryOrbitRequest.model_validate(
+            _wide_orbit_payload(14)
         )
+        graph_symmetry_orbits(rejected.graph, rejected.generators)
 
 
 def test_graph_symmetry_operation_declares_version_seven() -> None:
@@ -789,21 +790,17 @@ def test_graph_symmetry_operation_declares_version_seven() -> None:
     """
 
     from jacobian.catalog.models import MathTool
-    from jacobian.math.graphs.symmetry.operations import GRAPH_SYMMETRY_OPERATIONS
-
-    (declaration,) = GRAPH_SYMMETRY_OPERATIONS
+    (declaration,) = TOOLS
     assert isinstance(declaration, MathTool)
 
 
 def test_graph_symmetry_schema_publishes_aggregate_output_envelope() -> None:
     """math.find readers must see the aggregate retained-result bound."""
 
-    from jacobian.math.graphs.symmetry.operations import GRAPH_SYMMETRY_OPERATIONS
-
     schema = GraphSymmetryOrbitRequest.model_json_schema()
     assert "canonical output limit" in schema["description"]
     assert "retains" in schema["description"]
 
-    (declaration,) = GRAPH_SYMMETRY_OPERATIONS
+    (declaration,) = TOOLS
     assert "canonical" in declaration.description
     assert "output limit" in declaration.description

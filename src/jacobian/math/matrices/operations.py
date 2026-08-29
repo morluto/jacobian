@@ -338,45 +338,48 @@ def _admit_permanent(matrix: RationalMatrix) -> None:
         )
 
 
-def _denominator_digits(value: CanonicalRational) -> int:
-    return 0 if value.den == "1" else len(value.den)
+def _denominator_digits(denominator: str) -> int:
+    return 0 if denominator == "1" else len(denominator)
 
 
 def _product_cell_digit_bound(
     left_row: tuple[CanonicalRational, ...],
     right_column: tuple[CanonicalRational, ...],
 ) -> int:
-    """Bound one output cell from participating nonzero terms and unique dens.
+    """Bound one output cell after combining equal-denominator terms.
 
-    Zero factors do not contribute. Identical term denominators are charged
-    once, which is the coprime-digit bound on their LCM rather than a row-max
-    times the inner dimension.
+    Zero factors do not contribute. Terms that share a denominator pair are
+    combined by summing numerator products before charging, so cancelling
+    pairs do not inflate the coprime-digit LCM bound.
     """
 
-    unique_term_denominators: set[tuple[str, str]] = set()
-    max_term_numerator_digits = 1
-    participating = 0
-    denominator_digits = 0
+    combined_numerators: dict[tuple[str, str], int] = {}
     for left_value, right_value in zip(left_row, right_column, strict=True):
         if left_value.num == "0" or right_value.num == "0":
             continue
-        participating += 1
-        max_term_numerator_digits = max(
-            max_term_numerator_digits,
-            len(left_value.num.lstrip("-")) + len(right_value.num.lstrip("-")),
-        )
         key = (left_value.den, right_value.den)
-        if key in unique_term_denominators:
-            continue
-        unique_term_denominators.add(key)
-        denominator_digits += _denominator_digits(left_value) + _denominator_digits(
-            right_value
-        )
-    if participating == 0:
+        combined_numerators[key] = combined_numerators.get(key, 0) + int(
+            left_value.num
+        ) * int(right_value.num)
+    remaining = tuple(
+        (key, numerator)
+        for key, numerator in combined_numerators.items()
+        if numerator != 0
+    )
+    if not remaining:
         return 1
+    denominator_digits = 0
+    max_numerator_digits = 1
+    for (left_den, right_den), numerator in remaining:
+        denominator_digits += _denominator_digits(left_den) + _denominator_digits(
+            right_den
+        )
+        max_numerator_digits = max(
+            max_numerator_digits, _positive_decimal_digits(numerator)
+        )
     denominator_digits = max(1, denominator_digits)
     numerator_digits = (
-        max_term_numerator_digits + denominator_digits + len(str(participating))
+        max_numerator_digits + denominator_digits + len(str(len(remaining)))
     )
     return max(numerator_digits, denominator_digits)
 

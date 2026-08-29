@@ -229,6 +229,28 @@ def test_product_admits_shared_denominator_dot_product() -> None:
     )
 
 
+def test_product_admits_cancelling_order_32_dot_product_terms() -> None:
+    order = 32
+    denominators = tuple(10**255 + 2 * index + 1 for index in range(order // 2))
+    zero = CanonicalRational(num="0", den="1")
+    one = CanonicalRational(num="1", den="1")
+    row = tuple(
+        CanonicalRational(num="1" if offset == 0 else "-1", den=str(denominator))
+        for denominator in denominators
+        for offset in range(2)
+    )
+    left = RationalMatrix(entries=tuple(row for _ in range(order)))
+    right = RationalMatrix(
+        entries=tuple(tuple(one for _ in range(order)) for _ in range(order))
+    )
+
+    result = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    assert result.product.entries == tuple(
+        tuple(zero for _ in range(order)) for _ in range(order)
+    )
+
+
 def test_product_admits_sparse_order_32_with_one_large_entry() -> None:
     order = 32
     denominator = str(10**255 + 1)

@@ -1,14 +1,35 @@
 """Typed contracts for the cyclic sumset representation profile operation."""
 
+from typing import Self
+
+from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
+
 from jacobian._models import StrictModel
+
+MAX_CYCLIC_SUMSET_PAIRS = 100_000
 
 
 class CyclicSumsetRequest(StrictModel):
     """Request the cyclic sumset representation profile."""
 
-    modulus: int
+    modulus: int = Field(gt=0)
     left: tuple[int, ...]
     right: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def require_canonical_bounded_operands(self) -> Self:
+        if len(self.left) * len(self.right) > MAX_CYCLIC_SUMSET_PAIRS:
+            raise PydanticCustomError(
+                "cyclic_sumset.pair_work_exceeded",
+                "cyclic sumset exceeds the 100000-pair work bound",
+            )
+        if any(not 0 <= value < self.modulus for value in (*self.left, *self.right)):
+            raise PydanticCustomError(
+                "cyclic_sumset.canonical_residue",
+                "cyclic sumset operands must be canonical residues modulo modulus",
+            )
+        return self
 
 
 class CyclicSumsetEntry(StrictModel):
@@ -29,6 +50,7 @@ class CyclicSumsetResult(StrictModel):
 
 
 __all__ = [
+    "MAX_CYCLIC_SUMSET_PAIRS",
     "CyclicSumsetEntry",
     "CyclicSumsetRequest",
     "CyclicSumsetResult",

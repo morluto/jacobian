@@ -47,6 +47,12 @@ def _bit_bound_to_decimal_digits(bit_bound: int) -> int:
     return (bit_bound * 30_103 + 99_999) // 100_000
 
 
+def _decimal_limb_count(digit_bound: int) -> int:
+    if digit_bound <= 0:
+        return 0
+    return (digit_bound + 8) // 9
+
+
 def _canonical_integer_conversion_work(digit_bound: int) -> int:
     """Limb work for ``format_canonical_integer`` plus positivity reparse.
 
@@ -55,9 +61,7 @@ def _canonical_integer_conversion_work(digit_bound: int) -> int:
     conversions costs the sum of operand widths ``1..chunks`` twice, which
     is ``chunks * (chunks + 1)``.
     """
-    if digit_bound <= 0:
-        return 0
-    chunks = (digit_bound + 8) // 9
+    chunks = _decimal_limb_count(digit_bound)
     return chunks * (chunks + 1)
 
 
@@ -67,6 +71,32 @@ def _binomial_prefix_bit_bound(upper: int, length: int) -> int:
     largest_index = min(length - 1, upper // 2)
     sparse_product_bound = largest_index * max(1, upper.bit_length())
     return max(1, min(sparse_product_bound, upper))
+
+
+def _chamber_recurrence_limb_work(upper: int, terms: int) -> int:
+    """Mul/div limb visits while forming ``C(upper, 0), ..., C(upper, terms-1)``.
+
+    Each of ``terms`` adjacent-binomial updates multiplies then divides the
+    current coefficient. Both walks traverse the whole operand. Width is the
+    largest requested prefix term, measured in the same base-``10**9`` limbs
+    as canonical integer conversion.
+    """
+    if terms <= 0:
+        return 0
+    coefficient_digits = _bit_bound_to_decimal_digits(
+        _binomial_prefix_bit_bound(upper, terms)
+    )
+    limbs = max(1, _decimal_limb_count(coefficient_digits))
+    return 2 * terms * limbs
+
+
+def _chamber_recurrence(upper: int, terms: int) -> int:
+    coefficient = 1
+    total = 0
+    for index in range(terms):
+        total += coefficient
+        coefficient = coefficient * (upper - index) // (index + 1)
+    return 2 * total
 
 
 def _signed_binomial_prefix(upper: int, length: int) -> tuple[int, ...]:
@@ -176,15 +206,16 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
             )
         count = 1 << m
     else:
-        if n > MAX_GENERIC_FORMULA_WORK:
-            _reject(
-                ("ambient_dimension",),
-                "chamber_summation_work_exceeded",
-                "chamber count exceeds the binomial-summation work budget",
-            )
         prefix_bit_bound = _binomial_prefix_bit_bound(m - 1, n)
         result_bit_bound = prefix_bit_bound + n.bit_length() + 1
         result_digits = _bit_bound_to_decimal_digits(result_bit_bound)
+        recurrence_work = _chamber_recurrence_limb_work(m - 1, n)
+        if n + recurrence_work > MAX_GENERIC_FORMULA_WORK:
+            _reject(
+                ("ambient_dimension", "hyperplane_count"),
+                "chamber_summation_work_exceeded",
+                "chamber count exceeds the binomial-summation work budget",
+            )
         if (
             result_digits + _FORMULA_RESULT_RESERVE_BYTES
             > CanonicalLimits().max_output_bytes
@@ -201,12 +232,7 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
                 "chamber_formatting_work_exceeded",
                 "chamber count exceeds the canonical integer-conversion work budget",
             )
-        coefficient = 1
-        total = 0
-        for index in range(n):
-            total += coefficient
-            coefficient = coefficient * (m - 1 - index) // (index + 1)
-        count = 2 * total
+        count = _chamber_recurrence(m - 1, n)
     return ChamberCountResult(chamber_count=format_canonical_integer(count))
 
 

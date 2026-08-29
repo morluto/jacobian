@@ -1058,6 +1058,27 @@ def _source_files(root: Path) -> tuple[Path, ...]:
     )
 
 
+def _generic_operation_shadow_violations(
+    relative: PurePosixPath,
+) -> tuple[Violation, ...]:
+    """Reject the retired request-coupled private operation layer."""
+
+    if relative.is_relative_to(PurePosixPath("src/jacobian/math")) and (
+        relative.name == "_operations.py"
+    ):
+        return (
+            Violation(
+                str(relative),
+                "generic-operation-shadow",
+                (
+                    "move native mathematics to operations.py and keep request "
+                    "projection in the publication module"
+                ),
+            ),
+        )
+    return ()
+
+
 def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     relative = PurePosixPath(path.relative_to(root).as_posix())
     try:
@@ -1065,6 +1086,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     except (OSError, SyntaxError) as exc:
         return (Violation(str(relative), "parse-error", f"cannot parse file: {exc}"),)
     return (
+        *_generic_operation_shadow_violations(relative),
         *_process_violations(relative, tree),
         *_bounded_process_violations(relative, tree),
         *_resolver_violations(relative, tree),

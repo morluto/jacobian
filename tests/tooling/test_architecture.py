@@ -26,6 +26,16 @@ def _violations(root: Path, code: str) -> list[str]:
     ]
 
 
+def test_generic_private_operation_shadows_are_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, "src/jacobian/math/example/_operations.py", "pass\n")
+    _write(tmp_path, "src/jacobian/math/example/operations.py", "pass\n")
+    _write(tmp_path, "src/jacobian/math/example/_singular.py", "pass\n")
+
+    assert _violations(tmp_path, "generic-operation-shadow") == [
+        "src/jacobian/math/example/_operations.py"
+    ]
+
+
 def test_direct_process_use_is_confined_to_process_owner(tmp_path: Path) -> None:
     _write(tmp_path, "src/jacobian/process.py", "import subprocess\n")
     _write(tmp_path, "src/jacobian/math/example.py", "import subprocess\n")

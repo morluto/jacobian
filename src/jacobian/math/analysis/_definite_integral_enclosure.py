@@ -642,6 +642,7 @@ class _DefiniteIntegralAdmission:
 class _EvaluatedIntegralLeaf:
     path: tuple[int, ...]
     interval: ClosedRationalInterval
+    domain_proven: bool
     range_enclosure: DyadicClosedInterval | None = None
     contribution: DyadicClosedInterval | None = None
     domain_failure: IntervalExpressionDomainFailure | None = None
@@ -653,6 +654,8 @@ class _EvaluatedIntegralLeaf:
             self.contribution is None
         ):
             raise AssertionError("one evaluated leaf must carry exactly one outcome")
+        if enclosed and not self.domain_proven:
+            raise AssertionError("an enclosed leaf requires inherited exact domain proof")
 
 
 def _midpoint_component_digits(box: RationalIntervalBox, depth: int) -> int:
@@ -783,27 +786,20 @@ def _evaluate_integral_leaf(
     interval: ClosedRationalInterval,
     *,
     deadline: float,
-    preflight: _BoxPreflight | None = None,
+    domain_proven: bool,
+    domain_failure: IntervalExpressionDomainFailure | None = None,
 ) -> _EvaluatedIntegralLeaf:
-    _require_deadline(deadline, "before a leaf domain preflight")
-    box = _leaf_box(request.box, interval)
-    if preflight is None:
-        try:
-            preflight = _preflight_box_expression(
-                request.expression, _rational_box_bounds(box)
-            )
-        except ValueError as exc:
-            raise OperationDomainValidationError(
-                location=("expression",),
-                code="analysis.definite_integral.intermediate_bound",
-                message=str(exc),
-            ) from exc
-    _require_deadline(deadline, "after a leaf domain preflight")
-    if isinstance(preflight, IntervalExpressionDomainFailure):
+    if not domain_proven:
+        if domain_failure is None:
+            raise AssertionError("an unproved leaf requires domain-failure evidence")
         return _EvaluatedIntegralLeaf(
-            path=path, interval=interval, domain_failure=preflight
+            path=path,
+            interval=interval,
+            domain_proven=False,
+            domain_failure=domain_failure,
         )
-    assert isinstance(preflight, _RationalBounds)
+    if domain_failure is not None:
+        raise AssertionError("proved-domain input cannot carry failure evidence")
 
     _require_deadline(deadline, "before an Arb leaf evaluation")
     try:
@@ -815,8 +811,11 @@ def _evaluate_integral_leaf(
             }
             result = _evaluate_box_expression(request.expression, variables)
             if isinstance(result, IntervalExpressionDomainFailure):
-                raise RuntimeError(
-                    "pinned Arb disagreed with the exact admitted leaf domain"
+                return _EvaluatedIntegralLeaf(
+                    path=path,
+                    interval=interval,
+                    domain_proven=True,
+                    domain_failure=result,
                 )
             if isinstance(result, _BoxEvaluationFailure) or not result.is_finite():
                 raise RuntimeError(
@@ -847,6 +846,7 @@ def _evaluate_integral_leaf(
     leaf = _EvaluatedIntegralLeaf(
         path=path,
         interval=interval,
+        domain_proven=True,
         range_enclosure=range_enclosure,
         contribution=_leaf_contribution(
             interval, range_enclosure, request.precision_bits
@@ -854,6 +854,47 @@ def _evaluate_integral_leaf(
     )
     _require_deadline(deadline, "after leaf contribution construction")
     return leaf
+
+
+def _refine_unproven_integral_leaf(
+    request: DefiniteIntegralEnclosureRequest,
+    path: tuple[int, ...],
+    interval: ClosedRationalInterval,
+    *,
+    inherited_failure: IntervalExpressionDomainFailure,
+    deadline: float,
+) -> _EvaluatedIntegralLeaf:
+    """Try to discharge an exact domain obstruction without reopening admission."""
+
+    _require_deadline(deadline, "before a leaf domain refinement")
+    try:
+        preflight = _preflight_box_expression(
+            request.expression,
+            _rational_box_bounds(_leaf_box(request.box, interval)),
+        )
+    except ValueError:
+        # Admission already charged this bounded probe. If its retained exact
+        # interval reaches the intermediate ceiling, the inherited obligation
+        # remains unproved rather than becoming a late request rejection.
+        preflight = inherited_failure
+    _require_deadline(deadline, "after a leaf domain refinement")
+    if isinstance(preflight, IntervalExpressionDomainFailure):
+        return _evaluate_integral_leaf(
+            request,
+            path,
+            interval,
+            deadline=deadline,
+            domain_proven=False,
+            domain_failure=preflight,
+        )
+    assert isinstance(preflight, _RationalBounds)
+    return _evaluate_integral_leaf(
+        request,
+        path,
+        interval,
+        deadline=deadline,
+        domain_proven=True,
+    )
 
 
 def _public_leaves(
@@ -976,13 +1017,20 @@ def _compute_definite_integral_enclosure(
     if _interval_width(source) == 0:
         return _finish_zero_measure_result(request, deadline=admission.deadline)
 
+    root_preflight = admission.root_preflight
+    assert root_preflight is not None
     leaves: tuple[_EvaluatedIntegralLeaf, ...] = (
         _evaluate_integral_leaf(
             request,
             (),
             source,
             deadline=admission.deadline,
-            preflight=admission.root_preflight,
+            domain_proven=isinstance(root_preflight, _RationalBounds),
+            domain_failure=(
+                root_preflight
+                if isinstance(root_preflight, IntervalExpressionDomainFailure)
+                else None
+            ),
         ),
     )
     while True:
@@ -1019,19 +1067,41 @@ def _compute_definite_integral_enclosure(
 
         selected = _select_leaf(leaves)
         child_intervals = _split_interval(selected.interval)
-        lower = _evaluate_integral_leaf(
-            request,
-            (*selected.path, 0),
-            child_intervals[0],
-            deadline=admission.deadline,
-        )
+        if selected.domain_proven:
+            lower = _evaluate_integral_leaf(
+                request,
+                (*selected.path, 0),
+                child_intervals[0],
+                deadline=admission.deadline,
+                domain_proven=True,
+            )
+        else:
+            assert selected.domain_failure is not None
+            lower = _refine_unproven_integral_leaf(
+                request,
+                (*selected.path, 0),
+                child_intervals[0],
+                inherited_failure=selected.domain_failure,
+                deadline=admission.deadline,
+            )
         _require_deadline(admission.deadline, "between child evaluations")
-        upper = _evaluate_integral_leaf(
-            request,
-            (*selected.path, 1),
-            child_intervals[1],
-            deadline=admission.deadline,
-        )
+        if selected.domain_proven:
+            upper = _evaluate_integral_leaf(
+                request,
+                (*selected.path, 1),
+                child_intervals[1],
+                deadline=admission.deadline,
+                domain_proven=True,
+            )
+        else:
+            assert selected.domain_failure is not None
+            upper = _refine_unproven_integral_leaf(
+                request,
+                (*selected.path, 1),
+                child_intervals[1],
+                inherited_failure=selected.domain_failure,
+                deadline=admission.deadline,
+            )
         leaves = (
             *(leaf for leaf in leaves if leaf.path != selected.path),
             lower,

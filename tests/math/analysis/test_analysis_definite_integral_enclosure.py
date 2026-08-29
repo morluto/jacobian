@@ -331,6 +331,92 @@ def test_unproved_real_domain_never_returns_an_integral_conclusion(
     )
 
 
+def test_arb_domain_uncertainty_is_a_typed_leaf_nonconclusion() -> None:
+    expression = {
+        "op": "log",
+        "children": [
+            {
+                "op": "add",
+                "children": [_var(), _const(Fraction(1, 10**127))],
+            }
+        ],
+    }
+
+    result = _run(
+        expression,
+        precision_bits=32,
+        target_mantissa="1",
+        target_exponent=8,
+        max_leaves=1,
+    )
+
+    assert isinstance(result.outcome, DefiniteIntegralDomainUnproven)
+    assert len(result.outcome.leaves) == 1
+    leaf = result.outcome.leaves[0]
+    assert isinstance(leaf, DefiniteIntegralDomainUnprovenLeaf)
+    assert leaf.path == ()
+    assert leaf.domain_failure.operation == "log"
+    assert leaf.domain_failure.reason == "LOG_ARGUMENT_NOT_STRICTLY_POSITIVE"
+
+
+def test_arb_domain_uncertainty_can_resolve_under_midpoint_refinement() -> None:
+    expression = {
+        "op": "log",
+        "children": [
+            {
+                "op": "add",
+                "children": [_var(), _const(Fraction(1, 2**40))],
+            }
+        ],
+    }
+
+    result = _run(
+        expression,
+        precision_bits=32,
+        target_mantissa="1",
+        target_exponent=8,
+        max_leaves=16,
+    )
+
+    assert isinstance(result.outcome, DefiniteIntegralTargetMet)
+    assert len(result.outcome.leaves) == 9
+    assert all(
+        isinstance(leaf, DefiniteIntegralEnclosedLeaf) for leaf in result.outcome.leaves
+    )
+
+
+def test_admitted_domain_proof_is_inherited_without_late_readmission() -> None:
+    pole = Fraction(1) + Fraction(1, 2**200)
+    expression = {
+        "op": "add",
+        "children": [
+            {
+                "op": "div",
+                "children": [
+                    _const(1),
+                    {"op": "sub", "children": [_const(pole), _var()]},
+                ],
+            },
+            {"op": "pow", "exponent": 64, "children": [_var()]},
+        ],
+    }
+
+    result = _run(
+        expression,
+        precision_bits=256,
+        target_mantissa="0",
+        target_exponent=0,
+        max_leaves=200,
+        wall_seconds=120,
+    )
+
+    assert isinstance(result.outcome, DefiniteIntegralBudgetExhausted)
+    assert len(result.outcome.leaves) == 200
+    assert all(
+        isinstance(leaf, DefiniteIntegralEnclosedLeaf) for leaf in result.outcome.leaves
+    )
+
+
 def test_dependency_domain_obstruction_can_be_resolved_by_subdivision() -> None:
     expression = {
         "op": "log",

@@ -115,8 +115,8 @@ class DefiniteIntegralEnclosureRequest(_IntervalExpressionBoxRequest):
         ge=1,
         le=MAX_DEFINITE_INTEGRAL_WALL_SECONDS,
         description=(
-            "Shared owner deadline in seconds, measured from dispatch start (or "
-            "native-function entry) through result construction."
+            "Shared owner deadline in seconds, measured from dispatch start through "
+            "result construction."
         ),
     )
 
@@ -190,7 +190,7 @@ class DefiniteIntegralEnclosedLeaf(_IntegralLeafPath):
 
 
 class DefiniteIntegralDomainUnprovenLeaf(_IntegralLeafPath):
-    """One leaf whose exact natural extension did not prove the real domain."""
+    """One leaf where bounded interval evaluation did not prove the real domain."""
 
     status: Literal["DOMAIN_UNPROVEN"] = "DOMAIN_UNPROVEN"
     domain_failure: IntervalExpressionDomainFailure
@@ -1145,8 +1145,8 @@ DEFINITE_INTEGRAL_ENCLOSURE_OPERATIONS = (
             "interval arithmetic; exact rational leaf width times its range is "
             "rounded outward and all contributions are summed exactly before one "
             "final outward conversion. Binary midpoint paths identify the complete "
-            "deterministic cover. DOMAIN_UNPROVEN means interval dependency left at "
-            "least one real-domain obligation unproved and carries no integral "
+            "deterministic cover. DOMAIN_UNPROVEN means bounded interval evaluation "
+            "left at least one real-domain obligation unproved and carries no integral "
             "conclusion. BUDGET_EXHAUSTED retains a sound enclosure after filling "
             "the requested leaf budget. The envelope admits at most "
             f"{MAX_DEFINITE_INTEGRAL_LEAVES:,} leaves, "

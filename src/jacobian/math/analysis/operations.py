@@ -553,7 +553,4 @@ def second_jet_enclosure(
     )
 
 
-__all__ = [
-    "expression_enclosure",
-    "second_jet_enclosure",
-]
+__all__ = ["expression_enclosure", "second_jet_enclosure"]

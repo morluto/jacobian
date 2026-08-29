@@ -15,8 +15,8 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"moments_orthogonal.{reason}", message)
 
 
-MAX_MOMENT_DEGREE = 64
-MAX_HANKEL_ORDER = 32
+MAX_MOMENT_DEGREE = 128
+MAX_HANKEL_ORDER = 64
 MAX_POLYNOMIAL_DEGREE = 32
 MAX_QUADRATURE_ORDER = 16
 MAX_VARIABLE_LENGTH = 64

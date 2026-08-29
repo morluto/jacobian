@@ -34,12 +34,15 @@ from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileResult,
 )
 from jacobian.math.number_theory._derived_models import (
-    MAX_FACTORIAL_ARGUMENT,
-    MAX_FACTORIAL_BASE,
     MAX_LEGENDRE_PRIME,
+    BinomialPrimeValuationResult,
     FactorialValuationResult,
     FloorSquareRootResult,
     LegendreSymbolResult,
+    _BinomialValuationInput,
+    _FactorialValuationInput,
+    admit_binomial_prime_valuation,
+    admit_factorial_valuation,
 )
 from jacobian.math.number_theory._divisibility_graph_models import (
     MAX_FAMILY_SIZE as MAX_GRAPH_FAMILY_SIZE,
@@ -120,6 +123,7 @@ from jacobian.math.number_theory.modular_polynomials import (
 )
 
 __all__ = [
+    "binomial_prime_valuation",
     "binomial_valuation_profile",
     "chinese_remainder",
     "contiguous_sum_profile",
@@ -348,24 +352,48 @@ def legendre_symbol(a: int, prime: int) -> LegendreSymbolResult:
 def factorial_valuation(n: int, base: int) -> FactorialValuationResult:
     """Return the largest exponent ``e`` for which ``base**e`` divides ``n!``."""
 
-    if not 0 <= n <= MAX_FACTORIAL_ARGUMENT:
-        raise OperationDomainValidationError(
-            location=("n",),
-            code="number_theory.factorial_valuation.argument_bound",
-            message=f"n must be between 0 and {MAX_FACTORIAL_ARGUMENT}",
-        )
-    if not 2 <= base <= MAX_FACTORIAL_BASE:
-        raise OperationDomainValidationError(
-            location=("base",),
-            code="number_theory.factorial_valuation.base_bound",
-            message=f"base must be between 2 and {MAX_FACTORIAL_BASE}",
-        )
+    return _factorial_valuation(admit_factorial_valuation(n, base))
+
+
+def _factorial_valuation(
+    admitted: _FactorialValuationInput,
+) -> FactorialValuationResult:
     from sympy.ntheory import multiplicity_in_factorial
 
-    return FactorialValuationResult(
-        n=n,
-        base=base,
-        valuation=int(multiplicity_in_factorial(base, n)),
+    return FactorialValuationResult.model_construct(
+        n=format_canonical_integer(admitted.n),
+        base=format_canonical_integer(admitted.base),
+        valuation=format_canonical_integer(
+            int(multiplicity_in_factorial(admitted.base, admitted.n))
+        ),
+    )
+
+
+def binomial_prime_valuation(
+    n: int, k: int, prime: int
+) -> BinomialPrimeValuationResult:
+    """Return the exponent of ``prime`` in one binomial coefficient."""
+
+    return _binomial_prime_valuation(admit_binomial_prime_valuation(n, k, prime))
+
+
+def _binomial_prime_valuation(
+    admitted: _BinomialValuationInput,
+) -> BinomialPrimeValuationResult:
+    left = admitted.k
+    right = admitted.n - admitted.k
+    carries = 0
+    carry = 0
+    while left or right or carry:
+        left, left_digit = divmod(left, admitted.prime)
+        right, right_digit = divmod(right, admitted.prime)
+        carry = int(left_digit + right_digit + carry >= admitted.prime)
+        carries += carry
+    return BinomialPrimeValuationResult.model_construct(
+        n=format_canonical_integer(admitted.n),
+        k=format_canonical_integer(admitted.k),
+        prime=format_canonical_integer(admitted.prime),
+        valuation=format_canonical_integer(carries),
     )
 
 

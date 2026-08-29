@@ -11,7 +11,9 @@ from jacobian.math.graphs.boolean_lattice_intersection.operations import (
 )
 
 
-def _construct(request: BooleanLatticeIntersectionRequest) -> BooleanLatticeIntersectionResult:
+def _construct(
+    request: BooleanLatticeIntersectionRequest,
+) -> BooleanLatticeIntersectionResult:
     return construct_boolean_lattice_intersection_graph(
         request.n, request.intersection_cardinality, request.relation
     )
@@ -35,7 +37,11 @@ TOOLS: MathTools = (
             example(
                 "n2_r1",
                 "Boolean lattice intersection graph for n=2, r=1.",
-                {"n": 2, "intersection_cardinality": 1, "relation": "INTERSECTION_EQ_THRESHOLD"},
+                {
+                    "n": 2,
+                    "intersection_cardinality": 1,
+                    "relation": "INTERSECTION_EQ_THRESHOLD",
+                },
             ),
         ),
     ),

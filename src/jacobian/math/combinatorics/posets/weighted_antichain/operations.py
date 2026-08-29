@@ -5,10 +5,10 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.combinatorics.posets.core._models import FinitePoset
 from jacobian.math.combinatorics.posets.weighted_antichain._models import (
     WeightedAntichainResult,
 )
-from jacobian.math.combinatorics.posets.core._models import FinitePoset
 
 __all__ = ["compute_maximum_weight_antichain"]
 
@@ -50,9 +50,7 @@ def compute_maximum_weight_antichain(
 
         if idx == n:
             if current_weight > best_weight or (
-                current_weight == best_weight
-                and current
-                and not best_set
+                current_weight == best_weight and current and not best_set
             ):
                 best_weight = current_weight
                 best_set = tuple(current)
@@ -69,7 +67,7 @@ def compute_maximum_weight_antichain(
                 break
 
         if can_include and weight_fracs[idx] >= 0:
-            new_current = current + [idx]
+            new_current = [*current, idx]
             _search(
                 idx + 1,
                 new_current,

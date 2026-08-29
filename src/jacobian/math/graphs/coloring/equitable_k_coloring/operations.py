@@ -20,7 +20,7 @@ def decide_equitable_k_coloring(
 
     Every colour class must have size floor(|V|/k) or ceil(|V|/k).
     """
-    nx_graph = nx.Graph()
+    nx_graph: nx.Graph[str] = nx.Graph()
     for v in graph.vertices:
         nx_graph.add_node(v)
     for u, v in graph.edges:

@@ -4,27 +4,22 @@ from __future__ import annotations
 
 import math
 
-import pytest
-
 from jacobian.math.number_theory._periodic import normalize_periodic_source
 from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceSubset,
+    PeriodicCongruenceSubsetInput,
+    PeriodicCongruenceUnionRequest,
     PeriodicCongruenceUnionSource,
 )
 from jacobian.math.number_theory.periodic_prefix_count.operations import (
     compute_periodic_union_prefix_count,
-)
-from jacobian.math.number_theory._periodic_models import (
-    PeriodicCongruenceSubsetInput,
-    PeriodicCongruenceUnionRequest,
 )
 
 
 def _source(subsets, complement=False):
     return PeriodicCongruenceUnionSource(
         subsets=tuple(
-            PeriodicCongruenceSubset(modulus=m, residues=tuple(r))
-            for m, r in subsets
+            PeriodicCongruenceSubset(modulus=m, residues=tuple(r)) for m, r in subsets
         ),
         complement=complement,
     )
@@ -116,14 +111,14 @@ def test_multiple_periods_and_remainder():
     source = _source([("2", ["0"]), ("3", ["1"])])
     period = 6
     occupied = {0, 1, 2, 4}  # residues occupied in [0, 6)
-    for cutoff in range(0, 50):
+    for cutoff in range(50):
         result = compute_periodic_union_prefix_count(source, cutoff)
         expected = sum(1 for t in range(1, cutoff + 1) if (t % period) in occupied)
         assert result.count == expected
 
 
 def test_overlapping_and_nested_moduli():
-    """Overlapping moduli: {0 mod 2} ∪ {0 mod 3} on [1, 20]."""
+    """Overlapping moduli: {0 mod 2} union {0 mod 3} on [1, 20]."""
     source = _source([("2", ["0"]), ("3", ["0"])])
     result = compute_periodic_union_prefix_count(source, 20)
     expected = sum(1 for t in range(1, 21) if t % 2 == 0 or t % 3 == 0)
@@ -131,7 +126,7 @@ def test_overlapping_and_nested_moduli():
 
 
 def test_complement_overlapping():
-    """Complement of {0 mod 2} ∪ {0 mod 3} on [1, 20]."""
+    """Complement of {0 mod 2} union {0 mod 3} on [1, 20]."""
     source = _source([("2", ["0"]), ("3", ["0"])], complement=True)
     result = compute_periodic_union_prefix_count(source, 20)
     expected = sum(1 for t in range(1, 21) if not (t % 2 == 0 or t % 3 == 0))
@@ -162,7 +157,7 @@ def test_exhaustive_small_periods():
         period = 1
         for m, _, _ in case:
             period = math.lcm(period, int(m))
-        for cutoff in range(0, 3 * period + 5):
+        for cutoff in range(3 * period + 5):
             result = compute_periodic_union_prefix_count(source, cutoff)
             expected = 0
             for t in range(1, cutoff + 1):
@@ -182,7 +177,7 @@ def test_exhaustive_small_periods():
 def test_large_cutoff_small_period():
     """A huge X remains admissible when L and the result are small; no scan through [1,X]."""
     source = _source([("2", ["0"])])
-    cutoff = 10 ** 18
+    cutoff = 10**18
     result = compute_periodic_union_prefix_count(source, cutoff)
     assert result.count == cutoff // 2
 
@@ -193,9 +188,7 @@ def test_divisor_family_488_fixture():
     for cutoff in [0, 1, 10, 30, 100]:
         result = compute_periodic_union_prefix_count(source, cutoff)
         expected = sum(
-            1
-            for t in range(1, cutoff + 1)
-            if t % 2 == 0 or t % 3 == 0 or t % 5 == 0
+            1 for t in range(1, cutoff + 1) if t % 2 == 0 or t % 3 == 0 or t % 5 == 0
         )
         assert result.count == expected
 

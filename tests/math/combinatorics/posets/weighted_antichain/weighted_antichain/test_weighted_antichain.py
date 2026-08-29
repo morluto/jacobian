@@ -5,8 +5,8 @@ from fractions import Fraction
 from jacobian._exact import CanonicalRational
 from jacobian.math.combinatorics.posets.core._models import (
     PresentationPair,
-    RelationInterpretation,
     ReflexivePairPolicy,
+    RelationInterpretation,
 )
 from jacobian.math.combinatorics.posets.core.operations import (
     materialize_finite_poset,
@@ -28,7 +28,8 @@ def _make_chain(n):
         for j in range(i + 1, n)
     )
     return materialize_finite_poset(
-        elements, relation,
+        elements,
+        relation,
         RelationInterpretation.COMPARABLE_PAIRS,
         ReflexivePairPolicy.FORBIDDEN,
     )
@@ -37,7 +38,8 @@ def _make_chain(n):
 def _make_antichain(n):
     elements = tuple(str(i) for i in range(n))
     return materialize_finite_poset(
-        elements, (),
+        elements,
+        (),
         RelationInterpretation.COMPARABLE_PAIRS,
         ReflexivePairPolicy.FORBIDDEN,
     )
@@ -73,7 +75,8 @@ def test_v_poset() -> None:
         PresentationPair(lower="0", upper="2"),
     )
     poset = materialize_finite_poset(
-        elements, relation,
+        elements,
+        relation,
         RelationInterpretation.COMPARABLE_PAIRS,
         ReflexivePairPolicy.FORBIDDEN,
     )

@@ -12,7 +12,11 @@ class UniformSubsetIntersectionRequest(StrictModel):
     n: int
     k: int
     threshold: int
-    relation: Literal["INTERSECTION_LT_THRESHOLD", "INTERSECTION_EQ_THRESHOLD", "INTERSECTION_GT_THRESHOLD"]
+    relation: Literal[
+        "INTERSECTION_LT_THRESHOLD",
+        "INTERSECTION_EQ_THRESHOLD",
+        "INTERSECTION_GT_THRESHOLD",
+    ]
 
 
 class UniformSubsetIntersectionResult(StrictModel):

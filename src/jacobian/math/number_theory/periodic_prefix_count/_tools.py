@@ -2,8 +2,8 @@
 
 from collections.abc import Callable
 
-from jacobian._exact import parse_canonical_integer
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.periodic_prefix_count._models import (
@@ -23,7 +23,7 @@ def compute_periodic_union_prefix_count_op(
     )
 
 
-def ppc_operation[  # type: ignore[type-arg]
+def ppc_operation[
     RequestT: StrictModel,
     ResultT: StrictModel,
 ](
@@ -35,7 +35,7 @@ def ppc_operation[  # type: ignore[type-arg]
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-) -> MathTool:
+) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
         title=title,
@@ -65,9 +65,7 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "mod2_or_mod3",
-                (
-                    "On [1,6], the union of 0 mod 2 and 1 mod 3 has count 4."
-                ),
+                ("On [1,6], the union of 0 mod 2 and 1 mod 3 has count 4."),
                 {
                     "source": {
                         "subsets": [

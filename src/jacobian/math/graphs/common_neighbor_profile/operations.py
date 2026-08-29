@@ -60,9 +60,7 @@ def compute_common_neighbor_profile(
 
     if histogram_dict:
         max_key = max(histogram_dict)
-        histogram = tuple(
-            histogram_dict.get(k, 0) for k in range(max_key + 1)
-        )
+        histogram = tuple(histogram_dict.get(k, 0) for k in range(max_key + 1))
     else:
         histogram = ()
 

@@ -57,10 +57,9 @@ def _label(subset: tuple[int, ...]) -> str:
 
 
 def _check_relation(intersection_size: int, threshold: int, relation: str) -> bool:
-    if relation == "INTERSECTION_EQ_THRESHOLD":
-        return intersection_size == threshold
-    elif relation == "INTERSECTION_LT_THRESHOLD":
-        return intersection_size < threshold
-    elif relation == "INTERSECTION_GT_THRESHOLD":
-        return intersection_size > threshold
-    return False
+    checks = {
+        "INTERSECTION_EQ_THRESHOLD": intersection_size == threshold,
+        "INTERSECTION_LT_THRESHOLD": intersection_size < threshold,
+        "INTERSECTION_GT_THRESHOLD": intersection_size > threshold,
+    }
+    return checks.get(relation, False)

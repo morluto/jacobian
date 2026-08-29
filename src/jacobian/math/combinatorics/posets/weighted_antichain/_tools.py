@@ -54,7 +54,7 @@ TOOLS: MathTools = (
                             {"element": "b", "rank": 1},
                             {"element": "c", "rank": 2},
                         ],
-                        "poset_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                        "poset_digest": "sha256:7505e31e11f07f0026eece8ce9621dd0dae51e613b8dfee93da02348bb80c95f",
                     },
                     "weights": [
                         {"num": "1", "den": "1"},

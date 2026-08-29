@@ -41,40 +41,7 @@ def decide_hypergraph_coloring(
             coloring=tuple(0 for _ in range(n)),
         )
 
-    colors = [0] * n
-
-    def is_edge_safe(edge: tuple[int, ...]) -> bool:
-        assigned = [colors[v] for v in edge if colors[v] >= 0]
-        if len(assigned) < len(edge):
-            return True  # Not all assigned yet
-        return len(set(assigned)) > 1
-
-    def backtrack(idx: int) -> list[int] | None:
-        if idx == n:
-            for edge in edges:
-                if not is_edge_safe(edge):
-                    return None
-            return list(colors)
-
-        for c in range(palette_size):
-            colors[idx] = c
-            ok = True
-            for edge in edges:
-                if idx in edge:
-                    assigned = [colors[v] for v in edge if colors[v] >= 0]
-                    if len(assigned) == len(edge) and len(set(assigned)) == 1:
-                        ok = False
-                        break
-            if ok:
-                result = backtrack(idx + 1)
-                if result is not None:
-                    return result
-            colors[idx] = -1
-        colors[idx] = 0
-        return None
-
-    colors = [-1] * n
-    result_colors = backtrack(0)
+    result_colors = _find_coloring(n, edges, palette_size)
 
     if result_colors is not None:
         return HypergraphColoringResult(
@@ -88,3 +55,31 @@ def decide_hypergraph_coloring(
         palette_size=palette_size,
         colorable=False,
     )
+
+
+def _find_coloring(
+    vertex_count: int,
+    edges: list[tuple[int, ...]],
+    palette_size: int,
+) -> list[int] | None:
+    colors = [-1] * vertex_count
+
+    def backtrack(idx: int) -> list[int] | None:
+        if idx == vertex_count:
+            return list(colors)
+
+        for color in range(palette_size):
+            colors[idx] = color
+            if all(_edge_is_safe(edge, colors) for edge in edges if idx in edge):
+                result = backtrack(idx + 1)
+                if result is not None:
+                    return result
+        colors[idx] = -1
+        return None
+
+    return backtrack(0)
+
+
+def _edge_is_safe(edge: tuple[int, ...], colors: list[int]) -> bool:
+    assigned = [colors[vertex] for vertex in edge if colors[vertex] >= 0]
+    return len(assigned) < len(edge) or len(set(assigned)) > 1

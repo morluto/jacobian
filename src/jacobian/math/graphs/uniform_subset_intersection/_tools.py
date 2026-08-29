@@ -11,7 +11,9 @@ from jacobian.math.graphs.uniform_subset_intersection.operations import (
 )
 
 
-def _construct(request: UniformSubsetIntersectionRequest) -> UniformSubsetIntersectionResult:
+def _construct(
+    request: UniformSubsetIntersectionRequest,
+) -> UniformSubsetIntersectionResult:
     return construct_uniform_subset_intersection_graph(
         request.n, request.k, request.threshold, request.relation
     )
@@ -34,7 +36,12 @@ TOOLS: MathTools = (
             example(
                 "kneser_5_2",
                 "Kneser graph KG(5,2) with t=0 (disjoint).",
-                {"n": 5, "k": 2, "threshold": 0, "relation": "INTERSECTION_EQ_THRESHOLD"},
+                {
+                    "n": 5,
+                    "k": 2,
+                    "threshold": 0,
+                    "relation": "INTERSECTION_EQ_THRESHOLD",
+                },
             ),
         ),
     ),

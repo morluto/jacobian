@@ -15,7 +15,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 __all__ = ["compute_edge_deletion_profile"]
 
 
-def _exact_chromatic_number(graph: nx.Graph) -> int:
+def _exact_chromatic_number(graph: nx.Graph[str]) -> int:
     """Compute exact chromatic number for small graphs via greedy + verification."""
     if graph.number_of_nodes() == 0:
         return 0
@@ -24,7 +24,7 @@ def _exact_chromatic_number(graph: nx.Graph) -> int:
 
     # Try k from 1 upward using networkx greedy coloring as upper bound,
     # then verify by brute-force for small graphs
-    coloring = nx.coloring.greedy_color(graph)
+    coloring: dict[str, int] = nx.coloring.greedy_color(graph)
     upper = max(coloring.values()) + 1
 
     for k in range(1, upper + 1):
@@ -33,12 +33,12 @@ def _exact_chromatic_number(graph: nx.Graph) -> int:
     return upper
 
 
-def _k_colorable(graph: nx.Graph, k: int) -> bool:
+def _k_colorable(graph: nx.Graph[str], k: int) -> bool:
     """Check if graph is k-colorable using backtracking."""
     nodes = list(graph.nodes())
     if not nodes:
         return True
-    colors: dict = {}
+    colors: dict[str, int] = {}
 
     def backtrack(idx: int) -> bool:
         if idx == len(nodes):
@@ -64,7 +64,7 @@ def compute_edge_deletion_profile(
     deletion_order: int,
 ) -> EdgeDeletionProfileResult:
     """Return the chromatic number of G-F for every edge subset F with |F| <= deletion_order."""
-    nx_graph = nx.Graph()
+    nx_graph: nx.Graph[str] = nx.Graph()
     for v in graph.vertices:
         nx_graph.add_node(v)
     for u, v in graph.edges:
@@ -75,10 +75,14 @@ def compute_edge_deletion_profile(
 
     entries: list[DeletionEntry] = []
 
-    for size in range(0, min(deletion_order, len(edges_list)) + 1):
+    for size in range(min(deletion_order, len(edges_list)) + 1):
         for subset in combinations(range(len(edges_list)), size):
-            deleted = tuple(sorted(tuple(edges_list[i]) for i in subset))
-            sub_graph = nx.Graph()
+            deleted_edges: list[tuple[str, str]] = []
+            for i in subset:
+                left, right = edges_list[i]
+                deleted_edges.append((left, right))
+            deleted = tuple(sorted(deleted_edges))
+            sub_graph: nx.Graph[str] = nx.Graph()
             for v in graph.vertices:
                 sub_graph.add_node(v)
             for idx, (u, v) in enumerate(graph.edges):

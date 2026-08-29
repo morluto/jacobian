@@ -44,7 +44,6 @@ def test_mixed() -> None:
         (_cr(1), _cr(2), _cr(3), _cr(1), _cr(4)),
     )
     inc = [v.as_fraction() for v in result.increasing_profile]
-    dec = [v.as_fraction() for v in result.decreasing_profile]
     # Increasing: can chain when a[j] <= a[i]
     # i=0: S=1 (w=1, no prior)
     # i=1: a[1]=1, no j<1 with a[j]<=1 (a[0]=3 > 1), S=2

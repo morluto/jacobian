@@ -8,11 +8,6 @@ from jacobian.math.combinatorics.arithmetic_progression_hypergraph._models impor
 from jacobian.math.combinatorics.arithmetic_progression_hypergraph.operations import (
     construct_arithmetic_progression_hypergraph,
 )
-from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
-    MAX_EDGES,
-    MAX_TOTAL_INCIDENCES,
-)
-
 
 # ---------------------------------------------------------------------------
 # Edge-count formula
@@ -377,7 +372,9 @@ def test_completeness_n8_k3() -> None:
     """Every 3-term AP in [0,7] must appear as an edge."""
     lo, hi = 0, 7
     result = construct_arithmetic_progression_hypergraph(lo, hi, 3)
-    edge_sets = {frozenset(int(m) for m in members) for _, members in result.hypergraph.edges}
+    edge_sets = {
+        frozenset(int(m) for m in members) for _, members in result.hypergraph.edges
+    }
 
     # Brute-force enumerate all 3-term APs
     expected_edges: set[frozenset[int]] = set()
@@ -393,7 +390,9 @@ def test_completeness_n8_k4() -> None:
     """Every 4-term AP in [0,7] must appear as an edge."""
     lo, hi = 0, 7
     result = construct_arithmetic_progression_hypergraph(lo, hi, 4)
-    edge_sets = {frozenset(int(m) for m in members) for _, members in result.hypergraph.edges}
+    edge_sets = {
+        frozenset(int(m) for m in members) for _, members in result.hypergraph.edges
+    }
 
     expected_edges: set[frozenset[int]] = set()
     for a in range(lo, hi + 1):
@@ -407,7 +406,9 @@ def test_completeness_n8_k4() -> None:
 def test_completeness_n10_k3() -> None:
     lo, hi = 0, 9
     result = construct_arithmetic_progression_hypergraph(lo, hi, 3)
-    edge_sets = {frozenset(int(m) for m in members) for _, members in result.hypergraph.edges}
+    edge_sets = {
+        frozenset(int(m) for m in members) for _, members in result.hypergraph.edges
+    }
 
     expected_edges: set[frozenset[int]] = set()
     for a in range(lo, hi + 1):

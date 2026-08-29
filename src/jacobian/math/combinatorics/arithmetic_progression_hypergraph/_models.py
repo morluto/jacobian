@@ -51,8 +51,12 @@ class ArithmeticProgressionHypergraphRequest(StrictModel):
     ``n = upper - lower + 1``, not merely on endpoint digit length.
     """
 
-    lower: int = Field(description="Inclusive lower endpoint L of the integer interval.")
-    upper: int = Field(description="Inclusive upper endpoint U of the integer interval.")
+    lower: int = Field(
+        description="Inclusive lower endpoint L of the integer interval."
+    )
+    upper: int = Field(
+        description="Inclusive upper endpoint U of the integer interval."
+    )
     k: int = Field(ge=3, description="Arity k >= 3 of each arithmetic progression.")
 
     @model_validator(mode="after")

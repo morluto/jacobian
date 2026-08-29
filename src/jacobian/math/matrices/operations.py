@@ -44,6 +44,7 @@ from jacobian.math.matrices._operation_models import (
     _validation_error,
 )
 from jacobian.math.matrices.values import (
+    MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
     RationalMatrix,
@@ -369,6 +370,12 @@ def _admit_square_integer(matrix: IntegerMatrix) -> None:
     if rows == 0 or rows != len(matrix.entries[0]):
         raise _validation_error(
             "budget_exceeded", "operation requires a square integer matrix"
+        )
+    if rows > MAX_MATRIX_DIMENSION:
+        raise _validation_error(
+            "budget_exceeded",
+            "matrix computation dimensions are limited to "
+            f"{MAX_MATRIX_DIMENSION} rows and columns",
         )
 
 

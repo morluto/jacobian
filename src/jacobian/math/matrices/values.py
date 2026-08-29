@@ -227,7 +227,13 @@ class RealQuadraticMatrix(StrictModel):
 
 
 class IntegerMatrix(StrictModel):
-    """One nonempty rectangular matrix over exact canonical integers."""
+    """One nonempty rectangular matrix over exact canonical integers.
+
+    Structural axes follow ``MAX_EXACT_LINEAR_MATRIX_AXIS``. Operations whose
+    admitted computation envelope is narrower, including lattice reduction,
+    enforce that bound in owner-local admission rather than on this shared
+    value.
+    """
 
     domain: Literal["ZZ"] = "ZZ"
     entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(

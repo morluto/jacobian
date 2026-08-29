@@ -9,6 +9,8 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.topology.chain_complexes.values import (
+    MAX_MATRIX_CELLS,
+    MAX_OPERATION_MATRIX_CELLS,
     ChainComplexValue,
     CoefficientField,
 )
@@ -16,6 +18,25 @@ from jacobian.math.topology.chain_complexes.values import (
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"chain_complex.{reason}", message)
+
+
+def _matrix_cells(complex_value: ChainComplexValue) -> int:
+    return sum(
+        complex_value.basis_sizes[index] * complex_value.basis_sizes[index + 1]
+        for index in range(len(complex_value.basis_sizes) - 1)
+    )
+
+
+def _require_complex_cell_budget(
+    complex_value: ChainComplexValue, *, maximum: int, label: str
+) -> None:
+    cells = _matrix_cells(complex_value)
+    if cells > maximum:
+        raise _validation_error(
+            "operation_matrix_cell_budget_exceeded",
+            f"{label} has {cells} differential cells, exceeding the "
+            f"{maximum}-cell operation budget",
+        )
 
 
 class ConstructChainComplexRequest(StrictModel):
@@ -57,6 +78,15 @@ class VerifyDifferentialRequest(StrictModel):
     """Verify that d^2 = 0 for a chain complex."""
 
     complex: ChainComplexValue
+
+    @model_validator(mode="after")
+    def require_operation_budget(self) -> Self:
+        _require_complex_cell_budget(
+            self.complex,
+            maximum=MAX_OPERATION_MATRIX_CELLS,
+            label="differential verification input",
+        )
+        return self
 
 
 def _require_component_entry_grammar(
@@ -177,6 +207,12 @@ class VerifyChainMapRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admissible_map_components(self) -> Self:
+        for label, complex_value in (("source", self.source), ("target", self.target)):
+            _require_complex_cell_budget(
+                complex_value,
+                maximum=MAX_OPERATION_MATRIX_CELLS,
+                label=f"chain-map {label}",
+            )
         _require_chain_map_components(
             self.source,
             self.target,
@@ -190,6 +226,15 @@ class ComputeHomologyRequest(StrictModel):
     """Compute homology of a chain complex."""
 
     complex: ChainComplexValue
+
+    @model_validator(mode="after")
+    def require_homology_budget(self) -> Self:
+        _require_complex_cell_budget(
+            self.complex,
+            maximum=MAX_MATRIX_CELLS,
+            label="homology input",
+        )
+        return self
 
 
 class MappingConeRequest(StrictModel):
@@ -207,12 +252,32 @@ class MappingConeRequest(StrictModel):
         )
     )
 
+    @model_validator(mode="after")
+    def require_input_budgets(self) -> Self:
+        for label, complex_value in (("source", self.source), ("target", self.target)):
+            _require_complex_cell_budget(
+                complex_value,
+                maximum=MAX_OPERATION_MATRIX_CELLS,
+                label=f"mapping-cone {label}",
+            )
+        return self
+
 
 class TensorProductRequest(StrictModel):
     """Compute the tensor product of two chain complexes."""
 
     left: ChainComplexValue
     right: ChainComplexValue
+
+    @model_validator(mode="after")
+    def require_input_budgets(self) -> Self:
+        for label, complex_value in (("left", self.left), ("right", self.right)):
+            _require_complex_cell_budget(
+                complex_value,
+                maximum=MAX_OPERATION_MATRIX_CELLS,
+                label=f"tensor-product {label}",
+            )
+        return self
 
 
 __all__ = [

@@ -7,9 +7,12 @@ from fractions import Fraction
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.topology.chain_complexes._models import (
     _require_chain_map_components,
+    _require_complex_cell_budget,
 )
 from jacobian.math.topology.chain_complexes.values import (
+    MAX_MATRIX_CELLS,
     MAX_MATRIX_ENTRY_CHARS,
+    MAX_OPERATION_MATRIX_CELLS,
     MAX_TENSOR_COEFFICIENT_DIGITS,
     MAX_TENSOR_GROUP_DIMENSION,
     MAX_TENSOR_TOTAL_CELLS,
@@ -210,59 +213,23 @@ def _matrix_to_fractions(
 
 
 def _rank_over_prime_field(mat: list[list[Fraction]], prime: int) -> int:
-    """Gauss-Jordan elimination inside GF(p) using modular inverses."""
+    """Return exact rank over GF(p) through FLINT modular elimination."""
     rows = len(mat)
     cols = len(mat[0])
-    work = [[int(v) % prime for v in row] for row in mat]
-    rank = 0
-    for col in range(cols):
-        pivot = next(
-            (row for row in range(rank, rows) if work[row][col] % prime != 0),
-            None,
-        )
-        if pivot is None:
-            continue
-        work[rank], work[pivot] = work[pivot], work[rank]
-        inverse = pow(work[rank][col], -1, prime)
-        for j in range(cols):
-            work[rank][j] = (work[rank][j] * inverse) % prime
-        for row in range(rows):
-            if row == rank:
-                continue
-            factor = work[row][col] % prime
-            if factor != 0:
-                for j in range(cols):
-                    work[row][j] = (work[row][j] - factor * work[rank][j]) % prime
-        rank += 1
-        if rank == rows:
-            break
-    return rank
+    from flint import nmod_mat
+
+    entries = [int(value) % prime for row in mat for value in row]
+    return int(nmod_mat(rows, cols, entries, prime).rank())
 
 
 def _rank_over_rationals(mat: list[list[Fraction]]) -> int:
-    """Gauss-Jordan elimination over QQ."""
+    """Return exact rank over QQ through FLINT fraction-free elimination."""
     rows = len(mat)
     cols = len(mat[0])
-    work = [row[:] for row in mat]
-    rank = 0
-    for col in range(cols):
-        pivot = next(
-            (row for row in range(rank, rows) if work[row][col] != 0),
-            None,
-        )
-        if pivot is None:
-            continue
-        work[rank], work[pivot] = work[pivot], work[rank]
-        for row in range(rows):
-            if row == rank or work[row][col] == 0:
-                continue
-            factor = work[row][col] / work[rank][col]
-            for j in range(cols):
-                work[row][j] -= factor * work[rank][j]
-        rank += 1
-        if rank == rows:
-            break
-    return rank
+    from flint import fmpq, fmpq_mat
+
+    entries = [fmpq(value.numerator, value.denominator) for row in mat for value in row]
+    return int(fmpq_mat(rows, cols, entries).rank())
 
 
 def _matrix_rank(matrix: list[list[Fraction]], prime: int | None = None) -> int:
@@ -1010,6 +977,11 @@ def construct_chain_complex(
         basis_sizes=basis_sizes,
         differential_matrices=differential_matrices,
     )
+    _require_complex_cell_budget(
+        value,
+        maximum=MAX_OPERATION_MATRIX_CELLS,
+        label="chain-complex construction",
+    )
     _require_square_zero(
         _parsed_differentials(value, value.prime),
         value.prime,
@@ -1022,6 +994,11 @@ def construct_chain_complex(
 
 def homology_groups(complex_value: ChainComplexValue) -> HomologyResult:
     """Return exact homology groups for a canonical chain complex value."""
+    _require_complex_cell_budget(
+        complex_value,
+        maximum=MAX_MATRIX_CELLS,
+        label="homology input",
+    )
     groups = _compute_homology_groups(complex_value)
     return HomologyResult._from_kernel(
         homology_groups=tuple(groups),
@@ -1033,6 +1010,11 @@ def differential_squares_to_zero(
     complex_value: ChainComplexValue,
 ) -> VerificationResult:
     """Verify d^2 = 0 for one canonical chain-complex value."""
+    _require_complex_cell_budget(
+        complex_value,
+        maximum=MAX_OPERATION_MATRIX_CELLS,
+        label="differential verification input",
+    )
     is_valid, detail = _differential_verdict(complex_value)
     return VerificationResult(is_valid=is_valid, detail=detail, complex=complex_value)
 
@@ -1043,6 +1025,12 @@ def chain_map_commutes(
     map_matrices: MapMatrices,
 ) -> VerificationResult:
     """Verify that a component-wise chain map commutes with differentials."""
+    for label, complex_value in (("source", source), ("target", target)):
+        _require_complex_cell_budget(
+            complex_value,
+            maximum=MAX_OPERATION_MATRIX_CELLS,
+            label=f"chain-map {label}",
+        )
     _require_chain_map_components(
         source, target, map_matrices, label="chain-map verification"
     )
@@ -1062,6 +1050,12 @@ def mapping_cone(
     map_matrices: MapMatrices,
 ) -> MappingConeResult:
     """Compute the mapping cone of a chain-map value."""
+    for label, complex_value in (("source", source), ("target", target)):
+        _require_complex_cell_budget(
+            complex_value,
+            maximum=MAX_OPERATION_MATRIX_CELLS,
+            label=f"mapping-cone {label}",
+        )
     _require_chain_map_components(source, target, map_matrices, label="mapping cone")
     _require_cone_admission(source, target, map_matrices)
     cone_basis_sizes, cone_diffs = _compute_mapping_cone(source, target, map_matrices)
@@ -1088,6 +1082,12 @@ def tensor_product_complex(
     right: ChainComplexValue,
 ) -> TensorProductResult:
     """Compute the tensor product of two canonical chain-complex values."""
+    for label, complex_value in (("left", left), ("right", right)):
+        _require_complex_cell_budget(
+            complex_value,
+            maximum=MAX_OPERATION_MATRIX_CELLS,
+            label=f"tensor-product {label}",
+        )
     _require_tensor_admission(left, right)
     tensor_basis_sizes, tensor_diffs = _compute_tensor_product(left, right)
     group_count = len(tensor_basis_sizes)

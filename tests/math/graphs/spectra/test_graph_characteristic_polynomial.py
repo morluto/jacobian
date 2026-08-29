@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from fractions import Fraction
+from math import comb
 from typing import Any
 
 import pytest
@@ -14,8 +15,10 @@ from jacobian.math.graphs.spectra import (
     laplacian_characteristic_polynomial,
 )
 from jacobian.math.graphs.spectra._models import (
+    GraphCharacteristicPolynomialRequest,
     GraphCharacteristicPolynomialResult,
     GraphSpectrumRequest,
+    _charpoly_coefficient_digit_bound,
 )
 from jacobian.math.graphs.spectra._tools import (
     TOOLS,
@@ -40,8 +43,8 @@ def _graph(edges: list[list[int]], vc: int) -> IndexedSimpleUndirectedGraph:
     )
 
 
-def _request(edges: list[list[int]], vc: int) -> GraphSpectrumRequest:
-    return GraphSpectrumRequest(graph=_graph(edges, vc))
+def _request(edges: list[list[int]], vc: int) -> GraphCharacteristicPolynomialRequest:
+    return GraphCharacteristicPolynomialRequest(graph=_graph(edges, vc))
 
 
 def _coeffs(polynomial: RationalPolynomial) -> list[Fraction]:
@@ -86,6 +89,21 @@ def _charpoly_payload(polynomial: RationalPolynomial) -> dict[str, Any]:
 
 
 class TestAdjacencyCharacteristicPolynomial:
+    def test_complete_graph_above_previous_limit(self) -> None:
+        order = 64
+        edges = [
+            [left, right] for left in range(order) for right in range(left + 1, order)
+        ]
+        result = compute_adjacency_characteristic_polynomial(_request(edges, order))
+        expected = [
+            Fraction(
+                (comb(order - 1, degree - 1) if degree else 0)
+                - (order - 1) * (comb(order - 1, degree) if degree < order else 0)
+            )
+            for degree in range(order + 1)
+        ]
+        assert _coeffs(result.polynomial) == expected
+
     def test_path_p3(self) -> None:
         # P3 adjacency eigenvalues: 0, sqrt(2), -sqrt(2) -> charpoly x(x^2-2) = x^3 - 2x.
         result = compute_adjacency_characteristic_polynomial(
@@ -135,6 +153,18 @@ class TestAdjacencyCharacteristicPolynomial:
 
 
 class TestLaplacianCharacteristicPolynomial:
+    def test_complete_graph_above_previous_limit(self) -> None:
+        order = 64
+        edges = [
+            [left, right] for left in range(order) for right in range(left + 1, order)
+        ]
+        result = compute_laplacian_characteristic_polynomial(_request(edges, order))
+        expected = [Fraction(0)] + [
+            Fraction(comb(order - 1, degree - 1) * (-order) ** (order - degree))
+            for degree in range(1, order + 1)
+        ]
+        assert _coeffs(result.polynomial) == expected
+
     def test_path_p3(self) -> None:
         # P3 Laplacian eigenvalues 0,1,3 -> charpoly x(x-1)(x-3) = x^3 - 4x^2 + 3x.
         result = compute_laplacian_characteristic_polynomial(
@@ -189,7 +219,9 @@ class TestLaplacianCharacteristicPolynomial:
 )
 def test_trusted_characteristic_polynomial_producers_run_the_kernel_once(
     monkeypatch: pytest.MonkeyPatch,
-    operation: Callable[[GraphSpectrumRequest], GraphCharacteristicPolynomialResult],
+    operation: Callable[
+        [GraphCharacteristicPolynomialRequest], GraphCharacteristicPolynomialResult
+    ],
     kernel_name: str,
 ) -> None:
     original = getattr(spectral_operations, kernel_name)
@@ -209,29 +241,27 @@ def test_trusted_characteristic_polynomial_producers_run_the_kernel_once(
 
 
 def test_replay_rejects_more_terms_than_any_admitted_charpoly_has() -> None:
-    # A degree-32 univariate characteristic polynomial has at most 33 nonzero
-    # terms, so a 34-term value is rejected before any backend conversion.
-    oversized = _univariate_polynomial(dict.fromkeys(range(34), "2"))
+    oversized = _univariate_polynomial(dict.fromkeys(range(5), "2"))
     with pytest.raises(ValidationError):
         GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(oversized))
 
 
-def test_replay_rejects_exponents_beyond_the_32_vertex_degree_bound() -> None:
-    beyond = _univariate_polynomial({32: "1", 40: "1"})
+def test_replay_rejects_exponents_beyond_the_graph_order_bound() -> None:
+    beyond = _univariate_polynomial({3: "1", 4: "1"})
     with pytest.raises(ValidationError):
         GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(beyond))
 
 
 def test_replay_rejects_coefficients_beyond_the_charpoly_digit_budget() -> None:
-    huge = _univariate_polynomial({3: "9" * 129})
+    huge = _univariate_polynomial({3: "9" * (_charpoly_coefficient_digit_bound(3) + 1)})
     with pytest.raises(ValidationError):
         GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(huge))
 
 
 def test_maximal_path_round_trips_through_serialization() -> None:
-    # Degree exactly 32 exercises the replay degree bound from above.
+    # Degree exactly 256 exercises the full graph carrier and result bounds.
     graph = IndexedSimpleUndirectedGraph(
-        vertex_count=32, edges=tuple((i, i + 1) for i in range(31))
+        vertex_count=256, edges=tuple((i, i + 1) for i in range(255))
     )
     polynomial = adjacency_characteristic_polynomial(graph)
     restored = GraphCharacteristicPolynomialResult.model_validate(
@@ -242,7 +272,14 @@ def test_maximal_path_round_trips_through_serialization() -> None:
         ).model_dump(mode="json")
     )
     assert restored.polynomial == polynomial
-    assert max(_exponents(restored.polynomial)) == 32
+    assert max(_exponents(restored.polynomial)) == 256
+
+
+def test_characteristic_polynomial_request_rejects_above_graph_carrier() -> None:
+    with pytest.raises(ValidationError):
+        GraphCharacteristicPolynomialRequest.model_validate(
+            {"graph": {"vertex_count": 257, "edges": []}}
+        )
 
 
 def test_native_adjacency_returns_canonical_polynomial() -> None:
@@ -315,3 +352,22 @@ def test_discovery_names_canonical_sparse_polynomial() -> None:
         assert "increasing-degree" not in description
         assert "canonical sparse RationalPolynomial" in description
         assert "descending exponent order" in description
+
+
+def test_characteristic_polynomial_schema_is_independent_of_exact_spectrum() -> None:
+    spectrum_graph_schema = GraphSpectrumRequest.model_json_schema()["properties"][
+        "graph"
+    ]
+    polynomial_graph_schema = GraphCharacteristicPolynomialRequest.model_json_schema()[
+        "properties"
+    ]["graph"]
+    assert spectrum_graph_schema["properties"]["vertex_count"]["maximum"] == 32
+    assert polynomial_graph_schema["properties"]["vertex_count"]["maximum"] == 256
+    characteristic_tools = [
+        tool for tool in TOOLS if "characteristic_polynomial" in tool.operation_id
+    ]
+    assert characteristic_tools
+    assert all(
+        tool.request_type is GraphCharacteristicPolynomialRequest
+        for tool in characteristic_tools
+    )

@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 
 import pytest
-from pydantic import ValidationError
 from tests.math.number_theory._validation import expect_validation
 
 from jacobian.catalog.models import OperationDomainValidationError

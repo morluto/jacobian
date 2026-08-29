@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from pydantic_core import PydanticCustomError
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples._models import (
     DivisibilitySumTriplesResult,
+    _validate_interval,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -21,6 +25,13 @@ def construct_divisibility_sum_triples_hypergraph(
     Vertices are the integers in [L, U]. Edges are the increasing triples
     (a, b, c) with L <= a < b < c <= U and a | (b + c).
     """
+    try:
+        _validate_interval(lower_bound, upper_bound)
+    except PydanticCustomError as error:
+        raise OperationDomainValidationError(
+            location=(), code=error.type, message=str(error)
+        ) from error
+
     vertices = tuple(str(i) for i in range(lower_bound, upper_bound + 1))
     edges: list[tuple[str, tuple[str, ...]]] = []
     edge_index = 0

@@ -91,3 +91,13 @@ def test_result_preserves_bounds() -> None:
     result = construct_divisibility_sum_triples_hypergraph(3, 8)
     assert result.lower_bound == 3
     assert result.upper_bound == 8
+
+
+def test_rejects_hypergraph_envelope_before_enumeration() -> None:
+    with pytest.raises(ValueError, match="triple family"):
+        construct_divisibility_sum_triples_hypergraph(1, 43)
+
+
+def test_native_rejects_reversed_interval() -> None:
+    with pytest.raises(ValueError, match="must not exceed"):
+        construct_divisibility_sum_triples_hypergraph(4, 1)

@@ -231,7 +231,7 @@ def test_count_admits_large_state_powering_within_work_bound() -> None:
     assert count_accepted_words(dfa, 5_000) == 2**5_000
 
 
-def test_count_accepts_maximum_exponent_for_compact_unary_automaton() -> None:
+def test_count_accepts_maximum_transport_exponent_for_compact_unary_dfa() -> None:
     state_count = 64
     dfa = DFA(
         state_count=state_count,
@@ -247,7 +247,7 @@ def test_count_accepts_maximum_exponent_for_compact_unary_automaton() -> None:
     assert count_accepted_words(dfa, MAX_COUNT_WORD_LENGTH) == 1
 
 
-def test_count_request_rejects_exponent_above_flint_range() -> None:
+def test_count_request_rejects_exponent_above_transport_range() -> None:
     with pytest.raises(ValidationError):
         CountRequest(
             dfa=_dfa_even_zeros(),

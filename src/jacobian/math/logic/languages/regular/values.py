@@ -20,9 +20,9 @@ MAX_DFA_STATES = 64
 MAX_DFA_ALPHABET = 32
 MAX_DFA_TRANSITIONS = 4096
 MAX_WORD_LENGTH = 1000
-# python-flint 0.9 accepts an unsigned-long exponent. Binary powering needs
-# only its bit length; owner-local work and result admission narrow this range.
-MAX_COUNT_WORD_LENGTH = (1 << 64) - 1
+# Raw JSON integers remain exactly interoperable through this exponent. FLINT
+# accepts the full range, while owner-local work and result admission narrow it.
+MAX_COUNT_WORD_LENGTH = (1 << 53) - 1
 MAX_COUNT_MATRIX_BIT_WORK = 10_000_000_000
 MAX_COUNT_RESULT_DIGITS = 32_768
 

@@ -642,9 +642,7 @@ def test_characteristic_polynomial_rejects_predicted_coefficient_growth() -> Non
 
 def test_characteristic_polynomial_admits_shared_denominator_order_32() -> None:
     order = 32
-    source = _matrix(
-        *tuple(tuple((1, 2) for _ in range(order)) for _ in range(order))
-    )
+    source = _matrix(*tuple(tuple((1, 2) for _ in range(order)) for _ in range(order)))
 
     result = compute_characteristic_polynomial(
         CharacteristicPolynomialRequest(matrix=source)
@@ -674,7 +672,9 @@ def test_native_characteristic_polynomial_shares_widened_flint_kernel() -> None:
             matrix=RationalMatrix(
                 entries=tuple(
                     tuple(
-                        CanonicalRational.from_integer_ratio(int(source[row, column]), 1)
+                        CanonicalRational.from_integer_ratio(
+                            int(source[row, column]), 1
+                        )
                         for column in range(order)
                     )
                     for row in range(order)

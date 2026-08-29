@@ -27,7 +27,12 @@ from jacobian.math.analysis.orthogonal_polynomials._tools import (
     compute_recurrence,
     compute_shifted_hankel,
 )
+from jacobian.math.analysis.orthogonal_polynomials.operations import (
+    _hankel_determinant_height_bound,
+    require_hankel_matrix_admission,
+)
 from jacobian.math.analysis.orthogonal_polynomials.values import (
+    MAX_HANKEL_ORDER,
     GaussianQuadratureRule,
     MomentFunctionalPrefix,
     OrthogonalPolynomialFamily,
@@ -100,13 +105,17 @@ class TestHankel:
         )
 
     def test_maximum_order_rejects_moment_above_derived_height_bound(self) -> None:
-        moments = (
-            CanonicalRational(num="1", den="10000019"),
-            *(CanonicalRational(num="1", den="1") for _ in range(128)),
+        order = MAX_HANKEL_ORDER
+        bound = _hankel_determinant_height_bound(order)
+        ones = tuple(CanonicalRational(num="1", den="1") for _ in range(2 * order))
+        prefix_at_bound = _prefix((CanonicalRational(num="1", den="9" * bound), *ones))
+        prefix_over_bound = _prefix(
+            (CanonicalRational(num="1", den="9" * (bound + 1)), *ones)
         )
 
-        with pytest.raises(ValueError, match="conservative 5-digit bound"):
-            compute_hankel_matrix(HankelRequest(prefix=_prefix(moments), order=64))
+        require_hankel_matrix_admission(prefix_at_bound, order, shifted=False)
+        with pytest.raises(ValueError, match=rf"conservative {bound}-digit bound"):
+            compute_hankel_matrix(HankelRequest(prefix=prefix_over_bound, order=order))
 
 
 class TestShiftedHankel:

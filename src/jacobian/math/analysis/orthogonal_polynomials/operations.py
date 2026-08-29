@@ -11,6 +11,7 @@ from jacobian.math.analysis.orthogonal_polynomials._jacobi import (
     require_jacobi_matrix_admission,
 )
 from jacobian.math.analysis.orthogonal_polynomials.values import (
+    MAX_HANKEL_ORDER,
     ChristoffelDarbouxKernel,
     GaussianQuadratureRule,
     HankelMomentMatrix,
@@ -90,12 +91,22 @@ def _require_gram_schmidt_heights_admissible(
             )
 
 
+def _hankel_determinant_height_bound(order: int) -> int:
+    """Conservative per-entry digit bound for an exact Hankel determinant.
+
+    An ``(order + 1)``-by-``(order + 1)`` product of consumed moments stays
+    representable when each entry has at most this many decimal digits. Two
+    digits of slack cover exact-determinant height beyond that product, and
+    the bound is at least one digit.
+    """
+    per_entry = MAX_CANONICAL_RATIONAL_DIGITS // ((order + 1) ** 2)
+    return max(per_entry - 2, 1)
+
+
 def require_hankel_matrix_admission(
     prefix: MomentFunctionalPrefix, order: int, *, shifted: bool
 ) -> None:
     """Validate one canonical prefix for a bounded Hankel construction."""
-    from jacobian.math.analysis.orthogonal_polynomials.values import MAX_HANKEL_ORDER
-
     maximum = MAX_HANKEL_ORDER - int(shifted)
     if (
         isinstance(order, bool)
@@ -115,8 +126,7 @@ def require_hankel_matrix_admission(
             f"{len(prefix.moments)}",
         )
     consumed = prefix.moments[1:] if shifted else prefix.moments
-    per_entry = MAX_CANONICAL_RATIONAL_DIGITS // ((order + 1) ** 2)
-    bound = max(per_entry - 2, 1)
+    bound = _hankel_determinant_height_bound(order)
     if any(
         RationalHeight.from_canonical(value).exceeds(bound)
         for value in consumed[: 2 * order + 1]

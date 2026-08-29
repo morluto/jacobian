@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.weighted_monotone_profiles.operations import (
     compute_weighted_monotone_profiles,
 )
@@ -64,3 +67,8 @@ def test_result_preserves_source() -> None:
     )
     assert result.alphabet == (1, 2)
     assert len(result.weights) == 2
+
+
+def test_weight_axis_must_match_the_alphabet() -> None:
+    with pytest.raises(OperationDomainValidationError, match="one-for-one"):
+        compute_weighted_monotone_profiles((1,), ())

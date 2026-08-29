@@ -278,6 +278,8 @@ class InverseIntegerMatrix(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
+        if isinstance(data, IntegerMatrix):
+            data = {"domain": "ZZ", "entries": data.entries}
         data = _require_raw_matrix_envelope(
             data, maximum_axis=MAX_INVERSE_INTEGER_MATRIX_ORDER, label="matrix"
         )

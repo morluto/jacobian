@@ -5,13 +5,16 @@ from typing import TypedDict
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.chip_firing._models import (
+    CriticalGroupRequest,
     CriticalGroupResult,
     FireVectorRequest,
     FiringRequest,
     ReducedLaplacianRequest,
     SinkConfiguration,
 )
+from jacobian.math.graphs.chip_firing._tools import compute_critical_group
 from jacobian.math.graphs.chip_firing.operations import (
     abel_jacobi,
     canonical_divisor,
@@ -320,6 +323,63 @@ class TestCriticalGroup:
         r3 = critical_group(C3, "c")
         assert r1.order == r2.order == r3.order
         assert r1.invariant_factors == r2.invariant_factors == r3.invariant_factors
+
+    def test_flint_diagonal_snf_exceeds_the_previous_vertex_ceiling(self) -> None:
+        order = 96
+        labels = [f"v{index:03d}" for index in range(order)]
+        graph = _graph(
+            {
+                "vertices": labels,
+                "edges": [
+                    [labels[index], labels[index + 1]] for index in range(order - 1)
+                ]
+                + [[labels[0], labels[-1]]],
+            }
+        )
+
+        result = compute_critical_group(
+            CriticalGroupRequest(graph=graph, sink=labels[0])
+        )
+
+        assert result.order == order
+        assert result.invariant_factors == (1,) * (order - 2) + (order,)
+        assert all(
+            right % left == 0
+            for left, right in zip(
+                result.invariant_factors,
+                result.invariant_factors[1:],
+                strict=False,
+            )
+        )
+
+    def test_critical_group_rejects_disconnected_graph(self) -> None:
+        graph = _graph(
+            {
+                "vertices": ["a", "b", "c", "d"],
+                "edges": [["a", "b"], ["c", "d"]],
+            }
+        )
+
+        with pytest.raises(
+            OperationDomainValidationError, match="requires a connected graph"
+        ):
+            critical_group(graph, "a")
+
+    def test_critical_group_rejects_the_snf_work_boundary(self) -> None:
+        order = 116
+        labels = [f"v{index:03d}" for index in range(order)]
+        graph = _graph(
+            {
+                "vertices": labels,
+                "edges": [
+                    [labels[index], labels[index + 1]] for index in range(order - 1)
+                ]
+                + [[labels[0], labels[-1]]],
+            }
+        )
+
+        with pytest.raises(OperationDomainValidationError, match="SNF exceeds"):
+            critical_group(graph, labels[0])
 
 
 class TestAbelJacobi:

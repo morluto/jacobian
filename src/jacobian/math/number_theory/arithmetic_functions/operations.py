@@ -227,6 +227,7 @@ def _convolution_slot_lcms(
     """Bound the denominator LCM independently for each output position."""
 
     lcms: list[int | None] = [1] * length
+    interned_lcms: dict[int, int] = {1: 1}
     for divisor, multiple in incidences:
         index = multiple - 1
         current = lcms[index]
@@ -238,7 +239,10 @@ def _convolution_slot_lcms(
         if term_denominator is None:
             lcms[index] = None
             continue
-        lcms[index] = _bounded_lcm(current, term_denominator)
+        merged = _bounded_lcm(current, term_denominator)
+        if merged is not None:
+            merged = interned_lcms.setdefault(merged, merged)
+        lcms[index] = merged
     return tuple(lcms)
 
 

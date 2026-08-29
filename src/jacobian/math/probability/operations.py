@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
+from math import gcd, lcm
 from typing import Any
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import CanonicalLimits, format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability._distribution import (
+    MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS,
     MAX_FINITE_CONVOLUTION_PAIRS,
+    MAX_FINITE_CONVOLUTION_POWER,
     MAX_FINITE_DISTRIBUTION_ATOMS,
+    MAX_FINITE_INPUT_ATOMS,
     FiniteConditionalContribution,
     FiniteConditionResult,
     FiniteConvolutionContribution,
+    FiniteConvolutionPeakResult,
+    FiniteConvolutionPowerResult,
     FiniteConvolutionResult,
     FiniteDistributionAtom,
     FiniteEventProbabilityResult,
@@ -43,6 +50,20 @@ from jacobian.math.probability._models import (
     _require_strictly_increasing,
 )
 
+MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS = 50_000_000
+MAX_CONVOLUTION_POWER_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+
+@dataclass(frozen=True)
+class _ConvolutionPowerPlan:
+    positions: tuple[int, ...]
+    weights: tuple[int, ...]
+    origin: Fraction
+    step: Fraction
+    powered_probability_denominator: int
+    exponent: int
+    degree: int
+
 
 def _wire(value: Any) -> CanonicalRational:
     return CanonicalRational(
@@ -65,6 +86,15 @@ def _complex_wire(value: tuple[Any, Any]) -> ExactComplexRational:
 def _admit_distribution(
     atoms: tuple[FiniteDistributionAtom, ...], *, require_canonical: bool
 ) -> tuple[Fraction, ...]:
+    if len(atoms) > MAX_FINITE_INPUT_ATOMS:
+        raise OperationDomainValidationError(
+            location=("atoms",),
+            code="probability.distribution.atom_bound",
+            message=(
+                "finite-distribution operations accept at most "
+                f"{MAX_FINITE_INPUT_ATOMS} source atoms"
+            ),
+        )
     try:
         return require_input_distribution(atoms, require_canonical=require_canonical)
     except ValueError as exc:
@@ -186,9 +216,10 @@ def _admit_convolution(
                     * right_atom.probability.as_fraction()
                 )
                 aggregated[value] = aggregated.get(value, Fraction()) + probability
-        if len(aggregated) > MAX_FINITE_DISTRIBUTION_ATOMS:
+        if len(aggregated) > MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS:
             raise ValueError(
-                f"finite convolution exceeds the {MAX_FINITE_DISTRIBUTION_ATOMS}-atom output bound"
+                "finite convolution exceeds the "
+                f"{MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS}-atom output bound"
             )
         for value, probability in aggregated.items():
             _require_bounded_fraction(
@@ -205,6 +236,182 @@ def _admit_convolution(
             code="probability.convolution.output_bound",
             message=str(exc),
         ) from exc
+
+
+def _power_at_most(base: int, exponent: int, limit: int) -> int | None:
+    """Return an exact nonnegative power, stopping once it exceeds ``limit``."""
+
+    result = 1
+    factor = base
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result *= factor
+            if result > limit:
+                return None
+        remaining >>= 1
+        if remaining:
+            factor *= factor
+            if factor > limit:
+                factor = limit + 1
+    return result
+
+
+def _power_multiplication_products(base_degree: int, exponent: int) -> int:
+    """Bound dense coefficient products in binary polynomial exponentiation."""
+
+    result_degree = 0
+    powered_degree = base_degree
+    remaining = exponent
+    products = 0
+    while remaining:
+        if remaining & 1:
+            products += (result_degree + 1) * (powered_degree + 1)
+            result_degree += powered_degree
+        remaining >>= 1
+        if remaining:
+            products += (powered_degree + 1) ** 2
+            powered_degree *= 2
+    return products
+
+
+def _admit_convolution_power(
+    distribution: FiniteRationalDistribution,
+    exponent: int,
+    *,
+    complete_profile: bool,
+) -> _ConvolutionPowerPlan:
+    if type(exponent) is not int or not 1 <= exponent <= MAX_FINITE_CONVOLUTION_POWER:
+        raise OperationDomainValidationError(
+            location=("exponent",),
+            code="probability.convolution_power.exponent_bound",
+            message=(
+                "convolution exponent must be between 1 and "
+                f"{MAX_FINITE_CONVOLUTION_POWER}"
+            ),
+        )
+    values = _admit_distribution(distribution.atoms, require_canonical=True)
+    positive = tuple(
+        (value, atom.probability.as_fraction())
+        for value, atom in zip(values, distribution.atoms, strict=True)
+        if atom.probability.as_fraction()
+    )
+    origin = positive[0][0]
+    value_denominator = 1
+    for value, _ in positive[1:]:
+        value_denominator = lcm(value_denominator, (value - origin).denominator)
+    offsets = tuple(int((value - origin) * value_denominator) for value, _ in positive)
+    lattice_gcd = 0
+    for offset in offsets[1:]:
+        lattice_gcd = gcd(lattice_gcd, offset)
+    lattice_gcd = max(1, lattice_gcd)
+    positions = tuple(offset // lattice_gcd for offset in offsets)
+    step = Fraction(lattice_gcd, value_denominator)
+
+    probability_denominator = 1
+    for _, probability in positive:
+        probability_denominator = lcm(probability_denominator, probability.denominator)
+    weights = tuple(
+        probability.numerator * (probability_denominator // probability.denominator)
+        for _, probability in positive
+    )
+    degree = positions[-1] * exponent
+    output_slots = degree + 1
+    if output_slots > MAX_FINITE_DISTRIBUTION_ATOMS:
+        raise OperationDomainValidationError(
+            location=("distribution", "exponent"),
+            code="probability.convolution_power.support_bound",
+            message=(
+                "convolution power can occupy at most "
+                f"{MAX_FINITE_DISTRIBUTION_ATOMS} lattice positions"
+            ),
+        )
+
+    products = _power_multiplication_products(positions[-1], exponent)
+    if products > MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS:
+        raise OperationDomainValidationError(
+            location=("distribution", "exponent"),
+            code="probability.convolution_power.work_bound",
+            message=(
+                "convolution power exceeds the "
+                f"{MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS:,}-product work bound"
+            ),
+        )
+
+    denominator_limit = 10**MAX_RESULT_RATIONAL_DIGITS - 1
+    powered_probability_denominator = _power_at_most(
+        probability_denominator,
+        exponent,
+        denominator_limit,
+    )
+    if powered_probability_denominator is None:
+        raise OperationDomainValidationError(
+            location=("distribution", "exponent"),
+            code="probability.convolution_power.height_bound",
+            message=(
+                "convolution-power probabilities exceed the "
+                f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+            ),
+        )
+    coefficient_digits = len(str(powered_probability_denominator))
+    minimum_value = origin * exponent
+    maximum_value = minimum_value + step * degree
+    try:
+        for value in (minimum_value, maximum_value):
+            _require_bounded_fraction(
+                value,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label="convolution-power atom",
+            )
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("distribution", "exponent"),
+            code="probability.convolution_power.height_bound",
+            message=str(exc),
+        ) from exc
+
+    source_bytes = sum(
+        len(atom.value.num)
+        + len(atom.value.den)
+        + len(atom.probability.num)
+        + len(atom.probability.den)
+        + 64
+        for atom in distribution.atoms
+    )
+    value_digits = max(
+        len(str(abs(component)))
+        for value in (minimum_value, maximum_value)
+        for component in (value.numerator, value.denominator)
+    )
+    if complete_profile:
+        row_bytes = value_digits * 2 + coefficient_digits * 2 + 96
+        result_bytes = source_bytes + output_slots * row_bytes + 4_096
+    else:
+        # A peak can tie at every attainable lattice position, but stores the
+        # maximum probability once instead of repeating one mass per value.
+        tie_bytes = value_digits * 2 + 48
+        result_bytes = (
+            source_bytes + output_slots * tie_bytes + coefficient_digits * 2 + 4_096
+        )
+    if result_bytes > MAX_CONVOLUTION_POWER_RESULT_BYTES:
+        result_kind = "profile" if complete_profile else "peak ties"
+        raise OperationDomainValidationError(
+            location=("distribution", "exponent"),
+            code="probability.convolution_power.result_bound",
+            message=(
+                f"convolution-power {result_kind} exceed the "
+                f"{MAX_CONVOLUTION_POWER_RESULT_BYTES:,}-byte result bound"
+            ),
+        )
+    return _ConvolutionPowerPlan(
+        positions=positions,
+        weights=weights,
+        origin=origin,
+        step=step,
+        powered_probability_denominator=powered_probability_denominator,
+        exponent=exponent,
+        degree=degree,
+    )
 
 
 def _admit_gaussian_polynomial_moment(
@@ -418,6 +625,92 @@ def convolution(
     return FiniteConvolutionResult._from_kernel(
         distribution=_distribution(aggregated),
         contributions=tuple(contributions),
+    )
+
+
+def _convolution_power_coefficients(plan: _ConvolutionPowerPlan) -> tuple[int, ...]:
+    """Run one admitted nonnegative integer-polynomial power in FLINT 0.9."""
+
+    from flint import fmpz_poly
+
+    coefficients = [0] * (plan.positions[-1] + 1)
+    for position, weight in zip(plan.positions, plan.weights, strict=True):
+        coefficients[position] = weight
+    powered = fmpz_poly([1])
+    base = fmpz_poly(coefficients)
+    remaining = plan.exponent
+    while remaining:
+        if remaining & 1:
+            powered *= base
+        remaining >>= 1
+        if remaining:
+            base *= base
+    return tuple(int(value) for value in powered.coeffs())
+
+
+def _power_value(plan: _ConvolutionPowerPlan, index: int) -> CanonicalRational:
+    return CanonicalRational.from_fraction(
+        plan.origin * plan.exponent + plan.step * index
+    )
+
+
+def convolution_power(
+    distribution: FiniteRationalDistribution,
+    exponent: int,
+) -> FiniteConvolutionPowerResult:
+    """Return the complete exact law of a positive i.i.d. convolution power."""
+
+    plan = _admit_convolution_power(
+        distribution,
+        exponent,
+        complete_profile=True,
+    )
+    denominator = plan.powered_probability_denominator
+    coefficients = _convolution_power_coefficients(plan)
+    powered_distribution = FiniteRationalDistribution(
+        atoms=tuple(
+            FiniteDistributionAtom(
+                value=_power_value(plan, index),
+                probability=CanonicalRational.from_fraction(
+                    Fraction(coefficient, denominator)
+                ),
+            )
+            for index, coefficient in enumerate(coefficients)
+            if coefficient
+        )
+    )
+    return FiniteConvolutionPowerResult._from_kernel(
+        source=distribution,
+        exponent=exponent,
+        distribution=powered_distribution,
+    )
+
+
+def convolution_peak(
+    distribution: FiniteRationalDistribution,
+    exponent: int,
+) -> FiniteConvolutionPeakResult:
+    """Return the exact largest atom mass and all values attaining it."""
+
+    plan = _admit_convolution_power(
+        distribution,
+        exponent,
+        complete_profile=False,
+    )
+    coefficients = _convolution_power_coefficients(plan)
+    maximum = max(coefficients)
+    denominator = plan.powered_probability_denominator
+    return FiniteConvolutionPeakResult._from_kernel(
+        source=distribution,
+        exponent=exponent,
+        maximum_probability=CanonicalRational.from_fraction(
+            Fraction(maximum, denominator)
+        ),
+        maximizing_values=tuple(
+            _power_value(plan, index)
+            for index, coefficient in enumerate(coefficients)
+            if coefficient == maximum
+        ),
     )
 
 

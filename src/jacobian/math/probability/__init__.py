@@ -14,6 +14,8 @@ from jacobian.math.probability.mutual_information import mutual_information
 from jacobian.math.probability.operations import (
     condition,
     convolution,
+    convolution_peak,
+    convolution_power,
     event_probability,
     gaussian_polynomial_moment,
     pushforward,
@@ -39,6 +41,8 @@ __all__ = [
     "check_asymmetric_local_lemma_witness",
     "condition",
     "convolution",
+    "convolution_peak",
+    "convolution_power",
     "event_probability",
     "gaussian_polynomial_moment",
     "mutual_information",

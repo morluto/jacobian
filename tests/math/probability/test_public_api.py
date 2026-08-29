@@ -20,6 +20,8 @@ def test_exact_public_api_symbols() -> None:
         "check_asymmetric_local_lemma_witness",
         "condition",
         "convolution",
+        "convolution_peak",
+        "convolution_power",
         "event_probability",
         "gaussian_polynomial_moment",
         "mutual_information",

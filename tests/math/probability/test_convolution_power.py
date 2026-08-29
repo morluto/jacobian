@@ -1,0 +1,224 @@
+"""Defining and boundary evidence for exact i.i.d. convolution powers (#2556)."""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from fractions import Fraction
+from itertools import product
+from math import prod
+
+import pytest
+
+from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.probability._distribution import (
+    MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS,
+    MAX_FINITE_DISTRIBUTION_ATOMS,
+    FiniteConvolutionPowerResult,
+    FiniteDistributionAtom,
+    FiniteRationalDistribution,
+)
+from jacobian.math.probability.operations import (
+    convolution,
+    convolution_peak,
+    convolution_power,
+)
+
+
+def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
+    return CanonicalRational(num=str(numerator), den=str(denominator))
+
+
+def _distribution(
+    atoms: tuple[tuple[Fraction, Fraction], ...],
+) -> FiniteRationalDistribution:
+    return FiniteRationalDistribution(
+        atoms=tuple(
+            FiniteDistributionAtom(
+                value=CanonicalRational.from_fraction(value),
+                probability=CanonicalRational.from_fraction(probability),
+            )
+            for value, probability in atoms
+        )
+    )
+
+
+def _fair_bit() -> FiniteRationalDistribution:
+    return _distribution(
+        (
+            (Fraction(0), Fraction(1, 2)),
+            (Fraction(1), Fraction(1, 2)),
+        )
+    )
+
+
+def _mass_map(distribution: FiniteRationalDistribution) -> dict[Fraction, Fraction]:
+    return {
+        atom.value.as_fraction(): atom.probability.as_fraction()
+        for atom in distribution.atoms
+    }
+
+
+def test_fair_bit_power_and_even_odd_peak_conventions() -> None:
+    source = _fair_bit()
+    powered = convolution_power(source, 4)
+    assert _mass_map(powered.distribution) == {
+        Fraction(index): Fraction(coefficient, 16)
+        for index, coefficient in enumerate((1, 4, 6, 4, 1))
+    }
+
+    even = convolution_peak(source, 4)
+    assert even.maximum_probability.as_fraction() == Fraction(3, 8)
+    assert tuple(value.as_fraction() for value in even.maximizing_values) == (
+        Fraction(2),
+    )
+
+    odd = convolution_peak(source, 3)
+    assert odd.maximum_probability.as_fraction() == Fraction(3, 8)
+    assert tuple(value.as_fraction() for value in odd.maximizing_values) == (
+        Fraction(1),
+        Fraction(2),
+    )
+
+
+def test_power_matches_exhaustive_ordered_product_measure() -> None:
+    source = _distribution(
+        (
+            (Fraction(-1, 2), Fraction(1, 3)),
+            (Fraction(1), Fraction(2, 3)),
+        )
+    )
+    expected: dict[Fraction, Fraction] = defaultdict(Fraction)
+    source_atoms = tuple(
+        (atom.value.as_fraction(), atom.probability.as_fraction())
+        for atom in source.atoms
+    )
+    for choices in product(source_atoms, repeat=3):
+        expected[sum((value for value, _ in choices), Fraction())] += prod(
+            probability for _, probability in choices
+        )
+
+    result = convolution_power(source, 3)
+    assert _mass_map(result.distribution) == dict(expected)
+    assert sum(_mass_map(result.distribution).values(), Fraction()) == 1
+
+
+def test_translation_and_positive_scaling_preserve_peak_masses() -> None:
+    source = _distribution(
+        (
+            (Fraction(0), Fraction(1, 4)),
+            (Fraction(2), Fraction(3, 4)),
+        )
+    )
+    transformed = _distribution(
+        tuple(
+            (3 * atom.value.as_fraction() + 5, atom.probability.as_fraction())
+            for atom in source.atoms
+        )
+    )
+    original = convolution_peak(source, 5)
+    changed = convolution_peak(transformed, 5)
+
+    assert changed.maximum_probability == original.maximum_probability
+    assert tuple(value.as_fraction() for value in changed.maximizing_values) == tuple(
+        3 * value.as_fraction() + 25 for value in original.maximizing_values
+    )
+
+
+def test_degenerate_power_retains_source_binding_at_large_exponent() -> None:
+    source = _distribution(((Fraction(2, 3), Fraction(1)),))
+    result = convolution_power(source, 10**12)
+    assert result.source == source
+    assert result.exponent == 10**12
+    assert _mass_map(result.distribution) == {Fraction(2 * 10**12, 3): Fraction(1)}
+
+
+def test_odd_square_source_case_exceeds_the_binary_output_ceiling() -> None:
+    source = _distribution(
+        tuple((Fraction(odd * odd), Fraction(1, 17)) for odd in range(1, 34, 2))
+    )
+    result = convolution_power(source, 13)
+    peak = convolution_peak(source, 13)
+    masses = _mass_map(result.distribution)
+
+    assert len(masses) > 256
+    assert all((value - 13) % 8 == 0 for value in masses)
+    assert sum(masses.values(), Fraction()) == 1
+    maximum = max(masses.values())
+    assert peak.maximum_probability.as_fraction() == maximum
+    assert tuple(value.as_fraction() for value in peak.maximizing_values) == tuple(
+        value for value, probability in masses.items() if probability == maximum
+    )
+    assert (
+        FiniteConvolutionPowerResult.model_validate_json(result.model_dump_json())
+        == result
+    )
+
+
+def test_wider_canonical_carrier_does_not_widen_binary_convolution() -> None:
+    source = _distribution(
+        tuple((Fraction(2**index), Fraction(1, 23)) for index in range(23))
+    )
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=rf"{MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS}-atom output bound",
+    ):
+        convolution(source, source)
+
+
+def test_power_rejects_dense_lattice_span_before_backend_execution() -> None:
+    boundary = _distribution(
+        (
+            (Fraction(0), Fraction(1, 3)),
+            (Fraction(1), Fraction(1, 3)),
+            (Fraction(MAX_FINITE_DISTRIBUTION_ATOMS - 1), Fraction(1, 3)),
+        )
+    )
+    assert convolution_power(boundary, 1).distribution == boundary
+
+    source = _distribution(
+        (
+            (Fraction(0), Fraction(1, 3)),
+            (Fraction(1), Fraction(1, 3)),
+            (Fraction(MAX_FINITE_DISTRIBUTION_ATOMS), Fraction(1, 3)),
+        )
+    )
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=rf"at most {MAX_FINITE_DISTRIBUTION_ATOMS} lattice positions",
+    ):
+        convolution_power(source, 1)
+
+
+def test_power_rejects_work_and_height_envelopes_separately() -> None:
+    wide = _distribution(
+        (
+            (Fraction(0), Fraction(1, 3)),
+            (Fraction(1), Fraction(1, 3)),
+            (Fraction(1_000), Fraction(1, 3)),
+        )
+    )
+    with pytest.raises(OperationDomainValidationError, match="product work bound"):
+        convolution_power(wide, 32)
+
+    assert convolution_peak(_fair_bit(), 1_700).maximum_probability.as_fraction() > 0
+    with pytest.raises(OperationDomainValidationError, match="digit result bound"):
+        convolution_power(_fair_bit(), 1_701)
+
+
+def test_result_deserialization_does_not_repeat_power_admission() -> None:
+    source = _distribution(
+        (
+            (Fraction(0), Fraction(1, 3)),
+            (Fraction(1), Fraction(1, 3)),
+            (Fraction(MAX_FINITE_DISTRIBUTION_ATOMS), Fraction(1, 3)),
+        )
+    )
+    restored = FiniteConvolutionPowerResult.model_validate(
+        {
+            "source": source.model_dump(mode="json"),
+            "exponent": 1,
+            "distribution": source.model_dump(mode="json"),
+        }
+    )
+    assert restored.source == source

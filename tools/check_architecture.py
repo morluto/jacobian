@@ -15,6 +15,23 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parents[1]
 _PRODUCT_ROOT = PurePosixPath("src/jacobian")
 _PROCESS_OWNER = PurePosixPath("src/jacobian/process.py")
+_EXTERNAL_OPERATION_OWNER_SUFFIXES = (
+    "_backend.py",
+    "_process.py",
+    "_sat.py",
+    "_singular.py",
+    "_smt.py",
+    "_z3.py",
+)
+_REGISTERED_EXTERNAL_OPERATION_OWNERS = frozenset(
+    {
+        PurePosixPath("src/jacobian/math/graphs/optimization/_chromatic_number.py"),
+        PurePosixPath("src/jacobian/math/graphs/optimization/_finite_optimization.py"),
+        PurePosixPath("src/jacobian/math/graphs/optimization/_invariants.py"),
+        PurePosixPath("src/jacobian/math/logic/_unsat_core.py"),
+        PurePosixPath("src/jacobian/math/number_theory/_factorization_kernels.py"),
+    }
+)
 _GENERIC_PRIVATE_MODULES = frozenset(
     {
         "_admission.py",
@@ -137,13 +154,11 @@ def _violation(
 def _is_external_operation_owner(relative: PurePosixPath) -> bool:
     """Recognize a private module whose name states its external responsibility."""
 
-    if relative == _PROCESS_OWNER:
+    if relative == _PROCESS_OWNER or relative in _REGISTERED_EXTERNAL_OPERATION_OWNERS:
         return True
-    return (
-        relative.is_relative_to(PurePosixPath("src/jacobian/math"))
-        and relative.name.startswith("_")
-        and relative.name not in _GENERIC_PRIVATE_MODULES
-    )
+    return relative.is_relative_to(
+        PurePosixPath("src/jacobian/math")
+    ) and relative.name.endswith(_EXTERNAL_OPERATION_OWNER_SUFFIXES)
 
 
 def _process_violations(
@@ -795,8 +810,7 @@ def _wire_model_names(root: Path, tree: ast.AST, source_module: str) -> set[str]
         names = {
             node.name
             for node in tree.body
-            if isinstance(node, ast.ClassDef)
-            and node.name.endswith("Request")
+            if isinstance(node, ast.ClassDef) and node.name.endswith("Request")
         }
     for local, (module, original) in _imports_by_local_name(
         root, tree, source_module
@@ -915,9 +929,8 @@ def _native_operations_wire_violations(
 ) -> tuple[Violation, ...]:
     """Keep transport Request/Input models out of canonical native modules."""
 
-    if (
-        relative.name != "operations.py"
-        or not relative.is_relative_to(PurePosixPath("src/jacobian/math"))
+    if relative.name != "operations.py" or not relative.is_relative_to(
+        PurePosixPath("src/jacobian/math")
     ):
         return ()
     module = _module_name(relative)

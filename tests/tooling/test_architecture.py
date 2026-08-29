@@ -56,11 +56,29 @@ def test_bounded_process_gateway_requires_external_tool_owner(tmp_path: Path) ->
         source,
     )
     _write(tmp_path, "src/jacobian/math/logic/_sat.py", source)
+    _write(tmp_path, "src/jacobian/math/example/__init__.py", source)
+    _write(tmp_path, "src/jacobian/math/example/_helpers.py", source)
     _write(tmp_path, "src/jacobian/math/example/_operations.py", source)
 
     assert _violations(tmp_path, "bounded-process-gateway") == [
+        "src/jacobian/math/example/__init__.py",
+        "src/jacobian/math/example/__init__.py",
+        "src/jacobian/math/example/_helpers.py",
+        "src/jacobian/math/example/_helpers.py",
         "src/jacobian/math/example/_operations.py",
         "src/jacobian/math/example/_operations.py",
+    ]
+
+
+def test_executable_resolution_requires_external_tool_owner(tmp_path: Path) -> None:
+    source = "import shutil\nshutil.which('tool')\n"
+    _write(tmp_path, "src/jacobian/math/example/_solver_backend.py", source)
+    _write(tmp_path, "src/jacobian/math/example/__init__.py", source)
+    _write(tmp_path, "src/jacobian/math/example/_helpers.py", source)
+
+    assert _violations(tmp_path, "shutil-which-resolver") == [
+        "src/jacobian/math/example/__init__.py",
+        "src/jacobian/math/example/_helpers.py",
     ]
 
 

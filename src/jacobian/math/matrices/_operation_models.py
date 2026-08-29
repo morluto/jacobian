@@ -18,11 +18,12 @@ from jacobian.math.matrices.values import (
 )
 
 MAX_INPUT_SCALAR_DIGITS = 256
-MAX_DETERMINANT_MATRIX_DIMENSION = 64
+MAX_DETERMINANT_MATRIX_DIMENSION = 128
+MAX_DETERMINANT_SCALAR_WORK = 500_000_000
 MAX_PERMANENT_RYSER_SUBSETS = 4_096
 MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
 # The canonical dense rational matrix carries determinant inputs through
-# order 64, but Kronecker admission was established only for product axes
+# order 128, but Kronecker admission was established only for product axes
 # through order 50. Pin each admitted output axis to that envelope.
 MAX_KRONECKER_PRODUCT_AXIS = 50
 
@@ -181,7 +182,7 @@ class MatrixPermanentRequest(_MatrixRequest):
 
 
 class MatrixDeterminantRequest(_MatrixRequest):
-    """One square rational matrix of order at most 64."""
+    """One square rational matrix of order at most 128."""
 
     matrix: RationalMatrix
     _raw_matrix_axis_limit: ClassVar[int] = MAX_DETERMINANT_MATRIX_DIMENSION

@@ -11,6 +11,7 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 MAX_MARKOV_STATES = 32
+MAX_STATIONARY_STATES = 128
 MAX_MIXING_STEPS = 256
 DEFAULT_MIXING_STEPS = 64
 
@@ -41,6 +42,10 @@ class TransitionMatrixRequest(StrictModel):
 class StationaryDistributionRequest(TransitionMatrixRequest):
     """A transition matrix whose exact stationary solutions fit the wire contract."""
 
+    matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        min_length=1, max_length=MAX_STATIONARY_STATES
+    )
+
 
 class ExtremeStationaryDistribution(StrictModel):
     """One canonical extreme point supported on a closed class."""
@@ -53,7 +58,7 @@ class StationaryDistributionResult(StrictModel):
     """Extreme points of the finite chain's stationary-distribution simplex."""
 
     transition_matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        min_length=1, max_length=MAX_MARKOV_STATES
+        min_length=1, max_length=MAX_STATIONARY_STATES
     )
     """The source transition matrix whose stationary simplex was computed."""
 

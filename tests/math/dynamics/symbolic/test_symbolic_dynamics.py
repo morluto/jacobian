@@ -348,6 +348,35 @@ def test_periodic_profile_handles_square_mobius_factor() -> None:
     assert result.complete_through_period == 4
 
 
+def test_periodic_profile_executes_above_the_previous_period_ceiling() -> None:
+    max_period = 128
+    fixed, exact, orbits = periodic_point_profile(
+        AdjacencyShift(matrix=((2,),)), max_period
+    )
+
+    assert fixed[-1] == 2**max_period
+    for period in range(1, max_period + 1):
+        assert fixed[period - 1] == sum(
+            exact[divisor - 1]
+            for divisor in range(1, period + 1)
+            if period % divisor == 0
+        )
+        assert exact[period - 1] == period * orbits[period - 1]
+
+
+def test_periodic_profile_rejects_matrix_work_before_powering() -> None:
+    size = 50
+    shift = AdjacencyShift(matrix=tuple((0,) * size for _ in range(size)))
+
+    with pytest.raises(OperationDomainValidationError, match="matrix powering"):
+        periodic_point_profile(shift, 81)
+
+
+def test_periodic_profile_rejects_projected_output_digits() -> None:
+    with pytest.raises(OperationDomainValidationError, match="output digit bound"):
+        periodic_point_profile(AdjacencyShift(matrix=((1_000_000,),)), 100)
+
+
 def test_value_models_reject_ambiguous_and_invalid_carriers() -> None:
     with pytest.raises(ValidationError) as exc_info:
         ForbiddenBlockShift(alphabet=("0", "0"), forbidden_blocks=())

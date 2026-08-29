@@ -8,11 +8,19 @@ from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields._bounds import (
+    MAX_PRIME_FIELD_ELIMINATION_WORK,
+    MAX_PRIME_FIELD_FLINT_PRIME,
+    MAX_PRIME_FIELD_MATRIX_AXIS,
+    MAX_PRIME_FIELD_MATRIX_CELLS,
+)
+from jacobian.math.matrices.finite_fields.linear_algebra import (
+    PrimeFieldMatrix,
+)
 
-MAX_ROWS = 256
-MAX_COLUMNS = 256
-MAX_PRIME = 2_147_483_647
+MAX_ROWS = MAX_PRIME_FIELD_MATRIX_AXIS
+MAX_COLUMNS = MAX_PRIME_FIELD_MATRIX_AXIS
+MAX_PRIME = MAX_PRIME_FIELD_FLINT_PRIME
 """Explicit conservative bound on the field prime before primality testing."""
 
 
@@ -27,7 +35,7 @@ class PrimeFieldMatrixRequest(StrictModel):
 
     The matrix is carried as the domain-owned ``PrimeFieldMatrix`` canonical
     value so it composes unchanged with the other GF(p) producers and
-    consumers. Shape rules (schema-visible): 0..256 rows, 1..256 columns,
+    consumers. Shape rules (schema-visible): 0..1024 rows, 1..1024 columns,
     rectangular rows, and every entry a canonical residue in ``[0, prime)``.
     Zero rows carry an explicit column axis, matching the canonical empty
     matrix that full-rank nullspace producers return. The characteristic is
@@ -41,10 +49,11 @@ class PrimeFieldMatrixRequest(StrictModel):
                 "A bounded integer matrix over an explicit prime field GF(p), "
                 "as the canonical `PrimeFieldMatrix` value: `prime` must be a "
                 "prime integer in [2, 2147483647], `entries` must have at "
-                "most 256 rows, each row 1..256 columns, all rows the same "
+                "most 1024 rows, each row 1..1024 columns, all rows the same "
                 "length matching the declared `columns`, and every entry a "
-                "canonical residue in [0, prime). Zero rows are permitted "
-                "and carry the explicit `columns` axis."
+                "canonical residue in [0, prime). The dense matrix carries "
+                "at most 1048576 cells. Zero rows are permitted and carry "
+                "the explicit `columns` axis."
             )
         }
     )
@@ -83,6 +92,24 @@ class PrimeFieldMatrixRequest(StrictModel):
         if not 1 <= self.matrix.columns <= MAX_COLUMNS:
             raise _validation_error(
                 "request.columns_bound", f"matrix has at most {MAX_COLUMNS} columns"
+            )
+        if (
+            len(self.matrix.entries) * self.matrix.columns
+            > MAX_PRIME_FIELD_MATRIX_CELLS
+        ):
+            raise _validation_error(
+                "request.cells_bound",
+                f"matrix has at most {MAX_PRIME_FIELD_MATRIX_CELLS} dense cells",
+            )
+        elimination_work = (
+            len(self.matrix.entries)
+            * self.matrix.columns
+            * min(len(self.matrix.entries), self.matrix.columns)
+        )
+        if elimination_work > MAX_PRIME_FIELD_ELIMINATION_WORK:
+            raise _validation_error(
+                "request.elimination_work_bound",
+                "matrix exceeds the exact modular-elimination work budget",
             )
         return self
 

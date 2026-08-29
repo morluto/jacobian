@@ -13,6 +13,9 @@ from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 MAX_GROUND_SIZE = 32
 """Schema-visible cap on the ground-set cardinality (matrix columns)."""
 
+MAX_REPRESENTATION_ROWS = 256
+"""Preserved row envelope for matroid representation and witness work."""
+
 MAX_PRIME = 2_147_483_647
 """Explicit conservative bound on the field prime before primality testing."""
 
@@ -69,6 +72,12 @@ class LinearMatroid(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_ground_set(self) -> Self:
+        if len(self.matrix.entries) > MAX_REPRESENTATION_ROWS:
+            raise _validation_error(
+                "representation_rows.bound",
+                "matroid representation must have at most "
+                f"{MAX_REPRESENTATION_ROWS} rows",
+            )
         if self.matrix.columns > MAX_GROUND_SIZE:
             raise _validation_error(
                 "ground_set.bound",

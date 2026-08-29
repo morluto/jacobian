@@ -16,6 +16,7 @@ from jacobian.math.combinatorics._recurrence_models import (
     MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES,
     MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
     MAX_P_RECURSIVE_POLYNOMIAL_DEGREE,
+    MAX_RATIONAL_SERIES_WORK_UNITS,
     _require_bounded_rational,
     _require_canonical_polynomial,
     _validate_result_inline_size,
@@ -318,6 +319,29 @@ def _admit_series(
         )
     numerator_values = tuple(value.as_fraction() for value in numerator)
     denominator_values = tuple(value.as_fraction() for value in denominator)
+    denominator_degree = len(denominator_values) - 1
+    ramp = min(max(0, truncation_order - 1), denominator_degree)
+    recurrence_products = ramp * (ramp + 1) // 2
+    recurrence_products += (
+        max(0, truncation_order - denominator_degree - 1) * denominator_degree
+    )
+    work_units = truncation_order + recurrence_products
+    if work_units > MAX_RATIONAL_SERIES_WORK_UNITS:
+        raise OperationDomainValidationError(
+            location=("truncation_order",),
+            code="combinatorics.work_bound",
+            message="rational-series recurrence exceeds the exact work bound",
+        )
+    minimum_result_size = (
+        2 * truncation_order * _minimum_fraction_wire_bytes(Fraction())
+        + _RESULT_WIRE_FIXED_BYTES
+    )
+    if minimum_result_size > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
+        raise OperationDomainValidationError(
+            location=("truncation_order",),
+            code="combinatorics.result_bound",
+            message="the exact combinatorics result exceeds the bounded result limit",
+        )
     coefficients: list[Fraction] = []
     for degree in range(truncation_order):
         numerator_coefficient = (

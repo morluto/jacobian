@@ -76,13 +76,35 @@ def test_delta_known_prefix_and_defining_e4_e6_identity() -> None:
 
 
 def test_full_public_precision_is_complete_and_carries_parent_metadata() -> None:
-    result = level_one_named_q_expansion("DELTA", 844)
-    assert result.q_expansion.truncation_order == 844
-    assert len(result.q_expansion.coefficients) == 844
+    result = level_one_named_q_expansion("DELTA", 1024)
+    assert result.q_expansion.truncation_order == 1024
+    assert len(result.q_expansion.coefficients) == 1024
     assert result.congruence_subgroup == "SL2Z"
     assert result.level == 1
     assert result.weight == 12
     assert result.space_kind == "CUSP"
+
+
+def test_delta_precision_1024_satisfies_its_defining_identity_coefficientwise() -> None:
+    from flint import fmpq, fmpq_poly
+
+    precision = 1024
+    delta = level_one_named_q_expansion("DELTA", precision).q_expansion
+    e4 = level_one_named_q_expansion("E4", precision).q_expansion
+    e6 = level_one_named_q_expansion("E6", precision).q_expansion
+
+    def polynomial(coefficients: tuple[CanonicalRational, ...]) -> fmpq_poly:
+        return fmpq_poly(
+            [fmpq(int(value.num), int(value.den)) for value in coefficients]
+        )
+
+    delta_poly = polynomial(delta.coefficients)
+    e4_poly = polynomial(e4.coefficients)
+    e6_poly = polynomial(e6.coefficients)
+    assert 1728 * delta_poly == (
+        ((e4_poly * e4_poly).truncate(precision) * e4_poly).truncate(precision)
+        - (e6_poly * e6_poly).truncate(precision)
+    )
 
 
 def test_e4_and_e6_report_the_standard_holomorphic_space_kind() -> None:
@@ -124,11 +146,24 @@ def test_requests_above_the_serialized_budget_name_the_controlling_quantity() ->
 
 
 def test_delta_above_the_serialized_budget_names_the_controlling_quantity() -> None:
-    request = LevelOneNamedQExpansionRequest(form="DELTA", truncation_order=845)
+    request = LevelOneNamedQExpansionRequest(form="DELTA", truncation_order=1355)
     with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
         level_one_named_q_expansion(request.form, request.truncation_order)
     with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
-        require_level_one_admission("DELTA", 845)
+        require_level_one_admission("DELTA", 1355)
+
+
+def test_delta_backend_does_not_read_or_mutate_global_series_precision() -> None:
+    from flint import ctx
+
+    original_cap = ctx.cap
+    try:
+        ctx.cap = 2
+        result = level_one_named_q_expansion("DELTA", 1024)
+        assert len(result.q_expansion.coefficients) == 1024
+        assert ctx.cap == 2
+    finally:
+        ctx.cap = original_cap
 
 
 def test_wire_request_rejects_boolean_truncation_orders() -> None:

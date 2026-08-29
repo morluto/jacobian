@@ -150,6 +150,58 @@ def test_native_markov_api_accepts_canonical_fraction_matrices() -> None:
     assert ergodic_properties(matrix) == (True, True)
 
 
+def _lazy_cycle_request(size: int) -> dict[str, object]:
+    return {
+        "matrix": [
+            [
+                {
+                    "num": "1" if column in {row, (row + 1) % size} else "0",
+                    "den": "2" if column in {row, (row + 1) % size} else "1",
+                }
+                for column in range(size)
+            ]
+            for row in range(size)
+        ]
+    }
+
+
+def test_flint_stationary_solve_exceeds_the_previous_state_ceiling() -> None:
+    size = 64
+    request = StationaryDistributionRequest.model_validate(_lazy_cycle_request(size))
+
+    result = compute_stationary_distribution(request)
+
+    assert result.unique is True
+    distribution = tuple(
+        value.as_fraction() for value in result.extreme_distributions[0].distribution
+    )
+    matrix = tuple(
+        tuple(value.as_fraction() for value in row) for row in request.matrix
+    )
+    assert distribution == (Fraction(1, size),) * size
+    assert sum(distribution) == 1
+    assert all(value >= 0 for value in distribution)
+    assert (
+        tuple(
+            sum(distribution[row] * matrix[row][column] for row in range(size))
+            for column in range(size)
+        )
+        == distribution
+    )
+
+
+def test_stationary_solve_work_rejects_before_flint() -> None:
+    request = StationaryDistributionRequest.model_validate(_lazy_cycle_request(101))
+
+    with pytest.raises(OperationDomainValidationError, match="solve-work bound"):
+        compute_stationary_distribution(request)
+
+
+def test_generic_markov_requests_keep_the_32_state_carrier() -> None:
+    with pytest.raises(ValidationError):
+        TransitionMatrixRequest.model_validate(_lazy_cycle_request(33))
+
+
 def test_stationary_family_solves_each_nonsingleton_closed_class_exactly() -> None:
     request = StationaryDistributionRequest.model_validate(
         {

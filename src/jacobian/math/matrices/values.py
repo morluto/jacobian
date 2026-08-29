@@ -22,10 +22,10 @@ MAX_MATRIX_DIMENSION = 32
 # The canonical dense rational matrix retains exact sources for analysis
 # results whose operations admit them by their own work and result budgets,
 # so its structural order is not tied to the shared computation dimension.
-# The determinant operation admits square matrices through order 64.  Keep
+# The determinant operation admits square matrices through order 128. Keep
 # that complete public domain representable by the one canonical QQ matrix
 # value so a determinant consumer can accept a produced matrix unchanged.
-MAX_RATIONAL_MATRIX_ORDER = 64
+MAX_RATIONAL_MATRIX_ORDER = 128
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 

@@ -8,6 +8,8 @@ from math import factorial
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 
 MAX_TRANSITION_STATES = 32
+MAX_STATIONARY_STATES = 128
+MAX_STATIONARY_SOLVE_WORK = 1_000_000
 
 type TransitionMatrix = tuple[tuple[Fraction, ...], ...]
 
@@ -44,14 +46,16 @@ def as_canonical_transition_matrix(
     )
 
 
-def require_transition_matrix(matrix: TransitionMatrix) -> None:
+def require_transition_matrix(
+    matrix: TransitionMatrix, *, maximum_states: int = MAX_TRANSITION_STATES
+) -> None:
     """Admit one finite exact stochastic matrix before a native kernel runs."""
 
     dimension = len(matrix)
-    if not 1 <= dimension <= MAX_TRANSITION_STATES:
+    if not 1 <= dimension <= maximum_states:
         raise TransitionMatrixAdmissionError(
             "transition_matrix_dimension",
-            f"transition matrix dimension must be between 1 and {MAX_TRANSITION_STATES}",
+            f"transition matrix dimension must be between 1 and {maximum_states}",
         )
     if any(len(row) != dimension for row in matrix):
         raise TransitionMatrixAdmissionError(
@@ -88,8 +92,13 @@ def _decimal_digits(value: int) -> int:
 def require_stationary_distribution_admission(matrix: TransitionMatrix) -> None:
     """Bound exact stationary coordinates for a native transition matrix."""
 
-    require_transition_matrix(matrix)
+    require_transition_matrix(matrix, maximum_states=MAX_STATIONARY_STATES)
     dimension = len(matrix)
+    if dimension**3 > MAX_STATIONARY_SOLVE_WORK:
+        raise TransitionMatrixAdmissionError(
+            "stationary_solve_work_exceeds_bound",
+            "stationary closed-class systems exceed the exact solve-work bound",
+        )
     row_bounds: list[int] = []
     for column in range(dimension - 1):
         entries = tuple(matrix[row][column] for row in range(dimension))

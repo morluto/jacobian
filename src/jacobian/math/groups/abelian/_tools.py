@@ -21,13 +21,43 @@ from jacobian.math.groups.abelian._models import (
     SubgroupGeneratedResult,
 )
 from jacobian.math.groups.abelian.operations import (
-    compute_element_equal,
-    compute_element_order,
-    compute_element_reduce,
-    compute_presentation_normalize,
-    compute_quotient,
-    compute_subgroup_generated,
+    element_order,
+    elements_equal,
+    generated_subgroup,
+    normalize_presentation,
+    quotient_group,
+    reduce_element,
 )
+
+
+def _run_presentation_normalize(
+    request: PresentationNormalizeRequest,
+) -> PresentationNormalizeResult:
+    return normalize_presentation(request.invariant_factors)
+
+
+def _run_element_reduce(request: ElementReduceRequest) -> ElementReduceResult:
+    return reduce_element(request.invariant_factors, request.coordinates)
+
+
+def _run_element_equal(request: ElementEqualRequest) -> ElementEqualResult:
+    return elements_equal(
+        request.invariant_factors, request.coordinates_a, request.coordinates_b
+    )
+
+
+def _run_element_order(request: ElementOrderRequest) -> ElementOrderResult:
+    return element_order(request.invariant_factors, request.coordinates)
+
+
+def _run_subgroup_generated(
+    request: SubgroupGeneratedRequest,
+) -> SubgroupGeneratedResult:
+    return generated_subgroup(request.invariant_factors, request.generators)
+
+
+def _run_quotient(request: QuotientRequest) -> QuotientResult:
+    return quotient_group(request.invariant_factors, request.subgroup_generators)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -61,7 +91,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "factors need not already be in invariant-factor order.",
         PresentationNormalizeRequest,
         PresentationNormalizeResult,
-        compute_presentation_normalize,
+        _run_presentation_normalize,
         "abelian-group",
         "smith-normal-form",
         "exact",
@@ -79,7 +109,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Reduce group element coordinates modulo the invariant factors.",
         ElementReduceRequest,
         ElementReduceResult,
-        compute_element_reduce,
+        _run_element_reduce,
         "abelian-group",
         "element",
         "exact",
@@ -98,7 +128,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "invariant factors and comparing.",
         ElementEqualRequest,
         ElementEqualResult,
-        compute_element_equal,
+        _run_element_equal,
         "abelian-group",
         "element",
         "exact",
@@ -120,7 +150,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the order of a group element as the lcm of component orders.",
         ElementOrderRequest,
         ElementOrderResult,
-        compute_element_order,
+        _run_element_order,
         "abelian-group",
         "element",
         "exact",
@@ -139,7 +169,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "via coset enumeration.",
         SubgroupGeneratedRequest,
         SubgroupGeneratedResult,
-        compute_subgroup_generated,
+        _run_subgroup_generated,
         "abelian-group",
         "subgroup",
         "exact",
@@ -161,7 +191,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "presentation matrix.",
         QuotientRequest,
         QuotientResult,
-        compute_quotient,
+        _run_quotient,
         "abelian-group",
         "quotient",
         "exact",

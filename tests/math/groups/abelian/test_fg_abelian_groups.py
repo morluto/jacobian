@@ -14,13 +14,39 @@ from jacobian.math.groups.abelian._models import (
 )
 from jacobian.math.groups.abelian._tools import TOOLS
 from jacobian.math.groups.abelian.operations import (
-    compute_element_equal,
-    compute_element_order,
-    compute_element_reduce,
-    compute_presentation_normalize,
-    compute_quotient,
-    compute_subgroup_generated,
+    element_order,
+    elements_equal,
+    generated_subgroup,
+    normalize_presentation,
+    quotient_group,
+    reduce_element,
 )
+
+
+def compute_presentation_normalize(request: PresentationNormalizeRequest):
+    return normalize_presentation(request.invariant_factors)
+
+
+def compute_element_reduce(request: ElementReduceRequest):
+    return reduce_element(request.invariant_factors, request.coordinates)
+
+
+def compute_element_equal(request: ElementEqualRequest):
+    return elements_equal(
+        request.invariant_factors, request.coordinates_a, request.coordinates_b
+    )
+
+
+def compute_element_order(request: ElementOrderRequest):
+    return element_order(request.invariant_factors, request.coordinates)
+
+
+def compute_subgroup_generated(request: SubgroupGeneratedRequest):
+    return generated_subgroup(request.invariant_factors, request.generators)
+
+
+def compute_quotient(request: QuotientRequest):
+    return quotient_group(request.invariant_factors, request.subgroup_generators)
 
 
 def test_catalog_contains_only_audited_operations() -> None:

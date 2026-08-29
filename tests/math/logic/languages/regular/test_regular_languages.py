@@ -132,6 +132,37 @@ def _dfa_accepting_only_zeros() -> DFA:
     )
 
 
+def _dfa_cycle_with_transient_branching() -> DFA:
+    """A 63-state accepting cycle with a 32-way branch only out of state 0.
+
+    Every other cycle state continues on one symbol and sends the rest to a
+    rejecting sink. Useful growth is ``32 ** ceil(length / 63)``, not ``32 ** length``.
+    """
+
+    cycle = 63
+    sink = 63
+    transitions = [
+        DFATransition(source=0, symbol=symbol, target=1) for symbol in range(32)
+    ]
+    for state in range(1, cycle):
+        nxt = (state + 1) % cycle
+        transitions.append(DFATransition(source=state, symbol=0, target=nxt))
+        transitions.extend(
+            DFATransition(source=state, symbol=symbol, target=sink)
+            for symbol in range(1, 32)
+        )
+    transitions.extend(
+        DFATransition(source=sink, symbol=symbol, target=sink) for symbol in range(32)
+    )
+    return DFA(
+        state_count=64,
+        alphabet_size=32,
+        transitions=tuple(transitions),
+        initial_state=0,
+        accepting_states=tuple(range(cycle)),
+    )
+
+
 def _dfa_with_transient_branching() -> DFA:
     """A DFA accepting 32 words despite a large first-step branch."""
 
@@ -292,6 +323,16 @@ def test_count_prunes_rejecting_growth_before_admission() -> None:
 
 def test_count_admits_transient_branching_before_sparse_tail() -> None:
     assert count_accepted_words(_dfa_with_transient_branching(), 22_000) == 32
+
+
+def test_count_admits_cycle_transient_branching_from_path_sensitive_work() -> None:
+    """Length 100000 on the 63-cycle is 32**1588 (2391 digits), not 32**100000."""
+
+    length = 100_000
+    expected = 32 ** ((length + 62) // 63)
+    assert len(str(expected)) == 2391
+    count = count_accepted_words(_dfa_cycle_with_transient_branching(), length)
+    assert count == expected
 
 
 def test_count_uses_tight_alphabet_power_digit_bound() -> None:

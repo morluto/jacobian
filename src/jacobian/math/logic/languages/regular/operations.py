@@ -64,19 +64,6 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
     matrix, accepting_states = accepted_paths
     state_count = len(matrix)
     result_cap = 10**MAX_COUNT_RESULT_DIGITS
-    row_sum_bound = max(sum(row) for row in matrix)
-    coefficient_bound = _power_capped(row_sum_bound, word_length, result_cap)
-    matrix_bit_work = (
-        state_count**3
-        * max(1, word_length.bit_length())
-        * max(1, coefficient_bound.bit_length())
-    )
-    if matrix_bit_work > MAX_COUNT_MATRIX_BIT_WORK:
-        raise OperationDomainValidationError(
-            location=("dfa", "word_length"),
-            code="regular_language.count_work_bound",
-            message="DFA matrix powering exceeds the exact work bound",
-        )
     max_intermediate, selected_count = _powered_count_admission(
         matrix,
         accepting_states,
@@ -96,6 +83,20 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
             location=("dfa", "word_length"),
             code="regular_language.count_intermediate_bound",
             message="DFA matrix-power intermediates exceed the canonical digit bound",
+        )
+    # Charge bit-work from the path-sensitive powered matrix, not max-row**n.
+    # A 32-way transient that fires once per cycle stays far below 32**length.
+    coefficient_bound = max(1, max_intermediate)
+    matrix_bit_work = (
+        state_count**3
+        * max(1, word_length.bit_length())
+        * max(1, coefficient_bound.bit_length())
+    )
+    if matrix_bit_work > MAX_COUNT_MATRIX_BIT_WORK:
+        raise OperationDomainValidationError(
+            location=("dfa", "word_length"),
+            code="regular_language.count_work_bound",
+            message="DFA matrix powering exceeds the exact work bound",
         )
     from jacobian.math.logic.languages.regular._flint import accepted_word_count
 
@@ -145,20 +146,6 @@ def _accepted_path_matrix(
         index[state] for state in states if state in dfa.accepting_states
     )
     return tuple(tuple(row) for row in matrix), accepting_states
-
-
-def _power_capped(base: int, exponent: int, cap: int) -> int:
-    """Return ``min(base ** exponent, cap)`` without exceeding ``cap``."""
-
-    result = 1
-    factor = min(base, cap)
-    while exponent:
-        if exponent & 1:
-            result = min(result * factor, cap)
-        exponent >>= 1
-        if exponent:
-            factor = min(factor * factor, cap)
-    return result
 
 
 def _matrix_max_entry(matrix: tuple[tuple[int, ...], ...]) -> int:

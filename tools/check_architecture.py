@@ -15,34 +15,14 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parents[1]
 _PRODUCT_ROOT = PurePosixPath("src/jacobian")
 _PROCESS_OWNER = PurePosixPath("src/jacobian/process.py")
-_EXTERNAL_OPERATION_OWNERS = frozenset(
+_GENERIC_PRIVATE_MODULES = frozenset(
     {
-        _PROCESS_OWNER,
-        PurePosixPath("src/jacobian/math/_singular.py"),
-        PurePosixPath("src/jacobian/math/graphs/isomorphism/_operations.py"),
-        PurePosixPath("src/jacobian/math/polynomials/ideals/_singular.py"),
-        PurePosixPath("src/jacobian/math/logic/_sat.py"),
-        PurePosixPath("src/jacobian/math/logic/_smt.py"),
-        PurePosixPath("src/jacobian/math/logic/_unsat_core.py"),
-        PurePosixPath(
-            "src/jacobian/math/combinatorics/finite_structures/"
-            "hypergraphs/_independence_z3.py"
-        ),
-        PurePosixPath("src/jacobian/math/graphs/_independence_z3.py"),
-        PurePosixPath("src/jacobian/math/graphs/coloring/_operations.py"),
-        PurePosixPath("src/jacobian/math/graphs/optimization/_finite_optimization.py"),
-        PurePosixPath("src/jacobian/math/graphs/optimization/_invariants.py"),
-        PurePosixPath("src/jacobian/math/graphs/optimization/_chromatic_number.py"),
-        PurePosixPath("src/jacobian/math/graphs/optimization/_maximum_cut_process.py"),
-        PurePosixPath(
-            "src/jacobian/math/combinatorics/discrepancy/_optimum_process.py"
-        ),
-        PurePosixPath("src/jacobian/math/number_theory/_factorization_kernels.py"),
-        PurePosixPath(
-            "src/jacobian/math/number_theory/number_fields/_operations.py"
-        ),
-        PurePosixPath("src/jacobian/math/polynomials/multivariate/_factor_backend.py"),
-        PurePosixPath("src/jacobian/math/polynomials/maps/_replay.py"),
+        "_admission.py",
+        "_bounds.py",
+        "_kernel.py",
+        "_models.py",
+        "_operations.py",
+        "_tools.py",
     }
 )
 _GENERATED_DIRECTORIES = frozenset(
@@ -154,6 +134,18 @@ def _violation(
     return Violation(str(relative), code, message, getattr(node, "lineno", None))
 
 
+def _is_external_operation_owner(relative: PurePosixPath) -> bool:
+    """Recognize a private module whose name states its external responsibility."""
+
+    if relative == _PROCESS_OWNER:
+        return True
+    return (
+        relative.is_relative_to(PurePosixPath("src/jacobian/math"))
+        and relative.name.startswith("_")
+        and relative.name not in _GENERIC_PRIVATE_MODULES
+    )
+
+
 def _process_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
@@ -207,7 +199,7 @@ def _process_violations(
 def _bounded_process_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
-    if relative in _EXTERNAL_OPERATION_OWNERS:
+    if _is_external_operation_owner(relative):
         return ()
     violations: list[Violation] = []
     for node in _walk(tree):
@@ -242,7 +234,7 @@ def _bounded_process_violations(
 def _resolver_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
-    if relative in _EXTERNAL_OPERATION_OWNERS:
+    if _is_external_operation_owner(relative):
         return ()
     return tuple(
         _violation(

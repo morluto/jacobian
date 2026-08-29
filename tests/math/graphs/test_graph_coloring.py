@@ -7,7 +7,7 @@ from typing import NoReturn
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.graphs.coloring import operations as coloring_operations
+from jacobian.math.graphs.coloring import _coloring_process as coloring_process
 from jacobian.math.graphs.coloring._models import (
     EdgeKColorabilityResult,
     MaximalIndependentSetRequest,
@@ -165,7 +165,7 @@ def test_coloring_worker_failure_is_typed_inconclusive_without_a_math_claim(
             timed_out=True,
         )
 
-    monkeypatch.setattr(coloring_operations, "run_bounded_process", expired_worker)
+    monkeypatch.setattr(coloring_process, "run_bounded_process", expired_worker)
     from jacobian.math.graphs.coloring._models import KColorabilityRequest
     from jacobian.math.graphs.coloring._tools import compute_k_colorability
 
@@ -188,7 +188,7 @@ def test_edgeless_vertex_coloring_bypasses_the_worker(
         raise AssertionError("edgeless vertex coloring must not start a worker")
 
     monkeypatch.setattr(
-        coloring_operations, "run_bounded_process", worker_must_not_start
+        coloring_process, "run_bounded_process", worker_must_not_start
     )
     from jacobian.math.graphs.coloring._models import KColorabilityRequest
     from jacobian.math.graphs.coloring._tools import compute_k_colorability

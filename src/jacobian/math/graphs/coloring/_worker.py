@@ -6,9 +6,9 @@ import json
 import sys
 from typing import Any
 
-from jacobian.math.graphs.coloring.operations import (
-    _run_edge_coloring_solver_kernel,
-    _run_k_colorability_solver_kernel,
+from jacobian.math.graphs.coloring._coloring_process import (
+    run_edge_coloring_solver_kernel,
+    run_k_colorability_solver_kernel,
 )
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
@@ -36,12 +36,12 @@ def main() -> int:
             indexed_graph = IndexedSimpleUndirectedGraph.model_validate(
                 payload["graph"]
             )
-            outcome, coloring = _run_k_colorability_solver_kernel(
+            outcome, coloring = run_k_colorability_solver_kernel(
                 indexed_graph, colors, solver_conflicts
             )
         else:
             edge_graph = SimpleUndirectedGraph.model_validate(payload["graph"])
-            outcome, coloring = _run_edge_coloring_solver_kernel(
+            outcome, coloring = run_edge_coloring_solver_kernel(
                 edge_graph, colors, solver_conflicts
             )
         sys.stdout.write(

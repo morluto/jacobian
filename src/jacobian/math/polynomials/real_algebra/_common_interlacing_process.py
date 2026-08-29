@@ -10,8 +10,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
+from jacobian._exact import CanonicalInteger
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
@@ -19,9 +20,13 @@ from jacobian._execution import (
     current_request_execution,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
+    CommonInterlacingOutcome,
     CommonInterlacingProfile,
     LabelledRationalPolynomial,
+    PolynomialRealRoot,
+    SourceRootProfile,
 )
 
 _WORKER = Path(__file__).resolve().with_name("_common_interlacing_worker.py")
@@ -29,6 +34,54 @@ _WALL_SECONDS = 180.0
 _ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 _STDOUT_LIMIT = 11 * 1024 * 1024
 _STDERR_LIMIT = 64 * 1024
+_CANONICAL_POLYNOMIAL = TypeAdapter(tuple[CanonicalInteger, ...])
+_OUTCOME: TypeAdapter[CommonInterlacingOutcome] = TypeAdapter(CommonInterlacingOutcome)
+
+
+def _root_profile_from_worker(value: object) -> SourceRootProfile:
+    """Parse bounded worker structure without replaying exact factorization."""
+
+    if not isinstance(value, dict) or not isinstance(value.get("roots"), list):
+        raise ValueError("malformed root profile")
+    roots: list[PolynomialRealRoot] = []
+    for raw_root in value["roots"]:
+        if not isinstance(raw_root, dict):
+            raise ValueError("malformed root row")
+        raw_value = raw_root.get("value")
+        if not isinstance(raw_value, dict):
+            raise ValueError("malformed algebraic value")
+        polynomial = _CANONICAL_POLYNOMIAL.validate_python(raw_value.get("polynomial"))
+        root_index = raw_value.get("real_root_index")
+        if type(root_index) is not int or root_index < 0:
+            raise ValueError("malformed algebraic root index")
+        algebraic_value = RealAlgebraicValue._from_kernel(
+            polynomial=polynomial,
+            real_root_index=root_index,
+        )
+        root_payload = dict(raw_root)
+        root_payload["value"] = algebraic_value
+        roots.append(PolynomialRealRoot.model_validate(root_payload))
+    return SourceRootProfile.model_validate(
+        {"source_index": value.get("source_index"), "roots": roots}
+    )
+
+
+def _profile_from_worker(
+    payload: dict[str, Any],
+    family: tuple[LabelledRationalPolynomial, ...],
+) -> CommonInterlacingProfile:
+    raw_profiles = payload.get("root_profiles")
+    if not isinstance(raw_profiles, list):
+        raise ValueError("malformed root profiles")
+    root_profiles = tuple(_root_profile_from_worker(value) for value in raw_profiles)
+    outcome = _OUTCOME.validate_python(payload.get("outcome"))
+    return CommonInterlacingProfile.model_validate(
+        {
+            "family": family,
+            "root_profiles": root_profiles,
+            "outcome": outcome,
+        }
+    )
 
 
 def _domain_error(payload: dict[str, Any]) -> OperationDomainValidationError:
@@ -144,8 +197,8 @@ def run_common_interlacing_profile(
             "bounded common-interlacing worker did not establish a profile"
         )
     try:
-        result = CommonInterlacingProfile.model_validate(payload.get("result"))
-    except ValidationError as exc:
+        result = _profile_from_worker(payload, family)
+    except (TypeError, ValueError, ValidationError) as exc:
         raise RuntimeError(
             "bounded common-interlacing worker returned a malformed profile"
         ) from exc

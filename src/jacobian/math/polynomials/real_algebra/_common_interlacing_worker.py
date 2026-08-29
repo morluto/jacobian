@@ -35,7 +35,13 @@ def main() -> int:
         return 1
     sys.stdout.write(
         json.dumps(
-            {"ok": True, "result": result.model_dump(mode="json")},
+            {
+                "ok": True,
+                "root_profiles": [
+                    profile.model_dump(mode="json") for profile in result.root_profiles
+                ],
+                "outcome": result.outcome.model_dump(mode="json"),
+            },
             separators=(",", ":"),
         )
     )

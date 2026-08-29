@@ -9,6 +9,9 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._difference_set_models import (
+    MAX_SIDON_ORDERED_DIFFERENCES,
+    MAX_SIDON_RESULT_BYTES,
+    MAX_SIDON_SET_SIZE,
     CyclicDifferenceMultiplicity,
     CyclicDifferenceSetExtensionRequest,
     CyclicDifferenceSetExtensionResult,
@@ -16,8 +19,10 @@ from jacobian.math.combinatorics._difference_set_models import (
     CyclicPerfectDifferenceSetResult,
     IntegerSidonRequest,
     IntegerSidonResult,
+    _integer_sidon_canonical_result_bytes,
 )
 from jacobian.math.combinatorics._difference_sets import (
+    _require_integer_sidon_result_admission,
     decide_cyclic_difference_set_extension,
     decide_cyclic_perfect_difference_set,
     decide_integer_sidon,
@@ -79,12 +84,46 @@ def test_sidon_admits_complete_profile_for_first_69_squares() -> None:
 
     assert len(result.normalized_elements) == 69
     assert len(result.ordered_differences) == 69 * 68
-    assert len(result.model_dump_json().encode()) < 10 * 1024 * 1024
+    assert len(result.model_dump_json().encode()) < MAX_SIDON_RESULT_BYTES
+
+
+def test_sidon_byte_formula_matches_compact_json_for_a_false_decision() -> None:
+    result = decide_integer_sidon(IntegerSidonRequest(elements=("0", "1", "2")))
+
+    assert result.is_sidon is False
+    assert _integer_sidon_canonical_result_bytes((0, 1, 2)) == len(
+        result.model_dump_json().encode()
+    )
+
+
+def test_sidon_parser_ceiling_is_derived_from_shortest_output_budget() -> None:
+    admitted = tuple(range(MAX_SIDON_SET_SIZE))
+    rejected = tuple(range(MAX_SIDON_SET_SIZE + 1))
+
+    assert _integer_sidon_canonical_result_bytes(admitted) <= MAX_SIDON_RESULT_BYTES
+    assert _integer_sidon_canonical_result_bytes(rejected) > MAX_SIDON_RESULT_BYTES
+    assert MAX_SIDON_ORDERED_DIFFERENCES == MAX_SIDON_SET_SIZE * (
+        MAX_SIDON_SET_SIZE - 1
+    )
+    IntegerSidonRequest(elements=tuple(str(value) for value in admitted))
+    _require_integer_sidon_result_admission(admitted)
+    with pytest.raises(ValidationError) as exc_info:
+        IntegerSidonRequest(elements=tuple(str(value) for value in rejected))
+    assert exc_info.value.errors()[0]["type"] == "too_long"
+
+
+def test_sidon_zero_through_256_reaches_result_sensitive_admission() -> None:
+    elements = tuple(range(257))
+    request = IntegerSidonRequest(elements=tuple(str(value) for value in elements))
+
+    assert len(request.elements) == 257
+    assert _integer_sidon_canonical_result_bytes(elements) == 3_616_904
+    _require_integer_sidon_result_admission(elements)
 
 
 def test_sidon_rejects_profile_exceeding_canonical_output_bound() -> None:
     prefix = "9" * 125
-    elements = tuple(f"{prefix}{value:03d}" for value in range(256))
+    elements = tuple(f"{prefix}{value:03d}" for value in range(MAX_SIDON_SET_SIZE))
 
     with pytest.raises(OperationDomainValidationError, match="canonical output bound"):
         decide_integer_sidon(IntegerSidonRequest(elements=elements))

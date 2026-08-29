@@ -9,8 +9,8 @@ from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_vali
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits
 
-MAX_SIDON_SET_SIZE = 256
 MAX_CYCLIC_DIFFERENCE_SET_MODULUS = 4_096
 MAX_DIFFERENCE_SET_EXTENSION_CANDIDATES = 50_000
 MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS = 3
@@ -41,6 +41,68 @@ AdditiveDifferenceInteger = Annotated[
         strict=True,
     ),
 ]
+
+# Empty arrays plus the longer ``false`` Sidon decision occupy 68 bytes
+# before contents are inserted. Each ordered-difference object contributes
+# 46 bytes of field spelling around the three integer wires.
+_SIDON_RESULT_ENVELOPE_BYTES = 68
+_SIDON_DIFFERENCE_ROW_OVERHEAD_BYTES = 46
+MAX_SIDON_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+
+def _integer_sidon_canonical_result_bytes(elements: tuple[int, ...]) -> int:
+    """Return the compact JSON size of one complete ordered-difference ledger.
+
+    The estimate is exact for ``is_sidon=false`` and overcounts a true
+    decision by one byte, so admission remains conservative.
+    """
+
+    normalized = tuple(str(value) for value in elements)
+    normalized_bytes = sum(len(value) + 2 for value in normalized) + max(
+        len(normalized) - 1, 0
+    )
+    difference_bytes = 0
+    pair_count = 0
+    for left in elements:
+        left_wire = str(left)
+        for right in elements:
+            if left == right:
+                continue
+            pair_count += 1
+            difference_bytes += (
+                _SIDON_DIFFERENCE_ROW_OVERHEAD_BYTES
+                + len(left_wire)
+                + len(str(right))
+                + len(str(left - right))
+            )
+    difference_bytes += max(pair_count - 1, 0)
+    return _SIDON_RESULT_ENVELOPE_BYTES + normalized_bytes + difference_bytes
+
+
+def _max_sidon_set_size_for_output_budget(budget: int) -> int:
+    """Largest ``n`` whose unique set ``0..n-1`` still fits ``budget`` bytes.
+
+    Pair work is ``n(n-1)`` ordered rows. The shortest unique AdditiveInteger
+    n-set is ``0..n-1``, so this ceiling is the largest cardinality whose
+    work and output can still fit; wider integers are rejected later by the
+    same byte reservation.
+    """
+
+    low = 0
+    high = math.isqrt(max(budget, 0) // _SIDON_DIFFERENCE_ROW_OVERHEAD_BYTES) + 2
+    while low < high:
+        mid = (low + high + 1) // 2
+        if _integer_sidon_canonical_result_bytes(tuple(range(mid))) <= budget:
+            low = mid
+        else:
+            high = mid - 1
+    return low
+
+
+# Cheap parser bound derived from the canonical output budget. Result-sensitive
+# admission still reserves the actual payload from source and difference widths.
+MAX_SIDON_SET_SIZE = _max_sidon_set_size_for_output_budget(MAX_SIDON_RESULT_BYTES)
+MAX_SIDON_ORDERED_DIFFERENCES = MAX_SIDON_SET_SIZE * max(MAX_SIDON_SET_SIZE - 1, 0)
 
 
 def _difference_set_validation_error(code: str, message: str) -> PydanticCustomError:
@@ -76,7 +138,7 @@ class IntegerSidonResult(StrictModel):
         max_length=MAX_SIDON_SET_SIZE
     )
     ordered_differences: tuple[OrderedIntegerDifference, ...] = Field(
-        max_length=MAX_SIDON_SET_SIZE * (MAX_SIDON_SET_SIZE - 1)
+        max_length=MAX_SIDON_ORDERED_DIFFERENCES
     )
     is_sidon: StrictBool
 

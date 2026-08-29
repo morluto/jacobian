@@ -5,13 +5,13 @@ from __future__ import annotations
 import math
 from collections import Counter
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._difference_set_models import (
     MAX_CYCLIC_DIFFERENCE_SET_MODULUS,
     MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS,
     MAX_DIFFERENCE_SET_EXTENSION_CANDIDATES,
+    MAX_SIDON_RESULT_BYTES,
     CyclicDifferenceMultiplicity,
     CyclicDifferenceSetExtensionRequest,
     CyclicDifferenceSetExtensionResult,
@@ -20,6 +20,7 @@ from jacobian.math.combinatorics._difference_set_models import (
     IntegerSidonRequest,
     IntegerSidonResult,
     OrderedIntegerDifference,
+    _integer_sidon_canonical_result_bytes,
 )
 from jacobian.math.combinatorics._support import (
     combinatorics_operation,
@@ -50,26 +51,7 @@ def decide_integer_sidon(request: IntegerSidonRequest) -> IntegerSidonResult:
 def _require_integer_sidon_result_admission(elements: tuple[int, ...]) -> None:
     """Reserve the complete canonical result before constructing profile rows."""
 
-    normalized = tuple(str(value) for value in elements)
-    normalized_bytes = sum(len(value) + 2 for value in normalized) + max(
-        len(normalized) - 1, 0
-    )
-    difference_bytes = 0
-    pair_count = 0
-    for left in elements:
-        left_wire = str(left)
-        for right in elements:
-            if left == right:
-                continue
-            pair_count += 1
-            difference_bytes += (
-                46 + len(left_wire) + len(str(right)) + len(str(left - right))
-            )
-    difference_bytes += max(pair_count - 1, 0)
-    # Empty arrays and the longer ``false`` decision occupy 68 bytes before
-    # their contents are inserted.
-    result_bytes = 68 + normalized_bytes + difference_bytes
-    if result_bytes > CanonicalLimits().max_output_bytes:
+    if _integer_sidon_canonical_result_bytes(elements) > MAX_SIDON_RESULT_BYTES:
         raise OperationDomainValidationError(
             location=("elements",),
             code="combinatorics.sidon_result_bound",

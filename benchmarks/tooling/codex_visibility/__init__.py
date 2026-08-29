@@ -427,10 +427,7 @@ def _codex_arguments(
             f"{json.dumps(_MCP_TOOL_APPROVAL_MODE)}"
         ),
     ]
-    for feature in _DISABLED_CODEX_FEATURES:
-        arguments.extend(("--disable", feature))
-    if tool_mode is ToolMode.UNIFIED_EXEC:
-        arguments.extend(("--enable", "unified_exec"))
+    arguments.extend(_feature_override_arguments(tool_mode))
     if os.environ.get("JACOBIAN_MCP_BEARER_TOKEN"):
         arguments.extend(
             (
@@ -439,6 +436,15 @@ def _codex_arguments(
             )
         )
     return (*arguments, prompt)
+
+
+def _feature_override_arguments(tool_mode: ToolMode) -> tuple[str, ...]:
+    arguments: list[str] = []
+    for feature in _DISABLED_CODEX_FEATURES:
+        arguments.extend(("--disable", feature))
+    if tool_mode is ToolMode.UNIFIED_EXEC:
+        arguments.extend(("--enable", "unified_exec"))
+    return tuple(arguments)
 
 
 def _prepare_isolated_codex_environment(
@@ -600,12 +606,14 @@ def _command_version(workspace: Path, environment: Mapping[str, str]) -> str:
 def _command_feature_state(
     workspace: Path,
     environment: Mapping[str, str],
+    *,
+    tool_mode: ToolMode,
 ) -> dict[str, dict[str, object]]:
     """Record the Codex features that determine deferred and code-mode routing."""
 
     result = run_operator_command(
         "codex",
-        ("features", "list"),
+        (*_feature_override_arguments(tool_mode), "features", "list"),
         cwd=workspace,
         timeout_seconds=30,
         environment=environment,
@@ -914,7 +922,11 @@ def main() -> None:
                 "isolated Codex prompt exposed external file-backed skills"
             )
         codex_version = _command_version(workspace, environment)
-        codex_feature_state = _command_feature_state(workspace, environment)
+        codex_feature_state = _command_feature_state(
+            workspace,
+            environment,
+            tool_mode=args.tool_mode,
+        )
         runs = [
             _run_case(
                 case=case,

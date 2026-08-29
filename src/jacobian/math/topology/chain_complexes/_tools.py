@@ -1,7 +1,9 @@
 """Chain complex operation declarations."""
 
+from pydantic import ValidationError
+
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationDomainValidationError
 from jacobian.math.topology.chain_complexes._models import (
     ComputeHomologyRequest,
     ConstructChainComplexRequest,
@@ -11,12 +13,12 @@ from jacobian.math.topology.chain_complexes._models import (
     VerifyDifferentialRequest,
 )
 from jacobian.math.topology.chain_complexes.operations import (
-    compute_homology,
-    compute_mapping_cone,
-    compute_tensor_product,
+    chain_map_commutes,
     construct_chain_complex,
-    verify_chain_map,
-    verify_differential,
+    differential_squares_to_zero,
+    homology_groups,
+    mapping_cone,
+    tensor_product_complex,
 )
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
@@ -25,6 +27,57 @@ from jacobian.math.topology.chain_complexes.values import (
     TensorProductResult,
     VerificationResult,
 )
+
+
+def _construct(request: ConstructChainComplexRequest) -> ChainComplexValue:
+    """Project a wire request into the canonical construction operation."""
+    try:
+        return construct_chain_complex(
+            request.basis_sizes,
+            request.differential_matrices,
+            coefficient_field=request.coefficient_field,
+            prime=request.prime,
+        )
+    except ValidationError as exc:
+        error = exc.errors(include_url=False, include_context=False)[0]
+        location = tuple(error.get("loc", ())) or ("differential_matrices",)
+        raise OperationDomainValidationError(
+            location=location,
+            code=str(error["type"]),
+            message=str(error["msg"]),
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("differential_matrices",),
+            code="chain_complex.differential_not_square_zero",
+            message=str(exc),
+        ) from exc
+
+
+def _verify_differential(request: VerifyDifferentialRequest) -> VerificationResult:
+    """Project a wire request into the canonical differential verifier."""
+    return differential_squares_to_zero(request.complex)
+
+
+def _verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
+    """Project a wire request into the canonical chain-map verifier."""
+    return chain_map_commutes(request.source, request.target, request.map_matrices)
+
+
+def _homology(request: ComputeHomologyRequest) -> HomologyResult:
+    """Project a wire request into the canonical homology operation."""
+    return homology_groups(request.complex)
+
+
+def _mapping_cone(request: MappingConeRequest) -> MappingConeResult:
+    """Project a wire request into the canonical mapping-cone operation."""
+    return mapping_cone(request.source, request.target, request.map_matrices)
+
+
+def _tensor_product(request: TensorProductRequest) -> TensorProductResult:
+    """Project a wire request into the canonical tensor operation."""
+    return tensor_product_complex(request.left, request.right)
+
 
 _CIRCLE_COMPLEX = {
     "coefficient_field": "QQ",
@@ -47,7 +100,7 @@ TOOLS: MathTools = (
         ),
         request_type=ConstructChainComplexRequest,
         result_type=ChainComplexValue,
-        run=construct_chain_complex,
+        run=_construct,
         tags=("chain-complex", "exact"),
         examples=(
             example(
@@ -73,7 +126,7 @@ TOOLS: MathTools = (
         description="Verify that the differential of a chain complex squares to zero.",
         request_type=VerifyDifferentialRequest,
         result_type=VerificationResult,
-        run=verify_differential,
+        run=_verify_differential,
         tags=("chain-complex", "exact"),
         examples=(
             example(
@@ -89,7 +142,7 @@ TOOLS: MathTools = (
         description="Verify that a chain map f: C -> D commutes with differentials.",
         request_type=VerifyChainMapRequest,
         result_type=VerificationResult,
-        run=verify_chain_map,
+        run=_verify_chain_map,
         tags=("chain-complex", "exact"),
         examples=(
             example(
@@ -115,7 +168,7 @@ TOOLS: MathTools = (
         ),
         request_type=ComputeHomologyRequest,
         result_type=HomologyResult,
-        run=compute_homology,
+        run=_homology,
         tags=("chain-complex", "homology", "exact"),
         examples=(
             example(
@@ -131,7 +184,7 @@ TOOLS: MathTools = (
         description="Compute the mapping cone of a chain map f: C -> D.",
         request_type=MappingConeRequest,
         result_type=MappingConeResult,
-        run=compute_mapping_cone,
+        run=_mapping_cone,
         tags=("chain-complex", "exact"),
         examples=(
             example(
@@ -154,7 +207,7 @@ TOOLS: MathTools = (
         description="Compute the tensor product (C ⊗ D)_n = ⊕_{i+j=n} C_i ⊗ D_j.",
         request_type=TensorProductRequest,
         result_type=TensorProductResult,
-        run=compute_tensor_product,
+        run=_tensor_product,
         tags=("chain-complex", "exact"),
         examples=(
             example(

@@ -14,17 +14,33 @@ from jacobian.math.topology.chain_complexes._models import (
     VerifyChainMapRequest,
     VerifyDifferentialRequest,
 )
+from jacobian.math.topology.chain_complexes._tools import (
+    _construct as construct_chain_complex,
+)
+from jacobian.math.topology.chain_complexes._tools import (
+    _homology as compute_homology,
+)
+from jacobian.math.topology.chain_complexes._tools import (
+    _mapping_cone as compute_mapping_cone,
+)
+from jacobian.math.topology.chain_complexes._tools import (
+    _tensor_product as compute_tensor_product,
+)
+from jacobian.math.topology.chain_complexes._tools import (
+    _verify_chain_map as verify_chain_map,
+)
+from jacobian.math.topology.chain_complexes._tools import (
+    _verify_differential as verify_differential,
+)
 from jacobian.math.topology.chain_complexes.operations import (
     chain_map_commutes,
-    compute_homology,
-    compute_mapping_cone,
-    compute_tensor_product,
-    construct_chain_complex,
     differential_squares_to_zero,
     homology_groups,
     mapping_cone,
     tensor_product_complex,
-    verify_differential,
+)
+from jacobian.math.topology.chain_complexes.operations import (
+    construct_chain_complex as construct_chain_complex_native,
 )
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
@@ -663,6 +679,9 @@ class TestNativeSurface:
         product = tensor_product_complex(_point_complex(), _point_complex())
         assert product.tensor_basis_sizes == (1,)
 
+        constructed = construct_chain_complex_native((1,), ())
+        assert constructed.basis_sizes == (1,)
+
     def test_native_tensor_applies_work_admission_before_expansion(self) -> None:
         """Native callers cannot reach the dense kernel with canonical
         inputs whose derived group dimensions exceed the work bounds."""
@@ -688,15 +707,14 @@ class TestNativeSurface:
 
         assert set(chain_complexes_package.__all__) == {
             "chain_map_commutes",
+            "construct_chain_complex",
             "differential_squares_to_zero",
             "homology_groups",
             "mapping_cone",
             "tensor_product_complex",
         }
-        from jacobian.math.topology.chain_complexes.operations import compute_homology
-
-        request = compute_homology.__annotations__.get("request")
-        assert request is not None
+        assert "request" not in construct_chain_complex_native.__annotations__
+        assert "request" in construct_chain_complex.__annotations__
 
 
 class TestMappingConeCanonicalValue:
@@ -709,7 +727,6 @@ class TestMappingConeCanonicalValue:
         from jacobian.math.topology.chain_complexes._models import (
             ComputeHomologyRequest,
         )
-        from jacobian.math.topology.chain_complexes.operations import compute_homology
 
         point = _point_complex()
         one = (("1",),)
@@ -843,8 +860,6 @@ class TestChainMapEndpointPrecondition:
     def test_non_square_zero_endpoints_fail_verification(self) -> None:
         """Endpoints violating d^2=0 admit no chain map; the identity
         components must not validate as commuting."""
-        from jacobian.math.topology.chain_complexes.operations import verify_chain_map
-
         bad = ChainComplexValue(
             coefficient_field=CoefficientField.RATIONAL,
             degree_min=0,
@@ -862,8 +877,6 @@ class TestChainMapEndpointPrecondition:
 
 class TestZeroWidthProducts:
     def test_zero_row_operand_preserves_columns(self) -> None:
-        from jacobian.math.topology.chain_complexes.operations import verify_chain_map
-
         source = ChainComplexValue(
             coefficient_field=CoefficientField.RATIONAL,
             degree_min=0,
@@ -915,8 +928,6 @@ class TestEmptyRowWidthChainMaps:
         return ((), (("1",),))
 
     def test_zero_row_target_differential_verifies(self) -> None:
-        from jacobian.math.topology.chain_complexes.operations import verify_chain_map
-
         request = VerifyChainMapRequest(
             source=self._source(),
             target=self._target(),
@@ -927,10 +938,6 @@ class TestEmptyRowWidthChainMaps:
         assert type(result).model_validate(result.model_dump()).is_valid
 
     def test_corresponding_cone_is_admitted_and_returned(self) -> None:
-        from jacobian.math.topology.chain_complexes.operations import (
-            compute_mapping_cone,
-        )
-
         request = MappingConeRequest(
             source=self._source(),
             target=self._target(),
@@ -943,8 +950,6 @@ class TestEmptyRowWidthChainMaps:
     def test_zero_row_homology_request_returns_typed_result(self) -> None:
         """The homology kernel's square-zero replay keeps declared widths
         for a complex whose first group is empty."""
-        from jacobian.math.topology.chain_complexes.operations import compute_homology
-
         shifted = ChainComplexValue(
             coefficient_field=CoefficientField.RATIONAL,
             degree_min=0,
@@ -958,9 +963,6 @@ class TestEmptyRowWidthChainMaps:
     def test_empty_middle_cone_group_round_trips(self) -> None:
         """A cone whose zeroth group is empty keeps its widths through
         construction and validation."""
-        from jacobian.math.topology.chain_complexes.operations import (
-            compute_mapping_cone,
-        )
         from jacobian.math.topology.chain_complexes.values import MappingConeResult
 
         endpoint = ChainComplexValue(
@@ -1020,8 +1022,6 @@ class TestTensorContextAndShapes:
     def test_every_endpoint_product_checked(self) -> None:
         """A four-term endpoint with differentials (0, 1, 1) has d0*d1 == 0
         but d1*d2 != 0; the identity map must fail verification."""
-        from jacobian.math.topology.chain_complexes.operations import verify_chain_map
-
         bad = ChainComplexValue(
             coefficient_field=CoefficientField.RATIONAL,
             degree_min=0,
@@ -1213,8 +1213,6 @@ class TestTensorPrimeFieldResidues:
                         source=point, target=point, map_matrices=(((bad,),),)
                     )
                 )
-        from jacobian.math.topology.chain_complexes.operations import verify_chain_map
-
         request = VerifyChainMapRequest(
             source=point, target=point, map_matrices=((("2",),),)
         )
@@ -1308,7 +1306,6 @@ class TestNativeHomologyFieldBinding:
         from jacobian.math.topology.chain_complexes._models import (
             ComputeHomologyRequest,
         )
-        from jacobian.math.topology.chain_complexes.operations import compute_homology
 
         point = self._gf_point(3)
         native_result = self._native(point)
@@ -1532,17 +1529,17 @@ class TestNativeWrappersCallKernelsDirectly:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Blocking every wire handler still yields correct native results."""
-        import jacobian.math.topology.chain_complexes.operations as ops
+        import jacobian.math.topology.chain_complexes._tools as ops
 
         def blocked(*args: Any, **kwargs: Any) -> NoReturn:
             raise AssertionError("wire handler reached from the native path")
 
         for name in (
-            "compute_homology",
-            "verify_differential",
-            "verify_chain_map",
-            "compute_mapping_cone",
-            "compute_tensor_product",
+            "_homology",
+            "_verify_differential",
+            "_verify_chain_map",
+            "_mapping_cone",
+            "_tensor_product",
         ):
             monkeypatch.setattr(ops, name, blocked)
 
@@ -1561,12 +1558,12 @@ class TestNativeWrappersCallKernelsDirectly:
     def test_native_chain_map_verdict_matches_wire_semantics(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import jacobian.math.topology.chain_complexes.operations as ops
+        import jacobian.math.topology.chain_complexes._tools as ops
 
         def blocked(*args: Any, **kwargs: Any) -> NoReturn:
             raise AssertionError("wire handler reached from the native path")
 
-        monkeypatch.setattr(ops, "verify_chain_map", blocked)
+        monkeypatch.setattr(ops, "_verify_chain_map", blocked)
         circle = self._circle()
         # One component per chain group: the identity chain map.
         identity = ((("1",),), (("1",),))

@@ -4,17 +4,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from pydantic import ValidationError
-
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.chain_complexes._models import (
-    ComputeHomologyRequest,
-    ConstructChainComplexRequest,
-    MappingConeRequest,
-    TensorProductRequest,
-    VerifyChainMapRequest,
-    VerifyDifferentialRequest,
     _require_chain_map_components,
 )
 from jacobian.math.topology.chain_complexes.values import (
@@ -23,6 +14,7 @@ from jacobian.math.topology.chain_complexes.values import (
     MAX_TENSOR_GROUP_DIMENSION,
     MAX_TENSOR_TOTAL_CELLS,
     ChainComplexValue,
+    CoefficientField,
     HomologyGroupValue,
     HomologyResult,
     MappingConeResult,
@@ -34,16 +26,11 @@ MapMatrices = tuple[tuple[tuple[str, ...], ...], ...]
 
 __all__ = [
     "chain_map_commutes",
-    "compute_homology",
-    "compute_mapping_cone",
-    "compute_tensor_product",
     "construct_chain_complex",
     "differential_squares_to_zero",
     "homology_groups",
     "mapping_cone",
     "tensor_product_complex",
-    "verify_chain_map",
-    "verify_differential",
 ]
 
 
@@ -421,47 +408,6 @@ def _require_chain_map_relation(
             )
 
 
-def construct_chain_complex(request: ConstructChainComplexRequest) -> ChainComplexValue:
-    """Construct a chain complex from differential matrices."""
-    basis_sizes = request.basis_sizes
-    n = len(basis_sizes)
-    degree_min = 0
-    degree_max = n - 1
-
-    try:
-        value = ChainComplexValue(
-            coefficient_field=request.coefficient_field,
-            prime=request.prime,
-            degree_min=degree_min,
-            degree_max=degree_max,
-            basis_sizes=basis_sizes,
-            differential_matrices=request.differential_matrices,
-        )
-    except ValidationError as exc:
-        error = exc.errors(include_url=False, include_context=False)[0]
-        location = tuple(error.get("loc", ())) or ("differential_matrices",)
-        raise OperationDomainValidationError(
-            location=location,
-            code=str(error["type"]),
-            message=str(error["msg"]),
-        ) from exc
-    try:
-        _require_square_zero(
-            _parsed_differentials(value, value.prime),
-            value.prime,
-            label="constructed",
-            group_columns=list(value.basis_sizes),
-            degree_min=value.degree_min,
-        )
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("differential_matrices",),
-            code="chain_complex.differential_not_square_zero",
-            message=str(exc),
-        ) from exc
-    return value
-
-
 def _differential_verdict(complex_value: ChainComplexValue) -> tuple[bool, str]:
     """Decide d^2 = 0 exactly and derive the authoritative detail string."""
     cx = complex_value
@@ -555,39 +501,6 @@ def _chain_map_verdict(
     return True, "chain map commutes with differentials"
 
 
-def verify_differential(request: VerifyDifferentialRequest) -> VerificationResult:
-    """Verify that d^2 = 0 for a chain complex.
-
-    Returns a dictionary with 'is_valid' (bool) and 'detail' (str).
-    """
-    is_valid, detail = _differential_verdict(request.complex)
-    return VerificationResult._from_kernel(
-        is_valid=is_valid,
-        detail=detail,
-        source_complex=request.complex,
-    )
-
-
-def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
-    """Verify that a chain map commutes with differentials.
-
-    Returns a dictionary with 'is_valid' (bool) and 'detail' (str).
-
-    Request admission guarantees equal coefficient fields and prime, so a
-    field mismatch can never reach this kernel as a verdict.
-    """
-    is_valid, detail = _chain_map_verdict(
-        request.source, request.target, request.map_matrices
-    )
-    return VerificationResult._from_chain_map_kernel(
-        is_valid=is_valid,
-        detail=detail,
-        source=request.source,
-        target=request.target,
-        map_matrices=request.map_matrices,
-    )
-
-
 def _compute_homology_groups(
     cx: ChainComplexValue,
 ) -> tuple[HomologyGroupValue, ...]:
@@ -646,13 +559,6 @@ def _compute_homology_groups(
         )
 
     return tuple(groups)
-
-
-def compute_homology(request: ComputeHomologyRequest) -> HomologyResult:
-    """Compute the homology groups of a chain complex."""
-    cx = request.complex
-    groups = _compute_homology_groups(cx)
-    return HomologyResult._from_kernel(homology_groups=groups, source_complex=cx)
 
 
 def _serialize_entry(value: Fraction, prime: int | None) -> str:
@@ -904,38 +810,6 @@ def _compute_mapping_cone(
     return cone_basis_sizes, cone_diffs
 
 
-def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
-    """Compute the mapping cone of a chain map f: C -> D.
-
-    The mapping cone has groups cone_n = C_{n-1} ⊕ D_n and differential
-    [[ -d_C, 0 ], [ f, d_D ]] as block matrices.
-    """
-    _require_chain_map_components(
-        request.source, request.target, request.map_matrices, label="mapping cone"
-    )
-    _require_cone_admission(request.source, request.target, request.map_matrices)
-    cone_basis_sizes, cone_diffs = _compute_mapping_cone(
-        request.source, request.target, request.map_matrices
-    )
-
-    value = ChainComplexValue(
-        coefficient_field=request.source.coefficient_field,
-        prime=request.source.prime,
-        degree_min=request.source.degree_min,
-        degree_max=request.source.degree_min + len(cone_basis_sizes) - 1,
-        basis_sizes=cone_basis_sizes,
-        differential_matrices=cone_diffs,
-    )
-    return MappingConeResult._from_kernel(
-        cone_basis_sizes=cone_basis_sizes,
-        cone_differential_matrices=cone_diffs,
-        source=request.source,
-        target=request.target,
-        map_matrices=request.map_matrices,
-        value=value,
-    )
-
-
 def _tensor_group_sizes(
     left: ChainComplexValue, right: ChainComplexValue
 ) -> tuple[int, ...]:
@@ -1116,37 +990,34 @@ def _compute_tensor_product(
     return tensor_basis_sizes, tensor_diffs
 
 
-def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult:
-    """Compute the tensor product of two chain complexes.
+def construct_chain_complex(
+    basis_sizes: tuple[int, ...],
+    differential_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+    *,
+    coefficient_field: CoefficientField = CoefficientField.RATIONAL,
+    prime: int | None = None,
+) -> ChainComplexValue:
+    """Construct an admitted canonical chain-complex value.
 
-    (C ⊗ D)_n = ⊕_{i+j=n} C_i ⊗ D_j with differential d_C ⊗ id + (-1)^i id ⊗ d_D.
+    Differential entries use the canonical exact string grammar carried by
+    :class:`ChainComplexValue`; adjacent differentials must compose to zero.
     """
-    left = request.left
-    right = request.right
-    _require_tensor_admission(left, right)
-    tensor_basis_sizes, tensor_diffs = _compute_tensor_product(left, right)
-
-    # Tensor degrees are pairwise sums: the derived complex concentrates
-    # on [deg_min, deg_min + group_count - 1].
-    group_count = len(tensor_basis_sizes)
-    degree_min = left.degree_min + right.degree_min
-    degree_max = degree_min + group_count - 1
-
     value = ChainComplexValue(
-        coefficient_field=left.coefficient_field,
-        prime=left.prime,
-        degree_min=degree_min,
-        degree_max=degree_max,
-        basis_sizes=tensor_basis_sizes,
-        differential_matrices=tensor_diffs,
+        coefficient_field=coefficient_field,
+        prime=prime,
+        degree_min=0,
+        degree_max=len(basis_sizes) - 1,
+        basis_sizes=basis_sizes,
+        differential_matrices=differential_matrices,
     )
-    return TensorProductResult._from_kernel(
-        tensor_basis_sizes=tensor_basis_sizes,
-        tensor_differential_matrices=tensor_diffs,
-        left=left,
-        right=right,
-        value=value,
+    _require_square_zero(
+        _parsed_differentials(value, value.prime),
+        value.prime,
+        label="constructed",
+        group_columns=list(value.basis_sizes),
+        degree_min=value.degree_min,
     )
+    return value
 
 
 def homology_groups(complex_value: ChainComplexValue) -> HomologyResult:

@@ -2,6 +2,7 @@
 
 from jacobian.math.topology.chain_complexes.operations import (
     chain_map_commutes,
+    construct_chain_complex,
     differential_squares_to_zero,
     homology_groups,
     mapping_cone,
@@ -9,11 +10,11 @@ from jacobian.math.topology.chain_complexes.operations import (
 )
 
 # The authoritative native surface: every export accepts domain values
-# directly. Wire-envelope request handlers live in
-# ``jacobian.math.topology.chain_complexes.operations`` and are projected to MCP
-# through ``_tools.py``; they are not part of this native API.
+# directly. Wire-envelope request handlers live in ``_tools.py`` and are not
+# part of this native API.
 __all__ = [
     "chain_map_commutes",
+    "construct_chain_complex",
     "differential_squares_to_zero",
     "homology_groups",
     "mapping_cone",

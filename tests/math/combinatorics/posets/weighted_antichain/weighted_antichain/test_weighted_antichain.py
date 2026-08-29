@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import (
     PresentationPair,
     ReflexivePairPolicy,
@@ -91,4 +94,16 @@ def test_v_poset() -> None:
 def test_method() -> None:
     poset = _make_chain(2)
     result = compute_maximum_weight_antichain(poset, (_cr(1), _cr(1)))
-    assert result.method == "EXACT_WEIGHTED_DILWORTH_REDUCTION"
+    assert result.method == "EXACT_BOUNDED_SUBSET_SEARCH"
+
+
+def test_weight_axis_must_match_the_poset() -> None:
+    with pytest.raises(OperationDomainValidationError, match="one-for-one"):
+        compute_maximum_weight_antichain(_make_chain(2), (_cr(1),))
+
+
+def test_exponential_search_envelope_is_enforced() -> None:
+    poset = _make_antichain(17)
+
+    with pytest.raises(OperationDomainValidationError, match="at most 16"):
+        compute_maximum_weight_antichain(poset, tuple(_cr(1) for _ in range(17)))

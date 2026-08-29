@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from itertools import combinations
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.antichain_enumeration._models import (
     AntichainEnumerationResult,
+    require_antichain_enumeration_envelope,
 )
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
 
@@ -22,6 +24,14 @@ def enumerate_antichains(
     An antichain is a set of pairwise incomparable elements. Uses a bitset
     comparability lookup for efficient rejection.
     """
+    try:
+        require_antichain_enumeration_envelope(poset, min_cardinality, max_cardinality)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("min_cardinality", "max_cardinality"),
+            code="poset.antichain_enumeration_envelope_exceeded",
+            message=str(exc),
+        ) from exc
     elements = poset.elements
     n = len(elements)
     element_index = {e: i for i, e in enumerate(elements)}

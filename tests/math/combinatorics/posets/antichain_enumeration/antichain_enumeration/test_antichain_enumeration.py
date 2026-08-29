@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.antichain_enumeration.operations import (
     enumerate_antichains,
 )
@@ -109,3 +112,10 @@ def test_v_poset():
     result = enumerate_antichains(poset, 2, 2)
     assert result.count == 1
     assert ("1", "2") in result.antichains
+
+
+def test_exponential_candidate_family_is_rejected_before_enumeration() -> None:
+    poset = _make_antichain_poset(24)
+
+    with pytest.raises(OperationDomainValidationError, match="candidate bound"):
+        enumerate_antichains(poset, 0, 24)

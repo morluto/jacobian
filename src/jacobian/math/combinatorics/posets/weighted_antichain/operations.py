@@ -5,8 +5,10 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
 from jacobian.math.combinatorics.posets.weighted_antichain._models import (
+    MAX_WEIGHTED_ANTICHAIN_ELEMENTS,
     WeightedAntichainResult,
 )
 
@@ -19,14 +21,21 @@ def compute_maximum_weight_antichain(
 ) -> WeightedAntichainResult:
     """Return the exact maximum-weight antichain.
 
-    Uses the Dilworth reduction: build a bipartite graph from the
-    comparability relation and solve a max-flow/min-cut for the
-    minimum chain cover, then derive the maximum weight antichain.
-
-    For small posets, we use brute-force enumeration of all antichains
-    weighted by the supplied weights, choosing the lexicographically
-    least among maxima.
+    Uses an admitted complete subset search and chooses the lexicographically
+    least antichain among equal maxima.
     """
+    if len(weights) != len(poset.elements):
+        raise OperationDomainValidationError(
+            location=("weights",),
+            code="poset.weighted_antichain_weight_axis",
+            message="weights must align one-for-one with the poset element axis",
+        )
+    if len(poset.elements) > MAX_WEIGHTED_ANTICHAIN_ELEMENTS:
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="poset.weighted_antichain_work_exceeded",
+            message="weighted antichain search supports at most 16 elements",
+        )
     elements = poset.elements
     n = len(elements)
     element_index = {e: i for i, e in enumerate(elements)}
@@ -81,5 +90,5 @@ def compute_maximum_weight_antichain(
         weights=weights,
         maximum_weight=CanonicalRational.from_fraction(best_weight),
         maximum_antichain=tuple(elements[i] for i in best_set),
-        method="EXACT_WEIGHTED_DILWORTH_REDUCTION",
+        method="EXACT_BOUNDED_SUBSET_SEARCH",
     )

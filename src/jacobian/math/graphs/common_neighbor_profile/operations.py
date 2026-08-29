@@ -52,28 +52,30 @@ def _admit_graph(
         adjacency[left].add(right)
         adjacency[right].add(left)
 
+    rows: list[tuple[str, str, tuple[str, ...]]] = []
+    for index, left in enumerate(vertices):
+        for right in vertices[index + 1 :]:
+            common = tuple(sorted(adjacency[left] & adjacency[right]))
+            rows.append((left, right, common))
+
     try:
         source_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
-        max_label_bytes = max(
-            (len(encode_strict_json(vertex)) for vertex in vertices), default=2
-        )
-        row_sizes: list[int] = []
-        for index, left in enumerate(vertices):
-            for right in vertices[index + 1 :]:
-                possible_common = min(len(adjacency[left]), len(adjacency[right]))
-                row_sizes.append(
-                    strict_json_object_size(
-                        (
-                            ("vertex_u", len(encode_strict_json(left))),
-                            ("vertex_v", len(encode_strict_json(right))),
-                            (
-                                "common_neighbors",
-                                _array_size([max_label_bytes] * possible_common),
-                            ),
-                            ("codegree", 3),
-                        )
-                    )
+        row_sizes = [
+            strict_json_object_size(
+                (
+                    ("vertex_u", len(encode_strict_json(left))),
+                    ("vertex_v", len(encode_strict_json(right))),
+                    (
+                        "common_neighbors",
+                        _array_size(
+                            [len(encode_strict_json(vertex)) for vertex in common]
+                        ),
+                    ),
+                    ("codegree", 3),
                 )
+            )
+            for left, right, common in rows
+        ]
         upper_bound = strict_json_object_size(
             (
                 ("graph", source_bytes),
@@ -88,11 +90,6 @@ def _admit_graph(
             f"the complete profile exceeds the {MAX_RESULT_BYTES}-byte output bound",
         )
 
-    rows: list[tuple[str, str, tuple[str, ...]]] = []
-    for index, left in enumerate(vertices):
-        for right in vertices[index + 1 :]:
-            common = tuple(sorted(adjacency[left] & adjacency[right]))
-            rows.append((left, right, common))
     return adjacency, _ProfilePlan(rows=tuple(rows))
 
 

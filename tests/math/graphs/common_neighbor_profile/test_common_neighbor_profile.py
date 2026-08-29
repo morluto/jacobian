@@ -98,3 +98,13 @@ def test_native_admission_rejects_complete_profile_over_output_bound() -> None:
     g = _graph(vertices, edges)
     with pytest.raises(OperationDomainValidationError, match="output bound"):
         compute_common_neighbor_profile(g)
+
+
+def test_result_bound_uses_actual_common_neighbor_labels() -> None:
+    """A long isolated label does not inflate unrelated common-neighbor rows."""
+    short = [f"{i:03d}" for i in range(99)]
+    isolated = "x" * 64
+    vertices = [*short, isolated]
+    edges = [(left, right) for i, left in enumerate(short) for right in short[i + 1 :]]
+    result = compute_common_neighbor_profile(_graph(vertices, edges))
+    assert len(result.rows) == len(vertices) * (len(vertices) - 1) // 2

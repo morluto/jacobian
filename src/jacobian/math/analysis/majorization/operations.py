@@ -4,25 +4,21 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from fractions import Fraction
+from typing import Literal
 
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, format_canonical_rational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.majorization._models import (
-    BirkhoffDecompositionRequest,
     BirkhoffDecompositionResult,
     BirkhoffTerm,
-    DoublyStochasticCheckRequest,
     DoublyStochasticCheckResult,
-    MajorizationCheckRequest,
     MajorizationCheckResult,
-    SchurHornCheckRequest,
+    RationalVector,
     SchurHornCheckResult,
-    TTransformSequenceRequest,
     TTransformSequenceResult,
     TTransformStep,
-    WeakMajorizationCheckRequest,
     WeakMajorizationCheckResult,
     _bound_rational,
     _require_majorization_matrix,
@@ -85,17 +81,25 @@ def _prefix_sums(values: list[Fraction]) -> list[Fraction]:
     return sums
 
 
-def compute_majorization_check(
-    request: MajorizationCheckRequest,
-) -> MajorizationCheckResult:
+def _require_same_dimension(x: RationalVector, y: RationalVector) -> None:
+    if len(x.labels) != len(y.labels):
+        raise OperationDomainValidationError(
+            location=("x", "y"),
+            code="majorization.vector_dimension",
+            message="vectors must have the same dimension",
+        )
+
+
+def majorization_check(x: RationalVector, y: RationalVector) -> MajorizationCheckResult:
     """Check if x majorizes y (ordinary majorization).
 
     x majorizes y when, after sorting both in nonincreasing order:
     - sum_{i=1}^k x_i >= sum_{i=1}^k y_i for all 1 <= k < n
     - sum_{i=1}^n x_i = sum_{i=1}^n y_i
     """
-    x_vals = request.x.as_fractions()
-    y_vals = request.y.as_fractions()
+    _require_same_dimension(x, y)
+    x_vals = x.as_fractions()
+    y_vals = y.as_fractions()
     n = len(x_vals)
 
     x_sorted = _sorted_desc(x_vals)
@@ -128,8 +132,10 @@ def compute_majorization_check(
     )
 
 
-def compute_weak_majorization_check(
-    request: WeakMajorizationCheckRequest,
+def weak_majorization_check(
+    x: RationalVector,
+    y: RationalVector,
+    direction: Literal["sub", "super"] = "sub",
 ) -> WeakMajorizationCheckResult:
     """Check weak majorization.
 
@@ -140,10 +146,10 @@ def compute_weak_majorization_check(
     sum_{i=1}^k x_i^up <= sum_{i=1}^k y_i^up for all 1 <= k <= n
     (using ascending sort)
     """
-    x_vals = request.x.as_fractions()
-    y_vals = request.y.as_fractions()
+    _require_same_dimension(x, y)
+    x_vals = x.as_fractions()
+    y_vals = y.as_fractions()
     n = len(x_vals)
-    direction = request.direction
 
     if direction == "sub":
         x_sorted = _sorted_desc(x_vals)
@@ -283,8 +289,8 @@ def _intermediate_vectors(
     return intermediate
 
 
-def compute_t_transform_sequence(
-    request: TTransformSequenceRequest,
+def t_transform_sequence(
+    x: RationalVector, y: RationalVector
 ) -> TTransformSequenceResult:
     """Compute an exact T-transform sequence from x to y.
 
@@ -292,9 +298,10 @@ def compute_t_transform_sequence(
     permutation) such that y = D * x where D is the composed doubly stochastic matrix.
     If x does not majorize y, returns a negative result.
     """
-    x_vals = list(request.x.as_fractions())
-    y_vals = list(request.y.as_fractions())
-    labels = list(request.x.labels)
+    _require_same_dimension(x, y)
+    x_vals = list(x.as_fractions())
+    y_vals = list(y.as_fractions())
+    labels = list(x.labels)
     n = len(x_vals)
 
     if not _majorizes_values(x_vals, y_vals):
@@ -378,15 +385,13 @@ def _build_composed_matrix(
     return mat
 
 
-def compute_doubly_stochastic_check(
-    request: DoublyStochasticCheckRequest,
-) -> DoublyStochasticCheckResult:
+def doubly_stochastic_check(matrix: RationalMatrix) -> DoublyStochasticCheckResult:
     """Check if a rational matrix is doubly stochastic."""
     _run_admission(
-        lambda: _require_majorization_matrix(request.matrix),
+        lambda: _require_majorization_matrix(matrix),
         location=("matrix",),
     )
-    mat = _matrix_fractions(request.matrix)
+    mat = _matrix_fractions(matrix)
     n = len(mat)
 
     first_neg: tuple[int, int] | None = None
@@ -416,19 +421,17 @@ def compute_doubly_stochastic_check(
     )
 
 
-def compute_birkhoff_decomposition(
-    request: BirkhoffDecompositionRequest,
-) -> BirkhoffDecompositionResult:
+def birkhoff_decomposition(matrix: RationalMatrix) -> BirkhoffDecompositionResult:
     """Compute a Birkhoff-von Neumann decomposition of a doubly stochastic matrix.
 
     Decomposes a doubly stochastic matrix into a convex combination of
     permutation matrices using the greedy matching + peel algorithm.
     """
     _run_admission(
-        lambda: _require_majorization_matrix(request.matrix),
+        lambda: _require_majorization_matrix(matrix),
         location=("matrix",),
     )
-    mat = _matrix_fractions(request.matrix)
+    mat = _matrix_fractions(matrix)
     n = len(mat)
 
     for i in range(n):
@@ -524,32 +527,39 @@ def _find_perfect_matching(matrix: list[list[Fraction]], n: int) -> list[int] | 
     return match_col
 
 
-def compute_schur_horn_check(
-    request: SchurHornCheckRequest,
+def schur_horn_check(
+    eigenvalues: tuple[CanonicalRational, ...],
+    diagonal: tuple[CanonicalRational, ...],
 ) -> SchurHornCheckResult:
     """Check Schur-Horn feasibility.
 
     A diagonal vector d is realizable as the diagonal of a Hermitian matrix
     with eigenvalues lambda iff lambda majorizes d.
     """
-    for index, value in enumerate(request.eigenvalues):
+    if not eigenvalues or len(eigenvalues) != len(diagonal):
+        raise OperationDomainValidationError(
+            location=("eigenvalues", "diagonal"),
+            code="majorization.schur_horn_dimension",
+            message="eigenvalues and diagonal must have the same positive length",
+        )
+    for index, value in enumerate(eigenvalues):
         _admit_bounded_rational(
             value,
             label=f"eigenvalues[{index}]",
             location=("eigenvalues", index),
         )
-    for index, value in enumerate(request.diagonal):
+    for index, value in enumerate(diagonal):
         _admit_bounded_rational(
             value,
             label=f"diagonal[{index}]",
             location=("diagonal", index),
         )
-    eigenvalues = [v.as_fraction() for v in request.eigenvalues]
-    diagonal = [v.as_fraction() for v in request.diagonal]
+    eigenvalue_fractions = [v.as_fraction() for v in eigenvalues]
+    diagonal_fractions = [v.as_fraction() for v in diagonal]
 
-    e_sorted = _sorted_desc(eigenvalues)
-    d_sorted = _sorted_desc(diagonal)
-    n = len(eigenvalues)
+    e_sorted = _sorted_desc(eigenvalue_fractions)
+    d_sorted = _sorted_desc(diagonal_fractions)
+    n = len(eigenvalue_fractions)
 
     e_prefix = _prefix_sums(e_sorted)
     d_prefix = _prefix_sums(d_sorted)
@@ -581,10 +591,10 @@ def compute_schur_horn_check(
 
 
 __all__ = [
-    "compute_birkhoff_decomposition",
-    "compute_doubly_stochastic_check",
-    "compute_majorization_check",
-    "compute_schur_horn_check",
-    "compute_t_transform_sequence",
-    "compute_weak_majorization_check",
+    "birkhoff_decomposition",
+    "doubly_stochastic_check",
+    "majorization_check",
+    "schur_horn_check",
+    "t_transform_sequence",
+    "weak_majorization_check",
 ]

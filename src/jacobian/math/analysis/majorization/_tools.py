@@ -21,13 +21,45 @@ from jacobian.math.analysis.majorization._models import (
     WeakMajorizationCheckResult,
 )
 from jacobian.math.analysis.majorization.operations import (
-    compute_birkhoff_decomposition,
-    compute_doubly_stochastic_check,
-    compute_majorization_check,
-    compute_schur_horn_check,
-    compute_t_transform_sequence,
-    compute_weak_majorization_check,
+    birkhoff_decomposition,
+    doubly_stochastic_check,
+    majorization_check,
+    schur_horn_check,
+    t_transform_sequence,
+    weak_majorization_check,
 )
+
+
+def _majorization_check(request: MajorizationCheckRequest) -> MajorizationCheckResult:
+    return majorization_check(request.x, request.y)
+
+
+def _weak_majorization_check(
+    request: WeakMajorizationCheckRequest,
+) -> WeakMajorizationCheckResult:
+    return weak_majorization_check(request.x, request.y, request.direction)
+
+
+def _t_transform_sequence(
+    request: TTransformSequenceRequest,
+) -> TTransformSequenceResult:
+    return t_transform_sequence(request.x, request.y)
+
+
+def _doubly_stochastic_check(
+    request: DoublyStochasticCheckRequest,
+) -> DoublyStochasticCheckResult:
+    return doubly_stochastic_check(request.matrix)
+
+
+def _birkhoff_decomposition(
+    request: BirkhoffDecompositionRequest,
+) -> BirkhoffDecompositionResult:
+    return birkhoff_decomposition(request.matrix)
+
+
+def _schur_horn_check(request: SchurHornCheckRequest) -> SchurHornCheckResult:
+    return schur_horn_check(request.eigenvalues, request.diagonal)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -61,7 +93,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "inequalities and total-sum equality.",
         MajorizationCheckRequest,
         MajorizationCheckResult,
-        compute_majorization_check,
+        _majorization_check,
         "linear-algebra",
         "majorization",
         "exact",
@@ -89,7 +121,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "super (x weakly supermajorizes y) without total-sum equality.",
         WeakMajorizationCheckRequest,
         WeakMajorizationCheckResult,
-        compute_weak_majorization_check,
+        _weak_majorization_check,
         "linear-algebra",
         "majorization",
         "exact",
@@ -119,7 +151,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "composed doubly stochastic matrix.",
         TTransformSequenceRequest,
         TTransformSequenceResult,
-        compute_t_transform_sequence,
+        _t_transform_sequence,
         "linear-algebra",
         "majorization",
         "exact",
@@ -147,7 +179,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "(non-negative, rows and columns sum to 1).",
         DoublyStochasticCheckRequest,
         DoublyStochasticCheckResult,
-        compute_doubly_stochastic_check,
+        _doubly_stochastic_check,
         "linear-algebra",
         "majorization",
         "exact",
@@ -173,7 +205,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "of permutation matrices using the greedy matching algorithm.",
         BirkhoffDecompositionRequest,
         BirkhoffDecompositionResult,
-        compute_birkhoff_decomposition,
+        _birkhoff_decomposition,
         "linear-algebra",
         "majorization",
         "exact",
@@ -199,7 +231,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Hermitian matrix with given eigenvalues (Schur-Horn theorem).",
         SchurHornCheckRequest,
         SchurHornCheckResult,
-        compute_schur_horn_check,
+        _schur_horn_check,
         "linear-algebra",
         "majorization",
         "exact",

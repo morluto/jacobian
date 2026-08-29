@@ -15,13 +15,13 @@ from jacobian.math.analysis.majorization._models import (
     TTransformSequenceRequest,
     WeakMajorizationCheckRequest,
 )
-from jacobian.math.analysis.majorization.operations import (
-    compute_birkhoff_decomposition,
-    compute_doubly_stochastic_check,
-    compute_majorization_check,
-    compute_schur_horn_check,
-    compute_t_transform_sequence,
-    compute_weak_majorization_check,
+from jacobian.math.analysis.majorization._tools import (
+    _birkhoff_decomposition,
+    _doubly_stochastic_check,
+    _majorization_check,
+    _schur_horn_check,
+    _t_transform_sequence,
+    _weak_majorization_check,
 )
 from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 
@@ -40,7 +40,7 @@ def rv(labels: list[str], vals: list[tuple[str, str]]) -> RationalVector:
 class TestMajorizationCheck:
     def test_majorizes(self) -> None:
         """(3,1) majorizes (2,2): 3>=2, 3+1=2+2."""
-        result = compute_majorization_check(
+        result = _majorization_check(
             MajorizationCheckRequest(
                 x=rv(["a", "b"], [("3", "1"), ("1", "1")]),
                 y=rv(["a", "b"], [("2", "1"), ("2", "1")]),
@@ -52,7 +52,7 @@ class TestMajorizationCheck:
 
     def test_not_majorizes_sum_mismatch(self) -> None:
         """(3,1) does not majorize (3,2): sums don't match."""
-        result = compute_majorization_check(
+        result = _majorization_check(
             MajorizationCheckRequest(
                 x=rv(["a", "b"], [("3", "1"), ("1", "1")]),
                 y=rv(["a", "b"], [("3", "1"), ("2", "1")]),
@@ -63,7 +63,7 @@ class TestMajorizationCheck:
 
     def test_not_majorizes_prefix_fail(self) -> None:
         """(2,2) does not majorize (3,1): prefix sum 2 < 3."""
-        result = compute_majorization_check(
+        result = _majorization_check(
             MajorizationCheckRequest(
                 x=rv(["a", "b"], [("2", "1"), ("2", "1")]),
                 y=rv(["a", "b"], [("3", "1"), ("1", "1")]),
@@ -74,7 +74,7 @@ class TestMajorizationCheck:
 
     def test_equal_vectors_majorize(self) -> None:
         """A vector majorizes itself."""
-        result = compute_majorization_check(
+        result = _majorization_check(
             MajorizationCheckRequest(
                 x=rv(["a", "b"], [("5", "1"), ("3", "1")]),
                 y=rv(["a", "b"], [("5", "1"), ("3", "1")]),
@@ -84,7 +84,7 @@ class TestMajorizationCheck:
 
     def test_three_dim(self) -> None:
         """(4,2,0) majorizes (2,2,2): 4>=2, 6>=4, 6=6."""
-        result = compute_majorization_check(
+        result = _majorization_check(
             MajorizationCheckRequest(
                 x=rv(["a", "b", "c"], [("4", "1"), ("2", "1"), ("0", "1")]),
                 y=rv(["a", "b", "c"], [("2", "1"), ("2", "1"), ("2", "1")]),
@@ -96,7 +96,7 @@ class TestMajorizationCheck:
 class TestWeakMajorization:
     def test_weak_sub_holds(self) -> None:
         """Weak submajorization holds when x >= y in prefix sums."""
-        result = compute_weak_majorization_check(
+        result = _weak_majorization_check(
             WeakMajorizationCheckRequest(
                 x=rv(["a", "b"], [("4", "1"), ("1", "1")]),
                 y=rv(["a", "b"], [("2", "1"), ("2", "1")]),
@@ -107,7 +107,7 @@ class TestWeakMajorization:
 
     def test_weak_sub_fails(self) -> None:
         """Weak submajorization fails when prefix sum is negative."""
-        result = compute_weak_majorization_check(
+        result = _weak_majorization_check(
             WeakMajorizationCheckRequest(
                 x=rv(["a", "b"], [("1", "1"), ("1", "1")]),
                 y=rv(["a", "b"], [("3", "1"), ("0", "1")]),
@@ -118,7 +118,7 @@ class TestWeakMajorization:
 
     def test_weak_super(self) -> None:
         """Weak supermajorization."""
-        result = compute_weak_majorization_check(
+        result = _weak_majorization_check(
             WeakMajorizationCheckRequest(
                 x=rv(["a", "b"], [("1", "1"), ("3", "1")]),
                 y=rv(["a", "b"], [("2", "1"), ("2", "1")]),
@@ -134,14 +134,12 @@ class TestDoublyStochastic:
             ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
         )
 
-        result = compute_doubly_stochastic_check(
-            DoublyStochasticCheckRequest(matrix=matrix)
-        )
+        result = _doubly_stochastic_check(DoublyStochasticCheckRequest(matrix=matrix))
 
         assert result.is_doubly_stochastic
 
     def test_identity(self) -> None:
-        result = compute_doubly_stochastic_check(
+        result = _doubly_stochastic_check(
             DoublyStochasticCheckRequest(
                 matrix=RationalMatrix(
                     entries=(
@@ -154,7 +152,7 @@ class TestDoublyStochastic:
         assert result.is_doubly_stochastic is True
 
     def test_not_ds(self) -> None:
-        result = compute_doubly_stochastic_check(
+        result = _doubly_stochastic_check(
             DoublyStochasticCheckRequest(
                 matrix=RationalMatrix(
                     entries=(
@@ -168,7 +166,7 @@ class TestDoublyStochastic:
         assert result.first_bad_row is not None
 
     def test_negative_entry(self) -> None:
-        result = compute_doubly_stochastic_check(
+        result = _doubly_stochastic_check(
             DoublyStochasticCheckRequest(
                 matrix=RationalMatrix(
                     entries=(
@@ -185,7 +183,7 @@ class TestDoublyStochastic:
 class TestBirkhoff:
     def test_permutation_matrix(self) -> None:
         """A permutation matrix decomposes into one term."""
-        result = compute_birkhoff_decomposition(
+        result = _birkhoff_decomposition(
             BirkhoffDecompositionRequest(
                 matrix=RationalMatrix(
                     entries=(
@@ -200,7 +198,7 @@ class TestBirkhoff:
 
     def test_average_matrix(self) -> None:
         """The 2x2 averaging matrix decomposes into 2 terms of weight 1/2."""
-        result = compute_birkhoff_decomposition(
+        result = _birkhoff_decomposition(
             BirkhoffDecompositionRequest(
                 matrix=RationalMatrix(
                     entries=(
@@ -225,7 +223,7 @@ class TestBirkhoff:
         )
 
         with pytest.raises(OperationDomainValidationError) as caught:
-            compute_birkhoff_decomposition(request)
+            _birkhoff_decomposition(request)
 
         assert caught.value.errors() == (
             {
@@ -239,7 +237,7 @@ class TestBirkhoff:
 class TestSchurHorn:
     def test_feasible(self) -> None:
         """Diagonal (1, 0) is feasible for eigenvalues (2, -1)."""
-        result = compute_schur_horn_check(
+        result = _schur_horn_check(
             SchurHornCheckRequest(
                 eigenvalues=(cr("2", "1"), cr("-1", "1")),
                 diagonal=(cr("1", "1"), cr("0", "1")),
@@ -249,7 +247,7 @@ class TestSchurHorn:
 
     def test_infeasible(self) -> None:
         """Diagonal (2, 0) is not feasible for eigenvalues (1, 1)."""
-        result = compute_schur_horn_check(
+        result = _schur_horn_check(
             SchurHornCheckRequest(
                 eigenvalues=(cr("1", "1"), cr("1", "1")),
                 diagonal=(cr("2", "1"), cr("0", "1")),
@@ -259,7 +257,7 @@ class TestSchurHorn:
 
     def test_sum_mismatch(self) -> None:
         """Sum mismatch makes it infeasible."""
-        result = compute_schur_horn_check(
+        result = _schur_horn_check(
             SchurHornCheckRequest(
                 eigenvalues=(cr("3", "1"), cr("1", "1")),
                 diagonal=(cr("2", "1"), cr("1", "1")),
@@ -272,7 +270,7 @@ class TestSchurHorn:
 class TestTTransform:
     def test_majorizes_t_transform(self) -> None:
         """When x majorizes y, compute the T-transform sequence."""
-        result = compute_t_transform_sequence(
+        result = _t_transform_sequence(
             TTransformSequenceRequest(
                 x=rv(["a", "b"], [("4", "1"), ("0", "1")]),
                 y=rv(["a", "b"], [("2", "1"), ("2", "1")]),
@@ -285,7 +283,7 @@ class TestTTransform:
     def test_permutation_equivalent_vectors_return_an_exact_witness(self) -> None:
         """A label permutation needs no averaging, but must still replay to y."""
 
-        result = compute_t_transform_sequence(
+        result = _t_transform_sequence(
             TTransformSequenceRequest(
                 x=rv(["a", "b", "c"], [("0", "1"), ("1", "1"), ("2", "1")]),
                 y=rv(["a", "b", "c"], [("1", "1"), ("2", "1"), ("0", "1")]),
@@ -303,7 +301,7 @@ class TestTTransform:
 
     def test_not_majorizes(self) -> None:
         """When x does not majorize y, return empty result."""
-        result = compute_t_transform_sequence(
+        result = _t_transform_sequence(
             TTransformSequenceRequest(
                 x=rv(["a", "b"], [("1", "1"), ("1", "1")]),
                 y=rv(["a", "b"], [("3", "1"), ("0", "1")]),

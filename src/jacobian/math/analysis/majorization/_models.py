@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -99,7 +99,7 @@ class WeakMajorizationCheckRequest(StrictModel):
 
     x: RationalVector
     y: RationalVector
-    direction: str = Field(default="sub")
+    direction: Literal["sub", "super"] = "sub"
 
     @model_validator(mode="after")
     def require_same_length(self) -> Self:
@@ -107,8 +107,6 @@ class WeakMajorizationCheckRequest(StrictModel):
             raise _validation_error(
                 "vector_dimension", "vectors must have the same dimension"
             )
-        if self.direction not in ("sub", "super"):
-            raise _validation_error("direction", "direction must be 'sub' or 'super'")
         return self
 
 
@@ -116,7 +114,7 @@ class WeakMajorizationCheckResult(StrictModel):
     """Result of a weak majorization check."""
 
     holds: bool
-    direction: str
+    direction: Literal["sub", "super"]
     prefix_slack: tuple[str, ...]
     first_failed_prefix: int | None = None
 

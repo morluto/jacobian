@@ -5,15 +5,19 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.word_cubes._models import (
     CombinatorialLineHypergraphRequest,
+    CombinatorialLineHypergraphResult,
 )
 from jacobian.math.combinatorics.word_cubes.operations import (
     construct_combinatorial_line_hypergraph,
 )
 
 
-def _edges(result):
+def _edges(
+    result: CombinatorialLineHypergraphResult,
+) -> list[tuple[str, tuple[str, ...]]]:
     return list(result.hypergraph.edges)
 
 
@@ -23,7 +27,7 @@ def test_q2_d1() -> None:
     assert len(result.hypergraph.vertices) == 2
     assert len(result.hypergraph.edges) == 1
     _, members = _edges(result)[0]
-    assert set(members) == {"0", "1"}
+    assert set(members) == {"[0]", "[1]"}
 
 
 def test_q3_d1() -> None:
@@ -32,7 +36,7 @@ def test_q3_d1() -> None:
     assert len(result.hypergraph.vertices) == 3
     assert len(result.hypergraph.edges) == 1
     _, members = _edges(result)[0]
-    assert set(members) == {"0", "1", "2"}
+    assert set(members) == {"[0]", "[1]", "[2]"}
 
 
 def test_q2_d2_count() -> None:
@@ -46,11 +50,13 @@ def test_q2_d2_fixture() -> None:
     """[2]^2 includes one-wildcard coordinate lines and the all-wildcard line."""
     result = construct_combinatorial_line_hypergraph(2, 2)
     edge_member_sets = {frozenset(members) for _, members in result.hypergraph.edges}
-    assert frozenset({"00", "10"}) in edge_member_sets
-    assert frozenset({"01", "11"}) in edge_member_sets
-    assert frozenset({"00", "01"}) in edge_member_sets
-    assert frozenset({"10", "11"}) in edge_member_sets
-    assert frozenset({"00", "11"}) in edge_member_sets
+    assert edge_member_sets == {
+        frozenset({"[0,0]", "[1,0]"}),
+        frozenset({"[0,1]", "[1,1]"}),
+        frozenset({"[0,0]", "[0,1]"}),
+        frozenset({"[1,0]", "[1,1]"}),
+        frozenset({"[0,0]", "[1,1]"}),
+    }
 
 
 def test_q3_d2_count() -> None:
@@ -61,12 +67,11 @@ def test_q3_d2_count() -> None:
 
 
 def test_q3_d2_fixture() -> None:
-    """For q=3,d=2: 6 one-wildcard coordinate lines plus 3 fully-wildcard diagonal lines."""
+    """Standard Hales--Jewett lines have one common wildcard value."""
     result = construct_combinatorial_line_hypergraph(3, 2)
-    edges = result.hypergraph.edges
-    assert len(edges) == 7
-    for _, members in edges:
-        assert len(members) == 3
+    assert len(result.lines) == 7
+    assert sum(line.wildcard_positions == (0, 1) for line in result.lines) == 1
+    assert result.lines[-1].vertices == ((0, 0), (1, 1), (2, 2))
 
 
 def test_count_identity() -> None:
@@ -83,7 +88,8 @@ def test_count_identity() -> None:
 def test_vertex_labels_are_words() -> None:
     """Vertex labels are canonical word representations."""
     result = construct_combinatorial_line_hypergraph(2, 2)
-    assert set(result.hypergraph.vertices) == {"00", "01", "10", "11"}
+    assert result.words == ((0, 0), (0, 1), (1, 0), (1, 1))
+    assert set(result.hypergraph.vertices) == {"[0,0]", "[0,1]", "[1,0]", "[1,1]"}
 
 
 def test_edge_size_equals_q() -> None:
@@ -106,8 +112,25 @@ def test_rejects_q_too_small() -> None:
 
 
 def test_rejects_vertex_count_exceeds_bound() -> None:
-    with pytest.raises(ValidationError):
-        CombinatorialLineHypergraphRequest(alphabet_size=10, dimension=5)
+    request = CombinatorialLineHypergraphRequest(alphabet_size=3, dimension=6)
+    with pytest.raises(OperationDomainValidationError) as error:
+        construct_combinatorial_line_hypergraph(
+            request.alphabet_size, request.dimension
+        )
+    assert error.value.errors()[0]["type"] == "word_cube.vertex_count_exceeds_bound"
+
+
+def test_native_entrypoint_uses_the_same_admission() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        construct_combinatorial_line_hypergraph(2, 0)
+    with pytest.raises(OperationDomainValidationError):
+        construct_combinatorial_line_hypergraph(3, 6)
+
+
+def test_exact_carrier_boundary_is_admitted() -> None:
+    result = construct_combinatorial_line_hypergraph(2, 8)
+    assert len(result.words) == 256
+    assert len(result.lines) == 3**8 - 2**8
 
 
 def test_independent_wildcard_enumeration() -> None:
@@ -128,7 +151,25 @@ def test_independent_wildcard_enumeration() -> None:
                     word[pos] = fixed_values[i]
                 for pos in wildcard_positions:
                     word[pos] = wildcard_val
-                edge.append("".join(str(x) for x in word))
+                edge.append("[" + ",".join(str(x) for x in word) + "]")
             expected_edges.add(frozenset(edge))
 
     assert actual_edges == expected_edges
+
+
+def test_pattern_provenance_reconstructs_each_line_uniquely() -> None:
+    result = construct_combinatorial_line_hypergraph(3, 3)
+    patterns = set()
+    for line in result.lines:
+        pattern = (line.wildcard_positions, line.fixed_coordinates)
+        assert pattern not in patterns
+        patterns.add(pattern)
+        for value, word in enumerate(line.vertices):
+            assert all(word[position] == value for position in line.wildcard_positions)
+            assert all(
+                word[position] == fixed for position, fixed in line.fixed_coordinates
+            )
+        edge = dict(result.hypergraph.edges)[line.edge_id]
+        assert set(edge) == {
+            "[" + ",".join(map(str, word)) + "]" for word in line.vertices
+        }

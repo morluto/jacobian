@@ -1,13 +1,20 @@
-"""Canonical combinatorial-line hypergraph constructor for word cubes [q]^d."""
+"""Canonical combinatorial-line hypergraph constructor for word cubes."""
 
 from __future__ import annotations
 
-from itertools import product
+from itertools import combinations, product
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGES,
+    MAX_TOTAL_INCIDENCES,
+    MAX_VERTICES,
     FiniteHypergraph,
 )
 from jacobian.math.combinatorics.word_cubes._models import (
+    MAX_ALPHABET_SIZE,
+    MAX_DIMENSION,
+    CombinatorialLine,
     CombinatorialLineHypergraphResult,
 )
 
@@ -18,51 +25,103 @@ def construct_combinatorial_line_hypergraph(
     alphabet_size: int,
     dimension: int,
 ) -> CombinatorialLineHypergraphResult:
-    """Construct the combinatorial-line hypergraph of [q]^d.
+    """Return every standard Hales--Jewett line in ``[alphabet_size]^dimension``."""
 
-    Vertices are all length-d words over the alphabet {0,...,q-1}.
-    Edges correspond to combinatorial lines: patterns with at least
-    one wildcard coordinate. Each edge has exactly q vertices.
-    """
+    _admit_word_cube(alphabet_size, dimension)
+    return _construct_admitted(alphabet_size, dimension)
+
+
+def _construct_admitted(
+    alphabet_size: int,
+    dimension: int,
+) -> CombinatorialLineHypergraphResult:
     q = alphabet_size
     d = dimension
+    words = tuple(product(range(q), repeat=d))
+    labels = tuple(_word_label(word) for word in words)
+    labels_by_word = dict(zip(words, labels, strict=True))
 
-    all_words = list(product(range(q), repeat=d))
-    word_labels = [_word_label(w) for w in all_words]
-    word_set = dict(zip(all_words, word_labels, strict=True))
+    lines: list[CombinatorialLine] = []
+    hyperedges: list[tuple[str, tuple[str, ...]]] = []
+    positions = range(d)
 
-    edges: list[tuple[str, tuple[str, ...]]] = []
-    edge_index = 0
+    for wildcard_count in range(1, d + 1):
+        for wildcard_positions in combinations(positions, wildcard_count):
+            wildcard_set = set(wildcard_positions)
+            fixed_positions = tuple(pos for pos in positions if pos not in wildcard_set)
+            for fixed_values in product(range(q), repeat=len(fixed_positions)):
+                fixed_coordinates = tuple(
+                    zip(fixed_positions, fixed_values, strict=True)
+                )
+                line_words = tuple(
+                    _instantiate(d, fixed_coordinates, wildcard_positions, value)
+                    for value in range(q)
+                )
+                edge_id = f"line_{len(lines)}"
+                lines.append(
+                    CombinatorialLine(
+                        edge_id=edge_id,
+                        wildcard_positions=wildcard_positions,
+                        fixed_coordinates=fixed_coordinates,
+                        vertices=line_words,
+                    )
+                )
+                hyperedges.append(
+                    (edge_id, tuple(labels_by_word[word] for word in line_words))
+                )
 
-    for mask in range(1, 1 << d):
-        wildcard_positions = [i for i in range(d) if mask & (1 << i)]
-        fixed_positions = [i for i in range(d) if not (mask & (1 << i))]
-
-        for fixed_values in product(range(q), repeat=len(fixed_positions)):
-            edge_vertices = []
-            for wildcard_val in range(q):
-                word = [0] * d
-                for i, pos in enumerate(fixed_positions):
-                    word[pos] = fixed_values[i]
-                for pos in wildcard_positions:
-                    word[pos] = wildcard_val
-                edge_vertices.append(word_set[tuple(word)])
-
-            edge_id = f"line_{edge_index}"
-            edges.append((edge_id, tuple(edge_vertices)))
-            edge_index += 1
-
-    hypergraph = FiniteHypergraph(
-        vertices=tuple(word_labels),
-        edges=tuple(edges),
-    )
     return CombinatorialLineHypergraphResult(
         alphabet_size=q,
         dimension=d,
-        hypergraph=hypergraph,
+        words=words,
+        lines=tuple(lines),
+        hypergraph=FiniteHypergraph(vertices=labels, edges=tuple(hyperedges)),
     )
 
 
+def _admit_word_cube(alphabet_size: int, dimension: int) -> None:
+    if not 2 <= alphabet_size <= MAX_ALPHABET_SIZE:
+        raise OperationDomainValidationError(
+            location=("alphabet_size",),
+            code="word_cube.alphabet_size",
+            message=f"alphabet_size must be between 2 and {MAX_ALPHABET_SIZE}",
+        )
+    if not 1 <= dimension <= MAX_DIMENSION:
+        raise OperationDomainValidationError(
+            location=("dimension",),
+            code="word_cube.dimension",
+            message=f"dimension must be between 1 and {MAX_DIMENSION}",
+        )
+    vertices = alphabet_size**dimension
+    edges = (alphabet_size + 1) ** dimension - vertices
+    incidences = alphabet_size * edges
+    bounds = (
+        (vertices, MAX_VERTICES, "vertex_count"),
+        (edges, MAX_EDGES, "edge_count"),
+        (incidences, MAX_TOTAL_INCIDENCES, "incidence_count"),
+    )
+    for actual, limit, quantity in bounds:
+        if actual > limit:
+            raise OperationDomainValidationError(
+                location=("alphabet_size", "dimension"),
+                code=f"word_cube.{quantity}_exceeds_bound",
+                message=f"the derived {quantity} {actual} exceeds the carrier limit {limit}",
+            )
+
+
+def _instantiate(
+    dimension: int,
+    fixed_coordinates: tuple[tuple[int, int], ...],
+    wildcard_positions: tuple[int, ...],
+    wildcard_value: int,
+) -> tuple[int, ...]:
+    word = [wildcard_value] * dimension
+    for position, value in fixed_coordinates:
+        word[position] = value
+    return tuple(word)
+
+
 def _word_label(word: tuple[int, ...]) -> str:
-    """Canonical label for a word."""
-    return "".join(str(d) for d in word)
+    """Return an injective, human-readable label for a coordinate word."""
+
+    return "[" + ",".join(map(str, word)) + "]"

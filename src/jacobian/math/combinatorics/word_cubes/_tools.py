@@ -66,7 +66,7 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "binary_cube_dim2",
-                "The word cube [2]^2 has 4 vertices and 4 combinatorial lines.",
+                "The word cube [2]^2 has 4 vertices and 5 combinatorial lines.",
                 {"alphabet_size": 2, "dimension": 2},
             ),
         ),

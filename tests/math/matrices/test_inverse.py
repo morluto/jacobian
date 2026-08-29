@@ -143,3 +143,38 @@ def test_inverse_operation_rejects_non_square_matrices() -> None:
 def test_inverse_operation_rejects_singular_matrices() -> None:
     with pytest.raises(ValueError):
         _run_inverse([["1", "2"], ["2", "4"]])
+
+
+def test_flint_inverse_exceeds_shared_integer_matrix_order() -> None:
+    order = 80
+    source = [
+        [str(int(row == column or column == row + 1)) for column in range(order)]
+        for row in range(order)
+    ]
+
+    inverse = _result_entries(_run_inverse(source))
+
+    expected = tuple(
+        tuple(
+            Fraction((-1) ** (column - row)) if column >= row else Fraction(0)
+            for column in range(order)
+        )
+        for row in range(order)
+    )
+    assert inverse == expected
+    identity = tuple(
+        tuple(Fraction(int(row == column)) for column in range(order))
+        for row in range(order)
+    )
+    assert _multiply(_fraction_entries(source), inverse) == identity
+    assert _multiply(inverse, _fraction_entries(source)) == identity
+
+
+def test_inverse_rejects_dense_output_work_before_backend() -> None:
+    order = 100
+    identity = [
+        [str(int(row == column)) for column in range(order)] for row in range(order)
+    ]
+
+    with pytest.raises(ValueError, match="exact output budget"):
+        _run_inverse(identity)

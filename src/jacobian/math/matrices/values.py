@@ -26,6 +26,9 @@ MAX_MATRIX_DIMENSION = 32
 # that complete public domain representable by the one canonical QQ matrix
 # value while narrower operations enforce their own request envelopes.
 MAX_RATIONAL_MATRIX_ORDER = 128
+# Exact inverse requests retain integer sources through the same structural
+# order; all other integer operations keep their owner-local order-32 limit.
+MAX_INTEGER_MATRIX_ORDER = 128
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 
@@ -231,23 +234,25 @@ class IntegerMatrix(StrictModel):
     domain: Literal["ZZ"] = "ZZ"
     entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
         min_length=1,
-        max_length=MAX_MATRIX_DIMENSION,
+        max_length=MAX_INTEGER_MATRIX_ORDER,
     )
 
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
         data = _require_raw_matrix_envelope(
-            data, maximum_axis=MAX_MATRIX_DIMENSION, label="matrix"
+            data, maximum_axis=MAX_INTEGER_MATRIX_ORDER, label="matrix"
         )
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
+        if column_count == 0 or column_count > MAX_INTEGER_MATRIX_ORDER:
             raise _validation_error(
-                "budget_exceeded", "matrix rows must contain between 1 and 32 entries"
+                "budget_exceeded",
+                "matrix rows must contain between 1 and "
+                f"{MAX_INTEGER_MATRIX_ORDER} entries",
             )
         if any(len(row) != column_count for row in self.entries):
             raise _validation_error(
@@ -323,6 +328,7 @@ class SmithNormalForm(StrictModel):
 
 
 __all__ = [
+    "MAX_INTEGER_MATRIX_ORDER",
     "MAX_MATRIX_DIMENSION",
     "MAX_MATRIX_SCALAR_DIGITS",
     "MAX_RATIONAL_MATRIX_ORDER",

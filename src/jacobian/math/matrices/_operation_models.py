@@ -20,6 +20,8 @@ from jacobian.math.matrices.values import (
 MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 64
 MAX_CHARACTERISTIC_POLYNOMIAL_ORDER = 128
+MAX_INVERSE_MATRIX_ORDER = 128
+MAX_INVERSE_OUTPUT_DIGIT_WORK = 3_000_000
 MAX_PERMANENT_RYSER_SUBSETS = 4_096
 MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
 # The canonical dense rational matrix carries determinant inputs through
@@ -209,6 +211,7 @@ class NonsingularIntegerMatrixRequest(_MatrixRequest):
     """One bounded square integer matrix for the exact inverse kernel."""
 
     matrix: IntegerMatrix
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_INVERSE_MATRIX_ORDER
 
 
 class SquareIntegerMatrixRequest(_MatrixRequest):

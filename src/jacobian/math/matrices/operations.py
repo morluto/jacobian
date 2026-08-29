@@ -21,6 +21,8 @@ from jacobian.math.matrices._operation_models import (
     MAX_CHARACTERISTIC_POLYNOMIAL_ORDER,
     MAX_DETERMINANT_MATRIX_DIMENSION,
     MAX_INPUT_SCALAR_DIGITS,
+    MAX_INVERSE_MATRIX_ORDER,
+    MAX_INVERSE_OUTPUT_DIGIT_WORK,
     MAX_KRONECKER_PRODUCT_AXIS,
     MAX_PERMANENT_RYSER_SUBSETS,
     CharacteristicPolynomialResult,
@@ -40,7 +42,12 @@ from jacobian.math.matrices._operation_models import (
     _require_square_system_admission,
     _validation_error,
 )
-from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix, SmithNormalForm
+from jacobian.math.matrices.values import (
+    MAX_MATRIX_DIMENSION,
+    IntegerMatrix,
+    RationalMatrix,
+    SmithNormalForm,
+)
 
 if TYPE_CHECKING:
     from sympy.matrices.matrixbase import MatrixBase
@@ -268,6 +275,15 @@ def _admit_integer(matrix: IntegerMatrix) -> None:
         maximum=MAX_INPUT_SCALAR_DIGITS,
         label="matrix input",
     )
+    if (
+        len(matrix.entries) > MAX_MATRIX_DIMENSION
+        or len(matrix.entries[0]) > MAX_MATRIX_DIMENSION
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "integer matrix computation dimensions are limited to "
+            f"{MAX_MATRIX_DIMENSION} rows and columns",
+        )
 
 
 def _admit_square_integer(matrix: IntegerMatrix) -> None:
@@ -276,6 +292,36 @@ def _admit_square_integer(matrix: IntegerMatrix) -> None:
     if rows == 0 or rows != len(matrix.entries[0]):
         raise _validation_error(
             "budget_exceeded", "operation requires a square integer matrix"
+        )
+
+
+def _admit_inverse(matrix: IntegerMatrix) -> None:
+    from jacobian.math.matrices.values import require_matrix_scalar_digits
+
+    require_matrix_scalar_digits(
+        matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+    )
+    order = len(matrix.entries)
+    if order != len(matrix.entries[0]):
+        raise _validation_error(
+            "budget_exceeded", "inverse requires a square integer matrix"
+        )
+    if order > MAX_INVERSE_MATRIX_ORDER:
+        raise _validation_error(
+            "budget_exceeded",
+            f"inverse matrices are limited to order {MAX_INVERSE_MATRIX_ORDER}",
+        )
+    height_digits = max(
+        len(value.lstrip("-")) for row in matrix.entries for value in row
+    )
+    determinant_digits = order * (height_digits + len(str(order)))
+    minor_order = max(1, order - 1)
+    minor_digits = minor_order * (height_digits + len(str(minor_order)))
+    component_digits = max(determinant_digits, minor_digits)
+    if order * order * component_digits > MAX_INVERSE_OUTPUT_DIGIT_WORK:
+        raise _validation_error(
+            "budget_exceeded",
+            "dense inverse coefficient work exceeds the exact output budget",
         )
 
 
@@ -497,16 +543,36 @@ def smith_normal_form_result(matrix: IntegerMatrix) -> SmithNormalForm:
 
 
 def inverse_result(matrix: IntegerMatrix) -> MatrixInverseResult:
-    _admit(_admit_square_integer, matrix)
+    _admit(_admit_inverse, matrix)
+    from flint import fmpq_mat
+
+    order = len(matrix.entries)
+    source = fmpq_mat(
+        order,
+        order,
+        [int(value) for row in matrix.entries for value in row],
+    )
     try:
-        value = inverse(conversions.integer_matrix_to_sympy(matrix))
-    except MatrixSingularError as exc:
+        value = source.inv()
+    except ZeroDivisionError as exc:
         raise OperationDomainValidationError(
             location=("matrix",),
             code="matrix.singular_matrix",
             message="matrix is singular; inverse does not exist",
         ) from exc
-    return MatrixInverseResult(inverse=conversions.rational_matrix_from_sympy(value))
+    return MatrixInverseResult(
+        inverse=RationalMatrix(
+            entries=tuple(
+                tuple(
+                    CanonicalRational.from_integer_ratio(
+                        int(value[row, column].p), int(value[row, column].q)
+                    )
+                    for column in range(order)
+                )
+                for row in range(order)
+            )
+        )
+    )
 
 
 def trace_result(matrix: IntegerMatrix) -> MatrixTraceResult:

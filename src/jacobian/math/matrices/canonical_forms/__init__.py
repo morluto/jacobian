@@ -10,6 +10,7 @@ from jacobian.math.matrices.canonical_forms._models import (
 )
 from jacobian.math.matrices.canonical_forms.operations import (
     characteristic_polynomial,
+    evaluate_matrix_polynomial_value,
     invariant_factors,
     minimal_polynomial,
     primary_decomposition,
@@ -23,6 +24,7 @@ __all__ = [
     "PrimaryDecompositionResult",
     "RationalCanonicalFormResult",
     "characteristic_polynomial",
+    "evaluate_matrix_polynomial_value",
     "invariant_factors",
     "minimal_polynomial",
     "primary_decomposition",

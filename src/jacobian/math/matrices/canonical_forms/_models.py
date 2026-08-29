@@ -1386,18 +1386,19 @@ class MatrixPolynomialEvaluationResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        request: MatrixPolynomialEvaluationRequest,
+        matrix: RationalMatrix,
+        polynomial: RationalPolynomial,
         value: RationalMatrix,
     ) -> Self:
-        polynomial_degree = _mathematical_polynomial_degree(request.polynomial)
+        polynomial_degree = _mathematical_polynomial_degree(polynomial)
         return cls.model_construct(
-            source_matrix=request.matrix,
-            polynomial=request.polynomial,
+            source_matrix=matrix,
+            polynomial=polynomial,
             value=value,
             polynomial_degree=polynomial_degree,
             matrix_multiplications=polynomial_degree or 0,
             scalar_product_terms=(polynomial_degree or 0)
-            * len(request.matrix.entries) ** 3,
+            * len(matrix.entries) ** 3,
         )
 
 
@@ -1431,7 +1432,7 @@ class MinimalPolynomialResult(StrictModel):
     :meth:`_from_kernel`.
     """
 
-    matrix: SquareMatrixRequest
+    matrix: RationalMatrix
     minimal_polynomial: MonicPolynomial
     characteristic_polynomial: MonicPolynomial
     degree: int = Field(ge=1, le=MAX_CANONICAL_FORM_DIMENSION)
@@ -1442,9 +1443,7 @@ class MinimalPolynomialResult(StrictModel):
             raise _validation_error(
                 "invariant_mismatch", "degree must equal the minimal-polynomial degree"
             )
-        if len(self.characteristic_polynomial.coefficients) - 1 != len(
-            self.matrix.matrix.entries
-        ):
+        if len(self.characteristic_polynomial.coefficients) - 1 != len(self.matrix.entries):
             raise _validation_error(
                 "shape_mismatch",
                 "characteristic-polynomial degree must equal matrix order",
@@ -1455,7 +1454,7 @@ class MinimalPolynomialResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        matrix: SquareMatrixRequest,
+        matrix: RationalMatrix,
         minimal_polynomial: MonicPolynomial,
         characteristic_polynomial: MonicPolynomial,
     ) -> Self:
@@ -1481,7 +1480,7 @@ class RationalCanonicalFormResult(StrictModel):
     :meth:`_from_kernel`.
     """
 
-    matrix: SquareMatrixRequest
+    matrix: RationalMatrix
     invariant_factors: tuple[InvariantFactorEntry, ...] = Field(min_length=1)
     characteristic_polynomial: MonicPolynomial
     minimal_polynomial: MonicPolynomial
@@ -1489,7 +1488,7 @@ class RationalCanonicalFormResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_metadata(self) -> Self:
-        dimension = len(self.matrix.matrix.entries)
+        dimension = len(self.matrix.entries)
         if self.total_block_size != sum(
             entry.block_size for entry in self.invariant_factors
         ):
@@ -1516,7 +1515,7 @@ class RationalCanonicalFormResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        matrix: SquareMatrixRequest,
+        matrix: RationalMatrix,
         invariant_factors: tuple[InvariantFactorEntry, ...],
         characteristic_polynomial: MonicPolynomial,
         minimal_polynomial: MonicPolynomial,
@@ -1536,14 +1535,14 @@ class PrimaryDecompositionResult(StrictModel):
     Retains source and component values. Kernel output uses :meth:`_from_kernel`.
     """
 
-    matrix: SquareMatrixRequest
+    matrix: RationalMatrix
     components: tuple[MonicPolynomial, ...] = Field(min_length=1)
     minimal_polynomial: MonicPolynomial
 
     @model_validator(mode="after")
     def require_structural_metadata(self) -> Self:
         if len(self.minimal_polynomial.coefficients) - 1 > len(
-            self.matrix.matrix.entries
+            self.matrix.entries
         ):
             raise _validation_error(
                 "shape_mismatch",
@@ -1555,7 +1554,7 @@ class PrimaryDecompositionResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        matrix: SquareMatrixRequest,
+        matrix: RationalMatrix,
         components: tuple[MonicPolynomial, ...],
         minimal_polynomial: MonicPolynomial,
     ) -> Self:

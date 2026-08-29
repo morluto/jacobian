@@ -86,7 +86,15 @@ def _polynomial(*terms: tuple[RationalInput, int]) -> RationalPolynomial:
 
 def _assert_admission_rejected(request: MatrixPolynomialEvaluationRequest) -> None:
     with pytest.raises(OperationDomainValidationError):
-        compute_matrix_polynomial_evaluation(request)
+        compute_matrix_polynomial_evaluation(request.matrix, request.polynomial)
+
+
+def _evaluate(
+    request: MatrixPolynomialEvaluationRequest,
+) -> MatrixPolynomialEvaluationResult:
+    """Invoke the canonical native operation for a wire-shaped fixture."""
+
+    return compute_matrix_polynomial_evaluation(request.matrix, request.polynomial)
 
 
 def _fractions(matrix: RationalMatrix) -> tuple[tuple[Fraction, ...], ...]:
@@ -125,10 +133,10 @@ def _assert_matrix_polynomial_envelope_conformance(
     metrics = _HornerEvaluationMetrics()
     measured_value = _evaluate_polynomial(
         _fractions(request.matrix),
-        _dense_polynomial_coefficients(request),
+        _dense_polynomial_coefficients(request.polynomial),
         metrics=metrics,
     )
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert _fractions(result.value) == measured_value
     actual_component_bounds = tuple(
@@ -240,7 +248,7 @@ def test_cancelled_horner_products_are_recorded_before_the_scalar_addition() -> 
     metrics = _HornerEvaluationMetrics()
     measured_value = _evaluate_polynomial(
         _fractions(request.matrix),
-        _dense_polynomial_coefficients(request),
+        _dense_polynomial_coefficients(request.polynomial),
         metrics=metrics,
     )
 
@@ -275,7 +283,7 @@ def test_canceling_dot_product_terms_are_observed_inside_each_product() -> None:
     metrics = _HornerEvaluationMetrics()
     measured_value = _evaluate_polynomial(
         _fractions(request.matrix),
-        _dense_polynomial_coefficients(request),
+        _dense_polynomial_coefficients(request.polynomial),
         metrics=metrics,
     )
 
@@ -456,7 +464,7 @@ def test_rotation_matrix_is_annihilated_by_t_squared_plus_one() -> None:
         polynomial=_polynomial((1, 2), (1, 0)),
     )
 
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert result.source_matrix == request.matrix
     assert result.polynomial == request.polynomial
@@ -481,7 +489,7 @@ def test_zero_constant_and_identity_polynomials(
     polynomial: RationalPolynomial,
     expected: tuple[tuple[int, ...], ...],
 ) -> None:
-    result = compute_matrix_polynomial_evaluation(
+    result = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=_matrix((1, 2), (0, 1)),
             polynomial=polynomial,
@@ -506,17 +514,17 @@ def test_evaluation_preserves_polynomial_sum_and_product() -> None:
     polynomial_product = _polynomial((2, 3), (3, 2), (-2, 1), (-3, 0))
 
     f_value = _fractions(
-        compute_matrix_polynomial_evaluation(
+        _evaluate(
             MatrixPolynomialEvaluationRequest(matrix=source, polynomial=f)
         ).value
     )
     g_value = _fractions(
-        compute_matrix_polynomial_evaluation(
+        _evaluate(
             MatrixPolynomialEvaluationRequest(matrix=source, polynomial=g)
         ).value
     )
     sum_value = _fractions(
-        compute_matrix_polynomial_evaluation(
+        _evaluate(
             MatrixPolynomialEvaluationRequest(
                 matrix=source,
                 polynomial=polynomial_sum,
@@ -524,7 +532,7 @@ def test_evaluation_preserves_polynomial_sum_and_product() -> None:
         ).value
     )
     product_value = _fractions(
-        compute_matrix_polynomial_evaluation(
+        _evaluate(
             MatrixPolynomialEvaluationRequest(
                 matrix=source,
                 polynomial=polynomial_product,
@@ -549,7 +557,7 @@ def test_evaluation_preserves_polynomial_sum_and_product() -> None:
 
 
 def test_value_composes_unchanged_with_matrix_consumers() -> None:
-    evaluated = compute_matrix_polynomial_evaluation(
+    evaluated = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=_matrix((0, 1), (0, 0)),
             polynomial=_polynomial((1, 1), (1, 0)),
@@ -568,7 +576,7 @@ def test_value_composes_unchanged_with_matrix_consumers() -> None:
 
 def test_adapter_preserves_canonical_coefficients_above_python_digit_limit() -> None:
     numerator = "1" * 5_000
-    result = compute_matrix_polynomial_evaluation(
+    result = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=_matrix((1,)),
             polynomial=_polynomial((numerator, 0)),
@@ -586,7 +594,7 @@ def test_adapter_preserves_canonical_coefficients_above_python_digit_limit() -> 
 def test_result_rejects_independent_source_value_and_work_mutations(
     mutation: str,
 ) -> None:
-    result = compute_matrix_polynomial_evaluation(
+    result = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=_matrix((0, -1), (1, 0)),
             polynomial=_polynomial((1, 2), (1, 0)),
@@ -758,7 +766,7 @@ def test_structurally_nilpotent_powers_are_admitted_and_evaluate_to_zero() -> No
         polynomial=_polynomial((1, 2)),
     )
 
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert _fractions(result.value) == (
         (Fraction(0), Fraction(0)),
@@ -810,7 +818,7 @@ def test_dead_powers_do_not_demand_a_global_clearing_denominator() -> None:
         polynomial=_polynomial((1, 2)),
     )
 
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert _fractions(result.value) == tuple(
         tuple(Fraction(0) for _ in range(3)) for _ in range(3)
@@ -833,7 +841,7 @@ def test_proven_cancellations_survive_with_compounded_denominators() -> None:
         )
     )
 
-    identity_result = compute_matrix_polynomial_evaluation(
+    identity_result = _evaluate(
         MatrixPolynomialEvaluationRequest(matrix=swap, polynomial=_polynomial((1, 2)))
     )
     assert _fractions(identity_result.value) == (
@@ -841,7 +849,7 @@ def test_proven_cancellations_survive_with_compounded_denominators() -> None:
         (Fraction(0), Fraction(1)),
     )
 
-    scaled_result = compute_matrix_polynomial_evaluation(
+    scaled_result = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=swap,
             polynomial=_polynomial((format_canonical_integer(2**24_000), 2)),
@@ -880,7 +888,7 @@ def test_structural_zero_reduces_to_surviving_terms_exactly() -> None:
             (_rational(0), _rational(0)),
         )
     )
-    with_constant = compute_matrix_polynomial_evaluation(
+    with_constant = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=nilpotent,
             polynomial=_polynomial((1, 2), (5, 0)),
@@ -894,7 +902,7 @@ def test_structural_zero_reduces_to_surviving_terms_exactly() -> None:
     fractional = RationalMatrix(
         entries=((_rational(0), _rational(1, 3)), (_rational(0), _rational(0)))
     )
-    rational_constant = compute_matrix_polynomial_evaluation(
+    rational_constant = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=fractional,
             polynomial=_polynomial((1, 2), (5, 0)),
@@ -905,7 +913,7 @@ def test_structural_zero_reduces_to_surviving_terms_exactly() -> None:
         (Fraction(0), Fraction(5)),
     )
 
-    surviving_power = compute_matrix_polynomial_evaluation(
+    surviving_power = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=nilpotent,
             polynomial=_polynomial((1, 2), (1, 1)),
@@ -938,7 +946,7 @@ def test_admission_still_charges_live_structural_growth() -> None:
         MatrixPolynomialEvaluationRequest(matrix=chain, polynomial=_polynomial((1, 2)))
     )
 
-    vanishing_chain_value = compute_matrix_polynomial_evaluation(
+    vanishing_chain_value = _evaluate(
         MatrixPolynomialEvaluationRequest(matrix=chain, polynomial=_polynomial((1, 3)))
     )
     assert _fractions(vanishing_chain_value.value) == (
@@ -989,7 +997,7 @@ def test_degree_two_admission_cross_cancels_coefficient_and_matrix_power_factors
         matrix=RationalMatrix(entries=((_rational(base_three, base_two),),)),
         polynomial=_rational_polynomial((coefficient, 2)),
     )
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert request.polynomial.polynomial.terms[0].exponents == (2,)
     assert result.value.entries[0][0].num == "1"
@@ -1062,7 +1070,7 @@ def test_constant_result_work_estimates_are_not_clipped_at_the_component_cap() -
     )
 
     moderate_height = "1" + "0" * 13_999
-    admitted = compute_matrix_polynomial_evaluation(
+    admitted = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=RationalMatrix(
                 entries=(
@@ -1109,7 +1117,7 @@ def test_structurally_dead_powers_are_excluded_from_digit_work_estimate() -> Non
         polynomial=_polynomial((1, 100)),
     )
 
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert request.polynomial.polynomial.terms[0].exponents == (100,)
     assert result.polynomial_degree == 100
@@ -1143,7 +1151,7 @@ def test_horner_charges_shifted_dead_leading_terms_during_their_ride() -> None:
     )
 
     moderate_height = "1" + "0" * 14_999
-    admitted = compute_matrix_polynomial_evaluation(
+    admitted = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=RationalMatrix(
                 entries=(
@@ -1181,7 +1189,7 @@ def test_clearing_denominator_growth_is_bounded_by_live_horner_shifts() -> None:
         polynomial=_polynomial((1, 100), (1, 1)),
     )
 
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert result.value.entries[0][0].num == "0"
     assert result.value.entries[1][0].num == "0"
@@ -1219,7 +1227,7 @@ def test_overlapping_dead_denominators_are_charged_at_shared_entries() -> None:
 
     moderate_first = "1" + "0" * 16_383
     moderate_second = format_canonical_integer(11**15_700)
-    admitted = compute_matrix_polynomial_evaluation(
+    admitted = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=chain,
             polynomial=_rational_polynomial(
@@ -1269,7 +1277,7 @@ def test_disjoint_dead_denominators_never_compound_across_entries() -> None:
         ),
     )
 
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert _fractions(result.value) == (
         (Fraction(0), Fraction(1)),
@@ -1303,7 +1311,7 @@ def test_mixed_overlap_of_dead_denominators_is_still_charged() -> None:
 
     moderate_first = "1" + "0" * 8_000
     moderate_second = format_canonical_integer(11**7_700)
-    admitted = compute_matrix_polynomial_evaluation(
+    admitted = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=chain,
             polynomial=_rational_polynomial(
@@ -1355,7 +1363,7 @@ def test_converging_matrix_paths_compound_shared_cell_denominators() -> None:
     small_second = format_canonical_integer(7**7_117)
     small_third = format_canonical_integer(11**5_834)
     small_fourth = format_canonical_integer(13**5_332)
-    admitted = compute_matrix_polynomial_evaluation(
+    admitted = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=RationalMatrix(
                 entries=(
@@ -1416,7 +1424,7 @@ def test_disjoint_rational_entries_never_demand_a_global_clearing_denominator() 
         polynomial=_polynomial((1, 2), (1, 1)),
     )
 
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert result.value.entries[0][1].num == "1"
     assert result.value.entries[0][1].den == first_denominator
@@ -1453,7 +1461,7 @@ def test_dead_coefficient_powers_are_classified_before_the_coefficient_lcm() -> 
         ),
     )
 
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert _fractions(result.value) == (
         (Fraction(0), Fraction(0)),
@@ -1526,7 +1534,7 @@ def test_linear_admission_cross_cancels_rational_product_factors() -> None:
         matrix=matrix,
         polynomial=_rational_polynomial((coefficient, 1)),
     )
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert request.polynomial.polynomial.terms[0].exponents == (1,)
     assert result.value.entries[0][0].num == "1"
@@ -1536,7 +1544,7 @@ def test_linear_admission_cross_cancels_rational_product_factors() -> None:
         matrix=matrix,
         polynomial=_rational_polynomial((coefficient, 1), (_rational(5, 7), 0)),
     )
-    constant_result = compute_matrix_polynomial_evaluation(cancelled_with_constant)
+    constant_result = _evaluate(cancelled_with_constant)
 
     assert constant_result.value.entries[0][0].as_fraction() == Fraction(12, 7)
 
@@ -1572,7 +1580,7 @@ def test_linear_output_bounds_preserve_additive_cancellation() -> None:
         ),
     )
 
-    result = compute_matrix_polynomial_evaluation(request)
+    result = _evaluate(request)
 
     assert _fractions(result.value) == ((Fraction(0),),)
     assert result.polynomial_degree == 1

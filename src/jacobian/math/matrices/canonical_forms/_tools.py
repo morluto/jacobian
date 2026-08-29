@@ -46,6 +46,28 @@ def canonical_form_operation[
     )
 
 
+def _compute_matrix_polynomial_evaluation(
+    request: MatrixPolynomialEvaluationRequest,
+) -> MatrixPolynomialEvaluationResult:
+    return compute_matrix_polynomial_evaluation(request.matrix, request.polynomial)
+
+
+def _compute_minimal_polynomial(request: SquareMatrixRequest) -> MinimalPolynomialResult:
+    return compute_minimal_polynomial(request.matrix)
+
+
+def _compute_rational_canonical_form(
+    request: SquareMatrixRequest,
+) -> RationalCanonicalFormResult:
+    return compute_rational_canonical_form(request.matrix)
+
+
+def _compute_primary_decomposition(
+    request: SquareMatrixRequest,
+) -> PrimaryDecompositionResult:
+    return compute_primary_decomposition(request.matrix)
+
+
 TOOLS: MathTools = (
     canonical_form_operation(
         "matrix.polynomial.evaluate.compute",
@@ -55,7 +77,7 @@ TOOLS: MathTools = (
         "alongside the exact evaluated matrix.",
         MatrixPolynomialEvaluationRequest,
         MatrixPolynomialEvaluationResult,
-        compute_matrix_polynomial_evaluation,
+        _compute_matrix_polynomial_evaluation,
         "matrix",
         "polynomial",
         "functional-calculus",
@@ -105,7 +127,7 @@ TOOLS: MathTools = (
         "method, returning the exact minimal and characteristic polynomials.",
         SquareMatrixRequest,
         MinimalPolynomialResult,
-        compute_minimal_polynomial,
+        _compute_minimal_polynomial,
         "matrix",
         "minimal-polynomial",
         "exact",
@@ -132,7 +154,7 @@ TOOLS: MathTools = (
         "over QQ[t].",
         SquareMatrixRequest,
         RationalCanonicalFormResult,
-        compute_rational_canonical_form,
+        _compute_rational_canonical_form,
         "matrix",
         "rational-canonical-form",
         "exact",
@@ -158,7 +180,7 @@ TOOLS: MathTools = (
         "components and return each monic component polynomial.",
         SquareMatrixRequest,
         PrimaryDecompositionResult,
-        compute_primary_decomposition,
+        _compute_primary_decomposition,
         "matrix",
         "primary-decomposition",
         "exact",

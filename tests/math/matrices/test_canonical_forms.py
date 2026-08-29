@@ -18,7 +18,6 @@ from jacobian.math.matrices.canonical_forms._models import (
     InvariantFactorEntry,
     MonicPolynomial,
     RationalCanonicalFormResult,
-    SquareMatrixRequest,
 )
 from jacobian.math.matrices.canonical_forms.operations import (
     compute_minimal_polynomial,
@@ -30,14 +29,14 @@ from jacobian.math.matrices.values import RationalMatrix
 R = CanonicalRational
 
 
-def _mat(*rows: tuple[tuple[str, str], ...]) -> SquareMatrixRequest:
+def _mat(*rows: tuple[tuple[str, str], ...]) -> RationalMatrix:
     entries = tuple(tuple(R(num=num, den=den) for num, den in row) for row in rows)
-    return SquareMatrixRequest(matrix=RationalMatrix(entries=entries))
+    return RationalMatrix(entries=entries)
 
 
-def _assert_admission_rejected(request: SquareMatrixRequest) -> None:
+def _assert_admission_rejected(matrix: RationalMatrix) -> None:
     with pytest.raises(OperationDomainValidationError):
-        compute_minimal_polynomial(request)
+        compute_minimal_polynomial(matrix)
 
 
 def _coeffs(poly: MonicPolynomial) -> list[Fraction]:
@@ -48,7 +47,7 @@ def _pair(num: str, den: str) -> tuple[str, str]:
     return (num, den)
 
 
-def _diagonal(*values: str) -> SquareMatrixRequest:
+def _diagonal(*values: str) -> RationalMatrix:
     entries = tuple(
         tuple(
             R(num=value if row == column else "0", den="1")
@@ -56,7 +55,7 @@ def _diagonal(*values: str) -> SquareMatrixRequest:
         )
         for row in range(len(values))
     )
-    return SquareMatrixRequest(matrix=RationalMatrix(entries=entries))
+    return RationalMatrix(entries=entries)
 
 
 def _mono(*coefficients: Fraction | int) -> MonicPolynomial:
@@ -67,7 +66,7 @@ def _mono(*coefficients: Fraction | int) -> MonicPolynomial:
     )
 
 
-def _companion(*tail: tuple[str, str]) -> SquareMatrixRequest:
+def _companion(*tail: tuple[str, str]) -> RationalMatrix:
     """Companion matrix of x^n + tail[-1] x^{n-1} + ... + tail[0]."""
     constants = [Fraction(int(num), int(den)) for num, den in tail]
     n = len(constants)
@@ -79,7 +78,7 @@ def _companion(*tail: tuple[str, str]) -> SquareMatrixRequest:
         for i in range(n - 1)
     ]
     entries.append(tuple(R.from_fraction(-constant) for constant in constants))
-    return SquareMatrixRequest(matrix=RationalMatrix(entries=tuple(entries)))
+    return RationalMatrix(entries=tuple(entries))
 
 
 def test_nilpotent_jordan_block_minimal_polynomial_is_t_squared() -> None:
@@ -302,8 +301,8 @@ def test_primary_decomposition_normalizes_rational_root_factors() -> None:
 
 def test_contract_rejects_nonsquare() -> None:
     _assert_admission_rejected(
-        SquareMatrixRequest(
-            matrix=RationalMatrix(entries=((R(num="1", den="1"), R(num="0", den="1")),))
+        RationalMatrix(
+            entries=((R(num="1", den="1"), R(num="0", den="1")),)
         )
     )
 
@@ -369,12 +368,12 @@ def test_contract_rejects_oversized_and_wide_scalar_matrices() -> None:
         for row in range(17)
     )
     _assert_admission_rejected(
-        SquareMatrixRequest(matrix=RationalMatrix(entries=identity_17))
+        RationalMatrix(entries=identity_17)
     )
 
     wide_scalar = ((R(num="1" + "0" * 256, den="1"),),)
     _assert_admission_rejected(
-        SquareMatrixRequest(matrix=RationalMatrix(entries=wide_scalar))
+        RationalMatrix(entries=wide_scalar)
     )
 
 
@@ -388,45 +387,37 @@ def test_public_kernels_return_monic_coefficient_lists() -> None:
     assert primary_decomposition(entries) == ((Fraction(0), Fraction(0), Fraction(1)),)
 
 
-def _block_diagonal(*blocks: SquareMatrixRequest) -> SquareMatrixRequest:
-    n = sum(len(block.matrix.entries) for block in blocks)
+def _block_diagonal(*blocks: RationalMatrix) -> RationalMatrix:
+    n = sum(len(block.entries) for block in blocks)
     grid = [[Fraction(0)] * n for _ in range(n)]
     offset = 0
     for block in blocks:
-        entries = [
-            [entry.as_fraction() for entry in row] for row in block.matrix.entries
-        ]
+        entries = [[entry.as_fraction() for entry in row] for row in block.entries]
         for i, row in enumerate(entries):
             for j, value in enumerate(row):
                 grid[offset + i][offset + j] = value
         offset += len(entries)
-    return SquareMatrixRequest(
-        matrix=RationalMatrix(
-            entries=tuple(
-                tuple(R.from_fraction(value) for value in row) for row in grid
-            )
-        )
+    return RationalMatrix(
+        entries=tuple(tuple(R.from_fraction(value) for value in row) for row in grid)
     )
 
 
 def _conjugate(
-    request: SquareMatrixRequest,
+    matrix_value: RationalMatrix,
     change_of_basis: tuple[tuple[Fraction, ...], ...],
-) -> SquareMatrixRequest:
+) -> RationalMatrix:
     """Return S A S^{-1} for an invertible rational change of basis."""
     import sympy
 
     matrix = sympy.Matrix(
-        [[entry.as_fraction() for entry in row] for row in request.matrix.entries]
+        [[entry.as_fraction() for entry in row] for row in matrix_value.entries]
     )
     similarity = sympy.Matrix([list(row) for row in change_of_basis])
     transformed = similarity * matrix * similarity.inv()
-    return SquareMatrixRequest(
-        matrix=RationalMatrix(
-            entries=tuple(
-                tuple(R.from_fraction(Fraction(int(v.p), int(v.q))) for v in row)
-                for row in transformed.tolist()
-            )
+    return RationalMatrix(
+        entries=tuple(
+            tuple(R.from_fraction(Fraction(int(v.p), int(v.q))) for v in row)
+            for row in transformed.tolist()
         )
     )
 
@@ -529,16 +520,14 @@ def test_rational_canonical_form_rejects_divisibility_break() -> None:
         )
 
 
-def _nilpotent_jordan_blocks(block_size: int) -> SquareMatrixRequest:
+def _nilpotent_jordan_blocks(block_size: int) -> RationalMatrix:
     """Direct sum of two nilpotent Jordan blocks J_block_size(0)."""
     dimension = 2 * block_size
     values = [[R.from_fraction(Fraction(0))] * dimension for _ in range(dimension)]
     for start in (0, block_size):
         for offset in range(block_size - 1):
             values[start + offset][start + offset + 1] = R.from_fraction(Fraction(1))
-    return SquareMatrixRequest(
-        matrix=RationalMatrix(entries=tuple(tuple(row) for row in values))
-    )
+    return RationalMatrix(entries=tuple(tuple(row) for row in values))
 
 
 def test_rational_canonical_form_j3_plus_j3_has_two_x_cubed_factors() -> None:

@@ -18,13 +18,11 @@ from jacobian.math.matrices.canonical_forms._models import (
     MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
     InvariantFactorEntry,
-    MatrixPolynomialEvaluationRequest,
     MatrixPolynomialEvaluationResult,
     MinimalPolynomialResult,
     MonicPolynomial,
     PrimaryDecompositionResult,
     RationalCanonicalFormResult,
-    SquareMatrixRequest,
     _polynomial_degree,
     _require_matrix_polynomial_output_budget,
     _validation_error,
@@ -37,11 +35,13 @@ from jacobian.math.matrices.values import (
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
+    RationalPolynomial,
     require_polynomial_budget,
 )
 
 __all__ = [
     "characteristic_polynomial",
+    "evaluate_matrix_polynomial_value",
     "invariant_factors",
     "minimal_polynomial",
     "primary_decomposition",
@@ -332,27 +332,28 @@ def primary_decomposition(entries: RationalEntries) -> tuple[CoefficientList, ..
 
 
 def _admit_matrix_polynomial_evaluation(
-    request: MatrixPolynomialEvaluationRequest,
+    matrix: RationalMatrix,
+    polynomial: RationalPolynomial,
 ) -> None:
-    dimension = len(request.matrix.entries)
-    if len(request.matrix.entries[0]) != dimension:
+    dimension = len(matrix.entries)
+    if len(matrix.entries[0]) != dimension:
         raise _validation_error(
             "budget_exceeded",
             "matrix polynomial evaluation requires a square matrix",
         )
-    if len(request.polynomial.variables) != 1:
+    if len(polynomial.variables) != 1:
         raise _validation_error(
             "budget_exceeded",
             "matrix polynomial evaluation requires exactly one polynomial variable",
         )
     require_polynomial_budget(
-        request.polynomial,
+        polynomial,
         maximum_terms=MAX_POLYNOMIAL_TERMS,
         maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
         maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
         label="matrix polynomial",
     )
-    degree = _polynomial_degree(request.polynomial)
+    degree = _polynomial_degree(polynomial)
     scalar_products_per_pass = degree * dimension**3
     total_scalar_products = (
         MATRIX_POLYNOMIAL_EVALUATION_PASSES * scalar_products_per_pass
@@ -365,8 +366,8 @@ def _admit_matrix_polynomial_evaluation(
             "work bound",
         )
     maximum_arithmetic_digits = _require_matrix_polynomial_output_budget(
-        request.matrix,
-        request.polynomial,
+        matrix,
+        polynomial,
         degree,
     )
     digit_work = total_scalar_products * maximum_arithmetic_digits**2
@@ -378,9 +379,9 @@ def _admit_matrix_polynomial_evaluation(
         )
 
 
-def _admit_square_matrix(request: SquareMatrixRequest) -> None:
-    rows = len(request.matrix.entries)
-    columns = len(request.matrix.entries[0])
+def _admit_square_matrix(matrix: RationalMatrix) -> None:
+    rows = len(matrix.entries)
+    columns = len(matrix.entries[0])
     if rows != columns:
         raise _validation_error(
             "budget_exceeded", "canonical-form operations require a square matrix"
@@ -392,18 +393,31 @@ def _admit_square_matrix(request: SquareMatrixRequest) -> None:
             f"{MAX_CANONICAL_FORM_DIMENSION} matrices",
         )
     require_matrix_scalar_digits(
-        request.matrix.entries,
+        matrix.entries,
         maximum=MAX_CANONICAL_FORM_SCALAR_DIGITS,
         label="canonical-form matrix",
     )
 
 
-def _admit(request: MatrixPolynomialEvaluationRequest | SquareMatrixRequest) -> None:
+def _admit_matrix_polynomial(
+    matrix: RationalMatrix,
+    polynomial: RationalPolynomial,
+) -> None:
     try:
-        if isinstance(request, MatrixPolynomialEvaluationRequest):
-            _admit_matrix_polynomial_evaluation(request)
-        else:
-            _admit_square_matrix(request)
+        _admit_matrix_polynomial_evaluation(matrix, polynomial)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("matrix",), code=exc.type, message=exc.message()
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("matrix",), code="matrix.domain_invalid", message=str(exc)
+        ) from exc
+
+
+def _admit_square(matrix: RationalMatrix) -> None:
+    try:
+        _admit_square_matrix(matrix)
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("matrix",), code=exc.type, message=exc.message()
@@ -429,64 +443,68 @@ def _to_monic_polynomial(coefficients: Sequence[Fraction]) -> MonicPolynomial:
 
 
 def _dense_polynomial_coefficients(
-    request: MatrixPolynomialEvaluationRequest,
+    polynomial: RationalPolynomial,
 ) -> tuple[Fraction, ...]:
     degree = max(
-        (term.exponents[0] for term in request.polynomial.polynomial.terms),
+        (term.exponents[0] for term in polynomial.polynomial.terms),
         default=0,
     )
     coefficients = [Fraction(0)] * (degree + 1)
-    for term in request.polynomial.polynomial.terms:
+    for term in polynomial.polynomial.terms:
         coefficients[term.exponents[0]] = term.coefficient.as_fraction()
     return tuple(coefficients)
 
 
 def evaluate_matrix_polynomial_value(
-    request: MatrixPolynomialEvaluationRequest,
+    matrix: RationalMatrix,
+    polynomial: RationalPolynomial,
 ) -> RationalMatrix:
-    _admit(request)
-    return _evaluate_matrix_polynomial_value(request)
+    _admit_matrix_polynomial(matrix, polynomial)
+    return _evaluate_matrix_polynomial_value(matrix, polynomial)
 
 
 def _evaluate_matrix_polynomial_value(
-    request: MatrixPolynomialEvaluationRequest,
+    matrix: RationalMatrix,
+    polynomial: RationalPolynomial,
 ) -> RationalMatrix:
     evaluated = _evaluate_polynomial(
-        _matrix_entries(request.matrix),
-        _dense_polynomial_coefficients(request),
+        _matrix_entries(matrix),
+        _dense_polynomial_coefficients(polynomial),
     )
     return rational_matrix_from_fractions(evaluated)
 
 
 def compute_matrix_polynomial_evaluation(
-    request: MatrixPolynomialEvaluationRequest,
+    matrix: RationalMatrix,
+    polynomial: RationalPolynomial,
 ) -> MatrixPolynomialEvaluationResult:
-    _admit(request)
+    _admit_matrix_polynomial(matrix, polynomial)
     return MatrixPolynomialEvaluationResult._from_kernel(
-        request=request,
-        value=_evaluate_matrix_polynomial_value(request),
+        matrix=matrix,
+        polynomial=polynomial,
+        value=_evaluate_matrix_polynomial_value(matrix, polynomial),
     )
 
 
 def compute_minimal_polynomial(
-    request: SquareMatrixRequest,
+    matrix: RationalMatrix,
 ) -> MinimalPolynomialResult:
-    _admit(request)
-    entries = _matrix_entries(request.matrix)
+    _admit_square(matrix)
+    entries = _matrix_entries(matrix)
     minimal = minimal_polynomial(entries)
     characteristic = characteristic_polynomial(entries)
     return MinimalPolynomialResult._from_kernel(
-        matrix=request,
+        matrix=matrix,
         minimal_polynomial=_to_monic_polynomial(minimal),
         characteristic_polynomial=_to_monic_polynomial(characteristic),
     )
 
 
 def compute_rational_canonical_form(
-    request: SquareMatrixRequest,
+    matrix: RationalMatrix,
 ) -> RationalCanonicalFormResult:
-    _admit(request)
-    entries = _matrix_entries(request.matrix)
+    _admit_square(matrix)
+    entries = _matrix_entries(matrix)
     factors = invariant_factors(entries)
     minimal = minimal_polynomial(entries)
     characteristic = characteristic_polynomial(entries)
@@ -500,7 +518,7 @@ def compute_rational_canonical_form(
     )
 
     return RationalCanonicalFormResult._from_kernel(
-        matrix=request,
+        matrix=matrix,
         invariant_factors=invariant_entries,
         characteristic_polynomial=_to_monic_polynomial(characteristic),
         minimal_polynomial=_to_monic_polynomial(minimal),
@@ -508,10 +526,10 @@ def compute_rational_canonical_form(
 
 
 def compute_primary_decomposition(
-    request: SquareMatrixRequest,
+    matrix: RationalMatrix,
 ) -> PrimaryDecompositionResult:
-    _admit(request)
-    entries = _matrix_entries(request.matrix)
+    _admit_square(matrix)
+    entries = _matrix_entries(matrix)
     components = primary_decomposition(entries)
     minimal_coefficients = [Fraction(1)]
     for component in components:
@@ -521,7 +539,7 @@ def compute_primary_decomposition(
                 product[left_index + right_index] += left * right
         minimal_coefficients = product
     return PrimaryDecompositionResult._from_kernel(
-        matrix=request,
+        matrix=matrix,
         components=tuple(
             _to_monic_polynomial(coefficient) for coefficient in components
         ),

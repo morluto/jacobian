@@ -135,6 +135,14 @@ class TestGramProfile:
             == "combinatorial_matrix.gram_axis_budget"
         )
 
+    def test_wide_thin_gram_is_admitted_by_predicted_work(self) -> None:
+        columns = 1_024
+        result = gram_profile(SignMatrix(rows=((1,) * columns,)))
+
+        assert result.gram == ((columns,),)
+        assert result.is_hadamard is False
+        assert result.diagonal_residuals == (0,)
+
 
 # ---------------------------------------------------------------------------
 # Normalize
@@ -184,17 +192,21 @@ class TestDeterminantProfile:
         h = HadamardMatrix(rows=((1, 1), (1, -1)))
         result = compute_determinant_profile(DeterminantProfileRequest(matrix=h))
         assert result.order == 2
-        assert result.determinant_magnitude == 2  # 2^(2/2) = 2
-        assert result.gram_determinant == 4  # 2^2
+        assert result.determinant_magnitude == "2"  # 2^(2/2) = 2
+        assert result.gram_determinant == "4"  # 2^2
 
     def test_hadamard_validation_and_determinant_above_previous_boundary(self) -> None:
+        from jacobian.canonical import parse_canonical_integer
+
         order = 256
         matrix = HadamardMatrix(rows=_sylvester_rows(order))
         result = determinant_profile(matrix)
 
         assert result.order == order
-        assert result.determinant_magnitude**2 == result.gram_determinant
-        assert result.gram_determinant == order**order
+        magnitude = parse_canonical_integer(result.determinant_magnitude)
+        gram = parse_canonical_integer(result.gram_determinant)
+        assert magnitude**2 == gram
+        assert gram == order**order
 
     def test_flint_validator_rejects_corruption_above_previous_boundary(self) -> None:
         order = 256

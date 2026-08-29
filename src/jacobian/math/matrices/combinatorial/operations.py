@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import CanonicalLimits
+from jacobian.canonical import CanonicalLimits, format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 
 from ._flint import integer_gram
@@ -17,6 +17,7 @@ from ._models import (
 from .values import HadamardMatrix, SignMatrix
 
 MAX_GRAM_PROFILE_AXIS = 512
+MAX_GRAM_PROFILE_MULTIPLY_ADDS = MAX_GRAM_PROFILE_AXIS**3
 MAX_KRONECKER_ORDER = 128
 
 
@@ -35,11 +36,18 @@ def _gram_profile_result_bound(row_count: int, column_count: int) -> int:
 def _require_gram_profile_admission(matrix: SignMatrix) -> None:
     row_count = len(matrix.rows)
     column_count = len(matrix.rows[0])
-    if row_count > MAX_GRAM_PROFILE_AXIS or column_count > MAX_GRAM_PROFILE_AXIS:
+    # Gram is row_count x row_count; rows determine output size.
+    if row_count > MAX_GRAM_PROFILE_AXIS:
         raise OperationDomainValidationError(
             location=("matrix", "rows"),
             code="combinatorial_matrix.gram_axis_budget",
             message="Gram profile exceeds the admitted matrix-axis budget",
+        )
+    if row_count * row_count * column_count > MAX_GRAM_PROFILE_MULTIPLY_ADDS:
+        raise OperationDomainValidationError(
+            location=("matrix", "rows"),
+            code="combinatorial_matrix.gram_work_budget",
+            message="Gram profile exceeds the exact multiply-add work budget",
         )
     if (
         _gram_profile_result_bound(row_count, column_count)
@@ -142,8 +150,8 @@ def determinant_profile(hadamard: HadamardMatrix) -> DeterminantProfileResult:
     gram_determinant = n**n
     return DeterminantProfileResult(
         order=n,
-        determinant_magnitude=magnitude,
-        gram_determinant=gram_determinant,
+        determinant_magnitude=format_canonical_integer(magnitude),
+        gram_determinant=format_canonical_integer(gram_determinant),
         identity="det(H)^2 = det(H H^T)",
     )
 

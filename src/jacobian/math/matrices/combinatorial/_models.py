@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.math.matrices.combinatorial.values import HadamardMatrix, SignMatrix
 
@@ -86,8 +87,8 @@ class DeterminantProfileResult(StrictModel):
     """Order, |det H|, Gram determinant, and the identity."""
 
     order: int = Field(ge=1)
-    determinant_magnitude: int = Field(ge=1)
-    gram_determinant: int = Field(ge=1)
+    determinant_magnitude: CanonicalInteger
+    gram_determinant: CanonicalInteger
     identity: str
 
 

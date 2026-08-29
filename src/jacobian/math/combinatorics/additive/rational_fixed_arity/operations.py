@@ -83,16 +83,18 @@ def _admit(
         (len(value.den) for value in values),
         default=1,
     )
-    sum_numerator_digits = (
-        maximum_numerator_digits
-        + max(arity - 1, 0) * maximum_denominator_digits
-        + len(str(max(arity, 1)))
-    )
-    sum_denominator_digits = arity * maximum_denominator_digits
-    if (
-        max(sum_numerator_digits, sum_denominator_digits)
-        > MAX_CANONICAL_RATIONAL_DIGITS
-    ):
+    if candidate_count:
+        sum_numerator_digits = (
+            maximum_numerator_digits
+            + max(arity - 1, 0) * maximum_denominator_digits
+            + (len(str(arity)) if arity > 1 else 0)
+        )
+        sum_denominator_digits = arity * maximum_denominator_digits
+    else:
+        sum_numerator_digits = sum_denominator_digits = 0
+    if candidate_count and max(
+        sum_numerator_digits, sum_denominator_digits
+    ) > MAX_CANONICAL_RATIONAL_DIGITS:
         _reject(
             ("values",),
             "rational_fixed_arity.rational_growth",

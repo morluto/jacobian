@@ -287,6 +287,26 @@ def _require_bounded_cartesian_product(
         )
 
 
+def _require_sumset_result_transport_bound(support: Iterable[int]) -> None:
+    """Reject sumsets whose complete result cannot fit canonical transport."""
+    values = tuple(format_canonical_integer(value) for value in support)
+    elements_size = 2 + max(len(values) - 1, 0) + sum(
+        len(value) + 2 for value in values
+    )
+    support_size = strict_json_object_size((("elements", elements_size),))
+    result_size = strict_json_object_size(
+        (("cardinality", len(str(len(values)))), ("support", support_size))
+    )
+    limit = CanonicalLimits().max_output_bytes
+    if result_size > limit:
+        raise _validation_error(
+            "sumset_result_transport_exceeded",
+            "sumset result requires "
+            f"{result_size:,} canonical JSON bytes, exceeding the "
+            f"{limit:,}-byte output limit",
+        )
+
+
 def _decimal_digit_sum_through(value: int) -> int:
     """Return the total decimal digit count of the integers in ``[0, value)``."""
 

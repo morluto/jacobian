@@ -226,6 +226,18 @@ class TestSumsetCardinality:
         assert result.cardinality == 65_536
         assert result.support.elements == tuple(str(value) for value in range(65_536))
 
+    def test_large_support_uses_the_final_result_transport_envelope(self) -> None:
+        """A produced support is not subject to the smaller operand envelope."""
+        left = FiniteIntegerSet(elements=("1" + "0" * 24_999,))
+        right = FiniteIntegerSet(elements=tuple(str(value) for value in range(256)))
+
+        result = sumset_cardinality(left, right)
+        encoded = encode_strict_json(result.model_dump(mode="json"))
+
+        assert result.cardinality == 256
+        assert len(encoded) <= CanonicalLimits().max_output_bytes
+        assert result.support.elements[0] == "1" + "0" * 24_999
+
     def test_result_rejects_cardinality_that_disagrees_with_canonical_support(
         self,
     ) -> None:

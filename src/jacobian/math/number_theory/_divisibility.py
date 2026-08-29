@@ -17,6 +17,7 @@ from jacobian.math.number_theory.arithmetic.operations import (
     divisor_count,
     divisor_sum,
     extended_gcd,
+    integer_gcd,
     prime_valuation,
 )
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
@@ -24,6 +25,10 @@ from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 def compute_extended_gcd(request: IntegerPairRequest) -> ExtendedGcdResult:
     return extended_gcd(request.left, request.right)
+
+
+def compute_gcd(request: IntegerPairRequest) -> IntegerValue:
+    return integer_gcd(request.left, request.right)
 
 
 def compute_valuation(request: ValuationRequest) -> IntegerValue:
@@ -40,6 +45,19 @@ def compute_divisor_sum(request: PositiveIntegerRequest) -> IntegerValue:
 
 DIVISIBILITY_OPERATIONS = (
     *FACTORIZATION_OPERATIONS,
+    number_theory_operation(
+        "integer.compute.gcd",
+        "Compute integer gcd",
+        "Compute the nonnegative greatest common divisor of two integers.",
+        IntegerPairRequest,
+        IntegerValue,
+        compute_gcd,
+        "number-theory",
+        "divisibility",
+        examples=(
+            example("gcd_84_30", "Compute gcd(84, 30).", {"left": "84", "right": "30"}),
+        ),
+    ),
     number_theory_operation(
         "integer.compute.extended_gcd",
         "Compute Bezout coefficients",

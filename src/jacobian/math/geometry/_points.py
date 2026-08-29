@@ -7,6 +7,8 @@ from jacobian.math.geometry._models import (
     GeometryBooleanResult,
     GeometryConvexHullResult,
     GeometryPointResult,
+    GeometryRationalResult,
+    PointPairRequest,
     PointQuadrupleRequest,
     PointSetRequest,
 )
@@ -15,9 +17,36 @@ from jacobian.math.geometry._tools import (
     circle_inversion,
     concyclic,
     convex_hull_points,
+    squared_distance,
 )
 
 POINT_OPERATIONS: MathTools = (
+    geometry_operation(
+        "geometry.points.compute.squared_distance",
+        "Compute squared distance",
+        "Compute exact squared Euclidean distance between two rational points.",
+        PointPairRequest,
+        GeometryRationalResult,
+        squared_distance,
+        "geometry",
+        "distance",
+        examples=(
+            example(
+                "diagonal_squared_distance",
+                "Compute the squared distance from (0,0) to (2,2).",
+                {
+                    "first": {
+                        "x": {"num": "0", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
+                    "second": {
+                        "x": {"num": "2", "den": "1"},
+                        "y": {"num": "2", "den": "1"},
+                    },
+                },
+            ),
+        ),
+    ),
     geometry_operation(
         "geometry.points.decide.concyclic",
         "Decide concyclicity",

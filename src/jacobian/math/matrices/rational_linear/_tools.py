@@ -91,10 +91,17 @@ TOOLS: MathTools = (
                 {
                     "system": {
                         "variables": ["x"],
-                        "row_count": 1,
-                        "coefficients": [
-                            {"row": 0, "column": 0, "value": {"num": "1", "den": "1"}}
-                        ],
+                        "coefficients": {
+                            "row_count": 1,
+                            "column_count": 1,
+                            "entries": [
+                                {
+                                    "row": 0,
+                                    "column": 0,
+                                    "value": {"num": "1", "den": "1"},
+                                }
+                            ],
+                        },
                         "rhs": [{"num": "2", "den": "1"}],
                     }
                 },
@@ -119,11 +126,22 @@ TOOLS: MathTools = (
                 {
                     "system": {
                         "variables": ["x"],
-                        "row_count": 2,
-                        "coefficients": [
-                            {"row": 0, "column": 0, "value": {"num": "1", "den": "1"}},
-                            {"row": 1, "column": 0, "value": {"num": "1", "den": "1"}},
-                        ],
+                        "coefficients": {
+                            "row_count": 2,
+                            "column_count": 1,
+                            "entries": [
+                                {
+                                    "row": 0,
+                                    "column": 0,
+                                    "value": {"num": "1", "den": "1"},
+                                },
+                                {
+                                    "row": 1,
+                                    "column": 0,
+                                    "value": {"num": "1", "den": "1"},
+                                },
+                            ],
+                        },
                         "rhs": [
                             {"num": "0", "den": "1"},
                             {"num": "1", "den": "1"},

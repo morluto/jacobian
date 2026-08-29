@@ -23,16 +23,17 @@ from jacobian.math.optimization._models import (
 )
 from jacobian.math.optimization.operations import linear_program
 
-pytestmark = pytest.mark.requires_backend("flint")
-
 
 def _system(rhs: list[dict[str, str]]) -> dict[str, object]:
     return {
         "variables": ["x"],
-        "row_count": len(rhs),
-        "coefficients": [
-            {"row": row, "column": 0, "value": q(1)} for row in range(len(rhs))
-        ],
+        "coefficients": {
+            "row_count": len(rhs),
+            "column_count": 1,
+            "entries": [
+                {"row": row, "column": 0, "value": q(1)} for row in range(len(rhs))
+            ],
+        },
         "rhs": rhs,
     }
 

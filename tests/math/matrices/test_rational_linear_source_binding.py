@@ -14,6 +14,7 @@ from sympy import primerange
 from tests.support.rationals import rational_payload as q
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.rational_linear._models import (
     LinearRationalInconsistencyFindRequest,
     LinearRationalInconsistencyResult,
@@ -24,6 +25,12 @@ from jacobian.math.matrices.rational_linear._models import (
 from jacobian.math.matrices.rational_linear._tools import (
     compute_rational_inconsistency,
     compute_rational_solution,
+)
+from jacobian.math.matrices.values import (
+    RationalMatrix,
+    SparseRationalMatrix,
+    dense_rational_matrix_from_sparse,
+    sparse_rational_matrix_from_dense,
 )
 
 
@@ -38,13 +45,16 @@ def _system(
 ) -> dict[str, object]:
     return {
         "variables": variables,
-        "row_count": len(entries),
-        "coefficients": [
-            {"row": row, "column": column, "value": _q(value)}
-            for row, values in enumerate(entries)
-            for column, value in enumerate(values)
-            if value
-        ],
+        "coefficients": {
+            "row_count": len(entries),
+            "column_count": len(variables),
+            "entries": [
+                {"row": row, "column": column, "value": _q(value)}
+                for row, values in enumerate(entries)
+                for column, value in enumerate(values)
+                if value
+            ],
+        },
         "rhs": [_q(value) for value in rhs],
     }
 
@@ -63,6 +73,24 @@ def _inconsistent_system() -> dict[str, object]:
         [[Fraction(1), Fraction(1)], [Fraction(1), Fraction(1)]],
         [Fraction(0), Fraction(1)],
     )
+
+
+def test_sparse_rational_matrix_round_trips_through_its_dense_owner() -> None:
+    dense = RationalMatrix.model_validate(
+        {
+            "entries": [
+                [_q(Fraction(0)), _q(Fraction(2)), _q(Fraction(0))],
+                [_q(Fraction(0)), _q(Fraction(0)), _q(Fraction(0))],
+            ]
+        }
+    )
+    sparse = sparse_rational_matrix_from_dense(dense)
+    restored = SparseRationalMatrix.model_validate(sparse.model_dump(mode="json"))
+
+    assert restored.row_count == 2
+    assert restored.column_count == 3
+    assert tuple((entry.row, entry.column) for entry in restored.entries) == ((0, 1),)
+    assert dense_rational_matrix_from_sparse(restored) == dense
 
 
 def _underdetermined_system() -> dict[str, object]:
@@ -110,10 +138,10 @@ def test_solution_result_replays_against_the_source() -> None:
     components = [value.as_fraction() for value in result.values]
     coefficient_map = {
         (item.row, item.column): item.value.as_fraction()
-        for item in system.coefficients
+        for item in system.coefficients.entries
     }
     for row, bound in zip(
-        range(system.row_count),
+        range(system.coefficients.row_count),
         (value.as_fraction() for value in system.rhs),
         strict=True,
     ):
@@ -139,7 +167,7 @@ def test_inconsistent_result_replays_witness_relations() -> None:
     coordinates = [value.as_fraction() for value in result.left_witness]
     coefficient_map = {
         (item.row, item.column): item.value.as_fraction()
-        for item in system.coefficients
+        for item in system.coefficients.entries
     }
     for column in range(len(system.variables)):
         assert (
@@ -378,11 +406,14 @@ def test_sparse_diagonal_system_scales_beyond_the_dense_32_axis() -> None:
     dimension = 128
     payload = {
         "variables": [f"x_{index}" for index in range(dimension)],
-        "row_count": dimension,
-        "coefficients": [
-            {"row": index, "column": index, "value": _q(Fraction(index + 1))}
-            for index in range(dimension)
-        ],
+        "coefficients": {
+            "row_count": dimension,
+            "column_count": dimension,
+            "entries": [
+                {"row": index, "column": index, "value": _q(Fraction(index + 1))}
+                for index in range(dimension)
+            ],
+        },
         "rhs": [_q(Fraction(index + 1)) for index in range(dimension)],
     }
     result = compute_rational_solution(
@@ -416,8 +447,11 @@ def test_result_sensitive_admission_keeps_a_wide_one_row_system() -> None:
     dimension = 1_024
     payload = {
         "variables": [f"x_{index}" for index in range(dimension)],
-        "row_count": 1,
-        "coefficients": [{"row": 0, "column": dimension - 1, "value": _q(Fraction(1))}],
+        "coefficients": {
+            "row_count": 1,
+            "column_count": dimension,
+            "entries": [{"row": 0, "column": dimension - 1, "value": _q(Fraction(1))}],
+        },
         "rhs": [_q(Fraction(7))],
     }
     result = compute_rational_solution(
@@ -446,8 +480,11 @@ def test_sparse_coefficients_reject_noncanonical_storage(
         LinearRationalSystem.model_validate(
             {
                 "variables": ["x"],
-                "row_count": 1,
-                "coefficients": coefficients,
+                "coefficients": {
+                    "row_count": 1,
+                    "column_count": 1,
+                    "entries": coefficients,
+                },
                 "rhs": [_q(Fraction(0))],
             }
         )
@@ -455,25 +492,49 @@ def test_sparse_coefficients_reject_noncanonical_storage(
 
 def test_sparse_work_budget_rejects_large_fill_envelope() -> None:
     dimension = 500
-    with pytest.raises(ValidationError, match="scalar-work budget"):
-        LinearRationalSystem.model_validate(
-            {
-                "variables": [f"x_{index}" for index in range(dimension)],
+    system = LinearRationalSystem.model_validate(
+        {
+            "variables": [f"x_{index}" for index in range(dimension)],
+            "coefficients": {
                 "row_count": dimension,
-                "coefficients": [],
-                "rhs": [_q(Fraction(0)) for _ in range(dimension)],
-            }
-        )
+                "column_count": dimension,
+                "entries": [],
+            },
+            "rhs": [_q(Fraction(0)) for _ in range(dimension)],
+        }
+    )
+    with pytest.raises(OperationDomainValidationError, match="scalar-work budget"):
+        compute_rational_solution(LinearRationalSolutionFindRequest(system=system))
+
+
+def test_result_deserialization_does_not_repeat_semantic_admission() -> None:
+    dimension = 500
+    system = LinearRationalSystem.model_validate(
+        {
+            "variables": [f"x_{index}" for index in range(dimension)],
+            "coefficients": {
+                "row_count": dimension,
+                "column_count": dimension,
+                "entries": [],
+            },
+            "rhs": [_q(Fraction(0)) for _ in range(dimension)],
+        }
+    )
+    restored = LinearRationalSolutionResult.model_validate(
+        {"system": system.model_dump(mode="json"), "status": "INCONSISTENT"}
+    )
+    assert restored.system == system
 
 
 def test_sparse_result_height_rejects_before_backend_expansion() -> None:
     denominators = tuple(islice(primerange(1_000_000_000, 2_000_000_000), 64))
-    with pytest.raises(ValidationError, match="result-height bound"):
-        LinearRationalSystem.model_validate(
-            {
-                "variables": [f"x_{index}" for index in range(64)],
+    system = LinearRationalSystem.model_validate(
+        {
+            "variables": [f"x_{index}" for index in range(64)],
+            "coefficients": {
                 "row_count": 64,
-                "coefficients": [
+                "column_count": 64,
+                "entries": [
                     {
                         "row": row,
                         "column": column,
@@ -482,6 +543,9 @@ def test_sparse_result_height_rejects_before_backend_expansion() -> None:
                     for row in range(64)
                     for column in range(64)
                 ],
-                "rhs": [_q(Fraction(0)) for _ in range(64)],
-            }
-        )
+            },
+            "rhs": [_q(Fraction(0)) for _ in range(64)],
+        }
+    )
+    with pytest.raises(OperationDomainValidationError, match="result-height bound"):
+        compute_rational_solution(LinearRationalSolutionFindRequest(system=system))

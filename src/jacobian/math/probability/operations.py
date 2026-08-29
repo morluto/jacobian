@@ -290,7 +290,7 @@ def _power_at_most(base: int, exponent: int, limit: int) -> int | None:
     return result
 
 
-_MAX_RESULT_RATIONAL_BITS = (MAX_RESULT_RATIONAL_DIGITS * 332_193 + 99_999) // 100_000
+_MAX_RESULT_RATIONAL_VALUE = 10**MAX_RESULT_RATIONAL_DIGITS - 1
 
 
 def _lcm_within_result_digits(
@@ -304,7 +304,7 @@ def _lcm_within_result_digits(
     """Fold one positive integer into an LCM without exceeding the result height."""
 
     combined = lcm(left, right)
-    if combined.bit_length() > _MAX_RESULT_RATIONAL_BITS:
+    if combined > _MAX_RESULT_RATIONAL_VALUE:
         raise OperationDomainValidationError(
             location=location,
             code=code,
@@ -432,9 +432,9 @@ def _plan_convolution_power(
     minimum_value = origin * exponent
     maximum_value = minimum_value + step * degree
     try:
-        for value in (minimum_value, maximum_value):
+        for index in range(output_slots):
             _require_bounded_fraction(
-                value,
+                minimum_value + step * index,
                 max_digits=MAX_RESULT_RATIONAL_DIGITS,
                 label="convolution-power atom",
             )

@@ -20,6 +20,7 @@ from jacobian.math.probability._distribution import (
     FiniteDistributionAtom,
     FiniteRationalDistribution,
 )
+from jacobian.math.probability._models import MAX_RESULT_RATIONAL_DIGITS
 from jacobian.math.probability.operations import (
     MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS,
     _admit_convolution_peak,
@@ -292,6 +293,35 @@ def test_power_rejects_coprime_support_denominator_lcm_growth() -> None:
     ):
         convolution_power(_distribution(atoms), 1)
     assert perf_counter() - started < 2.0
+
+
+def test_power_rejects_a_lattice_value_over_the_exact_decimal_bound() -> None:
+    denominator = 10**MAX_RESULT_RATIONAL_DIGITS
+    source = _distribution(
+        (
+            (Fraction(0), Fraction(1, 3)),
+            (Fraction(2, denominator), Fraction(1, 3)),
+            (Fraction(5, denominator), Fraction(1, 3)),
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="512-digit"):
+        convolution_power(source, 2)
+
+
+def test_power_rejects_an_interior_value_with_a_larger_reduced_numerator() -> None:
+    numerator = 2 * 10**511 + 3
+    denominator = 18 * (10**510 + 1)
+    source = _distribution(
+        (
+            (Fraction(0), Fraction(1, 3)),
+            (Fraction(numerator, denominator), Fraction(1, 3)),
+            (Fraction(9 * numerator, denominator), Fraction(1, 3)),
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="512-digit"):
+        convolution_power(source, 2)
 
 
 def test_result_deserialization_does_not_repeat_power_admission() -> None:

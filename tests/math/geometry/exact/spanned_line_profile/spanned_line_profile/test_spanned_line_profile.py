@@ -1,0 +1,53 @@
+from __future__ import annotations
+
+from fractions import Fraction
+
+from jacobian._exact import CanonicalRational
+from jacobian.math.geometry.exact._models import (
+    LabelledRationalPoint,
+    PointConfiguration,
+)
+from jacobian.math.geometry.exact.spanned_line_profile.operations import (
+    compute_spanned_line_profile,
+)
+
+
+def _cr(num, den=1):
+    return CanonicalRational.from_fraction(Fraction(num, den))
+
+
+def _config(points):
+    return PointConfiguration(
+        points=tuple(
+            LabelledRationalPoint(
+                label=l,
+                coordinates=tuple(_cr(x) for x in coords),
+            )
+            for l, coords in points
+        )
+    )
+
+
+def test_three_collinear() -> None:
+    config = _config([("a", [0, 0]), ("b", [1, 0]), ("c", [2, 0])])
+    result = compute_spanned_line_profile(config)
+    assert result.line_count == 1  # All on one line
+
+
+def test_triangle() -> None:
+    config = _config([("a", [0, 0]), ("b", [1, 0]), ("c", [0, 1])])
+    result = compute_spanned_line_profile(config)
+    assert result.line_count == 3  # Three pairs, three lines
+
+
+def test_square() -> None:
+    config = _config([("a", [0, 0]), ("b", [1, 0]), ("c", [1, 1]), ("d", [0, 1])])
+    result = compute_spanned_line_profile(config)
+    # 4 sides + 2 diagonals = 6 lines
+    assert result.line_count == 6
+
+
+def test_result_preserves_source() -> None:
+    config = _config([("a", [0, 0]), ("b", [1, 0])])
+    result = compute_spanned_line_profile(config)
+    assert result.configuration == config

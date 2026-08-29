@@ -1,0 +1,103 @@
+"""Spanned-line profile kernel."""
+
+from __future__ import annotations
+
+from fractions import Fraction
+from itertools import combinations
+
+from jacobian.math.geometry.exact._models import PointConfiguration
+from jacobian.math.geometry.exact.spanned_line_profile._models import (
+    SpannedLineEntry,
+    SpannedLineProfileResult,
+)
+
+__all__ = ["compute_spanned_line_profile"]
+
+
+def compute_spanned_line_profile(
+    configuration: PointConfiguration,
+) -> SpannedLineProfileResult:
+    """Return every distinct affine line spanned by unordered source pairs."""
+    points = configuration.points
+    n = len(points)
+
+    def get_coords(i):
+        return tuple(c.as_fraction() for c in points[i].coordinates)
+
+    line_to_pairs: dict[tuple, list[tuple[int, int]]] = {}
+
+    for i, j in combinations(range(n), 2):
+        ci = get_coords(i)
+        cj = get_coords(j)
+        if ci == cj:
+            continue
+
+        key = _canonical_line(ci, cj)
+        if key is not None:
+            line_to_pairs.setdefault(key, []).append((i, j))
+
+    entries: list[SpannedLineEntry] = []
+    for key, pairs in line_to_pairs.items():
+        all_indices: set[int] = set()
+        for i, j in pairs:
+            all_indices.add(i)
+            all_indices.add(j)
+        entries.append(
+            SpannedLineEntry(
+                source_pairs=tuple(pairs),
+                point_count=len(all_indices),
+            )
+        )
+
+    entries.sort(key=lambda e: e.source_pairs[0])
+
+    return SpannedLineProfileResult(
+        configuration=configuration,
+        lines=tuple(entries),
+        line_count=len(entries),
+    )
+
+
+def _canonical_line(ci, cj):
+    """Return a canonical key for the line through ci and cj.
+
+    The key is (direction, anchor_on_line) where direction is normalized
+    so the first nonzero component is positive, and anchor is the projection
+    of the origin onto the line (or ci if the projection is not rational-
+    clean, we use ci itself since two pairs on the same line will share ci
+    if they share a point, or we use the midpoint projected to canonical form).
+
+    Actually, the simplest correct approach: for two pairs to span the same
+    line, they must have the same direction AND one point from each pair must
+    lie on the same line. We can check this by verifying that the vector from
+    one pair's midpoint to the other pair's midpoint is parallel to the direction.
+
+    But for a hash key, we need something simpler. Let's use:
+    (normalized_direction, t0) where t0 is the parameter of the first nonzero
+    coordinate's projection onto the line. For a line with direction d through
+    point p, the parameter is p[k]/d[k] where k is the first nonzero direction index.
+    """
+    dim = len(ci)
+    direction = tuple(cj[c] - ci[c] for c in range(dim))
+
+    if all(d == 0 for d in direction):
+        return None
+
+    # Normalize direction: make first nonzero component positive
+    first_nonzero_idx = next(i for i, d in enumerate(direction) if d != 0)
+    first_nonzero = direction[first_nonzero_idx]
+    sign = 1 if first_nonzero > 0 else -1
+    norm_direction = tuple(d * sign / direction[first_nonzero_idx] for d in direction)
+
+    # Anchor: the line is { ci + t * direction }. We need a canonical point.
+    # Use the projection of the origin onto the line:
+    # t0 = -dot(ci, direction) / dot(direction, direction)
+    # anchor = ci + t0 * direction
+    dot_ci_d = sum(ci[c] * direction[c] for c in range(dim))
+    dot_d_d = sum(d * d for d in direction)
+    if dot_d_d == 0:
+        return None
+    t0 = -dot_ci_d / dot_d_d
+    anchor = tuple(ci[c] + t0 * direction[c] for c in range(dim))
+
+    return (norm_direction, anchor)

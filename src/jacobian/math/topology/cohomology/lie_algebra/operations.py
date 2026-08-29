@@ -11,12 +11,10 @@ from jacobian.math.matrices.finite_fields.linear_algebra import (
     rank as pf_rank,
 )
 from jacobian.math.topology.cohomology.lie_algebra._models import (
-    ChevalleyEilenbergComplexRequest,
     ChevalleyEilenbergComplexResult,
     DifferentialMatrix,
     LieAlgebra,
     LieHomologyGroup,
-    LieHomologyRequest,
     LieHomologyResult,
 )
 
@@ -158,21 +156,7 @@ def lie_homology(lie_algebra: LieAlgebra) -> LieHomologyResult:
     )
 
 
-def compute_chevalley_eilenberg_complex(
-    request: ChevalleyEilenbergComplexRequest,
-) -> ChevalleyEilenbergComplexResult:
-    """Project a wire request onto the native CE-complex operation."""
-    return chevalley_eilenberg_complex(request.lie_algebra)
-
-
-def compute_lie_homology(request: LieHomologyRequest) -> LieHomologyResult:
-    """Project a wire request onto the native Lie-homology operation."""
-    return lie_homology(request.lie_algebra)
-
-
 __all__ = [
     "chevalley_eilenberg_complex",
-    "compute_chevalley_eilenberg_complex",
-    "compute_lie_homology",
     "lie_homology",
 ]

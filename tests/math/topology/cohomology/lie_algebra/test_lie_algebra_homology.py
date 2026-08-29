@@ -16,10 +16,18 @@ from jacobian.math.topology.cohomology.lie_algebra._models import (
 )
 from jacobian.math.topology.cohomology.lie_algebra.operations import (
     chevalley_eilenberg_complex,
-    compute_chevalley_eilenberg_complex,
-    compute_lie_homology,
     lie_homology,
 )
+
+
+def compute_chevalley_eilenberg_complex(
+    request: ChevalleyEilenbergComplexRequest,
+) -> ChevalleyEilenbergComplexResult:
+    return chevalley_eilenberg_complex(request.lie_algebra)
+
+
+def compute_lie_homology(request: LieHomologyRequest) -> LieHomologyResult:
+    return lie_homology(request.lie_algebra)
 
 
 def _assert_error_type(

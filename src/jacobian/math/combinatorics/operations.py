@@ -85,15 +85,6 @@ def _admit_multiplicative_count(
     steps: int,
     cancellation_bit_bound: int | None = None,
 ) -> None:
-    if steps > MAX_COUNTING_MULTIPLICATIVE_STEPS:
-        raise OperationDomainValidationError(
-            location=("k",),
-            code="combinatorics.counting_work_exceeded",
-            message=(
-                "counting request exceeds the "
-                f"{MAX_COUNTING_MULTIPLICATIVE_STEPS}-step multiplicative budget"
-            ),
-        )
     # Every multiplicative factor is at most ``maximum_factor``.  The rational
     # 30103 / 100000 is a strict upper bound for log10(2), so this cannot
     # underestimate the decimal width of that product envelope.
@@ -101,6 +92,21 @@ def _admit_multiplicative_count(
     if cancellation_bit_bound is not None:
         bit_bound = min(bit_bound, cancellation_bit_bound)
     digit_bound = (bit_bound * 30_103 + 99_999) // 100_000
+    # Canonical integer formatting performs one base-10**9 division per output
+    # chunk.  Charge that mandatory result-construction phase alongside the
+    # multiplicative kernel so an accepted result cannot hide substantially
+    # more non-interruptible work than its coefficient construction.
+    formatting_steps = (digit_bound + 8) // 9
+    if steps + formatting_steps > MAX_COUNTING_MULTIPLICATIVE_STEPS:
+        raise OperationDomainValidationError(
+            location=("k",),
+            code="combinatorics.counting_work_exceeded",
+            message=(
+                "counting request exceeds the "
+                f"{MAX_COUNTING_MULTIPLICATIVE_STEPS}-step construction and "
+                "canonical-formatting budget"
+            ),
+        )
     if digit_bound > MAX_COUNTING_RESULT_DIGITS:
         raise OperationDomainValidationError(
             location=("n", "k"),

@@ -105,6 +105,15 @@ def test_long_permutation_uses_the_actual_string_transport_envelope() -> None:
     assert len(result.value) == 77_338
 
 
+def test_decimal_result_construction_is_included_in_work_admission() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        compute_permutations(
+            SparseCountingPairRequest(n=MAX_SPARSE_COUNTING_INDEX, k=100_000)
+        )
+
+    assert error.value.errors()[0]["type"] == "combinatorics.counting_work_exceeded"
+
+
 def test_medium_counts_retain_defining_identities() -> None:
     n, k = 200, 37
     assert compute_binomial(SparseCountingPairRequest(n=n, k=k)).value == str(

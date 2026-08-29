@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.cyclic_sumset_profile.operations import (
     compute_cyclic_sumset_profile,
 )
@@ -37,3 +40,13 @@ def test_result_preserves_source() -> None:
     assert result.modulus == 7
     assert result.left == (0, 1)
     assert result.right == (2, 3)
+
+
+def test_nonpositive_modulus_is_rejected_before_arithmetic() -> None:
+    with pytest.raises(OperationDomainValidationError, match="must be positive"):
+        compute_cyclic_sumset_profile(0, (0,), (0,))
+
+
+def test_noncanonical_residue_is_rejected() -> None:
+    with pytest.raises(OperationDomainValidationError, match="canonical residues"):
+        compute_cyclic_sumset_profile(5, (5,), (0,))

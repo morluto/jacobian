@@ -7,11 +7,16 @@ from collections.abc import Mapping
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    format_canonical_integer,
+    parse_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive import _multiset_sum
 from jacobian.math.combinatorics.additive._models import (
     _MAX_RESULT_SIZE,
+    _MAX_VECTOR_COORDINATE_LENGTH,
     AdditiveEnergyResult,
     DirectSumPredicateResult,
     FiniteIntegerSet,
@@ -230,8 +235,28 @@ def ordered_difference_profile(
     vectors: IntegerVectorSet,
 ) -> OrderedDifferenceProfileResult:
     """Compute the complete ordered-difference profile of a finite vector set."""
+    set_size = len(vectors.vectors)
+    dimension = len(vectors.vectors[0].coordinates)
+    ordered_pairs = set_size * (set_size - 1)
+    coordinate_work = ordered_pairs * dimension
+    if coordinate_work > 1_000_000:
+        raise OperationDomainValidationError(
+            location=("vectors",),
+            code="additive_combinatorics.ordered_difference_work_exceeded",
+            message="ordered-difference subtraction exceeds the 1,000,000-coordinate work budget",
+        )
+    predicted_bytes = (
+        4_096
+        + set_size * dimension * (_MAX_VECTOR_COORDINATE_LENGTH + 3)
+        + ordered_pairs * (dimension * (_MAX_VECTOR_COORDINATE_LENGTH + 3) + 96)
+    )
+    if predicted_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("vectors",),
+            code="additive_combinatorics.ordered_difference_result_exceeded",
+            message="ordered-difference profile exceeds the canonical output-byte limit",
+        )
     vector_values = [vector.as_int_tuple() for vector in vectors.vectors]
-    dimension = len(vector_values[0])
     difference_map: dict[tuple[int, ...], list[tuple[int, int]]] = {}
     for left_index, left in enumerate(vector_values):
         for right_index, right in enumerate(vector_values):

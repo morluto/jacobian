@@ -15,6 +15,26 @@ from jacobian.math.matrices.finite_fields.linear_algebra import (
     rank as pf_rank,
 )
 
+MAX_CLOSURE_RANK_WORK = 50_000_000
+
+
+def _rank_work(rows: int, columns: int) -> int:
+    return rows * columns * min(rows, columns)
+
+
+def _require_closure_work(matroid: LinearMatroid, subset_size: int) -> None:
+    rows = len(matroid.matrix.entries)
+    ground_size = matroid.ground_size
+    work = _rank_work(rows, subset_size) + (ground_size - subset_size) * _rank_work(
+        rows, subset_size + 1
+    )
+    if work > MAX_CLOSURE_RANK_WORK:
+        raise OperationDomainValidationError(
+            location=("matroid", "subset"),
+            code="matroid.closure.work_bound",
+            message="closure rank computations exceed the exact work bound",
+        )
+
 
 def _selected_columns_matrix(
     matroid: LinearMatroid, column_indices: list[int]
@@ -52,7 +72,7 @@ def _closure_invariant(
     for element in range(matroid.ground_size):
         if element in closure:
             continue
-        test = sorted(closure | {element})
+        test = [*subset, element]
         if pf_rank(_selected_columns_matrix(matroid, test)) == subset_rank:
             closure.add(element)
     return tuple(sorted(closure)), subset_rank
@@ -75,6 +95,7 @@ def matroid_closure(
             code="matroid.subset.invalid",
             message=str(exc),
         ) from exc
+    _require_closure_work(matroid, len(canonical_subset))
     return _closure_invariant(matroid, list(canonical_subset))
 
 

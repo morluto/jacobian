@@ -478,6 +478,20 @@ def test_native_multiply_shares_widened_flint_product_kernel() -> None:
     )
 
 
+def test_native_matrix_operations_keep_large_exact_scalar_fallbacks() -> None:
+    import sympy
+
+    from jacobian.math import matrices
+
+    huge = 10**256
+    source = sympy.Matrix([[huge]])
+
+    assert matrices.multiply(source, sympy.ones(1)) == source
+    assert matrices.characteristic_polynomial(source, "lambda").as_expr() == (
+        sympy.Symbol("lambda") - huge
+    )
+
+
 def test_request_admission_rejects_matrices_above_the_computation_dimension() -> None:
     oversized = RationalMatrix(
         entries=_identity_entries(MAX_EXACT_LINEAR_MATRIX_AXIS + 1)

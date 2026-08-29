@@ -113,6 +113,17 @@ def _exact_matrix(value: MatrixBase, *, maximum_dimension: int = 32) -> MatrixBa
     return value
 
 
+def _rational_scalars_within_kernel_limit(value: MatrixBase) -> bool:
+    return all(
+        max(
+            len(str(abs(int(entry.p)))),
+            len(str(abs(int(entry.q)))),
+        )
+        <= MAX_INPUT_SCALAR_DIGITS
+        for entry in value
+    )
+
+
 def rref(matrix: MatrixBase) -> tuple[MatrixBase, tuple[int, ...]]:
     result = rref_result(
         conversions.rational_matrix_from_sympy(
@@ -157,6 +168,12 @@ def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
     if source.rows != source.cols:
         raise ValueError("characteristic polynomial requires a square matrix")
     if not all(entry.is_Rational is True for entry in source):
+        if source.rows > MAX_MATRIX_DIMENSION:
+            raise ValueError(
+                f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+            )
+        return source.charpoly(variable)
+    if not _rational_scalars_within_kernel_limit(source):
         if source.rows > MAX_MATRIX_DIMENSION:
             raise ValueError(
                 f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
@@ -214,6 +231,20 @@ def multiply(left: MatrixBase, right: MatrixBase) -> MatrixBase:
     ):
         left_source = _exact_matrix(left, maximum_dimension=MAX_MATRIX_PRODUCT_AXIS)
         right_source = _exact_matrix(right, maximum_dimension=MAX_MATRIX_PRODUCT_AXIS)
+        if not (
+            _rational_scalars_within_kernel_limit(left_source)
+            and _rational_scalars_within_kernel_limit(right_source)
+        ):
+            if (
+                left_source.rows > MAX_MATRIX_DIMENSION
+                or left_source.cols > MAX_MATRIX_DIMENSION
+                or right_source.rows > MAX_MATRIX_DIMENSION
+                or right_source.cols > MAX_MATRIX_DIMENSION
+            ):
+                raise ValueError(
+                    f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+                )
+            return left_source * right_source
         result = product_result(
             conversions.rational_matrix_from_sympy(left_source),
             conversions.rational_matrix_from_sympy(right_source),

@@ -18,8 +18,8 @@ from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
     SourceBoundAlgebraicMeasure,
     StrictSublevelComponent,
     StrictSublevelEndpoint,
-    StrictSublevelMeasureRequest,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
 @dataclass(frozen=True)
@@ -73,10 +73,11 @@ def _strict_at(polynomial: Any, threshold: Any, point: Any) -> bool:
 
 
 def _whole_scope_payload(
-    request: StrictSublevelMeasureRequest,
+    lower_value: CanonicalRational,
+    upper_value: CanonicalRational,
 ) -> StrictSublevelPayload:
-    lower = ScopeEndpoint(value=request.lower)
-    upper = ScopeEndpoint(value=request.upper)
+    lower = ScopeEndpoint(value=lower_value)
+    upper = ScopeEndpoint(value=upper_value)
     component = StrictSublevelComponent(
         left=lower,
         right=upper,
@@ -85,7 +86,7 @@ def _whole_scope_payload(
     )
     measure = SourceBoundAlgebraicMeasure(
         rational_part=CanonicalRational.from_fraction(
-            request.upper.as_fraction() - request.lower.as_fraction()
+            upper_value.as_fraction() - lower_value.as_fraction()
         )
     )
     return StrictSublevelPayload(components=(component,), measure=measure)
@@ -148,7 +149,10 @@ def _measure_from_components(
 
 
 def compute_strict_sublevel_payload(
-    request: StrictSublevelMeasureRequest,
+    polynomial_value: RationalPolynomial,
+    threshold_value: CanonicalRational,
+    lower_scope: CanonicalRational,
+    upper_scope: CanonicalRational,
 ) -> StrictSublevelPayload:
     """Return every contributing cell and its exact endpoint-difference sum.
 
@@ -159,22 +163,22 @@ def compute_strict_sublevel_payload(
     custom isolation kernel.
     """
 
-    if request.threshold.as_fraction() == 0:
+    if threshold_value.as_fraction() == 0:
         return _empty_payload()
 
-    polynomial = rational_polynomial_to_sympy(request.polynomial)
-    threshold = _sympy_rational(request.threshold)
-    lower_value = _sympy_rational(request.lower)
-    upper_value = _sympy_rational(request.upper)
+    polynomial = rational_polynomial_to_sympy(polynomial_value)
+    threshold = _sympy_rational(threshold_value)
+    lower_value = _sympy_rational(lower_scope)
+    upper_value = _sympy_rational(upper_scope)
 
-    if request.lower == request.upper:
+    if lower_scope == upper_scope:
         if _strict_at(polynomial, threshold, lower_value):
-            return _whole_scope_payload(request)
+            return _whole_scope_payload(lower_scope, upper_scope)
         return _empty_payload()
 
     if polynomial.degree() <= 0:
         if _strict_at(polynomial, threshold, lower_value):
-            return _whole_scope_payload(request)
+            return _whole_scope_payload(lower_scope, upper_scope)
         return _empty_payload()
 
     roots = tuple(
@@ -203,7 +207,7 @@ def compute_strict_sublevel_payload(
             break
 
     components: list[StrictSublevelComponent] = []
-    left_endpoint: StrictSublevelEndpoint = ScopeEndpoint(value=request.lower)
+    left_endpoint: StrictSublevelEndpoint = ScopeEndpoint(value=lower_scope)
     left_included = _strict_at(polynomial, threshold, lower_value)
     for root in roots:
         if bool(root.value <= lower_value):
@@ -229,7 +233,7 @@ def compute_strict_sublevel_payload(
         components.append(
             StrictSublevelComponent(
                 left=left_endpoint,
-                right=ScopeEndpoint(value=request.upper),
+                right=ScopeEndpoint(value=upper_scope),
                 left_included=left_included,
                 right_included=_strict_at(polynomial, threshold, upper_value),
             )

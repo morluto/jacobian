@@ -18,7 +18,7 @@ from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
     StrictSublevelMeasureRequest,
     StrictSublevelMeasureResult,
 )
-from jacobian.math.polynomials.real_algebra.operations import (
+from jacobian.math.polynomials.real_algebra._tools import (
     compute_strict_sublevel_measure,
 )
 from jacobian.math.polynomials.values import (
@@ -134,15 +134,24 @@ def test_producer_isolates_once_and_result_parsing_stays_structural(
     calls = 0
     original = kernel.compute_strict_sublevel_payload
 
-    def counting(request: StrictSublevelMeasureRequest) -> Any:
+    def counting(
+        polynomial: RationalPolynomial,
+        threshold: CanonicalRational,
+        lower: CanonicalRational,
+        upper: CanonicalRational,
+    ) -> Any:
         nonlocal calls
         calls += 1
-        return original(request)
+        return original(polynomial, threshold, lower, upper)
 
     monkeypatch.setattr(operations, "compute_strict_sublevel_payload", counting)
     monkeypatch.setattr(kernel, "compute_strict_sublevel_payload", counting)
+    request = _request(_polynomial((1, 2)), threshold=2)
     result = operations.compute_strict_sublevel_measure(
-        _request(_polynomial((1, 2)), threshold=2)
+        request.polynomial,
+        request.threshold,
+        request.lower,
+        request.upper,
     )
     assert calls == 1
 

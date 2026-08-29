@@ -13,8 +13,8 @@ from jacobian.math.polynomials.real_algebra._models import (
     SturmChainRequest,
     UnivariatePolynomial,
 )
-from jacobian.math.polynomials.real_algebra._tools import TOOLS
-from jacobian.math.polynomials.real_algebra.operations import (
+from jacobian.math.polynomials.real_algebra._tools import (
+    TOOLS,
     compute_root_count,
     compute_sturm_chain,
 )

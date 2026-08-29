@@ -11,9 +11,7 @@ from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.real_algebra._models import (
     PolynomialTerm,
-    RootCountRequest,
     RootCountResult,
-    SturmChainRequest,
     SturmChainResult,
     UnivariatePolynomial,
     _require_bounded_integer_coefficients,
@@ -30,15 +28,23 @@ from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
     MAX_STRICT_SUBLEVEL_INPUT_DIGITS,
     MAX_STRICT_SUBLEVEL_ISOLATION_WORK,
     MAX_STRICT_SUBLEVEL_TERMS,
-    StrictSublevelMeasureRequest,
     StrictSublevelMeasureResult,
     _level_polynomial_height_digits,
     _polynomial_degree,
     _validation_error,
 )
-from jacobian.math.polynomials.values import require_polynomial_budget
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    require_polynomial_budget,
+)
 
-__all__ = ["root_count", "sturm_chain"]
+__all__ = [
+    "compute_root_count",
+    "compute_strict_sublevel_measure",
+    "compute_sturm_chain",
+    "root_count",
+    "sturm_chain",
+]
 
 
 def _to_sympy_poly(terms: list[tuple[Fraction, int]]) -> Any:
@@ -122,45 +128,50 @@ def _sympy_poly_to_terms(poly: Any) -> list[tuple[Fraction, int]]:
     return result
 
 
-def _admit_strict_sublevel(request: StrictSublevelMeasureRequest) -> None:
-    if len(request.polynomial.variables) != 1:
+def _admit_strict_sublevel(
+    polynomial: RationalPolynomial,
+    threshold: CanonicalRational,
+    lower: CanonicalRational,
+    upper: CanonicalRational,
+) -> None:
+    if len(polynomial.variables) != 1:
         raise _validation_error(
             "variable_count", "strict sublevel measure requires one polynomial variable"
         )
     require_polynomial_budget(
-        request.polynomial,
+        polynomial,
         maximum_terms=MAX_STRICT_SUBLEVEL_TERMS,
         maximum_exponent=MAX_STRICT_SUBLEVEL_DEGREE,
         maximum_coefficient_digits=MAX_STRICT_SUBLEVEL_INPUT_DIGITS,
         label="strict sublevel polynomial",
     )
     for value, label in (
-        (request.threshold, "strict sublevel threshold"),
-        (request.lower, "strict sublevel lower scope endpoint"),
-        (request.upper, "strict sublevel upper scope endpoint"),
+        (threshold, "strict sublevel threshold"),
+        (lower, "strict sublevel lower scope endpoint"),
+        (upper, "strict sublevel upper scope endpoint"),
     ):
         require_bounded_rational(
             value, max_digits=MAX_STRICT_SUBLEVEL_INPUT_DIGITS, label=label
         )
-    if request.threshold.as_fraction() < 0:
+    if threshold.as_fraction() < 0:
         raise _validation_error(
             "negative_threshold", "strict sublevel threshold must be nonnegative"
         )
-    if request.lower.as_fraction() > request.upper.as_fraction():
+    if lower.as_fraction() > upper.as_fraction():
         raise _validation_error(
             "scope_order", "strict sublevel lower endpoint must not exceed upper"
         )
     if (
-        request.threshold.as_fraction() == 0
-        or _polynomial_degree(request.polynomial) == 0
-        or request.lower == request.upper
+        threshold.as_fraction() == 0
+        or _polynomial_degree(polynomial) == 0
+        or lower == upper
     ):
         return
     boundary_heights = []
     for subtract_threshold, label in ((True, "f-threshold"), (False, "f+threshold")):
         height_digits = _level_polynomial_height_digits(
-            request.polynomial,
-            request.threshold,
+            polynomial,
+            threshold,
             subtract_threshold=subtract_threshold,
         )
         if height_digits > MAX_STRICT_SUBLEVEL_BOUNDARY_HEIGHT_DIGITS:
@@ -169,7 +180,7 @@ def _admit_strict_sublevel(request: StrictSublevelMeasureRequest) -> None:
                 f"primitive {label} height exceeds the {MAX_STRICT_SUBLEVEL_BOUNDARY_HEIGHT_DIGITS}-digit root-isolation bound",
             )
         boundary_heights.append(height_digits)
-    degree = _polynomial_degree(request.polynomial)
+    degree = _polynomial_degree(polynomial)
     isolation_work = degree**5 * sum(boundary_heights)
     if isolation_work > MAX_STRICT_SUBLEVEL_ISOLATION_WORK:
         raise _validation_error(
@@ -179,9 +190,14 @@ def _admit_strict_sublevel(request: StrictSublevelMeasureRequest) -> None:
         )
 
 
-def _run_admission(request: StrictSublevelMeasureRequest) -> None:
+def _run_admission(
+    polynomial: RationalPolynomial,
+    threshold: CanonicalRational,
+    lower: CanonicalRational,
+    upper: CanonicalRational,
+) -> None:
     try:
-        _admit_strict_sublevel(request)
+        _admit_strict_sublevel(polynomial, threshold, lower, upper)
     except OperationDomainValidationError:
         raise
     except PydanticCustomError as exc:
@@ -226,8 +242,7 @@ def _admit_integer_polynomial(polynomial: UnivariatePolynomial) -> None:
         ) from exc
 
 
-def compute_sturm_chain(request: SturmChainRequest) -> SturmChainResult:
-    poly = request.polynomial
+def compute_sturm_chain(poly: UnivariatePolynomial) -> SturmChainResult:
     _admit_integer_polynomial(poly)
     if max(term.exponent for term in poly.terms) < 1:
         error = _real_algebra_validation_error(
@@ -245,34 +260,44 @@ def compute_sturm_chain(request: SturmChainRequest) -> SturmChainResult:
     )
 
 
-def compute_root_count(request: RootCountRequest) -> RootCountResult:
-    _admit_integer_polynomial(request.polynomial)
-    if request.lower.as_fraction() > request.upper.as_fraction():
+def compute_root_count(
+    polynomial: UnivariatePolynomial,
+    lower_bound: CanonicalRational,
+    upper_bound: CanonicalRational,
+) -> RootCountResult:
+    _admit_integer_polynomial(polynomial)
+    if lower_bound.as_fraction() > upper_bound.as_fraction():
         error = _real_algebra_validation_error(
             "interval_order", "lower bound must not exceed upper bound"
         )
         raise OperationDomainValidationError(
             location=("lower", "upper"), code=error.type, message=error.message()
         )
-    terms = _poly_to_terms(request.polynomial)
-    lower = request.lower.as_fraction()
-    upper = request.upper.as_fraction()
+    terms = _poly_to_terms(polynomial)
+    lower = lower_bound.as_fraction()
+    upper = upper_bound.as_fraction()
     count = root_count(terms, lower, upper)
     return RootCountResult(
-        source_polynomial=request.polynomial,
+        source_polynomial=polynomial,
         root_count=count,
-        lower=request.lower,
-        upper=request.upper,
+        lower=lower_bound,
+        upper=upper_bound,
     )
 
 
 def compute_strict_sublevel_measure(
-    request: StrictSublevelMeasureRequest,
+    polynomial: RationalPolynomial,
+    threshold: CanonicalRational,
+    lower: CanonicalRational,
+    upper: CanonicalRational,
 ) -> StrictSublevelMeasureResult:
-    _run_admission(request)
-    payload = compute_strict_sublevel_payload(request)
+    _run_admission(polynomial, threshold, lower, upper)
+    payload = compute_strict_sublevel_payload(polynomial, threshold, lower, upper)
     return StrictSublevelMeasureResult._from_kernel(
-        request,
+        polynomial,
+        threshold,
+        lower,
+        upper,
         components=payload.components,
         measure=payload.measure,
     )

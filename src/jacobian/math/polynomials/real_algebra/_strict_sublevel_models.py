@@ -431,7 +431,10 @@ class StrictSublevelMeasureResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: StrictSublevelMeasureRequest,
+        source_polynomial: RationalPolynomial,
+        threshold: CanonicalRational,
+        lower: CanonicalRational,
+        upper: CanonicalRational,
         *,
         components: tuple[StrictSublevelComponent, ...],
         measure: SourceBoundAlgebraicMeasure,
@@ -444,10 +447,10 @@ class StrictSublevelMeasureResult(StrictModel):
         """
 
         return cls.model_construct(
-            source_polynomial=request.polynomial,
-            threshold=request.threshold,
-            lower=request.lower,
-            upper=request.upper,
+            source_polynomial=source_polynomial,
+            threshold=threshold,
+            lower=lower,
+            upper=upper,
             components=components,
             measure=measure,
         )

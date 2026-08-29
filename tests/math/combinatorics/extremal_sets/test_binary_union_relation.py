@@ -144,8 +144,6 @@ def test_code_support_producer_composes_without_reconstruction() -> None:
 
 
 def test_ground_axis_is_independent_of_relation_vertex_count() -> None:
-    result = construct_binary_union_relation(
-        _source(((256,),), ground_set_size=257)
-    )
+    result = construct_binary_union_relation(_source(((256,),), ground_set_size=257))
     assert result.source.ground_set_size == 257
     assert result.rows == ()

@@ -15,7 +15,7 @@ from jacobian._execution import (
 )
 from jacobian.canonical import canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.analysis import definite_integral_enclosure
+from jacobian.math import analysis
 from jacobian.math.analysis._definite_integral_enclosure import (
     MAX_DEFINITE_INTEGRAL_LEAVES,
     MAX_DEFINITE_INTEGRAL_PRECISION_WORK,
@@ -607,18 +607,9 @@ def test_result_schema_exposes_both_discriminated_branch_families() -> None:
     assert set(concluded_leaf_mapping) == {"ENCLOSED", "ZERO_MEASURE"}
 
 
-def test_native_function_matches_the_declared_request_execution() -> None:
-    request = _request(_var(), max_leaves=4)
-    native = definite_integral_enclosure(
-        request.expression,
-        request.box,
-        request.target_width,
-        precision_bits=request.precision_bits,
-        max_leaves=request.max_leaves,
-        wall_seconds=request.wall_seconds,
-    )
-    declared = _compute_definite_integral_enclosure(request)
-    assert native == declared
+def test_wire_only_integral_contract_is_not_published_as_a_native_api() -> None:
+    assert "definite_integral_enclosure" not in analysis.__all__
+    assert not hasattr(analysis, "definite_integral_enclosure")
 
 
 def test_dispatch_start_time_is_part_of_the_owner_deadline() -> None:

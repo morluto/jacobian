@@ -1001,17 +1001,9 @@ def _select_leaf(leaves: tuple[_EvaluatedIntegralLeaf, ...]) -> _EvaluatedIntegr
 
 def _compute_definite_integral_enclosure(
     request: DefiniteIntegralEnclosureRequest,
-    *,
-    native_started_at: float | None = None,
 ) -> DefiniteIntegralEnclosureResult:
     execution = current_request_execution()
-    started_at = (
-        execution.started_at
-        if execution is not None
-        else native_started_at
-        if native_started_at is not None
-        else monotonic()
-    )
+    started_at = execution.started_at if execution is not None else monotonic()
     admission = _admit_definite_integral(request, started_at=started_at)
     source = request.box.intervals[0]
     if _interval_width(source) == 0:
@@ -1110,29 +1102,6 @@ def _compute_definite_integral_enclosure(
         leaves = tuple(sorted(leaves, key=lambda leaf: leaf.path))
 
 
-def definite_integral_enclosure(
-    expression: IntervalExpressionNode,
-    box: RationalIntervalBox,
-    target_width: ExactDyadic,
-    *,
-    precision_bits: int = 128,
-    max_leaves: int = 32,
-    wall_seconds: int = 30,
-) -> DefiniteIntegralEnclosureResult:
-    """Return a rigorous enclosure of one definite integral."""
-
-    started_at = monotonic()
-    request = DefiniteIntegralEnclosureRequest(
-        expression=expression,
-        box=box,
-        precision_bits=precision_bits,
-        target_width=target_width,
-        max_leaves=max_leaves,
-        wall_seconds=wall_seconds,
-    )
-    return _compute_definite_integral_enclosure(request, native_started_at=started_at)
-
-
 DEFINITE_INTEGRAL_ENCLOSURE_OPERATIONS = (
     MathTool(
         operation_id="interval.expression.definite_integral_enclosure.compute",
@@ -1223,5 +1192,4 @@ __all__ = [
     "DefiniteIntegralEnclosureResult",
     "DefiniteIntegralTargetMet",
     "DefiniteIntegralZeroMeasureLeaf",
-    "definite_integral_enclosure",
 ]

@@ -14,15 +14,6 @@ from jacobian._execution import current_request_execution
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
-from jacobian.math.number_theory._contiguous_sum_admission import (
-    require_contiguous_sum_profile_admission,
-)
-from jacobian.math.number_theory._contiguous_sum_kernel import (
-    run_contiguous_sum_profile,
-)
-from jacobian.math.number_theory._contiguous_sum_models import (
-    ContiguousSumProfileResult,
-)
 from jacobian.math.number_theory._binomial_valuation_models import (
     _MAX_BINOMIAL_ROWS_FROM_OUTPUT,
     _MAX_SAFE_JSON_INTEGER,
@@ -32,6 +23,15 @@ from jacobian.math.number_theory._binomial_valuation_models import (
     BinomialValuationProfileRow,
     _base_digit_count,
     _binomial_result_upper_bound_bytes,
+)
+from jacobian.math.number_theory._contiguous_sum_admission import (
+    require_contiguous_sum_profile_admission,
+)
+from jacobian.math.number_theory._contiguous_sum_kernel import (
+    run_contiguous_sum_profile,
+)
+from jacobian.math.number_theory._contiguous_sum_models import (
+    ContiguousSumProfileResult,
 )
 from jacobian.math.number_theory._derived_models import (
     MAX_FACTORIAL_ARGUMENT,

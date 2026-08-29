@@ -817,10 +817,9 @@ __all__ = [
 class OrderedDifferenceProfileRequest(StrictModel):
     """Compute the ordered-difference profile r_{A-A}(v) for a finite set in Z^d.
 
-    Vectors must be distinct, share a common dimension 1..8, and each coordinate
-    is bounded to 6 digits in magnitude. The set size is derived from the
-    worst-case serialized result so the complete profile always fits within
-    Jacobian's canonical output budget.
+    Vectors must be distinct, share a common dimension up to the parser ceiling,
+    and carry 6-digit coordinates. Operation admission combines dimension with
+    set size before constructing the complete pair profile.
     """
 
     vectors: IntegerVectorSet = Field(

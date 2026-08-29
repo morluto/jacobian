@@ -93,9 +93,14 @@ def test_result_preserves_bounds() -> None:
     assert result.upper_bound == 8
 
 
-def test_rejects_hypergraph_envelope_before_enumeration() -> None:
-    with pytest.raises(ValueError, match="triple family"):
-        construct_divisibility_sum_triples_hypergraph(1, 43)
+def test_result_sensitive_admission_accepts_edge_free_shifted_interval() -> None:
+    result = construct_divisibility_sum_triples_hypergraph(1000, 1042)
+    assert result.hypergraph.edges == ()
+
+
+def test_rejects_actual_hypergraph_envelope() -> None:
+    with pytest.raises(ValueError, match="exact triple family"):
+        construct_divisibility_sum_triples_hypergraph(1, 90)
 
 
 def test_native_rejects_reversed_interval() -> None:

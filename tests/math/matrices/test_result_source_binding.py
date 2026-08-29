@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices._operation_models import (
     MAX_DETERMINANT_MATRIX_DIMENSION,
     MatrixDeterminantRequest,
@@ -143,6 +144,42 @@ def test_product_value_feeds_determinant_without_reencoding() -> None:
     assert compute_determinant(request).determinant == CanonicalRational(
         num="2", den="1"
     )
+
+
+def test_flint_rectangular_product_exceeds_shared_matrix_axis() -> None:
+    left_rows = 96
+    right_columns = 80
+    left = _matrix([[str(row + 1), "1", "-1"] for row in range(left_rows)])
+    right = _matrix(
+        [
+            ["1" for _ in range(right_columns)],
+            [str(column + 1) for column in range(right_columns)],
+            ["2" for _ in range(right_columns)],
+        ]
+    )
+
+    result = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    assert result.left_rows == left_rows
+    assert result.inner_dimension == 3
+    assert result.right_columns == right_columns
+    assert tuple(
+        tuple(value.as_fraction() for value in row) for row in result.product.entries
+    ) == tuple(
+        tuple(Fraction(row + column) for column in range(right_columns))
+        for row in range(left_rows)
+    )
+
+
+def test_product_rejects_coefficient_growth_before_backend() -> None:
+    inner_dimension = 128
+    denominator = str(10**255 + 1)
+    value = CanonicalRational(num="1", den=denominator)
+    left = RationalMatrix(entries=(tuple(value for _ in range(inner_dimension)),))
+    right = RationalMatrix(entries=tuple((value,) for _ in range(inner_dimension)))
+
+    with pytest.raises(OperationDomainValidationError, match="canonical digit budget"):
+        compute_product(RationalMatrixProductRequest(left=left, right=right))
 
 
 def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:

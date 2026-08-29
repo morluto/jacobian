@@ -22,6 +22,8 @@ from jacobian.math.matrices._operation_models import (
     MAX_DETERMINANT_MATRIX_DIMENSION,
     MAX_INPUT_SCALAR_DIGITS,
     MAX_KRONECKER_PRODUCT_AXIS,
+    MAX_MATRIX_PRODUCT_MULTIPLY_ADDS,
+    MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK,
     MAX_PERMANENT_RYSER_SUBSETS,
     CharacteristicPolynomialResult,
     MatrixAdjugateResult,
@@ -300,8 +302,62 @@ def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
             "budget_exceeded",
             "matrix multiplication requires the left column count to equal the right row count",
         )
-    _admit_rational_matrix(left)
-    _admit_rational_matrix(right)
+    from jacobian.math.matrices.values import require_matrix_scalar_digits
+
+    for label, matrix in (("left", left), ("right", right)):
+        require_matrix_scalar_digits(
+            matrix.entries,
+            maximum=MAX_INPUT_SCALAR_DIGITS,
+            label=f"{label} matrix input",
+        )
+    left_rows = len(left.entries)
+    inner_dimension = len(left.entries[0])
+    right_columns = len(right.entries[0])
+    if left_rows * inner_dimension * right_columns > MAX_MATRIX_PRODUCT_MULTIPLY_ADDS:
+        raise _validation_error(
+            "budget_exceeded",
+            "matrix product exceeds the exact multiply-add work budget",
+        )
+
+    def component_digits(matrix: RationalMatrix) -> tuple[int, int]:
+        numerator = max(
+            len(value.num.lstrip("-")) for row in matrix.entries for value in row
+        )
+        denominator = max(
+            (
+                len(value.den)
+                for row in matrix.entries
+                for value in row
+                if value.den != "1"
+            ),
+            default=0,
+        )
+        return numerator, denominator
+
+    left_numerator, left_denominator = component_digits(left)
+    right_numerator, right_denominator = component_digits(right)
+    denominator_pair = left_denominator + right_denominator
+    numerator_digits = (
+        left_numerator
+        + right_numerator
+        + max(0, inner_dimension - 1) * denominator_pair
+        + len(str(inner_dimension))
+    )
+    denominator_digits = max(1, inner_dimension * denominator_pair)
+    output_component_digits = max(numerator_digits, denominator_digits)
+    if output_component_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise _validation_error(
+            "budget_exceeded",
+            "matrix product components exceed the canonical digit budget",
+        )
+    if (
+        left_rows * right_columns * output_component_digits
+        > MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "matrix product exceeds the exact dense-output digit budget",
+        )
 
 
 def _admit_kronecker(left: RationalMatrix, right: RationalMatrix) -> None:
@@ -520,14 +576,38 @@ def trace_result(matrix: IntegerMatrix) -> MatrixTraceResult:
 
 def product_result(left: RationalMatrix, right: RationalMatrix) -> MatrixProductResult:
     _admit(_admit_product, left, right, location=("left", "right"))
-    left_source = conversions.rational_matrix_to_sympy(left)
-    right_source = conversions.rational_matrix_to_sympy(right)
-    product = multiply(left_source, right_source)
+    from flint import fmpq, fmpq_mat
+
+    left_rows = len(left.entries)
+    inner_dimension = len(left.entries[0])
+    right_columns = len(right.entries[0])
+
+    def to_flint(matrix: RationalMatrix) -> Any:
+        rows = len(matrix.entries)
+        columns = len(matrix.entries[0])
+        entries = [
+            fmpq(int(value.num), int(value.den))
+            for row in matrix.entries
+            for value in row
+        ]
+        return fmpq_mat(rows, columns, entries)
+
+    product = to_flint(left) * to_flint(right)
     return MatrixProductResult(
-        product=conversions.rational_matrix_from_sympy(product),
-        left_rows=left_source.rows,
-        inner_dimension=left_source.cols,
-        right_columns=right_source.cols,
+        product=RationalMatrix(
+            entries=tuple(
+                tuple(
+                    CanonicalRational.from_integer_ratio(
+                        int(product[row, column].p), int(product[row, column].q)
+                    )
+                    for column in range(right_columns)
+                )
+                for row in range(left_rows)
+            )
+        ),
+        left_rows=left_rows,
+        inner_dimension=inner_dimension,
+        right_columns=right_columns,
     )
 
 

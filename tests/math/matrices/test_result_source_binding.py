@@ -6,11 +6,13 @@ from fractions import Fraction
 from itertools import islice
 
 import pytest
+import sympy
 from pydantic import ValidationError
 from sympy import primerange
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math import matrices
 from jacobian.math.matrices._operation_models import (
     MAX_DETERMINANT_MATRIX_DIMENSION,
     MAX_DETERMINANT_SCALAR_WORK,
@@ -31,7 +33,9 @@ from jacobian.math.matrices._tools import (
     compute_rref,
     compute_smith_normal_form,
 )
+from jacobian.math.matrices.operations import rank_result
 from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
     MAX_MATRIX_DIMENSION,
     MAX_RATIONAL_MATRIX_ORDER,
     IntegerMatrix,
@@ -51,6 +55,15 @@ def _tall_relation_rows() -> tuple[tuple[int, ...], ...]:
         values[20] = values[0] + values[1]
         rows.append(tuple(values))
     return tuple(rows)
+
+
+def _sympy_from_fractions(entries: tuple[tuple[Fraction, ...], ...]) -> sympy.Matrix:
+    return sympy.Matrix(
+        [
+            [sympy.Rational(value.numerator, value.denominator) for value in row]
+            for row in entries
+        ]
+    )
 
 
 def test_flint_exact_linear_operations_support_reported_46_by_21_shape() -> None:
@@ -89,6 +102,50 @@ def test_flint_exact_linear_operations_support_reported_46_by_21_shape() -> None
     assert smith.invariant_factors == ("1",) * 20
     assert len(smith.normal_form.entries) == 46
     assert len(smith.normal_form.entries[0]) == 21
+
+
+def test_native_exact_linear_operations_share_the_46_by_21_flint_path() -> None:
+    integer_rows = _tall_relation_rows()
+    source = sympy.Matrix([list(row) for row in integer_rows])
+    rational = rational_matrix_from_fractions(
+        tuple(tuple(Fraction(value) for value in row) for row in integer_rows)
+    )
+    integer = IntegerMatrix(
+        entries=tuple(tuple(str(value) for value in row) for row in integer_rows)
+    )
+
+    native_rank, native_pivots = matrices.rank(source)
+    wire_rank = compute_rank(MatrixRankRequest(matrix=rational))
+    native_reduced, native_rref_pivots = matrices.rref(source)
+    wire_rref = compute_rref(RationalMatrixRequest(matrix=rational))
+    native_smith = matrices.smith_normal_form(source)
+    wire_smith = compute_smith_normal_form(IntegerMatrixRequest(matrix=integer))
+
+    assert native_rank == wire_rank.rank == 20
+    assert native_pivots == wire_rank.pivot_columns
+    assert native_rref_pivots == wire_rref.pivot_columns
+    assert native_reduced == sympy.Matrix(
+        [
+            [sympy.Rational(value.as_fraction()) for value in row]
+            for row in wire_rref.reduced_matrix.entries
+        ]
+    )
+    assert native_smith == sympy.Matrix(
+        [[int(value) for value in row] for row in wire_smith.normal_form.entries]
+    )
+
+
+def test_native_exact_linear_operations_reject_an_axis_above_the_flint_envelope() -> (
+    None
+):
+    oversized = sympy.zeros(MAX_EXACT_LINEAR_MATRIX_AXIS + 1, 1)
+
+    with pytest.raises(ValueError, match="between 1 and 64"):
+        matrices.rank(oversized)
+    with pytest.raises(ValueError, match="between 1 and 64"):
+        matrices.rref(oversized)
+    with pytest.raises(ValueError, match="between 1 and 64"):
+        matrices.smith_normal_form(oversized)
 
 
 def test_exact_linear_admission_rejects_unrepresentable_rref_height() -> None:
@@ -245,9 +302,24 @@ def test_exact_linear_requests_admit_tall_matrices_above_the_square_dimension() 
     assert MatrixRankRequest(matrix=tall).matrix is tall
 
 
-def test_exact_linear_requests_reject_an_axis_above_the_operation_envelope() -> None:
-    from jacobian.math.matrices.values import MAX_EXACT_LINEAR_MATRIX_AXIS
+def test_exact_linear_admission_rejects_an_axis_above_the_operation_envelope() -> None:
+    matrix = RationalMatrix(
+        entries=tuple(
+            tuple(
+                CanonicalRational(num=str(column + 1), den="1") for column in range(2)
+            )
+            for _ in range(MAX_EXACT_LINEAR_MATRIX_AXIS + 1)
+        )
+    )
 
+    with pytest.raises(OperationDomainValidationError) as excinfo:
+        rank_result(matrix)
+
+    assert excinfo.value.errors()[0]["type"] == "matrix.budget_exceeded"
+    assert "64 rows and columns" in excinfo.value.errors()[0]["msg"]
+
+
+def test_exact_linear_requests_reject_an_axis_above_the_operation_envelope() -> None:
     tall = RationalMatrix(
         entries=tuple(
             tuple(
@@ -297,6 +369,8 @@ def test_flint_determinant_executes_above_the_previous_order_ceiling() -> None:
     result = compute_determinant(MatrixDeterminantRequest(matrix=matrix))
 
     assert result.determinant == CanonicalRational(num="-2", den="3")
+    native = matrices.determinant(_sympy_from_fractions(entries))
+    assert native == sympy.Rational(-2, 3)
 
 
 def test_determinant_preserves_row_swap_and_scaling_invariants() -> None:
@@ -335,24 +409,27 @@ def test_determinant_rejects_requests_above_the_scalar_work_envelope() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="scalar-work budget"):
         compute_determinant(MatrixDeterminantRequest(matrix=matrix))
+    with pytest.raises(OperationDomainValidationError, match="scalar-work budget"):
+        matrices.determinant(_sympy_from_fractions(entries))
 
 
 def test_determinant_rejects_an_unrepresentable_result_height_bound() -> None:
     denominators = tuple(primerange(2, 730))[:MAX_DETERMINANT_MATRIX_DIMENSION]
     row = tuple(Fraction(1, denominator) for denominator in denominators)
-    matrix = rational_matrix_from_fractions(
-        tuple(row for _ in range(MAX_DETERMINANT_MATRIX_DIMENSION))
-    )
+    entries = tuple(row for _ in range(MAX_DETERMINANT_MATRIX_DIMENSION))
+    matrix = rational_matrix_from_fractions(entries)
 
     with pytest.raises(
         OperationDomainValidationError, match="rational result-height bound"
     ):
         compute_determinant(MatrixDeterminantRequest(matrix=matrix))
+    with pytest.raises(
+        OperationDomainValidationError, match="rational result-height bound"
+    ):
+        matrices.determinant(_sympy_from_fractions(entries))
 
 
 def test_raw_preflight_keeps_exact_linear_and_determinant_axis_boundaries() -> None:
-    from jacobian.math.matrices.values import MAX_EXACT_LINEAR_MATRIX_AXIS
-
     def wire_identity(order: int) -> list[list[dict[str, str]]]:
         return [
             [{"num": str(int(row == column)), "den": "1"} for column in range(order)]

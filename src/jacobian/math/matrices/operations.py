@@ -44,6 +44,7 @@ from jacobian.math.matrices._operation_models import (
     _validation_error,
 )
 from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
@@ -109,8 +110,15 @@ def _exact_matrix(value: MatrixBase, *, maximum_dimension: int = 32) -> MatrixBa
 
 
 def rref(matrix: MatrixBase) -> tuple[MatrixBase, tuple[int, ...]]:
-    reduced, pivots = _exact_matrix(matrix).rref()
-    return reduced, tuple(int(pivot) for pivot in pivots)
+    result = rref_result(
+        conversions.rational_matrix_from_sympy(
+            _exact_matrix(matrix, maximum_dimension=MAX_EXACT_LINEAR_MATRIX_AXIS)
+        )
+    )
+    return (
+        conversions.rational_matrix_to_sympy(result.reduced_matrix),
+        result.pivot_columns,
+    )
 
 
 def inverse(matrix: MatrixBase) -> MatrixBase:
@@ -144,22 +152,32 @@ def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
 
 
 def determinant(matrix: MatrixBase) -> Any:
+    import sympy
+
     source = _exact_matrix(matrix, maximum_dimension=MAX_DETERMINANT_MATRIX_DIMENSION)
     if source.rows != source.cols:
         raise ValueError("determinant requires a square matrix")
-    return source.det(method="bareiss")
+    result = determinant_result(conversions.rational_matrix_from_sympy(source))
+    value = result.determinant.as_fraction()
+    return sympy.Rational(value.numerator, value.denominator)
 
 
 def rank(matrix: MatrixBase) -> tuple[int, tuple[int, ...]]:
-    _, pivots = rref(matrix)
-    return len(pivots), pivots
+    result = rank_result(
+        conversions.rational_matrix_from_sympy(
+            _exact_matrix(matrix, maximum_dimension=MAX_EXACT_LINEAR_MATRIX_AXIS)
+        )
+    )
+    return result.rank, result.pivot_columns
 
 
 def smith_normal_form(matrix: MatrixBase) -> MatrixBase:
-    import sympy
-    from sympy.matrices.normalforms import smith_normal_form as sympy_smith_normal_form
-
-    return sympy_smith_normal_form(_exact_matrix(matrix), domain=sympy.ZZ)
+    result = smith_normal_form_result(
+        conversions.integer_matrix_from_sympy(
+            _exact_matrix(matrix, maximum_dimension=MAX_EXACT_LINEAR_MATRIX_AXIS)
+        )
+    )
+    return conversions.integer_matrix_to_sympy(result.normal_form)
 
 
 def multiply(left: MatrixBase, right: MatrixBase) -> MatrixBase:
@@ -274,6 +292,12 @@ def _admit_exact_linear_matrix(
     )
     rows = len(entries)
     columns = len(entries[0])
+    if rows > MAX_EXACT_LINEAR_MATRIX_AXIS or columns > MAX_EXACT_LINEAR_MATRIX_AXIS:
+        raise _validation_error(
+            "budget_exceeded",
+            "matrix computation dimensions are limited to "
+            f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
+        )
     rank_bound = min(rows, columns)
     scalar_digits = max(
         len(component.lstrip("-"))

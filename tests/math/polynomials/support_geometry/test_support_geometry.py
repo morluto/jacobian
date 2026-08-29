@@ -16,12 +16,28 @@ from jacobian.math.polynomials.support_geometry._models import (
     WeightProfileRequest,
 )
 from jacobian.math.polynomials.support_geometry.operations import (
-    compute_initial_form,
-    compute_newton_polytope,
-    compute_support,
-    compute_weight_profile,
+    exponent_support,
+    initial_form,
+    newton_polytope,
+    weight_profile,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
+
+
+def compute_support(request: SupportRequest):
+    return exponent_support(request.polynomial)
+
+
+def compute_newton_polytope(request: NewtonPolytopeRequest):
+    return newton_polytope(request.polynomial)
+
+
+def compute_weight_profile(request: WeightProfileRequest):
+    return weight_profile(request.polynomial, request.weight)
+
+
+def compute_initial_form(request: InitialFormRequest):
+    return initial_form(request.polynomial, request.weight)
 
 
 class _CanonicalRationalPayload(TypedDict):

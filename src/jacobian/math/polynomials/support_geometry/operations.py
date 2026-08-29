@@ -12,10 +12,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.support_geometry._models import (
     MAX_WEIGHTED_COEFFICIENT_DIGITS,
     MAX_WEIGHTED_POLYNOMIAL_TERMS,
-    InitialFormRequest,
-    NewtonPolytopeRequest,
-    SupportRequest,
-    WeightProfileRequest,
     _require_transportable_weight,
 )
 from jacobian.math.polynomials.support_geometry.values import (
@@ -399,11 +395,6 @@ def support_from_polynomial(polynomial: RationalPolynomial) -> PolynomialSupport
     )
 
 
-def compute_support(request: SupportRequest) -> PolynomialSupport:
-    """MCP adapter: parse one request, call the domain kernel once."""
-    return support_from_polynomial(request.polynomial)
-
-
 def newton_polytope_from_polynomial(
     polynomial: RationalPolynomial,
 ) -> NewtonPolytope:
@@ -466,11 +457,6 @@ def newton_polytope_from_polynomial(
     )
 
 
-def compute_newton_polytope(request: NewtonPolytopeRequest) -> NewtonPolytope:
-    """MCP adapter: parse one request, call the domain kernel once."""
-    return newton_polytope_from_polynomial(request.polynomial)
-
-
 def exponent_support(polynomial: RationalPolynomial) -> PolynomialSupport:
     """Return the exponent support of one canonical polynomial."""
 
@@ -501,11 +487,6 @@ def weight_profile(
     )
 
 
-def compute_weight_profile(request: WeightProfileRequest) -> PolynomialWeightProfile:
-    """Compute the weight profile of a polynomial's support."""
-    return weight_profile(request.polynomial, request.weight)
-
-
 def initial_form(
     polynomial: RationalPolynomial, weight: tuple[int, ...]
 ) -> PolynomialFaceData:
@@ -530,8 +511,3 @@ def initial_form(
         weight=weight,
         initial_form=value,
     )
-
-
-def compute_initial_form(request: InitialFormRequest) -> PolynomialFaceData:
-    """Compute the initial form of a polynomial under a weight vector."""
-    return initial_form(request.polynomial, request.weight)

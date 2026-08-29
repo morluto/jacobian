@@ -9,10 +9,10 @@ from jacobian.math.polynomials.support_geometry._models import (
     WeightProfileRequest,
 )
 from jacobian.math.polynomials.support_geometry.operations import (
-    compute_initial_form,
-    compute_newton_polytope,
-    compute_support,
-    compute_weight_profile,
+    exponent_support,
+    initial_form,
+    newton_polytope,
+    weight_profile,
 )
 from jacobian.math.polynomials.support_geometry.values import (
     NewtonPolytope,
@@ -20,6 +20,22 @@ from jacobian.math.polynomials.support_geometry.values import (
     PolynomialSupport,
     PolynomialWeightProfile,
 )
+
+
+def _run_support(request: SupportRequest) -> PolynomialSupport:
+    return exponent_support(request.polynomial)
+
+
+def _run_newton_polytope(request: NewtonPolytopeRequest) -> NewtonPolytope:
+    return newton_polytope(request.polynomial)
+
+
+def _run_weight_profile(request: WeightProfileRequest) -> PolynomialWeightProfile:
+    return weight_profile(request.polynomial, request.weight)
+
+
+def _run_initial_form(request: InitialFormRequest) -> PolynomialFaceData:
+    return initial_form(request.polynomial, request.weight)
 
 # Canonical x^2 + xy + y^2 over the ordered ring QQ[x, y].
 _TOY_POLYNOMIAL = {
@@ -46,7 +62,7 @@ TOOLS: MathTools = (
         ),
         request_type=SupportRequest,
         result_type=PolynomialSupport,
-        run=compute_support,
+        run=_run_support,
         tags=("polynomial", "support", "exact"),
         examples=(
             example(
@@ -70,7 +86,7 @@ TOOLS: MathTools = (
         ),
         request_type=NewtonPolytopeRequest,
         result_type=NewtonPolytope,
-        run=compute_newton_polytope,
+        run=_run_newton_polytope,
         tags=("polynomial", "newton-polytope", "exact"),
         examples=(
             example(
@@ -93,7 +109,7 @@ TOOLS: MathTools = (
         ),
         request_type=WeightProfileRequest,
         result_type=PolynomialWeightProfile,
-        run=compute_weight_profile,
+        run=_run_weight_profile,
         tags=("polynomial", "weight-profile", "exact"),
         examples=(
             example(
@@ -120,7 +136,7 @@ TOOLS: MathTools = (
         ),
         request_type=InitialFormRequest,
         result_type=PolynomialFaceData,
-        run=compute_initial_form,
+        run=_run_initial_form,
         tags=("polynomial", "initial-form", "exact"),
         examples=(
             example(

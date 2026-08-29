@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic.json_schema import WithJsonSchema
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -28,7 +29,7 @@ class CyclicPrefixSumResidueProfileRequest(StrictModel):
 
     sequence: Annotated[
         IndexedIntegerSequence,
-        indexed_sequence_item_ceiling(MAX_SEQUENCE_LENGTH),
+        WithJsonSchema(indexed_sequence_item_ceiling(MAX_SEQUENCE_LENGTH)),
     ]
     modulus: BoundedModulus
 

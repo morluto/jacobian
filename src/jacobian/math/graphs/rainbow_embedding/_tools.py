@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.rainbow_embedding._models import (
@@ -19,16 +20,16 @@ def compute_rainbow_embedding_op(
     return compute_rainbow_embedding_profile(request.pattern, request.host)
 
 
-def reb_action(
+def reb_action[RequestT: StrictModel, ResultT: StrictModel](
     operation_id: str,
     title: str,
     description: str,
-    request_model: type,
-    result_model: type,
-    operation: Callable,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-) -> MathTool:
+) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
         title=title,

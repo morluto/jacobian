@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.rainbow_embedding.operations import (
     compute_rainbow_embedding_profile,
 )
@@ -45,10 +48,33 @@ def test_p2_two_same() -> None:
 
 
 def test_empty_pattern() -> None:
-    """Empty pattern: 0 embeddings."""
+    """The empty pattern has one empty injective embedding."""
     empty = SimpleUndirectedGraph(vertices=(), edges=())
     result = compute_rainbow_embedding_profile(empty, _k3_all_distinct())
-    assert result.total_embeddings == 0
+    assert result.total_embeddings == 1
+    assert result.rainbow_count == 1
+    assert result.embeddings[0].pattern_to_host == ()
+
+
+def test_rejects_uncolored_nonempty_host() -> None:
+    host = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=("0", "1"), edges=(("0", "1"),))
+    )
+    with pytest.raises(OperationDomainValidationError):
+        compute_rainbow_embedding_profile(_p2(), host)
+
+
+def test_rejects_unbounded_embedding_family() -> None:
+    pattern = SimpleUndirectedGraph(
+        vertices=tuple(str(i) for i in range(8)), edges=()
+    )
+    host = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(
+            vertices=tuple(str(i) for i in range(16)), edges=()
+        )
+    )
+    with pytest.raises(OperationDomainValidationError):
+        compute_rainbow_embedding_profile(pattern, host)
 
 
 def test_pattern_larger_than_host() -> None:

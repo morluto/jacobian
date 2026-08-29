@@ -157,10 +157,15 @@ def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
 
 
 def determinant(matrix: MatrixBase) -> Any:
+    import sympy
+
     source = _exact_matrix(matrix, maximum_dimension=MAX_DETERMINANT_MATRIX_DIMENSION)
     if source.rows != source.cols:
         raise ValueError("determinant requires a square matrix")
-    return source.det(method="bareiss")
+    if not all(entry.is_Rational is True for entry in source):
+        return source.det(method="bareiss")
+    result = determinant_result(conversions.rational_matrix_from_sympy(source))
+    return sympy.Rational(result.determinant.num, result.determinant.den)
 
 
 def rank(matrix: MatrixBase) -> tuple[int, tuple[int, ...]]:

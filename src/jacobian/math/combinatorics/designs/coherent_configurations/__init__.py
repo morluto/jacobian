@@ -1,3 +1,7 @@
-"""Exact coherent-configuration operations are catalog-only in this release."""
+"""Exact coherent-configuration operations."""
 
-__all__: list[str] = []
+from jacobian.math.combinatorics.designs.coherent_configurations.operations import (
+    analyze_configuration,
+)
+
+__all__ = ["analyze_configuration"]

@@ -449,7 +449,9 @@ def _characteristic_polynomial_component_digit_bound(
         ),
         default=1,
     )
-    numerator_digits = order * (cleared_height + _positive_decimal_digits(order)) + order
+    numerator_digits = (
+        order * (cleared_height + _positive_decimal_digits(order)) + order
+    )
     denominator_digits = max(1, order * denominator_growth)
     return max(numerator_digits, denominator_digits)
 

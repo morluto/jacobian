@@ -290,6 +290,29 @@ def _power_at_most(base: int, exponent: int, limit: int) -> int | None:
     return result
 
 
+_MAX_RESULT_RATIONAL_BITS = (MAX_RESULT_RATIONAL_DIGITS * 332_193 + 99_999) // 100_000
+
+
+def _lcm_within_result_digits(
+    left: int,
+    right: int,
+    *,
+    location: tuple[str, ...],
+    code: str,
+    message: str,
+) -> int:
+    """Fold one positive integer into an LCM without exceeding the result height."""
+
+    combined = lcm(left, right)
+    if combined.bit_length() > _MAX_RESULT_RATIONAL_BITS:
+        raise OperationDomainValidationError(
+            location=location,
+            code=code,
+            message=message,
+        )
+    return combined
+
+
 def _power_multiplication_shapes(
     base_degree: int, exponent: int
 ) -> tuple[tuple[int, int], ...]:
@@ -332,7 +355,16 @@ def _plan_convolution_power(
     origin = positive[0][0]
     value_denominator = 1
     for value, _ in positive[1:]:
-        value_denominator = lcm(value_denominator, (value - origin).denominator)
+        value_denominator = _lcm_within_result_digits(
+            value_denominator,
+            (value - origin).denominator,
+            location=("distribution",),
+            code="probability.convolution_power.height_bound",
+            message=(
+                "convolution-power lattice denominators exceed the "
+                f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+            ),
+        )
     offsets = tuple(int((value - origin) * value_denominator) for value, _ in positive)
     lattice_gcd = 0
     for offset in offsets[1:]:
@@ -343,7 +375,16 @@ def _plan_convolution_power(
 
     probability_denominator = 1
     for _, probability in positive:
-        probability_denominator = lcm(probability_denominator, probability.denominator)
+        probability_denominator = _lcm_within_result_digits(
+            probability_denominator,
+            probability.denominator,
+            location=("distribution",),
+            code="probability.convolution_power.height_bound",
+            message=(
+                "convolution-power probabilities exceed the "
+                f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+            ),
+        )
     weights = tuple(
         probability.numerator * (probability_denominator // probability.denominator)
         for _, probability in positive

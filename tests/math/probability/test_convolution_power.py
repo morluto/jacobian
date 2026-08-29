@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections import defaultdict
 from fractions import Fraction
 from itertools import product
-from math import prod
+from math import gcd, prod
+from time import perf_counter
 
 import pytest
 
@@ -272,6 +273,25 @@ def test_complete_power_result_byte_envelope_has_useful_boundary() -> None:
         match=r"profile exceed.*result bound",
     ):
         convolution_power(_three_point_lattice(100, 100_000), 100)
+
+
+def test_power_rejects_coprime_support_denominator_lcm_growth() -> None:
+    dens: list[int] = []
+    candidate = 10**90
+    while len(dens) < 8:
+        candidate += 1
+        if all(gcd(candidate, den) == 1 for den in dens):
+            dens.append(candidate)
+    atoms = tuple(
+        (Fraction(index, den), Fraction(1, 8)) for index, den in enumerate(dens)
+    )
+    started = perf_counter()
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="lattice denominators exceed",
+    ):
+        convolution_power(_distribution(atoms), 1)
+    assert perf_counter() - started < 2.0
 
 
 def test_result_deserialization_does_not_repeat_power_admission() -> None:

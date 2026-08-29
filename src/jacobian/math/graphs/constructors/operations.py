@@ -4,11 +4,8 @@ from __future__ import annotations
 
 from jacobian.math.graphs.constructors._bounds import admit_triangle_profile
 from jacobian.math.graphs.constructors._models import (
-    HypercubeGraphRequest,
     HypercubeGraphResult,
-    KellerGraphRequest,
     KellerGraphResult,
-    TriangleProfileRequest,
     TriangleProfileResult,
     TriangleProfileRow,
 )
@@ -18,9 +15,8 @@ from jacobian.math.graphs.values import (
 )
 
 
-def _run_hypercube_graph(request: HypercubeGraphRequest) -> HypercubeGraphResult:
+def construct_hypercube_graph(dimension: int) -> HypercubeGraphResult:
     """Construct the d-dimensional hypercube graph Q_d."""
-    dimension = request.dimension
     vertex_count = 1 << dimension
     edges: list[tuple[int, int]] = []
     for vertex in range(vertex_count):
@@ -58,9 +54,8 @@ def _keller_adjacent(left: tuple[int, ...], right: tuple[int, ...]) -> bool:
     return has_diff_2_mod_4 and hamming >= 2
 
 
-def _run_keller_graph(request: KellerGraphRequest) -> KellerGraphResult:
+def construct_keller_graph(dimension: int) -> KellerGraphResult:
     """Construct the Keller graph K_d."""
-    dimension = request.dimension
     if dimension == 0:
         return KellerGraphResult(
             dimension=dimension,
@@ -82,9 +77,10 @@ def _run_keller_graph(request: KellerGraphRequest) -> KellerGraphResult:
     )
 
 
-def _run_triangle_profile(request: TriangleProfileRequest) -> TriangleProfileResult:
+def compute_triangle_profile(graph: SimpleUndirectedGraph) -> TriangleProfileResult:
     """Compute the complete triangle profile of a finite simple graph."""
-    graph = request.graph
+    if not isinstance(graph, SimpleUndirectedGraph):
+        raise TypeError("compute_triangle_profile expects a SimpleUndirectedGraph")
     admission = admit_triangle_profile(graph)
     triangles = tuple(
         TriangleProfileRow(
@@ -103,21 +99,6 @@ def _run_triangle_profile(request: TriangleProfileRequest) -> TriangleProfileRes
     )
 
 
-def construct_hypercube_graph(dimension: int) -> HypercubeGraphResult:
-    """Construct ``Q_dimension`` from its mathematical dimension."""
-    return _run_hypercube_graph(HypercubeGraphRequest(dimension=dimension))
-
-
-def construct_keller_graph(dimension: int) -> KellerGraphResult:
-    """Construct the Keller graph of the requested dimension."""
-    return _run_keller_graph(KellerGraphRequest(dimension=dimension))
-
-
-def compute_triangle_profile(graph: SimpleUndirectedGraph) -> TriangleProfileResult:
-    """Compute the complete triangle profile of one canonical graph."""
-    if not isinstance(graph, SimpleUndirectedGraph):
-        raise TypeError("compute_triangle_profile expects a SimpleUndirectedGraph")
-    return _run_triangle_profile(TriangleProfileRequest(graph=graph))
 
 
 __all__ = [

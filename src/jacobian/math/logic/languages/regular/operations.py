@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.languages.regular._profile_admission import (
     TransitionParikhAdmissionPlan,
     admit_transition_profile,
 )
 from jacobian.math.logic.languages.regular.values import (
     DFA,
+    MAX_COUNT_MATRIX_WORK,
+    MAX_COUNT_RESULT_DIGITS,
+    MAX_COUNT_WORD_LENGTH,
     AutomatonTransition,
     FiniteLabeledAutomaton,
     TransitionParikhCell,
@@ -43,17 +47,40 @@ def dfa_run(dfa: DFA, word: tuple[int, ...]) -> tuple[bool, int]:
 def count_accepted_words(dfa: DFA, word_length: int) -> int:
     """Count accepted words of exact length via exact integer matrix powering."""
 
-    import sympy
-
     state_count = dfa.state_count
+    if type(word_length) is not int or not 0 <= word_length <= MAX_COUNT_WORD_LENGTH:
+        raise OperationDomainValidationError(
+            location=("word_length",),
+            code="regular_language.word_length_out_of_bounds",
+            message="word length is outside the exact counting bound",
+        )
+    matrix_work = state_count**3 * max(1, word_length.bit_length())
+    if matrix_work > MAX_COUNT_MATRIX_WORK:
+        raise OperationDomainValidationError(
+            location=("dfa", "word_length"),
+            code="regular_language.count_work_bound",
+            message="DFA matrix powering exceeds the exact work bound",
+        )
+    count_bits = 1 + word_length * (dfa.alphabet_size - 1).bit_length()
+    count_digits = max(1, (count_bits * 30_103 + 99_999) // 100_000)
+    if count_digits > MAX_COUNT_RESULT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("dfa", "word_length"),
+            code="regular_language.count_result_bound",
+            message="accepted-word count exceeds the canonical result digit bound",
+        )
     if word_length == 0:
         return 1 if dfa.initial_state in dfa.accepting_states else 0
-    matrix = sympy.zeros(state_count, state_count)
+    matrix = [[0] * state_count for _ in range(state_count)]
     for (source, _symbol), target in _transition_map(dfa).items():
-        matrix[source, target] += 1
-    powered = matrix**word_length
-    return sum(
-        int(powered[dfa.initial_state, target]) for target in dfa.accepting_states
+        matrix[source][target] += 1
+    from jacobian.math.logic.languages.regular._flint import accepted_word_count
+
+    return accepted_word_count(
+        tuple(tuple(row) for row in matrix),
+        dfa.initial_state,
+        dfa.accepting_states,
+        word_length,
     )
 
 

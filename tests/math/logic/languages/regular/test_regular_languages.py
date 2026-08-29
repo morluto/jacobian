@@ -5,6 +5,7 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.languages.regular._models import (
     ComplementRequest,
     CountRequest,
@@ -158,6 +159,35 @@ def test_count_large_value_uses_canonical_string() -> None:
     dfa = _dfa_full_alphabet_accepting()
     result = compute_count(CountRequest(dfa=dfa, word_length=200))
     assert result.count == str(32**200)
+
+
+def test_count_uses_flint_powering_above_the_previous_length_ceiling() -> None:
+    dfa = _dfa_full_alphabet_accepting()
+    result = compute_count(CountRequest(dfa=dfa, word_length=1_000))
+
+    assert result.count == str(32**1_000)
+
+
+def test_count_rejects_projected_result_digits_before_powering() -> None:
+    with pytest.raises(OperationDomainValidationError, match="result digit bound"):
+        count_accepted_words(_dfa_full_alphabet_accepting(), 22_000)
+
+
+def test_count_rejects_large_state_powering_work() -> None:
+    state_count = 64
+    dfa = DFA(
+        state_count=state_count,
+        alphabet_size=1,
+        transitions=tuple(
+            DFATransition(source=state, symbol=0, target=(state + 1) % state_count)
+            for state in range(state_count)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="matrix powering"):
+        count_accepted_words(dfa, 1_000_000)
 
 
 def test_run_and_count_results_remain_structural() -> None:

@@ -92,8 +92,7 @@ def test_result_preserves_source() -> None:
     )
     result = compute_eventual_hitting_profile(matrix, (0,))
     assert result.matrix == tuple(
-        tuple(CanonicalRational.from_fraction(value) for value in row)
-        for row in matrix
+        tuple(CanonicalRational.from_fraction(value) for value in row) for row in matrix
     )
     assert result.target_states == (0,)
 

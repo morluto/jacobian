@@ -84,7 +84,9 @@ def _admit_eventual_hitting(
                 frontier.append(predecessor)
 
     transient = tuple(
-        state for state in range(n) if state in can_reach_target and state not in target_set
+        state
+        for state in range(n)
+        if state in can_reach_target and state not in target_set
     )
     matrix_digits = max(
         (_decimal_digits(value.numerator) for row in matrix for value in row),
@@ -109,9 +111,7 @@ def _admit_eventual_hitting(
             ("den", matrix_digits + 2),
         )
     )
-    matrix_bytes = _json_array_size(
-        _json_array_size(rational_source_bytes, n), n
-    )
+    matrix_bytes = _json_array_size(_json_array_size(rational_source_bytes, n), n)
     index_bytes = max(1, len(str(max(n - 1, 0))))
     target_bytes = _json_array_size(index_bytes, len(target_states))
     probability_bytes = _json_array_size(

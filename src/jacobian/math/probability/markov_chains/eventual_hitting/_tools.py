@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.probability.markov_chains.eventual_hitting._models import (
@@ -11,24 +12,27 @@ from jacobian.math.probability.markov_chains.eventual_hitting._models import (
 from jacobian.math.probability.markov_chains.eventual_hitting.operations import (
     compute_eventual_hitting_profile,
 )
+from jacobian.math.probability.markov_chains.values import as_transition_matrix
 
 
 def compute_ehp_op(
     request: EventualHittingProfileRequest,
 ) -> EventualHittingProfileResult:
-    return compute_eventual_hitting_profile(request.matrix, request.target_states)
+    return compute_eventual_hitting_profile(
+        as_transition_matrix(request.matrix), request.target_states
+    )
 
 
-def ehp_action(
+def ehp_action[RequestT: StrictModel, ResultT: StrictModel](
     operation_id: str,
     title: str,
     description: str,
-    request_model: type,
-    result_model: type,
-    operation: Callable,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-) -> MathTool:
+) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
         title=title,

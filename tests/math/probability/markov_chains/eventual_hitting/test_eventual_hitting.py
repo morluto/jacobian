@@ -9,11 +9,11 @@ from jacobian.math.probability.markov_chains.eventual_hitting.operations import 
 
 
 def _cr(num, den=1):
-    return CanonicalRational.from_fraction(Fraction(num, den))
+    return Fraction(num, den)
 
 
 def _matrix(rows):
-    return tuple(tuple(_cr(v) for v in row) for row in rows)
+    return tuple(tuple(Fraction(v) for v in row) for row in rows)
 
 
 def test_two_state_absorbing() -> None:
@@ -91,5 +91,31 @@ def test_result_preserves_source() -> None:
         (_cr(0), _cr(1)),
     )
     result = compute_eventual_hitting_profile(matrix, (0,))
-    assert result.matrix == matrix
+    assert result.matrix == tuple(
+        tuple(CanonicalRational.from_fraction(value) for value in row)
+        for row in matrix
+    )
     assert result.target_states == (0,)
+
+
+def test_reducible_chain_uses_minimal_nonnegative_solution() -> None:
+    matrix = (
+        (Fraction(1), Fraction(0), Fraction(0)),
+        (Fraction(1, 2), Fraction(0), Fraction(1, 2)),
+        (Fraction(0), Fraction(0), Fraction(1)),
+    )
+    result = compute_eventual_hitting_profile(matrix, (2,))
+    assert tuple(value.as_fraction() for value in result.hitting_probabilities) == (
+        Fraction(0),
+        Fraction(1, 2),
+        Fraction(1),
+    )
+
+
+def test_rejects_non_stochastic_native_matrix() -> None:
+    import pytest
+
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    with pytest.raises(OperationDomainValidationError):
+        compute_eventual_hitting_profile(((Fraction(1),), (Fraction(1),)), (0,))

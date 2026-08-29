@@ -4,13 +4,8 @@ from __future__ import annotations
 
 from math import isqrt
 
-from pydantic_core import PydanticCustomError
-
 from jacobian.canonical import parse_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._friable_models import (
-    FriableCountRequest,
-    FriableCountResult,
     _plan_friable_count,
 )
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
@@ -87,20 +82,4 @@ def count_friable(x: int | IntegerValue, y: int | IntegerValue) -> int:
     return _count_generated(x, primes)
 
 
-def compute_friable_count(request: FriableCountRequest) -> FriableCountResult:
-    """Compute one exact source-bound friable count."""
-
-    x = parse_canonical_integer(request.x)
-    y = parse_canonical_integer(request.y)
-    try:
-        count = count_friable(x, y)
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=("x", "y"),
-            code=exc.type,
-            message=exc.message(),
-        ) from exc
-    return FriableCountResult._from_kernel(request, count=count)
-
-
-__all__ = ["compute_friable_count", "count_friable"]
+__all__ = ["count_friable"]

@@ -1,9 +1,11 @@
 """Exact arithmetic counting operations."""
 
+from math import gcd
+
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.counting._models import (
-    _MAX_BOX_AREA,
     _MAX_BOX_COORD,
+    _MAX_BOX_LINEAR_COEFFICIENT,
     _MAX_BOX_MODULUS,
     _MAX_FLOOR_SUM_N,
     _MAX_FLOOR_SUM_PARAM,
@@ -84,18 +86,33 @@ def congruence_box_count(
             "modulus_out_of_range",
             "modulus is outside the admitted range",
         )
-    area = (x_hi - x_lo + 1) * (y_hi - y_lo + 1)
-    if area > _MAX_BOX_AREA:
-        _reject(
-            ("x_lo", "x_hi", "y_lo", "y_hi"),
-            "box_area_exceeds_budget",
-            "box area exceeds the computational budget",
-        )
-    return sum(
-        (u * x + v * y - c) % modulus == 0
-        for x in range(x_lo, x_hi + 1)
-        for y in range(y_lo, y_hi + 1)
-    )
+    for name, value in (("u", u), ("v", v), ("c", c)):
+        if not -_MAX_BOX_LINEAR_COEFFICIENT <= value <= _MAX_BOX_LINEAR_COEFFICIENT:
+            _reject(
+                (name,),
+                f"{name}_out_of_range",
+                f"{name} is outside the admitted range",
+            )
+
+    x_length = x_hi - x_lo + 1
+    y_length = y_hi - y_lo + 1
+    if y_length < x_length:
+        x_lo, x_hi, y_lo, y_hi = y_lo, y_hi, x_lo, x_hi
+        u, v = v, u
+
+    divisor = gcd(v, modulus)
+    reduced_modulus = modulus // divisor
+    inverse = 0 if reduced_modulus == 1 else pow(v // divisor, -1, reduced_modulus)
+
+    count = 0
+    for x in range(x_lo, x_hi + 1):
+        right_hand_side = c - u * x
+        if right_hand_side % divisor:
+            continue
+        residue = (right_hand_side // divisor * inverse) % reduced_modulus
+        count += (y_hi - residue) // reduced_modulus
+        count -= (y_lo - 1 - residue) // reduced_modulus
+    return count
 
 
 __all__ = ["congruence_box_count", "floor_sum"]

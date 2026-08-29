@@ -14,11 +14,14 @@ from jacobian.math.combinatorics.matroids import (
     matroid_closure,
     matroid_rank,
 )
-from jacobian.math.combinatorics.matroids._models import MatroidClosureRequest
+from jacobian.math.combinatorics.matroids._models import (
+    MatroidClosureRequest,
+    MatroidClosureResult,
+)
 from jacobian.math.combinatorics.matroids.operations import closure_result
 
 
-def compute_closure(request: MatroidClosureRequest):
+def compute_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
     return closure_result(request.matroid, request.subset)
 
 
@@ -71,7 +74,7 @@ class TestLinearMatroidRepresentation:
 
     def test_ground_set_beyond_cap_rejected(self) -> None:
         """A 33-column matrix is rejected even though the shared kernel
-        admits up to 256 columns: the advertised envelope is 32 elements."""
+        admits up to 1024 columns: the advertised envelope is 32 elements."""
         from jacobian.math.matrices.finite_fields.linear_algebra import (
             PrimeFieldMatrix,
         )
@@ -96,6 +99,21 @@ class TestLinearMatroidRepresentation:
         with pytest.raises(ValidationError) as exc_info:
             MatroidClosureRequest.model_validate(payload)
         assert exc_info.value.errors()[0]["type"] == "matroid.ground_set.bound"
+
+    def test_shared_carrier_does_not_widen_matroid_row_envelope(self) -> None:
+        """The matrix carrier may scale without widening matroid witness work."""
+        from jacobian.math.matrices.finite_fields.linear_algebra import (
+            PrimeFieldMatrix,
+        )
+
+        matrix = PrimeFieldMatrix(
+            prime=2,
+            entries=((0,),) * 257,
+            columns=1,
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            LinearMatroid(matrix=matrix)
+        assert exc_info.value.errors()[0]["type"] == "matroid.representation_rows.bound"
 
     def test_empty_matroid_admitted(self) -> None:
         """The empty ground set with a preserved row axis is representable."""

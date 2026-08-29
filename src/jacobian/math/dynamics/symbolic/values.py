@@ -17,7 +17,9 @@ MAX_ADJACENCY_STATES = 50
 MAX_ADJACENCY_ENTRY = 1_000_000
 MAX_ENUMERATED_BLOCKS = 100_000
 MAX_PRESENTATION_CELLS = MAX_ENUMERATED_BLOCKS
-MAX_PERIOD = 50
+# Three complete integer vectors are returned. Even one-digit counts consume
+# three digits per period under the aggregate profile budget.
+MAX_PERIOD = 100_000 // 3
 
 Symbol = Annotated[str, Field(min_length=1, max_length=MAX_SYMBOL_LENGTH)]
 

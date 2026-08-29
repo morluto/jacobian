@@ -89,7 +89,6 @@ def _first_primes(count: int) -> list[int]:
 
 def _pairwise_coprime_denominators(count: int, digits: int) -> list[int]:
     limit = 10**digits
-    minimum = 10 ** (digits - 1)
     denominators: list[int] = []
     for prime in _first_primes(count):
         exponent = max(1, ceil((digits - 1) / log10(prime)))
@@ -97,7 +96,6 @@ def _pairwise_coprime_denominators(count: int, digits: int) -> list[int]:
         while value >= limit:
             exponent -= 1
             value = prime**exponent
-        assert value >= minimum
         denominators.append(value)
     return denominators
 

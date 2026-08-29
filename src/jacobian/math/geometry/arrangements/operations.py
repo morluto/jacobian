@@ -141,6 +141,16 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
                 "chamber_result_bytes_exceeded",
                 "chamber count exceeds the canonical output-byte limit",
             )
+        # Closed-form ``2^m`` construction is cheap, but canonical formatting
+        # and the positivity parse each perform one base-10**9 limb operation
+        # per output chunk.  Charge both against the shared work ledger.
+        conversion_steps = 2 * ((result_digits + 8) // 9)
+        if conversion_steps > MAX_GENERIC_FORMULA_WORK:
+            _reject(
+                ("hyperplane_count",),
+                "chamber_formatting_work_exceeded",
+                "chamber count exceeds the canonical integer-conversion work budget",
+            )
         count = 1 << m
     else:
         if n > MAX_GENERIC_FORMULA_WORK:
@@ -160,6 +170,13 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
                 ("ambient_dimension", "hyperplane_count"),
                 "chamber_result_bytes_exceeded",
                 "chamber count exceeds the canonical output-byte limit",
+            )
+        conversion_steps = 2 * ((result_digits + 8) // 9)
+        if n + conversion_steps > MAX_GENERIC_FORMULA_WORK:
+            _reject(
+                ("ambient_dimension", "hyperplane_count"),
+                "chamber_formatting_work_exceeded",
+                "chamber count exceeds the canonical integer-conversion work budget",
             )
         coefficient = 1
         total = 0

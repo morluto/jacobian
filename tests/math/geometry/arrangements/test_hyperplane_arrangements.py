@@ -257,6 +257,19 @@ def test_chamber_count_rejects_actual_output_bytes() -> None:
     )
 
 
+def test_chamber_count_rejects_closed_form_integer_conversion_work() -> None:
+    request = ChamberCountRequest(
+        ambient_dimension=30_000_000,
+        hyperplane_count=30_000_000,
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        compute_chamber_count(request)
+    assert (
+        error.value.errors()[0]["type"]
+        == "hyperplane_arrangement.chamber_formatting_work_exceeded"
+    )
+
+
 def test_chamber_count_rejects_long_partial_sum() -> None:
     request = ChamberCountRequest(
         ambient_dimension=MAX_GENERIC_FORMULA_WORK + 1,

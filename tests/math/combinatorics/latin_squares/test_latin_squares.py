@@ -22,6 +22,9 @@ from jacobian.math.combinatorics.designs.latin_squares._tools import (
     compute_latin_square_transpose,
     compute_orthogonality,
 )
+from jacobian.math.combinatorics.designs.latin_squares.operations import (
+    MAX_LATIN_ORTHOGONALITY_PAIR_CELLS,
+)
 
 
 class _RawSquare(TypedDict):
@@ -44,6 +47,13 @@ def _candidate_square(
 
 
 Z2 = _latin_square(2, ((0, 1), (1, 0)))
+
+
+def _cyclic_square(order: int, multiplier: int = 1) -> tuple[tuple[int, ...], ...]:
+    return tuple(
+        tuple((row + multiplier * column) % order for column in range(order))
+        for row in range(order)
+    )
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -115,3 +125,43 @@ def test_check_accepts_non_latin_square() -> None:
     request = LatinSquareRequest(square=_candidate_square(2, ((0, 0), (1, 1))))
     result = compute_latin_square_check(request)
     assert result.is_latin is False
+
+
+def test_operations_admit_materialized_squares_beyond_order_32() -> None:
+    order = 127
+    left_cells = _cyclic_square(order)
+    right_cells = _cyclic_square(order, 2)
+
+    check = compute_latin_square_check(
+        LatinSquareRequest(square=_candidate_square(order, left_cells))
+    )
+    left = _latin_square(order, left_cells)
+    right = _latin_square(order, right_cells)
+    orthogonality = compute_orthogonality(
+        OrthogonalityRequest(square_a=left, square_b=right)
+    )
+    transposed = compute_latin_square_transpose(TransposeRequest(square=left))
+
+    assert check.is_latin is True
+    assert orthogonality.is_orthogonal is True
+    assert orthogonality.pair_count == order * order
+    assert all(
+        transposed.transposed[row][column] == left.cells[column][row]
+        for row in range(order)
+        for column in range(order)
+    )
+
+
+def test_orthogonality_rejects_above_pair_memory_budget() -> None:
+    from math import isqrt
+
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    order = isqrt(MAX_LATIN_ORTHOGONALITY_PAIR_CELLS) + 1
+    square = _latin_square(order, _cyclic_square(order))
+    with pytest.raises(OperationDomainValidationError) as error:
+        orthogonality_profile(square, square)
+    assert (
+        error.value.errors()[0]["type"]
+        == "combinatorics.latin_square.orthogonality_pair_cells_exceeded"
+    )

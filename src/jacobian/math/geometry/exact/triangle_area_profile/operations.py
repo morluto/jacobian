@@ -1,0 +1,66 @@
+"""Triangle area profile kernel."""
+
+from __future__ import annotations
+
+from fractions import Fraction
+from itertools import combinations
+
+from jacobian._exact import CanonicalRational
+from jacobian.math.geometry.exact._models import PointConfiguration
+from jacobian.math.geometry.exact.triangle_area_profile._models import (
+    TriangleAreaEntry,
+    TriangleAreaProfileResult,
+)
+
+__all__ = ["compute_triangle_area_profile"]
+
+
+def compute_triangle_area_profile(
+    configuration: PointConfiguration,
+) -> TriangleAreaProfileResult:
+    """Return the complete triangle-area profile of a planar configuration.
+
+    For every triple of points, compute the exact unsigned triangle area
+    using the cross-product formula. Points must be 2-dimensional.
+    """
+    points = configuration.points
+    n = len(points)
+
+    entries: list[TriangleAreaEntry] = []
+    area_to_triples: dict[Fraction, list[tuple[int, int, int]]] = {}
+
+    for i, j, k in combinations(range(n), 3):
+        coords_i = [c.as_fraction() for c in points[i].coordinates]
+        coords_j = [c.as_fraction() for c in points[j].coordinates]
+        coords_k = [c.as_fraction() for c in points[k].coordinates]
+
+        # Signed area = 0.5 * |cross product|
+        # cross = (x_j - x_i) * (y_k - y_i) - (x_k - x_i) * (y_j - y_i)
+        dx1 = coords_j[0] - coords_i[0]
+        dy1 = coords_j[1] - coords_i[1]
+        dx2 = coords_k[0] - coords_i[0]
+        dy2 = coords_k[1] - coords_i[1]
+
+        cross = dx1 * dy2 - dx2 * dy1
+        area = abs(cross) / 2
+
+        triple = (i, j, k)
+        entries.append(
+            TriangleAreaEntry(
+                indices=triple,
+                area=CanonicalRational.from_fraction(area),
+            )
+        )
+        area_to_triples.setdefault(area, []).append(triple)
+
+    # Build sorted area classes
+    area_classes = tuple(
+        (CanonicalRational.from_fraction(a), tuple(tuple(triples) for triples in area_to_triples[a]))
+        for a in sorted(area_to_triples.keys())
+    )
+
+    return TriangleAreaProfileResult(
+        configuration=configuration,
+        entries=tuple(entries),
+        area_classes=area_classes,
+    )

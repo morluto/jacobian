@@ -4,6 +4,8 @@ import pytest
 
 from jacobian.math.finite_dim_algebras import center_basis
 from jacobian.math.finite_dim_algebras._models import (
+    MAX_DIM,
+    MAX_STRUCTURE_CONSTANT_ENTRIES,
     CenterRequest,
     StructureConstants,
 )
@@ -136,23 +138,30 @@ def test_moderate_dimension_does_not_enumerate() -> None:
     assert result.center_dimension == n
 
 
-def test_center_admits_derived_dimension_boundary() -> None:
-    """The Theta(n^4) kernel admits up to dimension 128 (measured ~19s)."""
-    from jacobian.math.finite_dim_algebras._models import MAX_DIM
-
-    n, q = 128, 251
-    zero_inner = tuple(0 for _ in range(n))
-    mult = tuple(tuple(zero_inner for _ in range(n)) for _ in range(n))
+def test_flint_center_executes_above_previous_dimension_limit() -> None:
+    """FLINT computes the exact center beyond the former dimension-128 cap."""
+    n, q = 129, 251
+    zero_inner = (0,) * n
+    zero_row = (zero_inner,) * n
+    mult = (zero_row,) * n
     struct = StructureConstants(dimension=n, field_order=q, multiplication=mult)
-    request = CenterRequest(algebra=struct)
-    assert request.algebra.dimension == 128 == MAX_DIM
+    result = compute_center(CenterRequest(algebra=struct))
+    assert result.dimension == n
+    assert result.center_dimension == n
+    assert result.center_basis == tuple(
+        tuple(int(row == column) for row in range(n)) for column in range(n)
+    )
+
+
+def test_dimension_limit_is_derived_from_structure_constant_budget() -> None:
+    assert MAX_DIM**3 == MAX_STRUCTURE_CONSTANT_ENTRIES
 
 
 def test_structure_constants_rejects_above_its_own_field_cap() -> None:
-    """The shared structure-constants cap (128) is independent of the center guard."""
+    """The structure tensor cannot exceed its materialization budget."""
     from pydantic import ValidationError
 
-    n, q = 129, 251
+    n, q = MAX_DIM + 1, 251
     with pytest.raises(ValidationError):
         StructureConstants(dimension=n, field_order=q, multiplication=())
 

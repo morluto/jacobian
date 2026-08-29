@@ -9,10 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
-MAX_DIM = 128
-MAX_ENTRIES = (
-    MAX_DIM * MAX_DIM
-)  # 16384; outer tensor bound (n <= 128, logical n^3 entries)
+MAX_STRUCTURE_CONSTANT_ENTRIES = 4_096_000
+MAX_DIM = 160
+MAX_COMMUTATOR_ENTRIES = MAX_STRUCTURE_CONSTANT_ENTRIES
+MAX_CENTER_BASIS_ENTRIES = MAX_DIM * MAX_DIM
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -34,7 +34,7 @@ class StructureConstants(StrictModel):
     dimension: int = Field(ge=1, le=MAX_DIM)
     field_order: int = Field(ge=2, le=251)
     multiplication: tuple[tuple[tuple[int, ...], ...], ...] = Field(
-        min_length=1, max_length=MAX_ENTRIES
+        min_length=1, max_length=MAX_DIM
     )
 
     @model_validator(mode="after")
@@ -46,6 +46,11 @@ class StructureConstants(StrictModel):
                 "field_order_not_prime", "field_order must be prime"
             )
         n = self.dimension
+        if n**3 > MAX_STRUCTURE_CONSTANT_ENTRIES:
+            raise _validation_error(
+                "structure_constant_budget",
+                "structure-constant tensor exceeds the materialization budget",
+            )
         if len(self.multiplication) != n:
             raise _validation_error(
                 "multiplication_outer_dimension",
@@ -82,6 +87,25 @@ class CenterRequest(StrictModel):
 
 
 class CenterResult(StrictModel):
-    center_basis: tuple[tuple[int, ...], ...]
-    dimension: int = Field(ge=1)
-    center_dimension: int = Field(ge=0)
+    center_basis: tuple[tuple[int, ...], ...] = Field(max_length=MAX_DIM)
+    dimension: int = Field(ge=1, le=MAX_DIM)
+    center_dimension: int = Field(ge=0, le=MAX_DIM)
+
+    @model_validator(mode="after")
+    def require_complete_basis_shape(self) -> Self:
+        if len(self.center_basis) != self.center_dimension:
+            raise _validation_error(
+                "center_dimension_mismatch",
+                "center_dimension must equal the number of basis vectors",
+            )
+        if any(len(vector) != self.dimension for vector in self.center_basis):
+            raise _validation_error(
+                "center_basis_shape",
+                "every center basis vector must match the algebra dimension",
+            )
+        if self.center_dimension * self.dimension > MAX_CENTER_BASIS_ENTRIES:
+            raise _validation_error(
+                "center_basis_budget",
+                "center basis exceeds the exact output budget",
+            )
+        return self

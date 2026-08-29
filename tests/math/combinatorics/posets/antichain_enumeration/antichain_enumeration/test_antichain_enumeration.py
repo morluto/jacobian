@@ -5,8 +5,8 @@ from jacobian.math.combinatorics.posets.antichain_enumeration.operations import 
 )
 from jacobian.math.combinatorics.posets.core._models import (
     PresentationPair,
-    RelationInterpretation,
     ReflexivePairPolicy,
+    RelationInterpretation,
 )
 from jacobian.math.combinatorics.posets.core.operations import (
     materialize_finite_poset,
@@ -21,7 +21,8 @@ def _make_chain(n: int):
         for j in range(i + 1, n)
     )
     return materialize_finite_poset(
-        elements, relation,
+        elements,
+        relation,
         RelationInterpretation.COMPARABLE_PAIRS,
         ReflexivePairPolicy.FORBIDDEN,
     )
@@ -31,7 +32,8 @@ def _make_antichain_poset(n: int):
     """A poset with n incomparable elements."""
     elements = tuple(str(i) for i in range(n))
     return materialize_finite_poset(
-        elements, (),
+        elements,
+        (),
         RelationInterpretation.COMPARABLE_PAIRS,
         ReflexivePairPolicy.FORBIDDEN,
     )
@@ -99,7 +101,8 @@ def test_v_poset():
         PresentationPair(lower="0", upper="2"),
     )
     poset = materialize_finite_poset(
-        elements, relation,
+        elements,
+        relation,
         RelationInterpretation.COMPARABLE_PAIRS,
         ReflexivePairPolicy.FORBIDDEN,
     )

@@ -21,7 +21,7 @@ def compute_cycle_length_profile(
     For every k from 3 to |V|, if the graph contains a simple k-cycle,
     include one canonical witness.
     """
-    nx_graph = nx.Graph()
+    nx_graph: nx.Graph[str] = nx.Graph()
     for v in graph.vertices:
         nx_graph.add_node(v)
     for u, v in graph.edges:
@@ -47,7 +47,7 @@ def compute_cycle_length_profile(
     )
 
 
-def _find_cycle_of_length(nx_graph, k: int) -> tuple[str, ...] | None:
+def _find_cycle_of_length(nx_graph: nx.Graph[str], k: int) -> tuple[str, ...] | None:
     """Find a simple cycle of exactly length k using BFS from each vertex."""
     for source in nx_graph.nodes:
         queue: list[tuple[str, tuple[str, ...]]] = [(source, (source,))]
@@ -63,7 +63,7 @@ def _find_cycle_of_length(nx_graph, k: int) -> tuple[str, ...] | None:
                 continue
             for neighbor in sorted(nx_graph.neighbors(node)):
                 if neighbor not in path:
-                    new_path = path + (neighbor,)
+                    new_path = (*path, neighbor)
                     if new_path not in visited:
                         visited.add(new_path)
                         queue.append((neighbor, new_path))

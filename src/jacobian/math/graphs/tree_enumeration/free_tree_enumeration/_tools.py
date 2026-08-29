@@ -3,7 +3,6 @@
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
 from jacobian.math.graphs.tree_enumeration.free_tree_enumeration._models import (
-    MAX_ORDER,
     FreeTreeEnumerationRequest,
     FreeTreeEnumerationResult,
 )

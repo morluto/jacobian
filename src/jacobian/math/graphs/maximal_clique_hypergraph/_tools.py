@@ -11,7 +11,9 @@ from jacobian.math.graphs.maximal_clique_hypergraph.operations import (
 )
 
 
-def _construct(request: MaximalCliqueHypergraphRequest) -> MaximalCliqueHypergraphResult:
+def _construct(
+    request: MaximalCliqueHypergraphRequest,
+) -> MaximalCliqueHypergraphResult:
     return construct_maximal_clique_hypergraph(request.graph)
 
 

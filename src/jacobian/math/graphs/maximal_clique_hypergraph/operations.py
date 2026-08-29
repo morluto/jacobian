@@ -23,7 +23,7 @@ def construct_maximal_clique_hypergraph(
     Uses NetworkX's Bron-Kerbosch with pivoting to find all maximal cliques.
     Only cliques of size >= 2 are retained (isolated vertices induce no edge).
     """
-    nx_graph = nx.Graph()
+    nx_graph: nx.Graph[str] = nx.Graph()
     for v in graph.vertices:
         nx_graph.add_node(v)
     for u, v in graph.edges:
@@ -34,10 +34,7 @@ def construct_maximal_clique_hypergraph(
     # Sort cliques for deterministic output
     cliques.sort(key=lambda c: tuple(sorted(c)))
 
-    edges = tuple(
-        (f"clique_{i}", tuple(sorted(c)))
-        for i, c in enumerate(cliques)
-    )
+    edges = tuple((f"clique_{i}", tuple(sorted(c))) for i, c in enumerate(cliques))
 
     hypergraph = FiniteHypergraph(
         vertices=graph.vertices,

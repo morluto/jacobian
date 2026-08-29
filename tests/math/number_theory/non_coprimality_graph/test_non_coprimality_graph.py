@@ -31,8 +31,9 @@ def test_result_type_is_returned() -> None:
     request = NonCoprimalityGraphRequest.model_validate(
         {"elements": {"elements": ["2", "3", "5"]}}
     )
-    assert isinstance(non_coprimality_graph(request.elements.elements),
-                      NonCoprimalityGraphResult)
+    assert isinstance(
+        non_coprimality_graph(request.elements.elements), NonCoprimalityGraphResult
+    )
 
 
 def test_empty_set_gives_empty_graph() -> None:
@@ -69,9 +70,7 @@ def test_all_share_factor_two_is_k3() -> None:
     graph = _graph(["2", "4", "6"])
     assert graph.vertices == ("2", "4", "6")
     assert len(graph.edges) == 3
-    assert set(tuple(e) for e in graph.edges) == {
-        ("2", "4"), ("2", "6"), ("4", "6")
-    }
+    assert {tuple(e) for e in graph.edges} == {("2", "4"), ("2", "6"), ("4", "6")}
 
 
 def test_mixed_pair_shares_factor() -> None:
@@ -79,8 +78,11 @@ def test_mixed_pair_shares_factor() -> None:
     # gcd(2,3)=1, gcd(3,10)=1
     graph = _graph(["2", "3", "6", "10"])
     assert graph.vertices == ("2", "3", "6", "10")
-    assert set(tuple(e) for e in graph.edges) == {
-        ("2", "6"), ("10", "2"), ("3", "6"), ("10", "6")
+    assert {tuple(e) for e in graph.edges} == {
+        ("2", "6"),
+        ("10", "2"),
+        ("3", "6"),
+        ("10", "6"),
     }
 
 
@@ -132,6 +134,7 @@ def test_request_model_validates_finite_integer_set() -> None:
 
 def test_request_rejects_duplicate_elements() -> None:
     from pydantic import ValidationError
+
     with pytest.raises(ValidationError):
         NonCoprimalityGraphRequest.model_validate(
             {"elements": {"elements": ["2", "2", "3"]}}
@@ -158,6 +161,7 @@ def test_examples_are_schema_valid() -> None:
 
 def test_graph_is_simple_undirected_graph() -> None:
     from jacobian.math.graphs.values import SimpleUndirectedGraph
+
     graph = _graph(["2", "3", "6"])
     assert isinstance(graph, SimpleUndirectedGraph)
 
@@ -170,6 +174,7 @@ def test_max_256_vertices_allowed() -> None:
 
 def test_max_257_vertices_rejected() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
+
     vertices = tuple(str(i) for i in range(1, 258))
     with pytest.raises(OperationDomainValidationError):
         non_coprimality_graph(vertices)
@@ -177,6 +182,7 @@ def test_max_257_vertices_rejected() -> None:
 
 def test_non_positive_integer_rejected() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
+
     # Zero is non-positive
     with pytest.raises(OperationDomainValidationError):
         non_coprimality_graph(("0", "2", "3"))
@@ -184,6 +190,7 @@ def test_non_positive_integer_rejected() -> None:
 
 def test_negative_integer_rejected() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
+
     # FiniteIntegerSet allows negatives, but our operation rejects them
     with pytest.raises(OperationDomainValidationError):
         non_coprimality_graph(("-5", "2", "3"))
@@ -199,5 +206,5 @@ def test_complete_graph_when_all_pairwise_non_coprime() -> None:
 def test_disconnected_components() -> None:
     # {2,4} connected, {3,9} connected, no cross edges
     graph = _graph(["2", "4", "3", "9"])
-    edges = set(tuple(e) for e in graph.edges)
+    edges = {tuple(e) for e in graph.edges}
     assert edges == {("2", "4"), ("3", "9")}

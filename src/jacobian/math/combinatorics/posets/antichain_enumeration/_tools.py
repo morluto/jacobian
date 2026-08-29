@@ -39,14 +39,25 @@ TOOLS: MathTools = (
                 {
                     "poset": {
                         "elements": ["a", "b", "c"],
-                        "strict_order_pairs": [["a", "b"], ["a", "c"], ["b", "c"]],
-                        "cover_relations": [["a", "b"], ["b", "c"]],
+                        "strict_order_pairs": [
+                            {"lower": "a", "upper": "b"},
+                            {"lower": "a", "upper": "c"},
+                            {"lower": "b", "upper": "c"},
+                        ],
+                        "cover_relations": [
+                            {"lower": "a", "upper": "b"},
+                            {"lower": "b", "upper": "c"},
+                        ],
                         "incomparable_pairs": [],
                         "minimal_elements": ["a"],
                         "maximal_elements": ["c"],
                         "graded": True,
-                        "ranks": [{"element": "a", "rank": 0}, {"element": "b", "rank": 1}, {"element": "c", "rank": 2}],
-                        "poset_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+                        "ranks": [
+                            {"element": "a", "rank": 0},
+                            {"element": "b", "rank": 1},
+                            {"element": "c", "rank": 2},
+                        ],
+                        "poset_digest": "sha256:7505e31e11f07f0026eece8ce9621dd0dae51e613b8dfee93da02348bb80c95f",
                     },
                     "min_cardinality": 1,
                     "max_cardinality": 1,

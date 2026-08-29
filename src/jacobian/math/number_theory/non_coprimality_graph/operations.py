@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from math import gcd as exact_gcd
 from itertools import combinations
+from math import gcd as exact_gcd
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph

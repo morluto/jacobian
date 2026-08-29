@@ -16,11 +16,44 @@ from jacobian.math.probability.markov_chains._models import (
     TransitionMatrixRequest,
 )
 from jacobian.math.probability.markov_chains.operations import (
-    compute_communicating_classes,
-    compute_ergodic_decision,
-    compute_mixing_time,
-    compute_stationary_distribution,
+    communicating_classes,
+    ergodic_decision,
+    mixing_time_result,
+    stationary_distribution_result,
 )
+from jacobian.math.probability.markov_chains.values import as_transition_matrix
+
+
+def compute_mixing_time(request: MixingTimeRequest) -> MixingTimeResult:
+    """Unpack a wire request for the native mixing-time operation."""
+
+    return mixing_time_result(
+        as_transition_matrix(request.matrix),
+        request.epsilon.as_fraction(),
+        request.max_steps,
+    )
+
+
+def compute_stationary_distribution(
+    request: StationaryDistributionRequest,
+) -> StationaryDistributionResult:
+    """Unpack a wire request for the native stationary-family operation."""
+
+    return stationary_distribution_result(as_transition_matrix(request.matrix))
+
+
+def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisionResult:
+    """Unpack a wire request for the native ergodicity operation."""
+
+    return ergodic_decision(as_transition_matrix(request.matrix))
+
+
+def compute_communicating_classes(
+    request: TransitionMatrixRequest,
+) -> CommunicatingClassesResult:
+    """Unpack a wire request for the native class-decomposition operation."""
+
+    return communicating_classes(as_transition_matrix(request.matrix))
 
 
 def mc_operation[RequestT: StrictModel, ResultT: StrictModel](

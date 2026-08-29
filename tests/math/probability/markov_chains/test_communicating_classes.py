@@ -11,8 +11,8 @@ from jacobian.math.probability.markov_chains import operations
 from jacobian.math.probability.markov_chains._models import (
     TransitionMatrixRequest,
 )
-from jacobian.math.probability.markov_chains._tools import TOOLS
-from jacobian.math.probability.markov_chains.operations import (
+from jacobian.math.probability.markov_chains._tools import (
+    TOOLS,
     compute_communicating_classes,
 )
 

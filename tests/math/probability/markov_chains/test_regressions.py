@@ -14,7 +14,7 @@ from jacobian.math.probability.markov_chains._models import (
     StationaryDistributionRequest,
     TransitionMatrixRequest,
 )
-from jacobian.math.probability.markov_chains.operations import (
+from jacobian.math.probability.markov_chains._tools import (
     compute_ergodic_decision,
     compute_stationary_distribution,
 )
@@ -25,6 +25,7 @@ def test_native_namespace_exposes_values_and_kernels_not_wire_requests() -> None
 
     assert "StationaryDistributionRequest" not in markov_chain.__all__
     assert "TransitionMatrixRequest" not in markov_chain.__all__
+    assert "TransitionMatrix" in markov_chain.__all__
     assert markov_chain.stationary_distribution is stationary_distribution
 
 

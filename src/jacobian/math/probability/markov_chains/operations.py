@@ -4,27 +4,36 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
-from math import factorial
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability.markov_chains._models import (
+    MAX_MIXING_STEPS,
     CommunicatingClassesResult,
     ErgodicDecisionResult,
     ExtremeStationaryDistribution,
-    MixingTimeRequest,
     MixingTimeResult,
-    StationaryDistributionRequest,
     StationaryDistributionResult,
-    TransitionMatrixRequest,
+)
+from jacobian.math.probability.markov_chains.values import (
+    TransitionMatrix,
+    TransitionMatrixAdmissionError,
+    _decimal_digits,
+    as_canonical_transition_matrix,
+    require_stationary_distribution_admission,
+    require_transition_matrix,
 )
 
 __all__ = [
     "MixingTimeSearchResult",
+    "communicating_classes",
+    "ergodic_decision",
     "ergodic_properties",
     "mixing_time",
+    "mixing_time_result",
     "stationary_distribution",
     "stationary_distribution_extremes",
+    "stationary_distribution_result",
 ]
 
 
@@ -36,7 +45,7 @@ class MixingTimeSearchResult:
 
 
 def mixing_time(
-    matrix: tuple[tuple[Fraction, ...], ...],
+    matrix: TransitionMatrix,
     stationary: tuple[Fraction, ...],
     epsilon: Fraction,
     max_steps: int,
@@ -71,7 +80,7 @@ def mixing_time(
 
 
 def _stationary_distribution_extremes(
-    matrix: tuple[tuple[Fraction, ...], ...],
+    matrix: TransitionMatrix,
 ) -> list[tuple[tuple[int, ...], tuple[Fraction, ...]]]:
     """Return one normalized stationary vector for every closed class."""
 
@@ -129,18 +138,20 @@ def _stationary_distribution_extremes(
 
 
 def stationary_distribution_extremes(
-    matrix: tuple[tuple[Fraction, ...], ...],
+    matrix: TransitionMatrix,
 ) -> list[tuple[tuple[int, ...], tuple[Fraction, ...]]]:
     """Return one normalized stationary vector for every closed class."""
 
+    _admit_stationary(matrix)
     return _stationary_distribution_extremes(matrix)
 
 
 def stationary_distribution(
-    matrix: tuple[tuple[Fraction, ...], ...],
+    matrix: TransitionMatrix,
 ) -> tuple[Fraction, ...]:
     """Return the unique stationary distribution, rejecting non-unique chains."""
 
+    _admit_stationary(matrix)
     extremes = _stationary_distribution_extremes(matrix)
     if len(extremes) != 1:
         raise ValueError(
@@ -149,7 +160,7 @@ def stationary_distribution(
     return extremes[0][1]
 
 
-def ergodic_properties(matrix: tuple[tuple[Fraction, ...], ...]) -> tuple[bool, bool]:
+def _ergodic_properties(matrix: TransitionMatrix) -> tuple[bool, bool]:
     import networkx as nx
 
     graph: nx.DiGraph[int] = nx.DiGraph()
@@ -168,6 +179,13 @@ def ergodic_properties(matrix: tuple[tuple[Fraction, ...], ...]) -> tuple[bool, 
     return irreducible, aperiodic
 
 
+def ergodic_properties(matrix: TransitionMatrix) -> tuple[bool, bool]:
+    """Return whether a finite exact transition matrix is irreducible and aperiodic."""
+
+    _admit_transition_matrix(matrix)
+    return _ergodic_properties(matrix)
+
+
 _MAX_MIXING_COMPONENT_DIGITS = 32
 _MIXING_RESULT_DIGIT_RESERVE = 1_024
 
@@ -178,58 +196,41 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
     )
 
 
-def _admit_transition_matrix(request: TransitionMatrixRequest) -> None:
-    for row_index, row in enumerate(request.matrix):
-        values = tuple(value.as_fraction() for value in row)
-        if any(value < 0 for value in values):
-            _reject(
-                ("matrix", row_index),
-                "transition_probability_negative",
-                "transition probabilities must be nonnegative",
-            )
-        if sum(values) != 1:
-            _reject(
-                ("matrix", row_index),
-                "transition_row_not_stochastic",
-                "each transition row must sum to one",
-            )
+def _admit_transition_matrix(matrix: TransitionMatrix) -> None:
+    try:
+        require_transition_matrix(matrix)
+    except TransitionMatrixAdmissionError as exc:
+        _reject(exc.location, exc.reason, str(exc))
 
 
-def _admit_stationary(request: StationaryDistributionRequest) -> None:
-    dimension = len(request.matrix)
-    row_bounds: list[int] = []
-    for column in range(dimension - 1):
-        entries = tuple(request.matrix[row][column] for row in range(dimension))
-        denominator_digits = sum(len(value.den) for value in entries)
-        row_bounds.append(
-            max(
-                max(len(value.num.lstrip("-")), len(value.den))
-                + 1
-                + denominator_digits
-                - len(value.den)
-                for value in entries
-            )
-        )
-    determinant_digits = sum(row_bounds) + 1 + len(str(factorial(dimension)))
-    if determinant_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+def _admit_stationary(matrix: TransitionMatrix) -> None:
+    try:
+        require_stationary_distribution_admission(matrix)
+    except TransitionMatrixAdmissionError as exc:
+        _reject(exc.location, exc.reason, str(exc))
+
+
+def _admit_mixing(
+    matrix: TransitionMatrix,
+    epsilon: Fraction,
+    max_steps: int,
+) -> None:
+    if type(max_steps) is not int or not 1 <= max_steps <= MAX_MIXING_STEPS:
         _reject(
-            ("matrix",),
-            "stationary_height_exceeds_bound",
-            "stationary distribution rational height exceeds the "
-            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound",
+            ("max_steps",),
+            "mixing_steps_out_of_range",
+            f"max_steps must be an integer between 1 and {MAX_MIXING_STEPS}",
         )
-
-
-def _admit_mixing(request: MixingTimeRequest) -> None:
-    if not 0 < request.epsilon.as_fraction() <= 1:
+    if not 0 < epsilon <= 1:
         _reject(
             ("epsilon",),
             "mixing_epsilon_out_of_range",
             "epsilon must lie in (0, 1]",
         )
-    values = (request.epsilon, *(item for row in request.matrix for item in row))
+    values = (epsilon, *(item for row in matrix for item in row))
     if any(
-        max(len(value.num.lstrip("-")), len(value.den)) > _MAX_MIXING_COMPONENT_DIGITS
+        max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
+        > _MAX_MIXING_COMPONENT_DIGITS
         for value in values
     ):
         _reject(
@@ -239,12 +240,12 @@ def _admit_mixing(request: MixingTimeRequest) -> None:
             f"{_MAX_MIXING_COMPONENT_DIGITS} digits",
         )
     matrix_digits = max(
-        max(len(value.num.lstrip("-")), len(value.den))
-        for row in request.matrix
+        max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
+        for row in matrix
         for value in row
     )
-    state_count = len(request.matrix)
-    height = matrix_digits * (state_count**3 + request.max_steps * state_count**2)
+    state_count = len(matrix)
+    height = matrix_digits * (state_count**3 + max_steps * state_count**2)
     if height > MAX_CANONICAL_RATIONAL_DIGITS - _MIXING_RESULT_DIGIT_RESERVE:
         _reject(
             ("matrix",),
@@ -254,7 +255,7 @@ def _admit_mixing(request: MixingTimeRequest) -> None:
 
 
 def _derive_communicating_classes(
-    matrix: tuple[tuple[CanonicalRational, ...], ...],
+    matrix: TransitionMatrix,
 ) -> tuple[tuple[tuple[tuple[int, ...], bool], ...], tuple[int, ...]]:
     """Derive the canonical SCC partition in bounded quadratic graph work."""
 
@@ -267,7 +268,7 @@ def _derive_communicating_classes(
         (source, target)
         for source in range(dimension)
         for target in range(dimension)
-        if matrix[source][target].as_fraction() > 0
+        if matrix[source][target] > 0
     )
     sccs = list(nx.strongly_connected_components(graph))
     condensation = nx.condensation(graph, sccs)
@@ -277,7 +278,7 @@ def _derive_communicating_classes(
         states_set = sccs[scc_node]
         states = tuple(sorted(states_set))
         is_closed = not any(
-            target not in states_set and matrix[source][target].as_fraction() > 0
+            target not in states_set and matrix[source][target] > 0
             for source in states
             for target in range(dimension)
         )
@@ -287,50 +288,49 @@ def _derive_communicating_classes(
     return tuple(classes), tuple(state_class)
 
 
-def compute_mixing_time(request: MixingTimeRequest) -> MixingTimeResult:
-    _admit_transition_matrix(request)
-    _admit_mixing(request)
-    matrix = tuple(
-        tuple(value.as_fraction() for value in row) for row in request.matrix
-    )
-    irreducible, aperiodic = ergodic_properties(matrix)
+def mixing_time_result(
+    matrix: TransitionMatrix,
+    epsilon: Fraction,
+    max_steps: int,
+) -> MixingTimeResult:
+    """Compute a bounded exact mixing result for a canonical matrix value."""
+
+    _admit_transition_matrix(matrix)
+    _admit_mixing(matrix, epsilon, max_steps)
+    irreducible, aperiodic = _ergodic_properties(matrix)
     if not (irreducible and aperiodic):
         return MixingTimeResult(
             status="NOT_ERGODIC",
-            epsilon=request.epsilon,
-            max_steps=request.max_steps,
+            epsilon=CanonicalRational.from_fraction(epsilon),
+            max_steps=max_steps,
             steps_examined=0,
         )
     extremes = _stationary_distribution_extremes(matrix)
     stationary = extremes[0][1]
-    outcome = mixing_time(
-        matrix, stationary, request.epsilon.as_fraction(), request.max_steps
-    )
+    outcome = mixing_time(matrix, stationary, epsilon, max_steps)
     distance = CanonicalRational.from_integer_ratio(
         outcome.max_total_variation_distance.numerator,
         outcome.max_total_variation_distance.denominator,
     )
     return MixingTimeResult(
         status="FOUND" if outcome.mixing_time is not None else "BOUND_EXCEEDED",
-        epsilon=request.epsilon,
-        max_steps=request.max_steps,
+        epsilon=CanonicalRational.from_fraction(epsilon),
+        max_steps=max_steps,
         steps_examined=outcome.steps_examined,
         mixing_time=outcome.mixing_time,
         max_total_variation_distance=distance,
     )
 
 
-def compute_stationary_distribution(
-    request: StationaryDistributionRequest,
+def stationary_distribution_result(
+    matrix: TransitionMatrix,
 ) -> StationaryDistributionResult:
-    _admit_transition_matrix(request)
-    _admit_stationary(request)
-    matrix = tuple(
-        tuple(value.as_fraction() for value in row) for row in request.matrix
-    )
+    """Compute the complete stationary family for a canonical matrix value."""
+
+    _admit_stationary(matrix)
     extremes = _stationary_distribution_extremes(matrix)
     return StationaryDistributionResult._from_kernel(
-        transition_matrix=request.matrix,
+        transition_matrix=as_canonical_transition_matrix(matrix),
         extreme_distributions=tuple(
             ExtremeStationaryDistribution(
                 closed_class=closed_class,
@@ -347,12 +347,11 @@ def compute_stationary_distribution(
     )
 
 
-def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisionResult:
-    _admit_transition_matrix(request)
-    matrix = tuple(
-        tuple(value.as_fraction() for value in row) for row in request.matrix
-    )
-    irreducible, aperiodic = ergodic_properties(matrix)
+def ergodic_decision(matrix: TransitionMatrix) -> ErgodicDecisionResult:
+    """Decide ergodicity for a canonical exact transition matrix value."""
+
+    _admit_transition_matrix(matrix)
+    irreducible, aperiodic = _ergodic_properties(matrix)
     return ErgodicDecisionResult(
         is_ergodic=irreducible and aperiodic,
         is_irreducible=irreducible,
@@ -360,16 +359,13 @@ def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisio
     )
 
 
-def compute_communicating_classes(
-    request: TransitionMatrixRequest,
-) -> CommunicatingClassesResult:
-    """Decompose a Markov chain into communicating classes via SCC analysis."""
+def communicating_classes(matrix: TransitionMatrix) -> CommunicatingClassesResult:
+    """Decompose a canonical Markov matrix into communicating classes."""
 
-    _admit_transition_matrix(request)
-    matrix = request.matrix
+    _admit_transition_matrix(matrix)
     classes, state_class = _derive_communicating_classes(matrix)
     return CommunicatingClassesResult._from_kernel(
-        transition_matrix=request.matrix,
+        transition_matrix=as_canonical_transition_matrix(matrix),
         classes=classes,
         state_class=state_class,
     )

@@ -6,7 +6,7 @@ from jacobian.math.probability.markov_chains._models import (
     StationaryDistributionRequest,
     TransitionMatrixRequest,
 )
-from jacobian.math.probability.markov_chains.operations import (
+from jacobian.math.probability.markov_chains._tools import (
     compute_stationary_distribution,
 )
 

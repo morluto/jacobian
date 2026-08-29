@@ -7,7 +7,7 @@ from itertools import pairwise
 from typing import Literal
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import CanonicalLimits, format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._progression_hypergraph_models import (
     MAX_GROUP_ORDER,
@@ -44,6 +44,9 @@ def _pair(n: int, k: int) -> tuple[int, int]:
 
 
 MAX_COUNTING_INDEX = 10_000
+MAX_SPARSE_COUNTING_INDEX = 10**15
+MAX_COUNTING_MULTIPLICATIVE_STEPS = 100_000
+MAX_COUNTING_RESULT_DIGITS = CanonicalLimits().max_integer_digits
 MAX_MULTINOMIAL_PARTS = 256
 MAX_MULTINOMIAL_TOTAL = MAX_COUNTING_INDEX
 
@@ -59,6 +62,46 @@ def _bounded_counting_index(value: int, *, name: str) -> int:
     return value
 
 
+def _bounded_sparse_counting_index(value: int, *, name: str) -> int:
+    value = _nonnegative(value, name=name)
+    if value > MAX_SPARSE_COUNTING_INDEX:
+        raise OperationDomainValidationError(
+            location=(name,),
+            code="combinatorics.sparse_counting_index_out_of_range",
+            message=(
+                f"{name} exceeds the {MAX_SPARSE_COUNTING_INDEX}-element "
+                "sparse-counting bound"
+            ),
+        )
+    return value
+
+
+def _admit_multiplicative_count(*, maximum_factor: int, steps: int) -> None:
+    if steps > MAX_COUNTING_MULTIPLICATIVE_STEPS:
+        raise OperationDomainValidationError(
+            location=("k",),
+            code="combinatorics.counting_work_exceeded",
+            message=(
+                "counting request exceeds the "
+                f"{MAX_COUNTING_MULTIPLICATIVE_STEPS}-step multiplicative budget"
+            ),
+        )
+    # Every multiplicative factor is at most ``maximum_factor``.  The rational
+    # 30103 / 100000 is a strict upper bound for log10(2), so this cannot
+    # underestimate the decimal width of that product envelope.
+    bit_bound = steps * max(1, maximum_factor.bit_length())
+    digit_bound = (bit_bound * 30_103 + 99_999) // 100_000
+    if digit_bound > MAX_COUNTING_RESULT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("n", "k"),
+            code="combinatorics.counting_result_digits_exceeded",
+            message=(
+                "predicted exact count exceeds the "
+                f"{MAX_COUNTING_RESULT_DIGITS}-digit result budget"
+            ),
+        )
+
+
 def factorial(n: int) -> int:
     """Return the factorial of a bounded nonnegative integer."""
     import math
@@ -70,9 +113,13 @@ def binomial(n: int, k: int) -> int:
     """Return the exact binomial coefficient, with zero for ``k > n``."""
     import math
 
-    first = _bounded_counting_index(n, name="n")
-    second = _bounded_counting_index(k, name="k")
-    return 0 if second > first else math.comb(first, second)
+    first = _bounded_sparse_counting_index(n, name="n")
+    second = _bounded_sparse_counting_index(k, name="k")
+    if second > first:
+        return 0
+    steps = min(second, first - second)
+    _admit_multiplicative_count(maximum_factor=first, steps=steps)
+    return math.comb(first, second)
 
 
 def multinomial(values: tuple[int, ...]) -> int:
@@ -111,9 +158,12 @@ def permutations(n: int, k: int) -> int:
     """Return the exact number of ordered ``k``-selections from ``n``."""
     import math
 
-    first = _bounded_counting_index(n, name="n")
-    second = _bounded_counting_index(k, name="k")
-    return 0 if second > first else math.perm(first, second)
+    first = _bounded_sparse_counting_index(n, name="n")
+    second = _bounded_sparse_counting_index(k, name="k")
+    if second > first:
+        return 0
+    _admit_multiplicative_count(maximum_factor=first, steps=second)
+    return math.perm(first, second)
 
 
 def central_binomial(n: int) -> int:
@@ -128,11 +178,15 @@ def compositions(n: int, k: int) -> int:
     """Count ordered compositions of ``n`` into ``k`` positive parts."""
     import math
 
-    total = _bounded_counting_index(n, name="n")
-    parts = _bounded_counting_index(k, name="k")
+    total = _bounded_sparse_counting_index(n, name="n")
+    parts = _bounded_sparse_counting_index(k, name="k")
     if total == parts == 0:
         return 1
-    return math.comb(total - 1, parts - 1) if 0 < parts <= total else 0
+    if parts == 0 or parts > total:
+        return 0
+    steps = min(parts - 1, total - parts)
+    _admit_multiplicative_count(maximum_factor=total - 1, steps=steps)
+    return math.comb(total - 1, parts - 1)
 
 
 def bell_number(n: int) -> int:

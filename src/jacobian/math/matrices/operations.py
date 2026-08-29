@@ -129,7 +129,11 @@ def inverse(matrix: MatrixBase) -> MatrixBase:
     source = _exact_matrix(matrix, maximum_dimension=MAX_INVERSE_MATRIX_ORDER)
     if source.rows != source.cols:
         raise ValueError("inverse requires a square matrix")
-    if all(entry.is_Integer is True for entry in source):
+    integer_entries = all(entry.is_Integer is True for entry in source)
+    input_within_kernel_limit = all(
+        len(str(abs(int(entry)))) <= MAX_INPUT_SCALAR_DIGITS for entry in source
+    )
+    if integer_entries and input_within_kernel_limit:
         result = inverse_result(conversions.integer_matrix_from_sympy(source))
         return conversions.rational_matrix_to_sympy(result.inverse)
     if source.rows > MAX_MATRIX_DIMENSION:

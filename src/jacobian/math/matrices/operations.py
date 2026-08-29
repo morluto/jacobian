@@ -535,7 +535,7 @@ def _admit_inverse(matrix: IntegerMatrix) -> None:
             raise _validation_error(
                 "budget_exceeded",
                 "diagonal inverse coefficient work exceeds the exact output budget",
-        )
+            )
         return
     rank_one_digit_work = _rank_one_inverse_digit_work(entries)
     if (

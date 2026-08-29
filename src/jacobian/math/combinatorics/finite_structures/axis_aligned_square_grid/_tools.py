@@ -63,7 +63,8 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "n3",
-                "The 3x3 grid has 9 vertices and 5 axis-aligned squares.",
+                "The 3x3 grid has 9 vertices and 5 axis-aligned squares; "
+                "side_length must be an integer from 1 through 16.",
                 {"side_length": 3},
             ),
         ),

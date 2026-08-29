@@ -40,6 +40,9 @@ from jacobian.math.polynomials._models import (
     _degree,
     _validation_error,
 )
+from jacobian.math.polynomials._multiply_kernel import (
+    rational_polynomial_multiply as multiply,
+)
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_TERMS,
     RationalFunction,
@@ -60,6 +63,7 @@ __all__ = [
     "groebner_basis",
     "hermite_reduction",
     "integral",
+    "multiply",
     "partial_fractions",
     "polynomial_discriminant",
     "polynomial_factorization",

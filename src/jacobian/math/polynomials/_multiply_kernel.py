@@ -17,7 +17,6 @@ from jacobian.math.polynomials._multiply_models import (
     MAX_MULTIPLY_PRODUCT_WORK,
     MAX_MULTIPLY_RESULT_BYTES,
     MAX_MULTIPLY_RESULT_TERMS,
-    RationalPolynomialMultiplyRequest,
     _is_multiplicative_identity,
     _maximum_product_coefficient_digits,
     _result_wire_upper_bound,
@@ -28,18 +27,16 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def _admit(request: RationalPolynomialMultiplyRequest) -> None:
-    if request.left.variables != request.right.variables:
+def _admit(left: RationalPolynomial, right: RationalPolynomial) -> None:
+    if left.variables != right.variables:
         raise _validation_error("polynomials must use the same ordered variables")
-    product_term_work = len(request.left.polynomial.terms) * len(
-        request.right.polynomial.terms
-    )
+    product_term_work = len(left.polynomial.terms) * len(right.polynomial.terms)
     if product_term_work > MAX_MULTIPLY_PRODUCT_WORK:
         raise _validation_error(
             "the polynomial product exceeds the bounded convolution work limit"
         )
     coefficient_digits = _maximum_product_coefficient_digits(
-        request.left, request.right
+        left, right
     )
     if coefficient_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise _validation_error(
@@ -47,13 +44,13 @@ def _admit(request: RationalPolynomialMultiplyRequest) -> None:
         )
     maximum_exponents = tuple(
         max(
-            (term.exponents[index] for term in request.left.polynomial.terms), default=0
+            (term.exponents[index] for term in left.polynomial.terms), default=0
         )
         + max(
-            (term.exponents[index] for term in request.right.polynomial.terms),
+            (term.exponents[index] for term in right.polynomial.terms),
             default=0,
         )
-        for index in range(len(request.left.variables))
+        for index in range(len(left.variables))
     )
     support_term_bound = math.prod(exponent + 1 for exponent in maximum_exponents)
     result_term_bound = min(product_term_work, support_term_bound)
@@ -67,7 +64,7 @@ def _admit(request: RationalPolynomialMultiplyRequest) -> None:
         )
     if (
         _result_wire_upper_bound(
-            request.left.variables,
+            left.variables,
             term_count=result_term_bound,
             coefficient_digits=coefficient_digits,
             maximum_exponents=maximum_exponents,
@@ -79,9 +76,9 @@ def _admit(request: RationalPolynomialMultiplyRequest) -> None:
         )
 
 
-def _run_admission(request: RationalPolynomialMultiplyRequest) -> None:
+def _run_admission(left: RationalPolynomial, right: RationalPolynomial) -> None:
     try:
-        _admit(request)
+        _admit(left, right)
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=(), code=exc.type, message=exc.message()
@@ -89,26 +86,27 @@ def _run_admission(request: RationalPolynomialMultiplyRequest) -> None:
 
 
 def rational_polynomial_multiply(
-    request: RationalPolynomialMultiplyRequest,
+    left: RationalPolynomial,
+    right: RationalPolynomial,
 ) -> RationalPolynomial:
     """Multiply two rational polynomials exactly using SymPy.
 
     The result is the canonical exact product in the same QQ variable ring,
     with zero coefficients removed and terms in canonical order.
     """
-    _run_admission(request)
-    if _is_multiplicative_identity(request.left):
-        return request.right
-    if _is_multiplicative_identity(request.right):
-        return request.left
+    _run_admission(left, right)
+    if _is_multiplicative_identity(left):
+        return right
+    if _is_multiplicative_identity(right):
+        return left
 
-    left_sym = rational_polynomial_to_sympy(request.left)
-    right_sym = rational_polynomial_to_sympy(request.right)
+    left_sym = rational_polynomial_to_sympy(left)
+    right_sym = rational_polynomial_to_sympy(right)
     product_sym = left_sym * right_sym
 
     return rational_polynomial_from_sympy(
         product_sym,
-        request.left.variables,
+        left.variables,
     )
 
 

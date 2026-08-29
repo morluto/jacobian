@@ -1,10 +1,16 @@
 """Declarations for rational polynomial multiplication."""
 
 from jacobian.catalog._examples import example
+from jacobian.math.polynomials._multiply_kernel import rational_polynomial_multiply
 from jacobian.math.polynomials._multiply_models import RationalPolynomialMultiplyRequest
-from jacobian.math.polynomials._multiply_operations import rational_polynomial_multiply
 from jacobian.math.polynomials._support import polynomial_operation
 from jacobian.math.polynomials.values import RationalPolynomial
+
+
+def compute_rational_polynomial_multiply(
+    request: RationalPolynomialMultiplyRequest,
+) -> RationalPolynomial:
+    return rational_polynomial_multiply(request.left, request.right)
 
 _C1 = {"num": "1", "den": "1"}
 
@@ -14,7 +20,7 @@ POLYNOMIAL_MULTIPLY_OPERATION = polynomial_operation(
     "Compute the exact product of two rational polynomials in the same QQ variable ring.",
     RationalPolynomialMultiplyRequest,
     RationalPolynomial,
-    rational_polynomial_multiply,
+    compute_rational_polynomial_multiply,
     "polynomial",
     "rational",
     "multiplication",

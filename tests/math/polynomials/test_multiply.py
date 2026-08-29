@@ -5,7 +5,9 @@ import pytest
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._multiply_models import RationalPolynomialMultiplyRequest
-from jacobian.math.polynomials._multiply_operations import rational_polynomial_multiply
+from jacobian.math.polynomials._multiply_ops import (
+    compute_rational_polynomial_multiply as rational_polynomial_multiply,
+)
 
 
 def test_multiply_x_plus_1() -> None:

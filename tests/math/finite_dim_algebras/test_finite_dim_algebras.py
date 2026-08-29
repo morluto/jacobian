@@ -192,7 +192,7 @@ def test_dimension_limit_is_derived_from_elimination_work_and_encoding() -> None
         for dimension in range(1, MAX_REQUEST_ENCODING_DIM + 1)
         if commutator_elimination_work(dimension) <= MAX_COMMUTATOR_ELIMINATION_WORK
     )
-    assert MAX_DIM == min(MAX_REQUEST_ENCODING_DIM, work_limited)
+    assert min(MAX_REQUEST_ENCODING_DIM, work_limited) == MAX_DIM
     assert MAX_DIM**3 == MAX_STRUCTURE_CONSTANT_ENTRIES
 
 

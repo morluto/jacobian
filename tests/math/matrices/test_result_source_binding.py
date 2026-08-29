@@ -186,9 +186,9 @@ def test_request_admission_keeps_the_boundary_computation_dimension() -> None:
     assert rank.matrix == boundary
 
 
-def test_determinant_accepts_the_canonical_matrix_boundary() -> None:
-    assert MAX_RATIONAL_MATRIX_ORDER == MAX_DETERMINANT_MATRIX_DIMENSION
-    matrix = RationalMatrix(entries=_identity_entries(MAX_RATIONAL_MATRIX_ORDER))
+def test_determinant_accepts_its_operation_specific_matrix_boundary() -> None:
+    assert MAX_RATIONAL_MATRIX_ORDER >= MAX_DETERMINANT_MATRIX_DIMENSION
+    matrix = RationalMatrix(entries=_identity_entries(MAX_DETERMINANT_MATRIX_DIMENSION))
     assert MatrixDeterminantRequest(matrix=matrix).matrix is matrix
 
 

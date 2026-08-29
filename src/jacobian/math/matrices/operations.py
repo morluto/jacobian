@@ -13,11 +13,12 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices import _conversions as conversions
 from jacobian.math.matrices._operation_models import (
+    MAX_CHARACTERISTIC_POLYNOMIAL_ORDER,
     MAX_DETERMINANT_MATRIX_DIMENSION,
     MAX_INPUT_SCALAR_DIGITS,
     MAX_KRONECKER_PRODUCT_AXIS,
@@ -345,6 +346,60 @@ def _admit_determinant(matrix: RationalMatrix) -> None:
         )
 
 
+def _characteristic_polynomial_component_digit_bound(
+    matrix: RationalMatrix,
+) -> int:
+    """Bound every coefficient after clearing all input denominators.
+
+    Coefficients are sums of principal minors. Hadamard bounds each cleared
+    minor, while 2^n bounds the number of minors of any fixed order.
+    """
+    order = len(matrix.entries)
+    denominator_growth = sum(
+        len(value.den) for row in matrix.entries for value in row if value.den != "1"
+    )
+    cleared_height = max(
+        (
+            len(value.num.lstrip("-"))
+            + denominator_growth
+            - (len(value.den) if value.den != "1" else 0)
+            for row in matrix.entries
+            for value in row
+        ),
+        default=1,
+    )
+    numerator_digits = order * (cleared_height + len(str(order))) + order
+    denominator_digits = max(1, order * denominator_growth)
+    return max(numerator_digits, denominator_digits)
+
+
+def _admit_characteristic_polynomial(matrix: RationalMatrix) -> None:
+    from jacobian.math.matrices.values import require_matrix_scalar_digits
+
+    require_matrix_scalar_digits(
+        matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+    )
+    order = len(matrix.entries)
+    if order != len(matrix.entries[0]):
+        raise _validation_error(
+            "budget_exceeded", "characteristic polynomial requires a square matrix"
+        )
+    if order > MAX_CHARACTERISTIC_POLYNOMIAL_ORDER:
+        raise _validation_error(
+            "budget_exceeded",
+            "characteristic-polynomial matrices are limited to order "
+            f"{MAX_CHARACTERISTIC_POLYNOMIAL_ORDER}",
+        )
+    if (
+        _characteristic_polynomial_component_digit_bound(matrix)
+        > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "characteristic-polynomial coefficients exceed the canonical digit budget",
+        )
+
+
 def _admit_linear_solve(
     matrix: RationalMatrix, rhs: tuple[CanonicalRational, ...]
 ) -> None:
@@ -416,15 +471,21 @@ def nullspace_result(matrix: RationalMatrix) -> NullspaceResult:
 def characteristic_polynomial_result(
     matrix: RationalMatrix,
 ) -> CharacteristicPolynomialResult:
-    _admit(_admit_square_rational, matrix)
-    polynomial = characteristic_polynomial(
-        conversions.rational_matrix_to_sympy(matrix), "lambda"
-    )
+    _admit(_admit_characteristic_polynomial, matrix)
+    from flint import fmpq, fmpq_mat
+
+    order = len(matrix.entries)
+    entries = [
+        fmpq(int(value.num), int(value.den)) for row in matrix.entries for value in row
+    ]
+    polynomial = fmpq_mat(order, order, entries).charpoly()
     return CharacteristicPolynomialResult(
-        degree=polynomial.degree(),
+        degree=order,
         coefficients_descending=tuple(
-            conversions.rational_from_sympy(coefficient)
-            for coefficient in polynomial.all_coeffs()
+            CanonicalRational.from_integer_ratio(
+                int(polynomial[index].p), int(polynomial[index].q)
+            )
+            for index in range(order, -1, -1)
         ),
     )
 

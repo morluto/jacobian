@@ -19,6 +19,7 @@ from jacobian.math.matrices.values import (
 
 MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 64
+MAX_CHARACTERISTIC_POLYNOMIAL_ORDER = 128
 MAX_PERMANENT_RYSER_SUBSETS = 4_096
 MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
 # The canonical dense rational matrix carries determinant inputs through
@@ -171,6 +172,13 @@ class RationalMatrixProductRequest(_MatrixRequest):
 
 class SquareRationalMatrixRequest(_MatrixRequest):
     matrix: RationalMatrix
+
+
+class CharacteristicPolynomialRequest(_MatrixRequest):
+    """One rational matrix for a complete exact characteristic polynomial."""
+
+    matrix: RationalMatrix
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_CHARACTERISTIC_POLYNOMIAL_ORDER
 
 
 class MatrixPermanentRequest(_MatrixRequest):
@@ -357,10 +365,10 @@ class NullspaceResult(StrictModel):
 
 class CharacteristicPolynomialResult(StrictModel):
     variable: Literal["lambda"] = "lambda"
-    degree: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    degree: int = Field(ge=1, le=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER)
     coefficients_descending: tuple[CanonicalRational, ...] = Field(
         min_length=2,
-        max_length=MAX_MATRIX_DIMENSION + 1,
+        max_length=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER + 1,
     )
     convention: Literal["DET_LAMBDA_I_MINUS_A"] = "DET_LAMBDA_I_MINUS_A"
 

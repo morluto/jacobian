@@ -142,6 +142,8 @@ def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
     )
     if source.rows != source.cols:
         raise ValueError("characteristic polynomial requires a square matrix")
+    if not all(entry.is_Rational is True for entry in source):
+        return source.charpoly(variable)
     result = characteristic_polynomial_result(
         conversions.rational_matrix_from_sympy(source)
     )
@@ -438,7 +440,10 @@ def _characteristic_polynomial_component_digit_bound(
     for row in fractions:
         for value in row:
             common_denominator = lcm(common_denominator, value.denominator)
-    denominator_growth = _positive_decimal_digits(common_denominator)
+    row_denominator_growth = sum(
+        _positive_decimal_digits(lcm(*(value.denominator for value in row)))
+        for row in fractions
+    )
     cleared_height = max(
         (
             _positive_decimal_digits(
@@ -452,7 +457,7 @@ def _characteristic_polynomial_component_digit_bound(
     numerator_digits = (
         order * (cleared_height + _positive_decimal_digits(order)) + order
     )
-    denominator_digits = max(1, order * denominator_growth)
+    denominator_digits = max(1, row_denominator_growth)
     return max(numerator_digits, denominator_digits)
 
 

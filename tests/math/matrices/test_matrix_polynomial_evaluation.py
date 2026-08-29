@@ -631,7 +631,11 @@ def test_characteristic_polynomial_rejects_predicted_coefficient_growth() -> Non
     source = _matrix(
         *tuple(
             tuple(
-                (numerator, denominator) if row == column else 0
+                (numerator, denominator)
+                if row == column
+                else (1, 10**255 + 3)
+                if row == 0 and column == 1
+                else 0
                 for column in range(order)
             )
             for row in range(order)

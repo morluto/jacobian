@@ -125,7 +125,6 @@ def rref(matrix: MatrixBase) -> tuple[MatrixBase, tuple[int, ...]]:
 
 
 def inverse(matrix: MatrixBase) -> MatrixBase:
-    import sympy
 
     source = _exact_matrix(matrix, maximum_dimension=MAX_INVERSE_MATRIX_ORDER)
     if source.rows != source.cols:

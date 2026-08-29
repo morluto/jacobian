@@ -4,7 +4,6 @@ from collections.abc import Callable
 
 import pytest
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.frames import VectorFamily, coherence, frame_potential, gram
 from jacobian.math.topology.frames._models import (
@@ -13,7 +12,7 @@ from jacobian.math.topology.frames._models import (
     VectorFamilyRequest,
 )
 from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
-from jacobian.math.topology.frames.operations import _gram_result_bound
+from jacobian.math.topology.frames.operations import _gram_result, _gram_result_bytes
 from jacobian.math.topology.frames.values import MAX_DIM, MAX_VECTORS
 
 
@@ -58,7 +57,7 @@ def test_native_gram_returns_exact_matrix_beyond_mcp_byte_cap() -> None:
     off_diagonal = 2 * 1_000 * 999 + (dimension - 2) * 999**2
 
     assert len(vectors) == MAX_VECTORS
-    assert _gram_result_bound(family) > CanonicalLimits().max_output_bytes
+    assert _gram_result_bytes(_gram_result(family)) > 10_485_760
     with pytest.raises(OperationDomainValidationError) as error:
         _gram(VectorFamilyRequest(vectors=vectors))
     assert error.value.errors()[0]["type"] == "frames.result_byte_budget"

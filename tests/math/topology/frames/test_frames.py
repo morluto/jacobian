@@ -14,7 +14,8 @@ from jacobian.math.topology.frames._models import (
 from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
 from jacobian.math.topology.frames.operations import (
     _RESULT_RESERVE_BYTES,
-    _gram_result_bound,
+    _gram_result,
+    _gram_result_bytes,
     gram,
 )
 from jacobian.math.topology.frames.values import MAX_DIM, MAX_VECTORS, VectorFamily
@@ -139,9 +140,9 @@ def test_sparse_high_height_gram_is_admitted_by_occupancy() -> None:
     )
 
     assert naive_bytes > CanonicalLimits().max_output_bytes
-    assert _gram_result_bound(family) <= CanonicalLimits().max_output_bytes
     result = gram(family)
     encoded = encode_strict_json(result.model_dump(mode="json"))
+    assert _gram_result_bytes(_gram_result(family)) <= CanonicalLimits().max_output_bytes
     assert result.gram[0][0] == 1_000_000
     assert result.gram[0][1] == 0
     assert result.gram[0][MAX_DIM] == 1_000_000
@@ -157,7 +158,7 @@ def test_dense_high_height_gram_is_rejected_before_backend_expansion() -> None:
     vectors = basis * 2
     family = VectorFamily(vectors=vectors)
 
-    assert _gram_result_bound(family) > CanonicalLimits().max_output_bytes
+    assert _gram_result_bytes(_gram_result(family)) > CanonicalLimits().max_output_bytes
     with pytest.raises(OperationDomainValidationError) as error:
         _gram(VectorFamilyRequest(vectors=vectors))
     assert error.value.errors()[0]["type"] == "frames.result_byte_budget"

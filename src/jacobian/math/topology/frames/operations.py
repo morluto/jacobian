@@ -33,29 +33,6 @@ def _coefficient_height(value: VectorFamily) -> int:
     return max(abs(entry) for vector in value.vectors for entry in vector)
 
 
-def _gram_result_bound(value: VectorFamily) -> int:
-    vectors = value.vectors
-    vector_count = len(vectors)
-    occupancy = [0] * len(vectors[0])
-    max_squared_norm = 0
-    for vector in vectors:
-        squared_norm = 0
-        for column, entry in enumerate(vector):
-            squared_norm += entry * entry
-            if entry:
-                occupancy[column] += 1
-        if squared_norm > max_squared_norm:
-            max_squared_norm = squared_norm
-    cell_count = vector_count * vector_count
-    nonzero_cells = min(cell_count, sum(count * count for count in occupancy))
-    zero_cells = cell_count - nonzero_cells
-    gram_value_chars = len(str(max_squared_norm)) + int(max_squared_norm > 0)
-    gram_bytes = (
-        nonzero_cells * (gram_value_chars + 1) + zero_cells * 2 + 2 * vector_count
-    )
-    return _retained_source_bytes(value) + gram_bytes + _RESULT_RESERVE_BYTES
-
-
 def _compact_result_bound(value: VectorFamily) -> int:
     vector_count = len(value.vectors)
     dimension = len(value.vectors[0])

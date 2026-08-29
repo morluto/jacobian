@@ -34,9 +34,10 @@ from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileResult,
 )
 from jacobian.math.number_theory._derived_models import (
-    MAX_FACTORIAL_ARGUMENT,
     MAX_FACTORIAL_BASE,
     MAX_LEGENDRE_PRIME,
+    MAX_VALUATION_ARGUMENT_DIGITS,
+    BinomialPrimeValuationResult,
     FactorialValuationResult,
     FloorSquareRootResult,
     LegendreSymbolResult,
@@ -120,6 +121,7 @@ from jacobian.math.number_theory.modular_polynomials import (
 )
 
 __all__ = [
+    "binomial_prime_valuation",
     "binomial_valuation_profile",
     "chinese_remainder",
     "contiguous_sum_profile",
@@ -348,11 +350,14 @@ def legendre_symbol(a: int, prime: int) -> LegendreSymbolResult:
 def factorial_valuation(n: int, base: int) -> FactorialValuationResult:
     """Return the largest exponent ``e`` for which ``base**e`` divides ``n!``."""
 
-    if not 0 <= n <= MAX_FACTORIAL_ARGUMENT:
+    if type(n) is not int or n < 0 or n >= 10**MAX_VALUATION_ARGUMENT_DIGITS:
         raise OperationDomainValidationError(
             location=("n",),
             code="number_theory.factorial_valuation.argument_bound",
-            message=f"n must be between 0 and {MAX_FACTORIAL_ARGUMENT}",
+            message=(
+                "n must be a nonnegative integer with at most "
+                f"{MAX_VALUATION_ARGUMENT_DIGITS} decimal digits"
+            ),
         )
     if not 2 <= base <= MAX_FACTORIAL_BASE:
         raise OperationDomainValidationError(
@@ -363,9 +368,54 @@ def factorial_valuation(n: int, base: int) -> FactorialValuationResult:
     from sympy.ntheory import multiplicity_in_factorial
 
     return FactorialValuationResult(
-        n=n,
-        base=base,
-        valuation=int(multiplicity_in_factorial(base, n)),
+        n=format_canonical_integer(n),
+        base=format_canonical_integer(base),
+        valuation=format_canonical_integer(int(multiplicity_in_factorial(base, n))),
+    )
+
+
+def binomial_prime_valuation(
+    n: int, k: int, prime: int
+) -> BinomialPrimeValuationResult:
+    """Return the exponent of ``prime`` in one binomial coefficient."""
+
+    if (
+        type(n) is not int
+        or type(k) is not int
+        or n < 0
+        or not 0 <= k <= n
+        or n >= 10**MAX_VALUATION_ARGUMENT_DIGITS
+    ):
+        raise OperationDomainValidationError(
+            location=("n", "k"),
+            code="number_theory.binomial_valuation.indices",
+            message=(
+                "n and k must satisfy 0 <= k <= n and use at most "
+                f"{MAX_VALUATION_ARGUMENT_DIGITS} decimal digits"
+            ),
+        )
+    from sympy import isprime
+
+    if type(prime) is not int or not 2 <= prime < 10**20 or not isprime(prime):
+        raise OperationDomainValidationError(
+            location=("prime",),
+            code="number_theory.binomial_valuation.prime_required",
+            message="prime must be a prime number between 2 and 10^20 - 1",
+        )
+    left = k
+    right = n - k
+    carries = 0
+    carry = 0
+    while left or right or carry:
+        left, left_digit = divmod(left, prime)
+        right, right_digit = divmod(right, prime)
+        carry = int(left_digit + right_digit + carry >= prime)
+        carries += carry
+    return BinomialPrimeValuationResult(
+        n=format_canonical_integer(n),
+        k=format_canonical_integer(k),
+        prime=format_canonical_integer(prime),
+        valuation=format_canonical_integer(carries),
     )
 
 

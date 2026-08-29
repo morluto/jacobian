@@ -13,6 +13,7 @@ from jacobian.math.matrices.values import (
     MAX_EXACT_LINEAR_MATRIX_AXIS,
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
+    MAX_RATIONAL_MATRIX_ORDER,
     IntegerMatrix,
     RationalMatrix,
     require_matrix_scalar_digits,
@@ -125,14 +126,11 @@ class _MatrixRequest(StrictModel):
 def _require_computation_dimensions(
     entries: tuple[tuple[CanonicalRational, ...], ...],
 ) -> None:
-    if (
-        len(entries) > MAX_EXACT_LINEAR_MATRIX_AXIS
-        or len(entries[0]) > MAX_EXACT_LINEAR_MATRIX_AXIS
-    ):
+    if len(entries) > MAX_MATRIX_DIMENSION or len(entries[0]) > MAX_MATRIX_DIMENSION:
         raise _validation_error(
             "budget_exceeded",
             "matrix computation dimensions are limited to "
-            f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
+            f"{MAX_MATRIX_DIMENSION} rows and columns",
         )
 
 
@@ -170,12 +168,7 @@ def _require_square_system_admission(
 
 class RationalMatrixRequest(_MatrixRequest):
     matrix: RationalMatrix
-    _raw_matrix_axis_limit: ClassVar[int] = MAX_EXACT_LINEAR_MATRIX_AXIS
-
-    @model_validator(mode="after")
-    def require_computation_dimensions(self) -> Self:
-        _require_computation_dimensions(self.matrix.entries)
-        return self
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_RATIONAL_MATRIX_ORDER
 
 
 class RationalMatrixProductRequest(_MatrixRequest):
@@ -215,12 +208,7 @@ class MatrixRankRequest(_MatrixRequest):
     """One bounded rectangular matrix whose exact rank is requested."""
 
     matrix: RationalMatrix
-    _raw_matrix_axis_limit: ClassVar[int] = MAX_EXACT_LINEAR_MATRIX_AXIS
-
-    @model_validator(mode="after")
-    def require_computation_dimensions(self) -> Self:
-        _require_computation_dimensions(self.matrix.entries)
-        return self
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_RATIONAL_MATRIX_ORDER
 
 
 class IntegerMatrixRequest(_MatrixRequest):

@@ -315,13 +315,21 @@ def _admit_inverse(matrix: IntegerMatrix) -> None:
             "budget_exceeded",
             f"inverse matrices are limited to order {MAX_INVERSE_MATRIX_ORDER}",
         )
-    height_digits = max(
-        len(value.lstrip("-")) for row in matrix.entries for value in row
+    entries = tuple(tuple(int(value) for value in row) for row in matrix.entries)
+    row_squared_norms = tuple(sum(value * value for value in row) for row in entries)
+    column_squared_norms = tuple(
+        sum(row[column] * row[column] for row in entries) for column in range(order)
     )
-    determinant_digits = order * (height_digits + len(str(order)))
-    minor_order = max(1, order - 1)
-    minor_digits = minor_order * (height_digits + len(str(minor_order)))
-    component_digits = max(determinant_digits, minor_digits)
+    row_determinant_bits, row_cofactor_bits = _hadamard_axis_bits(row_squared_norms)
+    column_determinant_bits, column_cofactor_bits = _hadamard_axis_bits(
+        column_squared_norms
+    )
+    component_digits = _bit_bound_decimal_digits(
+        max(
+            min(row_determinant_bits, column_determinant_bits),
+            min(row_cofactor_bits, column_cofactor_bits),
+        )
+    )
     if order * order * component_digits > MAX_INVERSE_OUTPUT_DIGIT_WORK:
         raise _validation_error(
             "budget_exceeded",
@@ -384,6 +392,31 @@ def _bit_bound_decimal_digits(bits: int) -> int:
     return max(1, (bits * 30_103 + 99_999) // 100_000)
 
 
+def _positive_decimal_digits(value: int) -> int:
+    """Upper-bound decimal length without converting the integer to a string."""
+
+    magnitude = abs(value)
+    if magnitude <= 9:
+        return 1
+    return _bit_bound_decimal_digits(magnitude.bit_length())
+
+
+def _hadamard_axis_bits(squared_norms: tuple[int, ...]) -> tuple[int, int]:
+    """Return determinant and max-cofactor bit bounds along one Hadamard axis.
+
+    Zero coordinates contribute a zero Euclidean norm, so sparse rows and
+    columns do not inflate the product. Cofactors of ``A`` are bounded by the
+    product of the remaining axis norms, hence by the product of the
+    ``n - 1`` largest norms.
+    """
+
+    axis_bits = tuple((norm.bit_length() + 1) // 2 for norm in squared_norms)
+    determinant_bits = sum(axis_bits)
+    if len(axis_bits) <= 1:
+        return determinant_bits, 0
+    return determinant_bits, determinant_bits - min(axis_bits)
+
+
 def _admit_determinant(
     matrix: RationalMatrix,
 ) -> tuple[tuple[Fraction, ...], ...]:
@@ -443,26 +476,37 @@ def _admit_determinant(
 def _characteristic_polynomial_component_digit_bound(
     matrix: RationalMatrix,
 ) -> int:
-    """Bound every coefficient after clearing all input denominators.
+    """Bound every coefficient after clearing a common input denominator.
 
-    Coefficients are sums of principal minors. Hadamard bounds each cleared
-    minor, while 2^n bounds the number of minors of any fixed order.
+    Coefficients are sums of principal minors. Writing ``A = N / D`` with
+    common positive denominator ``D = lcm`` of nonzero-entry denominators, the
+    cleared integer matrix ``N`` has Hadamard-bounded minors; ``2^n`` bounds
+    the number of minors of any fixed order. Zero entries do not contribute to
+    ``D`` or to the cleared height.
     """
     order = len(matrix.entries)
-    denominator_growth = sum(
-        len(value.den) for row in matrix.entries for value in row if value.den != "1"
+    fractions = tuple(
+        tuple(value.as_fraction() for value in row) for row in matrix.entries
     )
+    common_denominator = 1
+    for row in fractions:
+        for value in row:
+            if value.numerator == 0:
+                continue
+            common_denominator = lcm(common_denominator, value.denominator)
+    denominator_growth = _positive_decimal_digits(common_denominator)
     cleared_height = max(
         (
-            len(value.num.lstrip("-"))
-            + denominator_growth
-            - (len(value.den) if value.den != "1" else 0)
-            for row in matrix.entries
+            _positive_decimal_digits(
+                value.numerator * (common_denominator // value.denominator)
+            )
+            for row in fractions
             for value in row
+            if value.numerator != 0
         ),
         default=1,
     )
-    numerator_digits = order * (cleared_height + len(str(order))) + order
+    numerator_digits = order * (cleared_height + _positive_decimal_digits(order)) + order
     denominator_digits = max(1, order * denominator_growth)
     return max(numerator_digits, denominator_digits)
 

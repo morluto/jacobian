@@ -170,20 +170,33 @@ def test_flint_inverse_exceeds_shared_integer_matrix_order() -> None:
     assert _multiply(inverse, _fraction_entries(source)) == identity
 
 
-def test_inverse_rejects_dense_output_work_before_backend() -> None:
-    order = 100
-    identity = [
-        [str(int(row == column)) for column in range(order)] for row in range(order)
-    ]
-
-    with pytest.raises(ValueError, match="exact output budget"):
-        _run_inverse(identity)
-
-
 def _identity_entries(order: int) -> list[list[str]]:
     return [
         [str(int(row == column)) for column in range(order)] for row in range(order)
     ]
+
+
+def test_inverse_admits_sparse_identity_with_tiny_output() -> None:
+    order = 100
+    source = _identity_entries(order)
+    inverse = _result_entries(_run_inverse(source))
+    identity = tuple(
+        tuple(Fraction(int(row == column)) for column in range(order))
+        for row in range(order)
+    )
+
+    assert inverse == identity
+    assert _multiply(_fraction_entries(source), inverse) == identity
+    assert _multiply(inverse, _fraction_entries(source)) == identity
+
+
+def test_inverse_rejects_dense_output_work_before_backend() -> None:
+    order = 128
+    tall = "1" + "0" * 99
+    source = [[tall] * order for _ in range(order)]
+
+    with pytest.raises(ValueError, match="exact output budget"):
+        _run_inverse(source)
 
 
 def _entry_axis_limit(schema: dict[str, Any], field: str) -> int:

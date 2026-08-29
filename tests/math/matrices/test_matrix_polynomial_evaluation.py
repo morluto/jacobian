@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from copy import deepcopy
 from fractions import Fraction
+from math import comb
 from typing import Any
 
 import pytest
@@ -627,9 +628,13 @@ def test_flint_characteristic_polynomial_preserves_exact_conventions(
 def test_characteristic_polynomial_rejects_predicted_coefficient_growth() -> None:
     order = 128
     denominator = 10**255 + 1
+    numerator = denominator - 1
     source = _matrix(
         *tuple(
-            tuple((1, denominator) if row == column else 0 for column in range(order))
+            tuple(
+                (numerator, denominator) if row == column else 0
+                for column in range(order)
+            )
             for row in range(order)
         )
     )
@@ -638,6 +643,30 @@ def test_characteristic_polynomial_rejects_predicted_coefficient_growth() -> Non
         compute_characteristic_polynomial(
             CharacteristicPolynomialRequest(matrix=source)
         )
+
+
+def test_characteristic_polynomial_admits_shared_denominator_scaled_identity() -> None:
+    order = 128
+    source = _matrix(
+        *tuple(
+            tuple((1, 100) if row == column else 0 for column in range(order))
+            for row in range(order)
+        )
+    )
+
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(matrix=source)
+    )
+
+    coefficients = tuple(
+        coefficient.as_fraction() for coefficient in result.coefficients_descending
+    )
+    expected = tuple(
+        Fraction(comb(order, index) * ((-1) ** index), 100**index)
+        for index in range(order + 1)
+    )
+    assert result.degree == order
+    assert coefficients == expected
 
 
 def test_adapter_preserves_canonical_coefficients_above_python_digit_limit() -> None:

@@ -98,6 +98,18 @@ def _split_source(label: str, roots: tuple[int, ...]) -> LabelledRationalPolynom
     )
 
 
+def _multiply_integer_polynomials(
+    left: tuple[int, ...], right: tuple[int, ...]
+) -> tuple[int, ...]:
+    product_coefficients = [0] * (len(left) + len(right) - 1)
+    for left_index, left_coefficient in enumerate(left):
+        for right_index, right_coefficient in enumerate(right):
+            product_coefficients[left_index + right_index] += (
+                left_coefficient * right_coefficient
+            )
+    return tuple(product_coefficients)
+
+
 def _request(*family: LabelledRationalPolynomial) -> CommonInterlacingRequest:
     return CommonInterlacingRequest(family=family)
 
@@ -279,6 +291,49 @@ def test_irreducible_factor_roots_are_compared_on_one_exact_axis() -> None:
             ).order
             != "GT"
         )
+
+
+def test_returned_factor_rows_reconstruct_the_retained_source() -> None:
+    # ((x^2 - 2)^2)(x - 3) has two conjugate roots from one repeated
+    # irreducible factor and one rational root from another.  Reconstructing
+    # the source catches a lost conjugate, factor identity, or multiplicity.
+    source = _source(
+        "mixed-repeated",
+        (1, 5),
+        (-3, 4),
+        (-4, 3),
+        (12, 2),
+        (4, 1),
+        (-12, 0),
+    )
+    result = common_interlacing_profile(
+        (source, source.model_copy(update={"label": "same-source"}))
+    )
+    parsed = CommonInterlacingProfile.model_validate_json(
+        result.model_dump_json(),
+        strict=True,
+    )
+
+    factor_rows: dict[tuple[str, ...], list[int]] = {}
+    for root in parsed.root_profiles[0].roots:
+        factor_rows.setdefault(root.value.polynomial, []).append(root.multiplicity)
+
+    reconstructed = (1,)
+    for polynomial, multiplicities in factor_rows.items():
+        factor = tuple(int(coefficient) for coefficient in polynomial)
+        assert len(multiplicities) == len(factor) - 1
+        assert len(set(multiplicities)) == 1
+        for _ in range(multiplicities[0]):
+            reconstructed = _multiply_integer_polynomials(reconstructed, factor)
+
+    retained_terms = parsed.family[0].polynomial.polynomial.terms
+    retained_degree = retained_terms[0].exponents[0]
+    retained_source = [0] * (retained_degree + 1)
+    for term in retained_terms:
+        coefficient = term.coefficient.as_fraction()
+        assert coefficient.denominator == 1
+        retained_source[retained_degree - term.exponents[0]] = coefficient.numerator
+    assert reconstructed == tuple(retained_source)
 
 
 def test_linear_sources_have_an_exists_profile_with_no_gaps() -> None:

@@ -4,7 +4,25 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ["complement", "graph_power", "induced_subgraph", "line_graph"]
+from jacobian.canonical import CanonicalLimits
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.transforms._path_profile_models import (
+    MAX_PATH_PROFILE_SEARCH_WORK,
+    PathProfileResult,
+    PathProfileRow,
+    _canonical_max_degree,
+    _path_prefix_work_bound,
+    _path_profile_result_bytes,
+)
+from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+__all__ = [
+    "complement",
+    "graph_power",
+    "induced_subgraph",
+    "line_graph",
+    "path_profile",
+]
 
 
 def _to_networkx(vertex_count: int, edges: list[tuple[int, int]]) -> Any:
@@ -73,3 +91,73 @@ def graph_power(
 
     graph = _to_networkx(vertex_count, edges)
     return _from_networkx(nx.power(graph, power))
+
+
+def _admit_path_profile(graph: SimpleUndirectedGraph, path_length: int) -> None:
+    vertex_count = len(graph.vertices)
+    degree_bound = _canonical_max_degree(graph)
+    work = vertex_count * _path_prefix_work_bound(
+        vertex_count, degree_bound, path_length
+    )
+    if work > MAX_PATH_PROFILE_SEARCH_WORK:
+        raise OperationDomainValidationError(
+            location=("graph", "path_length"),
+            code="graph.path_profile_search_exceeds_work_budget",
+            message=(
+                "fixed-length simple path profile search exceeds the "
+                f"{MAX_PATH_PROFILE_SEARCH_WORK}-node work budget"
+            ),
+        )
+    output_limit = CanonicalLimits().max_output_bytes
+    if _path_profile_result_bytes(graph, path_length) > output_limit:
+        raise OperationDomainValidationError(
+            location=("graph", "path_length"),
+            code="graph.path_profile_result_exceeds_output_budget",
+            message=(
+                "fixed-length simple path profile result exceeds the canonical "
+                f"{output_limit}-byte output budget"
+            ),
+        )
+
+
+def path_profile(
+    graph: SimpleUndirectedGraph, path_length: int
+) -> PathProfileResult:
+    """Count simple paths of a fixed length for every ordered endpoint pair."""
+
+    _admit_path_profile(graph, path_length)
+    vertices = list(graph.vertices)
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in vertices}
+    for left, right in graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+
+    rows: list[PathProfileRow] = []
+    for source in vertices:
+        counts = _count_paths_by_endpoint(source, path_length, adjacency)
+        rows.extend(
+            PathProfileRow(source=source, target=target, path_count=counts[target])
+            for target in vertices
+            if target in counts
+        )
+    return PathProfileResult(source=graph, path_length=path_length, rows=rows)
+
+
+def _count_paths_by_endpoint(
+    source: str,
+    length: int,
+    adjacency: dict[str, set[str]],
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+
+    def visit(current: str, steps_left: int, visited: set[str]) -> None:
+        if steps_left == 0:
+            counts[current] = counts.get(current, 0) + 1
+            return
+        next_visited = visited | {current}
+        for neighbor in adjacency[current]:
+            if neighbor not in next_visited:
+                visit(neighbor, steps_left - 1, next_visited)
+
+    visit(source, length, set())
+    return counts

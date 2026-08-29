@@ -34,15 +34,17 @@ def _path_prefix_work_bound(vertex_count: int, max_degree: int, length: int) -> 
     return total
 
 
-def _path_profile_result_bytes(request: PathProfileRequest) -> int:
-    vertex_count = len(request.graph.vertices)
-    graph_bytes = len(encode_strict_json(request.graph.model_dump(mode="json")))
+def _path_profile_result_bytes(
+    graph: SimpleUndirectedGraph, path_length: int
+) -> int:
+    vertex_count = len(graph.vertices)
+    graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
     max_label_bytes = max(
-        (len(encode_strict_json(label)) for label in request.graph.vertices),
+        (len(encode_strict_json(label)) for label in graph.vertices),
         default=0,
     )
-    degree = _canonical_max_degree(request.graph)
-    depth = min(request.path_length, max(len(request.graph.vertices) - 1, 0))
+    degree = _canonical_max_degree(graph)
+    depth = min(path_length, max(len(graph.vertices) - 1, 0))
     max_path_count = math.prod(range(max(degree - 1, 1), max(degree - 1, 1) + depth))
     row_bytes = 2 * max_label_bytes + len(str(max_path_count)) + 32
     return (

@@ -5,6 +5,7 @@ from jacobian.math.graphs.transforms.operations import (
     graph_power,
     induced_subgraph,
     line_graph,
+    path_profile,
 )
 
-__all__ = ["complement", "graph_power", "induced_subgraph", "line_graph"]
+__all__ = ["complement", "graph_power", "induced_subgraph", "line_graph", "path_profile"]

@@ -10,6 +10,7 @@ from jacobian.math.graphs.transforms import (
     graph_power,
     induced_subgraph,
     line_graph,
+    path_profile,
 )
 from jacobian.math.graphs.transforms._models import (
     GraphResult,
@@ -20,9 +21,6 @@ from jacobian.math.graphs.transforms._models import (
 from jacobian.math.graphs.transforms._path_profile_models import (
     PathProfileRequest,
     PathProfileResult,
-)
-from jacobian.math.graphs.transforms._path_profile_operations import (
-    compute_path_profile,
 )
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
@@ -72,6 +70,10 @@ def compute_induced_subgraph(request: SubgraphRequest) -> GraphResult:
         list(request.vertices),
     )
     return _result(vertex_count, edges)
+
+
+def compute_path_profile(request: PathProfileRequest) -> PathProfileResult:
+    return path_profile(request.graph, request.path_length)
 
 
 def gt_operation[RequestT: StrictModel, ResultT: StrictModel](

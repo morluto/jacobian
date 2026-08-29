@@ -501,6 +501,17 @@ def test_convolution_admission_preserves_shared_denominators() -> None:
     assert result[5].as_fraction() == Fraction(4, 1000000014000000049)
 
 
+def test_convolution_admission_tracks_denominators_per_result_slot() -> None:
+    length = 54_269
+    values = [CanonicalRational(num="1", den="1") for _ in range(length)]
+    values[-1] = CanonicalRational(num="1", den=str(10**100 + 1))
+
+    result = dirichlet_convolution(tuple(values), tuple(values))
+
+    assert len(result) == length
+    assert result[-1].as_fraction() == Fraction(2, 10**100 + 1)
+
+
 def test_constant_one_inverse_admits_widened_prefix() -> None:
     ones = (CanonicalRational(num="1", den="1"),) * _MAX_DIVISOR_PREFIX_LENGTH
     result = dirichlet_inverse(ones)

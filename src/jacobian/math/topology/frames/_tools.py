@@ -32,7 +32,7 @@ TOOLS: MathTools = (
         operation_id="frame.gram.compute",
         title="Compute the Gram matrix of a vector family",
         description="Compute the exact Gram matrix G with G_ij = <v_i, v_j> "
-        "using a FLINT integer kernel and a complete-result byte preflight.",
+        "for a finite family of integer vectors.",
         request_type=VectorFamilyRequest,
         result_type=GramResult,
         run=_gram,
@@ -48,8 +48,8 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="frame.coherence.compute",
         title="Compute the coherence of a frame",
-        description="Compute the maximum normalized off-diagonal Gram entry from "
-        "one exact FLINT Gram product after checking full ambient span.",
+        description="Compute the maximum normalized off-diagonal Gram entry "
+        "after checking that the family spans the ambient space.",
         request_type=CoherenceRequest,
         result_type=CoherenceResult,
         run=_coherence,
@@ -66,7 +66,7 @@ TOOLS: MathTools = (
         operation_id="frame.potential.compute",
         title="Compute the frame potential",
         description="Compute the exact frame potential sum_{i,j} |<v_i, v_j>|^2 "
-        "from one FLINT Gram product after checking full ambient span.",
+        "after checking that the family spans the ambient space.",
         request_type=FiniteFrameRequest,
         result_type=FramePotentialResult,
         run=_frame_potential,

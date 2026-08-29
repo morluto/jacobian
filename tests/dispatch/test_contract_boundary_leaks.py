@@ -5,10 +5,7 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.analysis.boolean._models import BooleanTruthTableRequest
-from jacobian.math.analysis.boolean._operations import (
-    compute_walsh_hadamard_transform,
-)
+from jacobian.math.analysis.boolean import walsh_hadamard_transform
 from jacobian.math.graphs._tools import TOOLS as GRAPH_TOOLS
 from jacobian.math.graphs._tools import Graph6DecodeRequest
 from jacobian.math.probability._graph_connection_probability import (
@@ -40,10 +37,8 @@ def test_graph_connection_probability_rejects_unbound_edge_probabilities() -> No
 
 
 def test_walsh_transform_rejects_non_power_of_two_truth_table() -> None:
-    request = BooleanTruthTableRequest(truth_table=(0, 0, 0))
-
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_walsh_hadamard_transform(request)
+        walsh_hadamard_transform((0, 0, 0))
 
     assert error.value.errors()[0]["loc"] == ("truth_table",)
 

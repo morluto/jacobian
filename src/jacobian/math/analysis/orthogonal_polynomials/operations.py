@@ -116,7 +116,7 @@ def require_hankel_matrix_admission(
         )
     consumed = prefix.moments[1:] if shifted else prefix.moments
     per_entry = MAX_CANONICAL_RATIONAL_DIGITS // ((order + 1) ** 2)
-    bound = max(per_entry - 2, 8)
+    bound = max(per_entry - 2, 1)
     if any(
         RationalHeight.from_canonical(value).exceeds(bound)
         for value in consumed[: 2 * order + 1]

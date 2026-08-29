@@ -99,6 +99,15 @@ class TestHankel:
             for column in range(65)
         )
 
+    def test_maximum_order_rejects_nonrepresentable_determinant_height(self) -> None:
+        moments = (
+            CanonicalRational(num="1", den="10000019"),
+            *(CanonicalRational(num="1", den="1") for _ in range(128)),
+        )
+
+        with pytest.raises(ValueError, match="conservative 5-digit bound"):
+            compute_hankel_matrix(HankelRequest(prefix=_prefix(moments), order=64))
+
 
 class TestShiftedHankel:
     def test_shifted_hankel(self) -> None:

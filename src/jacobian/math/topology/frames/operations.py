@@ -23,6 +23,9 @@ __all__ = ["coherence", "frame_potential", "gram"]
 
 
 _RESULT_RESERVE_BYTES = 128
+MAX_FRAME_GRAM_ENTRIES = 2_097_152
+MAX_FRAME_GRAM_MULTIPLY_ADDS = 536_870_912
+_MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
 
 
 def _retained_source_bytes(value: VectorFamily) -> int:
@@ -55,6 +58,35 @@ def _gram_minimum_result_bound(value: VectorFamily) -> int:
 
     vector_count = len(value.vectors)
     return _retained_source_bytes(value) + 2 * vector_count**2 + 2 * vector_count
+
+
+def _require_gram_work_budget(value: VectorFamily) -> None:
+    vector_count = len(value.vectors)
+    dimension = len(value.vectors[0])
+    gram_entries = vector_count**2
+    if gram_entries > MAX_FRAME_GRAM_ENTRIES:
+        raise OperationDomainValidationError(
+            location=("vectors",),
+            code="frames.gram_intermediate_budget",
+            message="frame Gram intermediate exceeds its entry budget",
+        )
+    if gram_entries * dimension > MAX_FRAME_GRAM_MULTIPLY_ADDS:
+        raise OperationDomainValidationError(
+            location=("vectors",),
+            code="frames.gram_work_budget",
+            message="frame Gram computation exceeds its multiply-add work budget",
+        )
+
+
+def _require_gram_entry_representation(value: VectorFamily) -> None:
+    coefficient_height = _coefficient_height(value)
+    gram_entry_bound = len(value.vectors[0]) * coefficient_height**2
+    if gram_entry_bound > _MAX_SAFE_JSON_INTEGER:
+        raise OperationDomainValidationError(
+            location=("vectors",),
+            code="frames.gram_entry_representation",
+            message="frame Gram entries exceed the canonical integer representation",
+        )
 
 
 def _gram_result(value: VectorFamily) -> GramResult:
@@ -93,11 +125,13 @@ def _admit_frame_shape(value: VectorFamily) -> None:
 
 def gram(value: VectorFamily) -> GramResult:
     """Compute the exact Gram matrix of a vector family."""
+    _require_gram_work_budget(value)
     return _gram_result(value)
 
 
 def coherence(value: VectorFamily) -> CoherenceResult:
     """Compute exact normalized squared coherence of a finite frame."""
+    _require_gram_work_budget(value)
     _require_result_budget(_compact_result_bound(value))
     if any(not any(vector) for vector in value.vectors):
         raise OperationDomainValidationError(
@@ -131,6 +165,7 @@ def coherence(value: VectorFamily) -> CoherenceResult:
 
 def frame_potential(value: VectorFamily) -> FramePotentialResult:
     """Compute the exact frame potential of a finite frame."""
+    _require_gram_work_budget(value)
     _require_result_budget(_compact_result_bound(value))
     _admit_frame_shape(value)
     rank, matrix = integer_gram_and_rank(value.vectors)

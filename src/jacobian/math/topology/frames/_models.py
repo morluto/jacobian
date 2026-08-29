@@ -9,9 +9,7 @@ from pydantic import Field
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian.math.topology.frames.values import (
     MAX_DIM,
-    MAX_VALUE,
     MAX_VECTOR_CELLS,
-    MAX_VECTORS,
     VectorFamily,
 )
 
@@ -80,8 +78,6 @@ class FramePotentialResult(FiniteFrameRequest):
 
 __all__ = [
     "MAX_DIM",
-    "MAX_VALUE",
-    "MAX_VECTORS",
     "MAX_VECTOR_CELLS",
     "CoherenceRequest",
     "CoherenceResult",

@@ -14,6 +14,8 @@ from jacobian.math.topology.frames.operations import (
     _gram_minimum_result_bound,
     _gram_result,
     _gram_result_bytes,
+    _require_gram_entry_representation,
+    _require_gram_work_budget,
     _require_result_budget,
     coherence,
     frame_potential,
@@ -21,6 +23,8 @@ from jacobian.math.topology.frames.operations import (
 
 
 def _gram(request: VectorFamilyRequest) -> GramResult:
+    _require_gram_work_budget(request)
+    _require_gram_entry_representation(request)
     _require_result_budget(_gram_minimum_result_bound(request))
     result = _gram_result(request)
     _require_result_budget(_gram_result_bytes(result))

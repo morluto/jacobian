@@ -10,7 +10,8 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 
 MAX_VECTOR_CELLS = 524_288
-MAX_VECTORS, MAX_DIM, MAX_VALUE = 1_024, MAX_VECTOR_CELLS, 1_000
+MAX_DIM = MAX_VECTOR_CELLS
+_MAX_VECTOR_ENTRY = (1 << 53) - 1
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -26,7 +27,6 @@ class VectorFamily(StrictModel):
 
     vectors: tuple[tuple[int, ...], ...] = Field(
         min_length=1,
-        max_length=MAX_VECTORS,
         description=(
             "Ordered vectors with len(vectors) * dimension <= "
             f"{MAX_VECTOR_CELLS} materialized cells."
@@ -50,7 +50,11 @@ class VectorFamily(StrictModel):
                 "vector_cell_budget",
                 "vector family exceeds the materialized-cell budget",
             )
-        if any(abs(entry) > MAX_VALUE for vector in self.vectors for entry in vector):
+        if any(
+            abs(entry) > _MAX_VECTOR_ENTRY
+            for vector in self.vectors
+            for entry in vector
+        ):
             raise _validation_error(
                 "vector_entry_out_of_range", "vector entries must be bounded"
             )
@@ -59,8 +63,6 @@ class VectorFamily(StrictModel):
 
 __all__ = [
     "MAX_DIM",
-    "MAX_VALUE",
-    "MAX_VECTORS",
     "MAX_VECTOR_CELLS",
     "VectorFamily",
 ]

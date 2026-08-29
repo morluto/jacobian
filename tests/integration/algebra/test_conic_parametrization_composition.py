@@ -10,7 +10,7 @@ from jacobian.math.geometry.algebraic_curves._tools import (
 from jacobian.math.matrices.symbolic._models import (
     SymbolicDeterminantRequest,
 )
-from jacobian.math.matrices.symbolic.operations import compute_symbolic_determinant
+from jacobian.math.matrices.symbolic.operations import symbolic_determinant
 from jacobian.math.polynomials.maps._models import EvalRequest, VariablePoint
 from jacobian.math.polynomials.maps.operations import evaluate_polynomial
 from jacobian.math.polynomials.values import (
@@ -56,8 +56,11 @@ def test_conic_coordinate_serialization_is_a_symbolic_matrix_entry() -> None:
     )
 
     assert determinant_request.matrix.entries[0][0] == parametrization.coordinates[0]
-    determinant = compute_symbolic_determinant(determinant_request)
-    assert determinant.determinant == parametrization.coordinates[0]
+    determinant = symbolic_determinant(
+        determinant_request.matrix.entries,
+        determinant_request.matrix.variables,
+    )
+    assert determinant == parametrization.coordinates[0]
 
 
 def test_exceptional_point_serialization_evaluates_on_its_source_conic() -> None:
@@ -92,7 +95,6 @@ def test_exceptional_point_serialization_evaluates_on_its_source_conic() -> None
         }
     )
     assert evaluation_request.point == parametrization.exceptional_point
-    assert (
-        evaluate_polynomial(evaluation_request.polynomial, evaluation_request.point).value
-        == _integer(0)
-    )
+    assert evaluate_polynomial(
+        evaluation_request.polynomial, evaluation_request.point
+    ).value == _integer(0)

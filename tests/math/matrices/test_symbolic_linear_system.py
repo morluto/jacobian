@@ -15,7 +15,7 @@ from jacobian.math.matrices.symbolic._models import (
 )
 from jacobian.math.matrices.symbolic.operations import (
     SystemClassification,
-    compute_symbolic_linear_system,
+    symbolic_linear_system_solve,
 )
 from jacobian.math.polynomials.values import RationalFunction
 
@@ -69,6 +69,25 @@ def _matrix(
     )
 
 
+def _run_linear_system(
+    request: SymbolicLinearSystemRequest,
+) -> SymbolicLinearSystemResult:
+    """Adapt a wire request for tests that exercise the native solver."""
+    classification, solution, particular, nullspace = symbolic_linear_system_solve(
+        request.matrix.entries,
+        request.rhs,
+        request.matrix.variables,
+    )
+    return SymbolicLinearSystemResult._from_kernel(
+        matrix=request.matrix,
+        rhs=request.rhs,
+        classification=classification,
+        solution=solution,
+        particular_solution=particular,
+        nullspace_basis=nullspace,
+    )
+
+
 class TestSymbolicLinearSystem:
     """Tests for ``matrix.symbolic.linear_system.solve``."""
 
@@ -78,7 +97,7 @@ class TestSymbolicLinearSystem:
         matrix = _matrix(vars_, ((_rf(vars_, (1, (1,))),),))
         rhs = (_rf(vars_, (1, (0,))),)
         req = SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
-        result = compute_symbolic_linear_system(req)
+        result = _run_linear_system(req)
         assert result.classification == "UNIQUE"
         assert result.solution is not None
         assert len(result.solution) == 1
@@ -98,7 +117,7 @@ class TestSymbolicLinearSystem:
         )
         rhs = (one, one)
         req = SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
-        result = compute_symbolic_linear_system(req)
+        result = _run_linear_system(req)
         assert result.classification == "UNIQUE"
         assert result.solution is not None
         assert len(result.solution) == 2
@@ -115,7 +134,7 @@ class TestSymbolicLinearSystem:
         matrix = _matrix(vars_, ((one,), (two,)))
         rhs = (one, two)
         req = SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
-        result = compute_symbolic_linear_system(req)
+        result = _run_linear_system(req)
         assert result.classification == "UNIQUE"
         assert result.solution is not None
         assert result.solution[0].numerator.terms[0].coefficient.num == "1"
@@ -127,7 +146,7 @@ class TestSymbolicLinearSystem:
         matrix = _matrix(vars_, ((one,), (one,)))
         rhs = (_rf(vars_, (1, ())), _rf(vars_, (2, ())))
         req = SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
-        result = compute_symbolic_linear_system(req)
+        result = _run_linear_system(req)
         assert result.classification == "INCONSISTENT"
         assert result.solution is None
         assert result.particular_solution is None
@@ -150,7 +169,7 @@ class TestSymbolicLinearSystem:
         )
         rhs = (e, f)
         req = SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
-        result = compute_symbolic_linear_system(req)
+        result = _run_linear_system(req)
         assert result.classification == "UNIQUE"
         assert result.solution is not None
         assert len(result.solution) == 2
@@ -163,7 +182,7 @@ class TestSymbolicLinearSystem:
         matrix = _matrix(vars_, ((two,),))
         rhs = (six,)
         req = SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
-        result = compute_symbolic_linear_system(req)
+        result = _run_linear_system(req)
         assert result.classification == "UNIQUE"
         assert result.solution is not None
         # Solution should be 3
@@ -199,7 +218,7 @@ class TestSymbolicLinearSystem:
             }
         )
         req = SymbolicLinearSystemRequest(matrix=matrix, rhs=(rhs,))
-        result = compute_symbolic_linear_system(req)
+        result = _run_linear_system(req)
         assert result.classification == "UNIQUE"
         assert result.solution is not None
 
@@ -231,9 +250,7 @@ class TestSolutionGrowthAdmission:
         matrix = _matrix(vars_, ((inv,),))
         rhs = (_rf(vars_, (1, (64,))),)
         with pytest.raises(OperationDomainValidationError):
-            compute_symbolic_linear_system(
-                SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
-            )
+            _run_linear_system(SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs))
 
     def test_rank_deficient_large_coefficients_rejected(self) -> None:
         """All work-size minors can be structurally zero while a smaller
@@ -263,9 +280,7 @@ class TestSolutionGrowthAdmission:
         matrix = _matrix(("t",), ((rf(1, big), rf(0, 1)), (rf(0, 1), rf(0, 1))))
         rhs = (rf(big, 1), rf(0, 1))
         with pytest.raises(OperationDomainValidationError):
-            compute_symbolic_linear_system(
-                SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
-            )
+            _run_linear_system(SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs))
 
     def test_rank_deficient_particular_solution_is_bounded_by_small_minor(self) -> None:
         """The reviewer's rank-deficient shape with representable sizes:
@@ -296,7 +311,7 @@ class TestSolutionGrowthAdmission:
         matrix = _matrix(("t",), ((rf(1, n), rf(0, 1)), (rf(0, 1), rf(0, 1))))
         rhs = (rf(n, 1), rf(0, 1))
         request = SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
-        result = compute_symbolic_linear_system(request)
+        result = _run_linear_system(request)
         assert result.classification == "NON_UNIQUE"
         assert result.particular_solution is not None
         assert result.particular_solution[0] == rf(n**2, 1)
@@ -321,7 +336,7 @@ class TestAdmissionWorkBounding:
         admitted, solved, and revalidated from its serialized result."""
         matrix, _, zero = self._identity(8)
         request = SymbolicLinearSystemRequest(matrix=matrix, rhs=(zero,) * 8)
-        result = compute_symbolic_linear_system(request)
+        result = _run_linear_system(request)
         assert result.classification == "UNIQUE"
         assert result.solution is not None
         assert all(
@@ -345,7 +360,7 @@ class TestAdmissionWorkBounding:
         started = time.perf_counter()
         request = SymbolicLinearSystemRequest(matrix=matrix, rhs=(one,) * 8)
         assert time.perf_counter() - started < 5.0
-        result = compute_symbolic_linear_system(request)
+        result = _run_linear_system(request)
         assert result.classification == "UNIQUE"
 
     def test_exhausted_enumeration_falls_back_to_sound_closed_form(
@@ -374,7 +389,7 @@ class TestAdmissionWorkBounding:
         assert request.matrix.entries == entries
         monkeypatch.setattr(_models, "_EXPANSION_ENUMERATION_NODE_BUDGET", 0)
         with pytest.raises(OperationDomainValidationError):
-            compute_symbolic_linear_system(
+            _run_linear_system(
                 SymbolicLinearSystemRequest(matrix=matrix, rhs=(zero,) * 8)
             )
 
@@ -388,7 +403,7 @@ class TestAdmissionWorkBounding:
         matrix = _matrix((), ((one,) * 8,) * 8)
         started = time.perf_counter()
         with pytest.raises(OperationDomainValidationError):
-            compute_symbolic_linear_system(
+            _run_linear_system(
                 SymbolicLinearSystemRequest(matrix=matrix, rhs=(one,) * 8)
             )
         assert time.perf_counter() - started < 5.0
@@ -407,11 +422,12 @@ class TestSourceBoundResult:
 
     def test_result_retains_source_system(self) -> None:
         request = self._request()
-        result = compute_symbolic_linear_system(request)
-        assert result.system == request
+        result = _run_linear_system(request)
+        assert result.matrix == request.matrix
+        assert result.rhs == request.rhs
 
     def test_serialized_result_revalidates(self) -> None:
-        result = compute_symbolic_linear_system(self._request())
+        result = _run_linear_system(self._request())
         revalidated = SymbolicLinearSystemResult.model_validate(result.model_dump())
         assert revalidated.classification == "UNIQUE"
         assert revalidated.solution == result.solution
@@ -440,12 +456,12 @@ class TestNativeSystemAdmission:
     def test_short_rhs_rejected_before_sympy(self) -> None:
         vars_: tuple[str, ...] = ()
         one = _rf(vars_, (1, ()))
-        with pytest.raises(ValueError):
+        with pytest.raises(OperationDomainValidationError):
             self._solve(((one,), (one,)), (one,), vars_)
 
     def test_field_mismatch_rejected(self) -> None:
         entry = _rf(("t",), (1, (0,)))
-        with pytest.raises(ValueError):
+        with pytest.raises(OperationDomainValidationError):
             self._solve(((entry,),), (entry,), ())
 
     def test_growth_budget_applied_to_native_callers(self) -> None:
@@ -466,7 +482,7 @@ class TestNativeSystemAdmission:
             }
         )
         rhs = (_rf(("t",), (1, (64,))),)
-        with pytest.raises(ValueError):
+        with pytest.raises(OperationDomainValidationError):
             self._solve(((inv,),), rhs, ("t",))
 
     def test_oversized_native_shape_rejected_before_growth_scan(self) -> None:
@@ -477,7 +493,7 @@ class TestNativeSystemAdmission:
         vars_: tuple[str, ...] = ()
         one = _rf(vars_, (1, ()))
         started = time.perf_counter()
-        with pytest.raises(ValueError):
+        with pytest.raises(OperationDomainValidationError):
             self._solve(((one,) * 20_000,), (one,), vars_)
         assert time.perf_counter() - started < 5.0
 
@@ -511,9 +527,7 @@ class TestNonUniqueWitnessEquivalence:
 
         matrix = _matrix(("t",), ((rf(1, 3), rf(0, 1)), (rf(0, 1), rf(0, 1))))
         rhs = (rf(3, 1), rf(0, 1))
-        return compute_symbolic_linear_system(
-            SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
-        )
+        return _run_linear_system(SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs))
 
     def test_alternative_valid_witnesses_pass_explicit_verification(self) -> None:
         def rf(num: int) -> RationalFunction:
@@ -537,7 +551,7 @@ class TestWitnessDeserializationHardening:
         one = _rf((), (1, ()))
         two = _rf((), (2, ()))
         matrix = _matrix((), ((one,), (one,)))
-        result = compute_symbolic_linear_system(
+        result = _run_linear_system(
             SymbolicLinearSystemRequest(matrix=matrix, rhs=(one, two))
         )
         assert result.classification == "INCONSISTENT"
@@ -553,7 +567,7 @@ class TestWitnessDeserializationHardening:
         """A zero system over QQ must not accept witnesses over QQ(z)."""
         zero_t = _rf(("t",))
         matrix = _matrix(("t",), ((zero_t,),))
-        result = compute_symbolic_linear_system(
+        result = _run_linear_system(
             SymbolicLinearSystemRequest(matrix=matrix, rhs=(zero_t,))
         )
         assert result.classification == "NON_UNIQUE"

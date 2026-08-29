@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from sympy.matrices.exceptions import MatrixError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -25,11 +26,11 @@ from jacobian.math.matrices.symbolic._models import (
 )
 from jacobian.math.matrices.symbolic._tools import TOOLS
 from jacobian.math.matrices.symbolic.operations import (
-    compute_symbolic_characteristic_polynomial,
-    compute_symbolic_determinant,
-    compute_symbolic_eigenvalues,
-    compute_symbolic_matrix_product,
-    compute_symbolic_rank,
+    symbolic_characteristic_polynomial,
+    symbolic_determinant,
+    symbolic_eigenvalues,
+    symbolic_matrix_multiply,
+    symbolic_rank,
 )
 from jacobian.math.polynomials.values import (
     RationalFunction,
@@ -124,11 +125,74 @@ def _characteristic_request(
     )
 
 
+def _run_determinant(
+    request: SymbolicDeterminantRequest,
+) -> SymbolicDeterminantResult:
+    return SymbolicDeterminantResult(
+        determinant=symbolic_determinant(
+            request.matrix.entries,
+            request.matrix.variables,
+        )
+    )
+
+
+def _run_rank(request: SymbolicMatrixRequest) -> SymbolicRankResult:
+    rank, pivot_columns = symbolic_rank(
+        request.matrix.entries,
+        request.matrix.variables,
+    )
+    return SymbolicRankResult(rank=rank, pivot_columns=pivot_columns)
+
+
+def _run_product(
+    request: SymbolicMatrixProductRequest,
+) -> SymbolicMatrix:
+    return symbolic_matrix_multiply(request.left, request.right)
+
+
+def _run_characteristic(
+    request: SymbolicCharacteristicPolynomialRequest,
+) -> SymbolicCharacteristicPolynomialResult:
+    degree, coefficients = symbolic_characteristic_polynomial(
+        request.matrix.entries,
+        request.matrix.variables,
+    )
+    return SymbolicCharacteristicPolynomialResult(
+        degree=degree,
+        coefficients_descending=coefficients,
+    )
+
+
+def _run_eigenvalues(
+    request: SymbolicCharacteristicPolynomialRequest,
+) -> SymbolicEigenvaluesResult:
+    try:
+        values = symbolic_eigenvalues(
+            request.matrix.entries,
+            request.matrix.variables,
+        )
+    except MatrixError:
+        degree, coefficients = symbolic_characteristic_polynomial(
+            request.matrix.entries,
+            request.matrix.variables,
+        )
+        return SymbolicEigenvaluesResult(
+            representation="ROOTS_BY_POLYNOMIAL",
+            characteristic_polynomial=coefficients,
+            degree=degree,
+        )
+    return SymbolicEigenvaluesResult(
+        representation="EXPLICIT_ROOTS",
+        eigenvalues=tuple(value for value, _ in values),
+        multiplicities=tuple(mult for _, mult in values),
+    )
+
+
 def _assert_product_admission_rejected(
     request: SymbolicMatrixProductRequest,
 ) -> None:
     with pytest.raises(OperationDomainValidationError):
-        compute_symbolic_matrix_product(request)
+        _run_product(request)
 
 
 def _generic_two_by_two() -> SymbolicDeterminantRequest:
@@ -138,7 +202,7 @@ def _generic_two_by_two() -> SymbolicDeterminantRequest:
 
 
 def test_symbolic_determinant_of_two_by_two() -> None:
-    result = compute_symbolic_determinant(_generic_two_by_two())
+    result = _run_determinant(_generic_two_by_two())
     assert isinstance(result, SymbolicDeterminantResult)
     assert result.determinant == _rf(
         ("a", "b", "c", "d"),
@@ -151,7 +215,7 @@ def test_symbolic_determinant_of_constant_matrix() -> None:
     request = _determinant_request(
         ((_constant(1), _constant(2)), (_constant(3), _constant(4))), ()
     )
-    assert compute_symbolic_determinant(request).determinant == _constant(-2)
+    assert _run_determinant(request).determinant == _constant(-2)
 
 
 def test_determinant_request_rejects_unrepresentable_expansion() -> None:
@@ -172,7 +236,7 @@ def test_determinant_request_rejects_unrepresentable_expansion() -> None:
     )
 
     with pytest.raises(OperationDomainValidationError):
-        compute_symbolic_determinant(
+        _run_determinant(
             SymbolicDeterminantRequest(
                 matrix=SymbolicMatrix(variables=variables, entries=entries)
             )
@@ -193,14 +257,14 @@ def test_determinant_request_admission_does_not_execute_kernel(
 
 
 def test_symbolic_rank_of_full_and_singular_matrices() -> None:
-    full = compute_symbolic_rank(_generic_two_by_two())
+    full = _run_rank(_generic_two_by_two())
     assert isinstance(full, SymbolicRankResult)
     assert full.rank == 2
     assert full.pivot_columns == (0, 1)
 
     variables = ("a",)
     a = _variable(variables, 0)
-    singular = compute_symbolic_rank(_request(((a, a), (a, a)), variables))
+    singular = _run_rank(_request(((a, a), (a, a)), variables))
     assert singular.rank == 1
 
 
@@ -208,14 +272,12 @@ def test_symbolic_matrix_product_is_exact_and_composes_with_rank() -> None:
     variables = ("a", "b")
     a, b = (_variable(variables, index) for index in range(2))
     one = _rf(variables, (1, 1, (0, 0)))
-    product = compute_symbolic_matrix_product(
-        _product_request(((a, b),), ((one,), (one,)), variables)
-    )
+    product = _run_product(_product_request(((a, b),), ((one,), (one,)), variables))
     assert product == SymbolicMatrix(
         variables=variables,
         entries=((_rf(variables, (1, 1, (1, 0)), (1, 1, (0, 1))),),),
     )
-    assert compute_symbolic_rank(SymbolicMatrixRequest(matrix=product)).rank == 1
+    assert _run_rank(SymbolicMatrixRequest(matrix=product)).rank == 1
 
 
 def test_symbolic_matrix_product_cancels_rational_function_entries() -> None:
@@ -230,9 +292,7 @@ def test_symbolic_matrix_product_cancels_rational_function_entries() -> None:
         (1, 1, (0, 1)),
         denominator=((1, 1, (1, 0)),),
     )
-    product = compute_symbolic_matrix_product(
-        _product_request(((e_over_f,),), ((f_over_e,),), variables)
-    )
+    product = _run_product(_product_request(((e_over_f,),), ((f_over_e,),), variables))
     assert product.entries == ((_rf(variables, (1, 1, (0, 0))),),)
 
 
@@ -259,7 +319,7 @@ def test_symbolic_matrix_product_admits_expansion_that_collects_into_budget() ->
         *((1, 1, (exponent,)) for exponent in range(16, -1, -1)),
     )
     request = _product_request(((many_terms,),), ((many_terms,),), variables)
-    product = compute_symbolic_matrix_product(request)
+    product = _run_product(request)
     collected = tuple(
         (min(exponent + 1, 33 - exponent), 1, (exponent,))
         for exponent in range(32, -1, -1)
@@ -405,7 +465,7 @@ def test_symbolic_matrix_product_admits_boundary_aggregate_canonical_support() -
     one = _rf(variables, (1, 1, (0,)))
     left = ((dense,),)
     right = (tuple(one for _ in range(8)),)
-    product = compute_symbolic_matrix_product(_product_request(left, right, variables))
+    product = _run_product(_product_request(left, right, variables))
     assert product == SymbolicMatrix(
         variables=variables,
         entries=(tuple(dense for _ in range(8)),),
@@ -450,9 +510,7 @@ def test_symbolic_matrix_product_keeps_dense_denominator_under_scalar_copy() -> 
         denominator=dense_denominator,
     )
     two = _rf(variables, (2, 1, (0,)))
-    product = compute_symbolic_matrix_product(
-        _product_request(((dense_inverse,),), ((two,),), variables)
-    )
+    product = _run_product(_product_request(((dense_inverse,),), ((two,),), variables))
     assert product.entries == (
         (
             _rf(
@@ -472,7 +530,7 @@ def test_symbolic_matrix_product_ignores_unit_denominator_coefficient_digits() -
     one = _constant(1)
     left = ((large,) * 8,)
     right = tuple((one,) for _ in range(8))
-    product = compute_symbolic_matrix_product(_product_request(left, right, variables))
+    product = _run_product(_product_request(left, right, variables))
     assert product.entries == ((_constant(8 * 10**120),),)
 
 
@@ -497,9 +555,7 @@ def test_symbolic_matrix_product_admits_scalar_identity_with_large_coefficients(
     variables = ("x",)
     large = _rf(variables, (10**63, 1, (1,)), (1, 1, (0,)))
     one = _rf(variables, (1, 1, (0,)))
-    product = compute_symbolic_matrix_product(
-        _product_request(((large,),), ((one,),), variables)
-    )
+    product = _run_product(_product_request(((large,),), ((one,),), variables))
     assert product.entries == ((large,),)
 
 
@@ -515,7 +571,7 @@ def test_symbolic_matrix_product_admits_partial_exponent_collisions() -> None:
     )
     shifted = _rf(variables, (1, 1, (1,)), (1, 1, (0,)))
     request = _product_request(((scaled,),), ((shifted,),), variables)
-    product = compute_symbolic_matrix_product(request)
+    product = _run_product(request)
     assert product.entries == (
         (
             _rf(
@@ -536,7 +592,7 @@ def test_symbolic_matrix_product_admits_integral_coefficient_collisions() -> Non
     scaled = _rf(variables, (10**63, 1, (1,)), (10**63, 1, (0,)))
     shifted = _rf(variables, (1, 1, (1,)), (1, 1, (0,)))
     request = _product_request(((scaled,),), ((shifted,),), variables)
-    product = compute_symbolic_matrix_product(request)
+    product = _run_product(request)
     assert product.entries == (
         (
             _rf(
@@ -565,9 +621,7 @@ def test_symbolic_matrix_product_admits_sparse_support_without_cancellation() ->
 
     variables = ("x", "y")
     monomial = _rf(variables, (1, 1, (16, 16)))
-    product = compute_symbolic_matrix_product(
-        _product_request(((monomial,),), ((monomial,),), variables)
-    )
+    product = _run_product(_product_request(((monomial,),), ((monomial,),), variables))
     assert product.entries == ((_rf(variables, (1, 1, (32, 32))),),)
 
 
@@ -578,7 +632,7 @@ def test_symbolic_matrix_product_ignores_zero_partner_for_support_path() -> None
     monomial = _rf(variables, (1, 1, (16, 16)))
     inverse_x = _rf(variables, (1, 1, (0, 0)), denominator=((1, 1, (1, 0)),))
     zero = _rf(variables)
-    product = compute_symbolic_matrix_product(
+    product = _run_product(
         _product_request(((monomial, inverse_x),), ((monomial,), (zero,)), variables)
     )
     assert product.entries == ((_rf(variables, (1, 1, (32, 32))),),)
@@ -594,9 +648,7 @@ def test_symbolic_matrix_product_keeps_monomial_denominator_support() -> None:
         denominator=((1, 1, (16, 16)),),
     )
     one = _rf(variables, (1, 1, (0, 0)))
-    product = compute_symbolic_matrix_product(
-        _product_request(((inverse,),), ((one,),), variables)
-    )
+    product = _run_product(_product_request(((inverse,),), ((one,),), variables))
     assert product.entries == ((inverse,),)
 
 
@@ -639,7 +691,7 @@ def test_symbolic_matrix_product_admits_shared_denominator_sums() -> None:
         denominator=((1, 1, (1,)), (1, 1, (0,))),
     )
     one = _rf(variables, (1, 1, (0,)))
-    product = compute_symbolic_matrix_product(
+    product = _run_product(
         _product_request(
             ((inverse_successor, inverse_successor),), ((one,), (one,)), variables
         )
@@ -665,9 +717,7 @@ def test_symbolic_matrix_product_admits_single_pair_over_shared_denominator() ->
         denominator=((1, 1, (1,)), (1, 1, (0,))),
     )
     x = _rf(variables, (1, 1, (1,)))
-    product = compute_symbolic_matrix_product(
-        _product_request(((x_over_successor,),), ((x,),), variables)
-    )
+    product = _run_product(_product_request(((x_over_successor,),), ((x,),), variables))
     assert product.entries == (
         (
             _rf(
@@ -693,7 +743,7 @@ def test_symbolic_matrix_product_admits_shared_denominators_on_both_sides() -> N
         (1, 1, (1,)),
         denominator=((1, 1, (1,)), (2, 1, (0,))),
     )
-    product = compute_symbolic_matrix_product(
+    product = _run_product(
         _product_request(((inverse_successor,),), ((x_over_shifted,),), variables)
     )
     assert product.entries == (
@@ -726,7 +776,7 @@ def test_symbolic_matrix_product_admits_swapped_pair_denominators() -> None:
         (1, 1, (0,)),
         denominator=((1, 1, (1,)), (2, 1, (0,))),
     )
-    product = compute_symbolic_matrix_product(
+    product = _run_product(
         _product_request(
             ((inverse_successor, inverse_shifted),),
             ((inverse_shifted,), (inverse_successor,)),
@@ -787,7 +837,7 @@ def test_symbolic_matrix_product_admits_shared_denominator_zero_sum() -> None:
     forward = _rf(variables, (1, 1, (1,)), denominator=successor)
     backward = _rf(variables, (-1, 1, (1,)), denominator=successor)
     one = _rf(variables, (1, 1, (0,)))
-    product = compute_symbolic_matrix_product(
+    product = _run_product(
         _product_request(((forward, backward),), ((one,), (one,)), variables)
     )
     assert product.entries == ((_rf(variables),),)
@@ -874,7 +924,7 @@ def test_symbolic_matrix_product_admits_boundary_shared_projection() -> None:
     y_denominator = tuple((1, 1, (0, exponent)) for exponent in range(15, -1, -1))
     left = ((_rf(variables, *x_numerator, denominator=y_denominator),),)
     right = ((_rf(variables, *x_numerator, denominator=y_denominator),),)
-    product = compute_symbolic_matrix_product(_product_request(left, right, variables))
+    product = _run_product(_product_request(left, right, variables))
     counts = tuple(min(exponent + 1, 31 - exponent) for exponent in range(30, -1, -1))
     numerator = tuple(
         (count, 1, (exponent, 0))
@@ -927,9 +977,7 @@ def test_symbolic_matrix_product_admits_identity_times_rational_entry() -> None:
         denominator=((1, 1, (1, 0)), (1, 1, (0, 0))),
     )
     one = _rf(variables, (1, 1, (0, 0)))
-    product = compute_symbolic_matrix_product(
-        _product_request(((rational,),), ((one,),), variables)
-    )
+    product = _run_product(_product_request(((rational,),), ((one,),), variables))
     assert product.entries == ((rational,),)
 
 
@@ -941,7 +989,7 @@ def test_symbolic_matrix_product_admits_dense_constant_matrices() -> None:
     one = _constant(1)
     left = tuple(tuple(two for _ in range(8)) for _ in range(8))
     right = tuple(tuple(one for _ in range(8)) for _ in range(8))
-    product = compute_symbolic_matrix_product(_product_request(left, right, variables))
+    product = _run_product(_product_request(left, right, variables))
     assert product.entries == tuple(
         tuple(_constant(16) for _ in range(8)) for _ in range(8)
     )
@@ -964,10 +1012,10 @@ def test_symbolic_matrix_product_admits_scalar_constant_times_rational_entry() -
         (2, 1, (0, 0)),
         denominator=((1, 1, (1, 0)), (1, 1, (0, 0))),
     )
-    assert compute_symbolic_matrix_product(
+    assert _run_product(
         _product_request(((rational,),), ((two,),), variables)
     ).entries == ((scaled,),)
-    assert compute_symbolic_matrix_product(
+    assert _run_product(
         _product_request(((two,),), ((rational,),), variables)
     ).entries == ((scaled,),)
 
@@ -980,9 +1028,7 @@ def test_symbolic_matrix_product_admits_rational_scalar_at_coefficient_boundary(
     variables = ("x",)
     base = _rf(variables, (10**63, 1, (1,)), (10**63, 1, (0,)))
     scalar = _rf(variables, (10**63, 97, (0,)))
-    product = compute_symbolic_matrix_product(
-        _product_request(((base,),), ((scalar,),), variables)
-    )
+    product = _run_product(_product_request(((base,),), ((scalar,),), variables))
     assert product.entries == (
         (_rf(variables, (10**126, 97, (1,)), (10**126, 97, (0,))),),
     )
@@ -1006,9 +1052,7 @@ def test_rational_function_entries_use_the_advertised_field() -> None:
         (1, 1, (0,)),
         denominator=((1, 1, (1,)),),
     )
-    result = compute_symbolic_determinant(
-        _determinant_request(((inverse_x,),), variables)
-    )
+    result = _run_determinant(_determinant_request(((inverse_x,),), variables))
     assert result.determinant == inverse_x
 
 
@@ -1016,7 +1060,7 @@ def test_symbolic_characteristic_polynomial_of_constant_matrix() -> None:
     request = _characteristic_request(
         ((_constant(1), _constant(2)), (_constant(3), _constant(4))), ()
     )
-    result = compute_symbolic_characteristic_polynomial(request)
+    result = _run_characteristic(request)
     assert isinstance(result, SymbolicCharacteristicPolynomialResult)
     assert result.degree == 2
     assert result.coefficients_descending == (
@@ -1028,7 +1072,7 @@ def test_symbolic_characteristic_polynomial_of_constant_matrix() -> None:
 
 def test_symbolic_characteristic_polynomial_of_zero_matrix() -> None:
     zero = _constant(0)
-    result = compute_symbolic_characteristic_polynomial(
+    result = _run_characteristic(
         _characteristic_request(((zero, zero), (zero, zero)), ())
     )
     assert result.coefficients_descending == (
@@ -1042,7 +1086,7 @@ def test_symbolic_eigenvalues_of_constant_matrix() -> None:
     request = _characteristic_request(
         ((_constant(1), _constant(2)), (_constant(3), _constant(4))), ()
     )
-    result = compute_symbolic_eigenvalues(request)
+    result = _run_eigenvalues(request)
     assert isinstance(result, SymbolicEigenvaluesResult)
     assert len(result.eigenvalues or ()) == 2
     assert result.multiplicities == (1, 1)
@@ -1070,9 +1114,7 @@ def test_square_only_descriptors_reject_rectangular_input(operation_id: str) -> 
 
 
 def test_rectangular_matrix_is_accepted_only_by_rank_contract() -> None:
-    result = compute_symbolic_rank(
-        _request(((_constant(1), _constant(2), _constant(3)),), ())
-    )
+    result = _run_rank(_request(((_constant(1), _constant(2), _constant(3)),), ()))
     assert result.rank == 1
 
 
@@ -1164,7 +1206,7 @@ def test_symbolic_eigenvalues_returns_polynomial_for_unrepresentable_roots() -> 
         ),
         variables,
     )
-    result = compute_symbolic_eigenvalues(request)
+    result = _run_eigenvalues(request)
     assert result.representation == "ROOTS_BY_POLYNOMIAL"
     assert result.degree == 5
     assert result.characteristic_polynomial is not None
@@ -1175,7 +1217,7 @@ def test_symbolic_eigenvalues_explicit_for_representable_roots() -> None:
     request = _characteristic_request(
         ((_constant(1), _constant(2)), (_constant(3), _constant(4))), ()
     )
-    result = compute_symbolic_eigenvalues(request)
+    result = _run_eigenvalues(request)
     assert result.representation == "EXPLICIT_ROOTS"
     assert result.eigenvalues is not None
     assert result.characteristic_polynomial is None

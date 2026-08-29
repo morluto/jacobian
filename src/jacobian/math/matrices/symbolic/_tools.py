@@ -3,6 +3,8 @@
 from collections.abc import Callable
 from typing import Any
 
+from sympy.matrices.exceptions import MatrixError
+
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
@@ -20,13 +22,91 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicRankResult,
 )
 from jacobian.math.matrices.symbolic.operations import (
-    compute_symbolic_characteristic_polynomial,
-    compute_symbolic_determinant,
-    compute_symbolic_eigenvalues,
-    compute_symbolic_linear_system,
-    compute_symbolic_matrix_product,
-    compute_symbolic_rank,
+    _symbolic_characteristic_polynomial_kernel,
+    symbolic_characteristic_polynomial,
+    symbolic_determinant,
+    symbolic_eigenvalues,
+    symbolic_linear_system_solve,
+    symbolic_matrix_multiply,
+    symbolic_rank,
 )
+
+
+def _run_determinant(request: SymbolicDeterminantRequest) -> SymbolicDeterminantResult:
+    return SymbolicDeterminantResult(
+        determinant=symbolic_determinant(
+            request.matrix.entries,
+            request.matrix.variables,
+        )
+    )
+
+
+def _run_rank(request: SymbolicMatrixRequest) -> SymbolicRankResult:
+    rank, pivot_columns = symbolic_rank(
+        request.matrix.entries,
+        request.matrix.variables,
+    )
+    return SymbolicRankResult(rank=rank, pivot_columns=pivot_columns)
+
+
+def _run_product(request: SymbolicMatrixProductRequest) -> SymbolicMatrix:
+    return symbolic_matrix_multiply(request.left, request.right)
+
+
+def _run_characteristic(
+    request: SymbolicCharacteristicPolynomialRequest,
+) -> SymbolicCharacteristicPolynomialResult:
+    degree, coefficients = symbolic_characteristic_polynomial(
+        request.matrix.entries,
+        request.matrix.variables,
+    )
+    return SymbolicCharacteristicPolynomialResult(
+        degree=degree,
+        coefficients_descending=coefficients,
+    )
+
+
+def _run_eigenvalues(
+    request: SymbolicCharacteristicPolynomialRequest,
+) -> SymbolicEigenvaluesResult:
+    try:
+        eigenvalues = symbolic_eigenvalues(
+            request.matrix.entries,
+            request.matrix.variables,
+        )
+    except MatrixError:
+        degree, coefficients = _symbolic_characteristic_polynomial_kernel(
+            request.matrix.entries,
+            request.matrix.variables,
+        )
+        return SymbolicEigenvaluesResult(
+            representation="ROOTS_BY_POLYNOMIAL",
+            characteristic_polynomial=coefficients,
+            degree=degree,
+        )
+    return SymbolicEigenvaluesResult(
+        representation="EXPLICIT_ROOTS",
+        eigenvalues=tuple(value for value, _ in eigenvalues),
+        multiplicities=tuple(mult for _, mult in eigenvalues),
+    )
+
+
+def _run_linear_system(
+    request: SymbolicLinearSystemRequest,
+) -> SymbolicLinearSystemResult:
+    classification, solution, particular, nullspace = symbolic_linear_system_solve(
+        request.matrix.entries,
+        request.rhs,
+        request.matrix.variables,
+    )
+    return SymbolicLinearSystemResult._from_kernel(
+        matrix=request.matrix,
+        rhs=request.rhs,
+        classification=classification,
+        solution=solution,
+        particular_solution=particular,
+        nullspace_basis=nullspace,
+    )
 
 
 def symbolic_matrix_operation[
@@ -155,7 +235,7 @@ TOOLS = (
         "Compute the determinant of a square matrix whose entries are rational functions in declared algebraically independent variables, using SymPy's exact fraction-free Bareiss algorithm.",
         SymbolicDeterminantRequest,
         SymbolicDeterminantResult,
-        compute_symbolic_determinant,
+        _run_determinant,
         "matrix",
         "symbolic",
         "determinant",
@@ -177,7 +257,7 @@ TOOLS = (
         "Compute the rank and RREF pivot columns of a rectangular matrix whose entries are rational functions in declared algebraically independent variables, using SymPy's exact row reduction.",
         SymbolicMatrixRequest,
         SymbolicRankResult,
-        compute_symbolic_rank,
+        _run_rank,
         "matrix",
         "symbolic",
         "rank",
@@ -206,7 +286,7 @@ TOOLS = (
         ),
         SymbolicMatrixProductRequest,
         SymbolicMatrix,
-        compute_symbolic_matrix_product,
+        _run_product,
         "matrix",
         "symbolic",
         "matrix-multiplication",
@@ -221,7 +301,7 @@ TOOLS = (
         "Compute the dense monic coefficients of det(lambda I - A) for a square symbolic matrix whose entries are rational functions in declared algebraically independent variables.",
         SymbolicCharacteristicPolynomialRequest,
         SymbolicCharacteristicPolynomialResult,
-        compute_symbolic_characteristic_polynomial,
+        _run_characteristic,
         "matrix",
         "symbolic",
         "characteristic-polynomial",
@@ -243,7 +323,7 @@ TOOLS = (
         "Compute the exact eigenvalues with algebraic multiplicities of a square symbolic matrix using SymPy's eigenvals. Entries may be rational functions in declared algebraically independent variables; eigenvalues are returned as canonical SymPy expression strings.",
         SymbolicCharacteristicPolynomialRequest,
         SymbolicEigenvaluesResult,
-        compute_symbolic_eigenvalues,
+        _run_eigenvalues,
         "matrix",
         "symbolic",
         "eigenvalues",
@@ -285,7 +365,7 @@ TOOLS = (
         ),
         SymbolicLinearSystemRequest,
         SymbolicLinearSystemResult,
-        compute_symbolic_linear_system,
+        _run_linear_system,
         "matrix",
         "symbolic",
         "linear-system",

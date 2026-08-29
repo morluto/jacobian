@@ -66,20 +66,20 @@ def _principal_minor_term_bounds(
 
 
 def _require_determinant_family_result_budget(
-    matrix: SymbolicMatrix,
+    entries: tuple[tuple[RationalFunction, ...], ...],
     *,
     characteristic_polynomial: bool,
 ) -> None:
-    dimension = len(matrix.entries)
+    dimension = len(entries)
     if dimension == 1:
         return
-    values = tuple(value for row in matrix.entries for value in row)
+    values = tuple(value for row in entries for value in row)
     if any(not _is_polynomial_entry(value) for value in values):
         raise _validation_error(
             "budget_exceeded",
             "multi-dimensional determinant-family requests require polynomial entries",
         )
-    term_bounds = _principal_minor_term_bounds(matrix.entries)
+    term_bounds = _principal_minor_term_bounds(entries)
     relevant_bounds = term_bounds[1:] if characteristic_polynomial else term_bounds[-1:]
     if any(bound > MAX_SYMBOLIC_RESULT_TERMS for bound in relevant_bounds):
         raise _validation_error(
@@ -1262,30 +1262,33 @@ class SymbolicLinearSystemRequest(StrictModel):
         return self
 
 
-def _raw_system_column_bound(system: Any) -> int:
-    """Best-effort column count of a not-yet-validated raw system payload."""
-    if isinstance(system, dict):
-        matrix = system.get("matrix")
-        if isinstance(matrix, dict):
-            entries = matrix.get("entries")
-            if (
-                isinstance(entries, (list, tuple))
-                and entries
-                and isinstance(entries[0], (list, tuple))
-            ):
-                return len(entries[0])
+def _raw_matrix_column_bound(matrix: Any) -> int:
+    """Best-effort column count of a not-yet-validated raw matrix payload."""
+    if isinstance(matrix, dict):
+        entries = matrix.get("entries")
+        if (
+            isinstance(entries, (list, tuple))
+            and entries
+            and isinstance(entries[0], (list, tuple))
+        ):
+            return len(entries[0])
     return MAX_SYMBOLIC_MATRIX_DIMENSION
 
 
 class SymbolicLinearSystemResult(StrictModel):
     """Classification and solution data for one symbolic linear system.
 
-    The source system is retained for an explicit bounded verifier. Kernel
-    output uses :meth:`_from_kernel`; this transport model checks only the
-    source-coupled payload shape and never re-enters a symbolic operation.
+    The canonical source matrix and right-hand side are retained for an
+    explicit bounded verifier. Kernel output uses :meth:`_from_kernel`; this
+    transport model checks only the source-coupled payload shape and never
+    re-enters a symbolic operation.
     """
 
-    system: SymbolicLinearSystemRequest
+    matrix: SymbolicMatrix
+    rhs: tuple[RationalFunction, ...] = Field(
+        min_length=1,
+        max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
+    )
     classification: Literal["UNIQUE", "NON_UNIQUE", "INCONSISTENT"]
     solution: tuple[RationalFunction, ...] | None = None
     particular_solution: tuple[RationalFunction, ...] | None = None
@@ -1302,7 +1305,7 @@ class SymbolicLinearSystemResult(StrictModel):
         # any later check rejects it.
         if not isinstance(data, dict):
             return data
-        limit = _raw_system_column_bound(data.get("system"))
+        limit = _raw_matrix_column_bound(data.get("matrix"))
         for key in ("solution", "particular_solution"):
             value = data.get(key)
             if isinstance(value, (list, tuple)) and len(value) > limit:
@@ -1334,13 +1337,13 @@ class SymbolicLinearSystemResult(StrictModel):
         *,
         label: str,
     ) -> None:
-        columns = len(self.system.matrix.entries[0])
+        columns = len(self.matrix.entries[0])
         if len(vector) != columns:
             raise _validation_error(
                 "shape_mismatch",
                 f"{label} must have exactly the retained system's column count",
             )
-        if any(value.variables != self.system.matrix.variables for value in vector):
+        if any(value.variables != self.matrix.variables for value in vector):
             raise _validation_error(
                 "shape_mismatch",
                 "witness vectors must use the retained system's declared ordered field",
@@ -1392,6 +1395,16 @@ class SymbolicLinearSystemResult(StrictModel):
         # a parsed canonical RationalFunction already caps each side at
         # MAX_SYMBOLIC_RESULT_TERMS, so per-component term checks here would
         # be ineffective anyway.
+        if len(self.rhs) != len(self.matrix.entries):
+            raise _validation_error(
+                "shape_mismatch",
+                "the right-hand side length must equal the coefficient row count",
+            )
+        if any(value.variables != self.matrix.variables for value in self.rhs):
+            raise _validation_error(
+                "shape_mismatch",
+                "the right-hand side must use the retained system's declared ordered field",
+            )
         self._require_classification_payload_shape()
         return self
 
@@ -1399,7 +1412,8 @@ class SymbolicLinearSystemResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        system: SymbolicLinearSystemRequest,
+        matrix: SymbolicMatrix,
+        rhs: tuple[RationalFunction, ...],
         classification: Literal["UNIQUE", "NON_UNIQUE", "INCONSISTENT"],
         solution: tuple[RationalFunction, ...] | None,
         particular_solution: tuple[RationalFunction, ...] | None,
@@ -1408,7 +1422,8 @@ class SymbolicLinearSystemResult(StrictModel):
         """Construct a result from the owner-local bounded kernel output."""
 
         return cls.model_construct(
-            system=system,
+            matrix=matrix,
+            rhs=rhs,
             classification=classification,
             solution=solution,
             particular_solution=particular_solution,

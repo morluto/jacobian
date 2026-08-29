@@ -50,6 +50,23 @@ class VisibilityOutputOutcome(BaseModel):
         return self
 
 
+class VisibilityCompositionRequirement(BaseModel):
+    """One exact producer-output to consumer-input handoff requirement."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    producer_operation_id: str = Field(min_length=1)
+    producer_output_field: str = Field(
+        min_length=1,
+        pattern=r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$",
+    )
+    consumer_operation_id: str = Field(min_length=1)
+    consumer_input_field: str = Field(
+        min_length=1,
+        pattern=r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$",
+    )
+
+
 class VisibilityCase(BaseModel):
     """One agent-visible prompt plus hidden trajectory expectations."""
 
@@ -62,6 +79,7 @@ class VisibilityCase(BaseModel):
     expected_operation_ids: tuple[str, ...] = ()
     diagnostic_operation_ids: tuple[str, ...] = ()
     acceptable_output_outcomes: tuple[VisibilityOutputOutcome, ...] = ()
+    required_compositions: tuple[VisibilityCompositionRequirement, ...] = ()
 
     @model_validator(mode="after")
     def _valid_expectation(self) -> VisibilityCase:
@@ -80,16 +98,31 @@ class VisibilityCase(BaseModel):
             set(self.expected_operation_ids) | set(self.diagnostic_operation_ids)
         ):
             raise ValueError("output-outcome operation IDs must be tracked")
+        tracked_ids = set(self.expected_operation_ids) | set(
+            self.diagnostic_operation_ids
+        )
+        composition_ids = {
+            operation_id
+            for requirement in self.required_compositions
+            for operation_id in (
+                requirement.producer_operation_id,
+                requirement.consumer_operation_id,
+            )
+        }
+        if not composition_ids.issubset(tracked_ids):
+            raise ValueError("composition operation IDs must be tracked")
         if (
             self.expectation is AdoptionExpectation.USE
             and not self.expected_operation_ids
             and not self.acceptable_output_outcomes
+            and not self.required_compositions
         ):
             raise ValueError("USE cases require an operation or output outcome")
         if self.expectation is AdoptionExpectation.ABSTAIN and (
             self.expected_operation_ids
             or self.diagnostic_operation_ids
             or self.acceptable_output_outcomes
+            or self.required_compositions
         ):
             raise ValueError("ABSTAIN cases cannot declare operations or outcomes")
         return self
@@ -126,6 +159,7 @@ __all__ = [
     "CueLevel",
     "ToolMode",
     "VisibilityCase",
+    "VisibilityCompositionRequirement",
     "VisibilityOutputOutcome",
     "VisibilitySuite",
     "load_suite",

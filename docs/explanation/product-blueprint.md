@@ -1,8 +1,9 @@
 # Product blueprint
 
-Jacobian exposes stateless functions over typed mathematical values through two
-MCP verbs: find an operation and run one operation. The caller owns composition:
-decomposition, sequencing, retention of values, and stopping.
+Jacobian exposes stateless functions over typed mathematical values as direct
+typed MCP tools, one per admitted operation. The caller's deferred tool search
+selects from that immutable surface. The caller owns composition: decomposition,
+sequencing, retention of values, and stopping.
 
 The server owns typed operation contracts, strict request validation, resource
 bounds, immutable discovery, and the final MCP projection.

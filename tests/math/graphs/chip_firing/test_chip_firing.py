@@ -50,6 +50,23 @@ GRAPH = _graph(GRAPH_WIRE)
 C3 = _graph(C3_WIRE)
 
 
+def test_simple_graph_schema_exposes_canonical_edge_orientation() -> None:
+    schema = SimpleUndirectedGraph.model_json_schema()
+    edges = schema["properties"]["edges"]
+
+    assert "left lexicographically smaller than right" in edges["description"]
+    assert edges["examples"] == [[["a", "b"], ["b", "c"]]]
+
+
+def test_reversed_simple_graph_edge_has_actionable_error() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        _graph({"vertices": ["a", "d"], "edges": [["d", "a"]]})
+
+    error = exc_info.value.errors(include_url=False)[0]
+    assert error["type"] == ("graph.edges_must_contain_two_declared_vertices_in_order")
+    assert "left lexicographically smaller than right" in error["msg"]
+
+
 class TestLaplacian:
     def test_path_graph(self) -> None:
         result = laplacian(GRAPH)

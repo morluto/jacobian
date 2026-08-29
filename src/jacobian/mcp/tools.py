@@ -9,17 +9,18 @@ from typing import Any, Protocol
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
-from mcp.types import INVALID_PARAMS
+from mcp.types import INVALID_PARAMS, CallToolResult, ContentBlock, TextContent
+from pydantic import ValidationError
+from pydantic_core import to_json
 
-from jacobian._execution import request_execution
-from jacobian.catalog.models import OperationId, OperationResult
+from jacobian._execution import current_request_execution, request_execution
+from jacobian.canonical import CanonicalizationError
+from jacobian.catalog.models import MathTool
 from jacobian.dispatch import (
     OperationDomainValidationError,
     OperationExecutionTimeoutError,
     OperationRequestValidationError,
-    _invoke_prepared_operation,
-    _OperationResolutionError,
-    _prepare_operation,
+    parse_operation_input,
 )
 from jacobian.mcp.models import (
     OperationBrowseRequest,
@@ -34,11 +35,7 @@ from jacobian.mcp.projections import (
     _operation_browse_response,
     _operation_discovery_response,
 )
-from jacobian.mcp.runtime import (
-    AppState,
-    _authorize,
-    _catalog,
-)
+from jacobian.mcp.runtime import AppState, _authorize, _catalog
 from jacobian.process import bounded_process_cancellation
 
 _MAX_VALIDATION_ERRORS = 64
@@ -96,41 +93,69 @@ def math_find(
     )
 
 
-def math_run(
-    operation_id: OperationId,
-    payload: dict[str, Any],
+def run_direct_math_tool(
+    operation: MathTool[Any, Any],
+    arguments: dict[str, Any],
     *,
     ctx: Context[AppState, Any],
-) -> OperationResult:
-    """Run one math tool. Role comes from the tool ID."""
+) -> CallToolResult:
+    """Parse and execute one catalog-bound operation through its direct MCP tool."""
+
     _authorize(ctx)
-    catalog = _catalog(ctx)
     cancellation = _request_cancellation(ctx)
     if cancellation.is_set():
         raise ToolError("operation cancelled before execution")
     try:
         started = time.monotonic()
-        # MCP runs synchronous tools in a worker thread.  Its request event
-        # is polled by the shared external-process runner, which kills and
-        # reaps only an operation's owned child tree.  Bind it before
-        # preparation because owner admission may itself use a child worker.
         with bounded_process_cancellation(cancellation), request_execution(started):
             try:
-                prepared = _prepare_operation(operation_id, payload, catalog)
-            except _OperationResolutionError as exc:
-                raise ToolError(str(exc)) from exc
+                request = parse_operation_input(operation.request_type, arguments)
+            except (CanonicalizationError, ValidationError) as exc:
+                raise OperationRequestValidationError(exc) from exc
             if cancellation.is_set():
                 raise ToolError("operation cancelled before execution")
-            return _invoke_prepared_operation(prepared, started=started)
+            result = operation.run(request)
+            if type(result) is not operation.result_type:
+                raise TypeError(
+                    f"{operation.operation_id} returned a result outside its declared type"
+                )
+            execution = current_request_execution()
+            if (
+                execution is not None
+                and execution.deadline is not None
+                and time.monotonic() >= execution.deadline
+            ):
+                raise OperationExecutionTimeoutError(
+                    "request deadline expired before result projection"
+                )
+            structured_content = result.model_dump(mode="json", by_alias=True)
+            content: list[ContentBlock] = [
+                TextContent(
+                    type="text",
+                    text=to_json(structured_content, indent=2).decode(),
+                )
+            ]
+            if (
+                execution is not None
+                and execution.deadline is not None
+                and time.monotonic() >= execution.deadline
+            ):
+                raise OperationExecutionTimeoutError(
+                    "request deadline expired during result serialization"
+                )
+            return CallToolResult(
+                content=content,
+                structured_content=structured_content,
+            )
     except (OperationRequestValidationError, OperationDomainValidationError) as exc:
         errors = _bounded_validation_issues(exc.errors())
         data = OperationInvalidRequestData(
-            operation_id=operation_id,
+            operation_id=operation.operation_id,
             errors=errors,
         )
         raise MCPError(
             code=INVALID_PARAMS,
-            message="operation payload failed validation",
+            message="operation arguments failed validation",
             data=data.model_dump(mode="json"),
         ) from exc
     except OperationExecutionTimeoutError as exc:
@@ -138,8 +163,6 @@ def math_run(
     except (MCPError, ToolError):
         raise
     except Exception as exc:
-        # Keep backend details inside the owner while guaranteeing the SDK
-        # receives a bounded tool error instead of an unhandled worker failure.
         raise ToolError("operation execution failed") from exc
 
 

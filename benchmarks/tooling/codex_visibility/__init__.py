@@ -41,6 +41,9 @@ from benchmarks.tooling.codex_visibility.contracts import (
     VisibilityCase as VisibilityCase,
 )
 from benchmarks.tooling.codex_visibility.contracts import (
+    VisibilityCompositionRequirement as VisibilityCompositionRequirement,
+)
+from benchmarks.tooling.codex_visibility.contracts import (
     VisibilityOutputOutcome as VisibilityOutputOutcome,
 )
 from benchmarks.tooling.codex_visibility.contracts import (
@@ -52,9 +55,8 @@ from benchmarks.tooling.codex_visibility.contracts import (
 from jacobian.canonical import canonicalize_json
 from mcp import Client
 
-_ROOT = Path(__file__).resolve().parents[2]
+_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_CASES = _ROOT / "benchmarks/config/codex-visibility-v2.json"
-_REQUIRED_TOOLS = frozenset({"math.find", "math.run"})
 _CODEX_ENVIRONMENT = (
     "HOME",
     "PATH",
@@ -70,6 +72,7 @@ _CODEX_ENVIRONMENT = (
     "no_proxy",
 )
 _MCP_TOOL_APPROVAL_MODE = "approve"
+_DISABLED_CODEX_FEATURES = ("apps", "plugins", "remote_plugin")
 _SKILLS_BLOCK = re.compile(r"<skills_instructions>.*?</skills_instructions>", re.DOTALL)
 _SKILL_ENTRY = re.compile(
     r"^- (?P<name>[^:\n]+): .* \((?P<kind>file|environment resource|"
@@ -138,6 +141,29 @@ def _output_outcome_matches(
     )
 
 
+def _composition_matches(
+    requirement: VisibilityCompositionRequirement,
+    invocations: tuple[Mapping[str, Any], ...],
+) -> bool:
+    for producer_index, producer in enumerate(invocations):
+        if producer.get("operation_id") != requirement.producer_operation_id:
+            continue
+        output_present, produced = _output_field(
+            producer.get("output"), requirement.producer_output_field
+        )
+        if not output_present:
+            continue
+        for consumer in invocations[producer_index + 1 :]:
+            if consumer.get("operation_id") != requirement.consumer_operation_id:
+                continue
+            input_present, consumed = _output_field(
+                consumer.get("input"), requirement.consumer_input_field
+            )
+            if input_present and consumed == produced:
+                return True
+    return False
+
+
 def classify_visibility(
     case: VisibilityCase,
     telemetry: Mapping[str, Any],
@@ -181,6 +207,17 @@ def classify_visibility(
             _output_outcome_matches(outcome, invocation) for invocation in invocations
         )
     )
+    composition_results = tuple(
+        {
+            "producer_operation_id": requirement.producer_operation_id,
+            "producer_output_field": requirement.producer_output_field,
+            "consumer_operation_id": requirement.consumer_operation_id,
+            "consumer_input_field": requirement.consumer_input_field,
+            "satisfied": _composition_matches(requirement, invocations),
+        }
+        for requirement in case.required_compositions
+    )
+    compositions_satisfied = all(result["satisfied"] for result in composition_results)
     mcp_calls = [
         value for value in telemetry.get("mcp_calls", []) if isinstance(value, str)
     ]
@@ -213,8 +250,10 @@ def classify_visibility(
     if case.expectation is AdoptionExpectation.ABSTAIN:
         contract_satisfied = observed["abstained"]
     else:
-        contract_satisfied = not expected_observed["missing_completed"] and (
-            bool(matched_outcomes) or not case.acceptable_output_outcomes
+        contract_satisfied = (
+            not expected_observed["missing_completed"]
+            and (bool(matched_outcomes) or not case.acceptable_output_outcomes)
+            and compositions_satisfied
         )
     usage = telemetry.get("usage")
     uncached_input_tokens = None
@@ -235,6 +274,11 @@ def classify_visibility(
                 {outcome.operation_id for outcome in matched_outcomes}
             ),
         },
+        "compositions": {
+            "required": bool(case.required_compositions),
+            "satisfied": compositions_satisfied,
+            "requirements": composition_results,
+        },
         "unexpected_operations": {
             "attempted": sorted(attempted - tracked),
             "completed": sorted(completed - tracked),
@@ -246,8 +290,15 @@ def classify_visibility(
         "usage": usage,
         "uncached_input_tokens": uncached_input_tokens,
         "mcp_call_count": len(mcp_calls),
+        "loaded_schemas": {
+            "exact_count": None,
+            "exact_count_observable": False,
+            "minimum_invoked_tool_count": len(set(mcp_calls)),
+        },
         "math_find_call_count": discovery_call_count + inspection_call_count,
-        "math_run_call_count": len(attempted_sequence),
+        "operation_execution_call_count": len(attempted_sequence),
+        "math_run_call_count": mcp_calls.count("math.run"),
+        "direct_operation_call_count": telemetry.get("direct_operation_call_count", 0),
         "mcp_resource_read_count": resource_read_count,
         "mcp_wire_bytes": telemetry.get("mcp_wire_bytes", 0),
         "mcp_model_visible_bytes": telemetry.get("mcp_model_visible_bytes", 0),
@@ -282,20 +333,31 @@ async def inspect_surface(
         server_info = client.server_info
         if server_info is None:
             raise RuntimeError("MCP server omitted implementation metadata")
+        tool_list_started = time.monotonic()
         listed = await client.list_tools()
+        tool_list_elapsed_seconds = round(time.monotonic() - tool_list_started, 6)
         tool_records = [
             tool.model_dump(mode="json", by_alias=True, exclude_none=True)
             for tool in listed.tools
         ]
         tool_names = {record["name"] for record in tool_records}
-        missing = sorted(_REQUIRED_TOOLS - tool_names)
-        if missing:
-            raise RuntimeError(f"MCP surface is missing required tools: {missing}")
         catalog_result = await client.read_resource("operation://catalog")
         catalog_content = catalog_result.contents[0]
         if not isinstance(catalog_content, TextResourceContents):
             raise RuntimeError("operation catalog is not text")
         catalog = json.loads(catalog_content.text)
+        operation_ids = sorted(
+            operation["operation_id"] for operation in catalog["operations"]
+        )
+        operation_id_set = set(operation_ids)
+        if "math.run" in tool_names:
+            execution_surface = "generic"
+            missing = sorted({"math.find", "math.run"} - tool_names)
+        else:
+            execution_surface = "direct"
+            missing = sorted(operation_id_set - tool_names)
+        if missing:
+            raise RuntimeError(f"MCP surface is missing required tools: {missing}")
         catalog_digest = _sha256_bytes(
             canonicalize_json(
                 {
@@ -311,6 +373,12 @@ async def inspect_surface(
             ),
             "instructions": client.instructions,
             "tools": sorted(tool_records, key=lambda item: item["name"]),
+            "execution_surface": execution_surface,
+            "tool_list": {
+                "tool_count": len(tool_records),
+                "definition_bytes": len(canonicalize_json(tool_records)),
+                "elapsed_seconds": tool_list_elapsed_seconds,
+            },
             "catalog": {
                 **(
                     {"catalog_version": catalog["catalog_version"]}
@@ -319,6 +387,7 @@ async def inspect_surface(
                 ),
                 "catalog_digest": catalog_digest,
                 "operation_count": len(catalog["operations"]),
+                "operation_ids": operation_ids,
                 "content_sha256": _sha256_bytes(catalog_content.text.encode("utf-8")),
             },
         }
@@ -358,6 +427,8 @@ def _codex_arguments(
             f"{json.dumps(_MCP_TOOL_APPROVAL_MODE)}"
         ),
     ]
+    for feature in _DISABLED_CODEX_FEATURES:
+        arguments.extend(("--disable", feature))
     if tool_mode is ToolMode.UNIFIED_EXEC:
         arguments.extend(("--enable", "unified_exec"))
     if os.environ.get("JACOBIAN_MCP_BEARER_TOKEN"):
@@ -439,9 +510,19 @@ def _inspect_codex_skill_surface(
 ) -> dict[str, Any]:
     """Render and record the skills actually visible to the evaluated Codex."""
 
+    feature_arguments = tuple(
+        argument
+        for feature in _DISABLED_CODEX_FEATURES
+        for argument in ("--disable", feature)
+    )
     result = run_operator_command(
         "codex",
-        ("debug", "prompt-input", "evaluation skill-surface snapshot"),
+        (
+            *feature_arguments,
+            "debug",
+            "prompt-input",
+            "evaluation skill-surface snapshot",
+        ),
         cwd=workspace,
         timeout_seconds=30,
         stdout_limit_bytes=4 * 1024 * 1024,
@@ -516,6 +597,42 @@ def _command_version(workspace: Path, environment: Mapping[str, str]) -> str:
     return result.stdout.decode("utf-8", errors="replace").strip()
 
 
+def _command_feature_state(
+    workspace: Path,
+    environment: Mapping[str, str],
+) -> dict[str, dict[str, object]]:
+    """Record the Codex features that determine deferred and code-mode routing."""
+
+    result = run_operator_command(
+        "codex",
+        ("features", "list"),
+        cwd=workspace,
+        timeout_seconds=30,
+        environment=environment,
+    )
+    if result.status is not ToolCommandStatus.EXITED or result.exit_code != 0:
+        raise RuntimeError("codex features list failed")
+    relevant = {
+        "code_mode_host",
+        "tool_search_always_defer_mcp_tools",
+        "tool_suggest",
+        "unified_exec",
+    }
+    states: dict[str, dict[str, object]] = {}
+    for line in result.stdout.decode("utf-8", errors="strict").splitlines():
+        fields = line.split()
+        if len(fields) < 3 or fields[0] not in relevant:
+            continue
+        states[fields[0]] = {
+            "stage": " ".join(fields[1:-1]),
+            "enabled": fields[-1] == "true",
+        }
+    deferred = states.get("tool_search_always_defer_mcp_tools")
+    if deferred is None or deferred["enabled"] is not True:
+        raise RuntimeError("Codex evaluation cannot establish deferred MCP tool search")
+    return states
+
+
 def _run_case(
     *,
     case: VisibilityCase,
@@ -528,6 +645,7 @@ def _run_case(
     timeout_seconds: float,
     tool_mode: ToolMode,
     environment: Mapping[str, str],
+    direct_operation_ids: frozenset[str],
 ) -> dict[str, Any]:
     stem = f"{case.case_id}-r{repetition:02d}"
     transcript_path = output / f"{stem}.jsonl"
@@ -552,8 +670,14 @@ def _run_case(
     elapsed_seconds = round(time.monotonic() - command_start, 6)
     transcript_path.write_bytes(result.stdout)
     stderr_path.write_bytes(result.stderr)
-    telemetry = parse_agent_transcript(transcript_path)
+    telemetry = parse_agent_transcript(
+        transcript_path,
+        direct_operation_ids=direct_operation_ids,
+    )
     classification = classify_visibility(case, telemetry)
+    unexpected_mcp_servers = sorted(
+        {server for server in telemetry.get("mcp_servers", []) if server != "jacobian"}
+    )
     command_completed = (
         result.status is ToolCommandStatus.EXITED and result.exit_code == 0
     )
@@ -572,8 +696,11 @@ def _run_case(
         },
         "classification": {
             **classification,
+            "unexpected_mcp_servers": unexpected_mcp_servers,
             "contract_satisfied": (
-                command_completed and classification["contract_satisfied"]
+                command_completed
+                and not unexpected_mcp_servers
+                and classification["contract_satisfied"]
             ),
         },
         "artifacts": {
@@ -769,6 +896,11 @@ def main() -> None:
     if output.exists():
         raise SystemExit(f"output directory already exists: {output}")
     surface = asyncio.run(inspect_surface(args.mcp_url, args.timeout_seconds))
+    direct_operation_ids = (
+        frozenset(surface["catalog"]["operation_ids"])
+        if surface["execution_surface"] == "direct"
+        else frozenset()
+    )
     output.mkdir(parents=True)
     with (
         tempfile.TemporaryDirectory(prefix="jacobian-codex-visibility-") as raw,
@@ -782,6 +914,7 @@ def main() -> None:
                 "isolated Codex prompt exposed external file-backed skills"
             )
         codex_version = _command_version(workspace, environment)
+        codex_feature_state = _command_feature_state(workspace, environment)
         runs = [
             _run_case(
                 case=case,
@@ -794,6 +927,7 @@ def main() -> None:
                 timeout_seconds=args.timeout_seconds,
                 tool_mode=args.tool_mode,
                 environment=environment,
+                direct_operation_ids=direct_operation_ids,
             )
             for case in selected_cases
             for repetition in range(1, args.repetitions + 1)
@@ -818,8 +952,10 @@ def main() -> None:
                 ),
                 "isolation": isolation,
                 "skill_surface": skill_surface,
+                "disabled_codex_features": list(_DISABLED_CODEX_FEATURES),
             },
             "codex_version": codex_version,
+            "codex_feature_state": codex_feature_state,
             "model": args.model,
             "reasoning_effort": args.reasoning_effort,
             "tool_mode": args.tool_mode,

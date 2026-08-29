@@ -1,4 +1,4 @@
-"""Owned MCP smoke journey: live SDK find → run without complete-runtime fixtures.
+"""Owned MCP smoke journey: live SDK discovery and direct typed execution.
 
 ``create_server()`` serves the immutable inline library. Keep this module
 small; do not grow ordinary projection or operation matrices here.
@@ -15,9 +15,10 @@ import pytest
 from mcp.shared.exceptions import MCPError
 from mcp.types import ContentBlock, TextContent
 
+from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.mcp.server import create_server
 
-MATH_TOOL_NAMES = {"math.find", "math.run"}
+MATH_TOOL_NAMES = {"math.find", *(tool.operation_id for tool in BUILTIN_TOOLS)}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
 
 
@@ -80,58 +81,44 @@ def test_mcp_runs_independent_sync_operations_concurrently() -> None:
             results = await asyncio.gather(
                 *(
                     client.call_tool(
-                        "math.run",
-                        {
-                            "operation_id": "test.concurrent.kernel",
-                            "payload": {"value": value},
-                        },
+                        "test.concurrent.kernel",
+                        {"value": value},
                     )
                     for value in range(2)
                 )
             )
         assert any(
-            result.structured_content["output"]["simultaneous_calls"] == 2
-            for result in results
+            result.structured_content["simultaneous_calls"] == 2 for result in results
         )
 
     asyncio.run(scenario())
 
 
-def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
+def test_mcp_advertises_and_invokes_direct_operations() -> None:
     async def scenario() -> None:
         from mcp import Client
 
         async with Client(create_server(), raise_exceptions=True) as client:
-            described = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "inspect",
-                        "operation_id": "integer.compute.extended_gcd",
-                    }
-                },
+            listed = await client.list_tools()
+            contract = next(
+                tool
+                for tool in listed.tools
+                if tool.name == "integer.compute.extended_gcd"
             )
-            assert isinstance(described.structured_content, dict)
-            contract = described.structured_content
-            assert (
-                contract["operation"]["operation_id"] == "integer.compute.extended_gcd"
-            )
-            assert "output_schema" in contract["operation"]
+            assert contract.output_schema is not None
+            assert contract.input_schema["examples"]
+            assert contract.description is not None
+            assert "Canonical argument example:" in contract.description
 
             result = await client.call_tool(
-                "math.run",
-                {
-                    "operation_id": "integer.compute.extended_gcd",
-                    "payload": {"left": "84", "right": "30"},
-                },
+                "integer.compute.extended_gcd",
+                {"left": "84", "right": "30"},
             )
             assert isinstance(result.structured_content, dict)
             response = json.loads(_text_content(result.content[0]))
-            assert response["runtime_ms"] >= 0
-            assert isinstance(result.structured_content, dict)
             assert "mcp_projection" not in result.structured_content
-            assert result.structured_content["output"] == response["output"]
-            assert result.structured_content["output"] == {
+            assert result.structured_content == response
+            assert result.structured_content == {
                 "gcd": "6",
                 "left_coefficient": "-1",
                 "right_coefficient": "3",
@@ -140,49 +127,42 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             assert "provider_digest" not in result.structured_content
 
             cnf_call = await client.call_tool(
-                "math.run",
+                "sat.cnf.canonicalize",
                 {
-                    "operation_id": "sat.cnf.canonicalize",
-                    "payload": {
-                        "variable_names": ["b", "a"],
-                        "clauses": [[1, -2], [2]],
-                    },
+                    "variable_names": ["b", "a"],
+                    "clauses": [[1, -2], [2]],
                 },
             )
             assert isinstance(cnf_call.structured_content, dict)
-            cnf_result = cnf_call.structured_content["output"]["cnf"]
+            cnf_result = cnf_call.structured_content["cnf"]
             assert cnf_result == {
                 "variables": ["a", "b"],
                 "clauses": [[-1, 2], [1]],
             }
 
             assignment_call = await client.call_tool(
-                "math.run",
-                {
-                    "operation_id": "sat.assignment.check",
-                    "payload": {"cnf": cnf_result, "assignment": [True, True]},
-                },
+                "sat.assignment.check",
+                {"cnf": cnf_result, "assignment": [True, True]},
             )
             assert isinstance(assignment_call.structured_content, dict)
-            assert assignment_call.structured_content["output"] == {
+            assert assignment_call.structured_content == {
                 "satisfies": True,
                 "first_unsatisfied_clause": None,
             }
 
             with pytest.raises(MCPError) as invalid_error:
                 await client.call_tool(
-                    "math.run",
+                    "integer.compute.extended_gcd",
                     {
-                        "operation_id": "integer.compute.extended_gcd",
-                        "payload": {
-                            "left": "84",
-                            "right": "30",
-                            "private": "reject-this-private-value",
-                        },
+                        "left": "84",
+                        "right": "30",
+                        "private": "reject-this-private-value",
                     },
                 )
             assert invalid_error.value.code == -32602
-            assert invalid_error.value.message == "operation payload failed validation"
+            assert (
+                invalid_error.value.message == "operation arguments failed validation"
+            )
             assert invalid_error.value.data == {
                 "code": "INVALID_REQUEST",
                 "stage": "operation_validation",
@@ -195,19 +175,16 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                     }
                 ],
                 "hint": (
-                    "Inspect the operation with math.find and correct the fields at "
-                    "the reported locations before retrying."
+                    "Correct the arguments at the reported locations against the "
+                    "tool schema before retrying."
                 ),
             }
             assert "reject-this-private-value" not in invalid_error.value.message
 
             with pytest.raises(MCPError) as noncanonical_error:
                 await client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "integer.compute.extended_gcd",
-                        "payload": {"left": 1.5, "right": "30"},
-                    },
+                    "integer.compute.extended_gcd",
+                    {"left": 1.5, "right": "30"},
                 )
             assert noncanonical_error.value.code == -32602
             assert noncanonical_error.value.data["errors"] == [
@@ -220,29 +197,26 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
 
             with pytest.raises(MCPError) as semantic_error:
                 await client.call_tool(
-                    "math.run",
+                    "universal_algebra.term.evaluate.compute",
                     {
-                        "operation_id": "universal_algebra.term.evaluate.compute",
-                        "payload": {
-                            "algebra": {
-                                "carrier": ["0", "1"],
-                                "operations": [{"operation_id": "and", "arity": 2}],
-                                "tables": [[0, 0, 0, 1]],
-                            },
-                            "term": {
-                                "nodes": [
-                                    {"kind": "variable", "variable_id": 0},
-                                    {"kind": "variable", "variable_id": 1},
-                                    {
-                                        "kind": "application",
-                                        "operation": 0,
-                                        "children": [0, 1],
-                                    },
-                                ],
-                                "root": 2,
-                            },
-                            "assignment": [0],
+                        "algebra": {
+                            "carrier": ["0", "1"],
+                            "operations": [{"operation_id": "and", "arity": 2}],
+                            "tables": [[0, 0, 0, 1]],
                         },
+                        "term": {
+                            "nodes": [
+                                {"kind": "variable", "variable_id": 0},
+                                {"kind": "variable", "variable_id": 1},
+                                {
+                                    "kind": "application",
+                                    "operation": 0,
+                                    "children": [0, 1],
+                                },
+                            ],
+                            "root": 2,
+                        },
+                        "assignment": [0],
                     },
                 )
             assert semantic_error.value.code == -32602
@@ -256,15 +230,12 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
 
             with pytest.raises(MCPError) as oversized_error:
                 await client.call_tool(
-                    "math.run",
+                    "universal_algebra.term.evaluate.compute",
                     {
-                        "operation_id": "universal_algebra.term.evaluate.compute",
-                        "payload": {
-                            "term": {
-                                "nodes": [{"kind": "x" * 4_096}],
-                                "root": 0,
-                            }
-                        },
+                        "term": {
+                            "nodes": [{"kind": "x" * 4_096}],
+                            "root": 0,
+                        }
                     },
                 )
             assert oversized_error.value.code == -32602
@@ -278,14 +249,11 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             }
             with pytest.raises(MCPError) as bounded_locations_error:
                 await client.call_tool(
-                    "math.run",
+                    "integer.compute.extended_gcd",
                     {
-                        "operation_id": "integer.compute.extended_gcd",
-                        "payload": {
-                            "left": "84",
-                            "right": "30",
-                            **oversized_fields,
-                        },
+                        "left": "84",
+                        "right": "30",
+                        **oversized_fields,
                     },
                 )
             bounded_data = bounded_locations_error.value.data
@@ -298,42 +266,30 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
 
             with pytest.raises(MCPError) as multiple_errors:
                 await client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "integer.compute.extended_gcd",
-                        "payload": {"left": "01", "right": "not-an-integer"},
-                    },
+                    "integer.compute.extended_gcd",
+                    {"left": "01", "right": "not-an-integer"},
                 )
             assert [
                 error["location"] for error in multiple_errors.value.data["errors"]
             ] == [["left"], ["right"]]
 
-            matching_description = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "inspect",
-                        "operation_id": ("graph.invariant.maximum_matching.compute"),
-                    }
-                },
+            matching_contract = next(
+                tool
+                for tool in listed.tools
+                if tool.name == "graph.invariant.maximum_matching.compute"
             )
-            assert isinstance(matching_description.structured_content, dict)
-            matching_contract = matching_description.structured_content
-            assert "version" not in matching_contract["operation"]
-            assert matching_contract["operation"]["examples"], (
+            assert "version" not in matching_contract.input_schema
+            assert matching_contract.input_schema["examples"], (
                 "operation must publish at least one invocation example"
             )
 
             unknown = await client.call_tool(
-                "math.run",
-                {
-                    "operation_id": "missing.operation",
-                    "payload": {},
-                },
+                "missing.operation",
+                {},
             )
             assert unknown.is_error is True
             unknown_text = _text_content(unknown.content[0])
-            assert "unknown operation" in unknown_text
+            assert "Unknown tool: missing.operation" in unknown_text
             assert len(unknown_text.encode("utf-8")) < 2_048
             assert unknown.structured_content is None
 
@@ -373,32 +329,21 @@ def test_mcp_composes_public_finite_field_values_with_native_projections(
             raise_exceptions=True,
         ) as client:
             table_call = await client.call_tool(
-                "math.run",
-                {
-                    "operation_id": "finite_field.polynomial_map.table.compute",
-                    "payload": {
-                        "polynomial_map": polynomial_map.model_dump(mode="json")
-                    },
-                },
+                "finite_field.polynomial_map.table.compute",
+                {"polynomial_map": polynomial_map.model_dump(mode="json")},
             )
             assert isinstance(table_call.structured_content, dict)
-            assert table_call.structured_content["runtime_ms"] >= 0
-            table_output = table_call.structured_content["output"]
+            table_output = table_call.structured_content
             assert "value_refs" not in table_output
             table_value = table_output
 
             table = FiniteMapTable.model_validate(table_value)
             fibers_call = await client.call_tool(
-                "math.run",
-                {
-                    "operation_id": "finite_field.polynomial_map.fibers.compute",
-                    "payload": {"table": table_value},
-                },
+                "finite_field.polynomial_map.fibers.compute",
+                {"table": table_value},
             )
             assert isinstance(fibers_call.structured_content, dict)
-            fibers = FiberPartition.model_validate(
-                fibers_call.structured_content["output"]
-            )
+            fibers = FiberPartition.model_validate(fibers_call.structured_content)
             assert fibers == fiber_partition(table)
             assert fibers.table == table
             assert sorted(len(sources) for _image, sources in fibers.fibers) == [1, 3]
@@ -419,18 +364,14 @@ def test_mcp_composes_public_finite_field_values_with_native_projections(
                 ),
             )
             directions_call = await client.call_tool(
-                "math.run",
+                "finite_field.projective_line.enumerate",
                 {
-                    "operation_id": "finite_field.projective_line.enumerate",
-                    "payload": {
-                        "presentation": presentation.model_dump(mode="json"),
-                        "axis": rows.model_dump(mode="json"),
-                    },
+                    "presentation": presentation.model_dump(mode="json"),
+                    "axis": rows.model_dump(mode="json"),
                 },
             )
             assert isinstance(directions_call.structured_content, dict)
-            assert directions_call.structured_content["runtime_ms"] >= 0
-            directions_output = directions_call.structured_content["output"]
+            directions_output = directions_call.structured_content
             assert "value_refs" not in directions_output
             directions_value = directions_output
 

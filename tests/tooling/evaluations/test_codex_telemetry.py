@@ -175,6 +175,93 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
     assert telemetry["operation_ids"] == ["graph.search.atlas"]
 
 
+def test_agent_telemetry_records_direct_typed_operation_calls(
+    tmp_path: Path,
+) -> None:
+    operation_id = "matrix.determinant.compute"
+    arguments = {"matrix": [["1", "2"], ["3", "4"]]}
+    response = {"determinant": "-2"}
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        json.dumps(_tool_event(operation_id, arguments, response)) + "\n",
+        encoding="utf-8",
+    )
+
+    telemetry = parse_agent_transcript(
+        transcript,
+        direct_operation_ids=frozenset({operation_id}),
+    )
+
+    assert telemetry["direct_operation_call_count"] == 1
+    assert telemetry["operation_attempts"] == [
+        {
+            "operation_id": operation_id,
+            "input": arguments,
+            "successful": True,
+        }
+    ]
+    assert telemetry["operation_ids"] == [operation_id]
+    assert telemetry["operation_invocations"] == [
+        {
+            "operation_id": operation_id,
+            "input": arguments,
+            "output": response,
+        }
+    ]
+
+
+def test_agent_telemetry_normalizes_configured_server_tool_prefixes(
+    tmp_path: Path,
+) -> None:
+    operation_id = "matrix.determinant.compute"
+    event = _tool_event(
+        f"jacobian.{operation_id}",
+        {"matrix": {"entries": []}},
+        {"determinant": {"num": "1", "den": "1"}},
+    )
+    event["item"]["server"] = "jacobian"  # type: ignore[typeddict-unknown-key]
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+    telemetry = parse_agent_transcript(
+        transcript,
+        direct_operation_ids=frozenset({operation_id}),
+    )
+
+    assert telemetry["mcp_servers"] == ["jacobian"]
+    assert telemetry["mcp_calls"] == [operation_id]
+    assert telemetry["operation_ids"] == [operation_id]
+
+
+def test_agent_telemetry_accepts_current_generic_operation_envelope(
+    tmp_path: Path,
+) -> None:
+    operation_id = "matrix.determinant.compute"
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        json.dumps(
+            _tool_event(
+                "math.run",
+                {"operation_id": operation_id, "payload": {"matrix": {}}},
+                {
+                    "operation_id": operation_id,
+                    "runtime_ms": 1,
+                    "output": {"determinant": {"num": "1", "den": "1"}},
+                },
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["operation_ids"] == [operation_id]
+    assert telemetry["operation_invocations"][0]["output"] == {
+        "determinant": {"num": "1", "den": "1"}
+    }
+
+
 def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> None:
     failed = {
         "type": "item.completed",

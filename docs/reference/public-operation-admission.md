@@ -4,7 +4,7 @@
 
 This document uses **catalog admission** narrowly. It decides whether a
 candidate operation belongs in the immutable public catalog. It does not define
-the **request admission** or execution plan for an individual `math.run` call;
+the **request admission** or execution plan for an individual direct tool call;
 those are owned by the mathematical domain and must account for work,
 intermediates, exact output, and transport representation.
 The [runtime ownership rule](../explanation/architecture.md#runtime-ownership-rule)
@@ -13,8 +13,8 @@ defines how that per-call plan is computed and reused.
 - Status: Current catalog-maintenance contract
 - Owner-local manifests: `src/jacobian/math/**/_tools.py`
 
-The public `math.find` / `math.run` catalog is a curated basis of mathematical
-operations, not an inventory of every callable helper in `jacobian.math` or in
+The public direct MCP catalog is a curated basis of mathematical operations,
+not an inventory of every callable helper in `jacobian.math` or in
 an installed backend. A declaration in an owner's immutable `TOOLS` tuple is
 the publication decision. Useful native-only functions remain package exports
 without a `MathTool` declaration. Catalog construction discovers manifests

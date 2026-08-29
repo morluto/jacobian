@@ -9,10 +9,9 @@ import sys
 from importlib.metadata import version
 from pathlib import Path
 
-MCP_TOOL_NAMES = {
-    "math.find",
-    "math.run",
-}
+from jacobian.catalog.builtins import BUILTIN_TOOLS
+
+MCP_TOOL_NAMES = {tool.operation_id for tool in BUILTIN_TOOLS}
 
 
 def test_mcp_stdio_entrypoint_exposes_stable_math_tools() -> None:

@@ -175,7 +175,7 @@ Not every failed attempt reveals a missing operation.
 | --- | --- | --- |
 | Representation | The mathematical object cannot be expressed cleanly. | Improve or add a typed value. |
 | Interoperability | Existing operations use incompatible mathematical representations. | Align types or add a domain-owned conversion. |
-| Discovery | The operation exists but `math.find` does not surface it. | Improve discovery metadata or examples. |
+| Discovery | The operation exists but deferred client tool search does not surface it. | Improve the direct tool title, description, or canonical example. |
 | Contract | The operation exists but omits needed semantics, witnesses, or evidence. | Repair its request/result contract. |
 | Scale/backend | The operation exists but its implementation or bounds are inadequate. | Improve the bounded implementation or backend. |
 | Operation | No clean existing composition produces the required mathematical result. | Consider a new public operation. |

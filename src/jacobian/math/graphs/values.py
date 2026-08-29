@@ -55,9 +55,22 @@ def _require_canonical_text(value: str, *, kind: str, max_bytes: int) -> None:
 class SimpleUndirectedGraph(StrictModel):
     """Immutable canonical value for a finite simple undirected graph."""
 
-    vertices: tuple[str, ...] = Field(max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES)
+    vertices: tuple[str, ...] = Field(
+        max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+        description=(
+            "Unique Unicode-NFC vertex labels. Their sequence fixes the labelled "
+            "matrix axis but need not be lexicographically sorted."
+        ),
+        examples=[["a", "b", "c"]],
+    )
     edges: tuple[tuple[str, str], ...] = Field(
-        max_length=MAX_INDEXED_SIMPLE_GRAPH_EDGES
+        max_length=MAX_INDEXED_SIMPLE_GRAPH_EDGES,
+        description=(
+            "Unique undirected edges between declared vertices. Encode each edge "
+            "once as [left, right] with left lexicographically smaller than right; "
+            "the edge list itself need not be sorted."
+        ),
+        examples=[[["a", "b"], ["b", "c"]]],
     )
 
     @model_validator(mode="after")
@@ -78,8 +91,11 @@ class SimpleUndirectedGraph(StrictModel):
             for left, right in self.edges
         ):
             raise PydanticCustomError(
-                "graph.edges_must_contain_two_declared_vertices_in_orde",
-                "edges must contain two declared vertices in order",
+                "graph.edges_must_contain_two_declared_vertices_in_order",
+                (
+                    "each edge must contain two declared vertices as [left, right] "
+                    "with left lexicographically smaller than right"
+                ),
             )
         if len(set(self.edges)) != len(self.edges):
             raise PydanticCustomError(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 
+from mcp.server import MCPServer
 from mcp.types import (
     BlobResourceContents,
     ContentBlock,
@@ -12,7 +13,18 @@ from mcp.types import (
     TextResourceContents,
 )
 
-from jacobian.mcp.server import create_server
+from jacobian.catalog.catalog import Catalog
+from jacobian.mcp.runtime import AppState
+from jacobian.mcp.server import _build_server, create_server
+
+
+def _vocabulary_control_server() -> MCPServer[AppState]:
+    """Expose the frozen B-arm discovery control, not the production surface."""
+
+    return _build_server(
+        state=AppState(operation_catalog=Catalog.open()),
+        include_math_find=True,
+    )
 
 
 def _resource_text(
@@ -54,7 +66,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
         from mcp import Client
 
         async with Client(
-            create_server(),
+            _vocabulary_control_server(),
             raise_exceptions=True,
         ) as client:
             resource_result = await client.read_resource("operation://catalog")
@@ -153,7 +165,7 @@ def test_mcp_operation_browse_pages_the_complete_immutable_library() -> None:
         from mcp import Client
 
         async with Client(
-            create_server(),
+            _vocabulary_control_server(),
             raise_exceptions=True,
         ) as client:
             resource_result = await client.read_resource("operation://catalog")

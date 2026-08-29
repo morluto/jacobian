@@ -78,7 +78,7 @@ its field presentation, axes, ambient dimension, normalization, or other
 mathematical context. Empty and degenerate values retain that context too.
 
 The native surface also retains useful deterministic helpers intentionally
-excluded from `math.find`, including classical combinatorial numbers, basic
+excluded from the public MCP catalog, including classical combinatorial numbers, basic
 formal-series transformations, Young-diagram projections, graph transforms and
 decomposition projections, DFA complement, continued-fraction convergents, and
 finite-metric balls. Their absence from the public operation catalog is

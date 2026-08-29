@@ -2,24 +2,29 @@
 
 from __future__ import annotations
 
-SERVER_DESCRIPTION = (
-    "Search and run atomic, composable Jacobian tools for higher mathematics."
-)
+SERVER_DESCRIPTION = "Direct typed, atomic, composable tools for higher mathematics."
 
 SERVER_INSTRUCTIONS = (
     "Jacobian provides local typed operations for mathematical computation and "
-    "structural analysis. Reach for math.find and math.run proactively when a problem "
-    "contains an exact computation, finite search, or structural analysis that may "
-    "match a public MCP operation. Use math.find to discover or inspect operations and "
-    "math.run to execute them. Each call returns an operation-owned canonical "
-    "mathematical value that a caller may retain and reuse when a later contract accepts it."
+    "structural analysis. Discover and call the matching operation directly when a "
+    "problem contains an exact computation, finite search, or structural analysis. "
+    "Each direct call returns an operation-owned canonical mathematical value that a "
+    "caller may retain and reuse when a later contract accepts it."
+)
+
+SERVER_INSTRUCTIONS_WITH_MATH_FIND = (
+    f"{SERVER_INSTRUCTIONS} This evaluation surface also exposes math.find as a "
+    "mathematical-vocabulary control for alternate terminology, neighboring "
+    "postconditions, and exact contract inspection; it is never required before a "
+    "direct operation call."
 )
 
 MATH_FIND_DESCRIPTION = """\
-Search, browse, or inspect public Jacobian MCP operations. This is authoritative for
-their local discovery and exact operation inspection; it does not enumerate the broader
-native Python API. Use math.find when a task may benefit from one exact computation,
-finite search, or structural analysis.
+Evaluation-only vocabulary control for searching, browsing, or inspecting Jacobian's
+public mathematical operations. Generic client tool search should discover an ordinary
+directly callable operation; this control isolates whether alternate terminology,
+neighboring postconditions, or exact catalog inspection adds measurable value. It does
+not enumerate the broader native Python API.
 
 Forms:
 - `request.op="search"`: a short atomic mathematical outcome (compact cards), not a
@@ -33,6 +38,8 @@ Forms:
 - Ranking is deterministic lexical retrieval; ordered matches are candidates, not
   recommendations or applicability claims.
 - `request.op="inspect"`: exact ID with authoritative schemas and examples.
+- Inspection is optional: every admitted operation already publishes the same request
+  and result contract as its direct MCP tool schema.
 - `operation://catalog` is the exact bulk-export fallback when the full catalog is
   needed, not the ordinary discovery path.
 
@@ -41,22 +48,4 @@ Examples:
 - `{"request":{"op":"browse","namespace":"matrix","limit":20}}`
 - `{"request":{"op":"search","query":"counterexample to associativity"}}`
 - `{"request":{"op":"inspect","operation_id":"polynomial.compute.gcd"}}`
-"""
-
-MATH_RUN_DESCRIPTION = """\
-Run one installed math tool by ID with its typed `payload`. A successful call returns
-the operation-owned canonical mathematical value in `output`; a later inspected
-operation may accept that complete value unchanged. Read its fields to determine what
-the calculation established. MCP reports malformed payloads, unknown IDs, and host
-failures as tool errors, not as mathematical results. If the payload shape is unknown,
-inspect the exact operation with math.find. When it publishes an `examples` item, copy
-and adapt that item's `input` object as the `payload`; otherwise, form the payload from
-the input schema and its field descriptions. Do not call math.run with an empty
-`payload` merely to discover required fields; inspection is authoritative.
-
-Timeout, incomplete search, and missing witnesses appear only in the concrete domain
-result that owns them; none is a mathematical conclusion by itself.
-
-Examples:
-- `{"operation_id":"integer.compute.extended_gcd","payload":{"left":"84","right":"30"}}`
 """

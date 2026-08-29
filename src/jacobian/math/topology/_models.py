@@ -287,6 +287,7 @@ class SimplicialComplexRequest(StrictModel):
         canonical_value = handler(FiniteSimplicialComplex.__pydantic_core_schema__)
         facet_presentation.pop("title", None)
         return {
+            "type": "object",
             "anyOf": [facet_presentation, canonical_value],
             "description": (
                 "Either the facet presentation (vertices + facets) or an "

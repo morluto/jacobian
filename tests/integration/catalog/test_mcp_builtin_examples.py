@@ -1,7 +1,7 @@
 """MCP-level executable contracts for every advertised catalog example.
 
-Covers the transport projection (`src/jacobian/mcp/tools.py:91 math_run`)
-in addition to the dispatch path (`tests/integration/catalog/test_builtin_examples.py:27`).
+Covers the direct typed transport projection in addition to the CLI dispatch
+path (`tests/integration/catalog/test_builtin_examples.py:27`).
 The catalog sweep is sequential so a failure identifies one advertised
 invocation; the MCP journey separately proves independent requests can overlap.
 """
@@ -34,8 +34,8 @@ def test_mcp_advertised_examples_execute_as_typed_results() -> None:
                 for example in operation.examples:
                     payload = dict(example.input)
                     result = await client.call_tool(
-                        "math.run",
-                        {"operation_id": descriptor.operation_id, "payload": payload},
+                        descriptor.operation_id,
+                        payload,
                     )
                     if result.is_error:
                         first = result.content[0] if result.content else None
@@ -49,12 +49,12 @@ def test_mcp_advertised_examples_execute_as_typed_results() -> None:
                         )
                         continue
                     structured = result.structured_content
-                    if not isinstance(structured, dict) or "output" not in structured:
+                    if not isinstance(structured, dict):
                         failures.append(
                             f"{descriptor.operation_id} {example.name}: missing output {structured}"
                         )
                         continue
-                    output = structured["output"]
+                    output = structured
                     try:
                         validated = operation.result_type.model_validate(output)
                     except Exception as exc:
@@ -65,17 +65,6 @@ def test_mcp_advertised_examples_execute_as_typed_results() -> None:
                     if validated.model_dump(mode="json") != output:
                         failures.append(
                             f"{descriptor.operation_id} {example.name}: round-trip mismatch"
-                        )
-                    if structured.get("operation_id") != descriptor.operation_id:
-                        failures.append(
-                            f"{descriptor.operation_id}: operation_id mismatch in MCP output"
-                        )
-                    if (
-                        not isinstance(structured.get("runtime_ms"), int)
-                        or structured["runtime_ms"] < 0
-                    ):
-                        failures.append(
-                            f"{descriptor.operation_id}: missing/invalid runtime_ms"
                         )
         assert not failures, "MCP example replay failures:\n" + "\n".join(failures)
 
@@ -119,8 +108,8 @@ def test_mcp_unexpected_operation_fault_uses_the_sdk_failure_path() -> None:
     async def scenario() -> None:
         async with Client(server, raise_exceptions=False) as client:
             result = await client.call_tool(
-                "math.run",
-                {"operation_id": "test.synthetic.boom", "payload": {"x": 1}},
+                "test.synthetic.boom",
+                {"x": 1},
             )
             # Expected mathematical failures are returned by their owning operation.
             # A programming fault reaches the MCP SDK's installed failure path rather
@@ -129,7 +118,9 @@ def test_mcp_unexpected_operation_fault_uses_the_sdk_failure_path() -> None:
             assert result.structured_content is None
             first = result.content[0] if result.content else None
             text = first.text if isinstance(first, TextContent) else ""
-            assert text == "Error executing tool math.run: operation execution failed"
+            assert text == (
+                "Error executing tool test.synthetic.boom: operation execution failed"
+            )
             assert len(text) < 5000
 
     asyncio.run(scenario())

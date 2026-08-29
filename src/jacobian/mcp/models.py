@@ -1,4 +1,4 @@
-"""Authoritative typed request and response contracts for ``math.find``."""
+"""Typed vocabulary-control and direct-operation error contracts."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ class OperationInspectionResult(StrictModel):
 
 
 class OperationValidationIssue(StrictModel):
-    """One field-level recovery item for a selected operation payload."""
+    """One field-level recovery item for direct operation arguments."""
 
     location: tuple[Annotated[str, Field(max_length=128)] | StrictInt, ...] = Field(
         max_length=32
@@ -111,8 +111,8 @@ class OperationInvalidRequestData(StrictModel):
         max_length=64,
     )
     hint: str = (
-        "Inspect the operation with math.find and correct the fields at the "
-        "reported locations before retrying."
+        "Correct the arguments at the reported locations against the tool schema "
+        "before retrying."
     )
 
 

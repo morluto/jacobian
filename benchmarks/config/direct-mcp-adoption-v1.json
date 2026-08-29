@@ -1,0 +1,139 @@
+{
+  "schema_version": "2",
+  "suite_id": "direct-mcp-adoption-v1",
+  "cases": [
+    {
+      "case_id": "explicit-determinant-canary",
+      "cue_level": "EXPLICIT",
+      "prompt": "Use available Jacobian mathematical tools to compute the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. Return the determinant and identify the mathematical operation used.",
+      "expected_operation_ids": [
+        "matrix.determinant.compute"
+      ],
+      "acceptable_output_outcomes": [
+        {
+          "operation_id": "matrix.determinant.compute",
+          "required_output_fields": [
+            "determinant.num",
+            "determinant.den"
+          ],
+          "expected_output_values": {
+            "determinant.num": "225538",
+            "determinant.den": "1"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "latent-matrix-rank",
+      "cue_level": "LATENT",
+      "prompt": "Use available Jacobian mathematical tools to compute the exact rank and zero-based pivot columns of [[2, 4, 1, 3], [1, 2, 0, 1], [3, 6, 1, 4], [0, 0, 2, 2]]. Return the rank, pivot columns, and a one-sentence method summary.",
+      "expected_operation_ids": [
+        "matrix.rank.compute"
+      ],
+      "acceptable_output_outcomes": [
+        {
+          "operation_id": "matrix.rank.compute",
+          "required_output_fields": [
+            "rank",
+            "pivot_columns"
+          ],
+          "expected_output_values": {
+            "rank": 2,
+            "pivot_columns": [
+              0,
+              2
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "latent-sandpile-group",
+      "cue_level": "LATENT",
+      "prompt": "Use available Jacobian mathematical tools to compute the sandpile group of the four-cycle a-b-c-d-a with sink a. Return its invariant factors and exact order.",
+      "expected_operation_ids": [
+        "graph.chip_firing.critical_group.compute"
+      ],
+      "acceptable_output_outcomes": [
+        {
+          "operation_id": "graph.chip_firing.critical_group.compute",
+          "required_output_fields": [
+            "invariant_factors",
+            "order"
+          ],
+          "expected_output_values": {
+            "invariant_factors": [
+              1,
+              1,
+              4
+            ],
+            "order": 4
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "latent-complete-subset-sum-profile",
+      "cue_level": "LATENT",
+      "prompt": "Use available Jacobian mathematical tools to compute the complete exact subset-sum multiplicity profile for indexed integer items [1, 2, 3], including the support size and total number of indexed subsets. Do not stop after one target witness.",
+      "expected_operation_ids": [
+        "additive.subset_sum.profile.compute"
+      ],
+      "acceptable_output_outcomes": [
+        {
+          "operation_id": "additive.subset_sum.profile.compute",
+          "required_output_fields": [
+            "support_size",
+            "total_subsets"
+          ],
+          "expected_output_values": {
+            "support_size": 7,
+            "total_subsets": "8"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "direct-composition-cnf",
+      "cue_level": "AFFORDANCE",
+      "prompt": "Use available Jacobian mathematical tools to canonicalize the CNF with variable_names [\"b\", \"a\"] and clauses [[1, -2], [2]], then pass that canonical CNF unchanged into the assignment checker for assignment [true, true]. Return the canonical CNF and whether the assignment satisfies it.",
+      "expected_operation_ids": [
+        "sat.cnf.canonicalize",
+        "sat.assignment.check"
+      ],
+      "required_compositions": [
+        {
+          "producer_operation_id": "sat.cnf.canonicalize",
+          "producer_output_field": "cnf",
+          "consumer_operation_id": "sat.assignment.check",
+          "consumer_input_field": "cnf"
+        }
+      ],
+      "acceptable_output_outcomes": [
+        {
+          "operation_id": "sat.assignment.check",
+          "required_output_fields": [
+            "satisfies"
+          ],
+          "expected_output_values": {
+            "satisfies": true
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "negative-conceptual-matrix",
+      "cue_level": "LATENT",
+      "expectation": "ABSTAIN",
+      "prompt": "In one sentence for a beginner, define what a square matrix is.",
+      "expected_operation_ids": []
+    },
+    {
+      "case_id": "negative-routine-gcd",
+      "cue_level": "LATENT",
+      "expectation": "ABSTAIN",
+      "prompt": "Compute the exact greatest common divisor of 1234567890 and 987654321. Return only the gcd and a one-sentence method summary.",
+      "expected_operation_ids": []
+    }
+  ]
+}

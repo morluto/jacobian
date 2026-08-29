@@ -29,38 +29,24 @@ async def inspect(server: Path, *, timeout_seconds: float) -> None:
     )
     async with Client(stdio_client(parameters), raise_exceptions=True) as client:
         listed = await asyncio.wait_for(client.list_tools(), timeout_seconds)
-        if {tool.name for tool in listed.tools} != {"math.find", "math.run"}:
+        tool_names = {tool.name for tool in listed.tools}
+        if "integer.compute.extended_gcd" not in tool_names:
             raise RuntimeError(
-                "installed MCP server exposed an unexpected tool surface"
+                "installed MCP server did not expose the extended-GCD operation"
             )
-        described = await asyncio.wait_for(
-            client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "inspect",
-                        "operation_id": "integer.compute.extended_gcd",
-                    }
-                },
-            ),
-            timeout_seconds,
-        )
-        if not isinstance(described.structured_content, dict):
-            raise RuntimeError("math.find inspection was not structured")
+        if {"math.find", "math.run"} & tool_names:
+            raise RuntimeError("installed MCP server exposed a retired generic tool")
         for left, right, expected in (("84", "30", "6"), ("35", "14", "7")):
             result = await asyncio.wait_for(
                 client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "integer.compute.extended_gcd",
-                        "payload": {"left": left, "right": right},
-                    },
+                    "integer.compute.extended_gcd",
+                    {"left": left, "right": right},
                 ),
                 timeout_seconds,
             )
             if (
                 not isinstance(result.structured_content, dict)
-                or result.structured_content.get("output", {}).get("gcd") != expected
+                or result.structured_content.get("gcd") != expected
             ):
                 raise RuntimeError(
                     "installed MCP server returned an unexpected gcd result"

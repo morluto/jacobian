@@ -512,7 +512,7 @@ def _product_cell_digit_bound(
         left_fraction = left_value.as_fraction()
         right_fraction = right_value.as_fraction()
         product = left_fraction * right_fraction
-        key = str(product.denominator)
+        key = format_canonical_integer(product.denominator)
         combined_numerators[key] = combined_numerators.get(key, 0) + product.numerator
     remaining = tuple(
         (key, numerator)

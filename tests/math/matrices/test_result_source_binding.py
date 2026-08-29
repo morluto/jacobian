@@ -6,10 +6,13 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
+from sympy import primerange
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices._operation_models import (
     MAX_DETERMINANT_MATRIX_DIMENSION,
+    MAX_DETERMINANT_SCALAR_WORK,
     MatrixDeterminantRequest,
     MatrixRankRequest,
     MatrixRankResult,
@@ -192,7 +195,80 @@ def test_determinant_accepts_the_canonical_matrix_boundary() -> None:
     assert MatrixDeterminantRequest(matrix=matrix).matrix is matrix
 
 
-def test_raw_preflight_keeps_32_and_64_axes_and_rejects_the_next_axis() -> None:
+def test_flint_determinant_executes_above_the_previous_order_ceiling() -> None:
+    order = 96
+    entries = tuple(
+        tuple(
+            Fraction(-2, 3)
+            if row == column == 0
+            else Fraction(1)
+            if row == column
+            else Fraction(row + column + 1, 7)
+            if column > row
+            else Fraction(0)
+            for column in range(order)
+        )
+        for row in range(order)
+    )
+    matrix = rational_matrix_from_fractions(entries)
+
+    result = compute_determinant(MatrixDeterminantRequest(matrix=matrix))
+
+    assert result.determinant == CanonicalRational(num="-2", den="3")
+
+
+def test_determinant_preserves_row_swap_and_scaling_invariants() -> None:
+    entries = (
+        (Fraction(1, 2), Fraction(2), Fraction(-1)),
+        (Fraction(3), Fraction(1, 3), Fraction(4)),
+        (Fraction(-2), Fraction(5), Fraction(7, 11)),
+    )
+    source = rational_matrix_from_fractions(entries)
+    transformed = rational_matrix_from_fractions(
+        (tuple(-3 * value for value in entries[1]), entries[0], entries[2])
+    )
+
+    source_value = compute_determinant(
+        MatrixDeterminantRequest(matrix=source)
+    ).determinant.as_fraction()
+    transformed_value = compute_determinant(
+        MatrixDeterminantRequest(matrix=transformed)
+    ).determinant.as_fraction()
+
+    assert transformed_value == 3 * source_value
+
+
+def test_determinant_rejects_requests_above_the_scalar_work_envelope() -> None:
+    order = MAX_DETERMINANT_MATRIX_DIMENSION
+    large = Fraction(int("9" * 256))
+    entries = tuple(
+        tuple(
+            large if row == column == 0 else Fraction(int(row == column))
+            for column in range(order)
+        )
+        for row in range(order)
+    )
+    matrix = rational_matrix_from_fractions(entries)
+    assert order**3 * 256 > MAX_DETERMINANT_SCALAR_WORK
+
+    with pytest.raises(OperationDomainValidationError, match="scalar-work budget"):
+        compute_determinant(MatrixDeterminantRequest(matrix=matrix))
+
+
+def test_determinant_rejects_an_unrepresentable_result_height_bound() -> None:
+    denominators = tuple(primerange(2, 730))[:MAX_DETERMINANT_MATRIX_DIMENSION]
+    row = tuple(Fraction(1, denominator) for denominator in denominators)
+    matrix = rational_matrix_from_fractions(
+        tuple(row for _ in range(MAX_DETERMINANT_MATRIX_DIMENSION))
+    )
+
+    with pytest.raises(
+        OperationDomainValidationError, match="rational result-height bound"
+    ):
+        compute_determinant(MatrixDeterminantRequest(matrix=matrix))
+
+
+def test_raw_preflight_keeps_32_and_128_axes_and_rejects_the_next_axis() -> None:
     def wire_identity(order: int) -> list[list[dict[str, str]]]:
         return [
             [{"num": str(int(row == column)), "den": "1"} for column in range(order)]

@@ -5,21 +5,10 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._rational_height import RationalHeight
 from jacobian.math.analysis.orthogonal_polynomials._jacobi import (
-    JacobiMatrixAdmissionError,
     jacobi_matrix_from_family,
     require_jacobi_matrix_admission,
-)
-from jacobian.math.analysis.orthogonal_polynomials._models import (
-    ChristoffelDarbouxRequest,
-    GaussianQuadratureRequest,
-    HankelRequest,
-    JacobiMatrixRequest,
-    OrthogonalPolynomialRequest,
-    RecurrenceRequest,
-    ShiftedHankelRequest,
 )
 from jacobian.math.analysis.orthogonal_polynomials.values import (
     ChristoffelDarbouxKernel,
@@ -219,35 +208,6 @@ def hankel_matrix_from_prefix(
     )
 
 
-def _admit_hankel_request(
-    prefix: MomentFunctionalPrefix, order: int, *, shifted: bool
-) -> None:
-    try:
-        require_hankel_matrix_admission(prefix, order, shifted=shifted)
-    except HankelMatrixAdmissionError as exc:
-        location = (
-            ("prefix", "moments") if exc.reason != "order_out_of_range" else ("order",)
-        )
-        operation = "shifted_hankel" if shifted else "hankel"
-        raise OperationDomainValidationError(
-            location=location,
-            code=f"moment_functional.{operation}.{exc.reason}",
-            message=str(exc),
-        ) from exc
-
-
-def compute_hankel_matrix(request: HankelRequest) -> HankelMomentMatrix:
-    """MCP adapter: parse one request, call the canonical-prefix kernel."""
-    _admit_hankel_request(request.prefix, request.order, shifted=False)
-    return hankel_matrix_from_prefix(request.prefix, request.order, shifted=False)
-
-
-def compute_shifted_hankel(request: ShiftedHankelRequest) -> HankelMomentMatrix:
-    """MCP adapter: parse one request, call the canonical-prefix kernel."""
-    _admit_hankel_request(request.prefix, request.order, shifted=True)
-    return hankel_matrix_from_prefix(request.prefix, request.order, shifted=True)
-
-
 def _require_nonzero_norm(norm: Fraction, degree: int) -> None:
     """Quasi-definite prefixes have no vanishing orthogonal-polynomial norm."""
     if norm == 0:
@@ -442,24 +402,6 @@ def _require_gram_schmidt_admission(
     _require_gram_schmidt_heights_admissible(prefix.moments, max_degree)
 
 
-def compute_orthogonal_polynomials(
-    request: OrthogonalPolynomialRequest,
-) -> OrthogonalPolynomialFamily:
-    """MCP adapter: validate the wire request, then run the shared kernel."""
-    try:
-        _require_gram_schmidt_admission(request.prefix, request.max_degree)
-        moments = [_to_fraction(m) for m in request.prefix.moments]
-        return orthogonal_polynomials_from_moments(
-            moments, request.max_degree, request.prefix.variable
-        )
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("prefix", "max_degree"),
-            code="moments_orthogonal.family_not_admitted",
-            message=str(exc),
-        ) from exc
-
-
 def _require_quasi_definite_family(family: OrthogonalPolynomialFamily) -> None:
     """Recurrence ratios divide by every squared norm except the terminal
     one: ``beta_k = h_k / h_{k-1}`` for k >= 1 uses p_0..p_{n-2} as
@@ -469,7 +411,7 @@ def _require_quasi_definite_family(family: OrthogonalPolynomialFamily) -> None:
 
     Degenerate canonical families remain authorable values for composition;
     each consuming operation rejects them at admission. This guard keeps the
-    native path on the same admitted domain as ``RecurrenceRequest``.
+    native path on the same admitted domain as the published operation.
     """
     polynomials = family.polynomials[:-1]
     if any(term.squared_norm.as_fraction() == 0 for term in polynomials):
@@ -542,18 +484,6 @@ def recurrence_coefficients_from_family(
     )
 
 
-def compute_recurrence(request: RecurrenceRequest) -> ThreeTermRecurrence:
-    """MCP adapter: parse one request, call the domain kernel once."""
-    try:
-        return recurrence_coefficients_from_family(request.family)
-    except MomentsOrthogonalAdmissionError as exc:
-        raise OperationDomainValidationError(
-            location=("family",),
-            code=f"moments_orthogonal.{exc.reason}",
-            message=str(exc),
-        ) from exc
-
-
 def _kernel_coefficient_matrix(
     polynomials: tuple[OrthogonalPolynomialTerm, ...], m: int
 ) -> list[list[Fraction]]:
@@ -620,33 +550,6 @@ def christoffel_darboux_kernel_from_family(
         variable=family.variable,
         family=family,
     )
-
-
-def compute_christoffel_darboux(
-    request: ChristoffelDarbouxRequest,
-) -> ChristoffelDarbouxKernel:
-    """MCP adapter: parse one request, call the domain kernel once."""
-    try:
-        return christoffel_darboux_kernel_from_family(request.family, request.degree)
-    except ChristoffelDarbouxAdmissionError as exc:
-        raise OperationDomainValidationError(
-            location=("family", "degree"),
-            code=f"moments_orthogonal.christoffel_darboux.{exc.reason}",
-            message=str(exc),
-        ) from exc
-
-
-def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrix:
-    """MCP adapter: parse one request, call the canonical-family kernel."""
-    try:
-        require_jacobi_matrix_admission(request.family)
-    except JacobiMatrixAdmissionError as exc:
-        raise OperationDomainValidationError(
-            location=("family",),
-            code=f"moments_orthogonal.jacobi_matrix.{exc.reason}",
-            message=str(exc),
-        ) from exc
-    return jacobi_matrix_from_family(request.family)
 
 
 def _construct_quadrature_rule(
@@ -757,20 +660,6 @@ def gaussian_quadrature_rule_from_prefix(
         variable=prefix.variable,
         prefix=prefix,
     )
-
-
-def compute_gaussian_quadrature(
-    request: GaussianQuadratureRequest,
-) -> GaussianQuadratureRule:
-    """MCP adapter: parse one request, call the canonical-prefix kernel."""
-    try:
-        return gaussian_quadrature_rule_from_prefix(request.prefix, request.order)
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("prefix", "order"),
-            code="moments_orthogonal.quadrature_not_admitted",
-            message=str(exc),
-        ) from exc
 
 
 def _solve_linear_system(

@@ -5,7 +5,14 @@ from typing import Any
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
+from jacobian.math.analysis.orthogonal_polynomials._jacobi import (
+    JacobiMatrixAdmissionError,
+)
 from jacobian.math.analysis.orthogonal_polynomials._models import (
     ChristoffelDarbouxRequest,
     GaussianQuadratureRequest,
@@ -16,13 +23,16 @@ from jacobian.math.analysis.orthogonal_polynomials._models import (
     ShiftedHankelRequest,
 )
 from jacobian.math.analysis.orthogonal_polynomials.operations import (
-    compute_christoffel_darboux,
-    compute_gaussian_quadrature,
-    compute_hankel_matrix,
-    compute_jacobi_matrix,
-    compute_orthogonal_polynomials,
-    compute_recurrence,
-    compute_shifted_hankel,
+    ChristoffelDarbouxAdmissionError,
+    HankelMatrixAdmissionError,
+    MomentsOrthogonalAdmissionError,
+    christoffel_darboux_kernel,
+    gaussian_quadrature_rule,
+    hankel_matrix,
+    jacobi_matrix,
+    orthogonal_polynomials,
+    recurrence_coefficients,
+    shifted_hankel_matrix,
 )
 from jacobian.math.analysis.orthogonal_polynomials.values import (
     ChristoffelDarbouxKernel,
@@ -32,6 +42,102 @@ from jacobian.math.analysis.orthogonal_polynomials.values import (
     OrthogonalPolynomialFamily,
     ThreeTermRecurrence,
 )
+
+
+def compute_hankel_matrix(request: HankelRequest) -> HankelMomentMatrix:
+    """Project one wire request into the canonical Hankel operation."""
+    try:
+        return hankel_matrix(request.prefix, request.order)
+    except HankelMatrixAdmissionError as exc:
+        location = (
+            ("prefix", "moments") if exc.reason != "order_out_of_range" else ("order",)
+        )
+        raise OperationDomainValidationError(
+            location=location,
+            code=f"moment_functional.hankel.{exc.reason}",
+            message=str(exc),
+        ) from exc
+
+
+def compute_shifted_hankel(request: ShiftedHankelRequest) -> HankelMomentMatrix:
+    """Project one wire request into the canonical shifted Hankel operation."""
+    try:
+        return shifted_hankel_matrix(request.prefix, request.order)
+    except HankelMatrixAdmissionError as exc:
+        location = (
+            ("prefix", "moments") if exc.reason != "order_out_of_range" else ("order",)
+        )
+        raise OperationDomainValidationError(
+            location=location,
+            code=f"moment_functional.shifted_hankel.{exc.reason}",
+            message=str(exc),
+        ) from exc
+
+
+def compute_orthogonal_polynomials(
+    request: OrthogonalPolynomialRequest,
+) -> OrthogonalPolynomialFamily:
+    """Project one wire request into the canonical family operation."""
+    try:
+        return orthogonal_polynomials(request.prefix, request.max_degree)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("prefix", "max_degree"),
+            code="moments_orthogonal.family_not_admitted",
+            message=str(exc),
+        ) from exc
+
+
+def compute_recurrence(request: RecurrenceRequest) -> ThreeTermRecurrence:
+    """Project one wire request into the canonical recurrence operation."""
+    try:
+        return recurrence_coefficients(request.family)
+    except MomentsOrthogonalAdmissionError as exc:
+        raise OperationDomainValidationError(
+            location=("family",),
+            code=f"moments_orthogonal.{exc.reason}",
+            message=str(exc),
+        ) from exc
+
+
+def compute_christoffel_darboux(
+    request: ChristoffelDarbouxRequest,
+) -> ChristoffelDarbouxKernel:
+    """Project one wire request into the canonical kernel operation."""
+    try:
+        return christoffel_darboux_kernel(request.family, request.degree)
+    except ChristoffelDarbouxAdmissionError as exc:
+        raise OperationDomainValidationError(
+            location=("family", "degree"),
+            code=f"moments_orthogonal.christoffel_darboux.{exc.reason}",
+            message=str(exc),
+        ) from exc
+
+
+def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrix:
+    """Project one wire request into the canonical Jacobi operation."""
+    try:
+        return jacobi_matrix(request.family)
+    except JacobiMatrixAdmissionError as exc:
+        raise OperationDomainValidationError(
+            location=("family",),
+            code=f"moments_orthogonal.jacobi_matrix.{exc.reason}",
+            message=str(exc),
+        ) from exc
+
+
+def compute_gaussian_quadrature(
+    request: GaussianQuadratureRequest,
+) -> GaussianQuadratureRule:
+    """Project one wire request into the canonical quadrature operation."""
+    try:
+        return gaussian_quadrature_rule(request.prefix, request.order)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("prefix", "order"),
+            code="moments_orthogonal.quadrature_not_admitted",
+            message=str(exc),
+        ) from exc
 
 
 def _op[

@@ -17,7 +17,7 @@ from jacobian.math.analysis.orthogonal_polynomials._models import (
     RecurrenceRequest,
     ShiftedHankelRequest,
 )
-from jacobian.math.analysis.orthogonal_polynomials.operations import (
+from jacobian.math.analysis.orthogonal_polynomials._tools import (
     compute_christoffel_darboux,
     compute_gaussian_quadrature,
     compute_hankel_matrix,
@@ -405,7 +405,7 @@ class TestGaussianQuadrature:
         )
 
     def test_exact_rule_for_rational_nodes(self) -> None:
-        from jacobian.math.analysis.orthogonal_polynomials.operations import (
+        from jacobian.math.analysis.orthogonal_polynomials._tools import (
             compute_gaussian_quadrature,
         )
 
@@ -445,7 +445,7 @@ class TestGaussianQuadrature:
         """An order-1 prefix (mu_0, mu_1) = (1, 2) determines the exact
         rule with node 2, weight 1, and exactness through degree 1; the
         unused mu_2 must not be required."""
-        from jacobian.math.analysis.orthogonal_polynomials.operations import (
+        from jacobian.math.analysis.orthogonal_polynomials._tools import (
             compute_gaussian_quadrature,
         )
 

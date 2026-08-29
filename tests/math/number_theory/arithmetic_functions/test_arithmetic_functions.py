@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.number_theory.arithmetic_functions import dirichlet_convolution
 from jacobian.math.number_theory.arithmetic_functions._models import (
+    _MAX_DIVISOR_PREFIX_LENGTH,
     DirichletConvolutionRequest,
     DirichletInverseRequest,
     MobiusTransformRequest,
@@ -20,6 +21,11 @@ from jacobian.math.number_theory.arithmetic_functions._tools import (
     compute_dirichlet_inverse,
     compute_mobius_transform,
     compute_summatory_function,
+)
+from jacobian.math.number_theory.arithmetic_functions.operations import (
+    MAX_DIVISOR_INCIDENCES,
+    _divisor_incidence_count,
+    _divisor_incidences,
 )
 
 # ---------------------------------------------------------------------------
@@ -40,7 +46,9 @@ def _frac(v: CanonicalRational) -> Fraction:
 
 
 def test_native_convolution_returns_canonical_values() -> None:
-    values = tuple(CanonicalRational.from_fraction(value) for value in (1, 2, 3))
+    values = tuple(
+        CanonicalRational.from_fraction(Fraction(value)) for value in (1, 2, 3)
+    )
     result = dirichlet_convolution(values, values)
     assert tuple(value.as_fraction() for value in result) == (
         Fraction(1),
@@ -342,3 +350,61 @@ class TestLargerN:
         # tau(1..20): 1, 2, 2, 3, 2, 4, 2, 4, 3, 4, 2, 6, 2, 4, 4, 5, 2, 6, 2, 6
         expected = [1, 2, 2, 3, 2, 4, 2, 4, 3, 4, 2, 6, 2, 4, 4, 5, 2, 6, 2, 6]
         assert [int(v.as_fraction()) for v in result.values] == expected
+
+
+def test_divisor_prefix_bound_is_derived_from_incidence_work() -> None:
+    assert _divisor_incidence_count(_MAX_DIVISOR_PREFIX_LENGTH) == 599_992
+    assert _divisor_incidence_count(_MAX_DIVISOR_PREFIX_LENGTH + 1) == 600_032
+    assert _divisor_incidence_count(_MAX_DIVISOR_PREFIX_LENGTH) <= (
+        MAX_DIVISOR_INCIDENCES
+    )
+    assert _divisor_incidence_count(_MAX_DIVISOR_PREFIX_LENGTH + 1) > (
+        MAX_DIVISOR_INCIDENCES
+    )
+    assert sum(1 for _ in _divisor_incidences(_MAX_DIVISOR_PREFIX_LENGTH)) == (599_992)
+
+
+def test_materialized_prefix_above_former_cap_is_exact() -> None:
+    length = 50_000
+    one = CanonicalRational(num="1", den="1")
+
+    result = dirichlet_convolution((one,) * length, (one,) * length)
+
+    assert len(result) == length
+    assert result[-1].as_fraction() == Fraction(30)
+
+
+def test_divisor_sieve_operations_match_direct_formulas_on_small_prefix() -> None:
+    source = tuple(
+        CanonicalRational.from_fraction(Fraction(index, index + 1))
+        for index in range(1, 33)
+    )
+    convolution = dirichlet_convolution(source, source)
+    inverse = compute_dirichlet_inverse(DirichletInverseRequest(values=source))
+    forward = compute_mobius_transform(MobiusTransformRequest(values=source))
+    restored = compute_mobius_transform(
+        MobiusTransformRequest(values=forward.values, inverse=True)
+    )
+
+    for index in range(1, len(source) + 1):
+        divisors = tuple(
+            divisor for divisor in range(1, index + 1) if index % divisor == 0
+        )
+        assert convolution[index - 1].as_fraction() == sum(
+            (
+                source[divisor - 1].as_fraction()
+                * source[index // divisor - 1].as_fraction()
+                for divisor in divisors
+            ),
+            start=Fraction(0),
+        )
+        identity_value = sum(
+            (
+                source[divisor - 1].as_fraction()
+                * inverse.values[index // divisor - 1].as_fraction()
+                for divisor in divisors
+            ),
+            start=Fraction(0),
+        )
+        assert identity_value == (Fraction(1) if index == 1 else Fraction(0))
+    assert restored.values == source

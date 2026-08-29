@@ -73,6 +73,22 @@ def _require_result_budget(predicted_bytes: int) -> None:
         )
 
 
+def _gram_result(value: VectorFamily) -> GramResult:
+    matrix = integer_gram(value.vectors)
+    return GramResult._from_kernel(vectors=value.vectors, gram=matrix)
+
+
+def _gram_result_bytes(result: GramResult) -> int:
+    output_limit = CanonicalLimits().max_output_bytes
+    measurement_limits = CanonicalLimits(max_output_bytes=2 * output_limit)
+    return len(
+        encode_strict_json(
+            result.model_dump(mode="json"),
+            limits=measurement_limits,
+        )
+    )
+
+
 def _admit_frame(value: VectorFamily, *, rank: int) -> None:
     if rank != len(value.vectors[0]):
         raise OperationDomainValidationError(
@@ -84,8 +100,7 @@ def _admit_frame(value: VectorFamily, *, rank: int) -> None:
 
 def gram(value: VectorFamily) -> GramResult:
     """Compute the exact Gram matrix of a vector family."""
-    matrix = integer_gram(value.vectors)
-    return GramResult._from_kernel(vectors=value.vectors, gram=matrix)
+    return _gram_result(value)
 
 
 def coherence(value: VectorFamily) -> CoherenceResult:

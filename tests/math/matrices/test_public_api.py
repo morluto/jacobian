@@ -71,6 +71,12 @@ def test_inverse_of_3x3_integer_matrix() -> None:
     assert matrices.inverse(source) == expected
 
 
+def test_inverse_accepts_exact_noninteger_entries_in_native_fallback() -> None:
+    source = sympy.Matrix([[sympy.I]])
+
+    assert matrices.inverse(source) == sympy.Matrix([[-sympy.I]])
+
+
 def test_trace_of_identity_equals_dimension() -> None:
     assert matrices.trace(sympy.eye(4)) == 4
 

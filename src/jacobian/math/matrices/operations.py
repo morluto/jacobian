@@ -130,7 +130,7 @@ def inverse(matrix: MatrixBase) -> MatrixBase:
     if source.rows != source.cols:
         raise ValueError("inverse requires a square matrix")
     integer_entries = all(entry.is_Integer is True for entry in source)
-    input_within_kernel_limit = all(
+    input_within_kernel_limit = integer_entries and all(
         len(str(abs(int(entry)))) <= MAX_INPUT_SCALAR_DIGITS for entry in source
     )
     if integer_entries and input_within_kernel_limit:
@@ -147,7 +147,13 @@ def inverse(matrix: MatrixBase) -> MatrixBase:
         numerator, denominator = DomainMatrix.from_Matrix(source).inv_den()
     except DMNonInvertibleMatrixError as exc:
         raise MatrixSingularError("matrix is singular; inverse does not exist") from exc
-    return numerator.to_Matrix() / int(denominator)
+    if hasattr(denominator, "x") and hasattr(denominator, "y"):
+        import sympy
+
+        denominator = sympy.Integer(denominator.x) + sympy.I * sympy.Integer(
+            denominator.y
+        )
+    return numerator.to_Matrix() / denominator
 
 
 def trace(matrix: MatrixBase) -> Any:

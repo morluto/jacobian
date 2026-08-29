@@ -33,8 +33,12 @@ TOOLS: MathTools = (
                 "triangle",
                 "The cycle length profile of a triangle.",
                 {
- "graph": {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"], ["a", "c"]]},
-            },
+                    "graph": {
+                        "vertices": ["a", "b", "c"],
+                        "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
+                    },
+                },
+            ),
         ),
     ),
 )

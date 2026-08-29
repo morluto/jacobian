@@ -5,12 +5,10 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.number_theory.divisibility_poset import (
-    DivisibilityPosetRequest,
-    compute_divisibility_poset,
-)
+from jacobian.math.number_theory.divisibility_poset import compute_divisibility_poset
 from jacobian.math.number_theory.divisibility_poset._models import (
     MAX_DIVISIBILITY_POSET_ELEMENTS,
+    DivisibilityPosetRequest,
 )
 
 
@@ -87,12 +85,15 @@ def test_chain() -> None:
     sources = _source_map(result)
 
     def label(src: str) -> str:
-        return next(l for l, s in sources.items() if s == src)
+        return next(label for label, s in sources.items() if s == src)
 
     l2, l4, l8, l16 = label("2"), label("4"), label("8"), label("16")
     for lower, upper in [
-        (l2, l4), (l2, l8), (l2, l16),
-        (l4, l8), (l4, l16),
+        (l2, l4),
+        (l2, l8),
+        (l2, l16),
+        (l4, l8),
+        (l4, l16),
         (l8, l16),
     ]:
         assert (lower, upper) in pairs
@@ -118,8 +119,8 @@ def test_large_digit_integers_divisibility() -> None:
     result = _compute([big1, big2])
     sources = _source_map(result)
     pairs = {(p.lower, p.upper) for p in result.poset.strict_order_pairs}
-    big1_label = next(l for l, s in sources.items() if s == big1)
-    big2_label = next(l for l, s in sources.items() if s == big2)
+    big1_label = next(label for label, s in sources.items() if s == big1)
+    big2_label = next(label for label, s in sources.items() if s == big2)
     assert (big1_label, big2_label) in pairs
     assert (big2_label, big1_label) not in pairs
 
@@ -145,9 +146,7 @@ def test_duplicate_rejected() -> None:
 def test_too_many_elements_rejected() -> None:
     elements = [str(i) for i in range(1, MAX_DIVISIBILITY_POSET_ELEMENTS + 2)]
     with pytest.raises(ValidationError):
-        DivisibilityPosetRequest.model_validate(
-            {"source_set": {"elements": elements}}
-        )
+        DivisibilityPosetRequest.model_validate({"source_set": {"elements": elements}})
 
 
 def test_exactly_max_elements() -> None:
@@ -166,8 +165,8 @@ def test_poset_is_valid_finite_poset() -> None:
 def test_minimal_and_maximal_elements() -> None:
     result = _compute(["1", "2", "4"])
     sources = _source_map(result)
-    one_label = next(l for l, s in sources.items() if s == "1")
-    four_label = next(l for l, s in sources.items() if s == "4")
+    one_label = next(label for label, s in sources.items() if s == "1")
+    four_label = next(label for label, s in sources.items() if s == "4")
     assert result.poset.minimal_elements == (one_label,)
     assert result.poset.maximal_elements == (four_label,)
 
@@ -175,9 +174,9 @@ def test_minimal_and_maximal_elements() -> None:
 def test_transitive_closure_completeness() -> None:
     result = _compute(["2", "4", "8"])
     sources = _source_map(result)
-    two_label = next(l for l, s in sources.items() if s == "2")
-    four_label = next(l for l, s in sources.items() if s == "4")
-    eight_label = next(l for l, s in sources.items() if s == "8")
+    two_label = next(label for label, s in sources.items() if s == "2")
+    four_label = next(label for label, s in sources.items() if s == "4")
+    eight_label = next(label for label, s in sources.items() if s == "8")
     pairs = {(p.lower, p.upper) for p in result.poset.strict_order_pairs}
     assert (two_label, four_label) in pairs
     assert (four_label, eight_label) in pairs
@@ -186,6 +185,7 @@ def test_transitive_closure_completeness() -> None:
 
 def test_catalog_discovery() -> None:
     from jacobian.catalog.builtins import BUILTIN_TOOLS
+
     ids = [t.operation_id for t in BUILTIN_TOOLS]
     assert "number_theory.divisibility_poset.compute" in ids
 

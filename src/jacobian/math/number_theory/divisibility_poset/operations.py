@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     FiniteIntegerSet,
 )
@@ -32,9 +31,7 @@ def compute_divisibility_poset(
     the ``ElementLabel`` character cap never constrains source-integer digit
     length.
     """
-    values: list[int] = [
-        parse_canonical_integer(v) for v in source_set.elements
-    ]
+    values: list[int] = [parse_canonical_integer(v) for v in source_set.elements]
 
     # Sort by integer value for deterministic label assignment.  The source set
     # is already distinct (validated by FiniteIntegerSet), but it is not
@@ -62,11 +59,7 @@ def compute_divisibility_poset(
             if x == 0:
                 continue
             if y % x == 0 and x != y:
-                pairs.append(
-                    PresentationPair(
-                        lower=label_for[i], upper=label_for[j]
-                    )
-                )
+                pairs.append(PresentationPair(lower=label_for[i], upper=label_for[j]))
 
     # Canonicalize: materialize_finite_poset with comparable-pair input
     # expects elements to be sorted.  The pairs must reference all declared
@@ -81,9 +74,7 @@ def compute_divisibility_poset(
     element_sources = tuple(
         ElementSource(
             label=label,
-            source_integer=format_canonical_integer(
-                label_to_value[label]
-            ),
+            source_integer=format_canonical_integer(label_to_value[label]),
         )
         for label in materialized.elements
     )

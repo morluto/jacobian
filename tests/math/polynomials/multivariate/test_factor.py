@@ -728,7 +728,10 @@ class TestExecutionInterruptionSeparation:
         request = MultivariateFactorRequest(polynomial=poly)
         from jacobian.math.polynomials.multivariate import _factor_backend
 
-        monkeypatch.setattr(_factor_backend, "FACTOR_WORK_WALL_SECONDS", 0.25)
+        # Keep this below process startup plus the easy-case factorization
+        # time so a fast runner cannot complete the worker before the
+        # deadline that this regression test is meant to exercise.
+        monkeypatch.setattr(_factor_backend, "FACTOR_WORK_WALL_SECONDS", 0.05)
         result = _compute_factor(request)
         assert result.status == "EXECUTION_FAILED"
         assert result.factors == ()

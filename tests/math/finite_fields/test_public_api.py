@@ -131,6 +131,33 @@ def test_exact_flint_presentation_and_element_coordinates_round_trip() -> None:
     )
 
 
+def test_prime_field_presentation_composes_with_scalar_restriction() -> None:
+    presentation = finite_field(3, (0, 1))
+    row_axis = Axis(name="b", labels=("b1",))
+    column_axis = Axis(name="B^T b", labels=("y1",))
+    basis_axis = Axis(name="matrix subspace", labels=("B1",))
+    one = element(presentation, (1,))
+    subspace = FiniteDimensionalSubspace(
+        presentation=presentation,
+        basis_axis=basis_axis,
+        basis=(
+            AxisBoundMatrix(
+                presentation=presentation,
+                row_axis=row_axis,
+                column_axis=column_axis,
+                entries=((one,),),
+            ),
+        ),
+    )
+    direction = projective_point(presentation, row_axis, (one,))
+
+    restricted = restrict_scalars(subspace, direction)
+
+    assert restricted.target_axis.labels == ("y1:1",)
+    assert restricted.matrix.entries == ((1,),)
+    assert linear_map_rank(subspace, direction).rank == 1
+
+
 def test_slice_a_restricts_to_f2_4_to_f2_6_and_matches_paper_ranks() -> None:
     subspace, directions = _slice_a_values()
 

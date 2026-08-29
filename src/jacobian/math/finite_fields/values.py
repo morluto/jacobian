@@ -153,8 +153,10 @@ class FiniteFieldPresentation(StrictModel):
     def ordered_basis(self) -> tuple[str, ...]:
         return (
             "1",
-            self.generator,
-            *(f"{self.generator}^{power}" for power in range(2, self.degree)),
+            *(
+                self.generator if power == 1 else f"{self.generator}^{power}"
+                for power in range(1, self.degree)
+            ),
         )
 
     @property

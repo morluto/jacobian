@@ -5,7 +5,10 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.algebra.affine_map_word_collision._models import (
+    AffineMapSpec,
     WordCollisionProfileRequest,
 )
 from jacobian.math.algebra.affine_map_word_collision.operations import (
@@ -47,7 +50,7 @@ def test_word_replay() -> None:
     for row in result.rows:
         for word in row.words:
             a, b = Fraction(1), Fraction(0)
-            for idx in reversed(word):
+            for idx in word:
                 ga, gb = gens[idx]
                 a, b = ga * a, ga * b + gb
             assert a == row.slope.as_fraction()
@@ -86,12 +89,12 @@ def test_rational_coefficients() -> None:
 def test_rejects_depth_zero() -> None:
     with pytest.raises(ValidationError):
         WordCollisionProfileRequest(
-            generators=[
-                {
-                    "slope": {"num": "1", "den": "1"},
-                    "intercept": {"num": "1", "den": "1"},
-                }
-            ],
+            generators=(
+                AffineMapSpec(
+                    slope=CanonicalRational(num="1", den="1"),
+                    intercept=CanonicalRational(num="1", den="1"),
+                ),
+            ),
             depth=0,
         )
 
@@ -103,3 +106,27 @@ def test_non_commuting_maps() -> None:
     result = compute_word_collision_profile([f, g], 2)
     # Words (0,1) and (1,0) should generally produce different maps
     assert len(result.rows) >= 2
+
+
+def test_word_order_matches_documented_composition() -> None:
+    """The first generator is applied first: word (0, 1) is f_1 o f_0."""
+    f = (Fraction(2), Fraction(1))
+    g = (Fraction(3), Fraction(5))
+    result = compute_word_collision_profile((f, g), 2)
+    row = next(row for row in result.rows if (0, 1) in row.words)
+    assert (row.slope.as_fraction(), row.intercept.as_fraction()) == (
+        Fraction(6),
+        Fraction(8),
+    )
+
+
+def test_native_admission_rejects_excessive_word_enumeration() -> None:
+    generators = tuple((Fraction(1), Fraction(index)) for index in range(20))
+    with pytest.raises(OperationDomainValidationError, match="10,000-word limit"):
+        compute_word_collision_profile(generators, 4)
+
+
+def test_native_admission_rejects_rational_growth_before_enumeration() -> None:
+    huge = 10**32_767
+    with pytest.raises(OperationDomainValidationError, match="rational digit limit"):
+        compute_word_collision_profile(((Fraction(huge), Fraction(0)),), 2)

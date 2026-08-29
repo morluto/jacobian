@@ -8,6 +8,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.optimization._arithmetic import rational_dot
 from jacobian.math.optimization._general_models import (
+    MAX_GENERAL_RATIONAL_INPUT_DIGITS,
     GeneralFormRationalLinearProgram,
     GeneralRationalLinearProgramResult,
     _source_arrays,
@@ -20,6 +21,8 @@ from jacobian.math.optimization._general_normalization import (
     admit_general_normalization,
 )
 from jacobian.math.optimization._models import RationalLinearProgramResult
+
+_INTERVAL_RESULT_DIGITS = 4 * MAX_GENERAL_RATIONAL_INPUT_DIGITS + 1
 
 
 def _wire(value: Fraction, *, max_digits: int) -> CanonicalRational | None:
@@ -298,10 +301,13 @@ def _one_variable_interval_result(
         )
         primal = _primal_data(program, (point_value,))
         direction = Fraction(-1 if effective > 0 else 1)
-        wires = _wire_vector((point_value,), max_digits=512)
-        ray = _wire_vector((direction,), max_digits=512)
-        fields = tuple(_wire_vector(values, max_digits=512) for values in primal[1:])
-        objective = _wire(primal[0], max_digits=512)
+        wires = _wire_vector((point_value,), max_digits=_INTERVAL_RESULT_DIGITS)
+        ray = _wire_vector((direction,), max_digits=_INTERVAL_RESULT_DIGITS)
+        fields = tuple(
+            _wire_vector(values, max_digits=_INTERVAL_RESULT_DIGITS)
+            for values in primal[1:]
+        )
+        objective = _wire(primal[0], max_digits=_INTERVAL_RESULT_DIGITS)
         if (
             wires is None
             or ray is None
@@ -373,11 +379,11 @@ def _one_variable_interval_result(
     )
     wire_vectors: list[tuple[CanonicalRational, ...]] = []
     for values in vector_values:
-        wire_vector = _wire_vector(values, max_digits=512)
+        wire_vector = _wire_vector(values, max_digits=_INTERVAL_RESULT_DIGITS)
         if wire_vector is None:
             return None
         wire_vectors.append(wire_vector)
-    wire_objective = _wire(primal[0], max_digits=512)
+    wire_objective = _wire(primal[0], max_digits=_INTERVAL_RESULT_DIGITS)
     if wire_objective is None:
         return None
     return GeneralRationalLinearProgramResult._from_kernel(

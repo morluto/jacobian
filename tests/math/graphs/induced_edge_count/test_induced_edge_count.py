@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from itertools import combinations
 
 import pytest
-from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.induced_edge_count._models import (
     InducedEdgeCountProfileRequest,
 )
@@ -14,7 +15,9 @@ from jacobian.math.graphs.induced_edge_count.operations import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _graph(vertices, edges):
+def _graph(
+    vertices: Sequence[str], edges: Sequence[tuple[str, str]]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(
         vertices=tuple(vertices),
         edges=tuple((a, b) for a, b in edges),
@@ -88,8 +91,32 @@ def test_exhaustive_comparison() -> None:
 
 def test_rejects_cardinality_too_large() -> None:
     g = _graph(["a", "b"], [("a", "b")])
-    with pytest.raises(ValidationError):
-        InducedEdgeCountProfileRequest(graph=g, cardinality=3)
+    request = InducedEdgeCountProfileRequest(graph=g, cardinality=3)
+    with pytest.raises(OperationDomainValidationError):
+        compute_induced_edge_count_profile(request.graph, request.cardinality)
+
+
+def test_native_admission_rejects_excessive_subset_edge_work() -> None:
+    g = _graph(
+        [f"{index:02}" for index in range(20)],
+        [
+            (f"{left:02}", f"{right:02}")
+            for left in range(20)
+            for right in range(left + 1, 20)
+        ],
+    )
+    with pytest.raises(OperationDomainValidationError, match="work bound"):
+        compute_induced_edge_count_profile(g, 10)
+
+
+def test_native_admission_rejects_untransportable_retained_result() -> None:
+    labels = tuple("x" * 240_000 + str(index) for index in range(20))
+    g = _graph(
+        labels,
+        [(labels[0], labels[1]), (labels[1], labels[2]), (labels[2], labels[3])],
+    )
+    with pytest.raises(OperationDomainValidationError, match="output-byte limit"):
+        compute_induced_edge_count_profile(g, 10)
 
 
 def test_result_preserves_source() -> None:

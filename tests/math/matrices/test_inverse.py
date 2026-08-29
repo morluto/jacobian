@@ -14,9 +14,11 @@ from typing import Any
 
 import pytest
 
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.matrices._operation_models import MatrixInverseResult
 from jacobian.math.matrices._tools import TOOLS
+from jacobian.math.matrices.operations import inverse_result
+from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, IntegerMatrix
 
 
 def _operation(operation_id: str) -> MathTool[Any, Any]:
@@ -128,6 +130,25 @@ def test_inverse_operation_round_trips_random_unimodular_matrices(size: int) -> 
         )
         assert _multiply(source_fraction, inverse) == identity
         assert _multiply(inverse, source_fraction) == identity
+
+
+def test_inverse_result_rejects_order_33_integer_matrix() -> None:
+    """Widened IntegerMatrix must not skip square-integer 32-axis admission."""
+
+    matrix = IntegerMatrix(
+        entries=tuple(
+            tuple(
+                "1" if row == column else "0"
+                for column in range(MAX_MATRIX_DIMENSION + 1)
+            )
+            for row in range(MAX_MATRIX_DIMENSION + 1)
+        )
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        inverse_result(matrix)
+    error = exc_info.value.errors()[0]
+    assert error["type"] == "matrix.budget_exceeded"
+    assert str(MAX_MATRIX_DIMENSION) in error["msg"]
 
 
 def test_inverse_operation_rejects_empty_matrix() -> None:

@@ -76,7 +76,7 @@ TOOLS: MathTools = (
     _op(
         "linear.rational_solution.compute",
         "Compute an exact rational solution",
-        "Return an exact rational solution or an inconsistent outcome.",
+        "Return an exact rational solution or an inconsistent outcome for one canonical coordinate-sparse system, subject to nonzero, scalar-work, and result-height bounds.",
         LinearRationalSolutionFindRequest,
         LinearRationalSolutionResult,
         compute_rational_solution,
@@ -91,7 +91,10 @@ TOOLS: MathTools = (
                 {
                     "system": {
                         "variables": ["x"],
-                        "coefficients": {"entries": [[{"num": "1", "den": "1"}]]},
+                        "row_count": 1,
+                        "coefficients": [
+                            {"row": 0, "column": 0, "value": {"num": "1", "den": "1"}}
+                        ],
                         "rhs": [{"num": "2", "den": "1"}],
                     }
                 },
@@ -101,7 +104,7 @@ TOOLS: MathTools = (
     _op(
         "linear.rational_inconsistency.compute",
         "Compute an exact rational inconsistency witness",
-        "Return an inconsistency witness or a consistent outcome.",
+        "Return an exact left inconsistency witness or a consistent outcome for one canonical coordinate-sparse system, subject to nonzero, scalar-work, and result-height bounds.",
         LinearRationalInconsistencyFindRequest,
         LinearRationalInconsistencyResult,
         compute_rational_inconsistency,
@@ -116,12 +119,11 @@ TOOLS: MathTools = (
                 {
                     "system": {
                         "variables": ["x"],
-                        "coefficients": {
-                            "entries": [
-                                [{"num": "1", "den": "1"}],
-                                [{"num": "1", "den": "1"}],
-                            ]
-                        },
+                        "row_count": 2,
+                        "coefficients": [
+                            {"row": 0, "column": 0, "value": {"num": "1", "den": "1"}},
+                            {"row": 1, "column": 0, "value": {"num": "1", "den": "1"}},
+                        ],
                         "rhs": [
                             {"num": "0", "den": "1"},
                             {"num": "1", "den": "1"},

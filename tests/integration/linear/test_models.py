@@ -24,7 +24,13 @@ def _canonical(numerator: int, denominator: int = 1) -> CanonicalRational:
 def _system() -> dict[str, object]:
     return {
         "variables": ["x", "y"],
-        "coefficients": {"entries": [[_q(2), _q(1)], [_q(1), _q(-1)]]},
+        "row_count": 2,
+        "coefficients": [
+            {"row": 0, "column": 0, "value": _q(2)},
+            {"row": 0, "column": 1, "value": _q(1)},
+            {"row": 1, "column": 0, "value": _q(1)},
+            {"row": 1, "column": 1, "value": _q(-1)},
+        ],
         "rhs": [_q(5), _q(1)],
     }
 
@@ -32,7 +38,7 @@ def _system() -> dict[str, object]:
 def test_linear_system_requires_exact_matching_dimensions() -> None:
     system = LinearRationalSystem.model_validate(_system())
     assert system.variables == ("x", "y")
-    assert len(system.coefficients.entries) == len(system.rhs) == 2
+    assert system.row_count == len(system.rhs) == 2
 
     malformed = _system()
     malformed["rhs"] = [_q(5)]
@@ -66,7 +72,12 @@ def test_inline_results_keep_only_mathematical_values() -> None:
     dependent = LinearRationalSystem.model_validate(
         {
             "variables": ["x", "y"],
-            "coefficients": {"entries": [[_q(1), _q(1)], [_q(1), _q(1)]]},
+            "row_count": 2,
+            "coefficients": [
+                {"row": row, "column": column, "value": _q(1)}
+                for row in range(2)
+                for column in range(2)
+            ],
             "rhs": [_q(0), _q(1)],
         }
     )
@@ -88,7 +99,12 @@ def test_inline_results_preserve_completed_no_candidate_outcomes() -> None:
     dependent = LinearRationalSystem.model_validate(
         {
             "variables": ["x", "y"],
-            "coefficients": {"entries": [[_q(1), _q(1)], [_q(1), _q(1)]]},
+            "row_count": 2,
+            "coefficients": [
+                {"row": row, "column": column, "value": _q(1)}
+                for row in range(2)
+                for column in range(2)
+            ],
             "rhs": [_q(0), _q(1)],
         }
     )
@@ -96,7 +112,10 @@ def test_inline_results_preserve_completed_no_candidate_outcomes() -> None:
     free = LinearRationalSystem.model_validate(
         {
             "variables": ["x", "y"],
-            "coefficients": {"entries": [[_q(1), _q(1)]]},
+            "row_count": 1,
+            "coefficients": [
+                {"row": 0, "column": column, "value": _q(1)} for column in range(2)
+            ],
             "rhs": [_q(1)],
         }
     )

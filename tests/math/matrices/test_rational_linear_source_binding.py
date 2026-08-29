@@ -5,12 +5,15 @@ from __future__ import annotations
 import copy
 import json
 from fractions import Fraction
+from itertools import islice
 from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
+from sympy import primerange
 from tests.support.rationals import rational_payload as q
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.matrices.rational_linear._models import (
     LinearRationalInconsistencyFindRequest,
     LinearRationalInconsistencyResult,
@@ -22,8 +25,6 @@ from jacobian.math.matrices.rational_linear._tools import (
     compute_rational_inconsistency,
     compute_rational_solution,
 )
-
-pytestmark = pytest.mark.requires_backend("flint")
 
 
 def _q(value: Fraction) -> dict[str, str]:
@@ -37,7 +38,13 @@ def _system(
 ) -> dict[str, object]:
     return {
         "variables": variables,
-        "coefficients": {"entries": [[_q(value) for value in row] for row in entries]},
+        "row_count": len(entries),
+        "coefficients": [
+            {"row": row, "column": column, "value": _q(value)}
+            for row, values in enumerate(entries)
+            for column, value in enumerate(values)
+            if value
+        ],
         "rhs": [_q(value) for value in rhs],
     }
 
@@ -101,14 +108,18 @@ def test_solution_result_replays_against_the_source() -> None:
     assert result.values is not None
     assert len(result.values) == len(system.variables)
     components = [value.as_fraction() for value in result.values]
+    coefficient_map = {
+        (item.row, item.column): item.value.as_fraction()
+        for item in system.coefficients
+    }
     for row, bound in zip(
-        system.coefficients.entries,
+        range(system.row_count),
         (value.as_fraction() for value in system.rhs),
         strict=True,
     ):
         residual = sum(
-            coefficient.as_fraction() * component
-            for coefficient, component in zip(row, components, strict=True)
+            coefficient_map.get((row, column), Fraction(0)) * component
+            for column, component in enumerate(components)
         )
         assert residual == bound
 
@@ -126,15 +137,15 @@ def test_inconsistent_result_replays_witness_relations() -> None:
     assert result.rhs_pairing is not None
     assert len(result.left_witness) == len(system.rhs)
     coordinates = [value.as_fraction() for value in result.left_witness]
-    for column in range(len(system.coefficients.entries[0])):
+    coefficient_map = {
+        (item.row, item.column): item.value.as_fraction()
+        for item in system.coefficients
+    }
+    for column in range(len(system.variables)):
         assert (
             sum(
-                row[column].as_fraction() * coordinate
-                for row, coordinate in zip(
-                    system.coefficients.entries,
-                    coordinates,
-                    strict=True,
-                )
+                coefficient_map.get((row, column), Fraction(0)) * coordinate
+                for row, coordinate in enumerate(coordinates)
             )
             == 0
         )
@@ -361,3 +372,116 @@ def test_separating_functional_annihilates_generators_but_not_the_target() -> No
     for generator in generators:
         assert sum(y * g for y, g in zip(coordinates, generator, strict=True)) == 0
     assert sum(y * t for y, t in zip(coordinates, target, strict=True)) != 0
+
+
+def test_sparse_diagonal_system_scales_beyond_the_dense_32_axis() -> None:
+    dimension = 128
+    payload = {
+        "variables": [f"x_{index}" for index in range(dimension)],
+        "row_count": dimension,
+        "coefficients": [
+            {"row": index, "column": index, "value": _q(Fraction(index + 1))}
+            for index in range(dimension)
+        ],
+        "rhs": [_q(Fraction(index + 1)) for index in range(dimension)],
+    }
+    result = compute_rational_solution(
+        LinearRationalSolutionFindRequest.model_validate({"system": payload})
+    )
+    assert result.status == "SOLUTION"
+    assert result.values == tuple(
+        CanonicalRational(num="1", den="1") for _ in range(dimension)
+    )
+
+
+def test_sparse_kernel_agrees_with_dense_sympy_on_the_overlap() -> None:
+    from sympy import Matrix, Rational
+
+    payload = _unique_system()
+    result = compute_rational_solution(
+        LinearRationalSolutionFindRequest.model_validate({"system": payload})
+    )
+    dense_solution, parameters = Matrix([[2, 1], [1, -1]]).gauss_jordan_solve(
+        Matrix([5, 1])
+    )
+    assert parameters.rows == 0
+    assert result.values is not None
+    assert all(isinstance(value, Rational) for value in dense_solution)
+    assert tuple(value.as_fraction() for value in result.values) == tuple(
+        Fraction(int(value.p), int(value.q)) for value in dense_solution
+    )
+
+
+def test_result_sensitive_admission_keeps_a_wide_one_row_system() -> None:
+    dimension = 1_024
+    payload = {
+        "variables": [f"x_{index}" for index in range(dimension)],
+        "row_count": 1,
+        "coefficients": [{"row": 0, "column": dimension - 1, "value": _q(Fraction(1))}],
+        "rhs": [_q(Fraction(7))],
+    }
+    result = compute_rational_solution(
+        LinearRationalSolutionFindRequest.model_validate({"system": payload})
+    )
+    assert result.values is not None
+    assert len(result.values) == dimension
+    assert result.values[-1] == CanonicalRational(num="7", den="1")
+    assert all(value.num == "0" for value in result.values[:-1])
+
+
+@pytest.mark.parametrize(
+    "coefficients",
+    (
+        [
+            {"row": 0, "column": 0, "value": _q(Fraction(1))},
+            {"row": 0, "column": 0, "value": _q(Fraction(2))},
+        ],
+        [{"row": 0, "column": 0, "value": _q(Fraction(0))}],
+    ),
+)
+def test_sparse_coefficients_reject_noncanonical_storage(
+    coefficients: list[dict[str, object]],
+) -> None:
+    with pytest.raises(ValidationError):
+        LinearRationalSystem.model_validate(
+            {
+                "variables": ["x"],
+                "row_count": 1,
+                "coefficients": coefficients,
+                "rhs": [_q(Fraction(0))],
+            }
+        )
+
+
+def test_sparse_work_budget_rejects_large_fill_envelope() -> None:
+    dimension = 500
+    with pytest.raises(ValidationError, match="scalar-work budget"):
+        LinearRationalSystem.model_validate(
+            {
+                "variables": [f"x_{index}" for index in range(dimension)],
+                "row_count": dimension,
+                "coefficients": [],
+                "rhs": [_q(Fraction(0)) for _ in range(dimension)],
+            }
+        )
+
+
+def test_sparse_result_height_rejects_before_backend_expansion() -> None:
+    denominators = tuple(islice(primerange(1_000_000_000, 2_000_000_000), 64))
+    with pytest.raises(ValidationError, match="result-height bound"):
+        LinearRationalSystem.model_validate(
+            {
+                "variables": [f"x_{index}" for index in range(64)],
+                "row_count": 64,
+                "coefficients": [
+                    {
+                        "row": row,
+                        "column": column,
+                        "value": _q(Fraction(1, denominators[column])),
+                    }
+                    for row in range(64)
+                    for column in range(64)
+                ],
+                "rhs": [_q(Fraction(0)) for _ in range(64)],
+            }
+        )

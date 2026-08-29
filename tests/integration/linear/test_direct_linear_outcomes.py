@@ -29,7 +29,10 @@ pytestmark = pytest.mark.requires_backend("flint")
 def _system(rhs: list[dict[str, str]]) -> dict[str, object]:
     return {
         "variables": ["x"],
-        "coefficients": {"entries": [[q(1)] for _ in rhs]},
+        "row_count": len(rhs),
+        "coefficients": [
+            {"row": row, "column": 0, "value": q(1)} for row in range(len(rhs))
+        ],
         "rhs": rhs,
     }
 

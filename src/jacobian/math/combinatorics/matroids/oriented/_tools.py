@@ -9,8 +9,12 @@ from jacobian.math.combinatorics.matroids.oriented._models import (
     ChirotopeCheckResult,
 )
 from jacobian.math.combinatorics.matroids.oriented.operations import (
-    compute_chirotope_check,
+    check_chirotope,
 )
+
+
+def _run_chirotope_check(request: ChirotopeCheckRequest) -> ChirotopeCheckResult:
+    return check_chirotope(request.chirotope)
 
 _ALTERNATING_RANK3_EXAMPLE: dict[str, Any] = {
     "chirotope": {
@@ -39,7 +43,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=ChirotopeCheckRequest,
         result_type=ChirotopeCheckResult,
-        run=compute_chirotope_check,
+        run=_run_chirotope_check,
         tags=("oriented-matroid", "chirotope", "exact"),
         examples=(
             example(

@@ -7,7 +7,6 @@ from typing import Literal, cast
 
 from jacobian.math.combinatorics.matroids.oriented._models import (
     B2Obstruction,
-    ChirotopeCheckRequest,
     ChirotopeCheckResult,
     ChirotopeCheckStatus,
     UniformRank3Chirotope,
@@ -135,9 +134,4 @@ def check_chirotope(chirotope: UniformRank3Chirotope) -> ChirotopeCheckResult:
     return _compute_result(chirotope)
 
 
-def compute_chirotope_check(request: ChirotopeCheckRequest) -> ChirotopeCheckResult:
-    """Project a wire request onto the native chirotope checker."""
-    return check_chirotope(request.chirotope)
-
-
-__all__ = ["check_chirotope", "compute_chirotope_check"]
+__all__ = ["check_chirotope"]

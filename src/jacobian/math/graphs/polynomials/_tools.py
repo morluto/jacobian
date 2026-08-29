@@ -5,22 +5,63 @@ from typing import Any
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.graphs.polynomials._models import (
     GraphPolynomialRequest,
     GraphPolynomialResult,
     MatchingPolynomialRequest,
     SparseMultivariatePolynomial,
+    TreeIndependencePolynomialAdmissionError,
     TreeIndependencePolynomialRequest,
     TreeIndependencePolynomialResult,
 )
 from jacobian.math.graphs.polynomials.operations import (
-    compute_chromatic_polynomial,
-    compute_flow_polynomial,
-    compute_independence_polynomial,
-    compute_matching_polynomial,
-    compute_tutte_polynomial,
+    chromatic_polynomial,
+    flow_polynomial,
+    independence_polynomial_coefficients,
+    matching_polynomial,
+    tutte_polynomial,
 )
+
+
+def _run_tutte(request: GraphPolynomialRequest) -> SparseMultivariatePolynomial:
+    return SparseMultivariatePolynomial(
+        variables=("x", "y"),
+        terms=tutte_polynomial(request.graph),
+    )
+
+
+def _run_chromatic(request: GraphPolynomialRequest) -> GraphPolynomialResult:
+    return GraphPolynomialResult(terms=chromatic_polynomial(request.graph))
+
+
+def _run_flow(request: GraphPolynomialRequest) -> GraphPolynomialResult:
+    return GraphPolynomialResult(terms=flow_polynomial(request.graph))
+
+
+def _run_independence(
+    request: TreeIndependencePolynomialRequest,
+) -> TreeIndependencePolynomialResult:
+    try:
+        coefficients = independence_polynomial_coefficients(request.graph)
+    except TreeIndependencePolynomialAdmissionError as exc:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.polynomial.independence.admission",
+            message=str(exc),
+        ) from exc
+    return TreeIndependencePolynomialResult._from_kernel(
+        graph=request.graph,
+        coefficients=coefficients,
+    )
+
+
+def _run_matching(request: MatchingPolynomialRequest) -> GraphPolynomialResult:
+    return GraphPolynomialResult(terms=matching_polynomial(request.graph))
 
 
 def graph_polynomial_operation[
@@ -87,7 +128,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "variable axis (x, y).",
         GraphPolynomialRequest,
         SparseMultivariatePolynomial,
-        compute_tutte_polynomial,
+        _run_tutte,
         "graph",
         "polynomial",
         "tutte",
@@ -107,7 +148,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "graph using NetworkX.",
         GraphPolynomialRequest,
         GraphPolynomialResult,
-        compute_chromatic_polynomial,
+        _run_chromatic,
         "graph",
         "polynomial",
         "chromatic",
@@ -127,7 +168,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "simple graph, derived from the Tutte polynomial.",
         GraphPolynomialRequest,
         GraphPolynomialResult,
-        compute_flow_polynomial,
+        _run_flow,
         "graph",
         "polynomial",
         "flow",
@@ -151,7 +192,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "convolution work and serialized-result size.",
         TreeIndependencePolynomialRequest,
         TreeIndependencePolynomialResult,
-        compute_independence_polynomial,
+        _run_independence,
         "graph",
         "polynomial",
         "independence",
@@ -178,7 +219,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "graph by the deletion recurrence on graphs with at most 16 vertices.",
         MatchingPolynomialRequest,
         GraphPolynomialResult,
-        compute_matching_polynomial,
+        _run_matching,
         "graph",
         "polynomial",
         "matching",

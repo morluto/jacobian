@@ -22,10 +22,10 @@ from jacobian.math.graphs.polynomials import (
 )
 from jacobian.math.graphs.polynomials._models import (
     MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS,
+    TreeIndependencePolynomialAdmissionError,
     TreeIndependencePolynomialRequest,
     TreeIndependencePolynomialResult,
 )
-from jacobian.math.graphs.polynomials.operations import compute_independence_polynomial
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.polynomials._elementary_operations import (
     rational_polynomial_evaluate,
@@ -81,6 +81,23 @@ def _dense_coefficients(polynomial: RationalPolynomial) -> tuple[int, ...]:
     return tuple(coefficients)
 
 
+def _run_independence(
+    request: TreeIndependencePolynomialRequest,
+) -> TreeIndependencePolynomialResult:
+    try:
+        coefficients = independence_polynomial_coefficients(request.graph)
+    except TreeIndependencePolynomialAdmissionError as exc:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.polynomial.independence.admission",
+            message=str(exc),
+        ) from exc
+    return TreeIndependencePolynomialResult._from_kernel(
+        graph=request.graph,
+        coefficients=coefficients,
+    )
+
+
 @pytest.mark.parametrize(
     ("graph", "expected"),
     [
@@ -97,9 +114,7 @@ def test_known_independence_polynomials(
     assert independence_polynomial_coefficients(graph) == expected
     assert _dense_coefficients(independence_polynomial(graph)) == expected
 
-    result = compute_independence_polynomial(
-        TreeIndependencePolynomialRequest(graph=graph)
-    )
+    result = _run_independence(TreeIndependencePolynomialRequest(graph=graph))
     assert result.coefficients == tuple(
         format_canonical_integer(coefficient) for coefficient in expected
     )
@@ -160,9 +175,7 @@ def test_root_choice_and_vertex_relabeling_do_not_change_polynomial() -> None:
 def test_serialized_polynomial_feeds_exact_evaluation_unchanged(
     graph: SimpleUndirectedGraph,
 ) -> None:
-    result = compute_independence_polynomial(
-        TreeIndependencePolynomialRequest(graph=graph)
-    )
+    result = _run_independence(TreeIndependencePolynomialRequest(graph=graph))
     serialized = result.model_dump(mode="json")["polynomial"]
     evaluation_request = RationalPolynomialEvaluationRequest.model_validate(
         {
@@ -193,7 +206,7 @@ def test_request_rejects_empty_disconnected_and_cyclic_graphs(
 ) -> None:
     request = TreeIndependencePolynomialRequest(graph=graph)
     with pytest.raises(OperationDomainValidationError) as caught:
-        compute_independence_polynomial(request)
+        _run_independence(request)
     assert caught.value.errors()[0]["loc"] == ("graph",)
 
 
@@ -204,7 +217,7 @@ def test_star_beyond_the_old_consumer_degree_cap_is_admitted_exactly() -> None:
     expected = (binomials[0], binomials[1] + 1, *binomials[2:])
 
     request = TreeIndependencePolynomialRequest(graph=star)
-    result = compute_independence_polynomial(request)
+    result = _run_independence(request)
 
     assert result.coefficients == tuple(
         format_canonical_integer(coefficient) for coefficient in expected
@@ -220,7 +233,7 @@ def test_full_vertex_envelope_path_is_admitted_and_over_envelope_is_rejected() -
     admitted = _path(256)
     request = TreeIndependencePolynomialRequest(graph=admitted)
 
-    result = compute_independence_polynomial(request)
+    result = _run_independence(request)
 
     assert result.independence_number == 128
     assert len(result.coefficients) == 129
@@ -239,7 +252,7 @@ def test_request_reserves_output_headroom_for_the_retained_source() -> None:
     assert len(encoded_request) <= output_limit
     request = TreeIndependencePolynomialRequest(graph=graph)
     with pytest.raises(ValueError, match="output limit"):
-        compute_independence_polynomial(request)
+        _run_independence(request)
 
 
 def test_request_schema_exposes_tree_and_work_preconditions() -> None:
@@ -254,7 +267,7 @@ def test_request_schema_exposes_tree_and_work_preconditions() -> None:
 
 def test_result_rejects_a_polynomial_inconsistent_with_dense_coefficients() -> None:
     graph = _path(4)
-    valid = compute_independence_polynomial(
+    valid = _run_independence(
         TreeIndependencePolynomialRequest(graph=graph)
     ).model_dump(mode="json")
     weaker = valid.copy()
@@ -291,7 +304,7 @@ def test_result_rejects_mutated_derived_values(
     replacement: object,
     message: str,
 ) -> None:
-    valid = compute_independence_polynomial(
+    valid = _run_independence(
         TreeIndependencePolynomialRequest(graph=_path(4))
     ).model_dump(mode="json")
     valid[field] = replacement
@@ -301,7 +314,7 @@ def test_result_rejects_mutated_derived_values(
 
 
 def test_result_rejects_a_polynomial_outside_qq_x() -> None:
-    valid = compute_independence_polynomial(
+    valid = _run_independence(
         TreeIndependencePolynomialRequest(graph=_path(4))
     ).model_dump(mode="json")
     valid["polynomial"]["variables"] = ["y"]
@@ -311,7 +324,7 @@ def test_result_rejects_a_polynomial_outside_qq_x() -> None:
 
 
 def test_result_rejects_overbudget_coefficients() -> None:
-    valid = compute_independence_polynomial(
+    valid = _run_independence(
         TreeIndependencePolynomialRequest(graph=_path(4))
     ).model_dump(mode="json")
     digits = MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
@@ -337,7 +350,7 @@ def test_result_rejects_overbudget_derived_values(
     field: str,
     replacement: object,
 ) -> None:
-    valid = compute_independence_polynomial(
+    valid = _run_independence(
         TreeIndependencePolynomialRequest(graph=_path(4))
     ).model_dump(mode="json")
     valid[field] = replacement
@@ -357,7 +370,7 @@ def test_result_rejects_negative_derived_values(
     field: str,
     replacement: object,
 ) -> None:
-    valid = compute_independence_polynomial(
+    valid = _run_independence(
         TreeIndependencePolynomialRequest(graph=_path(4))
     ).model_dump(mode="json")
     valid[field] = replacement
@@ -370,8 +383,12 @@ def test_native_module_exports_canonical_value_and_dense_projection() -> None:
     from jacobian.math.graphs import polynomials
 
     assert polynomials.__all__ == [
+        "chromatic_polynomial",
+        "flow_polynomial",
         "independence_polynomial",
         "independence_polynomial_coefficients",
+        "matching_polynomial",
+        "tutte_polynomial",
     ]
     assert all(hasattr(polynomials, name) for name in polynomials.__all__)
     assert type(independence_polynomial(_path(2))) is RationalPolynomial

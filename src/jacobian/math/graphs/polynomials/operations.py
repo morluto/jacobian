@@ -16,19 +16,17 @@ from jacobian.math.graphs.polynomials._models import (
     MAX_GRAPH_POLYNOMIAL_VERTICES,
     MAX_MATCHING_EDGES,
     MAX_MATCHING_VERTICES,
-    GraphPolynomialRequest,
-    GraphPolynomialResult,
-    MatchingPolynomialRequest,
     MultivariatePolynomialTerm,
     PolynomialTerm,
-    SparseMultivariatePolynomial,
     TreeIndependencePolynomialAdmissionError,
-    TreeIndependencePolynomialRequest,
-    TreeIndependencePolynomialResult,
     _admitted_tree_profile,
     _maximum_independence_result_bytes,
+    _TreeProfile,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    IndexedSimpleUndirectedGraph,
+    SimpleUndirectedGraph,
+)
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -55,25 +53,10 @@ def _convolve_coefficients(
     return tuple(result)
 
 
-def independence_polynomial_coefficients(
-    graph: SimpleUndirectedGraph,
+def _compute_independence_coefficients(
+    profile: _TreeProfile,
 ) -> tuple[int, ...]:
-    """Return ``i_0, ..., i_alpha`` for one admitted finite tree.
-
-    This native projection matches the dense coefficients returned alongside
-    the canonical sparse ``RationalPolynomial`` by the catalog operation.
-    """
-
-    profile = _admitted_tree_profile(graph)
-    output_limit = CanonicalLimits().max_output_bytes
-    if (
-        _maximum_independence_result_bytes(graph, profile.independence_degree)
-        > output_limit
-    ):
-        raise TreeIndependencePolynomialAdmissionError(
-            "tree independence polynomial would exceed the canonical output "
-            "limit after retaining its source; shorten vertex labels"
-        )
+    """Run the tree dynamic program using an already-admitted profile."""
     states: dict[str, tuple[tuple[int, ...], tuple[int, ...]]] = {}
     for vertex in profile.postorder:
         excluded: tuple[int, ...] = (1,)
@@ -92,6 +75,32 @@ def independence_polynomial_coefficients(
     if len(coefficients) != profile.independence_degree + 1:
         raise ValueError("independence polynomial degree invariant failed")
     return coefficients
+
+
+def _admit_tree(graph: SimpleUndirectedGraph) -> _TreeProfile:
+    profile = _admitted_tree_profile(graph)
+    output_limit = CanonicalLimits().max_output_bytes
+    if (
+        _maximum_independence_result_bytes(graph, profile.independence_degree)
+        > output_limit
+    ):
+        raise TreeIndependencePolynomialAdmissionError(
+            "tree independence polynomial would exceed the canonical output "
+            "limit after retaining its source; shorten vertex labels"
+        )
+    return profile
+
+
+def independence_polynomial_coefficients(
+    graph: SimpleUndirectedGraph,
+) -> tuple[int, ...]:
+    """Return ``i_0, ..., i_alpha`` for one admitted finite tree.
+
+    This native projection matches the dense coefficients returned alongside
+    the canonical sparse ``RationalPolynomial`` by the catalog operation.
+    """
+
+    return _compute_independence_coefficients(_admit_tree(graph))
 
 
 def _polynomial_from_coefficients(
@@ -118,13 +127,17 @@ def _polynomial_from_coefficients(
 def independence_polynomial(graph: SimpleUndirectedGraph) -> RationalPolynomial:
     """Return the exact independence polynomial of one admitted finite tree."""
 
-    return _polynomial_from_coefficients(independence_polynomial_coefficients(graph))
+    return _polynomial_from_coefficients(
+        _compute_independence_coefficients(_admit_tree(graph))
+    )
 
 
 def _build_graph(
-    request: GraphPolynomialRequest | MatchingPolynomialRequest,
+    graph: IndexedSimpleUndirectedGraph,
+    *,
+    matching: bool = False,
 ) -> nx.Graph[int]:
-    if isinstance(request, MatchingPolynomialRequest):
+    if matching:
         max_vertices, max_edges = MAX_MATCHING_VERTICES, MAX_MATCHING_EDGES
         label = "matching polynomial"
         code = "graph.matching_polynomial.exact_computation_envelope"
@@ -135,18 +148,15 @@ def _build_graph(
         )
         label = "graph polynomial"
         code = "graph.polynomial.exact_computation_envelope"
-    if (
-        request.graph.vertex_count > max_vertices
-        or len(request.graph.edges) > max_edges
-    ):
+    if graph.vertex_count > max_vertices or len(graph.edges) > max_edges:
         raise OperationDomainValidationError(
             location=("graph",),
             code=code,
             message=f"{label} graph exceeds its exact computation envelope",
         )
     g: nx.Graph[int] = nx.Graph()
-    g.add_nodes_from(range(request.graph.vertex_count))
-    g.add_edges_from(request.graph.edges)
+    g.add_nodes_from(range(graph.vertex_count))
+    g.add_edges_from(graph.edges)
     return g
 
 
@@ -161,15 +171,15 @@ def _poly_to_terms(poly_expr: object, var: sympy.Symbol) -> tuple[PolynomialTerm
     return tuple(sorted(terms, key=lambda term: term.degree))
 
 
-def compute_tutte_polynomial(
-    request: GraphPolynomialRequest,
-) -> SparseMultivariatePolynomial:
+def tutte_polynomial(
+    graph: IndexedSimpleUndirectedGraph,
+) -> tuple[MultivariatePolynomialTerm, ...]:
     """Compute the exact Tutte polynomial T_G(x, y).
 
     Monomials retain their bivariate exponent tuples.
     """
     x, y = sympy.symbols("x y")
-    g = _build_graph(request)
+    g = _build_graph(graph)
     result = nx.tutte_polynomial(g)
     poly = Poly(result, x, y)
     terms: list[MultivariatePolynomialTerm] = []
@@ -179,49 +189,46 @@ def compute_tutte_polynomial(
         terms.append(
             MultivariatePolynomialTerm(coefficient=int(coeff), exponents=tuple(monom))
         )
-    return SparseMultivariatePolynomial(
-        variables=("x", "y"),
-        terms=tuple(sorted(terms, key=lambda term: term.exponents)),
-    )
+    return tuple(sorted(terms, key=lambda term: term.exponents))
 
 
-def compute_chromatic_polynomial(
-    request: GraphPolynomialRequest,
-) -> GraphPolynomialResult:
+def chromatic_polynomial(
+    graph: IndexedSimpleUndirectedGraph,
+) -> tuple[PolynomialTerm, ...]:
     """Compute the exact chromatic polynomial chi_G(x)."""
     x = Symbol("x")
-    g = _build_graph(request)
+    g = _build_graph(graph)
     result = nx.chromatic_polynomial(g)
-    return GraphPolynomialResult(terms=_poly_to_terms(result, x))
+    return _poly_to_terms(result, x)
 
 
-def compute_flow_polynomial(request: GraphPolynomialRequest) -> GraphPolynomialResult:
+def flow_polynomial(graph: IndexedSimpleUndirectedGraph) -> tuple[PolynomialTerm, ...]:
     """Compute the exact nowhere-zero flow polynomial F_G(x).
 
     The identity is F_G(x) = (-1)^{|E|-|V|+k(G)} T_G(0, 1-x).
     """
-    g = _build_graph(request)
+    g = _build_graph(graph)
     tutte = nx.tutte_polynomial(g)
     components = nx.number_connected_components(g)
     sign = (-1) ** (g.number_of_edges() - g.number_of_nodes() + components)
     flow_x = sympy.Symbol("flow_x")
     flow_expr = tutte.subs({sympy.Symbol("x"): 0, sympy.Symbol("y"): 1 - flow_x})
     flow_expr = sign * expand(flow_expr)
-    return GraphPolynomialResult(terms=_poly_to_terms(flow_expr, flow_x))
+    return _poly_to_terms(flow_expr, flow_x)
 
 
-def compute_matching_polynomial(
-    request: MatchingPolynomialRequest,
-) -> GraphPolynomialResult:
+def matching_polynomial(
+    graph: IndexedSimpleUndirectedGraph,
+) -> tuple[PolynomialTerm, ...]:
     """Compute the exact matching polynomial M_G(x).
 
     M_G(x) = sum_{k} (-1)^k m_k x^{n-2k}, computed by the deletion recurrence
     on induced subgraphs of at most 16 vertices.
     """
-    g = _build_graph(request)
+    g = _build_graph(graph, matching=True)
     n = g.number_of_nodes()
     if n == 0:
-        return GraphPolynomialResult(terms=(PolynomialTerm(coefficient=1, degree=0),))
+        return (PolynomialTerm(coefficient=1, degree=0),)
 
     adjacency = [0] * n
     for u, v in g.edges():
@@ -254,39 +261,14 @@ def compute_matching_polynomial(
         for degree, coeff in enumerate(coefficients((1 << n) - 1))
         if coeff
     )
-    return GraphPolynomialResult(terms=terms)
-
-
-def compute_independence_polynomial(
-    request: TreeIndependencePolynomialRequest,
-) -> TreeIndependencePolynomialResult:
-    """Compute the exact independence polynomial of an admitted finite tree."""
-
-    try:
-        coefficients = independence_polynomial_coefficients(request.graph)
-    except TreeIndependencePolynomialAdmissionError as exc:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph.polynomial.independence.admission",
-            message=str(exc),
-        ) from exc
-    return TreeIndependencePolynomialResult._from_kernel(
-        graph=request.graph,
-        coefficients=coefficients,
-    )
+    return terms
 
 
 __all__ = [
-    "compute_chromatic_polynomial",
-    "compute_flow_polynomial",
-    "compute_independence_polynomial",
-    "compute_matching_polynomial",
-    "compute_tutte_polynomial",
-]
-
-
-
-__all__ = [
+    "chromatic_polynomial",
+    "flow_polynomial",
     "independence_polynomial",
     "independence_polynomial_coefficients",
+    "matching_polynomial",
+    "tutte_polynomial",
 ]

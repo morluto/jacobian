@@ -5,8 +5,9 @@ from __future__ import annotations
 from itertools import combinations
 
 from jacobian.math.graphs.uniform_subset_intersection._models import (
-    UniformSubsetIntersectionRequest,
+    IntersectionRelation,
     UniformSubsetIntersectionResult,
+    _admit_uniform_subset_intersection,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -14,7 +15,10 @@ __all__ = ["construct_uniform_subset_intersection_graph"]
 
 
 def construct_uniform_subset_intersection_graph(
-    request: UniformSubsetIntersectionRequest,
+    ground_set_size: int,
+    subset_cardinality: int,
+    threshold: int,
+    relation: IntersectionRelation,
 ) -> UniformSubsetIntersectionResult:
     """Construct a graph on k-subsets of [n] with a threshold relation.
 
@@ -22,23 +26,11 @@ def construct_uniform_subset_intersection_graph(
     comma-separated subset. An edge joins two subsets when their
     intersection size satisfies the declared relation with the threshold.
     """
-    n = request.ground_set_size
-    k = request.subset_cardinality
-    t = request.threshold
-    relation = request.relation
-
-    if k == 0 or k > n:
-        graph = SimpleUndirectedGraph(vertices=(), edges=())
-        return UniformSubsetIntersectionResult(
-            ground_set_size=n,
-            subset_cardinality=k,
-            threshold=t,
-            relation=relation,
-            graph=graph,
-        )
-
-    ground = list(range(n))
-    subsets = list(combinations(ground, k))
+    plan = _admit_uniform_subset_intersection(
+        ground_set_size, subset_cardinality, threshold, relation
+    )
+    subsets = tuple(combinations(range(ground_set_size), subset_cardinality))
+    assert len(subsets) == plan.vertex_count
 
     if len(subsets) == 1:
         graph = SimpleUndirectedGraph(
@@ -46,9 +38,9 @@ def construct_uniform_subset_intersection_graph(
             edges=(),
         )
         return UniformSubsetIntersectionResult(
-            ground_set_size=n,
-            subset_cardinality=k,
-            threshold=t,
+            ground_set_size=ground_set_size,
+            subset_cardinality=subset_cardinality,
+            threshold=threshold,
             relation=relation,
             graph=graph,
         )
@@ -59,11 +51,11 @@ def construct_uniform_subset_intersection_graph(
     for i in range(len(subsets)):
         si = set(subsets[i])
         for j in range(i + 1, len(subsets)):
-            intersection_size = len(si & set(subsets[j]))
+            intersection_size = len(si.intersection(subsets[j]))
             if relation == "INTERSECTION_LT_THRESHOLD":
-                adjacent = intersection_size < t
+                adjacent = intersection_size < threshold
             else:
-                adjacent = intersection_size == t
+                adjacent = intersection_size == threshold
             if adjacent:
                 a, b = vertices_labels[i], vertices_labels[j]
                 if a < b:
@@ -75,10 +67,11 @@ def construct_uniform_subset_intersection_graph(
         vertices=tuple(vertices_labels),
         edges=tuple(edges),
     )
+    assert len(graph.edges) == plan.edge_count
     return UniformSubsetIntersectionResult(
-        ground_set_size=n,
-        subset_cardinality=k,
-        threshold=t,
+        ground_set_size=ground_set_size,
+        subset_cardinality=subset_cardinality,
+        threshold=threshold,
         relation=relation,
         graph=graph,
     )

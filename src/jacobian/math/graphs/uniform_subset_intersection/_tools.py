@@ -17,7 +17,12 @@ from jacobian.math.graphs.uniform_subset_intersection.operations import (
 def compute_uniform_subset_intersection_graph(
     request: UniformSubsetIntersectionRequest,
 ) -> UniformSubsetIntersectionResult:
-    return construct_uniform_subset_intersection_graph(request)
+    return construct_uniform_subset_intersection_graph(
+        request.ground_set_size,
+        request.subset_cardinality,
+        request.threshold,
+        request.relation,
+    )
 
 
 def usi_operation[
@@ -52,8 +57,8 @@ TOOLS: MathTools = (
         (
             "Construct a labelled simple graph whose vertices are all k-subsets "
             "of [n], with an edge between two subsets when their intersection size "
-            "satisfies the declared relation (less-than or equal-to) with a given "
-            "threshold. Includes Kneser graphs and Johnson-scheme threshold graphs "
+            "satisfies the declared less-than-threshold or equality relation. "
+            "Includes Kneser graphs and Johnson-scheme threshold graphs "
             "as special cases."
         ),
         UniformSubsetIntersectionRequest,

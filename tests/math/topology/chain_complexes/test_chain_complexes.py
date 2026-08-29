@@ -138,6 +138,54 @@ class TestComputeHomology:
         assert result.homology_groups[0].betti_number == 1
         assert result.homology_groups[1].betti_number == 1
 
+    @pytest.mark.parametrize(
+        ("coefficient_field", "prime"),
+        [
+            (CoefficientField.RATIONAL, None),
+            (CoefficientField.PRIME_FIELD, 101),
+        ],
+    )
+    def test_flint_rank_admits_retained_complex_above_shared_ceiling(
+        self, coefficient_field: CoefficientField, prime: int | None
+    ) -> None:
+        size = 64
+        identity = tuple(
+            tuple("1" if row == column else "0" for column in range(size))
+            for row in range(size)
+        )
+        zero = tuple(tuple("0" for _ in range(size)) for _ in range(size))
+        complex_value = ChainComplexValue(
+            coefficient_field=coefficient_field,
+            prime=prime,
+            degree_min=0,
+            degree_max=2,
+            basis_sizes=(size, size, size),
+            differential_matrices=(identity, zero),
+        )
+
+        result = compute_homology(ComputeHomologyRequest(complex=complex_value))
+
+        assert tuple(group.betti_number for group in result.homology_groups) == (
+            0,
+            0,
+            size,
+        )
+        assert result.complex is complex_value
+
+    def test_non_homology_request_retains_smaller_cell_envelope(self) -> None:
+        size = 64
+        zero = tuple(tuple("0" for _ in range(size)) for _ in range(size))
+        complex_value = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=2,
+            basis_sizes=(size, size, size),
+            differential_matrices=(zero, zero),
+        )
+
+        with pytest.raises(ValidationError, match="4096-cell operation budget"):
+            VerifyDifferentialRequest(complex=complex_value)
+
     def test_point_homology(self) -> None:
         result = compute_homology(ComputeHomologyRequest(complex=_point_complex()))
         assert result.homology_groups[0].betti_number == 1

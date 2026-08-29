@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
@@ -30,6 +31,7 @@ MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
 # order 128, but Kronecker admission was established only for product axes
 # through order 50. Pin each admitted output axis to that envelope.
 MAX_KRONECKER_PRODUCT_AXIS = 50
+MAX_EXACT_LINEAR_MATRIX_WORK = 100_000_000
 
 
 def _require_raw_scalar_digits(value: object, *, label: str) -> None:
@@ -123,11 +125,11 @@ class _MatrixRequest(StrictModel):
 def _require_computation_dimensions(
     entries: tuple[tuple[CanonicalRational, ...], ...],
 ) -> None:
-    if len(entries) > MAX_MATRIX_DIMENSION or len(entries[0]) > MAX_MATRIX_DIMENSION:
+    if len(entries) > MAX_EXACT_LINEAR_MATRIX_AXIS or len(entries[0]) > MAX_EXACT_LINEAR_MATRIX_AXIS:
         raise _validation_error(
             "budget_exceeded",
             "matrix computation dimensions are limited to "
-            f"{MAX_MATRIX_DIMENSION} rows and columns",
+            f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
         )
 
 
@@ -165,6 +167,12 @@ def _require_square_system_admission(
 
 class RationalMatrixRequest(_MatrixRequest):
     matrix: RationalMatrix
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_EXACT_LINEAR_MATRIX_AXIS
+
+    @model_validator(mode="after")
+    def require_computation_dimensions(self) -> Self:
+        _require_computation_dimensions(self.matrix.entries)
+        return self
 
 
 class RationalMatrixProductRequest(_MatrixRequest):
@@ -204,10 +212,17 @@ class MatrixRankRequest(_MatrixRequest):
     """One bounded rectangular matrix whose exact rank is requested."""
 
     matrix: RationalMatrix
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_EXACT_LINEAR_MATRIX_AXIS
+
+    @model_validator(mode="after")
+    def require_computation_dimensions(self) -> Self:
+        _require_computation_dimensions(self.matrix.entries)
+        return self
 
 
 class IntegerMatrixRequest(_MatrixRequest):
     matrix: IntegerMatrix
+    _raw_matrix_axis_limit: ClassVar[int] = MAX_EXACT_LINEAR_MATRIX_AXIS
 
 
 class NonsingularIntegerMatrixRequest(_MatrixRequest):
@@ -237,9 +252,9 @@ class RrefResult(StrictModel):
 
     matrix: RationalMatrix
     reduced_matrix: RationalMatrix
-    rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
-    pivot_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
-    free_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
+    rank: int = Field(ge=0, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
+    pivot_columns: tuple[int, ...] = Field(max_length=MAX_EXACT_LINEAR_MATRIX_AXIS)
+    free_columns: tuple[int, ...] = Field(max_length=MAX_EXACT_LINEAR_MATRIX_AXIS)
     convention: Literal["UNIQUE_RREF_OVER_QQ"] = "UNIQUE_RREF_OVER_QQ"
 
     @classmethod
@@ -287,8 +302,8 @@ class MatrixRankResult(StrictModel):
     """One structurally bounded rank outcome bound to its source matrix."""
 
     matrix: RationalMatrix
-    rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
-    pivot_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
+    rank: int = Field(ge=0, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
+    pivot_columns: tuple[int, ...] = Field(max_length=MAX_EXACT_LINEAR_MATRIX_AXIS)
 
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
@@ -319,13 +334,13 @@ class NullspaceResult(StrictModel):
     """
 
     matrix: RationalMatrix
-    ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
-    rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
-    nullity: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
+    ambient_dimension: int = Field(ge=1, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
+    rank: int = Field(ge=0, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
+    nullity: int = Field(ge=0, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
     basis_vectors: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        max_length=MAX_MATRIX_DIMENSION
+        max_length=MAX_EXACT_LINEAR_MATRIX_AXIS
     )
-    free_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
+    free_columns: tuple[int, ...] = Field(max_length=MAX_EXACT_LINEAR_MATRIX_AXIS)
     convention: Literal["RREF_FUNDAMENTAL_BASIS"] = "RREF_FUNDAMENTAL_BASIS"
 
     @classmethod

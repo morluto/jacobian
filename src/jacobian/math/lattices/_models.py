@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     IntegerMatrix,
@@ -25,10 +27,51 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"lattice.{reason}", message)
 
 
-class HermiteNormalFormRequest(StrictModel):
-    """One bounded integer matrix for row Hermite normal form."""
+def _require_lattice_matrix_envelope(matrix: IntegerMatrix, *, label: str) -> None:
+    """Admit one integer matrix into the lattice 32-axis computation envelope."""
 
-    matrix: IntegerMatrix
+    rows = len(matrix.entries)
+    columns = len(matrix.entries[0])
+    if rows > MAX_MATRIX_DIMENSION or columns > MAX_MATRIX_DIMENSION:
+        raise _validation_error(
+            "budget_exceeded",
+            f"{label} dimensions are limited to {MAX_MATRIX_DIMENSION} rows and columns",
+        )
+    require_matrix_scalar_digits(
+        matrix.entries,
+        maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,
+        label=label,
+    )
+
+
+def _run_admission(admission: Callable[[], None], *, location: tuple[str, ...]) -> None:
+    """Expose lattice envelope rejection through the domain API."""
+
+    try:
+        admission()
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=location, code=exc.type, message=exc.message()
+        ) from exc
+
+
+class HermiteNormalFormRequest(StrictModel):
+    """One bounded integer matrix for row Hermite normal form.
+
+    Row and column counts are at most ``MAX_MATRIX_DIMENSION``.
+    """
+
+    matrix: IntegerMatrix = Field(
+        description=(
+            "Integer matrix whose row and column counts are at most "
+            f"{MAX_MATRIX_DIMENSION}."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_admitted_envelope(self) -> Self:
+        _require_lattice_matrix_envelope(self.matrix, label="Hermite normal form input")
+        return self
 
 
 class HermiteNormalFormResult(StrictModel):
@@ -56,9 +99,22 @@ class HermiteNormalFormResult(StrictModel):
 
 
 class LatticeReductionRequest(StrictModel):
-    """One bounded integer row basis for exact LLL reduction."""
+    """One bounded integer row basis for exact LLL reduction.
 
-    basis: IntegerMatrix
+    Row and column counts are at most ``MAX_MATRIX_DIMENSION``.
+    """
+
+    basis: IntegerMatrix = Field(
+        description=(
+            "Integer row basis whose row and column counts are at most "
+            f"{MAX_MATRIX_DIMENSION}."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_admitted_envelope(self) -> Self:
+        _require_lattice_matrix_envelope(self.basis, label="basis input")
+        return self
 
 
 class LatticeReductionResult(StrictModel):

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
@@ -56,6 +59,26 @@ def _univariate_polynomial() -> RationalPolynomial:
     )
 
 
+def _binomial(degree: int, constant: int) -> RationalPolynomial:
+    return RationalPolynomial.model_validate(
+        {
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {
+                        "coefficient": {"num": "1", "den": "1"},
+                        "exponents": [degree],
+                    },
+                    {
+                        "coefficient": {"num": str(constant), "den": "1"},
+                        "exponents": [0],
+                    },
+                ]
+            },
+        }
+    )
+
+
 def test_contract_sympy_contract_round_trip_preserves_ring_and_order() -> None:
     source = _polynomial()
 
@@ -99,6 +122,30 @@ def test_invariant_operations_accept_canonical_polynomial_values() -> None:
     assert resultant.elimination_variable == "x"
     assert resultant.resultant.kind == "SCALAR"
     assert resultant.resultant.value.num == "0"
+
+
+def test_flint_discriminant_accepts_degree_above_previous_ceiling() -> None:
+    degree = 512
+    result = polynomial_discriminant(_binomial(degree, -2), "x")
+
+    assert result.discriminant.kind == "SCALAR"
+    expected = (
+        (-1) ** (degree * (degree - 1) // 2) * degree**degree * (-2) ** (degree - 1)
+    )
+    assert result.discriminant.value.as_fraction() == expected
+
+
+def test_flint_resultant_accepts_degree_sum_above_previous_ceiling() -> None:
+    degree = 96
+    result = polynomial_resultant(_binomial(degree, -2), _binomial(degree, -3), "x")
+
+    assert result.resultant.kind == "SCALAR"
+    assert result.resultant.value.as_fraction() == 1
+
+
+def test_univariate_discriminant_rejects_degree_above_work_bound() -> None:
+    with pytest.raises(OperationDomainValidationError, match="operation budget"):
+        polynomial_discriminant(_binomial(1_025, -2), "x")
 
 
 def test_sparse_polynomial_schema_explains_canonical_term_order() -> None:

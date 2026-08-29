@@ -8,7 +8,12 @@ from typing import Any
 from pydantic import ConfigDict, StrictInt
 from pydantic.dataclasses import dataclass
 
-_MAX_DIMENSION = 256
+from jacobian.math.matrices.finite_fields._bounds import (
+    MAX_PRIME_FIELD_FALLBACK_AXIS,
+    MAX_PRIME_FIELD_FLINT_PRIME,
+    MAX_PRIME_FIELD_MATRIX_AXIS,
+    MAX_PRIME_FIELD_MATRIX_CELLS,
+)
 
 __all__ = [
     "PrimeFieldMatrix",
@@ -33,8 +38,18 @@ class PrimeFieldMatrix:
             raise ValueError("prime must be a prime integer")
         if type(self.columns) is not int or self.columns < 0:
             raise ValueError("columns must be a nonnegative integer")
-        if self.columns > _MAX_DIMENSION or len(self.entries) > _MAX_DIMENSION:
-            raise ValueError("matrix exceeds the supported dimension bound")
+        if (
+            self.columns > MAX_PRIME_FIELD_MATRIX_AXIS
+            or len(self.entries) > MAX_PRIME_FIELD_MATRIX_AXIS
+        ):
+            raise ValueError("matrix exceeds the supported axis bound")
+        if self.prime > MAX_PRIME_FIELD_FLINT_PRIME and (
+            self.columns > MAX_PRIME_FIELD_FALLBACK_AXIS
+            or len(self.entries) > MAX_PRIME_FIELD_FALLBACK_AXIS
+        ):
+            raise ValueError("matrix exceeds the exact fallback axis bound")
+        if len(self.entries) * self.columns > MAX_PRIME_FIELD_MATRIX_CELLS:
+            raise ValueError("matrix exceeds the supported cell bound")
         if any(len(row) != self.columns for row in self.entries):
             raise ValueError("every matrix row must match the declared column count")
         if any(
@@ -49,13 +64,23 @@ class PrimeFieldMatrix:
             raise ValueError("prime must be a prime integer")
 
 
+def _backend_matrix(matrix: PrimeFieldMatrix) -> Any:
+    from flint import nmod_mat
+
+    return nmod_mat(
+        len(matrix.entries),
+        matrix.columns,
+        [value for row in matrix.entries for value in row],
+        matrix.prime,
+    )
+
+
 def _domain_matrix(matrix: PrimeFieldMatrix) -> Any:
     import sympy
     from sympy.polys.matrices import DomainMatrix
 
-    entries = [list(row) for row in matrix.entries]
     return DomainMatrix(
-        entries,
+        [list(row) for row in matrix.entries],
         (len(matrix.entries), matrix.columns),
         sympy.GF(matrix.prime),
     )
@@ -69,17 +94,31 @@ def rref(
     row_count = len(matrix.entries)
     if row_count == 0 or matrix.columns == 0:
         return tuple((0,) * matrix.columns for _ in matrix.entries), ()
-    reduced_domain, pivot_columns = _domain_matrix(matrix).rref()
-    reduced = reduced_domain.to_Matrix()
-    return (
-        tuple(
+    if matrix.prime > MAX_PRIME_FIELD_FLINT_PRIME:
+        reduced_domain, pivot_columns = _domain_matrix(matrix).rref()
+        reduced = reduced_domain.to_Matrix()
+        return (
             tuple(
-                int(reduced[row, column]) % matrix.prime
-                for column in range(matrix.columns)
-            )
-            for row in range(row_count)
-        ),
-        tuple(int(pivot) for pivot in pivot_columns),
+                tuple(
+                    int(reduced[row, column]) % matrix.prime
+                    for column in range(matrix.columns)
+                )
+                for row in range(row_count)
+            ),
+            tuple(int(pivot) for pivot in pivot_columns),
+        )
+    reduced, rank_value = _backend_matrix(matrix).rref()
+    reduced_rows = tuple(
+        tuple(int(reduced[row, column]) for column in range(matrix.columns))
+        for row in range(row_count)
+    )
+    pivot_columns = tuple(
+        next(column for column, value in enumerate(row) if value)
+        for row in reduced_rows[: int(rank_value)]
+    )
+    return (
+        reduced_rows,
+        pivot_columns,
     )
 
 
@@ -88,7 +127,9 @@ def rank(matrix: PrimeFieldMatrix) -> int:
 
     if not matrix.entries or matrix.columns == 0:
         return 0
-    return int(_domain_matrix(matrix).rank())
+    if matrix.prime > MAX_PRIME_FIELD_FLINT_PRIME:
+        return int(_domain_matrix(matrix).rank())
+    return int(_backend_matrix(matrix).rank())
 
 
 def nullspace(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:
@@ -96,9 +137,21 @@ def nullspace(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:
 
     if matrix.columns == 0:
         return ()
-    domain = _domain_matrix(matrix).nullspace(divide_last=True)
+    if not matrix.entries:
+        return tuple(
+            tuple(int(row == column) for column in range(matrix.columns))
+            for row in range(matrix.columns)
+        )
+    if matrix.prime > MAX_PRIME_FIELD_FLINT_PRIME:
+        domain = _domain_matrix(matrix).nullspace(divide_last=True)
+        return tuple(
+            tuple(int(value) % matrix.prime for value in row)
+            for row in domain.to_list()
+        )
+    vectors, nullity = _backend_matrix(matrix).nullspace()
     return tuple(
-        tuple(int(value) % matrix.prime for value in row) for row in domain.to_list()
+        tuple(int(vectors[coordinate, basis]) for coordinate in range(matrix.columns))
+        for basis in range(int(nullity))
     )
 
 

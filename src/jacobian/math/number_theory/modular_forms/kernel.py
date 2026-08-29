@@ -17,7 +17,9 @@ NamedLevelOneModularForm = Literal["E4", "E6", "DELTA"]
 
 NAMED_LEVEL_ONE_FORMS = frozenset(("E4", "E6", "DELTA"))
 
-# Delta needs five finite convolutions to construct its defining identity.
+# This ceiling charges all coefficient products in three schoolbook truncated
+# products. FLINT selects faster kernels where applicable, so the estimate is
+# conservative without depending on one private multiplication algorithm.
 MAX_LEVEL_ONE_WORK_TERMS = 4_000_000
 MAX_LEVEL_ONE_SERIALIZED_CHARACTERS = 65_536
 
@@ -56,20 +58,6 @@ def eisenstein_coefficients(
     )
 
 
-def _convolve(
-    left: tuple[Fraction, ...], right: tuple[Fraction, ...]
-) -> tuple[Fraction, ...]:
-    """Cauchy product through the common finite precision."""
-    order = len(left)
-    return tuple(
-        sum(
-            (left[index] * right[degree - index] for index in range(degree + 1)),
-            start=Fraction(0),
-        )
-        for degree in range(order)
-    )
-
-
 def expected_coefficients(
     form: NamedLevelOneModularForm, truncation_order: int
 ) -> tuple[Fraction, ...]:
@@ -80,11 +68,9 @@ def expected_coefficients(
         return eisenstein_coefficients("E6", truncation_order)
     e4 = eisenstein_coefficients("E4", truncation_order)
     e6 = eisenstein_coefficients("E6", truncation_order)
-    e4_cubed = _convolve(_convolve(e4, e4), e4)
-    e6_squared = _convolve(e6, e6)
-    return tuple(
-        (left - right) / 1728 for left, right in zip(e4_cubed, e6_squared, strict=True)
-    )
+    from jacobian.math.number_theory.modular_forms._flint import delta_coefficients
+
+    return delta_coefficients(e4, e6)
 
 
 def metadata(
@@ -103,9 +89,10 @@ def coefficient_digit_bound(
 ) -> int:
     """Conservative decimal bound for every integral output coefficient.
 
-    For n < P, ``sigma_r(n) <= n^(r+1) <= P^(r+1)``.  Delta is formed
-    from at most P^2 triple and P double Cauchy terms.  The bound deliberately
-    exceeds the exact coefficient size so admission occurs before any scan.
+    For n < P, ``sigma_r(n) <= n^(r+1) <= P^(r+1)``. For Delta, Deligne's
+    bound ``|tau(n)| <= d(n)n^(11/2)`` and ``d(n) <= 2sqrt(n)`` give the
+    integral bound ``|tau(n)| <= 2P^6``. Admission therefore tracks the
+    canonical result rather than unreduced intermediates in its identity.
     """
     p = truncation_order
     e4_bound = 240 * p**4
@@ -115,7 +102,7 @@ def coefficient_digit_bound(
     elif form == "E6":
         bound = e6_bound
     else:
-        bound = p**2 * e4_bound**3 + p * e6_bound**2
+        bound = 2 * p**6
     return len(str(bound))
 
 
@@ -145,7 +132,7 @@ def require_level_one_admission(
     p = truncation_order
     divisor_scans = p * isqrt(p)
     formula_scans = divisor_scans if form in {"E4", "E6"} else 2 * divisor_scans
-    series_terms = 0 if form in {"E4", "E6"} else 5 * p * p
+    series_terms = 0 if form in {"E4", "E6"} else 3 * p * (p + 1) // 2
     if formula_scans + series_terms > MAX_LEVEL_ONE_WORK_TERMS:
         raise OperationDomainValidationError(
             location=("truncation_order",),

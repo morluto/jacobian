@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._hnf import compute_hermite_normal_form
 from jacobian.math.lattices._lattice import reduce_lattice_basis
 from jacobian.math.lattices._models import (

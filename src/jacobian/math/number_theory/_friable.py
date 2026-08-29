@@ -5,11 +5,11 @@ from pydantic_core import PydanticCustomError
 from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory._friable_kernel import count_friable
 from jacobian.math.number_theory._friable_models import (
     FriableCountRequest,
     FriableCountResult,
 )
-from jacobian.math.number_theory._friable_operations import count_friable
 from jacobian.math.number_theory._support import number_theory_operation
 
 

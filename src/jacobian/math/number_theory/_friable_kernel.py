@@ -1,4 +1,4 @@
-"""Exact bounded friable-count kernel and typed operation adapter."""
+"""Exact bounded friable-count kernel."""
 
 from __future__ import annotations
 

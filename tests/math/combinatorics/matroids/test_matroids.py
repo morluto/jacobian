@@ -2,23 +2,27 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import TypedDict
+from collections.abc import Callable, Sequence
+from typing import TypedDict, cast
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.matroids import (
     LinearMatroid,
     matroid_closure,
     matroid_rank,
+    operations,
 )
 from jacobian.math.combinatorics.matroids._models import (
     MatroidClosureRequest,
     MatroidClosureResult,
 )
 from jacobian.math.combinatorics.matroids.operations import closure_result
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
 def compute_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
@@ -166,18 +170,48 @@ class TestClosure:
         )
         matroid = _matroid(1_000_003, rows, 105)
 
-        closure, rank = matroid_closure(matroid, (0, 1, 2, 3, 4))
+        executed_work = 0
+        original_rank = cast(
+            Callable[[PrimeFieldMatrix], int], vars(operations)["pf_rank"]
+        )
+
+        def counted_rank(matrix: PrimeFieldMatrix) -> int:
+            nonlocal executed_work
+            executed_work += operations._rank_work(len(matrix.entries), matrix.columns)
+            return original_rank(matrix)
+
+        with patch.object(operations, "pf_rank", side_effect=counted_rank):
+            closure, rank = matroid_closure(matroid, (0, 1, 2, 3, 4))
 
         assert rank == 5
         assert closure == tuple(
             column for column in range(105) if column % 7 in {0, 1, 2, 3, 4}
         )
+        assert_charged_work_parity(
+            charged={"rank": 25_375}, executed={"rank": executed_work}
+        )
 
-    def test_dense_large_seed_rejects_rank_work_before_kernel(self) -> None:
-        matroid = _matroid(2, _identity_rows(256), 256)
+    def test_closure_work_boundary_accepts_last_in_range_request(self) -> None:
+        matroid = _matroid(2, [(0,) * 147 for _ in range(222)], 147)
+
+        closure, rank = matroid_closure(matroid, tuple(range(46)))
+
+        assert (
+            operations._rank_work(222, 46) + 101 * operations._rank_work(222, 47)
+            == 49_999_950
+        )
+        assert closure == tuple(range(147))
+        assert rank == 0
+
+    def test_closure_work_boundary_rejects_first_out_of_range_request(self) -> None:
+        matroid = _matroid(2, [(0,) * 250 for _ in range(141)], 250)
 
         with pytest.raises(OperationDomainValidationError, match="work bound"):
-            matroid_closure(matroid, tuple(range(128)))
+            matroid_closure(matroid, tuple(range(40)))
+        assert (
+            operations._rank_work(141, 40) + 210 * operations._rank_work(141, 41)
+            == 50_000_010
+        )
 
 
 class TestCatalogAdmission:

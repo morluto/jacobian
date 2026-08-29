@@ -13,7 +13,7 @@ from jacobian.math.topology.frames._models import (
 )
 from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
 from jacobian.math.topology.frames.operations import _gram_result, _gram_result_bytes
-from jacobian.math.topology.frames.values import MAX_DIM, MAX_VECTORS
+from jacobian.math.topology.frames.values import MAX_VECTORS
 
 
 def test_native_gram_and_potential_match_wire_adapters() -> None:
@@ -46,7 +46,7 @@ def test_native_frame_operations_keep_semantic_admission(
 
 def test_native_gram_returns_exact_matrix_beyond_mcp_byte_cap() -> None:
     """MCP output size is a transport-only constraint; native gram stays exact."""
-    dimension = MAX_DIM
+    dimension = 512
     basis = tuple(
         tuple(1_000 if row == column else 999 for column in range(dimension))
         for row in range(dimension)

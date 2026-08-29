@@ -9,8 +9,8 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
-MAX_VECTORS, MAX_DIM, MAX_VALUE = 1_024, 512, 1_000
 MAX_VECTOR_CELLS = 524_288
+MAX_VECTORS, MAX_DIM, MAX_VALUE = 1_024, MAX_VECTOR_CELLS, 1_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

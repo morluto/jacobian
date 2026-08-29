@@ -50,6 +50,13 @@ def _require_result_budget(predicted_bytes: int) -> None:
         )
 
 
+def _gram_minimum_result_bound(value: VectorFamily) -> int:
+    """Bound the unavoidable source and matrix structure before the kernel."""
+
+    vector_count = len(value.vectors)
+    return _retained_source_bytes(value) + 2 * vector_count**2 + 2 * vector_count
+
+
 def _gram_result(value: VectorFamily) -> GramResult:
     matrix = integer_gram(value.vectors)
     return GramResult._from_kernel(vectors=value.vectors, gram=matrix)

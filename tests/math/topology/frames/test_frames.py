@@ -18,7 +18,7 @@ from jacobian.math.topology.frames.operations import (
     _gram_result_bytes,
     gram,
 )
-from jacobian.math.topology.frames.values import MAX_DIM, MAX_VECTORS, VectorFamily
+from jacobian.math.topology.frames.values import MAX_VECTORS, VectorFamily
 
 
 def _repeated_standard_basis(
@@ -38,6 +38,14 @@ def test_gram_accepts_nonspanning_vector_family() -> None:
         (1, 2),
         (2, 4),
     )
+
+
+def test_gram_accepts_a_single_vector_beyond_the_old_side_cap() -> None:
+    vector = (1,) * 513
+    result = gram(VectorFamily(vectors=(vector,)))
+
+    assert result.dimension == 513
+    assert result.gram == ((513,),)
 
 
 def test_frame_requires_full_ambient_span() -> None:
@@ -102,7 +110,8 @@ def test_flint_gram_reconstructs_dot_products_and_quadratic_form() -> None:
 
 
 def test_result_sensitive_operations_diverge_at_full_carrier_boundary() -> None:
-    vectors = _repeated_standard_basis(dimension=MAX_DIM, repeats=2)
+    dimension = 512
+    vectors = _repeated_standard_basis(dimension=dimension, repeats=2)
     family = VectorFamily(vectors=vectors)
 
     assert len(vectors) == MAX_VECTORS
@@ -110,10 +119,10 @@ def test_result_sensitive_operations_diverge_at_full_carrier_boundary() -> None:
     potential = _frame_potential(FiniteFrameRequest(vectors=vectors))
     coherence = _coherence(CoherenceRequest(vectors=vectors))
     assert len(gram_result.gram) == MAX_VECTORS
-    assert gram_result.gram[0][MAX_DIM] == 1
+    assert gram_result.gram[0][dimension] == 1
     assert potential.potential == str(2 * MAX_VECTORS)
     assert coherence.coherence_squared.as_integer_ratio() == (1, 1)
-    assert coherence.maximizing_pair == (MAX_DIM - 1, MAX_VECTORS - 1)
+    assert coherence.maximizing_pair == (dimension - 1, MAX_VECTORS - 1)
     assert (
         len(encode_strict_json(gram_result.model_dump(mode="json")))
         <= CanonicalLimits().max_output_bytes
@@ -127,10 +136,10 @@ def test_result_sensitive_operations_diverge_at_full_carrier_boundary() -> None:
 def test_sparse_high_height_gram_is_admitted_by_occupancy() -> None:
     vectors = tuple(
         tuple(1_000 * entry for entry in vector)
-        for vector in _repeated_standard_basis(dimension=MAX_DIM, repeats=2)
+        for vector in _repeated_standard_basis(dimension=512, repeats=2)
     )
     family = VectorFamily(vectors=vectors)
-    naive_entry_bound = MAX_DIM * 1_000**2
+    naive_entry_bound = 512 * 1_000**2
     naive_chars = len(str(naive_entry_bound)) + int(naive_entry_bound > 0)
     naive_bytes = (
         MAX_VECTORS**2 * (naive_chars + 1)
@@ -147,12 +156,12 @@ def test_sparse_high_height_gram_is_admitted_by_occupancy() -> None:
     )
     assert result.gram[0][0] == 1_000_000
     assert result.gram[0][1] == 0
-    assert result.gram[0][MAX_DIM] == 1_000_000
+    assert result.gram[0][512] == 1_000_000
     assert len(encoded) <= CanonicalLimits().max_output_bytes
 
 
 def test_dense_high_height_gram_is_rejected_before_backend_expansion() -> None:
-    dimension = MAX_DIM
+    dimension = 512
     basis = tuple(
         tuple(1_000 if row == column else 999 for column in range(dimension))
         for row in range(dimension)

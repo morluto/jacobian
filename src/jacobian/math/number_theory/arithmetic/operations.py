@@ -15,6 +15,14 @@ from jacobian.math.number_theory.arithmetic._models import (
     _MAX_NTH_ROOT_DEGREE,
     MAX_BASE_DIGITS,
 )
+from jacobian.math.number_theory.arithmetic._multiplicative_forms import (
+    MAX_K_VALUE,
+    KFreeDecompositionResult,
+    NormalizedQuadraticRadicalResult,
+    PerfectPowerProfileResult,
+    PrimeExponentRow,
+    SquarefreeDecompositionResult,
+)
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 __all__ = [
@@ -42,11 +50,14 @@ __all__ = [
     "is_odd",
     "is_perfect",
     "is_square",
+    "k_free_decomposition",
     "less_than_rationals",
     "maximum_rational",
     "minimum_rational",
     "negate_rational",
+    "normalized_quadratic_radical",
     "nth_root",
+    "perfect_power_profile",
     "prime_valuation",
     "primitive_integer_vector",
     "product_rationals",
@@ -54,6 +65,7 @@ __all__ = [
     "rational_absolute_value",
     "reciprocal",
     "sign",
+    "squarefree_decomposition",
     "sum_rationals",
 ]
 
@@ -66,6 +78,190 @@ def _as_python_integer(value: SupportsIndex | CanonicalInteger | IntegerValue) -
     if isinstance(value, str):
         return parse_canonical_integer(value)
     return value.__index__()
+
+
+def _factorize_abs(value: int) -> list[tuple[int, int]]:
+    """Return the complete prime factorization of |value| in sorted order."""
+
+    from sympy import factorint
+
+    return sorted(factorint(abs(value)).items())
+
+
+def perfect_power_profile(value: IntegerValue) -> PerfectPowerProfileResult:
+    """Compute the maximal perfect-power profile of one integer value."""
+
+    integer = _as_python_integer(value)
+
+    if integer == 0:
+        return PerfectPowerProfileResult(kind="ZERO")
+    if integer == 1:
+        return PerfectPowerProfileResult(kind="POSITIVE_UNIT")
+    if integer == -1:
+        return PerfectPowerProfileResult(kind="NEGATIVE_UNIT")
+
+    prime_exps = _factorize_abs(integer)
+    exponent = prime_exps[0][1]
+    for _, prime_exponent in prime_exps[1:]:
+        exponent = gcd(exponent, prime_exponent)
+
+    if integer < 0:
+        while exponent % 2 == 0 and exponent > 1:
+            exponent //= 2
+
+    from sympy import integer_nthroot
+
+    root, _ = integer_nthroot(abs(integer), exponent)
+    base = -root if integer < 0 else root
+    assert base**exponent == integer
+
+    return PerfectPowerProfileResult(
+        kind="NONUNIT",
+        base=format_canonical_integer(base),
+        exponent=exponent,
+        is_nontrivial_perfect_power=exponent > 1,
+        factors=tuple(
+            PrimeExponentRow(
+                prime=format_canonical_integer(prime),
+                power=prime_exponent,
+            )
+            for prime, prime_exponent in prime_exps
+        ),
+        reconstruction=format_canonical_integer(integer),
+    )
+
+
+def _require_k(k: int) -> None:
+    if not 2 <= k <= MAX_K_VALUE:
+        raise OperationDomainValidationError(
+            location=("k",),
+            code="arithmetic.k_out_of_range",
+            message=f"k must be between 2 and {MAX_K_VALUE}",
+        )
+
+
+def k_free_decomposition(value: IntegerValue, k: int) -> KFreeDecompositionResult:
+    """Compute the unique decomposition n = a^k * c for one integer value."""
+
+    _require_k(k)
+    integer = _as_python_integer(value)
+
+    if integer == 0:
+        return KFreeDecompositionResult(kind="ZERO")
+    if integer == 1 or integer == -1:
+        return KFreeDecompositionResult(kind="UNIT")
+
+    prime_exps = _factorize_abs(integer)
+    base_value = 1
+    cofactor_sign = 1 if integer > 0 else -1
+    cofactor_abs = 1
+    rows: list[PrimeExponentRow] = []
+
+    for prime, exponent in prime_exps:
+        quotient_value, remainder = divmod(exponent, k)
+        if quotient_value > 0:
+            base_value *= prime**quotient_value
+        if remainder > 0:
+            cofactor_abs *= prime**remainder
+        rows.append(
+            PrimeExponentRow(
+                prime=format_canonical_integer(prime),
+                power=exponent,
+            )
+        )
+
+    cofactor = cofactor_sign * cofactor_abs
+    assert base_value**k * cofactor == integer
+
+    return KFreeDecompositionResult(
+        kind="NONUNIT",
+        base=format_canonical_integer(base_value),
+        cofactor=format_canonical_integer(cofactor),
+        factors=tuple(rows),
+        reconstruction=format_canonical_integer(integer),
+    )
+
+
+def squarefree_decomposition(value: IntegerValue) -> SquarefreeDecompositionResult:
+    """Compute the unique decomposition n = s^2 * d for one integer value."""
+
+    integer = _as_python_integer(value)
+
+    if integer == 0:
+        return SquarefreeDecompositionResult(kind="ZERO")
+    if integer == 1 or integer == -1:
+        return SquarefreeDecompositionResult(kind="UNIT")
+
+    prime_exps = _factorize_abs(integer)
+    square_factor = 1
+    squarefree_sign = 1 if integer > 0 else -1
+    squarefree_abs = 1
+    rows: list[PrimeExponentRow] = []
+
+    for prime, exponent in prime_exps:
+        quotient_value, remainder = divmod(exponent, 2)
+        if quotient_value > 0:
+            square_factor *= prime**quotient_value
+        if remainder > 0:
+            squarefree_abs *= prime
+        rows.append(
+            PrimeExponentRow(
+                prime=format_canonical_integer(prime),
+                power=exponent,
+            )
+        )
+
+    squarefree_part = squarefree_sign * squarefree_abs
+    assert square_factor**2 * squarefree_part == integer
+
+    return SquarefreeDecompositionResult(
+        kind="NONUNIT",
+        square_factor=format_canonical_integer(square_factor),
+        squarefree_part=format_canonical_integer(squarefree_part),
+        factors=tuple(rows),
+        reconstruction=format_canonical_integer(integer),
+    )
+
+
+def normalized_quadratic_radical(
+    value: IntegerValue,
+) -> NormalizedQuadraticRadicalResult:
+    """Normalize the positive square root of one nonnegative integer value."""
+
+    integer = _as_python_integer(value)
+    if integer < 0:
+        raise OperationDomainValidationError(
+            location=("value",),
+            code="arithmetic.value_must_be_nonnegative",
+            message="value must be nonnegative",
+        )
+
+    if integer == 0:
+        return NormalizedQuadraticRadicalResult(
+            kind="ZERO", coefficient="0", radicand="1", reconstruction="0"
+        )
+    if integer == 1:
+        return NormalizedQuadraticRadicalResult(
+            kind="RATIONAL_INTEGER", coefficient="1", radicand="1", reconstruction="1"
+        )
+
+    prime_exps = _factorize_abs(integer)
+    coefficient = 1
+    radicand = 1
+    for prime, exponent in prime_exps:
+        quotient_value, remainder = divmod(exponent, 2)
+        if quotient_value > 0:
+            coefficient *= prime**quotient_value
+        if remainder > 0:
+            radicand *= prime
+
+    assert coefficient**2 * radicand == integer
+    return NormalizedQuadraticRadicalResult(
+        kind="RATIONAL_INTEGER" if radicand == 1 else "IRRATIONAL_QUADRATIC",
+        coefficient=format_canonical_integer(coefficient),
+        radicand=format_canonical_integer(radicand),
+        reconstruction=format_canonical_integer(integer),
+    )
 
 
 def integer_gcd(

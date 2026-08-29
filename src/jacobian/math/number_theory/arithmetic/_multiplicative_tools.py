@@ -15,12 +15,41 @@ from jacobian.math.number_theory.arithmetic._multiplicative_forms import (
     PerfectPowerProfileResult,
     SquarefreeDecompositionResult,
 )
-from jacobian.math.number_theory.arithmetic._multiplicative_operations import (
-    compute_k_free_decomposition,
-    compute_normalized_quadratic_radical,
-    compute_perfect_power_profile,
-    compute_squarefree_decomposition,
+from jacobian.math.number_theory.arithmetic.operations import (
+    k_free_decomposition,
+    normalized_quadratic_radical,
+    perfect_power_profile,
+    squarefree_decomposition,
 )
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
+
+
+def _compute_perfect_power_profile(request: IntegerRequest) -> PerfectPowerProfileResult:
+    """Project the wire request onto the native integer-value operation."""
+
+    return perfect_power_profile(IntegerValue(value=request.value))
+
+
+def _compute_k_free_decomposition(request: IntegerKRequest) -> KFreeDecompositionResult:
+    """Project the wire request onto the native integer-value operation."""
+
+    return k_free_decomposition(IntegerValue(value=request.value), request.k)
+
+
+def _compute_squarefree_decomposition(
+    request: IntegerRequest,
+) -> SquarefreeDecompositionResult:
+    """Project the wire request onto the native integer-value operation."""
+
+    return squarefree_decomposition(IntegerValue(value=request.value))
+
+
+def _compute_normalized_quadratic_radical(
+    request: NonnegativeIntegerRequest,
+) -> NormalizedQuadraticRadicalResult:
+    """Project the wire request onto the native integer-value operation."""
+
+    return normalized_quadratic_radical(IntegerValue(value=request.value))
 
 
 def _mf_op[
@@ -57,7 +86,7 @@ MULTIPLICATIVE_FORM_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "exponents of |n|. Zero and units use closed structural variants.",
         IntegerRequest,
         PerfectPowerProfileResult,
-        compute_perfect_power_profile,
+        _compute_perfect_power_profile,
         "integer",
         "multiplicative",
         "exact",
@@ -79,7 +108,7 @@ MULTIPLICATIVE_FORM_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "exponent rows, and exact reconstruction.",
         IntegerKRequest,
         KFreeDecompositionResult,
-        compute_k_free_decomposition,
+        _compute_k_free_decomposition,
         "integer",
         "multiplicative",
         "exact",
@@ -101,7 +130,7 @@ MULTIPLICATIVE_FORM_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "per-prime exponent rows, and exact reconstruction.",
         IntegerRequest,
         SquarefreeDecompositionResult,
-        compute_squarefree_decomposition,
+        _compute_squarefree_decomposition,
         "integer",
         "multiplicative",
         "exact",
@@ -123,7 +152,7 @@ MULTIPLICATIVE_FORM_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "squarefree part and square factor.",
         IntegerRequest,
         SquarefreeDecompositionResult,
-        compute_squarefree_decomposition,
+        _compute_squarefree_decomposition,
         "integer",
         "multiplicative",
         "exact",
@@ -145,7 +174,7 @@ MULTIPLICATIVE_FORM_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "The radicand n must be a nonnegative integer.",
         NonnegativeIntegerRequest,
         NormalizedQuadraticRadicalResult,
-        compute_normalized_quadratic_radical,
+        _compute_normalized_quadratic_radical,
         "integer",
         "multiplicative",
         "exact",

@@ -59,26 +59,32 @@ def _require_divisor_incidences(
 class _HeightSums:
     """Incremental form of ``sum_heights`` for one dense result vector."""
 
-    def __init__(
-        self, length: int, *, shared_denominator_digits: int | None = None
-    ) -> None:
+    def __init__(self, length: int, *, shared_lcm: int | None = None) -> None:
         self.denominator_digits = [0] * length
         self.maximum_adjusted_numerator = [0] * length
         self.maximum_numerator = [0] * length
         self.term_counts = [0] * length
-        self.shared_denominator_digits = shared_denominator_digits
+        self.shared_lcm = shared_lcm
 
-    def add(self, index: int, height: RationalHeight) -> None:
+    def add(
+        self,
+        index: int,
+        height: RationalHeight,
+        *,
+        denominator: int | None = None,
+    ) -> None:
         self.denominator_digits[index] += height.denominator_digits
         self.maximum_adjusted_numerator[index] = max(
             self.maximum_adjusted_numerator[index],
             height.numerator_digits - height.denominator_digits,
         )
         lifted_numerator = height.numerator_digits
-        if self.shared_denominator_digits is not None:
-            lifted_numerator += (
-                self.shared_denominator_digits - height.denominator_digits
-            )
+        if self.shared_lcm is not None:
+            if denominator is None:
+                raise ValueError("shared-LCM height sums require a source denominator")
+            common = gcd(self.shared_lcm, denominator)
+            lift = max(1, self.shared_lcm // common)
+            lifted_numerator += _decimal_digits_from_bits(lift.bit_length())
         self.maximum_numerator[index] = max(
             self.maximum_numerator[index], lifted_numerator
         )
@@ -88,10 +94,10 @@ class _HeightSums:
         count = self.term_counts[index]
         if count == 0:
             return RationalHeight(1, 1)
-        if self.shared_denominator_digits is not None:
+        if self.shared_lcm is not None:
             return RationalHeight(
                 self.maximum_numerator[index] + len(str(count)),
-                self.shared_denominator_digits,
+                _decimal_digits_from_bits(self.shared_lcm.bit_length()),
             )
         denominator_digits = self.denominator_digits[index]
         return RationalHeight(
@@ -162,23 +168,15 @@ def _bounded_lcm(left: int, right: int) -> int | None:
     return left // common * right
 
 
-def _shared_denominator_digits(
+def _shared_denominator_lcm(
     values: tuple[CanonicalRational, ...],
 ) -> int | None:
-    """Return digit count of ``lcm(dens)`` when it stays in the result bound.
-
-    Mixed prefixes can keep a small maximum denominator while the LCM still
-    grows, so admission tracks the actual common multiple rather than
-    ``max(den).bit_length()``.
-    """
+    """Return ``lcm(dens)`` when its digits stay in the result bound."""
 
     if not values:
         return None
-    first = values[0].den
-    if all(value.den == first for value in values):
-        return len(first)
-    running = parse_canonical_integer(first)
-    seen = {first}
+    running = parse_canonical_integer(values[0].den)
+    seen = {values[0].den}
     for value in values[1:]:
         den = value.den
         if den in seen:
@@ -188,7 +186,16 @@ def _shared_denominator_digits(
         if merged is None:
             return None
         running = merged
-    return len(str(running))
+    if _decimal_digits_from_bits(running.bit_length()) > MAX_CANONICAL_RATIONAL_DIGITS:
+        return None
+    return running
+
+
+def _bounded_product(left: int, right: int) -> int | None:
+    predicted_bits = left.bit_length() + right.bit_length()
+    if _decimal_digits_from_bits(predicted_bits) > MAX_CANONICAL_RATIONAL_DIGITS:
+        return None
+    return left * right
 
 
 def _admit_convolution(
@@ -200,22 +207,23 @@ def _admit_convolution(
     incidences = _require_divisor_incidences(len(f))
     left = _heights(f)
     right = _heights(g)
-    left_shared = _shared_denominator_digits(f)
-    right_shared = _shared_denominator_digits(g)
-    # Homogeneous inputs multiply to one shared product denominator; do not
-    # charge independent dens per incidence as if each product dens differed.
-    shared_product_denominator_digits = (
+    left_lcm = _shared_denominator_lcm(f)
+    right_lcm = _shared_denominator_lcm(g)
+    product_lcm = (
         None
-        if left_shared is None or right_shared is None
-        else left_shared + right_shared
+        if left_lcm is None or right_lcm is None
+        else _bounded_product(left_lcm, right_lcm)
     )
-    sums = _HeightSums(
-        len(left), shared_denominator_digits=shared_product_denominator_digits
-    )
+    sums = _HeightSums(len(left), shared_lcm=product_lcm)
+    left_dens = tuple(parse_canonical_integer(value.den) for value in f)
+    right_dens = tuple(parse_canonical_integer(value.den) for value in g)
     for divisor, multiple in incidences:
+        left_index = divisor - 1
+        right_index = multiple // divisor - 1
         sums.add(
             multiple - 1,
-            left[divisor - 1].product(right[multiple // divisor - 1]),
+            left[left_index].product(right[right_index]),
+            denominator=left_dens[left_index] * right_dens[right_index],
         )
     _require_result_envelope(sums.heights(), "Dirichlet convolution")
     return incidences
@@ -227,12 +235,14 @@ def _admit_mobius(
     _require_length(values, "values", _MAX_DIVISOR_PREFIX_LENGTH)
     incidences = _require_divisor_incidences(len(values))
     heights = _heights(values)
+    dens = tuple(parse_canonical_integer(value.den) for value in values)
     sums = _HeightSums(
         len(heights),
-        shared_denominator_digits=_shared_denominator_digits(values),
+        shared_lcm=_shared_denominator_lcm(values),
     )
     for divisor, multiple in incidences:
-        sums.add(multiple - 1, heights[multiple // divisor - 1])
+        source = multiple // divisor - 1
+        sums.add(multiple - 1, heights[source], denominator=dens[source])
     _require_result_envelope(sums.heights(), "Möbius transform")
     return incidences
 

@@ -30,6 +30,7 @@ from jacobian.math.number_theory.arithmetic_functions.operations import (
     MAX_DIVISOR_INCIDENCES,
     _divisor_incidence_count,
     _divisor_incidences,
+    _shared_denominator_lcm,
 )
 
 # ---------------------------------------------------------------------------
@@ -411,6 +412,28 @@ def test_mobius_admission_bounds_two_prime_denominator_lcm() -> None:
     )
     assert result.values[2].as_fraction() == Fraction(0)
     assert all(common % int(entry.den) == 0 for entry in result.values)
+
+
+def test_mobius_admission_accounts_for_lifting_carries() -> None:
+    values = (
+        CanonicalRational(num="-97", den="10"),
+        CanonicalRational(num="70", den="99"),
+    )
+    result = compute_mobius_transform(MobiusTransformRequest(values=values))
+    assert result.values[0].as_fraction() == Fraction(-97, 10)
+    assert result.values[1].as_fraction() == Fraction(70, 99) - Fraction(-97, 10)
+
+
+def test_mobius_admission_sizes_lcm_without_decimal_stringification() -> None:
+    values = (
+        CanonicalRational(num="1", den="2"),
+        CanonicalRational(num="1", den="1" + "0" * 4299 + "1"),
+    )
+    shared = _shared_denominator_lcm(values)
+    assert shared is not None
+    assert shared.bit_length() > 14_000
+    result = compute_mobius_transform(MobiusTransformRequest(values=values))
+    assert result.values[0].as_fraction() == Fraction(1, 2)
 
 
 def test_mobius_mixed_two_prime_denominators_match_the_defining_sum() -> None:

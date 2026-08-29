@@ -4,6 +4,7 @@ from jacobian.math.number_theory._friable_kernel import count_friable
 from jacobian.math.number_theory._friable_models import FriableCountResult
 from jacobian.math.number_theory._prime_shift_models import PrimeShiftProfileResult
 from jacobian.math.number_theory.operations import (
+    binomial_prime_valuation,
     chinese_remainder,
     contiguous_sum_profile,
     euler_totient,
@@ -34,6 +35,7 @@ from jacobian.math.number_theory.ramanujan_sums import ramanujan_sum
 __all__ = [
     "FriableCountResult",
     "PrimeShiftProfileResult",
+    "binomial_prime_valuation",
     "chinese_remainder",
     "contiguous_sum_profile",
     "count_friable",

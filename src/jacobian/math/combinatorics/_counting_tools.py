@@ -4,13 +4,12 @@ from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.combinatorics import operations as native
 from jacobian.math.combinatorics._counting_models import (
-    BinomialRequest,
     IntegerListRequest,
+    SparseCountingPairRequest,
 )
 from jacobian.math.combinatorics._models import (
     IntegerResult,
     NonnegativeIntegerRequest,
-    NonnegativePairRequest,
 )
 from jacobian.math.combinatorics._support import (
     combinatorics_operation,
@@ -33,7 +32,7 @@ def derangements(request: NonnegativeIntegerRequest) -> IntegerResult:
     return _integer_result(native.derangement_number(request.n))
 
 
-def binomial(request: BinomialRequest) -> IntegerResult:
+def binomial(request: SparseCountingPairRequest) -> IntegerResult:
     return _integer_result(native.binomial(request.n, request.k))
 
 
@@ -42,7 +41,7 @@ def multinomial(request: IntegerListRequest) -> IntegerResult:
     return _integer_result(native.multinomial(values))
 
 
-def permutations(request: NonnegativePairRequest) -> IntegerResult:
+def permutations(request: SparseCountingPairRequest) -> IntegerResult:
     return _integer_result(native.permutations(request.n, request.k))
 
 
@@ -58,7 +57,7 @@ def central_binomial(request: NonnegativeIntegerRequest) -> IntegerResult:
     return _integer_result(native.central_binomial(request.n))
 
 
-def compositions(request: NonnegativePairRequest) -> IntegerResult:
+def compositions(request: SparseCountingPairRequest) -> IntegerResult:
     return _integer_result(native.compositions(request.n, request.k))
 
 
@@ -105,7 +104,7 @@ COUNTING_OPERATIONS = (
         "Compute binomial coefficient",
         "Compute the exact integer binomial coefficient n choose k, counting "
         "k-element subsets of an n-element set.",
-        BinomialRequest,
+        SparseCountingPairRequest,
         IntegerResult,
         binomial,
         "combinatorics",
@@ -136,7 +135,7 @@ COUNTING_OPERATIONS = (
         "combinatorics.compute.permutations",
         "Count partial permutations",
         "Count ordered selections of k objects from n.",
-        NonnegativePairRequest,
+        SparseCountingPairRequest,
         IntegerResult,
         permutations,
         "combinatorics",
@@ -194,7 +193,7 @@ COUNTING_OPERATIONS = (
         "combinatorics.compute.compositions",
         "Count positive compositions",
         "Count ordered positive-part compositions of n into k parts.",
-        NonnegativePairRequest,
+        SparseCountingPairRequest,
         IntegerResult,
         compositions,
         "combinatorics",

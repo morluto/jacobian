@@ -1,4 +1,4 @@
-"""Exact contiguous-sum representation profile kernel."""
+"""Bounded contiguous-sum profile execution kernel."""
 
 from __future__ import annotations
 
@@ -8,14 +8,11 @@ from math import isqrt, prod
 from time import monotonic
 from typing import Literal
 
-from jacobian._execution import current_request_execution
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._contiguous_sum_admission import (
     ContiguousSumProfileAdmission,
-    require_contiguous_sum_profile_admission,
 )
 from jacobian.math.number_theory._contiguous_sum_models import (
-    ContiguousSumProfileRequest,
     ContiguousSumProfileResult,
     ContiguousSumWorkerDiagnostic,
 )
@@ -123,8 +120,10 @@ def _factored_odd_divisor_count(
     )
 
 
-def compute_contiguous_sum_profile(
-    request: ContiguousSumProfileRequest,
+def run_contiguous_sum_profile(
+    admission: ContiguousSumProfileAdmission,
+    *,
+    profile_started: float,
 ) -> ContiguousSumProfileResult:
     """For each n in [L, U], count representations as a sum of consecutive positive integers.
 
@@ -140,11 +139,6 @@ def compute_contiguous_sum_profile(
     Dense intervals use a segmented odd-factor sieve, while high-magnitude
     narrow intervals use the maintained SymPy factorization backend.
     """
-    execution = current_request_execution()
-    profile_started = execution.started_at if execution is not None else monotonic()
-    admission = require_contiguous_sum_profile_admission(
-        request, started_at=profile_started
-    )
     if admission.regime == "SEGMENTED":
         counts = _segmented_odd_divisor_counts(admission)
     else:
@@ -238,4 +232,4 @@ def compute_contiguous_sum_profile(
     return result
 
 
-__all__ = ["compute_contiguous_sum_profile"]
+__all__ = ["run_contiguous_sum_profile"]

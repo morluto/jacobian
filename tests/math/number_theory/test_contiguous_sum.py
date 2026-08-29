@@ -3,16 +3,16 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.number_theory._contiguous_sum import CONTIGUOUS_SUM_OPERATION
+from jacobian.math.number_theory._contiguous_sum import (
+    CONTIGUOUS_SUM_OPERATION,
+    compute_contiguous_sum_profile,
+)
 from jacobian.math.number_theory._contiguous_sum_admission import (
     require_contiguous_sum_profile_admission,
 )
 from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileRequest,
     ContiguousSumProfileResult,
-)
-from jacobian.math.number_theory._contiguous_sum_operations import (
-    compute_contiguous_sum_profile,
 )
 
 
@@ -69,14 +69,8 @@ def test_high_magnitude_singleton_does_not_allocate_to_upper_bound() -> None:
 
 
 def test_admission_plan_is_the_single_regime_and_budget_source() -> None:
-    segmented = require_contiguous_sum_profile_admission(
-        ContiguousSumProfileRequest(lower_bound="10", upper_bound="15")
-    )
-    direct = require_contiguous_sum_profile_admission(
-        ContiguousSumProfileRequest(
-            lower_bound="1000000000001", upper_bound="1000000000001"
-        )
-    )
+    segmented = require_contiguous_sum_profile_admission(10, 15)
+    direct = require_contiguous_sum_profile_admission(1000000000001, 1000000000001)
 
     assert segmented.regime == "SEGMENTED"
     assert segmented.factorization_budget_seconds is None
@@ -86,9 +80,8 @@ def test_admission_plan_is_the_single_regime_and_budget_source() -> None:
     assert direct.width == 1
     started_at = 100.0
     timed = require_contiguous_sum_profile_admission(
-        ContiguousSumProfileRequest(
-            lower_bound="1000000000001", upper_bound="1000000000001"
-        ),
+        1000000000001,
+        1000000000001,
         started_at=started_at,
     )
     assert timed.execution_deadline == 160.0

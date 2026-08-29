@@ -5,10 +5,14 @@ from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileRequest,
     ContiguousSumProfileResult,
 )
-from jacobian.math.number_theory._contiguous_sum_operations import (
-    compute_contiguous_sum_profile,
-)
 from jacobian.math.number_theory._support import number_theory_operation
+from jacobian.math.number_theory.operations import contiguous_sum_profile
+
+
+def compute_contiguous_sum_profile(
+    request: ContiguousSumProfileRequest,
+) -> ContiguousSumProfileResult:
+    return contiguous_sum_profile(request.lower_bound, request.upper_bound)
 
 CONTIGUOUS_SUM_OPERATION = number_theory_operation(
     "number_theory.integer_interval.contiguous_sum_profile.compute",

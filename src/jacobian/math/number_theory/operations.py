@@ -5,11 +5,22 @@ from __future__ import annotations
 import math
 import operator
 from itertools import product
+from time import monotonic
 from typing import Literal, SupportsIndex, cast
 
 from jacobian._exact import CanonicalInteger
+from jacobian._execution import current_request_execution
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory._contiguous_sum_admission import (
+    require_contiguous_sum_profile_admission,
+)
+from jacobian.math.number_theory._contiguous_sum_kernel import (
+    run_contiguous_sum_profile,
+)
+from jacobian.math.number_theory._contiguous_sum_models import (
+    ContiguousSumProfileResult,
+)
 from jacobian.math.number_theory._derived_models import (
     MAX_FACTORIAL_ARGUMENT,
     MAX_FACTORIAL_BASE,
@@ -51,6 +62,7 @@ from jacobian.math.number_theory.modular_polynomials import (
 
 __all__ = [
     "chinese_remainder",
+    "contiguous_sum_profile",
     "euler_totient",
     "factorial_valuation",
     "floor_square_root",
@@ -78,6 +90,22 @@ def _integer(value: SupportsIndex | CanonicalInteger | IntegerValue) -> int:
     if isinstance(value, str):
         return parse_canonical_integer(value)
     return operator.index(value)
+
+
+def contiguous_sum_profile(
+    lower_bound: SupportsIndex | CanonicalInteger | IntegerValue,
+    upper_bound: SupportsIndex | CanonicalInteger | IntegerValue,
+) -> ContiguousSumProfileResult:
+    """Count contiguous-sum representations on a closed positive interval."""
+
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else monotonic()
+    admission = require_contiguous_sum_profile_admission(
+        _integer(lower_bound),
+        _integer(upper_bound),
+        started_at=started_at,
+    )
+    return run_contiguous_sum_profile(admission, profile_started=started_at)
 
 
 def is_prime(value: SupportsIndex | CanonicalInteger | IntegerValue) -> BooleanResult:
@@ -122,7 +150,9 @@ def nth_prime(index: SupportsIndex | CanonicalInteger | IntegerValue) -> Integer
     return IntegerValue(value=format_canonical_integer(int(prime(_integer(index)))))
 
 
-def primorial(index: SupportsIndex | CanonicalInteger | IntegerValue) -> PrimorialResult:
+def primorial(
+    index: SupportsIndex | CanonicalInteger | IntegerValue,
+) -> PrimorialResult:
     """Return the product of the first ``index`` primes."""
 
     from sympy import primorial as sympy_primorial
@@ -415,9 +445,7 @@ def _require_crt_admission(residues: tuple[int, ...], moduli: tuple[int, ...]) -
                     "congruence system into narrower subsystems"
                 ),
             )
-    for index, (residue, modulus) in enumerate(
-        zip(residues, moduli, strict=True)
-    ):
+    for index, (residue, modulus) in enumerate(zip(residues, moduli, strict=True)):
         if not 0 <= residue < modulus:
             raise OperationDomainValidationError(
                 location=("residues", index),
@@ -441,7 +469,9 @@ def chinese_remainder(
 ) -> ChineseRemainderResult:
     """Solve a finite compatible system of integer congruences."""
 
-    if not isinstance(residues, tuple) or not all(type(item) is int for item in residues):
+    if not isinstance(residues, tuple) or not all(
+        type(item) is int for item in residues
+    ):
         raise TypeError("residues must be a tuple of integers")
     if not isinstance(moduli, tuple) or not all(type(item) is int for item in moduli):
         raise TypeError("moduli must be a tuple of integers")
@@ -464,7 +494,9 @@ def _require_residue_image_admission(
     terms: tuple[ModularPolynomialTerm, ...],
 ) -> None:
     _require_modulus(modulus)
-    if not all(isinstance(variable, ModularPolynomialVariable) for variable in variables):
+    if not all(
+        isinstance(variable, ModularPolynomialVariable) for variable in variables
+    ):
         raise TypeError("variables must contain ModularPolynomialVariable values")
     if not all(isinstance(term, ModularPolynomialTerm) for term in terms):
         raise TypeError("terms must contain ModularPolynomialTerm values")
@@ -576,7 +608,9 @@ def _residue_image(
     for assignment in product(*(variable.residues for variable in variables)):
         residue = _evaluate_modular_polynomial(normalized_terms, assignment, modulus)
         if table is not None:
-            table.append(ModularPolynomialResidueTableRow(assignment=assignment, residue=residue))
+            table.append(
+                ModularPolynomialResidueTableRow(assignment=assignment, residue=residue)
+            )
         counts[residue] = counts.get(residue, 0) + 1
         first_assignments.setdefault(residue, assignment)
     image = tuple(sorted(counts))

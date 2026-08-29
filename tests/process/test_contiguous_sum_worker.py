@@ -4,11 +4,9 @@ import pytest
 
 import jacobian.math.number_theory._factorization_kernels as factorization_kernels
 import jacobian.process as process
+from jacobian.math.number_theory._contiguous_sum import compute_contiguous_sum_profile
 from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileRequest,
-)
-from jacobian.math.number_theory._contiguous_sum_operations import (
-    compute_contiguous_sum_profile,
 )
 from jacobian.math.number_theory._factorization_kernels import (
     _FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES,

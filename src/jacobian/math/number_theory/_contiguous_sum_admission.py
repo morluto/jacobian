@@ -7,7 +7,6 @@ from math import isqrt
 from typing import Literal
 
 from jacobian._execution import bind_request_deadline
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._contiguous_sum_models import (
     MAX_FACTORING_INTERVAL_WIDTH,
@@ -16,7 +15,6 @@ from jacobian.math.number_theory._contiguous_sum_models import (
     MAX_INTERVAL_WIDTH,
     MAX_INTERVAL_WORK,
     MAX_SEGMENTED_SIEVE_UPPER,
-    ContiguousSumProfileRequest,
 )
 
 ContiguousSumRegime = Literal["SEGMENTED", "DIRECT_FACTORIZATION"]
@@ -37,14 +35,13 @@ class ContiguousSumProfileAdmission:
 
 
 def require_contiguous_sum_profile_admission(
-    request: ContiguousSumProfileRequest,
+    lower: int,
+    upper: int,
     *,
     started_at: float | None = None,
 ) -> ContiguousSumProfileAdmission:
     """Validate one interval and select the complete bounded kernel regime."""
 
-    lower = parse_canonical_integer(request.lower_bound)
-    upper = parse_canonical_integer(request.upper_bound)
     if lower < 1 or upper < 1:
         raise OperationDomainValidationError(
             location=("lower_bound", "upper_bound"),
@@ -66,7 +63,7 @@ def require_contiguous_sum_profile_admission(
             message="interval width exceeds maximum supported width",
         )
 
-    upper_digits = len(request.upper_bound)
+    upper_digits = len(str(upper))
     if upper > MAX_SEGMENTED_SIEVE_UPPER:
         if width > MAX_FACTORING_INTERVAL_WIDTH:
             raise OperationDomainValidationError(

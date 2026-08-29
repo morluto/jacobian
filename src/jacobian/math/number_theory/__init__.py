@@ -5,6 +5,7 @@ from jacobian.math.number_theory._friable_models import FriableCountResult
 from jacobian.math.number_theory._prime_shift_models import PrimeShiftProfileResult
 from jacobian.math.number_theory.operations import (
     chinese_remainder,
+    contiguous_sum_profile,
     euler_totient,
     factorial_valuation,
     floor_square_root,
@@ -30,6 +31,7 @@ __all__ = [
     "FriableCountResult",
     "PrimeShiftProfileResult",
     "chinese_remainder",
+    "contiguous_sum_profile",
     "count_friable",
     "euler_totient",
     "factorial_valuation",

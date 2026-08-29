@@ -17,11 +17,31 @@ from jacobian.math.number_theory.galois._models import (
     SolvableResult,
 )
 from jacobian.math.number_theory.galois.operations import (
-    compute_frobenius_cycle,
-    compute_galois_factor,
-    compute_galois_group,
-    compute_solvable,
+    frobenius_cycle,
+    galois_factor,
+    galois_group,
+    solvable,
 )
+
+
+def _galois_factor(request: GaloisFactorRequest) -> GaloisFactorResult:
+    return galois_factor(request.field_order, request.coefficients)
+
+
+def _frobenius_cycle(request: FrobeniusCycleRequest) -> FrobeniusCycleResult:
+    return frobenius_cycle(
+        request.field_order,
+        request.polynomial_degree,
+        request.factorization_degrees,
+    )
+
+
+def _galois_group(request: GaloisGroupRequest) -> GaloisGroupResult:
+    return galois_group(request.coefficients)
+
+
+def _solvable(request: SolvableRequest) -> SolvableResult:
+    return solvable(request.coefficients)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -55,7 +75,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "reconstruction-checked irreducibility result.",
         GaloisFactorRequest,
         GaloisFactorResult,
-        compute_galois_factor,
+        _galois_factor,
         "galois-theory",
         "factorization",
         "exact",
@@ -74,7 +94,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "GF(p), returning the cycle type and irreducibility.",
         FrobeniusCycleRequest,
         FrobeniusCycleResult,
-        compute_frobenius_cycle,
+        _frobenius_cycle,
         "galois-theory",
         "frobenius",
         "exact",
@@ -98,7 +118,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "and degree at most six; the result includes explicit generators.",
         GaloisGroupRequest,
         GaloisGroupResult,
-        compute_galois_group,
+        _galois_group,
         "galois-theory",
         "galois-group",
         "exact",
@@ -117,7 +137,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Galois group, within SymPy's irreducible degree-at-most-six domain.",
         SolvableRequest,
         SolvableResult,
-        compute_solvable,
+        _solvable,
         "galois-theory",
         "solvable",
         "exact",

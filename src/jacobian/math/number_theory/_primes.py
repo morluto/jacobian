@@ -12,20 +12,52 @@ from jacobian.math.number_theory._prime_models import (
     PrimorialRequest,
     PrimorialResult,
 )
-from jacobian.math.number_theory._prime_operations import (
-    compute_euler_totient,
-    compute_mobius,
-    compute_next_prime,
-    compute_nth_prime,
-    compute_previous_prime,
-    compute_prime_count,
-    compute_primorial,
-    decide_prime,
-)
 from jacobian.math.number_theory._support import (
     number_theory_operation,
 )
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
+from jacobian.math.number_theory.operations import (
+    euler_totient,
+    is_prime,
+    mobius,
+    next_prime,
+    nth_prime,
+    previous_prime,
+    prime_count,
+    primorial,
+)
+
+
+def decide_prime(request: PrimalityRequest) -> BooleanResult:
+    return is_prime(request.value)
+
+
+def compute_next_prime(request: NonnegativeIntegerRequest) -> IntegerValue:
+    return next_prime(request.n)
+
+
+def compute_previous_prime(request: PreviousPrimeRequest) -> IntegerValue:
+    return previous_prime(request.n)
+
+
+def compute_prime_count(request: NonnegativeIntegerRequest) -> IntegerValue:
+    return prime_count(request.n)
+
+
+def compute_nth_prime(request: PositiveIntegerRequest) -> IntegerValue:
+    return nth_prime(request.n)
+
+
+def compute_primorial(request: PrimorialRequest) -> PrimorialResult:
+    return primorial(request.n)
+
+
+def compute_euler_totient(request: PositiveIntegerRequest) -> IntegerValue:
+    return euler_totient(request.n)
+
+
+def compute_mobius(request: PositiveIntegerRequest) -> IntegerValue:
+    return mobius(request.n)
 
 PRIME_OPERATIONS = (
     number_theory_operation(

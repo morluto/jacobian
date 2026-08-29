@@ -39,7 +39,7 @@ from jacobian.math.number_theory._prime_models import (
     PreviousPrimeRequest,
     PrimalityRequest,
 )
-from jacobian.math.number_theory._prime_operations import compute_previous_prime
+from jacobian.math.number_theory._primes import compute_previous_prime
 
 
 @pytest.mark.parametrize("residue", [-1, 3])

@@ -9,14 +9,14 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
 from jacobian.math.lattices import reduce_basis
 from jacobian.math.lattices._models import (
-    _MAX_LATTICE_INPUT_SCALAR_DIGITS,
     LatticeReductionRequest,
     LatticeReductionResult,
+    _require_lattice_matrix_envelope,
+    _run_admission,
 )
 from jacobian.math.matrices.values import (
     MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
-    require_matrix_scalar_digits,
 )
 
 
@@ -40,10 +40,9 @@ def _wire(matrix: Any) -> IntegerMatrix:
 def reduce_lattice_basis(
     request: LatticeReductionRequest,
 ) -> LatticeReductionResult:
-    require_matrix_scalar_digits(
-        request.basis.entries,
-        maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,
-        label="basis input",
+    _run_admission(
+        lambda: _require_lattice_matrix_envelope(request.basis, label="basis input"),
+        location=("basis",),
     )
     entries = [
         [parse_canonical_integer(value) for value in row]

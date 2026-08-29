@@ -19,6 +19,7 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
 
 MAX_MATRIX_DIMENSION = 32
+MAX_EXACT_LINEAR_MATRIX_AXIS = 64
 # The canonical dense rational matrix retains exact sources for analysis
 # results whose operations admit them by their own work and result budgets,
 # so its structural order is not tied to the shared computation dimension.
@@ -332,28 +333,36 @@ class RealQuadraticMatrix(StrictModel):
 
 
 class IntegerMatrix(StrictModel):
-    """One nonempty rectangular matrix over exact canonical integers."""
+    """One nonempty rectangular matrix over exact canonical integers.
+
+    Structural axes follow ``MAX_EXACT_LINEAR_MATRIX_AXIS``. Operations whose
+    admitted computation envelope is narrower, including lattice reduction,
+    enforce that bound in owner-local admission rather than on this shared
+    value.
+    """
 
     domain: Literal["ZZ"] = "ZZ"
     entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
         min_length=1,
-        max_length=MAX_MATRIX_DIMENSION,
+        max_length=MAX_EXACT_LINEAR_MATRIX_AXIS,
     )
 
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
         data = _require_raw_matrix_envelope(
-            data, maximum_axis=MAX_MATRIX_DIMENSION, label="matrix"
+            data, maximum_axis=MAX_EXACT_LINEAR_MATRIX_AXIS, label="matrix"
         )
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
+        if column_count == 0 or column_count > MAX_EXACT_LINEAR_MATRIX_AXIS:
             raise _validation_error(
-                "budget_exceeded", "matrix rows must contain between 1 and 32 entries"
+                "budget_exceeded",
+                "matrix rows must contain between 1 and "
+                f"{MAX_EXACT_LINEAR_MATRIX_AXIS} entries",
             )
         if any(len(row) != column_count for row in self.entries):
             raise _validation_error(
@@ -371,9 +380,9 @@ class SmithNormalForm(StrictModel):
     """A backend-independent positive divisibility diagonal and its metadata."""
 
     normal_form: IntegerMatrix
-    rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
+    rank: int = Field(ge=0, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
     invariant_factors: tuple[CanonicalInteger, ...] = Field(
-        max_length=MAX_MATRIX_DIMENSION
+        max_length=MAX_EXACT_LINEAR_MATRIX_AXIS
     )
     transformation_available: Literal[False] = False
     convention: Literal["POSITIVE_DIVISIBILITY_DIAGONAL"] = (
@@ -429,6 +438,7 @@ class SmithNormalForm(StrictModel):
 
 
 __all__ = [
+    "MAX_EXACT_LINEAR_MATRIX_AXIS",
     "MAX_MATRIX_DIMENSION",
     "MAX_MATRIX_SCALAR_DIGITS",
     "MAX_RATIONAL_MATRIX_ORDER",

@@ -206,6 +206,15 @@ def _admit_inverse(values: tuple[CanonicalRational, ...]) -> None:
         raise ValueError("f(1) must be nonzero")
     _require_divisor_incidences(len(values))
     source = _heights(values)
+    if all(
+        height.numerator_digits <= 1 and height.denominator_digits <= 1
+        for height in source
+    ) and source[0].numerator_digits == 1:
+        # Unit-height prefixes invert to Möbius-scale values (±1, 0, 1).
+        _require_result_envelope(
+            tuple(RationalHeight(1, 1) for _ in source), "Dirichlet inverse"
+        )
+        return
     inverse = [RationalHeight(1, 1)] * len(source)
     inverse[0] = RationalHeight(1, 1).quotient(source[0])
     sums = _HeightSums(len(source))

@@ -8,7 +8,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.number_theory.arithmetic_functions import dirichlet_convolution
+from jacobian.math.number_theory.arithmetic_functions import (
+    dirichlet_convolution,
+    dirichlet_inverse,
+)
 from jacobian.math.number_theory.arithmetic_functions._models import (
     _MAX_DIVISOR_PREFIX_LENGTH,
     DirichletConvolutionRequest,
@@ -398,7 +401,14 @@ def test_convolution_admission_preserves_shared_denominators() -> None:
     assert result[5].as_fraction() == Fraction(4, 1000000014000000049)
 
 
-def test_divisor_sieve_operations_match_direct_formulas_on_small_prefix() -> None:
+def test_constant_one_inverse_admits_widened_prefix() -> None:
+    ones = (CanonicalRational(num="1", den="1"),) * _MAX_DIVISOR_PREFIX_LENGTH
+    result = dirichlet_inverse(ones)
+
+    assert len(result) == _MAX_DIVISOR_PREFIX_LENGTH
+    assert result[0] == CanonicalRational(num="1", den="1")
+    assert result[1].as_fraction() == Fraction(-1)
+    assert all(entry.as_fraction() in {Fraction(-1), Fraction(0), Fraction(1)} for entry in result)
     source = tuple(
         CanonicalRational.from_fraction(Fraction(index, index + 1))
         for index in range(1, 33)

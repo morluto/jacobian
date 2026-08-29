@@ -14,18 +14,9 @@ from jacobian.math.number_theory.numerical_semigroups._element_invariant_models 
     ElementDeltaSetRequest,
     ElementElasticityRequest,
 )
-from jacobian.math.number_theory.numerical_semigroups._element_invariant_operations import (
-    compute_element_catenary_degree,
-    compute_element_delta_set,
-    compute_element_elasticity,
-)
 from jacobian.math.number_theory.numerical_semigroups._factorization_models import (
     FactorizationComputeRequest,
     FactorizationGraphComputeRequest,
-)
-from jacobian.math.number_theory.numerical_semigroups._factorization_operations import (
-    compute_factorization_graph,
-    compute_factorizations,
 )
 from jacobian.math.number_theory.numerical_semigroups._global_invariant_models import (
     BettiElementsRequest,
@@ -33,18 +24,21 @@ from jacobian.math.number_theory.numerical_semigroups._global_invariant_models i
     DeltaSetRequest,
     ElasticityRequest,
 )
-from jacobian.math.number_theory.numerical_semigroups._global_invariant_operations import (
-    compute_betti_elements,
-    compute_catenary_degree,
-    compute_delta_set,
-    compute_elasticity,
-)
 from jacobian.math.number_theory.numerical_semigroups._presentation_models import (
     MinimalPresentationRequest,
     MinimalPresentationResult,
     PresentationBinomialsRequest,
 )
-from jacobian.math.number_theory.numerical_semigroups._presentation_operations import (
+from jacobian.math.number_theory.numerical_semigroups._tools import (
+    compute_betti_elements,
+    compute_catenary_degree,
+    compute_delta_set,
+    compute_elasticity,
+    compute_element_catenary_degree,
+    compute_element_delta_set,
+    compute_element_elasticity,
+    compute_factorization_graph,
+    compute_factorizations,
     compute_minimal_presentation,
     compute_presentation_binomials,
 )

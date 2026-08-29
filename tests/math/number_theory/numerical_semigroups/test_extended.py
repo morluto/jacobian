@@ -14,11 +14,6 @@ from jacobian.math.number_theory.numerical_semigroups._element_invariant_models 
     ElementElasticityRequest,
     ElementElasticityResult,
 )
-from jacobian.math.number_theory.numerical_semigroups._element_invariant_operations import (
-    compute_element_catenary_degree,
-    compute_element_delta_set,
-    compute_element_elasticity,
-)
 from jacobian.math.number_theory.numerical_semigroups._factorization_models import (
     FactorizationComputeRequest,
     FactorizationComputeResult,
@@ -28,12 +23,6 @@ from jacobian.math.number_theory.numerical_semigroups._factorization_models impo
     FactorizationLengthsComputeRequest,
     FactorizationLengthsComputeResult,
 )
-from jacobian.math.number_theory.numerical_semigroups._factorization_operations import (
-    compute_factorization_distance,
-    compute_factorization_graph,
-    compute_factorization_lengths,
-    compute_factorizations,
-)
 from jacobian.math.number_theory.numerical_semigroups._global_invariant_models import (
     BettiElementsRequest,
     BettiElementsResult,
@@ -42,12 +31,6 @@ from jacobian.math.number_theory.numerical_semigroups._global_invariant_models i
     DeltaSetRequest,
     DeltaSetResult,
     ElasticityRequest,
-)
-from jacobian.math.number_theory.numerical_semigroups._global_invariant_operations import (
-    compute_betti_elements,
-    compute_catenary_degree,
-    compute_delta_set,
-    compute_elasticity,
 )
 from jacobian.math.number_theory.numerical_semigroups._models import (
     MAX_ELEMENT,
@@ -59,7 +42,18 @@ from jacobian.math.number_theory.numerical_semigroups._presentation_models impor
     PresentationBinomialsRequest,
     PresentationBinomialsResult,
 )
-from jacobian.math.number_theory.numerical_semigroups._presentation_operations import (
+from jacobian.math.number_theory.numerical_semigroups._tools import (
+    compute_betti_elements,
+    compute_catenary_degree,
+    compute_delta_set,
+    compute_elasticity,
+    compute_element_catenary_degree,
+    compute_element_delta_set,
+    compute_element_elasticity,
+    compute_factorization_distance,
+    compute_factorization_graph,
+    compute_factorization_lengths,
+    compute_factorizations,
     compute_minimal_presentation,
     compute_presentation_binomials,
 )

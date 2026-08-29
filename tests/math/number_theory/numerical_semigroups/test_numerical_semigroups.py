@@ -16,7 +16,7 @@ from jacobian.math.number_theory.numerical_semigroups._summary_models import (
     NumericalSemigroupSummaryResult,
     SemigroupMembershipRequest,
 )
-from jacobian.math.number_theory.numerical_semigroups._summary_operations import (
+from jacobian.math.number_theory.numerical_semigroups._tools import (
     compute_membership,
     compute_summary,
 )

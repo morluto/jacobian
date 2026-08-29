@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from itertools import product
 
+from pydantic_core import PydanticCustomError
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraph_coloring._models import (
     ColoringWitness,
     NonmonochromaticColoringResult,
+    _validate_coloring_envelope,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -24,6 +28,13 @@ def decide_nonmonochromatic_coloring(
     For every vertex q-colouring, no hyperedge should be monochromatic.
     Returns COLORABLE with one witness colouring, or NOT_COLORABLE.
     """
+    try:
+        _validate_coloring_envelope(hypergraph, palette_size)
+    except PydanticCustomError as error:
+        raise OperationDomainValidationError(
+            location=(), code=error.type, message=str(error)
+        ) from error
+
     vertices = list(hypergraph.vertices)
     edges = list(hypergraph.edges)
 

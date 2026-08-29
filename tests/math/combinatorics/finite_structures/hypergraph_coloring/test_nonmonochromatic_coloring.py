@@ -42,11 +42,11 @@ def test_not_colorable_k3() -> None:
     assert result.witness is None
 
 
-def test_empty_edges_colorable() -> None:
-    """Hypergraph with no edges is trivially colourable."""
+def test_empty_edges_rejected() -> None:
+    """The bounded decision operation requires an edge to inspect."""
     h = _hg(["0", "1"], [])
-    result = decide_nonmonochromatic_coloring(h, 2)
-    assert result.outcome == "COLORABLE"
+    with pytest.raises(ValueError, match="at least one edge"):
+        decide_nonmonochromatic_coloring(h, 2)
 
 
 def test_q1_singleton_edge_not_colorable() -> None:
@@ -57,10 +57,10 @@ def test_q1_singleton_edge_not_colorable() -> None:
 
 
 def test_q1_empty_edges_colorable() -> None:
-    """q=1 with no edges is trivially colourable."""
+    """The decision operation rejects an empty edge family."""
     h = _hg(["0"], [])
-    result = decide_nonmonochromatic_coloring(h, 1)
-    assert result.outcome == "COLORABLE"
+    with pytest.raises(ValueError, match="at least one edge"):
+        decide_nonmonochromatic_coloring(h, 1)
 
 
 def test_witness_replay() -> None:
@@ -124,3 +124,9 @@ def test_rejects_too_many_vertices() -> None:
     h = _hg([str(i) for i in range(17)], [])
     with pytest.raises(ValidationError):
         NonmonochromaticColoringRequest(hypergraph=h, palette_size=2)
+
+
+def test_rejects_search_work_before_enumeration() -> None:
+    h = _hg([str(i) for i in range(16)], [("e0", ("0", "1"))])
+    with pytest.raises(ValueError, match="edge checks"):
+        decide_nonmonochromatic_coloring(h, 16)

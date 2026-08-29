@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
@@ -15,8 +16,61 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 MAX_PALETTE_SIZE = 16
 MAX_VERTEX_COUNT = 16
 MAX_EDGE_COUNT = 200
+MAX_COLORING_WORK = 2_000_000
 
-ColoringResult = str  # Literal["COLORABLE", "NOT_COLORABLE"]
+ColoringResult = Literal["COLORABLE", "NOT_COLORABLE"]
+
+
+def _validate_coloring_envelope(
+    hypergraph: FiniteHypergraph, palette_size: int
+) -> None:
+    """Validate the complete request and retained-result envelope."""
+    vertex_count = len(hypergraph.vertices)
+    edge_count = len(hypergraph.edges)
+    if not isinstance(palette_size, int) or isinstance(palette_size, bool):
+        raise PydanticCustomError(
+            "hypergraph_coloring.palette_type", "palette_size must be an integer"
+        )
+    if not 1 <= palette_size <= MAX_PALETTE_SIZE:
+        raise PydanticCustomError(
+            "hypergraph_coloring.palette_out_of_range",
+            f"palette_size must be between 1 and {MAX_PALETTE_SIZE}",
+        )
+    if vertex_count > MAX_VERTEX_COUNT:
+        raise PydanticCustomError(
+            "hypergraph_coloring.too_many_vertices",
+            f"at most {MAX_VERTEX_COUNT} vertices are supported",
+        )
+    if edge_count == 0:
+        raise PydanticCustomError(
+            "hypergraph_coloring.no_edges",
+            "the hypergraph must contain at least one edge",
+        )
+    if edge_count > MAX_EDGE_COUNT:
+        raise PydanticCustomError(
+            "hypergraph_coloring.too_many_edges",
+            f"at most {MAX_EDGE_COUNT} edges are supported",
+        )
+    work = palette_size**vertex_count * edge_count
+    if work > MAX_COLORING_WORK:
+        raise PydanticCustomError(
+            "hypergraph_coloring.work_too_large",
+            f"coloring search requires at most {MAX_COLORING_WORK} edge checks",
+        )
+
+    # A COLORABLE result retains the source hypergraph and one assignment per
+    # vertex. This is the largest result shape produced by the kernel.
+    payload = {
+        "hypergraph": hypergraph.model_dump(mode="json"),
+        "palette_size": palette_size,
+        "outcome": "COLORABLE",
+        "witness": {"assignments": [[vertex, 0] for vertex in hypergraph.vertices]},
+    }
+    if len(encode_strict_json(payload)) > CanonicalLimits().max_output_bytes:
+        raise PydanticCustomError(
+            "hypergraph_coloring.result_too_large",
+            "the retained coloring result exceeds the canonical output limit",
+        )
 
 
 class NonmonochromaticColoringRequest(StrictModel):
@@ -27,16 +81,7 @@ class NonmonochromaticColoringRequest(StrictModel):
 
     @model_validator(mode="after")
     def validate_bounds(self) -> Self:
-        if len(self.hypergraph.vertices) > MAX_VERTEX_COUNT:
-            raise PydanticCustomError(
-                "hypergraph_coloring.too_many_vertices",
-                f"at most {MAX_VERTEX_COUNT} vertices are supported",
-            )
-        if len(self.hypergraph.edges) > MAX_EDGE_COUNT:
-            raise PydanticCustomError(
-                "hypergraph_coloring.too_many_edges",
-                f"at most {MAX_EDGE_COUNT} edges are supported",
-            )
+        _validate_coloring_envelope(self.hypergraph, self.palette_size)
         return self
 
 
@@ -54,12 +99,28 @@ class NonmonochromaticColoringResult(StrictModel):
     outcome: ColoringResult
     witness: ColoringWitness | None = None
 
+    @model_validator(mode="after")
+    def require_outcome_shape(self) -> Self:
+        if self.outcome == "COLORABLE" and self.witness is None:
+            raise PydanticCustomError(
+                "hypergraph_coloring.colorable_requires_witness",
+                "COLORABLE results must carry a witness",
+            )
+        if self.outcome == "NOT_COLORABLE" and self.witness is not None:
+            raise PydanticCustomError(
+                "hypergraph_coloring.not_colorable_has_no_witness",
+                "NOT_COLORABLE results must not carry a witness",
+            )
+        return self
+
 
 __all__ = [
+    "MAX_COLORING_WORK",
     "MAX_EDGE_COUNT",
     "MAX_PALETTE_SIZE",
     "MAX_VERTEX_COUNT",
     "ColoringWitness",
     "NonmonochromaticColoringRequest",
     "NonmonochromaticColoringResult",
+    "_validate_coloring_envelope",
 ]

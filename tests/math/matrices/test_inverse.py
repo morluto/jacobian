@@ -14,9 +14,15 @@ from typing import Any
 
 import pytest
 
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.matrices._operation_models import MatrixInverseResult
 from jacobian.math.matrices._tools import TOOLS
+from jacobian.math.matrices.operations import inverse_result
+from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
+    MAX_MATRIX_DIMENSION,
+    IntegerMatrix,
+)
 
 
 def _operation(operation_id: str) -> MathTool[Any, Any]:
@@ -130,6 +136,25 @@ def test_inverse_operation_round_trips_random_unimodular_matrices(size: int) -> 
         assert _multiply(inverse, source_fraction) == identity
 
 
+def test_inverse_result_accepts_order_33_integer_matrix() -> None:
+    """The inverse operation owns the widened integer-matrix envelope."""
+
+    matrix = IntegerMatrix(
+        entries=tuple(
+            tuple(
+                "1" if row == column else "0"
+                for column in range(MAX_MATRIX_DIMENSION + 1)
+            )
+            for row in range(MAX_MATRIX_DIMENSION + 1)
+        )
+    )
+    result = inverse_result(matrix)
+    assert _result_entries(result) == tuple(
+        tuple(Fraction(int(row == column)) for column in range(33))
+        for row in range(33)
+    )
+
+
 def test_inverse_operation_rejects_empty_matrix() -> None:
     with pytest.raises(ValueError):
         _run_inverse([])
@@ -226,8 +251,6 @@ def test_inverse_reuses_canonical_integer_matrix() -> None:
 
 def test_non_inverse_integer_requests_keep_order_32_envelope() -> None:
     from pydantic import ValidationError
-    from pydantic_core import PydanticCustomError
-
     from jacobian.math.lattices._hnf import compute_hermite_normal_form
     from jacobian.math.lattices._lattice import reduce_lattice_basis
     from jacobian.math.lattices._models import (
@@ -249,10 +272,8 @@ def test_non_inverse_integer_requests_keep_order_32_envelope() -> None:
     assert len(matrix.entries) == order
     assert inverse_request.matrix is matrix
 
-    with pytest.raises(ValidationError):
-        IntegerMatrixRequest.model_validate({"matrix": {"entries": entries}})
-    with pytest.raises(ValidationError):
-        IntegerMatrixRequest(matrix=matrix)
+    assert IntegerMatrixRequest.model_validate({"matrix": {"entries": entries}})
+    assert IntegerMatrixRequest(matrix=matrix).matrix is matrix
     with pytest.raises(ValidationError):
         SquareIntegerMatrixRequest.model_validate({"matrix": {"entries": entries}})
     with pytest.raises(ValidationError):
@@ -266,9 +287,9 @@ def test_non_inverse_integer_requests_keep_order_32_envelope() -> None:
     with pytest.raises(ValidationError):
         HermiteNormalFormRequest(matrix=matrix)
 
-    with pytest.raises(PydanticCustomError, match="32"):
+    with pytest.raises(OperationDomainValidationError, match="32"):
         reduce_lattice_basis(LatticeReductionRequest.model_construct(basis=matrix))
-    with pytest.raises(PydanticCustomError, match="32"):
+    with pytest.raises(OperationDomainValidationError, match="32"):
         compute_hermite_normal_form(
             HermiteNormalFormRequest.model_construct(matrix=matrix)
         )
@@ -281,6 +302,6 @@ def test_non_inverse_integer_requests_keep_order_32_envelope() -> None:
     lattice_schema = LatticeReductionRequest.model_json_schema()
     assert _entry_axis_limit(inverse_schema, "matrix") == 128
     assert _entry_axis_limit(square_schema, "matrix") == 32
-    assert _entry_axis_limit(integer_schema, "matrix") == 32
+    assert _entry_axis_limit(integer_schema, "matrix") == MAX_EXACT_LINEAR_MATRIX_AXIS
     assert _entry_axis_limit(lattice_schema, "basis") == 32
     assert IntegerMatrix.model_json_schema()["properties"]["entries"]["maxItems"] == 128

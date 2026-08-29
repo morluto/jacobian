@@ -8,8 +8,8 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MaximumEdgeMatchingRequest,
     MaximumEdgeMatchingResult,
 )
-from jacobian.math.combinatorics.finite_structures.hypergraphs._operations import (
-    compute_maximum_edge_matching,
+from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
+    maximum_edge_matching,
 )
 
 HYPERGRAPH = {
@@ -23,9 +23,7 @@ HYPERGRAPH = {
 
 
 def _matching(source: object) -> MaximumEdgeMatchingResult:
-    return compute_maximum_edge_matching(
-        MaximumEdgeMatchingRequest(hypergraph=FiniteHypergraph.model_validate(source))
-    )
+    return maximum_edge_matching(FiniteHypergraph.model_validate(source))
 
 
 class TestMaximumEdgeMatching:
@@ -133,7 +131,7 @@ class TestMaximumEdgeMatching:
             )
         )
         with pytest.raises(ValueError, match="search exceeds"):
-            compute_maximum_edge_matching(request)
+            maximum_edge_matching(request.hypergraph)
 
     def test_rejects_wrong_count(self) -> None:
         with pytest.raises(ValidationError):

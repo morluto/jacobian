@@ -8,7 +8,16 @@ def test_hypergraph_public_api_is_explicit() -> None:
         "EdgeIntersectionEntry",
         "EdgeIntersectionsResult",
         "FiniteHypergraph",
+        "clique_expansion",
+        "dual",
         "edge_intersections",
+        "incidence_graph",
+        "independence_number",
+        "induced_type_profile",
+        "maximum_edge_matching",
+        "minimum_transversal",
+        "parameters",
+        "vertex_degrees",
     )
 
     assert tuple(hypergraphs.__all__) == expected

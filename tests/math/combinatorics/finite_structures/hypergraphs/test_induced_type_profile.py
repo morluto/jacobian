@@ -7,11 +7,10 @@ import pytest
 from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
-    InducedTypeProfileRequest,
     InducedTypeProfileResult,
 )
-from jacobian.math.combinatorics.finite_structures.hypergraphs._operations import (
-    compute_induced_type_profile,
+from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
+    induced_type_profile,
 )
 
 # The Fano-plane-like hypergraph used across the domain.
@@ -26,12 +25,7 @@ HYPERGRAPH = {
 
 
 def _profile(source: object, subset_size: int) -> InducedTypeProfileResult:
-    return compute_induced_type_profile(
-        InducedTypeProfileRequest(
-            hypergraph=FiniteHypergraph.model_validate(source),
-            subset_size=subset_size,
-        )
-    )
+    return induced_type_profile(FiniteHypergraph.model_validate(source), subset_size)
 
 
 class TestInducedTypeProfile:

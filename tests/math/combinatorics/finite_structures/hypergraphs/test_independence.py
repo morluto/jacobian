@@ -10,16 +10,14 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS,
-    DualRequest,
     FiniteHypergraph,
     HypergraphIndependenceRequest,
     HypergraphIndependenceResult,
-    ParametersRequest,
 )
-from jacobian.math.combinatorics.finite_structures.hypergraphs._operations import (
-    compute_dual,
-    compute_independence_number,
-    compute_parameters,
+from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
+    dual,
+    independence_number,
+    parameters,
 )
 from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 
@@ -29,17 +27,16 @@ def _compute(
     *,
     max_solver_calls: int = MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS,
 ) -> HypergraphIndependenceResult:
-    return compute_independence_number(
-        HypergraphIndependenceRequest.model_validate(
-            {
-                "hypergraph": hypergraph,
-                "resource_budget": {
-                    "wall_seconds": 5,
-                    "max_solver_calls": max_solver_calls,
-                },
-            }
-        )
+    request = HypergraphIndependenceRequest.model_validate(
+        {
+            "hypergraph": hypergraph,
+            "resource_budget": {
+                "wall_seconds": 5,
+                "max_solver_calls": max_solver_calls,
+            },
+        }
     )
+    return independence_number(request.hypergraph, request.resource_budget)
 
 
 def _kernel_compute(
@@ -62,7 +59,9 @@ def _kernel_compute(
             },
         }
     )
-    return _independence_z3._solve_independence_number_kernel(request)
+    return _independence_z3._solve_independence_number_kernel(
+        request.hypergraph, request.resource_budget
+    )
 
 
 def _independence_worker_result(payload: dict[str, object]) -> BoundedProcessResult:
@@ -99,7 +98,7 @@ def test_rejects_empty_hyperedge_before_solver() -> None:
         {"hypergraph": {"vertices": ["v"], "edges": [["empty", []]]}}
     )
     with pytest.raises(OperationDomainValidationError, match="empty edges"):
-        compute_independence_number(request)
+        independence_number(request.hypergraph, request.resource_budget)
 
 
 def test_solver_budget_is_separate_from_the_hypergraph_carrier_limit() -> None:
@@ -193,22 +192,24 @@ def test_large_ap_carrier_reaches_linear_consumers_not_independence_search() -> 
     assert len(source.edges) == 11_130
     assert sum(len(members) for _, members in source.edges) == 33_390
     assert FiniteHypergraph.model_validate(source.model_dump(mode="json")) == source
-    parameters = compute_parameters(ParametersRequest(hypergraph=source))
+    parameter_result = parameters(source)
     assert (
-        parameters.vertex_count,
-        parameters.edge_count,
-        parameters.total_incidences,
+        parameter_result.vertex_count,
+        parameter_result.edge_count,
+        parameter_result.total_incidences,
     ) == (
         212,
         11_130,
         33_390,
     )
     with pytest.raises(OperationDomainValidationError, match="100-vertex solver bound"):
-        compute_independence_number(HypergraphIndependenceRequest(hypergraph=source))
+        independence_number(
+            source, HypergraphIndependenceRequest(hypergraph=source).resource_budget
+        )
     with pytest.raises(
         OperationDomainValidationError, match="256-vertex representation bound"
     ):
-        compute_dual(DualRequest(hypergraph=source))
+        dual(source)
 
 
 def test_edge_free_hypergraph_returns_all_vertices() -> None:
@@ -429,7 +430,9 @@ def test_public_independence_path_bounds_the_entire_z3_worker(
             "resource_budget": {"wall_seconds": 3, "max_solver_calls": 5},
         }
     )
-    expected = _independence_z3._solve_independence_number_kernel(request)
+    expected = _independence_z3._solve_independence_number_kernel(
+        request.hypergraph, request.resource_budget
+    )
     recorded: dict[str, object] = {}
 
     def complete_worker(*args: object, **kwargs: object) -> BoundedProcessResult:
@@ -444,7 +447,7 @@ def test_public_independence_path_bounds_the_entire_z3_worker(
 
     monkeypatch.setattr(_independence_z3, "run_bounded_process", complete_worker)
 
-    result = compute_independence_number(request)
+    result = independence_number(request.hypergraph, request.resource_budget)
 
     assert result == expected
     timeout_seconds = recorded["timeout_seconds"]
@@ -479,7 +482,9 @@ def test_independence_worker_projection_cannot_replace_the_submitted_request(
             "resource_budget": {"wall_seconds": 3, "max_solver_calls": 5},
         }
     )
-    wrong_result = _independence_z3._solve_independence_number_kernel(wrong_request)
+    wrong_result = _independence_z3._solve_independence_number_kernel(
+        wrong_request.hypergraph, wrong_request.resource_budget
+    )
     monkeypatch.setattr(
         _independence_z3,
         "run_bounded_process",
@@ -491,7 +496,7 @@ def test_independence_worker_projection_cannot_replace_the_submitted_request(
         ),
     )
 
-    result = compute_independence_number(request)
+    result = independence_number(request.hypergraph, request.resource_budget)
 
     assert result.status == "UNKNOWN"
     assert result.hypergraph == request.hypergraph

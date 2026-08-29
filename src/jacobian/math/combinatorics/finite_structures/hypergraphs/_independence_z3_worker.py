@@ -10,7 +10,8 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._independence_z3 
     _solve_independence_number_kernel,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
-    HypergraphIndependenceRequest,
+    FiniteHypergraph,
+    HypergraphIndependenceBudget,
 )
 
 
@@ -21,8 +22,11 @@ def main() -> int:
             raise ValueError("worker payload must be an object")
         kind = payload["kind"]
         if kind == "solve":
-            request = HypergraphIndependenceRequest.model_validate(payload["request"])
-            result = _solve_independence_number_kernel(request)
+            source = FiniteHypergraph.model_validate(payload["hypergraph"])
+            resource_budget = HypergraphIndependenceBudget.model_validate(
+                payload["resource_budget"]
+            )
+            result = _solve_independence_number_kernel(source, resource_budget)
             sys.stdout.write(
                 json.dumps(
                     result.model_dump(

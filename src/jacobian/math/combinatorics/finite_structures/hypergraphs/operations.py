@@ -12,28 +12,19 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_TRANSVERSAL_RESULT_BYTES,
     MAX_TRANSVERSAL_SEARCH_WORK,
     MAX_VERTICES,
-    CliqueExpansionRequest,
     CliqueExpansionResult,
-    DualRequest,
     DualResult,
     EdgeIntersectionEntry,
-    EdgeIntersectionsRequest,
     EdgeIntersectionsResult,
     FiniteHypergraph,
-    HypergraphIndependenceRequest,
+    HypergraphIndependenceBudget,
     HypergraphIndependenceResult,
-    IncidenceGraphRequest,
     IncidenceGraphResult,
     InducedTypeProfileEntry,
-    InducedTypeProfileRequest,
     InducedTypeProfileResult,
-    MaximumEdgeMatchingRequest,
     MaximumEdgeMatchingResult,
-    MinimumTransversalRequest,
     MinimumTransversalResult,
-    ParametersRequest,
     ParametersResult,
-    VertexDegreesRequest,
     VertexDegreesResult,
     _admit_edge_intersection_profile,
     _induced_type_profile_admission_plan,
@@ -45,16 +36,29 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
+__all__ = [
+    "clique_expansion",
+    "dual",
+    "edge_intersections",
+    "incidence_graph",
+    "independence_number",
+    "induced_type_profile",
+    "maximum_edge_matching",
+    "minimum_transversal",
+    "parameters",
+    "vertex_degrees",
+]
 
-def _admit_independence(request: HypergraphIndependenceRequest) -> None:
-    if any(not members for _, members in request.hypergraph.edges):
+
+def _admit_independence(hypergraph: FiniteHypergraph) -> None:
+    if any(not members for _, members in hypergraph.edges):
         raise OperationDomainValidationError(
             location=("hypergraph",),
             code="hypergraph.independence_number.empty_edge",
             message="independence-number search does not admit empty edges",
         )
-    total_incidences = sum(len(members) for _, members in request.hypergraph.edges)
-    if len(request.hypergraph.vertices) > MAX_HYPERGRAPH_INDEPENDENCE_VERTICES:
+    total_incidences = sum(len(members) for _, members in hypergraph.edges)
+    if len(hypergraph.vertices) > MAX_HYPERGRAPH_INDEPENDENCE_VERTICES:
         raise OperationDomainValidationError(
             location=("hypergraph",),
             code="hypergraph.independence_number.vertex_bound",
@@ -74,8 +78,8 @@ def _admit_independence(request: HypergraphIndependenceRequest) -> None:
         )
 
 
-def _admit_dual(request: DualRequest) -> None:
-    if len(request.hypergraph.edges) > MAX_VERTICES:
+def _admit_dual(hypergraph: FiniteHypergraph) -> None:
+    if len(hypergraph.edges) > MAX_VERTICES:
         raise OperationDomainValidationError(
             location=("hypergraph",),
             code="hypergraph.dual.vertex_bound",
@@ -86,10 +90,9 @@ def _admit_dual(request: DualRequest) -> None:
         )
 
 
-def _admit_clique_expansion(request: CliqueExpansionRequest) -> None:
+def _admit_clique_expansion(hypergraph: FiniteHypergraph) -> None:
     if any(
-        not unicodedata.is_normalized("NFC", vertex)
-        for vertex in request.hypergraph.vertices
+        not unicodedata.is_normalized("NFC", vertex) for vertex in hypergraph.vertices
     ):
         raise OperationDomainValidationError(
             location=("hypergraph",),
@@ -98,9 +101,9 @@ def _admit_clique_expansion(request: CliqueExpansionRequest) -> None:
         )
 
 
-def _admit_maximum_edge_matching(request: MaximumEdgeMatchingRequest) -> None:
-    edge_ids = tuple(edge_id for edge_id, _ in request.hypergraph.edges)
-    nonempty_edge_count = sum(bool(members) for _, members in request.hypergraph.edges)
+def _admit_maximum_edge_matching(hypergraph: FiniteHypergraph) -> None:
+    edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
+    nonempty_edge_count = sum(bool(members) for _, members in hypergraph.edges)
     if nonempty_edge_count > MAX_MATCHING_EDGES:
         raise OperationDomainValidationError(
             location=("hypergraph",),
@@ -111,7 +114,7 @@ def _admit_maximum_edge_matching(request: MaximumEdgeMatchingRequest) -> None:
             ),
         )
     if (
-        _maximum_edge_matching_result_bytes(request.hypergraph, edge_ids)
+        _maximum_edge_matching_result_bytes(hypergraph, edge_ids)
         > MAX_MATCHING_RESULT_BYTES
     ):
         raise OperationDomainValidationError(
@@ -125,8 +128,9 @@ def _admit_maximum_edge_matching(request: MaximumEdgeMatchingRequest) -> None:
         )
 
 
-def compute_independence_number(
-    request: HypergraphIndependenceRequest,
+def independence_number(
+    hypergraph: FiniteHypergraph,
+    resource_budget: HypergraphIndependenceBudget | None = None,
 ) -> HypergraphIndependenceResult:
     """Return an exact optimum or source-bound incumbent and sound bounds."""
 
@@ -134,8 +138,9 @@ def compute_independence_number(
         _independence_z3,
     )
 
-    _admit_independence(request)
-    return _independence_z3.solve_independence_number(request)
+    resource_budget = resource_budget or HypergraphIndependenceBudget()
+    _admit_independence(hypergraph)
+    return _independence_z3.solve_independence_number(hypergraph, resource_budget)
 
 
 def _canonical_edges(
@@ -320,7 +325,7 @@ def _clique_expansion_graph(hypergraph: FiniteHypergraph) -> SimpleUndirectedGra
     return SimpleUndirectedGraph(vertices=hypergraph.vertices, edges=graph_edges)
 
 
-def compute_parameters(request: ParametersRequest) -> ParametersResult:
+def parameters(hypergraph: FiniteHypergraph) -> ParametersResult:
     """Compute the basic parameters of a finite hypergraph."""
 
     (
@@ -330,9 +335,9 @@ def compute_parameters(request: ParametersRequest) -> ParametersResult:
         corank,
         uniform_size,
         total_incidences,
-    ) = _parameters_data(request.hypergraph)
+    ) = _parameters_data(hypergraph)
     return ParametersResult(
-        hypergraph=request.hypergraph,
+        hypergraph=hypergraph,
         vertex_count=vertex_count,
         edge_count=edge_count,
         rank=rank,
@@ -342,12 +347,12 @@ def compute_parameters(request: ParametersRequest) -> ParametersResult:
     )
 
 
-def compute_vertex_degrees(request: VertexDegreesRequest) -> VertexDegreesResult:
+def vertex_degrees(hypergraph: FiniteHypergraph) -> VertexDegreesResult:
     """Compute the vertex-degree map of a finite hypergraph."""
 
-    degrees, histogram = _vertex_degrees_data(request.hypergraph)
+    degrees, histogram = _vertex_degrees_data(hypergraph)
     return VertexDegreesResult(
-        hypergraph=request.hypergraph,
+        hypergraph=hypergraph,
         degrees=degrees,
         histogram=histogram,
     )
@@ -378,45 +383,32 @@ def edge_intersections(
     )
 
 
-def compute_edge_intersections(
-    request: EdgeIntersectionsRequest,
-) -> EdgeIntersectionsResult:
-    """Compute the complete indexed edge-intersection profile."""
-
-    return edge_intersections(request.hypergraph)
-
-
-def compute_dual(request: DualRequest) -> DualResult:
+def dual(hypergraph: FiniteHypergraph) -> DualResult:
     """Compute the dual of a finite hypergraph."""
 
-    _admit_dual(request)
-    dual = _dual_data(request.hypergraph)
-    return DualResult(hypergraph=request.hypergraph, dual=dual)
+    _admit_dual(hypergraph)
+    return DualResult(hypergraph=hypergraph, dual=_dual_data(hypergraph))
 
 
-def compute_incidence_graph(
-    request: IncidenceGraphRequest,
-) -> IncidenceGraphResult:
+def incidence_graph(hypergraph: FiniteHypergraph) -> IncidenceGraphResult:
     """Compute the bipartite incidence graph (Levi graph) of a hypergraph."""
 
-    vertex_incidence, edge_incidence, edges = _incidence_graph_data(request.hypergraph)
+    vertex_incidence, edge_incidence, edges = _incidence_graph_data(hypergraph)
     return IncidenceGraphResult(
-        hypergraph=request.hypergraph,
+        hypergraph=hypergraph,
         vertex_incidence=vertex_incidence,
         edge_incidence=edge_incidence,
         edges=edges,
     )
 
 
-def compute_clique_expansion(
-    request: CliqueExpansionRequest,
-) -> CliqueExpansionResult:
+def clique_expansion(hypergraph: FiniteHypergraph) -> CliqueExpansionResult:
     """Compute the 2-section (primal/clique expansion) of a hypergraph."""
 
-    _admit_clique_expansion(request)
+    _admit_clique_expansion(hypergraph)
     return CliqueExpansionResult(
-        hypergraph=request.hypergraph,
-        graph=_clique_expansion_graph(request.hypergraph),
+        hypergraph=hypergraph,
+        graph=_clique_expansion_graph(hypergraph),
     )
 
 
@@ -441,14 +433,15 @@ def _induced_type_profile_data(
     return tuple(rows)
 
 
-def compute_induced_type_profile(
-    request: InducedTypeProfileRequest,
+def induced_type_profile(
+    hypergraph: FiniteHypergraph,
+    subset_size: int,
 ) -> InducedTypeProfileResult:
     """Compute the induced uniform type profile of a finite hypergraph."""
 
     plan = _induced_type_profile_admission_plan(
-        request.hypergraph,
-        request.subset_size,
+        hypergraph,
+        subset_size,
     )
     if plan.result_bytes > MAX_INDUCED_PROFILE_RESULT_BYTES:
         raise _validation_error(
@@ -462,8 +455,8 @@ def compute_induced_type_profile(
         for subset, count in rows
     )
     return InducedTypeProfileResult._from_kernel(
-        hypergraph=request.hypergraph,
-        subset_size=request.subset_size,
+        hypergraph=hypergraph,
+        subset_size=subset_size,
         entries=entries,
     )
 
@@ -530,15 +523,13 @@ def _admit_minimum_transversal(
     return plan
 
 
-def compute_minimum_transversal(
-    request: MinimumTransversalRequest,
-) -> MinimumTransversalResult:
+def minimum_transversal(hypergraph: FiniteHypergraph) -> MinimumTransversalResult:
     """Compute an exact minimum-cardinality transversal of a finite hypergraph."""
 
-    plan = _admit_minimum_transversal(request.hypergraph)
+    plan = _admit_minimum_transversal(hypergraph)
     transversal, cardinality = _minimum_transversal_data(plan)
     return MinimumTransversalResult(
-        hypergraph=request.hypergraph,
+        hypergraph=hypergraph,
         transversal=transversal,
         cardinality=cardinality,
     )
@@ -584,15 +575,13 @@ def _maximum_edge_matching_data(
     return (), 0
 
 
-def compute_maximum_edge_matching(
-    request: MaximumEdgeMatchingRequest,
-) -> MaximumEdgeMatchingResult:
+def maximum_edge_matching(hypergraph: FiniteHypergraph) -> MaximumEdgeMatchingResult:
     """Compute an exact maximum-cardinality edge matching of a finite hypergraph."""
 
-    _admit_maximum_edge_matching(request)
-    matching, count = _maximum_edge_matching_data(request.hypergraph)
+    _admit_maximum_edge_matching(hypergraph)
+    matching, count = _maximum_edge_matching_data(hypergraph)
     return MaximumEdgeMatchingResult(
-        hypergraph=request.hypergraph,
+        hypergraph=hypergraph,
         matching=matching,
         count=count,
     )

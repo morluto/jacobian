@@ -9,8 +9,8 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MinimumTransversalRequest,
     MinimumTransversalResult,
 )
-from jacobian.math.combinatorics.finite_structures.hypergraphs._operations import (
-    compute_minimum_transversal,
+from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
+    minimum_transversal,
 )
 
 HYPERGRAPH = {
@@ -24,9 +24,7 @@ HYPERGRAPH = {
 
 
 def _transversal(source: object) -> MinimumTransversalResult:
-    return compute_minimum_transversal(
-        MinimumTransversalRequest(hypergraph=FiniteHypergraph.model_validate(source))
-    )
+    return minimum_transversal(FiniteHypergraph.model_validate(source))
 
 
 class TestMinimumTransversal:

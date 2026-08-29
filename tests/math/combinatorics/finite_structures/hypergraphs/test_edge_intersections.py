@@ -16,8 +16,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
     _edge_intersection_preflight_data,
 )
-from jacobian.math.combinatorics.finite_structures.hypergraphs._operations import (
-    compute_edge_intersections,
+from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
     edge_intersections,
 )
 
@@ -32,9 +31,7 @@ NONLINEAR = {
 
 
 def _profile(source: object) -> EdgeIntersectionsResult:
-    return compute_edge_intersections(
-        EdgeIntersectionsRequest.model_validate({"hypergraph": source})
-    )
+    return edge_intersections(FiniteHypergraph.model_validate(source))
 
 
 class TestEdgeIntersections:
@@ -225,7 +222,7 @@ class TestEdgeIntersectionPreflight:
         assert pair_count == 4_950
         assert incidences == 1_300
         assert cells == 64_350 <= MAX_EDGE_INTERSECTION_CELLS
-        result = compute_edge_intersections(request)
+        result = edge_intersections(request.hypergraph)
         assert result.pair_count == pair_count
         assert (
             sum(entry.intersection_size for entry in result.pair_intersections) == cells
@@ -245,7 +242,7 @@ class TestEdgeIntersectionPreflight:
             }
         )
         with pytest.raises(ValueError, match="intersection-cell"):
-            compute_edge_intersections(request)
+            edge_intersections(request.hypergraph)
 
     def test_sparse_overlap_family_uses_exact_incidence_cell_count(self) -> None:
         vertices = tuple(f"v{i:03}" for i in range(100))
@@ -265,7 +262,7 @@ class TestEdgeIntersectionPreflight:
             _edge_intersection_preflight_data(hypergraph)
         )
         request = EdgeIntersectionsRequest(hypergraph=hypergraph)
-        result = compute_edge_intersections(request)
+        result = edge_intersections(request.hypergraph)
 
         assert pair_count == 4_950
         assert incidences == 1_400
@@ -305,7 +302,7 @@ class TestEdgeIntersectionPreflight:
             }
         )
         with pytest.raises(ValueError, match="canonical output limit"):
-            compute_edge_intersections(request)
+            edge_intersections(request.hypergraph)
 
     def test_output_bound_preserves_exact_non_normalized_label_bytes(self) -> None:
         # Each 63-code-point label is 189 UTF-8 bytes, but NFC would compose
@@ -326,7 +323,7 @@ class TestEdgeIntersectionPreflight:
             }
         )
         with pytest.raises(ValueError, match="canonical output limit"):
-            compute_edge_intersections(request)
+            edge_intersections(request.hypergraph)
 
     def test_schema_exposes_complete_profile_bounds(self) -> None:
         request_schema = EdgeIntersectionsRequest.model_json_schema()

@@ -12,7 +12,7 @@ from typing import Any, cast
 
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
-    HypergraphIndependenceRequest,
+    HypergraphIndependenceBudget,
     HypergraphIndependenceResult,
     HypergraphIndependenceStatus,
     HypergraphIndependenceTermination,
@@ -99,7 +99,8 @@ def _check_threshold(
 
 
 def _result(
-    request: HypergraphIndependenceRequest,
+    source: FiniteHypergraph,
+    resource_budget: HypergraphIndependenceBudget,
     *,
     status: HypergraphIndependenceStatus,
     independence_number: int | None,
@@ -111,8 +112,8 @@ def _result(
     detail: str,
 ) -> HypergraphIndependenceResult:
     return HypergraphIndependenceResult._from_kernel(
-        hypergraph=request.hypergraph,
-        resource_budget=request.resource_budget,
+        hypergraph=source,
+        resource_budget=resource_budget,
         status=status,
         independence_number=independence_number,
         incumbent_vertices=incumbent,
@@ -144,21 +145,22 @@ def _solver_witness_is_canonical_and_independent(
 
 
 def _solve_independence_number_kernel(
-    request: HypergraphIndependenceRequest,
+    source: FiniteHypergraph,
+    resource_budget: HypergraphIndependenceBudget,
 ) -> HypergraphIndependenceResult:
     """Search cardinality thresholds from a sound source-derived upper bound."""
 
     import z3
 
     started = time.monotonic()
-    source = request.hypergraph
     vertices = source.vertices
     incumbent = _greedy_independent_vertices(source)
     source_upper_bound = _independence_upper_bound(source)
     upper_bound = source_upper_bound
     if len(incumbent) == upper_bound:
         return _result(
-            request,
+            source,
+            resource_budget,
             status="EXACT",
             independence_number=len(incumbent),
             incumbent=incumbent,
@@ -176,7 +178,8 @@ def _solve_independence_number_kernel(
         solver, selected, cardinality = _build_solver(source)
     except z3.Z3Exception as exc:
         return _result(
-            request,
+            source,
+            resource_budget,
             status="UNKNOWN",
             independence_number=None,
             incumbent=incumbent,
@@ -189,9 +192,10 @@ def _solve_independence_number_kernel(
 
     solver_calls = 0
     for threshold in range(upper_bound, len(incumbent), -1):
-        if solver_calls >= request.resource_budget.max_solver_calls:
+        if solver_calls >= resource_budget.max_solver_calls:
             return _result(
-                request,
+                source,
+                resource_budget,
                 status="UNKNOWN",
                 independence_number=None,
                 incumbent=incumbent,
@@ -201,9 +205,10 @@ def _solve_independence_number_kernel(
                 termination_reason="SOLVER_CALL_LIMIT",
                 detail="the descending threshold search exhausted its solver-call budget",
             )
-        if _remaining_ms(started, request.resource_budget.wall_seconds) <= 0:
+        if _remaining_ms(started, resource_budget.wall_seconds) <= 0:
             return _result(
-                request,
+                source,
+                resource_budget,
                 status="UNKNOWN",
                 independence_number=None,
                 incumbent=incumbent,
@@ -222,12 +227,13 @@ def _solve_independence_number_kernel(
                 cardinality,
                 threshold,
                 started,
-                request.resource_budget.wall_seconds,
+                resource_budget.wall_seconds,
                 vertices,
             )
         except z3.Z3Exception as exc:
             return _result(
-                request,
+                source,
+                resource_budget,
                 status="UNKNOWN",
                 independence_number=None,
                 incumbent=incumbent,
@@ -247,7 +253,8 @@ def _solve_independence_number_kernel(
                 source, candidate
             ):
                 return _result(
-                    request,
+                    source,
+                    resource_budget,
                     status="UNKNOWN",
                     independence_number=None,
                     incumbent=incumbent,
@@ -261,7 +268,8 @@ def _solve_independence_number_kernel(
                     ),
                 )
             return _result(
-                request,
+                source,
+                resource_budget,
                 status="EXACT",
                 independence_number=len(candidate),
                 incumbent=candidate,
@@ -273,11 +281,12 @@ def _solve_independence_number_kernel(
             )
 
         wall_expired = (
-            _remaining_ms(started, request.resource_budget.wall_seconds) <= 0
+            _remaining_ms(started, resource_budget.wall_seconds) <= 0
             or "timeout" in reason.lower()
         )
         return _result(
-            request,
+            source,
+            resource_budget,
             status="UNKNOWN",
             independence_number=None,
             incumbent=incumbent,
@@ -292,7 +301,8 @@ def _solve_independence_number_kernel(
         )
 
     return _result(
-        request,
+        source,
+        resource_budget,
         status="EXACT",
         independence_number=len(incumbent),
         incumbent=incumbent,
@@ -346,19 +356,19 @@ def _run_independence_worker(
 
 
 def solve_independence_number(
-    request: HypergraphIndependenceRequest,
+    source: FiniteHypergraph,
+    resource_budget: HypergraphIndependenceBudget,
 ) -> HypergraphIndependenceResult:
     """Run every Z3 phase under one process and resource envelope."""
 
-    source_upper_bound = _independence_upper_bound(request.hypergraph)
-    incumbent = _greedy_independent_vertices(request.hypergraph)
+    source_upper_bound = _independence_upper_bound(source)
+    incumbent = _greedy_independent_vertices(source)
     started = time.monotonic()
-    remaining_seconds = (
-        _remaining_ms(started, request.resource_budget.wall_seconds) / 1_000
-    )
+    remaining_seconds = _remaining_ms(started, resource_budget.wall_seconds) / 1_000
     if remaining_seconds <= 0:
         return _result(
-            request,
+            source,
+            resource_budget,
             status="UNKNOWN",
             independence_number=None,
             incumbent=incumbent,
@@ -369,12 +379,17 @@ def solve_independence_number(
             detail="the hypergraph independence request expired before worker startup",
         )
     response = _run_independence_worker(
-        {"kind": "solve", "request": request.model_dump(mode="json")},
+        {
+            "kind": "solve",
+            "hypergraph": source.model_dump(mode="json"),
+            "resource_budget": resource_budget.model_dump(mode="json"),
+        },
         timeout_seconds=remaining_seconds,
     )
     if not isinstance(response, dict):
         return _result(
-            request,
+            source,
+            resource_budget,
             status="UNKNOWN",
             independence_number=None,
             incumbent=incumbent,
@@ -384,9 +399,10 @@ def solve_independence_number(
             termination_reason="SOLVER_ERROR",
             detail="the bounded hypergraph independence worker did not establish an outcome",
         )
-    if _remaining_ms(started, request.resource_budget.wall_seconds) <= 0:
+    if _remaining_ms(started, resource_budget.wall_seconds) <= 0:
         return _result(
-            request,
+            source,
+            resource_budget,
             status="UNKNOWN",
             independence_number=None,
             incumbent=incumbent,
@@ -403,17 +419,18 @@ def solve_independence_number(
         result = HypergraphIndependenceResult.model_validate(
             {
                 **response,
-                "hypergraph": request.hypergraph.model_dump(mode="json"),
-                "hypergraph_digest": _hypergraph_digest(request.hypergraph),
-                "resource_budget": request.resource_budget.model_dump(mode="json"),
+                "hypergraph": source.model_dump(mode="json"),
+                "hypergraph_digest": _hypergraph_digest(source),
+                "resource_budget": resource_budget.model_dump(mode="json"),
             }
         )
-        if _remaining_ms(started, request.resource_budget.wall_seconds) > 0:
+        if _remaining_ms(started, resource_budget.wall_seconds) > 0:
             return result
         raise ValueError("request expired during response validation")
     except (TypeError, ValueError):
         return _result(
-            request,
+            source,
+            resource_budget,
             status="UNKNOWN",
             independence_number=None,
             incumbent=incumbent,

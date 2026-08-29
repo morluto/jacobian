@@ -28,18 +28,72 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     VertexDegreesRequest,
     VertexDegreesResult,
 )
-from jacobian.math.combinatorics.finite_structures.hypergraphs._operations import (
-    compute_clique_expansion,
-    compute_dual,
-    compute_edge_intersections,
-    compute_incidence_graph,
-    compute_independence_number,
-    compute_induced_type_profile,
-    compute_maximum_edge_matching,
-    compute_minimum_transversal,
-    compute_parameters,
-    compute_vertex_degrees,
+from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
+    clique_expansion,
+    dual,
+    edge_intersections,
+    incidence_graph,
+    independence_number,
+    induced_type_profile,
+    maximum_edge_matching,
+    minimum_transversal,
+    parameters,
+    vertex_degrees,
 )
+
+
+def _compute_independence_number(
+    request: HypergraphIndependenceRequest,
+) -> HypergraphIndependenceResult:
+    return independence_number(request.hypergraph, request.resource_budget)
+
+
+def _compute_parameters(request: ParametersRequest) -> ParametersResult:
+    return parameters(request.hypergraph)
+
+
+def _compute_vertex_degrees(request: VertexDegreesRequest) -> VertexDegreesResult:
+    return vertex_degrees(request.hypergraph)
+
+
+def _compute_edge_intersections(
+    request: EdgeIntersectionsRequest,
+) -> EdgeIntersectionsResult:
+    return edge_intersections(request.hypergraph)
+
+
+def _compute_dual(request: DualRequest) -> DualResult:
+    return dual(request.hypergraph)
+
+
+def _compute_incidence_graph(
+    request: IncidenceGraphRequest,
+) -> IncidenceGraphResult:
+    return incidence_graph(request.hypergraph)
+
+
+def _compute_clique_expansion(
+    request: CliqueExpansionRequest,
+) -> CliqueExpansionResult:
+    return clique_expansion(request.hypergraph)
+
+
+def _compute_induced_type_profile(
+    request: InducedTypeProfileRequest,
+) -> InducedTypeProfileResult:
+    return induced_type_profile(request.hypergraph, request.subset_size)
+
+
+def _compute_minimum_transversal(
+    request: MinimumTransversalRequest,
+) -> MinimumTransversalResult:
+    return minimum_transversal(request.hypergraph)
+
+
+def _compute_maximum_edge_matching(
+    request: MaximumEdgeMatchingRequest,
+) -> MaximumEdgeMatchingResult:
+    return maximum_edge_matching(request.hypergraph)
 
 
 def _op[
@@ -88,7 +142,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "when the bounded exact threshold search does not finish.",
         HypergraphIndependenceRequest,
         HypergraphIndependenceResult,
-        compute_independence_number,
+        _compute_independence_number,
         "combinatorics",
         "hypergraph",
         "independent-set",
@@ -119,7 +173,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "size, and total incidences of a finite hypergraph.",
         ParametersRequest,
         ParametersResult,
-        compute_parameters,
+        _compute_parameters,
         "combinatorics",
         "hypergraph",
         "exact",
@@ -138,7 +192,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "finite hypergraph.",
         VertexDegreesRequest,
         VertexDegreesResult,
-        compute_vertex_degrees,
+        _compute_vertex_degrees,
         "combinatorics",
         "hypergraph",
         "exact",
@@ -158,7 +212,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "and linearity with the first canonical violating pair.",
         EdgeIntersectionsRequest,
         EdgeIntersectionsResult,
-        compute_edge_intersections,
+        _compute_edge_intersections,
         "combinatorics",
         "hypergraph",
         "intersection",
@@ -182,7 +236,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "vertices become edges.",
         DualRequest,
         DualResult,
-        compute_dual,
+        _compute_dual,
         "combinatorics",
         "hypergraph",
         "exact",
@@ -201,7 +255,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "hypergraph, giving vertex-to-edge and edge-to-vertex incidence.",
         IncidenceGraphRequest,
         IncidenceGraphResult,
-        compute_incidence_graph,
+        _compute_incidence_graph,
         "combinatorics",
         "hypergraph",
         "exact",
@@ -221,7 +275,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "they share a hyperedge, with edge endpoints in lexical order.",
         CliqueExpansionRequest,
         CliqueExpansionResult,
-        compute_clique_expansion,
+        _compute_clique_expansion,
         "combinatorics",
         "hypergraph",
         "exact",
@@ -241,7 +295,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "restricted to that subset S, in lexicographic vertex order.",
         InducedTypeProfileRequest,
         InducedTypeProfileResult,
-        compute_induced_type_profile,
+        _compute_induced_type_profile,
         "combinatorics",
         "hypergraph",
         "exact",
@@ -262,7 +316,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "search. Empty hyperedges are not admitted.",
         MinimumTransversalRequest,
         MinimumTransversalResult,
-        compute_minimum_transversal,
+        _compute_minimum_transversal,
         "combinatorics",
         "hypergraph",
         "optimization",
@@ -284,7 +338,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "is handled by a trivial presolve.",
         MaximumEdgeMatchingRequest,
         MaximumEdgeMatchingResult,
-        compute_maximum_edge_matching,
+        _compute_maximum_edge_matching,
         "combinatorics",
         "hypergraph",
         "optimization",

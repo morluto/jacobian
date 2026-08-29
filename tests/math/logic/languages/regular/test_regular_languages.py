@@ -74,6 +74,20 @@ def _dfa_full_alphabet_accepting() -> DFA:
     )
 
 
+def _dfa_full_alphabet_rejecting() -> DFA:
+    """One non-accepting state looping on all 32 symbols."""
+
+    return DFA(
+        state_count=1,
+        alphabet_size=32,
+        transitions=tuple(
+            DFATransition(source=0, symbol=symbol, target=0) for symbol in range(32)
+        ),
+        initial_state=0,
+        accepting_states=(),
+    )
+
+
 def test_run_accepts_word_ending_in_1() -> None:
     dfa = _dfa_ends_in_1()
     result = compute_run(RunRequest(dfa=dfa, word=(1, 0, 1)))
@@ -171,6 +185,15 @@ def test_count_uses_flint_powering_above_the_previous_length_ceiling() -> None:
 def test_count_rejects_projected_result_digits_before_powering() -> None:
     with pytest.raises(OperationDomainValidationError, match="result digit bound"):
         count_accepted_words(_dfa_full_alphabet_accepting(), 22_000)
+
+
+def test_count_empty_accepting_set_short_circuits_before_result_bound() -> None:
+    """Empty accepting sets are exactly zero without charging large-n growth."""
+
+    dfa = _dfa_full_alphabet_rejecting()
+    assert compute_count(CountRequest(dfa=dfa, word_length=22_000)).count == "0"
+    assert count_accepted_words(dfa, 22_000) == 0
+    assert count_accepted_words(dfa, 0) == 0
 
 
 def test_count_rejects_large_state_powering_work() -> None:

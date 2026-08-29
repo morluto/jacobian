@@ -54,6 +54,11 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
             code="regular_language.word_length_out_of_bounds",
             message="word length is outside the exact counting bound",
         )
+    if not dfa.accepting_states:
+        # Empty accepting sets accept no words of any length, including ε.
+        return 0
+    if word_length == 0:
+        return 1 if dfa.initial_state in dfa.accepting_states else 0
     matrix_work = state_count**3 * max(1, word_length.bit_length())
     if matrix_work > MAX_COUNT_MATRIX_WORK:
         raise OperationDomainValidationError(
@@ -69,8 +74,6 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
             code="regular_language.count_result_bound",
             message="accepted-word count exceeds the canonical result digit bound",
         )
-    if word_length == 0:
-        return 1 if dfa.initial_state in dfa.accepting_states else 0
     matrix = [[0] * state_count for _ in range(state_count)]
     for (source, _symbol), target in _transition_map(dfa).items():
         matrix[source][target] += 1

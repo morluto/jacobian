@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from math import gcd
 from typing import TYPE_CHECKING, Literal, Self
 
@@ -35,15 +36,42 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 RealAlgebraicOrder = Literal["LT", "EQ", "GT"]
 
 
-def _sympy_polynomial(value: RealAlgebraicValue) -> Poly:
+@lru_cache(maxsize=128)
+def _sympy_polynomial_from_coefficients(
+    coefficients: tuple[CanonicalInteger, ...],
+) -> Poly:
     import sympy
 
     x = sympy.Symbol("x")
     return sympy.Poly.from_list(
-        [parse_canonical_integer(coefficient) for coefficient in value.polynomial],
+        [parse_canonical_integer(coefficient) for coefficient in coefficients],
         gens=x,
         domain=sympy.ZZ,
     )
+
+
+def _sympy_polynomial(value: RealAlgebraicValue) -> Poly:
+    return _sympy_polynomial_from_coefficients(value.polynomial)
+
+
+@lru_cache(maxsize=128)
+def _polynomial_is_irreducible(
+    coefficients: tuple[CanonicalInteger, ...],
+) -> bool:
+    return _sympy_polynomial_from_coefficients(coefficients).is_irreducible is True
+
+
+@lru_cache(maxsize=128)
+def _real_root_count(
+    coefficients: tuple[CanonicalInteger, ...],
+) -> int:
+    return len(_sympy_polynomial_from_coefficients(coefficients).intervals())
+
+
+def _real_polynomial_validation(
+    coefficients: tuple[CanonicalInteger, ...],
+) -> tuple[bool, int]:
+    return _polynomial_is_irreducible(coefficients), _real_root_count(coefficients)
 
 
 def _rational(value: SympyRational) -> CanonicalRational:
@@ -111,19 +139,32 @@ class RealAlgebraicValue(StrictModel):
                 "real algebraic minimal polynomial must be primitive over ZZ",
             )
 
-        polynomial = _sympy_polynomial(self)
-        if polynomial.is_irreducible is not True:
+        is_irreducible, real_root_count = _real_polynomial_validation(self.polynomial)
+        if not is_irreducible:
             raise _validation_error(
                 "not_irreducible",
                 "real algebraic minimal polynomial must be irreducible over QQ",
             )
-        real_root_count = len(polynomial.intervals())
         if self.real_root_index >= real_root_count:
             raise _validation_error(
                 "root_index",
                 "real_root_index must select an existing real root of the minimal polynomial",
             )
         return self
+
+    @classmethod
+    def _from_admitted_polynomial(
+        cls,
+        *,
+        polynomial: tuple[CanonicalInteger, ...],
+        real_root_index: int,
+    ) -> RealAlgebraicValue:
+        """Construct after an owner has admitted the canonical polynomial/root."""
+
+        return cls.model_construct(
+            polynomial=polynomial,
+            real_root_index=real_root_index,
+        )
 
 
 class RationalIsolatingInterval(StrictModel):

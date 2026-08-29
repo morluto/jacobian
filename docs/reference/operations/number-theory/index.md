@@ -10,3 +10,4 @@ and finite abelian-group decompositions are separate catalog entries.
 
 - [Powerful-number decision](integer-powerful-number-decision.md)
 - [Integer prime factorization](integer-prime-factorization-verification.md)
+- [Simple number-field embeddings](number-field-embeddings.md)

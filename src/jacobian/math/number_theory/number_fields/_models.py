@@ -9,6 +9,9 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
+from jacobian.math.number_theory.number_fields.values import (
+    SimpleNumberFieldPresentation,
+)
 from jacobian.math.polynomials.values import PolynomialVariable
 
 MAX_NUMBER_FIELD_COEFFICIENT_DIGITS = 256
@@ -74,3 +77,17 @@ class NumberFieldDiscriminantResult(StrictModel):
                 "an unknown number-field computation requires detail and no value",
             )
         return self
+
+
+class NumberFieldEmbeddingsRequest(StrictModel):
+    """Request every Archimedean embedding of one bounded presented field."""
+
+    field: SimpleNumberFieldPresentation
+
+
+__all__ = [
+    "MAX_NUMBER_FIELD_COEFFICIENT_DIGITS",
+    "NumberFieldDiscriminantResult",
+    "NumberFieldEmbeddingsRequest",
+    "NumberFieldRequest",
+]

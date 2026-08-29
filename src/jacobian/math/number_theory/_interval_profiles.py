@@ -1,6 +1,9 @@
 """Declarations for bounded integer-interval arithmetic-function profiles."""
 
+from typing import NoReturn
+
 from jacobian.catalog._examples import example
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._interval_profile_models import (
     DivisorCountProfileRequest,
     DivisorCountProfileResult,
@@ -17,16 +20,95 @@ from jacobian.math.number_theory._interval_profile_models import (
     SquarefreeProfileRequest,
     SquarefreeProfileResult,
 )
-from jacobian.math.number_theory._interval_profile_operations import (
-    compute_divisor_count_profile,
-    compute_divisor_sum_profile,
-    compute_euler_totient_profile,
-    compute_greatest_prime_factor_profile,
-    compute_least_prime_factor_profile,
-    compute_prime_gap_profile,
-    compute_squarefree_profile,
-)
 from jacobian.math.number_theory._support import number_theory_operation
+from jacobian.math.number_theory.interval_profiles.operations import (
+    IntervalAdmissionError,
+    divisor_count_profile,
+    divisor_sum_profile,
+    euler_totient_profile,
+    greatest_prime_factor_profile,
+    least_prime_factor_profile,
+    prime_gap_profile,
+    squarefree_profile,
+)
+
+
+def _raise_interval_admission(exc: IntervalAdmissionError) -> NoReturn:
+    """Translate native interval admission into catalog's field error type."""
+    raise OperationDomainValidationError(
+        location=("upper_bound",),
+        code=f"number_theory.interval.{exc.reason}",
+        message=str(exc),
+    ) from exc
+
+
+def compute_squarefree_profile(
+    request: SquarefreeProfileRequest,
+) -> SquarefreeProfileResult:
+    """Project a squarefree request into the canonical native operation."""
+    try:
+        return squarefree_profile(request.lower_bound, request.upper_bound)
+    except IntervalAdmissionError as exc:
+        _raise_interval_admission(exc)
+
+
+def compute_divisor_count_profile(
+    request: DivisorCountProfileRequest,
+) -> DivisorCountProfileResult:
+    """Project a divisor-count request into the canonical native operation."""
+    try:
+        return divisor_count_profile(request.lower_bound, request.upper_bound)
+    except IntervalAdmissionError as exc:
+        _raise_interval_admission(exc)
+
+
+def compute_greatest_prime_factor_profile(
+    request: GreatestPrimeFactorProfileRequest,
+) -> GreatestPrimeFactorProfileResult:
+    """Project a greatest-prime-factor request into the canonical operation."""
+    try:
+        return greatest_prime_factor_profile(request.lower_bound, request.upper_bound)
+    except IntervalAdmissionError as exc:
+        _raise_interval_admission(exc)
+
+
+def compute_prime_gap_profile(request: PrimeGapProfileRequest) -> PrimeGapProfileResult:
+    """Project a prime-gap request into the canonical native operation."""
+    try:
+        return prime_gap_profile(request.lower_bound, request.upper_bound)
+    except IntervalAdmissionError as exc:
+        _raise_interval_admission(exc)
+
+
+def compute_least_prime_factor_profile(
+    request: LeastPrimeFactorProfileRequest,
+) -> LeastPrimeFactorProfileResult:
+    """Project a least-prime-factor request into the canonical operation."""
+    try:
+        return least_prime_factor_profile(request.lower_bound, request.upper_bound)
+    except IntervalAdmissionError as exc:
+        _raise_interval_admission(exc)
+
+
+def compute_euler_totient_profile(
+    request: EulerTotientProfileRequest,
+) -> EulerTotientProfileResult:
+    """Project a totient request into the canonical native operation."""
+    try:
+        return euler_totient_profile(request.lower_bound, request.upper_bound)
+    except IntervalAdmissionError as exc:
+        _raise_interval_admission(exc)
+
+
+def compute_divisor_sum_profile(
+    request: DivisorSumProfileRequest,
+) -> DivisorSumProfileResult:
+    """Project a divisor-sum request into the canonical native operation."""
+    try:
+        return divisor_sum_profile(request.lower_bound, request.upper_bound)
+    except IntervalAdmissionError as exc:
+        _raise_interval_admission(exc)
+
 
 INTERVAL_PROFILE_OPERATIONS = (
     number_theory_operation(

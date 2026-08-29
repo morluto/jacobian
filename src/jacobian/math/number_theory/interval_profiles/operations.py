@@ -15,76 +15,89 @@ state is used.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._interval_profile_models import (
+    MAX_INTERVAL_UPPER_BOUND,
+    MAX_INTERVAL_WIDTH,
     MAX_PROFILE_RESULT_BYTES,
     MAX_SIEVE_WORK,
-    DivisorCountProfileRequest,
     DivisorCountProfileResult,
     DivisorCountProfileRow,
-    DivisorSumProfileRequest,
     DivisorSumProfileResult,
     DivisorSumProfileRow,
-    EulerTotientProfileRequest,
     EulerTotientProfileResult,
     EulerTotientProfileRow,
-    GreatestPrimeFactorProfileRequest,
     GreatestPrimeFactorProfileResult,
     GreatestPrimeFactorProfileRow,
     IntervalAdmission,
-    IntervalProfileRequest,
-    LeastPrimeFactorProfileRequest,
     LeastPrimeFactorProfileResult,
     LeastPrimeFactorProfileRow,
-    PrimeGapProfileRequest,
     PrimeGapProfileResult,
     PrimeGapProfileRow,
-    SquarefreeProfileRequest,
     SquarefreeProfileResult,
+    _estimate_divisor_count_result_bytes,
+    _estimate_factor_profile_work,
+    _estimate_greatest_prime_factor_result_bytes,
+    _estimate_prime_gap_result_bytes,
+    _estimate_prime_gap_work,
+    _estimate_squarefree_result_bytes,
+    _estimate_squarefree_work,
 )
 
 
-def _admit_interval(request: IntervalProfileRequest) -> IntervalAdmission:
-    """Build one operation-local execution envelope after wire parsing."""
-    if request.upper_bound < request.lower_bound:
-        raise OperationDomainValidationError(
-            location=("upper_bound",),
-            code="number_theory.interval.order_bound",
-            message="upper_bound must be >= lower_bound",
+class IntervalAdmissionError(ValueError):
+    """A canonical interval fails one mathematical admission bound."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+def _admit_interval(
+    lower_bound: int,
+    upper_bound: int,
+    *,
+    result_estimator: Callable[[int, int], int],
+    work_estimator: Callable[[int, int], int],
+    max_width: int | None,
+) -> IntervalAdmission:
+    """Build one operation-local execution envelope for canonical bounds."""
+    if type(lower_bound) is not int or type(upper_bound) is not int:
+        raise TypeError("interval bounds must be integers")
+    if lower_bound < 1 or upper_bound < 1:
+        raise IntervalAdmissionError(
+            "domain_bound", "interval bounds must be positive integers"
         )
-    max_width = type(request)._max_width
-    width = request.width()
+    if lower_bound > MAX_INTERVAL_UPPER_BOUND or upper_bound > MAX_INTERVAL_UPPER_BOUND:
+        raise IntervalAdmissionError(
+            "domain_bound",
+            f"interval bounds must be at most {MAX_INTERVAL_UPPER_BOUND}",
+        )
+    if upper_bound < lower_bound:
+        raise IntervalAdmissionError(
+            "order_bound", "upper_bound must be >= lower_bound"
+        )
+    width = upper_bound - lower_bound + 1
     if max_width is not None and width > max_width:
-        raise OperationDomainValidationError(
-            location=("upper_bound",),
-            code="number_theory.interval.width_bound",
-            message="interval width exceeds maximum supported width",
+        raise IntervalAdmissionError(
+            "width_bound", "interval width exceeds maximum supported width"
         )
-    estimated_result_bytes = type(request)._result_estimator(
-        request.lower_bound, request.upper_bound
-    )
+    estimated_result_bytes = result_estimator(lower_bound, upper_bound)
     if estimated_result_bytes > MAX_PROFILE_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("upper_bound",),
-            code="number_theory.interval.output_bound",
-            message="interval result exceeds the canonical output budget",
+        raise IntervalAdmissionError(
+            "output_bound", "interval result exceeds the canonical output budget"
         )
-    estimated_work = type(request)._work_estimator(
-        request.lower_bound, request.upper_bound
-    )
+    estimated_work = work_estimator(lower_bound, upper_bound)
     if estimated_work > MAX_SIEVE_WORK:
-        raise OperationDomainValidationError(
-            location=("upper_bound",),
-            code="number_theory.interval.work_bound",
-            message=(
-                "interval exceeds the segmented-sieve work budget of "
-                f"{MAX_SIEVE_WORK} steps"
-            ),
+        raise IntervalAdmissionError(
+            "work_bound",
+            "interval exceeds the segmented-sieve work budget of "
+            f"{MAX_SIEVE_WORK} steps",
         )
     return IntervalAdmission(
-        lower_bound=request.lower_bound,
-        upper_bound=request.upper_bound,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
         width=width,
         estimated_work=estimated_work,
         estimated_result_bytes=estimated_result_bytes,
@@ -103,17 +116,6 @@ def _simple_sieve(limit: int) -> list[int]:
             for j in range(i * i, limit + 1, i):
                 is_prime[j] = 0
     return [i for i in range(2, limit + 1) if is_prime[i]]
-
-
-def _require_request_type[T: IntervalProfileRequest](
-    request: IntervalProfileRequest, expected_type: type[T]
-) -> T:
-    """Reject native calls that pair a kernel with another profile envelope."""
-    if not isinstance(request, expected_type):
-        raise TypeError(
-            f"expected {expected_type.__name__}, got {type(request).__name__}"
-        )
-    return request
 
 
 def _segmented_primes(lower_bound: int, upper_bound: int) -> list[int]:
@@ -191,12 +193,16 @@ def _segmented_factor_profile_data(
     )
 
 
-def compute_squarefree_profile(
-    request: SquarefreeProfileRequest,
-) -> SquarefreeProfileResult:
+def squarefree_profile(lower_bound: int, upper_bound: int) -> SquarefreeProfileResult:
     """Partition [L, U] into squarefree and non-squarefree integers."""
-    request = _require_request_type(request, SquarefreeProfileRequest)
-    return _squarefree_profile_kernel(_admit_interval(request))
+    admission = _admit_interval(
+        lower_bound,
+        upper_bound,
+        result_estimator=_estimate_squarefree_result_bytes,
+        work_estimator=_estimate_squarefree_work,
+        max_width=None,
+    )
+    return _squarefree_profile_kernel(admission)
 
 
 def _squarefree_profile_kernel(admission: IntervalAdmission) -> SquarefreeProfileResult:
@@ -237,12 +243,18 @@ def _squarefree_profile_kernel(admission: IntervalAdmission) -> SquarefreeProfil
     )
 
 
-def compute_divisor_count_profile(
-    request: DivisorCountProfileRequest,
+def divisor_count_profile(
+    lower_bound: int, upper_bound: int
 ) -> DivisorCountProfileResult:
     """Compute tau(n) for every n in [L, U]."""
-    request = _require_request_type(request, DivisorCountProfileRequest)
-    return _divisor_count_profile_kernel(_admit_interval(request))
+    admission = _admit_interval(
+        lower_bound,
+        upper_bound,
+        result_estimator=_estimate_divisor_count_result_bytes,
+        work_estimator=_estimate_factor_profile_work,
+        max_width=MAX_INTERVAL_WIDTH,
+    )
+    return _divisor_count_profile_kernel(admission)
 
 
 def _divisor_count_profile_kernel(
@@ -286,12 +298,18 @@ def _divisor_count_profile_kernel(
     )
 
 
-def compute_greatest_prime_factor_profile(
-    request: GreatestPrimeFactorProfileRequest,
+def greatest_prime_factor_profile(
+    lower_bound: int, upper_bound: int
 ) -> GreatestPrimeFactorProfileResult:
     """Compute P+(n) for every n in [L, U]."""
-    request = _require_request_type(request, GreatestPrimeFactorProfileRequest)
-    return _greatest_prime_factor_profile_kernel(_admit_interval(request))
+    admission = _admit_interval(
+        lower_bound,
+        upper_bound,
+        result_estimator=_estimate_greatest_prime_factor_result_bytes,
+        work_estimator=_estimate_factor_profile_work,
+        max_width=MAX_INTERVAL_WIDTH,
+    )
+    return _greatest_prime_factor_profile_kernel(admission)
 
 
 def _greatest_prime_factor_profile_kernel(
@@ -333,12 +351,16 @@ def _greatest_prime_factor_profile_kernel(
     )
 
 
-def compute_prime_gap_profile(
-    request: PrimeGapProfileRequest,
-) -> PrimeGapProfileResult:
+def prime_gap_profile(lower_bound: int, upper_bound: int) -> PrimeGapProfileResult:
     """Compute consecutive-prime gaps for primes p with L <= p <= U."""
-    request = _require_request_type(request, PrimeGapProfileRequest)
-    return _prime_gap_profile_kernel(_admit_interval(request))
+    admission = _admit_interval(
+        lower_bound,
+        upper_bound,
+        result_estimator=_estimate_prime_gap_result_bytes,
+        work_estimator=_estimate_prime_gap_work,
+        max_width=None,
+    )
+    return _prime_gap_profile_kernel(admission)
 
 
 def _prime_gap_profile_kernel(admission: IntervalAdmission) -> PrimeGapProfileResult:
@@ -371,12 +393,16 @@ def _prime_gap_profile_kernel(admission: IntervalAdmission) -> PrimeGapProfileRe
     return PrimeGapProfileResult(lower_bound=lo, upper_bound=hi, rows=tuple(rows))
 
 
-def compute_least_prime_factor_profile(
-    request: LeastPrimeFactorProfileRequest,
+def least_prime_factor_profile(
+    lower_bound: int, upper_bound: int
 ) -> LeastPrimeFactorProfileResult:
     """Compute p(n), the least prime factor, for every n in [L, U]."""
     admission = _admit_interval(
-        _require_request_type(request, LeastPrimeFactorProfileRequest)
+        lower_bound,
+        upper_bound,
+        result_estimator=_estimate_divisor_count_result_bytes,
+        work_estimator=_estimate_factor_profile_work,
+        max_width=MAX_INTERVAL_WIDTH,
     )
     lo, hi = admission.lower_bound, admission.upper_bound
     _, _, least_prime_factors, _, _ = _segmented_factor_profile_data(lo, hi)
@@ -387,12 +413,16 @@ def compute_least_prime_factor_profile(
     return LeastPrimeFactorProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
 
 
-def compute_euler_totient_profile(
-    request: EulerTotientProfileRequest,
+def euler_totient_profile(
+    lower_bound: int, upper_bound: int
 ) -> EulerTotientProfileResult:
     """Compute phi(n), Euler's totient, for every n in [L, U]."""
     admission = _admit_interval(
-        _require_request_type(request, EulerTotientProfileRequest)
+        lower_bound,
+        upper_bound,
+        result_estimator=_estimate_divisor_count_result_bytes,
+        work_estimator=_estimate_factor_profile_work,
+        max_width=MAX_INTERVAL_WIDTH,
     )
     lo, hi = admission.lower_bound, admission.upper_bound
     _, _, _, euler_totients, _ = _segmented_factor_profile_data(lo, hi)
@@ -403,12 +433,14 @@ def compute_euler_totient_profile(
     return EulerTotientProfileResult(lower_bound=lo, upper_bound=hi, rows=rows)
 
 
-def compute_divisor_sum_profile(
-    request: DivisorSumProfileRequest,
-) -> DivisorSumProfileResult:
+def divisor_sum_profile(lower_bound: int, upper_bound: int) -> DivisorSumProfileResult:
     """Compute sigma(n), the divisor sum, for every n in [L, U]."""
     admission = _admit_interval(
-        _require_request_type(request, DivisorSumProfileRequest)
+        lower_bound,
+        upper_bound,
+        result_estimator=_estimate_divisor_count_result_bytes,
+        work_estimator=_estimate_factor_profile_work,
+        max_width=MAX_INTERVAL_WIDTH,
     )
     lo, hi = admission.lower_bound, admission.upper_bound
     _, _, _, _, divisor_sums = _segmented_factor_profile_data(lo, hi)
@@ -420,11 +452,11 @@ def compute_divisor_sum_profile(
 
 
 __all__ = [
-    "compute_divisor_count_profile",
-    "compute_divisor_sum_profile",
-    "compute_euler_totient_profile",
-    "compute_greatest_prime_factor_profile",
-    "compute_least_prime_factor_profile",
-    "compute_prime_gap_profile",
-    "compute_squarefree_profile",
+    "divisor_count_profile",
+    "divisor_sum_profile",
+    "euler_totient_profile",
+    "greatest_prime_factor_profile",
+    "least_prime_factor_profile",
+    "prime_gap_profile",
+    "squarefree_profile",
 ]

@@ -1,0 +1,82 @@
+from __future__ import annotations
+
+from fractions import Fraction
+from itertools import combinations
+from math import comb
+
+from jacobian._exact import CanonicalRational
+from jacobian.math.combinatorics.additive.rational_fixed_arity.operations import (
+    compute_rational_fixed_arity_sum_profile,
+)
+
+
+def _cr(num, den=None):
+    if den is None:
+        return CanonicalRational.from_fraction(Fraction(num))
+    return CanonicalRational.from_fraction(Fraction(num, den))
+
+
+def test_fixture() -> None:
+    """Sums of pairs from (1/2, 1/3, 1/6): 5/6, 2/3, 1/2, each with multiplicity 1."""
+    values = (_cr(1, 2), _cr(1, 3), _cr(1, 6))
+    result = compute_rational_fixed_arity_sum_profile(values, 2)
+    sum_map = {r.sum_value.as_fraction(): r.multiplicity for r in result.rows}
+    assert sum_map[Fraction(5, 6)] == 1
+    assert sum_map[Fraction(2, 3)] == 1
+    assert sum_map[Fraction(1, 2)] == 1
+
+
+def test_multiplicity_sum() -> None:
+    """Total multiplicity equals C(n, h)."""
+    values = [_cr(i + 1, i + 2) for i in range(6)]
+    result = compute_rational_fixed_arity_sum_profile(tuple(values), 3)
+    total = sum(r.multiplicity for r in result.rows)
+    assert total == comb(6, 3)
+
+
+def test_equal_values_distinct_indices() -> None:
+    """Equal values at different indices are distinct choices."""
+    values = (_cr(1, 2), _cr(1, 2), _cr(1, 2))
+    result = compute_rational_fixed_arity_sum_profile(values, 2)
+    assert len(result.rows) == 1
+    assert result.rows[0].sum_value.as_fraction() == Fraction(1)
+    assert result.rows[0].multiplicity == 3  # C(3,2) = 3
+
+
+def test_arity_1() -> None:
+    """Arity 1 returns each value individually."""
+    values = (_cr(1, 3), _cr(2, 3), _cr(1, 3))
+    result = compute_rational_fixed_arity_sum_profile(values, 1)
+    sum_map = {r.sum_value.as_fraction(): r.multiplicity for r in result.rows}
+    assert sum_map[Fraction(1, 3)] == 2
+    assert sum_map[Fraction(2, 3)] == 1
+
+
+def test_replay() -> None:
+    """Replay: independently compute all sums."""
+    values = (_cr(1, 2), _cr(1, 3), _cr(1, 4), _cr(1, 5))
+    arity = 2
+    result = compute_rational_fixed_arity_sum_profile(values, arity)
+    expected: dict[Fraction, int] = {}
+    fracs = [v.as_fraction() for v in values]
+    for indices in combinations(range(len(values)), arity):
+        s = sum(fracs[i] for i in indices)
+        expected[s] = expected.get(s, 0) + 1
+    actual = {r.sum_value.as_fraction(): r.multiplicity for r in result.rows}
+    assert actual == expected
+
+
+def test_sorted_output() -> None:
+    """Rows are sorted by rational value."""
+    values = (_cr(3, 2), _cr(1, 4), _cr(1, 2))
+    result = compute_rational_fixed_arity_sum_profile(values, 1)
+    sums = [r.sum_value.as_fraction() for r in result.rows]
+    assert sums == sorted(sums)
+
+
+def test_result_preserves_source() -> None:
+    """Result retains the source values and arity."""
+    values = (_cr(1, 2), _cr(1, 3))
+    result = compute_rational_fixed_arity_sum_profile(values, 2)
+    assert result.values == values
+    assert result.arity == 2

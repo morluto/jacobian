@@ -10,6 +10,12 @@ def _canonical_rows(matrix: fmpz_mat) -> tuple[tuple[int, ...], ...]:
     )
 
 
+def integer_rank(vectors: tuple[tuple[int, ...], ...]) -> int:
+    """Return the exact rank of the integer vector family."""
+
+    return int(fmpz_mat(vectors).rank())
+
+
 def integer_gram(
     vectors: tuple[tuple[int, ...], ...],
 ) -> tuple[tuple[int, ...], ...]:
@@ -28,4 +34,4 @@ def integer_gram_and_rank(
     return _canonical_rows(source * source.transpose()), int(source.rank())
 
 
-__all__ = ["integer_gram", "integer_gram_and_rank"]
+__all__ = ["integer_gram", "integer_gram_and_rank", "integer_rank"]

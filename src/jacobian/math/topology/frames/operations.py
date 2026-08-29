@@ -11,7 +11,7 @@ from jacobian.canonical import (
     format_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.topology.frames._flint import integer_gram, integer_gram_and_rank
+from jacobian.math.topology.frames._flint import integer_gram, integer_rank
 from jacobian.math.topology.frames._models import (
     CoherenceResult,
     FramePotentialResult,
@@ -78,14 +78,14 @@ def gram(value: VectorFamily) -> GramResult:
 def coherence(value: VectorFamily) -> CoherenceResult:
     """Compute exact normalized squared coherence of a finite frame."""
     _require_result_budget(_compact_result_bound(value))
-    matrix, rank = integer_gram_and_rank(value.vectors)
-    _admit_frame(value, rank=rank)
     if any(not any(vector) for vector in value.vectors):
         raise OperationDomainValidationError(
             location=("vectors",),
             code="frames.zero_vector",
             message="coherence requires every vector to be nonzero",
         )
+    _admit_frame(value, rank=integer_rank(value.vectors))
+    matrix = integer_gram(value.vectors)
     maximum = Fraction(0)
     pair: tuple[int, int] | None = None
     for left in range(len(value.vectors)):
@@ -109,8 +109,8 @@ def coherence(value: VectorFamily) -> CoherenceResult:
 def frame_potential(value: VectorFamily) -> FramePotentialResult:
     """Compute the exact frame potential of a finite frame."""
     _require_result_budget(_compact_result_bound(value))
-    matrix, rank = integer_gram_and_rank(value.vectors)
-    _admit_frame(value, rank=rank)
+    _admit_frame(value, rank=integer_rank(value.vectors))
+    matrix = integer_gram(value.vectors)
     total = sum(entry**2 for row in matrix for entry in row)
     return FramePotentialResult._from_kernel(
         vectors=value.vectors, potential=format_canonical_integer(total)

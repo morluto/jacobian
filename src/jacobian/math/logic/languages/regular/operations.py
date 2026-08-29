@@ -47,7 +47,6 @@ def dfa_run(dfa: DFA, word: tuple[int, ...]) -> tuple[bool, int]:
 def count_accepted_words(dfa: DFA, word_length: int) -> int:
     """Count accepted words of exact length via exact integer matrix powering."""
 
-    state_count = dfa.state_count
     if type(word_length) is not int or not 0 <= word_length <= MAX_COUNT_WORD_LENGTH:
         raise OperationDomainValidationError(
             location=("word_length",),
@@ -64,19 +63,9 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
         return 0
     matrix, accepting_states = accepted_paths
     state_count = len(matrix)
+    result_cap = 10**MAX_COUNT_RESULT_DIGITS
     row_sum_bound = max(sum(row) for row in matrix)
-    intermediate_digits = _power_decimal_digits(max(row_sum_bound, 1), word_length)
-    if intermediate_digits > MAX_COUNT_RESULT_DIGITS:
-        raise OperationDomainValidationError(
-            location=("dfa", "word_length"),
-            code="regular_language.count_intermediate_bound",
-            message="DFA matrix-power intermediates exceed the canonical digit bound",
-        )
-    coefficient_bound = _power_capped(
-        row_sum_bound,
-        word_length,
-        10**MAX_COUNT_RESULT_DIGITS,
-    )
+    coefficient_bound = _power_capped(row_sum_bound, word_length, result_cap)
     matrix_bit_work = (
         state_count**3
         * max(1, word_length.bit_length())
@@ -88,15 +77,25 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
             code="regular_language.count_work_bound",
             message="DFA matrix powering exceeds the exact work bound",
         )
-    result_cap = 10**MAX_COUNT_RESULT_DIGITS
-    if (
-        _selected_count_capped(matrix, accepting_states, word_length, result_cap)
-        == result_cap
-    ):
+    max_intermediate, selected_count = _powered_count_admission(
+        matrix,
+        accepting_states,
+        word_length,
+        result_cap,
+    )
+    if selected_count >= result_cap:
         raise OperationDomainValidationError(
             location=("dfa", "word_length"),
             code="regular_language.count_result_bound",
             message="accepted-word count exceeds the canonical result digit bound",
+        )
+    if max_intermediate >= result_cap:
+        # FLINT powers the full matrix. Unused entries can explode while the
+        # selected count stays tiny; do not cap that growth at the result limit.
+        raise OperationDomainValidationError(
+            location=("dfa", "word_length"),
+            code="regular_language.count_intermediate_bound",
+            message="DFA matrix-power intermediates exceed the canonical digit bound",
         )
     from jacobian.math.logic.languages.regular._flint import accepted_word_count
 
@@ -148,14 +147,6 @@ def _accepted_path_matrix(
     return tuple(tuple(row) for row in matrix), accepting_states
 
 
-def _power_decimal_digits(base: int, exponent: int) -> int:
-    """Upper-bound the decimal length of ``base ** exponent`` without powering."""
-
-    if exponent == 0 or base <= 1:
-        return 1
-    return max(1, (exponent * base.bit_length() * 30_103) // 100_000 + 1)
-
-
 def _power_capped(base: int, exponent: int, cap: int) -> int:
     """Return ``min(base ** exponent, cap)`` without exceeding ``cap``."""
 
@@ -170,37 +161,37 @@ def _power_capped(base: int, exponent: int, cap: int) -> int:
     return result
 
 
-def _selected_count_capped(
+def _matrix_max_entry(matrix: tuple[tuple[int, ...], ...]) -> int:
+    return max(max(row) for row in matrix)
+
+
+def _powered_count_admission(
     matrix: tuple[tuple[int, ...], ...],
     accepting_states: tuple[int, ...],
     exponent: int,
     cap: int,
-) -> int:
-    """Return the selected initial-row sum of ``matrix ** exponent``, capped."""
+) -> tuple[int, int]:
+    """Return capped ``(max materialized entry, selected count)`` of ``matrix ** exponent``.
+
+    The maximum covers every matrix binary exponentiation materializes: the
+    successive squares and the running product. Hitting ``cap`` means the true
+    value is at least ``cap``.
+    """
 
     size = len(matrix)
-    vector = [1, *([0] * (size - 1))]
+    running = tuple(tuple(int(i == j) for j in range(size)) for i in range(size))
     power = matrix
+    max_entry = _matrix_max_entry(power)
     while exponent:
         if exponent & 1:
-            vector = _capped_vector_matrix_product(vector, power, cap)
+            running = _capped_matrix_product(running, power, cap)
+            max_entry = max(max_entry, _matrix_max_entry(running))
         exponent >>= 1
         if exponent:
             power = _capped_matrix_product(power, power, cap)
-    return min(sum(vector[state] for state in accepting_states), cap)
-
-
-def _capped_vector_matrix_product(
-    vector: list[int], matrix: tuple[tuple[int, ...], ...], cap: int
-) -> list[int]:
-    result = [0] * len(vector)
-    for source, coefficient in enumerate(vector):
-        if coefficient == 0:
-            continue
-        for target, entry in enumerate(matrix[source]):
-            if entry:
-                result[target] = min(result[target] + coefficient * entry, cap)
-    return result
+            max_entry = max(max_entry, _matrix_max_entry(power))
+    selected = min(sum(running[0][state] for state in accepting_states), cap)
+    return max_entry, selected
 
 
 def _capped_matrix_product(

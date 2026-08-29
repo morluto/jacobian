@@ -152,6 +152,37 @@ def _dfa_with_transient_branching() -> DFA:
     )
 
 
+def _dfa_ternary_accepting() -> DFA:
+    """One accepting state looping on three symbols."""
+
+    return DFA(
+        state_count=1,
+        alphabet_size=3,
+        transitions=tuple(
+            DFATransition(source=0, symbol=symbol, target=0) for symbol in range(3)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+
+def _dfa_binary_toggle() -> DFA:
+    """Both symbols swap two states; only the initial state accepts."""
+
+    return DFA(
+        state_count=2,
+        alphabet_size=2,
+        transitions=(
+            DFATransition(source=0, symbol=0, target=1),
+            DFATransition(source=0, symbol=1, target=1),
+            DFATransition(source=1, symbol=0, target=0),
+            DFATransition(source=1, symbol=1, target=0),
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+
 def test_run_accepts_word_ending_in_1() -> None:
     dfa = _dfa_ends_in_1()
     result = compute_run(RunRequest(dfa=dfa, word=(1, 0, 1)))
@@ -263,6 +294,12 @@ def test_count_admits_transient_branching_before_sparse_tail() -> None:
     assert count_accepted_words(_dfa_with_transient_branching(), 22_000) == 32
 
 
+def test_count_uses_tight_alphabet_power_digit_bound() -> None:
+    """3**60000 has 28,628 digits; a ceil(log2) estimate would reject it."""
+
+    assert count_accepted_words(_dfa_ternary_accepting(), 60_000) == 3**60_000
+
+
 def test_count_empty_accepting_set_short_circuits_before_result_bound() -> None:
     """Empty accepting sets are exactly zero without charging large-n growth."""
 
@@ -270,6 +307,21 @@ def test_count_empty_accepting_set_short_circuits_before_result_bound() -> None:
     assert compute_count(CountRequest(dfa=dfa, word_length=22_000)).count == "0"
     assert count_accepted_words(dfa, 22_000) == 0
     assert count_accepted_words(dfa, 0) == 0
+
+
+def test_count_toggle_dfa_parity_is_exact() -> None:
+    dfa = _dfa_binary_toggle()
+    assert count_accepted_words(dfa, 1) == 0
+    assert count_accepted_words(dfa, 2) == 4
+    assert count_accepted_words(dfa, 3) == 0
+    assert count_accepted_words(dfa, 10) == 2**10
+
+
+def test_count_rejects_toggle_dfa_intermediate_explosion() -> None:
+    """Odd max-length toggle counts are 0, but FLINT off-diagonals are 2**n."""
+
+    with pytest.raises(OperationDomainValidationError, match="intermediate"):
+        count_accepted_words(_dfa_binary_toggle(), MAX_COUNT_WORD_LENGTH)
 
 
 def test_count_rejects_large_state_powering_work() -> None:

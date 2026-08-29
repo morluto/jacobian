@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._execution import (
     OperationExecutionTimeoutError,
@@ -16,6 +17,10 @@ from jacobian._execution import (
 from jacobian.canonical import canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import analysis
+from jacobian.math.analysis._box_enclosure import (
+    _evaluate_box_expression,
+    _preflight_box_expression,
+)
 from jacobian.math.analysis._definite_integral_enclosure import (
     MAX_DEFINITE_INTEGRAL_LEAVES,
     MAX_DEFINITE_INTEGRAL_PRECISION_WORK,
@@ -40,6 +45,7 @@ from jacobian.math.analysis._models import (
     ExactDyadic,
     IntervalExpressionNode,
     RationalIntervalBox,
+    _bounded_expression_nodes,
 )
 from jacobian.math.analysis.intervals import ClosedRationalInterval
 
@@ -550,7 +556,6 @@ def test_result_rejects_an_outcome_that_disagrees_with_target_width() -> None:
     result = _run(_var(), max_leaves=4)
     payload = deepcopy(result.model_dump(mode="json"))
     payload["outcome"]["status"] = "BUDGET_EXHAUSTED"
-    payload["outcome"]["reason"] = "MAX_LEAVES"
 
     with pytest.raises(ValidationError, match="agree with the requested target"):
         DefiniteIntegralEnclosureResult.model_validate(payload)
@@ -601,6 +606,8 @@ def test_result_schema_exposes_both_discriminated_branch_families() -> None:
     }
     domain_properties = schema["$defs"]["DefiniteIntegralDomainUnproven"]["properties"]
     assert "enclosure" not in domain_properties
+    budget_properties = schema["$defs"]["DefiniteIntegralBudgetExhausted"]["properties"]
+    assert "reason" not in budget_properties
     concluded_leaf_mapping = schema["$defs"]["DefiniteIntegralConcludedLeaf"][
         "discriminator"
     ]["mapping"]
@@ -680,22 +687,102 @@ def test_maximum_result_reservation_fits_the_real_transport_limit() -> None:
     assert _estimated_result_bytes(request) <= MAX_DEFINITE_INTEGRAL_RESULT_BYTES
 
 
-def test_evaluated_subproblems_match_the_binary_partition_accounting(
+def test_admission_charges_every_executed_partition_primitive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.analysis._definite_integral_enclosure as integral
 
-    calls = 0
-    original = integral._evaluate_integral_leaf
+    executed = {
+        "arb_node_bit": 0,
+        "expression_node": 0,
+        "midpoint_split": 0,
+        "output_leaf": 0,
+        "selection_candidate": 0,
+        "subproblem": 0,
+        "summation_endpoint": 0,
+    }
+    admissions: list[Any] = []
+    expression = {
+        "op": "mul",
+        "children": [
+            _var(),
+            {"op": "sub", "children": [_const(1), _var()]},
+        ],
+    }
+    request = _request(expression, target_mantissa="0", target_exponent=0, max_leaves=8)
+    node_count = len(_bounded_expression_nodes(request.expression))
 
-    def counting(*args: Any, **kwargs: Any) -> Any:
-        nonlocal calls
-        calls += 1
-        return original(*args, **kwargs)
+    original_admit = integral._admit_definite_integral
+    original_evaluate = integral._evaluate_integral_leaf
+    original_preflight = _preflight_box_expression
+    original_arb = _evaluate_box_expression
+    original_select = integral._select_leaf
+    original_split = integral._split_interval
+    original_sum = integral._summed_enclosure
 
-    monkeypatch.setattr(integral, "_evaluate_integral_leaf", counting)
-    result = _run(_var(), target_mantissa="0", target_exponent=0, max_leaves=8)
-    assert calls == 2 * len(result.outcome.leaves) - 1
+    def admitting(*args: Any, **kwargs: Any) -> Any:
+        admission = original_admit(*args, **kwargs)
+        admissions.append(admission)
+        return admission
+
+    def evaluating(*args: Any, **kwargs: Any) -> Any:
+        executed["subproblem"] += 1
+        return original_evaluate(*args, **kwargs)
+
+    def preflighting(*args: Any, **kwargs: Any) -> Any:
+        executed["expression_node"] += node_count
+        return original_preflight(*args, **kwargs)
+
+    def evaluating_arb(*args: Any, **kwargs: Any) -> Any:
+        executed["expression_node"] += node_count
+        executed["arb_node_bit"] += node_count * request.precision_bits
+        return original_arb(*args, **kwargs)
+
+    def selecting(leaves: tuple[Any, ...]) -> Any:
+        executed["selection_candidate"] += len(leaves)
+        return original_select(leaves)
+
+    def splitting(*args: Any, **kwargs: Any) -> Any:
+        executed["midpoint_split"] += 1
+        return original_split(*args, **kwargs)
+
+    def summing(contributions: tuple[Any, ...], precision_bits: int) -> Any:
+        executed["summation_endpoint"] += 2 * len(contributions)
+        return original_sum(contributions, precision_bits)
+
+    monkeypatch.setattr(integral, "_admit_definite_integral", admitting)
+    monkeypatch.setattr(integral, "_evaluate_integral_leaf", evaluating)
+    monkeypatch.setattr(integral, "_preflight_box_expression", preflighting)
+    monkeypatch.setattr(integral, "_evaluate_box_expression", evaluating_arb)
+    monkeypatch.setattr(integral, "_select_leaf", selecting)
+    monkeypatch.setattr(integral, "_split_interval", splitting)
+    monkeypatch.setattr(integral, "_summed_enclosure", summing)
+
+    result = _compute_definite_integral_enclosure(request)
+    assert len(admissions) == 1
+    admission = admissions[0]
+    executed["output_leaf"] = len(result.outcome.leaves)
+    assert_charged_work_parity(
+        charged={
+            "arb_node_bit": admission.precision_work,
+            "expression_node": admission.node_work,
+            "midpoint_split": admission.maximum_splits,
+            "output_leaf": admission.maximum_leaves,
+            "selection_candidate": admission.selection_comparisons,
+            "subproblem": admission.maximum_subproblems,
+            "summation_endpoint": admission.summation_units,
+        },
+        executed=executed,
+    )
+    assert executed == {
+        "arb_node_bit": 15 * node_count * request.precision_bits,
+        "expression_node": 16 * node_count,
+        "midpoint_split": 7,
+        "output_leaf": 8,
+        "selection_candidate": 28,
+        "subproblem": 15,
+        "summation_endpoint": 72,
+    }
 
 
 def test_public_source_envelope_is_retained_without_backend_objects() -> None:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from itertools import pairwise
 from time import monotonic
@@ -257,7 +257,6 @@ class DefiniteIntegralBudgetExhausted(StrictModel):
     """A sound complete cover whose leaf budget did not meet the target."""
 
     status: Literal["BUDGET_EXHAUSTED"] = "BUDGET_EXHAUSTED"
-    reason: Literal["MAX_LEAVES"] = "MAX_LEAVES"
     enclosure: DyadicClosedInterval
     leaves: tuple[DefiniteIntegralConcludedLeaf, ...] = Field(
         min_length=1,
@@ -636,6 +635,13 @@ class DefiniteIntegralEnclosureResult(DefiniteIntegralEnclosureRequest):
 class _DefiniteIntegralAdmission:
     deadline: float
     root_preflight: _BoxPreflight | None
+    maximum_leaves: int
+    maximum_splits: int
+    maximum_subproblems: int
+    node_work: int
+    precision_work: int
+    selection_comparisons: int
+    summation_units: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -646,6 +652,7 @@ class _EvaluatedIntegralLeaf:
     range_enclosure: DyadicClosedInterval | None = None
     contribution: DyadicClosedInterval | None = None
     domain_failure: IntervalExpressionDomainFailure | None = None
+    selection_width: Fraction = field(init=False)
 
     def __post_init__(self) -> None:
         enclosed = self.range_enclosure is not None and self.contribution is not None
@@ -655,7 +662,19 @@ class _EvaluatedIntegralLeaf:
         ):
             raise AssertionError("one evaluated leaf must carry exactly one outcome")
         if enclosed and not self.domain_proven:
-            raise AssertionError("an enclosed leaf requires inherited exact domain proof")
+            raise AssertionError(
+                "an enclosed leaf requires inherited exact domain proof"
+            )
+        source_width = _interval_width(self.interval)
+        if source_width <= 0:
+            raise AssertionError(
+                "an evaluated integral leaf must have positive measure"
+            )
+        selection_width = source_width
+        if enclosed:
+            assert self.range_enclosure is not None
+            selection_width *= _enclosure_width(self.range_enclosure)
+        object.__setattr__(self, "selection_width", selection_width)
 
 
 def _midpoint_component_digits(box: RationalIntervalBox, depth: int) -> int:
@@ -698,6 +717,7 @@ def _admit_definite_integral(
     _require_deadline(deadline, "before semantic preflight")
 
     nodes = _bounded_expression_nodes(request.expression)
+    maximum_splits = request.max_leaves - 1
     maximum_subproblems = 2 * request.max_leaves - 1
     node_work = 2 * len(nodes) * maximum_subproblems
     if node_work > MAX_DEFINITE_INTEGRAL_NODE_WORK:
@@ -771,6 +791,13 @@ def _admit_definite_integral(
     return _DefiniteIntegralAdmission(
         deadline=deadline,
         root_preflight=root_preflight,
+        maximum_leaves=request.max_leaves,
+        maximum_splits=maximum_splits,
+        maximum_subproblems=maximum_subproblems,
+        node_work=node_work,
+        precision_work=precision_work,
+        selection_comparisons=selection_comparisons,
+        summation_units=summation_units,
     )
 
 
@@ -900,8 +927,10 @@ def _refine_unproven_integral_leaf(
 def _public_leaves(
     leaves: tuple[_EvaluatedIntegralLeaf, ...],
 ) -> tuple[DefiniteIntegralLeaf, ...]:
+    if any(left.path >= right.path for left, right in pairwise(leaves)):
+        raise AssertionError("the kernel must retain lexicographic leaf order")
     public: list[DefiniteIntegralLeaf] = []
-    for leaf in sorted(leaves, key=lambda value: value.path):
+    for leaf in leaves:
         if leaf.domain_failure is not None:
             public.append(
                 DefiniteIntegralDomainUnprovenLeaf(
@@ -981,22 +1010,27 @@ def _finish_zero_measure_result(
     return result
 
 
-def _unrounded_contribution_width(leaf: _EvaluatedIntegralLeaf) -> Fraction:
-    assert leaf.range_enclosure is not None
-    return _interval_width(leaf.interval) * _enclosure_width(leaf.range_enclosure)
+def _select_leaf(leaves: tuple[_EvaluatedIntegralLeaf, ...]) -> int:
+    """Return the deterministic highest-priority leaf index in one linear scan."""
 
-
-def _select_leaf(leaves: tuple[_EvaluatedIntegralLeaf, ...]) -> _EvaluatedIntegralLeaf:
-    unproven = tuple(leaf for leaf in leaves if leaf.domain_failure is not None)
-    if unproven:
-        return min(
-            unproven,
-            key=lambda leaf: (-_interval_width(leaf.interval), leaf.path),
-        )
-    return min(
-        leaves,
-        key=lambda leaf: (-_unrounded_contribution_width(leaf), leaf.path),
-    )
+    if not leaves:
+        raise AssertionError("leaf selection requires a nonempty partition")
+    selected_index = 0
+    for candidate_index in range(1, len(leaves)):
+        candidate = leaves[candidate_index]
+        selected = leaves[selected_index]
+        candidate_unproven = candidate.domain_failure is not None
+        selected_unproven = selected.domain_failure is not None
+        if candidate_unproven != selected_unproven:
+            if candidate_unproven:
+                selected_index = candidate_index
+            continue
+        if candidate.selection_width > selected.selection_width or (
+            candidate.selection_width == selected.selection_width
+            and candidate.path < selected.path
+        ):
+            selected_index = candidate_index
+    return selected_index
 
 
 def _compute_definite_integral_enclosure(
@@ -1028,28 +1062,26 @@ def _compute_definite_integral_enclosure(
     while True:
         _require_deadline(admission.deadline, "before partition refinement")
         has_unproven = any(leaf.domain_failure is not None for leaf in leaves)
-        public: tuple[DefiniteIntegralLeaf, ...] | None = None
         enclosure: DyadicClosedInterval | None = None
         if not has_unproven:
-            public = _public_leaves(leaves)
-            _require_deadline(admission.deadline, "after leaf result construction")
             contributions = tuple(
-                leaf.contribution
-                for leaf in public
-                if isinstance(leaf, DefiniteIntegralEnclosedLeaf)
+                leaf.contribution for leaf in leaves if leaf.contribution is not None
             )
+            assert len(contributions) == len(leaves)
             enclosure = _summed_enclosure(contributions, request.precision_bits)
             _require_deadline(admission.deadline, "after exact leaf summation")
             if _target_met(enclosure, request.target_width):
+                public = _public_leaves(leaves)
+                _require_deadline(admission.deadline, "after leaf result construction")
                 return _finish_result(
                     request,
                     public,
                     enclosure=enclosure,
                     deadline=admission.deadline,
                 )
-        if len(leaves) >= request.max_leaves:
-            if public is None:
-                public = _public_leaves(leaves)
+        if len(leaves) >= admission.maximum_leaves:
+            public = _public_leaves(leaves)
+            _require_deadline(admission.deadline, "after leaf result construction")
             return _finish_result(
                 request,
                 public,
@@ -1057,7 +1089,8 @@ def _compute_definite_integral_enclosure(
                 deadline=admission.deadline,
             )
 
-        selected = _select_leaf(leaves)
+        selected_index = _select_leaf(leaves)
+        selected = leaves[selected_index]
         child_intervals = _split_interval(selected.interval)
         if selected.domain_proven:
             lower = _evaluate_integral_leaf(
@@ -1095,11 +1128,11 @@ def _compute_definite_integral_enclosure(
                 deadline=admission.deadline,
             )
         leaves = (
-            *(leaf for leaf in leaves if leaf.path != selected.path),
+            *leaves[:selected_index],
             lower,
             upper,
+            *leaves[selected_index + 1 :],
         )
-        leaves = tuple(sorted(leaves, key=lambda leaf: leaf.path))
 
 
 DEFINITE_INTEGRAL_ENCLOSURE_OPERATIONS = (

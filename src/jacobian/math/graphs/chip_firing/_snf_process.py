@@ -42,9 +42,7 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
     bind_request_deadline(deadline)
     remaining = deadline - time.monotonic()
     if remaining <= 0:
-        raise TimeoutError(
-            "request deadline expired before reduced-Laplacian SNF"
-        )
+        raise TimeoutError("request deadline expired before reduced-Laplacian SNF")
 
     try:
         with TemporaryDirectory(prefix="jacobian-chip-firing-snf-") as worker_directory:
@@ -70,9 +68,7 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
         ) from exc
 
     if completed.timed_out or completed.cancelled:
-        raise TimeoutError(
-            "request deadline expired during reduced-Laplacian SNF"
-        )
+        raise TimeoutError("request deadline expired during reduced-Laplacian SNF")
     if (
         completed.stdout_exceeded
         or completed.stderr_exceeded

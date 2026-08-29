@@ -25,9 +25,9 @@ from jacobian.math.geometry._models import (
     GeometryOrientationResult,
     GeometryPointResult,
     GeometryRationalResult,
-    LineRequest,
     PolygonIntersectionWitness,
     PolygonPointClassificationResult,
+    RationalLine2D,
     RationalPoint2D,
     SegmentIntersectionResult,
     SimplePolygonDecisionResult,
@@ -250,7 +250,7 @@ def _on_segment(point: Any, start: Any, end: Any) -> bool:
     )
 
 
-def _line(value: LineRequest) -> Any:
+def _line(value: RationalLine2D) -> Any:
     from sympy.geometry import Line2D
 
     return Line2D(_point(value.first), _point(value.second))
@@ -382,8 +382,10 @@ def concyclic(
 
 def line_predicate(
     predicate: Callable[[Any, Any], bool],
-) -> Callable[[LineRequest, LineRequest], GeometryBooleanResult]:
-    def compute(first_line: LineRequest, second_line: LineRequest) -> GeometryBooleanResult:
+) -> Callable[[RationalLine2D, RationalLine2D], GeometryBooleanResult]:
+    def compute(
+        first_line: RationalLine2D, second_line: RationalLine2D
+    ) -> GeometryBooleanResult:
         return GeometryBooleanResult(
             holds=predicate(_line(first_line), _line(second_line))
         )
@@ -392,7 +394,7 @@ def line_predicate(
 
 
 def line_intersection(
-    first_line: LineRequest, second_line: LineRequest
+    first_line: RationalLine2D, second_line: RationalLine2D
 ) -> GeometryLineIntersectionResult:
     from sympy.geometry import Point2D
 
@@ -408,7 +410,9 @@ def line_intersection(
     return GeometryLineIntersectionResult(status="POINT", point=_wire_point(point))
 
 
-def projection(point_value: RationalPoint2D, line_value: LineRequest) -> GeometryPointResult:
+def projection(
+    point_value: RationalPoint2D, line_value: RationalLine2D
+) -> GeometryPointResult:
     from sympy.geometry import Point2D
 
     projected = _line(line_value).projection(_point(point_value))

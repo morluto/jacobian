@@ -17,6 +17,7 @@ from jacobian.math.geometry._models import (
     GeometryPointResult,
     GeometryRationalResult,
     LinePairRequest,
+    LineRequest,
     PointLineRequest,
     PointPairRequest,
     PointQuadrupleRequest,
@@ -24,11 +25,17 @@ from jacobian.math.geometry._models import (
     PointTripleRequest,
     PolygonPointClassificationResult,
     PolygonRequest,
+    RationalLine2D,
     SegmentIntersectionRequest,
     SegmentIntersectionResult,
     SimplePolygonDecisionResult,
     SimplePolygonPointRequest,
 )
+
+
+def _line_value(request: LineRequest) -> RationalLine2D:
+    """Project the validated wire line onto the canonical line value."""
+    return RationalLine2D.model_construct(first=request.first, second=request.second)
 
 
 def squared_distance(request: PointPairRequest) -> GeometryRationalResult:
@@ -52,11 +59,13 @@ def concyclic(request: PointQuadrupleRequest) -> GeometryBooleanResult:
 
 
 def line_intersection(request: LinePairRequest) -> GeometryLineIntersectionResult:
-    return _native.line_intersection(request.first_line, request.second_line)
+    return _native.line_intersection(
+        _line_value(request.first_line), _line_value(request.second_line)
+    )
 
 
 def projection(request: PointLineRequest) -> GeometryPointResult:
-    return _native.projection(request.point, request.line)
+    return _native.projection(request.point, _line_value(request.line))
 
 
 def orientation(request: PointTripleRequest) -> GeometryOrientationResult:

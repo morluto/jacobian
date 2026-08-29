@@ -323,7 +323,9 @@ class PointPairRequest(StrictModel):
     second: RationalPoint2D
 
 
-class LineRequest(StrictModel):
+class RationalLine2D(StrictModel):
+    """Canonical exact line determined by two distinct planar points."""
+
     first: RationalPoint2D
     second: RationalPoint2D
 
@@ -335,6 +337,10 @@ class LineRequest(StrictModel):
                 "a line requires two distinct points",
             )
         return self
+
+
+class LineRequest(RationalLine2D):
+    """Wire request carrying one canonical exact planar line."""
 
 
 class LinePairRequest(StrictModel):

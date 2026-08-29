@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import cached_property
 from math import isqrt
 from typing import Literal, Self
 
@@ -65,16 +64,6 @@ class FactorialValuationRequest(StrictModel):
         description=f"Integer base in [2, {MAX_FACTORIAL_BASE}].",
     )
 
-    @cached_property
-    def admitted(self) -> _FactorialValuationInput:
-        """Parse and admit the request once for the trusted kernel."""
-
-        return admit_factorial_valuation(
-            parse_canonical_integer(self.n),
-            parse_canonical_integer(self.base),
-        )
-
-
 class FactorialValuationResult(StrictModel):
     n: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
     base: CanonicalInteger = Field(max_length=len(str(MAX_FACTORIAL_BASE)))
@@ -123,17 +112,6 @@ class BinomialPrimeValuationRequest(StrictModel):
             "(deterministic SymPy primality range)."
         ),
     )
-
-    @cached_property
-    def admitted(self) -> _BinomialValuationInput:
-        """Parse and admit the request once for the trusted kernel."""
-
-        return admit_binomial_prime_valuation(
-            parse_canonical_integer(self.n),
-            parse_canonical_integer(self.k),
-            parse_canonical_integer(self.prime),
-        )
-
 
 class BinomialPrimeValuationResult(StrictModel):
     n: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)

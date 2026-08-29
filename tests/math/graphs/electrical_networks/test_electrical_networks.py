@@ -8,13 +8,13 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.electrical_networks._models import (
+    MAX_LAPLACIAN_VERTICES,
     ConductanceEdge,
     ConductanceNetwork,
     EffectiveResistanceRequest,
     LaplacianEdge,
     LaplacianNetwork,
     LaplacianRequest,
-    MAX_LAPLACIAN_VERTICES,
     NodePotentialRequest,
 )
 from jacobian.math.graphs.electrical_networks._tools import (

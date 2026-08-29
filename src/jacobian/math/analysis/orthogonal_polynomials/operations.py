@@ -90,63 +90,6 @@ def _require_gram_schmidt_heights_admissible(
             )
 
 
-def _rational_det(matrix: list[list[Fraction]]) -> Fraction:
-    """Compute the determinant of a rational matrix via Gaussian elimination."""
-    n = len(matrix)
-    if n == 0:
-        return Fraction(1)
-    mat = [row[:] for row in matrix]
-    det = Fraction(1)
-    for col in range(n):
-        pivot = None
-        for row in range(col, n):
-            if mat[row][col] != 0:
-                pivot = row
-                break
-        if pivot is None:
-            return Fraction(0)
-        if pivot != col:
-            mat[col], mat[pivot] = mat[pivot], mat[col]
-            det = -det
-        det *= mat[col][col]
-        for row in range(col + 1, n):
-            factor = mat[row][col] / mat[col][col]
-            for j in range(col, n):
-                mat[row][j] -= factor * mat[col][j]
-    return det
-
-
-def _rational_rank(matrix: list[list[Fraction]]) -> int:
-    """Compute the rank of a rational matrix via Gaussian elimination."""
-    if not matrix or not matrix[0]:
-        return 0
-    rows = len(matrix)
-    cols = len(matrix[0])
-    mat = [row[:] for row in matrix]
-    rank = 0
-    for col in range(cols):
-        pivot = next((row for row in range(rank, rows) if mat[row][col] != 0), None)
-        if pivot is None:
-            continue
-        mat[rank], mat[pivot] = mat[pivot], mat[rank]
-        _eliminate_below(mat, rank, col)
-        rank += 1
-        if rank == rows:
-            break
-    return rank
-
-
-def _eliminate_below(mat: list[list[Fraction]], rank: int, col: int) -> None:
-    """Clear ``col`` in every row except the current pivot row."""
-    cols = len(mat[0])
-    for row in range(len(mat)):
-        if row == rank or mat[row][col] == 0:
-            continue
-        factor = mat[row][col] / mat[rank][col]
-        for j in range(cols):
-            mat[row][j] -= factor * mat[rank][j]
-
-
 def require_hankel_matrix_admission(
     prefix: MomentFunctionalPrefix, order: int, *, shifted: bool
 ) -> None:
@@ -191,11 +134,15 @@ def hankel_matrix_from_prefix(
     """Compute one admitted ordinary or shifted exact Hankel matrix."""
     moments = [_to_fraction(moment) for moment in prefix.moments]
     offset = int(shifted)
-    matrix = [
-        [moments[i + j + offset] for j in range(order + 1)] for i in range(order + 1)
-    ]
-    determinant = _rational_det(matrix)
-    rank = _rational_rank(matrix)
+    matrix = tuple(
+        tuple(moments[i + j + offset] for j in range(order + 1))
+        for i in range(order + 1)
+    )
+    from jacobian.math.analysis.orthogonal_polynomials._flint import (
+        determinant_and_rank,
+    )
+
+    determinant, rank = determinant_and_rank(matrix)
     return HankelMomentMatrix._from_kernel(
         order=order,
         entries=tuple(

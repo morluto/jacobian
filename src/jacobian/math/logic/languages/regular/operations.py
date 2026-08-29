@@ -65,27 +65,31 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
     matrix, accepting_states = accepted_paths
     state_count = len(matrix)
     row_sum_bound = max(sum(row) for row in matrix)
-    count_bound = _power_capped(
+    coefficient_bound = _power_capped(
         row_sum_bound,
         word_length,
         10**MAX_COUNT_RESULT_DIGITS,
     )
-    if count_bound == 10**MAX_COUNT_RESULT_DIGITS:
-        raise OperationDomainValidationError(
-            location=("dfa", "word_length"),
-            code="regular_language.count_result_bound",
-            message="accepted-word count may exceed the canonical result digit bound",
-        )
     matrix_bit_work = (
         state_count**3
         * max(1, word_length.bit_length())
-        * max(1, count_bound.bit_length())
+        * max(1, coefficient_bound.bit_length())
     )
     if matrix_bit_work > MAX_COUNT_MATRIX_BIT_WORK:
         raise OperationDomainValidationError(
             location=("dfa", "word_length"),
             code="regular_language.count_work_bound",
             message="DFA matrix powering exceeds the exact work bound",
+        )
+    result_cap = 10**MAX_COUNT_RESULT_DIGITS
+    if (
+        _selected_count_capped(matrix, accepting_states, word_length, result_cap)
+        == result_cap
+    ):
+        raise OperationDomainValidationError(
+            location=("dfa", "word_length"),
+            code="regular_language.count_result_bound",
+            message="accepted-word count exceeds the canonical result digit bound",
         )
     from jacobian.math.logic.languages.regular._flint import accepted_word_count
 
@@ -149,6 +153,59 @@ def _power_capped(base: int, exponent: int, cap: int) -> int:
         if exponent:
             factor = min(factor * factor, cap)
     return result
+
+
+def _selected_count_capped(
+    matrix: tuple[tuple[int, ...], ...],
+    accepting_states: tuple[int, ...],
+    exponent: int,
+    cap: int,
+) -> int:
+    """Return the selected initial-row sum of ``matrix ** exponent``, capped."""
+
+    size = len(matrix)
+    vector = [1, *([0] * (size - 1))]
+    power = matrix
+    while exponent:
+        if exponent & 1:
+            vector = _capped_vector_matrix_product(vector, power, cap)
+        exponent >>= 1
+        if exponent:
+            power = _capped_matrix_product(power, power, cap)
+    return min(sum(vector[state] for state in accepting_states), cap)
+
+
+def _capped_vector_matrix_product(
+    vector: list[int], matrix: tuple[tuple[int, ...], ...], cap: int
+) -> list[int]:
+    result = [0] * len(vector)
+    for source, coefficient in enumerate(vector):
+        if coefficient == 0:
+            continue
+        for target, entry in enumerate(matrix[source]):
+            if entry:
+                result[target] = min(result[target] + coefficient * entry, cap)
+    return result
+
+
+def _capped_matrix_product(
+    left: tuple[tuple[int, ...], ...],
+    right: tuple[tuple[int, ...], ...],
+    cap: int,
+) -> tuple[tuple[int, ...], ...]:
+    size = len(left)
+    result = [[0] * size for _ in range(size)]
+    for source, row in enumerate(left):
+        for middle, left_entry in enumerate(row):
+            if left_entry == 0:
+                continue
+            for target, right_entry in enumerate(right[middle]):
+                if right_entry:
+                    result[source][target] = min(
+                        result[source][target] + left_entry * right_entry,
+                        cap,
+                    )
+    return tuple(tuple(row) for row in result)
 
 
 def dfa_complement(dfa: DFA) -> DFA:

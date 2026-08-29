@@ -132,6 +132,26 @@ def _dfa_accepting_only_zeros() -> DFA:
     )
 
 
+def _dfa_with_transient_branching() -> DFA:
+    """A DFA accepting 32 words despite a large first-step branch."""
+
+    return DFA(
+        state_count=3,
+        alphabet_size=32,
+        transitions=tuple(
+            DFATransition(
+                source=state,
+                symbol=symbol,
+                target=(1 if state == 0 or (state == 1 and symbol == 0) else 2),
+            )
+            for state in range(3)
+            for symbol in range(32)
+        ),
+        initial_state=0,
+        accepting_states=(1,),
+    )
+
+
 def test_run_accepts_word_ending_in_1() -> None:
     dfa = _dfa_ends_in_1()
     result = compute_run(RunRequest(dfa=dfa, word=(1, 0, 1)))
@@ -237,6 +257,10 @@ def test_count_admits_value_just_below_result_digit_bound() -> None:
 
 def test_count_prunes_rejecting_growth_before_admission() -> None:
     assert count_accepted_words(_dfa_accepting_only_zeros(), 22_000) == 1
+
+
+def test_count_admits_transient_branching_before_sparse_tail() -> None:
+    assert count_accepted_words(_dfa_with_transient_branching(), 22_000) == 32
 
 
 def test_count_empty_accepting_set_short_circuits_before_result_bound() -> None:

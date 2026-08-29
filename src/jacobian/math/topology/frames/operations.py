@@ -11,7 +11,7 @@ from jacobian.canonical import (
     format_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.topology.frames._flint import integer_gram, integer_rank
+from jacobian.math.topology.frames._flint import integer_gram, integer_gram_and_rank
 from jacobian.math.topology.frames._models import (
     CoherenceResult,
     FramePotentialResult,
@@ -106,8 +106,9 @@ def coherence(value: VectorFamily) -> CoherenceResult:
             message="coherence requires every vector to be nonzero",
         )
     _admit_frame_shape(value)
-    _admit_frame(value, rank=integer_rank(value.vectors))
-    matrix = integer_gram(value.vectors)
+    rank, matrix = integer_gram_and_rank(value.vectors)
+    _admit_frame(value, rank=rank)
+    assert matrix is not None
     maximum = Fraction(0)
     pair: tuple[int, int] | None = None
     for left in range(len(value.vectors)):
@@ -132,8 +133,9 @@ def frame_potential(value: VectorFamily) -> FramePotentialResult:
     """Compute the exact frame potential of a finite frame."""
     _require_result_budget(_compact_result_bound(value))
     _admit_frame_shape(value)
-    _admit_frame(value, rank=integer_rank(value.vectors))
-    matrix = integer_gram(value.vectors)
+    rank, matrix = integer_gram_and_rank(value.vectors)
+    _admit_frame(value, rank=rank)
+    assert matrix is not None
     total = sum(entry**2 for row in matrix for entry in row)
     return FramePotentialResult._from_kernel(
         vectors=value.vectors, potential=format_canonical_integer(total)

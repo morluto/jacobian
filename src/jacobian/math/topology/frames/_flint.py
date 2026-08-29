@@ -27,11 +27,14 @@ def integer_gram(
 
 def integer_gram_and_rank(
     vectors: tuple[tuple[int, ...], ...],
-) -> tuple[tuple[tuple[int, ...], ...], int]:
-    """Return the exact row Gram matrix and rank from one FLINT source."""
+) -> tuple[int, tuple[tuple[int, ...], ...] | None]:
+    """Return rank and, only when admitted, the Gram matrix from one source."""
 
     source = fmpz_mat(vectors)
-    return _canonical_rows(source * source.transpose()), int(source.rank())
+    rank = int(source.rank())
+    if rank != len(vectors[0]):
+        return rank, None
+    return rank, _canonical_rows(source * source.transpose())
 
 
 __all__ = ["integer_gram", "integer_gram_and_rank", "integer_rank"]

@@ -44,6 +44,23 @@ def test_native_frame_operations_keep_semantic_admission(
     assert error.value.errors()[0]["type"] == "frames.frame_does_not_span"
 
 
+@pytest.mark.parametrize("operation", [coherence, frame_potential])
+def test_frame_operations_reject_undercomplete_families_before_rank(
+    operation: Callable[[VectorFamily], object],
+) -> None:
+    family = VectorFamily(
+        vectors=tuple(
+            tuple(1 if index == coordinate else 0 for coordinate in range(64))
+            for index in range(32)
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        operation(family)
+
+    assert error.value.errors()[0]["type"] == "frames.frame_does_not_span"
+
+
 def test_native_gram_returns_exact_matrix_beyond_mcp_byte_cap() -> None:
     """MCP output size is a transport-only constraint; native gram stays exact."""
     dimension = 512

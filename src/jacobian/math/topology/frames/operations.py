@@ -82,6 +82,15 @@ def _admit_frame(value: VectorFamily, *, rank: int) -> None:
         )
 
 
+def _admit_frame_shape(value: VectorFamily) -> None:
+    if len(value.vectors) < len(value.vectors[0]):
+        raise OperationDomainValidationError(
+            location=("vectors",),
+            code="frames.frame_does_not_span",
+            message="a finite frame must have at least as many vectors as coordinates",
+        )
+
+
 def gram(value: VectorFamily) -> GramResult:
     """Compute the exact Gram matrix of a vector family."""
     return _gram_result(value)
@@ -96,6 +105,7 @@ def coherence(value: VectorFamily) -> CoherenceResult:
             code="frames.zero_vector",
             message="coherence requires every vector to be nonzero",
         )
+    _admit_frame_shape(value)
     _admit_frame(value, rank=integer_rank(value.vectors))
     matrix = integer_gram(value.vectors)
     maximum = Fraction(0)
@@ -121,6 +131,7 @@ def coherence(value: VectorFamily) -> CoherenceResult:
 def frame_potential(value: VectorFamily) -> FramePotentialResult:
     """Compute the exact frame potential of a finite frame."""
     _require_result_budget(_compact_result_bound(value))
+    _admit_frame_shape(value)
     _admit_frame(value, rank=integer_rank(value.vectors))
     matrix = integer_gram(value.vectors)
     total = sum(entry**2 for row in matrix for entry in row)

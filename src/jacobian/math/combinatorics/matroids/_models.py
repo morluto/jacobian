@@ -10,7 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
-MAX_GROUND_SIZE = 32
+MAX_GROUND_SIZE = 256
 """Schema-visible cap on the ground-set cardinality (matrix columns)."""
 
 MAX_REPRESENTATION_ROWS = 256
@@ -42,7 +42,7 @@ class LinearMatroid(StrictModel):
             "description": (
                 "A linear matroid over GF(p) as the canonical "
                 "`PrimeFieldMatrix`: the ground set indexes matrix columns, "
-                "entries are canonical residues in [0, prime), and up to 32 "
+                "entries are canonical residues in [0, prime), and up to 256 "
                 "columns. The empty matroid (zero columns) is admitted."
             )
         }

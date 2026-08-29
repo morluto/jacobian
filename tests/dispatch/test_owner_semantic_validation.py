@@ -138,6 +138,18 @@ def test_group_semantic_admission_is_owned_by_native_operations(
     assert caught.value.errors()[0]["type"] == code
 
 
+def test_group_subgroup_lattice_semantic_admission_is_typed() -> None:
+    with pytest.raises(OperationDomainValidationError) as caught:
+        invoke_operation(
+            "group.subgroup_lattice.compute",
+            {"degree": 3, "generators": [[0, 0, 1]]},
+            Catalog.open(),
+        )
+
+    assert caught.value.errors()[0]["loc"] == ("generators",)
+    assert caught.value.errors()[0]["type"] == "group.generator_permutation"
+
+
 def test_euclidean_segment_admission_is_typed() -> None:
     operation_id = "geometry.euclidean.segment_ratio.compute"
     payload = _example_payload(operation_id)

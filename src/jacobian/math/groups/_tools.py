@@ -99,7 +99,15 @@ def compute_group_stabilizer(request: GroupStabilizerRequest) -> GroupStabilizer
 def compute_subgroup_lattice(
     request: GroupSubgroupLatticeRequest,
 ) -> GroupSubgroupLatticeResult:
-    source = PermutationGroup(degree=request.degree, generators=request.generators)
+    try:
+        source = PermutationGroup(degree=request.degree, generators=request.generators)
+    except ValidationError as error:
+        detail = error.errors(include_url=False, include_context=False)[0]
+        raise OperationDomainValidationError(
+            location=("generators",),
+            code=str(detail["type"]),
+            message=str(detail["msg"]),
+        ) from error
     try:
         subgroups = native.subgroup_lattice(source)
     except SubgroupLatticeBudgetExceededError as error:

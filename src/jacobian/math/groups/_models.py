@@ -306,21 +306,6 @@ class GroupSubgroupLatticeRequest(StrictModel):
         min_length=1, max_length=MAX_GROUP_DEGREE
     )
 
-    @model_validator(mode="after")
-    def require_valid_generators(self) -> Self:
-        for perm in self.generators:
-            if len(perm) != self.degree:
-                raise _validation_error(
-                    "group.generator_length",
-                    "each generator must have length equal to degree",
-                )
-            if sorted(perm) != list(range(self.degree)):
-                raise _validation_error(
-                    "group.generator_permutation",
-                    "each generator must be a permutation of 0..n-1",
-                )
-        return self
-
 
 class SubgroupEntry(StrictModel):
     """One subgroup as the canonical permutation-group value plus its order.

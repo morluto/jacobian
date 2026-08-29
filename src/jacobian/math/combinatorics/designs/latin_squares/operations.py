@@ -8,7 +8,7 @@ from jacobian.math.combinatorics.designs.latin_squares._models import (
 )
 
 MAX_LATIN_CHECK_CELLS = 1_048_576
-MAX_LATIN_ORTHOGONALITY_PAIR_CELLS = 262_144
+MAX_LATIN_ORTHOGONALITY_PAIR_CELLS = 1_048_576
 MAX_LATIN_TRANSPOSE_CELLS = 1_048_576
 _LATIN_TRANSPOSE_RESULT_RESERVE_BYTES = 4_096
 
@@ -61,14 +61,21 @@ def orthogonality_profile(
             "orthogonality_pair_cells_exceeded",
             "orthogonality check exceeds the distinct-pair memory budget",
         )
-    pairs: set[tuple[int, int]] = set()
+    # Symbols already lie in ``range(order)``, so the aligned pair has a dense
+    # integer address.  A byte table keeps the complete positive-decision
+    # envelope bounded without paying Python tuple/set overhead for each pair.
+    seen = bytearray(pair_cells)
+    pair_count = 0
     for row in range(left.order):
         for column in range(left.order):
-            pair = (left.cells[row][column], right.cells[row][column])
-            if pair in pairs:
-                return False, len(pairs)
-            pairs.add(pair)
-    return True, len(pairs)
+            pair_index = (
+                left.cells[row][column] * left.order + right.cells[row][column]
+            )
+            if seen[pair_index]:
+                return False, pair_count
+            seen[pair_index] = 1
+            pair_count += 1
+    return True, pair_count
 
 
 def transpose(square: LatinSquare) -> tuple[tuple[int, ...], ...]:

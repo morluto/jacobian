@@ -152,16 +152,10 @@ def test_operations_admit_materialized_squares_beyond_order_32() -> None:
     )
 
 
-def test_orthogonality_rejects_above_pair_memory_budget() -> None:
-    from math import isqrt
-
-    from jacobian.catalog.models import OperationDomainValidationError
-
-    order = isqrt(MAX_LATIN_ORTHOGONALITY_PAIR_CELLS) + 1
+def test_large_negative_orthogonality_uses_compact_pair_storage() -> None:
+    order = 513
     square = _latin_square(order, _cyclic_square(order))
-    with pytest.raises(OperationDomainValidationError) as error:
-        orthogonality_profile(square, square)
-    assert (
-        error.value.errors()[0]["type"]
-        == "combinatorics.latin_square.orthogonality_pair_cells_exceeded"
-    )
+
+    assert order * order > 262_144
+    assert order * order <= MAX_LATIN_ORTHOGONALITY_PAIR_CELLS
+    assert orthogonality_profile(square, square) == (False, order)

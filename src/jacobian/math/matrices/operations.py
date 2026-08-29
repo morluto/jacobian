@@ -145,7 +145,7 @@ def characteristic_polynomial(matrix: MatrixBase, variable: str) -> Any:
 
 
 def determinant(matrix: MatrixBase) -> Any:
-    source = _exact_matrix(matrix, maximum_dimension=64)
+    source = _exact_matrix(matrix, maximum_dimension=MAX_DETERMINANT_MATRIX_DIMENSION)
     if source.rows != source.cols:
         raise ValueError("determinant requires a square matrix")
     return source.det(method="bareiss")
@@ -572,7 +572,7 @@ def characteristic_polynomial_result(
 
     order = len(matrix.entries)
     entries = [
-        fmpq(int(value.num), int(value.den)) for row in matrix.entries for value in row
+        fmpq(*value.as_integer_ratio()) for row in matrix.entries for value in row
     ]
     polynomial = fmpq_mat(order, order, entries).charpoly()
     return CharacteristicPolynomialResult(

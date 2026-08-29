@@ -67,7 +67,11 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "triangle_signed",
-                "Three vertices with mixed signed weights.",
+                (
+                    "Compute the minimum and maximum signed induced weights for "
+                    "this triangle. The graph must be simple and its edge weights "
+                    "must be canonical rational values."
+                ),
                 {
                     "graph": {
                         "vertices": ["0", "1", "2"],

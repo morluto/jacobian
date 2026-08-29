@@ -29,6 +29,9 @@ from jacobian.math.matrices.combinatorial.operations import (
     gram_profile,
     kronecker,
 )
+from jacobian.math.matrices.combinatorial.values import (
+    MAX_MATERIALIZED_SIGN_MATRIX_AXIS,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -125,14 +128,35 @@ class TestGramProfile:
 
         assert actual <= CanonicalLimits().max_output_bytes
 
-    def test_axis_above_gram_work_boundary_is_rejected_by_operation(self) -> None:
-        matrix = SignMatrix(rows=((1,),) * (MAX_GRAM_PROFILE_AXIS + 1))
+    def test_tall_thin_gram_is_admitted_by_predicted_work(self) -> None:
+        row_count = MAX_GRAM_PROFILE_AXIS + 1
+        result = gram_profile(SignMatrix(rows=((1,),) * row_count))
+
+        assert result.order == row_count
+        assert result.gram == ((1,) * row_count,) * row_count
+        assert result.diagonal_residuals == (0,) * row_count
+        assert result.is_hadamard is False
+        assert len(result.nonzero_off_diagonal) == row_count * (row_count - 1) // 2
+
+    def test_square_gram_above_work_budget_is_rejected(self) -> None:
+        order = MAX_GRAM_PROFILE_AXIS + 1
+        matrix = SignMatrix(rows=((1,) * order,) * order)
 
         with pytest.raises(OperationDomainValidationError) as exc_info:
             gram_profile(matrix)
         assert (
             exc_info.value.errors()[0]["type"]
-            == "combinatorial_matrix.gram_axis_budget"
+            == "combinatorial_matrix.gram_work_budget"
+        )
+
+    def test_tall_gram_above_result_budget_is_rejected(self) -> None:
+        matrix = SignMatrix(rows=((1,),) * MAX_MATERIALIZED_SIGN_MATRIX_AXIS)
+
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            gram_profile(matrix)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "combinatorial_matrix.gram_result_budget"
         )
 
     def test_wide_thin_gram_is_admitted_by_predicted_work(self) -> None:
@@ -142,6 +166,19 @@ class TestGramProfile:
         assert result.gram == ((columns,),)
         assert result.is_hadamard is False
         assert result.diagonal_residuals == (0,)
+
+    def test_gram_profile_discovery_advertises_work_and_result_admission(self) -> None:
+        tool = next(
+            item
+            for item in TOOLS
+            if item.operation_id == "matrix.hadamard.gram_profile.compute"
+        )
+
+        assert "512" not in tool.description
+        assert tool.description.endswith(
+            "Row and column counts are admitted by Gram multiply-add work "
+            "and exact-result size."
+        )
 
 
 # ---------------------------------------------------------------------------

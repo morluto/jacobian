@@ -102,8 +102,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "matrix.hadamard.gram_profile.compute",
         "Compute the Gram profile of a sign matrix",
         "Return order, exact H H^T, diagonal residuals from n, all nonzero "
-        "off-diagonal inner products, and is_hadamard. Row count is at most 512; "
-        "column count is admitted by Gram multiply-add and exact-result size.",
+        "off-diagonal inner products, and is_hadamard. Row and column counts "
+        "are admitted by Gram multiply-add work and exact-result size.",
         GramProfileRequest,
         GramProfileResult,
         compute_gram_profile,

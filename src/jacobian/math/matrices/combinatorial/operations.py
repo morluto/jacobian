@@ -16,6 +16,7 @@ from ._models import (
 )
 from .values import HadamardMatrix, SignMatrix
 
+# Cube-root of the Gram multiply-add work budget.
 MAX_GRAM_PROFILE_AXIS = 512
 MAX_GRAM_PROFILE_MULTIPLY_ADDS = MAX_GRAM_PROFILE_AXIS**3
 MAX_KRONECKER_ORDER = 128
@@ -36,13 +37,6 @@ def _gram_profile_result_bound(row_count: int, column_count: int) -> int:
 def _require_gram_profile_admission(matrix: SignMatrix) -> None:
     row_count = len(matrix.rows)
     column_count = len(matrix.rows[0])
-    # Gram is row_count x row_count; rows determine output size.
-    if row_count > MAX_GRAM_PROFILE_AXIS:
-        raise OperationDomainValidationError(
-            location=("matrix", "rows"),
-            code="combinatorial_matrix.gram_axis_budget",
-            message="Gram profile exceeds the admitted matrix-axis budget",
-        )
     if row_count * row_count * column_count > MAX_GRAM_PROFILE_MULTIPLY_ADDS:
         raise OperationDomainValidationError(
             location=("matrix", "rows"),

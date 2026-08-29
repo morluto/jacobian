@@ -8,14 +8,18 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.combinatorics.discrepancy._models import (
+    MAX_GROUND_SET,
+    FiniteSetSystem,
+)
 
-MAX_N = 1000
+MAX_N = MAX_GROUND_SET
 
 
 class HomogeneousProgressionRequest(StrictModel):
     """Request to construct the homogeneous progression set system on [n]."""
 
-    n: int = Field(ge=0, le=MAX_N)
+    n: int = Field(ge=0, le=MAX_N, strict=True)
 
     @model_validator(mode="after")
     def validate_n(self) -> Self:
@@ -27,12 +31,7 @@ class HomogeneousProgressionRequest(StrictModel):
         return self
 
 
-class HomogeneousProgressionResult(StrictModel):
-    """The homogeneous progression set system on [n]."""
-
-    n: int
-    ground_set_size: int
-    sets: tuple[tuple[int, ...], ...]
+HomogeneousProgressionResult = FiniteSetSystem
 
 
 __all__ = [

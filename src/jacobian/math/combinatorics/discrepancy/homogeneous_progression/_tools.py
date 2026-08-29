@@ -1,13 +1,10 @@
 """Homogeneous progression set system operation declarations."""
 
-from collections.abc import Callable
-
-from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools, OperationExample
+from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.combinatorics.discrepancy._models import FiniteSetSystem
 from jacobian.math.combinatorics.discrepancy.homogeneous_progression._models import (
     HomogeneousProgressionRequest,
-    HomogeneousProgressionResult,
 )
 from jacobian.math.combinatorics.discrepancy.homogeneous_progression.operations import (
     construct_homogeneous_progression_set_system,
@@ -16,37 +13,12 @@ from jacobian.math.combinatorics.discrepancy.homogeneous_progression.operations 
 
 def compute_homogeneous_progression(
     request: HomogeneousProgressionRequest,
-) -> HomogeneousProgressionResult:
+) -> FiniteSetSystem:
     return construct_homogeneous_progression_set_system(request.n)
 
 
-def hp_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: MathTools = (
-    hp_operation(
+    MathTool(
         "discrepancy.homogeneous_progression_set_system.construct",
         "Construct the homogeneous progression set system on [n]",
         (
@@ -57,11 +29,9 @@ TOOLS: MathTools = (
             "experiments."
         ),
         HomogeneousProgressionRequest,
-        HomogeneousProgressionResult,
+        FiniteSetSystem,
         compute_homogeneous_progression,
-        "combinatorics",
-        "discrepancy",
-        "exact",
+        tags=("combinatorics", "discrepancy", "exact"),
         examples=(
             example(
                 "n4",

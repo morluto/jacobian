@@ -84,5 +84,11 @@ def test_exhaustive_dk_enumeration() -> None:
 def test_result_preserves_n() -> None:
     """Result retains the source n."""
     result = construct_homogeneous_progression_set_system(5)
-    assert result.n == 5
     assert result.ground_set_size == 5
+
+
+def test_native_negative_n_is_rejected() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="between 0"):
+        construct_homogeneous_progression_set_system(-1)

@@ -9,6 +9,7 @@ they do not exercise installation, state migration, or rollout machinery.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import httpx2
 import pytest
@@ -19,7 +20,7 @@ from deploy.smoke import (
     is_transient_transport_failure,
     raise_for_http_error,
 )
-from deploy.smoke_remote import _validate_discovery_response
+from deploy.smoke_remote import _validate_discovery_response, _validate_tool_surface
 
 
 def _current_discovery_payload() -> dict[str, object]:
@@ -52,6 +53,23 @@ def test_remote_smoke_accepts_the_current_typed_discovery_response() -> None:
     )
 
     assert matches == ("matrix.determinant.compute",)
+    assert failures == []
+
+
+def test_remote_smoke_derives_tool_surface_from_deployed_catalog() -> None:
+    remote_operation = "test.remote.previous_release"
+    listed = SimpleNamespace(
+        tools=[
+            SimpleNamespace(name="math.find"),
+            SimpleNamespace(name="math.run"),
+            SimpleNamespace(name=remote_operation),
+        ]
+    )
+    failures: list[str] = []
+
+    tool_names = _validate_tool_surface(listed, {remote_operation}, failures)
+
+    assert tool_names == {"math.find", "math.run", remote_operation}
     assert failures == []
 
 

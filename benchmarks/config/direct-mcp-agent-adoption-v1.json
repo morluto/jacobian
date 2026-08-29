@@ -1,0 +1,95 @@
+{
+  "schema_version": "3",
+  "suite_id": "direct-mcp-agent-adoption-v1",
+  "cases": [
+    {
+      "case_id": "straightforward-determinant",
+      "category": "STRAIGHTFORWARD",
+      "cue_level": "AFFORDANCE",
+      "prompt": "Use Jacobian to compute the exact determinant of [[0,2],[3,4]]. Return the determinant and the operation ID used. Do not use shell or Python.",
+      "expected_operation_ids": ["matrix.determinant.compute"],
+      "acceptable_output_outcomes": [
+        {
+          "operation_id": "matrix.determinant.compute",
+          "required_output_fields": ["determinant.num", "determinant.den"],
+          "expected_output_values": {"determinant.num": "-6", "determinant.den": "1"}
+        }
+      ]
+    },
+    {
+      "case_id": "alternate-term-sandpile-group",
+      "category": "ALTERNATE_TERMINOLOGY",
+      "cue_level": "AFFORDANCE",
+      "prompt": "Use Jacobian to compute the sandpile group of the triangle graph with vertices a,b,c, edges ab,bc,ac, and sink a. Return invariant factors, order, and the operation ID used. Do not use shell or Python.",
+      "expected_operation_ids": ["graph.chip_firing.critical_group.compute"],
+      "acceptable_output_outcomes": [
+        {
+          "operation_id": "graph.chip_firing.critical_group.compute",
+          "required_output_fields": ["invariant_factors", "order"],
+          "expected_output_values": {"invariant_factors": [1, 3], "order": 3}
+        }
+      ]
+    },
+    {
+      "case_id": "complete-subset-sum-profile",
+      "category": "POSTCONDITION_DISTINCTION",
+      "cue_level": "AFFORDANCE",
+      "prompt": "Use Jacobian on the indexed sequence [1,1] to return the complete multiplicity of every attainable subset sum, including the empty subset. Do not substitute a collision or Sidon decision. Return the profile and operation ID. Do not use shell or Python.",
+      "expected_operation_ids": ["additive.subset_sum.profile.compute"],
+      "acceptable_output_outcomes": [
+        {
+          "operation_id": "additive.subset_sum.profile.compute",
+          "required_output_fields": ["support_size", "total_subsets"],
+          "expected_output_values": {"support_size": 3, "total_subsets": "4"}
+        }
+      ]
+    },
+    {
+      "case_id": "structured-polynomial-gcd",
+      "category": "STRUCTURAL_AMBIGUITY",
+      "cue_level": "AFFORDANCE",
+      "prompt": "Use Jacobian to compute the monic gcd over QQ[x] of x^2-1 and x-1, including exact Bezout multipliers. Select the polynomial rather than integer operation and construct the required sparse typed input. Return the gcd and operation ID. Do not use shell or Python.",
+      "expected_operation_ids": ["polynomial.compute.gcd"],
+      "acceptable_output_outcomes": [
+        {
+          "operation_id": "polynomial.compute.gcd",
+          "required_output_fields": ["gcd.domain", "gcd.variables", "normalization"],
+          "expected_output_values": {"gcd.domain": "QQ", "gcd.variables": ["x"], "normalization": "MONIC"}
+        }
+      ]
+    },
+    {
+      "case_id": "canonical-cnf-composition",
+      "category": "MULTI_OPERATION",
+      "cue_level": "AFFORDANCE",
+      "prompt": "Use Jacobian to canonicalize the CNF with variable names [b,a] and clauses [[1,-2],[2]], then pass the returned canonical CNF unchanged into the assignment checker for assignment [true,true]. Return the canonical CNF, whether it satisfies, and both operation IDs. Do not use shell or Python.",
+      "expected_operation_ids": ["sat.cnf.canonicalize", "sat.assignment.check"],
+      "acceptable_output_outcomes": [
+        {
+          "operation_id": "sat.assignment.check",
+          "required_output_fields": ["satisfies", "first_unsatisfied_clause"],
+          "expected_output_values": {"satisfies": true, "first_unsatisfied_clause": null}
+        }
+      ]
+    },
+    {
+      "case_id": "semantic-sandpile-synonym",
+      "category": "SEMANTIC_DISCOVERY",
+      "cue_level": "AFFORDANCE",
+      "expectation": "DISCOVER",
+      "prompt": "Use only Jacobian semantic catalog search, without executing an operation, to identify the installed operation for a graph's sandpile group and summarize its mathematical postcondition.",
+      "expected_operation_ids": ["graph.chip_firing.critical_group.compute"]
+    },
+    {
+      "case_id": "semantic-chip-firing-neighborhood",
+      "category": "SEMANTIC_DISCOVERY",
+      "cue_level": "AFFORDANCE",
+      "expectation": "DISCOVER",
+      "prompt": "Use only Jacobian semantic catalog search, without executing an operation, to identify installed vocabulary around chip-firing divisors. Include the sandpile group operation and the q-reduced divisor operation, and distinguish their postconditions.",
+      "expected_operation_ids": [
+        "graph.chip_firing.critical_group.compute",
+        "graph.chip_firing.q_reduced.compute"
+      ]
+    }
+  ]
+}

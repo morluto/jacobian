@@ -126,16 +126,7 @@ def math_run(
                 raise ToolError("operation cancelled before execution")
             return _invoke_prepared_operation(prepared, started=started)
     except (OperationRequestValidationError, OperationDomainValidationError) as exc:
-        errors = _bounded_validation_issues(exc.errors())
-        data = OperationInvalidRequestData(
-            operation_id=operation_id,
-            errors=errors,
-        )
-        raise MCPError(
-            code=INVALID_PARAMS,
-            message="operation payload failed validation",
-            data=data.model_dump(mode="json"),
-        ) from exc
+        raise _invalid_request_error(operation_id, exc) from exc
     except OperationExecutionTimeoutError as exc:
         raise ToolError("operation execution deadline expired") from exc
     except OperationExecutionCancelledError as exc:
@@ -146,6 +137,23 @@ def math_run(
         # Keep backend details inside the owner while guaranteeing the SDK
         # receives a bounded tool error instead of an unhandled worker failure.
         raise ToolError("operation execution failed") from exc
+
+
+def _invalid_request_error(
+    operation_id: OperationId,
+    error: OperationRequestValidationError | OperationDomainValidationError,
+) -> MCPError:
+    """Project one owner-bound rejection without reflecting caller values."""
+
+    data = OperationInvalidRequestData(
+        operation_id=operation_id,
+        errors=_bounded_validation_issues(error.errors()),
+    )
+    return MCPError(
+        code=INVALID_PARAMS,
+        message="operation payload failed validation",
+        data=data.model_dump(mode="json"),
+    )
 
 
 def _request_cancellation(ctx: Context[AppState, Any]) -> _CancellationSignal:

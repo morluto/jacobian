@@ -19,10 +19,12 @@
 </p>
 
 Jacobian is an MCP server that gives AI agents a searchable vocabulary of typed
-mathematical operations. `math.find` discovers an operation, and `math.run`
-executes exactly one bounded mathematical contract and returns its typed
-result. The same mathematical library is also available through a CLI and
-native Python API.
+mathematical operations. Every admitted operation is directly callable under
+its operation ID, with its owner-local request schema and canonical result
+schema. `math.find` remains available for semantic catalog search and exact
+contract inspection; `math.run` remains temporarily available while the direct
+tool migration is evaluated. The same mathematical library is also available
+through a CLI and native Python API.
 
 Each operation establishes one stable, reusable mathematical postcondition
 rather than prescribing a workflow or proof strategy. Results are exact where
@@ -104,9 +106,12 @@ jacobian run integer.compute.extended_gcd --json '{"left":"84","right":"30"}'
 ```
 
 The second command returns the gcd and Bézout coefficients as JSON. In an MCP
-host, use `math.find` to inspect the same contract and `math.run` with the same
-payload shape. See [Discover and invoke operations](docs/how-to/invoke-domain-operations.md)
-for that agent workflow.
+host, call `integer.compute.extended_gcd` directly with
+`{"left":"84","right":"30"}`; the result is the gcd and coefficients,
+without an `operation_id` + `payload` dispatch envelope. Use `math.find` when
+semantic catalog search or exact contract inspection is useful. See
+[Discover and invoke operations](docs/how-to/invoke-domain-operations.md) for
+that agent workflow.
 
 ## Available mathematics
 
@@ -118,9 +123,10 @@ The built-in portfolio covers work in:
 - bounded SAT and SMT solving;
 - finite algebra, probability, geometry, and topology.
 
-SAT and SMT operations use the maintained Z3 Python binding directly. Use
-`math.find` to search for an operation, browse an unfamiliar domain, and inspect
-one operation before calling `math.run` once.
+SAT and SMT operations use the maintained Z3 Python binding directly. Client
+tool search can discover their direct operation tools. Use `math.find` to search
+the mathematical vocabulary, browse an unfamiliar domain, or inspect an exact
+contract when that adds value beyond client-managed tool discovery.
 
 See the [domain operation library](docs/reference/domain-operation-library.md)
 for the maintained operation portfolio and

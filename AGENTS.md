@@ -29,12 +29,14 @@ operations, but admit it separately only when it establishes a distinct stable
 postcondition. Alternative algorithms for the same postcondition remain private
 kernel choices.
 
-It exposes two MCP tools:
+It exposes the admitted catalog directly through MCP, plus fixed discovery and
+migration tools:
 
 | Agent verb | MCP tool | Meaning |
 | --- | --- | --- |
-| Search | `math.find` | Find or inspect an operation. |
-| Execute | `math.run` | Run one operation and return its mathematical value. |
+| Execute | the operation ID | Call one operation through its typed owner-local schema. |
+| Search | `math.find` | Search mathematical vocabulary or inspect an exact contract. |
+| Transitional execute | `math.run` | Generic dispatch retained while direct discovery is evaluated. |
 
 Jacobian supplies bounded typed operations and immutable discovery. Use
 “operation” or “math tool,” not “product” or “provider,” for built-ins. It is
@@ -43,12 +45,13 @@ preserve an explicit transport/security boundary only when the task actually
 changes one.
 
 The authoritative operation path and ownership vocabulary are defined in the
-[architecture](docs/explanation/architecture.md). In summary, `math.find`
-selects an immutable declaration and `math.run` parses one strict request,
-executes one owner-local bounded domain operation, and returns a canonical
-mathematical result through the delivery boundary. Any execution plan is
-request-scoped internal data, not caller-visible workflow state or a new MCP
-verb.
+[architecture](docs/explanation/architecture.md). In summary, the MCP tool list
+is derived from immutable declarations. A direct call parses one strict request
+against its named operation, executes one owner-local bounded domain operation,
+and returns that operation's canonical mathematical result through the delivery
+boundary. `math.find` is a separate semantic discovery surface. Any execution
+plan is request-scoped internal data, not caller-visible workflow state or a new
+MCP verb.
 
 The domain function may use a maintained library as a private computational
 engine; prefer an established backend over hand-rolling a kernel whenever it

@@ -17,9 +17,6 @@ from mcp.types import ContentBlock, TextContent
 
 from jacobian.mcp.server import create_server
 
-MATH_TOOL_NAMES = {"math.find", "math.run"}
-MCP_TOOL_NAMES = MATH_TOOL_NAMES
-
 
 def _text_content(block: ContentBlock) -> str:
     assert isinstance(block, TextContent)
@@ -80,18 +77,14 @@ def test_mcp_runs_independent_sync_operations_concurrently() -> None:
             results = await asyncio.gather(
                 *(
                     client.call_tool(
-                        "math.run",
-                        {
-                            "operation_id": "test.concurrent.kernel",
-                            "payload": {"value": value},
-                        },
+                        "test.concurrent.kernel",
+                        {"value": value},
                     )
                     for value in range(2)
                 )
             )
         assert any(
-            result.structured_content["output"]["simultaneous_calls"] == 2
-            for result in results
+            result.structured_content["simultaneous_calls"] == 2 for result in results
         )
 
     asyncio.run(scenario())

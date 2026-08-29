@@ -20,11 +20,6 @@ from mcp import Client
 
 from .smoke import exit_for_smoke_failure, raise_for_http_error
 
-REQUIRED_TOOLS = {
-    "math.find",
-    "math.run",
-}
-
 
 def _require_server_info(server_info: Implementation | None) -> Implementation:
     if server_info is None:
@@ -76,10 +71,15 @@ def _headers() -> dict[str, str] | None:
     return {"Authorization": f"Bearer {token}"} if token else None
 
 
-def _validate_tool_surface(listed: Any, failures: list[str]) -> set[str]:
+def _validate_tool_surface(
+    listed: Any,
+    operation_ids: set[str],
+    failures: list[str],
+) -> set[str]:
     tool_names = {tool.name for tool in listed.tools}
-    missing = sorted(REQUIRED_TOOLS - tool_names)
-    unexpected = sorted(tool_names - REQUIRED_TOOLS)
+    expected = {"math.find", "math.run"} | operation_ids
+    missing = sorted(expected - tool_names)
+    unexpected = sorted(tool_names - expected)
     if missing:
         failures.append(
             f"deployed MCP tool surface is missing required tools: {missing!r}"
@@ -155,8 +155,6 @@ async def inspect(
         _validate_server_version(server_version, expected_version, failures)
 
         listed = await client.list_tools()
-        tool_names = _validate_tool_surface(listed, failures)
-
         catalog_result = await client.read_resource("operation://catalog")
         catalog_content = catalog_result.contents[0]
         if not isinstance(catalog_content, TextResourceContents):
@@ -176,6 +174,7 @@ async def inspect(
         operation_ids = {
             operation["operation_id"] for operation in catalog["operations"]
         }
+        tool_names = _validate_tool_surface(listed, operation_ids, failures)
         missing = sorted(required_operations - operation_ids)
         if missing:
             failures.append(

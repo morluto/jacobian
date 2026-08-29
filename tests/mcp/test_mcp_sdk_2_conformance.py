@@ -205,7 +205,14 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(
         assert hasattr(server, "list_tools") and hasattr(server, "call_tool")
         async with Client(server, raise_exceptions=True) as client:
             listed = await client.list_tools()
-            assert {tool.name for tool in listed.tools} == {"math.find", "math.run"}
+            operation_ids = {
+                descriptor.operation_id
+                for descriptor in Catalog.open().snapshot().operations
+            }
+            assert {tool.name for tool in listed.tools} == operation_ids | {
+                "math.find",
+                "math.run",
+            }
 
             invoke = next(tool for tool in listed.tools if tool.name == "math.run")
             assert set(invoke.input_schema["properties"]) == {

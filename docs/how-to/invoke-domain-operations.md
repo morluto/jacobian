@@ -1,15 +1,15 @@
 # Discover and invoke domain operations
 
-Use `math.find` progressively, then call `math.run` once with the selected
-operation ID and a `payload` matching its request model. The ordinary path is:
+Use client tool discovery to load a relevant direct Jacobian operation, then
+call that operation with an object matching its request model. The ordinary
+path is:
 
-1. Search globally for one atomic mathematical outcome when the operation is
-   unknown. Use a short phrase such as "integer nth root" or "real root
-   isolation", not a complete proof goal. Search ranking is deterministic
-   lexical retrieval, not a recommendation.
-2. Inspect the selected operation before forming an unfamiliar payload. Its
-   schemas and examples are authoritative for that installed catalog.
-3. Run exactly that operation with one typed payload.
+1. Let client tool search discover one atomic mathematical outcome such as
+   "integer nth root" or "real root isolation", not a complete proof goal.
+2. Load the selected direct operation's callable schema. Use `math.find` only
+   when semantic vocabulary search, namespace browsing, or exact example
+   inspection adds value beyond client tool discovery.
+3. Call exactly that operation with one typed JSON object.
 4. Retain the mathematical result and decide the next move yourself.
 
 For example, search for a small number of matrix operations, then inspect an
@@ -32,11 +32,15 @@ explicit fallback for a full catalog export:
 {"request":{"op":"browse","namespace":"matrix","limit":20}}
 ```
 
-After inspection, run the selected operation. For example:
+After discovery, call the selected operation directly. For example, invoke
+`integer.compute.extended_gcd` with:
 
 ```json
-{"operation_id":"integer.compute.extended_gcd","payload":{"left":"84","right":"30"}}
+{"left":"84","right":"30"}
 ```
+
+The result is the operation's canonical result object; it has no generic
+`operation_id`, `runtime_ms`, or `output` wrapper.
 
 ## Compose a returned value
 
@@ -47,9 +51,9 @@ normalization, axes, ambient object, or other mathematical context may be part
 of the value. Extract a scalar, witness, or projection only when the inspected
 input schema explicitly asks for it.
 
-For example, `sat.cnf.canonicalize` returns `output.cnf`, and both `sat.solve`
+For example, `sat.cnf.canonicalize` returns `cnf`, and both `sat.solve`
 and `sat.assignment.check` accept that entire canonical CNF as their `cnf`
-payload field. The caller chooses whether solving or checking is the useful
+request field. The caller chooses whether solving or checking is the useful
 next move; Jacobian does not retain values, workflow state, artifacts, ports,
 or workspace documents.
 
@@ -58,16 +62,16 @@ or workspace documents.
 A successful tool call returns the operation's own mathematical result model.
 For `sat.solve`, `SAT` and `UNSAT` have their stated meanings, while `UNKNOWN`
 is a non-conclusion; its `exhausted` field may say whether a time, work, or
-memory budget was exhausted. A malformed payload or unknown operation ID is a
-tool error, not a mathematical result. A client timeout aborts transport and is
-also not a conclusion. Preserve the selected operation, exact payload or digest,
-and the changed budget, backend, representation, or partition before retrying.
+memory budget was exhausted. A malformed request or unknown tool name is a tool
+error, not a mathematical result. A client timeout aborts transport and is also
+not a conclusion. Preserve the selected operation, exact request or digest, and
+the changed budget, backend, representation, or partition before retrying.
 
 ## Use the same contract from the CLI
 
 The installed CLI is useful for checking one operation locally before wiring it
 into an MCP host. `inspect` prints the exact current schemas and examples;
-`run` accepts the same payload as `math.run`:
+`run` accepts the same JSON object as the direct MCP tool:
 
 ```sh
 jacobian inspect integer.compute.extended_gcd

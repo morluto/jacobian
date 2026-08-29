@@ -5,8 +5,12 @@ This page describes the package boundaries and ordinary execution path that
 implement it.
 
 The serving process compiles one immutable catalog directly from explicit
-`MathTool` entries and exposes `math.find` and `math.run` through the MCP Python
-SDK.
+`MathTool` entries. At server construction it derives one MCP Python SDK `Tool`
+from every declaration, using the unchanged operation ID as the tool name and
+the owner-local request and result models as its schemas. `math.find` provides a
+separate semantic discovery surface. `math.run` remains an isolated transitional
+execution surface while direct discovery and catalog-scale behavior are
+evaluated.
 
 For most native functions, the ordinary call path is deliberately small:
 
@@ -30,12 +34,12 @@ intrinsic cross-field relations needed to construct the request value. It must
 not call a mathematical backend, enumerate a search space, select an algorithm,
 reserve result work, or cache execution data in a private model attribute.
 
-The MCP path wraps that same native operation with discovery, wire parsing, and
-transport projection:
+The ordinary MCP path wraps that same native operation with strict wire parsing
+and transport projection:
 
 ```text
-operation ID + JSON
-  -> declaration
+direct operation tool + JSON object
+  -> catalog-derived typed registration
   -> strict typed request
   -> owner-local native operation
   -> bounded Jacobian kernel or private backend adapter
@@ -72,31 +76,43 @@ computational engines behind Jacobian's public mathematical contracts.
 
 ## Transport and mathematical ownership
 
-The MCP Python SDK owns the fixed transport boundary: registration of
-`math.find` and `math.run`, their outer argument and output schemas, protocol
-validation, and structured JSON delivery. Jacobian does not duplicate those
-checks.
+The MCP Python SDK owns the transport boundary: the concrete registered tool
+objects, protocol validation, cancellation signal, and structured JSON
+delivery. Jacobian derives the direct tool inventory from the immutable catalog
+snapshot and uses the SDK argument hook only to carry the raw request object
+without Python-mode coercion. Inside one request-scoped execution envelope,
+Jacobian parses that object with the selected owner's strict JSON model, invokes
+the owner, and serializes the result. The direct tool returns the owner's result
+model itself, without a generic operation-ID or output envelope.
 
-`math.run` still needs a small dispatch boundary because its `payload` has an
-operation-specific schema that is known only after its immutable `operation_id`
-is resolved. Dispatch therefore does only this: resolve the declaration, parse
-the payload once with that owner's request model, invoke that owner once, and
-project the typed result once. It does not contain domain admission, backend
-logic, result-specific replay, or workflow state.
+MCP requires every input schema to have an object root. Owner schemas are used
+unchanged when they already have that root. A root union whose every branch is
+an object receives only the required top-level `type: object` transport
+projection; a non-object request schema fails server construction. Existing
+operation IDs already satisfy the MCP name grammar, so the naming projection is
+the reversible identity function and fixed-tool collisions fail closed.
+
+The transitional `math.run` path still needs a small dispatch boundary because
+its `payload` has an operation-specific schema that is known only after its
+immutable `operation_id` is resolved. Dispatch therefore does only this:
+resolve the declaration, parse the payload once with that owner's request model,
+invoke that owner once, and project the typed result once. It does not contain
+domain admission, backend logic, result-specific replay, or workflow state.
 
 Rejections retain the phase that owns them:
 
-| Phase | Python boundary | MCP projection |
+| Phase | Python boundary | Direct MCP projection |
 | --- | --- | --- |
 | JSON canonicalization or structural Pydantic parsing | `OperationRequestValidationError` | `INVALID_PARAMS` |
 | Native mathematical or resource admission | `OperationDomainValidationError` | `INVALID_PARAMS` |
 | Unexpected backend or execution failure | Operational exception | Tool error |
 
-Dispatch does not turn native admission into structural request validation.
-MCP deliberately projects both validation classes through `INVALID_PARAMS`
-because both mean that the selected operation cannot accept the supplied
-payload; operational failures remain distinct and establish no mathematical
-conclusion.
+The direct adapter does not turn native admission into structural request
+validation. MCP deliberately projects both validation classes through
+`INVALID_PARAMS` because both mean that the selected operation cannot accept
+the supplied request; operational failures remain distinct and establish no
+mathematical conclusion. Field diagnostics are bounded and omit raw caller
+values.
 
 Jacobian is a typed, bounded tool layer over maintained mathematical libraries.
 The runtime ownership rule above keeps replay out of ordinary execution and
@@ -117,10 +133,10 @@ Catalog construction discovers packaged `_tools.py` modules under
 operation ID, and freezes the resulting inventory. There is no parallel
 decision ledger, central domain list, or external plugin discovery.
 `jacobian.catalog` owns declaration models, search, and immutable lookup;
-`jacobian.dispatch` owns strict invocation;
-`jacobian.mcp` and the CLI are delivery boundaries. The private root model and
-exact-scalar helpers contain only behavior genuinely shared by unrelated
-owners.
+`jacobian.dispatch` owns the transitional generic and CLI invocation path;
+`jacobian.mcp` owns direct typed registration and delivery; the CLI is a
+separate delivery boundary. The private root model and exact-scalar helpers
+contain only behavior genuinely shared by unrelated owners.
 
 An immutable declaration may carry a small `discovery_terms` vocabulary of
 reviewed, established names for its exact postcondition. Terms are catalog
@@ -137,10 +153,11 @@ Defining-invariant evidence belongs in the operation's tests; a full replay is
 not part of ordinary execution. An adapter may reject malformed backend data
 while converting it, but that is integration safety rather than a separate
 mathematical result stage.
-After owner admission succeeds, dispatch and MCP project the typed result into
-the final transport envelope; they must not discover a mathematical or work
-bound only after execution. Independently supplied result data uses an
-explicit, bounded replay verifier rather than ordinary result construction.
+After owner admission succeeds, direct MCP returns the typed result through the
+SDK projection; the transitional dispatcher wraps the same result for its
+generic boundary. Neither path may discover a mathematical or work bound only
+after execution. Independently supplied result data uses an explicit, bounded
+replay verifier rather than ordinary result construction.
 
 ## Bounded worker adapters
 

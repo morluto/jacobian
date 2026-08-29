@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/morluto/jacobian" alt="MIT 许可证"></a>
 </p>
 
-Jacobian 是一个 MCP 服务器，为 AI 智能体提供一套可搜索、类型化的数学操作。`math.find` 用来发现操作，`math.run` 每次只执行一个有界契约，并返回类型化结果。同样的数学库也可以通过 CLI 和原生 Python API 直接使用。
+Jacobian 是一个 MCP 服务器，为 AI 智能体提供一套可搜索、类型化的数学操作。每个已准入的操作都以其操作 ID 作为 MCP 工具名直接调用，并公开所属领域定义的请求和结果模式。`math.find` 用于数学词汇搜索与精确契约查看；在直接工具迁移完成评估前，`math.run` 暂时保留。同样的数学库也可以通过 CLI 和原生 Python API 直接使用。
 
 每个操作只确立一个稳定、可复用的数学后置条件，而不是规定工作流或证明策略。声称精确的地方就会保持精确，近似、不完备或不确定性也会显式标出。
 
@@ -70,9 +70,11 @@ jacobian inspect integer.compute.extended_gcd
 jacobian run integer.compute.extended_gcd --json '{"left":"84","right":"30"}'
 ```
 
-第二条命令会以 JSON 返回最大公约数和 Bézout 系数。在 MCP 主机中，用
-`math.find` 查看同一份契约，再用相同形状的 payload 调用 `math.run`。具体的
-智能体调用流程见[发现和调用操作](docs/how-to/invoke-domain-operations.md)。
+第二条命令会以 JSON 返回最大公约数和 Bézout 系数。在 MCP 主机中，直接调用
+`integer.compute.extended_gcd`，参数为 `{"left":"84","right":"30"}`；
+无需构造 `operation_id` 与 `payload` 的通用调度封装。需要数学词汇搜索或精确
+契约示例时再使用 `math.find`。具体的智能体调用流程见
+[发现和调用操作](docs/how-to/invoke-domain-operations.md)。
 
 ## 可用的数学能力
 
@@ -84,7 +86,7 @@ jacobian run integer.compute.extended_gcd --json '{"left":"84","right":"30"}'
 - 有界 SAT 和 SMT 求解；
 - 有限代数、概率、几何与拓扑。
 
-SAT 和 SMT 操作直接调用 Z3 的 Python 绑定。用 `math.find` 搜索操作、浏览不熟悉的领域，先查看单个操作的契约，再用 `math.run` 执行一次。
+SAT 和 SMT 操作直接调用 Z3 的 Python 绑定。客户端工具搜索可以发现这些直接操作；需要搜索数学词汇、浏览不熟悉的领域或查看精确契约时，再使用 `math.find`。
 
 请参阅[领域操作库](docs/reference/domain-operation-library.md)了解操作契约与准入规则，用 `math.find` 浏览实际的操作目录，并参阅[后端要求](docs/how-to/backend-requirements.md)。
 

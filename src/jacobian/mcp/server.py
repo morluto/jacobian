@@ -10,6 +10,7 @@ from mcp.server import MCPServer
 
 from jacobian import __version__
 from jacobian.catalog.catalog import Catalog
+from jacobian.mcp.direct_tools import direct_operation_tools
 from jacobian.mcp.guidance import SERVER_DESCRIPTION, SERVER_INSTRUCTIONS
 from jacobian.mcp.protocol import register_core_projection
 from jacobian.mcp.runtime import AppState
@@ -49,6 +50,7 @@ def _build_server(
         lifespan=lifespan,
         token_verifier=token_verifier,
         auth=auth,
+        tools=direct_operation_tools(state.operation_catalog),
     )
     register_core_projection(server, state)
     return server

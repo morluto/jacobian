@@ -57,21 +57,15 @@ def test_stdio_cancellation_reaps_tree_and_server_remains_responsive(
                 marker = tmp_path / f"request-{attempt}.json"
                 with pytest.raises(MCPError, match="timed out"):
                     await client.call_tool(
-                        "math.run",
-                        {
-                            "operation_id": "test.process.wait",
-                            "payload": {"marker": str(marker)},
-                        },
+                        "test.process.wait",
+                        {"marker": str(marker)},
                         read_timeout_seconds=2,
                     )
                 await _assert_pids_exit(await _read_pids(marker))
             follow_up = await client.call_tool(
-                "math.run",
-                {
-                    "operation_id": "integer.compute.extended_gcd",
-                    "payload": {"left": "84", "right": "30"},
-                },
+                "integer.compute.extended_gcd",
+                {"left": "84", "right": "30"},
             )
-            assert follow_up.structured_content["output"]["gcd"] == "6"
+            assert follow_up.structured_content["gcd"] == "6"
 
     asyncio.run(scenario())

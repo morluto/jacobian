@@ -175,6 +175,152 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
     assert telemetry["operation_ids"] == ["graph.search.atlas"]
 
 
+def test_agent_telemetry_does_not_count_unknown_exact_inspection(
+    tmp_path: Path,
+) -> None:
+    events = [
+        _tool_event(
+            "math.find",
+            {
+                "request": {
+                    "op": "inspect",
+                    "operation_id": "missing.operation",
+                }
+            },
+            {
+                "kind": "error",
+                "error": {"code": "UNKNOWN_OPERATION"},
+            },
+        )
+    ]
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps(events[0]) + "\n", encoding="utf-8")
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["operation_describe_exact_calls"] == 0
+    assert telemetry["operation_descriptions"] == []
+
+
+def test_agent_telemetry_records_current_inline_math_run_result(
+    tmp_path: Path,
+) -> None:
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        json.dumps(
+            _tool_event(
+                "math.run",
+                {
+                    "operation_id": "matrix.determinant.compute",
+                    "payload": {"matrix": {"entries": []}},
+                },
+                {
+                    "operation_id": "matrix.determinant.compute",
+                    "runtime_ms": 0,
+                    "output": {"determinant": {"num": "-6", "den": "1"}},
+                },
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["operation_ids"] == ["matrix.determinant.compute"]
+    assert telemetry["operation_invocations"] == [
+        {
+            "operation_id": "matrix.determinant.compute",
+            "input": {"matrix": {"entries": []}},
+            "output": {"determinant": {"num": "-6", "den": "1"}},
+        }
+    ]
+
+
+def test_agent_telemetry_records_direct_catalog_operation_calls(tmp_path: Path) -> None:
+    operation_id = "matrix.determinant.compute"
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        json.dumps(
+            _tool_event(
+                operation_id,
+                {
+                    "matrix": {
+                        "entries": [
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "2", "den": "1"},
+                            ],
+                            [
+                                {"num": "3", "den": "1"},
+                                {"num": "4", "den": "1"},
+                            ],
+                        ]
+                    }
+                },
+                {"determinant": {"num": "-6", "den": "1"}},
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    telemetry = parse_agent_transcript(
+        transcript, direct_operation_ids=frozenset({operation_id})
+    )
+
+    assert telemetry["direct_operation_call_count"] == 1
+    assert telemetry["operation_attempt_ids"] == [operation_id]
+    assert telemetry["operation_ids"] == [operation_id]
+    assert telemetry["operation_invocations"] == [
+        {
+            "operation_id": operation_id,
+            "input": {
+                "matrix": {
+                    "entries": [
+                        [
+                            {"num": "0", "den": "1"},
+                            {"num": "2", "den": "1"},
+                        ],
+                        [
+                            {"num": "3", "den": "1"},
+                            {"num": "4", "den": "1"},
+                        ],
+                    ]
+                }
+            },
+            "output": {"determinant": {"num": "-6", "den": "1"}},
+        }
+    ]
+
+
+def test_agent_telemetry_counts_direct_operation_calls_independently(
+    tmp_path: Path,
+) -> None:
+    operation_id = "integer.compute.extended_gcd"
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        json.dumps(
+            _tool_event(
+                operation_id,
+                {"left": "84", "right": "30"},
+                {"gcd": "6"},
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    telemetry = parse_agent_transcript(
+        transcript,
+        direct_operation_ids={operation_id},
+    )
+
+    assert telemetry["direct_operation_call_count"] == 1
+    assert telemetry["operation_attempt_ids"] == [operation_id]
+    assert telemetry["operation_ids"] == [operation_id]
+
+
 def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> None:
     failed = {
         "type": "item.completed",
@@ -233,6 +379,7 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
 
     telemetry = parse_agent_transcript(transcript)
 
+    assert telemetry["direct_operation_call_count"] == 0
     assert telemetry["operation_attempts"] == [
         {
             "operation_id": None,
@@ -473,6 +620,41 @@ def test_agent_telemetry_ignores_non_string_mcp_status(tmp_path: Path) -> None:
     assert telemetry["successful_tool_calls"] == ["resources/read"]
     assert telemetry["mcp_resource_read_attempts"] == 1
     assert telemetry["mcp_resource_read_successes"] == 1
+
+
+def test_agent_telemetry_does_not_treat_operation_timeout_status_as_call_failure(
+    tmp_path: Path,
+) -> None:
+    operation_id = "analysis.real_function.point_enclosure.compute"
+    response = {
+        "status": "TIMEOUT",
+        "interval": {"lower": "0", "upper": "1"},
+    }
+    event = {
+        "type": "item.completed",
+        "item": {
+            "type": "mcp_tool_call",
+            "tool": operation_id,
+            "arguments": {"function": "x", "point": "0"},
+            "status": "completed",
+            "result": {
+                "isError": False,
+                "structured_content": response,
+                "content": [{"type": "text", "text": json.dumps(response)}],
+            },
+        },
+    }
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+    telemetry = parse_agent_transcript(
+        transcript,
+        direct_operation_ids={operation_id},
+    )
+
+    assert telemetry["tool_error_count"] == 0
+    assert telemetry["successful_tool_calls"] == [operation_id]
+    assert telemetry["operation_ids"] == [operation_id]
 
 
 def test_agent_telemetry_ignores_non_string_mcp_tool(tmp_path: Path) -> None:

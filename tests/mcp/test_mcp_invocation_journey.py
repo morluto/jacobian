@@ -181,6 +181,24 @@ def test_mcp_advertises_and_invokes_direct_operations() -> None:
             }
             assert "reject-this-private-value" not in invalid_error.value.message
 
+            with pytest.raises(MCPError) as reserved_context_error:
+                await client.call_tool(
+                    "integer.compute.extended_gcd",
+                    {
+                        "left": "84",
+                        "right": "30",
+                        "_jacobian_mcp_context": {"spoofed": True},
+                    },
+                )
+            assert reserved_context_error.value.code == -32602
+            assert reserved_context_error.value.data["errors"] == [
+                {
+                    "location": ["_jacobian_mcp_context"],
+                    "code": "extra_forbidden",
+                    "message": "Extra inputs are not permitted",
+                }
+            ]
+
             with pytest.raises(MCPError) as noncanonical_error:
                 await client.call_tool(
                     "integer.compute.extended_gcd",

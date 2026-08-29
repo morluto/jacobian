@@ -18,6 +18,7 @@ from jacobian.mcp.runtime import AppState
 from jacobian.mcp.tools import math_find, run_direct_math_tool
 
 _DIRECT_CONTEXT_ARGUMENT = "_jacobian_mcp_context"
+_DIRECT_CALLER_CONTEXT_ARGUMENT = "__jacobian_mcp_context_supplied"
 
 
 class _DirectArguments(ArgModelBase):
@@ -32,7 +33,13 @@ class _DirectArguments(ArgModelBase):
     model_config = ConfigDict(extra="allow")
 
     def model_dump_one_level(self) -> dict[str, Any]:
-        return dict(self.__pydantic_extra__ or {})
+        arguments = dict(self.__pydantic_extra__ or {})
+        if _DIRECT_CONTEXT_ARGUMENT in arguments:
+            # Tool.run injects the real context after this adapter validates the
+            # caller mapping. Preserve a marker so invoke() can put the reserved
+            # caller key back through Jacobian's strict owner parser.
+            arguments[_DIRECT_CALLER_CONTEXT_ARGUMENT] = True
+        return arguments
 
 
 def _direct_tool(
@@ -42,6 +49,8 @@ def _direct_tool(
 
     def invoke(**arguments: Any) -> Any:
         ctx = arguments.pop(_DIRECT_CONTEXT_ARGUMENT)
+        if arguments.pop(_DIRECT_CALLER_CONTEXT_ARGUMENT, False):
+            arguments[_DIRECT_CONTEXT_ARGUMENT] = True
         return run_direct_math_tool(operation, arguments, ctx=ctx)
 
     metadata = FuncMetadata(

@@ -65,13 +65,9 @@ def test_rejects_uncolored_nonempty_host() -> None:
 
 
 def test_rejects_unbounded_embedding_family() -> None:
-    pattern = SimpleUndirectedGraph(
-        vertices=tuple(str(i) for i in range(8)), edges=()
-    )
+    pattern = SimpleUndirectedGraph(vertices=tuple(str(i) for i in range(8)), edges=())
     host = ColoredUndirectedGraph(
-        graph=SimpleUndirectedGraph(
-            vertices=tuple(str(i) for i in range(16)), edges=()
-        )
+        graph=SimpleUndirectedGraph(vertices=tuple(str(i) for i in range(16)), edges=())
     )
     with pytest.raises(OperationDomainValidationError):
         compute_rainbow_embedding_profile(pattern, host)

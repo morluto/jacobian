@@ -12,6 +12,9 @@ from jacobian.math.graphs.uniform_subset_intersection._models import (
     UniformSubsetIntersectionRequest,
     UniformSubsetIntersectionResult,
 )
+from jacobian.math.graphs.uniform_subset_intersection._tools import (
+    compute_uniform_subset_intersection_graph,
+)
 from jacobian.math.graphs.uniform_subset_intersection.operations import (
     construct_uniform_subset_intersection_graph,
 )
@@ -188,6 +191,29 @@ def test_rejects_family_beyond_graph_vertex_bound_before_enumeration() -> None:
             threshold=1,
             relation="INTERSECTION_LT_THRESHOLD",
         )
+
+
+def test_rejects_huge_binomial_family_without_constructing_it() -> None:
+    with pytest.raises(ValidationError, match="256-vertex graph bound"):
+        UniformSubsetIntersectionRequest(
+            ground_set_size=(1 << 53) - 1,
+            subset_cardinality=2,
+            threshold=1,
+            relation="INTERSECTION_LT_THRESHOLD",
+        )
+
+
+def test_request_retains_one_admission_plan_for_the_constructor() -> None:
+    request = UniformSubsetIntersectionRequest(
+        ground_set_size=4,
+        subset_cardinality=2,
+        threshold=1,
+        relation="INTERSECTION_LT_THRESHOLD",
+    )
+    assert request._admission_plan.vertex_count == 6
+    assert request._admission_plan.edge_count == 3
+    result = compute_uniform_subset_intersection_graph(request)
+    assert len(result.graph.vertices) == request._admission_plan.vertex_count
 
 
 def test_native_api_accepts_domain_arguments() -> None:

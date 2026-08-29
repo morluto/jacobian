@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from math import comb
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, PrivateAttr, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -30,6 +30,25 @@ class _UniformSubsetIntersectionPlan:
     vertex_count: int
     edge_count: int
     result_wire_upper_bound: int
+
+
+def _combination_at_most(n: int, k: int, limit: int) -> int:
+    """Return ``C(n, k)`` exactly up to ``limit``, then return ``limit + 1``.
+
+    The recurrence is checked before each multiplication, so a rejected
+    family never constructs an unrestricted large binomial coefficient.
+    """
+
+    if k < 0 or k > n:
+        return 0
+    k = min(k, n - k)
+    value = 1
+    for index in range(1, k + 1):
+        numerator = n - k + index
+        if value * numerator > limit * index:
+            return limit + 1
+        value = value * numerator // index
+    return value
 
 
 def _intersection_pair_count(n: int, k: int, t: int, relation: str) -> int:
@@ -85,7 +104,11 @@ def _admit_uniform_subset_intersection(
     ):
         raise ValueError("relation must name a supported intersection predicate")
 
-    vertex_count = comb(ground_set_size, subset_cardinality)
+    vertex_count = _combination_at_most(
+        ground_set_size,
+        subset_cardinality,
+        MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    )
     if vertex_count > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
         raise ValueError(
             "the uniform subset family exceeds the "
@@ -136,11 +159,12 @@ class UniformSubsetIntersectionRequest(StrictModel):
     subset_cardinality: StrictInt = Field(ge=0, le=MAX_SAFE_GROUND_SET_SIZE)
     threshold: StrictInt = Field(ge=0, le=MAX_SAFE_GROUND_SET_SIZE)
     relation: IntersectionRelation
+    _admission_plan: _UniformSubsetIntersectionPlan = PrivateAttr()
 
     @model_validator(mode="after")
     def validate_request(self) -> Self:
         try:
-            _admit_uniform_subset_intersection(
+            self._admission_plan = _admit_uniform_subset_intersection(
                 self.ground_set_size,
                 self.subset_cardinality,
                 self.threshold,

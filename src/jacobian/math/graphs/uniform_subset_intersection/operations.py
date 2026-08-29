@@ -8,6 +8,7 @@ from jacobian.math.graphs.uniform_subset_intersection._models import (
     IntersectionRelation,
     UniformSubsetIntersectionResult,
     _admit_uniform_subset_intersection,
+    _UniformSubsetIntersectionPlan,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -29,6 +30,20 @@ def construct_uniform_subset_intersection_graph(
     plan = _admit_uniform_subset_intersection(
         ground_set_size, subset_cardinality, threshold, relation
     )
+    return _construct_uniform_subset_intersection_graph_from_plan(
+        ground_set_size, subset_cardinality, threshold, relation, plan
+    )
+
+
+def _construct_uniform_subset_intersection_graph_from_plan(
+    ground_set_size: int,
+    subset_cardinality: int,
+    threshold: int,
+    relation: IntersectionRelation,
+    plan: _UniformSubsetIntersectionPlan,
+) -> UniformSubsetIntersectionResult:
+    """Construct a graph from one already-computed request admission."""
+
     subsets = tuple(combinations(range(ground_set_size), subset_cardinality))
     assert len(subsets) == plan.vertex_count
 

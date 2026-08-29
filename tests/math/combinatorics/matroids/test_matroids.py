@@ -72,33 +72,27 @@ class TestLinearMatroidRepresentation:
             )
         assert exc_info.value.errors()[0]["type"] == "matroid.field_prime.bound"
 
-    def test_ground_set_beyond_cap_rejected(self) -> None:
-        """A 33-column matrix is rejected even though the shared kernel
-        admits up to 1024 columns: the advertised envelope is 32 elements."""
+    def test_matroid_accepts_shared_matrix_column_carrier(self) -> None:
         from jacobian.math.matrices.finite_fields.linear_algebra import (
             PrimeFieldMatrix,
         )
 
-        oversized_matrix = PrimeFieldMatrix(
+        boundary_matrix = PrimeFieldMatrix(
             prime=5,
-            entries=((0,) * 33,),
-            columns=33,
+            entries=((0,) * 256,),
+            columns=256,
         )
-        with pytest.raises(ValidationError) as exc_info:
-            LinearMatroid(matrix=oversized_matrix)
-        assert exc_info.value.errors()[0]["type"] == "matroid.ground_set.bound"
+        assert LinearMatroid(matrix=boundary_matrix).ground_size == 256
         matrix_payload: _PrimeFieldMatrixPayload = {
             "prime": 5,
-            "entries": [[0] * 33],
-            "columns": 33,
+            "entries": [[0] * 256],
+            "columns": 256,
         }
         payload: _ClosureRequestPayload = {
             "matroid": {"matrix": matrix_payload},
             "subset": [],
         }
-        with pytest.raises(ValidationError) as exc_info:
-            MatroidClosureRequest.model_validate(payload)
-        assert exc_info.value.errors()[0]["type"] == "matroid.ground_set.bound"
+        assert MatroidClosureRequest.model_validate(payload).matroid.ground_size == 256
 
     def test_shared_carrier_does_not_widen_matroid_row_envelope(self) -> None:
         """The matrix carrier may scale without widening matroid witness work."""
@@ -165,6 +159,25 @@ class TestClosure:
             matroid_closure(m, [2])
         with pytest.raises(ValueError, match="distinct"):
             matroid_closure(m, [0, 0])
+
+    def test_seven_by_105_closure_uses_result_sensitive_rank_work(self) -> None:
+        rows = tuple(
+            tuple(int(column % 7 == row) for column in range(105)) for row in range(7)
+        )
+        matroid = _matroid(1_000_003, rows, 105)
+
+        closure, rank = matroid_closure(matroid, (0, 1, 2, 3, 4))
+
+        assert rank == 5
+        assert closure == tuple(
+            column for column in range(105) if column % 7 in {0, 1, 2, 3, 4}
+        )
+
+    def test_dense_large_seed_rejects_rank_work_before_kernel(self) -> None:
+        matroid = _matroid(2, _identity_rows(256), 256)
+
+        with pytest.raises(OperationDomainValidationError, match="work bound"):
+            matroid_closure(matroid, tuple(range(128)))
 
 
 class TestCatalogAdmission:

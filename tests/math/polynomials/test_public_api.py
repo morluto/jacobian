@@ -81,6 +81,12 @@ def test_exact_public_api_symbols() -> None:
         "hermite_reduction",
         "integral",
         "partial_fractions",
+        "polynomial_discriminant",
+        "polynomial_factorization",
+        "polynomial_gcd",
+        "polynomial_groebner_basis",
+        "polynomial_resultant",
+        "polynomial_square_free_decomposition",
         "resultant",
         "square_free_decomposition",
     )
@@ -122,9 +128,7 @@ def test_factor_producers_compute_once_and_round_trip_structurally(
     from jacobian.math.polynomials import operations as _operations
     from jacobian.math.polynomials._models import (
         PolynomialFactorizationResult,
-        PolynomialFactorRequest,
         PolynomialSquareFreeDecompositionResult,
-        PolynomialSquareFreeRequest,
     )
 
     source = _univariate("x", {4: "1", 2: "-2", 0: "1"})
@@ -144,12 +148,8 @@ def test_factor_producers_compute_once_and_round_trip_structurally(
 
     monkeypatch.setattr(_operations, "factorization", count_factorization)
     monkeypatch.setattr(_operations, "square_free_decomposition", count_square_free)
-    factorization = _operations.polynomial_factorization(
-        PolynomialFactorRequest(polynomial=source)
-    )
-    square_free = _operations.polynomial_square_free_decomposition(
-        PolynomialSquareFreeRequest(polynomial=source)
-    )
+    factorization = _operations.polynomial_factorization(source)
+    square_free = _operations.polynomial_square_free_decomposition(source)
     assert (factor_calls, square_free_calls) == (1, 1)
     assert factorization.reconstructed == square_free.reconstructed == source
     assert (
@@ -165,14 +165,11 @@ def test_factor_producers_compute_once_and_round_trip_structurally(
 def test_factor_results_keep_structural_ring_and_order_checks() -> None:
     from jacobian.math.polynomials._models import (
         PolynomialFactorizationResult,
-        PolynomialFactorRequest,
         PolynomialIrreducibleFactor,
     )
     from jacobian.math.polynomials.operations import polynomial_factorization
 
-    result = polynomial_factorization(
-        PolynomialFactorRequest(polynomial=_univariate("x", {3: "1", 0: "-1"}))
-    )
+    result = polynomial_factorization(_univariate("x", {3: "1", 0: "-1"}))
     with pytest.raises(ValidationError):
         PolynomialFactorizationResult(
             polynomial=result.polynomial,

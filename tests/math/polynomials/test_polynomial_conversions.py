@@ -5,7 +5,11 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
 )
 from jacobian.math.polynomials._models import PolynomialGcdRequest
-from jacobian.math.polynomials.operations import polynomial_gcd
+from jacobian.math.polynomials.operations import (
+    polynomial_discriminant,
+    polynomial_gcd,
+    polynomial_resultant,
+)
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     SparseRationalPolynomial,
@@ -66,7 +70,7 @@ def test_contract_sympy_contract_round_trip_preserves_ring_and_order() -> None:
 def test_gcd_result_composes_without_reshaping_or_json_round_trip() -> None:
     source = _univariate_polynomial()
     request = PolynomialGcdRequest(left=source, right=source)
-    result = polynomial_gcd(request)
+    result = polynomial_gcd(request.left, request.right)
 
     direct_consumer = PolynomialGcdRequest(left=result.gcd, right=source)
     assert direct_consumer.left is result.gcd
@@ -77,7 +81,24 @@ def test_gcd_result_composes_without_reshaping_or_json_round_trip() -> None:
             "right": source.model_dump(mode="json"),
         }
     )
-    assert polynomial_gcd(serialized_consumer).gcd == result.gcd
+    assert (
+        polynomial_gcd(serialized_consumer.left, serialized_consumer.right).gcd
+        == result.gcd
+    )
+
+
+def test_invariant_operations_accept_canonical_polynomial_values() -> None:
+    source = _univariate_polynomial()
+
+    discriminant = polynomial_discriminant(source, "x")
+    resultant = polynomial_resultant(source, source, "x")
+
+    assert discriminant.variable == "x"
+    assert discriminant.discriminant.kind == "SCALAR"
+    assert discriminant.discriminant.value.num == "4"
+    assert resultant.elimination_variable == "x"
+    assert resultant.resultant.kind == "SCALAR"
+    assert resultant.resultant.value.num == "0"
 
 
 def test_sparse_polynomial_schema_explains_canonical_term_order() -> None:

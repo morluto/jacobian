@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.tree_enumeration.free_tree_enumeration._models import (
+    MAX_ORDER,
+    FreeTreeEnumerationRequest,
+)
 from jacobian.math.graphs.tree_enumeration.free_tree_enumeration.operations import (
     enumerate_free_trees,
 )
@@ -16,6 +24,8 @@ def test_order_1() -> None:
     result = enumerate_free_trees(1)
     assert result.count == 1
     assert len(result.trees) == 1
+    assert result.trees[0].vertices == ("0",)
+    assert result.trees[0].edges == ()
 
 
 def test_order_2() -> None:
@@ -61,7 +71,7 @@ def test_no_isomorphic_pairs() -> None:
         result = enumerate_free_trees(order)
         canonical_forms = []
         for tree in result.trees:
-            g = nx.Graph()
+            g: nx.Graph[str] = nx.Graph()
             for v in tree.vertices:
                 g.add_node(v)
             for u, v in tree.edges:
@@ -75,3 +85,11 @@ def test_result_preserves_order() -> None:
     result = enumerate_free_trees(5)
     assert result.order == 5
     assert result.count == 3
+
+
+def test_request_rejects_first_undeliverable_order() -> None:
+    with pytest.raises(ValidationError):
+        FreeTreeEnumerationRequest(order=MAX_ORDER + 1)
+
+    with pytest.raises(OperationDomainValidationError, match="orders from 0 through"):
+        enumerate_free_trees(MAX_ORDER + 1)

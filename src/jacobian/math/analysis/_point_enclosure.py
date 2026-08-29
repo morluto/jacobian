@@ -8,6 +8,7 @@ from typing import Literal, Self
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis._arb import dyadic_endpoints
@@ -304,10 +305,10 @@ def _point_enclosure(request: ArbPointEnclosureRequest) -> ArbPointEnclosureResu
             message=str(exc),
         ) from exc
 
-    from flint import arb, ctx, fmpq
+    from flint import arb, fmpq
 
     numerator, denominator = request.argument.as_integer_ratio()
-    with ctx.workprec(request.precision_bits):
+    with flint_workprec(request.precision_bits):
         value = arb(fmpq(numerator, denominator))
         result = getattr(value, request.function.value.lower())()
         if not result.is_finite():
@@ -321,6 +322,7 @@ def _point_enclosure(request: ArbPointEnclosureRequest) -> ArbPointEnclosureResu
         lower_mantissa, lower_exponent = result.lower().man_exp()
         upper_mantissa, upper_exponent = result.upper().man_exp()
         exact = bool(result.is_exact())
+        relative_accuracy_bits = None if exact else int(result.rel_accuracy_bits())
         endpoints = dyadic_endpoints(
             lower_mantissa, lower_exponent, upper_mantissa, upper_exponent
         )
@@ -344,7 +346,7 @@ def _point_enclosure(request: ArbPointEnclosureRequest) -> ArbPointEnclosureResu
             lower=endpoints[0],
             upper=endpoints[1],
         ),
-        relative_accuracy_bits=None if exact else int(result.rel_accuracy_bits()),
+        relative_accuracy_bits=relative_accuracy_bits,
         exact=exact,
         detail="Pinned Arb ball arithmetic returned an outward-rounded enclosure with exact dyadic endpoints.",
     )

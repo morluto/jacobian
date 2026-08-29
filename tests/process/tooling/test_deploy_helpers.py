@@ -80,7 +80,9 @@ def test_remote_smoke_requires_the_catalog_derived_direct_tool_surface() -> None
 
     failures: list[str] = []
     names = _validate_tool_surface(
-        Listed(), {"integer.compute.extended_gcd", "matrix.determinant.compute"}, failures
+        Listed(),
+        {"integer.compute.extended_gcd", "matrix.determinant.compute"},
+        failures,
     )
 
     assert names == {"integer.compute.extended_gcd", "stale.tool"}

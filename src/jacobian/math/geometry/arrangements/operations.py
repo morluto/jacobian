@@ -42,20 +42,17 @@ def _formula_indices(ambient_dimension: int, hyperplane_count: int) -> tuple[int
     return ambient_dimension, hyperplane_count
 
 
-def _power_of_two_digit_bound(exponent: int) -> int:
+def _bit_bound_to_decimal_digits(bit_bound: int) -> int:
     # 30103 / 100000 is a strict upper bound for log10(2).
-    return (exponent * 30_103) // 100_000 + 1
+    return (bit_bound * 30_103 + 99_999) // 100_000
 
 
-def _admit_formula_result_digits(hyperplane_count: int) -> int:
-    digit_bound = _power_of_two_digit_bound(hyperplane_count)
-    if digit_bound > CanonicalLimits().max_integer_digits:
-        _reject(
-            ("hyperplane_count",),
-            "formula_result_digits_exceeded",
-            "generic-arrangement values exceed the canonical integer digit limit",
-        )
-    return digit_bound
+def _binomial_prefix_bit_bound(upper: int, length: int) -> int:
+    if length <= 1 or upper == 0:
+        return 1
+    largest_index = min(length - 1, upper // 2)
+    sparse_product_bound = largest_index * max(1, upper.bit_length())
+    return max(1, min(sparse_product_bound, upper))
 
 
 def _signed_binomial_prefix(upper: int, length: int) -> tuple[int, ...]:
@@ -97,8 +94,16 @@ def characteristic_polynomial(
             "characteristic_coefficient_work_exceeded",
             "characteristic polynomial exceeds the coefficient-work budget",
         )
-    digit_bound = _admit_formula_result_digits(m)
-    predicted_bytes = (n + 1) * (digit_bound + 3) + _FORMULA_RESULT_RESERVE_BYTES
+    nonzero_coefficients = min(n, m) + 1
+    zero_coefficients = n + 1 - nonzero_coefficients
+    coefficient_digits = _bit_bound_to_decimal_digits(
+        _binomial_prefix_bit_bound(m - 1, min(n, m)) + 1
+    )
+    predicted_bytes = (
+        nonzero_coefficients * (coefficient_digits + 3)
+        + zero_coefficients * 4
+        + _FORMULA_RESULT_RESERVE_BYTES
+    )
     if predicted_bytes > CanonicalLimits().max_output_bytes:
         _reject(
             ("ambient_dimension", "hyperplane_count"),
@@ -124,8 +129,18 @@ def characteristic_polynomial(
 def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCountResult:
     r"""Count chambers of a generic central arrangement."""
     n, m = _formula_indices(ambient_dimension, hyperplane_count)
-    _admit_formula_result_digits(m)
     if n >= m:
+        result_bit_bound = m + 1
+        result_digits = _bit_bound_to_decimal_digits(result_bit_bound)
+        if (
+            result_digits + _FORMULA_RESULT_RESERVE_BYTES
+            > CanonicalLimits().max_output_bytes
+        ):
+            _reject(
+                ("hyperplane_count",),
+                "chamber_result_bytes_exceeded",
+                "chamber count exceeds the canonical output-byte limit",
+            )
         count = 1 << m
     else:
         if n > MAX_GENERIC_FORMULA_WORK:
@@ -133,6 +148,18 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
                 ("ambient_dimension",),
                 "chamber_summation_work_exceeded",
                 "chamber count exceeds the binomial-summation work budget",
+            )
+        prefix_bit_bound = _binomial_prefix_bit_bound(m - 1, n)
+        result_bit_bound = prefix_bit_bound + n.bit_length() + 1
+        result_digits = _bit_bound_to_decimal_digits(result_bit_bound)
+        if (
+            result_digits + _FORMULA_RESULT_RESERVE_BYTES
+            > CanonicalLimits().max_output_bytes
+        ):
+            _reject(
+                ("ambient_dimension", "hyperplane_count"),
+                "chamber_result_bytes_exceeded",
+                "chamber count exceeds the canonical output-byte limit",
             )
         coefficient = 1
         total = 0

@@ -215,10 +215,21 @@ def test_characteristic_rejects_coefficient_work_before_construction() -> None:
     )
 
 
+def test_characteristic_accounts_for_zero_coefficient_tail() -> None:
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(
+            ambient_dimension=MAX_GENERIC_FORMULA_WORK,
+            hyperplane_count=1_000,
+        )
+    )
+    assert len(result.coefficients) == MAX_GENERIC_FORMULA_WORK + 1
+    assert sum(coefficient != "0" for coefficient in result.coefficients) == 1_001
+
+
 def test_characteristic_rejects_aggregate_output_before_construction() -> None:
     request = CharacteristicPolynomialRequest(
         ambient_dimension=MAX_GENERIC_FORMULA_WORK,
-        hyperplane_count=1_000,
+        hyperplane_count=MAX_GENERIC_FORMULA_WORK,
     )
     with pytest.raises(OperationDomainValidationError) as error:
         compute_characteristic_polynomial(request)
@@ -228,13 +239,21 @@ def test_characteristic_rejects_aggregate_output_before_construction() -> None:
     )
 
 
-def test_chamber_count_rejects_integer_digits_before_summation() -> None:
+def test_chamber_count_uses_the_requested_binomial_prefix() -> None:
     request = ChamberCountRequest(ambient_dimension=1, hyperplane_count=200_000)
+    assert compute_chamber_count(request).chamber_count == "2"
+
+
+def test_chamber_count_rejects_actual_output_bytes() -> None:
+    request = ChamberCountRequest(
+        ambient_dimension=40_000_000,
+        hyperplane_count=40_000_000,
+    )
     with pytest.raises(OperationDomainValidationError) as error:
         compute_chamber_count(request)
     assert (
         error.value.errors()[0]["type"]
-        == "hyperplane_arrangement.formula_result_digits_exceeded"
+        == "hyperplane_arrangement.chamber_result_bytes_exceeded"
     )
 
 

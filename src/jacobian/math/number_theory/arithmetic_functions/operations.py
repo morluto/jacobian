@@ -136,6 +136,19 @@ def _require_length(
         raise ValueError(f"{name} must have between 1 and {maximum} values")
 
 
+def _shared_denominator_digits(
+    values: tuple[CanonicalRational, ...],
+) -> int | None:
+    """Return the common denominator digit count, or ``None`` if dens differ."""
+
+    if not values:
+        return None
+    shared = values[0].den
+    if all(value.den == shared for value in values):
+        return len(shared)
+    return None
+
+
 def _admit_convolution(
     f: tuple[CanonicalRational, ...], g: tuple[CanonicalRational, ...]
 ) -> None:
@@ -145,7 +158,18 @@ def _admit_convolution(
     _require_divisor_work(len(f))
     left = _heights(f)
     right = _heights(g)
-    sums = _HeightSums(len(left))
+    left_shared = _shared_denominator_digits(f)
+    right_shared = _shared_denominator_digits(g)
+    # Homogeneous inputs multiply to one shared product denominator; do not
+    # charge independent dens per incidence as if each product dens differed.
+    shared_product_denominator_digits = (
+        None
+        if left_shared is None or right_shared is None
+        else left_shared + right_shared
+    )
+    sums = _HeightSums(
+        len(left), shared_denominator_digits=shared_product_denominator_digits
+    )
     for divisor, multiple in _divisor_incidences(len(left)):
         sums.add(
             multiple - 1,
@@ -158,13 +182,9 @@ def _admit_mobius(values: tuple[CanonicalRational, ...]) -> None:
     _require_length(values, "values", _MAX_DIVISOR_PREFIX_LENGTH)
     _require_divisor_work(len(values))
     heights = _heights(values)
-    shared_denominator_digits = (
-        len(values[0].den)
-        if all(value.den == values[0].den for value in values)
-        else None
-    )
     sums = _HeightSums(
-        len(heights), shared_denominator_digits=shared_denominator_digits
+        len(heights),
+        shared_denominator_digits=_shared_denominator_digits(values),
     )
     for divisor, multiple in _divisor_incidences(len(heights)):
         sums.add(multiple - 1, heights[multiple // divisor - 1])

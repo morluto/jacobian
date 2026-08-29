@@ -384,6 +384,20 @@ def test_mobius_admission_preserves_a_shared_denominator() -> None:
     assert all(entry.num == "0" and entry.den == "1" for entry in result.values[1:])
 
 
+def test_convolution_admission_preserves_shared_denominators() -> None:
+    length = _MAX_DIVISOR_PREFIX_LENGTH
+    value = CanonicalRational(num="1", den="1000000007")
+    values = (value,) * length
+
+    result = dirichlet_convolution(values, values)
+
+    assert len(result) == length
+    assert result[0] == CanonicalRational(num="1", den="1000000014000000049")
+    assert all(entry.den == "1000000014000000049" for entry in result)
+    # tau(k) / D^2 for the constant-1/D prefix.
+    assert result[5].as_fraction() == Fraction(4, 1000000014000000049)
+
+
 def test_divisor_sieve_operations_match_direct_formulas_on_small_prefix() -> None:
     source = tuple(
         CanonicalRational.from_fraction(Fraction(index, index + 1))

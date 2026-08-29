@@ -375,11 +375,13 @@ def _factor_source(
     squarefree_product = sympy.Poly(1, variable, domain=sympy.ZZ)
     for factor, multiplicity in factorization:
         factor_degree = factor.degree()
-        if factor_degree > MAX_REAL_ALGEBRAIC_DEGREE:
+        if factor_degree > MAX_REAL_ALGEBRAIC_DEGREE and factor.intervals(
+            sqf=True
+        ):
             _reject(
                 ("family", source_index, "polynomial"),
                 "factor_degree",
-                "an irreducible factor exceeds the degree-"
+                "an irreducible factor with real roots exceeds the degree-"
                 f"{MAX_REAL_ALGEBRAIC_DEGREE} RealAlgebraicValue bound",
             )
         canonical_coefficients = _canonical_factor(factor)

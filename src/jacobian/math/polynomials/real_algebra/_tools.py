@@ -93,8 +93,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "attained closed gap endpoints or the first deterministic non-real-root "
         "or empty-gap obstruction. The envelope admits 2-8 sources, source "
         "degree at most 32, total degree at most 128, 64-digit rational "
-        "components, 256-digit primitive height, and irreducible factors of "
-        "degree at most 8.",
+        "components, 256-digit primitive height, and real-rooted irreducible "
+        "factors of degree at most 8; higher-degree root-free factors are "
+        "retained only to report the exact non-real-root obstruction.",
         CommonInterlacingRequest,
         CommonInterlacingProfile,
         compute_common_interlacing_profile,

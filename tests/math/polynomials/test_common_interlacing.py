@@ -523,6 +523,24 @@ def test_source_degree_and_factor_degree_boundaries() -> None:
     assert _error_code(exception) == "polynomial.common_interlacing_factor_degree"
 
 
+def test_root_free_high_degree_factor_reports_nonreal_obstruction() -> None:
+    # Eisenstein at 2 makes x^10 + 2x^2 + 2 irreducible, and its value is
+    # strictly positive on R.  No RealAlgebraicValue is needed for this
+    # factor, so its degree should not narrow the exact obstruction result.
+    result = common_interlacing_profile(
+        (
+            _source("first", (1, 10), (2, 2), (2, 0)),
+            _source("second", (1, 10), (2, 2), (2, 0)),
+        )
+    )
+
+    assert isinstance(result.outcome, CommonInterlacingDoesNotExist)
+    assert isinstance(result.outcome.obstruction, NonRealRootObstruction)
+    assert result.outcome.obstruction.source_index == 0
+    assert result.outcome.obstruction.real_root_multiplicity == 0
+    assert result.outcome.obstruction.nonreal_root_multiplicity == 10
+
+
 def _large_primitive_height_source(
     label: str,
     denominators: tuple[int, ...],

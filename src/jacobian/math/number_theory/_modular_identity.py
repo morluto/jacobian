@@ -5,8 +5,16 @@ from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.modular_polynomials import (
     ModularPolynomialIdentityRequest,
     ModularPolynomialIdentityValue,
-    _modular_polynomial_identity_request,
+    modular_polynomial_identity,
 )
+
+
+def _run_modular_polynomial_identity(
+    request: ModularPolynomialIdentityRequest,
+) -> ModularPolynomialIdentityValue:
+    return modular_polynomial_identity(
+        request.modulus, request.variables, request.left, request.right
+    )
 
 MODULAR_IDENTITY_OPERATIONS = (
     number_theory_operation(
@@ -19,7 +27,7 @@ MODULAR_IDENTITY_OPERATIONS = (
         ),
         ModularPolynomialIdentityRequest,
         ModularPolynomialIdentityValue,
-        _modular_polynomial_identity_request,
+        _run_modular_polynomial_identity,
         "number-theory",
         "modular",
         "polynomial",

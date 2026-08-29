@@ -227,16 +227,6 @@ def modular_polynomial_identity(
     return _compute_modular_polynomial_identity(modulus, variables, left, right)
 
 
-def _modular_polynomial_identity_request(
-    request: ModularPolynomialIdentityRequest,
-) -> ModularPolynomialIdentityValue:
-    """Catalog adapter for the strict modular-polynomial identity request."""
-
-    return modular_polynomial_identity(
-        request.modulus, request.variables, request.left, request.right
-    )
-
-
 __all__ = [
     "ModularPolynomialIdentityValue",
     "ModularPolynomialTerm",

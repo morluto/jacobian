@@ -410,8 +410,8 @@ def find_generalized_exact_cover(
 ) -> GeneralizedExactCoverResult:
     """Return one cover, exact nonexistence, or UNKNOWN for canonical values.
 
-    This is the native Python boundary. Catalog and MCP execution retain their
-    strict wire request model in :func:`_find_generalized_exact_cover_request`.
+    This is the native Python boundary. Catalog and MCP request projection
+    remains private to the publication module.
     """
 
     if not isinstance(instance, GeneralizedExactCoverInstance):
@@ -427,22 +427,11 @@ def find_generalized_exact_cover(
     return _solve_generalized_exact_cover(instance, search_node_limit)
 
 
-def _find_generalized_exact_cover_request(
-    request: GeneralizedExactCoverRequest,
-) -> GeneralizedExactCoverResult:
-    """Catalog adapter for the strict generalized-exact-cover wire request."""
-
-    return find_generalized_exact_cover(
-        request.instance, search_node_limit=request.search_node_limit
-    )
-
-
 __all__ = [
     "ExactCoverItemMultiplicity",
     "ExactCoverRow",
     "ExactCoverSearchStatus",
     "GeneralizedExactCoverInstance",
-    "GeneralizedExactCoverRequest",
     "GeneralizedExactCoverResult",
     "find_generalized_exact_cover",
 ]

@@ -374,14 +374,6 @@ def _factor_source(
     factors: list[_FactorPlan] = []
     squarefree_product = sympy.Poly(1, variable, domain=sympy.ZZ)
     for factor, multiplicity in factorization:
-        factor_degree = factor.degree()
-        if factor_degree > MAX_REAL_ALGEBRAIC_DEGREE and factor.intervals(sqf=True):
-            _reject(
-                ("family", source_index, "polynomial"),
-                "factor_degree",
-                "an irreducible factor with real roots exceeds the degree-"
-                f"{MAX_REAL_ALGEBRAIC_DEGREE} RealAlgebraicValue bound",
-            )
         canonical_coefficients = _canonical_factor(factor)
         if any(
             len(coefficient.lstrip("-")) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
@@ -561,6 +553,13 @@ def _root_profile(source_index: int, plan: _SourcePlan) -> SourceRootProfile:
             )
         factor_index = matches[0]
         factor = plan.factors[factor_index]
+        if factor.polynomial.degree() > MAX_REAL_ALGEBRAIC_DEGREE:
+            _reject(
+                ("family", source_index, "polynomial"),
+                "factor_degree",
+                "an irreducible factor with real roots exceeds the degree-"
+                f"{MAX_REAL_ALGEBRAIC_DEGREE} RealAlgebraicValue bound",
+            )
         real_root_index = factor_root_indices[factor_index]
         factor_root_indices[factor_index] += 1
         value = RealAlgebraicValue._from_kernel(
@@ -664,11 +663,9 @@ def _common_interlacing_outcome(
     return CommonInterlacingExists(gaps=tuple(gaps))
 
 
-def common_interlacing_profile(
+def _common_interlacing_profile_in_process(
     family: tuple[LabelledRationalPolynomial, ...],
 ) -> CommonInterlacingProfile:
-    """Return the complete exact common weak-interlacing profile of ``family``."""
-
     plan = _admit_common_interlacing(family)
     root_profiles = tuple(
         _root_profile(source_index, source)
@@ -680,6 +677,18 @@ def common_interlacing_profile(
         root_profiles=root_profiles,
         outcome=outcome,
     )
+
+
+def common_interlacing_profile(
+    family: tuple[LabelledRationalPolynomial, ...],
+) -> CommonInterlacingProfile:
+    """Return the complete exact common weak-interlacing profile of ``family``."""
+
+    from jacobian.math.polynomials.real_algebra._common_interlacing_process import (
+        run_common_interlacing_profile,
+    )
+
+    return run_common_interlacing_profile(family)
 
 
 __all__ = ["common_interlacing_profile"]

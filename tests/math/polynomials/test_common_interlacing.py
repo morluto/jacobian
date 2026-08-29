@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from fractions import Fraction
 from itertools import combinations_with_replacement, product
 
@@ -9,6 +11,11 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_execution,
+)
 from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import (
@@ -35,6 +42,7 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+from jacobian.process import bounded_process_cancellation
 
 
 def _polynomial(
@@ -318,7 +326,7 @@ def test_returned_factor_rows_reconstruct_the_retained_source() -> None:
     for root in parsed.root_profiles[0].roots:
         factor_rows.setdefault(root.value.polynomial, []).append(root.multiplicity)
 
-    reconstructed = (1,)
+    reconstructed: tuple[int, ...] = (1,)
     for polynomial, multiplicities in factor_rows.items():
         factor = tuple(int(coefficient) for coefficient in polynomial)
         assert len(multiplicities) == len(factor) - 1
@@ -539,6 +547,50 @@ def test_root_free_high_degree_factor_reports_nonreal_obstruction() -> None:
     assert result.outcome.obstruction.source_index == 0
     assert result.outcome.obstruction.real_root_multiplicity == 0
     assert result.outcome.obstruction.nonreal_root_multiplicity == 10
+
+
+def test_isolation_work_is_rejected_after_factorization_before_root_profiles() -> None:
+    prime = 10**30 + 57
+    with pytest.raises(OperationDomainValidationError) as exception:
+        common_interlacing_profile(
+            (
+                _source("first", (1, 20), (prime, 0)),
+                _source("second", (1, 20), (prime, 0)),
+            )
+        )
+
+    assert _error_code(exception) == "polynomial.common_interlacing_isolation_work"
+
+
+def test_expired_request_deadline_stops_before_backend_launch() -> None:
+    family = (
+        _source("first", (1, 2), (-1, 0)),
+        _source("second", (1, 2), (-1, 0)),
+    )
+
+    with request_execution(0.0), pytest.raises(OperationExecutionTimeoutError):
+        common_interlacing_profile(family)
+
+
+def test_active_worker_cancellation_is_preserved_as_execution_state() -> None:
+    family = tuple(
+        _split_source(f"source-{index}", tuple(range(-8, 8))) for index in range(8)
+    )
+    cancellation = threading.Event()
+    timer = threading.Timer(0.1, cancellation.set)
+    started = time.monotonic()
+    timer.start()
+    try:
+        with (
+            bounded_process_cancellation(cancellation),
+            pytest.raises(OperationExecutionCancelledError),
+        ):
+            common_interlacing_profile(family)
+    finally:
+        timer.cancel()
+        timer.join()
+
+    assert time.monotonic() - started < 5.0
 
 
 def _large_primitive_height_source(

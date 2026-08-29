@@ -158,7 +158,7 @@ def characteristic_polynomial(
         nonzero_coefficients * _canonical_integer_conversion_work(coefficient_digits)
         + zero_coefficients
     )
-    if conversion_work > MAX_GENERIC_FORMULA_WORK:
+    if n + conversion_work > MAX_GENERIC_FORMULA_WORK:
         _reject(
             ("ambient_dimension", "hyperplane_count"),
             "characteristic_formatting_work_exceeded",
@@ -205,12 +205,33 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
                 "chamber count exceeds the canonical integer-conversion work budget",
             )
         count = 1 << m
+    elif n == m - 1:
+        result_bit_bound = m + 1
+        result_digits = _bit_bound_to_decimal_digits(result_bit_bound)
+        if (
+            result_digits + _FORMULA_RESULT_RESERVE_BYTES
+            > CanonicalLimits().max_output_bytes
+        ):
+            _reject(
+                ("hyperplane_count",),
+                "chamber_result_bytes_exceeded",
+                "chamber count exceeds the canonical output-byte limit",
+            )
+        conversion_work = _canonical_integer_conversion_work(result_digits)
+        if conversion_work > MAX_GENERIC_FORMULA_WORK:
+            _reject(
+                ("hyperplane_count",),
+                "chamber_formatting_work_exceeded",
+                "chamber count exceeds the canonical integer-conversion work budget",
+            )
+        count = (1 << m) - 2
     else:
         prefix_bit_bound = _binomial_prefix_bit_bound(m - 1, n)
         result_bit_bound = prefix_bit_bound + n.bit_length() + 1
         result_digits = _bit_bound_to_decimal_digits(result_bit_bound)
         recurrence_work = _chamber_recurrence_limb_work(m - 1, n)
-        if n + recurrence_work > MAX_GENERIC_FORMULA_WORK:
+        conversion_work = _canonical_integer_conversion_work(result_digits)
+        if n + recurrence_work + conversion_work > MAX_GENERIC_FORMULA_WORK:
             _reject(
                 ("ambient_dimension", "hyperplane_count"),
                 "chamber_summation_work_exceeded",
@@ -224,13 +245,6 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
                 ("ambient_dimension", "hyperplane_count"),
                 "chamber_result_bytes_exceeded",
                 "chamber count exceeds the canonical output-byte limit",
-            )
-        conversion_work = _canonical_integer_conversion_work(result_digits)
-        if n + conversion_work > MAX_GENERIC_FORMULA_WORK:
-            _reject(
-                ("ambient_dimension", "hyperplane_count"),
-                "chamber_formatting_work_exceeded",
-                "chamber count exceeds the canonical integer-conversion work budget",
             )
         count = _chamber_recurrence(m - 1, n)
     return ChamberCountResult(chamber_count=format_canonical_integer(count))

@@ -316,8 +316,8 @@ def test_chamber_count_rejects_closed_form_integer_conversion_work() -> None:
 
 def test_chamber_count_rejects_long_partial_sum() -> None:
     request = ChamberCountRequest(
-        ambient_dimension=MAX_GENERIC_FORMULA_WORK + 1,
-        hyperplane_count=MAX_GENERIC_FORMULA_WORK + 2,
+        ambient_dimension=5_000,
+        hyperplane_count=100_000,
     )
     with pytest.raises(OperationDomainValidationError) as error:
         compute_chamber_count(request)
@@ -327,20 +327,26 @@ def test_chamber_count_rejects_long_partial_sum() -> None:
     )
 
 
-def test_chamber_count_rejects_recurrence_limb_work() -> None:
-    # n = 8500, m = 8501 passes the digit and conversion guards (~90,010
-    # units) but the binomial recurrence walks C(8500, 4250). Max-width
-    # mul/div limb visits are about 4.8 million, over the 100,000 ledger.
+def test_chamber_count_uses_complementary_power_near_the_full_prefix() -> None:
     request = ChamberCountRequest(
         ambient_dimension=8_500,
         hyperplane_count=8_501,
     )
+    result = compute_chamber_count(request)
+    assert result.chamber_count == format_canonical_integer((1 << 8_501) - 2)
+
+
+def test_chamber_count_rejects_combined_recurrence_and_formatting_work() -> None:
+    request = ChamberCountRequest(
+        ambient_dimension=173,
+        hyperplane_count=10**15,
+    )
     with pytest.raises(OperationDomainValidationError) as error:
         compute_chamber_count(request)
-    assert (
-        error.value.errors()[0]["type"]
-        == "hyperplane_arrangement.chamber_summation_work_exceeded"
-    )
+    assert error.value.errors()[0]["type"] in {
+        "hyperplane_arrangement.chamber_summation_work_exceeded",
+        "hyperplane_arrangement.chamber_formatting_work_exceeded",
+    }
 
 
 def test_result_models_reject_contradictory_exact_values() -> None:

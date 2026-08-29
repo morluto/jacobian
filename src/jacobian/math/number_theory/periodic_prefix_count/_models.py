@@ -20,8 +20,8 @@ class PeriodicUnionPrefixCountResult(StrictModel):
     source: PeriodicCongruenceUnionSource
     cutoff: CanonicalInteger
     common_period: CanonicalInteger
-    occupied_count: int
-    count: int
+    occupied_count: CanonicalInteger
+    count: CanonicalInteger
 
 
 __all__ = [

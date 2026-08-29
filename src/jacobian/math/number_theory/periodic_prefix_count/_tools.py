@@ -2,8 +2,8 @@
 
 from collections.abc import Callable
 
-from jacobian._exact import parse_canonical_integer
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.periodic_prefix_count._models import (

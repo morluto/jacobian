@@ -9,7 +9,12 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from jacobian._execution import bind_request_deadline, current_request_execution
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+)
 
 _SNF_WORKER = Path(__file__).resolve().with_name("_snf_worker.py")
 # Admitted reduced Laplacians satisfy dimension**3 <= 1_500_000. FLINT's
@@ -42,7 +47,9 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
     bind_request_deadline(deadline)
     remaining = deadline - time.monotonic()
     if remaining <= 0:
-        raise TimeoutError("request deadline expired before reduced-Laplacian SNF")
+        raise OperationExecutionTimeoutError(
+            "request deadline expired before reduced-Laplacian SNF"
+        )
 
     try:
         with TemporaryDirectory(prefix="jacobian-chip-firing-snf-") as worker_directory:
@@ -67,8 +74,19 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
             "bounded chip-firing SNF worker could not be started"
         ) from exc
 
+<<<<<<< HEAD
+    if completed.cancelled:
+        raise OperationExecutionCancelledError(
+            "request cancelled during reduced-Laplacian SNF"
+        )
+    if completed.timed_out:
+        raise OperationExecutionTimeoutError(
+            "request deadline expired during reduced-Laplacian SNF"
+        )
+=======
     if completed.timed_out or completed.cancelled:
         raise TimeoutError("request deadline expired during reduced-Laplacian SNF")
+>>>>>>> origin/fix/flint-chip-firing-snf
     if (
         completed.stdout_exceeded
         or completed.stderr_exceeded

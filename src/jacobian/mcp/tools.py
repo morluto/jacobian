@@ -11,7 +11,10 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
 from mcp.types import INVALID_PARAMS
 
-from jacobian._execution import request_execution
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_execution,
+)
 from jacobian.catalog.models import OperationId, OperationResult
 from jacobian.dispatch import (
     OperationDomainValidationError,
@@ -135,6 +138,8 @@ def math_run(
         ) from exc
     except OperationExecutionTimeoutError as exc:
         raise ToolError("operation execution deadline expired") from exc
+    except OperationExecutionCancelledError as exc:
+        raise ToolError("operation cancelled") from exc
     except (MCPError, ToolError):
         raise
     except Exception as exc:

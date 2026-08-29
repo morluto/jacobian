@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 from typing_extensions import TypedDict
 
+from jacobian.canonical import encode_strict_json, loads_strict_json
 from jacobian.math.combinatorics.designs.latin_squares import (
     is_latin_square,
     orthogonality_profile,
@@ -13,6 +14,7 @@ from jacobian.math.combinatorics.designs.latin_squares._models import (
     LatinSquare,
     LatinSquareCandidate,
     LatinSquareRequest,
+    LatinSquareTransposeResult,
     OrthogonalityRequest,
     TransposeRequest,
 )
@@ -21,6 +23,9 @@ from jacobian.math.combinatorics.designs.latin_squares._tools import (
     compute_latin_square_check,
     compute_latin_square_transpose,
     compute_orthogonality,
+)
+from jacobian.math.combinatorics.designs.latin_squares.operations import (
+    MAX_LATIN_ORTHOGONALITY_PAIR_CELLS,
 )
 
 
@@ -44,6 +49,13 @@ def _candidate_square(
 
 
 Z2 = _latin_square(2, ((0, 1), (1, 0)))
+
+
+def _cyclic_square(order: int, multiplier: int = 1) -> tuple[tuple[int, ...], ...]:
+    return tuple(
+        tuple((row + multiplier * column) % order for column in range(order))
+        for row in range(order)
+    )
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -89,8 +101,19 @@ def test_orthogonality_orthogonal() -> None:
 def test_transpose() -> None:
     request = TransposeRequest(square=Z2)
     result = compute_latin_square_transpose(request)
-    assert result.transposed == ((0, 1), (1, 0))
-    assert transpose(Z2) == result.transposed
+    assert result.transposed == Z2
+    native = transpose(Z2)
+    assert native == result.transposed
+    assert isinstance(native, LatinSquare)
+    # Native and MCP producers share the canonical LatinSquare carrier so the
+    # native result composes unchanged into transpose and orthogonality.
+    assert transpose(native) == Z2
+    assert orthogonality_profile(native, Z2) == (False, 2)
+    restored = LatinSquareTransposeResult.model_validate(
+        loads_strict_json(encode_strict_json(result.model_dump(mode="json")))
+    )
+    relayed = TransposeRequest(square=restored.transposed)
+    assert compute_latin_square_transpose(relayed).transposed == Z2
     assert orthogonality_profile(Z2, Z2) == (False, 2)
 
 
@@ -115,3 +138,52 @@ def test_check_accepts_non_latin_square() -> None:
     request = LatinSquareRequest(square=_candidate_square(2, ((0, 0), (1, 1))))
     result = compute_latin_square_check(request)
     assert result.is_latin is False
+
+
+def test_operations_admit_materialized_squares_beyond_order_32() -> None:
+    order = 127
+    left_cells = _cyclic_square(order)
+    right_cells = _cyclic_square(order, 2)
+
+    check = compute_latin_square_check(
+        LatinSquareRequest(square=_candidate_square(order, left_cells))
+    )
+    left = _latin_square(order, left_cells)
+    right = _latin_square(order, right_cells)
+    orthogonality = compute_orthogonality(
+        OrthogonalityRequest(square_a=left, square_b=right)
+    )
+    transposed = compute_latin_square_transpose(TransposeRequest(square=left))
+
+    assert check.is_latin is True
+    assert orthogonality.is_orthogonal is True
+    assert orthogonality.pair_count == order * order
+    assert all(
+        transposed.transposed.cells[row][column] == left.cells[column][row]
+        for row in range(order)
+        for column in range(order)
+    )
+
+
+def test_large_negative_orthogonality_uses_compact_pair_storage() -> None:
+    order = 513
+    square = _latin_square(order, _cyclic_square(order))
+
+    assert order * order > 262_144
+    assert order * order <= MAX_LATIN_ORTHOGONALITY_PAIR_CELLS
+    assert orthogonality_profile(square, square) == (False, order)
+
+
+def test_pair_count_covers_all_cells_after_first_duplicate() -> None:
+    left = _latin_square(4, _cyclic_square(4))
+    right = _latin_square(
+        4,
+        (
+            (0, 1, 3, 2),
+            (1, 2, 0, 3),
+            (2, 3, 1, 0),
+            (3, 0, 2, 1),
+        ),
+    )
+
+    assert orthogonality_profile(left, right) == (False, 12)

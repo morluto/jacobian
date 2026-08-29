@@ -278,6 +278,34 @@ def test_result_parsing_rejects_contradictory_non_tree_diagnostic() -> None:
         RootedTreeFinePartition.model_validate(payload)
 
 
+def test_result_parsing_rejects_non_tree_status_for_a_tree() -> None:
+    payload = {
+        "graph": {"vertices": ["a", "b"], "edges": [["a", "b"]]},
+        "root": "a",
+        "component_size_limit": 1,
+        "outcome": {
+            "status": "NOT_A_TREE",
+            "connected": True,
+            "has_cycle": False,
+            "component_count": 1,
+        },
+    }
+
+    with pytest.raises(ValidationError, match="disconnected or cyclic"):
+        RootedTreeFinePartition.model_validate(payload)
+
+
+def test_result_parsing_rejects_undeclared_upper_seed_without_key_error(
+    path_five: SimpleUndirectedGraph,
+) -> None:
+    payload = construct_fine_partition(path_five, "a", 2).model_dump(mode="json")
+    payload["outcome"]["shrubs"][0]["upper_seed"] = "missing"
+    payload["outcome"]["shrubs"][0]["boundary_seeds"] = ["c", "missing"]
+
+    with pytest.raises(ValidationError, match="upper_seed must be a retained seed"):
+        RootedTreeFinePartition.model_validate(payload)
+
+
 @pytest.mark.parametrize(
     ("root", "size_limit", "code"),
     [

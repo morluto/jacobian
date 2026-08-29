@@ -242,6 +242,11 @@ class RootedTreeFinePartition(StrictModel):
                     "non_tree_diagnostic",
                     "the NOT_A_TREE diagnostic must match the retained graph",
                 )
+            if connected and not has_cycle:
+                raise _fine_partition_error(
+                    "non_tree_status",
+                    "a NOT_A_TREE outcome requires a disconnected or cyclic graph",
+                )
             return self
 
         if not connected or has_cycle:
@@ -348,6 +353,11 @@ class RootedTreeFinePartition(StrictModel):
                 raise _fine_partition_error(
                     "shrub_root_vertex",
                     "a shrub root_vertex must be its rootward vertex",
+                )
+            if shrub.upper_seed not in seeds:
+                raise _fine_partition_error(
+                    "shrub_upper_seed_membership",
+                    "a shrub upper_seed must be a retained seed",
                 )
             if depths[shrub.upper_seed] != depths[shrub.root_vertex] - 1:
                 raise _fine_partition_error(

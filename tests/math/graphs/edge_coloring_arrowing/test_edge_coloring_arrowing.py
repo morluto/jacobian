@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
-from jacobian.math.graphs.edge_coloring_arrowing._models import (
-    EdgeColoringArrowingRequest,
-)
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.coloring._models import EdgeColoringAssignment
 from jacobian.math.graphs.edge_coloring_arrowing.operations import (
     decide_edge_coloring_arrowing,
 )
@@ -74,7 +72,8 @@ def test_avoiding_coloring_replay() -> None:
     """Replay the avoiding colouring to verify it avoids all targets."""
     result = decide_edge_coloring_arrowing(_k5(), (_k3(), _k3()))
     assert result.outcome == "DOES_NOT_ARROW"
-    coloring = dict(result.avoiding_coloring)
+    assert isinstance(result.avoiding_coloring, EdgeColoringAssignment)
+    coloring = dict(enumerate(result.avoiding_coloring.coloring))
     edges = list(result.host_graph.edges)
     for color, target in enumerate(result.targets):
         color_edges = [edges[i] for i in range(len(edges)) if coloring[i] == color]
@@ -105,9 +104,9 @@ def test_result_preserves_inputs() -> None:
 def test_rejects_empty_target_and_unbounded_search() -> None:
     host = _k6()
     empty = _graph([], [])
-    with pytest.raises(ValidationError):
-        EdgeColoringArrowingRequest(host_graph=host, targets=(empty,))
-    with pytest.raises(ValueError, match="embedding checks"):
+    with pytest.raises(OperationDomainValidationError, match="target 0"):
+        decide_edge_coloring_arrowing(host, (empty,))
+    with pytest.raises(OperationDomainValidationError, match="embedding checks"):
         decide_edge_coloring_arrowing(
             _graph([str(i) for i in range(10)], _k6().edges), (_k3(),) * 6
         )

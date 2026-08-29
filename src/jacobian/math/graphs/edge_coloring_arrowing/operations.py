@@ -7,6 +7,7 @@ from itertools import permutations, product
 from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.coloring._models import EdgeColoringAssignment
 from jacobian.math.graphs.edge_coloring_arrowing._models import (
     EdgeColoringArrowingResult,
     _validate_arrowing_envelope,
@@ -41,7 +42,11 @@ def decide_edge_coloring_arrowing(
 
     for coloring in product(range(num_colors), repeat=edge_count):
         if _is_avoiding_coloring(coloring, edges, targets, host_graph):
-            avoiding = tuple((i, coloring[i]) for i in range(edge_count))
+            avoiding = EdgeColoringAssignment(
+                graph=host_graph,
+                colors=num_colors,
+                coloring=coloring,
+            )
             return EdgeColoringArrowingResult(
                 host_graph=host_graph,
                 targets=targets,

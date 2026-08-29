@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs.coloring._models import EdgeColoringAssignment
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_HOST_VERTICES = 10
@@ -80,12 +81,7 @@ class EdgeColoringArrowingRequest(StrictModel):
     """Decide whether a host graph arrows a tuple of target graphs."""
 
     host_graph: SimpleUndirectedGraph
-    targets: tuple[SimpleUndirectedGraph, ...]
-
-    @model_validator(mode="after")
-    def validate_request(self) -> Self:
-        _validate_arrowing_envelope(self.host_graph, self.targets)
-        return self
+    targets: tuple[SimpleUndirectedGraph, ...] = Field(max_length=MAX_TARGET_COUNT)
 
 
 class EdgeColoringArrowingResult(StrictModel):
@@ -94,9 +90,7 @@ class EdgeColoringArrowingResult(StrictModel):
     host_graph: SimpleUndirectedGraph
     targets: tuple[SimpleUndirectedGraph, ...]
     outcome: Literal["ARROWS", "DOES_NOT_ARROW"]
-    avoiding_coloring: tuple[tuple[int, int], ...] | None = (
-        None  # (edge_index, color) pairs
-    )
+    avoiding_coloring: EdgeColoringAssignment | None = None
 
     @model_validator(mode="after")
     def require_outcome_certificate_shape(self) -> Self:
@@ -111,14 +105,19 @@ class EdgeColoringArrowingResult(StrictModel):
                     "graph.arrowing.missing_avoiding_coloring",
                     "DOES_NOT_ARROW results must carry an avoiding colouring",
                 )
-            if len(self.avoiding_coloring) != len(self.host_graph.edges):
+            if self.avoiding_coloring.graph != self.host_graph:
+                raise PydanticCustomError(
+                    "graph.arrowing.mismatched_avoiding_coloring",
+                    "avoiding colouring must be bound to the host graph",
+                )
+            if len(self.avoiding_coloring.coloring) != len(self.host_graph.edges):
                 raise PydanticCustomError(
                     "graph.arrowing.incomplete_avoiding_coloring",
                     "avoiding colouring must cover every host edge",
                 )
             if any(
-                edge_index != index or not 0 <= color < len(self.targets)
-                for index, (edge_index, color) in enumerate(self.avoiding_coloring)
+                not 0 <= color < len(self.targets)
+                for color in self.avoiding_coloring.coloring
             ):
                 raise PydanticCustomError(
                     "graph.arrowing.invalid_avoiding_coloring",

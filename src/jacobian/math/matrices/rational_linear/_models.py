@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian._models import StrictModel
-from jacobian.math.matrices.values import RationalMatrix
+from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.math.matrices.values import (
+    MAX_SPARSE_RATIONAL_MATRIX_AXIS,
+    MAX_SPARSE_RATIONAL_MATRIX_NONZEROS,
+    SparseRationalMatrix,
+)
 
-MAX_LINEAR_DIMENSION = 32
+MAX_LINEAR_DIMENSION = MAX_SPARSE_RATIONAL_MATRIX_AXIS
+MAX_LINEAR_NONZERO_COUNT = MAX_SPARSE_RATIONAL_MATRIX_NONZEROS
 MAX_RATIONAL_DIGITS = 256
 
 LinearVariableName = Annotated[
@@ -44,11 +49,67 @@ class LinearRationalSystem(StrictModel):
         min_length=1,
         max_length=MAX_LINEAR_DIMENSION,
     )
-    coefficients: RationalMatrix
+    coefficients: SparseRationalMatrix
     rhs: tuple[CanonicalRational, ...] = Field(
         min_length=1,
         max_length=MAX_LINEAR_DIMENSION,
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_sparse_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        variables = data.get("variables")
+        coefficients = data.get("coefficients")
+        rhs = data.get("rhs")
+        if (
+            isinstance(variables, (list, tuple))
+            and len(variables) > MAX_LINEAR_DIMENSION
+        ):
+            raise _validation_error(
+                "budget_exceeded",
+                f"linear systems have at most {MAX_LINEAR_DIMENSION} variables",
+            )
+        coefficient_entries = (
+            coefficients.get("entries") if isinstance(coefficients, dict) else None
+        )
+        if (
+            isinstance(coefficient_entries, (list, tuple))
+            and len(coefficient_entries) > MAX_LINEAR_NONZERO_COUNT
+        ):
+            raise _validation_error(
+                "budget_exceeded",
+                f"linear systems store at most {MAX_LINEAR_NONZERO_COUNT} nonzeros",
+            )
+        if isinstance(rhs, (list, tuple)) and len(rhs) > MAX_LINEAR_DIMENSION:
+            raise _validation_error(
+                "budget_exceeded",
+                f"linear systems have at most {MAX_LINEAR_DIMENSION} rows",
+            )
+        raw_values: list[object] = list(rhs) if isinstance(rhs, (list, tuple)) else []
+        if isinstance(coefficient_entries, (list, tuple)):
+            raw_values.extend(
+                item.get("value")
+                for item in coefficient_entries
+                if isinstance(item, dict)
+            )
+        for value in raw_values:
+            components = (
+                (value.get("num"), value.get("den"))
+                if isinstance(value, dict)
+                else (value,)
+            )
+            if any(
+                isinstance(component, (str, int))
+                and len(str(component).lstrip("-")) > MAX_RATIONAL_DIGITS
+                for component in components
+            ):
+                raise _validation_error(
+                    "rational_bound",
+                    f"linear-system rationals are limited to {MAX_RATIONAL_DIGITS} decimal digits",
+                )
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_matching_canonical_dimensions(self) -> Self:
@@ -56,19 +117,18 @@ class LinearRationalSystem(StrictModel):
             raise _validation_error(
                 "budget_exceeded", "linear-system variable names must be unique"
             )
-        if len(self.coefficients.entries[0]) != len(self.variables):
-            raise _validation_error(
-                "budget_exceeded",
-                "the coefficient column count must equal the declared variable count",
-            )
-        if len(self.coefficients.entries) != len(self.rhs):
+        if self.coefficients.row_count != len(self.rhs):
             raise _validation_error(
                 "budget_exceeded",
                 "the right-hand side length must equal the coefficient row count",
             )
+        if self.coefficients.column_count != len(self.variables):
+            raise _validation_error(
+                "budget_exceeded",
+                "the coefficient column count must equal the declared variable count",
+            )
         _require_bounded_rationals(
-            tuple(value for row in self.coefficients.entries for value in row)
-            + self.rhs
+            tuple(item.value for item in self.coefficients.entries) + self.rhs
         )
         return self
 

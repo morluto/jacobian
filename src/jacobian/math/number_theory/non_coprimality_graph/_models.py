@@ -20,11 +20,13 @@ class NonCoprimalityGraphRequest(StrictModel):
         max_length=MAX_INTEGERS,
     )
 
+
 class NonCoprimalityGraphResult(StrictModel):
     """The non-coprimality graph of a set of integers."""
 
     integers: tuple[CanonicalInteger, ...]
     graph: SimpleUndirectedGraph
+
 
 __all__ = [
     "MAX_INTEGERS",

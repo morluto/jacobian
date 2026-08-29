@@ -66,8 +66,7 @@ def _admit_non_coprimality_graph(
                 location=("integers", index),
                 code="non_coprimality.digits",
                 message=(
-                    f"integer {index} exceeds the "
-                    f"{MAX_INTEGER_DIGITS}-digit bound"
+                    f"integer {index} exceeds the {MAX_INTEGER_DIGITS}-digit bound"
                 ),
             )
         label = format_canonical_integer(value)
@@ -76,8 +75,7 @@ def _admit_non_coprimality_graph(
                 location=("integers", index),
                 code="non_coprimality.digits",
                 message=(
-                    f"integer {index} exceeds the "
-                    f"{MAX_INTEGER_DIGITS}-digit bound"
+                    f"integer {index} exceeds the {MAX_INTEGER_DIGITS}-digit bound"
                 ),
             )
         source.append(label)

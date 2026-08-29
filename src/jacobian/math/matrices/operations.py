@@ -556,6 +556,7 @@ def _characteristic_polynomial_component_digit_bound(
     over_budget = MAX_CANONICAL_RATIONAL_DIGITS + 1
     numerator_bits = 0
     denominator_bits = 0
+    seen_rows: set[tuple[Fraction, ...]] = set()
     for row in fractions:
         row_denominator = 1
         for value in row:
@@ -564,6 +565,9 @@ def _characteristic_polynomial_component_digit_bound(
                 denominator_bits + row_denominator.bit_length()
             ):
                 return over_budget
+        if row in seen_rows:
+            continue
+        seen_rows.add(row)
         denominator_bits += row_denominator.bit_length()
         squared_norm = sum(
             (value.numerator * (row_denominator // value.denominator)) ** 2

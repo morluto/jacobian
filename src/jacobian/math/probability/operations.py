@@ -547,8 +547,7 @@ def raw_moment(
         location=("atoms",),
         code="probability.raw_moment.atom_bound",
         message=(
-            "finite raw moments accept at most "
-            f"{MAX_FINITE_INPUT_ATOMS} source atoms"
+            f"finite raw moments accept at most {MAX_FINITE_INPUT_ATOMS} source atoms"
         ),
     )
     _admit_distribution(atoms, require_canonical=False)

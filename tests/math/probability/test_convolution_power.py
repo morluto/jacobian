@@ -190,7 +190,9 @@ def test_widened_power_result_composes_into_finite_distribution_consumers() -> N
     assert event.selected_atoms == (atom,)
 
     conditioned = condition(powered.distribution, (atom.value,))
-    assert _mass_map(conditioned.distribution) == {atom.value.as_fraction(): Fraction(1)}
+    assert _mass_map(conditioned.distribution) == {
+        atom.value.as_fraction(): Fraction(1)
+    }
 
     replayed = FiniteConvolutionPowerRequest.model_validate(
         {

@@ -1,8 +1,10 @@
 """Exact finite-dimensional algebra operations."""
 
 from jacobian.math.finite_dim_algebras._models import (
+    MAX_COMMUTATOR_ELIMINATION_WORK,
     MAX_COMMUTATOR_ENTRIES,
     StructureConstants,
+    commutator_elimination_work,
 )
 
 
@@ -26,7 +28,11 @@ def center_basis(algebra: StructureConstants) -> tuple[tuple[int, ...], ...]:
     prime = algebra.field_order
     multiplication = algebra.multiplication
     if dimension**3 > MAX_COMMUTATOR_ENTRIES:
-        raise ValueError("commutator matrix exceeds the exact work budget")
+        raise ValueError("commutator matrix exceeds the materialization budget")
+    if commutator_elimination_work(dimension) > MAX_COMMUTATOR_ELIMINATION_WORK:
+        raise ValueError(
+            "commutator nullspace exceeds the exact elimination-work budget"
+        )
     commutator_entries = [
         (
             multiplication[column][basis][coordinate]

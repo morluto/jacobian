@@ -11,6 +11,7 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     current_request_execution,
+    request_cancelled,
 )
 
 _DEFAULT_CONTEXT_WAIT_SECONDS = 120.0
@@ -30,8 +31,6 @@ def flint_workprec(
     A bound request cancellation interrupts a queued acquisition.
     """
 
-    from jacobian.process import bounded_process_cancelled
-
     execution = current_request_execution()
     request_deadline = execution.deadline if execution is not None else None
     if deadline is not None and request_deadline is not None:
@@ -44,7 +43,7 @@ def flint_workprec(
         wait_deadline = monotonic() + _DEFAULT_CONTEXT_WAIT_SECONDS
 
     while True:
-        if bounded_process_cancelled():
+        if request_cancelled():
             raise OperationExecutionCancelledError(
                 "operation cancelled waiting for the python-flint precision context"
             )
@@ -56,7 +55,7 @@ def flint_workprec(
         if _CONTEXT_LOCK.acquire(timeout=min(_CONTEXT_LOCK_POLL_SECONDS, remaining)):
             break
     try:
-        if bounded_process_cancelled():
+        if request_cancelled():
             raise OperationExecutionCancelledError(
                 "operation cancelled waiting for the python-flint precision context"
             )

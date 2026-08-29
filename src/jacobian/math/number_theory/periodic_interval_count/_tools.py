@@ -1,5 +1,6 @@
 """Typed declarations for the periodic congruence interval count operation."""
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
 from jacobian.math.number_theory.periodic_interval_count._models import (
@@ -14,8 +15,8 @@ from jacobian.math.number_theory.periodic_interval_count.operations import (
 def _compute(request: PeriodicIntervalCountRequest) -> PeriodicIntervalCountResult:
     return compute_periodic_interval_count(
         request.source,
-        int(request.lower),
-        int(request.upper),
+        parse_canonical_integer(request.lower),
+        parse_canonical_integer(request.upper),
     )
 
 

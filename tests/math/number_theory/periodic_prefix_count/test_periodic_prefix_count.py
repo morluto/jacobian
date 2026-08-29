@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic import normalize_periodic_source
 from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceSubset,
@@ -41,7 +44,7 @@ def test_fixture_mod2_or_mod3():
     """On [1,6], the union of 0 mod 2 and 1 mod 3 is {1,2,4,6}, count 4."""
     source = _source([("2", ["0"]), ("3", ["1"])])
     result = compute_periodic_union_prefix_count(source, 6)
-    assert result.count == 4
+    assert result.count == "4"
     assert result.occupied_count == 4
 
 
@@ -49,21 +52,21 @@ def test_empty_union():
     """Empty union has count 0."""
     source = PeriodicCongruenceUnionSource(subsets=(), complement=False)
     result = compute_periodic_union_prefix_count(source, 10)
-    assert result.count == 0
+    assert result.count == "0"
 
 
 def test_mod1_all_integers():
     """0 mod 1: all positive integers."""
     source = _source([("1", ["0"])])
     result = compute_periodic_union_prefix_count(source, 10)
-    assert result.count == 10
+    assert result.count == "10"
 
 
 def test_cutoff_zero():
     """Cutoff 0: count 0."""
     source = _source([("2", ["0"])])
     result = compute_periodic_union_prefix_count(source, 0)
-    assert result.count == 0
+    assert result.count == "0"
 
 
 def test_periodicity():
@@ -71,7 +74,7 @@ def test_periodicity():
     source = _source([("2", ["0"])])
     result_small = compute_periodic_union_prefix_count(source, 10)
     result_large = compute_periodic_union_prefix_count(source, 12)
-    assert result_large.count - result_small.count == 1
+    assert int(result_large.count) - int(result_small.count) == 1
 
 
 def test_result_preserves_source():
@@ -89,21 +92,21 @@ def test_complement_of_full_set():
     """Complement of {0 mod 2} (i.e., odd numbers) on [1,10] has count 5."""
     source = _source([("2", ["0"])], complement=True)
     result = compute_periodic_union_prefix_count(source, 10)
-    assert result.count == 5
+    assert result.count == "5"
 
 
 def test_one_nonzero_residue():
     """1 mod 3 on [1,10]: {1,4,7,10}, count 4."""
     source = _source([("3", ["1"])])
     result = compute_periodic_union_prefix_count(source, 10)
-    assert result.count == 4
+    assert result.count == "4"
 
 
 def test_exact_period_endpoint():
     """Cutoff equal to one full period gives exactly occupied_count."""
     source = _source([("2", ["0"]), ("3", ["1"])])
     result = compute_periodic_union_prefix_count(source, 6)
-    assert result.count == result.occupied_count
+    assert int(result.count) == result.occupied_count
 
 
 def test_multiple_periods_and_remainder():
@@ -114,7 +117,7 @@ def test_multiple_periods_and_remainder():
     for cutoff in range(50):
         result = compute_periodic_union_prefix_count(source, cutoff)
         expected = sum(1 for t in range(1, cutoff + 1) if (t % period) in occupied)
-        assert result.count == expected
+        assert result.count == str(expected)
 
 
 def test_overlapping_and_nested_moduli():
@@ -122,7 +125,7 @@ def test_overlapping_and_nested_moduli():
     source = _source([("2", ["0"]), ("3", ["0"])])
     result = compute_periodic_union_prefix_count(source, 20)
     expected = sum(1 for t in range(1, 21) if t % 2 == 0 or t % 3 == 0)
-    assert result.count == expected
+    assert result.count == str(expected)
 
 
 def test_complement_overlapping():
@@ -130,7 +133,7 @@ def test_complement_overlapping():
     source = _source([("2", ["0"]), ("3", ["0"])], complement=True)
     result = compute_periodic_union_prefix_count(source, 20)
     expected = sum(1 for t in range(1, 21) if not (t % 2 == 0 or t % 3 == 0))
-    assert result.count == expected
+    assert result.count == str(expected)
 
 
 def test_negative_residues_normalized():
@@ -138,7 +141,7 @@ def test_negative_residues_normalized():
     source = _normalize_source([("2", ["0"]), ("3", ["-2"])])
     result = compute_periodic_union_prefix_count(source, 10)
     expected = sum(1 for t in range(1, 11) if t % 2 == 0 or t % 3 == 1)
-    assert result.count == expected
+    assert result.count == str(expected)
 
 
 def test_exhaustive_small_periods():
@@ -169,7 +172,7 @@ def test_exhaustive_small_periods():
                 if complement:
                     belongs = not belongs
                 expected += 1 if belongs else 0
-            assert result.count == expected, (
+            assert result.count == str(expected), (
                 f"Failed for {case}, complement={complement}, cutoff={cutoff}"
             )
 
@@ -179,7 +182,7 @@ def test_large_cutoff_small_period():
     source = _source([("2", ["0"])])
     cutoff = 10**18
     result = compute_periodic_union_prefix_count(source, cutoff)
-    assert result.count == cutoff // 2
+    assert result.count == str(cutoff // 2)
 
 
 def test_divisor_family_488_fixture():
@@ -190,7 +193,7 @@ def test_divisor_family_488_fixture():
         expected = sum(
             1 for t in range(1, cutoff + 1) if t % 2 == 0 or t % 3 == 0 or t % 5 == 0
         )
-        assert result.count == expected
+        assert result.count == str(expected)
 
 
 def test_result_common_period():
@@ -199,4 +202,9 @@ def test_result_common_period():
     result = compute_periodic_union_prefix_count(source, 100)
     assert result.common_period == "12"
     expected = sum(1 for t in range(1, 101) if t % 4 == 0 or t % 6 == 1)
-    assert result.count == expected
+    assert result.count == str(expected)
+
+
+def test_negative_cutoff_is_rejected() -> None:
+    with pytest.raises(OperationDomainValidationError, match="nonnegative"):
+        compute_periodic_union_prefix_count(_source([("2", ["0"])]), -1)

@@ -7,10 +7,6 @@ import operator
 from typing import SupportsIndex
 
 from jacobian.canonical import parse_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_theory._prime_shift_models import (
-    PrimeShiftProfileRequest as PrimeShiftRequest,
-)
 from jacobian.math.number_theory._prime_shift_models import (
     PrimeShiftProfileResult,
     _PrimeShiftProfileExecutionPlan,
@@ -74,29 +70,6 @@ def _compute_prime_shift_profile(
     )
 
 
-def compute_prime_shift_profile(
-    request: PrimeShiftRequest,
-) -> PrimeShiftProfileResult:
-    """Compute the translated-prime representation count for every n in [L, U].
-
-    For each n, count representations n = p + 2^k where p is prime and k >= 0.
-    This is the de Polignac-style count: for each prime p and each power of 2
-    that satisfies 2^k <= n - p, we count one representation.
-    """
-    try:
-        plan = require_prime_shift_profile_admission(
-            request.lower_bound, request.upper_bound
-        )
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("lower_bound", "upper_bound"),
-            code="number_theory.translated_prime.admission",
-            message=str(exc),
-        ) from exc
-
-    return _compute_prime_shift_profile(plan)
-
-
 def _as_python_integer(value: SupportsIndex | IntegerValue) -> int:
     """Return one direct native integer input as a Python integer."""
 
@@ -122,4 +95,4 @@ def prime_shift_profile(
     return _compute_prime_shift_profile(plan)
 
 
-__all__ = ["compute_prime_shift_profile", "prime_shift_profile"]
+__all__ = ["prime_shift_profile"]

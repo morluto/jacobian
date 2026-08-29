@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory import PrimeShiftProfileResult, prime_shift_profile
 from jacobian.math.number_theory._prime_shift_models import PrimeShiftProfileRequest
-from jacobian.math.number_theory._prime_shift_operations import (
+from jacobian.math.number_theory._prime_shifts import (
     compute_prime_shift_profile,
 )
 

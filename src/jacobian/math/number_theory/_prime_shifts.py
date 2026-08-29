@@ -1,6 +1,7 @@
 """Declarations for translated-prime representation profiles."""
 
 from jacobian.catalog._examples import example
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._prime_shift_models import (
     MAX_SHIFT_RESULT_BYTES,
     MAX_SHIFT_WORK,
@@ -8,9 +9,24 @@ from jacobian.math.number_theory._prime_shift_models import (
     PrimeShiftProfileResult,
 )
 from jacobian.math.number_theory._prime_shift_operations import (
-    compute_prime_shift_profile,
+    prime_shift_profile,
 )
 from jacobian.math.number_theory._support import number_theory_operation
+
+
+def compute_prime_shift_profile(
+    request: PrimeShiftProfileRequest,
+) -> PrimeShiftProfileResult:
+    """Project one wire request onto the native translated-prime operation."""
+
+    try:
+        return prime_shift_profile(request.lower_bound, request.upper_bound)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("lower_bound", "upper_bound"),
+            code="number_theory.translated_prime.admission",
+            message=str(exc),
+        ) from exc
 
 PRIME_SHIFT_OPERATION = number_theory_operation(
     "number_theory.translated_prime.representation_profile.compute",
@@ -38,4 +54,4 @@ PRIME_SHIFT_OPERATION = number_theory_operation(
     ),
 )
 
-__all__ = ["PRIME_SHIFT_OPERATION"]
+__all__ = ["PRIME_SHIFT_OPERATION", "compute_prime_shift_profile"]

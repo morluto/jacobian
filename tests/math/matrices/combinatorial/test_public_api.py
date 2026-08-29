@@ -13,6 +13,7 @@ def test_exact_public_api_symbols() -> None:
         "gram_profile",
         "kronecker",
         "normalize",
+        "recognize_hadamard",
         "sign_profile",
         "sylvester",
     )

@@ -11,6 +11,7 @@ from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_VERTICES = 50
+MAX_CRITICAL_GROUP_VERTICES = 128
 MAX_COEFFICIENT_DIGITS = 1_000
 MAX_STABILIZATION_CHIPS = 1_000_000
 
@@ -44,6 +45,28 @@ def _require_chip_firing_graph(
 _ChipFiringGraph = Annotated[
     SimpleUndirectedGraph,
     AfterValidator(_require_chip_firing_graph),
+]
+
+
+def _require_critical_group_graph(
+    graph: SimpleUndirectedGraph,
+) -> SimpleUndirectedGraph:
+    if not graph.vertices:
+        raise _validation_error(
+            "chip_firing.empty_graph", "chip-firing requires a nonempty graph"
+        )
+    if len(graph.vertices) > MAX_CRITICAL_GROUP_VERTICES:
+        raise _validation_error(
+            "chip_firing.critical_group_vertex_bound",
+            "critical-group computation supports at most "
+            f"{MAX_CRITICAL_GROUP_VERTICES} vertices",
+        )
+    return graph
+
+
+_CriticalGroupGraph = Annotated[
+    SimpleUndirectedGraph,
+    AfterValidator(_require_critical_group_graph),
 ]
 
 
@@ -253,7 +276,7 @@ class CanonicalDivisorResult(StrictModel):
 class CriticalGroupRequest(StrictModel):
     """Request the critical group (sandpile group) of a graph."""
 
-    graph: _ChipFiringGraph
+    graph: _CriticalGroupGraph
     sink: str
 
     @model_validator(mode="after")

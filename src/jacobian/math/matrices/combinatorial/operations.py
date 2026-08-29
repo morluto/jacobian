@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
+
+from ._flint import integer_gram
 from ._models import (
     DeterminantProfileResult,
     GramProfileResult,
@@ -10,13 +14,83 @@ from ._models import (
     SignProfileResult,
     SylvesterResult,
 )
-from .values import MAX_MATRIX_ORDER, HadamardMatrix, SignMatrix
+from .values import HadamardMatrix, SignMatrix
+
+# Cube-root of the Gram multiply-add work budget.
+MAX_GRAM_PROFILE_AXIS = 512
+MAX_GRAM_PROFILE_MULTIPLY_ADDS = MAX_GRAM_PROFILE_AXIS**3
+MAX_KRONECKER_ORDER = 128
+
+
+def _gram_profile_result_bound(row_count: int, column_count: int) -> int:
+    """Conservatively bound canonical bytes for the complete Gram profile."""
+
+    value_chars = len(str(column_count)) + 1
+    index_chars = len(str(max(0, row_count - 1)))
+    gram_bytes = row_count * row_count * (value_chars + 1) + 2 * row_count
+    residual_bytes = 2 * row_count
+    pair_count = row_count * (row_count - 1) // 2
+    off_diagonal_bytes = pair_count * (2 * index_chars + value_chars + 5)
+    return 160 + gram_bytes + residual_bytes + off_diagonal_bytes
+
+
+def _require_gram_profile_admission(matrix: SignMatrix) -> None:
+    row_count = len(matrix.rows)
+    column_count = len(matrix.rows[0])
+    if row_count * row_count * column_count > MAX_GRAM_PROFILE_MULTIPLY_ADDS:
+        raise OperationDomainValidationError(
+            location=("matrix", "rows"),
+            code="combinatorial_matrix.gram_work_budget",
+            message="Gram profile exceeds the exact multiply-add work budget",
+        )
+    if (
+        _gram_profile_result_bound(row_count, column_count)
+        > CanonicalLimits().max_output_bytes
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix", "rows"),
+            code="combinatorial_matrix.gram_result_budget",
+            message="Gram profile exceeds the canonical result-byte budget",
+        )
+
+
+def _is_exact_hadamard_gram(gram: tuple[tuple[int, ...], ...], order: int) -> bool:
+    return all(
+        gram[i][j] == (order if i == j else 0)
+        for i in range(order)
+        for j in range(order)
+    )
+
+
+def _require_hadamard_recognition_admission(matrix: SignMatrix) -> None:
+    row_count = len(matrix.rows)
+    column_count = len(matrix.rows[0])
+    if row_count != column_count:
+        raise OperationDomainValidationError(
+            location=("matrix", "rows"),
+            code="combinatorial_matrix.not_square",
+            message="Hadamard matrices must be square",
+        )
+    if row_count * row_count * column_count > MAX_GRAM_PROFILE_MULTIPLY_ADDS:
+        raise OperationDomainValidationError(
+            location=("matrix", "rows"),
+            code="combinatorial_matrix.gram_work_budget",
+            message="Hadamard recognition exceeds the exact multiply-add work budget",
+        )
+
+
+def _sign_matrix_from_hadamard(hadamard: HadamardMatrix) -> SignMatrix:
+    """Reuse structurally validated Hadamard rows as a sign-matrix carrier."""
+
+    return SignMatrix.model_construct(rows=hadamard.rows)
+
 
 __all__ = [
     "determinant_profile",
     "gram_profile",
     "kronecker",
     "normalize",
+    "recognize_hadamard",
     "sign_profile",
     "sylvester",
 ]
@@ -50,29 +124,38 @@ def gram_profile(matrix: SignMatrix) -> GramProfileResult:
     rows = matrix.rows
     n = len(rows)
     m = len(rows[0]) if n else 0
-    gram: list[list[int]] = [[0] * n for _ in range(n)]
-    for i in range(n):
-        for j in range(i, n):
-            inner = sum(rows[i][k] * rows[j][k] for k in range(m))
-            gram[i][j] = inner
-            gram[j][i] = inner
-    is_hadamard = n == m and all(
-        gram[i][j] == (n if i == j else 0) for i in range(n) for j in range(n)
-    )
+    _require_gram_profile_admission(matrix)
+    gram = integer_gram(rows)
+    is_hadamard = n == m and _is_exact_hadamard_gram(gram, n)
     residuals = tuple(gram[i][i] - m for i in range(n))
     nonzero_off = tuple(
         (i, j, gram[i][j]) for i in range(n) for j in range(i + 1, n) if gram[i][j] != 0
     )
     return GramProfileResult(
         order=n,
-        gram=tuple(tuple(row) for row in gram),
+        gram=gram,
         diagonal_residuals=residuals,
         nonzero_off_diagonal=nonzero_off,
         is_hadamard=is_hadamard,
     )
 
 
-def normalize(matrix: HadamardMatrix | SignMatrix) -> NormalizeResult:
+def recognize_hadamard(matrix: SignMatrix) -> HadamardMatrix:
+    """Return a trusted Hadamard matrix when ``H H^T = n I_n`` exactly."""
+
+    _require_hadamard_recognition_admission(matrix)
+    rows = matrix.rows
+    gram = integer_gram(rows)
+    if not _is_exact_hadamard_gram(gram, len(rows)):
+        raise OperationDomainValidationError(
+            location=("matrix", "rows"),
+            code="combinatorial_matrix.orthogonality_violation",
+            message="Hadamard orthogonality H H^T = n I_n is violated",
+        )
+    return HadamardMatrix._from_kernel(rows=rows)
+
+
+def normalize(matrix: SignMatrix) -> NormalizeResult:
     """Return a deterministically normalized sign matrix whose first row and
     first column are all ``+1``, plus the exact row/column sign switches
     used. Normalization must preserve the full matrix and be idempotent."""
@@ -89,9 +172,8 @@ def normalize(matrix: HadamardMatrix | SignMatrix) -> NormalizeResult:
             row_switches[i] = 1
             for j in range(len(rows[0])):
                 rows[i][j] = -rows[i][j]
-    value_type = HadamardMatrix if isinstance(matrix, HadamardMatrix) else SignMatrix
     return NormalizeResult(
-        normalized=value_type(rows=tuple(tuple(row) for row in rows)),
+        normalized=SignMatrix(rows=tuple(tuple(row) for row in rows)),
         row_switches=tuple(row_switches),
         column_switches=tuple(col_switches),
     )
@@ -100,15 +182,16 @@ def normalize(matrix: HadamardMatrix | SignMatrix) -> NormalizeResult:
 def determinant_profile(hadamard: HadamardMatrix) -> DeterminantProfileResult:
     """For a constructed Hadamard matrix of order n, return |det H| = n^(n/2)
     and the Gram determinant = n^n."""
-    n = len(hadamard.rows)
+    recognized = recognize_hadamard(_sign_matrix_from_hadamard(hadamard))
+    n = len(recognized.rows)
     if n % 2 != 0 and n != 1:
         raise ValueError("Hadamard matrices have even order (except order 1)")
     magnitude = n ** (n // 2)
     gram_determinant = n**n
     return DeterminantProfileResult(
         order=n,
-        determinant_magnitude=magnitude,
-        gram_determinant=gram_determinant,
+        determinant_magnitude=format_canonical_integer(magnitude),
+        gram_determinant=format_canonical_integer(gram_determinant),
         identity="det(H)^2 = det(H H^T)",
     )
 
@@ -117,13 +200,15 @@ def kronecker(left: HadamardMatrix, right: HadamardMatrix) -> KroneckerProductRe
     """Return the Kronecker product of two Hadamard matrices as a Hadamard
     matrix, factor-to-product row/column maps, and the exact Gram
     factorization."""
-    a = [list(row) for row in left.rows]
-    b = [list(row) for row in right.rows]
-    n, m = len(a), len(b)
-    if n * m > MAX_MATRIX_ORDER:
+    n, m = len(left.rows), len(right.rows)
+    if n * m > MAX_KRONECKER_ORDER:
         raise ValueError(
-            f"Kronecker product order {n * m} exceeds maximum {MAX_MATRIX_ORDER}"
+            f"Kronecker product order {n * m} exceeds maximum {MAX_KRONECKER_ORDER}"
         )
+    left_h = recognize_hadamard(_sign_matrix_from_hadamard(left))
+    right_h = recognize_hadamard(_sign_matrix_from_hadamard(right))
+    a = [list(row) for row in left_h.rows]
+    b = [list(row) for row in right_h.rows]
     result: list[list[int]] = []
     row_map: list[tuple[int, int]] = []
     for i in range(n):
@@ -139,7 +224,7 @@ def kronecker(left: HadamardMatrix, right: HadamardMatrix) -> KroneckerProductRe
         for j in range(m):
             col_map.append((i, j))
     return KroneckerProductResult(
-        product=HadamardMatrix(rows=tuple(tuple(row) for row in result)),
+        product=HadamardMatrix._from_kernel(rows=tuple(tuple(row) for row in result)),
         row_map=tuple(row_map),
         column_map=tuple(col_map),
     )
@@ -152,7 +237,7 @@ def sylvester(k: int) -> SylvesterResult:
         raise ValueError("k must be in [0, 7]")
     if k == 0:
         return SylvesterResult(
-            matrix=HadamardMatrix(rows=((1,),)),
+            matrix=HadamardMatrix._from_kernel(rows=((1,),)),
             construction="base_case",
             order=1,
         )
@@ -163,7 +248,7 @@ def sylvester(k: int) -> SylvesterResult:
     bottom = [prev[i] + [-prev[i][j] for j in range(n)] for i in range(n)]
     result = top + bottom
     return SylvesterResult(
-        matrix=HadamardMatrix(rows=tuple(tuple(row) for row in result)),
+        matrix=HadamardMatrix._from_kernel(rows=tuple(tuple(row) for row in result)),
         construction="sylvester_recursion",
         order=2**k,
     )

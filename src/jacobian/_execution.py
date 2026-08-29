@@ -39,6 +39,14 @@ def current_request_execution() -> RequestExecution | None:
     return _REQUEST_EXECUTION.get()
 
 
+class OperationExecutionTimeoutError(TimeoutError):
+    """The request-scoped owner envelope expired."""
+
+
+class OperationExecutionCancelledError(Exception):
+    """The caller cancelled the request during a killable backend."""
+
+
 def bind_request_deadline(deadline: float) -> None:
     """Attach an owner-derived deadline to the current request envelope."""
 
@@ -48,6 +56,8 @@ def bind_request_deadline(deadline: float) -> None:
 
 
 __all__ = [
+    "OperationExecutionCancelledError",
+    "OperationExecutionTimeoutError",
     "RequestExecution",
     "bind_request_deadline",
     "current_request_execution",

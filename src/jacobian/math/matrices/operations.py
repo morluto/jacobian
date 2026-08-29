@@ -178,6 +178,10 @@ def determinant(matrix: MatrixBase) -> Any:
     if source.rows != source.cols:
         raise ValueError("determinant requires a square matrix")
     if not all(entry.is_Rational is True for entry in source):
+        if source.rows > MAX_MATRIX_DIMENSION:
+            raise ValueError(
+                f"matrix dimensions must be between 1 and {MAX_MATRIX_DIMENSION}"
+            )
         return source.det(method="bareiss")
     result = determinant_result(conversions.rational_matrix_from_sympy(source))
     value = result.determinant.as_fraction()

@@ -1,9 +1,11 @@
 """Tests for arithmetic counting operations."""
 
+from itertools import product
 from typing import TypedDict
 
 from jacobian.math.number_theory.counting import congruence_box_count, floor_sum
 from jacobian.math.number_theory.counting._models import (
+    _MAX_BOX_LINEAR_COEFFICIENT,
     CongruenceBoxCountRequest,
     FloorSumRequest,
 )
@@ -127,26 +129,132 @@ class TestCongruenceBoxCount:
             == 12
         )
 
-    def test_rejects_oversized_box(self) -> None:
-        import pytest
-
-        from jacobian.catalog.models import OperationDomainValidationError
-
+    def test_admits_full_coordinate_box(self) -> None:
         request = CongruenceBoxCountRequest.model_validate(
             CongruenceBoxCountPayload(
                 x_lo=-10_000,
                 x_hi=10_000,
                 y_lo=-10_000,
                 y_hi=10_000,
-                u=1,
-                v=1,
-                c=0,
-                modulus=3,
+                u=7331,
+                v=4096,
+                c=17,
+                modulus=9991,
             )
         )
-        with pytest.raises(OperationDomainValidationError) as error:
-            compute_congruence_box_count(request)
-        assert (
-            error.value.errors()[0]["type"]
-            == "arithmetic_counting.box_area_exceeds_budget"
+        assert compute_congruence_box_count(request).count == 40_040
+
+    def test_matches_exhaustive_small_boxes(self) -> None:
+        intervals = ((-2, 2), (-1, -1), (0, 2))
+        for (x_lo, x_hi), (y_lo, y_hi), u, v, c, modulus in product(
+            intervals,
+            intervals,
+            range(-2, 3),
+            range(-2, 3),
+            range(-2, 3),
+            range(1, 6),
+        ):
+            expected = sum(
+                (u * x + v * y - c) % modulus == 0
+                for x in range(x_lo, x_hi + 1)
+                for y in range(y_lo, y_hi + 1)
+            )
+            assert (
+                congruence_box_count(
+                    x_lo=x_lo,
+                    x_hi=x_hi,
+                    y_lo=y_lo,
+                    y_hi=y_hi,
+                    u=u,
+                    v=v,
+                    c=c,
+                    modulus=modulus,
+                )
+                == expected
+            )
+
+    def test_axis_swap_preserves_count(self) -> None:
+        request = CongruenceBoxCountPayload(
+            x_lo=-20,
+            x_hi=19,
+            y_lo=-30,
+            y_hi=31,
+            u=6,
+            v=10,
+            c=4,
+            modulus=14,
         )
+        expected = congruence_box_count(**request)
+        assert expected == 354
+        assert (
+            congruence_box_count(
+                x_lo=request["y_lo"],
+                x_hi=request["y_hi"],
+                y_lo=request["x_lo"],
+                y_hi=request["x_hi"],
+                u=request["v"],
+                v=request["u"],
+                c=request["c"],
+                modulus=request["modulus"],
+            )
+            == expected
+        )
+
+    def test_degenerate_boxes(self) -> None:
+        assert (
+            congruence_box_count(
+                x_lo=0,
+                x_hi=0,
+                y_lo=-3,
+                y_hi=3,
+                u=2,
+                v=4,
+                c=1,
+                modulus=6,
+            )
+            == 0
+        )
+        assert (
+            congruence_box_count(
+                x_lo=-3,
+                x_hi=3,
+                y_lo=0,
+                y_hi=0,
+                u=2,
+                v=4,
+                c=2,
+                modulus=6,
+            )
+            == 2
+        )
+        assert (
+            congruence_box_count(
+                x_lo=1,
+                x_hi=1,
+                y_lo=1,
+                y_hi=1,
+                u=2,
+                v=4,
+                c=0,
+                modulus=6,
+            )
+            == 1
+        )
+
+    def test_rejects_linear_coefficient_above_digit_budget(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            CongruenceBoxCountRequest.model_validate(
+                CongruenceBoxCountPayload(
+                    x_lo=0,
+                    x_hi=0,
+                    y_lo=0,
+                    y_hi=0,
+                    u=_MAX_BOX_LINEAR_COEFFICIENT + 1,
+                    v=0,
+                    c=0,
+                    modulus=1,
+                )
+            )

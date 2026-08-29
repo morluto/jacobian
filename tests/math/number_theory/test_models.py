@@ -151,8 +151,28 @@ def test_kummer_carries_match_direct_binomial_factorization() -> None:
 
 
 def test_scalar_binomial_valuation_rejects_composite_base() -> None:
-    with pytest.raises(ValidationError, match="prime must be prime"):
-        BinomialPrimeValuationRequest(n="20", k="7", prime="4")
+    request = BinomialPrimeValuationRequest(n="20", k="7", prime="4")
+    with pytest.raises(OperationDomainValidationError, match="prime must be prime"):
+        compute_binomial_prime_valuation(request)
+
+
+def test_valuation_request_schemas_publish_semantic_bounds() -> None:
+    factorial = FactorialValuationRequest.model_json_schema()["properties"]
+    binomial = BinomialPrimeValuationRequest.model_json_schema()["properties"]
+
+    assert "nonnegative" in factorial["n"]["description"].lower()
+    assert "[2, 1000000]" in factorial["base"]["description"]
+    assert "0 <= k <= n" in binomial["n"]["description"]
+    assert "0 <= k <= n" in binomial["k"]["description"]
+    assert str(2**64 - 1) in binomial["prime"]["description"]
+
+
+def test_valuation_admission_runs_once_after_parse() -> None:
+    request = BinomialPrimeValuationRequest(n="8", k="3", prime="2")
+    first = request.admitted
+    second = request.admitted
+    assert first is second
+    assert compute_binomial_prime_valuation(request).valuation == "3"
 
 
 def test_chinese_remainder_rejects_combined_modulus_beyond_result_budget() -> None:
@@ -208,7 +228,8 @@ def test_in_process_factorization_dependencies_have_small_input_bounds() -> None
         (PositiveIntegerRequest, {"n": 10_001}),
         (NonnegativeIntegerRequest, {"n": 10_001}),
         (ModularValueRequest, {"value": "2", "modulus": 1_000_001}),
-        (FactorialValuationRequest, {"n": "1", "base": "1000001"}),
+        # Eight digits exceeds the published base digit ceiling (len("1000000")).
+        (FactorialValuationRequest, {"n": "1", "base": "10000000"}),
         (FactorizationRequest, {"value": "1" + "0" * 20}),
     ):
         with expect_validation("number_theory."):

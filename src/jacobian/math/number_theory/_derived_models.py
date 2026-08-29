@@ -13,6 +13,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._integer_models import MAX_SAFE_INTEGER
 
 MAX_VALUATION_ARGUMENT_DIGITS = 4_096
@@ -46,31 +47,32 @@ class LegendreSymbolResult(StrictModel):
 
 
 class FactorialValuationRequest(StrictModel):
-    """Arguments for the largest exponent ``e`` such that ``base**e`` divides ``n!``."""
+    """Arguments for the largest exponent ``e`` such that ``base**e`` divides ``n!``.
 
-    n: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
-    base: CanonicalInteger = Field(max_length=len(str(MAX_FACTORIAL_BASE)))
+    Semantic domain (checked once after parse): ``n`` is nonnegative and
+    ``base`` lies in ``[2, 1000000]``.
+    """
+
+    n: CanonicalInteger = Field(
+        max_length=MAX_VALUATION_ARGUMENT_DIGITS,
+        description=(
+            f"Nonnegative integer n with at most {MAX_VALUATION_ARGUMENT_DIGITS} "
+            "decimal digits."
+        ),
+    )
+    base: CanonicalInteger = Field(
+        max_length=len(str(MAX_FACTORIAL_BASE)),
+        description=f"Integer base in [2, {MAX_FACTORIAL_BASE}].",
+    )
 
     @cached_property
     def admitted(self) -> _FactorialValuationInput:
-        n = parse_canonical_integer(self.n)
-        if n < 0:
-            raise PydanticCustomError(
-                "number_theory.factorial_valuation.argument",
-                "n must be nonnegative",
-            )
-        base = parse_canonical_integer(self.base)
-        if not 2 <= base <= MAX_FACTORIAL_BASE:
-            raise PydanticCustomError(
-                "number_theory.factorial_valuation.base",
-                f"base must be between 2 and {MAX_FACTORIAL_BASE}",
-            )
-        return _FactorialValuationInput(n=n, base=base)
+        """Parse and admit the request once for the trusted kernel."""
 
-    @model_validator(mode="after")
-    def require_domain(self) -> Self:
-        _ = self.admitted
-        return self
+        return admit_factorial_valuation(
+            parse_canonical_integer(self.n),
+            parse_canonical_integer(self.base),
+        )
 
 
 class FactorialValuationResult(StrictModel):
@@ -93,40 +95,44 @@ class FactorialValuationResult(StrictModel):
 
 
 class BinomialPrimeValuationRequest(StrictModel):
-    """Arguments for the prime valuation of one binomial coefficient."""
+    """Arguments for the prime valuation of one binomial coefficient.
 
-    n: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
-    k: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
-    prime: CanonicalInteger = Field(max_length=len(str(MAX_BINOMIAL_VALUATION_PRIME)))
+    Semantic domain (checked once after parse): ``0 <= k <= n`` and ``prime`` is
+    an ordinary prime at most ``2**64 - 1`` (SymPy's deterministic primality
+    ceiling).
+    """
+
+    n: CanonicalInteger = Field(
+        max_length=MAX_VALUATION_ARGUMENT_DIGITS,
+        description=(
+            f"Nonnegative upper index n with at most {MAX_VALUATION_ARGUMENT_DIGITS} "
+            "decimal digits; must satisfy 0 <= k <= n."
+        ),
+    )
+    k: CanonicalInteger = Field(
+        max_length=MAX_VALUATION_ARGUMENT_DIGITS,
+        description=(
+            f"Nonnegative lower index k with at most {MAX_VALUATION_ARGUMENT_DIGITS} "
+            "decimal digits; must satisfy 0 <= k <= n."
+        ),
+    )
+    prime: CanonicalInteger = Field(
+        max_length=len(str(MAX_BINOMIAL_VALUATION_PRIME)),
+        description=(
+            f"Ordinary prime p in [2, {MAX_BINOMIAL_VALUATION_PRIME}] "
+            "(deterministic SymPy primality range)."
+        ),
+    )
 
     @cached_property
     def admitted(self) -> _BinomialValuationInput:
-        n = parse_canonical_integer(self.n)
-        k = parse_canonical_integer(self.k)
-        prime = parse_canonical_integer(self.prime)
-        if n < 0 or not 0 <= k <= n:
-            raise PydanticCustomError(
-                "number_theory.binomial_valuation.indices",
-                "n and k must satisfy 0 <= k <= n",
-            )
-        if not 2 <= prime <= MAX_BINOMIAL_VALUATION_PRIME:
-            raise PydanticCustomError(
-                "number_theory.binomial_valuation.prime",
-                f"prime must be between 2 and {MAX_BINOMIAL_VALUATION_PRIME}",
-            )
-        from sympy import isprime
+        """Parse and admit the request once for the trusted kernel."""
 
-        if not isprime(prime):
-            raise PydanticCustomError(
-                "number_theory.binomial_valuation.prime",
-                "prime must be prime",
-            )
-        return _BinomialValuationInput(n=n, k=k, prime=prime)
-
-    @model_validator(mode="after")
-    def require_domain(self) -> Self:
-        _ = self.admitted
-        return self
+        return admit_binomial_prime_valuation(
+            parse_canonical_integer(self.n),
+            parse_canonical_integer(self.k),
+            parse_canonical_integer(self.prime),
+        )
 
 
 class BinomialPrimeValuationResult(StrictModel):
@@ -161,6 +167,67 @@ class _BinomialValuationInput:
     prime: int
 
 
+def admit_factorial_valuation(n: int, base: int) -> _FactorialValuationInput:
+    """Admit one factorial-valuation request after structural parsing."""
+
+    if type(n) is not int or n < 0 or n >= 10**MAX_VALUATION_ARGUMENT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("n",),
+            code="number_theory.factorial_valuation.argument_bound",
+            message=(
+                "n must be a nonnegative integer with at most "
+                f"{MAX_VALUATION_ARGUMENT_DIGITS} decimal digits"
+            ),
+        )
+    if type(base) is not int or not 2 <= base <= MAX_FACTORIAL_BASE:
+        raise OperationDomainValidationError(
+            location=("base",),
+            code="number_theory.factorial_valuation.base_bound",
+            message=f"base must be between 2 and {MAX_FACTORIAL_BASE}",
+        )
+    return _FactorialValuationInput(n=n, base=base)
+
+
+def admit_binomial_prime_valuation(
+    n: int, k: int, prime: int
+) -> _BinomialValuationInput:
+    """Admit one binomial prime-valuation request after structural parsing."""
+
+    if (
+        type(n) is not int
+        or type(k) is not int
+        or n < 0
+        or not 0 <= k <= n
+        or n >= 10**MAX_VALUATION_ARGUMENT_DIGITS
+    ):
+        raise OperationDomainValidationError(
+            location=("n", "k"),
+            code="number_theory.binomial_valuation.indices",
+            message=(
+                "n and k must satisfy 0 <= k <= n and use at most "
+                f"{MAX_VALUATION_ARGUMENT_DIGITS} decimal digits"
+            ),
+        )
+    if type(prime) is not int or not 2 <= prime <= MAX_BINOMIAL_VALUATION_PRIME:
+        raise OperationDomainValidationError(
+            location=("prime",),
+            code="number_theory.binomial_valuation.prime_required",
+            message=(
+                "prime must be a prime number between 2 and "
+                f"{MAX_BINOMIAL_VALUATION_PRIME}"
+            ),
+        )
+    from sympy import isprime
+
+    if not isprime(prime):
+        raise OperationDomainValidationError(
+            location=("prime",),
+            code="number_theory.binomial_valuation.prime_required",
+            message="prime must be prime",
+        )
+    return _BinomialValuationInput(n=n, k=k, prime=prime)
+
+
 __all__ = [
     "BinomialPrimeValuationRequest",
     "BinomialPrimeValuationResult",
@@ -170,4 +237,6 @@ __all__ = [
     "FloorSquareRootResult",
     "LegendreSymbolRequest",
     "LegendreSymbolResult",
+    "admit_binomial_prime_valuation",
+    "admit_factorial_valuation",
 ]

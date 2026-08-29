@@ -16,7 +16,7 @@ from jacobian.math.combinatorics.posets.formal_concepts import (
 from jacobian.math.combinatorics.posets.formal_concepts._models import (
     ImplicationClosureRequest,
 )
-from jacobian.math.combinatorics.posets.formal_concepts.operations import (
+from jacobian.math.combinatorics.posets.formal_concepts._tools import (
     compute_implication_closure,
 )
 from jacobian.math.combinatorics.posets.formal_concepts.values import (

@@ -11,8 +11,8 @@ from jacobian.math.combinatorics.posets.formal_concepts._models import (
     EnumerateConceptsRequest,
     ObjectSubsetRequest,
 )
-from jacobian.math.combinatorics.posets.formal_concepts._tools import TOOLS
-from jacobian.math.combinatorics.posets.formal_concepts.operations import (
+from jacobian.math.combinatorics.posets.formal_concepts._tools import (
+    TOOLS,
     compute_attribute_derivation,
     compute_concept_from_attributes,
     compute_concept_from_objects,

@@ -2,22 +2,17 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import NoReturn, TypedDict
 
 from jacobian.canonical import encode_strict_json
+from jacobian.catalog.models import OperationDomainValidationError
 
+from . import _concepts
 from ._models import (
     MAX_CONCEPTS,
-    AttributeSubsetRequest,
     ClosureResult,
     ConceptLatticeResult,
     ConceptResult,
-    DerivationResult,
-    DuquenneGuiguesBasisRequest,
-    EnumerateConceptsRequest,
-    EnumerateConceptsResult,
-    ImplicationClosureRequest,
-    ObjectSubsetRequest,
 )
 from .basis import (
     CanonicalImplicationBasisResult,
@@ -41,16 +36,6 @@ __all__ = [
     "MAX_CONCEPTS",
     "attribute_closure",
     "attribute_derivation",
-    "compute_attribute_closure",
-    "compute_attribute_derivation",
-    "compute_concept_from_attributes",
-    "compute_concept_from_objects",
-    "compute_concept_lattice",
-    "compute_duquenne_guigues_basis",
-    "compute_enumerate_concepts",
-    "compute_implication_closure",
-    "compute_object_closure",
-    "compute_object_derivation",
     "concept_family_size_capped",
     "concept_from_attributes",
     "concept_from_objects",
@@ -68,16 +53,47 @@ class _Concept(TypedDict):
     intent: frozenset[int]
 
 
+def _domain_error(location: tuple[str, ...], code: str, message: str) -> NoReturn:
+    raise OperationDomainValidationError(
+        location=location,
+        code=f"formal_concept_analysis.{code}",
+        message=message,
+    )
+
+
 def _require_implication_seed(
     system: FiniteAttributeImplicationSystem,
     seed: frozenset[int],
 ) -> None:
     for attribute in seed:
         if type(attribute) is not int:
-            raise TypeError("implication seed attributes must be integers")
+            _domain_error(
+                ("seed",),
+                "seed_attribute_must_be_integer",
+                "implication seed attributes must be integers",
+            )
         if not 0 <= attribute < len(system.attributes):
-            raise ValueError(
-                "implication seed attribute is outside the declared carrier"
+            _domain_error(
+                ("seed",),
+                "seed_attribute_out_of_range",
+                "implication seed attribute is outside the declared carrier",
+            )
+
+
+def _admit_subset(context: FormalContext, subset: frozenset[int], *, side: str) -> None:
+    size = len(context.objects) if side == "object" else len(context.attributes)
+    for index in subset:
+        if type(index) is not int:
+            _domain_error(
+                (side,),
+                "subset_index_must_be_integer",
+                f"{side} subset indices must be integers",
+            )
+        if not 0 <= index < size:
+            _domain_error(
+                (side,),
+                "subset_index_out_of_range",
+                f"{side} subset index out of range",
             )
 
 
@@ -186,7 +202,10 @@ def duquenne_guigues_basis(
     needed by the recursive definition has already been considered.
     """
 
-    plan = _admit_duquenne_guigues_basis(context)
+    try:
+        plan = _admit_duquenne_guigues_basis(context)
+    except ValueError as exc:
+        _domain_error(("context",), "basis_admission_failed", str(exc))
     closure_matrix = _closure_rows_from_plan(context, plan)
     attribute_count = len(context.attributes)
     implications = tuple(
@@ -281,15 +300,8 @@ def object_derivation(ctx: FormalContext, objects: frozenset[int]) -> frozenset[
     Under standard FCA semantics, the derivation of the empty object set is
     every attribute.
     """
-    if not objects:
-        return frozenset(range(len(ctx.attributes)))
-    all_attrs: set[int] = set(range(len(ctx.attributes)))
-    for oi in objects:
-        if not 0 <= oi < len(ctx.objects):
-            raise ValueError("object index out of range")
-        attrs = {ai for o, ai in ctx.incidence if o == oi}
-        all_attrs &= attrs
-    return frozenset(all_attrs)
+    _admit_subset(ctx, objects, side="object")
+    return _concepts.object_derivation(ctx, objects)
 
 
 def attribute_derivation(
@@ -300,31 +312,59 @@ def attribute_derivation(
     Under standard FCA semantics, the derivation of the empty attribute set is
     every object.
     """
-    if not attributes:
-        return frozenset(range(len(ctx.objects)))
-    all_objs: set[int] = set(range(len(ctx.objects)))
-    for ai in attributes:
-        if not 0 <= ai < len(ctx.attributes):
-            raise ValueError("attribute index out of range")
-        objs = {o for o, a in ctx.incidence if a == ai}
-        all_objs &= objs
-    return frozenset(all_objs)
+    _admit_subset(ctx, attributes, side="attribute")
+    return _concepts.attribute_derivation(ctx, attributes)
 
 
 def object_closure(ctx: FormalContext, objects: frozenset[int]) -> frozenset[int]:
     """Return A'' = (A')'."""
-    return attribute_derivation(ctx, object_derivation(ctx, objects))
+    _admit_subset(ctx, objects, side="object")
+    return _concepts.attribute_derivation(
+        ctx, _concepts.object_derivation(ctx, objects)
+    )
+
+
+def object_closure_result(ctx: FormalContext, objects: frozenset[int]) -> ClosureResult:
+    """Return object closure data from one admitted canonical subset."""
+    _admit_subset(ctx, objects, side="object")
+    derived = _concepts.object_derivation(ctx, objects)
+    closure = _concepts.attribute_derivation(ctx, derived)
+    return ClosureResult(
+        closure=tuple(sorted(closure)),
+        derived=tuple(sorted(derived)),
+        added=tuple(sorted(closure - objects)),
+        is_closed=closure == objects,
+    )
 
 
 def attribute_closure(ctx: FormalContext, attributes: frozenset[int]) -> frozenset[int]:
     """Return B'' = (B')'."""
-    return object_derivation(ctx, attribute_derivation(ctx, attributes))
+    _admit_subset(ctx, attributes, side="attribute")
+    return _concepts.object_derivation(
+        ctx, _concepts.attribute_derivation(ctx, attributes)
+    )
+
+
+def attribute_closure_result(
+    ctx: FormalContext, attributes: frozenset[int]
+) -> ClosureResult:
+    """Return attribute closure data from one admitted canonical subset."""
+    _admit_subset(ctx, attributes, side="attribute")
+    derived = _concepts.attribute_derivation(ctx, attributes)
+    closure = _concepts.object_derivation(ctx, derived)
+    return ClosureResult(
+        closure=tuple(sorted(closure)),
+        derived=tuple(sorted(derived)),
+        added=tuple(sorted(closure - attributes)),
+        is_closed=closure == attributes,
+    )
 
 
 def concept_from_objects(ctx: FormalContext, objects: frozenset[int]) -> ConceptResult:
     """Return the unique concept (A'', A')."""
-    intent = object_derivation(ctx, objects)
-    extent = attribute_derivation(ctx, intent)
+    _admit_subset(ctx, objects, side="object")
+    intent = _concepts.object_derivation(ctx, objects)
+    extent = _concepts.attribute_derivation(ctx, intent)
     return ConceptResult(
         extent=tuple(sorted(extent)),
         intent=tuple(sorted(intent)),
@@ -335,47 +375,13 @@ def concept_from_attributes(
     ctx: FormalContext, attributes: frozenset[int]
 ) -> ConceptResult:
     """Return the unique concept (B', B'')."""
-    extent = attribute_derivation(ctx, attributes)
-    intent = object_derivation(ctx, extent)
+    _admit_subset(ctx, attributes, side="attribute")
+    extent = _concepts.attribute_derivation(ctx, attributes)
+    intent = _concepts.object_derivation(ctx, extent)
     return ConceptResult(
         extent=tuple(sorted(extent)),
         intent=tuple(sorted(intent)),
     )
-
-
-def _next_closure(
-    ctx: FormalContext, current: frozenset[int], n: int
-) -> frozenset[int] | None:
-    """Find the next closed attribute set in lectic order after *current*.
-
-    Implements Ganter's NextClosure algorithm.  The lectic order compares
-    sets by scanning from the largest element downward: A < B iff the
-    largest element where A and B differ belongs to B.
-    """
-    current_set = set(current)
-    for i in range(n - 1, -1, -1):
-        if i in current_set:
-            current_set.discard(i)
-            continue
-        # Candidate = (current intersect {0,...,i-1}) union {i}
-        candidate = {a for a in current_set if a < i}
-        candidate.add(i)
-        # closure = candidate'' (closure under the closure operator)
-        closure = object_derivation(
-            ctx, attribute_derivation(ctx, frozenset(candidate))
-        )
-        closure_set = set(closure)
-        # Check lectic condition: closure agrees with current below i,
-        # and i is in the closure (candidate is "licit-closed" up to i).
-        # The standard condition is:
-        #   closure intersect {0,...,i-1} == current intersect {0,...,i-1}  AND  i in closure
-        if i not in closure_set:
-            continue
-        if {a for a in closure_set if a < i} != {a for a in current_set if a < i}:
-            continue
-        # closure is the next closed set in lectic order
-        return frozenset(closure_set)
-    return None
 
 
 def enumerate_concepts(ctx: FormalContext) -> list[_Concept]:
@@ -389,22 +395,14 @@ def enumerate_concepts(ctx: FormalContext) -> list[_Concept]:
     operations, so the total cost is proportional to the number of concepts
     times n, not to 2^n.
     """
-    n = len(ctx.attributes)
-    concepts: list[_Concept] = []
-
-    current: frozenset[int] | None = attribute_closure(ctx, frozenset())
-    while current is not None:
-        intent = current
-        extent = attribute_derivation(ctx, intent)
-        concepts.append({"extent": extent, "intent": intent})
-        if len(concepts) > MAX_CONCEPTS:
-            raise ValueError(
-                f"concept count exceeds maximum of {MAX_CONCEPTS}; "
-                "narrow the context or reduce the number of attributes"
-            )
-        current = _next_closure(ctx, current, n)
-
-    return concepts
+    try:
+        pairs = _concepts.enumerate_concept_pairs(ctx, limit=MAX_CONCEPTS)
+    except ValueError as exc:
+        _domain_error(("context",), "concept_enumeration_admission_failed", str(exc))
+    return [
+        {"extent": frozenset(extent), "intent": frozenset(intent)}
+        for extent, intent in pairs
+    ]
 
 
 def concept_family_size_capped(ctx: FormalContext, limit: int) -> int:
@@ -416,15 +414,7 @@ def concept_family_size_capped(ctx: FormalContext, limit: int) -> int:
     overflow exactly for contexts whose worst case alone cannot prove that
     the family fits the declared budget.
     """
-    n = len(ctx.attributes)
-    count = 0
-    current: frozenset[int] | None = attribute_closure(ctx, frozenset())
-    while current is not None:
-        count += 1
-        if count > limit:
-            return count
-        current = _next_closure(ctx, current, n)
-    return count
+    return _concepts.concept_family_size_capped(ctx, limit)
 
 
 def _inclusion_order(
@@ -504,82 +494,3 @@ def _concept_lattice_from_concepts(
         top=top,
         bottom=bottom,
     )
-
-
-def compute_object_derivation(request: ObjectSubsetRequest) -> DerivationResult:
-    return DerivationResult(
-        derived=tuple(
-            sorted(object_derivation(request.context, frozenset(request.subset)))
-        )
-    )
-
-
-def compute_attribute_derivation(
-    request: AttributeSubsetRequest,
-) -> DerivationResult:
-    return DerivationResult(
-        derived=tuple(
-            sorted(attribute_derivation(request.context, frozenset(request.subset)))
-        )
-    )
-
-
-def compute_object_closure(request: ObjectSubsetRequest) -> ClosureResult:
-    objects = frozenset(request.subset)
-    derived = object_derivation(request.context, objects)
-    closure = object_closure(request.context, objects)
-    return ClosureResult(
-        closure=tuple(sorted(closure)),
-        derived=tuple(sorted(derived)),
-        added=tuple(sorted(closure - objects)),
-        is_closed=closure == objects,
-    )
-
-
-def compute_attribute_closure(request: AttributeSubsetRequest) -> ClosureResult:
-    attributes = frozenset(request.subset)
-    derived = attribute_derivation(request.context, attributes)
-    closure = attribute_closure(request.context, attributes)
-    return ClosureResult(
-        closure=tuple(sorted(closure)),
-        derived=tuple(sorted(derived)),
-        added=tuple(sorted(closure - attributes)),
-        is_closed=closure == attributes,
-    )
-
-
-def compute_implication_closure(
-    request: ImplicationClosureRequest,
-) -> ImplicationClosureResult:
-    return implication_closure(request.system, frozenset(request.seed))
-
-
-def compute_duquenne_guigues_basis(
-    request: DuquenneGuiguesBasisRequest,
-) -> CanonicalImplicationBasisResult:
-    return duquenne_guigues_basis(request.context)
-
-
-def compute_concept_from_objects(request: ObjectSubsetRequest) -> ConceptResult:
-    return concept_from_objects(request.context, frozenset(request.subset))
-
-
-def compute_concept_from_attributes(request: AttributeSubsetRequest) -> ConceptResult:
-    return concept_from_attributes(request.context, frozenset(request.subset))
-
-
-def compute_enumerate_concepts(
-    request: EnumerateConceptsRequest,
-) -> EnumerateConceptsResult:
-    concepts = enumerate_concepts(request.context)
-    pairs = tuple(
-        (tuple(sorted(concept["extent"])), tuple(sorted(concept["intent"])))
-        for concept in concepts
-    )
-    return EnumerateConceptsResult(concepts=pairs, count=len(pairs))
-
-
-def compute_concept_lattice(
-    request: EnumerateConceptsRequest,
-) -> ConceptLatticeResult:
-    return concept_lattice(request.context)

@@ -22,19 +22,83 @@ from jacobian.math.combinatorics.posets.formal_concepts.basis import (
     CanonicalImplicationBasisResult,
 )
 from jacobian.math.combinatorics.posets.formal_concepts.operations import (
-    compute_attribute_derivation,
-    compute_concept_from_attributes,
-    compute_concept_from_objects,
-    compute_concept_lattice,
-    compute_duquenne_guigues_basis,
-    compute_enumerate_concepts,
-    compute_implication_closure,
-    compute_object_closure,
-    compute_object_derivation,
+    attribute_closure_result,
+    attribute_derivation,
+    concept_from_attributes,
+    concept_from_objects,
+    concept_lattice,
+    duquenne_guigues_basis,
+    enumerate_concepts,
+    implication_closure,
+    object_closure_result,
+    object_derivation,
 )
 from jacobian.math.combinatorics.posets.formal_concepts.values import (
     ImplicationClosureResult,
 )
+
+
+def compute_object_derivation(request: ObjectSubsetRequest) -> DerivationResult:
+    return DerivationResult(
+        derived=tuple(
+            sorted(object_derivation(request.context, frozenset(request.subset)))
+        )
+    )
+
+
+def compute_attribute_derivation(
+    request: AttributeSubsetRequest,
+) -> DerivationResult:
+    return DerivationResult(
+        derived=tuple(
+            sorted(attribute_derivation(request.context, frozenset(request.subset)))
+        )
+    )
+
+
+def compute_object_closure(request: ObjectSubsetRequest) -> ClosureResult:
+    return object_closure_result(request.context, frozenset(request.subset))
+
+
+def compute_attribute_closure(request: AttributeSubsetRequest) -> ClosureResult:
+    return attribute_closure_result(request.context, frozenset(request.subset))
+
+
+def compute_implication_closure(
+    request: ImplicationClosureRequest,
+) -> ImplicationClosureResult:
+    return implication_closure(request.system, frozenset(request.seed))
+
+
+def compute_duquenne_guigues_basis(
+    request: DuquenneGuiguesBasisRequest,
+) -> CanonicalImplicationBasisResult:
+    return duquenne_guigues_basis(request.context)
+
+
+def compute_concept_from_objects(request: ObjectSubsetRequest) -> ConceptResult:
+    return concept_from_objects(request.context, frozenset(request.subset))
+
+
+def compute_concept_from_attributes(request: AttributeSubsetRequest) -> ConceptResult:
+    return concept_from_attributes(request.context, frozenset(request.subset))
+
+
+def compute_enumerate_concepts(
+    request: EnumerateConceptsRequest,
+) -> EnumerateConceptsResult:
+    concepts = enumerate_concepts(request.context)
+    pairs = tuple(
+        (tuple(sorted(concept["extent"])), tuple(sorted(concept["intent"])))
+        for concept in concepts
+    )
+    return EnumerateConceptsResult(concepts=pairs, count=len(pairs))
+
+
+def compute_concept_lattice(
+    request: EnumerateConceptsRequest,
+) -> ConceptLatticeResult:
+    return concept_lattice(request.context)
 
 
 def _op[

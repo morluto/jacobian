@@ -63,14 +63,22 @@ def test_no_private_names_in_any_public_all() -> None:
 
 
 def test_public_math_namespaces_expose_no_wire_models() -> None:
-    """Native APIs expose mathematical values and kernels, not wire requests."""
-    from jacobian import math
+    """Every declared native package excludes wire requests from its exports."""
 
-    for domain in math.__all__:
-        module = importlib.import_module(f"jacobian.math.{domain}")
+    math_root = Path(__file__).parents[3] / "src" / "jacobian" / "math"
+    modules = (
+        importlib.import_module(
+            "jacobian.math."
+            + path.parent.relative_to(math_root).as_posix().replace("/", ".")
+        )
+        for path in math_root.rglob("__init__.py")
+        if path.parent != math_root
+    )
+    for module in modules:
         assert all(
-            not name.endswith(("Request", "Input")) for name in module.__all__
-        ), f"{domain} exports a wire model"
+            not name.endswith(("Request", "Input"))
+            for name in getattr(module, "__all__", ())
+        ), f"{module.__name__} exports a wire model"
 
 
 def test_public_values_and_functions_have_one_canonical_module() -> None:

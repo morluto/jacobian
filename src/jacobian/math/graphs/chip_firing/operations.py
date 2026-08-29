@@ -406,22 +406,15 @@ def _smith_normal_form_diagonal(
 ) -> tuple[int, ...]:
     """Return the diagonal entries of the Smith normal form of an integer matrix.
 
-    Uses FLINT's diagonal-only exact integer SNF kernel.
+    Uses FLINT's diagonal-only exact integer SNF kernel in a deadline-bound
+    killable worker so expanded critical-group requests stay inside the
+    request-scoped execution envelope.
     """
-    rows = len(matrix)
-    cols = len(matrix[0]) if matrix else 0
-    if rows == 0 or cols == 0:
-        return ()
-    from flint import fmpz_mat
+    from jacobian.math.graphs.chip_firing._snf_process import (
+        smith_normal_form_diagonal,
+    )
 
-    diagonal = fmpz_mat(matrix).snf()
-    result = []
-    for i in range(min(rows, cols)):
-        val = int(diagonal[i, i])
-        if val < 0:
-            val = -val
-        result.append(val)
-    return tuple(result)
+    return smith_normal_form_diagonal(matrix)
 
 
 def _critical_group_factors(

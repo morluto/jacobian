@@ -352,6 +352,27 @@ class TestCriticalGroup:
             )
         )
 
+    def test_expanded_snf_binds_the_request_deadline(self) -> None:
+        import time
+
+        from jacobian._execution import current_request_execution, request_execution
+        from jacobian.math.graphs.chip_firing._snf_process import (
+            _SNF_WALL_SECONDS,
+            smith_normal_form_diagonal,
+        )
+
+        matrix = [[2, -1], [-1, 2]]
+        started = time.monotonic()
+        with request_execution(started_at=started):
+            diagonal = smith_normal_form_diagonal(matrix)
+            execution = current_request_execution()
+            assert execution is not None
+            assert execution.deadline == pytest.approx(
+                started + _SNF_WALL_SECONDS, abs=1e-6
+            )
+
+        assert diagonal == (1, 3)
+
     def test_critical_group_rejects_disconnected_graph(self) -> None:
         graph = _graph(
             {

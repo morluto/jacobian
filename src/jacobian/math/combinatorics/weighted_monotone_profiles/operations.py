@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.weighted_monotone_profiles._models import (
     WeightedMonotoneProfileResult,
 )
@@ -21,6 +22,12 @@ def compute_weighted_monotone_profiles(
     S_i = w_i + max_{j<i, a_j <= a_i} S_j  (increasing)
     T_i = w_i + max_{j<i, a_j >= a_i} T_j  (decreasing)
     """
+    if len(weights) != len(alphabet):
+        raise OperationDomainValidationError(
+            location=("weights",),
+            code="weighted_monotone.weight_axis",
+            message="weights must align one-for-one with the alphabet axis",
+        )
     n = len(alphabet)
     w = [wt.as_fraction() for wt in weights]
 

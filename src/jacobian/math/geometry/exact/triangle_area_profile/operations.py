@@ -55,7 +55,10 @@ def compute_triangle_area_profile(
 
     # Build sorted area classes
     area_classes = tuple(
-        (CanonicalRational.from_fraction(a), tuple(tuple(triples) for triples in area_to_triples[a]))
+        (
+            CanonicalRational.from_fraction(a),
+            tuple(area_to_triples[a]),
+        )
         for a in sorted(area_to_triples.keys())
     )
 

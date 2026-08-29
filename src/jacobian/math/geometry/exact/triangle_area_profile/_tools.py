@@ -35,10 +35,34 @@ TOOLS: MathTools = (
                 {
                     "configuration": {
                         "points": [
-                            {"label": "a", "coordinates": [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}]},
-                            {"label": "b", "coordinates": [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}]},
-                            {"label": "c", "coordinates": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}]},
-                            {"label": "d", "coordinates": [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}]},
+                            {
+                                "label": "a",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "label": "b",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "label": "c",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
+                            {
+                                "label": "d",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
                         ],
                     },
                 },

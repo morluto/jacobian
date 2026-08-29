@@ -20,10 +20,10 @@ def _config(points):
     return PointConfiguration(
         points=tuple(
             LabelledRationalPoint(
-                label=l,
+                label=_label,
                 coordinates=tuple(_cr(x) for x in coords),
             )
-            for l, coords in points
+            for _label, coords in points
         )
     )
 

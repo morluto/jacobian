@@ -35,7 +35,7 @@ class PinnedDistanceProfileResult(StrictModel):
 
 __all__ = [
     "PinnedDistanceEntry",
+    "PinnedDistancePointProfile",
     "PinnedDistanceProfileRequest",
     "PinnedDistanceProfileResult",
-    "PinnedDistancePointProfile",
 ]

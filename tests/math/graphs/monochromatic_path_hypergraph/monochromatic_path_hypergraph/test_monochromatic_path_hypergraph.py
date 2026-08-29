@@ -36,9 +36,7 @@ def test_single_color() -> None:
 
 
 def test_result_preserves_source() -> None:
-    graph = SimpleUndirectedGraph(
-        vertices=("a", "b"), edges=(("a", "b"),)
-    )
+    graph = SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),))
     colored = ColoredUndirectedGraph(graph=graph, edge_colors=("red",))
     result = construct_monochromatic_path_hypergraphs(colored)
     assert result.graph == colored

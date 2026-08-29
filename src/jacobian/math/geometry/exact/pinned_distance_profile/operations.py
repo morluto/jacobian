@@ -39,8 +39,8 @@ def compute_pinned_distance_profile(
                 continue
             coords_j = [c.as_fraction() for c in points[j].coordinates]
             sq_dist = sum(
-                (coords_i[d] - coords_j[d]) ** 2
-                for d in range(len(coords_i))
+                ((coords_i[d] - coords_j[d]) ** 2 for d in range(len(coords_i))),
+                Fraction(0),
             )
             dist_labels.append((sq_dist, points[j].label))
 
@@ -48,7 +48,7 @@ def compute_pinned_distance_profile(
 
         entries: list[PinnedDistanceEntry] = []
         for dist, group in groupby(dist_labels, key=lambda x: x[0]):
-            labels = tuple(sorted(l for _, l in group))
+            labels = tuple(sorted(label for _, label in group))
             entries.append(
                 PinnedDistanceEntry(
                     source_label=source_label,

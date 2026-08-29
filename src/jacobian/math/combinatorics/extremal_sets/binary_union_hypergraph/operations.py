@@ -15,9 +15,9 @@ __all__ = ["compute_binary_union_hypergraph"]
 def compute_binary_union_hypergraph(
     sets: tuple[tuple[int, ...], ...],
 ) -> BinaryUnionHypergraphResult:
-    """Construct the 3-uniform hypergraph of A ∪ B = C relations.
+    """Construct the 3-uniform hypergraph of A union B = C relations.
 
-    For every triple (i,j,k) of distinct indices with S_i ∪ S_j = S_k,
+    For every triple (i,j,k) of distinct indices with S_i union S_j = S_k,
     add one hyperedge.
     """
     n = len(sets)
@@ -29,12 +29,10 @@ def compute_binary_union_hypergraph(
         for j in range(i + 1, n):
             union = set(sets[i]) | set(sets[j])
             for k in range(n):
-                if k == i or k == j:
+                if k in (i, j):
                     continue
                 if set(sets[k]) == union:
-                    edges.append(
-        (f"rel_{edge_idx}", (str(i), str(j), str(k)))
-                    )
+                    edges.append((f"rel_{edge_idx}", (str(i), str(j), str(k))))
                     edge_idx += 1
 
     hypergraph = FiniteHypergraph(

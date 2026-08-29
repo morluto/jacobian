@@ -20,21 +20,23 @@ def _config(points):
     return PointConfiguration(
         points=tuple(
             LabelledRationalPoint(
-                label=l,
+                label=_label,
                 coordinates=tuple(_cr(x) for x in coords),
             )
-            for l, coords in points
+            for _label, coords in points
         )
     )
 
 
 def test_unit_square() -> None:
-    config = _config([
-        ("a", [0, 0]),
-        ("b", [1, 0]),
-        ("c", [1, 1]),
-        ("d", [0, 1]),
-    ])
+    config = _config(
+        [
+            ("a", [0, 0]),
+            ("b", [1, 0]),
+            ("c", [1, 1]),
+            ("d", [0, 1]),
+        ]
+    )
     result = compute_triangle_area_profile(config)
     assert len(result.entries) == 4  # C(4,3) = 4
     # All triangles have area 1/2
@@ -43,22 +45,26 @@ def test_unit_square() -> None:
 
 
 def test_collinear() -> None:
-    config = _config([
-        ("a", [0, 0]),
-        ("b", [1, 0]),
-        ("c", [2, 0]),
-    ])
+    config = _config(
+        [
+            ("a", [0, 0]),
+            ("b", [1, 0]),
+            ("c", [2, 0]),
+        ]
+    )
     result = compute_triangle_area_profile(config)
     assert len(result.entries) == 1
     assert result.entries[0].area.as_fraction() == Fraction(0)
 
 
 def test_right_triangle() -> None:
-    config = _config([
-        ("a", [0, 0]),
-        ("b", [3, 0]),
-        ("c", [0, 4]),
-    ])
+    config = _config(
+        [
+            ("a", [0, 0]),
+            ("b", [3, 0]),
+            ("c", [0, 4]),
+        ]
+    )
     result = compute_triangle_area_profile(config)
     assert len(result.entries) == 1
     assert result.entries[0].area.as_fraction() == Fraction(6)

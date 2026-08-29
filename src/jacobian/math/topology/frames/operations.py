@@ -6,6 +6,7 @@ from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import (
+    CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
@@ -97,12 +98,19 @@ def _gram_result(value: VectorFamily) -> GramResult:
 def _gram_result_bytes(result: GramResult) -> int:
     output_limit = CanonicalLimits().max_output_bytes
     measurement_limits = CanonicalLimits(max_output_bytes=2 * output_limit)
-    return len(
-        encode_strict_json(
-            result.model_dump(mode="json"),
-            limits=measurement_limits,
+    try:
+        return len(
+            encode_strict_json(
+                result.model_dump(mode="json"),
+                limits=measurement_limits,
+            )
         )
-    )
+    except CanonicalizationError as exc:
+        raise OperationDomainValidationError(
+            location=("vectors",),
+            code="frames.result_byte_budget",
+            message="frame operation exceeds the canonical result-byte budget",
+        ) from exc
 
 
 def _admit_frame(value: VectorFamily, *, rank: int) -> None:

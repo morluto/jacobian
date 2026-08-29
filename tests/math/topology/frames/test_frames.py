@@ -210,6 +210,15 @@ def test_dense_high_height_gram_is_rejected_before_backend_expansion() -> None:
     assert potential.potential == str(expected)
 
 
+def test_oversized_gram_measurement_is_a_domain_rejection() -> None:
+    dimension = 512
+    vectors = ((4_000_000,) * dimension,) * (MAX_VECTOR_CELLS // dimension)
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        _gram(VectorFamilyRequest(vectors=vectors))
+    assert error.value.errors()[0]["type"] == "frames.result_byte_budget"
+
+
 def test_flint_rank_rejects_nonspanning_family_above_previous_boundary() -> None:
     vector = (1,) * 32
     request = FiniteFrameRequest(vectors=(vector,) * 64)

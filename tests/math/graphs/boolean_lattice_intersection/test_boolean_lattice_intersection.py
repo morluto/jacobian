@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.boolean_lattice_intersection._models import (
     BooleanLatticeIntersectionRequest,
 )
@@ -69,9 +69,12 @@ def test_vertex_labels_are_subsets() -> None:
 
 
 def test_rejects_threshold_exceeds_n() -> None:
-    with pytest.raises(ValidationError):
-        BooleanLatticeIntersectionRequest(
-            ground_set_size=2, threshold=3, relation="INTERSECTION_EQ"
+    request = BooleanLatticeIntersectionRequest(
+        ground_set_size=2, threshold=3, relation="INTERSECTION_EQ"
+    )
+    with pytest.raises(OperationDomainValidationError):
+        construct_boolean_lattice_intersection_graph(
+            request.ground_set_size, request.threshold, request.relation
         )
 
 
@@ -90,5 +93,10 @@ def test_n8_is_the_carrier_boundary() -> None:
 
 
 def test_native_rejects_negative_ground_set_size() -> None:
-    with pytest.raises(ValueError, match="between 0"):
+    with pytest.raises(OperationDomainValidationError, match="between 0"):
         construct_boolean_lattice_intersection_graph(-1, 0, "INTERSECTION_EQ")
+
+
+def test_native_rejects_invalid_relation_before_enumeration() -> None:
+    with pytest.raises(OperationDomainValidationError, match="relation"):
+        construct_boolean_lattice_intersection_graph(8, 0, "INVALID")  # type: ignore[arg-type]

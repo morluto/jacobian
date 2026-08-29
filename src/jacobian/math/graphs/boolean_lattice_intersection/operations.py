@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from pydantic_core import PydanticCustomError
 
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.boolean_lattice_intersection._models import (
     BooleanLatticeIntersectionResult,
@@ -13,6 +16,70 @@ from jacobian.math.graphs.boolean_lattice_intersection._models import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 __all__ = ["construct_boolean_lattice_intersection_graph"]
+
+
+@dataclass(frozen=True, slots=True)
+class BooleanLatticeIntersectionAdmission:
+    """The exact bounded graph construction shared by admission and execution."""
+
+    vertices: tuple[str, ...]
+    edges: tuple[tuple[str, str], ...]
+
+
+def _admit_boolean_lattice_intersection(
+    ground_set_size: int,
+    threshold: int,
+    relation: IntersectionRelation,
+) -> BooleanLatticeIntersectionAdmission:
+    try:
+        _validate_intersection_request(ground_set_size, threshold, relation)
+    except PydanticCustomError as error:
+        raise OperationDomainValidationError(
+            location=(), code=error.type, message=str(error)
+        ) from error
+
+    subsets = _all_subsets(ground_set_size)
+    vertices = tuple(_subset_label(subset) for subset in subsets)
+    edges: list[tuple[str, str]] = []
+    for left_index, left in enumerate(subsets):
+        left_label = vertices[left_index]
+        for right in subsets[left_index + 1 :]:
+            right_label = _subset_label(right)
+            intersection_size = len(left & right)
+            if relation == "INTERSECTION_EQ":
+                adjacent = intersection_size == threshold
+            elif relation == "INTERSECTION_LT":
+                adjacent = intersection_size < threshold
+            else:
+                adjacent = intersection_size > threshold
+            if adjacent:
+                edges.append(
+                    (min(left_label, right_label), max(left_label, right_label))
+                )
+    canonical_edges = tuple(edges)
+    payload = {
+        "ground_set_size": ground_set_size,
+        "threshold": threshold,
+        "relation": relation,
+        "graph": {
+            "vertices": list(vertices),
+            "edges": [list(edge) for edge in canonical_edges],
+        },
+    }
+    try:
+        if len(encode_strict_json(payload)) > CanonicalLimits().max_output_bytes:
+            raise OperationDomainValidationError(
+                location=(),
+                code="boolean_lattice.result_bytes_exceeded",
+                message="the Boolean-lattice graph exceeds the canonical output-byte limit",
+            )
+    except ValueError as error:
+        raise OperationDomainValidationError(
+            location=(),
+            code="boolean_lattice.result_not_canonical",
+            message="the Boolean-lattice graph cannot be represented in canonical JSON",
+        ) from error
+    return BooleanLatticeIntersectionAdmission(vertices, canonical_edges)
 
 
 def construct_boolean_lattice_intersection_graph(
@@ -26,43 +93,15 @@ def construct_boolean_lattice_intersection_graph(
     An edge joins two distinct subsets when their intersection size
     satisfies the declared relation with the threshold.
     """
-    try:
-        _validate_intersection_request(ground_set_size, threshold, relation)
-    except PydanticCustomError as error:
-        raise OperationDomainValidationError(
-            location=(), code=error.type, message=str(error)
-        ) from error
-
-    n = ground_set_size
-    all_subsets = [_subset_label(s) for s in _all_subsets(n)]
-
-    edges: list[tuple[str, str]] = []
-    for i in range(len(all_subsets)):
-        si = _subset_from_label(all_subsets[i])
-        for j in range(i + 1, len(all_subsets)):
-            sj = _subset_from_label(all_subsets[j])
-            intersection_size = len(si & sj)
-            if relation == "INTERSECTION_EQ":
-                adjacent = intersection_size == threshold
-            elif relation == "INTERSECTION_LT":
-                adjacent = intersection_size < threshold
-            elif relation == "INTERSECTION_GT":
-                adjacent = intersection_size > threshold
-            else:
-                adjacent = False
-            if adjacent:
-                a, b = all_subsets[i], all_subsets[j]
-                if a < b:
-                    edges.append((a, b))
-                else:
-                    edges.append((b, a))
-
-    graph = SimpleUndirectedGraph(
-        vertices=tuple(all_subsets),
-        edges=tuple(edges),
+    admission = _admit_boolean_lattice_intersection(
+        ground_set_size, threshold, relation
     )
-    return BooleanLatticeIntersectionResult(
-        ground_set_size=n,
+    graph = SimpleUndirectedGraph(
+        vertices=admission.vertices,
+        edges=admission.edges,
+    )
+    return BooleanLatticeIntersectionResult.model_construct(
+        ground_set_size=ground_set_size,
         threshold=threshold,
         relation=relation,
         graph=graph,
@@ -82,10 +121,3 @@ def _subset_label(subset: frozenset[int]) -> str:
     if not subset:
         return "{}"
     return "{" + ",".join(str(i) for i in sorted(subset)) + "}"
-
-
-def _subset_from_label(label: str) -> frozenset[int]:
-    if label == "{}":
-        return frozenset()
-    inner = label[1:-1]
-    return frozenset(int(x) for x in inner.split(","))

@@ -62,6 +62,7 @@ class BooleanLatticeIntersectionRequest(StrictModel):
     threshold: int = Field(ge=0)
     relation: IntersectionRelation
 
+
 class BooleanLatticeIntersectionResult(StrictModel):
     """The Boolean-lattice intersection graph."""
 
@@ -69,6 +70,7 @@ class BooleanLatticeIntersectionResult(StrictModel):
     threshold: int
     relation: IntersectionRelation
     graph: SimpleUndirectedGraph
+
 
 __all__ = [
     "MAX_GROUND_SET_SIZE",

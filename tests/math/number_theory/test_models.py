@@ -4,14 +4,14 @@ import pytest
 from tests.math.number_theory._validation import expect_validation
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory._derived import (
+    compute_floor_square_root,
+    compute_legendre_symbol,
+)
 from jacobian.math.number_theory._derived_models import (
     FactorialValuationRequest,
     FloorSquareRootRequest,
     LegendreSymbolRequest,
-)
-from jacobian.math.number_theory._derived_operations import (
-    compute_floor_square_root,
-    compute_legendre_symbol,
 )
 from jacobian.math.number_theory._direct_factorization_models import (
     MAX_DIRECT_FACTORIZATION_DIGITS,

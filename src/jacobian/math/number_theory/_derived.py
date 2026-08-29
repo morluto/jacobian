@@ -9,12 +9,26 @@ from jacobian.math.number_theory._derived_models import (
     LegendreSymbolRequest,
     LegendreSymbolResult,
 )
-from jacobian.math.number_theory._derived_operations import (
-    compute_factorial_valuation,
-    compute_floor_square_root,
-    compute_legendre_symbol,
-)
 from jacobian.math.number_theory._support import number_theory_operation
+from jacobian.math.number_theory.operations import (
+    factorial_valuation,
+    floor_square_root,
+    legendre_symbol,
+)
+
+
+def compute_floor_square_root(request: FloorSquareRootRequest) -> FloorSquareRootResult:
+    return floor_square_root(request.n)
+
+
+def compute_legendre_symbol(request: LegendreSymbolRequest) -> LegendreSymbolResult:
+    return legendre_symbol(request.a, request.prime)
+
+
+def compute_factorial_valuation(
+    request: FactorialValuationRequest,
+) -> FactorialValuationResult:
+    return factorial_valuation(request.n, request.base)
 
 DERIVED_NUMBER_THEORY_OPERATIONS = (
     number_theory_operation(

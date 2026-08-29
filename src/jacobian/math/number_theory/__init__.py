@@ -6,7 +6,10 @@ from jacobian.math.number_theory._prime_shift_models import PrimeShiftProfileRes
 from jacobian.math.number_theory._prime_shift_operations import prime_shift_profile
 from jacobian.math.number_theory.operations import (
     euler_totient,
+    factorial_valuation,
+    floor_square_root,
     is_prime,
+    legendre_symbol,
     mobius,
     next_prime,
     nth_prime,
@@ -21,7 +24,10 @@ __all__ = [
     "PrimeShiftProfileResult",
     "count_friable",
     "euler_totient",
+    "factorial_valuation",
+    "floor_square_root",
     "is_prime",
+    "legendre_symbol",
     "mobius",
     "next_prime",
     "nth_prime",

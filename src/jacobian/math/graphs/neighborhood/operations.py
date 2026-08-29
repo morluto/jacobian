@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.math.graphs.neighborhood._bounds import admit_open_neighborhood
+from jacobian.math.graphs.neighborhood._bounds import (
+    OpenNeighborhoodAdmission,
+    admit_open_neighborhood,
+)
 from jacobian.math.graphs.neighborhood._models import NeighborhoodResult
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -18,7 +21,16 @@ def open_neighborhood(
     The open neighbourhood of a vertex set S consists of all vertices
     outside S that are adjacent to at least one member of S.
     """
-    admission = admit_open_neighborhood(graph, selected_vertices)
+    return _open_neighborhood_from_admission(
+        graph, admit_open_neighborhood(graph, selected_vertices)
+    )
+
+
+def _open_neighborhood_from_admission(
+    graph: SimpleUndirectedGraph,
+    admission: OpenNeighborhoodAdmission,
+) -> NeighborhoodResult:
+    """Build the result from one already-computed mathematical admission."""
     return NeighborhoodResult(
         graph=graph,
         selected_vertices=admission.selected_vertices,

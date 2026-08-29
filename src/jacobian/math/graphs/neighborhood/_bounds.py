@@ -11,7 +11,10 @@ from jacobian.canonical import (
     strict_json_object_size,
 )
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,7 +23,6 @@ class OpenNeighborhoodAdmission:
 
     selected_vertices: tuple[str, ...]
     neighborhood: tuple[str, ...]
-    output_bytes: int
 
 
 def _encoded_size(value: object, *, location: tuple[str, ...]) -> int:
@@ -40,7 +42,7 @@ def admit_open_neighborhood(
     graph: SimpleUndirectedGraph,
     selected_vertices: tuple[str, ...],
 ) -> OpenNeighborhoodAdmission:
-    """Normalize one selected set and reject an unrepresentable exact result."""
+    """Normalize one selected set and admit its exact mathematical result."""
 
     if not isinstance(graph, SimpleUndirectedGraph):
         raise TypeError("open_neighborhood expects a SimpleUndirectedGraph")
@@ -48,6 +50,15 @@ def admit_open_neighborhood(
         not isinstance(vertex, str) for vertex in selected_vertices
     ):
         raise TypeError("selected_vertices must be a tuple of strings")
+    if len(selected_vertices) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+        raise OperationDomainValidationError(
+            location=("selected_vertices",),
+            code="graph.open_neighborhood.selected_vertices_bound",
+            message=(
+                "open-neighbourhood selection supports at most "
+                f"{MAX_INDEXED_SIMPLE_GRAPH_VERTICES} raw vertices"
+            ),
+        )
 
     selected_set = set(selected_vertices)
     unknown = selected_set.difference(graph.vertices)
@@ -67,12 +78,25 @@ def admit_open_neighborhood(
             neighbors.add(left)
     neighborhood = tuple(vertex for vertex in graph.vertices if vertex in neighbors)
 
+    return OpenNeighborhoodAdmission(
+        selected_vertices=selected,
+        neighborhood=neighborhood,
+    )
+
+
+def require_open_neighborhood_output_budget(
+    graph: SimpleUndirectedGraph,
+    selected_vertices: tuple[str, ...],
+    neighborhood: tuple[str, ...],
+) -> None:
+    """Reject a result that cannot cross the canonical transport boundary."""
+
     graph_bytes = _encoded_size(
         graph.model_dump(mode="json"),
         location=("graph",),
     )
     selected_bytes = _encoded_size(
-        list(selected),
+        list(selected_vertices),
         location=("selected_vertices",),
     )
     neighborhood_bytes = _encoded_size(
@@ -98,11 +122,9 @@ def admit_open_neighborhood(
             ),
         )
 
-    return OpenNeighborhoodAdmission(
-        selected_vertices=selected,
-        neighborhood=neighborhood,
-        output_bytes=output_bytes,
-    )
 
-
-__all__ = ["OpenNeighborhoodAdmission", "admit_open_neighborhood"]
+__all__ = [
+    "OpenNeighborhoodAdmission",
+    "admit_open_neighborhood",
+    "require_open_neighborhood_output_budget",
+]

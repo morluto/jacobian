@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import pytest
 
 from jacobian.canonical import CanonicalLimits, encode_strict_json
@@ -9,10 +11,15 @@ from jacobian.math.graphs.neighborhood._models import (
 )
 from jacobian.math.graphs.neighborhood._tools import compute_open_neighborhood
 from jacobian.math.graphs.neighborhood.operations import open_neighborhood
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 
-def _graph(vertices, edges):
+def _graph(
+    vertices: Sequence[str], edges: Sequence[tuple[str, str]]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(
         vertices=tuple(vertices),
         edges=tuple((a, b) for a, b in edges),
@@ -108,6 +115,30 @@ def test_native_operation_rejects_nonexistent_vertex() -> None:
         open_neighborhood(g, ("c",))
 
 
+def test_native_operation_rejects_an_oversized_raw_selection_before_hashing() -> None:
+    g = _graph(["a"], ())
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=(f"at most {MAX_INDEXED_SIMPLE_GRAPH_VERTICES} raw vertices"),
+    ):
+        open_neighborhood(g, ("a",) * (MAX_INDEXED_SIMPLE_GRAPH_VERTICES + 1))
+
+
+def test_catalog_request_rejects_an_oversized_raw_selection() -> None:
+    g = _graph(["a"], ())
+    with pytest.raises(ValueError, match="Tuple should have at most"):
+        NeighborhoodRequest(
+            graph=g,
+            selected_vertices=("a",) * (MAX_INDEXED_SIMPLE_GRAPH_VERTICES + 1),
+        )
+
+
+def test_catalog_request_reuses_selection_admission() -> None:
+    g = _graph(["a", "b"], [("a", "b")])
+    with pytest.raises(ValueError, match="every selected vertex"):
+        NeighborhoodRequest(graph=g, selected_vertices=("c",))
+
+
 def test_selected_vertices_are_normalized_as_a_set_in_source_order() -> None:
     g = _graph(["a", "b", "c"], [("a", "c"), ("b", "c")])
     result = open_neighborhood(g, ("b", "a", "b"))
@@ -162,6 +193,9 @@ def test_rejects_result_that_would_exceed_canonical_output_budget() -> None:
         len(encode_strict_json(request.model_dump(mode="json")))
         <= CanonicalLimits().max_input_bytes
     )
+
+    native_result = open_neighborhood(g, ("a",))
+    assert native_result.neighborhood == (long_label,)
 
     with pytest.raises(
         OperationDomainValidationError,

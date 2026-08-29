@@ -14,6 +14,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability._distribution import (
     MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS,
     MAX_FINITE_DISTRIBUTION_ATOMS,
+    FiniteConvolutionPowerRequest,
     FiniteConvolutionPowerResult,
     FiniteDistributionAtom,
     FiniteRationalDistribution,
@@ -21,9 +22,11 @@ from jacobian.math.probability._distribution import (
 from jacobian.math.probability.operations import (
     MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS,
     _admit_convolution_peak,
+    condition,
     convolution,
     convolution_peak,
     convolution_power,
+    event_probability,
 )
 
 
@@ -163,6 +166,49 @@ def test_odd_square_source_case_exceeds_the_binary_output_ceiling() -> None:
         FiniteConvolutionPowerResult.model_validate_json(result.model_dump_json())
         == result
     )
+
+
+def test_widened_power_result_composes_into_finite_distribution_consumers() -> None:
+    powered = convolution_power(_fair_bit(), 430)
+    assert len(powered.distribution.atoms) > MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS
+
+    identity = convolution_power(powered.distribution, 1)
+    assert identity.source == powered.distribution
+    assert identity.distribution == powered.distribution
+
+    masses = _mass_map(powered.distribution)
+    peak = convolution_peak(powered.distribution, 1)
+    maximum = max(masses.values())
+    assert peak.maximum_probability.as_fraction() == maximum
+    assert tuple(value.as_fraction() for value in peak.maximizing_values) == tuple(
+        value for value, probability in masses.items() if probability == maximum
+    )
+
+    atom = powered.distribution.atoms[0]
+    event = event_probability(powered.distribution, (atom.value,))
+    assert event.event_probability == atom.probability
+    assert event.selected_atoms == (atom,)
+
+    conditioned = condition(powered.distribution, (atom.value,))
+    assert _mass_map(conditioned.distribution) == {atom.value.as_fraction(): Fraction(1)}
+
+    replayed = FiniteConvolutionPowerRequest.model_validate(
+        {
+            "distribution": powered.distribution.model_dump(mode="json"),
+            "exponent": 1,
+        }
+    )
+    assert (
+        convolution_power(replayed.distribution, replayed.exponent).distribution
+        == powered.distribution
+    )
+
+    degenerate = _distribution(((Fraction(0), Fraction(1)),))
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=rf"{MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS}-atom output bound",
+    ):
+        convolution(powered.distribution, degenerate)
 
 
 def test_wider_canonical_carrier_does_not_widen_binary_convolution() -> None:

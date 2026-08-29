@@ -44,7 +44,6 @@ from jacobian.math.probability._gaussian import (
 )
 from jacobian.math.probability._gaussian_moments import gaussian_univariate_moment
 from jacobian.math.probability._models import (
-    MAX_INPUT_RATIONAL_DIGITS,
     MAX_RESULT_RATIONAL_DIGITS,
     _require_bounded_fraction,
     _require_strictly_increasing,
@@ -86,18 +85,31 @@ def _complex_wire(value: tuple[Any, Any]) -> ExactComplexRational:
     return ExactComplexRational(real=_wire(value[0]), imaginary=_wire(value[1]))
 
 
+def _support_values(distribution: FiniteRationalDistribution) -> tuple[Fraction, ...]:
+    """Return canonical support. The carrier already validated the law."""
+
+    return tuple(atom.value.as_fraction() for atom in distribution.atoms)
+
+
+def _require_atom_envelope(
+    count: int,
+    *,
+    limit: int,
+    location: tuple[str, ...],
+    code: str,
+    message: str,
+) -> None:
+    if count > limit:
+        raise OperationDomainValidationError(
+            location=location,
+            code=code,
+            message=message,
+        )
+
+
 def _admit_distribution(
     atoms: tuple[FiniteDistributionAtom, ...], *, require_canonical: bool
 ) -> tuple[Fraction, ...]:
-    if len(atoms) > MAX_FINITE_INPUT_ATOMS:
-        raise OperationDomainValidationError(
-            location=("atoms",),
-            code="probability.distribution.atom_bound",
-            message=(
-                "finite-distribution operations accept at most "
-                f"{MAX_FINITE_INPUT_ATOMS} source atoms"
-            ),
-        )
     try:
         return require_input_distribution(atoms, require_canonical=require_canonical)
     except ValueError as exc:
@@ -114,13 +126,23 @@ def _admit_event(
     *,
     require_positive: bool,
 ) -> None:
-    support = set(_admit_distribution(distribution.atoms, require_canonical=True))
+    _require_atom_envelope(
+        len(event_values),
+        limit=MAX_FINITE_INPUT_ATOMS,
+        location=("event_values",),
+        code="probability.event.atom_bound",
+        message=(
+            "finite-event operations accept at most "
+            f"{MAX_FINITE_INPUT_ATOMS} selected atoms"
+        ),
+    )
+    support = set(_support_values(distribution))
     try:
         event = _require_strictly_increasing(event_values, label="finite event values")
         for value in event_values:
             require_bounded_rational(
                 value,
-                max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
                 label="finite event value",
             )
         if not set(event).issubset(support):
@@ -153,7 +175,17 @@ def _admit_pushforward(
     distribution: FiniteRationalDistribution,
     mapping: tuple[FinitePushforwardMapEntry, ...],
 ) -> None:
-    source_values = _admit_distribution(distribution.atoms, require_canonical=True)
+    _require_atom_envelope(
+        len(distribution.atoms),
+        limit=MAX_FINITE_INPUT_ATOMS,
+        location=("mapping",),
+        code="probability.pushforward.atom_bound",
+        message=(
+            "finite pushforward exceeds the "
+            f"{MAX_FINITE_INPUT_ATOMS}-contribution ledger bound"
+        ),
+    )
+    source_values = _support_values(distribution)
     try:
         mapping_sources = tuple(item.source.as_fraction() for item in mapping)
         if mapping_sources != source_values:
@@ -164,12 +196,12 @@ def _admit_pushforward(
         for atom, item in zip(distribution.atoms, mapping, strict=True):
             require_bounded_rational(
                 item.source,
-                max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
                 label="pushforward source",
             )
             require_bounded_rational(
                 item.target,
-                max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
                 label="pushforward target",
             )
             target = item.target.as_fraction()
@@ -199,8 +231,6 @@ def _admit_convolution(
     left: FiniteRationalDistribution,
     right: FiniteRationalDistribution,
 ) -> None:
-    _admit_distribution(left.atoms, require_canonical=True)
-    _admit_distribution(right.atoms, require_canonical=True)
     if len(left.atoms) * len(right.atoms) > MAX_FINITE_CONVOLUTION_PAIRS:
         raise OperationDomainValidationError(
             location=("left", "right"),
@@ -293,7 +323,7 @@ def _plan_convolution_power(
                 f"{MAX_FINITE_CONVOLUTION_POWER}"
             ),
         )
-    values = _admit_distribution(distribution.atoms, require_canonical=True)
+    values = _support_values(distribution)
     positive = tuple(
         (value, atom.probability.as_fraction())
         for value, atom in zip(values, distribution.atoms, strict=True)
@@ -511,6 +541,16 @@ def raw_moment(
 
     if type(order) is not int or not 0 <= order <= 128:
         raise ValueError("raw moment order must be between 0 and 128")
+    _require_atom_envelope(
+        len(atoms),
+        limit=MAX_FINITE_INPUT_ATOMS,
+        location=("atoms",),
+        code="probability.raw_moment.atom_bound",
+        message=(
+            "finite raw moments accept at most "
+            f"{MAX_FINITE_INPUT_ATOMS} source atoms"
+        ),
+    )
     _admit_distribution(atoms, require_canonical=False)
     contributions: list[FiniteRawMomentContribution] = []
     total = fmpq(0)

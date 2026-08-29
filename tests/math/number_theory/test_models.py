@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import math
+
 import pytest
 from tests.math.number_theory._validation import expect_validation
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._derived import (
+    compute_binomial_prime_valuation,
+    compute_factorial_valuation,
     compute_floor_square_root,
     compute_legendre_symbol,
 )
 from jacobian.math.number_theory._derived_models import (
+    BinomialPrimeValuationRequest,
     FactorialValuationRequest,
     FloorSquareRootRequest,
     LegendreSymbolRequest,
@@ -96,6 +101,79 @@ def test_killable_arithmetic_function_request_admits_safe_integer_scale() -> Non
     assert ArithmeticFunctionRequest(n=MAX_SAFE_INTEGER).n == MAX_SAFE_INTEGER
 
 
+def test_factorial_valuation_accepts_large_canonical_argument() -> None:
+    n = 10**100
+    result = compute_factorial_valuation(FactorialValuationRequest(n=str(n), base="2"))
+
+    assert result.n == str(n)
+    assert int(result.valuation) == n - n.bit_count()
+
+
+@pytest.mark.parametrize(("n", "k", "prime", "expected"), ((8, 3, 2, 3), (10, 3, 3, 1)))
+def test_scalar_binomial_prime_valuation(
+    n: int, k: int, prime: int, expected: int
+) -> None:
+    result = compute_binomial_prime_valuation(
+        BinomialPrimeValuationRequest(n=str(n), k=str(k), prime=str(prime))
+    )
+
+    assert result.valuation == str(expected)
+
+
+def test_source_scale_binomial_valuation_matches_factorial_identity() -> None:
+    n, k, prime = 99_999_937, 40_000_001, 2
+    result = compute_binomial_prime_valuation(
+        BinomialPrimeValuationRequest(n=str(n), k=str(k), prime=str(prime))
+    )
+
+    def factorial_exponent(value: int) -> int:
+        return value - value.bit_count()
+
+    assert int(result.valuation) == (
+        factorial_exponent(n) - factorial_exponent(k) - factorial_exponent(n - k)
+    )
+
+
+def test_kummer_carries_match_direct_binomial_factorization() -> None:
+    for n in range(21):
+        for k in range(n + 1):
+            for prime in (2, 3, 5, 7):
+                result = compute_binomial_prime_valuation(
+                    BinomialPrimeValuationRequest(n=str(n), k=str(k), prime=str(prime))
+                )
+                value = math.comb(n, k)
+                expected = 0
+                while value % prime == 0:
+                    value //= prime
+                    expected += 1
+                assert result.valuation == str(expected)
+
+
+def test_scalar_binomial_valuation_rejects_composite_base() -> None:
+    request = BinomialPrimeValuationRequest(n="20", k="7", prime="4")
+    with pytest.raises(OperationDomainValidationError, match="prime must be prime"):
+        compute_binomial_prime_valuation(request)
+
+
+def test_valuation_request_schemas_publish_semantic_bounds() -> None:
+    factorial = FactorialValuationRequest.model_json_schema()["properties"]
+    binomial = BinomialPrimeValuationRequest.model_json_schema()["properties"]
+
+    assert "nonnegative" in factorial["n"]["description"].lower()
+    assert "[2, 1000000]" in factorial["base"]["description"]
+    assert "0 <= k <= n" in binomial["n"]["description"]
+    assert "0 <= k <= n" in binomial["k"]["description"]
+    assert str(2**64 - 1) in binomial["prime"]["description"]
+
+
+def test_valuation_admission_follows_copied_request_fields() -> None:
+    request = BinomialPrimeValuationRequest(n="8", k="3", prime="2")
+    assert compute_binomial_prime_valuation(request).valuation == "3"
+    copied = request.model_copy(update={"n": "20", "k": "7"})
+    assert compute_binomial_prime_valuation(copied).valuation == "4"
+    assert copied.n == "20"
+
+
 def test_chinese_remainder_rejects_combined_modulus_beyond_result_budget() -> None:
     """64 pairwise-coprime six-digit moduli each fit the per-modulus bound
     while their LCM exceeds the declared 256-character ``BoundedInteger``
@@ -149,7 +227,8 @@ def test_in_process_factorization_dependencies_have_small_input_bounds() -> None
         (PositiveIntegerRequest, {"n": 10_001}),
         (NonnegativeIntegerRequest, {"n": 10_001}),
         (ModularValueRequest, {"value": "2", "modulus": 1_000_001}),
-        (FactorialValuationRequest, {"n": 1, "base": 1_000_001}),
+        # Eight digits exceeds the published base digit ceiling (len("1000000")).
+        (FactorialValuationRequest, {"n": "1", "base": "10000000"}),
         (FactorizationRequest, {"value": "1" + "0" * 20}),
     ):
         with expect_validation("number_theory."):

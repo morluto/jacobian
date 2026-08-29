@@ -29,7 +29,6 @@ from jacobian.math.number_theory.prime_affine_forms._models import (
     PrimeTupleResidueRow,
     _require_prime,
     _require_prime_set,
-    _run_admission,
     _source_character_upper_bound,
     _summary_character_upper_bound,
     _validation_error,
@@ -81,10 +80,10 @@ class PrimeTupleLocalFactorRequest(StrictModel):
     prime: StrictInt = Field(ge=2)
 
 
-def _admit_local_factor(request: PrimeTupleLocalFactorRequest) -> None:
-    _require_prime(request.prime, maximum=MAX_LOCAL_PROFILE_PRIME)
-    _require_factor_output(request.source, request.prime)
-    work = 6 * request.source.form_count + 2 * request.prime
+def _admit_local_factor(source: PrimeAffineTuple, prime: int) -> None:
+    _require_prime(prime, maximum=MAX_LOCAL_PROFILE_PRIME)
+    _require_factor_output(source, prime)
+    work = 6 * source.form_count + 2 * prime
     if work > MAX_LOCAL_PROFILE_WORK:
         raise _validation_error(
             f"local profile needs {work} bounded steps, "
@@ -129,29 +128,28 @@ class PrimeTupleLocalFactorResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: PrimeTupleLocalFactorRequest,
         *,
+        source: PrimeAffineTuple,
+        prime: int,
         bad: tuple[tuple[int, tuple[str, ...]], ...],
     ) -> Self:
         bad_by_residue = dict(bad)
         bad_count = len(bad)
         return cls.model_construct(
-            source=request.source,
-            prime=request.prime,
+            source=source,
+            prime=prime,
             residue_rows=tuple(
                 PrimeTupleResidueRow(
                     residue=residue,
                     vanishing_form_ids=bad_by_residue.get(residue, ()),
                 )
-                for residue in range(request.prime)
+                for residue in range(prime)
             ),
             bad_count=bad_count,
-            valid_count=request.prime - bad_count,
-            locally_obstructed=bad_count == request.prime,
+            valid_count=prime - bad_count,
+            locally_obstructed=bad_count == prime,
             factor=CanonicalRational.from_fraction(
-                local_factor_from_bad_count(
-                    request.source.form_count, request.prime, bad_count
-                )
+                local_factor_from_bad_count(source.form_count, prime, bad_count)
             ),
         )
 
@@ -170,18 +168,16 @@ class PrimeTupleLocalFactorsRequest(StrictModel):
     )
 
 
-def _admit_local_factors(request: PrimeTupleLocalFactorsRequest) -> None:
-    _require_prime_set(request.primes, maximum=MAX_BATCH_PRIME)
-    root_cells = request.source.form_count * len(request.primes)
+def _admit_local_factors(source: PrimeAffineTuple, primes: tuple[int, ...]) -> None:
+    _require_prime_set(primes, maximum=MAX_BATCH_PRIME)
+    root_cells = source.form_count * len(primes)
     root_work = 6 * root_cells
     if root_work > MAX_BATCH_ROOT_WORK:
         raise _validation_error(
             f"local-factor computation needs {root_work} root "
             f"steps, exceeding {MAX_BATCH_ROOT_WORK}"
         )
-    digit_bounds = tuple(
-        _factor_digit_upper_bound(request.source, prime) for prime in request.primes
-    )
+    digit_bounds = tuple(_factor_digit_upper_bound(source, prime) for prime in primes)
     if any(bound > MAX_FACTOR_COMPONENT_DIGITS for bound in digit_bounds):
         raise _validation_error(
             "one local factor exceeds the exact rational component-digit bound"
@@ -192,12 +188,9 @@ def _admit_local_factors(request: PrimeTupleLocalFactorsRequest) -> None:
             f"digit bound {MAX_FACTOR_PRODUCT_DIGITS}"
         )
     estimated_characters = (
-        _source_character_upper_bound(request.source)
-        + sum(
-            _summary_character_upper_bound(request.source, prime)
-            for prime in request.primes
-        )
-        + 128 * len(request.primes)
+        _source_character_upper_bound(source)
+        + sum(_summary_character_upper_bound(source, prime) for prime in primes)
+        + 128 * len(primes)
         + 4 * sum(digit_bounds)
         + 256
     )
@@ -244,61 +237,20 @@ class FinitePrimeTupleFactorProduct(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: PrimeTupleLocalFactorsRequest,
         *,
+        source: PrimeAffineTuple,
+        primes: tuple[CompactPrime, ...],
         rows: tuple[PrimeTupleLocalFactorRow, ...],
         product: Fraction,
         first_obstruction: int | None,
     ) -> Self:
         return cls.model_construct(
-            source=request.source,
-            primes=request.primes,
+            source=source,
+            primes=primes,
             rows=rows,
             product=CanonicalRational.from_fraction(product),
             first_obstructing_prime=first_obstruction,
         )
-
-
-def compute_local_factor(
-    request: PrimeTupleLocalFactorRequest,
-) -> PrimeTupleLocalFactorResult:
-    """Return one complete local residue partition and exact factor."""
-
-    _run_admission(lambda: _admit_local_factor(request))
-    return PrimeTupleLocalFactorResult._from_kernel(
-        request, bad=local_bad_residues(request.source, request.prime)
-    )
-
-
-def compute_local_factors(
-    request: PrimeTupleLocalFactorsRequest,
-) -> FinitePrimeTupleFactorProduct:
-    """Return compact exact local factors over one finite prime set."""
-
-    _run_admission(lambda: _admit_local_factors(request))
-    product = Fraction(1, 1)
-    rows: list[PrimeTupleLocalFactorRow] = []
-    first_obstruction: int | None = None
-    for prime in request.primes:
-        summary = local_summary(request.source, prime)
-        factor = local_factor_from_bad_count(
-            request.source.form_count, prime, summary.bad_count
-        )
-        rows.append(
-            PrimeTupleLocalFactorRow(
-                summary=summary,
-                factor=CanonicalRational.from_fraction(factor),
-            )
-        )
-        product *= factor
-        if first_obstruction is None and summary.valid_count == 0:
-            first_obstruction = prime
-    return FinitePrimeTupleFactorProduct._from_kernel(
-        request,
-        rows=tuple(rows),
-        product=product,
-        first_obstruction=first_obstruction,
-    )
 
 
 __all__ = [
@@ -307,7 +259,5 @@ __all__ = [
     "PrimeTupleLocalFactorResult",
     "PrimeTupleLocalFactorRow",
     "PrimeTupleLocalFactorsRequest",
-    "compute_local_factor",
-    "compute_local_factors",
     "local_summary",
 ]

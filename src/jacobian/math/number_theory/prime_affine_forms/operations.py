@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from math import prod
 
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.affine_forms.values import (
     MAX_AFFINE_COMPONENT_DIGITS,
@@ -15,26 +17,27 @@ from jacobian.math.number_theory.prime_affine_forms._admissibility import (
 )
 from jacobian.math.number_theory.prime_affine_forms._interval import (
     MAX_INTERVAL_EVALUATIONS,
-    PrimeAffineIntervalCountRequest,
-    PrimeAffineIntervalEnumerateRequest,
     PrimePatternIntervalCountResult,
     PrimePatternIntervalEnumerateResult,
+    _admit_interval_count,
+    _admit_interval_enumerate,
     _parse_interval,
-    compute_interval_count,
-    compute_interval_enumerate,
     require_bounded_affine_endpoints,
 )
 from jacobian.math.number_theory.prime_affine_forms._kernel import (
+    interval_match_summary,
+    interval_matches,
+    local_bad_residues,
+    local_factor_from_bad_count,
     wheel_modulus,
     wheel_rows,
 )
 from jacobian.math.number_theory.prime_affine_forms._local_factors import (
     FinitePrimeTupleFactorProduct,
-    PrimeTupleLocalFactorRequest,
     PrimeTupleLocalFactorResult,
-    PrimeTupleLocalFactorsRequest,
-    compute_local_factor,
-    compute_local_factors,
+    PrimeTupleLocalFactorRow,
+    _admit_local_factor,
+    _admit_local_factors,
     local_summary,
 )
 from jacobian.math.number_theory.prime_affine_forms._models import (
@@ -71,8 +74,9 @@ from jacobian.math.number_theory.prime_affine_forms.values import PrimeAffineTup
 def local_factor(source: PrimeAffineTuple, prime: int) -> PrimeTupleLocalFactorResult:
     """Return the complete modulo-``prime`` residue partition and local factor."""
 
-    return compute_local_factor(
-        PrimeTupleLocalFactorRequest(source=source, prime=prime)
+    _run_admission(lambda: _admit_local_factor(source, prime))
+    return PrimeTupleLocalFactorResult._from_kernel(
+        source=source, prime=prime, bad=local_bad_residues(source, prime)
     )
 
 
@@ -81,8 +85,30 @@ def local_factors(
 ) -> FinitePrimeTupleFactorProduct:
     """Return exact compact local factors over one finite prime set."""
 
-    return compute_local_factors(
-        PrimeTupleLocalFactorsRequest(source=source, primes=primes)
+    _run_admission(lambda: _admit_local_factors(source, primes))
+    product = Fraction(1, 1)
+    rows: list[PrimeTupleLocalFactorRow] = []
+    first_obstruction: int | None = None
+    for prime in primes:
+        summary = local_summary(source, prime)
+        factor = local_factor_from_bad_count(
+            source.form_count, prime, summary.bad_count
+        )
+        rows.append(
+            PrimeTupleLocalFactorRow(
+                summary=summary,
+                factor=CanonicalRational.from_fraction(factor),
+            )
+        )
+        product *= factor
+        if first_obstruction is None and summary.valid_count == 0:
+            first_obstruction = prime
+    return FinitePrimeTupleFactorProduct._from_kernel(
+        source=source,
+        primes=primes,
+        rows=tuple(rows),
+        product=product,
+        first_obstruction=first_obstruction,
     )
 
 
@@ -92,9 +118,46 @@ def local_admissibility(source: PrimeAffineTuple) -> PrimeTupleAdmissibilityResu
     return compute_local_admissibility(source)
 
 
-def _admit_residue_wheel(
-    source: PrimeAffineTuple, primes: tuple[int, ...]
-) -> None:
+def interval_count(
+    source: PrimeAffineTuple, lower: str | int, upper: str | int
+) -> PrimePatternIntervalCountResult:
+    """Count every admitted positive-prime affine tuple in the interval."""
+
+    lower_text = lower if isinstance(lower, str) else format_canonical_integer(lower)
+    upper_text = upper if isinstance(upper, str) else format_canonical_integer(upper)
+    lower, upper, _, _ = _run_admission(
+        lambda: _admit_interval_count(source, lower_text, upper_text)
+    )
+    count, first, last = interval_match_summary(source, lower, upper)
+    return PrimePatternIntervalCountResult._from_kernel(
+        source=source,
+        lower=lower_text,
+        upper=upper_text,
+        count=count,
+        first=first,
+        last=last,
+    )
+
+
+def interval_enumerate(
+    source: PrimeAffineTuple, lower: str | int, upper: str | int
+) -> PrimePatternIntervalEnumerateResult:
+    """Materialize every admitted positive-prime affine tuple in the interval."""
+
+    lower_text = lower if isinstance(lower, str) else format_canonical_integer(lower)
+    upper_text = upper if isinstance(upper, str) else format_canonical_integer(upper)
+    lower, upper, _ = _run_admission(
+        lambda: _admit_interval_enumerate(source, lower_text, upper_text)
+    )
+    return PrimePatternIntervalEnumerateResult._from_kernel(
+        source=source,
+        lower=lower_text,
+        upper=upper_text,
+        matches=interval_matches(source, lower, upper),
+    )
+
+
+def _admit_residue_wheel(source: PrimeAffineTuple, primes: tuple[int, ...]) -> None:
     _require_prime_set(primes, maximum=MAX_BATCH_PRIME)
     root_cells = source.form_count * len(primes)
     root_work = 6 * root_cells
@@ -111,14 +174,14 @@ def _admit_residue_wheel(
         )
     estimated_characters = (
         _source_character_upper_bound(source)
-        + sum(
-            _summary_character_upper_bound(source, prime) for prime in primes
-        )
+        + sum(_summary_character_upper_bound(source, prime) for prime in primes)
         + 2 * modulus_digits
         + 128
     )
     if estimated_characters > MAX_RESULT_CHARACTER_BUDGET:
-        raise _validation_error("compact wheel exceeds the conservative serialized bound")
+        raise _validation_error(
+            "compact wheel exceeds the conservative serialized bound"
+        )
 
 
 def _admit_verified_wheel(wheel: PrimeTupleResidueWheel) -> None:
@@ -127,7 +190,9 @@ def _admit_verified_wheel(wheel: PrimeTupleResidueWheel) -> None:
     expected_modulus = wheel_modulus(wheel.primes)
     expected_valid_count = prod((row.valid_count for row in expected_rows), start=1)
     if wheel.local_rows != expected_rows:
-        raise _validation_error("wheel must equal the compact wheel for its source and primes")
+        raise _validation_error(
+            "wheel must equal the compact wheel for its source and primes"
+        )
     if parse_canonical_integer(wheel.modulus) != expected_modulus:
         raise _validation_error("wheel modulus does not match its canonical prime set")
     if parse_canonical_integer(wheel.valid_count) != expected_valid_count:
@@ -153,7 +218,9 @@ def _admit_wheel_enumeration(wheel: PrimeTupleResidueWheel) -> None:
             f"wheel result needs {result_cells} cells, exceeding {MAX_WHEEL_RESULT_CELLS}"
         )
     root_cells = wheel.source.form_count * len(wheel.primes)
-    enumeration_work = result_count * len(wheel.primes) + local_residue_rows + root_cells
+    enumeration_work = (
+        result_count * len(wheel.primes) + local_residue_rows + root_cells
+    )
     if enumeration_work > MAX_WHEEL_ENUMERATION_WORK:
         raise _validation_error(
             f"wheel enumeration needs {enumeration_work} bounded steps, exceeding "
@@ -168,7 +235,9 @@ def _admit_wheel_enumeration(wheel: PrimeTupleResidueWheel) -> None:
         + 128
     )
     if serialized_characters > MAX_RESULT_CHARACTER_BUDGET:
-        raise _validation_error("wheel enumeration exceeds the conservative serialized bound")
+        raise _validation_error(
+            "wheel enumeration exceeds the conservative serialized bound"
+        )
 
 
 def _admit_wheel_membership(wheel: PrimeTupleResidueWheel, value: int) -> None:
@@ -213,12 +282,12 @@ def _admit_interval_residue_profile(
         )
     endpoint_digits = max(_digits(lower), _digits(upper))
     result_characters = (
-        len(wheel.model_dump_json())
-        + interval_size * (endpoint_digits + 4)
-        + 192
+        len(wheel.model_dump_json()) + interval_size * (endpoint_digits + 4) + 192
     )
     if result_characters > MAX_RESULT_CHARACTER_BUDGET:
-        raise _validation_error("wheel interval profile exceeds the conservative serialized bound")
+        raise _validation_error(
+            "wheel interval profile exceeds the conservative serialized bound"
+        )
     return lower, upper
 
 
@@ -284,34 +353,6 @@ def wheel_membership(
         is_permitted=first_prime is None,
         first_excluded_prime=first_prime,
         vanishing_form_ids=form_ids,
-    )
-
-
-def interval_count(
-    source: PrimeAffineTuple, lower: int, upper: int
-) -> PrimePatternIntervalCountResult:
-    """Count every n in [lower, upper] whose affine values are all positive primes."""
-
-    return compute_interval_count(
-        PrimeAffineIntervalCountRequest(
-            source=source,
-            lower=format_canonical_integer(lower),
-            upper=format_canonical_integer(upper),
-        )
-    )
-
-
-def interval_enumerate(
-    source: PrimeAffineTuple, lower: int, upper: int
-) -> PrimePatternIntervalEnumerateResult:
-    """Enumerate every n in [lower, upper] whose affine values are all positive primes."""
-
-    return compute_interval_enumerate(
-        PrimeAffineIntervalEnumerateRequest(
-            source=source,
-            lower=format_canonical_integer(lower),
-            upper=format_canonical_integer(upper),
-        )
     )
 
 

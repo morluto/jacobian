@@ -12,13 +12,10 @@ from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.affine_forms.values import MAX_AFFINE_COMPONENT_DIGITS
 from jacobian.math.number_theory.prime_affine_forms._kernel import (
     MAX_DETERMINISTIC_PRIME_INPUT,
-    interval_match_summary,
-    interval_matches,
 )
 from jacobian.math.number_theory.prime_affine_forms._models import (
     MAX_RESULT_CHARACTER_BUDGET,
     _digits,
-    _run_admission,
     _source_character_upper_bound,
     _validation_error,
 )
@@ -104,14 +101,14 @@ class PrimeAffineIntervalCountRequest(StrictModel):
 
 
 def _admit_interval_count(
-    request: PrimeAffineIntervalCountRequest,
+    source: PrimeAffineTuple,
+    lower_text: str,
+    upper_text: str,
 ) -> tuple[int, int, int, int]:
-    require_bounded_affine_endpoints(
-        request.source, request.lower, request.upper, label="interval"
-    )
-    lower, upper, interval_size = _parse_interval(request.lower, request.upper)
-    value_digits = _interval_value_digit_bound(request.source, lower, upper)
-    evaluations = interval_size * request.source.form_count
+    require_bounded_affine_endpoints(source, lower_text, upper_text, label="interval")
+    lower, upper, interval_size = _parse_interval(lower_text, upper_text)
+    value_digits = _interval_value_digit_bound(source, lower, upper)
+    evaluations = interval_size * source.form_count
     if evaluations > MAX_INTERVAL_EVALUATIONS:
         raise _validation_error(
             f"interval needs {evaluations} affine evaluations, exceeding "
@@ -121,10 +118,14 @@ def _admit_interval_count(
 
 
 def _admit_interval_enumerate(
-    request: PrimeAffineIntervalEnumerateRequest,
+    source: PrimeAffineTuple,
+    lower_text: str,
+    upper_text: str,
 ) -> tuple[int, int, int]:
-    lower, upper, interval_size, value_digits = _admit_interval_count(request)
-    result_cells = interval_size * (request.source.form_count + 1)
+    lower, upper, interval_size, value_digits = _admit_interval_count(
+        source, lower_text, upper_text
+    )
+    result_cells = interval_size * (source.form_count + 1)
     if result_cells > MAX_INTERVAL_ENUMERATION_CELLS:
         raise _validation_error(
             f"interval enumeration may need {result_cells} result cells, "
@@ -132,9 +133,9 @@ def _admit_interval_enumerate(
         )
     parameter_digits = max(_digits(lower), _digits(upper))
     serialized_characters = (
-        _source_character_upper_bound(request.source)
+        _source_character_upper_bound(source)
         + interval_size
-        * (40 + parameter_digits + request.source.form_count * (value_digits + 4))
+        * (40 + parameter_digits + source.form_count * (value_digits + 4))
         + 256
     )
     if serialized_characters > MAX_RESULT_CHARACTER_BUDGET:
@@ -194,21 +195,23 @@ class PrimePatternIntervalCountResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: PrimeAffineIntervalCountRequest,
         *,
+        source: PrimeAffineTuple,
+        lower: str,
+        upper: str,
         count: int,
         first: int | None,
         last: int | None,
     ) -> Self:
-        lower = parse_canonical_integer(request.lower)
-        upper = parse_canonical_integer(request.upper)
-        interval_size = upper - lower + 1
+        lower_value = parse_canonical_integer(lower)
+        upper_value = parse_canonical_integer(upper)
+        interval_size = upper_value - lower_value + 1
         return cls.model_construct(
-            source=request.source,
-            lower=request.lower,
-            upper=request.upper,
+            source=source,
+            lower=lower,
+            upper=upper,
             interval_size=interval_size,
-            affine_values_examined=interval_size * request.source.form_count,
+            affine_values_examined=interval_size * source.form_count,
             match_count=count,
             first_match=None if first is None else format_canonical_integer(first),
             last_match=None if last is None else format_canonical_integer(last),
@@ -265,19 +268,21 @@ class PrimePatternIntervalEnumerateResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: PrimeAffineIntervalEnumerateRequest,
         *,
+        source: PrimeAffineTuple,
+        lower: str,
+        upper: str,
         matches: tuple[tuple[int, tuple[int, ...]], ...],
     ) -> Self:
-        lower = parse_canonical_integer(request.lower)
-        upper = parse_canonical_integer(request.upper)
-        interval_size = upper - lower + 1
+        lower_value = parse_canonical_integer(lower)
+        upper_value = parse_canonical_integer(upper)
+        interval_size = upper_value - lower_value + 1
         return cls.model_construct(
-            source=request.source,
-            lower=request.lower,
-            upper=request.upper,
+            source=source,
+            lower=lower,
+            upper=upper,
             interval_size=interval_size,
-            affine_values_examined=interval_size * request.source.form_count,
+            affine_values_examined=interval_size * source.form_count,
             matches=tuple(
                 PrimePatternMatch(
                     parameter=format_canonical_integer(parameter),
@@ -290,28 +295,6 @@ class PrimePatternIntervalEnumerateResult(StrictModel):
         )
 
 
-def compute_interval_count(
-    request: PrimeAffineIntervalCountRequest,
-) -> PrimePatternIntervalCountResult:
-    """Count every admitted positive-prime affine tuple in the interval."""
-
-    lower, upper, _, _ = _run_admission(lambda: _admit_interval_count(request))
-    count, first, last = interval_match_summary(request.source, lower, upper)
-    return PrimePatternIntervalCountResult._from_kernel(
-        request, count=count, first=first, last=last
-    )
-
-
-def compute_interval_enumerate(
-    request: PrimeAffineIntervalEnumerateRequest,
-) -> PrimePatternIntervalEnumerateResult:
-    """Materialize every admitted positive-prime affine tuple in the interval."""
-
-    lower, upper, _ = _run_admission(lambda: _admit_interval_enumerate(request))
-    matches = interval_matches(request.source, lower, upper)
-    return PrimePatternIntervalEnumerateResult._from_kernel(request, matches=matches)
-
-
 __all__ = [
     "MAX_INTERVAL_ENUMERATION_CELLS",
     "MAX_INTERVAL_EVALUATIONS",
@@ -321,7 +304,5 @@ __all__ = [
     "PrimePatternIntervalCountResult",
     "PrimePatternIntervalEnumerateResult",
     "PrimePatternMatch",
-    "compute_interval_count",
-    "compute_interval_enumerate",
     "require_bounded_affine_endpoints",
 ]

@@ -25,14 +25,10 @@ from jacobian.math.number_theory.prime_affine_forms._admissibility import (
 from jacobian.math.number_theory.prime_affine_forms._interval import (
     PrimeAffineIntervalCountRequest,
     PrimeAffineIntervalEnumerateRequest,
-    compute_interval_count,
-    compute_interval_enumerate,
 )
 from jacobian.math.number_theory.prime_affine_forms._local_factors import (
     PrimeTupleLocalFactorRequest,
     PrimeTupleLocalFactorsRequest,
-    compute_local_factor,
-    compute_local_factors,
 )
 from jacobian.math.number_theory.prime_affine_forms._residue_wheel import (
     PrimeTupleIntervalResidueProfileRequest,
@@ -41,8 +37,12 @@ from jacobian.math.number_theory.prime_affine_forms._residue_wheel import (
     PrimeTupleWheelMembershipRequest,
 )
 from jacobian.math.number_theory.prime_affine_forms._tools import (
+    compute_interval_count,
+    compute_interval_enumerate,
     compute_interval_residue_profile,
     compute_local_admissibility,
+    compute_local_factor,
+    compute_local_factors,
     compute_residue_wheel,
     compute_residue_wheel_enumeration,
     compute_translation,

@@ -16,16 +16,12 @@ from jacobian.math.number_theory.prime_affine_forms._interval import (
     PrimeAffineIntervalEnumerateRequest,
     PrimePatternIntervalCountResult,
     PrimePatternIntervalEnumerateResult,
-    compute_interval_count,
-    compute_interval_enumerate,
 )
 from jacobian.math.number_theory.prime_affine_forms._local_factors import (
     FinitePrimeTupleFactorProduct,
     PrimeTupleLocalFactorRequest,
     PrimeTupleLocalFactorResult,
     PrimeTupleLocalFactorsRequest,
-    compute_local_factor,
-    compute_local_factors,
 )
 from jacobian.math.number_theory.prime_affine_forms._residue_wheel import (
     PrimeTupleIntervalResidueProfileRequest,
@@ -46,10 +42,22 @@ from jacobian.math.number_theory.prime_affine_forms.operations import (
     enumerate_residue_wheel as native_enumerate_residue_wheel,
 )
 from jacobian.math.number_theory.prime_affine_forms.operations import (
+    interval_count as native_interval_count,
+)
+from jacobian.math.number_theory.prime_affine_forms.operations import (
+    interval_enumerate as native_interval_enumerate,
+)
+from jacobian.math.number_theory.prime_affine_forms.operations import (
     interval_residue_profile as native_interval_residue_profile,
 )
 from jacobian.math.number_theory.prime_affine_forms.operations import (
     local_admissibility as native_local_admissibility,
+)
+from jacobian.math.number_theory.prime_affine_forms.operations import (
+    local_factor as native_local_factor,
+)
+from jacobian.math.number_theory.prime_affine_forms.operations import (
+    local_factors as native_local_factors,
 )
 from jacobian.math.number_theory.prime_affine_forms.operations import (
     residue_wheel as native_residue_wheel,
@@ -66,6 +74,18 @@ def compute_local_admissibility(
     request: PrimeTupleAdmissibilityRequest,
 ) -> PrimeTupleAdmissibilityResult:
     return native_local_admissibility(request.source)
+
+
+def compute_local_factor(
+    request: PrimeTupleLocalFactorRequest,
+) -> PrimeTupleLocalFactorResult:
+    return native_local_factor(request.source, request.prime)
+
+
+def compute_local_factors(
+    request: PrimeTupleLocalFactorsRequest,
+) -> FinitePrimeTupleFactorProduct:
+    return native_local_factors(request.source, request.primes)
 
 
 def compute_translation(
@@ -103,6 +123,26 @@ def compute_interval_residue_profile(
         request.wheel,
         parse_canonical_integer(request.lower),
         parse_canonical_integer(request.upper),
+    )
+
+
+def compute_interval_count(
+    request: PrimeAffineIntervalCountRequest,
+) -> PrimePatternIntervalCountResult:
+    return native_interval_count(
+        request.source,
+        request.lower,
+        request.upper,
+    )
+
+
+def compute_interval_enumerate(
+    request: PrimeAffineIntervalEnumerateRequest,
+) -> PrimePatternIntervalEnumerateResult:
+    return native_interval_enumerate(
+        request.source,
+        request.lower,
+        request.upper,
     )
 
 

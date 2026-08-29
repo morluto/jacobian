@@ -175,10 +175,19 @@ def test_flint_rectangular_product_exceeds_shared_matrix_axis() -> None:
 
 def test_product_rejects_coefficient_growth_before_backend() -> None:
     inner_dimension = 128
-    denominator = str(10**255 + 1)
-    value = CanonicalRational(num="1", den=denominator)
-    left = RationalMatrix(entries=(tuple(value for _ in range(inner_dimension)),))
-    right = RationalMatrix(entries=tuple((value,) for _ in range(inner_dimension)))
+    left = RationalMatrix(
+        entries=(
+            tuple(
+                CanonicalRational(num="1", den=str(10**255 + index + 1))
+                for index in range(inner_dimension)
+            ),
+        )
+    )
+    right = RationalMatrix(
+        entries=tuple(
+            (CanonicalRational(num="1", den="1"),) for _ in range(inner_dimension)
+        )
+    )
 
     with pytest.raises(OperationDomainValidationError, match="canonical digit budget"):
         compute_product(RationalMatrixProductRequest(left=left, right=right))
@@ -190,6 +199,33 @@ def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
     return tuple(
         tuple(one if index == column else zero for column in range(size))
         for index in range(size)
+    )
+
+
+def test_product_admits_dense_shared_denominator_order_32_times_identity() -> None:
+    order = 32
+    huge = CanonicalRational(num="1", den=str(10**255 + 1))
+    left = RationalMatrix(
+        entries=tuple(tuple(huge for _ in range(order)) for _ in range(order))
+    )
+    right = RationalMatrix(entries=_identity_entries(order))
+
+    result = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    assert result.product == left
+
+
+def test_product_admits_shared_denominator_dot_product() -> None:
+    inner_dimension = 128
+    denominator = 10**255 + 1
+    value = CanonicalRational(num="1", den=str(denominator))
+    left = RationalMatrix(entries=(tuple(value for _ in range(inner_dimension)),))
+    right = RationalMatrix(entries=tuple((value,) for _ in range(inner_dimension)))
+
+    result = compute_product(RationalMatrixProductRequest(left=left, right=right))
+
+    assert result.product.entries == (
+        (CanonicalRational.from_integer_ratio(inner_dimension, denominator**2),),
     )
 
 

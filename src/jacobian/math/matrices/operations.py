@@ -47,6 +47,7 @@ from jacobian.math.matrices._operation_models import (
     _validation_error,
 )
 from jacobian.math.matrices.values import (
+    MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
     RationalMatrix,
@@ -179,18 +180,24 @@ def smith_normal_form(matrix: MatrixBase) -> MatrixBase:
 
 
 def multiply(left: MatrixBase, right: MatrixBase) -> MatrixBase:
-    left_source = _exact_matrix(left, maximum_dimension=MAX_MATRIX_PRODUCT_AXIS)
-    right_source = _exact_matrix(right, maximum_dimension=MAX_MATRIX_PRODUCT_AXIS)
-    if not (
-        all(entry.is_Rational is True for entry in left_source)
-        and all(entry.is_Rational is True for entry in right_source)
+    from sympy.matrices.matrixbase import MatrixBase as SymPyMatrix
+
+    if (
+        isinstance(left, SymPyMatrix)
+        and isinstance(right, SymPyMatrix)
+        and all(entry.is_Rational is True for entry in left)
+        and all(entry.is_Rational is True for entry in right)
     ):
-        return left_source * right_source
-    result = product_result(
-        conversions.rational_matrix_from_sympy(left_source),
-        conversions.rational_matrix_from_sympy(right_source),
-    )
-    return conversions.rational_matrix_to_sympy(result.product)
+        left_source = _exact_matrix(left, maximum_dimension=MAX_MATRIX_PRODUCT_AXIS)
+        right_source = _exact_matrix(right, maximum_dimension=MAX_MATRIX_PRODUCT_AXIS)
+        result = product_result(
+            conversions.rational_matrix_from_sympy(left_source),
+            conversions.rational_matrix_from_sympy(right_source),
+        )
+        return conversions.rational_matrix_to_sympy(result.product)
+    left_fallback = _exact_matrix(left, maximum_dimension=MAX_MATRIX_DIMENSION)
+    right_fallback = _exact_matrix(right, maximum_dimension=MAX_MATRIX_DIMENSION)
+    return left_fallback * right_fallback
 
 
 def solve_linear_system(
@@ -331,6 +338,49 @@ def _admit_permanent(matrix: RationalMatrix) -> None:
         )
 
 
+def _denominator_digits(value: CanonicalRational) -> int:
+    return 0 if value.den == "1" else len(value.den)
+
+
+def _product_cell_digit_bound(
+    left_row: tuple[CanonicalRational, ...],
+    right_column: tuple[CanonicalRational, ...],
+) -> int:
+    """Bound one output cell from participating nonzero terms and unique dens.
+
+    Zero factors do not contribute. Identical term denominators are charged
+    once, which is the coprime-digit bound on their LCM rather than a row-max
+    times the inner dimension.
+    """
+
+    unique_term_denominators: set[tuple[str, str]] = set()
+    max_term_numerator_digits = 1
+    participating = 0
+    denominator_digits = 0
+    for left_value, right_value in zip(left_row, right_column, strict=True):
+        if left_value.num == "0" or right_value.num == "0":
+            continue
+        participating += 1
+        max_term_numerator_digits = max(
+            max_term_numerator_digits,
+            len(left_value.num.lstrip("-")) + len(right_value.num.lstrip("-")),
+        )
+        key = (left_value.den, right_value.den)
+        if key in unique_term_denominators:
+            continue
+        unique_term_denominators.add(key)
+        denominator_digits += _denominator_digits(left_value) + _denominator_digits(
+            right_value
+        )
+    if participating == 0:
+        return 1
+    denominator_digits = max(1, denominator_digits)
+    numerator_digits = (
+        max_term_numerator_digits + denominator_digits + len(str(participating))
+    )
+    return max(numerator_digits, denominator_digits)
+
+
 def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
     if len(left.entries[0]) != len(right.entries):
         raise _validation_error(
@@ -365,34 +415,14 @@ def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
             "matrix product exceeds the exact multiply-add work budget",
         )
 
-    def entry_digits(value: CanonicalRational) -> tuple[int, int]:
-        return len(value.num.lstrip("-")), 0 if value.den == "1" else len(value.den)
-
-    def vector_digits(
-        values: tuple[CanonicalRational, ...],
-    ) -> tuple[int, int]:
-        numerator = max((entry_digits(value)[0] for value in values), default=1)
-        denominator = max((entry_digits(value)[1] for value in values), default=0)
-        return numerator, denominator
-
     right_columns_entries = tuple(
         tuple(right.entries[row][column] for row in range(inner_dimension))
         for column in range(right_columns)
     )
     output_digit_work = 0
     for left_row in left.entries:
-        left_numerator, left_denominator = vector_digits(left_row)
         for right_column in right_columns_entries:
-            right_numerator, right_denominator = vector_digits(right_column)
-            denominator_pair = left_denominator + right_denominator
-            numerator_digits = (
-                left_numerator
-                + right_numerator
-                + max(0, inner_dimension - 1) * denominator_pair
-                + len(str(inner_dimension))
-            )
-            denominator_digits = max(1, inner_dimension * denominator_pair)
-            cell_digits = max(numerator_digits, denominator_digits)
+            cell_digits = _product_cell_digit_bound(left_row, right_column)
             if cell_digits > MAX_CANONICAL_RATIONAL_DIGITS:
                 raise _validation_error(
                     "budget_exceeded",

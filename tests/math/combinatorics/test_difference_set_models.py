@@ -3,11 +3,14 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics import _difference_set_models as sidon_models
+from jacobian.math.combinatorics import _difference_sets as sidon_kernel
 from jacobian.math.combinatorics._difference_set_models import (
     MAX_SIDON_ORDERED_DIFFERENCES,
     MAX_SIDON_RESULT_BYTES,
@@ -20,6 +23,8 @@ from jacobian.math.combinatorics._difference_set_models import (
     IntegerSidonRequest,
     IntegerSidonResult,
     _integer_sidon_canonical_result_bytes,
+    _minimum_integer_sidon_result_bytes,
+    _minimum_payload_sidon_elements,
 )
 from jacobian.math.combinatorics._difference_sets import (
     _require_integer_sidon_result_admission,
@@ -96,20 +101,49 @@ def test_sidon_byte_formula_matches_compact_json_for_a_false_decision() -> None:
     )
 
 
-def test_sidon_parser_ceiling_is_derived_from_shortest_output_budget() -> None:
-    admitted = tuple(range(MAX_SIDON_SET_SIZE))
-    rejected = tuple(range(MAX_SIDON_SET_SIZE + 1))
+def test_sidon_parser_ceiling_is_derived_from_minimum_payload_per_cardinality() -> None:
+    admitted = _minimum_payload_sidon_elements(MAX_SIDON_SET_SIZE)
+    rejected = tuple(str(value) for value in range(MAX_SIDON_SET_SIZE + 1))
 
-    assert _integer_sidon_canonical_result_bytes(admitted) <= MAX_SIDON_RESULT_BYTES
-    assert _integer_sidon_canonical_result_bytes(rejected) > MAX_SIDON_RESULT_BYTES
+    assert (
+        _minimum_integer_sidon_result_bytes(MAX_SIDON_SET_SIZE)
+        <= MAX_SIDON_RESULT_BYTES
+    )
+    assert (
+        _minimum_integer_sidon_result_bytes(MAX_SIDON_SET_SIZE + 1)
+        > MAX_SIDON_RESULT_BYTES
+    )
+    assert _integer_sidon_canonical_result_bytes(
+        admitted
+    ) == _minimum_integer_sidon_result_bytes(MAX_SIDON_SET_SIZE)
     assert MAX_SIDON_ORDERED_DIFFERENCES == MAX_SIDON_SET_SIZE * (
         MAX_SIDON_SET_SIZE - 1
     )
     IntegerSidonRequest(elements=tuple(str(value) for value in admitted))
     _require_integer_sidon_result_admission(admitted)
     with pytest.raises(ValidationError) as exc_info:
-        IntegerSidonRequest(elements=tuple(str(value) for value in rejected))
+        IntegerSidonRequest(elements=rejected)
     assert exc_info.value.errors()[0]["type"] == "too_long"
+
+
+def test_sidon_translated_interval_reaches_result_sensitive_admission() -> None:
+    elements = tuple(range(-9, 426))
+    request = IntegerSidonRequest(elements=tuple(str(value) for value in elements))
+    plan = _require_integer_sidon_result_admission(elements)
+
+    assert len(request.elements) == 435
+    assert MAX_SIDON_SET_SIZE == 435
+    assert plan.result_bytes == 10_481_930
+    assert plan.result_bytes <= MAX_SIDON_RESULT_BYTES
+
+
+def test_sidon_nonnegative_interval_at_the_ceiling_is_rejected_by_bytes() -> None:
+    elements = tuple(range(MAX_SIDON_SET_SIZE))
+    IntegerSidonRequest(elements=tuple(str(value) for value in elements))
+
+    assert _integer_sidon_canonical_result_bytes(elements) > MAX_SIDON_RESULT_BYTES
+    with pytest.raises(OperationDomainValidationError, match="canonical output bound"):
+        _require_integer_sidon_result_admission(elements)
 
 
 def test_sidon_zero_through_256_reaches_result_sensitive_admission() -> None:
@@ -121,9 +155,40 @@ def test_sidon_zero_through_256_reaches_result_sensitive_admission() -> None:
     _require_integer_sidon_result_admission(elements)
 
 
+def test_sidon_kernel_reuses_admitted_difference_wires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    captured: list[Any] = []
+    real_profile = sidon_models._integer_sidon_profile
+
+    def counted_profile(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        plan = real_profile(*args, **kwargs)
+        captured.append(plan)
+        return plan
+
+    monkeypatch.setattr(sidon_models, "_integer_sidon_profile", counted_profile)
+    monkeypatch.setattr(sidon_kernel, "_integer_sidon_profile", counted_profile)
+    result = decide_integer_sidon(IntegerSidonRequest(elements=("0", "1", "3")))
+
+    assert calls == 1
+    plan = captured[0]
+    assert result.normalized_elements == plan.normalized_wires
+    assert result.is_sidon == plan.is_sidon
+    assert (
+        tuple(
+            (item.minuend, item.subtrahend, item.difference)
+            for item in result.ordered_differences
+        )
+        == plan.difference_wires
+    )
+
+
 def test_sidon_rejects_profile_exceeding_canonical_output_bound() -> None:
     prefix = "9" * 125
-    elements = tuple(f"{prefix}{value:03d}" for value in range(MAX_SIDON_SET_SIZE))
+    elements = tuple(f"{prefix}{value:03d}" for value in range(256))
 
     with pytest.raises(OperationDomainValidationError, match="canonical output bound"):
         decide_integer_sidon(IntegerSidonRequest(elements=elements))

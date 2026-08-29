@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
@@ -50,6 +51,50 @@ _SIDON_DIFFERENCE_ROW_OVERHEAD_BYTES = 46
 MAX_SIDON_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
+@dataclass(frozen=True, slots=True)
+class _IntegerSidonAdmissionPlan:
+    """Request-scoped Sidon wires reused by trusted result construction."""
+
+    normalized_wires: tuple[str, ...]
+    difference_wires: tuple[tuple[str, str, str], ...]
+    result_bytes: int
+    is_sidon: bool
+
+
+def _integer_sidon_profile(elements: tuple[int, ...]) -> _IntegerSidonAdmissionPlan:
+    """Traverse one ordered-difference ledger and retain its canonical wires."""
+
+    normalized_wires = tuple(str(value) for value in elements)
+    normalized_bytes = sum(len(wire) + 2 for wire in normalized_wires) + max(
+        len(normalized_wires) - 1, 0
+    )
+    difference_wires: list[tuple[str, str, str]] = []
+    seen_differences: set[int] = set()
+    difference_bytes = 0
+    for left, left_wire in zip(elements, normalized_wires, strict=True):
+        for right, right_wire in zip(elements, normalized_wires, strict=True):
+            if left == right:
+                continue
+            difference = left - right
+            difference_wire = str(difference)
+            difference_wires.append((left_wire, right_wire, difference_wire))
+            difference_bytes += (
+                _SIDON_DIFFERENCE_ROW_OVERHEAD_BYTES
+                + len(left_wire)
+                + len(right_wire)
+                + len(difference_wire)
+            )
+            seen_differences.add(difference)
+    pair_count = len(difference_wires)
+    difference_bytes += max(pair_count - 1, 0)
+    return _IntegerSidonAdmissionPlan(
+        normalized_wires=normalized_wires,
+        difference_wires=tuple(difference_wires),
+        result_bytes=_SIDON_RESULT_ENVELOPE_BYTES + normalized_bytes + difference_bytes,
+        is_sidon=len(seen_differences) == pair_count,
+    )
+
+
 def _integer_sidon_canonical_result_bytes(elements: tuple[int, ...]) -> int:
     """Return the compact JSON size of one complete ordered-difference ledger.
 
@@ -57,42 +102,79 @@ def _integer_sidon_canonical_result_bytes(elements: tuple[int, ...]) -> int:
     decision by one byte, so admission remains conservative.
     """
 
-    normalized = tuple(str(value) for value in elements)
-    normalized_bytes = sum(len(value) + 2 for value in normalized) + max(
-        len(normalized) - 1, 0
+    return _integer_sidon_profile(elements).result_bytes
+
+
+def _minimum_payload_sidon_start(cardinality: int) -> int:
+    """Return the start of a consecutive n-set with minimum source-wire length.
+
+    Consecutive integers minimize ordered-difference magnitudes. Shifting that
+    interval toward the shortest AdditiveInteger spellings then minimizes the
+    source wires that appear in every row; several starts can tie.
+    """
+
+    if cardinality <= 0:
+        return 0
+    current = sum(len(str(value)) for value in range(cardinality))
+    best = current
+    best_start = 0
+    start = 0
+    while start > -cardinality:
+        start -= 1
+        current += len(str(start)) - len(str(start + cardinality))
+        if current < best:
+            best = current
+            best_start = start
+        elif current > best:
+            break
+    return best_start
+
+
+def _minimum_payload_sidon_elements(cardinality: int) -> tuple[int, ...]:
+    """Return one unique AdditiveInteger n-set with the lightest ledger."""
+
+    if cardinality <= 0:
+        return ()
+    start = _minimum_payload_sidon_start(cardinality)
+    return tuple(range(start, start + cardinality))
+
+
+def _minimum_integer_sidon_result_bytes(cardinality: int) -> int:
+    """Compact JSON size of the lightest unique AdditiveInteger n-set ledger."""
+
+    if cardinality <= 0:
+        return _SIDON_RESULT_ENVELOPE_BYTES
+    start = _minimum_payload_sidon_start(cardinality)
+    length_sum = sum(len(str(value)) for value in range(start, start + cardinality))
+    pair_count = cardinality * (cardinality - 1)
+    normalized_bytes = length_sum + 2 * cardinality + (cardinality - 1)
+    difference_value_bytes = 0
+    for gap in range(1, cardinality):
+        multiplicity = cardinality - gap
+        positive_length = len(str(gap))
+        difference_value_bytes += multiplicity * (2 * positive_length + 1)
+    difference_bytes = (
+        pair_count * _SIDON_DIFFERENCE_ROW_OVERHEAD_BYTES
+        + 2 * (cardinality - 1) * length_sum
+        + difference_value_bytes
+        + max(pair_count - 1, 0)
     )
-    difference_bytes = 0
-    pair_count = 0
-    for left in elements:
-        left_wire = str(left)
-        for right in elements:
-            if left == right:
-                continue
-            pair_count += 1
-            difference_bytes += (
-                _SIDON_DIFFERENCE_ROW_OVERHEAD_BYTES
-                + len(left_wire)
-                + len(str(right))
-                + len(str(left - right))
-            )
-    difference_bytes += max(pair_count - 1, 0)
     return _SIDON_RESULT_ENVELOPE_BYTES + normalized_bytes + difference_bytes
 
 
 def _max_sidon_set_size_for_output_budget(budget: int) -> int:
-    """Largest ``n`` whose unique set ``0..n-1`` still fits ``budget`` bytes.
+    """Largest ``n`` whose lightest unique AdditiveInteger n-set fits ``budget``.
 
-    Pair work is ``n(n-1)`` ordered rows. The shortest unique AdditiveInteger
-    n-set is ``0..n-1``, so this ceiling is the largest cardinality whose
-    work and output can still fit; wider integers are rejected later by the
-    same byte reservation.
+    Pair work is ``n(n-1)`` ordered rows. The parser ceiling is the largest
+    cardinality whose minimum payload can still fit; actual source and
+    difference widths are reserved later by result-sensitive admission.
     """
 
     low = 0
     high = math.isqrt(max(budget, 0) // _SIDON_DIFFERENCE_ROW_OVERHEAD_BYTES) + 2
     while low < high:
         mid = (low + high + 1) // 2
-        if _integer_sidon_canonical_result_bytes(tuple(range(mid))) <= budget:
+        if _minimum_integer_sidon_result_bytes(mid) <= budget:
             low = mid
         else:
             high = mid - 1
@@ -129,6 +211,14 @@ class OrderedIntegerDifference(StrictModel):
     minuend: AdditiveInteger
     subtrahend: AdditiveInteger
     difference: AdditiveDifferenceInteger
+
+    @classmethod
+    def _from_kernel(cls, minuend: str, subtrahend: str, difference: str) -> Self:
+        return cls.model_construct(
+            minuend=minuend,
+            subtrahend=subtrahend,
+            difference=difference,
+        )
 
 
 class IntegerSidonResult(StrictModel):

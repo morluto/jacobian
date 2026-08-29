@@ -20,7 +20,8 @@ from jacobian.math.combinatorics._difference_set_models import (
     IntegerSidonRequest,
     IntegerSidonResult,
     OrderedIntegerDifference,
-    _integer_sidon_canonical_result_bytes,
+    _integer_sidon_profile,
+    _IntegerSidonAdmissionPlan,
 )
 from jacobian.math.combinatorics._support import (
     combinatorics_operation,
@@ -29,29 +30,28 @@ from jacobian.math.combinatorics._support import (
 
 def decide_integer_sidon(request: IntegerSidonRequest) -> IntegerSidonResult:
     elements = tuple(sorted(int(value) for value in request.elements))
-    _require_integer_sidon_result_admission(elements)
-    differences = tuple(
-        OrderedIntegerDifference(
-            minuend=str(left),
-            subtrahend=str(right),
-            difference=str(left - right),
-        )
-        for left in elements
-        for right in elements
-        if left != right
-    )
-    values = tuple(int(record.difference) for record in differences)
+    plan = _require_integer_sidon_result_admission(elements)
     return IntegerSidonResult._from_kernel(
-        normalized_elements=tuple(str(value) for value in elements),
-        ordered_differences=differences,
-        is_sidon=len(set(values)) == len(values),
+        normalized_elements=plan.normalized_wires,
+        ordered_differences=tuple(
+            OrderedIntegerDifference._from_kernel(
+                minuend=minuend,
+                subtrahend=subtrahend,
+                difference=difference,
+            )
+            for minuend, subtrahend, difference in plan.difference_wires
+        ),
+        is_sidon=plan.is_sidon,
     )
 
 
-def _require_integer_sidon_result_admission(elements: tuple[int, ...]) -> None:
-    """Reserve the complete canonical result before constructing profile rows."""
+def _require_integer_sidon_result_admission(
+    elements: tuple[int, ...],
+) -> _IntegerSidonAdmissionPlan:
+    """Reserve the complete canonical result and retain its difference wires."""
 
-    if _integer_sidon_canonical_result_bytes(elements) > MAX_SIDON_RESULT_BYTES:
+    plan = _integer_sidon_profile(elements)
+    if plan.result_bytes > MAX_SIDON_RESULT_BYTES:
         raise OperationDomainValidationError(
             location=("elements",),
             code="combinatorics.sidon_result_bound",
@@ -59,6 +59,7 @@ def _require_integer_sidon_result_admission(elements: tuple[int, ...]) -> None:
                 "complete ordered-difference profile exceeds the canonical output bound"
             ),
         )
+    return plan
 
 
 def _difference_counts(residues: tuple[int, ...], modulus: int) -> Counter[int]:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 
 MAX_NETWORK_VERTICES = 256
 MAX_LAPLACIAN_VERTICES = 128
@@ -58,7 +58,7 @@ class LaplacianNetwork(StrictModel):
                 "vertex_count": data.vertex_count,
                 "edges": data.edges,
             }
-        return data
+        return canonicalize_json_containers(data)
 
 
 class EffectiveResistanceRequest(StrictModel):

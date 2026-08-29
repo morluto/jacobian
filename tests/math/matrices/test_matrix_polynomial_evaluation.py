@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from copy import deepcopy
 from fractions import Fraction
-from math import comb
+from math import ceil, comb, log10
 from typing import Any
 
 import pytest
@@ -18,7 +18,11 @@ from jacobian.canonical import (
     format_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.matrices._operation_models import CharacteristicPolynomialRequest
+from jacobian.math.matrices._operation_models import (
+    MAX_CHARACTERISTIC_POLYNOMIAL_ORDER,
+    MAX_INPUT_SCALAR_DIGITS,
+    CharacteristicPolynomialRequest,
+)
 from jacobian.math.matrices._tools import compute_characteristic_polynomial
 from jacobian.math.matrices.canonical_forms._models import (
     _MAX_WORK_BOUND,
@@ -70,6 +74,32 @@ def _matrix(*rows: tuple[RationalInput, ...]) -> RationalMatrix:
     return RationalMatrix(
         entries=tuple(tuple(_rational(entry) for entry in row) for row in rows)
     )
+
+
+def _first_primes(count: int) -> list[int]:
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < count:
+        limit = int(candidate**0.5)
+        if all(candidate % prime for prime in primes if prime <= limit):
+            primes.append(candidate)
+        candidate += 1 if candidate == 2 else 2
+    return primes
+
+
+def _pairwise_coprime_denominators(count: int, digits: int) -> list[int]:
+    limit = 10**digits
+    minimum = 10 ** (digits - 1)
+    denominators: list[int] = []
+    for prime in _first_primes(count):
+        exponent = max(1, ceil((digits - 1) / log10(prime)))
+        value = prime**exponent
+        while value >= limit:
+            exponent -= 1
+            value = prime**exponent
+        assert value >= minimum
+        denominators.append(value)
+    return denominators
 
 
 def _polynomial(*terms: tuple[RationalInput, int]) -> RationalPolynomial:
@@ -633,6 +663,34 @@ def test_characteristic_polynomial_rejects_predicted_coefficient_growth() -> Non
         *tuple(
             tuple(
                 (numerator, denominator) if row == column else 0
+                for column in range(order)
+            )
+            for row in range(order)
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="canonical digit budget"):
+        compute_characteristic_polynomial(
+            CharacteristicPolynomialRequest(matrix=source)
+        )
+
+
+def test_characteristic_polynomial_rejects_coprime_denominator_lcm_growth() -> None:
+    """Dense pairwise-coprime 256-digit dens exceed the budget after a few LCMs.
+
+    Completing a 128×128 product LCM would materialize about four million
+    digits; admission must stop from ``order * digits(LCM)`` before that.
+    """
+    order = MAX_CHARACTERISTIC_POLYNOMIAL_ORDER
+    denominators = _pairwise_coprime_denominators(
+        order * order, MAX_INPUT_SCALAR_DIGITS
+    )
+    source = RationalMatrix(
+        entries=tuple(
+            tuple(
+                CanonicalRational(
+                    num="1", den=str(denominators[row * order + column])
+                )
                 for column in range(order)
             )
             for row in range(order)

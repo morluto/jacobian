@@ -483,26 +483,32 @@ def _characteristic_polynomial_component_digit_bound(
     cleared integer matrix ``N`` has Hadamard-bounded minors; ``2^n`` bounds
     the number of minors of any fixed order. Zero entries do not contribute to
     ``D`` or to the cleared height.
+
+    ``order * digits(D)`` is monotone in ``D``. Once that quantity exceeds the
+    canonical digit budget, the coefficient bound is already over budget, so
+    folding stops without materializing a larger LCM or clearing numerators
+    against it.
     """
     order = len(matrix.entries)
-    fractions = tuple(
-        tuple(value.as_fraction() for value in row) for row in matrix.entries
-    )
     common_denominator = 1
-    for row in fractions:
+    nonzero: list[Fraction] = []
+    for row in matrix.entries:
         for value in row:
-            if value.numerator == 0:
+            if value.num.lstrip("-") == "0":
                 continue
-            common_denominator = lcm(common_denominator, value.denominator)
+            fraction = value.as_fraction()
+            common_denominator = lcm(common_denominator, fraction.denominator)
+            denominator_growth = _positive_decimal_digits(common_denominator)
+            if order * denominator_growth > MAX_CANONICAL_RATIONAL_DIGITS:
+                return max(1, order * denominator_growth)
+            nonzero.append(fraction)
     denominator_growth = _positive_decimal_digits(common_denominator)
     cleared_height = max(
         (
             _positive_decimal_digits(
                 value.numerator * (common_denominator // value.denominator)
             )
-            for row in fractions
-            for value in row
-            if value.numerator != 0
+            for value in nonzero
         ),
         default=1,
     )

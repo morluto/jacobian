@@ -14,6 +14,7 @@ from jacobian.math.matrices._operation_models import (
     MAX_PERMANENT_MATRIX_ORDER,
 )
 from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
     MAX_MATRIX_DIMENSION,
     MAX_RATIONAL_MATRIX_ORDER,
 )
@@ -76,18 +77,18 @@ def _oversized_partial_trace_payload() -> dict[str, Any]:
         ),
         (
             "matrix.rank.compute",
-            _identity_payload(MAX_MATRIX_DIMENSION + 1),
-            MAX_MATRIX_DIMENSION,
+            _identity_payload(MAX_EXACT_LINEAR_MATRIX_AXIS + 1),
+            MAX_EXACT_LINEAR_MATRIX_AXIS,
         ),
         (
             "matrix.normal_form.rref.compute",
-            _identity_payload(MAX_MATRIX_DIMENSION + 1),
-            MAX_MATRIX_DIMENSION,
+            _identity_payload(MAX_EXACT_LINEAR_MATRIX_AXIS + 1),
+            MAX_EXACT_LINEAR_MATRIX_AXIS,
         ),
         (
             "matrix.nullspace.compute",
-            _identity_payload(MAX_MATRIX_DIMENSION + 1),
-            MAX_MATRIX_DIMENSION,
+            _identity_payload(MAX_EXACT_LINEAR_MATRIX_AXIS + 1),
+            MAX_EXACT_LINEAR_MATRIX_AXIS,
         ),
         (
             "matrix.partial_trace.compute",

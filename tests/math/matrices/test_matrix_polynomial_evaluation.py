@@ -730,6 +730,22 @@ def test_characteristic_polynomial_admits_heterogeneous_100_digit_prime_diagonal
     )
 
 
+def test_characteristic_polynomial_admits_repeated_heterogeneous_rows() -> None:
+    primes = _distinct_primes(32, digits=40)
+    row = tuple((1, prime) for prime in primes)
+    source = _matrix(*tuple(row for _ in range(32)))
+    result = compute_characteristic_polynomial(
+        CharacteristicPolynomialRequest(matrix=source)
+    )
+    total = sum(Fraction(1, prime) for prime in primes)
+    coefficients = tuple(
+        coefficient.as_fraction() for coefficient in result.coefficients_descending
+    )
+    assert coefficients[0] == 1
+    assert coefficients[1] == -total
+    assert all(coefficient == 0 for coefficient in coefficients[2:])
+
+
 def test_characteristic_polynomial_stops_denominator_lcm_once_rejection_is_certain() -> (
     None
 ):

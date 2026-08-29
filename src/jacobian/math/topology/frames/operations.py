@@ -5,9 +5,13 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.topology.frames._arithmetic import dot
+from jacobian.math.topology.frames._flint import integer_gram, integer_gram_and_rank
 from jacobian.math.topology.frames._models import (
     CoherenceResult,
     FramePotentialResult,
@@ -18,10 +22,45 @@ from jacobian.math.topology.frames.values import VectorFamily
 __all__ = ["coherence", "frame_potential", "gram"]
 
 
-def _admit_frame(value: VectorFamily) -> None:
-    from sympy import Matrix
+_RESULT_RESERVE_BYTES = 128
 
-    if Matrix(value.vectors).rank() != len(value.vectors[0]):
+
+def _retained_source_bytes(value: VectorFamily) -> int:
+    return len(encode_strict_json(value.model_dump(mode="json")))
+
+
+def _coefficient_height(value: VectorFamily) -> int:
+    return max(abs(entry) for vector in value.vectors for entry in vector)
+
+
+def _gram_result_bound(value: VectorFamily) -> int:
+    vector_count = len(value.vectors)
+    dimension = len(value.vectors[0])
+    gram_entry_bound = dimension * _coefficient_height(value) ** 2
+    gram_value_chars = len(str(gram_entry_bound)) + int(gram_entry_bound > 0)
+    gram_bytes = vector_count**2 * (gram_value_chars + 1) + 2 * vector_count
+    return _retained_source_bytes(value) + gram_bytes + _RESULT_RESERVE_BYTES
+
+
+def _compact_result_bound(value: VectorFamily) -> int:
+    vector_count = len(value.vectors)
+    dimension = len(value.vectors[0])
+    gram_bound = dimension * _coefficient_height(value) ** 2
+    scalar_chars = len(str(vector_count**2 * gram_bound**2))
+    return _retained_source_bytes(value) + scalar_chars * 2 + _RESULT_RESERVE_BYTES
+
+
+def _require_result_budget(predicted_bytes: int) -> None:
+    if predicted_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("vectors",),
+            code="frames.result_byte_budget",
+            message="frame operation exceeds the canonical result-byte budget",
+        )
+
+
+def _admit_frame(value: VectorFamily, *, rank: int) -> None:
+    if rank != len(value.vectors[0]):
         raise OperationDomainValidationError(
             location=("vectors",),
             code="frames.frame_does_not_span",
@@ -31,32 +70,35 @@ def _admit_frame(value: VectorFamily) -> None:
 
 def gram(value: VectorFamily) -> GramResult:
     """Compute the exact Gram matrix of a vector family."""
-    matrix = tuple(
-        tuple(dot(left, right) for right in value.vectors) for left in value.vectors
-    )
+    _require_result_budget(_gram_result_bound(value))
+    matrix = integer_gram(value.vectors)
     return GramResult._from_kernel(vectors=value.vectors, gram=matrix)
 
 
 def coherence(value: VectorFamily) -> CoherenceResult:
     """Compute exact normalized squared coherence of a finite frame."""
-    _admit_frame(value)
+    _require_result_budget(_compact_result_bound(value))
+    matrix, rank = integer_gram_and_rank(value.vectors)
+    _admit_frame(value, rank=rank)
     if any(not any(vector) for vector in value.vectors):
         raise OperationDomainValidationError(
             location=("vectors",),
             code="frames.zero_vector",
             message="coherence requires every vector to be nonzero",
         )
-    candidates = []
+    maximum = Fraction(0)
+    pair: tuple[int, int] | None = None
     for left in range(len(value.vectors)):
         for right in range(left + 1, len(value.vectors)):
-            inner_product = dot(value.vectors[left], value.vectors[right])
-            denominator = dot(value.vectors[left], value.vectors[left]) * dot(
-                value.vectors[right], value.vectors[right]
-            )
-            candidates.append(
-                (Fraction(inner_product * inner_product, denominator), (left, right))
-            )
-    maximum, pair = max(candidates, default=(Fraction(0), None))
+            inner_product = matrix[left][right]
+            denominator = matrix[left][left] * matrix[right][right]
+            candidate = Fraction(inner_product * inner_product, denominator)
+            candidate_pair = (left, right)
+            if candidate > maximum or (
+                candidate == maximum and (pair is None or candidate_pair > pair)
+            ):
+                maximum = candidate
+                pair = candidate_pair
     return CoherenceResult._from_kernel(
         vectors=value.vectors,
         coherence_squared=CanonicalRational.from_fraction(maximum),
@@ -66,10 +108,10 @@ def coherence(value: VectorFamily) -> CoherenceResult:
 
 def frame_potential(value: VectorFamily) -> FramePotentialResult:
     """Compute the exact frame potential of a finite frame."""
-    _admit_frame(value)
-    total = sum(
-        dot(left, right) ** 2 for left in value.vectors for right in value.vectors
-    )
+    _require_result_budget(_compact_result_bound(value))
+    matrix, rank = integer_gram_and_rank(value.vectors)
+    _admit_frame(value, rank=rank)
+    total = sum(entry**2 for row in matrix for entry in row)
     return FramePotentialResult._from_kernel(
         vectors=value.vectors, potential=format_canonical_integer(total)
     )

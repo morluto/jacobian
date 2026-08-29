@@ -1,5 +1,18 @@
 """Supported exact polynomial API."""
 
+from jacobian.math.polynomials._elementary_kernel import (
+    integer_polynomial_compose,
+    integer_polynomial_content,
+    integer_polynomial_evaluate,
+    integer_polynomial_gcd,
+    integer_polynomial_primitive_part,
+    integer_polynomial_shift,
+    rational_partial_fraction_decomposition,
+    rational_polynomial_derivative,
+    rational_polynomial_division,
+    rational_polynomial_evaluate,
+    rational_polynomial_integral,
+)
 from jacobian.math.polynomials.operations import (
     derivative,
     discriminant,
@@ -30,6 +43,12 @@ __all__ = [
     "gcdex",
     "groebner_basis",
     "hermite_reduction",
+    "integer_polynomial_compose",
+    "integer_polynomial_content",
+    "integer_polynomial_evaluate",
+    "integer_polynomial_gcd",
+    "integer_polynomial_primitive_part",
+    "integer_polynomial_shift",
     "integral",
     "partial_fractions",
     "polynomial_discriminant",
@@ -38,6 +57,11 @@ __all__ = [
     "polynomial_groebner_basis",
     "polynomial_resultant",
     "polynomial_square_free_decomposition",
+    "rational_partial_fraction_decomposition",
+    "rational_polynomial_derivative",
+    "rational_polynomial_division",
+    "rational_polynomial_evaluate",
+    "rational_polynomial_integral",
     "resultant",
     "square_free_decomposition",
 ]

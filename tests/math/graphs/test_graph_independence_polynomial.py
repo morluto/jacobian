@@ -27,7 +27,7 @@ from jacobian.math.graphs.polynomials._models import (
     TreeIndependencePolynomialResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
-from jacobian.math.polynomials._elementary_operations import (
+from jacobian.math.polynomials._elementary_kernel import (
     rational_polynomial_evaluate,
 )
 from jacobian.math.polynomials._models import RationalPolynomialEvaluationRequest
@@ -184,7 +184,9 @@ def test_serialized_polynomial_feeds_exact_evaluation_unchanged(
         }
     )
 
-    evaluation = rational_polynomial_evaluate(evaluation_request)
+    evaluation = rational_polynomial_evaluate(
+        evaluation_request.polynomial, evaluation_request.point
+    )
 
     assert evaluation.value.num == result.independent_set_count
     assert evaluation.value.den == "1"

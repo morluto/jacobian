@@ -12,7 +12,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials import interpolation
-from jacobian.math.polynomials._elementary_operations import (
+from jacobian.math.polynomials._elementary_kernel import (
     rational_polynomial_evaluate,
 )
 from jacobian.math.polynomials._models import RationalPolynomialEvaluationRequest
@@ -258,7 +258,7 @@ def test_native_polynomial_value_composes_with_existing_evaluation() -> None:
         {"polynomial": serialized_polynomial, "point": {"num": "3", "den": "1"}}
     )
 
-    evaluated = rational_polynomial_evaluate(request)
+    evaluated = rational_polynomial_evaluate(request.polynomial, request.point)
 
     assert evaluated.value.as_fraction() == 9
 

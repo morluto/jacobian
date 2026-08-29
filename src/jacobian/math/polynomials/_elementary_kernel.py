@@ -7,7 +7,11 @@ from typing import Any
 
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalInteger,
+    CanonicalRational,
+)
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import polynomials
@@ -22,30 +26,22 @@ from jacobian.math.polynomials._models import (
     _MAX_INTEGER_COEFFICIENT_DIGITS,
     _MAX_INVARIANT_TERMS,
     IntegerPolynomial,
-    IntegerPolynomialCompositionRequest,
     IntegerPolynomialCompositionResult,
     IntegerPolynomialContentResult,
-    IntegerPolynomialEvaluationRequest,
     IntegerPolynomialEvaluationResult,
     IntegerPolynomialGcdResult,
-    IntegerPolynomialPairRequest,
     IntegerPolynomialPrimitivePartResult,
-    IntegerPolynomialRequest,
-    IntegerPolynomialShiftRequest,
     IntegerPolynomialShiftResult,
-    RationalFunctionRequest,
     RationalPartialFractionResult,
     RationalPartialFractionTerm,
     RationalPolynomialDerivativeResult,
-    RationalPolynomialDivisionRequest,
     RationalPolynomialDivisionResult,
-    RationalPolynomialEvaluationRequest,
     RationalPolynomialEvaluationResult,
     RationalPolynomialIntegralResult,
-    RationalPolynomialRequest,
     _validation_error,
 )
 from jacobian.math.polynomials.values import (
+    RationalPolynomial,
     rational_evaluation_component_digit_bounds,
     require_polynomial_budget,
 )
@@ -78,45 +74,52 @@ def _admit_integer(polynomial: IntegerPolynomial) -> None:
         raise _validation_error("integer coefficient exceeds the decimal-digit budget")
 
 
-def _admit_integer_pair(request: IntegerPolynomialPairRequest) -> None:
-    _admit_integer(request.left)
-    _admit_integer(request.right)
+def _admit_integer_pair(
+    left: IntegerPolynomial, right: IntegerPolynomial
+) -> None:
+    _admit_integer(left)
+    _admit_integer(right)
 
 
-def _admit_integer_evaluation(request: IntegerPolynomialEvaluationRequest) -> None:
-    _admit_integer(request.polynomial)
-    if len(request.point.lstrip("-")) > _MAX_INTEGER_COEFFICIENT_DIGITS:
+def _admit_integer_evaluation(
+    polynomial: IntegerPolynomial, point: CanonicalInteger
+) -> None:
+    _admit_integer(polynomial)
+    if len(point.lstrip("-")) > _MAX_INTEGER_COEFFICIENT_DIGITS:
         raise _validation_error("evaluation point exceeds the decimal-digit budget")
 
 
-def _admit_integer_composition(request: IntegerPolynomialCompositionRequest) -> None:
-    _admit_integer(request.outer)
-    _admit_integer(request.inner)
-    if (len(request.outer.coefficients) - 1) * (
-        len(request.inner.coefficients) - 1
+def _admit_integer_composition(
+    outer: IntegerPolynomial, inner: IntegerPolynomial
+) -> None:
+    _admit_integer(outer)
+    _admit_integer(inner)
+    if (len(outer.coefficients) - 1) * (
+        len(inner.coefficients) - 1
     ) > _MAX_ELEMENTARY_DEGREE:
         raise _validation_error(
             f"composition exceeds the degree-{_MAX_ELEMENTARY_DEGREE} output budget"
         )
 
 
-def _admit_rational(request: RationalPolynomialRequest) -> None:
-    if len(request.polynomial.variables) != 1:
+def _admit_rational(polynomial: RationalPolynomial) -> None:
+    if len(polynomial.variables) != 1:
         raise _validation_error("elementary polynomial operations require one variable")
     require_polynomial_budget(
-        request.polynomial,
+        polynomial,
         maximum_terms=_MAX_GCD_TERMS,
         maximum_exponent=_MAX_ELEMENTARY_DEGREE,
     )
 
 
 def _admit_rational_evaluation(
-    request: RationalPolynomialEvaluationRequest,
+    polynomial: RationalPolynomial,
+    point: CanonicalRational,
 ) -> None:
-    _admit_rational(request)
+    _admit_rational(polynomial)
     numerator_digits, denominator_digits = rational_evaluation_component_digit_bounds(
-        request.polynomial,
-        (request.point,),
+        polynomial,
+        (point,),
     )
     if max(numerator_digits, denominator_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationDomainValidationError(
@@ -129,12 +132,14 @@ def _admit_rational_evaluation(
         )
 
 
-def _admit_division(request: RationalPolynomialDivisionRequest) -> None:
-    if len(request.left.variables) != 1:
+def _admit_division(left: RationalPolynomial, right: RationalPolynomial) -> None:
+    if left.variables != right.variables:
+        raise _validation_error("polynomials must use the same ordered variables")
+    if len(left.variables) != 1:
         raise _validation_error("polynomial division requires one variable")
-    if not request.right.polynomial.terms:
+    if not right.polynomial.terms:
         raise _validation_error("divisor polynomial must be nonzero")
-    for polynomial in (request.left, request.right):
+    for polynomial in (left, right):
         require_polynomial_budget(
             polynomial,
             maximum_terms=_MAX_GCD_TERMS,
@@ -142,14 +147,16 @@ def _admit_division(request: RationalPolynomialDivisionRequest) -> None:
         )
 
 
-def _admit_partial_fractions(request: RationalFunctionRequest) -> None:
-    if request.numerator.variables != request.denominator.variables:
+def _admit_partial_fractions(
+    numerator: RationalPolynomial, denominator: RationalPolynomial
+) -> None:
+    if numerator.variables != denominator.variables:
         raise _validation_error("numerator and denominator must use the same ring")
-    if len(request.numerator.variables) != 1:
+    if len(numerator.variables) != 1:
         raise _validation_error("partial fractions require one variable")
-    if not request.denominator.polynomial.terms:
+    if not denominator.polynomial.terms:
         raise _validation_error("denominator polynomial must be nonzero")
-    for polynomial in (request.numerator, request.denominator):
+    for polynomial in (numerator, denominator):
         require_polynomial_budget(
             polynomial,
             maximum_terms=_MAX_INVARIANT_TERMS,
@@ -189,36 +196,38 @@ def _integer_wire(polynomial: Any) -> IntegerPolynomial:
 
 
 def integer_polynomial_gcd(
-    request: IntegerPolynomialPairRequest,
+    left: IntegerPolynomial, right: IntegerPolynomial
 ) -> IntegerPolynomialGcdResult:
-    _run_admission(lambda: _admit_integer_pair(request))
-    left = _integer_poly(request.left)
-    right = _integer_poly(request.right)
-    gcd = left.gcd(right)
+    """Compute the exact GCD and contents of two canonical integer polynomials."""
+
+    _run_admission(lambda: _admit_integer_pair(left, right))
+    left_backend = _integer_poly(left)
+    right_backend = _integer_poly(right)
+    gcd = left_backend.gcd(right_backend)
     return IntegerPolynomialGcdResult(
         gcd=_integer_wire(gcd),
-        left_content=format_canonical_integer(int(left.content())),
-        right_content=format_canonical_integer(int(right.content())),
+        left_content=format_canonical_integer(int(left_backend.content())),
+        right_content=format_canonical_integer(int(right_backend.content())),
         gcd_content=format_canonical_integer(int(gcd.content())),
     )
 
 
-def integer_polynomial_content(
-    request: IntegerPolynomialRequest,
-) -> IntegerPolynomialContentResult:
-    _run_admission(lambda: _admit_integer(request.polynomial))
+def integer_polynomial_content(polynomial: IntegerPolynomial) -> IntegerPolynomialContentResult:
+    """Return the nonnegative coefficient content of a canonical polynomial."""
+
+    _run_admission(lambda: _admit_integer(polynomial))
     return IntegerPolynomialContentResult(
-        content=format_canonical_integer(
-            int(_integer_poly(request.polynomial).content())
-        )
+        content=format_canonical_integer(int(_integer_poly(polynomial).content()))
     )
 
 
 def integer_polynomial_primitive_part(
-    request: IntegerPolynomialRequest,
+    polynomial: IntegerPolynomial,
 ) -> IntegerPolynomialPrimitivePartResult:
-    _run_admission(lambda: _admit_integer(request.polynomial))
-    source = _integer_poly(request.polynomial)
+    """Return content, primitive part, and exact reconstruction."""
+
+    _run_admission(lambda: _admit_integer(polynomial))
+    source = _integer_poly(polynomial)
     content, primitive = source.primitive()
     reconstructed = primitive.mul_ground(content)
     return IntegerPolynomialPrimitivePartResult(
@@ -229,45 +238,51 @@ def integer_polynomial_primitive_part(
 
 
 def integer_polynomial_evaluate(
-    request: IntegerPolynomialEvaluationRequest,
+    polynomial: IntegerPolynomial, point: CanonicalInteger
 ) -> IntegerPolynomialEvaluationResult:
-    _run_admission(lambda: _admit_integer_evaluation(request))
-    point = parse_canonical_integer(request.point)
-    value = _integer_poly(request.polynomial).eval(point)
+    """Evaluate a canonical integer polynomial at one integer point."""
+
+    _run_admission(lambda: _admit_integer_evaluation(polynomial, point))
+    parsed_point = parse_canonical_integer(point)
+    value = _integer_poly(polynomial).eval(parsed_point)
     return IntegerPolynomialEvaluationResult(
-        point=request.point,
+        point=point,
         value=format_canonical_integer(int(value)),
     )
 
 
 def integer_polynomial_compose(
-    request: IntegerPolynomialCompositionRequest,
+    outer: IntegerPolynomial, inner: IntegerPolynomial
 ) -> IntegerPolynomialCompositionResult:
-    _run_admission(lambda: _admit_integer_composition(request))
-    composition = _integer_poly(request.outer).compose(_integer_poly(request.inner))
+    """Compose two canonical integer polynomials."""
+
+    _run_admission(lambda: _admit_integer_composition(outer, inner))
+    composition = _integer_poly(outer).compose(_integer_poly(inner))
     return IntegerPolynomialCompositionResult(composition=_integer_wire(composition))
 
 
 def integer_polynomial_shift(
-    request: IntegerPolynomialShiftRequest,
+    polynomial: IntegerPolynomial, shift: int
 ) -> IntegerPolynomialShiftResult:
     """Compute ``p(x + a)`` using SymPy's exact dense shift."""
-    _run_admission(lambda: _admit_integer(request.polynomial))
-    shifted = _integer_poly(request.polynomial).shift(request.shift)
+    _run_admission(lambda: _admit_integer(polynomial))
+    shifted = _integer_poly(polynomial).shift(shift)
     return IntegerPolynomialShiftResult(
-        shift=request.shift,
+        shift=shift,
         shifted=_integer_wire(shifted),
     )
 
 
 def rational_polynomial_division(
-    request: RationalPolynomialDivisionRequest,
+    left: RationalPolynomial, right: RationalPolynomial
 ) -> RationalPolynomialDivisionResult:
-    _run_admission(lambda: _admit_division(request))
-    left = rational_polynomial_to_sympy(request.left)
-    right = rational_polynomial_to_sympy(request.right)
-    quotient, remainder, reconstruction = polynomials.divide(left, right)
-    variables = request.left.variables
+    """Divide two canonical univariate rational polynomials exactly."""
+
+    _run_admission(lambda: _admit_division(left, right))
+    left_backend = rational_polynomial_to_sympy(left)
+    right_backend = rational_polynomial_to_sympy(right)
+    quotient, remainder, reconstruction = polynomials.divide(left_backend, right_backend)
+    variables = left.variables
     return RationalPolynomialDivisionResult(
         quotient=rational_polynomial_from_sympy(quotient, variables),
         remainder=rational_polynomial_from_sympy(remainder, variables),
@@ -276,42 +291,48 @@ def rational_polynomial_division(
 
 
 def rational_polynomial_evaluate(
-    request: RationalPolynomialEvaluationRequest,
+    polynomial: RationalPolynomial, point: CanonicalRational
 ) -> RationalPolynomialEvaluationResult:
-    _run_admission(lambda: _admit_rational_evaluation(request))
-    point = request.point.as_fraction()
+    """Evaluate one canonical rational polynomial at an exact rational point."""
+
+    _run_admission(lambda: _admit_rational_evaluation(polynomial, point))
+    point_value = point.as_fraction()
     from sympy import Rational
 
     value = polynomials.evaluate(
-        rational_polynomial_to_sympy(request.polynomial),
-        Rational(point.numerator, point.denominator),
+        rational_polynomial_to_sympy(polynomial),
+        Rational(point_value.numerator, point_value.denominator),
     )
     return RationalPolynomialEvaluationResult(
-        point=request.point,
+        point=point,
         value=rational_from_sympy(value),
     )
 
 
 def rational_polynomial_derivative(
-    request: RationalPolynomialRequest,
+    polynomial: RationalPolynomial,
 ) -> RationalPolynomialDerivativeResult:
-    _run_admission(lambda: _admit_rational(request))
+    """Return the exact derivative of a canonical rational polynomial."""
+
+    _run_admission(lambda: _admit_rational(polynomial))
     return RationalPolynomialDerivativeResult(
         derivative=rational_polynomial_from_sympy(
-            polynomials.derivative(rational_polynomial_to_sympy(request.polynomial)),
-            request.polynomial.variables,
+            polynomials.derivative(rational_polynomial_to_sympy(polynomial)),
+            polynomial.variables,
         )
     )
 
 
 def rational_polynomial_integral(
-    request: RationalPolynomialRequest,
+    polynomial: RationalPolynomial,
 ) -> RationalPolynomialIntegralResult:
-    _run_admission(lambda: _admit_rational(request))
+    """Return the exact zero-constant-term integral."""
+
+    _run_admission(lambda: _admit_rational(polynomial))
     return RationalPolynomialIntegralResult(
         antiderivative=rational_polynomial_from_sympy(
-            polynomials.integral(rational_polynomial_to_sympy(request.polynomial)),
-            request.polynomial.variables,
+            polynomials.integral(rational_polynomial_to_sympy(polynomial)),
+            polynomial.variables,
         )
     )
 
@@ -357,14 +378,16 @@ def _partial_fraction_sort_key(
 
 
 def rational_partial_fraction_decomposition(
-    request: RationalFunctionRequest,
+    numerator: RationalPolynomial, denominator: RationalPolynomial
 ) -> RationalPartialFractionResult:
-    _run_admission(lambda: _admit_partial_fractions(request))
+    """Return the exact partial-fraction decomposition of a rational function."""
+
+    _run_admission(lambda: _admit_partial_fractions(numerator, denominator))
     from sympy import Add, Poly, cancel, fraction, together
 
-    variables = request.numerator.variables
-    numerator_polynomial = rational_polynomial_to_sympy(request.numerator)
-    denominator_polynomial = rational_polynomial_to_sympy(request.denominator)
+    variables = numerator.variables
+    numerator_polynomial = rational_polynomial_to_sympy(numerator)
+    denominator_polynomial = rational_polynomial_to_sympy(denominator)
     generator = numerator_polynomial.gens[0]
     source = cancel(numerator_polynomial.as_expr() / denominator_polynomial.as_expr())
     decomposition = polynomials.partial_fractions(source, generator)

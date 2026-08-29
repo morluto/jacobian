@@ -1,7 +1,7 @@
 """Domain-owned elementary integer and rational polynomial operations."""
 
 from jacobian.catalog._examples import example
-from jacobian.math.polynomials._elementary_operations import (
+from jacobian.math.polynomials._elementary_kernel import (
     integer_polynomial_evaluate,
     integer_polynomial_gcd,
     rational_polynomial_evaluate,
@@ -16,6 +16,24 @@ from jacobian.math.polynomials._models import (
 )
 from jacobian.math.polynomials._support import polynomial_operation
 
+
+def _run_integer_gcd(
+    request: IntegerPolynomialPairRequest,
+) -> IntegerPolynomialGcdResult:
+    return integer_polynomial_gcd(request.left, request.right)
+
+
+def _run_integer_evaluation(
+    request: IntegerPolynomialEvaluationRequest,
+) -> IntegerPolynomialEvaluationResult:
+    return integer_polynomial_evaluate(request.polynomial, request.point)
+
+
+def _run_rational_evaluation(
+    request: RationalPolynomialEvaluationRequest,
+) -> RationalPolynomialEvaluationResult:
+    return rational_polynomial_evaluate(request.polynomial, request.point)
+
 INTEGER_POLYNOMIAL_OPERATIONS = (
     polynomial_operation(
         "polynomial.integer.compute.gcd",
@@ -26,7 +44,7 @@ INTEGER_POLYNOMIAL_OPERATIONS = (
         ),
         IntegerPolynomialPairRequest,
         IntegerPolynomialGcdResult,
-        integer_polynomial_gcd,
+        _run_integer_gcd,
         "polynomial",
         "integer",
         "gcd",
@@ -47,7 +65,7 @@ INTEGER_POLYNOMIAL_OPERATIONS = (
         "Evaluate one bounded polynomial in ZZ[x] at an exact integer point.",
         IntegerPolynomialEvaluationRequest,
         IntegerPolynomialEvaluationResult,
-        integer_polynomial_evaluate,
+        _run_integer_evaluation,
         "polynomial",
         "integer",
         "evaluation",
@@ -65,7 +83,7 @@ INTEGER_POLYNOMIAL_OPERATIONS = (
         "Evaluate one bounded polynomial in QQ[x] at an exact rational point.",
         RationalPolynomialEvaluationRequest,
         RationalPolynomialEvaluationResult,
-        rational_polynomial_evaluate,
+        _run_rational_evaluation,
         "polynomial",
         "rational",
         "evaluation",

@@ -11,12 +11,16 @@ from jacobian.math.combinatorics.designs.coherent_configurations._models import 
 )
 from jacobian.math.combinatorics.designs.coherent_configurations._tools import TOOLS
 from jacobian.math.combinatorics.designs.coherent_configurations.operations import (
-    compute_analyze,
+    analyze_configuration,
 )
 from jacobian.math.combinatorics.designs.coherent_configurations.values import (
     MAX_POINT_LABEL_BYTES,
     MAX_RELATION_ID_BYTES,
 )
+
+
+def compute_analyze(request: CoherentConfigurationAnalyzeRequest):
+    return analyze_configuration(request.configuration)
 
 
 def _complete_graph_k3() -> dict[str, object]:

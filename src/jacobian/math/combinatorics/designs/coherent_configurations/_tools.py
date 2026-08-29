@@ -7,8 +7,14 @@ from jacobian.math.combinatorics.designs.coherent_configurations._models import 
     CoherentConfigurationAnalyzeResult,
 )
 from jacobian.math.combinatorics.designs.coherent_configurations.operations import (
-    compute_analyze,
+    analyze_configuration,
 )
+
+
+def _run_analyze(
+    request: CoherentConfigurationAnalyzeRequest,
+) -> CoherentConfigurationAnalyzeResult:
+    return analyze_configuration(request.configuration)
 
 TOOLS: MathTools = (
     MathTool(
@@ -21,7 +27,7 @@ TOOLS: MathTools = (
         ),
         request_type=CoherentConfigurationAnalyzeRequest,
         result_type=CoherentConfigurationAnalyzeResult,
-        run=compute_analyze,
+        run=_run_analyze,
         tags=(
             "algebraic-combinatorics",
             "coherent-configuration",

@@ -9,7 +9,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from ._bounds import CoherentConfigurationAdmissionError, require_analysis_admission
 from ._models import (
     CoherenceObstruction,
-    CoherentConfigurationAnalyzeRequest,
     CoherentConfigurationAnalyzeResult,
     DiagonalRelationMixedObstruction,
     Fiber,
@@ -292,20 +291,20 @@ def _computed_analysis_result(
     )
 
 
-def compute_analyze(
-    request: CoherentConfigurationAnalyzeRequest,
+def analyze_configuration(
+    configuration: CoherentConfigurationInput,
 ) -> CoherentConfigurationAnalyzeResult:
     """Analyze one complete relation partition with one native kernel pass."""
 
     try:
-        data = _analyze(request.configuration)
+        data = _analyze(configuration)
     except CoherentConfigurationAdmissionError as exc:
         raise OperationDomainValidationError(
             location=("configuration",),
             code="coherent_configuration.analysis_not_admitted",
             message=str(exc),
         ) from exc
-    return _computed_analysis_result(request.configuration, data)
+    return _computed_analysis_result(configuration, data)
 
 
-__all__ = ["compute_analyze"]
+__all__ = ["analyze_configuration"]

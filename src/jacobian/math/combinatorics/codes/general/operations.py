@@ -15,8 +15,6 @@ from jacobian.math.combinatorics.codes.general._models import (
     MAX_COVERING_RADIUS_TRANSITIONS,
     MAX_EXACT_CODEWORD_EVALUATIONS,
     SYNDROME_BFS_PASSES,
-    CoveringRadiusRequest,
-    LinearCodeRequest,
     _matrix_rank_mod_prime,
 )
 
@@ -41,6 +39,12 @@ def _admit_prime_field_matrix(
             code="code_theory.field_order_not_prime",
             message="field_order must be prime for this prime-field operation",
         )
+    if not generator_matrix:
+        raise OperationDomainValidationError(
+            location=("generator_matrix",),
+            code="code_theory.generator_matrix_empty",
+            message="generator matrix must contain at least one row",
+        )
     width = len(generator_matrix[0])
     if width == 0 or width > 256:
         raise OperationDomainValidationError(
@@ -63,10 +67,12 @@ def _admit_prime_field_matrix(
     return width
 
 
-def _admit_enumeration(request: LinearCodeRequest) -> None:
-    _admit_prime_field_matrix(request.field_order, request.generator_matrix)
+def _admit_enumeration(
+    generator_matrix: GeneratorMatrix, field_order: int
+) -> None:
+    _admit_prime_field_matrix(field_order, generator_matrix)
     if (
-        EXACT_ENUMERATION_PASSES * request.field_order ** len(request.generator_matrix)
+        EXACT_ENUMERATION_PASSES * field_order ** len(generator_matrix)
         > MAX_EXACT_CODEWORD_EVALUATIONS
     ):
         raise OperationDomainValidationError(
@@ -100,12 +106,9 @@ def minimum_distance(generator_matrix: GeneratorMatrix, field_order: int) -> int
     For the zero code (rank 0) no nonzero codeword exists; the code
     length is returned by the empty-code convention.
     """
-    request = LinearCodeRequest(
-        generator_matrix=generator_matrix, field_order=field_order
-    )
-    _admit_enumeration(request)
+    _admit_enumeration(generator_matrix, field_order)
     min_dist = float("inf")
-    for codeword in _codewords(request.generator_matrix, request.field_order):
+    for codeword in _codewords(generator_matrix, field_order):
         weight = sum(1 for c in codeword if c != 0)
         if weight > 0 and weight < min_dist:
             min_dist = weight
@@ -117,13 +120,10 @@ def weight_distribution(
 ) -> list[tuple[int, int]]:
     from collections import Counter
 
-    request = LinearCodeRequest(
-        generator_matrix=generator_matrix, field_order=field_order
-    )
-    _admit_enumeration(request)
+    _admit_enumeration(generator_matrix, field_order)
 
     weights: Counter[int] = Counter()
-    for codeword in _codewords(request.generator_matrix, request.field_order):
+    for codeword in _codewords(generator_matrix, field_order):
         weight = sum(1 for c in codeword if c != 0)
         weights[weight] += 1
     return sorted(weights.items())
@@ -187,19 +187,16 @@ def covering_radius(generator_matrix: GeneratorMatrix, field_order: int) -> int:
     Therefore graph distance from the zero syndrome is minimum coset-leader
     weight, and the maximum distance is the covering radius.
     """
-    request = CoveringRadiusRequest(
-        generator_matrix=generator_matrix, field_order=field_order
-    )
-    width = _admit_prime_field_matrix(request.field_order, request.generator_matrix)
-    rank = _matrix_rank_mod_prime(request.generator_matrix, request.field_order)
-    state_count = request.field_order ** (width - rank)
+    width = _admit_prime_field_matrix(field_order, generator_matrix)
+    rank = _matrix_rank_mod_prime(generator_matrix, field_order)
+    state_count = field_order ** (width - rank)
     if state_count > MAX_COVERING_RADIUS_STATES_PER_PASS:
         raise OperationDomainValidationError(
             location=("generator_matrix",),
             code="code_theory.syndrome_state_bound_exceeded",
             message="syndrome space exceeds the exact state bound",
         )
-    move_count_bound = min(width * (request.field_order - 1), max(state_count - 1, 0))
+    move_count_bound = min(width * (field_order - 1), max(state_count - 1, 0))
     if (
         SYNDROME_BFS_PASSES * state_count * move_count_bound
         > MAX_COVERING_RADIUS_TRANSITIONS
@@ -210,8 +207,8 @@ def covering_radius(generator_matrix: GeneratorMatrix, field_order: int) -> int:
             message="syndrome graph exceeds the exact transition bound",
         )
     check_rows = _parity_check_matrix(
-        request.generator_matrix,
-        request.field_order,
+        generator_matrix,
+        field_order,
     )
     if not check_rows:
         return 0
@@ -221,11 +218,11 @@ def covering_radius(generator_matrix: GeneratorMatrix, field_order: int) -> int:
     zero = (0,) * syndrome_dimension
     move_set = {
         tuple(
-            scalar * check_rows[row][column] % request.field_order
+            scalar * check_rows[row][column] % field_order
             for row in range(syndrome_dimension)
         )
         for column in range(column_count)
-        for scalar in range(1, request.field_order)
+        for scalar in range(1, field_order)
     }
     move_set.discard(zero)
     moves = tuple(sorted(move_set))
@@ -238,7 +235,7 @@ def covering_radius(generator_matrix: GeneratorMatrix, field_order: int) -> int:
         next_distance = distances[syndrome] + 1
         for move in moves:
             neighbor = tuple(
-                (left + right) % request.field_order
+                (left + right) % field_order
                 for left, right in zip(syndrome, move, strict=True)
             )
             if neighbor in distances:
@@ -247,7 +244,7 @@ def covering_radius(generator_matrix: GeneratorMatrix, field_order: int) -> int:
             radius = max(radius, next_distance)
             queue.append(neighbor)
 
-    expected_states = request.field_order**syndrome_dimension
+    expected_states = field_order**syndrome_dimension
     if len(distances) != expected_states:
         raise ArithmeticError("parity-check columns did not span the syndrome space")
     return radius

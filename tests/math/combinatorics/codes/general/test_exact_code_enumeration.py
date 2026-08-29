@@ -71,7 +71,9 @@ def test_zero_code_uses_length_convention_for_minimum_distance() -> None:
 
 
 def test_native_code_api_rejects_empty_generator_matrix_structurally() -> None:
-    _assert_validation_error_code(lambda: minimum_distance((), 2), "too_short")
+    with pytest.raises(OperationDomainValidationError) as error:
+        minimum_distance((), 2)
+    assert error.value.errors()[0]["type"] == "code_theory.generator_matrix_empty"
 
 
 def test_native_code_api_rejects_unequal_rows_semantically() -> None:

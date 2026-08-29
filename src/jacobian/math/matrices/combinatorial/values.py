@@ -18,7 +18,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
-MAX_MATRIX_ORDER = 128
+from ._flint import integer_gram
+
+MAX_MATERIALIZED_SIGN_MATRIX_AXIS = 1_024
+MAX_HADAMARD_ORDER = 512
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -43,7 +46,7 @@ class SignMatrix(StrictModel):
 
     @model_validator(mode="after")
     def require_well_formed(self) -> Self:
-        if len(self.rows) > MAX_MATRIX_ORDER:
+        if len(self.rows) > MAX_MATERIALIZED_SIGN_MATRIX_AXIS:
             raise _validation_error(
                 "row_count_exceeds_budget", "row count exceeds the bounded budget"
             )
@@ -55,7 +58,7 @@ class SignMatrix(StrictModel):
                 raise _validation_error(
                     "row_length_mismatch", "sign matrix rows must have equal length"
                 )
-            if len(row) > MAX_MATRIX_ORDER:
+            if len(row) > MAX_MATERIALIZED_SIGN_MATRIX_AXIS:
                 raise _validation_error(
                     "column_count_exceeds_budget",
                     "column count exceeds the bounded budget",
@@ -75,7 +78,7 @@ class HadamardMatrix(StrictModel):
 
     @model_validator(mode="after")
     def require_hadamard(self) -> Self:
-        if len(self.rows) > MAX_MATRIX_ORDER:
+        if len(self.rows) > MAX_HADAMARD_ORDER:
             raise _validation_error(
                 "row_count_exceeds_budget", "row count exceeds the bounded budget"
             )
@@ -86,12 +89,10 @@ class HadamardMatrix(StrictModel):
                     "not_square", "Hadamard matrices must be square"
                 )
         _validate_sign_entries(self.rows)
-        h = [list(row) for row in self.rows]
+        gram = integer_gram(self.rows)
         for i in range(n):
-            for j in range(i, n):
-                inner = sum(h[i][k] * h[j][k] for k in range(n))
-                expected = n if i == j else 0
-                if inner != expected:
+            for j in range(n):
+                if gram[i][j] != (n if i == j else 0):
                     raise _validation_error(
                         "orthogonality_violation",
                         "Hadamard orthogonality H H^T = n I_n is violated",
@@ -100,7 +101,8 @@ class HadamardMatrix(StrictModel):
 
 
 __all__ = [
-    "MAX_MATRIX_ORDER",
+    "MAX_HADAMARD_ORDER",
+    "MAX_MATERIALIZED_SIGN_MATRIX_AXIS",
     "HadamardMatrix",
     "SignMatrix",
 ]

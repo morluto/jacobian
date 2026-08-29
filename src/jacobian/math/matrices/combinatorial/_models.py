@@ -54,13 +54,13 @@ class GramProfileResult(StrictModel):
 class NormalizeRequest(StrictModel):
     """Normalize a sign matrix so first row/column are all +1."""
 
-    matrix: HadamardMatrix | SignMatrix
+    matrix: SignMatrix
 
 
 class NormalizeResult(StrictModel):
     """The normalized matrix and row/column sign switches used."""
 
-    normalized: HadamardMatrix | SignMatrix
+    normalized: SignMatrix
     row_switches: tuple[int, ...]
     column_switches: tuple[int, ...]
 

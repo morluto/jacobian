@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import CanonicalLimits
+from jacobian.catalog.models import OperationDomainValidationError
+
+from ._flint import integer_gram
 from ._models import (
     DeterminantProfileResult,
     GramProfileResult,
@@ -10,7 +14,43 @@ from ._models import (
     SignProfileResult,
     SylvesterResult,
 )
-from .values import MAX_MATRIX_ORDER, HadamardMatrix, SignMatrix
+from .values import HadamardMatrix, SignMatrix
+
+MAX_GRAM_PROFILE_AXIS = 512
+MAX_KRONECKER_ORDER = 128
+
+
+def _gram_profile_result_bound(row_count: int, column_count: int) -> int:
+    """Conservatively bound canonical bytes for the complete Gram profile."""
+
+    value_chars = len(str(column_count)) + 1
+    index_chars = len(str(max(0, row_count - 1)))
+    gram_bytes = row_count * row_count * (value_chars + 1) + 2 * row_count
+    residual_bytes = 2 * row_count
+    pair_count = row_count * (row_count - 1) // 2
+    off_diagonal_bytes = pair_count * (2 * index_chars + value_chars + 5)
+    return 160 + gram_bytes + residual_bytes + off_diagonal_bytes
+
+
+def _require_gram_profile_admission(matrix: SignMatrix) -> None:
+    row_count = len(matrix.rows)
+    column_count = len(matrix.rows[0])
+    if row_count > MAX_GRAM_PROFILE_AXIS or column_count > MAX_GRAM_PROFILE_AXIS:
+        raise OperationDomainValidationError(
+            location=("matrix", "rows"),
+            code="combinatorial_matrix.gram_axis_budget",
+            message="Gram profile exceeds the admitted matrix-axis budget",
+        )
+    if (
+        _gram_profile_result_bound(row_count, column_count)
+        > CanonicalLimits().max_output_bytes
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix", "rows"),
+            code="combinatorial_matrix.gram_result_budget",
+            message="Gram profile exceeds the canonical result-byte budget",
+        )
+
 
 __all__ = [
     "determinant_profile",
@@ -50,12 +90,8 @@ def gram_profile(matrix: SignMatrix) -> GramProfileResult:
     rows = matrix.rows
     n = len(rows)
     m = len(rows[0]) if n else 0
-    gram: list[list[int]] = [[0] * n for _ in range(n)]
-    for i in range(n):
-        for j in range(i, n):
-            inner = sum(rows[i][k] * rows[j][k] for k in range(m))
-            gram[i][j] = inner
-            gram[j][i] = inner
+    _require_gram_profile_admission(matrix)
+    gram = integer_gram(rows)
     is_hadamard = n == m and all(
         gram[i][j] == (n if i == j else 0) for i in range(n) for j in range(n)
     )
@@ -65,14 +101,14 @@ def gram_profile(matrix: SignMatrix) -> GramProfileResult:
     )
     return GramProfileResult(
         order=n,
-        gram=tuple(tuple(row) for row in gram),
+        gram=gram,
         diagonal_residuals=residuals,
         nonzero_off_diagonal=nonzero_off,
         is_hadamard=is_hadamard,
     )
 
 
-def normalize(matrix: HadamardMatrix | SignMatrix) -> NormalizeResult:
+def normalize(matrix: SignMatrix) -> NormalizeResult:
     """Return a deterministically normalized sign matrix whose first row and
     first column are all ``+1``, plus the exact row/column sign switches
     used. Normalization must preserve the full matrix and be idempotent."""
@@ -89,9 +125,8 @@ def normalize(matrix: HadamardMatrix | SignMatrix) -> NormalizeResult:
             row_switches[i] = 1
             for j in range(len(rows[0])):
                 rows[i][j] = -rows[i][j]
-    value_type = HadamardMatrix if isinstance(matrix, HadamardMatrix) else SignMatrix
     return NormalizeResult(
-        normalized=value_type(rows=tuple(tuple(row) for row in rows)),
+        normalized=SignMatrix(rows=tuple(tuple(row) for row in rows)),
         row_switches=tuple(row_switches),
         column_switches=tuple(col_switches),
     )
@@ -120,9 +155,9 @@ def kronecker(left: HadamardMatrix, right: HadamardMatrix) -> KroneckerProductRe
     a = [list(row) for row in left.rows]
     b = [list(row) for row in right.rows]
     n, m = len(a), len(b)
-    if n * m > MAX_MATRIX_ORDER:
+    if n * m > MAX_KRONECKER_ORDER:
         raise ValueError(
-            f"Kronecker product order {n * m} exceeds maximum {MAX_MATRIX_ORDER}"
+            f"Kronecker product order {n * m} exceeds maximum {MAX_KRONECKER_ORDER}"
         )
     result: list[list[int]] = []
     row_map: list[tuple[int, int]] = []

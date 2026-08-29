@@ -103,7 +103,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the Gram profile of a sign matrix",
         "Return order, exact H H^T, diagonal residuals from n, all nonzero "
         "off-diagonal inner products, and is_hadamard. Orthogonality is "
-        "replayed exactly with no floating tolerance.",
+        "replayed exactly with FLINT integer matrices and no floating tolerance, "
+        "for materialized sign matrices with axes at most 512.",
         GramProfileRequest,
         GramProfileResult,
         compute_gram_profile,

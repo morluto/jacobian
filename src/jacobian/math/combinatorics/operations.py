@@ -46,7 +46,10 @@ def _pair(n: int, k: int) -> tuple[int, int]:
 MAX_COUNTING_INDEX = 10_000
 MAX_SPARSE_COUNTING_INDEX = 10**15
 MAX_COUNTING_MULTIPLICATIVE_STEPS = 100_000
-MAX_COUNTING_RESULT_DIGITS = CanonicalLimits().max_integer_digits
+_COUNTING_RESULT_RESERVE_BYTES = 4_096
+MAX_COUNTING_RESULT_DIGITS = (
+    CanonicalLimits().max_output_bytes - _COUNTING_RESULT_RESERVE_BYTES
+)
 MAX_MULTINOMIAL_PARTS = 256
 MAX_MULTINOMIAL_TOTAL = MAX_COUNTING_INDEX
 
@@ -76,7 +79,12 @@ def _bounded_sparse_counting_index(value: int, *, name: str) -> int:
     return value
 
 
-def _admit_multiplicative_count(*, maximum_factor: int, steps: int) -> None:
+def _admit_multiplicative_count(
+    *,
+    maximum_factor: int,
+    steps: int,
+    cancellation_bit_bound: int | None = None,
+) -> None:
     if steps > MAX_COUNTING_MULTIPLICATIVE_STEPS:
         raise OperationDomainValidationError(
             location=("k",),
@@ -90,6 +98,8 @@ def _admit_multiplicative_count(*, maximum_factor: int, steps: int) -> None:
     # 30103 / 100000 is a strict upper bound for log10(2), so this cannot
     # underestimate the decimal width of that product envelope.
     bit_bound = steps * max(1, maximum_factor.bit_length())
+    if cancellation_bit_bound is not None:
+        bit_bound = min(bit_bound, cancellation_bit_bound)
     digit_bound = (bit_bound * 30_103 + 99_999) // 100_000
     if digit_bound > MAX_COUNTING_RESULT_DIGITS:
         raise OperationDomainValidationError(
@@ -118,7 +128,14 @@ def binomial(n: int, k: int) -> int:
     if second > first:
         return 0
     steps = min(second, first - second)
-    _admit_multiplicative_count(maximum_factor=first, steps=steps)
+    # The coefficient is also at most the sum of all coefficients of
+    # (1 + x)^n, namely 2^n.  Taking the smaller bound retains cancellation
+    # near the center without weakening the sparse product envelope.
+    _admit_multiplicative_count(
+        maximum_factor=first,
+        steps=steps,
+        cancellation_bit_bound=first,
+    )
     return math.comb(first, second)
 
 
@@ -185,7 +202,11 @@ def compositions(n: int, k: int) -> int:
     if parts == 0 or parts > total:
         return 0
     steps = min(parts - 1, total - parts)
-    _admit_multiplicative_count(maximum_factor=total - 1, steps=steps)
+    _admit_multiplicative_count(
+        maximum_factor=total - 1,
+        steps=steps,
+        cancellation_bit_bound=total - 1,
+    )
     return math.comb(total - 1, parts - 1)
 
 

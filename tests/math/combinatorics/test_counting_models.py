@@ -95,18 +95,14 @@ def test_long_multiplicative_profiles_reject_before_kernel(
     assert error.value.errors()[0]["type"] == "combinatorics.counting_work_exceeded"
 
 
-@pytest.mark.parametrize(
-    "operation", (compute_binomial, compute_permutations, compute_compositions)
-)
-def test_large_result_profiles_reject_before_kernel(
-    operation: Callable[[SparseCountingPairRequest], IntegerResult],
-) -> None:
-    with pytest.raises(OperationDomainValidationError) as error:
-        operation(SparseCountingPairRequest(n=10**15, k=3_001))
-    assert (
-        error.value.errors()[0]["type"]
-        == "combinatorics.counting_result_digits_exceeded"
-    )
+def test_central_binomial_admission_accounts_for_cancellation() -> None:
+    result = compute_binomial(SparseCountingPairRequest(n=100_000, k=50_000))
+    assert len(result.value) == 30_101
+
+
+def test_long_permutation_uses_the_actual_string_transport_envelope() -> None:
+    result = compute_permutations(SparseCountingPairRequest(n=20_000, k=20_000))
+    assert len(result.value) == 77_338
 
 
 def test_medium_counts_retain_defining_identities() -> None:

@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.math.graphs.edge_coloring_arrowing._models import (
+    EdgeColoringArrowingRequest,
+)
 from jacobian.math.graphs.edge_coloring_arrowing.operations import (
     decide_edge_coloring_arrowing,
 )
@@ -94,3 +100,14 @@ def test_result_preserves_inputs() -> None:
     result = decide_edge_coloring_arrowing(k6, (k3, k3))
     assert result.host_graph == k6
     assert result.targets == (k3, k3)
+
+
+def test_rejects_empty_target_and_unbounded_search() -> None:
+    host = _k6()
+    empty = _graph([], [])
+    with pytest.raises(ValidationError):
+        EdgeColoringArrowingRequest(host_graph=host, targets=(empty,))
+    with pytest.raises(ValueError, match="embedding checks"):
+        decide_edge_coloring_arrowing(
+            _graph([str(i) for i in range(10)], _k6().edges), (_k3(),) * 6
+        )

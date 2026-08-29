@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from itertools import permutations, product
 
+from pydantic_core import PydanticCustomError
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.edge_coloring_arrowing._models import (
     EdgeColoringArrowingResult,
+    _validate_arrowing_envelope,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -24,6 +28,13 @@ def decide_edge_coloring_arrowing(
     Returns ARROWS if every colouring contains a monochromatic target copy,
     or DOES_NOT_ARROW with one avoiding colouring otherwise.
     """
+    try:
+        _validate_arrowing_envelope(host_graph, targets)
+    except PydanticCustomError as error:
+        raise OperationDomainValidationError(
+            location=(), code=error.type, message=str(error)
+        ) from error
+
     edges = list(host_graph.edges)
     num_colors = len(targets)
     edge_count = len(edges)

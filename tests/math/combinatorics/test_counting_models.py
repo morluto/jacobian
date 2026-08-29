@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Callable
 
 import pytest
@@ -103,6 +104,23 @@ def test_central_binomial_admission_accounts_for_cancellation() -> None:
 def test_off_center_binomial_admission_accounts_for_cancellation() -> None:
     result = compute_binomial(SparseCountingPairRequest(n=1_000_000, k=80_000))
     assert len(result.value) == 121_066
+
+
+@pytest.mark.parametrize("operation", (compute_binomial, compute_compositions))
+def test_oversized_binomial_steps_reject_before_digit_bound_iteration(
+    operation: Callable[[SparseCountingPairRequest], IntegerResult],
+) -> None:
+    request = SparseCountingPairRequest(
+        n=MAX_SPARSE_COUNTING_INDEX,
+        k=MAX_SPARSE_COUNTING_INDEX // 2,
+    )
+    started = time.perf_counter()
+    with pytest.raises(OperationDomainValidationError) as error:
+        operation(request)
+    elapsed = time.perf_counter() - started
+
+    assert error.value.errors()[0]["type"] == "combinatorics.counting_work_exceeded"
+    assert elapsed < 1.0
 
 
 def test_long_permutation_uses_the_actual_string_transport_envelope() -> None:

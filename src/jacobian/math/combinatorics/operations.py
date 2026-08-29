@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from fractions import Fraction
 from itertools import pairwise
-from typing import Literal
+from typing import Literal, NoReturn
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import CanonicalLimits, format_canonical_integer
@@ -81,13 +81,33 @@ def _bounded_sparse_counting_index(value: int, *, name: str) -> int:
     return value
 
 
+def _reject_counting_work() -> NoReturn:
+    raise OperationDomainValidationError(
+        location=("k",),
+        code="combinatorics.counting_work_exceeded",
+        message=(
+            "counting request exceeds the "
+            f"{MAX_COUNTING_MULTIPLICATIVE_STEPS}-step construction and "
+            "canonical-formatting budget"
+        ),
+    )
+
+
+def _require_counting_step_budget(steps: int) -> None:
+    if steps > MAX_COUNTING_MULTIPLICATIVE_STEPS:
+        _reject_counting_work()
+
+
 def _binomial_coefficient_digit_bound(n: int, k: int) -> int:
     """Return a safe upper bound on the decimal digit length of ``C(n, k)``.
 
     Uses the cancelled product ``∏_{i=1}^{k} (n - k + i) / i`` rather than the
     undivided numerator, so off-center coefficients are not charged as if they
-    were near ``2^n``.  Float accumulation over the admitted step budget stays
-    far below one digit; the final ``+ 1`` keeps the bound from underestimating.
+    were near ``2^n``.  Callers must reject ``min(k, n-k)`` above the
+    multiplicative-step budget before this loop; the same check is repeated
+    here so a direct call cannot iterate past that budget.  Float
+    accumulation over the admitted step budget stays far below one digit; the
+    final ``+ 1`` keeps the bound from underestimating.
     """
 
     if k < 0 or k > n:
@@ -95,6 +115,7 @@ def _binomial_coefficient_digit_bound(n: int, k: int) -> int:
     steps = min(k, n - k)
     if steps == 0:
         return 1
+    _require_counting_step_budget(steps)
     log10_value = 0.0
     for index in range(1, steps + 1):
         log10_value += math.log10(n - steps + index) - math.log10(index)
@@ -109,6 +130,7 @@ def _admit_multiplicative_count(
     steps: int,
     result_digit_bound: int | None = None,
 ) -> None:
+    _require_counting_step_budget(steps)
     if result_digit_bound is None:
         # Every multiplicative factor is at most ``maximum_factor``.  The
         # rational 30103 / 100000 is a strict upper bound for log10(2), so this
@@ -123,15 +145,7 @@ def _admit_multiplicative_count(
     # more non-interruptible work than its coefficient construction.
     formatting_steps = (digit_bound + 8) // 9
     if steps + formatting_steps > MAX_COUNTING_MULTIPLICATIVE_STEPS:
-        raise OperationDomainValidationError(
-            location=("k",),
-            code="combinatorics.counting_work_exceeded",
-            message=(
-                "counting request exceeds the "
-                f"{MAX_COUNTING_MULTIPLICATIVE_STEPS}-step construction and "
-                "canonical-formatting budget"
-            ),
-        )
+        _reject_counting_work()
     if digit_bound > MAX_COUNTING_RESULT_DIGITS:
         raise OperationDomainValidationError(
             location=("n", "k"),
@@ -141,6 +155,24 @@ def _admit_multiplicative_count(
                 f"{MAX_COUNTING_RESULT_DIGITS}-digit result budget"
             ),
         )
+
+
+def _admit_cancelled_binomial_count(n: int, k: int) -> None:
+    """Admit ``C(n, k)`` after checking the step budget, then the digit bound.
+
+    The published sparse-counting schema accepts ``n, k <= 10**15``.  Checking
+    ``min(k, n-k)`` against the multiplicative-step budget first keeps
+    ``binomial(10**15, 5 * 10**14)`` from iterating half a quadrillion times
+    while estimating digits.
+    """
+
+    steps = min(k, n - k)
+    _require_counting_step_budget(steps)
+    _admit_multiplicative_count(
+        maximum_factor=n,
+        steps=steps,
+        result_digit_bound=_binomial_coefficient_digit_bound(n, k),
+    )
 
 
 def factorial(n: int) -> int:
@@ -156,12 +188,7 @@ def binomial(n: int, k: int) -> int:
     second = _bounded_sparse_counting_index(k, name="k")
     if second > first:
         return 0
-    steps = min(second, first - second)
-    _admit_multiplicative_count(
-        maximum_factor=first,
-        steps=steps,
-        result_digit_bound=_binomial_coefficient_digit_bound(first, second),
-    )
+    _admit_cancelled_binomial_count(first, second)
     return math.comb(first, second)
 
 
@@ -223,12 +250,7 @@ def compositions(n: int, k: int) -> int:
         return 1
     if parts == 0 or parts > total:
         return 0
-    steps = min(parts - 1, total - parts)
-    _admit_multiplicative_count(
-        maximum_factor=total - 1,
-        steps=steps,
-        result_digit_bound=_binomial_coefficient_digit_bound(total - 1, parts - 1),
-    )
+    _admit_cancelled_binomial_count(total - 1, parts - 1)
     return math.comb(total - 1, parts - 1)
 
 

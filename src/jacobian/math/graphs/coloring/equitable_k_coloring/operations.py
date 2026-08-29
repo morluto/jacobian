@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import networkx as nx
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring.equitable_k_coloring._models import (
+    MAX_EQUITABLE_COLORING_SEARCH_NODES,
     EquitableColoringResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -20,17 +22,34 @@ def decide_equitable_k_coloring(
 
     Every colour class must have size floor(|V|/k) or ceil(|V|/k).
     """
+    if k <= 0:
+        raise OperationDomainValidationError(
+            location=("k",),
+            code="graph.equitable_coloring_positive_palette",
+            message="equitable coloring requires a positive palette size",
+        )
+    n = len(graph.vertices)
+    if k < n and k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES:
+        raise OperationDomainValidationError(
+            location=("graph", "k"),
+            code="graph.equitable_coloring_search_exceeded",
+            message="equitable coloring exceeds the 1000000-node search bound",
+        )
+    if k >= n:
+        return EquitableColoringResult(
+            graph=graph,
+            k=k,
+            colorable=True,
+            coloring=tuple(range(n)),
+        )
+
     nx_graph: nx.Graph[str] = nx.Graph()
     for v in graph.vertices:
         nx_graph.add_node(v)
     for u, v in graph.edges:
         nx_graph.add_edge(u, v)
 
-    n = len(graph.vertices)
     vertices = list(graph.vertices)
-
-    if n == 0:
-        return EquitableColoringResult(graph=graph, k=k, colorable=True, coloring=())
 
     base = n // k
     remainder = n % k

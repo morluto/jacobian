@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring.equitable_k_coloring.operations import (
     decide_equitable_k_coloring,
 )
@@ -39,3 +42,23 @@ def test_result_preserves_source() -> None:
     result = decide_equitable_k_coloring(graph, 2)
     assert result.graph == graph
     assert result.k == 2
+
+
+def test_nonpositive_palette_is_rejected_before_division() -> None:
+    with pytest.raises(OperationDomainValidationError, match="positive palette"):
+        decide_equitable_k_coloring(_graph(["a"], []), 0)
+
+
+def test_large_palette_uses_the_direct_singleton_class_construction() -> None:
+    graph = _graph([str(index) for index in range(64)], [])
+    result = decide_equitable_k_coloring(graph, 64)
+
+    assert result.colorable
+    assert result.coloring == tuple(range(64))
+
+
+def test_exponential_search_is_rejected_before_backtracking() -> None:
+    graph = _graph([str(index) for index in range(20)], [])
+
+    with pytest.raises(OperationDomainValidationError, match="search bound"):
+        decide_equitable_k_coloring(graph, 2)

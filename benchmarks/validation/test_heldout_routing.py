@@ -17,14 +17,17 @@ def _ready_probe(*, mcp_url, expected_version, timeout_seconds):
         "reachable": True,
         "report": {
             "server": {"name": "jacobian", "version": "1.2.3"},
-            "tool_names": ["math.find", "math.run"],
+            "tool_names": ["integer.compute.extended_gcd"],
             "catalog": {
                 "catalog_version": "1",
                 "operations": 1,
                 "catalog_digest": "sha256:" + "5" * 64,
                 "sha256": "abc",
             },
-            "discovery": {"bytes": 100, "matches": ["cap-1"]},
+            "probe": {
+                "operation_id": "integer.compute.extended_gcd",
+                "result": {"gcd": "6"},
+            },
         },
     }
 
@@ -54,7 +57,7 @@ def test_treatment_readiness_preflight_ready_with_successful_probe(
     assert contract["checks"]["server_version_match"] is True
     assert contract["checks"]["catalog_digest_match"] is True
     assert contract["checks"]["required_tools_present"] is True
-    assert contract["checks"]["describe_responded"] is True
+    assert contract["checks"]["probe_responded"] is True
     assert contract["failures"] == []
     assert contract["probe"]["reachable"] is True
     assert contract["probe"]["server_version_observed"] == "1.2.3"
@@ -162,14 +165,17 @@ def test_treatment_readiness_preflight_misconfigured_on_digest_mismatch(
             "reachable": True,
             "report": {
                 "server": {"name": "jacobian", "version": "1.2.3"},
-                "tool_names": ["math.find", "math.run"],
+                "tool_names": ["integer.compute.extended_gcd"],
                 "catalog": {
                     "catalog_version": "1",
                     "operations": 1,
                     "catalog_digest": "sha256:" + "9" * 64,
                     "sha256": "abc",
                 },
-                "discovery": {"bytes": 100, "matches": ["cap-1"]},
+                "probe": {
+                    "operation_id": "integer.compute.extended_gcd",
+                    "result": {"gcd": "6"},
+                },
             },
         }
 

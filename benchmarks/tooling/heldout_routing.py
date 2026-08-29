@@ -21,7 +21,7 @@ from benchmarks.tooling.heldout_manifest import (
     validate_manifest,
 )
 
-_REQUIRED_MCP_TOOLS = {"math.find", "math.run"}
+_PROBE_OPERATION_ID = "integer.compute.extended_gcd"
 _ZERO_DIGEST = "sha256:" + "0" * 64
 
 
@@ -31,7 +31,7 @@ def _probe_digest(report: dict[str, Any]) -> str:
             "server_version": report.get("server", {}).get("version"),
             "catalog_digest": report.get("catalog", {}).get("catalog_digest"),
             "tool_names": report.get("tool_names"),
-            "discovery_matches": report.get("discovery", {}).get("matches"),
+            "probe": report.get("probe"),
         }
     )
 
@@ -90,7 +90,7 @@ def _empty_checks() -> dict[str, Any]:
         "server_version_match": None,
         "catalog_digest_match": None,
         "required_tools_present": None,
-        "describe_responded": None,
+        "probe_responded": None,
     }
 
 
@@ -205,16 +205,19 @@ def _probe_match_checks(
         probe["catalog_digest_observed"] == expected_catalog_digest
     )
     observed_tools = set(probe.get("tool_names") or [])
-    checks["required_tools_present"] = _REQUIRED_MCP_TOOLS.issubset(observed_tools)
-    checks["describe_responded"] = bool(probe.get("discovery_matches") is not None)
+    checks["required_tools_present"] = _PROBE_OPERATION_ID in observed_tools
+    checks["probe_responded"] = bool(
+        probe.get("probe_operation_id") == _PROBE_OPERATION_ID
+        and probe.get("probe_succeeded") is True
+    )
     if not checks["server_version_match"]:
         failures.append("probe server_version does not match manifest")
     if not checks["catalog_digest_match"]:
         failures.append("probe catalog_digest does not match manifest")
     if not checks["required_tools_present"]:
         failures.append("probe is missing required MCP tools")
-    if not checks["describe_responded"]:
-        failures.append("probe math.find did not respond")
+    if not checks["probe_responded"]:
+        failures.append("probe direct operation did not respond")
     return checks, failures
 
 
@@ -269,7 +272,8 @@ def treatment_readiness_preflight(
         "server_version_observed": None,
         "catalog_digest_observed": None,
         "tool_names": None,
-        "discovery_matches": None,
+        "probe_operation_id": None,
+        "probe_succeeded": None,
         "probe_digest": _ZERO_DIGEST,
         "diagnostic": None,
     }
@@ -291,7 +295,11 @@ def treatment_readiness_preflight(
                     "catalog_digest"
                 ),
                 "tool_names": report.get("tool_names"),
-                "discovery_matches": report.get("discovery", {}).get("matches"),
+                "probe_operation_id": report.get("probe", {}).get("operation_id"),
+                "probe_succeeded": (
+                    report.get("probe", {}).get("operation_id") == _PROBE_OPERATION_ID
+                    and report.get("probe", {}).get("result") is not None
+                ),
                 "probe_digest": _probe_digest(report),
                 "diagnostic": None,
             }
@@ -328,7 +336,7 @@ def treatment_readiness_preflight(
             "server_version_match",
             "catalog_digest_match",
             "required_tools_present",
-            "describe_responded",
+            "probe_responded",
         )
     ):
         infrastructure_status = "READY"

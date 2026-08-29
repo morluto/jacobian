@@ -470,7 +470,7 @@ function printReport(value, json) {
   }
   const names = value.clients.map((client) => client.display_name).join(", ");
   console.log(`◆ Jacobian MCP and skill are configured for ${names}.`);
-  console.log("  Restart or reload those clients, then use math.find to discover an operation.");
+  console.log("  Restart or reload those clients, then select a direct operation tool for each mathematical task.");
 }
 
 async function promptForClients(detected) {

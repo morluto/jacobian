@@ -154,14 +154,17 @@ def _ready_probe(*, mcp_url, expected_version, timeout_seconds):
         "reachable": True,
         "report": {
             "server": {"name": "jacobian", "version": "1.0.0"},
-            "tool_names": ["math.find", "math.run"],
+            "tool_names": ["integer.compute.extended_gcd"],
             "catalog": {
                 "catalog_version": "1",
                 "operations": 1,
                 "catalog_digest": "sha256:" + "2" * 64,
                 "sha256": "abc",
             },
-            "discovery": {"bytes": 100, "matches": ["cap-1"]},
+            "probe": {
+                "operation_id": "integer.compute.extended_gcd",
+                "result": {"gcd": "6"},
+            },
         },
     }
 

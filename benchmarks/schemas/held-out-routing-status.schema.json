@@ -54,10 +54,8 @@
           "type": ["array", "null"],
           "items": {"type": "string"}
         },
-        "discovery_matches": {
-          "type": ["array", "null"],
-          "items": {"type": "string"}
-        },
+        "probe_operation_id": {"type": ["string", "null"]},
+        "probe_succeeded": {"type": ["boolean", "null"]},
         "probe_digest": {"$ref": "#/$defs/digest"},
         "diagnostic": {"type": ["string", "null"]}
       }
@@ -65,7 +63,7 @@
     "checks": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["image_digest_pinned", "catalog_digest_bound", "server_version_bound", "server_version_match", "catalog_digest_match", "required_tools_present", "describe_responded"],
+      "required": ["image_digest_pinned", "catalog_digest_bound", "server_version_bound", "server_version_match", "catalog_digest_match", "required_tools_present", "probe_responded"],
       "properties": {
         "image_digest_pinned": {"type": "boolean"},
         "catalog_digest_bound": {"type": "boolean"},
@@ -73,7 +71,7 @@
         "server_version_match": {"type": ["boolean", "null"]},
         "catalog_digest_match": {"type": ["boolean", "null"]},
         "required_tools_present": {"type": ["boolean", "null"]},
-        "describe_responded": {"type": ["boolean", "null"]}
+        "probe_responded": {"type": ["boolean", "null"]}
       }
     },
     "failures": {"type": "array", "items": {"type": "string"}}

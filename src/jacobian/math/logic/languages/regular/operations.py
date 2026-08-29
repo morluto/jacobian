@@ -65,6 +65,13 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
     matrix, accepting_states = accepted_paths
     state_count = len(matrix)
     row_sum_bound = max(sum(row) for row in matrix)
+    intermediate_digits = _power_decimal_digits(max(row_sum_bound, 1), word_length)
+    if intermediate_digits > MAX_COUNT_RESULT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("dfa", "word_length"),
+            code="regular_language.count_intermediate_bound",
+            message="DFA matrix-power intermediates exceed the canonical digit bound",
+        )
     coefficient_bound = _power_capped(
         row_sum_bound,
         word_length,
@@ -139,6 +146,14 @@ def _accepted_path_matrix(
         index[state] for state in states if state in dfa.accepting_states
     )
     return tuple(tuple(row) for row in matrix), accepting_states
+
+
+def _power_decimal_digits(base: int, exponent: int) -> int:
+    """Upper-bound the decimal length of ``base ** exponent`` without powering."""
+
+    if exponent == 0 or base <= 1:
+        return 1
+    return max(1, (exponent * base.bit_length() * 30_103) // 100_000 + 1)
 
 
 def _power_capped(base: int, exponent: int, cap: int) -> int:

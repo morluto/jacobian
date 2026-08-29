@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.common_neighbor_profile.operations import (
     compute_common_neighbor_profile,
 )
@@ -86,3 +89,12 @@ def test_result_preserves_source() -> None:
     g = _graph(["a", "b"], [("a", "b")])
     result = compute_common_neighbor_profile(g)
     assert result.graph == g
+
+
+def test_native_admission_rejects_complete_profile_over_output_bound() -> None:
+    """A dense large graph is rejected before retaining millions of labels."""
+    vertices = sorted(str(i) for i in range(256))
+    edges = [(vertices[i], vertices[j]) for i in range(256) for j in range(i + 1, 256)]
+    g = _graph(vertices, edges)
+    with pytest.raises(OperationDomainValidationError, match="output bound"):
+        compute_common_neighbor_profile(g)

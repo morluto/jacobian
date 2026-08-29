@@ -2,6 +2,9 @@
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.analysis._adaptive_range_enclosure import (
+    ADAPTIVE_RANGE_ENCLOSURE_OPERATIONS,
+)
 from jacobian.math.analysis._box_enclosure import BOX_EXPRESSION_ENCLOSURE_OPERATIONS
 from jacobian.math.analysis._definite_integral_enclosure import (
     DEFINITE_INTEGRAL_ENCLOSURE_OPERATIONS,
@@ -219,6 +222,7 @@ SECOND_JET_ENCLOSURE_OPERATIONS = (
 TOOLS: MathTools = (
     *POINT_ENCLOSURE_OPERATIONS,
     *EXPRESSION_ENCLOSURE_OPERATIONS,
+    *ADAPTIVE_RANGE_ENCLOSURE_OPERATIONS,
     *BOX_EXPRESSION_ENCLOSURE_OPERATIONS,
     *DEFINITE_INTEGRAL_ENCLOSURE_OPERATIONS,
     *SECOND_JET_ENCLOSURE_OPERATIONS,

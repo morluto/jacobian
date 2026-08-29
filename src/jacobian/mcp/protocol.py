@@ -46,6 +46,7 @@ def _direct_tool(
 
     metadata = FuncMetadata(
         arg_model=_DirectArguments,
+        output_model=operation.result_type,
         output_schema=operation.result_type.model_json_schema(),
     )
     parameters = operation.request_type.model_json_schema()

@@ -1,6 +1,6 @@
 ---
 name: recent-conjecture-evaluations
-description: Run source-grounded Jacobian reliability evaluations using recently resolved conjectures as held-out probes. Use for source selection and deduplication, exact input-bound oracles, current-main math.find/math.run contract audits, frozen control/treatment comparisons, observable trajectory scoring, failure attribution, and independent review of another evaluation. Do not use merely to solve a conjecture or create benchmark-specific mathematical helpers.
+description: Run source-grounded Jacobian reliability evaluations using recently resolved conjectures as held-out probes. Use for source selection and deduplication, exact input-bound oracles, current-main direct-operation contract audits, frozen control/treatment comparisons, observable trajectory scoring, failure attribution, and independent review of another evaluation. Do not use merely to solve a conjecture or create benchmark-specific mathematical helpers.
 ---
 
 # Recent Conjecture Evaluations
@@ -85,10 +85,12 @@ boundary is already documented.
 Then:
 
 1. Search with natural task language.
-2. Treat bounded `math.find` search as candidate retrieval, not complete inventory;
-   use `operation://catalog` when full installed membership matters.
-3. Inspect returned cards and exact IDs for schemas, examples, domains, bounds,
-   and provider availability. Treat these as operation facts, not workflow advice.
+2. Inspect the published direct operation surface and select an exposed
+   operation by its tool name and exact request schema. Use the catalog resource
+   when full installed membership matters.
+3. Inspect the selected operation's description, schema, examples, domain,
+   bounds, and provider availability. Treat these as operation facts, not
+   workflow advice.
 4. Inspect the producer and independent checker as separate operation contracts.
    A checker verdict must bind the exact claim and semantics; do not expect a
    generic verification record or artifact URI from an ordinary operation.

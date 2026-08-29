@@ -19,7 +19,6 @@ from benchmarks.tooling.observation_results import (
     _validate_contract,
     build_observation_evidence,
 )
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 
 
 def normalize_treatment_comparison_job(job: dict[str, Any]) -> dict[str, Any]:
@@ -110,6 +109,7 @@ def _collect_heldout_runs(
     manifest: dict[str, Any],
     ledger: dict[str, Any],
     condition: str,
+    direct_operation_ids: frozenset[str],
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], list[str]]:
     trials: list[dict[str, Any]] = []
     signatures: list[dict[str, str]] = []
@@ -128,6 +128,7 @@ def _collect_heldout_runs(
             runtime_snapshot=runtime,
             heldout_manifest=manifest,
             comparison_job=normalize_treatment_comparison_job,
+            direct_operation_ids=direct_operation_ids,
         )
         failures.extend(f"{run['pair_id']}: {failure}" for failure in run_failures)
         run_id = f"{run['pair_id']}/{condition}"
@@ -161,7 +162,14 @@ def _heldout_runtime_invariants(plan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-_DIRECT_OPERATION_IDS = frozenset(tool.operation_id for tool in BUILTIN_TOOLS)
+def _probe_direct_operation_ids(ledger: dict[str, Any]) -> frozenset[str]:
+    routing = ledger.get("routing_status")
+    c2 = routing.get("C2") if isinstance(routing, dict) else None
+    probe = c2.get("probe") if isinstance(c2, dict) else None
+    tool_names = probe.get("tool_names") if isinstance(probe, dict) else None
+    if not isinstance(tool_names, list):
+        return frozenset()
+    return frozenset(name for name in tool_names if isinstance(name, str))
 
 
 def _mark_invoked_if_operation_used(
@@ -169,6 +177,7 @@ def _mark_invoked_if_operation_used(
     trials: list[dict[str, Any]],
     *,
     contract_dir: Path,
+    direct_operation_ids: frozenset[str] | None = None,
 ) -> bool:
     """Transition treatment routing_status to AVAILABLE_INVOKED when
     a successful Jacobian operation invocation is observed during
@@ -181,11 +190,16 @@ def _mark_invoked_if_operation_used(
     invocation and must not transition the routing status.
     """
 
+    known_direct_ids = (
+        _probe_direct_operation_ids(ledger)
+        if direct_operation_ids is None
+        else direct_operation_ids
+    )
     invoked = any(
         isinstance(trial.get("tool_calls"), dict)
         and any(
             isinstance(tool, str)
-            and tool in _DIRECT_OPERATION_IDS
+            and tool in known_direct_ids
             and isinstance(count, int)
             and not isinstance(count, bool)
             and count > 0
@@ -225,18 +239,23 @@ def collect_heldout_evidence(
     if not isinstance(plan, dict) or not isinstance(ledger, dict):
         raise HarborSuiteError("held-out plan and ledger must be JSON objects")
     selected, failures = _heldout_plan_failures(plan, ledger, condition)
+    direct_operation_ids = _probe_direct_operation_ids(ledger)
     trials, signatures, run_failures = _collect_heldout_runs(
         selected=selected,
         root=run_plan_path.parent,
         manifest=manifest,
         ledger=ledger,
         condition=condition,
+        direct_operation_ids=direct_operation_ids,
     )
     failures.extend(run_failures)
     experiment = manifest["experiment"]
     if condition == "C2":
         routing_changed = _mark_invoked_if_operation_used(
-            ledger, trials, contract_dir=ledger_path.parent
+            ledger,
+            trials,
+            contract_dir=ledger_path.parent,
+            direct_operation_ids=direct_operation_ids,
         )
         if routing_changed:
             from benchmarks.tooling.heldout_runner import _write_ledger

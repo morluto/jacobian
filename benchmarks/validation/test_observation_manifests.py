@@ -333,6 +333,43 @@ def test_direct_operation_trace_names_are_canonicalized_against_catalog(
     assert failures == []
 
 
+def test_direct_operation_trace_names_use_frozen_catalog_ids(
+    tmp_path: Path,
+) -> None:
+    operation_id = "frozen.operation.compute"
+    events = [
+        _tool_event(f"jacobian.{operation_id}", {}, {}),
+        _tool_event(f"mcp__jacobian__{operation_id}", {}, {}),
+    ]
+    trial_dir = tmp_path / "job" / "attempt-0"
+    _write_trial_manifest(
+        trial_dir,
+        [
+            {
+                "source": "/logs/agent/trajectory.jsonl",
+                "destination": "artifacts/logs/agent/trajectory.jsonl",
+                "type": "file",
+                "status": "ok",
+                "service": None,
+                "_content": "\n".join(json.dumps(event) for event in events) + "\n",
+            }
+        ],
+    )
+    result_path = trial_dir / "result.json"
+    result_path.write_text("{}", encoding="utf-8")
+
+    _artifacts, calls, errors, failures = _trial_artifacts(
+        result_path,
+        "attempt-0",
+        "job.json",
+        direct_operation_ids=frozenset({operation_id}),
+    )
+
+    assert calls == {operation_id: 2}
+    assert errors == 0
+    assert failures == []
+
+
 def test_heldout_artifact_source_paths_include_pair_and_condition(
     tmp_path: Path,
 ) -> None:

@@ -13,7 +13,11 @@ from mcp.types import INVALID_PARAMS, CallToolResult, ContentBlock, TextContent
 from pydantic import ValidationError
 from pydantic_core import to_json
 
-from jacobian._execution import current_request_execution, request_execution
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    current_request_execution,
+    request_execution,
+)
 from jacobian.canonical import CanonicalizationError
 from jacobian.catalog.models import MathTool
 from jacobian.dispatch import (
@@ -160,6 +164,8 @@ def run_direct_math_tool(
         ) from exc
     except OperationExecutionTimeoutError as exc:
         raise ToolError("operation execution deadline expired") from exc
+    except OperationExecutionCancelledError as exc:
+        raise ToolError("operation cancelled") from exc
     except (MCPError, ToolError):
         raise
     except Exception as exc:

@@ -34,16 +34,21 @@ _MCP_OPERATION_ATTEMPT = re.compile(
 _DIRECT_OPERATION_IDS = frozenset(tool.operation_id for tool in BUILTIN_TOOLS)
 
 
-def _canonical_tool_name(value: str) -> str:
+def _canonical_tool_name(
+    value: str, *, direct_operation_ids: frozenset[str] | None = None
+) -> str:
     aliases = {
         "mcp__jacobian__math_find": "math.find",
         "mcp__jacobian__math_run": "math.run",
     }
     canonical = aliases.get(value, value)
+    known_direct_ids = (
+        _DIRECT_OPERATION_IDS if direct_operation_ids is None else direct_operation_ids
+    )
     for prefix in ("jacobian.", "mcp__jacobian__"):
         if canonical.startswith(prefix):
             candidate = canonical.removeprefix(prefix)
-            if candidate in _DIRECT_OPERATION_IDS:
+            if candidate in known_direct_ids:
                 return candidate
     return canonical
 
@@ -86,26 +91,41 @@ def _walk_trace(
     calls: Counter[str],
     *,
     ignored_tools: frozenset[str] = frozenset(),
+    direct_operation_ids: frozenset[str] | None = None,
 ) -> int:
     if isinstance(value, list):
         return sum(
-            _walk_trace(child, calls, ignored_tools=ignored_tools) for child in value
+            _walk_trace(
+                child,
+                calls,
+                ignored_tools=ignored_tools,
+                direct_operation_ids=direct_operation_ids,
+            )
+            for child in value
         )
     if not isinstance(value, dict):
         return 0
     observed_tool: str | None = None
     tool_name = value.get("tool_name")
     if isinstance(tool_name, str):
-        observed_tool = _canonical_tool_name(tool_name)
+        observed_tool = _canonical_tool_name(
+            tool_name, direct_operation_ids=direct_operation_ids
+        )
     elif value.get("type") in {"tool_call", "tool_use"} and isinstance(
         value.get("name"), str
     ):
-        observed_tool = _canonical_tool_name(str(value["name"]))
+        observed_tool = _canonical_tool_name(
+            str(value["name"]), direct_operation_ids=direct_operation_ids
+        )
     elif value.get("type") == "mcp_tool_call" and isinstance(value.get("tool"), str):
-        observed_tool = _canonical_tool_name(str(value["tool"]))
+        observed_tool = _canonical_tool_name(
+            str(value["tool"]), direct_operation_ids=direct_operation_ids
+        )
     function_name = value.get("function_name")
     if isinstance(function_name, str) and isinstance(value.get("tool_call_id"), str):
-        observed_tool = _canonical_tool_name(function_name)
+        observed_tool = _canonical_tool_name(
+            function_name, direct_operation_ids=direct_operation_ids
+        )
     if observed_tool in ignored_tools:
         return 0
     if observed_tool is not None:
@@ -114,7 +134,12 @@ def _walk_trace(
         value.get("error") not in {None, False, ""} or value.get("isError") is True
     )
     return own_error + sum(
-        _walk_trace(child, calls, ignored_tools=ignored_tools)
+        _walk_trace(
+            child,
+            calls,
+            ignored_tools=ignored_tools,
+            direct_operation_ids=direct_operation_ids,
+        )
         for child in value.values()
     )
 
@@ -125,18 +150,29 @@ def _read_trace(
     *,
     ignored_tools: frozenset[str] = frozenset(),
     mcp_runtime_log: bool = False,
+    direct_operation_ids: frozenset[str] | None = None,
 ) -> int:
     try:
         if mcp_runtime_log:
             return _read_mcp_runtime_log(path, calls)
         if path.suffix == ".jsonl":
             return sum(
-                _walk_trace(json.loads(line), calls, ignored_tools=ignored_tools)
+                _walk_trace(
+                    json.loads(line),
+                    calls,
+                    ignored_tools=ignored_tools,
+                    direct_operation_ids=direct_operation_ids,
+                )
                 for line in path.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             )
         if path.suffix == ".json":
-            return _walk_trace(_read_json(path), calls, ignored_tools=ignored_tools)
+            return _walk_trace(
+                _read_json(path),
+                calls,
+                ignored_tools=ignored_tools,
+                direct_operation_ids=direct_operation_ids,
+            )
     except (OSError, UnicodeError, json.JSONDecodeError, HarborSuiteError):
         return 1
     return 0
@@ -539,6 +575,7 @@ def trial_artifacts(
     *,
     source_prefix: str | None = None,
     configured_artifacts: set[tuple[str, str | None]] | None = None,
+    direct_operation_ids: frozenset[str] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int], int, list[str]]:
     """Collect manifest-driven artifacts for one trial.
 
@@ -621,7 +658,13 @@ def trial_artifacts(
         frozenset({"math.find", "math.run"}) if runtime_logs else frozenset()
     )
     errors = sum(
-        _read_trace(path, calls, ignored_tools=ignored_tools) for path in agent_traces
+        _read_trace(
+            path,
+            calls,
+            ignored_tools=ignored_tools,
+            direct_operation_ids=direct_operation_ids,
+        )
+        for path in agent_traces
     )
     errors += sum(
         _read_trace(path, calls, mcp_runtime_log=True) for path in runtime_logs

@@ -214,6 +214,7 @@ def _normalize_trial(
     runtime: dict[str, Any] | None,
     source_prefix: str | None = None,
     configured_artifacts: set[tuple[str, str | None]] | None = None,
+    direct_operation_ids: frozenset[str] | None = None,
     job_stats: dict[str, Any] | None = None,
     observed_trial_count: int | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
@@ -235,6 +236,7 @@ def _normalize_trial(
             job_label,
             source_prefix=source_prefix,
             configured_artifacts=configured_artifacts,
+            direct_operation_ids=direct_operation_ids,
         )
     )
     budgets: dict[str, Any] | None = None
@@ -480,6 +482,7 @@ def build_observation_evidence(
     runtime_snapshot: dict[str, Any] | None = None,
     heldout_manifest: dict[str, Any] | None = None,
     comparison_job: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    direct_operation_ids: frozenset[str] | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     job = _parse_job_selection(job_path)
     harbor_result = load_harbor_result(jobs_dir, result_path)
@@ -553,6 +556,7 @@ def build_observation_evidence(
             runtime=runtime_snapshot,
             source_prefix=source_prefix,
             configured_artifacts=configured_artifacts,
+            direct_operation_ids=direct_operation_ids,
             job_stats=job_stats,
             observed_trial_count=len(raw_trials),
         )

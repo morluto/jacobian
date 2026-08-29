@@ -83,6 +83,21 @@ def test_mark_invoked_transitions_on_successful_operation_invoke(
     assert (tmp_path / "routing-status-c2.json").is_file()
 
 
+def test_mark_invoked_uses_frozen_probe_catalog(tmp_path: Path) -> None:
+    ledger = {"routing_status": {"C2": _c2_routing_contract()}}
+    ledger["routing_status"]["C2"]["probe"]["tool_names"] = ["frozen.operation.compute"]
+    trials = [
+        {
+            "status": "COMPLETED",
+            "tool_calls": {"frozen.operation.compute": 1},
+            "tool_errors": 0,
+        }
+    ]
+    _mark_invoked_if_operation_used(ledger, trials, contract_dir=tmp_path)
+
+    assert ledger["routing_status"]["C2"]["routing_status"] == "AVAILABLE_INVOKED"
+
+
 def test_mark_invoked_fail_closed_on_errored_invocation(tmp_path: Path) -> None:
     """A failed/errored direct operation must not transition."""
 

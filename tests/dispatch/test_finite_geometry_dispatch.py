@@ -11,19 +11,13 @@ from jacobian.math.geometry.finite._models import (
     MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS,
     GrassmannianCountRequest,
 )
-from jacobian.math.geometry.finite.operations import compute_grassmannian_count
+from jacobian.math.geometry.finite.operations import grassmannian_count
 
 
 def test_dispatch_round_trips_an_exact_count_past_the_json_integer_range() -> None:
     """A lawful exact count past 2^53 survives canonical request transport."""
 
-    last_safe_slice = compute_grassmannian_count(
-        GrassmannianCountRequest(
-            field_order=2,
-            ambient_dimension=14,
-            subspace_dimension=7,
-        )
-    )
+    last_safe_slice = grassmannian_count(2, 14, 7)
     assert int(last_safe_slice.count) <= (1 << 53) - 1
 
     payload = {

@@ -213,13 +213,15 @@ class ProjectivePointCanonicalizeResult(ProjectivePointCanonicalizeRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: ProjectivePointCanonicalizeRequest,
+        *,
+        space: PrimeFieldVectorSpace,
+        vector: tuple[int, ...],
         point: ProjectivePoint,
         scale: int,
     ) -> Self:
         return cls.model_construct(
-            space=request.space,
-            vector=request.vector,
+            space=space,
+            vector=vector,
             point=point,
             scale=scale,
         )
@@ -240,10 +242,10 @@ class ProjectivePointEqualResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, request: ProjectivePointEqualRequest, equal: bool) -> Self:
-        return cls.model_construct(
-            point_a=request.point_a, point_b=request.point_b, equal=equal
-        )
+    def _from_kernel(
+        cls, *, point_a: ProjectivePoint, point_b: ProjectivePoint, equal: bool
+    ) -> Self:
+        return cls.model_construct(point_a=point_a, point_b=point_b, equal=equal)
 
 
 class SubspaceComputeResult(SubspaceComputeRequest):
@@ -260,11 +262,13 @@ class SubspaceComputeResult(SubspaceComputeRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: SubspaceComputeRequest, subspace: LinearSubspace
+        cls,
+        *,
+        space: PrimeFieldVectorSpace,
+        vectors: tuple[tuple[int, ...], ...],
+        subspace: LinearSubspace,
     ) -> Self:
-        return cls.model_construct(
-            space=request.space, vectors=request.vectors, subspace=subspace
-        )
+        return cls.model_construct(space=space, vectors=vectors, subspace=subspace)
 
 
 class SubspaceMembershipResult(StrictModel):
@@ -278,9 +282,11 @@ class SubspaceMembershipResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, request: SubspaceMembershipRequest, is_member: bool) -> Self:
+    def _from_kernel(
+        cls, *, subspace: LinearSubspace, vector: tuple[int, ...], is_member: bool
+    ) -> Self:
         return cls.model_construct(
-            subspace=request.subspace, vector=request.vector, is_member=is_member
+            subspace=subspace, vector=vector, is_member=is_member
         )
 
 
@@ -297,12 +303,17 @@ class SubspaceSpanResult(SubspaceSpanRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: SubspaceSpanRequest, subspace: LinearSubspace
+        cls,
+        *,
+        space: PrimeFieldVectorSpace,
+        vectors: tuple[tuple[int, ...], ...],
+        subspaces: tuple[LinearSubspace, ...],
+        subspace: LinearSubspace,
     ) -> Self:
         return cls.model_construct(
-            space=request.space,
-            vectors=request.vectors,
-            subspaces=request.subspaces,
+            space=space,
+            vectors=vectors,
+            subspaces=subspaces,
             subspace=subspace,
         )
 
@@ -321,11 +332,15 @@ class SubspaceIntersectionResult(SubspaceIntersectionRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: SubspaceIntersectionRequest, subspace: LinearSubspace
+        cls,
+        *,
+        subspace_a: LinearSubspace,
+        subspace_b: LinearSubspace,
+        subspace: LinearSubspace,
     ) -> Self:
         return cls.model_construct(
-            subspace_a=request.subspace_a,
-            subspace_b=request.subspace_b,
+            subspace_a=subspace_a,
+            subspace_b=subspace_b,
             subspace=subspace,
         )
 
@@ -340,12 +355,17 @@ class GrassmannianCountResult(StrictModel):
 
     @classmethod
     def _from_kernel(
-        cls, request: GrassmannianCountRequest, count: CanonicalInteger
+        cls,
+        *,
+        field_order: int,
+        ambient_dimension: int,
+        subspace_dimension: int,
+        count: CanonicalInteger,
     ) -> Self:
         return cls.model_construct(
-            field_order=request.field_order,
-            ambient_dimension=request.ambient_dimension,
-            subspace_dimension=request.subspace_dimension,
+            field_order=field_order,
+            ambient_dimension=ambient_dimension,
+            subspace_dimension=subspace_dimension,
             count=count,
         )
 

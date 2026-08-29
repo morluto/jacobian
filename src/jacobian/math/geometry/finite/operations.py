@@ -23,25 +23,16 @@ from jacobian.math.geometry.finite._models import (
     MAX_AFFINE_PLANE_FIELD_ORDER,
     MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES,
     MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS,
-    GrassmannianCountRequest,
     GrassmannianCountResult,
     LinearSubspace,
     ParallelClass,
-    PrimeFieldAffinePlaneRequest,
     PrimeFieldAffinePlaneResult,
-    ProjectivePointCanonicalizeRequest,
     ProjectivePointCanonicalizeResult,
-    ProjectivePointEqualRequest,
     ProjectivePointEqualResult,
-    ProjectiveSpaceEnumerateRequest,
     ProjectiveSpaceEnumerateResult,
-    SubspaceComputeRequest,
     SubspaceComputeResult,
-    SubspaceIntersectionRequest,
     SubspaceIntersectionResult,
-    SubspaceMembershipRequest,
     SubspaceMembershipResult,
-    SubspaceSpanRequest,
     SubspaceSpanResult,
 )
 from jacobian.math.geometry.finite.values import (
@@ -51,6 +42,28 @@ from jacobian.math.geometry.finite.values import (
     ProjectivePointSequence,
     _validate_vector,
 )
+
+
+def _domain_error(location: tuple[str | int, ...], code: str, message: str) -> NoReturn:
+    raise OperationDomainValidationError(
+        location=location,
+        code=f"finite_geometry.{code}",
+        message=message,
+    )
+
+
+__all__ = [
+    "grassmannian_count",
+    "prime_field_affine_plane",
+    "projective_point",
+    "projective_point_canonicalize",
+    "projective_point_equal",
+    "projective_space_enumerate",
+    "subspace_compute",
+    "subspace_intersection",
+    "subspace_membership",
+    "subspace_span",
+]
 
 
 def projective_point(
@@ -66,7 +79,11 @@ def projective_point(
     _validate_vector(vector, space)
     scale = next((value for value in vector if value != 0), None)
     if scale is None:
-        raise ValueError("zero vector has no projective point")
+        _domain_error(
+            ("vector",),
+            "projective_vector_zero",
+            "zero vector has no projective point",
+        )
     inverse = pow(scale, -1, space.field_order)
     return ProjectivePoint(
         space=space,
@@ -74,25 +91,16 @@ def projective_point(
     )
 
 
-def _domain_error(location: tuple[str | int, ...], code: str, message: str) -> NoReturn:
-    raise OperationDomainValidationError(
-        location=location,
-        code=f"finite_geometry.{code}",
-        message=message,
-    )
-
-
-def _admit_span(request: SubspaceSpanRequest) -> None:
-    if not request.vectors and not request.subspaces:
+def _admit_span(
+    vectors: tuple[tuple[int, ...], ...], subspaces: tuple[LinearSubspace, ...]
+) -> None:
+    if not vectors and not subspaces:
         _domain_error(
             ("vectors",),
             "span_source_required",
             "span requires at least one vector or subspace",
         )
-    if (
-        len(request.vectors) + sum(len(item.basis) for item in request.subspaces)
-        > MAX_DIM
-    ):
+    if len(vectors) + sum(len(item.basis) for item in subspaces) > MAX_DIM:
         _domain_error(
             ("vectors",),
             "span_generator_count_exceeds_bound",
@@ -100,12 +108,14 @@ def _admit_span(request: SubspaceSpanRequest) -> None:
         )
 
 
-def _admit_grassmannian(request: GrassmannianCountRequest) -> None:
-    if not isprime(request.field_order):
+def _admit_grassmannian(
+    field_order: int, ambient_dimension: int, subspace_dimension: int
+) -> None:
+    if not isprime(field_order):
         _domain_error(
             ("field_order",), "field_order_not_prime", "field_order must be prime"
         )
-    if request.subspace_dimension > request.ambient_dimension:
+    if subspace_dimension > ambient_dimension:
         _domain_error(
             ("subspace_dimension",),
             "subspace_dimension_exceeds_ambient",
@@ -113,9 +123,9 @@ def _admit_grassmannian(request: GrassmannianCountRequest) -> None:
         )
 
 
-def _admit_projective_enumeration(request: ProjectiveSpaceEnumerateRequest) -> None:
-    q = request.space.field_order
-    n = len(request.space.axis)
+def _admit_projective_enumeration(space: PrimeFieldVectorSpace) -> None:
+    q = space.field_order
+    n = len(space.axis)
     if q**n > MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS:
         _domain_error(
             ("space",),
@@ -130,7 +140,7 @@ def _admit_projective_enumeration(request: ProjectiveSpaceEnumerateRequest) -> N
         _PROJECTIVE_ENUMERATION_ENVELOPE_BYTES
         + sum(
             len(encode_strict_json(unicodedata.normalize("NFC", label)))
-            for label in request.space.axis
+            for label in space.axis
         )
         + point_count * per_point_bytes
     )
@@ -143,84 +153,126 @@ def _admit_projective_enumeration(request: ProjectiveSpaceEnumerateRequest) -> N
         )
 
 
-def compute_projective_point_canonicalize(
-    request: ProjectivePointCanonicalizeRequest,
+def projective_point_canonicalize(
+    space: PrimeFieldVectorSpace,
+    vector: tuple[int, ...],
 ) -> ProjectivePointCanonicalizeResult:
-    point = projective_point(request.space, request.vector)
-    scale = next(value for value in request.vector if value != 0)
+    point = projective_point(space, vector)
+    scale = next(value for value in vector if value != 0)
     return ProjectivePointCanonicalizeResult._from_kernel(
-        request,
-        point,
-        scale,
+        space=space,
+        vector=vector,
+        point=point,
+        scale=scale,
     )
 
 
-def compute_projective_point_equal(
-    request: ProjectivePointEqualRequest,
+def projective_point_equal(
+    point_a: ProjectivePoint,
+    point_b: ProjectivePoint,
 ) -> ProjectivePointEqualResult:
+    if point_a.space != point_b.space:
+        _domain_error(
+            ("point_a", "space"),
+            "projective_parent_mismatch",
+            "projective points must have the same field and axis",
+        )
     return ProjectivePointEqualResult._from_kernel(
-        request, request.point_a.coordinates == request.point_b.coordinates
+        point_a=point_a,
+        point_b=point_b,
+        equal=point_a.coordinates == point_b.coordinates,
     )
 
 
-def compute_subspace_compute(
-    request: SubspaceComputeRequest,
+def subspace_compute(
+    space: PrimeFieldVectorSpace,
+    vectors: tuple[tuple[int, ...], ...],
 ) -> SubspaceComputeResult:
-    matrix = [list(row) for row in request.vectors]
-    basis = canonical_basis(matrix, request.space.field_order)
+    for vector in vectors:
+        _validate_vector(vector, space)
+    matrix = [list(row) for row in vectors]
+    basis = canonical_basis(matrix, space.field_order)
     return SubspaceComputeResult._from_kernel(
-        request, LinearSubspace(space=request.space, basis=basis)
+        space=space, vectors=vectors, subspace=LinearSubspace(space=space, basis=basis)
     )
 
 
-def compute_subspace_membership(
-    request: SubspaceMembershipRequest,
+def subspace_membership(
+    subspace: LinearSubspace,
+    vector: tuple[int, ...],
 ) -> SubspaceMembershipResult:
-    matrix = [list(row) for row in request.subspace.basis]
-    word = list(request.vector)
-    q = request.subspace.space.field_order
+    _validate_vector(vector, subspace.space)
+    matrix = [list(row) for row in subspace.basis]
+    word = list(vector)
+    q = subspace.space.field_order
 
     _, rank_g = rref_rank([list(r) for r in matrix], q)
     augmented = [list(row) for row in matrix] + [word]
     _, rank_aug = rref_rank(augmented, q)
     is_member = rank_aug == rank_g
 
-    return SubspaceMembershipResult._from_kernel(request, is_member)
-
-
-def compute_subspace_span(
-    request: SubspaceSpanRequest,
-) -> SubspaceSpanResult:
-    _admit_span(request)
-    matrix = [list(row) for row in request.vectors]
-    matrix.extend(list(row) for subspace in request.subspaces for row in subspace.basis)
-    basis = canonical_basis(matrix, request.space.field_order)
-    return SubspaceSpanResult._from_kernel(
-        request, LinearSubspace(space=request.space, basis=basis)
+    return SubspaceMembershipResult._from_kernel(
+        subspace=subspace, vector=vector, is_member=is_member
     )
 
 
-def compute_subspace_intersection(
-    request: SubspaceIntersectionRequest,
+def subspace_span(
+    space: PrimeFieldVectorSpace,
+    vectors: tuple[tuple[int, ...], ...],
+    subspaces: tuple[LinearSubspace, ...],
+) -> SubspaceSpanResult:
+    for vector in vectors:
+        _validate_vector(vector, space)
+    if any(subspace.space != space for subspace in subspaces):
+        _domain_error(
+            ("subspaces",),
+            "span_parent_mismatch",
+            "all subspaces must have the declared field and axis",
+        )
+    _admit_span(vectors, subspaces)
+    matrix = [list(row) for row in vectors]
+    matrix.extend(list(row) for subspace in subspaces for row in subspace.basis)
+    basis = canonical_basis(matrix, space.field_order)
+    return SubspaceSpanResult._from_kernel(
+        space=space,
+        vectors=vectors,
+        subspaces=subspaces,
+        subspace=LinearSubspace(space=space, basis=basis),
+    )
+
+
+def subspace_intersection(
+    subspace_a: LinearSubspace,
+    subspace_b: LinearSubspace,
 ) -> SubspaceIntersectionResult:
+    if subspace_a.space != subspace_b.space:
+        _domain_error(
+            ("subspace_b", "space"),
+            "intersection_parent_mismatch",
+            "subspaces must have the same field and axis",
+        )
     canonical = intersection_basis(
-        request.subspace_a.basis,
-        request.subspace_b.basis,
-        request.subspace_a.space.field_order,
-        len(request.subspace_a.space.axis),
+        subspace_a.basis,
+        subspace_b.basis,
+        subspace_a.space.field_order,
+        len(subspace_a.space.axis),
     )
     return SubspaceIntersectionResult._from_kernel(
-        request, LinearSubspace(space=request.subspace_a.space, basis=canonical)
+        subspace_a=subspace_a,
+        subspace_b=subspace_b,
+        subspace=LinearSubspace(space=subspace_a.space, basis=canonical),
     )
 
 
-def compute_grassmannian_count(
-    request: GrassmannianCountRequest,
+def grassmannian_count(
+    field_order: int,
+    ambient_dimension: int,
+    subspace_dimension: int,
 ) -> GrassmannianCountResult:
-    _admit_grassmannian(request)
-    q = request.field_order
-    n = request.ambient_dimension
-    k = request.subspace_dimension
+    _admit_grassmannian(field_order, ambient_dimension, subspace_dimension)
+    q = field_order
+    n = ambient_dimension
+    k = subspace_dimension
 
     # Gaussian binomial coefficient: [n choose k]_q
     # = product_{i=0}^{k-1} (q^(n-i) - 1) / (q^(k-i) - 1)
@@ -232,17 +284,20 @@ def compute_grassmannian_count(
         denominator *= q ** (k - i) - 1
     count = numerator // denominator
     return GrassmannianCountResult._from_kernel(
-        request, format_canonical_integer(count)
+        field_order=field_order,
+        ambient_dimension=ambient_dimension,
+        subspace_dimension=subspace_dimension,
+        count=format_canonical_integer(count),
     )
 
 
-def compute_projective_space_enumerate(
-    request: ProjectiveSpaceEnumerateRequest,
+def projective_space_enumerate(
+    space: PrimeFieldVectorSpace,
 ) -> ProjectiveSpaceEnumerateResult:
-    _admit_projective_enumeration(request)
+    _admit_projective_enumeration(space)
 
-    q = request.space.field_order
-    n = len(request.space.axis)
+    q = space.field_order
+    n = len(space.axis)
 
     seen: dict[tuple[int, ...], bool] = {}
     points: list[tuple[int, ...]] = []
@@ -261,14 +316,12 @@ def compute_projective_space_enumerate(
                 break
 
     return ProjectiveSpaceEnumerateResult(
-        sequence=ProjectivePointSequence(
-            space=request.space, coordinates=tuple(points)
-        ),
+        sequence=ProjectivePointSequence(space=space, coordinates=tuple(points)),
     )
 
 
-def compute_prime_field_affine_plane(
-    request: PrimeFieldAffinePlaneRequest,
+def prime_field_affine_plane(
+    prime_order: int,
 ) -> PrimeFieldAffinePlaneResult:
     """Construct the complete affine plane AG(2, q) over a prime field.
 
@@ -279,7 +332,7 @@ def compute_prime_field_affine_plane(
     into q+1 ordered classes: q slope classes (m=0..q-1) plus the vertical
     class.
     """
-    q = request.prime_order
+    q = prime_order
     if not isprime(q):
         _domain_error(
             ("prime_order",), "prime_order_not_prime", "prime_order must be prime"
@@ -348,7 +401,6 @@ def compute_prime_field_affine_plane(
         parallel_classes=tuple(parallel_classes),
         total_incidences=total_incidences,
     )
-
 
 
 __all__ = ["projective_point"]

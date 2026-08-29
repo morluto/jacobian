@@ -3,12 +3,10 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.geometry.finite._models import (
-    PrimeFieldAffinePlaneRequest,
-)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.finite._tools import TOOLS
 from jacobian.math.geometry.finite.operations import (
-    compute_prime_field_affine_plane,
+    prime_field_affine_plane,
 )
 
 # ---------------------------------------------------------------------------
@@ -28,9 +26,7 @@ def test_catalog_contains_affine_plane_operation() -> None:
 
 def test_q2_structure() -> None:
     """AG(2,2): 4 points, 6 lines, 3 parallel classes."""
-    result = compute_prime_field_affine_plane(
-        PrimeFieldAffinePlaneRequest(prime_order=2)
-    )
+    result = prime_field_affine_plane(2)
     assert result.prime_order == 2
     assert len(result.incidence.points) == 4
     assert len(result.incidence.block_ids) == 6
@@ -40,9 +36,7 @@ def test_q2_structure() -> None:
 
 def test_q3_structure() -> None:
     """AG(2,3): 9 points, 12 lines, 4 parallel classes."""
-    result = compute_prime_field_affine_plane(
-        PrimeFieldAffinePlaneRequest(prime_order=3)
-    )
+    result = prime_field_affine_plane(3)
     assert len(result.incidence.points) == 9
     assert len(result.incidence.block_ids) == 12
     assert len(result.parallel_classes) == 4
@@ -51,9 +45,7 @@ def test_q3_structure() -> None:
 
 def test_q5_structure() -> None:
     """AG(2,5): 25 points, 30 lines, 6 parallel classes, 150 incidences."""
-    result = compute_prime_field_affine_plane(
-        PrimeFieldAffinePlaneRequest(prime_order=5)
-    )
+    result = prime_field_affine_plane(5)
     assert len(result.incidence.points) == 25
     assert len(result.incidence.block_ids) == 30
     assert len(result.parallel_classes) == 6
@@ -67,9 +59,7 @@ def test_q5_structure() -> None:
 
 def test_q3_point_ordering() -> None:
     """Points are (x,y) in lexicographic order with index = x*q + y."""
-    result = compute_prime_field_affine_plane(
-        PrimeFieldAffinePlaneRequest(prime_order=3)
-    )
+    result = prime_field_affine_plane(3)
     expected = [
         "0,0",
         "0,1",
@@ -92,9 +82,7 @@ def test_q3_point_ordering() -> None:
 def test_every_line_has_q_points() -> None:
     """Every line in AG(2,q) contains exactly q points."""
     for q in (2, 3, 5, 7):
-        result = compute_prime_field_affine_plane(
-            PrimeFieldAffinePlaneRequest(prime_order=q)
-        )
+        result = prime_field_affine_plane(q)
         for block in result.incidence.blocks:
             assert len(block) == q, f"q={q}: line has {len(block)} points, expected {q}"
 
@@ -102,9 +90,7 @@ def test_every_line_has_q_points() -> None:
 def test_every_point_on_q_plus_1_lines() -> None:
     """Every point in AG(2,q) lies on exactly q+1 lines."""
     for q in (2, 3, 5, 7):
-        result = compute_prime_field_affine_plane(
-            PrimeFieldAffinePlaneRequest(prime_order=q)
-        )
+        result = prime_field_affine_plane(q)
         point_to_count: dict[str, int] = dict.fromkeys(result.incidence.points, 0)
         for block in result.incidence.blocks:
             for member in block:
@@ -120,9 +106,7 @@ def test_every_pair_of_points_on_exactly_one_line() -> None:
     from itertools import combinations
 
     for q in (2, 3, 5):
-        result = compute_prime_field_affine_plane(
-            PrimeFieldAffinePlaneRequest(prime_order=q)
-        )
+        result = prime_field_affine_plane(q)
         points = list(result.incidence.points)
         for p1, p2 in combinations(points, 2):
             common_count = 0
@@ -137,9 +121,7 @@ def test_every_pair_of_points_on_exactly_one_line() -> None:
 def test_total_incidences() -> None:
     """Total incidences = q^2 * (q+1)."""
     for q in (2, 3, 5, 7):
-        result = compute_prime_field_affine_plane(
-            PrimeFieldAffinePlaneRequest(prime_order=q)
-        )
+        result = prime_field_affine_plane(q)
         expected = q * q * (q + 1)
         assert result.total_incidences == expected
         actual = sum(len(block) for block in result.incidence.blocks)
@@ -154,9 +136,7 @@ def test_total_incidences() -> None:
 def test_parallel_classes_partition() -> None:
     """Parallel classes partition line IDs into q+1 disjoint classes."""
     for q in (2, 3, 5, 7):
-        result = compute_prime_field_affine_plane(
-            PrimeFieldAffinePlaneRequest(prime_order=q)
-        )
+        result = prime_field_affine_plane(q)
         assert len(result.parallel_classes) == q + 1
         all_ids: list[int] = []
         for cls in result.parallel_classes:
@@ -167,18 +147,14 @@ def test_parallel_classes_partition() -> None:
 def test_parallel_class_sizes() -> None:
     """Each parallel class contains exactly q lines."""
     for q in (2, 3, 5, 7):
-        result = compute_prime_field_affine_plane(
-            PrimeFieldAffinePlaneRequest(prime_order=q)
-        )
+        result = prime_field_affine_plane(q)
         for cls in result.parallel_classes:
             assert len(cls.line_ids) == q
 
 
 def test_parallel_classes_labels() -> None:
     """Slope classes have labels slope_0..slope_{q-1}, vertical class labeled."""
-    result = compute_prime_field_affine_plane(
-        PrimeFieldAffinePlaneRequest(prime_order=3)
-    )
+    result = prime_field_affine_plane(3)
     labels = [cls.label for cls in result.parallel_classes]
     assert labels == ["slope_0", "slope_1", "slope_2", "vertical"]
 
@@ -191,16 +167,14 @@ def test_parallel_classes_labels() -> None:
 @pytest.mark.parametrize("bad_q", [1, 4, 6, 9, 10, 15, 21, 100])
 def test_rejects_composite_and_one(bad_q: int) -> None:
     with pytest.raises((ValidationError, ValueError)):
-        compute_prime_field_affine_plane(
-            PrimeFieldAffinePlaneRequest(prime_order=bad_q)
-        )
+        prime_field_affine_plane(bad_q)
 
 
 def test_rejects_q_too_large() -> None:
     """q > MAX_AFFINE_PLANE_FIELD_ORDER is rejected."""
     # 11 is prime but exceeds the transport budget
-    with pytest.raises(ValidationError):
-        compute_prime_field_affine_plane(PrimeFieldAffinePlaneRequest(prime_order=11))
+    with pytest.raises(OperationDomainValidationError):
+        prime_field_affine_plane(11)
 
 
 # ---------------------------------------------------------------------------
@@ -211,9 +185,7 @@ def test_rejects_q_too_large() -> None:
 def test_parallel_lines_are_disjoint() -> None:
     """Lines in the same parallel class are pairwise disjoint."""
     for q in (2, 3, 5):
-        result = compute_prime_field_affine_plane(
-            PrimeFieldAffinePlaneRequest(prime_order=q)
-        )
+        result = prime_field_affine_plane(q)
         blocks = list(result.incidence.blocks)
         for cls in result.parallel_classes:
             line_indices = list(cls.line_ids)
@@ -235,9 +207,7 @@ def test_parallel_lines_are_disjoint() -> None:
 def test_non_parallel_lines_intersect_in_one_point() -> None:
     """Lines from different parallel classes intersect in exactly one point."""
     for q in (2, 3, 5):
-        result = compute_prime_field_affine_plane(
-            PrimeFieldAffinePlaneRequest(prime_order=q)
-        )
+        result = prime_field_affine_plane(q)
         blocks = list(result.incidence.blocks)
         classes = result.parallel_classes
         for i in range(len(classes)):

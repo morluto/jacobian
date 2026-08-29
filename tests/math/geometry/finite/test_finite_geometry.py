@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,
@@ -26,14 +27,14 @@ from jacobian.math.geometry.finite._models import (
 )
 from jacobian.math.geometry.finite._tools import TOOLS
 from jacobian.math.geometry.finite.operations import (
-    compute_grassmannian_count,
-    compute_projective_point_canonicalize,
-    compute_projective_point_equal,
-    compute_projective_space_enumerate,
-    compute_subspace_compute,
-    compute_subspace_intersection,
-    compute_subspace_membership,
-    compute_subspace_span,
+    grassmannian_count,
+    projective_point_canonicalize,
+    projective_point_equal,
+    projective_space_enumerate,
+    subspace_compute,
+    subspace_intersection,
+    subspace_membership,
+    subspace_span,
 )
 from jacobian.math.geometry.finite.values import ProjectivePoint
 
@@ -62,27 +63,21 @@ def test_projective_point_canonicalize_scales_to_one() -> None:
     request = ProjectivePointCanonicalizeRequest(
         space=_space(5, ("x", "y")), vector=(2, 3)
     )
-    result = compute_projective_point_canonicalize(request)
+    result = projective_point_canonicalize(request.space, request.vector)
     assert result.point.coordinates[0] == 1
     assert result.point.space == request.space
     assert result.scale == 2
 
 
 def test_projective_point_canonicalize_rejects_zero() -> None:
-    with pytest.raises(ValueError, match="zero vector"):
-        compute_projective_point_canonicalize(
-            ProjectivePointCanonicalizeRequest(
-                space=_space(5, ("x", "y")), vector=(0, 0)
-            )
-        )
+    with pytest.raises(OperationDomainValidationError, match="zero vector"):
+        projective_point_canonicalize(_space(5, ("x", "y")), (0, 0))
 
 
 def test_projective_point_equal_same_point() -> None:
-    point = compute_projective_point_canonicalize(
-        ProjectivePointCanonicalizeRequest(space=_space(5, ("x", "y")), vector=(2, 3))
-    ).point
+    point = projective_point_canonicalize(_space(5, ("x", "y")), (2, 3)).point
     request = ProjectivePointEqualRequest(point_a=point, point_b=point)
-    result = compute_projective_point_equal(request)
+    result = projective_point_equal(request.point_a, request.point_b)
     assert result.equal is True
 
 
@@ -92,16 +87,14 @@ def test_projective_point_equal_different_points() -> None:
         point_a=ProjectivePoint(space=space, coordinates=(1, 0)),
         point_b=ProjectivePoint(space=space, coordinates=(0, 1)),
     )
-    result = compute_projective_point_equal(request)
+    result = projective_point_equal(request.point_a, request.point_b)
     assert result.equal is False
 
 
 @pytest.mark.requires_backend("flint")
 def test_projective_point_embeds_into_finite_field_restrict_scalars() -> None:
     """A finite-geometry producer composes through an explicit field extension."""
-    geometry_point = compute_projective_point_canonicalize(
-        ProjectivePointCanonicalizeRequest(space=_space(2, ("x", "y")), vector=(1, 1))
-    ).point
+    geometry_point = projective_point_canonicalize(_space(2, ("x", "y")), (1, 1)).point
     presentation = finite_field(2, (1, 1, 1))
     row_axis = Axis(name="coordinate directions", labels=("x", "y"))
 
@@ -138,9 +131,7 @@ def test_projective_point_embeds_into_finite_field_restrict_scalars() -> None:
 
 
 def test_projective_point_embedding_requires_explicit_compatible_target() -> None:
-    point = compute_projective_point_canonicalize(
-        ProjectivePointCanonicalizeRequest(space=_space(2, ("x", "y")), vector=(1, 1))
-    ).point
+    point = projective_point_canonicalize(_space(2, ("x", "y")), (1, 1)).point
     target = finite_field(2, (1, 1, 1))
 
     with pytest.raises(ValueError, match="axis labels"):
@@ -165,7 +156,16 @@ def test_public_api_constructs_and_embeds_without_private_imports() -> None:
         "ProjectivePoint",
         "ProjectivePointSequence",
         "embed_projective_point_in_finite_field",
+        "grassmannian_count",
+        "prime_field_affine_plane",
         "projective_point",
+        "projective_point_canonicalize",
+        "projective_point_equal",
+        "projective_space_enumerate",
+        "subspace_compute",
+        "subspace_intersection",
+        "subspace_membership",
+        "subspace_span",
     ]
 
     space = _space(2, ("x", "y"))
@@ -187,9 +187,7 @@ def test_public_api_constructs_and_embeds_without_private_imports() -> None:
 def test_enumeration_sequence_composes_into_embeddings_directly() -> None:
     """Enumerated points compose into the consumer as typed values, without
     manual reconstruction from coordinate tuples and a parent space."""
-    result = compute_projective_space_enumerate(
-        ProjectiveSpaceEnumerateRequest(space=_space(2, ("x", "y")))
-    )
+    result = projective_space_enumerate(_space(2, ("x", "y")))
 
     presentation = finite_field(2, (1, 1, 1))
     row_axis = Axis(name="coordinate directions", labels=("x", "y"))
@@ -215,20 +213,17 @@ def test_subspace_compute_basic() -> None:
         space=_space(3, ("x", "y", "z")),
         vectors=((1, 0, 0), (0, 1, 0)),
     )
-    result = compute_subspace_compute(request)
+    result = subspace_compute(request.space, request.vectors)
     assert result.subspace.dimension == 2
     assert result.subspace.space == request.space
 
 
 def test_subspace_membership_member() -> None:
-    subspace = compute_subspace_compute(
-        SubspaceComputeRequest(
-            space=_space(3, ("x", "y", "z")),
-            vectors=((1, 0, 0), (0, 1, 0)),
-        )
+    subspace = subspace_compute(
+        _space(3, ("x", "y", "z")), ((1, 0, 0), (0, 1, 0))
     ).subspace
     request = SubspaceMembershipRequest(subspace=subspace, vector=(1, 1, 0))
-    result = compute_subspace_membership(request)
+    result = subspace_membership(request.subspace, request.vector)
     assert result.is_member is True
 
 
@@ -238,7 +233,7 @@ def test_subspace_membership_nonmember() -> None:
         basis=((1, 0, 0), (0, 1, 0)),
     )
     request = SubspaceMembershipRequest(subspace=subspace, vector=(1, 1, 1))
-    result = compute_subspace_membership(request)
+    result = subspace_membership(request.subspace, request.vector)
     assert result.is_member is False
 
 
@@ -248,7 +243,7 @@ def test_subspace_span_dependent() -> None:
         vectors=((1, 0), (1, 0)),
         subspaces=(),
     )
-    result = compute_subspace_span(request)
+    result = subspace_span(request.space, request.vectors, request.subspaces)
     assert result.subspace.dimension == 1
 
 
@@ -258,7 +253,7 @@ def test_subspace_intersection_trivial() -> None:
         subspace_a=LinearSubspace(space=space, basis=((1, 0),)),
         subspace_b=LinearSubspace(space=space, basis=((0, 1),)),
     )
-    result = compute_subspace_intersection(request)
+    result = subspace_intersection(request.subspace_a, request.subspace_b)
     assert result.subspace.dimension == 0
 
 
@@ -269,7 +264,7 @@ def test_subspace_intersection_identical() -> None:
         subspace_a=LinearSubspace(space=space, basis=((1, 0),)),
         subspace_b=LinearSubspace(space=space, basis=((1, 0),)),
     )
-    result = compute_subspace_intersection(request)
+    result = subspace_intersection(request.subspace_a, request.subspace_b)
     assert result.subspace.dimension == 1
 
 
@@ -280,17 +275,15 @@ def test_subspace_intersection_overlapping() -> None:
         subspace_a=LinearSubspace(space=space, basis=((1, 0, 0), (0, 1, 0))),
         subspace_b=LinearSubspace(space=space, basis=((0, 1, 0), (0, 0, 1))),
     )
-    result = compute_subspace_intersection(request)
+    result = subspace_intersection(request.subspace_a, request.subspace_b)
     assert result.subspace.dimension == 1
 
 
 def test_projective_point_equal_reports_scale() -> None:
     """Scale should be the actual scalar relating the two vectors."""
-    point = compute_projective_point_canonicalize(
-        ProjectivePointCanonicalizeRequest(space=_space(5, ("x", "y")), vector=(2, 3))
-    ).point
+    point = projective_point_canonicalize(_space(5, ("x", "y")), (2, 3)).point
     request = ProjectivePointEqualRequest(point_a=point, point_b=point)
-    result = compute_projective_point_equal(request)
+    result = projective_point_equal(request.point_a, request.point_b)
     assert result.equal is True
     assert result.point_a == result.point_b
 
@@ -299,7 +292,9 @@ def test_grassmannian_count_lines_in_pg_2_2() -> None:
     request = GrassmannianCountRequest(
         field_order=2, ambient_dimension=3, subspace_dimension=1
     )
-    result = compute_grassmannian_count(request)
+    result = grassmannian_count(
+        request.field_order, request.ambient_dimension, request.subspace_dimension
+    )
     assert result.count == "7"
 
 
@@ -307,27 +302,23 @@ def test_grassmannian_count_planes_in_f2_4() -> None:
     request = GrassmannianCountRequest(
         field_order=2, ambient_dimension=4, subspace_dimension=2
     )
-    result = compute_grassmannian_count(request)
+    result = grassmannian_count(
+        request.field_order, request.ambient_dimension, request.subspace_dimension
+    )
     assert result.count == "35"
 
 
 def test_grassmannian_count_exact_past_json_integer_range() -> None:
     """The exact Gaussian-binomial value stays a canonical decimal string."""
 
-    result = compute_grassmannian_count(
-        GrassmannianCountRequest(
-            field_order=2,
-            ambient_dimension=15,
-            subspace_dimension=7,
-        )
-    )
+    result = grassmannian_count(2, 15, 7)
     assert result.count == "246614610741341843"
     assert int(result.count) > (1 << 53) - 1
 
 
 def test_projective_space_enumerate_pg1_f2() -> None:
     request = ProjectiveSpaceEnumerateRequest(space=_space(2, ("x", "y")))
-    result = compute_projective_space_enumerate(request)
+    result = projective_space_enumerate(request.space)
     assert len(result.sequence) == 3
     assert result.sequence.coordinates == ((0, 1), (1, 0), (1, 1))
     assert [point.coordinates for point in result.sequence.points] == [
@@ -340,9 +331,7 @@ def test_projective_space_enumerate_pg1_f2() -> None:
 def test_enumeration_wire_form_stays_compact_and_typed_natively() -> None:
     """The wire form stores the parent space once plus bare coordinate
     tuples, while native iteration yields parent-bound typed points."""
-    result = compute_projective_space_enumerate(
-        ProjectiveSpaceEnumerateRequest(space=_space(3, ("x", "y")))
-    )
+    result = projective_space_enumerate(_space(3, ("x", "y")))
 
     wire = result.model_dump(mode="json")
     assert set(wire) == {"sequence"}
@@ -356,11 +345,7 @@ def test_enumerate_admission_rejects_results_beyond_the_transport_budget() -> No
     result past admission: the serialized-result bound fires before any
     enumeration runs."""
     with pytest.raises(ValueError, match="serialized point list"):
-        compute_projective_space_enumerate(
-            ProjectiveSpaceEnumerateRequest(
-                space=_space(2, ("x", "y" * (9 * 1024 * 1024)))
-            )
-        )
+        projective_space_enumerate(_space(2, ("x", "y" * (9 * 1024 * 1024))))
 
 
 def test_enumerate_admission_estimates_normalized_label_encoding() -> None:
@@ -373,17 +358,13 @@ def test_enumerate_admission_estimates_normalized_label_encoding() -> None:
     """
     label = "x" + "\u0344" * (2_600_000)
     with pytest.raises(ValueError, match="serialized point list"):
-        compute_projective_space_enumerate(
-            ProjectiveSpaceEnumerateRequest(space=_space(2, ("x", label)))
-        )
+        projective_space_enumerate(_space(2, ("x", label)))
 
 
 def test_enumeration_replay_rejects_unnormalized_representatives() -> None:
     """Sequence coordinates stay bound to the canonical representative
     invariant of the declared parent space."""
-    result = compute_projective_space_enumerate(
-        ProjectiveSpaceEnumerateRequest(space=_space(3, ("x", "y")))
-    )
+    result = projective_space_enumerate(_space(3, ("x", "y")))
     assert result.sequence.coordinates == ((0, 1), (1, 0), (1, 1), (1, 2))
 
     payload = result.model_dump()
@@ -401,9 +382,7 @@ def test_enumeration_replay_rejects_unnormalized_representatives() -> None:
 
 def test_enumeration_sequence_replay_rejects_duplicates_and_wrong_counts() -> None:
     """The sequence value itself certifies uniqueness and completeness."""
-    result = compute_projective_space_enumerate(
-        ProjectiveSpaceEnumerateRequest(space=_space(2, ("x", "y")))
-    )
+    result = projective_space_enumerate(_space(2, ("x", "y")))
 
     payload = result.model_dump()
     payload["sequence"]["coordinates"] = ((0, 1), (0, 1), (1, 0))
@@ -432,18 +411,9 @@ def test_request_rejects_nonprime_field() -> None:
 
 def test_canonical_values_compose_and_reject_different_parents() -> None:
     space = finite_geometry.PrimeFieldVectorSpace(field_order=3, axis=("x", "y"))
-    computed = compute_subspace_compute(
-        SubspaceComputeRequest(space=space, vectors=((1, 0),))
-    ).subspace
-    assert compute_subspace_membership(
-        SubspaceMembershipRequest(subspace=computed, vector=(2, 0))
-    ).is_member
-    assert (
-        compute_subspace_span(
-            SubspaceSpanRequest(space=space, vectors=(), subspaces=(computed,))
-        ).subspace
-        == computed
-    )
+    computed = subspace_compute(space, ((1, 0),)).subspace
+    assert subspace_membership(computed, (2, 0)).is_member
+    assert subspace_span(space, (), (computed,)).subspace == computed
 
     other = LinearSubspace(space=_space(5, ("x", "y")), basis=((1, 0),))
     with pytest.raises(ValidationError) as error:
@@ -465,22 +435,13 @@ def test_axis_identity_is_part_of_the_parent() -> None:
 
 
 def test_result_models_remain_structural_only() -> None:
-    result = compute_subspace_compute(
-        SubspaceComputeRequest(
-            space=_space(3, ("x", "y")),
-            vectors=((1, 0),),
-        )
-    )
+    result = subspace_compute(_space(3, ("x", "y")), ((1, 0),))
     payload = result.model_dump()
     payload["subspace"]["basis"] = ((0, 1),)
     forged = type(result).model_validate(payload)
     assert forged.subspace.basis == ((0, 1),)
 
-    count = compute_grassmannian_count(
-        GrassmannianCountRequest(
-            field_order=2, ambient_dimension=3, subspace_dimension=1
-        )
-    )
+    count = grassmannian_count(2, 3, 1)
     payload = count.model_dump()
     payload["count"] = "8"
     forged_count = type(count).model_validate(payload)

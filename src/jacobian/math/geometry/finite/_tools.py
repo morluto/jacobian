@@ -27,16 +27,70 @@ from jacobian.math.geometry.finite._models import (
     SubspaceSpanResult,
 )
 from jacobian.math.geometry.finite.operations import (
-    compute_grassmannian_count,
-    compute_prime_field_affine_plane,
-    compute_projective_point_canonicalize,
-    compute_projective_point_equal,
-    compute_projective_space_enumerate,
-    compute_subspace_compute,
-    compute_subspace_intersection,
-    compute_subspace_membership,
-    compute_subspace_span,
+    grassmannian_count,
+    prime_field_affine_plane,
+    projective_point_canonicalize,
+    projective_point_equal,
+    projective_space_enumerate,
+    subspace_compute,
+    subspace_intersection,
+    subspace_membership,
+    subspace_span,
 )
+
+
+def _compute_projective_point_canonicalize(
+    request: ProjectivePointCanonicalizeRequest,
+) -> ProjectivePointCanonicalizeResult:
+    return projective_point_canonicalize(request.space, request.vector)
+
+
+def _compute_projective_point_equal(
+    request: ProjectivePointEqualRequest,
+) -> ProjectivePointEqualResult:
+    return projective_point_equal(request.point_a, request.point_b)
+
+
+def _compute_subspace_compute(
+    request: SubspaceComputeRequest,
+) -> SubspaceComputeResult:
+    return subspace_compute(request.space, request.vectors)
+
+
+def _compute_subspace_membership(
+    request: SubspaceMembershipRequest,
+) -> SubspaceMembershipResult:
+    return subspace_membership(request.subspace, request.vector)
+
+
+def _compute_subspace_span(request: SubspaceSpanRequest) -> SubspaceSpanResult:
+    return subspace_span(request.space, request.vectors, request.subspaces)
+
+
+def _compute_subspace_intersection(
+    request: SubspaceIntersectionRequest,
+) -> SubspaceIntersectionResult:
+    return subspace_intersection(request.subspace_a, request.subspace_b)
+
+
+def _compute_grassmannian_count(
+    request: GrassmannianCountRequest,
+) -> GrassmannianCountResult:
+    return grassmannian_count(
+        request.field_order, request.ambient_dimension, request.subspace_dimension
+    )
+
+
+def _compute_projective_space_enumerate(
+    request: ProjectiveSpaceEnumerateRequest,
+) -> ProjectiveSpaceEnumerateResult:
+    return projective_space_enumerate(request.space)
+
+
+def _compute_prime_field_affine_plane(
+    request: PrimeFieldAffinePlaneRequest,
+) -> PrimeFieldAffinePlaneResult:
+    return prime_field_affine_plane(request.prime_order)
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -70,7 +124,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "the scale factor.",
         ProjectivePointCanonicalizeRequest,
         ProjectivePointCanonicalizeResult,
-        compute_projective_point_canonicalize,
+        _compute_projective_point_canonicalize,
         "finite-geometry",
         "projective-point",
         "exact",
@@ -89,7 +143,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "multiples of each other.",
         ProjectivePointEqualRequest,
         ProjectivePointEqualResult,
-        compute_projective_point_equal,
+        _compute_projective_point_equal,
         "finite-geometry",
         "projective-point",
         "exact",
@@ -117,7 +171,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "of the linear span of a family of vectors over a prime field.",
         SubspaceComputeRequest,
         SubspaceComputeResult,
-        compute_subspace_compute,
+        _compute_subspace_compute,
         "finite-geometry",
         "subspace",
         "exact",
@@ -139,7 +193,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "over a prime field.",
         SubspaceMembershipRequest,
         SubspaceMembershipResult,
-        compute_subspace_membership,
+        _compute_subspace_membership,
         "finite-geometry",
         "subspace",
         "exact",
@@ -164,7 +218,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "prime field with canonical RREF basis and dimension.",
         SubspaceSpanRequest,
         SubspaceSpanResult,
-        compute_subspace_span,
+        _compute_subspace_span,
         "finite-geometry",
         "subspace",
         "exact",
@@ -187,7 +241,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "of two subspaces given by generator matrices over a prime field.",
         SubspaceIntersectionRequest,
         SubspaceIntersectionResult,
-        compute_subspace_intersection,
+        _compute_subspace_intersection,
         "finite-geometry",
         "subspace",
         "intersection",
@@ -216,7 +270,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "number of k-dimensional subspaces of F_q^n.",
         GrassmannianCountRequest,
         GrassmannianCountResult,
-        compute_grassmannian_count,
+        _compute_grassmannian_count,
         "finite-geometry",
         "grassmannian",
         "exact",
@@ -237,7 +291,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "coordinate tuple relative to it.",
         ProjectiveSpaceEnumerateRequest,
         ProjectiveSpaceEnumerateResult,
-        compute_projective_space_enumerate,
+        _compute_projective_space_enumerate,
         "finite-geometry",
         "projective-space",
         "exact",
@@ -257,7 +311,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "incidences, and q+1 parallel classes partitioning the line axis.",
         PrimeFieldAffinePlaneRequest,
         PrimeFieldAffinePlaneResult,
-        compute_prime_field_affine_plane,
+        _compute_prime_field_affine_plane,
         "finite-geometry",
         "affine-plane",
         "exact",

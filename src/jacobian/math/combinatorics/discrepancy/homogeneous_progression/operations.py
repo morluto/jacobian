@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from jacobian.math.combinatorics.discrepancy._models import FiniteSetSystem
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.discrepancy._models import (
+    MAX_GROUND_SET,
+    FiniteSetSystem,
+)
 from jacobian.math.combinatorics.discrepancy.homogeneous_progression._models import (
     HomogeneousProgressionResult,
 )
@@ -19,6 +23,15 @@ def construct_homogeneous_progression_set_system(
     (zero-based indices representing 1..n).
     The sets are returned in canonical order: by d, then by k.
     """
+    if not 0 <= n <= MAX_GROUND_SET:
+        raise OperationDomainValidationError(
+            location=("n",),
+            code="discrepancy.homogeneous_progression_ground_set_size",
+            message=(
+                "homogeneous progression systems support ground-set sizes "
+                f"from 0 through {MAX_GROUND_SET}"
+            ),
+        )
     sets: list[tuple[int, ...]] = []
 
     for d in range(1, n + 1):

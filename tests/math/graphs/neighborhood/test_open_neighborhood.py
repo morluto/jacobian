@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
+from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.neighborhood._models import (
     NeighborhoodRequest,
 )
@@ -30,6 +31,12 @@ def test_single_vertex_neighborhood() -> None:
     g = _graph(["a", "b", "c"], [("a", "b"), ("b", "c")])
     result = open_neighborhood(g, ("a",))
     assert result.neighborhood == ("b",)
+
+
+def test_issue_path_fixture_has_the_exact_open_neighborhood() -> None:
+    g = _graph(["0", "1", "2", "3"], [("0", "1"), ("1", "2"), ("2", "3")])
+    result = open_neighborhood(g, ("1",))
+    assert result.neighborhood == ("0", "2")
 
 
 def test_selected_vertex_excluded_from_neighborhood() -> None:
@@ -92,16 +99,20 @@ def test_result_retains_source() -> None:
     assert result.selected_vertices == ("a",)
 
 
-def test_request_rejects_nonexistent_vertex() -> None:
+def test_native_operation_rejects_nonexistent_vertex() -> None:
     g = _graph(["a", "b"], [("a", "b")])
-    with pytest.raises(ValidationError):
-        NeighborhoodRequest(graph=g, selected_vertices=("c",))
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="every selected vertex must be a declared graph vertex",
+    ):
+        open_neighborhood(g, ("c",))
 
 
-def test_request_rejects_duplicate_selected() -> None:
-    g = _graph(["a", "b"], [("a", "b")])
-    with pytest.raises(ValidationError):
-        NeighborhoodRequest(graph=g, selected_vertices=("a", "a"))
+def test_selected_vertices_are_normalized_as_a_set_in_source_order() -> None:
+    g = _graph(["a", "b", "c"], [("a", "c"), ("b", "c")])
+    result = open_neighborhood(g, ("b", "a", "b"))
+    assert result.selected_vertices == ("a", "b")
+    assert result.neighborhood == ("c",)
 
 
 def test_catalog_operation_runs() -> None:
@@ -127,3 +138,33 @@ def test_complete_graph_neighborhood() -> None:
     )
     result = open_neighborhood(g, ("a",))
     assert set(result.neighborhood) == {"b", "c", "d"}
+
+
+def test_every_neighborhood_vertex_replays_against_an_incident_edge() -> None:
+    g = _graph(
+        ["a", "b", "c", "d"],
+        [("a", "c"), ("b", "c"), ("b", "d")],
+    )
+    result = open_neighborhood(g, ("a", "b"))
+    selected = set(result.selected_vertices)
+    edges = {frozenset(edge) for edge in result.graph.edges}
+    assert all(
+        any(frozenset((source, neighbor)) in edges for source in selected)
+        for neighbor in result.neighborhood
+    )
+
+
+def test_rejects_result_that_would_exceed_canonical_output_budget() -> None:
+    long_label = "z" * 4_000_000
+    g = _graph(["a", long_label], [("a", long_label)])
+    request = NeighborhoodRequest(graph=g, selected_vertices=("a",))
+    assert (
+        len(encode_strict_json(request.model_dump(mode="json")))
+        <= CanonicalLimits().max_input_bytes
+    )
+
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=r"exceeding the .* canonical output budget",
+    ):
+        compute_open_neighborhood(request)

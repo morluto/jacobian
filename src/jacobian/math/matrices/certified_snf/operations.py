@@ -15,12 +15,59 @@ from itertools import pairwise
 from typing import Literal
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.certified_snf.values import (
+    MAX_CERTIFIED_SNF_INPUT_DIGITS,
+    MAX_CERTIFIED_SNF_INPUT_DIMENSION,
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
+    _integer_digits,
 )
 
 Matrix = list[list[int]]
+
+
+def _admit_certified_smith_input(matrix: CertifiedIntegerMatrix) -> None:
+    if (
+        not 1 <= matrix.row_count <= MAX_CERTIFIED_SNF_INPUT_DIMENSION
+        or not 1 <= matrix.column_count <= MAX_CERTIFIED_SNF_INPUT_DIMENSION
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="matrix.budget_exceeded",
+            message=(
+                "certified Smith input must be a nonempty matrix of at most "
+                f"{MAX_CERTIFIED_SNF_INPUT_DIMENSION} by "
+                f"{MAX_CERTIFIED_SNF_INPUT_DIMENSION}"
+            ),
+        )
+    if any(
+        _integer_digits(value) > MAX_CERTIFIED_SNF_INPUT_DIGITS
+        for row in matrix.entries
+        for value in row
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix", "entries"),
+            code="matrix.budget_exceeded",
+            message=(
+                "certified Smith input entries may contain at most "
+                f"{MAX_CERTIFIED_SNF_INPUT_DIGITS} decimal digits"
+            ),
+        )
+
+
+def smith_normal_form_certificate(
+    matrix: CertifiedIntegerMatrix,
+) -> SmithNormalFormCertificate:
+    """Compute a transformation-certified Smith normal form."""
+
+    _admit_certified_smith_input(matrix)
+    reduction = smith_reduce(
+        [[parse_canonical_integer(value) for value in row] for row in matrix.entries],
+        row_count=matrix.row_count,
+        column_count=matrix.column_count,
+    )
+    return certificate_from_reduction(reduction)
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,15 +318,9 @@ def verify_smith_normal_form_certificate(
     certified-Smith request envelope, which bounds the exact replay.
     """
 
-    from pydantic import ValidationError
-
-    from jacobian.math.matrices.certified_snf._models import (
-        CertifiedSmithNormalFormRequest,
-    )
-
     try:
-        CertifiedSmithNormalFormRequest(matrix=certificate.source)
-    except ValidationError:
+        _admit_certified_smith_input(certificate.source)
+    except OperationDomainValidationError:
         return False
 
     source = [
@@ -323,6 +364,7 @@ __all__ = [
     "matrix_multiply",
     "matrix_shape",
     "matrix_vector_multiply",
+    "smith_normal_form_certificate",
     "smith_reduce",
     "verify_smith_normal_form_certificate",
     "zero_matrix",

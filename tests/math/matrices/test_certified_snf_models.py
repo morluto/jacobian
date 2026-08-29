@@ -5,11 +5,13 @@ from typing import Literal, TypedDict
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.certified_snf._models import (
     CertifiedSmithNormalFormRequest,
     CertifiedSmithNormalFormResult,
 )
 from jacobian.math.matrices.certified_snf.operations import (
+    smith_normal_form_certificate,
     verify_smith_normal_form_certificate,
 )
 from jacobian.math.matrices.certified_snf.values import (
@@ -53,10 +55,12 @@ def test_certified_smith_request_accepts_a_bounded_integer_rectangle() -> None:
 
 
 def test_certified_smith_request_rejects_large_input_scalars() -> None:
-    with pytest.raises(ValidationError):
-        CertifiedSmithNormalFormRequest.model_validate(
-            {"matrix": _matrix([["1" * 33]])}
-        )
+    request = CertifiedSmithNormalFormRequest.model_validate(
+        {"matrix": _matrix([["1" * 33]])}
+    )
+
+    with pytest.raises(OperationDomainValidationError):
+        smith_normal_form_certificate(request.matrix)
 
 
 def test_certified_smith_request_schema_publishes_the_enforced_dimension_cap() -> None:

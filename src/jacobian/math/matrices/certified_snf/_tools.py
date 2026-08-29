@@ -9,22 +9,15 @@ from jacobian.math.matrices.certified_snf._models import (
     CertifiedSmithNormalFormResult,
 )
 from jacobian.math.matrices.certified_snf.operations import (
-    certificate_from_reduction,
-    smith_reduce,
+    smith_normal_form_certificate,
 )
 
 
 def _certified_smith(
     request: CertifiedSmithNormalFormRequest,
 ) -> CertifiedSmithNormalFormResult:
-    source = [[int(value) for value in row] for row in request.matrix.entries]
-    reduction = smith_reduce(
-        source,
-        row_count=request.matrix.row_count,
-        column_count=request.matrix.column_count,
-    )
     return CertifiedSmithNormalFormResult._from_kernel(
-        certificate=certificate_from_reduction(reduction)
+        certificate=smith_normal_form_certificate(request.matrix)
     )
 
 

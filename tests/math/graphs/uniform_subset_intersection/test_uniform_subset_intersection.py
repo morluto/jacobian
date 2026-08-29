@@ -4,8 +4,8 @@ from itertools import combinations
 from typing import Literal
 
 import pytest
-from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.chip_firing._models import LaplacianRequest
 from jacobian.math.graphs.chip_firing.operations import laplacian
 from jacobian.math.graphs.uniform_subset_intersection._models import (
@@ -164,56 +164,58 @@ def test_no_loops_or_duplicates() -> None:
 
 
 def test_rejects_k_exceeds_n() -> None:
-    with pytest.raises(ValidationError):
-        UniformSubsetIntersectionRequest(
-            ground_set_size=3,
-            subset_cardinality=5,
-            threshold=1,
-            relation="INTERSECTION_LT_THRESHOLD",
-        )
+    request = UniformSubsetIntersectionRequest(
+        ground_set_size=3,
+        subset_cardinality=5,
+        threshold=1,
+        relation="INTERSECTION_LT_THRESHOLD",
+    )
+    with pytest.raises(OperationDomainValidationError):
+        _construct(request)
 
 
 def test_rejects_threshold_exceeds_k() -> None:
-    with pytest.raises(ValidationError):
-        UniformSubsetIntersectionRequest(
-            ground_set_size=4,
-            subset_cardinality=2,
-            threshold=3,
-            relation="INTERSECTION_LT_THRESHOLD",
-        )
+    request = UniformSubsetIntersectionRequest(
+        ground_set_size=4,
+        subset_cardinality=2,
+        threshold=3,
+        relation="INTERSECTION_LT_THRESHOLD",
+    )
+    with pytest.raises(OperationDomainValidationError):
+        _construct(request)
 
 
 def test_rejects_family_beyond_graph_vertex_bound_before_enumeration() -> None:
-    with pytest.raises(ValidationError, match="256-vertex graph bound"):
-        UniformSubsetIntersectionRequest(
-            ground_set_size=11,
-            subset_cardinality=5,
-            threshold=1,
-            relation="INTERSECTION_LT_THRESHOLD",
-        )
+    request = UniformSubsetIntersectionRequest(
+        ground_set_size=11,
+        subset_cardinality=5,
+        threshold=1,
+        relation="INTERSECTION_LT_THRESHOLD",
+    )
+    with pytest.raises(OperationDomainValidationError, match="256-vertex graph bound"):
+        _construct(request)
 
 
 def test_rejects_huge_binomial_family_without_constructing_it() -> None:
-    with pytest.raises(ValidationError, match="256-vertex graph bound"):
-        UniformSubsetIntersectionRequest(
-            ground_set_size=(1 << 53) - 1,
-            subset_cardinality=2,
-            threshold=1,
-            relation="INTERSECTION_LT_THRESHOLD",
-        )
+    request = UniformSubsetIntersectionRequest(
+        ground_set_size=(1 << 53) - 1,
+        subset_cardinality=2,
+        threshold=1,
+        relation="INTERSECTION_LT_THRESHOLD",
+    )
+    with pytest.raises(OperationDomainValidationError, match="256-vertex graph bound"):
+        _construct(request)
 
 
-def test_request_retains_one_admission_plan_for_the_constructor() -> None:
+def test_catalog_adapter_uses_the_native_admission() -> None:
     request = UniformSubsetIntersectionRequest(
         ground_set_size=4,
         subset_cardinality=2,
         threshold=1,
         relation="INTERSECTION_LT_THRESHOLD",
     )
-    assert request._admission_plan.vertex_count == 6
-    assert request._admission_plan.edge_count == 3
     result = compute_uniform_subset_intersection_graph(request)
-    assert len(result.graph.vertices) == request._admission_plan.vertex_count
+    assert len(result.graph.vertices) == 6
 
 
 def test_native_api_accepts_domain_arguments() -> None:

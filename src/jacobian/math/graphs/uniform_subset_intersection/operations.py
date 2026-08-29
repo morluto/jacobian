@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from itertools import combinations
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.uniform_subset_intersection._models import (
     IntersectionRelation,
     UniformSubsetIntersectionResult,
@@ -27,9 +28,16 @@ def construct_uniform_subset_intersection_graph(
     comma-separated subset. An edge joins two subsets when their
     intersection size satisfies the declared relation with the threshold.
     """
-    plan = _admit_uniform_subset_intersection(
-        ground_set_size, subset_cardinality, threshold, relation
-    )
+    try:
+        plan = _admit_uniform_subset_intersection(
+            ground_set_size, subset_cardinality, threshold, relation
+        )
+    except (TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=(),
+            code="graph.uniform_subset_intersection.request_not_admitted",
+            message=str(error),
+        ) from error
     return _construct_uniform_subset_intersection_graph_from_plan(
         ground_set_size, subset_cardinality, threshold, relation, plan
     )

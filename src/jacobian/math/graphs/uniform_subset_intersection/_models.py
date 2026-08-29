@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import comb
-from typing import Literal, Self
+from typing import Literal
 
-from pydantic import Field, PrivateAttr, StrictInt, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field, StrictInt
 
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits
@@ -159,23 +158,6 @@ class UniformSubsetIntersectionRequest(StrictModel):
     subset_cardinality: StrictInt = Field(ge=0, le=MAX_SAFE_GROUND_SET_SIZE)
     threshold: StrictInt = Field(ge=0, le=MAX_SAFE_GROUND_SET_SIZE)
     relation: IntersectionRelation
-    _admission_plan: _UniformSubsetIntersectionPlan = PrivateAttr()
-
-    @model_validator(mode="after")
-    def validate_request(self) -> Self:
-        try:
-            self._admission_plan = _admit_uniform_subset_intersection(
-                self.ground_set_size,
-                self.subset_cardinality,
-                self.threshold,
-                self.relation,
-            )
-        except ValueError as error:
-            raise PydanticCustomError(
-                "graph.uniform_subset_intersection.request_not_admitted",
-                str(error),
-            ) from error
-        return self
 
 
 class UniformSubsetIntersectionResult(StrictModel):

@@ -10,19 +10,18 @@ from jacobian.math.graphs.uniform_subset_intersection._models import (
     UniformSubsetIntersectionResult,
 )
 from jacobian.math.graphs.uniform_subset_intersection.operations import (
-    _construct_uniform_subset_intersection_graph_from_plan,
+    construct_uniform_subset_intersection_graph,
 )
 
 
 def compute_uniform_subset_intersection_graph(
     request: UniformSubsetIntersectionRequest,
 ) -> UniformSubsetIntersectionResult:
-    return _construct_uniform_subset_intersection_graph_from_plan(
+    return construct_uniform_subset_intersection_graph(
         request.ground_set_size,
         request.subset_cardinality,
         request.threshold,
         request.relation,
-        request._admission_plan,
     )
 
 

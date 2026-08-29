@@ -10,23 +10,29 @@ from sympy import ZZ
 from sympy.polys.matrices import DomainMatrix
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.discrepancy import _models as discrepancy_models
 from jacobian.math.combinatorics.discrepancy._models import (
     MAX_OPTIMUM_SOLVER_MILLISECONDS,
     MAX_OPTIMUM_SOLVER_NODES,
     MAX_ROUNDING_INTERMEDIATE_DIGITS,
-    DiscrepancyEvalRequest,
     DiscrepancyEvalResult,
-    DiscrepancyOptimumRequest,
     DiscrepancyOptimumResult,
-    HardConstraintRoundingRequest,
+    FiniteSetSystem,
     HardConstraintRoundingResult,
+    HardConstraintRoundingSource,
     HardConstraintRowLedger,
     MonitoredColumnLedger,
     _budget_exceeded_result,
     _execution_failed_result,
     _proven_optimal_result,
 )
+
+__all__ = [
+    "compute_discrepancy",
+    "compute_hard_constraint_rounding",
+    "compute_optimal_discrepancy",
+]
 
 
 def _primitive_nullspace_direction(
@@ -72,11 +78,10 @@ def _require_admitted_step_height(
 
 
 def _floating_round(
-    source_values: list[Fraction], request: HardConstraintRoundingRequest
+    source_values: list[Fraction], source: HardConstraintRoundingSource
 ) -> tuple[int, ...]:
     """Run the deterministic exact floating-variable algorithm."""
 
-    source = request.source
     values = list(source_values)
     common_denominator_digits = 1 + sum(
         len(value.den) for value in source.values if value.den != "1"
@@ -133,7 +138,7 @@ def _floating_round(
 
 
 def compute_hard_constraint_rounding(
-    request: HardConstraintRoundingRequest,
+    source: HardConstraintRoundingSource,
 ) -> HardConstraintRoundingResult:
     """Round exactly while preserving hard rows and bounding column errors.
 
@@ -145,9 +150,8 @@ def compute_hard_constraint_rounding(
     step per initially fractional coordinate.
     """
 
-    source = request.source
     source_values = [value.as_fraction() for value in source.values]
-    rounded_values = _floating_round(source_values, request)
+    rounded_values = _floating_round(source_values, source)
 
     incidences = [0] * len(source_values)
     for column in source.columns:
@@ -203,7 +207,9 @@ def _max_absolute_imbalance(
     return max((abs(value) for value in signed_sums), default=0)
 
 
-def compute_discrepancy(request: DiscrepancyEvalRequest) -> DiscrepancyEvalResult:
+def compute_discrepancy(
+    set_system: FiniteSetSystem, coloring: tuple[int, ...]
+) -> DiscrepancyEvalResult:
     """Compute the signed sum on every set and the maximum absolute imbalance.
 
     For a coloring ``c`` and a set ``S`` the signed sum is
@@ -211,18 +217,29 @@ def compute_discrepancy(request: DiscrepancyEvalRequest) -> DiscrepancyEvalResul
     of the absolute signed sums across all sets; it is zero when the family
     is empty.
     """
+    if len(coloring) != set_system.ground_set_size:
+        raise OperationDomainValidationError(
+            location=("coloring",),
+            code="discrepancy_theory.coloring_length_mismatch",
+            message="coloring length must equal ground_set_size",
+        )
+    if any(value not in (-1, 1) for value in coloring):
+        raise OperationDomainValidationError(
+            location=("coloring",),
+            code="discrepancy_theory.coloring_not_signed_binary",
+            message="coloring values must be +1 or -1",
+        )
     signed_sums = tuple(
-        sum(request.coloring[element] for element in subset)
-        for subset in request.set_system.sets
+        sum(coloring[element] for element in subset) for subset in set_system.sets
     )
-    return DiscrepancyEvalResult(
+    return DiscrepancyEvalResult._from_kernel(
         signed_sums=signed_sums,
         max_absolute_imbalance=_max_absolute_imbalance(signed_sums),
     )
 
 
 def compute_optimal_discrepancy(
-    request: DiscrepancyOptimumRequest,
+    set_system: FiniteSetSystem,
 ) -> DiscrepancyOptimumResult:
     """Minimize the maximum imbalance via a bounded incumbent search plus proof.
 
@@ -248,11 +265,11 @@ def compute_optimal_discrepancy(
     any claim. The empty ground set has the single empty coloring with
     discrepancy zero.
     """
-    n = request.set_system.ground_set_size
-    sets = request.set_system.sets
+    n = set_system.ground_set_size
+    sets = set_system.sets
 
     if n == 0:
-        return _proven_optimal_result(request.set_system, (), 0)
+        return _proven_optimal_result(set_system, (), 0)
 
     variable_count = n + 1
 
@@ -313,28 +330,16 @@ def compute_optimal_discrepancy(
         # bounded external call: an ABI/loader, native, or raised failure
         # there is transport, not mathematics, so report the typed claim-free
         # outcome instead of escaping the kernel.
-        return _execution_failed_result(request.set_system)
+        return _execution_failed_result(set_system)
     if result.status == 1:
-        return _budget_exceeded_result(request.set_system)
+        return _budget_exceeded_result(set_system)
     if result.status != 0 or result.x is None:
-        return _execution_failed_result(request.set_system)
-    return _incumbent_outcome(request, result, variable_count)
-
-
-def _compute_optimal_discrepancy_isolated(
-    request: DiscrepancyOptimumRequest,
-) -> DiscrepancyOptimumResult:
-    """Run the complete HiGHS/Z3 transaction in a bounded owner worker."""
-
-    from jacobian.math.combinatorics.discrepancy._optimum_process import (
-        compute_optimal_discrepancy_isolated,
-    )
-
-    return compute_optimal_discrepancy_isolated(request)
+        return _execution_failed_result(set_system)
+    return _incumbent_outcome(set_system, result, variable_count)
 
 
 def _incumbent_outcome(
-    request: DiscrepancyOptimumRequest,
+    set_system: FiniteSetSystem,
     result: Any,
     variable_count: int,
 ) -> DiscrepancyOptimumResult:
@@ -342,20 +347,20 @@ def _incumbent_outcome(
 
     import numpy as np
 
-    sets = request.set_system.sets
-    n = request.set_system.ground_set_size
+    sets = set_system.sets
+    n = set_system.ground_set_size
     try:
         raw_result = result.x
         if raw_result.shape != (variable_count,) or not bool(
             np.all(np.isfinite(raw_result))
         ):
-            return _execution_failed_result(request.set_system)
+            return _execution_failed_result(set_system)
 
         raw_assignment = raw_result[:n]
         if float(np.max(np.abs(raw_assignment - np.round(raw_assignment)))) > 1e-6:
-            return _execution_failed_result(request.set_system)
+            return _execution_failed_result(set_system)
         if bool(np.any(raw_assignment < -1e-6) or np.any(raw_assignment > 1 + 1e-6)):
-            return _execution_failed_result(request.set_system)
+            return _execution_failed_result(set_system)
         coloring = tuple(1 if value > 0.5 else -1 for value in raw_assignment)
 
         # Bind the claimed optimum to an exact integer recomputation so no
@@ -369,21 +374,19 @@ def _incumbent_outcome(
         # A status-zero result is only an incumbent candidate.  If its vector
         # cannot be inspected in the advertised finite floating-point domain,
         # no canonical coloring or mathematical conclusion may escape.
-        return _execution_failed_result(request.set_system)
+        return _execution_failed_result(set_system)
     if abs(solved_bound - recomputed) > 1e-6:
-        return _execution_failed_result(request.set_system)
+        return _execution_failed_result(set_system)
     if recomputed == 0:
-        return _proven_optimal_result(request.set_system, coloring, recomputed)
+        return _proven_optimal_result(set_system, coloring, recomputed)
     try:
-        outcome = discrepancy_models._feasibility_outcome(
-            request.set_system, recomputed - 1
-        )
+        outcome = discrepancy_models._feasibility_outcome(set_system, recomputed - 1)
     except (ImportError, OSError, RuntimeError, TypeError, ValueError):
         # An unavailable exact proof cannot back the OPTIMAL claim; report
         # the claim-free outcome instead of escaping the kernel.
-        return _budget_exceeded_result(request.set_system)
+        return _budget_exceeded_result(set_system)
     if outcome == "unsat":
-        return _proven_optimal_result(request.set_system, coloring, recomputed)
+        return _proven_optimal_result(set_system, coloring, recomputed)
     if outcome == "sat":
-        return _execution_failed_result(request.set_system)
-    return _budget_exceeded_result(request.set_system)
+        return _execution_failed_result(set_system)
+    return _budget_exceeded_result(set_system)

@@ -6,7 +6,7 @@ import json
 import sys
 from typing import Any
 
-from jacobian.math.combinatorics.discrepancy._models import DiscrepancyOptimumRequest
+from jacobian.math.combinatorics.discrepancy._models import FiniteSetSystem
 from jacobian.math.combinatorics.discrepancy.operations import (
     compute_optimal_discrepancy,
 )
@@ -15,8 +15,8 @@ from jacobian.math.combinatorics.discrepancy.operations import (
 def main() -> int:
     try:
         payload: Any = json.loads(sys.stdin.buffer.read())
-        request = DiscrepancyOptimumRequest.model_validate(payload)
-        result = compute_optimal_discrepancy(request)
+        set_system = FiniteSetSystem.model_validate(payload)
+        result = compute_optimal_discrepancy(set_system)
         sys.stdout.write(
             json.dumps(result.model_dump(mode="json"), separators=(",", ":"))
         )

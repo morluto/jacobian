@@ -14,11 +14,48 @@ from jacobian.math.combinatorics.discrepancy._models import (
     HardConstraintRoundingRequest,
     HardConstraintRoundingResult,
 )
-from jacobian.math.combinatorics.discrepancy.operations import (
-    _compute_optimal_discrepancy_isolated,
-    compute_discrepancy,
-    compute_hard_constraint_rounding,
+from jacobian.math.combinatorics.discrepancy._optimum_process import (
+    compute_optimal_discrepancy_isolated as _compute_optimal_discrepancy_isolated,
 )
+from jacobian.math.combinatorics.discrepancy.operations import (
+    compute_discrepancy as _compute_discrepancy_native,
+)
+from jacobian.math.combinatorics.discrepancy.operations import (
+    compute_hard_constraint_rounding as _compute_hard_constraint_rounding_native,
+)
+from jacobian.math.combinatorics.discrepancy.operations import (
+    compute_optimal_discrepancy as _compute_optimal_discrepancy_native,
+)
+
+
+def compute_hard_constraint_rounding(
+    request: HardConstraintRoundingRequest,
+) -> HardConstraintRoundingResult:
+    """Unpack a wire request for the native rounding operation."""
+
+    return _compute_hard_constraint_rounding_native(request.source)
+
+
+def compute_discrepancy(request: DiscrepancyEvalRequest) -> DiscrepancyEvalResult:
+    """Unpack a wire request for the native discrepancy evaluator."""
+
+    return _compute_discrepancy_native(request.set_system, request.coloring)
+
+
+def compute_optimal_discrepancy(
+    request: DiscrepancyOptimumRequest,
+) -> DiscrepancyOptimumResult:
+    """Unpack a wire request for the native optimum operation."""
+
+    return _compute_optimal_discrepancy_native(request.set_system)
+
+
+def compute_optimal_discrepancy_isolated(
+    request: DiscrepancyOptimumRequest,
+) -> DiscrepancyOptimumResult:
+    """Run the native optimum operation in its killable worker process."""
+
+    return _compute_optimal_discrepancy_isolated(request.set_system)
 
 
 def discrepancy_theory_operation[
@@ -126,7 +163,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "claim.",
         DiscrepancyOptimumRequest,
         DiscrepancyOptimumResult,
-        _compute_optimal_discrepancy_isolated,
+        compute_optimal_discrepancy_isolated,
         "discrepancy",
         "set-system",
         "combinatorial-search",

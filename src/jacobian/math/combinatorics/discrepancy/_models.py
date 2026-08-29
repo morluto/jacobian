@@ -422,6 +422,17 @@ class DiscrepancyEvalResult(StrictModel):
     signed_sums: tuple[int, ...]
     max_absolute_imbalance: int = Field(ge=0, strict=True)
 
+    @classmethod
+    def _from_kernel(
+        cls, *, signed_sums: tuple[int, ...], max_absolute_imbalance: int
+    ) -> Self:
+        """Build the exact evaluator result after native computation."""
+
+        return cls.model_construct(
+            signed_sums=signed_sums,
+            max_absolute_imbalance=max_absolute_imbalance,
+        )
+
 
 class DiscrepancyOptimumRequest(StrictModel):
     """Search for a coloring minimizing the maximum discrepancy."""
@@ -488,6 +499,24 @@ class DiscrepancyOptimumResult(StrictModel):
     optimal_coloring: tuple[int, ...] = Field(default=())
     optimal_discrepancy: int | None = Field(default=None, ge=0, strict=True)
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        set_system: FiniteSetSystem,
+        status: Literal["OPTIMAL", "BUDGET_EXCEEDED", "EXECUTION_FAILED"],
+        optimal_coloring: tuple[int, ...] = (),
+        optimal_discrepancy: int | None = None,
+    ) -> Self:
+        """Build a result bound to the canonical source set system."""
+
+        return cls.model_construct(
+            set_system=set_system,
+            status=status,
+            optimal_coloring=optimal_coloring,
+            optimal_discrepancy=optimal_discrepancy,
+        )
+
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
         if self.status in ("BUDGET_EXCEEDED", "EXECUTION_FAILED"):
@@ -525,7 +554,7 @@ def _proven_optimal_result(
     witness feasibility and the exact lower-bound proof.
     """
 
-    return DiscrepancyOptimumResult.model_construct(
+    return DiscrepancyOptimumResult._from_kernel(
         set_system=set_system,
         status="OPTIMAL",
         optimal_coloring=optimal_coloring,
@@ -540,7 +569,7 @@ def _budget_exceeded_result(set_system: FiniteSetSystem) -> DiscrepancyOptimumRe
     bounded execution envelope is exhausted.
     """
 
-    return DiscrepancyOptimumResult.model_construct(
+    return DiscrepancyOptimumResult._from_kernel(
         set_system=set_system,
         status="BUDGET_EXCEEDED",
         optimal_coloring=(),
@@ -554,7 +583,7 @@ def _execution_failed_result(set_system: FiniteSetSystem) -> DiscrepancyOptimumR
     Same claim-free shape as ``_budget_exceeded_result`` for a backend failure.
     """
 
-    return DiscrepancyOptimumResult.model_construct(
+    return DiscrepancyOptimumResult._from_kernel(
         set_system=set_system,
         status="EXECUTION_FAILED",
         optimal_coloring=(),

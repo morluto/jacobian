@@ -13,7 +13,6 @@ from pydantic import ValidationError
 
 import jacobian.math.combinatorics.discrepancy._models as discrepancy_models
 import jacobian.math.combinatorics.discrepancy._optimum_process as optimum_process
-import jacobian.math.combinatorics.discrepancy.operations as discrepancy_operations
 from jacobian.math.combinatorics.discrepancy._models import (
     MAX_COLUMN_INCIDENCES,
     MAX_MONITORED_COLUMNS,
@@ -29,10 +28,11 @@ from jacobian.math.combinatorics.discrepancy._models import (
     HardConstraintRoundingRequest,
     HardConstraintRoundingResult,
 )
-from jacobian.math.combinatorics.discrepancy.operations import (
+from jacobian.math.combinatorics.discrepancy._tools import (
     compute_discrepancy,
     compute_hard_constraint_rounding,
     compute_optimal_discrepancy,
+    compute_optimal_discrepancy_isolated,
 )
 from jacobian.process import BoundedProcessResult
 
@@ -966,7 +966,7 @@ class TestDiscrepancyOptimum:
             )
         )
 
-        result = discrepancy_operations._compute_optimal_discrepancy_isolated(request)
+        result = compute_optimal_discrepancy_isolated(request)
 
         assert result.status == expected_status
         assert result.set_system == request.set_system

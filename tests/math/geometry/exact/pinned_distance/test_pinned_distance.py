@@ -124,14 +124,27 @@ def test_result_preserves_source() -> None:
     assert result.configuration == config
 
 
-def test_native_admission_rejects_coordinate_height_before_squaring() -> None:
-    """The profile's squared-distance envelope is narrower than shared points."""
-    huge = CanonicalRational.from_fraction(Fraction(10**256))
+def test_result_sensitive_admission_accepts_large_but_representable_coordinates() -> None:
+    """A small profile can use coordinates beyond the old fixed cap."""
+    huge = CanonicalRational.from_fraction(Fraction(10**999))
     config = PointConfiguration(
         points=(
             LabelledRationalPoint(label="a", coordinates=(huge,)),
             _pt("b", (0,)),
         )
     )
-    with pytest.raises(OperationDomainValidationError, match="coordinate"):
+    result = compute_pinned_distance_support_profile(config)
+    assert result.entries[0].distance_classes[0].squared_distance.as_fraction() == 10**1998
+
+
+def test_native_admission_rejects_distance_height_before_squaring() -> None:
+    """Squared coordinates beyond the canonical height are rejected early."""
+    huge = CanonicalRational.from_fraction(Fraction(10**16384))
+    config = PointConfiguration(
+        points=(
+            LabelledRationalPoint(label="a", coordinates=(huge,)),
+            _pt("b", (0,)),
+        )
+    )
+    with pytest.raises(OperationDomainValidationError, match="squared-distance"):
         compute_pinned_distance_support_profile(config)

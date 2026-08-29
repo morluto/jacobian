@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import NoReturn
 
 from jacobian.canonical import (
@@ -40,23 +39,27 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> None:
     if vertex_count > MAX_VERTICES:
         _reject("too_many_vertices", f"at most {MAX_VERTICES} vertices are supported")
     edge_count = len(graph.edges)
-    if not edge_count:
-        return
+    adjacency: dict[str, set[str]] = {v: set() for v in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
 
-    # A simple path on k vertices has at most P(n,k)/2 distinct undirected
-    # orientations.  Raising this candidate bound once per edge gives a
-    # conservative upper bound for the cover recursion, before it is entered.
-    candidate_bound = sum(
-        math.perm(vertex_count, length) // 2 for length in range(2, vertex_count + 1)
-    )
-    search_bound = 1
-    for _ in range(edge_count):
-        search_bound *= max(candidate_bound, 1)
-        if search_bound > MAX_SEARCH_STATES:
-            _reject(
-                "search_work_bound",
-                "the exact path-partition search exceeds its bounded work envelope",
-            )
+    if edge_count:
+        # Count paths in the actual graph, stopping once the work budget is
+        # already impossible. This preserves sparse graphs that the complete
+        # graph envelope rejected.
+        candidate_bound = max(
+            _count_simple_paths(adjacency, MAX_SEARCH_STATES * 2) // 2,
+            1,
+        )
+        search_bound = 1
+        for _ in range(edge_count):
+            search_bound *= max(candidate_bound, 1)
+            if search_bound > MAX_SEARCH_STATES:
+                _reject(
+                    "search_work_bound",
+                    "the exact path-partition search exceeds its bounded work envelope",
+                )
 
     try:
         source_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
@@ -66,7 +69,7 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> None:
     except ValueError as exc:
         _reject("source_representation", str(exc))
     path_bytes = _array_size([max_label_bytes] * vertex_count)
-    paths_bytes = _array_size([path_bytes] * edge_count)
+    paths_bytes = _array_size([path_bytes] * edge_count) if edge_count else 2
     result_bytes = strict_json_object_size(
         (
             ("graph", source_bytes),
@@ -79,6 +82,31 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> None:
             "result_size_bound",
             f"the path decomposition result exceeds the {MAX_RESULT_BYTES}-byte output bound",
         )
+
+
+def _count_simple_paths(
+    adjacency: dict[str, set[str]],
+    limit: int,
+) -> int:
+    count = 0
+
+    def visit(current: str, visited: frozenset[str]) -> None:
+        nonlocal count
+        for neighbor in adjacency[current]:
+            if neighbor in visited:
+                continue
+            count += 1
+            if count > limit:
+                return
+            visit(neighbor, visited | {neighbor})
+            if count > limit:
+                return
+
+    for start in adjacency:
+        visit(start, frozenset({start}))
+        if count > limit:
+            return limit + 1
+    return count
 
 
 def compute_minimum_path_decomposition(

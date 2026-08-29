@@ -73,3 +73,11 @@ def test_k5_search_is_rejected_before_exhaustive_cover() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="work envelope"):
         compute_minimum_path_decomposition(g)
+
+
+def test_sparse_graph_uses_actual_path_candidates() -> None:
+    """Isolated vertices do not make a one-edge search look dense."""
+    vertices = [f"v{i}" for i in range(10)]
+    g = _graph(vertices, [(vertices[0], vertices[1])])
+    result = compute_minimum_path_decomposition(g)
+    assert result.path_count == 1

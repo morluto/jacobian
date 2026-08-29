@@ -290,8 +290,8 @@ def _require_bounded_cartesian_product(
 def _require_sumset_result_transport_bound(support: Iterable[int]) -> None:
     """Reject sumsets whose complete result cannot fit canonical transport."""
     values = tuple(format_canonical_integer(value) for value in support)
-    elements_size = 2 + max(len(values) - 1, 0) + sum(
-        len(value) + 2 for value in values
+    elements_size = (
+        2 + max(len(values) - 1, 0) + sum(len(value) + 2 for value in values)
     )
     support_size = strict_json_object_size((("elements", elements_size),))
     result_size = strict_json_object_size(

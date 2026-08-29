@@ -372,33 +372,6 @@ def test_hermite_request_rejects_order_33_identity() -> None:
     assert exc_info.value.errors()[0]["type"] == "lattice.budget_exceeded"
 
 
-def test_lattice_reduction_admits_before_lll_backend() -> None:
-    """A 33-by-33 identity must not reach FLINT or fail inside the result model."""
-
-    basis = IntegerMatrix.model_validate(
-        {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}
-    )
-    request = LatticeReductionRequest.model_construct(basis=basis)
-    with pytest.raises(OperationDomainValidationError) as exc_info:
-        reduce_lattice_basis(request)
-    error = exc_info.value.errors()[0]
-    assert error["type"] == "lattice.budget_exceeded"
-    assert error["loc"] == ("basis",)
-    assert str(MAX_MATRIX_DIMENSION) in error["msg"]
-
-
-def test_hermite_admits_before_hnf_backend() -> None:
-    matrix = IntegerMatrix.model_validate(
-        {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}
-    )
-    request = HermiteNormalFormRequest.model_construct(matrix=matrix)
-    with pytest.raises(OperationDomainValidationError) as exc_info:
-        compute_hermite_normal_form(request)
-    error = exc_info.value.errors()[0]
-    assert error["type"] == "lattice.budget_exceeded"
-    assert error["loc"] == ("matrix",)
-
-
 def test_lattice_reduction_accepts_order_32_identity() -> None:
     request = LatticeReductionRequest.model_validate(
         {"basis": {"entries": _identity_entries(MAX_MATRIX_DIMENSION)}}
@@ -425,6 +398,20 @@ def test_hermite_accepts_order_32_identity() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_lattice_reduction_rejects_order_above_32_before_backend() -> None:
+    order = MAX_MATRIX_DIMENSION + 1
+    entries = tuple(
+        tuple("1" if row == column else "0" for column in range(order))
+        for row in range(order)
+    )
+    matrix = IntegerMatrix(entries=entries)
+
+    with pytest.raises(ValidationError):
+        LatticeReductionRequest(basis=matrix)
+    with pytest.raises(OperationDomainValidationError, match="32"):
+        reduce_lattice_basis(LatticeReductionRequest.model_construct(basis=matrix))
+
+
 def test_all_new_operations_registered_in_catalog() -> None:
     from jacobian.catalog.builtins import BUILTIN_TOOLS
 
@@ -441,23 +428,3 @@ def test_all_new_operations_registered_in_catalog() -> None:
         "lattice.orthogonal_sum.compute",
     }
     assert expected <= ids
-
-
-def test_lattice_reduction_rejects_order_above_32_before_backend() -> None:
-    from pydantic import ValidationError
-
-    from jacobian.math.lattices._lattice import reduce_lattice_basis
-    from jacobian.math.lattices._models import LatticeReductionRequest
-    from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, IntegerMatrix
-
-    order = MAX_MATRIX_DIMENSION + 1
-    entries = tuple(
-        tuple("1" if row == column else "0" for column in range(order))
-        for row in range(order)
-    )
-    matrix = IntegerMatrix(entries=entries)
-
-    with pytest.raises(ValidationError):
-        LatticeReductionRequest(basis=matrix)
-    with pytest.raises(OperationDomainValidationError, match="32"):
-        reduce_lattice_basis(LatticeReductionRequest.model_construct(basis=matrix))

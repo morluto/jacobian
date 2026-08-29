@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import pairwise
+from math import gcd
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -17,8 +18,44 @@ from jacobian.math.probability._models import (
     _validation_error,
 )
 
-MAX_FINITE_DISTRIBUTION_ATOMS = 256
+MAX_FINITE_INPUT_ATOMS = 256
+MAX_FINITE_DISTRIBUTION_ATOMS = 32_768
 MAX_FINITE_CONVOLUTION_PAIRS = 4096
+MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS = 256
+MAX_FINITE_CONVOLUTION_POWER = 10**15
+MAX_FINITE_DISTRIBUTION_SUM_DIGITS = MAX_RESULT_RATIONAL_DIGITS
+
+
+def _bounded_fraction_sum(
+    values: tuple[Fraction, ...],
+    *,
+    label: str,
+) -> Fraction:
+    """Sum nonnegative rationals without materializing an over-height fraction."""
+
+    total = Fraction()
+    for value in values:
+        common = gcd(total.denominator, value.denominator)
+        left_denominator = total.denominator // common
+        right_denominator = value.denominator // common
+        left_numerator_digits = len(str(abs(total.numerator))) + len(
+            str(right_denominator)
+        )
+        right_numerator_digits = len(str(abs(value.numerator))) + len(
+            str(left_denominator)
+        )
+        if (
+            len(str(left_denominator)) + len(str(value.denominator))
+            > MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+            or max(left_numerator_digits, right_numerator_digits) + 1
+            > MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+        ):
+            raise _validation_error(
+                f"{label} normalization exceeds the "
+                f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
+            )
+        total += value
+    return total
 
 
 class FiniteDistributionAtom(StrictModel):
@@ -57,9 +94,9 @@ class FiniteRationalDistribution(StrictModel):
             label="finite-distribution support values",
         )
         if (
-            sum(
-                (atom.probability.as_fraction() for atom in self.atoms),
-                start=Fraction(),
+            _bounded_fraction_sum(
+                tuple(atom.probability.as_fraction() for atom in self.atoms),
+                label="finite-distribution probability",
             )
             != 1
         ):
@@ -93,9 +130,9 @@ def require_input_distribution(
             label="finite-distribution input probability",
         )
     if (
-        sum(
-            (atom.probability.as_fraction() for atom in atoms),
-            start=Fraction(),
+        _bounded_fraction_sum(
+            tuple(atom.probability.as_fraction() for atom in atoms),
+            label="finite-distribution input probability",
         )
         != 1
     ):
@@ -108,7 +145,7 @@ def require_input_distribution(
 class FiniteRawMomentRequest(StrictModel):
     atoms: tuple[FiniteDistributionAtom, ...] = Field(
         min_length=1,
-        max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
+        max_length=MAX_FINITE_INPUT_ATOMS,
     )
     order: StrictInt = Field(ge=0, le=128)
 
@@ -125,7 +162,7 @@ class FiniteRawMomentResult(StrictModel):
     moment: CanonicalRational
     contributions: tuple[FiniteRawMomentContribution, ...] = Field(
         min_length=1,
-        max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
+        max_length=MAX_FINITE_INPUT_ATOMS,
     )
 
     @classmethod
@@ -144,7 +181,7 @@ class FiniteRawMomentResult(StrictModel):
 class FiniteEventRequest(StrictModel):
     distribution: FiniteRationalDistribution
     event_values: tuple[CanonicalRational, ...] = Field(
-        max_length=MAX_FINITE_DISTRIBUTION_ATOMS
+        max_length=MAX_FINITE_INPUT_ATOMS
     )
 
 
@@ -155,7 +192,7 @@ class FiniteConditionRequest(FiniteEventRequest):
 class FiniteEventProbabilityResult(StrictModel):
     event_probability: CanonicalRational
     selected_atoms: tuple[FiniteDistributionAtom, ...] = Field(
-        max_length=MAX_FINITE_DISTRIBUTION_ATOMS
+        max_length=MAX_FINITE_INPUT_ATOMS
     )
 
     @classmethod
@@ -203,7 +240,7 @@ class FiniteConditionResult(StrictModel):
     distribution: FiniteRationalDistribution
     contributions: tuple[FiniteConditionalContribution, ...] = Field(
         min_length=1,
-        max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
+        max_length=MAX_FINITE_INPUT_ATOMS,
     )
 
     @classmethod
@@ -230,7 +267,7 @@ class FinitePushforwardRequest(StrictModel):
     distribution: FiniteRationalDistribution
     mapping: tuple[FinitePushforwardMapEntry, ...] = Field(
         min_length=1,
-        max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
+        max_length=MAX_FINITE_INPUT_ATOMS,
     )
 
 
@@ -260,7 +297,7 @@ class FinitePushforwardResult(StrictModel):
     distribution: FiniteRationalDistribution
     contributions: tuple[FinitePushforwardContribution, ...] = Field(
         min_length=1,
-        max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
+        max_length=MAX_FINITE_INPUT_ATOMS,
     )
 
     @classmethod
@@ -279,6 +316,86 @@ class FinitePushforwardResult(StrictModel):
 class FiniteConvolutionRequest(StrictModel):
     left: FiniteRationalDistribution
     right: FiniteRationalDistribution
+
+
+class FiniteConvolutionPowerRequest(StrictModel):
+    """One positive i.i.d. convolution exponent over an exact source law."""
+
+    distribution: FiniteRationalDistribution
+    exponent: StrictInt = Field(ge=1, le=MAX_FINITE_CONVOLUTION_POWER)
+
+
+class FiniteConvolutionPowerResult(StrictModel):
+    """The complete exact law of an i.i.d. sum, bound to its source."""
+
+    source: FiniteRationalDistribution
+    exponent: StrictInt = Field(ge=1, le=MAX_FINITE_CONVOLUTION_POWER)
+    distribution: FiniteRationalDistribution
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: FiniteRationalDistribution,
+        exponent: int,
+        distribution: FiniteRationalDistribution,
+    ) -> Self:
+        return cls.model_construct(
+            source=source,
+            exponent=exponent,
+            distribution=distribution,
+        )
+
+
+class FiniteConvolutionPeakResult(StrictModel):
+    """Every maximizer and the exact largest mass of an i.i.d. sum."""
+
+    source: FiniteRationalDistribution
+    exponent: StrictInt = Field(ge=1, le=MAX_FINITE_CONVOLUTION_POWER)
+    maximum_probability: CanonicalRational
+    maximizing_values: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_peak_shape(self) -> Self:
+        require_bounded_rational(
+            self.maximum_probability,
+            max_digits=MAX_RESULT_RATIONAL_DIGITS,
+            label="convolution-power maximum probability",
+        )
+        if self.maximum_probability.as_fraction() <= 0:
+            raise _validation_error(
+                "convolution-power maximum probability must be positive"
+            )
+        _require_strictly_increasing(
+            self.maximizing_values,
+            label="convolution-power maximizing values",
+        )
+        for value in self.maximizing_values:
+            require_bounded_rational(
+                value,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label="convolution-power maximizing value",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: FiniteRationalDistribution,
+        exponent: int,
+        maximum_probability: CanonicalRational,
+        maximizing_values: tuple[CanonicalRational, ...],
+    ) -> Self:
+        return cls.model_construct(
+            source=source,
+            exponent=exponent,
+            maximum_probability=maximum_probability,
+            maximizing_values=maximizing_values,
+        )
 
 
 class FiniteConvolutionContribution(StrictModel):
@@ -328,12 +445,19 @@ class FiniteConvolutionResult(StrictModel):
 
 
 __all__ = [
+    "MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS",
     "MAX_FINITE_CONVOLUTION_PAIRS",
+    "MAX_FINITE_CONVOLUTION_POWER",
     "MAX_FINITE_DISTRIBUTION_ATOMS",
+    "MAX_FINITE_DISTRIBUTION_SUM_DIGITS",
+    "MAX_FINITE_INPUT_ATOMS",
     "FiniteConditionRequest",
     "FiniteConditionResult",
     "FiniteConditionalContribution",
     "FiniteConvolutionContribution",
+    "FiniteConvolutionPeakResult",
+    "FiniteConvolutionPowerRequest",
+    "FiniteConvolutionPowerResult",
     "FiniteConvolutionRequest",
     "FiniteConvolutionResult",
     "FiniteDistributionAtom",

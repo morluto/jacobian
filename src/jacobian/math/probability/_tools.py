@@ -13,6 +13,9 @@ from jacobian.math.probability._directed_bond_reliability import (
 from jacobian.math.probability._distribution import (
     FiniteConditionRequest,
     FiniteConditionResult,
+    FiniteConvolutionPeakResult,
+    FiniteConvolutionPowerRequest,
+    FiniteConvolutionPowerResult,
     FiniteConvolutionRequest,
     FiniteConvolutionResult,
     FiniteEventProbabilityResult,
@@ -54,6 +57,18 @@ def _pushforward(request: FinitePushforwardRequest) -> FinitePushforwardResult:
 
 def _convolution(request: FiniteConvolutionRequest) -> FiniteConvolutionResult:
     return native.convolution(request.left, request.right)
+
+
+def _convolution_power(
+    request: FiniteConvolutionPowerRequest,
+) -> FiniteConvolutionPowerResult:
+    return native.convolution_power(request.distribution, request.exponent)
+
+
+def _convolution_peak(
+    request: FiniteConvolutionPowerRequest,
+) -> FiniteConvolutionPeakResult:
+    return native.convolution_peak(request.distribution, request.exponent)
 
 
 def _gaussian_polynomial_moment(
@@ -249,6 +264,60 @@ FINITE_PROBABILITY_OPERATIONS = (
                 "die_plus_bit",
                 "Convolve a fair die with a fair bit; pair product and aggregated atoms have bounded limits.",
                 {"left": _FAIR_DIE_3, "right": _FAIR_BIT},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="probability.finite_distribution.convolution_power.compute",
+        title="Compute an exact i.i.d. convolution power",
+        description=(
+            "Return the complete exact distribution of a positive convolution "
+            "power of one finite rational law, with lattice-span, work, height, "
+            "and result-sensitive admission."
+        ),
+        request_type=FiniteConvolutionPowerRequest,
+        result_type=FiniteConvolutionPowerResult,
+        run=_convolution_power,
+        tags=(
+            "probability",
+            "convolution-power",
+            "iid-sum",
+            "finite",
+            "exact",
+            "python-flint",
+        ),
+        examples=(
+            example(
+                "three_fair_bits",
+                "Compute the exact distribution of the sum of three fair bits.",
+                {"distribution": _FAIR_BIT, "exponent": 3},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="probability.finite_distribution.convolution_peak.compute",
+        title="Compute exact peaks of an i.i.d. convolution power",
+        description=(
+            "Return the exact maximum atom probability and every value attaining "
+            "it for a positive convolution power of one finite rational law."
+        ),
+        request_type=FiniteConvolutionPowerRequest,
+        result_type=FiniteConvolutionPeakResult,
+        run=_convolution_peak,
+        tags=(
+            "probability",
+            "convolution-peak",
+            "anti-concentration",
+            "iid-sum",
+            "finite",
+            "exact",
+            "python-flint",
+        ),
+        examples=(
+            example(
+                "three_fair_bit_peaks",
+                "Find both central peaks of the sum of three fair bits.",
+                {"distribution": _FAIR_BIT, "exponent": 3},
             ),
         ),
     ),

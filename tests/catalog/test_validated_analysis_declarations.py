@@ -28,6 +28,8 @@ def test_subject_operation_groups_preserve_wire_contracts() -> None:
             "probability.finite_distribution.condition.compute",
             "probability.finite_distribution.pushforward.compute",
             "probability.finite_distribution.convolution.compute",
+            "probability.finite_distribution.convolution_power.compute",
+            "probability.finite_distribution.convolution_peak.compute",
             "probability.gaussian_polynomial.moment.compute",
             "probability.graph_reliability.connection_probability.compute",
             "probability.digraph_bond_reliability.connection_probability.compute",

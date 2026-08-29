@@ -86,7 +86,7 @@ def test_presolve_admits_513_digit_residuals_from_128_digit_inputs() -> None:
     offsets = (11509, 61478, 41469, 52773, 5591, 35311, 73132, 999)
     values = tuple(10**digit_bound - offset for offset in offsets)
     assert all(len(str(value)) == digit_bound for value in values)
-    assert _INTERVAL_RESULT_DIGITS == 4 * digit_bound + 1
+    assert 4 * digit_bound + 1 == _INTERVAL_RESULT_DIGITS
 
     point = Fraction(values[2], values[3]) / Fraction(values[0], values[1])
     tall_residual = Fraction(values[4], values[5]) * point - Fraction(

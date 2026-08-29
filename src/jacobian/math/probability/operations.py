@@ -874,18 +874,18 @@ def convolution_peak(
         )
     plan = _admit_convolution_peak(distribution, exponent)
     coefficients = _convolution_power_coefficients(plan)
-    maximum = max(coefficients)
+    maximum_coefficient = max(coefficients)
     denominator = plan.powered_probability_denominator
     return FiniteConvolutionPeakResult._from_kernel(
         source=distribution,
         exponent=exponent,
         maximum_probability=CanonicalRational.from_fraction(
-            Fraction(maximum, denominator)
+            Fraction(maximum_coefficient, denominator)
         ),
         maximizing_values=tuple(
             _power_value(plan, index)
             for index, coefficient in enumerate(coefficients)
-            if coefficient == maximum
+            if coefficient == maximum_coefficient
         ),
     )
 

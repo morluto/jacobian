@@ -465,8 +465,8 @@ class SmithNormalForm(StrictModel):
 
 
 __all__ = [
-    "MAX_INTEGER_MATRIX_ORDER",
     "MAX_EXACT_LINEAR_MATRIX_AXIS",
+    "MAX_INTEGER_MATRIX_ORDER",
     "MAX_MATRIX_DIMENSION",
     "MAX_MATRIX_SCALAR_DIGITS",
     "MAX_RATIONAL_MATRIX_ORDER",
@@ -477,10 +477,10 @@ __all__ = [
     "RationalVectorSpaceBasis",
     "RealQuadraticMatrix",
     "SmithNormalForm",
-    "integer_matrix_axis_schema",
     "SparseRationalMatrix",
     "SparseRationalMatrixEntry",
     "dense_rational_matrix_from_sparse",
+    "integer_matrix_axis_schema",
     "rational_matrix_from_fractions",
     "rational_vector_space_basis_from_fractions",
     "require_matrix_scalar_digits",

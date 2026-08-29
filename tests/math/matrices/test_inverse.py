@@ -150,8 +150,7 @@ def test_inverse_result_accepts_order_33_integer_matrix() -> None:
     )
     result = inverse_result(matrix)
     assert _result_entries(result) == tuple(
-        tuple(Fraction(int(row == column)) for column in range(33))
-        for row in range(33)
+        tuple(Fraction(int(row == column)) for column in range(33)) for row in range(33)
     )
 
 
@@ -251,6 +250,7 @@ def test_inverse_reuses_canonical_integer_matrix() -> None:
 
 def test_non_inverse_integer_requests_keep_order_32_envelope() -> None:
     from pydantic import ValidationError
+
     from jacobian.math.lattices._hnf import compute_hermite_normal_form
     from jacobian.math.lattices._lattice import reduce_lattice_basis
     from jacobian.math.lattices._models import (

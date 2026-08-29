@@ -5,7 +5,11 @@ from typing import Any
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.probability.stochastic_processes import operations as native
 from jacobian.math.probability.stochastic_processes._models import (
     ConditionalExpectationRequest,
@@ -17,16 +21,28 @@ from jacobian.math.probability.stochastic_processes._models import (
     JoinRequest,
 )
 from jacobian.math.probability.stochastic_processes._poisson_binomial_models import (
+    PoissonBinomialAdmissionError,
     PoissonBinomialRequest,
     PoissonBinomialResult,
-)
-from jacobian.math.probability.stochastic_processes._poisson_binomial_operations import (
-    compute_poisson_binomial,
 )
 from jacobian.math.probability.stochastic_processes.values import (
     FiniteRandomVariable,
     FiniteSigmaAlgebra,
 )
+
+
+def compute_poisson_binomial(
+    request: PoissonBinomialRequest,
+) -> PoissonBinomialResult:
+    try:
+        count_distribution = native.poisson_binomial(request.probabilities)
+    except PoissonBinomialAdmissionError as exc:
+        raise OperationDomainValidationError(
+            location=("probabilities",),
+            code="probability.poisson_binomial.admission",
+            message=str(exc),
+        ) from exc
+    return PoissonBinomialResult._from_kernel(request, count_distribution)
 
 
 def compute_sigma_from_observation(

@@ -10,7 +10,7 @@ from jacobian.math.probability.stochastic_processes import poisson_binomial
 from jacobian.math.probability.stochastic_processes._poisson_binomial_models import (
     PoissonBinomialRequest,
 )
-from jacobian.math.probability.stochastic_processes._poisson_binomial_operations import (
+from jacobian.math.probability.stochastic_processes._tools import (
     compute_poisson_binomial,
 )
 

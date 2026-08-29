@@ -8,10 +8,13 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
+from jacobian.math.combinatorics import _sidon_extension_kernel as sidon_kernel
 from jacobian.math.combinatorics import (
     _sidon_extension_models as sidon_models,
 )
-from jacobian.math.combinatorics import _sidon_extension_operations as sidon_operations
+from jacobian.math.combinatorics._sidon_extension import (
+    compute_sidon_extension_profile,
+)
 from jacobian.math.combinatorics._sidon_extension_models import (
     MAX_EXTENSION_RESULT_BYTES,
     SidonExtensionCandidateResult,
@@ -19,9 +22,6 @@ from jacobian.math.combinatorics._sidon_extension_models import (
     SidonExtensionProfileRequest,
     SidonExtensionProfileResult,
     _maximum_result_bytes,
-)
-from jacobian.math.combinatorics._sidon_extension_operations import (
-    compute_sidon_extension_profile,
 )
 
 
@@ -232,7 +232,7 @@ class TestSidonExtensionProfile:
             return real_obstruction(*args, **kwargs)
 
         monkeypatch.setattr(
-            sidon_operations, "_candidate_obstruction", counted_obstruction
+            sidon_kernel, "_candidate_obstruction", counted_obstruction
         )
         monkeypatch.setattr(sidon_models, "_candidate_obstruction", counted_obstruction)
         _extension(["1", "2"], ["3", "4", "10"])

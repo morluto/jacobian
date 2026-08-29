@@ -11,7 +11,6 @@ from jacobian.math.combinatorics._sidon_extension_models import (
     MAX_EXTENSION_RESULT_BYTES,
     SidonExtensionCandidateResult,
     SidonExtensionObstruction,
-    SidonExtensionProfileRequest,
     SidonExtensionProfileResult,
     _candidate_obstruction,
     _CandidateObstruction,
@@ -54,7 +53,8 @@ def _sidon_extension_admission_plan(
 
 
 def compute_sidon_extension_profile(
-    request: SidonExtensionProfileRequest,
+    source_elements: tuple[str, ...],
+    candidate_elements: tuple[str, ...],
 ) -> SidonExtensionProfileResult:
     """Partition candidates into admissible and rejected.
 
@@ -62,11 +62,11 @@ def compute_sidon_extension_profile(
     all ordered differences and checking for collisions. If a collision
     is found, record the repeated difference and the two source pairs.
     """
-    candidates = request.candidate_elements
+    candidates = candidate_elements
 
     admission_plan = _sidon_extension_admission_plan(
-        request.source_elements,
-        request.candidate_elements,
+        source_elements,
+        candidate_elements,
     )
     source_diffs = admission_plan.source_differences
     candidate_obstructions = admission_plan.candidate_obstructions
@@ -77,7 +77,7 @@ def compute_sidon_extension_profile(
     for index, x in enumerate(candidates):
         if candidate_obstructions is None:
             obstruction_data = _candidate_obstruction(
-                request.source_elements,
+                source_elements,
                 source_diffs,
                 x,
             )
@@ -101,8 +101,8 @@ def compute_sidon_extension_profile(
             admissible.append(x)
 
     return SidonExtensionProfileResult._from_kernel(
-        source_elements=request.source_elements,
-        candidate_elements=request.candidate_elements,
+        source_elements=source_elements,
+        candidate_elements=candidate_elements,
         admissible=tuple(admissible),
         rejected=tuple(rejected),
     )

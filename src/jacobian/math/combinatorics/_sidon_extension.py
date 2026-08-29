@@ -1,14 +1,23 @@
 """Declarations for the Sidon extension-profile operation."""
 
 from jacobian.catalog._examples import example
+from jacobian.math.combinatorics._sidon_extension_kernel import (
+    compute_sidon_extension_profile as _compute_sidon_extension_profile,
+)
 from jacobian.math.combinatorics._sidon_extension_models import (
     SidonExtensionProfileRequest,
     SidonExtensionProfileResult,
 )
-from jacobian.math.combinatorics._sidon_extension_operations import (
-    compute_sidon_extension_profile,
-)
 from jacobian.math.combinatorics._support import combinatorics_operation
+
+
+def compute_sidon_extension_profile(
+    request: SidonExtensionProfileRequest,
+) -> SidonExtensionProfileResult:
+    return _compute_sidon_extension_profile(
+        request.source_elements,
+        request.candidate_elements,
+    )
 
 SIDON_EXTENSION_OPERATION = (
     combinatorics_operation(

@@ -247,6 +247,23 @@ known-answer, adversarial, and property-based fixtures. Independently supplied
 claims need an explicit bounded verifier only when a public consumer accepts
 those claims as theorem-bearing input.
 
+Validation and verification are separate responsibilities:
+
+| Boundary | Permitted work |
+| --- | --- |
+| Request parsing | Canonical shape, grammar, nesting, digit, and raw representation bounds |
+| Worker-output decoding | Strict codec, canonical scalar syntax, cardinality, and projection shape |
+| Result structural validation | Axis alignment, references, coverage, and discriminated-state consistency |
+| Trusted result construction | Owner-local `_from_kernel` construction after the kernel established the skipped invariants |
+| Ordinary result deserialization | Canonical structural parsing only; it does not authenticate mathematical truth |
+| Explicit verifier or tests | Declared bounded replay when a theorem-bearing input contract requires it |
+
+No ordinary boundary may factor, isolate roots, enumerate candidates, invoke a
+solver or backend, recompute a defining relation, or trigger a nested public
+validator that performs that work. A computed result is a trusted producer
+output. Public deserialization establishes its canonical representation, not a
+second proof of its mathematical postcondition.
+
 Public results describe mathematical meaning, not the implementation used to
 compute it. Do not expose a constant backend, method, algorithm, exactness,
 determinism, or verification field merely to narrate trusted execution. Retain
@@ -281,8 +298,9 @@ wrappers must not recompute the decision independently. A simple admission
 guard may return nothing on success. Do not introduce a plan class or module
 unless it carries information that a later phase genuinely consumes.
 
-When result construction needs to bypass semantic replay, expose one private
-owner-local factory such as ``_from_kernel``. It may use trusted construction
+Result construction uses one private owner-local factory such as
+``_from_kernel`` whenever public validation would replay semantic work. It may
+use trusted construction
 only after the kernel has established every invariant it skips. Pydantic result
 validators remain limited to structural, linearly bounded checks; they do not
 call a backend, enumerate a search space, invoke a solver, or recompute the

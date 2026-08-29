@@ -158,12 +158,17 @@ def test_dimension_limit_is_derived_from_structure_constant_budget() -> None:
 
 
 def test_published_dimension_fits_canonical_request_byte_limit() -> None:
-    """Worst-case valid tensors must encode under the 10 MiB transport envelope."""
+    """Worst-case valid tensors must encode under the 10 MiB transport envelope.
+
+    ``math.run`` canonicalizes through ``parse_operation_input`` before Pydantic
+    sees the request, so the advertised dimension must survive that gate.
+    """
     from jacobian.canonical import (
         CanonicalizationError,
         CanonicalLimits,
         encode_strict_json,
     )
+    from jacobian.dispatch import parse_operation_input
 
     n = MAX_DIM
     residue = 250
@@ -178,6 +183,10 @@ def test_published_dimension_fits_canonical_request_byte_limit() -> None:
     }
     encoded = encode_strict_json(payload)
     assert len(encoded) <= CanonicalLimits().max_input_bytes
+    parsed = parse_operation_input(CenterRequest, payload)
+    assert parsed.algebra.dimension == n
+    schema = StructureConstants.model_json_schema()
+    assert schema["properties"]["dimension"]["maximum"] == n
 
     oversized_inner = [residue] * (n + 1)
     oversized_row = [oversized_inner] * (n + 1)
@@ -189,7 +198,7 @@ def test_published_dimension_fits_canonical_request_byte_limit() -> None:
         }
     }
     with pytest.raises(CanonicalizationError):
-        encode_strict_json(oversized)
+        parse_operation_input(CenterRequest, oversized)
 
 
 def test_structure_constants_rejects_above_its_own_field_cap() -> None:

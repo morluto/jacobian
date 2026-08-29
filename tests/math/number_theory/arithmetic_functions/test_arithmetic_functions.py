@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.arithmetic_functions import (
     dirichlet_convolution,
     dirichlet_inverse,
@@ -385,6 +386,82 @@ def test_mobius_admission_preserves_a_shared_denominator() -> None:
 
     assert result.values[0] == value
     assert all(entry.num == "0" and entry.den == "1" for entry in result.values[1:])
+
+
+def test_mobius_admission_bounds_two_prime_denominator_lcm() -> None:
+    """Alternating 1/p and 1/q dens share an LCM, not just max(den)."""
+
+    first_prime = 1_000_000_007
+    second_prime = 1_000_000_009
+    common = first_prime * second_prime
+    values = tuple(
+        CanonicalRational(
+            num="1",
+            den=str(first_prime if index % 2 == 0 else second_prime),
+        )
+        for index in range(_MAX_DIVISOR_PREFIX_LENGTH)
+    )
+
+    result = compute_mobius_transform(MobiusTransformRequest(values=values))
+
+    assert result.values[0] == CanonicalRational(num="1", den=str(first_prime))
+    # f(2) = F(2) - F(1) = 1/q - 1/p; f(3) = F(3) - F(1) = 0.
+    assert result.values[1].as_fraction() == (
+        Fraction(1, second_prime) - Fraction(1, first_prime)
+    )
+    assert result.values[2].as_fraction() == Fraction(0)
+    assert all(common % int(entry.den) == 0 for entry in result.values)
+
+
+def test_mobius_mixed_two_prime_denominators_match_the_defining_sum() -> None:
+    first_prime = 7
+    second_prime = 11
+    values = tuple(
+        CanonicalRational(
+            num="1",
+            den=str(first_prime if index % 2 == 0 else second_prime),
+        )
+        for index in range(12)
+    )
+    result = compute_mobius_transform(MobiusTransformRequest(values=values))
+    mobius = (1, -1, -1, 0, -1, 1, -1, 0, 0, 1, -1, 0)
+    fractions = tuple(value.as_fraction() for value in values)
+    for index in range(1, len(values) + 1):
+        expected = sum(
+            (
+                mobius[divisor - 1] * fractions[index // divisor - 1]
+                for divisor in range(1, index + 1)
+                if index % divisor == 0
+            ),
+            start=Fraction(0),
+        )
+        assert result.values[index - 1].as_fraction() == expected
+
+
+def test_mobius_admission_rejects_exploding_denominator_lcm() -> None:
+    """Many small prime dens keep max(den) tiny while the LCM explodes."""
+
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < 50:
+        if all(candidate % prime != 0 for prime in primes):
+            primes.append(candidate)
+        candidate += 1
+    common = 1
+    for prime in primes:
+        common *= prime
+    assert len(str(max(primes))) == 3
+    assert len(str(common)) >= 80
+    values = tuple(
+        CanonicalRational(num="1", den=str(primes[index % len(primes)]))
+        for index in range(_MAX_DIVISOR_PREFIX_LENGTH)
+    )
+
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        compute_mobius_transform(MobiusTransformRequest(values=values))
+    assert exc_info.value.errors()[0]["type"] == (
+        "arithmetic_functions.result_bytes_exceeded"
+    )
 
 
 def test_convolution_admission_preserves_shared_denominators() -> None:

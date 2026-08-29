@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import CanonicalLimits
+from jacobian.canonical import CanonicalLimits, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.number_theory.arithmetic_functions._models import (
@@ -73,8 +74,13 @@ class _HeightSums:
             self.maximum_adjusted_numerator[index],
             height.numerator_digits - height.denominator_digits,
         )
+        lifted_numerator = height.numerator_digits
+        if self.shared_denominator_digits is not None:
+            lifted_numerator += (
+                self.shared_denominator_digits - height.denominator_digits
+            )
         self.maximum_numerator[index] = max(
-            self.maximum_numerator[index], height.numerator_digits
+            self.maximum_numerator[index], lifted_numerator
         )
         self.term_counts[index] += 1
 
@@ -141,17 +147,48 @@ def _require_length(
         raise ValueError(f"{name} must have between 1 and {maximum} values")
 
 
+def _decimal_digits_from_bits(bits: int) -> int:
+    # 30103 / 100000 is a strict upper rational approximation to log10(2).
+    return max(1, (bits * 30_103 + 99_999) // 100_000)
+
+
+def _bounded_lcm(left: int, right: int) -> int | None:
+    """Return ``lcm(left, right)`` when its digits stay in the result bound."""
+
+    common = gcd(left, right)
+    predicted_bits = left.bit_length() + right.bit_length() - common.bit_length() + 1
+    if _decimal_digits_from_bits(predicted_bits) > MAX_CANONICAL_RATIONAL_DIGITS:
+        return None
+    return left // common * right
+
+
 def _shared_denominator_digits(
     values: tuple[CanonicalRational, ...],
 ) -> int | None:
-    """Return the common denominator digit count, or ``None`` if dens differ."""
+    """Return digit count of ``lcm(dens)`` when it stays in the result bound.
+
+    Mixed prefixes can keep a small maximum denominator while the LCM still
+    grows, so admission tracks the actual common multiple rather than
+    ``max(den).bit_length()``.
+    """
 
     if not values:
         return None
-    shared = values[0].den
-    if all(value.den == shared for value in values):
-        return len(shared)
-    return None
+    first = values[0].den
+    if all(value.den == first for value in values):
+        return len(first)
+    running = parse_canonical_integer(first)
+    seen = {first}
+    for value in values[1:]:
+        den = value.den
+        if den in seen:
+            continue
+        seen.add(den)
+        merged = _bounded_lcm(running, parse_canonical_integer(den))
+        if merged is None:
+            return None
+        running = merged
+    return len(str(running))
 
 
 def _admit_convolution(

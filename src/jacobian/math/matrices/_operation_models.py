@@ -125,7 +125,10 @@ class _MatrixRequest(StrictModel):
 def _require_computation_dimensions(
     entries: tuple[tuple[CanonicalRational, ...], ...],
 ) -> None:
-    if len(entries) > MAX_EXACT_LINEAR_MATRIX_AXIS or len(entries[0]) > MAX_EXACT_LINEAR_MATRIX_AXIS:
+    if (
+        len(entries) > MAX_EXACT_LINEAR_MATRIX_AXIS
+        or len(entries[0]) > MAX_EXACT_LINEAR_MATRIX_AXIS
+    ):
         raise _validation_error(
             "budget_exceeded",
             "matrix computation dimensions are limited to "

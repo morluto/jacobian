@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -46,6 +46,16 @@ class LaplacianNetwork(StrictModel):
     edges: tuple[ConductanceEdge, ...] = Field(
         min_length=1, max_length=MAX_NETWORK_EDGES
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_shared_conductance_network(cls, data: object) -> object:
+        if isinstance(data, ConductanceNetwork):
+            return {
+                "vertex_count": data.vertex_count,
+                "edges": data.edges,
+            }
+        return data
 
 
 class EffectiveResistanceRequest(StrictModel):

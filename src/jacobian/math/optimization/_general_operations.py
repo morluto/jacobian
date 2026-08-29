@@ -5,16 +5,10 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import (
-    MathTool,
-    MathTools,
-    OperationDomainValidationError,
-)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.optimization._arithmetic import rational_dot
 from jacobian.math.optimization._general_models import (
     GeneralFormRationalLinearProgram,
-    GeneralRationalLinearProgramRequest,
     GeneralRationalLinearProgramResult,
     _source_arrays,
 )
@@ -25,10 +19,7 @@ from jacobian.math.optimization._general_normalization import (
     _mapped_residual_digit_bound,
     admit_general_normalization,
 )
-from jacobian.math.optimization._models import (
-    RationalLinearProgramRequest,
-    RationalLinearProgramResult,
-)
+from jacobian.math.optimization._models import RationalLinearProgramResult
 
 
 def _wire(value: Fraction, *, max_digits: int) -> CanonicalRational | None:
@@ -457,14 +448,11 @@ def _map_standard_result(
     )
 
 
-def _general_linear_program(
-    request: GeneralRationalLinearProgramRequest,
+def general_linear_program(
+    program: GeneralFormRationalLinearProgram,
 ) -> GeneralRationalLinearProgramResult:
-    # Avoid a declaration-cycle: the standard operation imports this sibling
-    # only to publish the immutable tuple, while its direct kernel stays private.
-    from jacobian.math.optimization._operations import _linear_program
+    from jacobian.math.optimization.operations import linear_program
 
-    program = request.program
     try:
         normalization = admit_general_normalization(program)
     except ValueError as error:
@@ -473,9 +461,7 @@ def _general_linear_program(
             code="optimization.linear.general_normalization_admission",
             message=str(error),
         ) from error
-    standard_result = _linear_program(
-        RationalLinearProgramRequest(program=normalization.standard_program)
-    )
+    standard_result = linear_program(normalization.standard_program)
     return _map_standard_result(
         program,
         normalization,
@@ -486,57 +472,4 @@ def _general_linear_program(
     )
 
 
-GENERAL_RATIONAL_LINEAR_OPERATIONS: MathTools = (
-    MathTool(
-        operation_id="optimization.linear.rational_general_optimum.compute",
-        title="Solve a general-form rational linear program",
-        description=(
-            "Solve a bounded exact rational LP with labeled LE, EQ, and GE rows, "
-            "finite bounds, and free variables. Results retain the original source "
-            "coordinates and replayed optimality, Farkas, or recession evidence; "
-            "private slack and sign-split columns never appear on the wire."
-        ),
-        request_type=GeneralRationalLinearProgramRequest,
-        result_type=GeneralRationalLinearProgramResult,
-        run=_general_linear_program,
-        tags=(
-            "optimization",
-            "linear-program",
-            "rational",
-            "inequality",
-            "bounded",
-        ),
-        examples=(
-            example(
-                "bounded_inequality_lp",
-                "Minimize x subject to x>=1; all rows and bounds are closed exact rationals.",
-                {
-                    "program": {
-                        "variables": [
-                            {
-                                "name": "x",
-                                "lower_bound": {"num": "0", "den": "1"},
-                                "upper_bound": None,
-                            }
-                        ],
-                        "objective": {
-                            "sense": "MINIMIZE",
-                            "coefficients": [{"num": "1", "den": "1"}],
-                        },
-                        "constraints": [
-                            {
-                                "label": "minimum",
-                                "coefficients": [{"num": "1", "den": "1"}],
-                                "relation": "GE",
-                                "rhs": {"num": "1", "den": "1"},
-                            }
-                        ],
-                    }
-                },
-            ),
-        ),
-    ),
-)
-
-
-__all__ = ["GENERAL_RATIONAL_LINEAR_OPERATIONS"]
+__all__ = ["general_linear_program"]

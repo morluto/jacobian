@@ -6,13 +6,7 @@ from fractions import Fraction
 from typing import Any
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
-from jacobian.math.optimization._general_operations import (
-    GENERAL_RATIONAL_LINEAR_OPERATIONS,
-)
 from jacobian.math.optimization._models import (
-    RationalLinearProgramRequest,
     RationalLinearProgramResult,
     StandardFormRationalLinearProgram,
     _active_equations,
@@ -513,13 +507,12 @@ def _positive_result(
     return optimal_result
 
 
-def _linear_program(
-    request: RationalLinearProgramRequest,
+def linear_program(
+    program: StandardFormRationalLinearProgram,
 ) -> RationalLinearProgramResult:
     import sympy
     from sympy.solvers.simplex import InfeasibleLPError, UnboundedLPError
 
-    program = request.program
     trivial_infeasibility = _trivial_infeasibility(program)
     if trivial_infeasibility is not None:
         return trivial_infeasibility
@@ -548,46 +541,4 @@ def _linear_program(
     )
 
 
-RATIONAL_LINEAR_OPERATIONS: MathTools = (
-    MathTool(
-        operation_id="optimization.linear.rational_optimum.compute",
-        title="Solve a rational linear program",
-        description=(
-            "Use exact SymPy simplex calls to return a source-bound standard-form "
-            "rational LP outcome. Optimal and feasible outcomes retain replayed "
-            "points; infeasible outcomes carry a Farkas witness; unbounded outcomes "
-            "carry a feasible point and recession direction; UNKNOWN makes no claim."
-        ),
-        request_type=RationalLinearProgramRequest,
-        result_type=RationalLinearProgramResult,
-        run=_linear_program,
-        tags=(
-            "optimization",
-            "linear-program",
-            "rational",
-            "optimum",
-            "bounded",
-        ),
-        examples=(
-            example(
-                "one_variable_unit_lp",
-                "Optimize x subject to x=1 and x>=0.",
-                {
-                    "program": {
-                        "variables": ["x"],
-                        "objective": [{"num": "1", "den": "1"}],
-                        "coefficients": [[{"num": "1", "den": "1"}]],
-                        "rhs": [{"num": "1", "den": "1"}],
-                    },
-                },
-            ),
-        ),
-    ),
-)
-
-RATIONAL_LINEAR_OPERATIONS = (
-    *RATIONAL_LINEAR_OPERATIONS,
-    *GENERAL_RATIONAL_LINEAR_OPERATIONS,
-)
-
-__all__ = ["RATIONAL_LINEAR_OPERATIONS"]
+__all__ = ["linear_program"]

@@ -21,7 +21,7 @@ from jacobian.math.optimization._models import (
     RationalLinearProgramResult,
     StandardFormRationalLinearProgram,
 )
-from jacobian.math.optimization._tools import TOOLS as OPTIMIZATION_TOOLS
+from jacobian.math.optimization.operations import linear_program
 
 pytestmark = pytest.mark.requires_backend("flint")
 
@@ -36,9 +36,7 @@ def _system(rhs: list[dict[str, str]]) -> dict[str, object]:
 
 def _run_linear_program(program: dict[str, object]) -> RationalLinearProgramResult:
     request = RationalLinearProgramRequest.model_validate({"program": program})
-    result = OPTIMIZATION_TOOLS[0].run(request)
-    assert isinstance(result, RationalLinearProgramResult)
-    return result
+    return linear_program(request.program)
 
 
 def test_rational_linear_operations_return_mathematical_outcomes() -> None:
@@ -77,19 +75,17 @@ def test_rational_linear_operations_return_mathematical_outcomes() -> None:
 
 
 def test_rational_linear_program_returns_a_source_bound_optimum() -> None:
-    operation = OPTIMIZATION_TOOLS[0]
-    result = operation.run(
-        RationalLinearProgramRequest.model_validate(
-            {
-                "program": {
-                    "variables": ["x"],
-                    "objective": [q(1)],
-                    "coefficients": [[q(1)]],
-                    "rhs": [q(1)],
-                }
+    request = RationalLinearProgramRequest.model_validate(
+        {
+            "program": {
+                "variables": ["x"],
+                "objective": [q(1)],
+                "coefficients": [[q(1)]],
+                "rhs": [q(1)],
             }
-        )
+        }
     )
+    result = linear_program(request.program)
 
     assert result.status == "OPTIMAL"
     # Guard the public wire shape: every conclusion retains the canonical source,
@@ -128,19 +124,17 @@ def test_rational_linear_program_returns_a_source_bound_optimum() -> None:
 
 
 def test_rational_linear_program_handles_multiple_equalities() -> None:
-    operation = OPTIMIZATION_TOOLS[0]
-    result = operation.run(
-        RationalLinearProgramRequest.model_validate(
-            {
-                "program": {
-                    "variables": ["x", "y"],
-                    "objective": [q(1), q(1)],
-                    "coefficients": [[q(1), q(0)], [q(0), q(1)]],
-                    "rhs": [q(1), q(2)],
-                }
+    request = RationalLinearProgramRequest.model_validate(
+        {
+            "program": {
+                "variables": ["x", "y"],
+                "objective": [q(1), q(1)],
+                "coefficients": [[q(1), q(0)], [q(0), q(1)]],
+                "rhs": [q(1), q(2)],
             }
-        )
+        }
     )
+    result = linear_program(request.program)
 
     assert result.status == "OPTIMAL"
     assert [v.model_dump(mode="json") for v in result.primal_candidate] == [q(1), q(2)]
@@ -191,7 +185,7 @@ def test_zero_coefficient_nonzero_rhs_has_a_direct_farkas_witness() -> None:
 
 
 def test_zero_equalities_are_pruned_from_farkas_backend_work() -> None:
-    from jacobian.math.optimization._operations import _solve_farkas
+    from jacobian.math.optimization.operations import _solve_farkas
 
     program = RationalLinearProgramRequest.model_validate(
         {

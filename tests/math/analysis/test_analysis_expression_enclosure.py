@@ -11,20 +11,21 @@ from jacobian.math.analysis._expression_enclosure import (
     IntervalExpressionEnclosureResult,
 )
 from jacobian.math.analysis._models import MAX_DYADIC_EXPONENT, ExactDyadic
-from jacobian.math.analysis._operations import _expression_enclosure
+from jacobian.math.analysis.operations import expression_enclosure
 
 
 def _run(
     expression: dict[str, object], argument: str = "0"
 ) -> IntervalExpressionEnclosureResult:
-    return _expression_enclosure(
-        IntervalExpressionEnclosureRequest.model_validate(
-            {
-                "expression": expression,
-                "argument": {"num": argument, "den": "1"},
-                "precision_bits": 128,
-            }
-        )
+    request = IntervalExpressionEnclosureRequest.model_validate(
+        {
+            "expression": expression,
+            "argument": {"num": argument, "den": "1"},
+            "precision_bits": 128,
+        }
+    )
+    return expression_enclosure(
+        request.expression, request.argument, request.precision_bits
     )
 
 
@@ -117,29 +118,30 @@ def test_uncertain_denominator_reports_precision_instead_of_domain_error() -> No
         "op": "exp",
         "children": [{"op": "const", "value": {"num": "1", "den": "1"}}],
     }
-    result = _expression_enclosure(
-        IntervalExpressionEnclosureRequest.model_validate(
-            {
-                "expression": {
-                    "op": "div",
-                    "children": [
-                        {"op": "const", "value": {"num": "1", "den": "1"}},
-                        {
-                            "op": "add",
-                            "children": [
-                                {
-                                    "op": "const",
-                                    "value": {"num": "1", "den": str(2**100)},
-                                },
-                                {"op": "sub", "children": [exp_one, exp_one]},
-                            ],
-                        },
-                    ],
-                },
-                "argument": {"num": "0", "den": "1"},
-                "precision_bits": 32,
-            }
-        )
+    request = IntervalExpressionEnclosureRequest.model_validate(
+        {
+            "expression": {
+                "op": "div",
+                "children": [
+                    {"op": "const", "value": {"num": "1", "den": "1"}},
+                    {
+                        "op": "add",
+                        "children": [
+                            {
+                                "op": "const",
+                                "value": {"num": "1", "den": str(2**100)},
+                            },
+                            {"op": "sub", "children": [exp_one, exp_one]},
+                        ],
+                    },
+                ],
+            },
+            "argument": {"num": "0", "den": "1"},
+            "precision_bits": 32,
+        }
+    )
+    result = expression_enclosure(
+        request.expression, request.argument, request.precision_bits
     )
     assert result.status == "PRECISION_INSUFFICIENT"
 

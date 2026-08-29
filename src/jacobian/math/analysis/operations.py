@@ -6,12 +6,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from jacobian._exact import require_bounded_rational
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis._arb import arb_source_interval, dyadic_endpoints
 from jacobian.math.analysis._expression_enclosure import (
-    IntervalExpressionEnclosureRequest,
     IntervalExpressionEnclosureResult,
 )
 from jacobian.math.analysis._models import (
@@ -19,23 +17,15 @@ from jacobian.math.analysis._models import (
     DyadicClosedInterval,
     IntervalExpressionDomainFailure,
     IntervalExpressionNode,
+    RationalIntervalBox,
     _bounded_expression_nodes,
     _rational_box_bounds,
-)
-from jacobian.math.analysis._point_enclosure import (
-    ArbPointEnclosureRequest,
-    ArbPointEnclosureResult,
-    PointEnclosureCheckRequest,
-    PointEnclosureCheckResult,
-    _check_point_enclosure,
-    _point_enclosure,
 )
 from jacobian.math.analysis._second_jet import (
     MAX_SECOND_JET_RESULT_INTERVALS,
     MAX_SECOND_JET_WORK_UNITS,
     FirstPartialEnclosure,
     HessianEntryEnclosure,
-    IntervalExpressionSecondJetEnclosureRequest,
     IntervalExpressionSecondJetEnclosureResult,
     _preflight_second_jet_expression,
     _second_jet_node_arithmetic_units,
@@ -117,12 +107,14 @@ def _evaluate_expression(node: IntervalExpressionNode, variable: Any) -> Any:
     return _apply_unary(node, values[0])
 
 
-def _expression_enclosure(
-    request: IntervalExpressionEnclosureRequest,
+def expression_enclosure(
+    expression: IntervalExpressionNode,
+    argument: CanonicalRational,
+    precision_bits: int,
 ) -> IntervalExpressionEnclosureResult:
     try:
         require_bounded_rational(
-            request.argument,
+            argument,
             max_digits=MAX_RATIONAL_DIGITS,
             label="interval-enclosure argument",
         )
@@ -134,7 +126,7 @@ def _expression_enclosure(
         ) from exc
     if any(
         node.op == "var" and node.variable is not None
-        for node in _bounded_expression_nodes(request.expression)
+        for node in _bounded_expression_nodes(expression)
     ):
         raise OperationDomainValidationError(
             location=("expression",),
@@ -143,15 +135,13 @@ def _expression_enclosure(
         )
     from flint import arb, ctx, fmpq
 
-    numerator, denominator = request.argument.as_integer_ratio()
-    with ctx.workprec(request.precision_bits):
-        result = _evaluate_expression(
-            request.expression, arb(fmpq(numerator, denominator))
-        )
+    numerator, denominator = argument.as_integer_ratio()
+    with ctx.workprec(precision_bits):
+        result = _evaluate_expression(expression, arb(fmpq(numerator, denominator)))
         if isinstance(result, _EvaluationFailure):
             return IntervalExpressionEnclosureResult(
                 status=result.value,
-                precision_bits=request.precision_bits,
+                precision_bits=precision_bits,
                 detail=(
                     "The expression is outside its real domain at the supplied argument."
                     if result is _EvaluationFailure.DOMAIN_ERROR
@@ -165,7 +155,7 @@ def _expression_enclosure(
         if not result.is_finite():
             return IntervalExpressionEnclosureResult(
                 status="NONFINITE",
-                precision_bits=request.precision_bits,
+                precision_bits=precision_bits,
                 detail="Arb returned a non-finite ball.",
             )
         lower_mantissa, lower_exponent = result.lower().man_exp()
@@ -177,12 +167,12 @@ def _expression_enclosure(
     if endpoints is None:
         return IntervalExpressionEnclosureResult(
             status="OUTPUT_MAGNITUDE_EXCEEDED",
-            precision_bits=request.precision_bits,
+            precision_bits=precision_bits,
             detail="Arb produced finite endpoints outside the interoperable dyadic exponent range.",
         )
     return IntervalExpressionEnclosureResult(
         status="ENCLOSED",
-        precision_bits=request.precision_bits,
+        precision_bits=precision_bits,
         lower=endpoints[0],
         upper=endpoints[1],
         relative_accuracy_bits=None if exact else int(result.rel_accuracy_bits()),
@@ -406,14 +396,41 @@ def _dyadic_closed_interval(value: Any) -> DyadicClosedInterval | None:
     return DyadicClosedInterval(lower=endpoints[0], upper=endpoints[1])
 
 
-def _second_jet_enclosure(
-    request: IntervalExpressionSecondJetEnclosureRequest,
+def _second_jet_result(
+    expression: IntervalExpressionNode,
+    box: RationalIntervalBox,
+    precision_bits: int,
+    *,
+    status: str,
+    detail: str,
+    value: DyadicClosedInterval | None = None,
+    gradient: tuple[FirstPartialEnclosure, ...] = (),
+    hessian: tuple[HessianEntryEnclosure, ...] = (),
+    domain_failure: IntervalExpressionDomainFailure | None = None,
 ) -> IntervalExpressionSecondJetEnclosureResult:
-    dimension = len(request.box.variables)
+    return IntervalExpressionSecondJetEnclosureResult.model_construct(
+        expression=expression,
+        box=box,
+        precision_bits=precision_bits,
+        status=status,
+        value=value,
+        gradient=gradient,
+        hessian=hessian,
+        domain_failure=domain_failure,
+        detail=detail,
+    )
+
+
+def second_jet_enclosure(
+    expression: IntervalExpressionNode,
+    box: RationalIntervalBox,
+    precision_bits: int,
+) -> IntervalExpressionSecondJetEnclosureResult:
+    dimension = len(box.variables)
     result_intervals = 1 + dimension + dimension * (dimension + 1) // 2
     if result_intervals > MAX_SECOND_JET_RESULT_INTERVALS:
         raise AssertionError("second-jet result interval accounting is inconsistent")
-    work_units = len(_bounded_expression_nodes(request.expression)) * (
+    work_units = len(_bounded_expression_nodes(expression)) * (
         _second_jet_node_arithmetic_units(dimension)
     )
     if work_units > MAX_SECOND_JET_WORK_UNITS:
@@ -427,7 +444,7 @@ def _second_jet_enclosure(
         )
     try:
         preflight = _preflight_second_jet_expression(
-            request.expression, _rational_box_bounds(request.box)
+            expression, _rational_box_bounds(box)
         )
     except ValueError as exc:
         raise OperationDomainValidationError(
@@ -436,8 +453,10 @@ def _second_jet_enclosure(
             message=str(exc),
         ) from exc
     if isinstance(preflight, IntervalExpressionDomainFailure):
-        return IntervalExpressionSecondJetEnclosureResult._from_kernel(
-            request,
+        return _second_jet_result(
+            expression,
+            box,
+            precision_bits,
             status="DOMAIN_UNPROVEN",
             domain_failure=preflight,
             detail=(
@@ -449,19 +468,17 @@ def _second_jet_enclosure(
     try:
         from flint import ctx
 
-        with ctx.workprec(request.precision_bits):
+        with ctx.workprec(precision_bits):
             variables = {
                 variable: arb_source_interval(interval)
-                for variable, interval in zip(
-                    request.box.variables, request.box.intervals, strict=True
-                )
+                for variable, interval in zip(box.variables, box.intervals, strict=True)
             }
-            jet = _evaluate_second_jet(
-                request.expression, variables, len(request.box.variables)
-            )
+            jet = _evaluate_second_jet(expression, variables, len(box.variables))
             if isinstance(jet, _SecondJetEvaluationFailure):
-                return IntervalExpressionSecondJetEnclosureResult._from_kernel(
-                    request,
+                return _second_jet_result(
+                    expression,
+                    box,
+                    precision_bits,
                     status="BACKEND_ERROR",
                     detail=(
                         "Pinned Arb returned no finite second-order enclosure within "
@@ -477,8 +494,10 @@ def _second_jet_enclosure(
                 for row in jet.hessian
             )
     except (OverflowError, ValueError, ZeroDivisionError):
-        return IntervalExpressionSecondJetEnclosureResult._from_kernel(
-            request,
+        return _second_jet_result(
+            expression,
+            box,
+            precision_bits,
             status="BACKEND_ERROR",
             detail=(
                 "Pinned Arb rejected an admitted bounded second-order computation; "
@@ -491,8 +510,10 @@ def _second_jet_enclosure(
         or any(entry is None for entry in gradient_intervals)
         or any(entry is None for row in hessian_intervals for entry in row)
     ):
-        return IntervalExpressionSecondJetEnclosureResult._from_kernel(
-            request,
+        return _second_jet_result(
+            expression,
+            box,
+            precision_bits,
             status="BACKEND_ERROR",
             detail=(
                 "Pinned Arb produced endpoints outside the admitted dyadic wire "
@@ -502,16 +523,12 @@ def _second_jet_enclosure(
 
     gradient = tuple(
         FirstPartialEnclosure(variable=variable, enclosure=entry)
-        for variable, entry in zip(
-            request.box.variables, gradient_intervals, strict=True
-        )
+        for variable, entry in zip(box.variables, gradient_intervals, strict=True)
         if entry is not None
     )
     hessian_entries: list[HessianEntryEnclosure] = []
-    for first_index, first in enumerate(request.box.variables):
-        for second_index, second in enumerate(
-            request.box.variables[first_index:], first_index
-        ):
+    for first_index, first in enumerate(box.variables):
+        for second_index, second in enumerate(box.variables[first_index:], first_index):
             enclosure = hessian_intervals[first_index][second_index]
             assert enclosure is not None
             hessian_entries.append(
@@ -521,8 +538,10 @@ def _second_jet_enclosure(
                     enclosure=enclosure,
                 )
             )
-    return IntervalExpressionSecondJetEnclosureResult._from_kernel(
-        request,
+    return _second_jet_result(
+        expression,
+        box,
+        precision_bits,
         status="ENCLOSED",
         value=value,
         gradient=gradient,
@@ -534,185 +553,4 @@ def _second_jet_enclosure(
     )
 
 
-POINT_ENCLOSURE_OPERATIONS = (
-    MathTool(
-        operation_id="analysis.real_function.point_enclosure.compute",
-        title="Enclose a real function at a rational point",
-        description=(
-            "Use pinned Arb ball arithmetic to enclose one supported real "
-            "function (square root, logarithm, exponential, sine, or cosine) "
-            "at one exact rational point."
-        ),
-        request_type=ArbPointEnclosureRequest,
-        result_type=ArbPointEnclosureResult,
-        run=_point_enclosure,
-        tags=(
-            "analysis",
-            "validated",
-            "arb",
-            "enclosure",
-            "bounded",
-            "square-root",
-            "sqrt",
-            "logarithm",
-            "log",
-            "exponential",
-            "exp",
-            "sine",
-            "sin",
-            "cosine",
-            "cos",
-        ),
-        examples=(
-            example(
-                "sqrt_zero",
-                "Enclose sqrt(0) at 32-bit precision.",
-                {
-                    "function": "SQRT",
-                    "argument": {"num": "0", "den": "1"},
-                    "precision_bits": 32,
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="analysis.real_function.point_enclosure.check",
-        title="Check a claimed real-function point enclosure",
-        description=(
-            "Independently check one claimed exact-dyadic enclosure of LOG or "
-            "SQRT at an exact rational point. The result is ACCEPTED, REJECTED, "
-            "or NON_RESULT and retains the complete claim. LOG verification is "
-            "capped at 128 exact series terms."
-        ),
-        request_type=PointEnclosureCheckRequest,
-        result_type=PointEnclosureCheckResult,
-        run=_check_point_enclosure,
-        tags=(
-            "analysis",
-            "check",
-            "enclosure",
-            "exact",
-            "bounded",
-            "square-root",
-            "sqrt",
-            "logarithm",
-            "log",
-        ),
-        examples=(
-            example(
-                "sqrt_zero",
-                "Independently check the exact claimed enclosure sqrt(0) = 0.",
-                {
-                    "enclosure": {
-                        "function": "SQRT",
-                        "argument": {"num": "0", "den": "1"},
-                        "precision_bits": 128,
-                        "lower": {"mantissa": "0", "exponent": 0},
-                        "upper": {"mantissa": "0", "exponent": 0},
-                    },
-                },
-            ),
-        ),
-    ),
-)
-
-EXPRESSION_ENCLOSURE_OPERATIONS = (
-    MathTool(
-        operation_id="interval.compute.enclosure",
-        title="Enclose a univariate expression at a rational point",
-        description="Use Arb ball arithmetic to enclose a bounded expression tree over one variable at one exact rational point.",
-        request_type=IntervalExpressionEnclosureRequest,
-        result_type=IntervalExpressionEnclosureResult,
-        run=_expression_enclosure,
-        tags=("analysis", "interval", "expression", "arb", "exact", "bounded"),
-        examples=(
-            example(
-                "log_137_80",
-                "Enclose log(137/80); the expression must use the bounded typed tree grammar.",
-                {
-                    "expression": {
-                        "op": "log",
-                        "children": [
-                            {"op": "const", "value": {"num": "137", "den": "80"}}
-                        ],
-                    },
-                    "argument": {"num": "0", "den": "1"},
-                    "precision_bits": 128,
-                },
-            ),
-        ),
-    ),
-)
-
-SECOND_JET_ENCLOSURE_OPERATIONS = (
-    MathTool(
-        operation_id="interval.expression.second_jet_enclosure.compute",
-        title="Enclose an expression, gradient, and Hessian over a rational box",
-        description=(
-            "Use pinned Arb forward automatic differentiation to enclose one bounded "
-            "named-variable elementary expression, every first partial, and its "
-            "symmetric Hessian over a complete ordered rational box. The fixed "
-            "envelope admits at most 8 variables, 64 nodes, depth 16, 128-digit "
-            "rationals, absolute power exponents up to 64, 4,096-bit Arb precision, "
-            "and 16,384 forward-jet scalar arithmetic units charged by dimension."
-        ),
-        request_type=IntervalExpressionSecondJetEnclosureRequest,
-        result_type=IntervalExpressionSecondJetEnclosureResult,
-        run=_second_jet_enclosure,
-        tags=(
-            "analysis",
-            "interval",
-            "expression",
-            "box",
-            "gradient",
-            "hessian",
-            "automatic-differentiation",
-            "arb",
-            "validated",
-            "bounded",
-        ),
-        examples=(
-            example(
-                "quadratic_unit_box",
-                "Enclose x^2 + y^2 and all derivatives over the unit square.",
-                {
-                    "expression": {
-                        "op": "add",
-                        "children": [
-                            {
-                                "op": "pow",
-                                "exponent": 2,
-                                "children": [{"op": "var", "variable": "x"}],
-                            },
-                            {
-                                "op": "pow",
-                                "exponent": 2,
-                                "children": [{"op": "var", "variable": "y"}],
-                            },
-                        ],
-                    },
-                    "box": {
-                        "variables": ["x", "y"],
-                        "intervals": [
-                            {
-                                "lower": {"num": "0", "den": "1"},
-                                "upper": {"num": "1", "den": "1"},
-                            },
-                            {
-                                "lower": {"num": "0", "den": "1"},
-                                "upper": {"num": "1", "den": "1"},
-                            },
-                        ],
-                    },
-                    "precision_bits": 128,
-                },
-            ),
-        ),
-    ),
-)
-
-__all__ = [
-    "EXPRESSION_ENCLOSURE_OPERATIONS",
-    "POINT_ENCLOSURE_OPERATIONS",
-    "SECOND_JET_ENCLOSURE_OPERATIONS",
-]
+__all__ = ["expression_enclosure", "second_jet_enclosure"]

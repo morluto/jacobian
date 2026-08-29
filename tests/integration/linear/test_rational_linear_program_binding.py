@@ -16,11 +16,9 @@ from jacobian.math.optimization._models import (
     RationalLinearProgramResult,
     StandardFormRationalLinearProgram,
 )
-from jacobian.math.optimization._tools import TOOLS as OPTIMIZATION_TOOLS
+from jacobian.math.optimization.operations import linear_program
 
 pytestmark = pytest.mark.requires_backend("sympy")
-
-OPERATION = OPTIMIZATION_TOOLS[0]
 
 
 def _canonical(
@@ -53,11 +51,8 @@ UNBOUNDED_PROGRAM: dict[str, object] = {
 
 
 def _solve(program: dict[str, object]) -> RationalLinearProgramResult:
-    result = OPERATION.run(
-        RationalLinearProgramRequest.model_validate({"program": program})
-    )
-    assert isinstance(result, RationalLinearProgramResult)
-    return result
+    request = RationalLinearProgramRequest.model_validate({"program": program})
+    return linear_program(request.program)
 
 
 def _fractions(
@@ -73,8 +68,7 @@ def _dot(left: list[Fraction], right: list[Fraction]) -> Fraction:
 
 def test_optimal_outcome_retains_source_and_replays_strong_duality() -> None:
     request = RationalLinearProgramRequest.model_validate({"program": BOUND_PROGRAM})
-    result = OPERATION.run(request)
-    assert isinstance(result, RationalLinearProgramResult)
+    result = linear_program(request.program)
 
     assert result.status == "OPTIMAL"
     assert result.program == request.program
@@ -160,7 +154,7 @@ def test_admitted_edge_programs_stay_exact_and_bound_to_source(
     candidate: list[Fraction] | None,
 ) -> None:
     request = RationalLinearProgramRequest.model_validate({"program": program})
-    result = OPERATION.run(request)
+    result = linear_program(request.program)
 
     assert result.status == "OPTIMAL"
     assert result.program == request.program

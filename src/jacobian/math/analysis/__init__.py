@@ -1,3 +1,5 @@
 """Validated real-analysis operation ownership."""
 
-__all__: list[str] = []
+from jacobian.math.analysis.operations import expression_enclosure, second_jet_enclosure
+
+__all__ = ["expression_enclosure", "second_jet_enclosure"]

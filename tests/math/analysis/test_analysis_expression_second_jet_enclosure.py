@@ -9,11 +9,11 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis._models import DyadicClosedInterval
-from jacobian.math.analysis._operations import _second_jet_enclosure
 from jacobian.math.analysis._second_jet import (
     IntervalExpressionSecondJetEnclosureRequest,
     IntervalExpressionSecondJetEnclosureResult,
 )
+from jacobian.math.analysis.operations import second_jet_enclosure
 
 
 def _q(numerator: int, denominator: int = 1) -> dict[str, str]:
@@ -57,7 +57,8 @@ def _run(
     expression: dict[str, Any],
     coordinates: tuple[tuple[str, Fraction, Fraction], ...],
 ) -> IntervalExpressionSecondJetEnclosureResult:
-    return _second_jet_enclosure(_request(expression, coordinates))
+    request = _request(expression, coordinates)
+    return second_jet_enclosure(request.expression, request.box, request.precision_bits)
 
 
 def _contains(interval: DyadicClosedInterval, value: Fraction) -> bool:
@@ -352,7 +353,7 @@ def test_work_budget_scales_with_the_jet_dimension() -> None:
 def test_backend_failure_returns_a_typed_nonconclusion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import jacobian.math.analysis._operations as operations
+    import jacobian.math.analysis.operations as operations
 
     def fail(*args: Any, **kwargs: Any) -> Any:
         raise ValueError("synthetic backend rejection")
@@ -372,7 +373,7 @@ def test_backend_failure_returns_a_typed_nonconclusion(
 def test_backend_error_result_round_trips_when_the_failure_does_not_recur(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import jacobian.math.analysis._operations as operations
+    import jacobian.math.analysis.operations as operations
 
     original = operations._evaluate_second_jet
     calls = 0
@@ -457,7 +458,7 @@ def test_backend_error_result_round_trips_when_the_failure_does_not_recur(
 def test_backend_error_payload_cannot_smuggle_conclusion_evidence(
     field: str, payload_patch: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import jacobian.math.analysis._operations as operations
+    import jacobian.math.analysis.operations as operations
 
     def fail(*args: Any, **kwargs: Any) -> Any:
         raise ValueError("synthetic backend rejection")

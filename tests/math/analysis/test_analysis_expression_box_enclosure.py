@@ -21,9 +21,7 @@ from jacobian.math.analysis._expression_enclosure import (
 from jacobian.math.analysis._models import (
     RationalIntervalBox,
 )
-from jacobian.math.analysis._operations import (
-    _expression_enclosure,
-)
+from jacobian.math.analysis.operations import expression_enclosure
 from jacobian.math.geometry.boxes import ClosedRationalInterval, RationalAxisAlignedBox
 
 
@@ -107,18 +105,19 @@ def test_monotone_box_enclosures_contain_both_endpoint_enclosures(op: str) -> No
 
     point_results = []
     for argument in (lower, upper):
+        request = IntervalExpressionEnclosureRequest.model_validate(
+            {
+                "expression": {
+                    "op": op,
+                    "children": [{"op": "var"}],
+                },
+                "argument": _q(argument.numerator, argument.denominator),
+                "precision_bits": 128,
+            }
+        )
         point_results.append(
-            _expression_enclosure(
-                IntervalExpressionEnclosureRequest.model_validate(
-                    {
-                        "expression": {
-                            "op": op,
-                            "children": [{"op": "var"}],
-                        },
-                        "argument": _q(argument.numerator, argument.denominator),
-                        "precision_bits": 128,
-                    }
-                )
+            expression_enclosure(
+                request.expression, request.argument, request.precision_bits
             )
         )
 
@@ -136,14 +135,15 @@ def test_degenerate_point_box_agrees_with_point_expression_operation() -> None:
         {"op": "exp", "children": [_var("x")]},
         (("x", Fraction(1), Fraction(1)),),
     )
-    point_result = _expression_enclosure(
-        IntervalExpressionEnclosureRequest.model_validate(
-            {
-                "expression": {"op": "exp", "children": [{"op": "var"}]},
-                "argument": _q(1),
-                "precision_bits": 128,
-            }
-        )
+    request = IntervalExpressionEnclosureRequest.model_validate(
+        {
+            "expression": {"op": "exp", "children": [{"op": "var"}]},
+            "argument": _q(1),
+            "precision_bits": 128,
+        }
+    )
+    point_result = expression_enclosure(
+        request.expression, request.argument, request.precision_bits
     )
 
     assert box_result.status == point_result.status == "ENCLOSED"
@@ -579,7 +579,9 @@ def test_named_variables_are_not_accepted_by_the_point_expression_contract() -> 
         }
     )
     with pytest.raises(OperationDomainValidationError, match="anonymous"):
-        _expression_enclosure(request)
+        expression_enclosure(
+            request.expression, request.argument, request.precision_bits
+        )
 
 
 def test_box_interval_endpoints_are_ordered_and_bounded() -> None:

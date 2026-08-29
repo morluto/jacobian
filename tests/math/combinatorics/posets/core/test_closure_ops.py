@@ -8,7 +8,7 @@ from jacobian.math.combinatorics.posets.core._closure_models import (
     LowerClosureRequest,
     UpperClosureRequest,
 )
-from jacobian.math.combinatorics.posets.core._closure_operations import (
+from jacobian.math.combinatorics.posets.core._closure_tools import (
     dual_poset,
     induced_subposet,
     lower_closure,

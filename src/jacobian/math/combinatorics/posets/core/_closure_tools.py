@@ -2,6 +2,7 @@
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.combinatorics.posets.core import operations as native
 from jacobian.math.combinatorics.posets.core._closure_models import (
     DualPosetRequest,
     DualPosetResult,
@@ -12,12 +13,22 @@ from jacobian.math.combinatorics.posets.core._closure_models import (
     UpperClosureRequest,
     UpperClosureResult,
 )
-from jacobian.math.combinatorics.posets.core._closure_operations import (
-    dual_poset,
-    induced_subposet,
-    lower_closure,
-    upper_closure,
-)
+
+
+def lower_closure(request: LowerClosureRequest) -> LowerClosureResult:
+    return native.lower_closure(request.poset, request.subset)
+
+
+def upper_closure(request: UpperClosureRequest) -> UpperClosureResult:
+    return native.upper_closure(request.poset, request.subset)
+
+
+def dual_poset(request: DualPosetRequest) -> DualPosetResult:
+    return native.dual_poset(request.poset)
+
+
+def induced_subposet(request: InducedSubposetRequest) -> InducedSubposetResult:
+    return native.induced_subposet(request.poset, request.subset)
 
 CLOSURE_OPERATIONS: MathTools = (
     MathTool(

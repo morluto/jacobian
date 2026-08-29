@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 from jacobian.math.combinatorics.posets.core._closure_models import (
-    DualPosetRequest,
     DualPosetResult,
-    InducedSubposetRequest,
     InducedSubposetResult,
-    LowerClosureRequest,
     LowerClosureResult,
-    UpperClosureRequest,
     UpperClosureResult,
 )
 from jacobian.math.combinatorics.posets.core._models import (
+    FinitePoset,
     IncomparablePair,
     OrderedPair,
     canonical_poset_ranks,
@@ -48,37 +45,38 @@ def _build_above_map(
     return above
 
 
-def lower_closure(request: LowerClosureRequest) -> LowerClosureResult:
+def lower_closure(
+    poset: FinitePoset, subset: tuple[str, ...]
+) -> LowerClosureResult:
     """Compute ↓S = {x : x <= s for some s in S}."""
-    poset = request.poset
     below = _build_comparable_map(poset.elements, poset.strict_order_pairs)
     closure: set[str] = set()
-    for s in request.subset:
+    for s in subset:
         closure |= below[s]
     return LowerClosureResult(
         poset_digest=poset.poset_digest,
-        subset=request.subset,
+        subset=subset,
         closure=tuple(sorted(closure)),
     )
 
 
-def upper_closure(request: UpperClosureRequest) -> UpperClosureResult:
+def upper_closure(
+    poset: FinitePoset, subset: tuple[str, ...]
+) -> UpperClosureResult:
     """Compute ↑S = {x : s <= x for some s in S}."""
-    poset = request.poset
     above = _build_above_map(poset.elements, poset.strict_order_pairs)
     closure: set[str] = set()
-    for s in request.subset:
+    for s in subset:
         closure |= above[s]
     return UpperClosureResult(
         poset_digest=poset.poset_digest,
-        subset=request.subset,
+        subset=subset,
         closure=tuple(sorted(closure)),
     )
 
 
-def dual_poset(request: DualPosetRequest) -> DualPosetResult:
+def dual_poset(poset: FinitePoset) -> DualPosetResult:
     """Compute the dual poset (order reversed)."""
-    poset = request.poset
     elements = tuple(sorted(poset.elements))
     # Swap lower/upper in every strict pair
     dual_strict = tuple(
@@ -117,8 +115,6 @@ def dual_poset(request: DualPosetRequest) -> DualPosetResult:
         if (dual_ranks is not None and poset.ranks is not None)
         else None,
     )
-    from jacobian.math.combinatorics.posets.core._models import FinitePoset
-
     dual = FinitePoset(
         elements=elements,
         strict_order_pairs=dual_strict,
@@ -138,10 +134,11 @@ def dual_poset(request: DualPosetRequest) -> DualPosetResult:
     )
 
 
-def induced_subposet(request: InducedSubposetRequest) -> InducedSubposetResult:
+def induced_subposet(
+    poset: FinitePoset, subset: tuple[str, ...]
+) -> InducedSubposetResult:
     """Compute the subposet induced by a subset of elements."""
-    poset = request.poset
-    subset_set = set(request.subset)
+    subset_set = set(subset)
     elements = tuple(sorted(subset_set))
 
     # Filter strict pairs to only those within the subset, then compute
@@ -182,8 +179,6 @@ def induced_subposet(request: InducedSubposetRequest) -> InducedSubposetResult:
     minimal = tuple(e for e in elements if e not in all_above)
     maximal = tuple(e for e in elements if e not in all_below)
     # Compute ranks
-    from jacobian.math.combinatorics.posets.core._models import FinitePoset
-
     ranks = canonical_poset_ranks(elements, {(p.lower, p.upper) for p in covers})
     ranked = ranks is not None
     # Compute digest

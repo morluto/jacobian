@@ -8,6 +8,12 @@ from typing import Any, Literal
 from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.posets.core._closure_kernel import (
+    dual_poset,
+    induced_subposet,
+    lower_closure,
+    upper_closure,
+)
 from jacobian.math.combinatorics.posets.core._models import (
     MAX_ANTICHAIN_PROFILE_CANDIDATES,
     MAX_ANTICHAIN_PROFILE_ELEMENTS,
@@ -465,10 +471,14 @@ def antichain_profile(poset: FinitePoset) -> AntichainProfileResult:
 __all__ = [
     "antichain_profile",
     "closure",
+    "dual_poset",
     "incidence_convolution",
+    "induced_subposet",
     "linear_extension_count",
+    "lower_closure",
     "materialize_finite_poset",
     "mobius_function",
+    "upper_closure",
     "width",
     "zeta_transform",
 ]

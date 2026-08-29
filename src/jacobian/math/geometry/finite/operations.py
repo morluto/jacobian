@@ -401,6 +401,3 @@ def prime_field_affine_plane(
         parallel_classes=tuple(parallel_classes),
         total_incidences=total_incidences,
     )
-
-
-__all__ = ["projective_point"]

@@ -119,6 +119,7 @@ def _admit_induced_edge_count_profile(
         result_bytes=result_bytes,
     )
 
+
 __all__ = ["compute_induced_edge_count_profile"]
 
 

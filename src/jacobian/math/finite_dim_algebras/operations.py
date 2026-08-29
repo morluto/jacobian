@@ -1,11 +1,6 @@
 """Exact finite-dimensional algebra operations."""
 
-from jacobian.math.finite_dim_algebras._models import (
-    MAX_COMMUTATOR_ELIMINATION_WORK,
-    MAX_COMMUTATOR_ENTRIES,
-    StructureConstants,
-    commutator_elimination_work,
-)
+from jacobian.math.finite_dim_algebras._models import StructureConstants
 
 
 def _nullspace_mod_prime(
@@ -22,17 +17,15 @@ def _nullspace_mod_prime(
 
 
 def center_basis(algebra: StructureConstants) -> tuple[tuple[int, ...], ...]:
-    """Return a canonical basis for the center over the declared prime field."""
+    """Return a canonical basis for the center over the declared prime field.
+
+    Materialization and elimination-work bounds are request-scoped admission on
+    ``StructureConstants``; this kernel executes the admitted algebra.
+    """
 
     dimension = algebra.dimension
     prime = algebra.field_order
     multiplication = algebra.multiplication
-    if dimension**3 > MAX_COMMUTATOR_ENTRIES:
-        raise ValueError("commutator matrix exceeds the materialization budget")
-    if commutator_elimination_work(dimension) > MAX_COMMUTATOR_ELIMINATION_WORK:
-        raise ValueError(
-            "commutator nullspace exceeds the exact elimination-work budget"
-        )
     commutator_entries = [
         (
             multiplication[column][basis][coordinate]

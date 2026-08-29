@@ -1,4 +1,4 @@
-"""Typed contracts for the weighted monotone subsequence endpoint profile."""
+"""Typed contracts for weighted monotone subsequence endpoint profiles."""
 
 from __future__ import annotations
 

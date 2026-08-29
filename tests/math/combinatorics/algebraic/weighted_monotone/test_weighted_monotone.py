@@ -1,18 +1,26 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
-from jacobian.math.algebraic_combinatorics.weighted_monotone._models import (
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
     WeightedOrderedWord,
 )
-from jacobian.math.algebraic_combinatorics.weighted_monotone.operations import (
+from jacobian.math.combinatorics.algebraic.weighted_monotone.operations import (
     compute_endpoint_profile,
 )
 from jacobian.math.logic.languages.words.values import FiniteWord
 
 
-def _word(alphabet, letters, weights):
+def _word(
+    alphabet: Sequence[str],
+    letters: Sequence[str],
+    weights: Sequence[int | Fraction],
+) -> WeightedOrderedWord:
     fw = FiniteWord(alphabet=tuple(alphabet), letters=tuple(letters))
     return WeightedOrderedWord(
         word=fw,
@@ -27,6 +35,23 @@ def test_single_letter() -> None:
     assert len(result.entries) == 1
     assert result.entries[0].increasing_value.as_fraction() == Fraction(3)
     assert result.entries[0].decreasing_value.as_fraction() == Fraction(3)
+
+
+def test_admission_reserves_a_digit_for_rational_addition_carry() -> None:
+    """An admitted profile value must fit the canonical rational carrier."""
+    q = 10**16_384 - 1
+    r = 10**16_384 - 3
+    source = _word(
+        ["a"],
+        ["a", "a"],
+        [Fraction(q - 1, q), Fraction(r - 1, r)],
+    )
+
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="rational growth exceeds",
+    ):
+        compute_endpoint_profile(source)
 
 
 def test_increasing_letters() -> None:

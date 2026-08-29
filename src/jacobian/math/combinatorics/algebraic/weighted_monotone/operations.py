@@ -14,7 +14,7 @@ from jacobian.canonical import (
     strict_json_object_size,
 )
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.algebraic_combinatorics.weighted_monotone._models import (
+from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
     MAX_ENDPOINT_PROFILE_WORK,
     EndpointProfileEntry,
     EndpointProfileResult,
@@ -52,7 +52,8 @@ def _admit_endpoint_profile(source: WeightedOrderedWord) -> None:
         (canonical_rational_component_digits(weight) for weight in source.weights),
         default=1,
     )
-    if n * max_digits > 32_768:
+    cumulative_carry_digits = len(str(max(n, 1)))
+    if n * max_digits + cumulative_carry_digits > 32_768:
         raise OperationDomainValidationError(
             location=("source", "weights"),
             code="weighted_word.result_growth_exceeded",
@@ -71,8 +72,14 @@ def _admit_endpoint_profile(source: WeightedOrderedWord) -> None:
                         "weight",
                         len(encode_strict_json(weight.model_dump(mode="json"))),
                     ),
-                    ("increasing_value", _rational_size(cumulative_digits)),
-                    ("decreasing_value", _rational_size(cumulative_digits)),
+                    (
+                        "increasing_value",
+                        _rational_size(cumulative_digits + len(str(index + 1))),
+                    ),
+                    (
+                        "decreasing_value",
+                        _rational_size(cumulative_digits + len(str(index + 1))),
+                    ),
                 )
             )
         )

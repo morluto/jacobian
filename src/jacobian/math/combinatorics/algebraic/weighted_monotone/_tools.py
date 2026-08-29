@@ -5,11 +5,11 @@ from collections.abc import Callable
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
-from jacobian.math.algebraic_combinatorics.weighted_monotone._models import (
+from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
     EndpointProfileRequest,
     EndpointProfileResult,
 )
-from jacobian.math.algebraic_combinatorics.weighted_monotone.operations import (
+from jacobian.math.combinatorics.algebraic.weighted_monotone.operations import (
     compute_endpoint_profile,
 )
 

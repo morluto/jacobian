@@ -79,6 +79,21 @@ def test_rejects_distance_exceeds_length() -> None:
         BinaryCodeDistanceGraphRequest(source=code, target_distance=3)
 
 
+def test_request_schema_inlines_binary_word_definition() -> None:
+    schema = BinaryCodeDistanceGraphRequest.model_json_schema()
+    codewords = schema["properties"]["source"]["properties"]["codewords"]
+    assert "$defs" not in schema
+    assert codewords["items"]["type"] == "array"
+    assert codewords["maxItems"] == 256
+
+
+@pytest.mark.parametrize("distance", [True, 1.0])
+def test_request_rejects_non_strict_target_distance(distance: object) -> None:
+    code = _code(2, [[0, 0], [1, 1]])
+    with pytest.raises(ValidationError):
+        BinaryCodeDistanceGraphRequest(source=code, target_distance=distance)
+
+
 def test_native_admission_rejects_invalid_distance() -> None:
     code = _code(2, [[0, 0], [1, 1]])
     with pytest.raises(OperationDomainValidationError) as error:

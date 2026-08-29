@@ -17,6 +17,12 @@ MAX_CODE_SIZE = 256
 
 def _distance_graph_code_schema() -> JsonSchemaValue:
     schema = ExplicitBinaryCode.model_json_schema()
+    # ``WithJsonSchema`` installs this object as an inline field schema. Its
+    # definitions are not merged into the enclosing model, so a reference
+    # copied from the standalone value schema would make Pydantic's enclosing
+    # schema walk fail with a missing ``BinaryWord`` definition.
+    binary_word_schema = schema.pop("$defs")["BinaryWord"]
+    schema["properties"]["codewords"]["items"] = binary_word_schema
     schema["description"] = (
         "An explicit binary code with at most "
         f"{MAX_CODE_SIZE} codewords for distance-graph construction."
@@ -35,7 +41,7 @@ class BinaryCodeDistanceGraphRequest(StrictModel):
     """Request for the Hamming distance graph of a binary code."""
 
     source: DistanceGraphCode
-    target_distance: int = Field(ge=0)
+    target_distance: int = Field(strict=True, ge=0)
 
     @model_validator(mode="after")
     def validate_request(self) -> Self:

@@ -139,7 +139,9 @@ def test_native_admission_rejects_hypergraph_edge_and_incidence_overflow() -> No
 
 def test_native_admission_rejects_missing_total_coloring() -> None:
     with pytest.raises(OperationDomainValidationError, match="edge_colors"):
-        construct_monochromatic_clique_hypergraph(_k4_red().model_copy(update={"edge_colors": ()}), 3)
+        construct_monochromatic_clique_hypergraph(
+            _k4_red().model_copy(update={"edge_colors": ()}), 3
+        )
 
 
 def test_native_admission_rejects_untransportable_result() -> None:

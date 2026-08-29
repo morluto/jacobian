@@ -60,8 +60,7 @@ def _admit_monochromatic_clique_hypergraph(
             location=("clique_order",),
             code="monochromatic_clique.invalid_clique_order",
             message=(
-                "clique_order must be an integer between 2 and "
-                f"{MAX_CLIQUE_ORDER}"
+                f"clique_order must be an integer between 2 and {MAX_CLIQUE_ORDER}"
             ),
         )
     graph = colored_graph.graph
@@ -117,7 +116,9 @@ def _admit_monochromatic_clique_hypergraph(
         )
         label_sizes = tuple(len(encode_strict_json(label)) for label in vertices)
         vertex_bytes = _array_size(label_sizes)
-        member_bytes = _array_size(tuple(sorted(label_sizes, reverse=True)[:clique_order]))
+        member_bytes = _array_size(
+            tuple(sorted(label_sizes, reverse=True)[:clique_order])
+        )
         edge_id_bytes = len(encode_strict_json(f"clique_{clique_count - 1}"))
         edge_bytes = _array_size((edge_id_bytes, member_bytes))
         hypergraph_bytes = strict_json_object_size(
@@ -146,6 +147,7 @@ def _admit_monochromatic_clique_hypergraph(
             message="monochromatic clique hypergraph exceeds the canonical output-byte limit",
         )
     return MonochromaticCliqueAdmission(clique_count, incidence_count, result_bytes)
+
 
 __all__ = ["construct_monochromatic_clique_hypergraph"]
 

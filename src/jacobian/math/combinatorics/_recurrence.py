@@ -9,19 +9,58 @@ from jacobian.math.combinatorics._recurrence_models import (
     RationalGeneratingFunctionCoefficientsRequest,
     RationalGeneratingFunctionCoefficientsResult,
 )
-from jacobian.math.combinatorics._recurrence_series_operations import (
-    compute_rational_generating_function_coefficients,
-    evaluate_linear_recurrence,
-    evaluate_polynomial_coefficient_recurrence,
-)
 from jacobian.math.combinatorics._support import (
     combinatorics_operation,
+)
+from jacobian.math.combinatorics.operations import (
+    evaluate_linear_recurrence,
+    evaluate_polynomial_coefficient_recurrence,
+    rational_generating_function_coefficients,
 )
 from jacobian.math.combinatorics.recurrence_tables import (
     PolynomialCoefficientRecurrenceTableRequest,
     PolynomialCoefficientRecurrenceTableResult,
     _compute_recurrence_table_residuals,
 )
+
+
+def _run_linear_recurrence(
+    request: LinearRecurrenceEvaluationRequest,
+) -> LinearRecurrenceEvaluationResult:
+    return evaluate_linear_recurrence(
+        request.coefficients,
+        request.initial_values,
+        request.coefficient_convention,
+        request.scope,
+        request.term_count,
+        request.indices,
+    )
+
+
+def _run_polynomial_coefficient_recurrence(
+    request: PolynomialCoefficientRecurrenceEvaluationRequest,
+) -> PolynomialCoefficientRecurrenceEvaluationResult:
+    return evaluate_polynomial_coefficient_recurrence(
+        request.coefficient_polynomials,
+        request.initial_values,
+        request.coefficient_convention,
+        request.polynomial_convention,
+        request.scope,
+        request.term_count,
+        request.indices,
+    )
+
+
+def _run_rational_generating_function_coefficients(
+    request: RationalGeneratingFunctionCoefficientsRequest,
+) -> RationalGeneratingFunctionCoefficientsResult:
+    return rational_generating_function_coefficients(
+        request.numerator,
+        request.denominator,
+        request.coefficient_convention,
+        request.expansion_point,
+        request.truncation_order,
+    )
 
 RECURRENCE_OPERATIONS = (
     combinatorics_operation(
@@ -33,7 +72,7 @@ RECURRENCE_OPERATIONS = (
         ),
         LinearRecurrenceEvaluationRequest,
         LinearRecurrenceEvaluationResult,
-        evaluate_linear_recurrence,
+        _run_linear_recurrence,
         "combinatorics",
         "recurrence",
         "linear-recurrence",
@@ -70,7 +109,7 @@ RECURRENCE_OPERATIONS = (
         ),
         PolynomialCoefficientRecurrenceEvaluationRequest,
         PolynomialCoefficientRecurrenceEvaluationResult,
-        evaluate_polynomial_coefficient_recurrence,
+        _run_polynomial_coefficient_recurrence,
         "combinatorics",
         "recurrence",
         "sequence",
@@ -151,7 +190,7 @@ RECURRENCE_OPERATIONS = (
         ),
         RationalGeneratingFunctionCoefficientsRequest,
         RationalGeneratingFunctionCoefficientsResult,
-        compute_rational_generating_function_coefficients,
+        _run_rational_generating_function_coefficients,
         "combinatorics",
         "generating-function",
         "rational-series",

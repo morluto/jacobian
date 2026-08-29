@@ -14,7 +14,7 @@ from jacobian.math.combinatorics._recurrence_models import (
     PolynomialCoefficientRecurrenceEvaluationResult,
     _validate_result_inline_size,
 )
-from jacobian.math.combinatorics._recurrence_series_operations import (
+from jacobian.math.combinatorics.operations import (
     evaluate_polynomial_coefficient_recurrence,
 )
 
@@ -119,6 +119,14 @@ def test_polynomial_recurrence_aborts_when_an_intermediate_exceeds_digit_bound()
 
     parsed = PolynomialCoefficientRecurrenceEvaluationRequest.model_validate(request)
     with pytest.raises(OperationDomainValidationError) as caught:
-        evaluate_polynomial_coefficient_recurrence(parsed)
+        evaluate_polynomial_coefficient_recurrence(
+            parsed.coefficient_polynomials,
+            parsed.initial_values,
+            parsed.coefficient_convention,
+            parsed.polynomial_convention,
+            parsed.scope,
+            parsed.term_count,
+            parsed.indices,
+        )
     assert caught.value.errors()[0]["loc"] == ("values", 31)
     assert caught.value.errors()[0]["type"] == "combinatorics.rational_bound"

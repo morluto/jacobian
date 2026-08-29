@@ -117,4 +117,10 @@ class OrthogonalityResult(StrictModel):
 
 
 class LatinSquareTransposeResult(StrictModel):
-    transposed: tuple[tuple[int, ...], ...]
+    transposed: LatinSquare
+
+    @classmethod
+    def _from_kernel(cls, *, order: int, cells: tuple[tuple[int, ...], ...]) -> Self:
+        return cls.model_construct(
+            transposed=LatinSquare.model_construct(order=order, cells=cells)
+        )

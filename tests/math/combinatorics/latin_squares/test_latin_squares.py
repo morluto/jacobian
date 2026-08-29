@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 from typing_extensions import TypedDict
 
+from jacobian.canonical import encode_strict_json, loads_strict_json
 from jacobian.math.combinatorics.designs.latin_squares import (
     is_latin_square,
     orthogonality_profile,
@@ -13,6 +14,7 @@ from jacobian.math.combinatorics.designs.latin_squares._models import (
     LatinSquare,
     LatinSquareCandidate,
     LatinSquareRequest,
+    LatinSquareTransposeResult,
     OrthogonalityRequest,
     TransposeRequest,
 )
@@ -99,8 +101,13 @@ def test_orthogonality_orthogonal() -> None:
 def test_transpose() -> None:
     request = TransposeRequest(square=Z2)
     result = compute_latin_square_transpose(request)
-    assert result.transposed == ((0, 1), (1, 0))
-    assert transpose(Z2) == result.transposed
+    assert result.transposed == Z2
+    assert transpose(Z2) == result.transposed.cells
+    restored = LatinSquareTransposeResult.model_validate(
+        loads_strict_json(encode_strict_json(result.model_dump(mode="json")))
+    )
+    relayed = TransposeRequest(square=restored.transposed)
+    assert compute_latin_square_transpose(relayed).transposed == Z2
     assert orthogonality_profile(Z2, Z2) == (False, 2)
 
 
@@ -146,7 +153,7 @@ def test_operations_admit_materialized_squares_beyond_order_32() -> None:
     assert orthogonality.is_orthogonal is True
     assert orthogonality.pair_count == order * order
     assert all(
-        transposed.transposed[row][column] == left.cells[column][row]
+        transposed.transposed.cells[row][column] == left.cells[column][row]
         for row in range(order)
         for column in range(order)
     )
@@ -159,3 +166,18 @@ def test_large_negative_orthogonality_uses_compact_pair_storage() -> None:
     assert order * order > 262_144
     assert order * order <= MAX_LATIN_ORTHOGONALITY_PAIR_CELLS
     assert orthogonality_profile(square, square) == (False, order)
+
+
+def test_pair_count_covers_all_cells_after_first_duplicate() -> None:
+    left = _latin_square(4, _cyclic_square(4))
+    right = _latin_square(
+        4,
+        (
+            (0, 1, 3, 2),
+            (1, 2, 0, 3),
+            (2, 3, 1, 0),
+            (3, 0, 2, 1),
+        ),
+    )
+
+    assert orthogonality_profile(left, right) == (False, 12)

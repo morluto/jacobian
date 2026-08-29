@@ -721,7 +721,7 @@ def test_characteristic_polynomial_admits_heterogeneous_100_digit_prime_diagonal
     assert result.degree == order
     assert coefficients[0] == 1
     assert coefficients[1] == -sum(Fraction(1, prime) for prime in primes)
-    assert coefficients[-1] == (-1) ** order / prod(primes)
+    assert coefficients[-1] == Fraction((-1) ** order, prod(primes))
 
     _admit_characteristic_polynomial(
         _diagonal_reciprocals(

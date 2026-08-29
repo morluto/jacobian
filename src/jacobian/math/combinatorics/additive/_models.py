@@ -44,7 +44,7 @@ from jacobian.math.combinatorics.finite_structures.sets._models import FiniteInt
 _MAX_SET_SIZE = 4096
 _MAX_CARTESIAN_PAIR_COUNT = 256 * 256
 _MAX_RESULT_SIZE = _MAX_SET_SIZE * _MAX_SET_SIZE
-_MAX_DIMENSION = 8
+_MAX_DIMENSION = 1_024
 _MAX_COORDINATE_DIGITS = 6
 
 # ``direct_sum_predicate`` returns a complete partition of Z_n: every residue
@@ -54,13 +54,8 @@ _MAX_COORDINATE_DIGITS = 6
 # valid computation to fail only when dispatch serializes its result.
 _MAX_DIRECT_SUM_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
-# One serialized ordered-difference entry carries an eight-coordinate signed
-# difference, a multiplicity, and one index pair, which stays under 256
-# canonical JSON bytes even at the widest admitted coordinates, and a complete
-# profile holds n*(n-1) entries. Admitting only set sizes whose worst-case
-# entry array fits the 4 MiB result budget keeps the full exact result safely
-# inside Jacobian's 10 MiB canonical output limit once the retained sources,
-# scalar header, and operation envelope are included.
+# The cardinality ceiling remains a cheap parser bound. Ordered-difference
+# execution separately charges its actual dimension and pair profile.
 _MAX_ENTRY_WIRE_BYTES = 256
 _MAX_PROFILE_RESULT_BUDGET_BYTES = 4 * 1024 * 1024
 _MAX_VECTOR_SET_SIZE = (
@@ -822,15 +817,14 @@ __all__ = [
 class OrderedDifferenceProfileRequest(StrictModel):
     """Compute the ordered-difference profile r_{A-A}(v) for a finite set in Z^d.
 
-    Vectors must be distinct, share a common dimension 1..8, and each coordinate
-    is bounded to 6 digits in magnitude. The set size is derived from the
-    worst-case serialized result so the complete profile always fits within
-    Jacobian's canonical output budget.
+    Vectors must be distinct, share a common dimension up to the parser ceiling,
+    and carry 6-digit coordinates. Operation admission combines dimension with
+    set size before constructing the complete pair profile.
     """
 
     vectors: IntegerVectorSet = Field(
         description=(
-            "Finite set of distinct integer vectors in Z^d with 1<=d<=8, each "
+            f"Finite set of distinct integer vectors in Z^d with 1<=d<={_MAX_DIMENSION}, each "
             "coordinate bounded to at most 6 digits in magnitude (abs value "
             f"<10^{_MAX_COORDINATE_DIGITS}), all vectors share the same dimension, "
             f"and vector entries are unique; set size at most {_MAX_VECTOR_SET_SIZE}."

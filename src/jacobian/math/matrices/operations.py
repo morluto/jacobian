@@ -239,12 +239,17 @@ def determinant(matrix: MatrixBase) -> Any:
     return sympy.Rational(value.numerator, value.denominator)
 
 
-def rank(matrix: MatrixBase) -> tuple[int, tuple[int, ...]]:
-    result = rank_result(
-        conversions.rational_matrix_from_sympy(
-            _exact_matrix(matrix, maximum_dimension=MAX_EXACT_LINEAR_MATRIX_AXIS)
+def rank(
+    matrix: MatrixBase | SparseRationalMatrix,
+) -> tuple[int, tuple[int, ...]]:
+    if isinstance(matrix, SparseRationalMatrix):
+        result = rank_result(matrix)
+    else:
+        result = rank_result(
+            conversions.rational_matrix_from_sympy(
+                _exact_matrix(matrix, maximum_dimension=MAX_EXACT_LINEAR_MATRIX_AXIS)
+            )
         )
-    )
     return result.rank, result.pivot_columns
 
 

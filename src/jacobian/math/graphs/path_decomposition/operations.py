@@ -21,6 +21,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 __all__ = ["compute_minimum_path_decomposition"]
 
 MAX_SEARCH_STATES = 1_000_000
+MAX_CANDIDATE_EDGE_INCIDENCES = 1_000_000
 MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
@@ -132,6 +133,7 @@ def _find_all_simple_paths(
     """Find all simple paths as sets of edges."""
     paths: set[frozenset[tuple[str, str]]] = set()
     enumeration_steps = [0]
+    candidate_incidences = [0]
     for start in adjacency:
         _dfs_paths(
             start,
@@ -141,6 +143,7 @@ def _find_all_simple_paths(
             paths,
             candidate_limit=candidate_limit,
             enumeration_steps=enumeration_steps,
+            candidate_incidences=candidate_incidences,
         )
     return paths
 
@@ -154,6 +157,7 @@ def _dfs_paths(
     *,
     candidate_limit: int,
     enumeration_steps: list[int],
+    candidate_incidences: list[int],
 ) -> None:
     enumeration_steps[0] += 1
     if enumeration_steps[0] > MAX_SEARCH_STATES:
@@ -162,7 +166,14 @@ def _dfs_paths(
             "simple-path enumeration exceeds its bounded work envelope",
         )
     if edges_used:
-        paths.add(edges_used)
+        if edges_used not in paths:
+            candidate_incidences[0] += len(edges_used)
+            if candidate_incidences[0] > MAX_CANDIDATE_EDGE_INCIDENCES:
+                _reject(
+                    "candidate_materialization_bound",
+                    "simple-path candidate materialization exceeds its bounded incidence envelope",
+                )
+            paths.add(edges_used)
         if len(paths) > candidate_limit:
             _reject(
                 "search_work_bound",
@@ -182,6 +193,7 @@ def _dfs_paths(
             paths,
             candidate_limit=candidate_limit,
             enumeration_steps=enumeration_steps,
+            candidate_incidences=candidate_incidences,
         )
 
 

@@ -109,7 +109,9 @@ def test_dense_graph_is_rejected_by_path_enumeration_ledger() -> None:
         for right in range(left + 1, 12)
     ]
 
-    with pytest.raises(OperationDomainValidationError, match="bounded work envelope"):
+    with pytest.raises(
+        OperationDomainValidationError, match=r"bounded (?:work|incidence) envelope"
+    ):
         compute_minimum_path_decomposition(_graph(vertices, edges))
 
 

@@ -9,7 +9,6 @@ import pytest
 from jacobian.math.number_theory._friable_enumerate import compute_friable_enumerate
 from jacobian.math.number_theory._friable_enumerate_kernels import enumerate_friable
 from jacobian.math.number_theory._friable_enumerate_models import (
-    MAX_FRIABLE_ENUMERATE_FAMILY_SIZE,
     MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF,
     MAX_FRIABLE_ENUMERATE_MATERIALIZED_X,
     FriableEnumerateRequest,
@@ -67,13 +66,15 @@ def test_known_families_and_boundary_conventions() -> None:
     assert enumerate_friable(10, 3) == (1, 2, 3, 4, 6, 8, 9)
     assert enumerate_friable(100, 100) == tuple(range(1, 101))
     assert enumerate_friable(100, 2) == tuple(
-        2**k for k in range(7)  # 1,2,4,8,16,32,64
+        2**k
+        for k in range(7)  # 1,2,4,8,16,32,64
     )
 
 
 # --------------------------------------------------------------------------- #
 # Tests from the implementation packet
 # --------------------------------------------------------------------------- #
+
 
 def test_factor_each_emitted_value_and_require_smooth() -> None:
     """Factor each emitted value and require every prime factor at most y."""
@@ -113,7 +114,9 @@ def test_absent_values_and_increasing_ordering() -> None:
     family = enumerate_friable(20, 5)
     absent = {7, 11, 13, 14, 17, 19}
     for value in absent:
-        assert value not in family, f"{value} should be absent from the 5-smooth family at most 20"
+        assert value not in family, (
+            f"{value} should be absent from the 5-smooth family at most 20"
+        )
 
     assert list(family) == sorted(family)
     assert len(family) == len(set(family))
@@ -123,6 +126,7 @@ def test_absent_values_and_increasing_ordering() -> None:
 # Cross-checks against the existing count operation
 # --------------------------------------------------------------------------- #
 
+
 @pytest.mark.parametrize("x", [0, 1, 5, 10, 20, 50, 100, 200, 500])
 @pytest.mark.parametrize("y", [0, 1, 2, 3, 5, 7, 11, 50])
 def test_family_length_matches_count(x: int, y: int) -> None:
@@ -131,8 +135,8 @@ def test_family_length_matches_count(x: int, y: int) -> None:
 
 
 def test_matches_independent_factorization_oracle() -> None:
-    for x in range(0, 51):
-        for y in range(0, 13):
+    for x in range(51):
+        for y in range(13):
             assert enumerate_friable(x, y) == tuple(_direct_enumerate(x, y))
 
 
@@ -156,7 +160,9 @@ def test_generated_regime_admits_large_sources_when_work_is_small() -> None:
 
 def test_materialized_regime_reaches_its_boundary() -> None:
     """At the materialized boundary with y >= x, every integer is friable."""
-    family = enumerate_friable(MAX_FRIABLE_ENUMERATE_MATERIALIZED_X, MAX_FRIABLE_ENUMERATE_MATERIALIZED_X)
+    family = enumerate_friable(
+        MAX_FRIABLE_ENUMERATE_MATERIALIZED_X, MAX_FRIABLE_ENUMERATE_MATERIALIZED_X
+    )
     assert len(family) == MAX_FRIABLE_ENUMERATE_MATERIALIZED_X
 
 

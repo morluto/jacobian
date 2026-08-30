@@ -12,6 +12,7 @@ from sympy.polys.matrices import DomainMatrix
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import parse_canonical_integer
+from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.matrices.values import EmbeddedRealSimpleNumberFieldMatrix
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.number_theory.number_fields.values import (
@@ -105,20 +106,57 @@ def field_element_sign(
     value: Any,
     recognized: RecognizedRealSimpleNumberField,
 ) -> int:
-    """Return the exact sign of one field element at the selected real root."""
+    """Return the exact sign of one field element at the selected real root.
+
+    If ``f`` is the irreducible degree-``d`` defining polynomial and ``p`` is
+    the nonzero reduced degree-``< d`` representative of the element, then
+    ``f`` and ``p`` are coprime.  SymPy's exact rational isolation of ``f*p``
+    therefore puts the selected root of ``f`` in an interval containing no
+    root of ``p``.  The sign at any rational point in that interval is the
+    required embedded sign.  The admitted degree and height envelope charges
+    isolation of the degree-at-most-``2d-1`` product before this call.
+    """
 
     coordinates = field_element_coordinates(value, recognized)
     if not any(coordinates):
         return 0
-    # AlgebraicField.is_positive orders ANP coefficients abstractly and is not
-    # embedding-aware. Convert through the field's selected CRootOf extension
-    # before asking SymPy for the exact real sign.
-    evaluated = recognized.field.to_sympy(value)
-    if evaluated.is_positive is True:
-        return 1
-    if evaluated.is_negative is True:
-        return -1
-    raise RuntimeError("SymPy could not order an admitted real algebraic element")
+    x = Symbol("x")
+    defining = Poly.from_list(
+        [
+            parse_canonical_integer(coefficient)
+            for coefficient in recognized.embedding.presentation.coefficients_descending
+        ],
+        gens=x,
+        domain=QQ,
+    )
+    representative = Poly.from_list(
+        [
+            QQ(coordinate.numerator, coordinate.denominator)
+            for coordinate in reversed(coordinates)
+        ],
+        gens=x,
+        domain=QQ,
+    )
+    selected_index = recognized.embedding.root.real_root_index
+    defining_roots_seen = 0
+    for (lower, upper), _multiplicity in (defining * representative).intervals():
+        if not strict_root_count(defining, lower, upper):
+            continue
+        if defining_roots_seen != selected_index:
+            defining_roots_seen += 1
+            continue
+        sample = lower if lower == upper else (lower + upper) / 2
+        exact_value = representative.eval(sample)
+        if exact_value > 0:
+            return 1
+        if exact_value < 0:
+            return -1
+        # Coprimality makes this unreachable for an exact isolating interval.
+        break
+    raise EmbeddedNumberFieldRecognitionError(
+        "sign_isolation",
+        "exact root isolation did not retain the selected real embedding",
+    )
 
 
 def domain_matrix_from_embedded(

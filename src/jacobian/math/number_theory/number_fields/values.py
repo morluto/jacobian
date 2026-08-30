@@ -173,8 +173,8 @@ class RealNumberFieldEmbedding(StrictModel):
     """A simple-field presentation with one structurally selected real root.
 
     Embedding producers establish that the indexed root exists. Deserialization
-    preserves that canonical identity without replaying a backend; mathematical
-    consumers recognize the root before using this value as a field homomorphism.
+    preserves that canonical identity structurally; mathematical consumers
+    recognize the root before using this value as a field homomorphism.
     """
 
     kind: Literal["REAL"]

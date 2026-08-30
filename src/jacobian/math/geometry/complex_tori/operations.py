@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any
@@ -13,8 +12,6 @@ from sympy.polys.matrices import DomainMatrix
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
-    OperationExecutionTimeoutError,
-    current_request_execution,
     request_cancelled,
 )
 from jacobian.canonical import CanonicalLimits, encode_strict_json
@@ -23,16 +20,18 @@ from jacobian.math.geometry.complex_tori._models import (
     HermitianDefiniteness,
     HermitianInertia,
     LatticeComplexStructure,
-    RiemannFormHodgeType11,
-    RiemannFormNotHodgeType11,
+    RiemannFormHodgeNonPositive,
+    RiemannFormNotHodge,
+    RiemannFormPositive,
     RiemannFormProfile,
     _validation_error,
 )
 from jacobian.math.lattices.invariant_forms._kernel import (
+    _admit_invariant_bilinear_form_lattice,
+    _InvariantFormExecutionPlan,
     invariant_bilinear_form_lattice_kernel,
 )
 from jacobian.math.lattices.invariant_forms._models import (
-    MAX_CONSTRAINT_CELLS,
     EmbeddedRealNumberFieldActionGenerator,
     EmbeddedRealNumberFieldMatrixAction,
     IntegralBilinearForm,
@@ -40,7 +39,6 @@ from jacobian.math.lattices.invariant_forms._models import (
     MatrixAction,
     RationalActionGenerator,
     RationalMatrixAction,
-    constraint_coefficient_count,
 )
 from jacobian.math.matrices._number_field import (
     EmbeddedNumberFieldRecognitionError,
@@ -50,7 +48,11 @@ from jacobian.math.matrices._number_field import (
     recognize_real_simple_number_field,
 )
 from jacobian.math.matrices.analysis._models import InertiaResult
-from jacobian.math.matrices.analysis.operations import _compute_inertia
+from jacobian.math.matrices.analysis.operations import (
+    _admit_inertia_from_bounds,
+    _compute_inertia,
+    _InertiaExecutionPlan,
+)
 from jacobian.math.matrices.operations import (
     _admit_exact_linear_matrix,
     _smith_normal_form_kernel,
@@ -69,29 +71,40 @@ MAX_COMPLEX_TORUS_SCALAR_WORK = 500_000_000
 
 
 @dataclass(frozen=True, slots=True)
-class _ComplexTorusExecutionPlan:
-    """One pre-backend work ledger bound to the ambient request deadline."""
+class _ScalarProductAdmission:
+    """Source-derived height and work bounds for dense exact products."""
 
-    deadline: float | None
-    field_degree: int
-    exact_scalar_work: int
-    hodge_constraint_cells: int
-    predicted_result_bytes: int
+    algebraic: bool
+    degree: int
+    numerator_digits: int
+    denominator_digits: int
+    field_digits: int
+    leading_digits: int
+    digit_work: int
 
 
-def _require_execution_active(
-    plan: _ComplexTorusExecutionPlan,
-    phase: str,
-) -> None:
+@dataclass(frozen=True, slots=True)
+class _NeronSeveriExecutionPlan:
+    """Complete pre-product envelope for one Neron-Severi computation."""
+
+    invariant_forms: _InvariantFormExecutionPlan
+
+
+@dataclass(frozen=True, slots=True)
+class _RiemannFormExecutionPlan:
+    """Complete pre-product envelope for one selected Riemann-form profile."""
+
+    associated_inertia: _InertiaExecutionPlan
+
+
+def _require_execution_active(phase: str) -> None:
     if request_cancelled():
         raise OperationExecutionCancelledError(f"request cancelled {phase}")
-    if plan.deadline is not None and plan.deadline <= time.monotonic():
-        raise OperationExecutionTimeoutError(f"request deadline expired {phase}")
 
 
 def _scalar_height_ledger(
     torus: LatticeComplexStructure,
-) -> tuple[int, int, int, int]:
+) -> tuple[bool, int, int, int, int, int]:
     matrix = torus.complex_structure
     if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
         degree = matrix.embedding.presentation.degree
@@ -111,26 +124,48 @@ def _scalar_height_ledger(
             len(coefficient.lstrip("-"))
             for coefficient in matrix.embedding.presentation.coefficients_descending
         )
+        leading_digits = len(
+            matrix.embedding.presentation.coefficients_descending[0].lstrip("-")
+        )
+        algebraic = True
     else:
         degree = 1
         coordinates = tuple(value for row in matrix.entries for value in row)
         field_digits = 1
+        leading_digits = 1
+        algebraic = False
     numerator_digits = max(len(value.num.lstrip("-")) for value in coordinates)
-    denominator_digits = max(len(value.den) for value in coordinates)
-    return degree, numerator_digits, denominator_digits, field_digits
+    denominator_digits = (
+        0
+        if all(value.den == "1" for value in coordinates)
+        else max(len(value.den) for value in coordinates)
+    )
+    return (
+        algebraic,
+        degree,
+        numerator_digits,
+        denominator_digits,
+        field_digits,
+        leading_digits,
+    )
 
 
 def _complex_structure_scalar_work(
     torus: LatticeComplexStructure,
     *,
     matrix_products: int,
-) -> tuple[int, int, int, int]:
+) -> _ScalarProductAdmission:
     """Admit exact scalar growth for a fixed number of dense products."""
 
     dimension = len(torus.coordinate_axis)
-    degree, numerator_digits, denominator_digits, field_digits = _scalar_height_ledger(
-        torus
-    )
+    (
+        algebraic,
+        degree,
+        numerator_digits,
+        denominator_digits,
+        field_digits,
+        leading_digits,
+    ) = _scalar_height_ledger(torus)
     exact_scalar_work = (
         matrix_products
         * dimension**3
@@ -143,85 +178,106 @@ def _complex_structure_scalar_work(
             "exact complex-structure products exceed the "
             f"{MAX_COMPLEX_TORUS_SCALAR_WORK:,}-unit scalar-work bound",
         )
-    return degree, numerator_digits, denominator_digits, exact_scalar_work
+    return _ScalarProductAdmission(
+        algebraic=algebraic,
+        degree=degree,
+        numerator_digits=numerator_digits,
+        denominator_digits=denominator_digits,
+        field_digits=field_digits,
+        leading_digits=leading_digits,
+        digit_work=exact_scalar_work,
+    )
 
 
-def _execution_plan(
-    *,
-    field_degree: int,
-    exact_scalar_work: int,
-    hodge_constraint_cells: int,
-    predicted_result_bytes: int,
-) -> _ComplexTorusExecutionPlan:
+def _require_result_envelope(*, predicted_result_bytes: int) -> None:
     if predicted_result_bytes > CanonicalLimits().max_output_bytes:
         raise _validation_error(
             "budget_exceeded",
             "the exact complex-torus result exceeds the canonical output envelope",
         )
-    execution = current_request_execution()
-    return _ComplexTorusExecutionPlan(
-        deadline=execution.deadline if execution is not None else None,
-        field_degree=field_degree,
-        exact_scalar_work=exact_scalar_work,
-        hodge_constraint_cells=hodge_constraint_cells,
-        predicted_result_bytes=predicted_result_bytes,
+
+
+def _complex_structure_action(torus: LatticeComplexStructure) -> MatrixAction:
+    matrix = torus.complex_structure
+    if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
+        return EmbeddedRealNumberFieldMatrixAction(
+            coordinate_axis=torus.coordinate_axis,
+            generators=(
+                EmbeddedRealNumberFieldActionGenerator(
+                    label="complex_structure",
+                    matrix=matrix,
+                ),
+            ),
+        )
+    return RationalMatrixAction(
+        coordinate_axis=torus.coordinate_axis,
+        generators=(
+            RationalActionGenerator(
+                label="complex_structure",
+                matrix=matrix,
+            ),
+        ),
     )
+
+
+def _as_complex_torus_admission_error(exc: PydanticCustomError) -> PydanticCustomError:
+    return _validation_error(exc.type.rsplit(".", 1)[-1], exc.message())
 
 
 def _admit_neron_severi_execution(
     torus: LatticeComplexStructure,
-) -> _ComplexTorusExecutionPlan:
-    """Admit J^2 and the degree-expanded alternating constraint system."""
+) -> tuple[MatrixAction, _NeronSeveriExecutionPlan]:
+    """Admit J^2, constraint expansion, graph HNF, and exact output."""
 
-    dimension = len(torus.coordinate_axis)
-    degree, _, _, exact_scalar_work = _complex_structure_scalar_work(
-        torus,
-        matrix_products=1,
+    products = _complex_structure_scalar_work(torus, matrix_products=1)
+    action = _complex_structure_action(torus)
+    try:
+        invariant_forms = _admit_invariant_bilinear_form_lattice(
+            action,
+            "ALTERNATING",
+        )
+    except PydanticCustomError as exc:
+        raise _as_complex_torus_admission_error(exc) from exc
+    total_digit_work = (
+        products.digit_work
+        + invariant_forms.expansion_digit_work
+        + invariant_forms.kernel_digit_work
     )
-    constraint_cells = (
-        constraint_coefficient_count(dimension, 1, "ALTERNATING") * degree
-    )
-    if constraint_cells > MAX_CONSTRAINT_CELLS:
+    if total_digit_work > MAX_COMPLEX_TORUS_SCALAR_WORK:
         raise _validation_error(
             "budget_exceeded",
-            "the algebraic Hodge constraint expansion exceeds the structural "
-            f"bound of {MAX_CONSTRAINT_CELLS} coefficients",
+            "the complete Neron-Severi computation exceeds the "
+            f"{MAX_COMPLEX_TORUS_SCALAR_WORK:,}-unit exact-work bound",
         )
-    return _execution_plan(
-        field_degree=degree,
-        exact_scalar_work=exact_scalar_work,
-        hodge_constraint_cells=constraint_cells,
-        predicted_result_bytes=(
-            len(encode_strict_json({"torus": torus.model_dump(mode="json")})) + 4_096
-        ),
-    )
+    return action, _NeronSeveriExecutionPlan(invariant_forms=invariant_forms)
 
 
 def _admit_riemann_form_execution(
     torus: LatticeComplexStructure,
     form: IntegralBilinearForm,
-) -> _ComplexTorusExecutionPlan:
+) -> _RiemannFormExecutionPlan:
     """Admit every exact product, Smith input, and retained profile value."""
 
     dimension = len(torus.coordinate_axis)
-    degree, numerator_digits, denominator_digits, exact_scalar_work = (
-        _complex_structure_scalar_work(torus, matrix_products=4)
-    )
-    _admit_exact_linear_matrix(form.matrix.entries)
+    products = _complex_structure_scalar_work(torus, matrix_products=4)
+    try:
+        _admit_exact_linear_matrix(form.matrix.entries)
+    except PydanticCustomError as exc:
+        raise _as_complex_torus_admission_error(exc) from exc
     form_digits = max(
         len(value.lstrip("-")) for row in form.matrix.entries for value in row
     )
     associated_numerator_digits = (
-        numerator_digits
+        products.numerator_digits
         + form_digits
-        + max(dimension - 1, 0) * denominator_digits
+        + max(dimension - 1, 0) * products.denominator_digits
         + len(str(dimension))
         + 2
     )
-    associated_denominator_digits = dimension * denominator_digits
+    associated_denominator_digits = dimension * products.denominator_digits
     associated_digits = max(
         associated_numerator_digits,
-        associated_denominator_digits,
+        max(1, associated_denominator_digits),
     )
     output_component_limit = (
         MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
@@ -244,7 +300,7 @@ def _admit_riemann_form_execution(
         else 0
     )
     per_associated_entry = (
-        presentation_bytes + 256 + degree * (2 * associated_digits + 32)
+        presentation_bytes + 256 + products.degree * (2 * associated_digits + 32)
     )
     predicted_result_bytes = (
         len(
@@ -258,12 +314,35 @@ def _admit_riemann_form_execution(
         + 8_192
         + dimension**2 * (per_associated_entry + form_digits + 16)
     )
-    return _execution_plan(
-        field_degree=degree,
-        exact_scalar_work=exact_scalar_work,
-        hodge_constraint_cells=0,
+    _require_result_envelope(
         predicted_result_bytes=predicted_result_bytes,
     )
+    try:
+        associated_inertia = _admit_inertia_from_bounds(
+            order=dimension,
+            algebraic=products.algebraic,
+            algebraic_degree=products.degree,
+            numerator_digits=associated_numerator_digits,
+            denominator_digits=associated_denominator_digits,
+            field_digits=products.field_digits,
+            leading_digits=products.leading_digits,
+            zero_matrix=all(
+                value == "0" for row in form.matrix.entries for value in row
+            ),
+        )
+    except PydanticCustomError as exc:
+        raise _as_complex_torus_admission_error(exc) from exc
+    smith_digit_work = dimension**3 * form_digits
+    if (
+        products.digit_work + associated_inertia.digit_work + smith_digit_work
+        > MAX_COMPLEX_TORUS_SCALAR_WORK
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "the complete Riemann-form profile exceeds the "
+            f"{MAX_COMPLEX_TORUS_SCALAR_WORK:,}-unit exact-work bound",
+        )
+    return _RiemannFormExecutionPlan(associated_inertia=associated_inertia)
 
 
 def _rational_domain_matrix(matrix: RationalMatrix) -> DomainMatrix:
@@ -275,11 +354,10 @@ def _rational_domain_matrix(matrix: RationalMatrix) -> DomainMatrix:
 
 def _require_complex_structure(
     torus: LatticeComplexStructure,
-    plan: _ComplexTorusExecutionPlan,
 ) -> RecognizedRealSimpleNumberField | None:
     """Recognize the scalar domain and establish ``J^2 = -I`` exactly."""
 
-    _require_execution_active(plan, "before exact complex-structure recognition")
+    _require_execution_active("before exact complex-structure recognition")
     matrix = torus.complex_structure
     try:
         if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
@@ -300,7 +378,7 @@ def _require_complex_structure(
             "not_complex_structure",
             "the exact complex-structure matrix must satisfy J^2 = -I",
         )
-    _require_execution_active(plan, "after exact complex-structure recognition")
+    _require_execution_active("after exact complex-structure recognition")
     return recognized
 
 
@@ -310,37 +388,19 @@ def compute_neron_severi_lattice(
     """Compute every integral alternating Hodge ``(1,1)`` form exactly."""
 
     try:
-        plan = _admit_neron_severi_execution(torus)
-        recognized = _require_complex_structure(torus, plan)
-        matrix = torus.complex_structure
-        action: MatrixAction
-        if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
-            action = EmbeddedRealNumberFieldMatrixAction(
-                coordinate_axis=torus.coordinate_axis,
-                generators=(
-                    EmbeddedRealNumberFieldActionGenerator(
-                        label="complex_structure",
-                        matrix=matrix,
-                    ),
-                ),
-            )
-        else:
-            action = RationalMatrixAction(
-                coordinate_axis=torus.coordinate_axis,
-                generators=(
-                    RationalActionGenerator(
-                        label="complex_structure",
-                        matrix=matrix,
-                    ),
-                ),
-            )
-        _require_execution_active(plan, "before the integral Hodge-lattice kernel")
+        _require_execution_active("before Neron-Severi semantic admission")
+        action, plan = _admit_neron_severi_execution(torus)
+        _require_execution_active("after Neron-Severi semantic admission")
+        recognized = _require_complex_structure(torus)
+        _require_execution_active("before the integral Hodge-lattice kernel")
         result = invariant_bilinear_form_lattice_kernel(
             action,
             "ALTERNATING",
+            admission=plan.invariant_forms,
             recognized_field=recognized,
+            execution_checkpoint=_require_execution_active,
         )
-        _require_execution_active(plan, "after the integral Hodge-lattice kernel")
+        _require_execution_active("after the integral Hodge-lattice kernel")
         return result
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
@@ -404,6 +464,7 @@ def compute_riemann_form_profile(
     """Classify one integral alternating form under the standard Riemann sign."""
 
     try:
+        _require_execution_active("before Riemann-form semantic admission")
         if form.coordinate_axis != torus.coordinate_axis:
             raise _validation_error(
                 "form_axis",
@@ -414,19 +475,48 @@ def compute_riemann_form_profile(
                 "form_kind", "a Riemann-form profile requires an alternating form"
             )
         plan = _admit_riemann_form_execution(torus, form)
-        recognized = _require_complex_structure(torus, plan)
+        _require_execution_active("after Riemann-form semantic admission")
+        recognized = _require_complex_structure(torus)
         matrix = torus.complex_structure
         if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
-            assert recognized is not None
+            if recognized is None:
+                raise RuntimeError("an algebraic torus lost its recognized field")
             complex_structure = domain_matrix_from_embedded(matrix, recognized)
             form_matrix = _integer_form_domain_matrix(form, recognized.field)
         else:
             complex_structure = _rational_domain_matrix(matrix)
             form_matrix = _integer_form_domain_matrix(form, QQ)
 
-        _require_execution_active(plan, "before the alternating Smith kernel")
+        _require_execution_active("before the Hodge compatibility products")
+        transformed = (
+            complex_structure.transpose()
+            .matmul(form_matrix)
+            .matmul(complex_structure)
+            .to_dense()
+        )
+        _require_execution_active("after the Hodge compatibility products")
+        hodge_type_11 = transformed == form_matrix.to_dense()
+        inertia: InertiaResult | None = None
+        if hodge_type_11:
+            associated = complex_structure.transpose().matmul(form_matrix).to_dense()
+            if associated != associated.transpose().to_dense():
+                raise RuntimeError("a compatible associated Riemann form lost symmetry")
+            associated_matrix = (
+                embedded_matrix_from_domain(associated, recognized)
+                if recognized is not None
+                else _rational_matrix_from_domain(associated)
+            )
+            _require_execution_active("before exact associated-form inertia")
+            inertia = _compute_inertia(
+                associated_matrix,
+                admission=plan.associated_inertia,
+                recognized_field=recognized,
+                execution_checkpoint=_require_execution_active,
+            )
+            _require_execution_active("after exact associated-form inertia")
+        _require_execution_active("before the alternating Smith kernel")
         smith = _smith_normal_form_kernel(form.matrix)
-        _require_execution_active(plan, "after the alternating Smith kernel")
+        _require_execution_active("after the alternating Smith kernel")
         factors = smith.invariant_factors
         if len(factors) % 2 or any(
             factors[index] != factors[index + 1] for index in range(0, len(factors), 2)
@@ -434,58 +524,50 @@ def compute_riemann_form_profile(
             raise RuntimeError("Smith factors of an alternating form were not paired")
         elementary_divisors = factors[::2]
         degenerate = smith.rank < len(torus.coordinate_axis)
-
-        _require_execution_active(plan, "before the Hodge compatibility products")
-        transformed = (
-            complex_structure.transpose()
-            .matmul(form_matrix)
-            .matmul(complex_structure)
-            .to_dense()
-        )
-        if transformed != form_matrix.to_dense():
-            _require_execution_active(plan, "after the Hodge compatibility products")
-            return RiemannFormProfile(
+        if not hodge_type_11:
+            result = RiemannFormProfile(
                 torus=torus,
                 form=form,
                 smith_normal_form=smith,
                 alternating_elementary_divisors=elementary_divisors,
                 is_degenerate=degenerate,
-                outcome=RiemannFormNotHodgeType11(),
+                outcome=RiemannFormNotHodge(status="NOT_HODGE"),
             )
+            _require_execution_active("after Riemann-form result construction")
+            return result
 
-        associated = complex_structure.transpose().matmul(form_matrix).to_dense()
-        if associated != associated.transpose().to_dense():
-            raise RuntimeError("a compatible associated Riemann form lost symmetry")
-        associated_matrix = (
-            embedded_matrix_from_domain(associated, recognized)
-            if recognized is not None
-            else _rational_matrix_from_domain(associated)
-        )
-        _require_execution_active(plan, "before exact associated-form inertia")
-        inertia = _compute_inertia(
-            associated_matrix,
-            recognized_field=recognized,
-        )
-        _require_execution_active(plan, "after exact associated-form inertia")
+        if inertia is None:
+            raise RuntimeError("a Hodge form lost its admitted inertia result")
         if any(
             count % 2
             for count in (inertia.n_positive, inertia.n_negative, inertia.n_zero)
         ):
             raise RuntimeError("a Hermitian realification had odd inertia")
         is_riemann = inertia.n_positive == len(torus.coordinate_axis)
-        return RiemannFormProfile(
+        outcome = (
+            RiemannFormPositive(
+                status="RIEMANN_FORM",
+                associated_form_inertia=inertia,
+                hermitian_inertia=_hermitian_inertia(inertia),
+                polarization_type=elementary_divisors,
+            )
+            if is_riemann
+            else RiemannFormHodgeNonPositive(
+                status="HODGE_NON_POSITIVE",
+                associated_form_inertia=inertia,
+                hermitian_inertia=_hermitian_inertia(inertia),
+            )
+        )
+        result = RiemannFormProfile(
             torus=torus,
             form=form,
             smith_normal_form=smith,
             alternating_elementary_divisors=elementary_divisors,
             is_degenerate=degenerate,
-            outcome=RiemannFormHodgeType11(
-                associated_form_inertia=inertia,
-                hermitian_inertia=_hermitian_inertia(inertia),
-                is_riemann_form=is_riemann,
-                polarization_type=elementary_divisors if is_riemann else None,
-            ),
+            outcome=outcome,
         )
+        _require_execution_active("after Riemann-form result construction")
+        return result
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("torus", "form"),

@@ -8,14 +8,19 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
-from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.lattices.invariant_forms._models import (
     MAX_ACTION_DIMENSION,
     IntegralBilinearForm,
 )
 from jacobian.math.matrices.analysis._models import InertiaResult
-from jacobian.math.matrices.values import ExactRealMatrix, SmithNormalForm
+from jacobian.math.matrices.values import (
+    EmbeddedRealSimpleNumberFieldMatrix,
+    ExactRealMatrix,
+    RationalMatrix,
+    SmithNormalForm,
+)
 
 HermitianDefiniteness = Literal[
     "positive_definite",
@@ -55,7 +60,10 @@ class LatticeComplexStructure(StrictModel):
                 "budget_exceeded",
                 f"a complex-torus lattice has at most {MAX_ACTION_DIMENSION} axes",
             )
-        return canonicalize_json_containers(data)
+        normalized = dict(data)
+        if isinstance(axis, list):
+            normalized["coordinate_axis"] = tuple(axis)
+        return normalized
 
     @model_validator(mode="after")
     def require_even_common_axis(self) -> Self:
@@ -129,31 +137,66 @@ class HermitianInertia(StrictModel):
         return self
 
 
-class RiemannFormNotHodgeType11(StrictModel):
+class RiemannFormNotHodge(StrictModel):
     """The selected alternating form is not of Hodge type ``(1,1)``."""
 
-    status: Literal["NOT_HODGE_TYPE_11"] = "NOT_HODGE_TYPE_11"
+    status: Literal["NOT_HODGE"]
     is_riemann_form: Literal[False] = False
 
 
-class RiemannFormHodgeType11(StrictModel):
-    """The complete symmetric/Hermitian profile of one ``(1,1)`` form."""
+class _RiemannFormHodgeProfile(StrictModel):
+    """Common exact profile of one Hodge ``(1,1)`` alternating form."""
 
-    status: Literal["HODGE_TYPE_11"] = "HODGE_TYPE_11"
     associated_form_inertia: InertiaResult
     hermitian_inertia: HermitianInertia
-    is_riemann_form: bool
-    polarization_type: tuple[CanonicalInteger, ...] | None = None
     associated_form_convention: Literal["J_TRANSPOSE_TIMES_E"] = "J_TRANSPOSE_TIMES_E"
     hermitian_form_convention: Literal["G_PLUS_I_E_LINEAR_IN_FIRST"] = (
         "G_PLUS_I_E_LINEAR_IN_FIRST"
     )
 
 
+class RiemannFormHodgeNonPositive(_RiemannFormHodgeProfile):
+    """A Hodge ``(1,1)`` form whose associated real form is not positive."""
+
+    status: Literal["HODGE_NON_POSITIVE"]
+    is_riemann_form: Literal[False] = False
+
+
+class RiemannFormPositive(_RiemannFormHodgeProfile):
+    """A positive Riemann form and its required polarization type."""
+
+    status: Literal["RIEMANN_FORM"]
+    is_riemann_form: Literal[True] = True
+    polarization_type: tuple[CanonicalInteger, ...]
+
+
 RiemannFormOutcome = Annotated[
-    RiemannFormNotHodgeType11 | RiemannFormHodgeType11,
+    RiemannFormNotHodge | RiemannFormHodgeNonPositive | RiemannFormPositive,
     Field(discriminator="status"),
 ]
+
+
+def _require_associated_scalar_domain(
+    torus: LatticeComplexStructure,
+    inertia: InertiaResult,
+) -> None:
+    complex_structure = torus.complex_structure
+    if isinstance(complex_structure, RationalMatrix):
+        if not isinstance(inertia.matrix, RationalMatrix):
+            raise _validation_error(
+                "associated_scalar_domain",
+                "the associated form must retain the torus's rational domain",
+            )
+        return
+    if (
+        not isinstance(inertia.matrix, EmbeddedRealSimpleNumberFieldMatrix)
+        or inertia.matrix.embedding != complex_structure.embedding
+    ):
+        raise _validation_error(
+            "associated_scalar_domain",
+            "the associated form must retain the torus's identical selected "
+            "real embedding",
+        )
 
 
 class RiemannFormProfile(StrictModel):
@@ -205,10 +248,11 @@ class RiemannFormProfile(StrictModel):
             raise _validation_error(
                 "degeneracy", "degeneracy must agree with the Smith rank"
             )
-        if isinstance(self.outcome, RiemannFormNotHodgeType11):
+        if isinstance(self.outcome, RiemannFormNotHodge):
             return self
 
         inertia = self.outcome.associated_form_inertia
+        _require_associated_scalar_domain(self.torus, inertia)
         real_counts = (inertia.n_positive, inertia.n_negative, inertia.n_zero)
         if any(count % 2 for count in real_counts):
             raise _validation_error(
@@ -231,16 +275,28 @@ class RiemannFormProfile(StrictModel):
                 "Hermitian inertia must sum to the complex dimension",
             )
         positive = inertia.n_positive == dimension
-        if self.outcome.is_riemann_form != positive:
+        if isinstance(self.outcome, RiemannFormPositive) != positive:
             raise _validation_error(
                 "riemann_positivity",
                 "Riemann-form status must agree with positive definiteness of J^T E",
             )
-        expected_type = self.alternating_elementary_divisors if positive else None
-        if self.outcome.polarization_type != expected_type:
+        if isinstance(self.outcome, RiemannFormPositive) and (
+            self.is_degenerate
+            or self.smith_normal_form.rank != dimension
+            or len(self.outcome.polarization_type) != self.torus.complex_dimension
+        ):
+            raise _validation_error(
+                "riemann_nondegenerate",
+                "a positive Riemann form must have full Smith rank and one "
+                "polarization divisor per complex dimension",
+            )
+        if isinstance(self.outcome, RiemannFormPositive) and (
+            self.outcome.polarization_type != self.alternating_elementary_divisors
+        ):
             raise _validation_error(
                 "polarization_type",
-                "polarization type exists exactly for a positive Riemann form",
+                "a positive Riemann form's polarization type must equal its "
+                "alternating elementary divisors",
             )
         return self
 
@@ -249,9 +305,10 @@ __all__ = [
     "HermitianInertia",
     "LatticeComplexStructure",
     "NeronSeveriLatticeRequest",
-    "RiemannFormHodgeType11",
-    "RiemannFormNotHodgeType11",
+    "RiemannFormHodgeNonPositive",
+    "RiemannFormNotHodge",
     "RiemannFormOutcome",
+    "RiemannFormPositive",
     "RiemannFormProfile",
     "RiemannFormProfileRequest",
 ]

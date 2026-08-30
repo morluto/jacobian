@@ -6,6 +6,8 @@ from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices.invariant_forms._kernel import (
+    _admit_invariant_bilinear_form_lattice,
+    _require_execution_active,
     invariant_bilinear_form_lattice_kernel,
 )
 from jacobian.math.lattices.invariant_forms._models import (
@@ -28,7 +30,17 @@ def compute_invariant_bilinear_form_lattice(
             message="kind must be BILINEAR, SYMMETRIC, or ALTERNATING",
         )
     try:
-        return invariant_bilinear_form_lattice_kernel(action, kind)
+        _require_execution_active("before invariant-form semantic admission")
+        admission = _admit_invariant_bilinear_form_lattice(
+            action,
+            kind,
+        )
+        _require_execution_active("after invariant-form semantic admission")
+        return invariant_bilinear_form_lattice_kernel(
+            action,
+            kind,
+            admission=admission,
+        )
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("action",),

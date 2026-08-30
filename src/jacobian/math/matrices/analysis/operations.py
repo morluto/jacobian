@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from fractions import Fraction
-from math import factorial, lcm
-from typing import Any
+from math import ceil, factorial, lcm, log10
+from typing import Any, Literal
 
 from pydantic_core import PydanticCustomError
 
@@ -14,6 +15,10 @@ from jacobian._exact import (
     canonical_rational_component_digits,
     format_canonical_rational,
     require_bounded_rational,
+)
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_cancelled,
 )
 from jacobian.canonical import (
     CanonicalizationError,
@@ -33,6 +38,7 @@ from jacobian.math.matrices.analysis._models import (
     _RATIONAL_SPECTRUM_MATRIX_ENTRY_BYTES,
     _RATIONAL_SPECTRUM_RESULT_BASE_BYTES,
     _RESULT_ENVELOPE_RESERVE_BYTES,
+    MAX_INERTIA_DIGIT_WORK,
     MAX_RATIONAL_SPECTRUM_INPUT_DIGITS,
     MAX_RATIONAL_SPECTRUM_MINOR_DIGITS,
     MAX_RATIONAL_SPECTRUM_NONZERO_ENTRIES,
@@ -40,7 +46,6 @@ from jacobian.math.matrices.analysis._models import (
     MAX_RATIONAL_SPECTRUM_RANK_WORK,
     MAX_RATIONAL_SPECTRUM_RESULT_BYTES,
     MAX_RATIONAL_SPECTRUM_SHIFTED_DIGITS,
-    MAX_SYMMETRIC_MATRIX_DIMENSION,
     FarkasCertificateResult,
     InertiaResult,
     RationalSpectrumClaimResult,
@@ -59,7 +64,23 @@ from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
 )
 
-MAX_ALGEBRAIC_INERTIA_DIGIT_WORK = 500_000_000
+type _InertiaRegime = Literal["DIAGONAL", "GENERAL"]
+type _ExecutionCheckpoint = Callable[[str], None]
+
+
+@dataclass(frozen=True, slots=True)
+class _InertiaExecutionPlan:
+    """One source-derived exact inertia envelope and congruence regime."""
+
+    regime: _InertiaRegime
+    order: int
+    algebraic: bool
+    digit_work: int
+
+
+def _require_inertia_execution_active(phase: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(f"request cancelled {phase}")
 
 
 def _admit_rational_spectrum_claim(
@@ -147,68 +168,263 @@ def _admit_rational_spectrum_claim(
         )
 
 
-def _admit_inertia(matrix: ExactRealMatrix) -> None:
-    try:
-        order = len(matrix.entries)
-        if order != len(matrix.entries[0]):
-            raise _validation_error(
-                "shape_mismatch", "inertia requires a square matrix"
+def _is_diagonal(matrix: ExactRealMatrix) -> bool:
+    order = len(matrix.entries)
+    if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
+        return all(
+            all(
+                coordinate.num == "0"
+                for coordinate in matrix.entries[row][column].coefficients_ascending
             )
-        if order > MAX_SYMMETRIC_MATRIX_DIMENSION:
-            raise _validation_error(
-                "budget_exceeded",
-                "inertia supports matrices through the established order bound",
-            )
-        if any(
-            matrix.entries[row][column] != matrix.entries[column][row]
             for row in range(order)
-            for column in range(row + 1, order)
-        ):
-            raise _validation_error(
-                "shape_mismatch", "inertia requires a symmetric matrix"
-            )
-        if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
-            degree = matrix.embedding.presentation.degree
-            if degree > MAX_NUMBER_FIELD_EMBEDDING_DEGREE:
-                raise _validation_error(
-                    "budget_exceeded",
-                    "exact algebraic inertia supports field degree at most "
-                    f"{MAX_NUMBER_FIELD_EMBEDDING_DEGREE}",
-                )
-            scalar_digits = max(
-                len(component.lstrip("-"))
-                for row in matrix.entries
+            for column in range(order)
+            if row != column
+        )
+    return all(
+        matrix.entries[row][column].num == "0"
+        for row in range(order)
+        for column in range(order)
+        if row != column
+    )
+
+
+def _denominator_product_digit_bound(denominators: tuple[str, ...]) -> int:
+    """Bound product width without charging harmless unit denominators."""
+
+    return max(1, sum(len(value) for value in denominators if value != "1"))
+
+
+def _rational_general_inertia_work(matrix: RationalMatrix) -> int:
+    """Bound fraction elimination through minors after diagonal clearing.
+
+    If ``d_i`` is the least common multiple of denominators in row ``i``,
+    ``diag(d_i) A diag(d_i)`` is an integral congruent matrix. Every Schur
+    complement entry produced by symmetric elimination is a ratio of minors of
+    that matrix. Hadamard's determinant bound therefore controls both rational
+    components before any elimination begins.
+    """
+
+    order = len(matrix.entries)
+    # The product of a row's denominators is a denominator multiple, so its
+    # decimal width gives a cheap conservative bound without constructing an
+    # enormous LCM during admission.
+    row_denominator_digits = tuple(
+        _denominator_product_digit_bound(tuple(value.den for value in row))
+        for row in matrix.entries
+    )
+    scaled_component_digits = max(
+        len(value.num.lstrip("-"))
+        + row_denominator_digits[row]
+        + row_denominator_digits[column]
+        + 2
+        for row, entries in enumerate(matrix.entries)
+        for column, value in enumerate(entries)
+    )
+    minor_digits = (
+        order * scaled_component_digits
+        + len(str(factorial(order)))
+        + ceil(order * 0.5 * log10(max(order, 1)))
+        + 2
+    )
+    return 4 * order**3 * minor_digits
+
+
+def _algebraic_source_height(
+    matrix: EmbeddedRealSimpleNumberFieldMatrix,
+) -> tuple[int, int, int]:
+    """Return degree, scaled coordinate height, and reduction-cost digits."""
+
+    degree = matrix.embedding.presentation.degree
+    row_denominator_digits = tuple(
+        _denominator_product_digit_bound(
+            tuple(
+                coordinate.den
                 for value in row
                 for coordinate in value.coefficients_ascending
-                for component in (coordinate.num, coordinate.den)
             )
-            field_digits = max(
-                len(coefficient.lstrip("-"))
-                for coefficient in matrix.embedding.presentation.coefficients_descending
-            )
-            digit_work = (
-                order**3 * degree**2 * (2 * scalar_digits + degree * field_digits + 8)
-            )
-            if digit_work > MAX_ALGEBRAIC_INERTIA_DIGIT_WORK:
-                raise _validation_error(
-                    "budget_exceeded",
-                    "exact algebraic congruence elimination exceeds the "
-                    f"{MAX_ALGEBRAIC_INERTIA_DIGIT_WORK:,}-unit digit-work bound",
-                )
-        output_limit = CanonicalLimits().max_output_bytes
-        try:
-            retained_bytes = len(encode_strict_json(matrix.model_dump(mode="json")))
-        except CanonicalizationError:
-            retained_bytes = output_limit + 1
-        if retained_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:
+        )
+        for row in matrix.entries
+    )
+    scaled_component_digits = max(
+        len(coordinate.num.lstrip("-"))
+        + row_denominator_digits[row]
+        + row_denominator_digits[column]
+        + 2
+        for row, entries in enumerate(matrix.entries)
+        for column, value in enumerate(entries)
+        for coordinate in value.coefficients_ascending
+    )
+    field_digits = max(
+        len(coefficient.lstrip("-"))
+        for coefficient in matrix.embedding.presentation.coefficients_descending
+    )
+    leading_digits = len(
+        matrix.embedding.presentation.coefficients_descending[0].lstrip("-")
+    )
+    reduction_digits = degree * (
+        field_digits + leading_digits + ceil(log10(degree + 1)) + 2
+    )
+    return degree, scaled_component_digits, reduction_digits
+
+
+def _algebraic_inertia_work(
+    matrix: EmbeddedRealSimpleNumberFieldMatrix,
+    *,
+    diagonal: bool,
+) -> int:
+    """Bound exact field arithmetic and embedding-aware root isolation."""
+
+    order = len(matrix.entries)
+    degree, source_digits, reduction_digits = _algebraic_source_height(matrix)
+    conversion_work = order**2 * degree * (source_digits + reduction_digits)
+    if diagonal:
+        nonzero_diagonal = sum(
+            any(coordinate.num != "0" for coordinate in value.coefficients_ascending)
+            for value in (matrix.entries[index][index] for index in range(order))
+        )
+        # A nonzero reduced polynomial p has degree < d and is coprime to the
+        # irreducible defining polynomial f. Exact root isolation of f*p has
+        # degree at most 2d-1 and coefficient height bounded here.
+        sign_height = source_digits + reduction_digits + 2
+        sign_work = nonzero_diagonal * (2 * degree - 1) ** 3 * sign_height
+        return conversion_work + order**2 * degree + sign_work
+
+    minor_digits = (
+        order * (source_digits + reduction_digits) + len(str(factorial(order))) + 2
+    )
+    # A Schur entry is a ratio of field-valued minors. Inverting the
+    # denominator element is a degree-d rational linear solve; Cramer's rule
+    # contributes at most 2d+3 minor-height factors.
+    ratio_digits = (2 * degree + 3) * (minor_digits + reduction_digits)
+    congruence_work = 4 * order**3 * degree**2 * ratio_digits
+    sign_work = order * (2 * degree - 1) ** 3 * ratio_digits
+    return conversion_work + congruence_work + sign_work
+
+
+def _diagonal_rational_inertia_work(matrix: RationalMatrix) -> int:
+    order = len(matrix.entries)
+    scalar_digits = max(
+        len(component.lstrip("-"))
+        for index in range(order)
+        for component in (
+            matrix.entries[index][index].num,
+            matrix.entries[index][index].den,
+        )
+    )
+    return order**2 + order * scalar_digits
+
+
+def _require_inertia_digit_work(digit_work: int) -> None:
+    if digit_work > MAX_INERTIA_DIGIT_WORK:
+        raise _validation_error(
+            "budget_exceeded",
+            "exact inertia arithmetic and intermediate heights exceed the "
+            f"{MAX_INERTIA_DIGIT_WORK:,}-unit digit-work bound",
+        )
+
+
+def _admit_inertia_from_bounds(
+    *,
+    order: int,
+    algebraic: bool,
+    algebraic_degree: int,
+    numerator_digits: int,
+    denominator_digits: int,
+    field_digits: int,
+    leading_digits: int,
+    zero_matrix: bool,
+) -> _InertiaExecutionPlan:
+    """Admit a not-yet-materialized symmetric matrix from source height bounds."""
+
+    if zero_matrix:
+        digit_work = (
+            order**2
+            if not algebraic
+            else order**2
+            * algebraic_degree
+            * (numerator_digits + denominator_digits + field_digits + leading_digits)
+        )
+        regime: _InertiaRegime = "DIAGONAL"
+    elif not algebraic:
+        row_denominator_digits = order * denominator_digits
+        scaled_component_digits = numerator_digits + 2 * row_denominator_digits + 2
+        minor_digits = (
+            order * scaled_component_digits
+            + len(str(factorial(order)))
+            + ceil(order * 0.5 * log10(max(order, 1)))
+            + 2
+        )
+        digit_work = 4 * order**3 * minor_digits
+        regime = "GENERAL"
+    else:
+        row_denominator_digits = order * algebraic_degree * denominator_digits
+        source_digits = numerator_digits + 2 * row_denominator_digits + 2
+        reduction_digits = algebraic_degree * (
+            field_digits + leading_digits + ceil(log10(algebraic_degree + 1)) + 2
+        )
+        conversion_work = (
+            order**2 * algebraic_degree * (source_digits + reduction_digits)
+        )
+        minor_digits = (
+            order * (source_digits + reduction_digits) + len(str(factorial(order))) + 2
+        )
+        ratio_digits = (2 * algebraic_degree + 3) * (minor_digits + reduction_digits)
+        congruence_work = 4 * order**3 * algebraic_degree**2 * ratio_digits
+        sign_work = order * (2 * algebraic_degree - 1) ** 3 * ratio_digits
+        digit_work = conversion_work + congruence_work + sign_work
+        regime = "GENERAL"
+    _require_inertia_digit_work(digit_work)
+    return _InertiaExecutionPlan(
+        regime=regime,
+        order=order,
+        algebraic=algebraic,
+        digit_work=digit_work,
+    )
+
+
+def _admit_inertia(matrix: ExactRealMatrix) -> _InertiaExecutionPlan:
+    order = len(matrix.entries)
+    if order != len(matrix.entries[0]):
+        raise _validation_error("shape_mismatch", "inertia requires a square matrix")
+    if any(
+        matrix.entries[row][column] != matrix.entries[column][row]
+        for row in range(order)
+        for column in range(row + 1, order)
+    ):
+        raise _validation_error("shape_mismatch", "inertia requires a symmetric matrix")
+    output_limit = CanonicalLimits().max_output_bytes
+    try:
+        retained_bytes = len(encode_strict_json(matrix.model_dump(mode="json")))
+    except CanonicalizationError:
+        retained_bytes = output_limit + 1
+    if retained_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:
+        raise _validation_error(
+            "budget_exceeded",
+            "the inertia result retains its source matrix and would exceed "
+            "the canonical output limit",
+        )
+
+    diagonal = _is_diagonal(matrix)
+    if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
+        degree = matrix.embedding.presentation.degree
+        if degree > MAX_NUMBER_FIELD_EMBEDDING_DEGREE:
             raise _validation_error(
-                "invariant_mismatch",
-                "the inertia result retains its source matrix and would exceed the canonical output limit",
+                "budget_exceeded",
+                "exact algebraic inertia supports field degree at most "
+                f"{MAX_NUMBER_FIELD_EMBEDDING_DEGREE}",
             )
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=("matrix",), code=exc.type, message=exc.message()
-        ) from exc
+        digit_work = _algebraic_inertia_work(matrix, diagonal=diagonal)
+    elif diagonal:
+        digit_work = _diagonal_rational_inertia_work(matrix)
+    else:
+        digit_work = _rational_general_inertia_work(matrix)
+    _require_inertia_digit_work(digit_work)
+    return _InertiaExecutionPlan(
+        regime="DIAGONAL" if diagonal else "GENERAL",
+        order=order,
+        algebraic=isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix),
+        digit_work=digit_work,
+    )
 
 
 def _exact_shifted_nullities(
@@ -395,13 +611,18 @@ def _eliminate_2x2(matrix: list[list[Fraction]], index: int) -> tuple[int, int, 
     return pos, neg, zero
 
 
-def _symmetric_inertia(matrix: list[list[Fraction]]) -> tuple[int, int, int]:
+def _symmetric_inertia(
+    matrix: list[list[Fraction]],
+    *,
+    checkpoint: _ExecutionCheckpoint,
+) -> tuple[int, int, int]:
     """Reduce a symmetric rational matrix to a congruence-diagonal form."""
     n = len(matrix)
     a = [row[:] for row in matrix]
     n_pos = n_neg = n_zero = 0
     index = 0
     while index < n:
+        checkpoint("during exact rational congruence elimination")
         pivot = next((row for row in range(index, n) if a[row][row] != 0), None)
         if pivot is not None:
             sign = _eliminate_1x1(a, index, pivot)
@@ -424,6 +645,7 @@ def _symmetric_algebraic_inertia(
     matrix: list[list[Any]],
     *,
     sign: Callable[[Any], int],
+    checkpoint: _ExecutionCheckpoint,
 ) -> tuple[int, int, int]:
     """Reduce a symmetric number-field matrix by exact congruences."""
 
@@ -432,6 +654,7 @@ def _symmetric_algebraic_inertia(
     n_pos = n_neg = n_zero = 0
     index = 0
     while index < n:
+        checkpoint("during exact algebraic congruence elimination")
         pivot = next((row for row in range(index, n) if bool(a[row][row])), None)
         if pivot is not None:
             _swap_symmetric(a, index, pivot)
@@ -492,48 +715,112 @@ def _symmetric_algebraic_inertia(
     return n_pos, n_neg, n_zero
 
 
+def _diagonal_inertia(
+    diagonal: list[Any],
+    *,
+    sign: Callable[[Any], int],
+    checkpoint: _ExecutionCheckpoint,
+) -> tuple[int, int, int]:
+    """Count a recognized diagonal source without cubic elimination."""
+
+    n_positive = n_negative = n_zero = 0
+    for value in diagonal:
+        checkpoint("during exact diagonal sign isolation")
+        value_sign = sign(value)
+        n_positive += value_sign > 0
+        n_negative += value_sign < 0
+        n_zero += value_sign == 0
+    return n_positive, n_negative, n_zero
+
+
 def _compute_inertia(
     matrix: ExactRealMatrix,
     *,
+    admission: _InertiaExecutionPlan,
     recognized_field: RecognizedRealSimpleNumberField | None = None,
+    execution_checkpoint: _ExecutionCheckpoint = _require_inertia_execution_active,
 ) -> InertiaResult:
     """Compute Sylvester inertia over QQ or one exact real simple field."""
 
-    _admit_inertia(matrix)
+    if admission.order != len(matrix.entries) or admission.algebraic != isinstance(
+        matrix, EmbeddedRealSimpleNumberFieldMatrix
+    ):
+        raise RuntimeError("the inertia plan does not match its admitted source")
     if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
         try:
+            execution_checkpoint("before exact number-field recognition")
             if recognized_field is None:
                 recognized = recognize_real_simple_number_field(matrix.embedding)
             else:
                 recognized = recognized_field
+                if recognized.embedding != matrix.embedding:
+                    raise EmbeddedNumberFieldRecognitionError(
+                        "embedding_mismatch",
+                        "the recognized field must use the matrix's selected embedding",
+                    )
+            execution_checkpoint("after exact number-field recognition")
             source = domain_matrix_from_embedded(matrix, recognized).rep.to_ddm()
+            execution_checkpoint("after exact number-field matrix conversion")
+            source_rows = [list(row) for row in source]
+            if admission.regime == "DIAGONAL":
+                n_pos, n_neg, n_zero = _diagonal_inertia(
+                    [source_rows[index][index] for index in range(len(source_rows))],
+                    sign=lambda value: field_element_sign(value, recognized),
+                    checkpoint=execution_checkpoint,
+                )
+            else:
+                n_pos, n_neg, n_zero = _symmetric_algebraic_inertia(
+                    source_rows,
+                    sign=lambda value: field_element_sign(value, recognized),
+                    checkpoint=execution_checkpoint,
+                )
         except EmbeddedNumberFieldRecognitionError as exc:
             raise OperationDomainValidationError(
                 location=("matrix", "embedding"),
                 code=f"matrix.{exc.reason}",
                 message=str(exc),
             ) from exc
-        n_pos, n_neg, n_zero = _symmetric_algebraic_inertia(
-            [list(row) for row in source],
-            sign=lambda value: field_element_sign(value, recognized),
-        )
     else:
         rational_source = [
             [entry.as_fraction() for entry in row] for row in matrix.entries
         ]
-        n_pos, n_neg, n_zero = _symmetric_inertia(rational_source)
-    return InertiaResult._from_kernel(
+        if admission.regime == "DIAGONAL":
+            n_pos, n_neg, n_zero = _diagonal_inertia(
+                [
+                    rational_source[index][index]
+                    for index in range(len(rational_source))
+                ],
+                sign=lambda value: 1 if value > 0 else -1 if value < 0 else 0,
+                checkpoint=execution_checkpoint,
+            )
+        else:
+            n_pos, n_neg, n_zero = _symmetric_inertia(
+                rational_source,
+                checkpoint=execution_checkpoint,
+            )
+    execution_checkpoint("after exact inertia computation")
+    result = InertiaResult._from_kernel(
         matrix=matrix,
         n_positive=n_pos,
         n_negative=n_neg,
         n_zero=n_zero,
     )
+    execution_checkpoint("after exact inertia result construction")
+    return result
 
 
 def compute_inertia(matrix: ExactRealMatrix) -> InertiaResult:
     """Compute Sylvester inertia over QQ or one exact real simple field."""
 
-    return _compute_inertia(matrix)
+    try:
+        _require_inertia_execution_active("before exact inertia admission")
+        admission = _admit_inertia(matrix)
+        _require_inertia_execution_active("after exact inertia admission")
+        return _compute_inertia(matrix, admission=admission)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("matrix",), code=exc.type, message=exc.message()
+        ) from exc
 
 
 def check_farkas_certificate(

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from fractions import Fraction
 from itertools import pairwise
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, GetJsonSchemaHandler, field_validator, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
@@ -171,6 +172,11 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
+        if set(data).difference({"domain", "embedding", "entries"}):
+            raise _validation_error(
+                "shape_mismatch",
+                "embedded number-field matrix contains unknown fields",
+            )
         entries = data.get("entries")
         if isinstance(entries, (list, tuple)):
             if len(entries) > MAX_RATIONAL_MATRIX_ORDER:
@@ -188,7 +194,32 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                         "embedded number-field matrices have at most "
                         f"{MAX_RATIONAL_MATRIX_ORDER} columns",
                     )
-        return canonicalize_json_containers(data)
+                for scalar in row:
+                    if isinstance(scalar, (list, tuple)) or (
+                        isinstance(scalar, dict)
+                        and set(scalar).difference(
+                            {"presentation", "coefficients_ascending"}
+                        )
+                    ):
+                        raise _validation_error(
+                            "shape_mismatch",
+                            "embedded number-field matrix entries must be field elements",
+                        )
+        normalized = dict(data)
+        embedding = normalized.get("embedding")
+        if isinstance(embedding, dict):
+            normalized_embedding = dict(embedding)
+            root = normalized_embedding.get("root")
+            if isinstance(root, dict) and isinstance(root.get("polynomial"), list):
+                normalized_root = dict(root)
+                normalized_root["polynomial"] = tuple(root["polynomial"])
+                normalized_embedding["root"] = normalized_root
+            normalized["embedding"] = normalized_embedding
+        if isinstance(entries, list):
+            normalized["entries"] = tuple(
+                tuple(row) if isinstance(row, list) else row for row in entries
+            )
+        return normalized
 
     @model_validator(mode="after")
     def require_common_embedding_and_rectangular_shape(self) -> Self:
@@ -215,9 +246,32 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
         return self
 
 
+class _RequiredExactRealMatrixDomainSchema:
+    """Publish the discriminator that strict exact-real parsing requires."""
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls,
+        core_schema: Any,
+        handler: GetJsonSchemaHandler,
+    ) -> JsonSchemaValue:
+        schema = deepcopy(handler(core_schema))
+        branches = []
+        for branch in schema["oneOf"]:
+            resolved = deepcopy(handler.resolve_ref_schema(branch))
+            required = list(resolved.get("required", ()))
+            if "domain" not in required:
+                required.insert(0, "domain")
+            resolved["required"] = required
+            branches.append(resolved)
+        schema["oneOf"] = branches
+        return schema
+
+
 ExactRealMatrix = Annotated[
     RationalMatrix | EmbeddedRealSimpleNumberFieldMatrix,
     Field(discriminator="domain"),
+    _RequiredExactRealMatrixDomainSchema,
 ]
 
 

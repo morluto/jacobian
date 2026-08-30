@@ -315,7 +315,10 @@ class IntegralBilinearForm(StrictModel):
                 "budget_exceeded",
                 f"form coordinate_axis has at most {MAX_ACTION_DIMENSION} labels",
             )
-        return canonicalize_json_containers(data)
+        normalized = dict(data)
+        if isinstance(axis, list):
+            normalized["coordinate_axis"] = tuple(axis)
+        return normalized
 
     @model_validator(mode="after")
     def require_form_shape(self) -> Self:

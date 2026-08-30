@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from fractions import Fraction
+from threading import Event
 from typing import Any
 
 import pytest
@@ -12,6 +13,10 @@ from sympy import Matrix
 from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_cancellation,
+)
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._lattice_ops import saturate_lattice
@@ -67,6 +72,7 @@ def _quartic_action(
         coefficients_descending=("1", "0", "0", "0", "-2")
     )
     embedding = embeddings(presentation).records[1].embedding
+    assert isinstance(embedding, RealNumberFieldEmbedding)
     matrix = EmbeddedRealSimpleNumberFieldMatrix(
         embedding=embedding,
         entries=tuple(
@@ -139,6 +145,7 @@ def _integer_matrix(form: IntegralBilinearForm) -> Matrix:
 def _assert_every_basis_form_is_invariant(
     result: InvariantBilinearFormLattice,
 ) -> None:
+    assert isinstance(result.action, RationalMatrixAction)
     generators = tuple(
         Matrix(
             [[entry.as_fraction() for entry in row] for row in generator.matrix.entries]
@@ -258,11 +265,30 @@ def test_quartic_complex_structure_has_rank_zero_alternating_lattice() -> None:
     assert result.basis_forms == ()
 
 
+def test_algebraic_invariant_forms_obey_caller_cancellation() -> None:
+    zero = (0, 0, 0, 0)
+    one = (1, 0, 0, 0)
+    action = _quartic_action(
+        tuple(
+            tuple(one if row == column else zero for column in range(4))
+            for row in range(4)
+        )
+    )
+    cancellation = Event()
+    cancellation.set()
+    with (
+        request_cancellation(cancellation),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        compute_invariant_bilinear_form_lattice(action, "ALTERNATING")
+
+
 def test_nonmonic_number_field_reduction_preserves_an_invariant_area_form() -> None:
     presentation = SimpleNumberFieldPresentation(
         coefficients_descending=("2", "0", "-1")
     )
     embedding = embeddings(presentation).records[1].embedding
+    assert isinstance(embedding, RealNumberFieldEmbedding)
     zero = _field_element(presentation, 0, 0)
     alpha = _field_element(presentation, 0, 1)
     twice_alpha = _field_element(presentation, 0, 2)
@@ -447,13 +473,13 @@ def test_result_round_trip_retains_source_and_exact_empty_lattice() -> None:
     action = _action([("twice", [[2, 0], [0, 2]])])
     result = compute_invariant_bilinear_form_lattice(action, "SYMMETRIC")
 
-    replayed = InvariantBilinearFormLattice.model_validate(
+    round_tripped = InvariantBilinearFormLattice.model_validate(
         result.model_dump(mode="json")
     )
 
-    assert replayed == result
-    assert replayed.action == action
-    assert replayed.basis_forms == ()
+    assert round_tripped == result
+    assert round_tripped.action == action
+    assert round_tripped.basis_forms == ()
 
 
 def test_one_dimensional_hundred_digit_action_uses_derived_height_admission() -> None:
@@ -506,14 +532,22 @@ def test_near_envelope_constraint_count_matches_realized_expansion(
     original = kernel._constraint_coefficient
     executed = 0
 
-    def counted(*args: Any, **kwargs: Any) -> Fraction:
+    def counted(*args: Any, **kwargs: Any) -> Any:
         nonlocal executed
         executed += 1
         return original(*args, **kwargs)
 
     monkeypatch.setattr(kernel, "_constraint_coefficient", counted)
 
-    plan = kernel._build_constraint_plan(action, "BILINEAR")
+    admission = kernel._admit_invariant_bilinear_form_lattice(
+        action,
+        "BILINEAR",
+    )
+    plan = kernel._build_constraint_plan(
+        action,
+        "BILINEAR",
+        admission=admission,
+    )
     charged = constraint_coefficient_count(dimension, generator_count, "BILINEAR")
 
     assert_charged_work_parity(

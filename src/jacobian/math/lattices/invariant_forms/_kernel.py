@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 from math import ceil, gcd, lcm, log10
 from typing import Any
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_cancelled,
+)
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
@@ -43,6 +48,20 @@ MAX_INVARIANT_FORM_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 type CoefficientPosition = tuple[int, int]
 type IntegerConstraint = tuple[int, ...]
+type _ExecutionCheckpoint = Callable[[str], None]
+
+
+def _require_execution_active(phase: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(f"request cancelled {phase}")
+
+
+@dataclass(frozen=True, slots=True)
+class _ConstraintExpansionEnvelope:
+    """Source-derived height and work bounds for congruence expansion."""
+
+    maximum_component_digits: int
+    digit_work: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +70,17 @@ class _ConstraintPlan:
 
     positions: tuple[CoefficientPosition, ...]
     constraints: tuple[IntegerConstraint, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _InvariantFormExecutionPlan:
+    """One source admission reused by constraint construction and graph HNF."""
+
+    positions: tuple[CoefficientPosition, ...]
+    maximum_constraint_count: int
+    maximum_constraint_digits: int
+    expansion_digit_work: int
+    kernel_digit_work: int
 
 
 def _coefficient_positions(
@@ -148,11 +178,14 @@ def _require_constraint_expansion_envelope(
     kind: FormKind,
     coefficient_count: int,
     coefficient_cells: int,
-) -> None:
+) -> _ConstraintExpansionEnvelope:
     """Bound Fraction construction, products, and row normalization by height."""
 
     if not action.generators or coefficient_count == 0:
-        return
+        return _ConstraintExpansionEnvelope(
+            maximum_component_digits=1,
+            digit_work=0,
+        )
     if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
         values = tuple(
             coordinate
@@ -260,6 +293,10 @@ def _require_constraint_expansion_envelope(
             "congruence expansion and primitive row normalization exceed the "
             f"{MAX_CONSTRAINT_DIGIT_WORK:,}-unit digit-work bound",
         )
+    return _ConstraintExpansionEnvelope(
+        maximum_component_digits=cleared_component_digits,
+        digit_work=digit_work,
+    )
 
 
 def _retained_action_bytes(action: MatrixAction) -> int:
@@ -315,26 +352,19 @@ def _require_result_envelope(
     action: MatrixAction,
     *,
     coefficient_count: int,
-    constraints: tuple[IntegerConstraint, ...],
+    constraint_count: int,
+    constraint_digits: int,
     source_bytes: int,
 ) -> None:
     """Prove a conservative exact-output envelope before graph-HNF work."""
 
-    if constraints:
-        constraint_digits = max(
-            _integer_digit_count(value)
-            for constraint in constraints
-            for value in constraint
-        )
-        possible_nonfull_ranks = range(
-            1, min(len(constraints), coefficient_count - 1) + 1
-        )
-    else:
-        constraint_digits = 1
-        possible_nonfull_ranks = range(1)
+    rank_ceiling = min(constraint_count, max(coefficient_count - 1, 0))
+    # A source-derived constraint-count ceiling may be positive even when every
+    # realized equation vanishes, so rank zero must always remain reachable.
+    possible_nonfull_ranks = range(rank_ceiling + 1)
     maximum_entry_digits = _kernel_entry_digit_bound(
         coefficient_count=coefficient_count,
-        constraint_count=len(constraints),
+        constraint_count=constraint_count,
         constraint_digits=constraint_digits,
     )
     if possible_nonfull_ranks and maximum_entry_digits > MAX_MATRIX_SCALAR_DIGITS:
@@ -374,18 +404,16 @@ def _require_result_envelope(
         )
 
 
-def _require_integer_kernel_work_envelope(plan: _ConstraintPlan) -> None:
-    """Admit canonical graph-lattice HNF from the realized constraint plan."""
+def _require_integer_kernel_work_envelope(
+    *,
+    coefficient_count: int,
+    constraint_count: int,
+    constraint_digits: int,
+) -> int:
+    """Admit canonical graph-lattice HNF from bounded matrix dimensions."""
 
-    if not plan.constraints or not plan.positions:
-        return
-    constraint_count = len(plan.constraints)
-    coefficient_count = len(plan.positions)
-    constraint_digits = max(
-        _integer_digit_count(value)
-        for constraint in plan.constraints
-        for value in constraint
-    )
+    if constraint_count == 0 or coefficient_count == 0:
+        return 0
     graph_entry_digits = _minor_digit_bound(
         rank=min(constraint_count, coefficient_count),
         component_digits=constraint_digits,
@@ -405,6 +433,116 @@ def _require_integer_kernel_work_envelope(plan: _ConstraintPlan) -> None:
             "the realized congruence matrix exceeds the exact primitive-kernel "
             f"digit-work bound of {MAX_INTEGER_KERNEL_DIGIT_WORK:,} units",
         )
+    return digit_work
+
+
+def _all_generators_are_identity(action: MatrixAction) -> bool:
+    """Recognize the exact identity case without multiplying source scalars."""
+
+    if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
+        return all(
+            all(
+                (
+                    value.coefficients_ascending[0].num == "1"
+                    and value.coefficients_ascending[0].den == "1"
+                    and all(
+                        coordinate.num == "0"
+                        for coordinate in value.coefficients_ascending[1:]
+                    )
+                    if row == column
+                    else all(
+                        coordinate.num == "0"
+                        for coordinate in value.coefficients_ascending
+                    )
+                )
+                for row, entries in enumerate(generator.matrix.entries)
+                for column, value in enumerate(entries)
+            )
+            for generator in action.generators
+        )
+    return all(
+        all(
+            value.num == str(int(row == column)) and value.den == "1"
+            for row, entries in enumerate(generator.matrix.entries)
+            for column, value in enumerate(entries)
+        )
+        for generator in action.generators
+    )
+
+
+def _admit_invariant_bilinear_form_lattice(
+    action: MatrixAction,
+    kind: FormKind,
+) -> _InvariantFormExecutionPlan:
+    """Derive one reusable source plan without constructing a constraint."""
+
+    dimension = len(action.coordinate_axis)
+    if (
+        isinstance(action, EmbeddedRealNumberFieldMatrixAction)
+        and action.generators[0].matrix.embedding.presentation.degree
+        > MAX_NUMBER_FIELD_EMBEDDING_DEGREE
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "embedded invariant-form actions support field degree at most "
+            f"{MAX_NUMBER_FIELD_EMBEDDING_DEGREE}",
+        )
+    positions = _coefficient_positions(dimension, kind)
+    source_bytes = _retained_action_bytes(action)
+    field_degree = (
+        action.generators[0].matrix.embedding.presentation.degree
+        if isinstance(action, EmbeddedRealNumberFieldMatrixAction)
+        else 1
+    )
+    coefficient_cells = (
+        constraint_coefficient_count(dimension, len(action.generators), kind)
+        * field_degree
+    )
+    if coefficient_cells > MAX_CONSTRAINT_CELLS:
+        raise _validation_error(
+            "budget_exceeded",
+            "the congruence expansion exceeds the structural bound of "
+            f"{MAX_CONSTRAINT_CELLS} coefficients",
+        )
+    expansion = _require_constraint_expansion_envelope(
+        action,
+        kind=kind,
+        coefficient_count=len(positions),
+        coefficient_cells=coefficient_cells,
+    )
+    maximum_constraint_count = (
+        0
+        if _all_generators_are_identity(action)
+        else len(action.generators) * dimension * dimension * field_degree
+    )
+    maximum_stored_digits = (
+        maximum_constraint_count * len(positions) * expansion.maximum_component_digits
+    )
+    if maximum_stored_digits > MAX_STORED_CONSTRAINT_DIGITS:
+        raise _validation_error(
+            "budget_exceeded",
+            "the source congruence system can exceed the exact "
+            f"{MAX_STORED_CONSTRAINT_DIGITS}-digit intermediate bound",
+        )
+    _require_result_envelope(
+        action,
+        coefficient_count=len(positions),
+        constraint_count=maximum_constraint_count,
+        constraint_digits=expansion.maximum_component_digits,
+        source_bytes=source_bytes,
+    )
+    kernel_digit_work = _require_integer_kernel_work_envelope(
+        coefficient_count=len(positions),
+        constraint_count=maximum_constraint_count,
+        constraint_digits=expansion.maximum_component_digits,
+    )
+    return _InvariantFormExecutionPlan(
+        positions=positions,
+        maximum_constraint_count=maximum_constraint_count,
+        maximum_constraint_digits=expansion.maximum_component_digits,
+        expansion_digit_work=expansion.digit_work,
+        kernel_digit_work=kernel_digit_work,
+    )
 
 
 def _recognize_action_field(
@@ -420,55 +558,20 @@ def _build_constraint_plan(
     action: MatrixAction,
     kind: FormKind,
     *,
+    admission: _InvariantFormExecutionPlan,
     recognized_field: RecognizedRealSimpleNumberField | None = None,
+    execution_checkpoint: _ExecutionCheckpoint = _require_execution_active,
 ) -> _ConstraintPlan:
     dimension = len(action.coordinate_axis)
-    if (
-        isinstance(action, EmbeddedRealNumberFieldMatrixAction)
-        and action.generators[0].matrix.embedding.presentation.degree
-        > MAX_NUMBER_FIELD_EMBEDDING_DEGREE
-    ):
-        raise _validation_error(
-            "budget_exceeded",
-            "embedded invariant-form actions support field degree at most "
-            f"{MAX_NUMBER_FIELD_EMBEDDING_DEGREE}",
-        )
-    positions = _coefficient_positions(dimension, kind)
-    source_bytes = _retained_action_bytes(action)
+    positions = admission.positions
     if not positions:
-        _require_result_envelope(
-            action,
-            coefficient_count=0,
-            constraints=(),
-            source_bytes=source_bytes,
-        )
         return _ConstraintPlan(positions=(), constraints=())
-    field_degree = (
-        action.generators[0].matrix.embedding.presentation.degree
-        if isinstance(action, EmbeddedRealNumberFieldMatrixAction)
-        else 1
-    )
-    cell_count = (
-        constraint_coefficient_count(dimension, len(action.generators), kind)
-        * field_degree
-    )
-    if cell_count > MAX_CONSTRAINT_CELLS:
-        raise _validation_error(
-            "budget_exceeded",
-            "the congruence expansion exceeds the structural bound of "
-            f"{MAX_CONSTRAINT_CELLS} coefficients",
-        )
-    _require_constraint_expansion_envelope(
-        action,
-        kind=kind,
-        coefficient_count=len(positions),
-        coefficient_cells=cell_count,
-    )
     constraints: set[IntegerConstraint] = set()
     stored_digits = 0
     recognized: RecognizedRealSimpleNumberField | None
     generator_matrices: tuple[tuple[tuple[Any, ...], ...], ...]
     if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
+        execution_checkpoint("before invariant-form number-field recognition")
         recognized = recognized_field or _recognize_action_field(action)
         if recognized.embedding != action.generators[0].matrix.embedding:
             raise RuntimeError("recognized field does not match the action embedding")
@@ -479,6 +582,7 @@ def _build_constraint_plan(
             )
             for generator in action.generators
         )
+        execution_checkpoint("after invariant-form number-field recognition")
     else:
         recognized = None
         generator_matrices = tuple(
@@ -490,6 +594,7 @@ def _build_constraint_plan(
         )
     for matrix in generator_matrices:
         for equation_row in range(dimension):
+            execution_checkpoint("during exact invariant-form constraint expansion")
             for equation_column in range(dimension):
                 exact_row = tuple(
                     _constraint_coefficient(
@@ -518,25 +623,34 @@ def _build_constraint_plan(
                         continue
                     stored_digits += row_digits
                     if stored_digits > MAX_STORED_CONSTRAINT_DIGITS:
-                        raise _validation_error(
-                            "budget_exceeded",
-                            "the normalized congruence system exceeds the exact "
-                            f"{MAX_STORED_CONSTRAINT_DIGITS}-digit intermediate bound",
+                        raise RuntimeError(
+                            "the admitted invariant-form storage bound was exceeded"
                         )
                     constraints.add(constraint)
     ordered_constraints = tuple(sorted(constraints))
-    _require_result_envelope(
-        action,
-        coefficient_count=len(positions),
-        constraints=ordered_constraints,
-        source_bytes=source_bytes,
+    constraint_digits = (
+        max(
+            _integer_digit_count(value)
+            for constraint in ordered_constraints
+            for value in constraint
+        )
+        if ordered_constraints
+        else 1
     )
+    if (
+        len(ordered_constraints) > admission.maximum_constraint_count
+        or constraint_digits > admission.maximum_constraint_digits
+    ):
+        raise RuntimeError("the invariant-form source admission was not conservative")
     plan = _ConstraintPlan(positions=positions, constraints=ordered_constraints)
-    _require_integer_kernel_work_envelope(plan)
     return plan
 
 
-def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
+def _integer_kernel_basis(
+    plan: _ConstraintPlan,
+    *,
+    execution_checkpoint: _ExecutionCheckpoint,
+) -> tuple[list[list[int]], int]:
     """Extract the primitive kernel from a canonical graph-lattice HNF.
 
     Rows of ``[C^T | I_m]`` form the graph of ``x -> x C^T`` inside
@@ -561,6 +675,7 @@ def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
 
     from flint import fmpz_mat
 
+    execution_checkpoint("before the primitive FLINT graph-HNF kernel")
     constraint_count = len(plan.constraints)
     graph = fmpz_mat(
         [
@@ -575,6 +690,7 @@ def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
         ]
     )
     graph_hnf = graph.hnf()
+    execution_checkpoint("after the primitive FLINT graph-HNF kernel")
     primitive_kernel = [
         [
             int(graph_hnf[row, constraint_count + column])
@@ -614,16 +730,23 @@ def invariant_bilinear_form_lattice_kernel(
     action: MatrixAction,
     kind: FormKind,
     *,
+    admission: _InvariantFormExecutionPlan,
     recognized_field: RecognizedRealSimpleNumberField | None = None,
+    execution_checkpoint: _ExecutionCheckpoint = _require_execution_active,
 ) -> InvariantBilinearFormLattice:
     """Return the saturated integer lattice of forms fixed by every generator."""
 
     plan = _build_constraint_plan(
         action,
         kind,
+        admission=admission,
         recognized_field=recognized_field,
+        execution_checkpoint=execution_checkpoint,
     )
-    basis, constraint_rank = _integer_kernel_basis(plan)
+    basis, constraint_rank = _integer_kernel_basis(
+        plan,
+        execution_checkpoint=execution_checkpoint,
+    )
     dimension = len(action.coordinate_axis)
     basis_forms = tuple(
         IntegralBilinearForm._from_kernel(
@@ -638,13 +761,15 @@ def invariant_bilinear_form_lattice_kernel(
         )
         for vector in basis
     )
-    return InvariantBilinearFormLattice._from_kernel(
+    result = InvariantBilinearFormLattice._from_kernel(
         action=action,
         kind=kind,
         coefficient_dimension=len(plan.positions),
         constraint_rank=constraint_rank,
         basis_forms=basis_forms,
     )
+    execution_checkpoint("after invariant-form result construction")
+    return result
 
 
 __all__ = ["invariant_bilinear_form_lattice_kernel"]

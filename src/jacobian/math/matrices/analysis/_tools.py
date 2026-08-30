@@ -13,7 +13,6 @@ from jacobian.math.matrices.analysis._models import (
     RationalSpectrumClaimRequest,
     RationalSpectrumClaimResult,
     SymmetricMatrixRequest,
-    _canonical_source_matrix,
 )
 from jacobian.math.matrices.analysis.operations import (
     check_farkas_certificate as _check_farkas_certificate_native,
@@ -37,9 +36,9 @@ def check_rational_spectrum_claim(
 
 
 def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
-    """Normalize a sparse wire matrix for the canonical inertia operation."""
+    """Compute inertia of the request's canonical exact-real matrix."""
 
-    return _compute_inertia_native(_canonical_source_matrix(request))
+    return _compute_inertia_native(request.matrix)
 
 
 def check_farkas_certificate(
@@ -140,7 +139,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "matrix.inertia.compute",
         "Compute Sylvester inertia of an exact real symmetric matrix",
-        "Given a sparse rational or common-embedding real simple-number-field "
+        "Given a canonical rational or common-embedding real simple-number-field "
         "symmetric matrix, compute its exact Sylvester inertia "
         "(n_positive, n_negative, n_zero) and definiteness classification by "
         "congruence reduction in the retained scalar domain.",
@@ -156,12 +155,26 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "identity_inertia",
                 "3x3 identity matrix has inertia (3, 0, 0).",
                 {
-                    "dimension": 3,
-                    "entries": [
-                        {"row": 0, "col": 0, "value": {"num": "1", "den": "1"}},
-                        {"row": 1, "col": 1, "value": {"num": "1", "den": "1"}},
-                        {"row": 2, "col": 2, "value": {"num": "1", "den": "1"}},
-                    ],
+                    "matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                        ],
+                    }
                 },
             ),
             example(

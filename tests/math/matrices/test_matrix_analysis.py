@@ -4,15 +4,15 @@ import copy
 from fractions import Fraction
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.analysis._models import (
-    MAX_SYMMETRIC_MATRIX_DIMENSION,
     FarkasCertificateRequest,
     InertiaResult,
-    MatrixEntry,
     SymmetricMatrixRequest,
 )
 from jacobian.math.matrices.analysis._tools import (
@@ -39,15 +39,31 @@ class TestInertia:
         assert result.matrix == matrix
         assert (result.n_positive, result.n_negative, result.n_zero) == (1, 0, 0)
 
-    def test_identity(self) -> None:
-        req = SymmetricMatrixRequest(
-            dimension=3,
+    def test_wire_request_consumes_a_serialized_rational_result_matrix(self) -> None:
+        matrix = RationalMatrix(
             entries=(
-                MatrixEntry(row=0, col=0, value=CanonicalRational(num="1", den="1")),
-                MatrixEntry(row=1, col=1, value=CanonicalRational(num="1", den="1")),
-                MatrixEntry(row=2, col=2, value=CanonicalRational(num="1", den="1")),
-            ),
+                (
+                    CanonicalRational(num="1", den="1"),
+                    CanonicalRational(num="0", den="1"),
+                ),
+                (
+                    CanonicalRational(num="0", den="1"),
+                    CanonicalRational(num="-1", den="1"),
+                ),
+            )
         )
+        produced = compute_inertia_native(matrix)
+        request = SymmetricMatrixRequest.model_validate_json(
+            encode_strict_json({"matrix": produced.matrix.model_dump(mode="json")}),
+            strict=True,
+        )
+
+        recomputed = compute_inertia(request)
+
+        assert recomputed == produced
+
+    def test_identity(self) -> None:
+        req = _inertia_request(3, {(0, 0): "1", (1, 1): "1", (2, 2): "1"})
         result = compute_inertia(req)
         assert result.n_positive == 3
         assert result.n_negative == 0
@@ -55,68 +71,45 @@ class TestInertia:
         assert result.definiteness == "positive_definite"
 
     def test_negative_identity(self) -> None:
-        req = SymmetricMatrixRequest(
-            dimension=2,
-            entries=(
-                MatrixEntry(row=0, col=0, value=CanonicalRational(num="-1", den="1")),
-                MatrixEntry(row=1, col=1, value=CanonicalRational(num="-1", den="1")),
-            ),
-        )
+        req = _inertia_request(2, {(0, 0): "-1", (1, 1): "-1"})
         result = compute_inertia(req)
         assert result.n_positive == 0
         assert result.n_negative == 2
         assert result.definiteness == "negative_definite"
 
     def test_indefinite(self) -> None:
-        req = SymmetricMatrixRequest(
-            dimension=2,
-            entries=(
-                MatrixEntry(row=0, col=0, value=CanonicalRational(num="1", den="1")),
-                MatrixEntry(row=1, col=1, value=CanonicalRational(num="-1", den="1")),
-            ),
-        )
+        req = _inertia_request(2, {(0, 0): "1", (1, 1): "-1"})
         result = compute_inertia(req)
         assert result.n_positive == 1
         assert result.n_negative == 1
         assert result.definiteness == "indefinite"
 
     def test_off_diagonal_hyperbolic_pair(self) -> None:
-        req = SymmetricMatrixRequest(
-            dimension=2,
-            entries=(
-                MatrixEntry(
-                    row=0,
-                    col=1,
-                    value=CanonicalRational(num="1", den="1"),
-                ),
-            ),
-        )
+        req = _inertia_request(2, {(0, 1): "1"})
         result = compute_inertia(req)
         assert result.n_positive == 1
         assert result.n_negative == 1
         assert result.n_zero == 0
         assert result.definiteness == "indefinite"
 
-    def test_rejects_conflicting_symmetric_entries(self) -> None:
-        import pytest
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError):
-            SymmetricMatrixRequest(
-                dimension=2,
+    def test_rejects_asymmetric_canonical_matrix_as_a_domain_error(self) -> None:
+        request = SymmetricMatrixRequest(
+            matrix=RationalMatrix(
                 entries=(
-                    MatrixEntry(
-                        row=0,
-                        col=1,
-                        value=CanonicalRational(num="1", den="1"),
+                    (
+                        CanonicalRational(num="0", den="1"),
+                        CanonicalRational(num="1", den="1"),
                     ),
-                    MatrixEntry(
-                        row=1,
-                        col=0,
-                        value=CanonicalRational(num="2", den="1"),
+                    (
+                        CanonicalRational(num="2", den="1"),
+                        CanonicalRational(num="0", den="1"),
                     ),
-                ),
+                )
             )
+        )
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            compute_inertia(request)
+        assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
 
 
 class TestFarkas:
@@ -184,20 +177,17 @@ class TestFarkas:
 def _inertia_request(
     dimension: int, entries: dict[tuple[int, int], str]
 ) -> SymmetricMatrixRequest:
-    from jacobian.math.matrices.analysis._models import MatrixEntry
-
+    zero = CanonicalRational(num="0", den="1")
+    dense = [[zero for _ in range(dimension)] for _ in range(dimension)]
+    for (row, column), encoded in entries.items():
+        value = CanonicalRational(
+            num=encoded.split("/")[0],
+            den=encoded.split("/")[1] if "/" in encoded else "1",
+        )
+        dense[row][column] = value
+        dense[column][row] = value
     return SymmetricMatrixRequest(
-        dimension=dimension,
-        entries=tuple(
-            MatrixEntry(
-                row=r,
-                col=c,
-                value=CanonicalRational(
-                    num=v.split("/")[0], den=(v.split("/")[1] if "/" in v else "1")
-                ),
-            )
-            for (r, c), v in entries.items()
-        ),
+        matrix=RationalMatrix(entries=tuple(tuple(row) for row in dense))
     )
 
 
@@ -205,7 +195,7 @@ def _inertia_request(
     ("dimension", "entries", "counts", "label"),
     (
         # zero matrix (explicit zero entry)
-        (2, {(0, 0): "0"}, (0, 0, 2), "positive_semidefinite"),
+        (2, {(0, 0): "0"}, (0, 0, 2), "zero"),
         # singular psd
         (2, {(0, 0): "1", (1, 1): "0"}, (1, 0, 1), "positive_semidefinite"),
         # negative semidefinite
@@ -223,7 +213,7 @@ def _inertia_request(
         ),
     ),
 )
-def test_inertia_results_replay_known_answers(
+def test_inertia_results_round_trip_known_answers(
     dimension: int,
     entries: dict[tuple[int, int], str],
     counts: tuple[int, int, int],
@@ -254,6 +244,7 @@ def test_inertia_result_rejects_structural_mutations() -> None:
     foreign_source = copy.deepcopy(dumped)
     foreign_source["matrix"]["entries"][0][0] = {"num": "-1", "den": "1"}
     supplied = InertiaResult.model_validate(foreign_source)
+    assert isinstance(supplied.matrix, RationalMatrix)
     assert supplied.matrix.entries[0][0].as_fraction() == Fraction(-1)
 
     asymmetric_source = copy.deepcopy(dumped)
@@ -277,7 +268,7 @@ def test_inertia_result_rejects_structural_mutations() -> None:
 
 
 def test_inertia_congruence_invariance() -> None:
-    """Invertible rational change of basis preserves the replayed counts."""
+    """Invertible rational change of basis preserves the exact inertia counts."""
 
     from sympy import Matrix
 
@@ -316,28 +307,54 @@ def test_inertia_result_retains_domain_canonical_matrix() -> None:
     )
 
 
-def test_inertia_results_are_representation_invariant() -> None:
-    upper = compute_inertia(_inertia_request(3, {(0, 1): "2", (2, 2): "-5"}))
-    lower = compute_inertia(_inertia_request(3, {(1, 0): "2", (2, 2): "-5"}))
-    reordered = compute_inertia(_inertia_request(3, {(2, 2): "-5", (0, 1): "2"}))
-    padded = compute_inertia(
-        _inertia_request(
-            3,
-            {(0, 0): "0", (0, 1): "2", (1, 1): "0", (2, 2): "-5"},
-        )
-    )
-    results = [upper, lower, reordered, padded]
-    assert all(result == upper for result in results[1:])
-    assert len({result.model_dump_json() for result in results}) == 1
-    assert (upper.n_positive, upper.n_negative, upper.n_zero) == (1, 2, 0)
+def test_inertia_canonical_request_has_one_schema_truthful_matrix_field() -> None:
+    schema = SymmetricMatrixRequest.model_json_schema()
+    assert schema["required"] == ["matrix"]
+    assert set(schema["properties"]) == {"matrix"}
+    assert schema["additionalProperties"] is False
+    assert schema["x-jacobian-bounds"] == {
+        "max_matrix_order": MAX_RATIONAL_MATRIX_ORDER,
+        "max_algebraic_field_degree": 8,
+        "max_exact_digit_work": 500_000_000,
+        "result_envelope_reserve_bytes": 1_024,
+        "diagonal_fast_path": True,
+    }
+    valid = {
+        "matrix": {
+            "domain": "QQ",
+            "entries": [[{"num": "1", "den": "1"}]],
+        }
+    }
+    missing_discriminator = copy.deepcopy(valid)
+    del missing_discriminator["matrix"]["domain"]
+    validator = Draft202012Validator(schema)
+    assert not list(validator.iter_errors(valid))
+    assert list(validator.iter_errors(missing_discriminator))
+    with pytest.raises(ValidationError):
+        SymmetricMatrixRequest.model_validate(missing_discriminator)
+
+
+def test_inertia_result_schema_matches_strict_discrimination_and_labels() -> None:
+    result = compute_inertia(_inertia_request(1, {(0, 0): "1"}))
+    payload = result.model_dump(mode="json")
+    missing_discriminator = copy.deepcopy(payload)
+    del missing_discriminator["matrix"]["domain"]
+    unknown_label = copy.deepcopy(payload)
+    unknown_label["definiteness"] = "unknown"
+
+    validator = Draft202012Validator(InertiaResult.model_json_schema())
+    assert not list(validator.iter_errors(payload))
+    for invalid in (missing_discriminator, unknown_label):
+        assert list(validator.iter_errors(invalid))
+        with pytest.raises(ValidationError):
+            InertiaResult.model_validate(invalid)
 
 
 def test_inertia_retained_matrix_reconstructs_the_source() -> None:
     request = _inertia_request(3, {(0, 1): "2/3", (2, 2): "-5"})
-    dense = [
-        [entry.as_fraction() for entry in row]
-        for row in compute_inertia(request).matrix.entries
-    ]
+    retained = compute_inertia(request).matrix
+    assert isinstance(retained, RationalMatrix)
+    dense = [[entry.as_fraction() for entry in row] for row in retained.entries]
     assert dense == [
         [Fraction(0), Fraction(2, 3), Fraction(0)],
         [Fraction(2, 3), Fraction(0), Fraction(0)],
@@ -358,16 +375,18 @@ def test_inertia_request_admits_order_33_diagonal_source() -> None:
     assert isinstance(result.matrix, RationalMatrix)
 
 
-@pytest.mark.parametrize(
-    "dimension",
-    range(MAX_SYMMETRIC_MATRIX_DIMENSION + 1, MAX_RATIONAL_MATRIX_ORDER + 1),
-)
-def test_inertia_request_rejects_dimensions_widened_by_the_canonical_value(
-    dimension: int,
-) -> None:
-    with pytest.raises(ValidationError) as excinfo:
-        _inertia_request(dimension, {(0, 0): "1"})
-    assert excinfo.value.errors()[0]["type"] == "less_than_equal"
+def test_inertia_accepts_diagonal_carrier_boundary() -> None:
+    result = compute_inertia(
+        _inertia_request(
+            MAX_RATIONAL_MATRIX_ORDER,
+            {(0, 0): "1", (MAX_RATIONAL_MATRIX_ORDER - 1,) * 2: "-1"},
+        )
+    )
+    assert (result.n_positive, result.n_negative, result.n_zero) == (
+        1,
+        1,
+        MAX_RATIONAL_MATRIX_ORDER - 2,
+    )
 
 
 def _encoded_inertia_payload_near_limit(offset: int) -> bytes:
@@ -416,19 +435,8 @@ def _encoded_inertia_payload_near_limit(offset: int) -> bytes:
         assert 1 <= digits[second] <= MAX_CANONICAL_RATIONAL_DIGITS
         digits[first] = adjusted
         assert len(dense_echo(digits)) == target
-        encoded = encode_strict_json(
-            {
-                "dimension": dimension,
-                "entries": [
-                    {
-                        "row": r,
-                        "col": c,
-                        "value": {"num": "9" * digits[(r, c)], "den": "1"},
-                    }
-                    for (r, c) in cells
-                ],
-            }
-        )
+        dense = dense_echo(digits)
+        encoded = encode_strict_json({"matrix": __import__("json").loads(dense)})
         assert len(encoded) <= limits.max_input_bytes
         return encoded
 
@@ -450,30 +458,4 @@ def test_inertia_request_admission_reserves_output_headroom_for_source_echo() ->
 def test_inertia_request_admission_accepts_payload_inside_reserved_budget() -> None:
     encoded = _encoded_inertia_payload_near_limit(offset=2048)
     request = SymmetricMatrixRequest.model_validate_json(encoded)
-    assert request.dimension == MAX_MATRIX_DIMENSION
-
-
-@pytest.mark.scale
-def test_inertia_request_admission_rejects_echo_beyond_output_limit_as_typed_error() -> (
-    None
-):
-    """A fitting sparse request whose dense echo exceeds the whole output
-    budget must still be rejected as a typed error, not overflow encoding."""
-
-    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
-    from jacobian.canonical import CanonicalLimits, encode_strict_json
-
-    digits = "9" * (MAX_CANONICAL_RATIONAL_DIGITS // 3)
-    payload = {
-        "dimension": MAX_MATRIX_DIMENSION,
-        "entries": [
-            {"row": r, "col": c, "value": {"num": digits, "den": "1"}}
-            for r in range(MAX_MATRIX_DIMENSION)
-            for c in range(r, MAX_MATRIX_DIMENSION)
-        ],
-    }
-    encoded = encode_strict_json(payload)
-    assert len(encoded) <= CanonicalLimits().max_input_bytes
-    request = SymmetricMatrixRequest.model_validate_json(encoded)
-    with pytest.raises(OperationDomainValidationError):
-        compute_inertia(request)
+    assert len(request.matrix.entries) == MAX_MATRIX_DIMENSION

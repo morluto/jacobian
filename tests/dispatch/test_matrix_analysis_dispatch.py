@@ -59,19 +59,7 @@ def _encoded_inertia_payload_near_limit(offset: int) -> bytes:
         assert 1 <= digits[second] <= MAX_CANONICAL_RATIONAL_DIGITS
         digits[first] = adjusted
         assert len(dense_echo(digits)) == target
-        encoded = encode_strict_json(
-            {
-                "dimension": dimension,
-                "entries": [
-                    {
-                        "row": r,
-                        "col": c,
-                        "value": {"num": "9" * digits[(r, c)], "den": "1"},
-                    }
-                    for (r, c) in cells
-                ],
-            }
-        )
+        encoded = encode_strict_json({"matrix": json.loads(dense_echo(digits))})
         assert len(encoded) <= limits.max_input_bytes
         return encoded
 
@@ -93,11 +81,16 @@ def test_dispatch_admits_order_33_diagonal_inertia_request() -> None:
     # Order 33 exceeds the shared computation dimension but stays inside the
     # canonical dense rational-matrix order envelope, so a small-entry source
     # there must be admitted end to end with a typed source-bound result.
+    zero = {"num": "0", "den": "1"}
+    one = {"num": "1", "den": "1"}
     payload = {
-        "dimension": 33,
-        "entries": [
-            {"row": r, "col": r, "value": {"num": "1", "den": "1"}} for r in range(33)
-        ],
+        "matrix": {
+            "domain": "QQ",
+            "entries": [
+                [one if row == column else zero for column in range(33)]
+                for row in range(33)
+            ],
+        }
     }
     result = invoke_operation("matrix.inertia.compute", payload, Catalog.open())
 
@@ -110,12 +103,19 @@ def test_dispatch_admits_order_33_diagonal_inertia_request() -> None:
 
 def test_large_fitting_inertia_request_returns_typed_result() -> None:
     digits = "9" * 4096
+    zero = {"num": "0", "den": "1"}
+    large = {"num": digits, "den": "1"}
     payload = {
-        "dimension": MAX_MATRIX_DIMENSION,
-        "entries": [
-            {"row": r, "col": r, "value": {"num": digits, "den": "1"}}
-            for r in range(MAX_MATRIX_DIMENSION)
-        ],
+        "matrix": {
+            "domain": "QQ",
+            "entries": [
+                [
+                    large if row == column else zero
+                    for column in range(MAX_MATRIX_DIMENSION)
+                ]
+                for row in range(MAX_MATRIX_DIMENSION)
+            ],
+        }
     }
     assert len(canonicalize_json(payload)) > 100_000
     result = invoke_operation("matrix.inertia.compute", payload, Catalog.open())

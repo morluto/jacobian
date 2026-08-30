@@ -1,12 +1,17 @@
 """Exact selected Riemann-form profiles on complex tori."""
 
+import copy
 from fractions import Fraction
 
-from sympy import QQ
+import pytest
+from jsonschema import Draft202012Validator
+from pydantic import ValidationError
+from sympy import QQ, Matrix
 from sympy.polys.matrices import DomainMatrix
 from tests.math.geometry.complex_tori._support import (
     index_six_alternating_form,
     quartic_index_six_torus,
+    quartic_matrix,
     quartic_rank_one_torus,
     standard_alternating_form,
 )
@@ -18,12 +23,17 @@ from jacobian.math.geometry.complex_tori import (
     compute_riemann_form_profile,
 )
 from jacobian.math.geometry.complex_tori._models import RiemannFormProfile
+from jacobian.math.geometry.complex_tori._tools import RIEMANN_FORM_PROFILE_OPERATION
 from jacobian.math.lattices.invariant_forms import IntegralBilinearForm
 from jacobian.math.matrices._number_field import (
     domain_matrix_from_embedded,
     recognize_real_simple_number_field,
 )
-from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix
+from jacobian.math.matrices.values import (
+    EmbeddedRealSimpleNumberFieldMatrix,
+    IntegerMatrix,
+    RationalMatrix,
+)
 
 
 def _rational(value: int | Fraction) -> CanonicalRational:
@@ -49,7 +59,7 @@ def test_elliptic_degree_d_form_uses_standard_positive_sign_and_type() -> None:
 
     result = compute_riemann_form_profile(torus, form)
 
-    assert result.outcome.status == "HODGE_TYPE_11"
+    assert result.outcome.status == "RIEMANN_FORM"
     assert result.outcome.associated_form_convention == "J_TRANSPOSE_TIMES_E"
     assert result.outcome.hermitian_form_convention == "G_PLUS_I_E_LINEAR_IN_FIRST"
     assert result.outcome.associated_form_inertia.matrix.entries == (
@@ -73,9 +83,18 @@ def test_quartic_rank_one_generator_has_hermitian_signature_one_one() -> None:
     torus = quartic_rank_one_torus()
     form = standard_alternating_form(torus)
 
-    result = compute_riemann_form_profile(torus, form)
+    request = RIEMANN_FORM_PROFILE_OPERATION.request_type.model_validate_json(
+        encode_strict_json(
+            {
+                "torus": torus.model_dump(mode="json"),
+                "form": form.model_dump(mode="json"),
+            }
+        ),
+        strict=True,
+    )
+    result = RIEMANN_FORM_PROFILE_OPERATION.run(request)
 
-    assert result.outcome.status == "HODGE_TYPE_11"
+    assert result.outcome.status == "HODGE_NON_POSITIVE"
     assert result.outcome.associated_form_inertia.n_positive == 2
     assert result.outcome.associated_form_inertia.n_negative == 2
     assert result.outcome.associated_form_inertia.n_zero == 0
@@ -84,7 +103,7 @@ def test_quartic_rank_one_generator_has_hermitian_signature_one_one() -> None:
     assert result.outcome.hermitian_inertia.n_zero == 0
     assert result.outcome.hermitian_inertia.definiteness == "indefinite"
     assert result.outcome.is_riemann_form is False
-    assert result.outcome.polarization_type is None
+    assert "polarization_type" not in result.outcome.model_dump()
 
 
 def test_selected_real_embedding_changes_exact_riemann_inertia() -> None:
@@ -100,20 +119,22 @@ def test_selected_real_embedding_changes_exact_riemann_inertia() -> None:
         standard_alternating_form(negative_root_torus),
     )
 
-    assert positive_result.outcome.status == "HODGE_TYPE_11"
-    assert negative_result.outcome.status == "HODGE_TYPE_11"
+    assert positive_result.outcome.status == "HODGE_NON_POSITIVE"
+    assert negative_result.outcome.status == "HODGE_NON_POSITIVE"
+    positive_associated = positive_result.outcome.associated_form_inertia.matrix
+    negative_associated = negative_result.outcome.associated_form_inertia.matrix
+    positive_complex_structure = positive_root_torus.complex_structure
+    negative_complex_structure = negative_root_torus.complex_structure
+    assert isinstance(positive_associated, EmbeddedRealSimpleNumberFieldMatrix)
+    assert isinstance(negative_associated, EmbeddedRealSimpleNumberFieldMatrix)
+    assert isinstance(positive_complex_structure, EmbeddedRealSimpleNumberFieldMatrix)
+    assert isinstance(negative_complex_structure, EmbeddedRealSimpleNumberFieldMatrix)
     assert positive_result.outcome.hermitian_inertia.definiteness == "indefinite"
     assert negative_result.outcome.hermitian_inertia.n_positive == 0
     assert negative_result.outcome.hermitian_inertia.n_negative == 2
     assert negative_result.outcome.hermitian_inertia.definiteness == "negative_definite"
-    assert (
-        positive_result.outcome.associated_form_inertia.matrix.embedding
-        == positive_root_torus.complex_structure.embedding
-    )
-    assert (
-        negative_result.outcome.associated_form_inertia.matrix.embedding
-        == negative_root_torus.complex_structure.embedding
-    )
+    assert positive_associated.embedding == positive_complex_structure.embedding
+    assert negative_associated.embedding == negative_complex_structure.embedding
 
 
 def test_basis_changed_index_six_fixture_has_exact_type_and_signature() -> None:
@@ -124,7 +145,7 @@ def test_basis_changed_index_six_fixture_has_exact_type_and_signature() -> None:
 
     result = compute_riemann_form_profile(torus, form)
 
-    assert result.outcome.status == "HODGE_TYPE_11"
+    assert result.outcome.status == "HODGE_NON_POSITIVE"
     assert result.alternating_elementary_divisors == ("1", "6")
     assert result.outcome.associated_form_inertia.n_positive == 2
     assert result.outcome.associated_form_inertia.n_negative == 2
@@ -147,9 +168,11 @@ def test_index_six_fixture_is_an_explicit_change_of_lattice() -> None:
         (0, 0, 1, 0),
         (6, 0, 0, 0),
     )
-    recognized = recognize_real_simple_number_field(
-        source_torus.complex_structure.embedding
-    )
+    source_complex_structure = source_torus.complex_structure
+    target_complex_structure = target_torus.complex_structure
+    assert isinstance(source_complex_structure, EmbeddedRealSimpleNumberFieldMatrix)
+    assert isinstance(target_complex_structure, EmbeddedRealSimpleNumberFieldMatrix)
+    recognized = recognize_real_simple_number_field(source_complex_structure.embedding)
     change_rational = DomainMatrix(
         [list(row) for row in change_rows],
         (4, 4),
@@ -157,11 +180,11 @@ def test_index_six_fixture_is_an_explicit_change_of_lattice() -> None:
     )
     change = change_rational.convert_to(recognized.field)
     source_j = domain_matrix_from_embedded(
-        source_torus.complex_structure,
+        source_complex_structure,
         recognized,
     )
     target_j = domain_matrix_from_embedded(
-        target_torus.complex_structure,
+        target_complex_structure,
         recognized,
     )
     source_e = DomainMatrix(
@@ -182,6 +205,90 @@ def test_index_six_fixture_is_an_explicit_change_of_lattice() -> None:
     )
 
 
+def test_unimodular_coordinate_change_transports_the_public_riemann_profile() -> None:
+    axis = ("e1", "e2", "e3", "e4")
+    complex_structure = Matrix(
+        (
+            (0, 1, 0, 0),
+            (-1, 0, 0, 0),
+            (0, 0, 0, 1),
+            (0, 0, -1, 0),
+        )
+    )
+    source_form = Matrix(
+        (
+            (0, 1, 0, 0),
+            (-1, 0, 0, 0),
+            (0, 0, 0, 3),
+            (0, 0, -3, 0),
+        )
+    )
+    coordinate_change = Matrix(
+        (
+            (1, 1, 0, 0),
+            (0, 1, 1, 0),
+            (0, 0, 1, 1),
+            (0, 0, 0, 1),
+        )
+    )
+    assert coordinate_change.det() == 1
+    target_structure = coordinate_change.inv() * complex_structure * coordinate_change
+    target_form = coordinate_change.T * source_form * coordinate_change
+
+    def torus(matrix: Matrix) -> LatticeComplexStructure:
+        return LatticeComplexStructure(
+            coordinate_axis=axis,
+            complex_structure=RationalMatrix(
+                entries=tuple(
+                    tuple(_rational(int(matrix[row, column])) for column in range(4))
+                    for row in range(4)
+                )
+            ),
+        )
+
+    def alternating_form(matrix: Matrix) -> IntegralBilinearForm:
+        return IntegralBilinearForm(
+            coordinate_axis=axis,
+            kind="ALTERNATING",
+            matrix=IntegerMatrix(
+                entries=tuple(
+                    tuple(str(int(matrix[row, column])) for column in range(4))
+                    for row in range(4)
+                )
+            ),
+        )
+
+    source = compute_riemann_form_profile(
+        torus(complex_structure), alternating_form(source_form)
+    )
+    target = compute_riemann_form_profile(
+        torus(target_structure), alternating_form(target_form)
+    )
+    assert source.outcome.status == target.outcome.status == "RIEMANN_FORM"
+    assert (
+        source.outcome.polarization_type
+        == target.outcome.polarization_type
+        == (
+            "1",
+            "3",
+        )
+    )
+    assert source.outcome.hermitian_inertia == target.outcome.hermitian_inertia
+    source_matrix = source.outcome.associated_form_inertia.matrix
+    target_matrix = target.outcome.associated_form_inertia.matrix
+    assert isinstance(source_matrix, RationalMatrix)
+    assert isinstance(target_matrix, RationalMatrix)
+    source_associated = Matrix(
+        [[value.as_fraction() for value in row] for row in source_matrix.entries]
+    )
+    target_associated = Matrix(
+        [[value.as_fraction() for value in row] for row in target_matrix.entries]
+    )
+    assert (
+        target_associated == coordinate_change.T * source_associated * coordinate_change
+    )
+
+
 def test_non_hodge_alternating_form_is_a_discriminated_mathematical_outcome() -> None:
     torus = quartic_rank_one_torus()
     form = IntegralBilinearForm(
@@ -199,7 +306,7 @@ def test_non_hodge_alternating_form_is_a_discriminated_mathematical_outcome() ->
 
     result = compute_riemann_form_profile(torus, form)
 
-    assert result.outcome.status == "NOT_HODGE_TYPE_11"
+    assert result.outcome.status == "NOT_HODGE"
     assert result.outcome.is_riemann_form is False
     assert result.alternating_elementary_divisors == ("1",)
     assert result.is_degenerate is True
@@ -223,15 +330,175 @@ def test_zero_hodge_form_has_zero_hermitian_inertia_without_a_type() -> None:
 
     result = compute_riemann_form_profile(torus, form)
 
-    assert result.outcome.status == "HODGE_TYPE_11"
+    assert result.outcome.status == "HODGE_NON_POSITIVE"
     assert result.outcome.associated_form_inertia.n_positive == 0
     assert result.outcome.associated_form_inertia.n_negative == 0
     assert result.outcome.associated_form_inertia.n_zero == 2
+    assert result.outcome.associated_form_inertia.definiteness == "zero"
     assert result.outcome.hermitian_inertia.n_positive == 0
     assert result.outcome.hermitian_inertia.n_negative == 0
     assert result.outcome.hermitian_inertia.n_zero == 1
     assert result.outcome.hermitian_inertia.definiteness == "zero"
     assert result.outcome.is_riemann_form is False
-    assert result.outcome.polarization_type is None
+    assert "polarization_type" not in result.outcome.model_dump()
     assert result.alternating_elementary_divisors == ()
     assert result.is_degenerate is True
+
+
+def test_rank_fifty_two_zero_hodge_form_returns_a_typed_profile() -> None:
+    dimension = 52
+    zero = _rational(0)
+    one = _rational(1)
+    negative_one = _rational(-1)
+    torus = LatticeComplexStructure(
+        coordinate_axis=tuple(f"e{index + 1}" for index in range(dimension)),
+        complex_structure=RationalMatrix(
+            entries=tuple(
+                tuple(
+                    one
+                    if column == row + 1 and row % 2 == 0
+                    else negative_one
+                    if column == row - 1 and row % 2 == 1
+                    else zero
+                    for column in range(dimension)
+                )
+                for row in range(dimension)
+            )
+        ),
+    )
+    form = IntegralBilinearForm(
+        coordinate_axis=torus.coordinate_axis,
+        kind="ALTERNATING",
+        matrix=IntegerMatrix(
+            entries=tuple(
+                tuple("0" for _ in range(dimension)) for _ in range(dimension)
+            )
+        ),
+    )
+
+    result = compute_riemann_form_profile(torus, form)
+
+    assert result.outcome.status == "HODGE_NON_POSITIVE"
+    assert result.outcome.associated_form_inertia.n_zero == dimension
+    assert result.outcome.hermitian_inertia.n_zero == dimension // 2
+    assert result.is_degenerate is True
+
+
+def test_outcome_schema_requires_only_positive_polarization_data() -> None:
+    schema = RiemannFormProfile.model_json_schema()
+    outcome_schema = schema["properties"]["outcome"]
+    assert set(outcome_schema["discriminator"]["mapping"]) == {
+        "NOT_HODGE",
+        "HODGE_NON_POSITIVE",
+        "RIEMANN_FORM",
+    }
+    positive = schema["$defs"]["RiemannFormPositive"]
+    nonpositive = schema["$defs"]["RiemannFormHodgeNonPositive"]
+    not_hodge = schema["$defs"]["RiemannFormNotHodge"]
+    assert all(
+        "status" in branch["required"] for branch in (positive, nonpositive, not_hodge)
+    )
+    assert "polarization_type" in positive["required"]
+    assert "polarization_type" not in nonpositive["properties"]
+
+
+@pytest.mark.parametrize(
+    ("form_scale", "expected_status"),
+    ((1, "RIEMANN_FORM"), (-1, "HODGE_NON_POSITIVE")),
+)
+def test_hodge_outcome_schema_requires_every_exact_real_discriminator(
+    form_scale: int,
+    expected_status: str,
+) -> None:
+    torus = LatticeComplexStructure(
+        coordinate_axis=("e1", "e2"),
+        complex_structure=RationalMatrix(
+            entries=((_rational(0), _rational(1)), (_rational(-1), _rational(0)))
+        ),
+    )
+    form = IntegralBilinearForm(
+        coordinate_axis=torus.coordinate_axis,
+        kind="ALTERNATING",
+        matrix=IntegerMatrix(entries=(("0", str(form_scale)), (str(-form_scale), "0"))),
+    )
+    payload = compute_riemann_form_profile(torus, form).model_dump(mode="json")
+    assert payload["outcome"]["status"] == expected_status
+
+    validator = Draft202012Validator(RiemannFormProfile.model_json_schema())
+    assert not list(validator.iter_errors(payload))
+    missing_torus_domain = copy.deepcopy(payload)
+    del missing_torus_domain["torus"]["complex_structure"]["domain"]
+    missing_inertia_domain = copy.deepcopy(payload)
+    del missing_inertia_domain["outcome"]["associated_form_inertia"]["matrix"]["domain"]
+    for invalid in (missing_torus_domain, missing_inertia_domain):
+        assert list(validator.iter_errors(invalid))
+        with pytest.raises(ValidationError):
+            RiemannFormProfile.model_validate(invalid)
+
+
+def test_profile_rejects_outcome_branch_and_scalar_domain_mutations() -> None:
+    torus = LatticeComplexStructure(
+        coordinate_axis=("e1", "e2"),
+        complex_structure=RationalMatrix(
+            entries=((_rational(0), _rational(1)), (_rational(-1), _rational(0)))
+        ),
+    )
+    form = IntegralBilinearForm(
+        coordinate_axis=torus.coordinate_axis,
+        kind="ALTERNATING",
+        matrix=IntegerMatrix(entries=(("0", "1"), ("-1", "0"))),
+    )
+    positive_dump = compute_riemann_form_profile(torus, form).model_dump(mode="json")
+
+    missing_type = copy.deepcopy(positive_dump)
+    del missing_type["outcome"]["polarization_type"]
+    with pytest.raises(ValidationError):
+        RiemannFormProfile.model_validate(missing_type)
+
+    impossible_degenerate = copy.deepcopy(positive_dump)
+    impossible_degenerate["smith_normal_form"]["normal_form"]["entries"] = [
+        ["0", "0"],
+        ["0", "0"],
+    ]
+    impossible_degenerate["smith_normal_form"]["rank"] = 0
+    impossible_degenerate["smith_normal_form"]["invariant_factors"] = []
+    impossible_degenerate["alternating_elementary_divisors"] = []
+    impossible_degenerate["is_degenerate"] = True
+    impossible_degenerate["outcome"]["polarization_type"] = []
+    with pytest.raises(ValidationError) as degeneracy_error:
+        RiemannFormProfile.model_validate(impossible_degenerate)
+    assert degeneracy_error.value.errors()[0]["type"] == (
+        "complex_torus.riemann_nondegenerate"
+    )
+
+    foreign_domain = copy.deepcopy(positive_dump)
+    foreign_domain["outcome"]["associated_form_inertia"]["matrix"] = quartic_matrix(
+        (((1, 0, 0, 0), (0, 0, 0, 0)), ((0, 0, 0, 0), (1, 0, 0, 0)))
+    ).model_dump(mode="json")
+    with pytest.raises(ValidationError) as domain_error:
+        RiemannFormProfile.model_validate(foreign_domain)
+    assert domain_error.value.errors()[0]["type"] == (
+        "complex_torus.associated_scalar_domain"
+    )
+
+    algebraic_torus = quartic_rank_one_torus(root_index=1)
+    algebraic_dump = compute_riemann_form_profile(
+        algebraic_torus,
+        standard_alternating_form(algebraic_torus),
+    ).model_dump(mode="json")
+    impossible_type = copy.deepcopy(algebraic_dump)
+    impossible_type["outcome"]["polarization_type"] = []
+    with pytest.raises(ValidationError):
+        RiemannFormProfile.model_validate(impossible_type)
+
+    negative_complex_structure = quartic_rank_one_torus(root_index=0).complex_structure
+    assert isinstance(negative_complex_structure, EmbeddedRealSimpleNumberFieldMatrix)
+    negative_embedding = negative_complex_structure.embedding
+    algebraic_dump["outcome"]["associated_form_inertia"]["matrix"]["embedding"] = (
+        negative_embedding.model_dump(mode="json")
+    )
+    with pytest.raises(ValidationError) as embedding_error:
+        RiemannFormProfile.model_validate(algebraic_dump)
+    assert embedding_error.value.errors()[0]["type"] == (
+        "complex_torus.associated_scalar_domain"
+    )

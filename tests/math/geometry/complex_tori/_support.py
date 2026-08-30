@@ -12,6 +12,7 @@ from jacobian.math.matrices.values import (
     IntegerMatrix,
 )
 from jacobian.math.number_theory.number_fields import (
+    RealNumberFieldEmbedding,
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
     embeddings,
@@ -36,6 +37,7 @@ def quartic_matrix(
         coefficients_descending=("1", "0", "0", "0", "-2")
     )
     embedding = embeddings(presentation).records[root_index].embedding
+    assert isinstance(embedding, RealNumberFieldEmbedding)
     return EmbeddedRealSimpleNumberFieldMatrix(
         embedding=embedding,
         entries=tuple(
@@ -94,6 +96,31 @@ def quartic_rank_one_torus(*, root_index: int = 1) -> LatticeComplexStructure:
                 ),
             ),
             root_index=root_index,
+        ),
+    )
+
+
+def nonmonic_quadratic_torus() -> LatticeComplexStructure:
+    """Return ``J=[[0,-a],[2a,0]]`` in ``QQ[a]/(2a^2-1)`` at ``a>0``."""
+
+    presentation = SimpleNumberFieldPresentation(
+        coefficients_descending=("2", "0", "-1")
+    )
+    embedding = embeddings(presentation).records[1].embedding
+    assert isinstance(embedding, RealNumberFieldEmbedding)
+
+    def element(constant: int, linear: int) -> SimpleNumberFieldElement:
+        return SimpleNumberFieldElement(
+            presentation=presentation,
+            coefficients_ascending=(rational(constant), rational(linear)),
+        )
+
+    zero = element(0, 0)
+    return LatticeComplexStructure(
+        coordinate_axis=("e1", "e2"),
+        complex_structure=EmbeddedRealSimpleNumberFieldMatrix(
+            embedding=embedding,
+            entries=((zero, element(0, -1)), (element(0, 2), zero)),
         ),
     )
 
@@ -166,6 +193,7 @@ def index_six_alternating_form(
 
 __all__ = [
     "index_six_alternating_form",
+    "nonmonic_quadratic_torus",
     "quartic_index_six_torus",
     "quartic_matrix",
     "quartic_rank_one_torus",

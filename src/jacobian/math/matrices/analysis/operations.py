@@ -561,10 +561,12 @@ def _eliminate_1x1(matrix: list[list[Fraction]], index: int, pivot: int) -> int:
         if matrix[row][index] == 0:
             continue
         factor = matrix[row][index] / diagonal
-        for col in range(index, len(matrix)):
+        for col in range(index + 1, len(matrix)):
             matrix[row][col] -= factor * matrix[index][col]
-        for col in range(index, len(matrix)):
+        for col in range(index + 1, len(matrix)):
             matrix[col][row] = matrix[row][col]
+        matrix[row][index] = Fraction(0)
+        matrix[index][row] = Fraction(0)
     return 1 if diagonal > 0 else -1
 
 
@@ -602,12 +604,16 @@ def _eliminate_2x2(matrix: list[list[Fraction]], index: int) -> tuple[int, int, 
             right = matrix[row][index + 1]
             coeff0 = left * inv00 + right * inv01
             coeff1 = left * inv01 + right * inv11
-            for col in range(index, len(matrix)):
+            for col in range(index + 2, len(matrix)):
                 matrix[row][col] -= (
                     coeff0 * matrix[index][col] + coeff1 * matrix[index + 1][col]
                 )
-            for col in range(index, len(matrix)):
+            for col in range(index + 2, len(matrix)):
                 matrix[col][row] = matrix[row][col]
+            matrix[row][index] = Fraction(0)
+            matrix[row][index + 1] = Fraction(0)
+            matrix[index][row] = Fraction(0)
+            matrix[index + 1][row] = Fraction(0)
     return pos, neg, zero
 
 
@@ -668,10 +674,12 @@ def _symmetric_algebraic_inertia(
                 if not a[row][index]:
                     continue
                 factor = a[row][index] / diagonal
-                for column in range(index, n):
+                for column in range(index + 1, n):
                     a[row][column] -= factor * a[index][column]
-                for column in range(index, n):
+                for column in range(index + 1, n):
                     a[column][row] = a[row][column]
+                a[row][index] = 0
+                a[index][row] = 0
             index += 1
             continue
 
@@ -704,13 +712,17 @@ def _symmetric_algebraic_inertia(
                 right = a[row][index + 1]
                 coefficient0 = right * inverse_off_diagonal
                 coefficient1 = left * inverse_off_diagonal
-                for column in range(index, n):
+                for column in range(index + 2, n):
                     a[row][column] -= (
                         coefficient0 * a[index][column]
                         + coefficient1 * a[index + 1][column]
                     )
-                for column in range(index, n):
+                for column in range(index + 2, n):
                     a[column][row] = a[row][column]
+                a[row][index] = 0
+                a[row][index + 1] = 0
+                a[index][row] = 0
+                a[index + 1][row] = 0
         index += 2
     return n_pos, n_neg, n_zero
 

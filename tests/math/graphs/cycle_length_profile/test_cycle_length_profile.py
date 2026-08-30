@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from itertools import combinations
+
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.cycle_length_profile.operations import (
     compute_cycle_length_profile,
 )
@@ -122,3 +127,13 @@ def test_native_admission_accepts_large_sparse_graph() -> None:
     """Sparse graphs beyond the old cap remain within the derived envelope."""
     graph = _graph([str(i) for i in range(17)], [])
     assert compute_cycle_length_profile(graph).rows == ()
+
+
+def test_near_complete_graph_uses_exhaustive_work_bound() -> None:
+    """Missing a few edges must not trigger an unproved complete-graph shortcut."""
+    vertices = [f"v{index:02d}" for index in range(20)]
+    edges = list(combinations(vertices, 2))
+    edges.remove(("v00", "v01"))
+    edges.remove(("v00", "v02"))
+    with pytest.raises(OperationDomainValidationError, match="work bound"):
+        compute_cycle_length_profile(_graph(vertices, edges))

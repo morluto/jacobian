@@ -11,6 +11,7 @@ from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_GROUND_SET_SIZE = 8
+MAX_THRESHOLD = (1 << 53) - 1
 
 IntersectionRelation = Literal["INTERSECTION_EQ", "INTERSECTION_LT", "INTERSECTION_GT"]
 
@@ -46,6 +47,11 @@ def _validate_intersection_request(
             "boolean_lattice.threshold_exceeds_n",
             "threshold must be nonnegative",
         )
+    if threshold > MAX_THRESHOLD:
+        raise PydanticCustomError(
+            "boolean_lattice.threshold_exceeds_json_integer",
+            f"threshold must not exceed {MAX_THRESHOLD}",
+        )
     vertex_count = 1 << ground_set_size
     edge_count = vertex_count * (vertex_count - 1) // 2
     if edge_count > 32_640:
@@ -59,7 +65,7 @@ class BooleanLatticeIntersectionRequest(StrictModel):
     """Construct a graph on the Boolean lattice 2^[n] with an intersection relation."""
 
     ground_set_size: int = Field(ge=0, le=MAX_GROUND_SET_SIZE)
-    threshold: int = Field(ge=0)
+    threshold: int = Field(ge=0, le=MAX_THRESHOLD)
     relation: IntersectionRelation
 
 
@@ -74,6 +80,7 @@ class BooleanLatticeIntersectionResult(StrictModel):
 
 __all__ = [
     "MAX_GROUND_SET_SIZE",
+    "MAX_THRESHOLD",
     "BooleanLatticeIntersectionRequest",
     "BooleanLatticeIntersectionResult",
     "IntersectionRelation",

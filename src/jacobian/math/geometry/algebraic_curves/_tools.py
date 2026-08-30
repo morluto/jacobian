@@ -13,6 +13,8 @@ from jacobian.math.geometry.algebraic_curves._models import (
     AffineCurveResult,
     ProjectiveClosureRequest,
     ProjectiveClosureResult,
+    ProjectivePlaneCurveSingularityProfile,
+    ProjectivePlaneCurveSingularityRequest,
     RationalConicParametrizationRequest,
     RationalConicParametrizationResult,
 )
@@ -21,6 +23,7 @@ from jacobian.math.geometry.algebraic_curves.operations import (
     affine_curve_check,
     projective_closure,
     rational_conic_parametrization,
+    singularity_profile,
 )
 
 
@@ -61,6 +64,14 @@ def compute_rational_conic_parametrization(
         inverse_parameter=data.inverse_parameter,
         finite_parameter_denominator=data.finite_parameter_denominator,
     )
+
+
+def compute_projective_plane_curve_singularity_profile(
+    request: ProjectivePlaneCurveSingularityRequest,
+) -> ProjectivePlaneCurveSingularityProfile:
+    """Compute one exact source-bound global projective singular locus."""
+
+    return singularity_profile(request.polynomial, request.resource_budget)
 
 
 def _polynomial(
@@ -105,6 +116,37 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "algebraic_geometry.projective_plane_curve.singularity_profile.compute",
+        "Compute a projective plane-curve singularity profile",
+        "Compute the complete saturated projective Jacobian locus over the "
+        "algebraic closure of QQ for one bounded homogeneous ternary polynomial. "
+        "The result distinguishes the unit-ideal smooth case, a complete finite "
+        "family of exact embedded number-field points, a positive-dimensional "
+        "locus, and operational noncompletion.",
+        ProjectivePlaneCurveSingularityRequest,
+        ProjectivePlaneCurveSingularityProfile,
+        compute_projective_plane_curve_singularity_profile,
+        "algebraic-geometry",
+        "projective-curve",
+        "singular-locus",
+        "exact",
+        examples=(
+            example(
+                "conjugate_singularities",
+                "Find both non-rational singular points [1:i:0] and [1:-i:0] "
+                "of Z*(X^2+Y^2+Z^2), retaining their distinct exact embeddings.",
+                {
+                    "polynomial": _polynomial(
+                        ("X", "Y", "Z"),
+                        (1, (2, 0, 1)),
+                        (1, (0, 2, 1)),
+                        (1, (0, 0, 3)),
+                    )
+                },
+            ),
+        ),
+    ),
     _op(
         "algebraic_geometry.affine_plane_curve.check",
         "Check an affine plane curve",

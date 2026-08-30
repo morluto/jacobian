@@ -15,6 +15,7 @@ from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
 )
+from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel
 from jacobian.canonical import encode_strict_json, format_canonical_integer
 
@@ -1162,9 +1163,9 @@ def _compare_euclidean_root_sums(
 
     if left == right:
         return 0
-    from flint import arb, ctx, fmpq
+    from flint import arb, fmpq
 
-    with ctx.workprec(EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS):
+    with flint_workprec(EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS):
         difference = arb(0)
         for value in left:
             difference += arb(fmpq(value.numerator, value.denominator)).sqrt()

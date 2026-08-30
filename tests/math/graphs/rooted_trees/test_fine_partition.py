@@ -6,7 +6,6 @@ import networkx as nx
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.rooted_trees import (
     RootedTreeFinePartition,
@@ -14,6 +13,7 @@ from jacobian.math.graphs.rooted_trees import (
     RootedTreeNotATree,
     construct_fine_partition,
 )
+from jacobian.math.graphs.rooted_trees._tools import TOOLS
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -446,8 +446,11 @@ def test_every_nonisomorphic_tree_through_order_seven_satisfies_contract() -> No
 
 
 def test_catalog_example_executes_and_round_trips() -> None:
-    operation = Catalog.open().operation("graph.rooted_tree.fine_partition.construct")
-    assert operation is not None
+    operation = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "graph.rooted_tree.fine_partition.construct"
+    )
     assert len(operation.examples) == 1
     request = operation.request_type.model_validate(operation.examples[0].input)
 

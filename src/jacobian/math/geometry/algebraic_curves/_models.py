@@ -9,6 +9,17 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.math.geometry.algebraic_curves._singularity_models import (
+    IncompleteProjectivePlaneCurveSingularityComputation,
+    PositiveDimensionalProjectivePlaneCurveSingularLocus,
+    ProjectivePlaneCurveFirstJet,
+    ProjectivePlaneCurveSingularityBudget,
+    ProjectivePlaneCurveSingularityProfile,
+    ProjectivePlaneCurveSingularityRequest,
+    ProjectivePlaneCurveSingularPointRecord,
+    SmoothProjectivePlaneCurve,
+    ZeroDimensionalProjectivePlaneCurveSingularLocus,
+)
 from jacobian.math.polynomials.maps._models import VariablePoint
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
@@ -181,8 +192,8 @@ class RationalConicParametrizationResult(StrictModel):
         """Check only bounded wire-shape relations between result fields.
 
         The admitted line-pencil kernel establishes the parametrization
-        identities. Parsing a serialized result must not reconstruct and replay
-        that computation; independently supplied claims are outside this result
+        identities. Parsing a serialized result must not rerun that computation;
+        independently supplied claims are outside this result
         contract.
         """
         try:
@@ -288,8 +299,17 @@ __all__ = [
     "AffineChartResult",
     "AffineCurveRequest",
     "AffineCurveResult",
+    "IncompleteProjectivePlaneCurveSingularityComputation",
+    "PositiveDimensionalProjectivePlaneCurveSingularLocus",
     "ProjectiveClosureRequest",
     "ProjectiveClosureResult",
+    "ProjectivePlaneCurveFirstJet",
+    "ProjectivePlaneCurveSingularPointRecord",
+    "ProjectivePlaneCurveSingularityBudget",
+    "ProjectivePlaneCurveSingularityProfile",
+    "ProjectivePlaneCurveSingularityRequest",
     "RationalConicParametrizationRequest",
     "RationalConicParametrizationResult",
+    "SmoothProjectivePlaneCurve",
+    "ZeroDimensionalProjectivePlaneCurveSingularLocus",
 ]

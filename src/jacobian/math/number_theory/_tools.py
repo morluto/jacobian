@@ -8,6 +8,7 @@ from jacobian.math.number_theory._divisibility import DIVISIBILITY_OPERATIONS
 from jacobian.math.number_theory._divisibility_graph import (
     DIVISIBILITY_GRAPH_OPERATION,
 )
+from jacobian.math.number_theory._divisibility_poset import DIVISIBILITY_POSET_OPERATION
 from jacobian.math.number_theory._divisibility_profiles import (
     DIVISIBILITY_PROFILE_OPERATIONS,
 )
@@ -19,6 +20,7 @@ from jacobian.math.number_theory._modular import MODULAR_OPERATIONS
 from jacobian.math.number_theory._modular_identity import MODULAR_IDENTITY_OPERATIONS
 from jacobian.math.number_theory._periodic import PERIODIC_CONGRUENCE_OPERATIONS
 from jacobian.math.number_theory._powerful import POWERFUL_NUMBER_OPERATION
+from jacobian.math.number_theory._powerful_enumerate import POWERFUL_ENUMERATE_OPERATION
 from jacobian.math.number_theory._preimage_ops import PREIMAGE_OPERATIONS
 from jacobian.math.number_theory._prime_shifts import PRIME_SHIFT_OPERATION
 from jacobian.math.number_theory._primes import PRIME_OPERATIONS
@@ -30,6 +32,8 @@ TOOLS: MathTools = (
     *DIVISIBILITY_OPERATIONS,
     *PRIME_OPERATIONS,
     POWERFUL_NUMBER_OPERATION,
+    DIVISIBILITY_POSET_OPERATION,
+    POWERFUL_ENUMERATE_OPERATION,
     *MODULAR_OPERATIONS,
     *PERIODIC_CONGRUENCE_OPERATIONS,
     *MODULAR_IDENTITY_OPERATIONS,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from itertools import combinations
-from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -218,15 +217,18 @@ def test_single_member_normalization_is_charged(
         construct_binary_union_relation(source)
 
 
-def test_output_admission_includes_the_retained_source(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source = _source(((0,), (1,), (0, 1)), ground_set_size=2)
-    source_bytes = len(canonicalize_json(source.model_dump(mode="json")))
-    monkeypatch.setattr(
-        "jacobian.math.combinatorics.extremal_sets.operations.CanonicalLimits",
-        lambda: SimpleNamespace(max_output_bytes=source_bytes + 16),
+def test_real_serializer_overflow_is_a_domain_rejection() -> None:
+    member_size = 154_200
+    base = 10**15
+    left = tuple(base + 2 * index for index in range(member_size))
+    right = tuple(base + 2 * index + 1 for index in range(member_size))
+    union = tuple(range(base, base + 2 * member_size))
+    source = IndexedFiniteSetFamily(
+        ground_set_size=base + 2 * member_size + 1,
+        members=(left, right, union),
     )
+    source_bytes = len(canonicalize_json(source.model_dump(mode="json")))
+    assert source_bytes < 10 * 1024 * 1024
 
     with pytest.raises(OperationDomainValidationError, match="retained-source"):
         construct_binary_union_relation(source)

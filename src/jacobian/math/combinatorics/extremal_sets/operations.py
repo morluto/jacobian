@@ -107,7 +107,7 @@ def _canonical_source(
 
 
 def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:
-    membership_work = max(1, len(source.members) - 1) * sum(
+    membership_work = (len(source.members) + 1) * sum(
         len(member) for member in source.members
     )
     if membership_work > MAX_BINARY_UNION_MEMBERSHIP_WORK:

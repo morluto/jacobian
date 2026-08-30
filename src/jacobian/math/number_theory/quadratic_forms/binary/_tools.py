@@ -17,6 +17,8 @@ from jacobian.math.number_theory.quadratic_forms.binary import operations as nat
 from jacobian.math.number_theory.quadratic_forms.binary._models import (
     BinaryQuadraticFormCheckRequest,
     BinaryQuadraticFormCheckResult,
+    BinaryQuadraticFormClassComposeRequest,
+    BinaryQuadraticFormClassCompositionResult,
     BinaryQuadraticFormEvaluateRequest,
     BinaryQuadraticFormEvaluateResult,
     BinaryQuadraticFormProperEquivRequest,
@@ -101,6 +103,21 @@ def compute_representations(
     )
 
 
+def compute_class_compose(
+    request: BinaryQuadraticFormClassComposeRequest,
+) -> BinaryQuadraticFormClassCompositionResult:
+    if request.first.discriminant != request.second.discriminant:
+        raise OperationDomainValidationError(
+            location=("first", "second"),
+            code="integral_binary_quadratic_form.class_discriminant_mismatch",
+            message="proper form classes must have the same discriminant",
+        )
+    return _admit(
+        lambda: native.compose_classes(request.first, request.second),
+        ("first", "second"),
+    )
+
+
 def _op[
     RequestT: StrictModel,
     ResultT: StrictModel,
@@ -127,6 +144,32 @@ def _op[
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "number_theory.binary_quadratic_form.class_compose.compute",
+        "Compose proper binary quadratic-form classes",
+        "Compute the exact proper-class product of two canonical Gauss-reduced "
+        "primitive positive-definite binary quadratic forms of one discriminant. "
+        "Return a direct composed form, its bilinear composition map, and the "
+        "canonical reduced product with an SL_2(Z) reduction witness.",
+        BinaryQuadraticFormClassComposeRequest,
+        BinaryQuadraticFormClassCompositionResult,
+        compute_class_compose,
+        "number-theory",
+        "quadratic-forms",
+        "exact",
+        examples=(
+            example(
+                "compose_classes_discriminant_neg_23",
+                "Compose the class [2,-1,3] with itself at discriminant -23; "
+                "both inputs must be canonical reduced representatives within "
+                "the reduced-class scan envelope.",
+                {
+                    "first": {"representative": {"a": 2, "b": -1, "c": 3}},
+                    "second": {"representative": {"a": 2, "b": -1, "c": 3}},
+                },
+            ),
+        ),
+    ),
     _op(
         "number_theory.binary_quadratic_form.check",
         "Check a binary quadratic form",

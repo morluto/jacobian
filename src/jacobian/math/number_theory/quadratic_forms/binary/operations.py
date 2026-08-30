@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from jacobian.math.number_theory.quadratic_forms.binary._kernel import (
+    compose as _compose,
+)
+from jacobian.math.number_theory.quadratic_forms.binary._kernel import (
     gcd as _gcd,
 )
 from jacobian.math.number_theory.quadratic_forms.binary._kernel import (
@@ -17,8 +20,11 @@ from jacobian.math.number_theory.quadratic_forms.binary._kernel import (
 from jacobian.math.number_theory.quadratic_forms.binary._models import (
     MAX_COEFFICIENT,
     BinaryQuadraticFormCheckResult,
+    BinaryQuadraticFormClassCompositionResult,
     BinaryQuadraticFormRepresentation,
+    DirectBinaryQuadraticCompositionMap,
     PrimitivePositiveDefiniteBinaryQuadraticForm,
+    ProperBinaryQuadraticFormClass,
     ProperEquivalenceResult,
     _require_evaluated_value_bound,
     _require_reduced_class_search_budget,
@@ -127,13 +133,13 @@ def proper_equivalence(
 
 def reduced_classes(
     discriminant: int,
-) -> tuple[PrimitivePositiveDefiniteBinaryQuadraticForm, ...]:
+) -> tuple[ProperBinaryQuadraticFormClass, ...]:
     """Enumerate all reduced primitive classes of a discriminant."""
     from math import isqrt
 
     _require_reduced_class_search_budget(discriminant)
     a_bound = isqrt(abs(discriminant) // 3) + 1
-    classes: list[PrimitivePositiveDefiniteBinaryQuadraticForm] = []
+    classes: list[ProperBinaryQuadraticFormClass] = []
     for a in range(1, a_bound + 1):
         for b in range(-a, a + 1):
             numerator = b * b - discriminant
@@ -144,9 +150,50 @@ def reduced_classes(
                 continue
             if _check_reduced(a, b, c):
                 classes.append(
-                    PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c)
+                    ProperBinaryQuadraticFormClass(
+                        representative=PrimitivePositiveDefiniteBinaryQuadraticForm(
+                            a=a, b=b, c=c
+                        )
+                    )
                 )
-    return tuple(sorted(classes, key=lambda form: (form.a, form.b, form.c)))
+    return tuple(
+        sorted(
+            classes,
+            key=lambda form_class: (
+                form_class.representative.a,
+                form_class.representative.b,
+                form_class.representative.c,
+            ),
+        )
+    )
+
+
+def compose_classes(
+    first: ProperBinaryQuadraticFormClass,
+    second: ProperBinaryQuadraticFormClass,
+) -> BinaryQuadraticFormClassCompositionResult:
+    """Return the exact proper-class product with direct-composition evidence."""
+    if first.discriminant != second.discriminant:
+        raise ValueError("proper form classes must have the same discriminant")
+    _require_reduced_class_search_budget(first.discriminant)
+    direct = _compose(first.representative, second.representative)
+    composed_form = PrimitivePositiveDefiniteBinaryQuadraticForm(
+        a=direct.a, b=direct.b, c=direct.c
+    )
+    reduced, matrix = reduction(composed_form)
+    product = ProperBinaryQuadraticFormClass(representative=reduced)
+    composition_map = DirectBinaryQuadraticCompositionMap(
+        x_coefficients=direct.x_coefficients,
+        y_coefficients=direct.y_coefficients,
+    )
+    return BinaryQuadraticFormClassCompositionResult._from_kernel(
+        first=first,
+        second=second,
+        composed_form=composed_form,
+        direct_composition_map=composition_map,
+        product=product,
+        reduction_matrix=matrix,
+    )
 
 
 def representations(
@@ -158,6 +205,7 @@ def representations(
 
 __all__ = [
     "check",
+    "compose_classes",
     "evaluate",
     "proper_equivalence",
     "reduced_classes",

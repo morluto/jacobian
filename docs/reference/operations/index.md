@@ -12,4 +12,4 @@ that need more context than an operation card:
 
 - [Combinatorics on words](words/index.md)
 - [SAT and SMT](sat-smt/index.md)
-- [Exact rational quadratic forms](quadratic-forms.md)
+- [Exact quadratic forms](quadratic-forms.md)

@@ -9,29 +9,38 @@ from jacobian.math.number_theory.quadratic_forms.binary._models import (
     MAX_REPRESENTATION_TARGET,
     MAX_REPRESENTATION_Y_CANDIDATES,
     BinaryQuadraticFormCheckRequest,
+    BinaryQuadraticFormClassComposeRequest,
+    BinaryQuadraticFormClassCompositionResult,
     BinaryQuadraticFormEvaluateRequest,
     BinaryQuadraticFormProperEquivRequest,
     BinaryQuadraticFormReducedClassesRequest,
     BinaryQuadraticFormReduceRequest,
     BinaryQuadraticFormRepresentationsRequest,
     PrimitivePositiveDefiniteBinaryQuadraticForm,
+    ProperBinaryQuadraticFormClass,
     _representation_y_bound,
 )
 from jacobian.math.number_theory.quadratic_forms.binary._tools import (
     TOOLS,
     compute_check,
+    compute_class_compose,
     compute_evaluate,
     compute_proper_equivalence,
     compute_reduce,
     compute_reduced_classes,
     compute_representations,
 )
+from jacobian.math.number_theory.quadratic_forms.binary.operations import reduced_form
 
 
 def _positive_form(
     a: int, b: int, c: int
 ) -> PrimitivePositiveDefiniteBinaryQuadraticForm:
     return PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c)
+
+
+def _proper_class(a: int, b: int, c: int) -> ProperBinaryQuadraticFormClass:
+    return ProperBinaryQuadraticFormClass(representative=_positive_form(a, b, c))
 
 
 def _assert_error_type(
@@ -292,14 +301,14 @@ class TestReducedClasses:
             BinaryQuadraticFormReducedClassesRequest(discriminant=-3)
         )
         assert result.class_number == 1
-        assert result.classes == (_positive_form(1, 1, 1),)
+        assert result.classes == (_proper_class(1, 1, 1),)
 
     def test_disc_neg_4(self) -> None:
         result = compute_reduced_classes(
             BinaryQuadraticFormReducedClassesRequest(discriminant=-4)
         )
         assert result.class_number == 1
-        assert result.classes == (_positive_form(1, 0, 1),)
+        assert result.classes == (_proper_class(1, 0, 1),)
 
     def test_disc_neg_23(self) -> None:
         result = compute_reduced_classes(
@@ -307,8 +316,8 @@ class TestReducedClasses:
         )
         assert result.class_number == 3
         # Verify all classes have the correct discriminant
-        for form in result.classes:
-            assert form.discriminant == -23
+        for form_class in result.classes:
+            assert form_class.discriminant == -23
 
     def test_disc_neg_20(self) -> None:
         result = compute_reduced_classes(
@@ -347,7 +356,8 @@ class TestReducedClasses:
             result = compute_reduced_classes(
                 BinaryQuadraticFormReducedClassesRequest(discriminant=D)
             )
-            for form in result.classes:
+            for form_class in result.classes:
+                form = form_class.representative
                 assert form.a > 0 and form.c > 0
                 assert abs(form.b) <= form.a
                 assert form.a <= form.c
@@ -355,6 +365,220 @@ class TestReducedClasses:
                     assert form.b >= 0
                 if form.a == form.c:
                     assert form.b >= 0
+
+
+class TestProperClassComposition:
+    @staticmethod
+    def _evaluate(
+        form: PrimitivePositiveDefiniteBinaryQuadraticForm, x: int, y: int
+    ) -> int:
+        return form.a * x * x + form.b * x * y + form.c * y * y
+
+    def _assert_direct_identity(
+        self,
+        first: ProperBinaryQuadraticFormClass,
+        second: ProperBinaryQuadraticFormClass,
+    ) -> None:
+        result = compute_class_compose(
+            BinaryQuadraticFormClassComposeRequest(first=first, second=second)
+        )
+        x_coefficients = result.direct_composition_map.x_coefficients
+        y_coefficients = result.direct_composition_map.y_coefficients
+        for x1 in range(-2, 3):
+            for y1 in range(-2, 3):
+                for x2 in range(-2, 3):
+                    for y2 in range(-2, 3):
+                        monomials = (x1 * x2, x1 * y2, y1 * x2, y1 * y2)
+                        x = sum(
+                            coefficient * monomial
+                            for coefficient, monomial in zip(
+                                x_coefficients, monomials, strict=True
+                            )
+                        )
+                        y = sum(
+                            coefficient * monomial
+                            for coefficient, monomial in zip(
+                                y_coefficients, monomials, strict=True
+                            )
+                        )
+                        assert self._evaluate(result.composed_form, x, y) == (
+                            self._evaluate(first.representative, x1, y1)
+                            * self._evaluate(second.representative, x2, y2)
+                        )
+        p, q = result.reduction_matrix[0]
+        r, s = result.reduction_matrix[1]
+        assert p * s - q * r == 1
+        source = result.composed_form
+        transformed = _positive_form(
+            source.a * p * p + source.b * p * r + source.c * r * r,
+            2 * source.a * p * q + source.b * (p * s + q * r) + 2 * source.c * r * s,
+            source.a * q * q + source.b * q * s + source.c * s * s,
+        )
+        assert transformed == result.product.representative
+        assert result.product.representative.discriminant == first.discriminant
+
+    def test_discriminant_neg_23_generator_squares_to_inverse(self) -> None:
+        generator = _proper_class(2, -1, 3)
+
+        result = compute_class_compose(
+            BinaryQuadraticFormClassComposeRequest(first=generator, second=generator)
+        )
+
+        assert result.composed_form == _positive_form(4, 3, 2)
+        assert result.product == _proper_class(2, 1, 3)
+        self._assert_direct_identity(generator, generator)
+
+    def test_common_divisor_case_squares_to_principal_class(self) -> None:
+        nonprincipal = _proper_class(2, 2, 3)
+
+        result = compute_class_compose(
+            BinaryQuadraticFormClassComposeRequest(
+                first=nonprincipal, second=nonprincipal
+            )
+        )
+
+        assert result.composed_form == _positive_form(1, 0, 5)
+        assert result.product == _proper_class(1, 0, 5)
+        self._assert_direct_identity(nonprincipal, nonprincipal)
+
+    @pytest.mark.parametrize("discriminant", [-20, -23, -31, -47, -56, -87])
+    def test_complete_small_class_sets_form_an_associative_commutative_group(
+        self, discriminant: int
+    ) -> None:
+        classes = compute_reduced_classes(
+            BinaryQuadraticFormReducedClassesRequest(discriminant=discriminant)
+        ).classes
+        principal = _proper_class(
+            1,
+            discriminant % 2,
+            ((discriminant % 2) - discriminant) // 4,
+        )
+
+        def product(
+            first: ProperBinaryQuadraticFormClass,
+            second: ProperBinaryQuadraticFormClass,
+        ) -> ProperBinaryQuadraticFormClass:
+            return compute_class_compose(
+                BinaryQuadraticFormClassComposeRequest(first=first, second=second)
+            ).product
+
+        for first in classes:
+            assert product(principal, first) == first
+            assert product(first, principal) == first
+            inverse_representative = reduced_form(
+                _positive_form(
+                    first.representative.a,
+                    -first.representative.b,
+                    first.representative.c,
+                )
+            )
+            inverse = ProperBinaryQuadraticFormClass(
+                representative=inverse_representative
+            )
+            assert product(first, inverse) == principal
+            for second in classes:
+                assert product(first, second) == product(second, first)
+                assert product(first, second) in classes
+                for third in classes:
+                    assert product(product(first, second), third) == product(
+                        first, product(second, third)
+                    )
+
+    def test_reduced_class_output_serializes_into_composition_unchanged(self) -> None:
+        classes = compute_reduced_classes(
+            BinaryQuadraticFormReducedClassesRequest(discriminant=-23)
+        )
+        request = BinaryQuadraticFormClassComposeRequest.model_validate(
+            {
+                "first": classes.classes[1].model_dump(mode="json"),
+                "second": classes.classes[2].model_dump(mode="json"),
+            }
+        )
+
+        result = compute_class_compose(request)
+
+        assert result.product == classes.classes[0]
+
+    def test_composition_result_round_trips_with_all_source_bindings(self) -> None:
+        result = compute_class_compose(
+            BinaryQuadraticFormClassComposeRequest(
+                first=_proper_class(2, -1, 3),
+                second=_proper_class(2, -1, 3),
+            )
+        )
+
+        assert (
+            BinaryQuadraticFormClassCompositionResult.model_validate_json(
+                result.model_dump_json()
+            )
+            == result
+        )
+
+    def test_composition_result_rejects_a_different_direct_form_discriminant(
+        self,
+    ) -> None:
+        result = compute_class_compose(
+            BinaryQuadraticFormClassComposeRequest(
+                first=_proper_class(2, -1, 3),
+                second=_proper_class(2, -1, 3),
+            )
+        ).model_dump(mode="json")
+        result["composed_form"] = {"a": 1, "b": 0, "c": 1}
+
+        with pytest.raises(ValidationError, match="share one discriminant"):
+            BinaryQuadraticFormClassCompositionResult.model_validate(result)
+
+    def test_catalog_example_exercises_nontrivial_proper_class_product(self) -> None:
+        (tool,) = (
+            candidate
+            for candidate in TOOLS
+            if candidate.operation_id
+            == "number_theory.binary_quadratic_form.class_compose.compute"
+        )
+        request = tool.request_type.model_validate(tool.examples[0].input)
+
+        result = tool.run(request)
+
+        assert result.product == _proper_class(2, 1, 3)
+
+    def test_nonreduced_representative_is_not_a_proper_class_value(self) -> None:
+        with pytest.raises(ValidationError, match="canonical Gauss-reduced"):
+            ProperBinaryQuadraticFormClass(representative=_positive_form(5, 3, 1))
+
+    def test_different_discriminants_are_rejected_before_composition(self) -> None:
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            compute_class_compose(
+                BinaryQuadraticFormClassComposeRequest(
+                    first=_proper_class(1, 1, 1),
+                    second=_proper_class(1, 0, 1),
+                )
+            )
+        _assert_error_type(
+            exc_info,
+            "integral_binary_quadratic_form.class_discriminant_mismatch",
+        )
+
+    def test_composition_admits_exact_reduced_class_scan_boundary(self) -> None:
+        principal = _proper_class(1, 0, 7_203)
+
+        result = compute_class_compose(
+            BinaryQuadraticFormClassComposeRequest(first=principal, second=principal)
+        )
+
+        assert result.product == principal
+
+    def test_composition_rejects_discriminant_above_class_scan_budget(self) -> None:
+        principal = _proper_class(1, 0, 7_351)
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            compute_class_compose(
+                BinaryQuadraticFormClassComposeRequest(
+                    first=principal, second=principal
+                )
+            )
+        _assert_error_type(
+            exc_info,
+            "integral_binary_quadratic_form.reduced_class_candidate_budget",
+        )
 
 
 class TestRepresentations:

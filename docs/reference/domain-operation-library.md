@@ -2,9 +2,8 @@
 
 Every built-in operation is a direct typed mathematical function with one
 domain owner. Declaration modules export immutable tuples of
-`MathTool` values. MCP registration derives one direct typed tool from every
-entry; `math.find` reads the same catalog for semantic discovery. The
-transitional `math.run` path validates and executes the same declarations.
+`MathTool` values. `math.find` reads those entries and `math.run`
+validates then executes exactly one of them.
 
 The canonical operation path and ownership boundaries are defined in the
 [architecture](../explanation/architecture.md). A domain function may use a
@@ -75,6 +74,30 @@ The logic family illustrates the boundary. `sat.cnf.canonicalize` returns a
 canonical CNF value; `sat.assignment.check` and `sat.solve` accept that value
 directly. `smt.solve` accepts one bounded QF SMT-LIB query.
 
+## Codomain closure
+
+Before admitting an exact operation, verify that canonical public value types
+can represent every value in its advertised codomain. Each returned value must
+have a backend-independent identity, an explicit mathematical parent and
+interpretation when those affect its meaning, and enough information for exact
+reconstruction and producer-consumer composition. Mathematically distinct
+values must remain distinguishable after serialization.
+
+A backend expression or ambient symbol is not a public mathematical identity.
+Values that depend on a field, ring, module, coordinate system, embedding,
+analytic branch, orientation, or basis must carry that context or bind to a
+canonical domain-owned presentation of it. Evidence such as an isolating
+interval, isolating rectangle, certificate, or decomposition may establish a
+value's identity, but incidental choices of evidence must not create different
+canonical values.
+
+When the current value vocabulary cannot represent the complete codomain, add
+the missing domain-owned carrier first. Do not narrow an advertised complete
+result to representable cases, expose backend-relative expressions, collapse
+conjugate or branch-dependent values, or report completeness after omitting
+unrepresentable results. Intentional changes of parent or interpretation remain
+explicit typed maps.
+
 ## Implementation selection
 
 Choose the smallest operational surface that can establish the admitted
@@ -128,6 +151,7 @@ below for subtype trust, boundedness, a backend adapter, or a process boundary.
 ### Public operation contract
 
 - Semantic mathematical domain and postcondition:
+- Codomain closure and required parent, embedding, branch, or coordinate data:
 - Canonical public value type:
 - Result type:
 - Reconstruction or defining invariant:
@@ -222,6 +246,23 @@ known-answer, adversarial, and property-based fixtures. Independently supplied
 claims need an explicit bounded verifier only when a public consumer accepts
 those claims as theorem-bearing input.
 
+Validation and verification are separate responsibilities:
+
+| Boundary | Permitted work |
+| --- | --- |
+| Request parsing | Canonical shape, grammar, nesting, digit, and raw representation bounds |
+| Worker-output decoding | Strict codec, canonical scalar syntax, cardinality, and projection shape |
+| Result structural validation | Axis alignment, references, coverage, and discriminated-state consistency |
+| Trusted result construction | Owner-local `_from_kernel` construction after the kernel established the skipped invariants |
+| Ordinary result deserialization | Canonical structural parsing only; it does not authenticate mathematical truth |
+| Explicit verifier or tests | Declared bounded replay when a theorem-bearing input contract requires it |
+
+No ordinary boundary may factor, isolate roots, enumerate candidates, invoke a
+solver or backend, recompute a defining relation, or trigger a nested public
+validator that performs that work. A computed result is a trusted producer
+output. Public deserialization establishes its canonical representation, not a
+second proof of its mathematical postcondition.
+
 Public results describe mathematical meaning, not the implementation used to
 compute it. Do not expose a constant backend, method, algorithm, exactness,
 determinism, or verification field merely to narrate trusted execution. Retain
@@ -256,8 +297,9 @@ wrappers must not recompute the decision independently. A simple admission
 guard may return nothing on success. Do not introduce a plan class or module
 unless it carries information that a later phase genuinely consumes.
 
-When result construction needs to bypass semantic replay, expose one private
-owner-local factory such as ``_from_kernel``. It may use trusted construction
+Result construction uses one private owner-local factory such as
+``_from_kernel`` whenever public validation would replay semantic work. It may
+use trusted construction
 only after the kernel has established every invariant it skips. Pydantic result
 validators remain limited to structural, linearly bounded checks; they do not
 call a backend, enumerate a search space, invoke a solver, or recompute the

@@ -60,7 +60,10 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
         return edge_count * n * 2
     # The kernel tries each k-colouring in turn. Charge the complete finite
     # search tree rather than the graph's edge count alone.
-    return n * sum(k**n for k in range(1, n + 1))
+    colorings = 0
+    for k in range(1, n + 1):
+        colorings += k**n
+    return n * colorings
 
 
 def _admit_edge_deletion_profile(

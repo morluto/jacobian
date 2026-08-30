@@ -153,10 +153,14 @@ def _admit_eventual_hitting(
         (("num", result_height + 2), ("den", result_height + 2))
     )
     zero_probability_bytes = len(
-        encode_strict_json(CanonicalRational.from_fraction(Fraction(0)).model_dump(mode="json"))
+        encode_strict_json(
+            CanonicalRational.from_fraction(Fraction(0)).model_dump(mode="json")
+        )
     )
     one_probability_bytes = len(
-        encode_strict_json(CanonicalRational.from_fraction(Fraction(1)).model_dump(mode="json"))
+        encode_strict_json(
+            CanonicalRational.from_fraction(Fraction(1)).model_dump(mode="json")
+        )
     )
     probability_bytes = _json_array_sizes(
         [

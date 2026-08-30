@@ -1030,8 +1030,9 @@ def characteristic_polynomial_result(
     )
 
 
-def smith_normal_form_result(matrix: IntegerMatrix) -> SmithNormalForm:
-    _admit(_admit_exact_linear_matrix, matrix.entries)
+def _smith_normal_form_kernel(matrix: IntegerMatrix) -> SmithNormalForm:
+    """Compute Smith data for an owner-admitted canonical integer matrix."""
+
     from jacobian.math.matrices._flint import integer_smith_normal_form
 
     raw = integer_smith_normal_form(
@@ -1061,6 +1062,11 @@ def smith_normal_form_result(matrix: IntegerMatrix) -> SmithNormalForm:
         rank=rank_value,
         invariant_factors=tuple(format_canonical_integer(value) for value in factors),
     )
+
+
+def smith_normal_form_result(matrix: IntegerMatrix) -> SmithNormalForm:
+    _admit(_admit_exact_linear_matrix, matrix.entries)
+    return _smith_normal_form_kernel(matrix)
 
 
 def inverse_result(matrix: IntegerMatrix) -> MatrixInverseResult:

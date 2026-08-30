@@ -1,5 +1,22 @@
 # Polynomial operations
 
+## Rational polynomial ideals
+
+`polynomial.ideal.containment.decide` decides the directed relation
+`I subseteq J` in one exact ordered polynomial ring over `QQ`. Its computed
+result retains the source and target presentations and a source-ordered
+Gröbner normal-form ledger. A positive result covers every source generator;
+a negative result ends at the first nonzero normal form, which is an exact
+obstruction to containment.
+
+`polynomial.ideal.equality.decide` computes both directed ledgers under one
+request deadline and reports equality exactly when both containments hold.
+The conclusion therefore does not depend on generator order, redundant
+generators, or multiplication of generators by nonzero rational scalars.
+Both operations support `lex`, `grlex`, and `grevlex`; the selected order is
+retained because the normal-form witnesses depend on it even though the ideal
+relation does not.
+
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 The live catalog is the authoritative reference for installed polynomial

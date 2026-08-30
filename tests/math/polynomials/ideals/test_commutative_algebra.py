@@ -138,6 +138,8 @@ def _monomial_radical_oracle(
 
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
+        "polynomial.ideal.containment.decide",
+        "polynomial.ideal.equality.decide",
         "polynomial.ideal.radical.compute",
         "polynomial.ideal.radical_membership.decide",
         "polynomial.ideal.quotient.compute",

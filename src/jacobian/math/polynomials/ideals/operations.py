@@ -21,6 +21,10 @@ from jacobian.math.polynomials.ideals._models import (
     EliminationIdealResult,
     GroebnerBasisResult,
     IdealComputationBudget,
+    IdealContainmentLedger,
+    IdealContainmentResult,
+    IdealEqualityResult,
+    IdealExecutionOutcome,
     IdealMinimalPrimesResult,
     IdealNormalFormResult,
     IdealQuotientResult,
@@ -96,6 +100,17 @@ def _admit_quotient(
 ) -> None:
     _admit_source(dividend, label="dividend ideal")
     _admit_source(divisor, label="divisor ideal")
+
+
+def _admit_relation(
+    left: RationalPolynomialIdeal, right: RationalPolynomialIdeal
+) -> None:
+    _admit_source(left, label="left ideal")
+    _admit_source(right, label="right ideal")
+    if left.variables != right.variables:
+        raise _validation_error(
+            "ideal relation operands must use the same ordered ring"
+        )
 
 
 def _admit_minimal_primes(ideal: RationalPolynomialIdeal) -> None:
@@ -258,6 +273,52 @@ def main() -> None:
                     "remainder": converted.model_dump(mode="json"),
                 }
             )
+        elif mode == "ideal_relation":
+            right_gens = [
+                RationalPolynomial.model_validate(item)
+                for item in payload["right_generators"]
+            ]
+            right_exprs = [
+                rational_polynomial_to_sympy(generator).as_expr()
+                for generator in right_gens
+            ]
+            order = payload.get("order", "grevlex")
+            maximum_terms = payload["maximum_terms"]
+            aggregate_terms = 0
+
+            def ledger(
+                source_exprs: list[object], target_exprs: list[object]
+            ) -> dict:
+                nonlocal aggregate_terms
+                basis = sympy.groebner(
+                    target_exprs, *symbols, order=order, domain=sympy.QQ
+                )
+                normal_forms = []
+                obstruction = None
+                for index, source_expr in enumerate(source_exprs):
+                    _, remainder = basis.reduce(source_expr)
+                    converted = dump(remainder, variables, maximum_terms)
+                    aggregate_terms += len(converted["polynomial"]["terms"])
+                    if aggregate_terms > maximum_terms:
+                        raise ValueError(
+                            "the containment ledger exceeds the "
+                            f"{maximum_terms}-term aggregate operation budget"
+                        )
+                    normal_forms.append(converted)
+                    if remainder != 0:
+                        obstruction = index
+                        break
+                return {
+                    "contained": obstruction is None,
+                    "normal_forms": normal_forms,
+                    "first_obstruction_index": obstruction,
+                }
+
+            left_in_right = ledger(exprs, right_exprs)
+            response = {"status": "ok", "left_in_right": left_in_right}
+            if payload["mutual"]:
+                response["right_in_left"] = ledger(right_exprs, exprs)
+            _emit(response)
         elif mode == "verify_ideal_equality":
             claimed = [
                 RationalPolynomial.model_validate(item)
@@ -652,9 +713,108 @@ def ideal_saturation(
     )
 
 
+def _relation_ledger(payload: dict[str, Any]) -> IdealContainmentLedger:
+    return IdealContainmentLedger.model_validate(payload)
+
+
+def ideal_containment(
+    source: RationalPolynomialIdeal,
+    target: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> IdealContainmentResult:
+    """Decide ``source subseteq target`` with a source-ordered exact ledger."""
+
+    resource_budget = resource_budget or IdealComputationBudget()
+    _run_admission(lambda: _admit_relation(source, target))
+    payload = {
+        "mode": "ideal_relation",
+        "variables": list(source.variables),
+        "generators": [item.model_dump(mode="json") for item in source.generators],
+        "right_generators": [
+            item.model_dump(mode="json") for item in target.generators
+        ],
+        "order": monomial_order,
+        "maximum_terms": resource_budget.maximum_output_terms,
+        "mutual": False,
+    }
+    outcome: IdealExecutionOutcome
+    try:
+        result = _run_sympy_kernel(payload, resource_budget.wall_seconds)
+        ledger = _relation_ledger(result["left_in_right"])
+        return IdealContainmentResult._from_kernel(
+            source, target, ledger, monomial_order
+        )
+    except _SympyKernelTimeoutError:
+        outcome = "TIMEOUT"
+        detail = "ideal containment exceeded the enforced wall-time budget"
+    except _ResultLimitExceededError:
+        outcome = "LIMIT_EXCEEDED"
+        detail = "the exact containment ledger exceeds the declared result bound"
+    except (KeyError, TypeError, ValueError, _SympyKernelError):
+        outcome = "ERROR"
+        detail = "the bounded kernel failed without producing an exact containment"
+    return IdealContainmentResult(
+        source=source,
+        target=target,
+        outcome=outcome,
+        monomial_order=monomial_order,
+        detail=detail,
+    )
+
+
+def ideal_equality(
+    left: RationalPolynomialIdeal,
+    right: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> IdealEqualityResult:
+    """Decide equality by two ledgers computed under one request deadline."""
+
+    resource_budget = resource_budget or IdealComputationBudget()
+    _run_admission(lambda: _admit_relation(left, right))
+    payload = {
+        "mode": "ideal_relation",
+        "variables": list(left.variables),
+        "generators": [item.model_dump(mode="json") for item in left.generators],
+        "right_generators": [item.model_dump(mode="json") for item in right.generators],
+        "order": monomial_order,
+        "maximum_terms": resource_budget.maximum_output_terms,
+        "mutual": True,
+    }
+    outcome: IdealExecutionOutcome
+    try:
+        result = _run_sympy_kernel(payload, resource_budget.wall_seconds)
+        left_in_right = _relation_ledger(result["left_in_right"])
+        right_in_left = _relation_ledger(result["right_in_left"])
+        return IdealEqualityResult._from_kernel(
+            left, right, left_in_right, right_in_left, monomial_order
+        )
+    except _SympyKernelTimeoutError:
+        outcome = "TIMEOUT"
+        detail = "ideal equality exceeded the enforced wall-time budget"
+    except _ResultLimitExceededError:
+        outcome = "LIMIT_EXCEEDED"
+        detail = "the exact equality ledgers exceed the declared result bound"
+    except (KeyError, TypeError, ValueError, _SympyKernelError):
+        outcome = "ERROR"
+        detail = "the bounded kernel failed without producing an exact equality result"
+    return IdealEqualityResult(
+        left=left,
+        right=right,
+        outcome=outcome,
+        monomial_order=monomial_order,
+        detail=detail,
+    )
+
+
 __all__ = [
     "elimination_ideal",
     "groebner_basis",
+    "ideal_containment",
+    "ideal_equality",
     "ideal_minimal_primes",
     "ideal_normal_form",
     "ideal_quotient",

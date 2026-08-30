@@ -273,9 +273,19 @@ class MatrixRankRequest(_MatrixRequest):
 
     @classmethod
     def _require_raw_matrix_input(cls, value: object) -> None:
+        entries = value.get("entries") if isinstance(value, dict) else getattr(value, "entries", None)
+        has_coordinate_entries = isinstance(entries, (list, tuple)) and any(
+            isinstance(entry, dict)
+            and {"row", "column", "value"}.issubset(entry)
+            for entry in entries
+        )
         if isinstance(value, SparseRationalMatrix) or (
             isinstance(value, dict)
-            and ("row_count" in value or "column_count" in value)
+            and (
+                "row_count" in value
+                or "column_count" in value
+                or has_coordinate_entries
+            )
         ):
             _require_raw_sparse_matrix(value, label="matrix input")
             return

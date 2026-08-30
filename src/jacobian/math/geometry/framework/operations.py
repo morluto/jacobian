@@ -48,7 +48,7 @@ class _FrameworkAdmission:
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=location,
-        code=f"geometry.framework.{code}",
+        code=(code if code.startswith("geometry.framework.") else f"geometry.framework.{code}"),
         message=message,
     )
 
@@ -205,12 +205,15 @@ def _reserve_profile_output_bytes(
 def planar_rigidity_profile(
     configuration: PointConfiguration,
     graph: SimpleUndirectedGraph,
+    *,
+    enforce_transport_limit: bool = False,
 ) -> PlanarRigidityProfile:
     """Return the exact planar rigidity matrix and rational rank."""
 
     admission = _admit_framework(configuration, graph)
     matrix = _rigidity_matrix(admission)
-    _reserve_profile_output_bytes(configuration, graph, admission, matrix)
+    if enforce_transport_limit:
+        _reserve_profile_output_bytes(configuration, graph, admission, matrix)
     try:
         matrix_rank = rank_result(matrix)
     except OperationDomainValidationError as exc:

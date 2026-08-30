@@ -1195,20 +1195,25 @@ def rank_result(
     if isinstance(matrix, SparseRationalMatrix):
         plan = _admit(_admit_sparse_rank, matrix)
         if enforce_transport_limit:
-            _require_sparse_rank_transport_envelope(
-                matrix,
-                rank_bound=sum(
-                    min(len(component.rows), len(component.columns))
-                    for component in plan.components
-                ),
-                active_columns=tuple(
-                    sorted(
-                        column
+            try:
+                _require_sparse_rank_transport_envelope(
+                    matrix,
+                    rank_bound=sum(
+                        min(len(component.rows), len(component.columns))
                         for component in plan.components
-                        for column in component.columns
-                    )
-                ),
-            )
+                    ),
+                    active_columns=tuple(
+                        sorted(
+                            column
+                            for component in plan.components
+                            for column in component.columns
+                        )
+                    ),
+                )
+            except PydanticCustomError as exc:
+                raise OperationDomainValidationError(
+                    location=("matrix",), code=exc.type, message=exc.message()
+                ) from exc
         pivot_columns = _sympy_sparse_rank_pivots(plan)
     else:
         _admit(_admit_exact_linear_matrix, matrix.entries)

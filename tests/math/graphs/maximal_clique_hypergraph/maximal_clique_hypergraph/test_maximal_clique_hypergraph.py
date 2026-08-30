@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.maximal_clique_hypergraph._models import (
+    MaximalCliqueHypergraphRequest,
+)
 from jacobian.math.graphs.maximal_clique_hypergraph.operations import (
     construct_maximal_clique_hypergraph,
 )
@@ -57,3 +64,19 @@ def test_result_preserves_source() -> None:
     graph = _graph(["a", "b"], [["a", "b"]])
     result = construct_maximal_clique_hypergraph(graph)
     assert result.graph == graph
+
+
+def test_complete_nine_partite_family_is_rejected_before_enumeration() -> None:
+    vertices = [f"v{part}_{slot}" for part in range(9) for slot in range(3)]
+    edges = [
+        [left, right]
+        for left_index, left in enumerate(vertices)
+        for right in vertices[left_index + 1 :]
+        if left.split("_")[0] != right.split("_")[0]
+    ]
+    graph = _graph(vertices, edges)
+
+    with pytest.raises(OperationDomainValidationError, match="12000-edge"):
+        construct_maximal_clique_hypergraph(graph)
+    with pytest.raises(ValidationError, match="12000-edge"):
+        MaximalCliqueHypergraphRequest(graph=graph)

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import networkx as nx
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 from jacobian.math.graphs.maximal_clique_hypergraph._models import (
     MaximalCliqueHypergraphResult,
+    _maximal_clique_admission_error,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -23,6 +25,12 @@ def construct_maximal_clique_hypergraph(
     Uses NetworkX's Bron-Kerbosch with pivoting to find all maximal cliques.
     Only cliques of size >= 2 are retained (isolated vertices induce no edge).
     """
+    failure = _maximal_clique_admission_error(graph)
+    if failure is not None:
+        code, message = failure
+        raise OperationDomainValidationError(
+            location=("graph",), code=f"maximal_clique.{code}", message=message
+        )
     nx_graph: nx.Graph[str] = nx.Graph()
     for v in graph.vertices:
         nx_graph.add_node(v)

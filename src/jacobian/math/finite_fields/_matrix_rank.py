@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+)
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
@@ -35,7 +40,38 @@ _MATRIX: dict[str, object] = {
 
 def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
-    return matrix_rank(request.matrix)
+    matrix = request.matrix
+    try:
+        rank_bound = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
+        result_probe = encode_strict_json(
+            {
+                "matrix": matrix.model_dump(mode="json"),
+                "rank": rank_bound,
+                "pivot_rows": sorted(
+                    matrix.row_axis.labels,
+                    key=lambda label: len(encode_strict_json(label)),
+                    reverse=True,
+                )[:rank_bound],
+                "pivot_columns": sorted(
+                    matrix.column_axis.labels,
+                    key=lambda label: len(encode_strict_json(label)),
+                    reverse=True,
+                )[:rank_bound],
+            }
+        )
+    except CanonicalizationError as exc:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="finite_field.matrix_rank.result_bound",
+            message="matrix-rank result exceeds the canonical output bound",
+        ) from exc
+    if len(result_probe) > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="finite_field.matrix_rank.result_bound",
+            message="matrix-rank result exceeds the canonical output bound",
+        )
+    return matrix_rank(matrix)
 
 
 MATRIX_RANK_OPERATION = MathTool(

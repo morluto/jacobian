@@ -52,32 +52,6 @@ _PALEY_ORIENTATION: Literal["ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"] = (
 
 def matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankResult:
     """Return the exact rank certificate for an axis-bound finite-field matrix."""
-    try:
-        rank_bound = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
-        result_probe = encode_strict_json(
-            {
-                "matrix": matrix.model_dump(mode="json"),
-                "rank": rank_bound,
-                "pivot_rows": sorted(matrix.row_axis.labels, key=len, reverse=True)[
-                    :rank_bound
-                ],
-                "pivot_columns": sorted(
-                    matrix.column_axis.labels, key=len, reverse=True
-                )[:rank_bound],
-            }
-        )
-    except CanonicalizationError as exc:
-        raise OperationDomainValidationError(
-            location=("matrix",),
-            code="finite_field.matrix_rank.result_bound",
-            message="matrix-rank result exceeds the canonical output bound",
-        ) from exc
-    if len(result_probe) > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("matrix",),
-            code="finite_field.matrix_rank.result_bound",
-            message="matrix-rank result exceeds the canonical output bound",
-        )
     data = compute_matrix_rank(matrix)
     return MatrixRankResult(
         matrix=matrix,

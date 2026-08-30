@@ -53,6 +53,27 @@ def matrix_rank(matrix: AxisBoundMatrix):
     """Return the exact rank certificate for an axis-bound finite-field matrix."""
     from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
 
+    try:
+        result_probe = encode_strict_json(
+            {
+                "matrix": matrix.model_dump(mode="json"),
+                "rank": min(len(matrix.row_axis.labels), len(matrix.column_axis.labels)),
+                "pivot_rows": list(matrix.row_axis.labels),
+                "pivot_columns": list(matrix.column_axis.labels),
+            }
+        )
+    except CanonicalizationError as exc:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="finite_field.matrix_rank.result_bound",
+            message="matrix-rank result exceeds the canonical output bound",
+        ) from exc
+    if len(result_probe) > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="finite_field.matrix_rank.result_bound",
+            message="matrix-rank result exceeds the canonical output bound",
+        )
     data = compute_matrix_rank(matrix)
     return MatrixRankResult(
         matrix=matrix,

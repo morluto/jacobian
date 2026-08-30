@@ -93,3 +93,10 @@ def test_worst_case_output_is_rejected_before_product_construction() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="output bound"):
         compute_product_representation_profile(left, right)
+
+
+def test_large_operands_are_rejected_before_integer_parsing() -> None:
+    operand = "9" * 600_001
+
+    with pytest.raises(OperationDomainValidationError, match="digit work bound"):
+        compute_product_representation_profile(_set([operand]), _set([operand]))

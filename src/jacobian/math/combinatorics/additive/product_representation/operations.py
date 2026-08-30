@@ -18,6 +18,11 @@ from jacobian.math.combinatorics.finite_structures.sets._models import FiniteInt
 __all__ = ["compute_product_representation_profile"]
 
 MAX_PRODUCT_REPRESENTATION_PAIRS = 100_000
+# Parsing and multiplying decimal integers is work proportional to their
+# operand widths.  Bound that work independently of the pair and wire limits:
+# a single pair must not turn a large-but-serializable value into an
+# effectively unbounded native call.
+MAX_PRODUCT_REPRESENTATION_DIGIT_WORK = 10_000_000_000
 _RESULT_ENTRY_OVERHEAD_BYTES = 64
 
 
@@ -64,6 +69,19 @@ def _admit_product_representation(
             location=("left", "right"),
             code="additive.product_representation_output_exceeded",
             message="complete product representation exceeds the canonical output bound",
+        )
+    # Decimal multiplication is quadratic in operand width for the native
+    # integers used here.  Apply this independent work bound before parsing
+    # any caller-supplied value into a Python integer.
+    digit_work = pair_count * maximum_product_digits**2
+    if digit_work > MAX_PRODUCT_REPRESENTATION_DIGIT_WORK:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="additive.product_representation_digit_work_exceeded",
+            message=(
+                "product representation arithmetic exceeds the "
+                f"{MAX_PRODUCT_REPRESENTATION_DIGIT_WORK}-unit digit work bound"
+            ),
         )
 
 

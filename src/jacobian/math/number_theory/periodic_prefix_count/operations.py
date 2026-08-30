@@ -31,9 +31,11 @@ __all__ = ["compute_periodic_union_prefix_count"]
 MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
-def _reject(code: str, message: str) -> NoReturn:
+def _reject(
+    code: str, message: str, *, location: tuple[str | int, ...] = ("source",)
+) -> NoReturn:
     raise OperationDomainValidationError(
-        location=("source",),
+        location=location,
         code=f"number_theory.periodic_prefix.{code}",
         message=message,
     )
@@ -101,13 +103,14 @@ def _admit_source(source: PeriodicCongruenceUnionSource, cutoff: int) -> _Execut
     if not isinstance(source, PeriodicCongruenceUnionSource):
         _reject("invalid_source", "source must be a canonical periodic union")
     if isinstance(cutoff, bool) or not isinstance(cutoff, int):
-        _reject("invalid_cutoff", "cutoff must be a strict integer")
+        _reject("invalid_cutoff", "cutoff must be a strict integer", location=("cutoff",))
     if cutoff < 0:
-        _reject("negative_cutoff", "cutoff must be nonnegative")
+        _reject("negative_cutoff", "cutoff must be nonnegative", location=("cutoff",))
     if cutoff > 10**MAX_PREFIX_CUTOFF_DIGITS - 1:
         _reject(
             "cutoff_digit_bound",
             f"cutoff must have at most {MAX_PREFIX_CUTOFF_DIGITS} digits",
+            location=("cutoff",),
         )
     try:
         plan = require_admitted_periodic_source(source)

@@ -1,14 +1,17 @@
 """Typed contracts for the periodic union prefix count operation."""
 
-from typing import Annotated
+from math import lcm
+from typing import Annotated, Self
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits
 from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceUnionSource,
+    PeriodicNonnegativeInteger,
+    PeriodicPositiveInteger,
 )
 
 # Prefix arithmetic is scalar and does not inherit the 256-digit period bound;
@@ -42,10 +45,43 @@ class PeriodicUnionPrefixCountResult(StrictModel):
     """The exact count of integers in [1, cutoff] belonging to the periodic set."""
 
     source: PeriodicCongruenceUnionSource
-    cutoff: CanonicalInteger
-    common_period: CanonicalInteger
-    occupied_count: CanonicalInteger
-    count: CanonicalInteger
+    cutoff: PeriodicPrefixCutoff
+    common_period: PeriodicPositiveInteger
+    occupied_count: PeriodicNonnegativeInteger
+    count: PeriodicNonnegativeInteger
+
+    @model_validator(mode="after")
+    def require_count_invariants(self) -> Self:
+        cutoff = int(self.cutoff)
+        period = int(self.common_period)
+        occupied = int(self.occupied_count)
+        count = int(self.count)
+        source_period = lcm(
+            *(int(subset.modulus) for subset in self.source.subsets)
+        )
+        if period != source_period:
+            raise PydanticCustomError(
+                "number_theory.periodic_prefix.period_mismatch",
+                "common_period must equal the source common period",
+            )
+        if occupied > period:
+            raise PydanticCustomError(
+                "number_theory.periodic_prefix.occupied_count_out_of_range",
+                "occupied_count must lie between 0 and common_period",
+            )
+        if count > cutoff:
+            raise PydanticCustomError(
+                "number_theory.periodic_prefix.count_out_of_range",
+                "count must lie between 0 and cutoff",
+            )
+        remainder = cutoff % period
+        partial = count - (cutoff // period) * occupied
+        if not 0 <= partial <= remainder:
+            raise PydanticCustomError(
+                "number_theory.periodic_prefix.count_identity_mismatch",
+                "count must decompose into full periods and a bounded partial period",
+            )
+        return self
 
 
 __all__ = [

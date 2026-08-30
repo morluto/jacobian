@@ -99,6 +99,25 @@ def test_worker_setup_consumes_the_inherited_absolute_deadline(
         _run_smith(time.monotonic() + 0.1)
 
 
+def test_launch_race_reports_typed_timeout_before_process_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter((9.0, 10.0))
+    launched = False
+
+    def forbidden_launch(*args: Any, **kwargs: Any) -> Any:
+        nonlocal launched
+        launched = True
+        raise AssertionError("expired allowance reached the process supervisor")
+
+    monkeypatch.setattr(time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr("jacobian.process.run_bounded_process", forbidden_launch)
+
+    with pytest.raises(OperationExecutionTimeoutError, match="before launching"):
+        _run_smith(10.0)
+    assert not launched
+
+
 def test_worker_projection_is_bound_to_the_admitted_source() -> None:
     result = _run_smith(time.monotonic() + 20)
 

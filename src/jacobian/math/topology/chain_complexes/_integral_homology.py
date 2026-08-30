@@ -21,7 +21,12 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+    parse_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.certified_snf.operations import (
     Matrix,
@@ -94,8 +99,9 @@ class IntegralHomologyExecutionPlan:
     parse_work: int
     square_zero_work: int
     smith_work: int
-    reconstruction_work: int
+    result_construction_work: int
     output_scalar_count: int
+    output_byte_bound: int
     total_work: int
     deadline: float
 
@@ -145,25 +151,54 @@ def _matrix_bits(matrix: Matrix) -> int:
     )
 
 
-def _include_smith_postcheck_bound(
+def _fraction_free_inverse_work(size: int) -> int:
+    """Bound scalar arithmetic in SymPy's fraction-free inverse path.
+
+    ``DomainMatrix.inv_den(method="rref")`` row-reduces an ``n x 2n``
+    augmented matrix.  At each of at most ``n`` pivots, scanning and updating
+    every other row touches at most ``2n`` entries with a multiply, subtract,
+    and exact division.  The factor below also covers pivot search, slicing,
+    and dense conversion.
+    """
+
+    return 8 * size**3 + 8 * size**2 + 1
+
+
+def _determinant_work(size: int) -> int:
+    """Conservatively price one maintained exact determinant computation."""
+
+    return 4 * size**4 + 8 * size**2 + 1
+
+
+def _maintained_worker_projection_work(rows: int, columns: int) -> int:
+    """Price work executed around the maintained Smith decomposition.
+
+    The Smith recurrence itself is charged by the core height functions.  A
+    general worker additionally computes two exact determinant signs, obtains
+    the two inverses needed for homology coordinates with fraction-free RREF,
+    and converts a bounded projection across the process boundary.
+    """
+
+    projected_scalars = 2 * rows * columns + 3 * rows * rows + 3 * columns * columns
+    return (
+        _fraction_free_inverse_work(rows)
+        + _fraction_free_inverse_work(columns)
+        + _determinant_work(rows)
+        + _determinant_work(columns)
+        + 8 * (projected_scalars + rows + columns + 1)
+    )
+
+
+def _include_maintained_worker_bound(
     bound: SmithHeightBound,
     *,
     rows: int,
     columns: int,
-    input_bits: int,
 ) -> SmithHeightBound:
-    """Include ``smith_reduce`` reconstruction and determinant checks.
+    """Include the actual inverse, determinant, and projection phases."""
 
-    The maintained primitive verifies ``D = U A V`` and both unimodular
-    determinants after SymPy returns. Matrix-product heights add operand
-    heights and the inner-dimension sum; determinant intermediates are bounded
-    by the Leibniz/Hadamard envelope already used for inverse cofactors.
-    """
-
-    left_source_bits = _add_bits(_ceil_log2(rows), bound.left_bits, input_bits, 1)
-    reconstruction_bits = _add_bits(
-        _ceil_log2(columns), left_source_bits, bound.right_bits, 1
-    )
+    left_inverse_bits = _inverse_unimodular_bits(rows, bound.left_bits)
+    right_inverse_bits = _inverse_unimodular_bits(columns, bound.right_bits)
     left_determinant_bits = _add_bits(rows * bound.left_bits, _factorial_bits(rows), 1)
     right_determinant_bits = _add_bits(
         columns * bound.right_bits, _factorial_bits(columns), 1
@@ -174,11 +209,14 @@ def _include_smith_postcheck_bound(
         diagonal_bits=bound.diagonal_bits,
         intermediate_bits=max(
             bound.intermediate_bits,
-            reconstruction_bits,
+            left_inverse_bits,
+            right_inverse_bits,
             left_determinant_bits,
             right_determinant_bits,
         ),
-        work_units=bound.work_units,
+        work_units=(
+            bound.work_units + _maintained_worker_projection_work(rows, columns)
+        ),
         transformations_are_identity=bound.transformations_are_identity,
     )
 
@@ -203,6 +241,14 @@ def _is_positive_smith_diagonal(matrix: Matrix, *, rows: int, columns: int) -> b
     )
 
 
+def _maintained_smith_structural_work(rows: int, columns: int) -> int:
+    operation_cells = rows * columns + rows * rows + columns * columns
+    pivot_scans = sum(
+        (rows - pivot) * (columns - pivot) for pivot in range(min(rows, columns))
+    )
+    return 8 * (operation_cells + 1) + pivot_scans
+
+
 def _one_dimensional_smith_bound(
     rows: int, columns: int, input_bits: int
 ) -> SmithHeightBound:
@@ -217,7 +263,11 @@ def _one_dimensional_smith_bound(
 
     length = max(rows, columns)
     transform_bits = _add_bits(length * (input_bits + 1), _ceil_log2(length + 1))
-    work = max(1, length - 1) * max(1, input_bits) * max(1, length)
+    operation_cells = rows * columns + rows * rows + columns * columns
+    updates = max(1, length - 1) * (input_bits + 1)
+    work = _maintained_smith_structural_work(rows, columns) + 12 * updates * max(
+        1, operation_cells
+    )
     return SmithHeightBound(
         left_bits=transform_bits if columns == 1 else 1,
         right_bits=transform_bits if rows == 1 else 1,
@@ -260,7 +310,7 @@ def _general_smith_bound(
             work_units=MAX_INTEGRAL_HOMOLOGY_WORK_UNITS + 1,
         )
 
-    recursive = _smith_height_bound_from_shape(
+    recursive = _smith_core_bound_from_shape(
         rows - 1,
         columns - 1,
         cleared_bits,
@@ -279,8 +329,9 @@ def _general_smith_bound(
     operation_cells = rows * columns + rows * rows + columns * columns
     work = (
         recursive.work_units
-        + updates * max(1, operation_cells)
-        + repairs * 5 * max(1, operation_cells)
+        + _maintained_smith_structural_work(rows, columns)
+        + 12 * updates * max(1, operation_cells)
+        + 60 * repairs * max(1, operation_cells)
     )
     return SmithHeightBound(
         left_bits=left_bits,
@@ -313,7 +364,7 @@ def _small_ternary_smith_bound(
     Hadamard's determinant bound supplies ``factor_bits`` below.
     """
 
-    recursive = _smith_height_bound_from_shape(rows - 1, columns - 1, 2)
+    recursive = _smith_core_bound_from_shape(rows - 1, columns - 1, 2)
     product_bits = _ceil_log2(max(rows, columns))
     left_bits = _add_bits(1, recursive.left_bits, product_bits)
     right_bits = _add_bits(1, recursive.right_bits, product_bits)
@@ -328,8 +379,9 @@ def _small_ternary_smith_bound(
     operation_cells = rows * columns + rows * rows + columns * columns
     work = (
         recursive.work_units
-        + (rows + columns) * max(1, operation_cells)
-        + repairs * 5 * max(1, operation_cells)
+        + _maintained_smith_structural_work(rows, columns)
+        + 12 * (rows + columns) * max(1, operation_cells)
+        + 60 * repairs * max(1, operation_cells)
     )
     return SmithHeightBound(
         left_bits=left_bits,
@@ -340,7 +392,7 @@ def _small_ternary_smith_bound(
     )
 
 
-def _smith_height_bound_from_shape(
+def _smith_core_bound_from_shape(
     rows: int,
     columns: int,
     input_bits: int,
@@ -353,11 +405,18 @@ def _smith_height_bound_from_shape(
         core = _small_ternary_smith_bound(rows, columns)
     else:
         core = _general_smith_bound(rows, columns, input_bits)
-    return _include_smith_postcheck_bound(
-        core,
+    return core
+
+
+def _smith_height_bound_from_shape(
+    rows: int,
+    columns: int,
+    input_bits: int,
+) -> SmithHeightBound:
+    return _include_maintained_worker_bound(
+        _smith_core_bound_from_shape(rows, columns, input_bits),
         rows=rows,
         columns=columns,
-        input_bits=input_bits,
     )
 
 
@@ -370,12 +429,7 @@ def _smith_height_bound(
     input_bits = _matrix_bits(matrix)
     if rows == 0 or columns == 0 or not any(value for row in matrix for value in row):
         core = SmithHeightBound(1, 1, 1, 1, 1, True)
-        return _include_smith_postcheck_bound(
-            core,
-            rows=rows,
-            columns=columns,
-            input_bits=input_bits,
-        )
+        return core
     if _is_positive_smith_diagonal(matrix, rows=rows, columns=columns):
         core = SmithHeightBound(
             1,
@@ -385,12 +439,7 @@ def _smith_height_bound(
             rows * columns,
             True,
         )
-        return _include_smith_postcheck_bound(
-            core,
-            rows=rows,
-            columns=columns,
-            input_bits=input_bits,
-        )
+        return core
     return _smith_height_bound_from_shape(rows, columns, input_bits)
 
 
@@ -693,12 +742,6 @@ def _presolve_unit_smith(
     right_bits = _matrix_bits(right)
     left_inverse_bits = _matrix_bits(left_inverse)
     right_inverse_bits = _matrix_bits(right_inverse)
-    left_source_bits = _matrix_product_bits(rows, left_bits, source_bits)
-    reconstruction_bits = _matrix_product_bits(columns, left_source_bits, right_bits)
-    left_inverse_check_bits = _matrix_product_bits(rows, left_inverse_bits, left_bits)
-    right_inverse_check_bits = _matrix_product_bits(
-        columns, right_bits, right_inverse_bits
-    )
     maximum_bits = max(
         source_bits,
         _matrix_bits(working),
@@ -706,28 +749,9 @@ def _presolve_unit_smith(
         right_bits,
         left_inverse_bits,
         right_inverse_bits,
-        reconstruction_bits,
-        left_inverse_check_bits,
-        right_inverse_check_bits,
     )
     if maximum_bits > MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS:
         return None
-    # These are bounded defining checks for the presolve itself.  The stored
-    # reduction is reused by the kernel; ordinary result construction does not
-    # replay them.
-    reconstructed = matrix_multiply(
-        matrix_multiply(left, source),
-        right,
-        right_columns_if_empty=columns,
-    )
-    if reconstructed != working:
-        raise ArithmeticError("unit Smith presolve lost its source relation")
-    if matrix_multiply(left_inverse, left) != identity_matrix(rows):
-        raise ArithmeticError("unit Smith presolve left inverse is invalid")
-    if matrix_multiply(right, right_inverse) != identity_matrix(columns):
-        raise ArithmeticError("unit Smith presolve right inverse is invalid")
-    work += rows * rows * max(1, rows) + columns * columns * max(1, columns)
-    work += rows * rows * max(1, columns) + rows * columns * max(1, columns)
     return SmithReductionData(
         reduction=SmithReduction(
             source=[row[:] for row in source],
@@ -953,37 +977,45 @@ def _output_scalar_count(
     )
 
 
-def _reconstruction_work(
+def _result_construction_work(
     chain_rank: int,
-    outgoing_rows: int,
     incoming_chain_rank: int,
     cycle_rank: int,
 ) -> int:
-    """Bound certificate replay, inverses, coordinates, and representatives."""
+    """Bound executed coordinate projection and representative construction."""
 
-    outgoing_certificate = (
-        outgoing_rows * outgoing_rows * chain_rank
-        + outgoing_rows * chain_rank * chain_rank
-        + outgoing_rows**3
-        + chain_rank**3
+    coordinate_projection = (
+        chain_rank * chain_rank * incoming_chain_rank + chain_rank * incoming_chain_rank
     )
-    cycle_coordinates = chain_rank**3 + (chain_rank * chain_rank * incoming_chain_rank)
-    incoming_certificate = (
-        cycle_rank * cycle_rank * incoming_chain_rank
-        + cycle_rank * incoming_chain_rank * incoming_chain_rank
-        + cycle_rank**3
-        + incoming_chain_rank**3
+    cycle_basis_copy = chain_rank * cycle_rank
+    representatives = cycle_rank * (
+        cycle_rank + chain_rank * cycle_rank + chain_rank + incoming_chain_rank + 1
     )
-    representatives = (
-        cycle_rank**3
-        + cycle_rank * chain_rank * cycle_rank
-        + cycle_rank * chain_rank * incoming_chain_rank
-    )
+    return coordinate_projection + cycle_basis_copy + representatives + 1
+
+
+_RESULT_ROOT_RESERVE_BYTES = 4_096
+_RESULT_GROUP_RESERVE_BYTES = 16_384
+
+
+def _decimal_chars_for_bits(bits: int) -> int:
+    """Bound decimal magnitude characters for an integer of ``bits`` bits."""
+
+    return max(1, (max(1, bits) * 30_103 + 99_999) // 100_000 + 1)
+
+
+def _group_result_byte_bound(*, scalar_count: int, maximum_bits: int) -> int:
+    """Bound one group's canonical JSON without materializing its result.
+
+    Every exact integer is serialized as a quoted decimal string.  Four bytes
+    beyond the magnitude cover a possible sign, quotes, and one separator.
+    The fixed reserve is larger than all field names, literal tags, object and
+    array punctuation in one group; it does not depend on mathematical output.
+    """
+
     return (
-        outgoing_certificate
-        + cycle_coordinates
-        + incoming_certificate
-        + representatives
+        scalar_count * (_decimal_chars_for_bits(maximum_bits) + 4)
+        + _RESULT_GROUP_RESERVE_BYTES
     )
 
 
@@ -1037,10 +1069,14 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
 
     degree_plans: list[IntegralHomologyDegreePlan] = []
     smith_work = 0
-    reconstruction_work = 0
+    result_construction_work = 0
     # The result retains the complete source complex in addition to the
     # per-degree certificates and representatives.
     output_scalar_count = matrix_cells + len(source.basis_sizes) + 8
+    output_byte_bound = (
+        len(encode_strict_json(source.model_dump(mode="json")))
+        + _RESULT_ROOT_RESERVE_BYTES
+    )
     for index, chain_rank in enumerate(source.basis_sizes):
         outgoing_rows = source.basis_sizes[index - 1] if index > 0 else 0
         outgoing = differentials[index - 1] if index > 0 else []
@@ -1081,6 +1117,7 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
             None if known_outgoing_rank is None else chain_rank - known_outgoing_rank
         )
         incoming_bits = _matrix_bits(incoming)
+        incoming_is_zero = not any(value for row in incoming for value in row)
         cycle_ranks = (
             (known_cycle_rank,)
             if known_cycle_rank is not None
@@ -1104,7 +1141,17 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
             int, tuple[int, SmithHeightBound, SmithReductionData | None, int]
         ] = {}
         for cycle_rank in cycle_ranks:
-            if exact_incoming_coordinates is not None:
+            if incoming_is_zero:
+                zero_coordinates = [
+                    [0 for _ in range(incoming_chain_rank)] for _ in range(cycle_rank)
+                ]
+                coordinate_bits = 1
+                incoming_height, incoming_presolve = _smith_admission(
+                    zero_coordinates,
+                    rows=cycle_rank,
+                    columns=incoming_chain_rank,
+                )
+            elif exact_incoming_coordinates is not None:
                 coordinate_bits = _matrix_bits(exact_incoming_coordinates)
                 incoming_height, incoming_presolve = _smith_admission(
                     exact_incoming_coordinates,
@@ -1175,6 +1222,11 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
                 1,
             )
             result_bits = max(
+                _matrix_bits(outgoing),
+                incoming_bits,
+                outgoing_height.left_bits,
+                outgoing_height.right_bits,
+                outgoing_height.diagonal_bits,
                 coordinate_bits,
                 cycle_coordinate_bits,
                 cycle_bits,
@@ -1213,19 +1265,26 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
             incoming_presolves.append(incoming_presolve)
             result_bounds.append(result_bits)
         smith_work += max(bound.work_units for bound in incoming_bounds)
-        reconstruction_work += max(
-            _reconstruction_work(
+        result_construction_work += max(
+            _result_construction_work(
                 chain_rank,
-                outgoing_rows,
                 incoming_chain_rank,
                 cycle_rank,
             )
             for cycle_rank in cycle_ranks
         )
-        output_scalar_count += _output_scalar_count(
+        degree_output_scalars = _output_scalar_count(
             chain_rank,
             outgoing_rows,
             incoming_chain_rank,
+        )
+        output_scalar_count += degree_output_scalars
+        output_byte_bound += max(
+            _group_result_byte_bound(
+                scalar_count=degree_output_scalars,
+                maximum_bits=bounds_by_cycle_rank[cycle_rank][3],
+            )
+            for cycle_rank in cycle_ranks
         )
         degree_plans.append(
             IntegralHomologyDegreePlan(
@@ -1249,7 +1308,7 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
         parse_work
         + square_zero_work
         + smith_work
-        + reconstruction_work
+        + result_construction_work
         + output_scalar_count
     )
     if total_work > MAX_INTEGRAL_HOMOLOGY_WORK_UNITS:
@@ -1265,6 +1324,13 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
             f"has a conservative bound of {output_scalar_count} integer scalars, above the "
             f"{MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS}-scalar output envelope",
         )
+    if output_byte_bound > CanonicalLimits().max_output_bytes:
+        raise _domain_error(
+            "integral_homology_output_byte_budget_exceeded",
+            "the complete retained complex, certificates, generators, and "
+            "bounding chains exceed the canonical "
+            f"{CanonicalLimits().max_output_bytes}-byte output envelope",
+        )
     _require_deadline(deadline, "after complete admission")
     return IntegralHomologyExecutionPlan(
         source=source,
@@ -1272,8 +1338,9 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
         parse_work=parse_work,
         square_zero_work=square_zero_work,
         smith_work=smith_work,
-        reconstruction_work=reconstruction_work,
+        result_construction_work=result_construction_work,
         output_scalar_count=output_scalar_count,
+        output_byte_bound=output_byte_bound,
         total_work=total_work,
         deadline=deadline,
     )
@@ -1455,10 +1522,6 @@ def compute_integral_homology(
                 incoming_reduction.right[row][index]
                 for row in range(degree_plan.incoming_chain_rank)
             ]
-            if matrix_vector_multiply(degree_plan.incoming, bounding_chain) != [
-                factor * value for value in cycle
-            ]:
-                raise ArithmeticError("torsion bounding-chain relation is invalid")
             generator_values.extend((factor, *coordinate, *cycle, *bounding_chain))
             torsion_generators.append(
                 IntegralTorsionGenerator(

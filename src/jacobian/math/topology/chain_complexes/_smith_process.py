@@ -46,6 +46,21 @@ def _require_active_deadline(deadline: float, *, stage: str) -> None:
         )
 
 
+def _positive_remaining_allowance(deadline: float, *, stage: str) -> float:
+    """Return one positive launch allowance or a typed execution outcome."""
+
+    if request_cancelled():
+        raise OperationExecutionCancelledError(
+            f"request cancelled {stage} integral-homology Smith reduction"
+        )
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise OperationExecutionTimeoutError(
+            f"integral homology deadline expired {stage} Smith worker"
+        )
+    return remaining
+
+
 def _decimal_digits_for_bits(bits: int) -> int:
     return max(1, (max(1, bits) * 30_103 + 99_999) // 100_000 + 1)
 
@@ -242,8 +257,10 @@ def smith_reduce_in_worker(
             # Temporary-directory setup belongs to the inherited request
             # envelope. Recompute the allowance at the actual launch boundary
             # so setup cannot mint a fresh child-process clock.
-            _require_active_deadline(deadline, stage="before launching the")
-            remaining = deadline - time.monotonic()
+            remaining = _positive_remaining_allowance(
+                deadline,
+                stage="before launching the",
+            )
             completed = run_bounded_process(
                 [sys.executable, str(_SMITH_WORKER)],
                 input_bytes=input_bytes,

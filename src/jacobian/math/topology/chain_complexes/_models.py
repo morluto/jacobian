@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Self
+from collections.abc import Mapping
+from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, WithJsonSchema, model_validator
+from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.topology.chain_complexes.values import (
+    MAX_BASIS_SIZE,
+    MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS,
+    MAX_CHAIN_DEGREE,
+    MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK,
+    MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS,
+    MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS,
     MAX_MATRIX_CELLS,
     MAX_OPERATION_MATRIX_CELLS,
     ChainComplexValue,
@@ -37,6 +45,186 @@ def _require_complex_cell_budget(
             f"{label} has {cells} differential cells, exceeding the "
             f"{maximum}-cell operation budget",
         )
+
+
+def _homology_input_complex_schema() -> JsonSchemaValue:
+    """Publish the nested parse envelope and the stricter ``ZZ`` branch."""
+
+    schema = ChainComplexValue.model_json_schema()
+    definitions = schema.pop("$defs", {})
+    properties = schema["properties"]
+    coefficient_ring = definitions.get("CoefficientRing")
+    if isinstance(coefficient_ring, dict):
+        properties["coefficient_ring"] = coefficient_ring
+    basis_sizes = properties["basis_sizes"]
+    differentials = properties["differential_matrices"]
+    matrices = differentials["items"]
+    rows = matrices["items"]
+    basis_sizes.update(maxItems=2 * MAX_CHAIN_DEGREE + 1)
+    differentials.update(maxItems=2 * MAX_CHAIN_DEGREE)
+    matrices.update(maxItems=MAX_BASIS_SIZE)
+    rows.update(maxItems=MAX_BASIS_SIZE)
+    schema["description"] = (
+        "A canonical finite based chain complex. Raw nested arrays are bounded "
+        "before canonical value parsing. For ZZ homology, every chain rank is "
+        f"at most {MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK}, differential matrices "
+        f"contain at most {MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS} cells in total, "
+        f"and each coefficient has at most {MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS} "
+        "decimal digits."
+    )
+    schema.setdefault("allOf", []).append(
+        {
+            "if": {
+                "properties": {"coefficient_ring": {"const": "ZZ"}},
+                "required": ["coefficient_ring"],
+            },
+            "then": {
+                "properties": {
+                    "basis_sizes": {
+                        "items": {
+                            "minimum": 0,
+                            "maximum": MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK,
+                            "type": "integer",
+                        }
+                    },
+                    "differential_matrices": {
+                        "items": {
+                            "maxItems": MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK,
+                            "items": {
+                                "maxItems": MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK,
+                                "items": {
+                                    "maxLength": (
+                                        MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS + 1
+                                    ),
+                                    "pattern": (
+                                        "^(?:0|-?[1-9][0-9]{0,"
+                                        f"{MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS - 1}"
+                                        "})$"
+                                    ),
+                                    "type": "string",
+                                },
+                                "type": "array",
+                            },
+                            "type": "array",
+                        },
+                    },
+                }
+            },
+        }
+    )
+    return schema
+
+
+HomologyInputComplex = Annotated[
+    ChainComplexValue,
+    WithJsonSchema(_homology_input_complex_schema()),
+]
+
+
+def _raw_component_digit_count(value: str) -> int:
+    return max(
+        (len(part) - int(part.startswith("-")) for part in value.split("/", 1)),
+        default=0,
+    )
+
+
+def _preflight_raw_differentials(
+    differentials: object,
+    *,
+    maximum_axis: int,
+    maximum_cells: int,
+    maximum_digits: int,
+) -> None:
+    if not isinstance(differentials, (list, tuple)):
+        return
+    if len(differentials) > 2 * MAX_CHAIN_DEGREE:
+        raise _validation_error(
+            "homology_raw_differential_count_exceeded",
+            "homology input has too many raw differential matrices",
+        )
+
+    cells = 0
+    for matrix in differentials:
+        if not isinstance(matrix, (list, tuple)):
+            continue
+        if len(matrix) > maximum_axis:
+            raise _validation_error(
+                "homology_raw_matrix_rows_exceeded",
+                f"a homology differential has more than {maximum_axis} rows",
+            )
+        for row in matrix:
+            if not isinstance(row, (list, tuple)):
+                continue
+            if len(row) > maximum_axis:
+                raise _validation_error(
+                    "homology_raw_matrix_columns_exceeded",
+                    f"a homology differential row has more than {maximum_axis} entries",
+                )
+            cells += len(row)
+            if cells > maximum_cells:
+                raise _validation_error(
+                    "homology_raw_matrix_cells_exceeded",
+                    "homology differential cells exceed the raw "
+                    f"{maximum_cells}-cell envelope",
+                )
+            if any(
+                isinstance(entry, str)
+                and _raw_component_digit_count(entry) > maximum_digits
+                for entry in row
+            ):
+                raise _validation_error(
+                    "homology_raw_coefficient_digits_exceeded",
+                    "a homology coefficient exceeds the raw "
+                    f"{maximum_digits}-digit envelope",
+                )
+
+
+def _preflight_raw_homology_complex(data: object) -> object:
+    """Bound nested homology input before ``ChainComplexValue`` parsing."""
+
+    if not isinstance(data, Mapping):
+        return data
+    raw_complex = data.get("complex")
+    if isinstance(raw_complex, ChainComplexValue) or not isinstance(
+        raw_complex, Mapping
+    ):
+        return canonicalize_json_containers(data)
+
+    raw_ring = raw_complex.get("coefficient_ring")
+    integral = raw_ring in ("ZZ", CoefficientRing.INTEGER)
+    maximum_axis = MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK if integral else MAX_BASIS_SIZE
+    maximum_cells = MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS if integral else MAX_MATRIX_CELLS
+    maximum_digits = (
+        MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS
+        if integral
+        else MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+    )
+
+    basis_sizes = raw_complex.get("basis_sizes")
+    if isinstance(basis_sizes, (list, tuple)):
+        if len(basis_sizes) > 2 * MAX_CHAIN_DEGREE + 1:
+            raise _validation_error(
+                "homology_raw_basis_count_exceeded",
+                "homology input has too many raw chain-group dimensions",
+            )
+        if any(
+            isinstance(size, int)
+            and not isinstance(size, bool)
+            and (size < 0 or size > maximum_axis)
+            for size in basis_sizes
+        ):
+            raise _validation_error(
+                "homology_raw_chain_rank_exceeded",
+                f"homology input chain ranks must be at most {maximum_axis}",
+            )
+
+    _preflight_raw_differentials(
+        raw_complex.get("differential_matrices"),
+        maximum_axis=maximum_axis,
+        maximum_cells=maximum_cells,
+        maximum_digits=maximum_digits,
+    )
+    return canonicalize_json_containers(data)
 
 
 class ConstructChainComplexRequest(StrictModel):
@@ -225,7 +413,12 @@ class VerifyChainMapRequest(StrictModel):
 class ComputeHomologyRequest(StrictModel):
     """Compute field or certified integral homology of a chain complex."""
 
-    complex: ChainComplexValue
+    complex: HomologyInputComplex
+
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_raw_complex(cls, data: object) -> object:
+        return _preflight_raw_homology_complex(data)
 
     @model_validator(mode="after")
     def require_homology_budget(self) -> Self:

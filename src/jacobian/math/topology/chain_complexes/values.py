@@ -38,6 +38,7 @@ MAX_CHAIN_MAP_ENTRY_CHARS = 65536
 # total coefficient size to the matrix work bounds rational elimination
 # bit complexity at admission instead of only bounding input shape.
 MAX_MATRIX_ENTRY_CHARS = 65536
+MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS = 4096
 # Tensor products may multiply and add two coefficients; keep their input
 # spelling bounded before the derived matrices are materialized.
 MAX_TENSOR_COEFFICIENT_DIGITS = 512
@@ -216,7 +217,10 @@ def _require_canonical_fraction_entry(entry: str) -> None:
             "zero_not_canonical",
             f"entry '{entry}' is not canonically spelled; spell zero as '0'",
         )
-    if len(num_str.lstrip("-")) > 4096 or len(den_str.lstrip("-")) > 4096:
+    if (
+        len(num_str.lstrip("-")) > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+        or len(den_str.lstrip("-")) > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+    ):
         raise _validation_error(
             "entry_digit_bound_exceeded", "differential entry exceeds digit bound"
         )
@@ -266,7 +270,7 @@ def _require_rational_entry_grammar(
         _require_canonical_fraction_entry(entry)
         return
     value = _require_canonical_integer_spelling(entry, entry)
-    if len(entry.lstrip("-")) > 4096:
+    if len(entry.lstrip("-")) > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS:
         raise _validation_error(
             "entry_digit_bound_exceeded", "differential entry exceeds digit bound"
         )
@@ -727,6 +731,7 @@ class TensorProductResult(StrictModel):
 __all__ = [
     "INTEGRAL_HOMOLOGY_WALL_SECONDS",
     "MAX_BASIS_SIZE",
+    "MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS",
     "MAX_CHAIN_DEGREE",
     "MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK",
     "MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS",

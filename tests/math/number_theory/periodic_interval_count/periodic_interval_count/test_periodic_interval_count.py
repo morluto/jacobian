@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceSubset,
     PeriodicCongruenceUnionSource,
@@ -72,3 +75,11 @@ def test_large_period_complement_uses_scalar_rank() -> None:
     result = compute_periodic_interval_count(source, -2, 2)
 
     assert result.count == "4"
+
+
+def test_endpoint_pair_must_fit_the_result_envelope() -> None:
+    source = _source(1, [0])
+    endpoint = 10**3_600_000
+
+    with pytest.raises(OperationDomainValidationError, match="output budget"):
+        compute_periodic_interval_count(source, -endpoint, endpoint)

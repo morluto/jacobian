@@ -40,9 +40,11 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
 def _common_denominator_digits(fractions: tuple[Fraction, ...]) -> int:
     common_denominator = 1
     for fraction in fractions:
-        common_denominator = common_denominator // gcd(
-            common_denominator, fraction.denominator
-        ) * fraction.denominator
+        common_denominator = (
+            common_denominator
+            // gcd(common_denominator, fraction.denominator)
+            * fraction.denominator
+        )
         digits = len(format_canonical_integer(common_denominator))
         if digits > MAX_CANONICAL_RATIONAL_DIGITS:
             return digits
@@ -210,8 +212,10 @@ def _admit(
             # multiplying the widest denominator by the arity.  The scaled
             # numerator bound is intentionally conservative; the exact sum is
             # still checked by the canonical result envelope below.
-            sum_numerator_digits = maximum_numerator_digits + common_denominator_digits + (
-                len(str(arity)) if arity > 1 else 0
+            sum_numerator_digits = (
+                maximum_numerator_digits
+                + common_denominator_digits
+                + (len(str(arity)) if arity > 1 else 0)
             )
             sum_denominator_digits = max(1, common_denominator_digits)
         else:

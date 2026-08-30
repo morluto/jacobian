@@ -54,10 +54,12 @@ returns two distinct points with the shared presentation
 `[1:-i:0]` and `[1:i:0]` survive strict JSON serialization as different
 embedded points.
 
-Before returning a point, the kernel substitutes its reduced coordinates into
-`F` and every partial and reduces exactly modulo the defining polynomial. The
-four remainders must all vanish. Numerical matching and backend root objects do
-not cross the public boundary.
+The point worker constructs reduced coordinates from the exact disjoint-chart
+components and their irreducible residue-field presentations. Direct
+defining-invariant tests independently substitute those coordinates into `F`
+and every partial and reduce modulo the presentation; the execution path does
+not replay that computation as a verifier. Numerical matching and backend root
+objects do not cross the public boundary.
 
 ## Execution envelope
 

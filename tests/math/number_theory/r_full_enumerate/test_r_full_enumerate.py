@@ -14,8 +14,10 @@ from jacobian.math.number_theory._r_full_enumerate_kernels import (
     enumerate_r_full as enumerate_r_full_kernel,
 )
 from jacobian.math.number_theory._r_full_enumerate_models import (
+    MAX_R_FULL_RESULT_BYTES,
     RFullEnumerateRequest,
     RFullEnumerateResult,
+    estimate_r_full_result_bytes,
 )
 
 
@@ -110,6 +112,11 @@ def test_result_uses_canonical_output_limit() -> None:
     """A complete family between the old 3 MiB cap and 10 MiB is admitted."""
     result = enumerate_r_full(64, 10**109)
     assert result.count == 31_377
+
+
+def test_result_estimator_reserves_dispatch_envelope_space() -> None:
+    family = tuple(10**99 + index for index in range(102_000))
+    assert estimate_r_full_result_bytes(64, 10**109, family) > MAX_R_FULL_RESULT_BYTES
 
 
 def test_high_exponent_family_is_rejected_before_materialization() -> None:

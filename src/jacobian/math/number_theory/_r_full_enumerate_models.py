@@ -24,7 +24,9 @@ MAX_R_FULL_CUTOFF = 10**MAX_R_FULL_CUTOFF_DIGITS
 MIN_R_FULL_EXPONENT = 2
 MAX_R_FULL_EXPONENT = 850
 MAX_R_FULL_FAMILY_SIZE = 200_000
-MAX_R_FULL_RESULT_BYTES = CanonicalLimits().max_output_bytes
+# Leave room for the typed OperationResult envelope added by dispatch before
+# the canonical payload reaches the transport boundary.
+MAX_R_FULL_RESULT_BYTES = CanonicalLimits().max_output_bytes - 1_024
 _MAX_PRIME_SEARCH_BOUND = 3_000_000
 
 

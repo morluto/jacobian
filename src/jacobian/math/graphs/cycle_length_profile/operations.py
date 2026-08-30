@@ -94,7 +94,21 @@ def _is_wheel_graph(graph: SimpleUndirectedGraph) -> bool:
     if len(hubs) != 1:
         return False
     rim = [vertex for vertex in graph.vertices if vertex != hubs[0]]
-    return all(len(adjacency[vertex]) == 3 for vertex in rim)
+    if not all(len(adjacency[vertex]) == 3 for vertex in rim):
+        return False
+    rim_adjacency = {
+        vertex: adjacency[vertex] - {hubs[0]} for vertex in rim
+    }
+    if not all(len(neighbors) == 2 for neighbors in rim_adjacency.values()):
+        return False
+    seen = {rim[0]}
+    stack = [rim[0]]
+    while stack:
+        vertex = stack.pop()
+        for neighbor in rim_adjacency[vertex] - seen:
+            seen.add(neighbor)
+            stack.append(neighbor)
+    return len(seen) == len(rim)
 
 
 def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:
@@ -153,9 +167,9 @@ def _cycle_block_feasible_lengths(
         )
         degrees = {
             vertex: sum(
-                vertex in edge
+                edge[0] in block and edge[1] in block and vertex in edge
                 for edge in graph.edges
-                if vertex in edge and edge[0] != edge[1]
+                if edge[0] != edge[1]
             )
             for vertex in block
         }

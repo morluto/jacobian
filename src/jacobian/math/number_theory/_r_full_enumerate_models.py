@@ -64,6 +64,11 @@ class RFullEnumerateResult(StrictModel):
                 "count must equal the family length",
             )
         cutoff = parse_canonical_integer(self.cutoff)
+        if cutoff <= 0 or cutoff > MAX_R_FULL_CUTOFF:
+            raise PydanticCustomError(
+                "r_full_enumerate.cutoff_bound",
+                "cutoff must be a positive canonical integer within the admitted bound",
+            )
         values = [parse_canonical_integer(v) for v in self.family]
         if any(v < 1 for v in values):
             raise PydanticCustomError(

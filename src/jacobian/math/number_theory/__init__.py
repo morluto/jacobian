@@ -2,6 +2,8 @@
 
 from jacobian.math.number_theory._friable_kernel import count_friable
 from jacobian.math.number_theory._friable_models import FriableCountResult
+from jacobian.math.number_theory._r_full_enumerate import enumerate_r_full
+from jacobian.math.number_theory._r_full_enumerate_models import RFullEnumerateResult
 from jacobian.math.number_theory._prime_shift_models import PrimeShiftProfileResult
 from jacobian.math.number_theory.operations import (
     binomial_prime_valuation,
@@ -34,11 +36,13 @@ from jacobian.math.number_theory.ramanujan_sums import ramanujan_sum
 
 __all__ = [
     "FriableCountResult",
+    "RFullEnumerateResult",
     "PrimeShiftProfileResult",
     "binomial_prime_valuation",
     "chinese_remainder",
     "contiguous_sum_profile",
     "count_friable",
+    "enumerate_r_full",
     "euler_totient",
     "factorial_valuation",
     "floor_square_root",

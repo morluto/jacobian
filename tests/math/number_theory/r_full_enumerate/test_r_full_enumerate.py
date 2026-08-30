@@ -5,8 +5,13 @@ from __future__ import annotations
 import pytest
 from sympy.ntheory.factor_ import factorint
 
-from jacobian.math.number_theory._r_full_enumerate import enumerate_r_full_numbers
-from jacobian.math.number_theory._r_full_enumerate_kernels import enumerate_r_full
+from jacobian.math.number_theory._r_full_enumerate import (
+    enumerate_r_full,
+    enumerate_r_full_numbers,
+)
+from jacobian.math.number_theory._r_full_enumerate_kernels import (
+    enumerate_r_full as enumerate_r_full_kernel,
+)
 from jacobian.math.number_theory._r_full_enumerate_models import (
     RFullEnumerateRequest,
     RFullEnumerateResult,
@@ -15,20 +20,20 @@ from jacobian.math.number_theory._r_full_enumerate_models import (
 
 def test_r2_equals_powerful() -> None:
     """r=2 gives the powerful family."""
-    result = enumerate_r_full(10, 2)
+    result = enumerate_r_full_kernel(10, 2)
     assert result == [1, 4, 8, 9]
 
 
 def test_r3_cubefull_to_20() -> None:
     """3-full integers in [1,20] are 1, 8, 16."""
-    result = enumerate_r_full(20, 3)
+    result = enumerate_r_full_kernel(20, 3)
     assert result == [1, 8, 16]
 
 
 def test_all_results_are_r_full() -> None:
     """Every returned integer has all prime exponents >= r."""
     for r in [2, 3, 4]:
-        result = enumerate_r_full(200, r)
+        result = enumerate_r_full_kernel(200, r)
         for n in result:
             for _, exp in factorint(n).items():
                 assert exp >= r, f"{n} is not {r}-full"
@@ -37,7 +42,7 @@ def test_all_results_are_r_full() -> None:
 def test_cross_check_brute_force() -> None:
     """Cross-check against brute-force factorization."""
     for r in [2, 3, 4, 5]:
-        result = enumerate_r_full(300, r)
+        result = enumerate_r_full_kernel(300, r)
         brute = [
             n for n in range(1, 301) if all(e >= r for _, e in factorint(n).items())
         ]
@@ -46,7 +51,7 @@ def test_cross_check_brute_force() -> None:
 
 def test_sorted_and_unique() -> None:
     """The family is sorted with no duplicates."""
-    result = enumerate_r_full(500, 3)
+    result = enumerate_r_full_kernel(500, 3)
     assert result == sorted(result)
     assert len(result) == len(set(result))
 
@@ -80,3 +85,9 @@ def test_result_requires_one_for_positive_cutoff() -> None:
             count=0,
             family=(),
         )
+
+
+def test_native_api_uses_integer_arguments() -> None:
+    """Native callers can enumerate without constructing a wire request."""
+    result = enumerate_r_full(3, 20)
+    assert result.family == ("1", "8", "16")

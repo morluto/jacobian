@@ -2,41 +2,73 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_theory._r_full_enumerate_kernels import enumerate_r_full
+from jacobian.math.number_theory._r_full_enumerate_kernels import (
+    enumerate_r_full as _enumerate_r_full_kernel,
+)
 from jacobian.math.number_theory._r_full_enumerate_models import (
+    MAX_R_FULL_CUTOFF,
+    MAX_R_FULL_EXPONENT,
     MAX_R_FULL_FAMILY_SIZE,
     MAX_R_FULL_RESULT_BYTES,
+    MIN_R_FULL_EXPONENT,
     RFullEnumerateRequest,
     RFullEnumerateResult,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 
 
-def enumerate_r_full_numbers(
-    request: RFullEnumerateRequest,
+def _enumerate_r_full_admitted(
+    minimum_exponent: int, cutoff: int
 ) -> RFullEnumerateResult:
-    """Return the complete ordered family of r-full integers up to the cutoff."""
-    cutoff = parse_canonical_integer(request.cutoff)
-    estimate = 10 * (cutoff ** (1 / request.minimum_exponent))
+    canonical_cutoff = format_canonical_integer(cutoff)
+    estimate = 10 * (cutoff ** (1 / minimum_exponent))
     if estimate > MAX_R_FULL_FAMILY_SIZE:
         raise OperationDomainValidationError(
             location=("cutoff",),
             code="r_full_enumerate_family_exceeds_result_budget",
             message="r-full family exceeds the result-size budget",
         )
-    if estimate * (len(request.cutoff) + 3) > MAX_R_FULL_RESULT_BYTES:
+    if estimate * (len(canonical_cutoff) + 3) > MAX_R_FULL_RESULT_BYTES:
         raise OperationDomainValidationError(
             location=("cutoff",),
             code="r_full_enumerate_family_exceeds_transport_budget",
             message="r-full family exceeds the serialized-byte budget",
         )
-    raw_family = enumerate_r_full(cutoff, request.minimum_exponent)
+    raw_family = _enumerate_r_full_kernel(cutoff, minimum_exponent)
     return RFullEnumerateResult._from_kernel(
-        request.minimum_exponent, request.cutoff, raw_family
+        minimum_exponent, canonical_cutoff, raw_family
     )
+
+
+def enumerate_r_full_numbers(
+    request: RFullEnumerateRequest,
+) -> RFullEnumerateResult:
+    """Return the complete ordered family of r-full integers up to the cutoff."""
+    return _enumerate_r_full_admitted(
+        request.minimum_exponent, parse_canonical_integer(request.cutoff)
+    )
+
+
+def enumerate_r_full(minimum_exponent: int, cutoff: int) -> RFullEnumerateResult:
+    """Enumerate r-full integers for native callers using integer arguments."""
+    if type(minimum_exponent) is not int or not (
+        MIN_R_FULL_EXPONENT <= minimum_exponent <= MAX_R_FULL_EXPONENT
+    ):
+        raise OperationDomainValidationError(
+            location=("minimum_exponent",),
+            code="r_full_enumerate.exponent_bound",
+            message="minimum_exponent must be an integer from 2 through 64",
+        )
+    if type(cutoff) is not int or not (0 < cutoff <= MAX_R_FULL_CUTOFF):
+        raise OperationDomainValidationError(
+            location=("cutoff",),
+            code="r_full_enumerate.cutoff_bound",
+            message="cutoff must be a positive integer within the admitted bound",
+        )
+    return _enumerate_r_full_admitted(minimum_exponent, cutoff)
 
 
 R_FULL_ENUMERATE_OPERATION = number_theory_operation(
@@ -65,4 +97,4 @@ R_FULL_ENUMERATE_OPERATION = number_theory_operation(
 )
 
 
-__all__ = ["R_FULL_ENUMERATE_OPERATION", "enumerate_r_full_numbers"]
+__all__ = ["R_FULL_ENUMERATE_OPERATION", "enumerate_r_full", "enumerate_r_full_numbers"]

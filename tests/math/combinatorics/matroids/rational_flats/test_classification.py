@@ -798,17 +798,13 @@ def test_one_request_ledger_charges_every_observed_work_primitive() -> None:
         plan: flat_kernel._RationalFlatPlan,
         ambient_dimension: int,
         ledger: flat_kernel._WorkLedger,
-        state_cache: dict[tuple[int, ...], flat_kernel._FlatState],
     ) -> flat_kernel._FlatState:
-        cache_miss = int(closed not in state_cache)
-        add_work("state_cache", 1 + cache_miss)
-        add_work("state_construction", cache_miss)
+        add_work("state_construction", 1)
         return original_state_from_closed(
             closed,
             plan=plan,
             ambient_dimension=ambient_dimension,
             ledger=ledger,
-            state_cache=state_cache,
         )
 
     with (
@@ -934,7 +930,6 @@ def test_one_request_ledger_charges_every_observed_work_primitive() -> None:
             "row_reduction",
             "search_frontier",
             "source_encoding",
-            "state_cache",
             "state_construction",
             "subset_action",
             "subset_cache",

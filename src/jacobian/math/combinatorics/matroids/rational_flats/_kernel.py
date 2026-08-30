@@ -731,12 +731,7 @@ def _state_from_closed(
     plan: _RationalFlatPlan,
     ambient_dimension: int,
     ledger: _WorkLedger,
-    state_cache: dict[ClosedCandidateSet, _FlatState],
 ) -> _FlatState:
-    ledger.charge("state_cache", _subset_container_work(len(closed)))
-    cached = state_cache.get(closed)
-    if cached is not None:
-        return cached
     ledger.charge(
         "state_construction",
         _subset_container_work(len(closed))
@@ -752,8 +747,6 @@ def _state_from_closed(
         row_space_basis=basis,
         rank=len(basis),
     )
-    ledger.charge("state_cache", _subset_container_work(len(closed)))
-    state_cache[closed] = state
     return state
 
 
@@ -856,7 +849,6 @@ def _search_satisfying_states(
     ambient_dimension = len(problem.candidates.coordinate_axis)
     ledger = plan.ledger
     canonicalizer = _SubsetOrbitCanonicalizer(plan.candidate_permutations)
-    state_cache: dict[ClosedCandidateSet, _FlatState] = {}
     visited: set[ClosedCandidateSet] = set()
     satisfying: dict[ClosedCandidateSet, _FlatState] = {}
     satisfying_elements = 0
@@ -895,7 +887,6 @@ def _search_satisfying_states(
             plan=plan,
             ambient_dimension=ambient_dimension,
             ledger=ledger,
-            state_cache=state_cache,
         )
         if state.rank > problem.maximum_rank or _contains_forbidden_row(
             state,

@@ -64,6 +64,13 @@ def test_rejects_uncolored_nonempty_host() -> None:
         compute_rainbow_embedding_profile(_p2(), host)
 
 
+def test_rejects_unencodable_pattern_label() -> None:
+    pattern = SimpleUndirectedGraph(vertices=("\ud800",), edges=())
+
+    with pytest.raises(OperationDomainValidationError, match="canonical output"):
+        compute_rainbow_embedding_profile(pattern, _k3_all_distinct())
+
+
 def test_rejects_unbounded_embedding_family() -> None:
     pattern = SimpleUndirectedGraph(vertices=tuple(str(i) for i in range(8)), edges=())
     host = ColoredUndirectedGraph(

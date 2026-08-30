@@ -83,7 +83,7 @@ def _admit_rainbow_embedding_profile(
     try:
         pattern_bytes = len(encode_strict_json(pattern.model_dump(mode="json")))
         host_bytes = len(encode_strict_json(host.model_dump(mode="json")))
-    except CanonicalizationError as exc:
+    except (CanonicalizationError, UnicodeEncodeError) as exc:
         raise OperationDomainValidationError(
             location=("pattern", "host"),
             code="graph.rainbow_embedding.result_exceeds_output_bound",

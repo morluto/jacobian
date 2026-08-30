@@ -72,6 +72,7 @@ _RESULT_VALIDATOR_KERNEL_CALLS = frozenset(
         "primary_decomposition",
     }
 )
+_THEOREM_BEARING_MODEL_SUFFIXES = ("Certificate", "Profile", "Result")
 _RATIONAL_COMPONENTS = frozenset({"denominator", "numerator", "p", "q"})
 _DESCRIPTIVE_RATIONAL_COMPONENTS = frozenset({"denominator", "numerator"})
 _EMBEDDED_PROCESS_PATTERNS = (
@@ -598,7 +599,8 @@ def _result_validator_replay_violations(
     for result_class in (
         node
         for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name.endswith("Result")
+        if isinstance(node, ast.ClassDef)
+        and node.name.endswith(_THEOREM_BEARING_MODEL_SUFFIXES)
     ):
         for method in result_class.body:
             if not isinstance(
@@ -615,7 +617,7 @@ def _result_validator_replay_violations(
                             relative,
                             call,
                             "result-validator-replay",
-                            "result validators must not call owner kernels, backends, or solvers; use an explicit bounded verifier",
+                            "theorem-bearing model validators must not call owner kernels, backends, or solvers; use trusted construction or an explicit bounded verifier",
                         )
                     )
     return tuple(violations)

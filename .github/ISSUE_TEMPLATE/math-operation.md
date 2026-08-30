@@ -21,6 +21,16 @@ assignees: []
 ## Result
 <!-- The returned mathematical value, witness, certificate, or closed outcome. -->
 
+## Result vocabulary and codomain closure
+<!--
+Which existing canonical types represent every possible result? Identify any
+required parent, field, ring, embedding, branch, orientation, basis, or
+coordinate data. Explain how mathematically distinct values remain distinct
+after serialization and compose with downstream consumers. If the complete
+codomain is not yet representable, link the prerequisite carrier issue instead
+of narrowing or omitting results.
+-->
+
 ## Completeness semantics
 <!--
 When may the result say EXACT, DOES_NOT_EXIST, UNKNOWN, UNRESOLVED, or reject

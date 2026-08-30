@@ -130,8 +130,10 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
                 max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
                 for value in exact_sums
             )
+    # Values are canonical JSON strings: include both quotes and a possible
+    # minus sign in the numerator component before sizing the object.
     rational_bytes = strict_json_object_size(
-        (("num", growth_digits), ("den", growth_digits))
+        (("num", growth_digits + 2), ("den", growth_digits + 2))
     )
     row_bytes = strict_json_object_size(
         (("sum_value", rational_bytes), ("multiplicity", len(str(1 << n))))

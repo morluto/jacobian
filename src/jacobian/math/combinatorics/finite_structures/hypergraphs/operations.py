@@ -15,8 +15,8 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     CliqueExpansionResult,
     DualResult,
     EdgeIntersectionEntry,
-    EdgeIntersectionsResult,
     EdgeIntersectionGraphResult,
+    EdgeIntersectionsResult,
     FiniteHypergraph,
     HypergraphIndependenceBudget,
     HypergraphIndependenceResult,
@@ -40,8 +40,8 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 __all__ = [
     "clique_expansion",
     "dual",
-    "edge_intersections",
     "edge_intersection_graph",
+    "edge_intersections",
     "incidence_graph",
     "independence_number",
     "induced_type_profile",
@@ -105,15 +105,12 @@ def _admit_clique_expansion(hypergraph: FiniteHypergraph) -> None:
 
 def _admit_edge_intersection_graph(hypergraph: FiniteHypergraph) -> None:
     if any(
-        not unicodedata.is_normalized("NFC", edge_id)
-        for edge_id, _ in hypergraph.edges
+        not unicodedata.is_normalized("NFC", edge_id) for edge_id, _ in hypergraph.edges
     ):
         raise OperationDomainValidationError(
             location=("hypergraph",),
             code="hypergraph.edge_intersection_graph.nfc_edge_ids",
-            message=(
-                "edge-intersection graph requires NFC-normalized edge IDs"
-            ),
+            message=("edge-intersection graph requires NFC-normalized edge IDs"),
         )
 
 

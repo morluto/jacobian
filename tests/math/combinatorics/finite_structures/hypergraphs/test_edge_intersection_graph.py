@@ -1,7 +1,6 @@
 """Defining-invariant and boundary tests for the edge-intersection graph."""
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -76,16 +75,12 @@ class TestEdgeIntersectionGraph:
 
         r = _graph(FIXTURE)
 
-        assert r.graph.vertices == tuple(
-            edge_id for edge_id, _ in r.hypergraph.edges
-        )
+        assert r.graph.vertices == tuple(edge_id for edge_id, _ in r.hypergraph.edges)
 
     def test_serialization_round_trip(self) -> None:
         r = _graph(FIXTURE)
 
-        restored = EdgeIntersectionGraphResult.model_validate_json(
-            r.model_dump_json()
-        )
+        restored = EdgeIntersectionGraphResult.model_validate_json(r.model_dump_json())
         assert restored == r
 
 

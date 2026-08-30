@@ -686,6 +686,7 @@ class EdgeIntersectionsResult(StrictModel):
             )
         return self
 
+
 class EdgeIntersectionGraphRequest(StrictModel):
     """Request the edge-intersection graph of a finite hypergraph.
 
@@ -715,7 +716,6 @@ class EdgeIntersectionGraphResult(StrictModel):
 
     hypergraph: FiniteHypergraph
     graph: SimpleUndirectedGraph
-
 
 
 class ParametersRequest(StrictModel):

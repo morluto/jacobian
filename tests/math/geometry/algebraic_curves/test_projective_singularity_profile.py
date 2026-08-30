@@ -484,7 +484,7 @@ def test_derived_result_bound_covers_the_maximal_admitted_ideal_shape() -> None:
             polynomial=SparseRationalPolynomial(
                 terms=tuple(
                     RationalPolynomialTerm(
-                        coefficient=_rational(99_999_999 if index == 0 else index),
+                        coefficient=_rational(99_999_999 if index == 1 else index),
                         exponents=exponents,
                     )
                     for index, exponents in enumerate(
@@ -495,6 +495,7 @@ def test_derived_result_bound_covers_the_maximal_admitted_ideal_shape() -> None:
         )
     )
     admission = _admit_singularity(source_backend)
+    assert admission.macaulay_minor_component_digits == 139
     numerator = 10 ** (admission.macaulay_minor_component_digits - 1)
     denominator_base = 10**admission.macaulay_minor_component_digits
 

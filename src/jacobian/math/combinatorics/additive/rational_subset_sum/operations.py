@@ -74,7 +74,7 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
             common_denominator_overflow |= (
                 _decimal_digits(common_denominator) > MAX_CANONICAL_RATIONAL_DIGITS
             )
-        scaled = [
+        scaled: list[int] = [
             value.numerator * (common_denominator // value.denominator)
             for value in fractions
         ]
@@ -100,9 +100,9 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
     for multiplicity in multiplicities.values():
         support_upper_bound *= multiplicity + 1
     if nonzero:
-        lattice_step = 0
-        for value in scaled:
-            lattice_step = gcd(lattice_step, abs(value))
+        lattice_step: int = 0
+        for scaled_value in scaled:
+            lattice_step = gcd(lattice_step, abs(scaled_value))
         support_span = (positive_span - negative_span) // max(lattice_step, 1)
         support_upper_bound = min(support_upper_bound, support_span + 1)
         if (

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import pytest
 from pydantic import ValidationError
 
@@ -13,10 +15,12 @@ from jacobian.math.graphs.cycle_length_profile.operations import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _graph(vertices, edges):
+def _graph(
+    vertices: Sequence[str], edges: Sequence[Sequence[str]]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(
         vertices=tuple(vertices),
-        edges=tuple(tuple(e) for e in edges),
+        edges=tuple((edge[0], edge[1]) for edge in edges),
     )
 
 

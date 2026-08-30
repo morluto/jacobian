@@ -9,17 +9,18 @@ from jacobian.math.number_theory.divisibility_poset import compute_divisibility_
 from jacobian.math.number_theory.divisibility_poset._models import (
     MAX_DIVISIBILITY_POSET_ELEMENTS,
     DivisibilityPosetRequest,
+    IntegerDivisibilityPosetResult,
 )
 
 
-def _compute(elements: list[str]):
+def _compute(elements: list[str]) -> IntegerDivisibilityPosetResult:
     request = DivisibilityPosetRequest.model_validate(
         {"source_set": {"elements": elements}}
     )
     return compute_divisibility_poset(request.source_set)
 
 
-def _source_map(result) -> dict[str, str]:
+def _source_map(result: IntegerDivisibilityPosetResult) -> dict[str, str]:
     return {e.label: e.source_integer for e in result.element_sources}
 
 
@@ -159,6 +160,7 @@ def test_poset_is_valid_finite_poset() -> None:
     result = _compute(["1", "2", "4", "8"])
     assert result.poset.poset_digest.startswith("sha256:")
     assert result.poset.graded is True
+    assert result.poset.ranks is not None
     assert len(result.poset.ranks) == 4
 
 

@@ -11,7 +11,7 @@ from jacobian.math.matrices.collatz_wielandt.operations import (
 )
 
 
-def _cr(num, den=1):
+def _cr(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(num, den))
 
 

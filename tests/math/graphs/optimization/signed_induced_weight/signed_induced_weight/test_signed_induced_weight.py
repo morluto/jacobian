@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
@@ -12,14 +13,16 @@ from jacobian.math.graphs.optimization.signed_induced_weight.operations import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _cr(num, den=1):
+def _cr(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(num, den))
 
 
-def _graph(vertices, edges):
+def _graph(
+    vertices: Sequence[str], edges: Sequence[Sequence[str]]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(
         vertices=tuple(vertices),
-        edges=tuple(tuple(e) for e in edges),
+        edges=tuple((edge[0], edge[1]) for edge in edges),
     )
 
 

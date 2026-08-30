@@ -54,7 +54,9 @@ class RFullEnumerateResult(StrictModel):
     minimum_exponent: int = Field(ge=MIN_R_FULL_EXPONENT, le=MAX_R_FULL_EXPONENT)
     cutoff: CanonicalInteger
     count: int = Field(ge=0)
-    family: tuple[CanonicalInteger, ...] = Field(default=())
+    family: tuple[CanonicalInteger, ...] = Field(
+        default=(), max_length=MAX_R_FULL_FAMILY_SIZE
+    )
 
     @model_validator(mode="after")
     def require_canonical_family(self) -> Self:
@@ -68,6 +70,13 @@ class RFullEnumerateResult(StrictModel):
             raise PydanticCustomError(
                 "r_full_enumerate.cutoff_bound",
                 "cutoff must be a positive canonical integer within the admitted bound",
+            )
+        if any(
+            len(value) > MAX_R_FULL_CUTOFF_DIGITS + 1 for value in self.family
+        ):
+            raise PydanticCustomError(
+                "r_full_enumerate.family_member_width",
+                "family members exceed the admitted canonical width",
             )
         values = [parse_canonical_integer(v) for v in self.family]
         if any(v < 1 for v in values):

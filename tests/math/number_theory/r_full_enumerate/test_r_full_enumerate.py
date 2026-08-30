@@ -91,3 +91,14 @@ def test_native_api_uses_integer_arguments() -> None:
     """Native callers can enumerate without constructing a wire request."""
     result = enumerate_r_full(3, 20)
     assert result.family == ("1", "8", "16")
+
+
+def test_result_rejects_oversized_family_member_before_parsing() -> None:
+    """Result validation bounds member representations before bigint parsing."""
+    with pytest.raises(ValueError, match="canonical width"):
+        RFullEnumerateResult(
+            minimum_exponent=2,
+            cutoff="10",
+            count=1,
+            family=("9" * 1_000_000,),
+        )

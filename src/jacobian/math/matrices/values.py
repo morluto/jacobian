@@ -18,6 +18,10 @@ from jacobian._exact import (
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
+from jacobian.math.number_theory.number_fields.values import (
+    SimpleNumberFieldElement,
+    SimpleNumberFieldPresentation,
+)
 
 MAX_MATRIX_DIMENSION = 32
 MAX_EXACT_LINEAR_MATRIX_AXIS = 64
@@ -37,6 +41,7 @@ MAX_INTEGER_MATRIX_ORDER = 128
 MAX_SPARSE_RATIONAL_MATRIX_AXIS = 8_192
 MAX_SPARSE_RATIONAL_MATRIX_NONZEROS = 32_768
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
+MAX_SIMPLE_NUMBER_FIELD_MATRIX_COORDINATES = 32_768
 
 
 def require_matrix_scalar_digits(
@@ -306,6 +311,230 @@ def rational_vector_space_basis_from_fractions(
     )
 
 
+class SimpleNumberFieldMatrix(StrictModel):
+    """One nonempty rectangular matrix over a shared simple number field.
+
+    Scalar entries remain the canonical ``SimpleNumberFieldElement`` value;
+    the repeated presentation therefore survives standalone extraction and
+    direct composition.  This matrix only establishes a shared parent and
+    rectangular shape.  Owner operations establish irreducibility and their
+    narrower work and result bounds before constructing one.
+    """
+
+    domain: Literal["SIMPLE_NUMBER_FIELD"] = "SIMPLE_NUMBER_FIELD"
+    presentation: SimpleNumberFieldPresentation
+    entries: tuple[tuple[SimpleNumberFieldElement, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_RATIONAL_MATRIX_ORDER,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_matrix_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if set(data).difference({"domain", "presentation", "entries"}):
+            raise _validation_error(
+                "shape_mismatch", "simple-number-field matrix contains unknown fields"
+            )
+        entries = data.get("entries")
+        if isinstance(entries, (list, tuple)):
+            if len(entries) > MAX_RATIONAL_MATRIX_ORDER:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "simple-number-field matrix exceeds the structural row bound",
+                )
+            if any(
+                isinstance(row, (list, tuple)) and len(row) > MAX_RATIONAL_MATRIX_ORDER
+                for row in entries
+            ):
+                raise _validation_error(
+                    "budget_exceeded",
+                    "simple-number-field matrix exceeds the structural column bound",
+                )
+            presentation = data.get("presentation")
+            coefficients = (
+                presentation.get("coefficients_descending")
+                if isinstance(presentation, dict)
+                else None
+            )
+            coordinate_count = 0
+            for row in entries:
+                if not isinstance(row, (list, tuple)):
+                    continue
+                for value in row:
+                    if not isinstance(value, dict):
+                        continue
+                    value_presentation = value.get("presentation")
+                    value_coefficients = (
+                        value_presentation.get("coefficients_descending")
+                        if isinstance(value_presentation, dict)
+                        else None
+                    )
+                    if (
+                        isinstance(coefficients, (list, tuple))
+                        and isinstance(value_coefficients, (list, tuple))
+                        and tuple(value_coefficients) != tuple(coefficients)
+                    ):
+                        raise _validation_error(
+                            "shape_mismatch",
+                            "every raw matrix entry must use the declared simple "
+                            "number field",
+                        )
+                    value_coordinates = value.get("coefficients_ascending")
+                    coordinate_count += (
+                        len(value_coordinates)
+                        if isinstance(value_coordinates, (list, tuple))
+                        else 0
+                    )
+            if coordinate_count > MAX_SIMPLE_NUMBER_FIELD_MATRIX_COORDINATES:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "simple-number-field matrix exceeds the structural power-basis "
+                    "coordinate bound",
+                )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_rectangular_shared_field(self) -> Self:
+        column_count = len(self.entries[0])
+        if column_count == 0 or column_count > MAX_RATIONAL_MATRIX_ORDER:
+            raise _validation_error(
+                "shape_mismatch",
+                "simple-number-field matrix rows must be nonempty and bounded",
+            )
+        if any(len(row) != column_count for row in self.entries):
+            raise _validation_error(
+                "shape_mismatch", "simple-number-field matrix rows must be rectangular"
+            )
+        if any(
+            value.presentation != self.presentation
+            for row in self.entries
+            for value in row
+        ):
+            raise _validation_error(
+                "shape_mismatch",
+                "every matrix entry must belong to the declared simple number field",
+            )
+        if (
+            len(self.entries) * column_count * self.presentation.degree
+            > MAX_SIMPLE_NUMBER_FIELD_MATRIX_COORDINATES
+        ):
+            raise _validation_error(
+                "budget_exceeded",
+                "simple-number-field matrix exceeds the structural power-basis "
+                "coordinate bound",
+            )
+        return self
+
+
+class SimpleNumberFieldVectorSpaceBasis(StrictModel):
+    """A basis over one simple number field with its ambient dimension retained."""
+
+    domain: Literal["SIMPLE_NUMBER_FIELD"] = "SIMPLE_NUMBER_FIELD"
+    presentation: SimpleNumberFieldPresentation
+    ambient_dimension: int = Field(ge=1, le=MAX_RATIONAL_MATRIX_ORDER)
+    vectors: tuple[tuple[SimpleNumberFieldElement, ...], ...] = Field(
+        default=(), max_length=MAX_RATIONAL_MATRIX_ORDER
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_basis_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if set(data).difference(
+            {"domain", "presentation", "ambient_dimension", "vectors"}
+        ):
+            raise _validation_error(
+                "shape_mismatch", "simple-number-field basis contains unknown fields"
+            )
+        vectors = data.get("vectors")
+        if isinstance(vectors, (list, tuple)):
+            if len(vectors) > MAX_RATIONAL_MATRIX_ORDER:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "simple-number-field basis exceeds its structural vector bound",
+                )
+            if any(
+                isinstance(vector, (list, tuple))
+                and len(vector) > MAX_RATIONAL_MATRIX_ORDER
+                for vector in vectors
+            ):
+                raise _validation_error(
+                    "budget_exceeded",
+                    "simple-number-field basis exceeds its structural ambient bound",
+                )
+            presentation = data.get("presentation")
+            coefficients = (
+                presentation.get("coefficients_descending")
+                if isinstance(presentation, dict)
+                else None
+            )
+            coordinate_count = 0
+            for vector in vectors:
+                if not isinstance(vector, (list, tuple)):
+                    continue
+                for value in vector:
+                    if not isinstance(value, dict):
+                        continue
+                    value_presentation = value.get("presentation")
+                    value_coefficients = (
+                        value_presentation.get("coefficients_descending")
+                        if isinstance(value_presentation, dict)
+                        else None
+                    )
+                    if (
+                        isinstance(coefficients, (list, tuple))
+                        and isinstance(value_coefficients, (list, tuple))
+                        and tuple(value_coefficients) != tuple(coefficients)
+                    ):
+                        raise _validation_error(
+                            "shape_mismatch",
+                            "every raw basis entry must use the declared simple number field",
+                        )
+                    value_coordinates = value.get("coefficients_ascending")
+                    coordinate_count += (
+                        len(value_coordinates)
+                        if isinstance(value_coordinates, (list, tuple))
+                        else 0
+                    )
+            if coordinate_count > MAX_SIMPLE_NUMBER_FIELD_MATRIX_COORDINATES:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "simple-number-field basis exceeds the structural power-basis "
+                    "coordinate bound",
+                )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_shared_field_and_shape(self) -> Self:
+        if any(len(vector) != self.ambient_dimension for vector in self.vectors):
+            raise _validation_error(
+                "shape_mismatch",
+                "each simple-number-field basis vector must have the ambient dimension",
+            )
+        if any(
+            value.presentation != self.presentation
+            for vector in self.vectors
+            for value in vector
+        ):
+            raise _validation_error(
+                "shape_mismatch",
+                "every basis entry must belong to the declared simple number field",
+            )
+        if (
+            len(self.vectors) * self.ambient_dimension * self.presentation.degree
+            > MAX_SIMPLE_NUMBER_FIELD_MATRIX_COORDINATES
+        ):
+            raise _validation_error(
+                "budget_exceeded",
+                "simple-number-field basis exceeds the structural power-basis "
+                "coordinate bound",
+            )
+        return self
+
+
 class RealQuadraticMatrix(StrictModel):
     """One nonempty rectangular matrix over a shared real quadratic field."""
 
@@ -470,12 +699,15 @@ __all__ = [
     "MAX_MATRIX_DIMENSION",
     "MAX_MATRIX_SCALAR_DIGITS",
     "MAX_RATIONAL_MATRIX_ORDER",
+    "MAX_SIMPLE_NUMBER_FIELD_MATRIX_COORDINATES",
     "MAX_SPARSE_RATIONAL_MATRIX_AXIS",
     "MAX_SPARSE_RATIONAL_MATRIX_NONZEROS",
     "IntegerMatrix",
     "RationalMatrix",
     "RationalVectorSpaceBasis",
     "RealQuadraticMatrix",
+    "SimpleNumberFieldMatrix",
+    "SimpleNumberFieldVectorSpaceBasis",
     "SmithNormalForm",
     "SparseRationalMatrix",
     "SparseRationalMatrixEntry",

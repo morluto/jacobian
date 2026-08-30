@@ -37,8 +37,7 @@ RainbowPatternGraph = Annotated[
             SimpleUndirectedGraph,
             maximum=MAX_PATTERN_VERTICES,
             description=(
-                "A pattern graph with at most "
-                f"{MAX_PATTERN_VERTICES} vertices."
+                f"A pattern graph with at most {MAX_PATTERN_VERTICES} vertices."
             ),
         )
     ),

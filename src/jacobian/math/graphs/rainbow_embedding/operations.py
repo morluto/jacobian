@@ -102,9 +102,7 @@ def _admit_rainbow_embedding_profile(
             len(encode_strict_json(vertex)) for vertex in host.graph.vertices
         )
         map_item_sizes = [
-            _json_array_size(
-                [len(encode_strict_json(pattern_vertex)), max_host_label]
-            )
+            _json_array_size([len(encode_strict_json(pattern_vertex)), max_host_label])
             for pattern_vertex in pattern.vertices
         ]
     mapping_bytes = _json_array_size(map_item_sizes)

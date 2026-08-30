@@ -41,7 +41,6 @@ def enumerate_r_full(cutoff: int, r: int) -> list[int]:
     for prime in primes:
         # Generate prime^r, prime^(r+1), ... all <= cutoff
         powers: list[int] = []
-        exp = r
         current = prime ** r
         while current <= cutoff:
             powers.append(current)
@@ -50,9 +49,12 @@ def enumerate_r_full(cutoff: int, r: int) -> list[int]:
             continue
 
         # Multiply every existing family member by each power
-        existing = list(family)
-        for member in existing:
-            for pw in powers:
+        existing = sorted(family)
+        for pw in powers:
+            max_member = cutoff // pw
+            for member in existing:
+                if member > max_member:
+                    break
                 product = member * pw
                 if product <= cutoff:
                     family.add(product)

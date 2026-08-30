@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -38,21 +37,6 @@ class RFullEnumerateRequest(StrictModel):
         description="Positive upper bound (inclusive).",
         examples=[100],
     )
-
-    @model_validator(mode="after")
-    def require_bounded_family(self) -> Self:
-        estimate = 3 * math.ceil(self.cutoff ** (1 / self.minimum_exponent))
-        if estimate > MAX_R_FULL_FAMILY_SIZE:
-            raise PydanticCustomError(
-                "r_full_enumerate_family_exceeds_result_budget",
-                "r-full family exceeds the result-size budget",
-            )
-        if estimate * (len(str(self.cutoff)) + 3) > MAX_R_FULL_RESULT_BYTES:
-            raise PydanticCustomError(
-                "r_full_enumerate_family_exceeds_transport_budget",
-                "r-full family exceeds the serialized-byte budget",
-            )
-        return self
 
 
 class RFullEnumerateResult(StrictModel):

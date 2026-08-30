@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import deque
+
 import networkx as nx
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -61,11 +63,11 @@ def compute_cycle_length_profile(
 def _find_cycle_of_length(nx_graph: nx.Graph[str], k: int) -> tuple[str, ...] | None:
     """Find a simple cycle of exactly length k using BFS from each vertex."""
     for source in nx_graph.nodes:
-        queue: list[tuple[str, tuple[str, ...]]] = [(source, (source,))]
+        queue: deque[tuple[str, tuple[str, ...]]] = deque([(source, (source,))])
         visited: set[tuple[str, ...]] = set()
 
         while queue:
-            node, path = queue.pop(0)
+            node, path = queue.popleft()
             if len(path) == k:
                 if nx_graph.has_edge(path[-1], source):
                     return path

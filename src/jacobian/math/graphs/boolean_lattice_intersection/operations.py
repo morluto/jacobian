@@ -23,6 +23,16 @@ def construct_boolean_lattice_intersection_graph(
     An edge joins two distinct subsets when their intersection satisfies
     the declared relation with the given cardinality.
     """
+    if relation not in {
+        "INTERSECTION_EQ_THRESHOLD",
+        "INTERSECTION_LT_THRESHOLD",
+        "INTERSECTION_GT_THRESHOLD",
+    }:
+        raise OperationDomainValidationError(
+            location=("relation",),
+            code="boolean_lattice.invalid_relation",
+            message="relation must be one of the declared intersection relations",
+        )
     if not 0 <= n <= 8:
         raise OperationDomainValidationError(
             location=("n",),

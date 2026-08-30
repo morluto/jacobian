@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Any
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._flint import flint_workprec
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis._arb import arb_source_interval, dyadic_endpoints
 from jacobian.math.analysis._expression_enclosure import (
@@ -133,10 +134,10 @@ def expression_enclosure(
             code="analysis.expression.named_variable",
             message="point-enclosure variable nodes must remain anonymous",
         )
-    from flint import arb, ctx, fmpq
+    from flint import arb, fmpq
 
     numerator, denominator = argument.as_integer_ratio()
-    with ctx.workprec(precision_bits):
+    with flint_workprec(precision_bits):
         result = _evaluate_expression(expression, arb(fmpq(numerator, denominator)))
         if isinstance(result, _EvaluationFailure):
             return IntervalExpressionEnclosureResult(
@@ -161,6 +162,7 @@ def expression_enclosure(
         lower_mantissa, lower_exponent = result.lower().man_exp()
         upper_mantissa, upper_exponent = result.upper().man_exp()
         exact = bool(result.is_exact())
+        relative_accuracy_bits = None if exact else int(result.rel_accuracy_bits())
         endpoints = dyadic_endpoints(
             lower_mantissa, lower_exponent, upper_mantissa, upper_exponent
         )
@@ -175,7 +177,7 @@ def expression_enclosure(
         precision_bits=precision_bits,
         lower=endpoints[0],
         upper=endpoints[1],
-        relative_accuracy_bits=None if exact else int(result.rel_accuracy_bits()),
+        relative_accuracy_bits=relative_accuracy_bits,
         exact=exact,
         detail="Arb returned an outward-rounded enclosure with exact dyadic endpoints.",
     )
@@ -466,9 +468,7 @@ def second_jet_enclosure(
         )
 
     try:
-        from flint import ctx
-
-        with ctx.workprec(precision_bits):
+        with flint_workprec(precision_bits):
             variables = {
                 variable: arb_source_interval(interval)
                 for variable, interval in zip(box.variables, box.intervals, strict=True)

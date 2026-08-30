@@ -8,6 +8,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
+    MAX_LABEL_LENGTH,
     MAX_TOTAL_INCIDENCES,
     FiniteHypergraph,
 )
@@ -31,6 +32,11 @@ def _moon_moser_bound(vertex_count: int) -> int:
 def _maximal_clique_admission_error(
     graph: SimpleUndirectedGraph,
 ) -> tuple[str, str] | None:
+    if any(len(label) > MAX_LABEL_LENGTH for label in graph.vertices):
+        return (
+            "label_bound",
+            f"graph vertex labels must be at most {MAX_LABEL_LENGTH} characters",
+        )
     vertex_count = len(graph.vertices)
     edge_count = len(graph.edges)
     if edge_count == 0 or edge_count == vertex_count * (vertex_count - 1) // 2:

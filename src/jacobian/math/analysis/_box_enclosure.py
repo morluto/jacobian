@@ -7,6 +7,7 @@ from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._flint import flint_workprec
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.analysis._arb import arb_source_interval, dyadic_endpoints
@@ -264,10 +265,8 @@ def _box_expression_enclosure(
             ),
         )
 
-    from flint import ctx
-
     try:
-        with ctx.workprec(request.precision_bits):
+        with flint_workprec(request.precision_bits):
             variables = {
                 variable: arb_source_interval(interval)
                 for variable, interval in zip(

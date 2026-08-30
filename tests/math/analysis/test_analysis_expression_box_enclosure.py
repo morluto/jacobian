@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 from tests.math.analysis._analysis_support import analysis_validation_error
 
+from jacobian._flint import flint_workprec
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis._box_enclosure import (
     IntervalExpressionBoxEnclosureRequest,
@@ -152,16 +153,14 @@ def test_degenerate_point_box_agrees_with_point_expression_operation() -> None:
 
 
 def test_request_precision_overrides_the_ambient_arb_context() -> None:
-    from flint import ctx
-
     request = _request(
         {"op": "exp", "children": [_var("x")]},
         (("x", Fraction(0), Fraction(1)),),
         precision_bits=128,
     )
-    with ctx.workprec(64):
+    with flint_workprec(64):
         low_ambient_precision = _box_expression_enclosure(request)
-    with ctx.workprec(512):
+    with flint_workprec(512):
         high_ambient_precision = _box_expression_enclosure(request)
 
     assert low_ambient_precision == high_ambient_precision

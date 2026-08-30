@@ -69,3 +69,8 @@ def test_sieve_allocation_is_bounded_before_construction() -> None:
 def test_invalid_minimum_exponent_is_rejected() -> None:
     with pytest.raises(OperationDomainValidationError, match="at least 2"):
         enumerate_r_full(10, 1)
+
+
+def test_huge_exponent_is_bounded_without_constructing_the_power() -> None:
+    result = enumerate_r_full(2, 1_000_000_000)
+    assert result.values == (1,)

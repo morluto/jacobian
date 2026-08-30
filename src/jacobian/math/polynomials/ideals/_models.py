@@ -160,8 +160,6 @@ class MonomialIdealBettiResult(StrictModel):
         le=MAX_MONOMIAL_IDEAL_VARIABLES * MAX_MONOMIAL_IDEAL_EXPONENT,
     )
     has_linear_resolution: bool
-    method: Literal["LCM_LATTICE_CROSSCUT_HOMOLOGY"] = "LCM_LATTICE_CROSSCUT_HOMOLOGY"
-    backend: Literal["PYTHON_FLINT"] = "PYTHON_FLINT"
 
     @model_validator(mode="after")
     def require_canonical_shape(self) -> Self:
@@ -237,8 +235,6 @@ class MonomialIdealBettiResult(StrictModel):
             graded_betti_numbers=graded_betti_numbers,
             regularity=regularity,
             has_linear_resolution=has_linear_resolution,
-            method="LCM_LATTICE_CROSSCUT_HOMOLOGY",
-            backend="PYTHON_FLINT",
         )
 
 

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import (
     FinitePoset,
     PresentationPair,
@@ -14,13 +16,53 @@ from jacobian.math.number_theory._divisibility_poset_kernels import (
     construct_divisibility_poset,
 )
 from jacobian.math.number_theory._divisibility_poset_models import (
+    MAX_DIVISIBILITY_SET_SIZE,
     DivisibilityPosetRequest,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 
 
+def _admit_values(values: tuple[str, ...]) -> None:
+    if type(values) is not tuple:
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="divisibility_poset.values_type",
+            message="values must be a tuple of canonical positive integers",
+        )
+    if not 1 <= len(values) <= MAX_DIVISIBILITY_SET_SIZE:
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="divisibility_poset.values_size",
+            message=(
+                "values must contain between 1 and "
+                f"{MAX_DIVISIBILITY_SET_SIZE} distinct integers"
+            ),
+        )
+    try:
+        parsed = tuple(parse_canonical_integer(value) for value in values)
+    except (TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="divisibility_poset.values_domain",
+            message="values must be canonical positive integers",
+        ) from exc
+    if any(value <= 0 for value in parsed):
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="divisibility_poset.values_domain",
+            message="values must be canonical positive integers",
+        )
+    if len(set(values)) != len(values):
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="divisibility_poset.values_unique",
+            message="values must be distinct",
+        )
+
+
 def divisibility_poset(values: tuple[str, ...]) -> FinitePoset:
     """Return the canonical proper-divisibility poset of positive integers."""
+    _admit_values(values)
     data = construct_divisibility_poset(values)
     return materialize_finite_poset(
         tuple(sorted(values)),

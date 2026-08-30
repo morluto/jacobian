@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import time
 from itertools import product
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraph_coloring._models import (
     ColoringWitness,
@@ -68,7 +74,16 @@ def decide_nonmonochromatic_coloring(
         )
 
     n = len(vertices)
-    for coloring in product(range(palette_size), repeat=n):
+    execution = current_request_execution()
+    if execution is not None and execution.deadline is None:
+        bind_request_deadline(time.monotonic() + max(60.0, (palette_size**n * len(edges)) / 100_000))
+    for index, coloring in enumerate(product(range(palette_size), repeat=n)):
+        if index % 1024 == 0:
+            execution = current_request_execution()
+            if execution is not None and execution.deadline is not None and time.monotonic() >= execution.deadline:
+                raise OperationExecutionTimeoutError(
+                    "hypergraph coloring search exceeded its request deadline"
+                )
         if _is_valid_coloring(coloring, edges, vertices):
             assignments = tuple((vertices[i], coloring[i]) for i in range(n))
             witness = ColoringWitness(assignments=assignments)

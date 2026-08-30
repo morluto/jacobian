@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import cast
 
@@ -137,15 +138,23 @@ def _cycle_block_feasible_lengths(graph: SimpleUndirectedGraph) -> dict[int, int
     topology.add_nodes_from(graph.vertices)
     topology.add_edges_from(graph.edges)
     feasible: dict[int, int] = {}
-    for block in nx.biconnected_components(topology):
+    for raw_block in nx.biconnected_components(topology):
+        block = cast(set[str], raw_block)
         if len(block) < 3:
             continue
-        subgraph = topology.subgraph(block)
-        edge_count = subgraph.number_of_edges()
-        if edge_count == len(block) and all(
-            degree == 2 for _, degree in subgraph.degree()
-        ):
-            lengths = (len(block),)
+        edge_count = sum(
+            left in block and right in block for left, right in graph.edges
+        )
+        degrees = {
+            vertex: sum(
+                vertex in edge
+                for edge in graph.edges
+                if vertex in edge and edge[0] != edge[1]
+            )
+            for vertex in block
+        }
+        if edge_count == len(block) and all(degree == 2 for degree in degrees.values()):
+            lengths: Iterable[int] = (len(block),)
         else:
             lengths = range(3, min(len(block), edge_count) + 1)
         for length in lengths:

@@ -44,6 +44,37 @@ MAX_INTERVAL_SIZE: int = _max_admitted_interval()
 assert MAX_INTERVAL_SIZE > 0, "no admitted interval size found"
 
 
+def _admission_error(lower: int, upper: int, k: int) -> tuple[str, str, str] | None:
+    """Return the first AP construction admission failure, if any."""
+    if upper < lower:
+        return ("upper", "empty_interval", "upper must be >= lower")
+    if k < 3:
+        return ("k", "invalid_arity", "k must be at least 3")
+    n = upper - lower + 1
+    if n > MAX_INTERVAL_SIZE:
+        return (
+            "upper",
+            "interval_too_large",
+            f"interval size {n} exceeds the maximum admitted size {MAX_INTERVAL_SIZE}",
+        )
+    edges = _edge_count(n, k)
+    if edges > MAX_EDGES:
+        return (
+            "k",
+            "edge_count_exceeds_bound",
+            f"edge count {edges} exceeds the {MAX_EDGES}-edge bound",
+        )
+    incidences = k * edges
+    if incidences > MAX_TOTAL_INCIDENCES:
+        return (
+            "k",
+            "incidence_count_exceeds_bound",
+            f"incidence count {incidences} exceeds the "
+            f"{MAX_TOTAL_INCIDENCES}-incidence bound",
+        )
+    return None
+
+
 class ArithmeticProgressionHypergraphRequest(StrictModel):
     """Inclusive integer interval ``[lower, upper]`` and arity ``k >= 3``.
 
@@ -61,30 +92,12 @@ class ArithmeticProgressionHypergraphRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_interval(self) -> Self:
-        if self.upper < self.lower:
+        failure = _admission_error(self.lower, self.upper, self.k)
+        if failure is not None:
+            _, code, message = failure
             raise PydanticCustomError(
-                "hypergraph.arithmetic_progression.empty_interval",
-                "upper must be >= lower",
-            )
-        n = self.upper - self.lower + 1
-        if n > MAX_INTERVAL_SIZE:
-            raise PydanticCustomError(
-                "hypergraph.arithmetic_progression.interval_too_large",
-                f"interval size {n} exceeds the maximum admitted size "
-                f"{MAX_INTERVAL_SIZE}",
-            )
-        edges = _edge_count(n, self.k)
-        if edges > MAX_EDGES:
-            raise PydanticCustomError(
-                "hypergraph.arithmetic_progression.edge_count_exceeds_bound",
-                f"edge count {edges} exceeds the {MAX_EDGES}-edge bound",
-            )
-        incidences = self.k * edges
-        if incidences > MAX_TOTAL_INCIDENCES:
-            raise PydanticCustomError(
-                "hypergraph.arithmetic_progression.incidence_count_exceeds_bound",
-                f"incidence count {incidences} exceeds the "
-                f"{MAX_TOTAL_INCIDENCES}-incidence bound",
+                f"hypergraph.arithmetic_progression.{code}",
+                message,
             )
         return self
 
@@ -116,5 +129,6 @@ __all__ = [
     "MAX_INTERVAL_SIZE",
     "ArithmeticProgressionHypergraphRequest",
     "ArithmeticProgressionHypergraphResult",
+    "_admission_error",
     "_edge_count",
 ]

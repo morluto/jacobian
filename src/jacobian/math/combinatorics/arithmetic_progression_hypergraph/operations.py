@@ -5,6 +5,7 @@ from __future__ import annotations
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.arithmetic_progression_hypergraph._models import (
     ArithmeticProgressionHypergraphResult,
+    _admission_error,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -26,17 +27,13 @@ def construct_arithmetic_progression_hypergraph(
     term and ``d`` is the positive common difference.  Edge members are stored
     in canonical sorted order by ``FiniteHypergraph``.
     """
-    if upper < lower:
+    failure = _admission_error(lower, upper, k)
+    if failure is not None:
+        field, code, message = failure
         raise OperationDomainValidationError(
-            location=("upper",),
-            code="hypergraph.arithmetic_progression.empty_interval",
-            message="upper must be >= lower",
-        )
-    if k < 3:
-        raise OperationDomainValidationError(
-            location=("k",),
-            code="hypergraph.arithmetic_progression.invalid_arity",
-            message="k must be at least 3",
+            location=(field,),
+            code=f"hypergraph.arithmetic_progression.{code}",
+            message=message,
         )
 
     vertices = tuple(str(x) for x in range(lower, upper + 1))

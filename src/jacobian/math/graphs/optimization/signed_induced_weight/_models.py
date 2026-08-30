@@ -18,8 +18,12 @@ class SignedInducedWeightRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_edge_axis(self) -> Self:
-        supplied = tuple((min(left, right), max(left, right)) for left, right, _ in self.edge_weights)
-        if len(supplied) != len(set(supplied)) or set(supplied) != set(self.graph.edges):
+        supplied = tuple(
+            (min(left, right), max(left, right)) for left, right, _ in self.edge_weights
+        )
+        if len(supplied) != len(set(supplied)) or set(supplied) != set(
+            self.graph.edges
+        ):
             raise PydanticCustomError(
                 "signed_induced_weight.edge_axis",
                 "edge_weights must align one-for-one with the graph edge axis",

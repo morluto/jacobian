@@ -9,6 +9,17 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.math.geometry.algebraic_curves._singularity_models import (
+    IncompleteProjectivePlaneCurveSingularityComputation,
+    PositiveDimensionalProjectivePlaneCurveSingularLocus,
+    ProjectivePlaneCurveFirstJet,
+    ProjectivePlaneCurveSingularityBudget,
+    ProjectivePlaneCurveSingularityProfile,
+    ProjectivePlaneCurveSingularityRequest,
+    ProjectivePlaneCurveSingularPointRecord,
+    SmoothProjectivePlaneCurve,
+    ZeroDimensionalProjectivePlaneCurveSingularLocus,
+)
 from jacobian.math.polynomials.maps._models import VariablePoint
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
@@ -288,8 +299,17 @@ __all__ = [
     "AffineChartResult",
     "AffineCurveRequest",
     "AffineCurveResult",
+    "IncompleteProjectivePlaneCurveSingularityComputation",
+    "PositiveDimensionalProjectivePlaneCurveSingularLocus",
     "ProjectiveClosureRequest",
     "ProjectiveClosureResult",
+    "ProjectivePlaneCurveFirstJet",
+    "ProjectivePlaneCurveSingularPointRecord",
+    "ProjectivePlaneCurveSingularityBudget",
+    "ProjectivePlaneCurveSingularityProfile",
+    "ProjectivePlaneCurveSingularityRequest",
     "RationalConicParametrizationRequest",
     "RationalConicParametrizationResult",
+    "SmoothProjectivePlaneCurve",
+    "ZeroDimensionalProjectivePlaneCurveSingularLocus",
 ]

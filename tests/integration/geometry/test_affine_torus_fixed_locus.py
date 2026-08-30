@@ -76,8 +76,8 @@ def test_public_tool_validates_and_executes_its_example() -> None:
 
     assert "linear part is square" in tool.examples[0].description
     assert "same standard torus" in tool.examples[0].description
-    assert linear_schema["properties"]["row_count"]["maximum"] == 16
-    assert linear_schema["properties"]["column_count"]["maximum"] == 16
+    assert linear_schema["properties"]["row_count"]["maximum"] == 64
+    assert linear_schema["properties"]["column_count"]["maximum"] == 64
     assert linear_schema["properties"]["entries"]["maxItems"] == 16
     assert linear_schema["properties"]["entries"]["items"]["maxItems"] == 16
     assert isinstance(result, AffineTorusFixedLocusResult)

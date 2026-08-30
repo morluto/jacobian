@@ -21,6 +21,7 @@ from jacobian._execution import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
+from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     CommonInterlacingOutcome,
     CommonInterlacingProfile,
@@ -38,7 +39,10 @@ _CANONICAL_POLYNOMIAL = TypeAdapter(tuple[CanonicalInteger, ...])
 _OUTCOME: TypeAdapter[CommonInterlacingOutcome] = TypeAdapter(CommonInterlacingOutcome)
 
 
-def _root_profile_from_worker(value: object) -> SourceRootProfile:
+def _root_profile_from_worker(
+    value: object,
+    source: LabelledRationalPolynomial,
+) -> SourceRootProfile:
     """Parse bounded worker structure without replaying exact factorization."""
 
     if not isinstance(value, dict) or not isinstance(value.get("roots"), list):
@@ -58,6 +62,14 @@ def _root_profile_from_worker(value: object) -> SourceRootProfile:
             polynomial=polynomial,
             real_root_index=root_index,
         )
+        source_poly = rational_polynomial_to_sympy(source.polynomial)
+        root_poly = source_poly.from_list(
+            [int(coefficient) for coefficient in polynomial],
+            gens=source_poly.gens,
+            domain="QQ",
+        )
+        if not source_poly.rem(root_poly).is_zero:
+            raise ValueError("worker root polynomial is not a factor of its source")
         root_payload = dict(raw_root)
         root_payload["value"] = algebraic_value
         roots.append(PolynomialRealRoot.model_validate(root_payload))
@@ -73,12 +85,20 @@ def _profile_from_worker(
     raw_profiles = payload.get("root_profiles")
     if not isinstance(raw_profiles, list):
         raise ValueError("malformed root profiles")
-    root_profiles = tuple(_root_profile_from_worker(value) for value in raw_profiles)
+    root_profiles: list[SourceRootProfile] = []
+    for value in raw_profiles:
+        if not isinstance(value, dict) or type(value.get("source_index")) is not int:
+            raise ValueError("malformed root profile source index")
+        source_index = value["source_index"]
+        if not 0 <= source_index < len(family):
+            raise ValueError("worker root profile source index is out of range")
+        root_profiles.append(_root_profile_from_worker(value, family[source_index]))
+    root_profiles_tuple = tuple(root_profiles)
     outcome = _OUTCOME.validate_python(payload.get("outcome"))
     return CommonInterlacingProfile.model_validate(
         {
             "family": family,
-            "root_profiles": root_profiles,
+            "root_profiles": root_profiles_tuple,
             "outcome": outcome,
         }
     )

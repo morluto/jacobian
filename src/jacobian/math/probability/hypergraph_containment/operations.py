@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import comb
 
 from jacobian._exact import (
     CanonicalRational,
@@ -66,7 +67,14 @@ def _admit_hypergraph_vertex_containment(
             code="hypergraph_containment.work_bound_exceeded",
             message="the complete subset containment work envelope is exceeded",
         )
-    probability_digits = n * canonical_rational_component_digits(retention_probability)
+    trivial_event = not hypergraph.edges or any(
+        not members for _, members in hypergraph.edges
+    )
+    probability_digits = (
+        1
+        if trivial_event
+        else n * canonical_rational_component_digits(retention_probability)
+    )
     if probability_digits > 32_768:
         raise OperationDomainValidationError(
             location=("retention_probability",),
@@ -117,6 +125,26 @@ def compute_hypergraph_vertex_containment(
     """
     edge_masks = _admit_hypergraph_vertex_containment(hypergraph, retention_probability)
     n = len(hypergraph.vertices)
+
+    if not hypergraph.edges:
+        return HypergraphVertexContainmentResult(
+            hypergraph=hypergraph,
+            retention_probability=retention_probability,
+            containing_subset_counts=tuple(0 for _ in range(n + 1)),
+            total_state_count=1 << n,
+            success_count=0,
+            probability=CanonicalRational.from_fraction(Fraction(0)),
+        )
+    if any(not members for _, members in hypergraph.edges):
+        counts = tuple(comb(n, k) for k in range(n + 1))
+        return HypergraphVertexContainmentResult(
+            hypergraph=hypergraph,
+            retention_probability=retention_probability,
+            containing_subset_counts=counts,
+            total_state_count=1 << n,
+            success_count=1 << n,
+            probability=CanonicalRational.from_fraction(Fraction(1)),
+        )
 
     counts = [0] * (n + 1)
     for mask in range(1 << n):

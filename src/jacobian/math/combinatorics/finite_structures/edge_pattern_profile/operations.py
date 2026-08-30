@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import unicodedata
+
 from jacobian.canonical import (
+    CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
     strict_json_object_size,
@@ -86,29 +89,41 @@ def _admit_edge_pattern_profile(
             code="edge_pattern.invalid_color_map",
             message="vertex_colors must be a string-to-string mapping",
         )
-    entry_sizes = tuple(
-        _entry_size(
-            edge_id,
-            members,
-            tuple(vertex_colors[member] for member in members),
+    normalized_keys = [unicodedata.normalize("NFC", key) for key in vertex_colors]
+    if len(set(normalized_keys)) != len(normalized_keys):
+        raise OperationDomainValidationError(
+            location=("vertex_colors",),
+            code="edge_pattern.color_map_key_collision",
+            message="vertex_colors keys collide after Unicode normalization",
         )
-        for edge_id, members in hypergraph.edges
-    )
-    id_sizes = tuple(
-        len(encode_strict_json(edge_id)) for edge_id, _ in hypergraph.edges
-    )
-    result_bytes = strict_json_object_size(
-        (
+    try:
+        entry_sizes: list[int] = []
+        monochromatic_sizes: list[int] = []
+        rainbow_sizes: list[int] = []
+        for edge_id, members in hypergraph.edges:
+            colors = tuple(vertex_colors[member] for member in members)
+            entry_sizes.append(_entry_size(edge_id, members, colors))
+            edge_id_size = len(encode_strict_json(edge_id))
+            blocks = len(set(colors))
+            if blocks == 1:
+                monochromatic_sizes.append(edge_id_size)
+            if blocks == len(members):
+                rainbow_sizes.append(edge_id_size)
+        result_bytes = strict_json_object_size(
             (
-                "hypergraph",
-                len(encode_strict_json(hypergraph.model_dump(mode="json"))),
-            ),
-            ("vertex_colors", len(encode_strict_json(vertex_colors))),
-            ("entries", _strict_json_array_size(entry_sizes)),
-            ("monochromatic_edge_ids", _strict_json_array_size(id_sizes)),
-            ("rainbow_edge_ids", _strict_json_array_size(id_sizes)),
+                ("hypergraph", len(encode_strict_json(hypergraph.model_dump(mode="json")))),
+                ("vertex_colors", len(encode_strict_json(vertex_colors))),
+                ("entries", _strict_json_array_size(tuple(entry_sizes))),
+                ("monochromatic_edge_ids", _strict_json_array_size(tuple(monochromatic_sizes))),
+                ("rainbow_edge_ids", _strict_json_array_size(tuple(rainbow_sizes))),
+            )
         )
-    )
+    except (CanonicalizationError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("hypergraph", "vertex_colors"),
+            code="edge_pattern.result_too_large",
+            message="the complete edge-pattern profile exceeds the canonical output envelope",
+        ) from error
     if result_bytes > MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES:
         raise OperationDomainValidationError(
             location=("hypergraph", "vertex_colors"),

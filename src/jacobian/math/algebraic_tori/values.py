@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from math import ceil, log10
+from itertools import pairwise
+from math import ceil, log10, prod
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
@@ -10,6 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
     MAX_CERTIFIED_SNF_INPUT_DIMENSION,
@@ -174,6 +176,20 @@ class TorsionCharacterGroup(StrictModel):
         "ZETA_D_EQUALS_EXP_2_PI_I_OVER_D"
     )
 
+    @model_validator(mode="after")
+    def require_canonical_invariant_factors(self) -> Self:
+        factors = tuple(
+            parse_canonical_integer(value) for value in self.invariant_factors
+        )
+        if any(value <= 1 for value in factors) or any(
+            right % left for left, right in pairwise(factors)
+        ):
+            raise _validation_error(
+                "algebraic_torus.torsion_invariant_factors",
+                "torsion invariant factors must exceed one and form a divisibility chain",
+            )
+        return self
+
 
 class AlgebraicTorusSolutionSubgroup(StrictModel):
     """The complete compact subgroup solving one homogeneous monomial system.
@@ -267,6 +283,21 @@ class AlgebraicTorusSolutionSubgroup(StrictModel):
             raise _validation_error(
                 "algebraic_torus.solution_torsion_shape",
                 "torsion characters must follow the nontrivial Smith factors",
+            )
+        expected_component_count = prod(
+            (
+                parse_canonical_integer(value)
+                for value in self.torsion_character_group.invariant_factors
+            ),
+            start=1,
+        )
+        if (
+            parse_canonical_integer(self.connected_component_count)
+            != expected_component_count
+        ):
+            raise _validation_error(
+                "algebraic_torus.solution_component_count",
+                "connected component count must equal the product of torsion invariant factors",
             )
         if (
             len(self.torsion_parameter_axis) != torsion_count

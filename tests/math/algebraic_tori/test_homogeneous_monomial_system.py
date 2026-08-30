@@ -12,6 +12,7 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.math.algebraic_tori import (
     AlgebraicTorusSolutionSubgroup,
     HomogeneousMonomialSystem,
+    TorsionCharacterGroup,
     homogeneous_monomial_solution_subgroup,
 )
 from jacobian.math.algebraic_tori._models import (
@@ -71,15 +72,7 @@ def _multiply(
 
 def _assert_defining_invariants(result: AlgebraicTorusSolutionSubgroup) -> None:
     certificate = result.smith_certificate
-    if certificate.source.row_count and certificate.source.column_count:
-        assert verify_smith_normal_form_certificate(certificate)
-    else:
-        # The existing standalone verifier intentionally owns only its public
-        # nonempty 16-by-16 request domain. The torus kernel also admits the
-        # exact empty-axis Smith degeneracies supported by smith_reduce.
-        assert certificate.source == result.source.exponent_matrix
-        assert certificate.rank == 0
-        assert certificate.invariant_factors == ()
+    assert verify_smith_normal_form_certificate(certificate)
     source = _integers(result.source.exponent_matrix)
     free = _integers(result.reduced_free_exponent_map)
     assert _multiply(source, free, result.free_rank) == [
@@ -236,6 +229,24 @@ def test_result_round_trips_and_source_composes_unchanged() -> None:
 
     assert decoded == produced
     assert consumed == produced
+
+
+@pytest.mark.parametrize("factors", [("1",), ("6", "2"), ("2", "3")])
+def test_torsion_character_group_rejects_noncanonical_factors(
+    factors: tuple[str, ...],
+) -> None:
+    with pytest.raises(ValidationError, match="divisibility chain"):
+        TorsionCharacterGroup(invariant_factors=factors)
+
+
+def test_result_rejects_component_count_that_contradicts_torsion_group() -> None:
+    encoded = homogeneous_monomial_solution_subgroup(
+        _system([[2, 0], [0, 6]])
+    ).model_dump(mode="json")
+    encoded["connected_component_count"] = "11"
+
+    with pytest.raises(ValidationError, match="product of torsion invariant factors"):
+        AlgebraicTorusSolutionSubgroup.model_validate(encoded)
 
 
 def test_result_rejects_a_certificate_bound_to_another_source() -> None:

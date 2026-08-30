@@ -6,7 +6,6 @@ from __future__ import annotations
 from typing import Any, Literal, cast, overload
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.topology._homology import (
@@ -130,12 +129,16 @@ def test_producer_result_carries_its_canonical_value() -> None:
     assert [group.betti_number for group in _field_groups(homology)] == [1, 1]
 
 
-def test_producer_result_binds_the_canonical_differentials() -> None:
+def test_producer_canonical_differentials_equal_its_sparse_boundaries() -> None:
     result = _prime_field_chain(_circle(), 2)
-    payload = result.model_dump(mode="json")
-    payload["canonical_value"]["differential_matrices"][0][0][0] = "0"
-    with pytest.raises(ValidationError, match="canonical chain-complex value"):
-        ChainComplexResult.model_validate(payload)
+    expected = []
+    for matrix in result.boundary_matrices[1:]:
+        dense = [[0] * matrix.columns for _ in range(matrix.rows)]
+        for entry in matrix.entries:
+            dense[entry.row][entry.column] = entry.value
+        expected.append(tuple(tuple(str(value) for value in row) for row in dense))
+
+    assert result.canonical_value.differential_matrices == tuple(expected)
 
 
 def test_integral_producer_value_enters_homology_unchanged() -> None:

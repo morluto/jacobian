@@ -15,7 +15,11 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
 )
-from jacobian.math.matrices.certified_snf.operations import matrix_multiply
+from jacobian.math.matrices.certified_snf.operations import (
+    identity_matrix,
+    matrix_determinant,
+    matrix_multiply,
+)
 from jacobian.math.topology.chain_complexes import _smith_process
 from jacobian.process import bounded_process_cancellation
 
@@ -128,10 +132,17 @@ def test_worker_projection_is_bound_to_the_admitted_source() -> None:
         )
         == result.reduction.diagonal
     )
-    assert matrix_multiply(result.left_inverse, result.reduction.left) == [
-        [1, 0],
-        [0, 1],
-    ]
+    unit = identity_matrix(2)
+    assert matrix_multiply(result.left_inverse, result.reduction.left) == unit
+    assert matrix_multiply(result.reduction.left, result.left_inverse) == unit
+    assert matrix_multiply(result.right_inverse, result.reduction.right) == unit
+    assert matrix_multiply(result.reduction.right, result.right_inverse) == unit
+    assert (
+        matrix_determinant(result.reduction.left) == result.reduction.left_determinant
+    )
+    assert (
+        matrix_determinant(result.reduction.right) == result.reduction.right_determinant
+    )
 
 
 def test_wrong_worker_digest_is_rejected(

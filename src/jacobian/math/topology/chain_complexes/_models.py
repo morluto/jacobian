@@ -9,7 +9,7 @@ from pydantic import Field, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian._models import StrictModel
 from jacobian.math.topology.chain_complexes.values import (
     MAX_BASIS_SIZE,
     MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS,
@@ -134,9 +134,9 @@ def _preflight_raw_differentials(
     maximum_axis: int,
     maximum_cells: int,
     maximum_digits: int,
-) -> None:
+) -> tuple[tuple[tuple[str, ...], ...], ...] | None:
     if not isinstance(differentials, (list, tuple)):
-        return
+        return None
     if len(differentials) > 2 * MAX_CHAIN_DEGREE:
         raise _validation_error(
             "homology_raw_differential_count_exceeded",
@@ -144,17 +144,25 @@ def _preflight_raw_differentials(
         )
 
     cells = 0
+    canonical_matrices: list[tuple[tuple[str, ...], ...]] = []
     for matrix in differentials:
         if not isinstance(matrix, (list, tuple)):
-            continue
+            raise _validation_error(
+                "homology_raw_matrix_axis_invalid",
+                "each raw homology differential must be an array of rows",
+            )
         if len(matrix) > maximum_axis:
             raise _validation_error(
                 "homology_raw_matrix_rows_exceeded",
                 f"a homology differential has more than {maximum_axis} rows",
             )
+        canonical_rows: list[tuple[str, ...]] = []
         for row in matrix:
             if not isinstance(row, (list, tuple)):
-                continue
+                raise _validation_error(
+                    "homology_raw_row_axis_invalid",
+                    "each raw homology differential row must be an array",
+                )
             if len(row) > maximum_axis:
                 raise _validation_error(
                     "homology_raw_matrix_columns_exceeded",
@@ -167,16 +175,23 @@ def _preflight_raw_differentials(
                     "homology differential cells exceed the raw "
                     f"{maximum_cells}-cell envelope",
                 )
-            if any(
-                isinstance(entry, str)
-                and _raw_component_digit_count(entry) > maximum_digits
-                for entry in row
-            ):
-                raise _validation_error(
-                    "homology_raw_coefficient_digits_exceeded",
-                    "a homology coefficient exceeds the raw "
-                    f"{maximum_digits}-digit envelope",
-                )
+            canonical_entries: list[str] = []
+            for entry in row:
+                if not isinstance(entry, str):
+                    raise _validation_error(
+                        "homology_raw_coefficient_invalid",
+                        "each raw homology coefficient must be a string",
+                    )
+                if _raw_component_digit_count(entry) > maximum_digits:
+                    raise _validation_error(
+                        "homology_raw_coefficient_digits_exceeded",
+                        "a homology coefficient exceeds the raw "
+                        f"{maximum_digits}-digit envelope",
+                    )
+                canonical_entries.append(entry)
+            canonical_rows.append(tuple(canonical_entries))
+        canonical_matrices.append(tuple(canonical_rows))
+    return tuple(canonical_matrices)
 
 
 def _preflight_raw_homology_complex(data: object) -> object:
@@ -188,7 +203,7 @@ def _preflight_raw_homology_complex(data: object) -> object:
     if isinstance(raw_complex, ChainComplexValue) or not isinstance(
         raw_complex, Mapping
     ):
-        return canonicalize_json_containers(data)
+        return data
 
     raw_ring = raw_complex.get("coefficient_ring")
     integral = raw_ring in ("ZZ", CoefficientRing.INTEGER)
@@ -218,13 +233,20 @@ def _preflight_raw_homology_complex(data: object) -> object:
                 f"homology input chain ranks must be at most {maximum_axis}",
             )
 
-    _preflight_raw_differentials(
+    differentials = _preflight_raw_differentials(
         raw_complex.get("differential_matrices"),
         maximum_axis=maximum_axis,
         maximum_cells=maximum_cells,
         maximum_digits=maximum_digits,
     )
-    return canonicalize_json_containers(data)
+    canonical_complex = dict(raw_complex)
+    if isinstance(basis_sizes, (list, tuple)):
+        canonical_complex["basis_sizes"] = tuple(basis_sizes)
+    if differentials is not None:
+        canonical_complex["differential_matrices"] = differentials
+    canonical_data = dict(data)
+    canonical_data["complex"] = canonical_complex
+    return canonical_data
 
 
 class ConstructChainComplexRequest(StrictModel):

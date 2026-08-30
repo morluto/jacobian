@@ -11,6 +11,11 @@ from pydantic import ValidationError
 from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices.certified_snf.operations import (
+    identity_matrix,
+    matrix_determinant,
+    matrix_multiply,
+)
 from jacobian.math.topology.chain_complexes._models import (
     ComputeHomologyRequest,
     ConstructChainComplexRequest,
@@ -374,6 +379,64 @@ class TestIntegralHomology:
             int(torsion.order) * int(value) for value in torsion.cycle.coefficients
         )
 
+    def test_small_unimodular_coordinate_change_preserves_exact_homology(self) -> None:
+        diagonal = self._complex(
+            (2, 2),
+            ((("2", "0"), ("0", "2")),),
+        )
+        changed = self._complex(
+            (2, 2),
+            ((("2", "32"), ("0", "2")),),
+        )
+
+        diagonal_groups = _integral_groups(homology_groups(diagonal))
+        changed_groups = _integral_groups(homology_groups(changed))
+
+        assert (
+            tuple(
+                (group.free_rank, group.torsion_invariant_factors)
+                for group in diagonal_groups
+            )
+            == tuple(
+                (group.free_rank, group.torsion_invariant_factors)
+                for group in changed_groups
+            )
+            == ((0, ("2", "2")), (0, ()))
+        )
+
+    def test_three_term_middle_homology_retains_cycles_and_bounding_chain(
+        self,
+    ) -> None:
+        complex_value = self._complex(
+            (1, 3, 1),
+            (
+                (("1", "1", "0"),),
+                (("2",), ("-2",), ("0",)),
+            ),
+        )
+
+        groups = _integral_groups(homology_groups(complex_value))
+
+        assert tuple(
+            (group.free_rank, group.torsion_invariant_factors) for group in groups
+        ) == ((0, ()), (1, ("2",)), (0, ()))
+        middle = groups[1]
+        cycles = tuple(generator.cycle for generator in middle.free_generators) + tuple(
+            generator.cycle for generator in middle.torsion_generators
+        )
+        for cycle in cycles:
+            assert self._apply(
+                complex_value.differential_matrices[0],
+                cycle.coefficients,
+            ) == (0,)
+        torsion = middle.torsion_generators[0]
+        assert self._apply(
+            complex_value.differential_matrices[1],
+            torsion.bounding_chain.coefficients,
+        ) == tuple(
+            int(torsion.order) * int(value) for value in torsion.cycle.coefficients
+        )
+
     def test_zero_incoming_map_does_not_inherit_transformation_height(self) -> None:
         complex_value = self._complex(
             (2, 2, 2),
@@ -409,6 +472,55 @@ class TestIntegralHomology:
             (group.free_rank, group.torsion_invariant_factors)
             for group in _integral_groups(result)
         ) == ((0, ()), (0, ()))
+
+    @pytest.mark.parametrize(
+        ("source", "expected_diagonal"),
+        (
+            (
+                [
+                    [0, 0, -1, 0],
+                    [1, 0, 0, 0],
+                    [0, 0, 0, 1],
+                    [0, -1, 0, 0],
+                ],
+                identity_matrix(4),
+            ),
+            ([[2, 32], [0, 2]], [[2, 0], [0, 2]]),
+        ),
+    )
+    def test_presolved_smith_transformations_and_inverses_are_exact(
+        self,
+        source: list[list[int]],
+        expected_diagonal: list[list[int]],
+    ) -> None:
+        from jacobian.math.topology.chain_complexes import _integral_homology as kernel
+
+        rows = len(source)
+        columns = len(source[0])
+        _height, presolved = kernel._smith_admission(
+            source,
+            rows=rows,
+            columns=columns,
+        )
+
+        assert presolved is not None
+        reduction = presolved.reduction
+        assert reduction.diagonal == expected_diagonal
+        assert (
+            matrix_multiply(
+                matrix_multiply(reduction.left, reduction.source),
+                reduction.right,
+            )
+            == reduction.diagonal
+        )
+        left_unit = identity_matrix(rows)
+        right_unit = identity_matrix(columns)
+        assert matrix_multiply(presolved.left_inverse, reduction.left) == left_unit
+        assert matrix_multiply(reduction.left, presolved.left_inverse) == left_unit
+        assert matrix_multiply(presolved.right_inverse, reduction.right) == right_unit
+        assert matrix_multiply(reduction.right, presolved.right_inverse) == right_unit
+        assert matrix_determinant(reduction.left) == reduction.left_determinant
+        assert matrix_determinant(reduction.right) == reduction.right_determinant
 
     def test_signed_permutation_presolve_reaches_the_chain_rank_boundary(self) -> None:
         rank = 32
@@ -473,10 +585,15 @@ class TestIntegralHomology:
         )
 
     def test_height_envelope_rejects_before_smith_execution(self) -> None:
-        coefficient = "9" * 32
+        coefficient = int("9" * 32)
         high_growth = self._complex(
             (2, 2),
-            (((coefficient, coefficient), (coefficient, coefficient)),),
+            (
+                (
+                    (str(coefficient), str(coefficient - 1)),
+                    (str(coefficient - 2), str(coefficient - 3)),
+                ),
+            ),
         )
         with pytest.raises(OperationDomainValidationError) as exc_info:
             homology_groups(high_growth)
@@ -681,6 +798,56 @@ class TestIntegralHomology:
             == 2_500
         )
 
+    @pytest.mark.parametrize(
+        ("differentials", "error_type"),
+        (
+            ([1], "chain_complex.homology_raw_matrix_axis_invalid"),
+            ([[1]], "chain_complex.homology_raw_row_axis_invalid"),
+        ),
+    )
+    def test_raw_integral_homology_rejects_malformed_axes_shallowly(
+        self,
+        differentials: object,
+        error_type: str,
+    ) -> None:
+        payload = {
+            "complex": {
+                "coefficient_ring": "ZZ",
+                "degree_min": 0,
+                "degree_max": 1,
+                "basis_sizes": [1, 1],
+                "differential_matrices": differentials,
+            }
+        }
+
+        with pytest.raises(ValidationError) as exc_info:
+            ComputeHomologyRequest.model_validate(payload)
+
+        assert exc_info.value.errors()[0]["type"] == error_type
+
+    def test_raw_integral_homology_rejects_deep_malformed_entry_shallowly(
+        self,
+    ) -> None:
+        entry: object = "0"
+        for _ in range(1_200):
+            entry = [entry]
+        payload = {
+            "complex": {
+                "coefficient_ring": "ZZ",
+                "degree_min": 0,
+                "degree_max": 1,
+                "basis_sizes": [1, 1],
+                "differential_matrices": [[[entry]]],
+            }
+        }
+
+        with pytest.raises(ValidationError) as exc_info:
+            ComputeHomologyRequest.model_validate(payload)
+
+        assert exc_info.value.errors()[0]["type"] == (
+            "chain_complex.homology_raw_coefficient_invalid"
+        )
+
     def test_integral_certificates_remain_bound_to_retained_differentials(
         self,
     ) -> None:
@@ -805,7 +972,7 @@ class TestIntegralHomology:
 
         complex_value = self._complex(
             (2, 2),
-            ((("2", "2"), ("2", "2")),),
+            ((("2", "3"), ("4", "5")),),
         )
         plan = kernel.admit_integral_homology(complex_value)
         executed_work = 0
@@ -839,11 +1006,78 @@ class TestIntegralHomology:
             groups = kernel.compute_integral_homology(plan)
 
         assert executed_work > 0
-        assert tuple(group.free_rank for group in groups) == (1, 1)
+        assert tuple(
+            (group.free_rank, group.torsion_invariant_factors) for group in groups
+        ) == ((0, ("2",)), (0, ()))
         assert_charged_work_parity(
             charged={"smith": plan.smith_work},
             executed={"smith": executed_work},
         )
+
+    def test_zero_coordinate_smith_reduction_is_lazy_and_charged_once(self) -> None:
+        from jacobian.math.topology.chain_complexes import _integral_homology as kernel
+
+        complex_value = self._complex(
+            (2, 3, 0),
+            (
+                (("2", "2", "0"), ("2", "2", "0")),
+                ((), (), ()),
+            ),
+        )
+
+        plan = kernel.admit_integral_homology(complex_value)
+        middle = plan.degrees[1]
+
+        assert middle.incoming_presolves_by_cycle_rank == (None, None, None, None)
+        expected_smith_work = sum(
+            degree.outgoing_height.work_units
+            + max(bound.work_units for bound in degree.incoming_heights_by_cycle_rank)
+            for degree in plan.degrees
+        )
+        assert plan.smith_work == expected_smith_work
+
+    def test_integral_admission_observes_cancellation_between_degrees(self) -> None:
+        from threading import Event
+
+        from jacobian._execution import OperationExecutionCancelledError
+        from jacobian.math.topology.chain_complexes import _integral_homology as kernel
+        from jacobian.process import bounded_process_cancellation
+
+        cancellation = Event()
+        original = kernel._smith_admission
+        calls = 0
+
+        def cancel_after_first_admission(
+            source: list[list[int]],
+            *,
+            rows: int,
+            columns: int,
+        ) -> Any:
+            nonlocal calls
+            result = original(source, rows=rows, columns=columns)
+            calls += 1
+            if calls == 1:
+                cancellation.set()
+            return result
+
+        with (
+            bounded_process_cancellation(cancellation),
+            patch.object(
+                kernel,
+                "_smith_admission",
+                side_effect=cancel_after_first_admission,
+            ),
+            pytest.raises(OperationExecutionCancelledError, match="degree 0"),
+        ):
+            kernel.admit_integral_homology(
+                self._complex(
+                    (2, 2, 0),
+                    (
+                        (("2", "2"), ("2", "2")),
+                        ((), ()),
+                    ),
+                )
+            )
 
 
 class TestTensorProduct:

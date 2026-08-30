@@ -444,7 +444,7 @@ def _smith_height_bound(
 
 
 class _PresolveHeightExceededError(Exception):
-    """The unit presolve cannot stay inside the admitted integer envelope."""
+    """The visible-pivot presolve cannot stay inside the integer envelope."""
 
 
 def _checked_linear_update(value: int, factor: int, source: int) -> int:
@@ -533,25 +533,49 @@ def _identity_reduction(
         # and retention of both square transformations and their inverses.
         # In particular, a 0 x n or n x 0 reduction still constructs two n x n
         # identity matrices and must not be priced as one unit.
-        work_units=8 * (rows * columns + rows * rows + columns * columns + 1),
+        work_units=_identity_reduction_work(rows, columns),
         intermediate_bits=max(1, _matrix_bits(source)),
     )
 
 
-def _unit_presolve_structural_work(rows: int, columns: int) -> int:
-    """Charge scans and retained structures independent of pivot outcomes."""
+def _identity_reduction_work(rows: int, columns: int) -> int:
+    """Charge scans, copies, and retained identities for a zero reduction."""
 
-    pivot_scans = sum(
-        (rows - pivot) * (columns - pivot) for pivot in range(min(rows, columns))
+    return 8 * (rows * columns + rows * rows + columns * columns + 1)
+
+
+def _lazy_zero_smith_height(rows: int, columns: int) -> SmithHeightBound:
+    """Describe a zero Smith reduction without allocating its matrices."""
+
+    return SmithHeightBound(
+        left_bits=1,
+        right_bits=1,
+        diagonal_bits=1,
+        intermediate_bits=1,
+        work_units=_identity_reduction_work(rows, columns),
+        transformations_are_identity=True,
     )
-    return 8 * (rows * columns + rows * rows + columns * columns + 1) + pivot_scans
 
 
-def _unit_presolve_attempt_work_bound(rows: int, columns: int) -> int:
-    """Bound an unsuccessful unit-pivot attempt before general Smith work."""
+def _presolve_structural_work(rows: int, columns: int) -> int:
+    """Charge retained matrices independent of exact pivot outcomes."""
 
-    work = _unit_presolve_structural_work(rows, columns)
+    return 8 * (rows * columns + rows * rows + columns * columns + 1)
+
+
+def _presolve_attempt_work_bound(
+    rows: int,
+    columns: int,
+) -> int:
+    """Bound one exact visible-pivot attempt before general Smith work."""
+
+    work = _presolve_structural_work(rows, columns)
+    state_scalars = rows * columns + 2 * rows * rows + 2 * columns * columns
     for pivot in range(min(rows, columns)):
+        remaining_cells = (rows - pivot) * (columns - pivot)
+        # One scan chooses a minimum-magnitude nonzero entry. Unless it is a
+        # unit, one further scan decides whether it divides the active block.
+        work += 2 * remaining_cells
         remaining_rows = rows - pivot - 1
         remaining_columns = columns - pivot - 1
         # At most one row swap, one column swap, and one sign normalization.
@@ -560,10 +584,51 @@ def _unit_presolve_attempt_work_bound(rows: int, columns: int) -> int:
         # transformation, and the inverse transformation.
         work += remaining_rows * (2 * columns + 4 * rows)
         work += remaining_columns * (2 * rows + 4 * columns)
+        # Retain the largest intermediate after row and column clearing.
+        work += 2 * state_scalars
     return work
 
 
-def _position_unit_pivot(
+def _select_visible_divisor_pivot(
+    working: Matrix,
+    *,
+    pivot: int,
+) -> tuple[tuple[int, int] | None, int, bool]:
+    """Select a minimum-magnitude entry when it divides the trailing block.
+
+    If any entry of the block divides every entry, its magnitude equals the
+    minimum nonzero magnitude. Thus testing one minimum is complete for this
+    presolve class and avoids an exhaustive scan over candidate pivots.
+    """
+
+    rows = len(working)
+    columns = len(working[0]) if working else 0
+    work = 0
+    selected: tuple[int, int] | None = None
+    minimum = 0
+    for row in range(pivot, rows):
+        for column in range(pivot, columns):
+            work += 1
+            value = working[row][column]
+            magnitude = abs(value)
+            if magnitude and (selected is None or magnitude < minimum):
+                selected = (row, column)
+                minimum = magnitude
+    if selected is None:
+        return None, work, False
+    if minimum == 1:
+        return selected, work, True
+
+    divisor = working[selected[0]][selected[1]]
+    for row in range(pivot, rows):
+        for column in range(pivot, columns):
+            work += 1
+            if working[row][column] % divisor:
+                return None, work, True
+    return selected, work, True
+
+
+def _position_visible_pivot(
     working: Matrix,
     left: Matrix,
     right: Matrix,
@@ -574,7 +639,7 @@ def _position_unit_pivot(
     selected_row: int,
     selected_column: int,
 ) -> tuple[int, int, int]:
-    """Move one selected unit to the positive diagonal position."""
+    """Move one selected divisor to the positive diagonal position."""
 
     work = 0
     left_determinant = 1
@@ -589,7 +654,7 @@ def _position_unit_pivot(
         work += _swap_columns(right, pivot, selected_column)
         work += _swap_rows(right_inverse, pivot, selected_column)
         right_determinant = -1
-    if working[pivot][pivot] == -1:
+    if working[pivot][pivot] < 0:
         work += _scale_row(working, pivot, -1)
         work += _scale_row(left, pivot, -1)
         work += _scale_column(left_inverse, pivot, -1)
@@ -597,7 +662,7 @@ def _position_unit_pivot(
     return work, left_determinant, right_determinant
 
 
-def _clear_unit_pivot(
+def _clear_visible_pivot(
     working: Matrix,
     left: Matrix,
     right: Matrix,
@@ -605,14 +670,23 @@ def _clear_unit_pivot(
     right_inverse: Matrix,
     *,
     pivot: int,
-) -> int:
-    """Clear the row and column of one positive unit pivot."""
+) -> tuple[int, int]:
+    """Clear the row and column of one positive divisor pivot."""
 
     work = 0
+    pivot_value = working[pivot][pivot]
+    state_scalars = (
+        len(working) * len(right)
+        + 2 * len(left) * len(left)
+        + 2 * len(right) * len(right)
+    )
     for row in range(pivot + 1, len(working)):
-        coefficient = working[row][pivot]
-        if coefficient == 0:
+        value = working[row][pivot]
+        if value == 0:
             continue
+        coefficient, remainder = divmod(value, pivot_value)
+        if remainder:
+            raise ArithmeticError("visible Smith pivot does not divide its column")
         work += _add_row_multiple(
             working, target=row, source=pivot, factor=-coefficient
         )
@@ -620,11 +694,19 @@ def _clear_unit_pivot(
         work += _add_column_multiple(
             left_inverse, target=pivot, source=row, factor=coefficient
         )
+    maximum_bits = max(
+        _matrix_bits(matrix)
+        for matrix in (working, left, right, left_inverse, right_inverse)
+    )
+    work += state_scalars
     column_count = len(right)
     for column in range(pivot + 1, column_count):
-        coefficient = working[pivot][column]
-        if coefficient == 0:
+        value = working[pivot][column]
+        if value == 0:
             continue
+        coefficient, remainder = divmod(value, pivot_value)
+        if remainder:
+            raise ArithmeticError("visible Smith pivot does not divide its row")
         work += _add_column_multiple(
             working, target=column, source=pivot, factor=-coefficient
         )
@@ -634,23 +716,30 @@ def _clear_unit_pivot(
         work += _add_row_multiple(
             right_inverse, target=pivot, source=column, factor=coefficient
         )
-    return work
+    maximum_bits = max(
+        maximum_bits,
+        *(
+            _matrix_bits(matrix)
+            for matrix in (working, left, right, left_inverse, right_inverse)
+        ),
+    )
+    work += state_scalars
+    return work, maximum_bits
 
 
-def _presolve_unit_smith(
+def _presolve_visible_smith(
     source: Matrix,
     *,
     rows: int,
     columns: int,
 ) -> SmithReductionData | None:
-    """Exactly reduce matrices cleared by a sequence of visible unit pivots.
+    """Exactly reduce matrices cleared by visible divisibility pivots.
 
-    A selected ``+/-1`` pivot can be cleared using integral elementary row
-    and column operations.  The presolve tracks both transformations and their
-    inverses, checks every scalar update against the owner height envelope, and
-    succeeds only when the remaining block is zero.  A nonzero residual with no
-    visible unit pivot is left to the maintained general Smith backend, even if
-    a later Bezout combination could expose one.
+    A pivot that divides its complete trailing block clears its row and column
+    using integral elementary operations. Selecting such a pivot at every step
+    also proves the positive divisibility order of the resulting diagonal.
+    A minimum-magnitude candidate decides this presolve class in two scans of
+    each trailing block.
     """
 
     if rows == 0 or columns == 0 or not any(value for row in source for value in row):
@@ -663,7 +752,7 @@ def _presolve_unit_smith(
             factors=(),
         )
     if _is_positive_smith_diagonal(source, rows=rows, columns=columns):
-        factors = tuple(
+        diagonal_factors = tuple(
             source[index][index]
             for index in range(min(rows, columns))
             if source[index][index] != 0
@@ -673,8 +762,8 @@ def _presolve_unit_smith(
             rows=rows,
             columns=columns,
             diagonal=[row[:] for row in source],
-            rank=len(factors),
-            factors=factors,
+            rank=len(diagonal_factors),
+            factors=diagonal_factors,
         )
 
     working = [row[:] for row in source]
@@ -684,29 +773,22 @@ def _presolve_unit_smith(
     right_inverse = identity_matrix(columns)
     left_determinant = 1
     right_determinant = 1
-    work = _unit_presolve_structural_work(rows, columns)
-    rank = 0
+    work = _presolve_structural_work(rows, columns)
+    factors: list[int] = []
+    maximum_bits = _matrix_bits(source)
     try:
         for pivot in range(min(rows, columns)):
-            selected = next(
-                (
-                    (row, column)
-                    for row in range(pivot, rows)
-                    for column in range(pivot, columns)
-                    if abs(working[row][column]) == 1
-                ),
-                None,
+            selected, selection_work, has_nonzero = _select_visible_divisor_pivot(
+                working,
+                pivot=pivot,
             )
+            work += selection_work
             if selected is None:
-                if any(
-                    working[row][column] != 0
-                    for row in range(pivot, rows)
-                    for column in range(pivot, columns)
-                ):
+                if has_nonzero:
                     return None
                 break
             selected_row, selected_column = selected
-            positioned_work, left_sign, right_sign = _position_unit_pivot(
+            positioned_work, left_sign, right_sign = _position_visible_pivot(
                 working,
                 left,
                 right,
@@ -719,7 +801,7 @@ def _presolve_unit_smith(
             work += positioned_work
             left_determinant *= left_sign
             right_determinant *= right_sign
-            work += _clear_unit_pivot(
+            cleared_work, cleared_bits = _clear_visible_pivot(
                 working,
                 left,
                 right,
@@ -727,22 +809,19 @@ def _presolve_unit_smith(
                 right_inverse,
                 pivot=pivot,
             )
-            rank += 1
+            work += cleared_work
+            maximum_bits = max(maximum_bits, cleared_bits)
+            factors.append(working[pivot][pivot])
     except _PresolveHeightExceededError:
         return None
 
-    expected = [
-        [int(row == column and row < rank) for column in range(columns)]
-        for row in range(rows)
-    ]
-    if working != expected:
-        return None
     source_bits = _matrix_bits(source)
     left_bits = _matrix_bits(left)
     right_bits = _matrix_bits(right)
     left_inverse_bits = _matrix_bits(left_inverse)
     right_inverse_bits = _matrix_bits(right_inverse)
     maximum_bits = max(
+        maximum_bits,
         source_bits,
         _matrix_bits(working),
         left_bits,
@@ -758,8 +837,8 @@ def _presolve_unit_smith(
             diagonal=working,
             left=left,
             right=right,
-            rank=rank,
-            invariant_factors=(1,) * rank,
+            rank=len(factors),
+            invariant_factors=tuple(factors),
             left_determinant=left_determinant,
             right_determinant=right_determinant,
         ),
@@ -776,7 +855,12 @@ def _smith_admission(
     rows: int,
     columns: int,
 ) -> tuple[SmithHeightBound, SmithReductionData | None]:
-    presolved = _presolve_unit_smith(matrix, rows=rows, columns=columns)
+    attempt_work = _presolve_attempt_work_bound(rows, columns)
+    presolved = _presolve_visible_smith(
+        matrix,
+        rows=rows,
+        columns=columns,
+    )
     if presolved is None:
         bound = _smith_height_bound(matrix, rows=rows, columns=columns)
         return (
@@ -785,9 +869,7 @@ def _smith_admission(
                 right_bits=bound.right_bits,
                 diagonal_bits=bound.diagonal_bits,
                 intermediate_bits=bound.intermediate_bits,
-                work_units=(
-                    bound.work_units + _unit_presolve_attempt_work_bound(rows, columns)
-                ),
+                work_units=bound.work_units + attempt_work,
                 transformations_are_identity=bound.transformations_are_identity,
             ),
             None,
@@ -1078,6 +1160,8 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
         + _RESULT_ROOT_RESERVE_BYTES
     )
     for index, chain_rank in enumerate(source.basis_sizes):
+        degree = source.degree_min + index
+        _require_deadline(deadline, f"before degree {degree} admission")
         outgoing_rows = source.basis_sizes[index - 1] if index > 0 else 0
         outgoing = differentials[index - 1] if index > 0 else []
         incoming_chain_rank = (
@@ -1098,6 +1182,7 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
             label=f"degree {source.degree_min + index} outgoing differential",
         )
         smith_work += outgoing_height.work_units
+        _require_deadline(deadline, f"after degree {degree} outgoing Smith admission")
 
         coordinate_bounds: list[int] = []
         incoming_bounds: list[SmithHeightBound] = []
@@ -1134,23 +1219,24 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
                 value for row in all_coordinates[:known_outgoing_rank] for value in row
             ):
                 raise ArithmeticError(
-                    "unit Smith presolve produced invalid cycle coordinates"
+                    "visible-pivot Smith presolve produced invalid cycle coordinates"
                 )
             exact_incoming_coordinates = all_coordinates[known_outgoing_rank:]
         bounds_by_cycle_rank: dict[
             int, tuple[int, SmithHeightBound, SmithReductionData | None, int]
         ] = {}
         for cycle_rank in cycle_ranks:
+            _require_deadline(
+                deadline,
+                f"during degree {degree} cycle-rank {cycle_rank} admission",
+            )
             if incoming_is_zero:
-                zero_coordinates = [
-                    [0 for _ in range(incoming_chain_rank)] for _ in range(cycle_rank)
-                ]
                 coordinate_bits = 1
-                incoming_height, incoming_presolve = _smith_admission(
-                    zero_coordinates,
-                    rows=cycle_rank,
-                    columns=incoming_chain_rank,
+                incoming_height = _lazy_zero_smith_height(
+                    cycle_rank,
+                    incoming_chain_rank,
                 )
+                incoming_presolve = None
             elif exact_incoming_coordinates is not None:
                 coordinate_bits = _matrix_bits(exact_incoming_coordinates)
                 incoming_height, incoming_presolve = _smith_admission(
@@ -1288,7 +1374,7 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
         )
         degree_plans.append(
             IntegralHomologyDegreePlan(
-                degree=source.degree_min + index,
+                degree=degree,
                 chain_rank=chain_rank,
                 incoming_chain_rank=incoming_chain_rank,
                 outgoing=outgoing,
@@ -1301,6 +1387,7 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
                 output_bits_by_cycle_rank=tuple(result_bounds),
             )
         )
+        _require_deadline(deadline, f"after degree {degree} admission")
 
     # One ledger covers parsing, d^2, both reductions in every degree, and
     # construction/serialization of the complete exact scalar payload.
@@ -1401,6 +1488,15 @@ def _execute_smith_reduction(
 
     if presolved is not None:
         return presolved
+    if rows == 0 or columns == 0 or not any(value for row in source for value in row):
+        return _identity_reduction(
+            source,
+            rows=rows,
+            columns=columns,
+            diagonal=[[0 for _ in range(columns)] for _ in range(rows)],
+            rank=0,
+            factors=(),
+        )
     from jacobian.math.topology.chain_complexes._smith_process import (
         smith_reduce_in_worker,
     )

@@ -160,6 +160,39 @@ def _augmentation(
     )
 
 
+def _chain_parts(
+    complex_: FiniteSimplicialComplex,
+    coefficient_ring: ChainCoefficientRing,
+    prime: int | None,
+    convention: HomologyConvention,
+) -> tuple[
+    tuple[SimplexBasis, ...],
+    tuple[SparseBoundaryMatrix, ...],
+    SparseBoundaryMatrix | None,
+]:
+    """Construct the based simplicial groups and differentials once."""
+
+    bases = tuple(
+        SimplexBasis(dimension=item.dimension, simplices=item.faces)
+        for item in complex_.faces_by_dimension
+    )
+    boundaries = tuple(
+        _boundary_matrix(
+            complex_,
+            dimension,
+            coefficient_ring=coefficient_ring,
+            prime=prime,
+        )
+        for dimension in range(complex_.dimension + 1)
+    )
+    augmentation = (
+        _augmentation(len(complex_.vertices))
+        if convention is HomologyConvention.REDUCED
+        else None
+    )
+    return bases, boundaries, augmentation
+
+
 def _dense(
     matrix: SparseBoundaryMatrix,
     *,
@@ -209,23 +242,11 @@ def chain_complex(
             lambda: _admit_chain(complex_, coefficient_ring, prime, convention),
             location=("complex",),
         )
-    bases = tuple(
-        SimplexBasis(dimension=item.dimension, simplices=item.faces)
-        for item in complex_.faces_by_dimension
-    )
-    boundaries = tuple(
-        _boundary_matrix(
-            complex_,
-            dimension,
-            coefficient_ring=coefficient_ring,
-            prime=prime,
-        )
-        for dimension in range(complex_.dimension + 1)
-    )
-    augmentation = (
-        _augmentation(len(complex_.vertices))
-        if convention is HomologyConvention.REDUCED
-        else None
+    bases, boundaries, augmentation = _chain_parts(
+        complex_,
+        coefficient_ring,
+        prime,
+        convention,
     )
     modulus = prime if coefficient_ring is ChainCoefficientRing.PRIME_FIELD else None
     ledger: list[BoundarySquareLedgerEntry] = []
@@ -382,14 +403,21 @@ def integral_homology(
         lambda: _admit_integral_homology(complex_, convention),
         location=("complex",),
     )
-    chain = chain_complex(
+    bases, boundaries, augmentation = _chain_parts(
         complex_,
         ChainCoefficientRing.INTEGER,
         None,
         convention,
-        admitted=True,
     )
-    homology = homology_groups(chain.canonical_value)
+    chain_value = canonical_chain_complex_value_from_parts(
+        ChainCoefficientRing.INTEGER,
+        convention,
+        None,
+        bases,
+        boundaries,
+        augmentation,
+    )
+    homology = homology_groups(chain_value)
     return IntegralSimplicialHomologyResult.model_construct(
         complex_digest=complex_.complex_digest,
         convention=convention,

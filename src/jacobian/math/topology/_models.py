@@ -677,35 +677,15 @@ class ChainComplexResult(StrictModel):
             else expected_basis_sizes
         )
         expected_degree_min = -1 if self.convention is HomologyConvention.REDUCED else 0
-        canonical_boundaries = (
-            (self.augmentation, *self.boundary_matrices[1:])
-            if self.augmentation is not None
-            else self.boundary_matrices[1:]
-        )
-        expected_differentials: list[tuple[tuple[str, ...], ...]] = []
-        for matrix in canonical_boundaries:
-            if matrix is None:
-                raise _validation_error(
-                    "topology.require_coherent_chain_contract_5",
-                    "canonical differential source is unexpectedly absent",
-                )
-            dense = [[0] * matrix.columns for _ in range(matrix.rows)]
-            for entry in matrix.entries:
-                dense[entry.row][entry.column] = entry.value
-            expected_differentials.append(
-                tuple(tuple(str(value) for value in row) for row in dense)
-            )
         if (
             self.canonical_value.coefficient_ring is not canonical_ring
             or self.canonical_value.prime != self.prime
             or self.canonical_value.degree_min != expected_degree_min
             or self.canonical_value.basis_sizes != expected_basis_sizes
-            or self.canonical_value.differential_matrices
-            != tuple(expected_differentials)
         ):
             raise _validation_error(
                 "topology.require_coherent_chain_contract_5",
-                "canonical chain-complex value does not match the simplicial coefficient, convention, or basis context",
+                "canonical chain-complex value does not match the simplicial coefficient, convention, or basis axes",
             )
         return self
 

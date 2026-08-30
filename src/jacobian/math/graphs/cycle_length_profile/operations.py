@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unicodedata
 from dataclasses import dataclass
+from typing import cast
 
 import networkx as nx
 import rfc8785
@@ -38,7 +39,9 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
         # In a complete graph the first DFS branch witnesses every length.
         return vertex_count**3
     vertex_to_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
-    adjacency = [[False] * vertex_count for _ in range(vertex_count)]
+    adjacency: list[list[bool]] = [
+        [False] * vertex_count for _ in range(vertex_count)
+    ]
     for left, right in graph.edges:
         left_index = vertex_to_index[left]
         right_index = vertex_to_index[right]
@@ -76,7 +79,9 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
 
 def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:
     """Return vertices in the graph's cycle-bearing 2-core."""
-    adjacency = {vertex: set() for vertex in graph.vertices}
+    adjacency: dict[str, set[str]] = {
+        vertex: set() for vertex in graph.vertices
+    }
     for left, right in graph.edges:
         adjacency[left].add(right)
         adjacency[right].add(left)
@@ -110,7 +115,7 @@ def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:
 
 def _maximum_cycle_block_size(graph: SimpleUndirectedGraph) -> int:
     """Return the largest biconnected block that can contain a cycle."""
-    topology = nx.Graph()
+    topology: nx.Graph[str] = nx.Graph()
     topology.add_nodes_from(graph.vertices)
     topology.add_edges_from(graph.edges)
     return max(
@@ -125,13 +130,13 @@ def _maximum_cycle_block_size(graph: SimpleUndirectedGraph) -> int:
 
 def _cycle_block_label_sizes(graph: SimpleUndirectedGraph) -> list[list[int]]:
     """Return descending encoded-label sizes for each cycle-bearing block."""
-    topology = nx.Graph()
+    topology: nx.Graph[str] = nx.Graph()
     topology.add_nodes_from(graph.vertices)
     topology.add_edges_from(graph.edges)
     return [
         sorted(
             (
-                len(rfc8785.dumps(unicodedata.normalize("NFC", label)))
+                len(rfc8785.dumps(unicodedata.normalize("NFC", cast(str, label))))
                 for label in block
             ),
             reverse=True,

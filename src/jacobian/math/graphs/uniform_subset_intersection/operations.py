@@ -42,7 +42,8 @@ def construct_uniform_subset_intersection_graph(
         for j in range(i + 1, len(subsets)):
             intersection_size = len(set(subsets[i]) & set(subsets[j]))
             if _check_relation(intersection_size, threshold, relation):
-                edges.append((labels[i], labels[j]))
+                left, right = sorted((labels[i], labels[j]))
+                edges.append((left, right))
 
     edges.sort()
     graph = SimpleUndirectedGraph(

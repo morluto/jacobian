@@ -76,3 +76,10 @@ def test_single_huge_subset_is_rejected_before_materialization() -> None:
             0,
             "INTERSECTION_EQ_THRESHOLD",
         )
+
+
+def test_multidigit_labels_have_canonical_edge_endpoints() -> None:
+    result = construct_uniform_subset_intersection_graph(
+        11, 1, 1, "INTERSECTION_LT_THRESHOLD"
+    )
+    assert ("L1_10", "L1_2") in result.graph.edges

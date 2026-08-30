@@ -39,9 +39,9 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
 
 def _support_bound(
     fractions: tuple[Fraction, ...], arity: int, candidate_count: int
-) -> int:
+) -> tuple[int, int]:
     if candidate_count <= 1:
-        return candidate_count
+        return candidate_count, 0
     multiplicities: dict[Fraction, int] = {}
     for fraction in fractions:
         multiplicities[fraction] = multiplicities.get(fraction, 0) + 1
@@ -49,15 +49,18 @@ def _support_bound(
         len(multiplicities) * (arity + 1) * (max(multiplicities.values()) + 1)
     )
     if transition_bound > MAX_ENUMERATION_WORK:
-        return candidate_count
+        return candidate_count, 0
     count_vectors = [0] * (arity + 1)
     count_vectors[0] = 1
+    transition_work = 0
     for multiplicity in multiplicities.values():
         next_counts = [0] * (arity + 1)
         for used, count in enumerate(count_vectors):
             if not count:
                 continue
-            for take in range(min(multiplicity, arity - used) + 1):
+            takes = min(multiplicity, arity - used) + 1
+            transition_work += takes
+            for take in range(takes):
                 next_counts[used + take] += count
         count_vectors = next_counts
     count_vector_bound = count_vectors[arity]
@@ -85,8 +88,8 @@ def _support_bound(
             span_bound = (
                 arity * (max(numerators) - min(numerators))
             ) // lattice_step + 1
-            return min(count_vector_bound, span_bound, candidate_count)
-    return count_vector_bound
+            return min(count_vector_bound, span_bound, candidate_count), transition_work
+    return count_vector_bound, transition_work
 
 
 def _capped_combination(n: int, k: int, cap: int) -> int:
@@ -200,7 +203,15 @@ def _admit(
     # Equal source values can collapse many index tuples to the same sum.  The
     # number of attainable value-count vectors is a safe support bound and is
     # much tighter for repeated inputs than the raw combination count.
-    support_bound = _support_bound(fractions, arity, candidate_count)
+    support_bound, support_presolve_work = _support_bound(
+        fractions, arity, candidate_count
+    )
+    if work + support_presolve_work > MAX_ENUMERATION_WORK:
+        _reject(
+            ("values",),
+            "rational_fixed_arity.work_bound",
+            "fixed-arity enumeration and support presolve exceed the admitted work bound",
+        )
     try:
         source_bytes = len(
             encode_strict_json(

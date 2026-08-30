@@ -12,6 +12,7 @@ from jacobian.math.number_theory.friable.family._models import (
     MAX_FRIABLE_FAMILY_MATERIALIZED_X,
     MAX_FRIABLE_FAMILY_ROWS,
     FriableFamilyRequest,
+    plan_friable_family,
 )
 from jacobian.math.number_theory.friable.family.operations import (
     enumerate_friable_family,
@@ -169,6 +170,11 @@ def test_rejects_large_source_exceeding_budget() -> None:
     """A request that would exceed an admission budget is rejected."""
     with pytest.raises(ValueError, match="exceeds the"):
         enumerate_friable_family(10**30, 7)
+
+
+def test_generated_regime_rejects_oversized_serialized_family() -> None:
+    with pytest.raises(ValueError, match="serialized result budget"):
+        plan_friable_family(10**230, 3)
 
 
 def test_request_rejects_negative_source() -> None:

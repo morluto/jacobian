@@ -8,6 +8,8 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
+from jacobian.math.combinatorics.posets.core._models import ElementLabel
 
 MAX_DIVISIBILITY_SET_SIZE = 500
 
@@ -15,7 +17,7 @@ MAX_DIVISIBILITY_SET_SIZE = 500
 class DivisibilityPosetRequest(StrictModel):
     """Construct the proper-divisibility poset of a finite set of positive integers."""
 
-    values: tuple[str, ...] = Field(
+    values: tuple[ElementLabel, ...] = Field(
         min_length=1,
         max_length=MAX_DIVISIBILITY_SET_SIZE,
         description=(
@@ -24,6 +26,20 @@ class DivisibilityPosetRequest(StrictModel):
         ),
         examples=["2", "3", "6"],
     )
+
+    @model_validator(mode="after")
+    def require_positive_unique_values(self) -> Self:
+        if any(parse_canonical_integer(value) <= 0 for value in self.values):
+            raise PydanticCustomError(
+                "divisibility_poset.positive_values",
+                "values must be positive canonical integers",
+            )
+        if len(set(self.values)) != len(self.values):
+            raise PydanticCustomError(
+                "divisibility_poset.values_unique",
+                "values must be distinct",
+            )
+        return self
 
 
 class DivisibilityPosetResult(StrictModel):

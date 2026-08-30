@@ -37,6 +37,9 @@ from jacobian.math.number_theory.number_fields import (
     SimpleNumberFieldPresentation,
     embeddings,
 )
+from jacobian.math.number_theory.number_fields._embedding_limits import (
+    MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES,
+)
 from jacobian.math.number_theory.number_fields._embedding_protocol import (
     NumberFieldEmbeddingWorkerComplete,
     NumberFieldEmbeddingWorkerRequest,
@@ -49,7 +52,6 @@ from jacobian.math.number_theory.number_fields._models import (
 )
 from jacobian.math.number_theory.number_fields._tools import TOOLS
 from jacobian.math.number_theory.number_fields.operations import (
-    MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES,
     NumberFieldEmbeddingAdmissionError,
     _admit_number_field_embeddings,
 )

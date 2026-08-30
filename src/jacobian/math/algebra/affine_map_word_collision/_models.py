@@ -26,9 +26,9 @@ class AffineMapSpec(StrictModel):
     @classmethod
     def _from_kernel(cls, slope: Fraction, intercept: Fraction) -> Self:
         def rational(value: Fraction) -> CanonicalRational:
-            numerator, separator, denominator = format_canonical_rational(value).partition(
-                "/"
-            )
+            numerator, separator, denominator = format_canonical_rational(
+                value
+            ).partition("/")
             return CanonicalRational.model_construct(
                 num=numerator, den=denominator if separator else "1"
             )

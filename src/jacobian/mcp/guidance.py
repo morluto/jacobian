@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 SERVER_DESCRIPTION = (
-    "Direct typed tools for atomic, composable computations in higher mathematics."
+    "Search and run atomic, composable Jacobian tools for higher mathematics."
 )
 
 SERVER_INSTRUCTIONS = (
     "Jacobian provides local typed operations for mathematical computation and "
-    "structural analysis. Each admitted operation is directly callable under its "
-    "operation ID with its owner-local input schema and returns its canonical result. "
-    "Use math.find only when semantic catalog search or exact contract inspection adds "
-    "value beyond client tool discovery. The caller owns composition and may retain a "
-    "returned value when a later operation accepts it. math.run remains available "
-    "during the direct-tool migration but is not required for ordinary operation calls."
+    "structural analysis. Reach for math.find and math.run proactively when a problem "
+    "contains an exact computation, finite search, or structural analysis that may "
+    "match a public MCP operation. Use math.find to discover or inspect operations and "
+    "math.run to execute them. Each call returns an operation-owned canonical "
+    "mathematical value that a caller may retain and reuse when a later contract accepts it."
 )
 
 MATH_FIND_DESCRIPTION = """\

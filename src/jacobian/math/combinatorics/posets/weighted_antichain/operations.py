@@ -8,8 +8,8 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
 from jacobian.math.combinatorics.posets.weighted_antichain._models import (
-    MAX_WEIGHTED_ANTICHAIN_ELEMENTS,
     WeightedAntichainResult,
+    _weighted_antichain_admission_error,
 )
 
 __all__ = ["compute_maximum_weight_antichain"]
@@ -24,17 +24,13 @@ def compute_maximum_weight_antichain(
     Uses an admitted complete subset search and chooses the lexicographically
     least antichain among equal maxima.
     """
-    if len(weights) != len(poset.elements):
+    failure = _weighted_antichain_admission_error(poset, weights)
+    if failure is not None:
+        code, message = failure
         raise OperationDomainValidationError(
-            location=("weights",),
-            code="poset.weighted_antichain_weight_axis",
-            message="weights must align one-for-one with the poset element axis",
-        )
-    if len(poset.elements) > MAX_WEIGHTED_ANTICHAIN_ELEMENTS:
-        raise OperationDomainValidationError(
-            location=("poset",),
-            code="poset.weighted_antichain_work_exceeded",
-            message="weighted antichain search supports at most 16 elements",
+            location=("poset", "weights"),
+            code=f"poset.weighted_antichain_{code}",
+            message=message,
         )
     elements = poset.elements
     n = len(elements)
@@ -58,11 +54,14 @@ def compute_maximum_weight_antichain(
         nonlocal best_weight, best_set
 
         if idx == n:
+            candidate = tuple(current)
+            candidate_labels = tuple(elements[i] for i in candidate)
+            best_labels = tuple(elements[i] for i in best_set)
             if current_weight > best_weight or (
-                current_weight == best_weight and current and not best_set
+                current_weight == best_weight and candidate_labels < best_labels
             ):
                 best_weight = current_weight
-                best_set = tuple(current)
+                best_set = candidate
             return
 
         # Option 1: exclude element idx

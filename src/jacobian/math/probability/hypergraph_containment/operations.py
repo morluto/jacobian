@@ -95,7 +95,9 @@ def _admit_hypergraph_vertex_containment(
         )
         active_state_count = 1 << len(active_vertices)
         ie_terms = _inclusion_exclusion_terms(len(edge_masks), n)
-        direct_work = len(edge_masks) * active_state_count + active_state_count * (n - len(active_vertices) + 1)
+        direct_work = len(edge_masks) * active_state_count + active_state_count * (
+            n - len(active_vertices) + 1
+        )
         ie_work = ie_terms * (n + len(edge_masks) + 2) if ie_terms is not None else None
         use_inclusion_exclusion = ie_terms is not None and ie_work < direct_work
         if active_state_count > MAX_SUBSET_STATES and not use_inclusion_exclusion:

@@ -74,7 +74,7 @@ def compute_maximum_weight_antichain(
                 can_include = False
                 break
 
-        if can_include and weight_fracs[idx] >= 0:
+        if can_include:
             new_current = [*current, idx]
             _search(
                 idx + 1,

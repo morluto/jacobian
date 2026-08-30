@@ -27,7 +27,12 @@ def _weighted_antichain_admission_error(
             "weight_axis",
             "weights must align one-for-one with the poset element axis",
         )
-    nonnegative = [weight for weight in weights if weight.as_fraction() >= 0]
+    if any(weight.as_fraction() < 0 for weight in weights):
+        return (
+            "negative_weight",
+            "weighted antichain weights must be nonnegative",
+        )
+    nonnegative = list(weights)
     common_denominator = 1
     for weight in nonnegative:
         denominator = parse_canonical_integer(weight.den)

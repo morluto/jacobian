@@ -136,17 +136,17 @@ def compute_hypergraph_vertex_containment(
             probability=CanonicalRational.from_fraction(Fraction(0)),
         )
     if any(not members for _, members in hypergraph.edges):
-        counts = tuple(comb(n, k) for k in range(n + 1))
+        all_counts = tuple(comb(n, k) for k in range(n + 1))
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
-            containing_subset_counts=counts,
+            containing_subset_counts=all_counts,
             total_state_count=1 << n,
             success_count=1 << n,
             probability=CanonicalRational.from_fraction(Fraction(1)),
         )
 
-    counts = [0] * (n + 1)
+    counts: list[int] = [0] * (n + 1)
     for mask in range(1 << n):
         k = mask.bit_count()
         contains_edge = any(edge_mask & ~mask == 0 for edge_mask in edge_masks)

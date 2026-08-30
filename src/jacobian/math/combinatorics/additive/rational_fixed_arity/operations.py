@@ -91,12 +91,17 @@ def _admit(
         default=0,
     )
     if candidate_count:
+        # The sole empty sum is exactly 0/1, independent of source widths.
         sum_numerator_digits = (
-            maximum_numerator_digits
+            1
+            if arity == 0
+            else maximum_numerator_digits
             + max(arity - 1, 0) * maximum_denominator_digits
             + (len(str(arity)) if arity > 1 else 0)
         )
-        sum_denominator_digits = max(1, arity * maximum_denominator_digits)
+        sum_denominator_digits = (
+            1 if arity == 0 else max(1, arity * maximum_denominator_digits)
+        )
     else:
         sum_numerator_digits = sum_denominator_digits = 0
     if (

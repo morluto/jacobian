@@ -87,9 +87,7 @@ def test_empty_edge_is_monochromatic() -> None:
 
 def test_numeric_color_keys_use_strict_delivery_sizing() -> None:
     hg = _hg(["num", "den"], [("e0", ("num", "den"))])
-    result = compute_edge_pattern_profile(
-        hg, {"num": "red", "den": "blue"}
-    )
+    result = compute_edge_pattern_profile(hg, {"num": "red", "den": "blue"})
 
     assert result.vertex_colors == {"num": "red", "den": "blue"}
 

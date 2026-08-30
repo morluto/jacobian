@@ -6,6 +6,7 @@ from itertools import combinations
 from math import comb
 
 from jacobian.canonical import (
+    CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
     strict_json_object_size,
@@ -23,6 +24,43 @@ MAX_EDGE_DELETION_PROFILE_WORK = 50_000_000
 
 def _json_array_size(item_size: int, count: int) -> int:
     return 2 + max(count - 1, 0) + item_size * count
+
+
+def _is_bipartite(graph: SimpleUndirectedGraph) -> bool:
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    colors: dict[str, bool] = {}
+    for start in graph.vertices:
+        if start in colors:
+            continue
+        colors[start] = False
+        stack = [start]
+        while stack:
+            vertex = stack.pop()
+            for neighbor in adjacency[vertex]:
+                if neighbor not in colors:
+                    colors[neighbor] = not colors[vertex]
+                    stack.append(neighbor)
+                elif colors[neighbor] == colors[vertex]:
+                    return False
+    return True
+
+
+def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> int:
+    n = len(graph.vertices)
+    edge_count = len(graph.edges)
+    if not edge_count or not n:
+        return 1
+    complete = edge_count == n * (n - 1) // 2
+    if complete and deletion_order == 0:
+        return n
+    if _is_bipartite(graph):
+        return edge_count * n * 2
+    # The kernel tries each k-colouring in turn. Charge the complete finite
+    # search tree rather than the graph's edge count alone.
+    return n * sum(k**n for k in range(1, n + 1))
 
 
 def _admit_edge_deletion_profile(
@@ -50,9 +88,7 @@ def _admit_edge_deletion_profile(
         )
 
     row_count = 0
-    coloring_work = 1
-    if graph.edges and vertex_count:
-        coloring_work = edge_count * vertex_count * vertex_count
+    coloring_work = _coloring_work_bound(graph, deletion_order)
     for order in range(deletion_order + 1):
         row_count += comb(edge_count, order)
         if row_count > MAX_EDGE_DELETION_PROFILE_WORK // max(coloring_work, 1):
@@ -62,7 +98,14 @@ def _admit_edge_deletion_profile(
                 message="edge-deletion profile search exceeds its exact work bound",
             )
 
-    graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
+    try:
+        graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
+    except CanonicalizationError as exc:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.edge_deletion.result_exceeds_output_bound",
+            message="edge-deletion profile result exceeds the canonical output bound",
+        ) from exc
     index_bytes = max(1, len(str(max(edge_count - 1, 0))))
     row_bytes = strict_json_object_size(
         (
@@ -132,6 +175,8 @@ def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
         return 0
     if not edges:
         return 1
+    if len(edges) == n * (n - 1) // 2:
+        return n
 
     adjacency: dict[str, set[str]] = {v: set() for v in vertices}
     for a, b in edges:

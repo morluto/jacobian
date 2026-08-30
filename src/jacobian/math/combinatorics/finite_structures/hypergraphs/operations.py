@@ -11,6 +11,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_MATCHING_RESULT_BYTES,
     MAX_TRANSVERSAL_RESULT_BYTES,
     MAX_TRANSVERSAL_SEARCH_WORK,
+    MAX_LABEL_LENGTH,
     MAX_VERTICES,
     CliqueExpansionResult,
     DualResult,
@@ -35,7 +36,11 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     _minimum_transversal_search_plan,
     _validation_error,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_EDGES,
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 __all__ = [
     "clique_expansion",
@@ -112,6 +117,51 @@ def _admit_edge_intersection_graph(hypergraph: FiniteHypergraph) -> None:
             code="hypergraph.edge_intersection_graph.nfc_edge_ids",
             message=("edge-intersection graph requires NFC-normalized edge IDs"),
         )
+    # The edge-intersection graph maps each hyperedge to a graph vertex, so
+    # the number of hyperedges must fit the SimpleUndirectedGraph carrier.
+    if len(hypergraph.edges) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="hypergraph.edge_intersection_graph.carrier_vertex_bound",
+            message=(
+                "edge-intersection graph exceeds the "
+                f"{MAX_INDEXED_SIMPLE_GRAPH_VERTICES}-vertex graph carrier bound"
+            ),
+        )
+    # Vertex labels of the target graph are the edge IDs of the source
+    # hypergraph; they must fit the graph label length to compose with
+    # downstream graph operations.
+    for edge_id, _ in hypergraph.edges:
+        if len(edge_id) > MAX_LABEL_LENGTH:
+            raise OperationDomainValidationError(
+                location=("hypergraph",),
+                code="hypergraph.edge_intersection_graph.label_length",
+                message=(
+                    "edge-intersection graph edge IDs must be at most "
+                    f"{MAX_LABEL_LENGTH} characters to fit the graph carrier"
+                ),
+            )
+    # The graph has one edge per intersecting hyperedge pair; bound the
+    # quadratic kernel and the result before entering it.
+    member_sets = tuple(
+        frozenset(members) for _, members in _canonical_edges(hypergraph)
+    )
+    graph_edge_count = 0
+    n = len(member_sets)
+    for left in range(n):
+        for right in range(left + 1, n):
+            if member_sets[left] & member_sets[right]:
+                graph_edge_count += 1
+                if graph_edge_count > MAX_INDEXED_SIMPLE_GRAPH_EDGES:
+                    raise OperationDomainValidationError(
+                        location=("hypergraph",),
+                        code="hypergraph.edge_intersection_graph.carrier_edge_bound",
+                        message=(
+                            "edge-intersection graph exceeds the "
+                            f"{MAX_INDEXED_SIMPLE_GRAPH_EDGES}-edge "
+                            "graph carrier bound"
+                        ),
+                    )
 
 
 def _admit_maximum_edge_matching(hypergraph: FiniteHypergraph) -> None:

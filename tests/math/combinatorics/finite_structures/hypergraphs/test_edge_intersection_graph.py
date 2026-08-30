@@ -257,3 +257,33 @@ class TestEdgeIntersectionGraphDefiningProperty:
                 pair = (min(u, v), max(u, v))
                 shared = bool(set(member_map[u]) & set(member_map[v]))
                 assert (pair in adjacent) == shared
+
+
+class TestEdgeIntersectionGraphCarrierBound:
+    """The edge-intersection graph must fit the SimpleUndirectedGraph carrier."""
+
+    def test_too_many_edges_rejected(self) -> None:
+        """More than 256 hyperedges produce too many graph vertices."""
+
+        too_many = [
+            {"vertices": ["v0"], "edges": [[f"e{i}", ["v0"]] for i in range(257)]}
+        ]
+        with pytest.raises(OperationDomainValidationError) as exc:
+            _graph(too_many[0])
+        assert "carrier_vertex_bound" in exc.value.errors()[0]["type"]
+
+    def test_edge_id_too_long_rejected(self) -> None:
+        """Edge IDs exceeding 64 characters cannot fit the graph carrier."""
+
+        long_id = "x" * 65
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            _graph(
+                {
+                    "vertices": ["a", "b"],
+                    "edges": [
+                        [long_id, ["a"]],
+                        ["e2", ["b"]],
+                    ],
+                }
+            )

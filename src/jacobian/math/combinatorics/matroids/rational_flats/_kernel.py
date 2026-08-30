@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import time
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from math import factorial, gcd, lcm
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    bind_request_deadline,
     current_request_execution,
     request_cancelled,
 )
@@ -21,6 +22,7 @@ from jacobian.canonical import (
 )
 from jacobian.math.combinatorics.matroids.rational_flats._models import (
     MAX_RATIONAL_FLAT_GROUP_ORDER,
+    MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS,
     MAX_RATIONAL_FLAT_RESULT_ORBITS,
     ClauseConstrainedRationalFlatClassification,
     ClauseConstrainedRationalFlatProblem,
@@ -35,10 +37,10 @@ from jacobian.math.matrices.values import (
     rational_vector_space_basis_from_fractions,
 )
 
-MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS = 256
 MAX_RATIONAL_FLAT_SEARCH_STATE_ORBITS = 100_000
 MAX_RATIONAL_FLAT_SEARCH_WORK = 5_000_000_000
 MAX_RATIONAL_FLAT_ORBIT_CACHE_ENTRIES = 500_000
+_RATIONAL_FLAT_WALL_SECONDS = 300.0
 _RESULT_ENVELOPE_RESERVE_BYTES = 16_384
 
 type RationalRow = tuple[Fraction, ...]
@@ -87,8 +89,9 @@ class _WorkLedger:
     deadline: float | None
     consumed: int = 0
     state_orbit_count: int = 0
+    charged_by_primitive: dict[str, int] = field(default_factory=dict)
 
-    def charge(self, units: int) -> None:
+    def charge(self, primitive: str, units: int) -> None:
         units = max(units, 1)
         if self.consumed + units > self.limit:
             raise _SearchStoppedError(
@@ -97,9 +100,15 @@ class _WorkLedger:
                 consumed_work=self.consumed,
             )
         self.consumed += units
+        self.charged_by_primitive[primitive] = (
+            self.charged_by_primitive.get(primitive, 0) + units
+        )
 
-    def charge_linear_algebra(self, scalar_operations: int) -> None:
-        self.charge(scalar_operations * self.linear_algebra_chunk_cost)
+    def charge_linear_algebra(self, primitive: str, scalar_operations: int) -> None:
+        self.charge(
+            primitive,
+            scalar_operations * self.linear_algebra_chunk_cost,
+        )
 
 
 def _require_execution_active(deadline: float | None, phase: str) -> None:
@@ -107,6 +116,52 @@ def _require_execution_active(deadline: float | None, phase: str) -> None:
         raise OperationExecutionCancelledError(f"request cancelled {phase}")
     if deadline is not None and deadline <= time.monotonic():
         raise OperationExecutionTimeoutError(f"request deadline expired {phase}")
+
+
+def _bind_owner_deadline() -> float:
+    execution = current_request_execution()
+    started = execution.started_at if execution is not None else time.monotonic()
+    owner_deadline = started + _RATIONAL_FLAT_WALL_SECONDS
+    deadline = (
+        min(owner_deadline, execution.deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+    return deadline
+
+
+def _span_membership_scalar_work(
+    *,
+    query_count: int,
+    rank: int,
+    ambient_dimension: int,
+) -> int:
+    """Bound pivot discovery, residual updates, and zero tests for span queries."""
+
+    return max(query_count, 1) * max(ambient_dimension, 1) * (2 * max(rank, 1) + 2)
+
+
+def _subset_container_work(element_count: int, *, sorting: bool = False) -> int:
+    """Bound tuple construction, hashing, set/queue traffic, and optional sorting."""
+
+    size = max(element_count, 1)
+    comparison_levels = size.bit_length() if sorting else 1
+    return size * (8 * comparison_levels + 8)
+
+
+def _clause_scan_work(
+    problem: ClauseConstrainedRationalFlatProblem,
+    closed_count: int,
+) -> int:
+    """Bound closed-set construction plus every clause/candidate membership test."""
+
+    return (
+        max(closed_count, 1)
+        + sum(len(clause) + 1 for clause in problem.clauses)
+        + problem.candidates.vector_count
+        + 1
+    )
 
 
 def _dense_fraction_rows(matrix: SparseRationalMatrix) -> tuple[RationalRow, ...]:
@@ -326,8 +381,7 @@ def _result_orbit_limit(
 def _admit_problem(problem: ClauseConstrainedRationalFlatProblem) -> _RationalFlatPlan:
     """Build one pre-search plan for all exact work and result obligations."""
 
-    execution = current_request_execution()
-    deadline = execution.deadline if execution is not None else None
+    deadline = _bind_owner_deadline()
     _require_execution_active(deadline, "before rational-flat admission")
     _require_component_digits(problem)
     candidate_rows = tuple(
@@ -346,11 +400,14 @@ def _admit_problem(problem: ClauseConstrainedRationalFlatProblem) -> _RationalFl
             "candidate heights can make canonical RREF or annihilator components "
             f"exceed {MAX_MATRIX_SCALAR_DIGITS} decimal digits",
         )
-    linear_algebra_digits = max(
-        minor_digits,
+    source_row_digits = max(
         _largest_row_component_digits(candidate_rows),
         _largest_row_component_digits(forbidden_rows),
     )
+    # Span tests combine an RREF coordinate with a primitive candidate or
+    # forbidden coordinate.  Their product height is bounded by the sum, not
+    # merely the larger of the two source-derived digit bounds.
+    linear_algebra_digits = minor_digits + source_row_digits + 1
     linear_algebra_chunks = (linear_algebra_digits + 31) // 32
     linear_algebra_chunk_cost = linear_algebra_chunks * linear_algebra_chunks
     candidate_permutations = _require_symmetry_compatibility(
@@ -373,32 +430,17 @@ def _admit_problem(problem: ClauseConstrainedRationalFlatProblem) -> _RationalFl
         source_bytes=source_bytes,
         minor_digits=minor_digits,
     )
-    ambient_dimension = len(problem.candidates.coordinate_axis)
-    candidate_count = problem.candidates.vector_count
-    forbidden_count = problem.forbidden_vectors.row_count
-    maximum_rank = problem.maximum_rank
-    per_state_work = max(
-        1,
-        (candidate_count + forbidden_count)
-        * max(maximum_rank, 1)
-        * ambient_dimension
-        * linear_algebra_chunk_cost
-        + group_order * max(len(candidate_permutations), 1) * max(candidate_count, 1),
-    )
-    state_orbit_limit = max(
-        1,
-        min(
-            MAX_RATIONAL_FLAT_SEARCH_STATE_ORBITS,
-            MAX_RATIONAL_FLAT_SEARCH_WORK // per_state_work,
-        ),
-    )
     return _RationalFlatPlan(
         deadline=deadline,
         candidate_rows=candidate_rows,
         forbidden_rows=forbidden_rows,
         candidate_permutations=candidate_permutations,
         symmetry_group_order=group_order,
-        state_orbit_limit=state_orbit_limit,
+        # The independent state cap bounds retained traversal structure.  The
+        # dynamic ledger separately charges every row reduction, span scan,
+        # clause scan, subset action, frontier mutation, and result conversion
+        # before it executes, so it does not rely on a coarse per-state proxy.
+        state_orbit_limit=MAX_RATIONAL_FLAT_SEARCH_STATE_ORBITS,
         result_orbit_limit=result_orbit_limit,
         search_work_limit=MAX_RATIONAL_FLAT_SEARCH_WORK,
         linear_algebra_chunk_cost=linear_algebra_chunk_cost,
@@ -414,8 +456,11 @@ def _rref_basis(
     if not rows:
         return ()
     _require_execution_active(ledger.deadline, "before exact rational row reduction")
+    rank_bound = min(len(rows), ambient_dimension)
+    input_cells = len(rows) * ambient_dimension
     ledger.charge_linear_algebra(
-        len(rows) * ambient_dimension * max(1, min(len(rows), ambient_dimension))
+        "row_reduction",
+        input_cells * max(rank_bound, 1) + input_cells + rank_bound * ambient_dimension,
     )
     from flint import fmpq, fmpq_mat
 
@@ -467,7 +512,12 @@ def _closed_candidates(
         len(candidate_rows[0]) if candidate_rows else (len(basis[0]) if basis else 1)
     )
     ledger.charge_linear_algebra(
-        max(len(candidate_rows), 1) * max(len(basis), 1) * max(ambient_dimension, 1)
+        "candidate_span_scan",
+        _span_membership_scalar_work(
+            query_count=len(candidate_rows),
+            rank=len(basis),
+            ambient_dimension=ambient_dimension,
+        ),
     )
     return tuple(
         index for index, row in enumerate(candidate_rows) if _row_is_in_span(row, basis)
@@ -484,14 +534,17 @@ class _SubsetOrbitCanonicalizer:
         subset: ClosedCandidateSet,
         ledger: _WorkLedger,
     ) -> tuple[ClosedCandidateSet, int]:
+        ledger.charge("subset_lookup", _subset_container_work(len(subset)))
         cached = self._cache.get(subset)
         if cached is not None:
             return cached
         if not self._generators:
+            ledger.charge("subset_cache", _subset_container_work(len(subset)))
             result = (subset, 1)
             self._cache[subset] = result
             return result
 
+        ledger.charge("subset_storage", 2 * _subset_container_work(len(subset)))
         seen = {subset}
         pending = deque((subset,))
         while pending:
@@ -499,13 +552,22 @@ class _SubsetOrbitCanonicalizer:
                 ledger.deadline,
                 "during rational-flat orbit canonicalization",
             )
+            ledger.charge("subset_storage", _subset_container_work(len(pending)))
             current = pending.popleft()
             for generator in self._generators:
-                ledger.charge(max(len(current), 1))
+                ledger.charge(
+                    "subset_action",
+                    _subset_container_work(len(current), sorting=True),
+                )
                 image = tuple(sorted(generator[index] for index in current))
                 if image not in seen:
                     seen.add(image)
                     pending.append(image)
+        retained_elements = sum(max(len(image), 1) for image in seen)
+        ledger.charge(
+            "subset_cache",
+            _subset_container_work(retained_elements, sorting=True),
+        )
         canonical = min(seen)
         result = (canonical, len(seen))
         if len(self._cache) + len(seen) <= MAX_RATIONAL_FLAT_ORBIT_CACHE_ENTRIES:
@@ -552,6 +614,7 @@ def _state_from_closed(
     ledger: _WorkLedger,
     state_cache: dict[ClosedCandidateSet, _FlatState],
 ) -> _FlatState:
+    ledger.charge("state_cache", _subset_container_work(len(closed)))
     cached = state_cache.get(closed)
     if cached is not None:
         return cached
@@ -565,6 +628,7 @@ def _state_from_closed(
         row_space_basis=basis,
         rank=len(basis),
     )
+    ledger.charge("state_cache", _subset_container_work(len(closed)))
     state_cache[closed] = state
     return state
 
@@ -595,7 +659,12 @@ def _contains_forbidden_row(
     ledger: _WorkLedger,
 ) -> bool:
     ledger.charge_linear_algebra(
-        max(len(plan.forbidden_rows), 1) * max(state.rank, 1) * ambient_dimension
+        "forbidden_span_scan",
+        _span_membership_scalar_work(
+            query_count=len(plan.forbidden_rows),
+            rank=state.rank,
+            ambient_dimension=ambient_dimension,
+        ),
     )
     return any(
         _row_is_in_span(row, state.row_space_basis) for row in plan.forbidden_rows
@@ -605,7 +674,9 @@ def _contains_forbidden_row(
 def _branch_candidates(
     problem: ClauseConstrainedRationalFlatProblem,
     closed: ClosedCandidateSet,
+    ledger: _WorkLedger,
 ) -> tuple[int, ...]:
+    ledger.charge("clause_scan", _clause_scan_work(problem, len(closed)))
     closed_set = set(closed)
     unmet_clause = next(
         (clause for clause in problem.clauses if closed_set.isdisjoint(clause)),
@@ -623,7 +694,9 @@ def _branch_candidates(
 def _clauses_are_satisfied(
     problem: ClauseConstrainedRationalFlatProblem,
     closed: ClosedCandidateSet,
+    ledger: _WorkLedger,
 ) -> bool:
+    ledger.charge("clause_scan", _clause_scan_work(problem, len(closed)))
     closed_set = set(closed)
     return all(not closed_set.isdisjoint(clause) for clause in problem.clauses)
 
@@ -654,10 +727,12 @@ def _search_satisfying_states(
         ledger=ledger,
         canonicalizer=canonicalizer,
     )
+    ledger.charge("search_frontier", 2 * _subset_container_work(len(initial)))
     pending = [initial]
     queued = {initial}
     while pending:
         _require_execution_active(plan.deadline, "during rational-flat search")
+        ledger.charge("search_frontier", 3 * _subset_container_work(len(pending[-1])))
         closed = pending.pop()
         queued.discard(closed)
         if closed in visited:
@@ -668,6 +743,7 @@ def _search_satisfying_states(
                 visited_count=len(visited),
                 consumed_work=ledger.consumed,
             )
+        ledger.charge("search_frontier", _subset_container_work(len(closed)))
         visited.add(closed)
         ledger.state_orbit_count = len(visited)
         state = _state_from_closed(
@@ -684,8 +760,9 @@ def _search_satisfying_states(
             ledger=ledger,
         ):
             continue
-        clauses_satisfied = _clauses_are_satisfied(problem, closed)
+        clauses_satisfied = _clauses_are_satisfied(problem, closed, ledger)
         if clauses_satisfied and state.rank >= problem.minimum_rank:
+            ledger.charge("search_frontier", 2 * _subset_container_work(len(closed)))
             if closed not in satisfying and len(satisfying) >= plan.result_orbit_limit:
                 raise _SearchStoppedError(
                     "RESULT_ORBIT_LIMIT",
@@ -695,16 +772,27 @@ def _search_satisfying_states(
             satisfying[closed] = state
         if state.rank == problem.maximum_rank:
             continue
-        child_keys = {
-            _canonical_closure(
+        child_keys: set[ClosedCandidateSet] = set()
+        for index in _branch_candidates(problem, closed, ledger):
+            ledger.charge("search_frontier", ambient_dimension + state.rank + 1)
+            child = _canonical_closure(
                 (*state.row_space_basis, plan.candidate_rows[index]),
                 plan=plan,
                 ambient_dimension=ambient_dimension,
                 ledger=ledger,
                 canonicalizer=canonicalizer,
             )
-            for index in _branch_candidates(problem, closed)
-        }
+            ledger.charge("search_frontier", _subset_container_work(len(child)))
+            child_keys.add(child)
+        retained_elements = sum(
+            max(len(item), 1)
+            for family in (child_keys, visited, queued)
+            for item in family
+        )
+        ledger.charge(
+            "search_frontier",
+            _subset_container_work(retained_elements, sorting=True),
+        )
         new_children = tuple(sorted(child_keys.difference(visited, queued)))
         if len(visited) + len(queued) + len(new_children) > plan.state_orbit_limit:
             raise _SearchStoppedError(
@@ -712,6 +800,11 @@ def _search_satisfying_states(
                 visited_count=len(visited),
                 consumed_work=ledger.consumed,
             )
+        ledger.charge(
+            "search_frontier",
+            2
+            * _subset_container_work(sum(max(len(child), 1) for child in new_children)),
+        )
         queued.update(new_children)
         pending.extend(reversed(new_children))
     return satisfying, visited, ledger, canonicalizer
@@ -726,13 +819,29 @@ def _representatives_from_states(
     canonicalizer: _SubsetOrbitCanonicalizer,
 ) -> tuple[RationalFlatOrbitRepresentative, ...]:
     representatives: list[RationalFlatOrbitRepresentative] = []
+    retained_elements = sum(max(len(closed), 1) for closed in satisfying)
+    ledger.charge(
+        "result_construction",
+        _subset_container_work(retained_elements, sorting=True),
+    )
     for closed, state in sorted(satisfying.items()):
         _require_execution_active(
             ledger.deadline,
             "during rational-flat representative construction",
         )
         _canonical, orbit_size = canonicalizer.canonicalize(closed, ledger)
-        ledger.charge_linear_algebra(ambient_dimension * ambient_dimension)
+        # Two exact bases are converted to canonical rationals.  The
+        # annihilator construction additionally reads at most rank*ambient
+        # RREF coordinates; all use the admitted minor-height chunk factor.
+        ledger.charge_linear_algebra(
+            "result_construction",
+            (
+                2 * ambient_dimension * ambient_dimension
+                + state.rank * ambient_dimension
+                + len(closed)
+                + 16
+            ),
+        )
         representatives.append(
             RationalFlatOrbitRepresentative._from_kernel(
                 closed_candidate_indices=closed,

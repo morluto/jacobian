@@ -29,8 +29,9 @@ CLASSIFY_CONSTRAINED_RATIONAL_FLATS_OPERATION = MathTool(
         "RREF row-space basis, canonical annihilator basis, rank, orbit size, "
         "and stabilizer order. If the deterministic state, work, or exact-output "
         "envelope is exhausted, the result is explicitly INCOMPLETE and makes no "
-        "family-"
-        "completeness claim."
+        "family-completeness claim. Ordinary execution uses one five-minute "
+        "request-scoped safety deadline across admission, search, and result "
+        "construction."
     ),
     request_type=ClauseConstrainedRationalFlatRequest,
     result_type=ClauseConstrainedRationalFlatClassification,

@@ -22,6 +22,10 @@ MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS = 4_096
 MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS = 16
 MAX_RATIONAL_FLAT_GROUP_ORDER = 10_000
 MAX_RATIONAL_FLAT_RESULT_ORBITS = 4_096
+MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS = 256
+MAX_RATIONAL_FLAT_MATRIX_NONZEROS = (
+    MAX_RATIONAL_FLAT_CANDIDATES * MAX_RATIONAL_FLAT_AMBIENT_DIMENSION
+)
 
 CandidateIndex = Annotated[
     StrictInt,
@@ -35,6 +39,71 @@ CandidateClause = Annotated[
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"rational_flat.{reason}", message)
+
+
+def _raw_component_exceeds_input_digits(value: object) -> bool:
+    if isinstance(value, str):
+        return len(value.lstrip("-")) > MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS
+    if isinstance(value, int) and not isinstance(value, bool):
+        return bool(abs(value) >= 10**MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS)
+    return False
+
+
+def _require_raw_sparse_input_envelope(
+    data: object,
+    *,
+    label: str,
+    maximum_rows: int,
+) -> None:
+    """Reject operation-sized sparse inputs before nested scalar parsing."""
+
+    if not isinstance(data, dict):
+        return
+    row_count = data.get("row_count")
+    column_count = data.get("column_count")
+    if (
+        isinstance(row_count, int)
+        and not isinstance(row_count, bool)
+        and row_count > maximum_rows
+    ):
+        raise _validation_error(
+            f"{label}_row_bound",
+            f"{label} matrices have at most {maximum_rows} rows",
+        )
+    if (
+        isinstance(column_count, int)
+        and not isinstance(column_count, bool)
+        and column_count > MAX_RATIONAL_FLAT_AMBIENT_DIMENSION
+    ):
+        raise _validation_error(
+            f"{label}_column_bound",
+            f"{label} matrices have at most "
+            f"{MAX_RATIONAL_FLAT_AMBIENT_DIMENSION} columns",
+        )
+    entries = data.get("entries")
+    if not isinstance(entries, (list, tuple)):
+        return
+    if len(entries) > MAX_RATIONAL_FLAT_MATRIX_NONZEROS:
+        raise _validation_error(
+            f"{label}_nonzero_bound",
+            f"{label} matrices store at most "
+            f"{MAX_RATIONAL_FLAT_MATRIX_NONZEROS} nonzero entries",
+        )
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        value = entry.get("value")
+        if not isinstance(value, dict):
+            continue
+        if any(
+            _raw_component_exceeds_input_digits(value.get(component))
+            for component in ("num", "den")
+        ):
+            raise _validation_error(
+                "input_component_bound",
+                f"{label} rational components may contain at most "
+                f"{MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS} decimal digits",
+            )
 
 
 class RationalVectorConfiguration(StrictModel):
@@ -91,6 +160,11 @@ class RationalVectorConfiguration(StrictModel):
                     "rational-flat configurations have at most "
                     f"{MAX_RATIONAL_FLAT_CANDIDATES} labelled vectors",
                 )
+            _require_raw_sparse_input_envelope(
+                data.get("vectors"),
+                label="candidate",
+                maximum_rows=MAX_RATIONAL_FLAT_CANDIDATES,
+            )
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
@@ -223,6 +297,18 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
     @classmethod
     def require_raw_problem_envelope(cls, data: Any) -> Any:
         if isinstance(data, dict):
+            candidates = data.get("candidates")
+            if isinstance(candidates, dict):
+                _require_raw_sparse_input_envelope(
+                    candidates.get("vectors"),
+                    label="candidate",
+                    maximum_rows=MAX_RATIONAL_FLAT_CANDIDATES,
+                )
+            _require_raw_sparse_input_envelope(
+                data.get("forbidden_vectors"),
+                label="forbidden",
+                maximum_rows=MAX_RATIONAL_FLAT_FORBIDDEN_VECTORS,
+            )
             clauses = data.get("clauses")
             if isinstance(clauses, (list, tuple)):
                 if len(clauses) > MAX_RATIONAL_FLAT_CLAUSES:
@@ -628,6 +714,8 @@ __all__ = [
     "MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS",
     "MAX_RATIONAL_FLAT_FORBIDDEN_VECTORS",
     "MAX_RATIONAL_FLAT_GROUP_ORDER",
+    "MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS",
+    "MAX_RATIONAL_FLAT_MATRIX_NONZEROS",
     "MAX_RATIONAL_FLAT_RESULT_ORBITS",
     "MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS",
     "ClauseConstrainedRationalFlatClassification",

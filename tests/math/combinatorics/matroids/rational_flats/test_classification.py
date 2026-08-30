@@ -1,12 +1,17 @@
 """Complete clause-constrained rational-flat orbit classification."""
 
 import time
+from contextlib import ExitStack
 from fractions import Fraction
 from itertools import combinations
 from threading import Event
+from typing import Any
+from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 from sympy import Matrix
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
@@ -26,6 +31,7 @@ from jacobian.math.combinatorics.matroids.rational_flats import (
     RationalVectorConfiguration,
     classify_clause_constrained_rational_flats,
 )
+from jacobian.math.combinatorics.matroids.rational_flats import _kernel as flat_kernel
 from jacobian.math.combinatorics.matroids.rational_flats._models import (
     ClauseConstrainedRationalFlatRequest,
 )
@@ -94,6 +100,32 @@ def _problem(
         ),
         symmetry_generators=symmetry_generators,
     )
+
+
+def _minimal_raw_request() -> dict[str, Any]:
+    return {
+        "problem": {
+            "candidates": {
+                "coordinate_axis": ["x"],
+                "vector_labels": ["v"],
+                "vectors": {
+                    "domain": "QQ",
+                    "row_count": 1,
+                    "column_count": 1,
+                    "entries": [],
+                },
+            },
+            "clauses": [],
+            "forbidden_vectors": {
+                "domain": "QQ",
+                "row_count": 1,
+                "column_count": 1,
+                "entries": [],
+            },
+            "rank_interval": None,
+            "symmetry_generators": [],
+        }
+    }
 
 
 def _matrix_rank(
@@ -536,7 +568,7 @@ def test_large_complete_family_fits_the_canonical_transport_envelope() -> None:
     )
 
 
-def test_request_and_complete_result_replay_through_strict_json() -> None:
+def test_request_and_complete_result_round_trip_through_strict_json() -> None:
     problem = _problem(
         ((1, 0), (0, 1), (1, 1)),
         columns=2,
@@ -571,6 +603,184 @@ def test_request_and_complete_result_replay_through_strict_json() -> None:
     )
 
 
+@pytest.mark.parametrize("matrix_owner", ["candidate", "forbidden"])
+def test_raw_257_digit_components_are_rejected_by_the_outer_input_envelope(
+    matrix_owner: str,
+) -> None:
+    oversized = "9" * 257
+    candidate_entries: list[dict[str, object]] = []
+    forbidden_entries: list[dict[str, object]] = []
+    target = candidate_entries if matrix_owner == "candidate" else forbidden_entries
+    target.append(
+        {
+            "row": 0,
+            "column": 0,
+            "value": {"num": oversized, "den": "1"},
+        }
+    )
+    raw = _minimal_raw_request()
+    raw_problem = raw["problem"]
+    raw_problem["candidates"]["vectors"]["entries"] = candidate_entries
+    raw_problem["forbidden_vectors"]["entries"] = forbidden_entries
+
+    # The shared rational carrier can represent this value; the operation's
+    # narrower error therefore demonstrates rejection in the outer raw pass.
+    assert CanonicalRational(num=oversized, den="1").num == oversized
+    with pytest.raises(ValidationError) as caught:
+        ClauseConstrainedRationalFlatRequest.model_validate(raw)
+    assert caught.value.errors()[0]["type"] == "rational_flat.input_component_bound"
+
+
+def test_raw_sparse_axes_and_nonzeros_are_rejected_before_nested_copying() -> None:
+    oversized_rows = _minimal_raw_request()
+    oversized_rows["problem"]["candidates"]["vectors"]["row_count"] = 129
+    with pytest.raises(ValidationError) as caught_rows:
+        ClauseConstrainedRationalFlatRequest.model_validate(oversized_rows)
+    assert caught_rows.value.errors()[0]["type"] == "rational_flat.candidate_row_bound"
+
+    oversized_axis = _minimal_raw_request()
+    oversized_axis["problem"]["forbidden_vectors"]["column_count"] = 17
+    with pytest.raises(ValidationError) as caught_axis:
+        ClauseConstrainedRationalFlatRequest.model_validate(oversized_axis)
+    assert (
+        caught_axis.value.errors()[0]["type"] == "rational_flat.forbidden_column_bound"
+    )
+
+    oversized_support = _minimal_raw_request()
+    oversized_support["problem"]["candidates"]["vectors"]["entries"] = [
+        {"row": 0, "column": 0, "value": {"num": "1", "den": "1"}}
+    ] * 2_049
+    with pytest.raises(ValidationError) as caught_support:
+        ClauseConstrainedRationalFlatRequest.model_validate(oversized_support)
+    assert caught_support.value.errors()[0]["type"] == (
+        "rational_flat.candidate_nonzero_bound"
+    )
+
+
+def test_named_search_ledger_charges_every_observed_primitive() -> None:
+    swap = RationalFlatSymmetryGenerator(
+        coordinate_permutation=(1, 0),
+        candidate_permutation=(1, 0, 2),
+    )
+    problem = _problem(
+        ((1, 0), (0, 1), (1, 1)),
+        columns=2,
+        symmetry_generators=(swap,),
+    )
+    executed = dict.fromkeys(
+        (
+            "row_reduction",
+            "candidate_span_scan",
+            "forbidden_span_scan",
+            "subset_lookup",
+            "subset_cache",
+            "subset_storage",
+            "subset_action",
+            "state_cache",
+            "clause_scan",
+            "search_frontier",
+            "result_construction",
+        ),
+        0,
+    )
+
+    original_canonicalize = flat_kernel._SubsetOrbitCanonicalizer.canonicalize
+
+    def counted(name: str, function: Any) -> Any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            executed[name] += 1
+            return function(*args, **kwargs)
+
+        return wrapper
+
+    def counted_canonicalize(
+        owner: Any,
+        subset: tuple[int, ...],
+        ledger: Any,
+    ) -> tuple[tuple[int, ...], int]:
+        executed["subset_lookup"] += 1
+        if subset not in owner._cache:
+            executed["subset_cache"] += 1
+            if owner._generators:
+                executed["subset_storage"] += 1
+                executed["subset_action"] += 1
+        return original_canonicalize(owner, subset, ledger)
+
+    observed_functions = {
+        "_rref_basis": "row_reduction",
+        "_closed_candidates": "candidate_span_scan",
+        "_contains_forbidden_row": "forbidden_span_scan",
+        "_branch_candidates": "clause_scan",
+        "_clauses_are_satisfied": "clause_scan",
+    }
+    with ExitStack() as stack:
+        for function_name, primitive in observed_functions.items():
+            original = getattr(flat_kernel, function_name)
+            stack.enter_context(
+                patch.object(flat_kernel, function_name, counted(primitive, original))
+            )
+        stack.enter_context(
+            patch.object(
+                flat_kernel._SubsetOrbitCanonicalizer,
+                "canonicalize",
+                autospec=True,
+                side_effect=counted_canonicalize,
+            )
+        )
+        plan = flat_kernel._admit_problem(problem)
+        satisfying, visited, ledger, canonicalizer = (
+            flat_kernel._search_satisfying_states(problem, plan)
+        )
+        representatives = flat_kernel._representatives_from_states(
+            satisfying,
+            plan=plan,
+            ambient_dimension=2,
+            ledger=ledger,
+            canonicalizer=canonicalizer,
+        )
+
+    assert representatives
+    executed["state_cache"] = len(visited)
+    executed["search_frontier"] = len(visited)
+    executed["result_construction"] = len(representatives)
+    assert set(ledger.charged_by_primitive) == set(executed)
+    assert_charged_work_parity(
+        charged=ledger.charged_by_primitive,
+        executed=executed,
+    )
+
+
+def test_span_work_combines_rref_and_forbidden_row_heights() -> None:
+    base = _problem(((1, 0),), columns=2, forbidden_rows=((0, 1),))
+    large_forbidden = SparseRationalMatrix(
+        row_count=1,
+        column_count=2,
+        entries=(
+            SparseRationalMatrixEntry(
+                row=0,
+                column=0,
+                value=CanonicalRational.from_fraction(Fraction(1, 10**200)),
+            ),
+            SparseRationalMatrixEntry(
+                row=0,
+                column=1,
+                value=CanonicalRational.from_fraction(Fraction(1, 10**200 - 1)),
+            ),
+        ),
+    )
+    large = ClauseConstrainedRationalFlatProblem(
+        candidates=base.candidates,
+        clauses=base.clauses,
+        forbidden_vectors=large_forbidden,
+        rank_interval=base.rank_interval,
+        symmetry_generators=base.symmetry_generators,
+    )
+
+    assert flat_kernel._admit_problem(large).linear_algebra_chunk_cost > (
+        flat_kernel._admit_problem(base).linear_algebra_chunk_cost
+    )
+
+
 def test_expired_deadline_and_cancellation_remain_execution_failures() -> None:
     problem = _problem(((1, 0),), columns=2)
     with request_execution(time.monotonic()):
@@ -583,6 +793,38 @@ def test_expired_deadline_and_cancellation_remain_execution_failures() -> None:
     with (
         request_cancellation(cancelled),
         pytest.raises(OperationExecutionCancelledError, match="admission"),
+    ):
+        classify_clause_constrained_rational_flats(problem)
+
+
+def test_timeout_and_cancellation_are_observed_after_admission() -> None:
+    problem = _problem(((1, 0), (0, 1), (1, 1)), columns=2)
+    clock_values = iter((*([100.0] * 4), *([106.0] * 20)))
+    with (
+        request_execution(100.0),
+        patch.object(time, "monotonic", side_effect=clock_values),
+        pytest.raises(
+            OperationExecutionTimeoutError, match="during rational-flat search"
+        ),
+    ):
+        bind_request_deadline(105.0)
+        classify_clause_constrained_rational_flats(problem)
+
+    class CancelDuringSearch:
+        def __init__(self) -> None:
+            self.checks = 0
+
+        def is_set(self) -> bool:
+            self.checks += 1
+            return self.checks >= 5
+
+    cancellation = CancelDuringSearch()
+    with (
+        request_cancellation(cancellation),
+        pytest.raises(
+            OperationExecutionCancelledError,
+            match="during rational-flat search",
+        ),
     ):
         classify_clause_constrained_rational_flats(problem)
 

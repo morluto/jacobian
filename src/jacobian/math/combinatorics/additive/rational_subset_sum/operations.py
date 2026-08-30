@@ -65,9 +65,11 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
         fractions = [value.as_fraction() for value in nonzero]
         common_denominator = 1
         for value in fractions:
-            common_denominator = common_denominator // gcd(
-                common_denominator, value.denominator
-            ) * value.denominator
+            common_denominator = (
+                common_denominator
+                // gcd(common_denominator, value.denominator)
+                * value.denominator
+            )
             if _decimal_digits(common_denominator) > MAX_CANONICAL_RATIONAL_DIGITS:
                 _reject(
                     "rational_growth_bound",

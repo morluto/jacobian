@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import pytest
 from sympy.ntheory.factor_ import factorint
 
 from jacobian.math.number_theory._r_full_enumerate import enumerate_r_full_numbers
 from jacobian.math.number_theory._r_full_enumerate_kernels import enumerate_r_full
-from jacobian.math.number_theory._r_full_enumerate_models import RFullEnumerateRequest
+from jacobian.math.number_theory._r_full_enumerate_models import (
+    RFullEnumerateRequest,
+    RFullEnumerateResult,
+)
 
 
 def test_r2_equals_powerful() -> None:
@@ -65,3 +69,14 @@ def test_r2_compatibility() -> None:
     assert "8" in result.family
     assert "9" in result.family
     assert "12" not in result.family
+
+
+def test_result_requires_one_for_positive_cutoff() -> None:
+    """A complete positive-cutoff family must contain the universal member 1."""
+    with pytest.raises(ValueError, match="must begin with 1"):
+        RFullEnumerateResult(
+            minimum_exponent=2,
+            cutoff="10",
+            count=0,
+            family=(),
+        )

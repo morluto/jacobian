@@ -59,7 +59,7 @@ R_FULL_ENUMERATE_OPERATION = number_theory_operation(
             "three_full_to_20",
             "Enumerate every 3-full (cubefull) integer up to 20; the cutoff "
             "must be a positive integer and minimum_exponent must be at least 2.",
-            {"minimum_exponent": 3, "cutoff": 20},
+            {"minimum_exponent": 3, "cutoff": "20"},
         ),
     ),
 )

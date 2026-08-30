@@ -137,11 +137,9 @@ def _root_profile_from_worker(
         roots.append(PolynomialRealRoot.model_validate(root_payload))
     reconstruction = source_poly.one()
     for root_poly, mult in root_factors.values():
-        reconstruction *= root_poly ** mult
+        reconstruction *= root_poly**mult
     if not source_poly.div(reconstruction)[1].is_zero:
-        raise ValueError(
-            "worker root rows do not divide the source polynomial"
-        )
+        raise ValueError("worker root rows do not divide the source polynomial")
     return SourceRootProfile.model_validate(
         {"source_index": value.get("source_index"), "roots": roots}
     )

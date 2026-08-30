@@ -134,7 +134,8 @@ def _admit_word_collision_profile(
         max(height.numerator_digits for height in intercept_heights),
         max(height.denominator_digits for height in intercept_heights),
     )
-    if all(slope == 0 for slope, _ in canonical_generators):
+    all_constant = all(slope == 0 for slope, _ in canonical_generators)
+    if all_constant:
         # A zero slope erases the prior coefficient and leaves only the final
         # intercept; the generic product bound would invent repeated growth.
         coefficient_height = RationalHeight(1, 1)
@@ -181,7 +182,10 @@ def _admit_word_collision_profile(
         )
     )
     distinct_generator_count = len(set(canonical_generators))
-    possible_rows = min(word_count, distinct_generator_count**depth)
+    possible_rows = min(
+        word_count,
+        distinct_generator_count if all_constant else distinct_generator_count**depth,
+    )
     rows_bytes = _array_size((row_fixed_bytes,) * possible_rows) + total_words_bytes
     result_bytes = strict_json_object_size(
         (

@@ -83,7 +83,9 @@ class PowerfulEnumerateResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, cutoff: int, raw_family: list[int]) -> PowerfulEnumerateResult:
+    def _from_kernel(
+        cls, cutoff: int, raw_family: list[int]
+    ) -> PowerfulEnumerateResult:
         family = tuple(format_canonical_integer(v) for v in sorted(raw_family))
         return cls.model_construct(
             cutoff=cutoff,

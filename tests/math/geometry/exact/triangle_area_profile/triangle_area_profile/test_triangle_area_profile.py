@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import (
     LabelledRationalPoint,
     PointConfiguration,
@@ -74,3 +77,17 @@ def test_result_preserves_source() -> None:
     config = _config([("a", [0, 0]), ("b", [1, 0]), ("c", [0, 1])])
     result = compute_triangle_area_profile(config)
     assert result.configuration == config
+
+
+@pytest.mark.parametrize("dimension", [1, 3])
+def test_nonplanar_configuration_is_rejected(dimension: int) -> None:
+    config = _config(
+        [
+            ("a", [0] * dimension),
+            ("b", [1] * dimension),
+            ("c", [2] * dimension),
+        ]
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="exactly two"):
+        compute_triangle_area_profile(config)

@@ -34,6 +34,15 @@ def test_three_collinear() -> None:
     assert result.line_count == 1  # All on one line
 
 
+def test_collinear_pairs_with_opposite_directions_share_one_line() -> None:
+    config = _config([("a", [1, 0]), ("b", [0, 0]), ("c", [2, 0])])
+
+    result = compute_spanned_line_profile(config)
+
+    assert result.line_count == 1
+    assert result.lines[0].source_pairs == ((0, 1), (0, 2), (1, 2))
+
+
 def test_triangle() -> None:
     config = _config([("a", [0, 0]), ("b", [1, 0]), ("c", [0, 1])])
     result = compute_spanned_line_profile(config)

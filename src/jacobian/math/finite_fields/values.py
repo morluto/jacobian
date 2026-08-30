@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from math import comb
 from typing import Any, Literal, Self
 
 import rfc8785
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import sha256_digest
 from jacobian.math.graphs.directed._models import DirectedGraph
+from jacobian.math.matrices.finite_fields._bounds import MAX_PRIME_FIELD_FLINT_PRIME
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix, rank
 
 _MAX_FIELD_ORDER = 65536
@@ -18,6 +20,10 @@ _MIN_MODULUS_COEFFICIENTS = 2
 _MAX_MODULUS_COEFFICIENTS = 17
 _MAX_AXIS_LABELS = 256
 _MAX_DERIVATION_WORK = 1_000_000
+_MAX_ACTION_VARIABLES = 8
+_MAX_ACTION_GENERATORS = 16
+_MAX_HOMOGENEOUS_DEGREE = 64
+_MAX_HOMOGENEOUS_MONOMIALS = 512
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -293,6 +299,248 @@ class Axis(StrictModel):
                 "name": self.name,
                 "value_type": "axis",
             }
+        )
+
+
+def _raw_field(value: object, name: str) -> object:
+    if isinstance(value, dict):
+        return value.get(name)
+    return getattr(value, name, None)
+
+
+class PrimeFieldLinearAction(StrictModel):
+    """Explicit generator substitutions on an ordered polynomial-variable axis.
+
+    Matrix column ``j`` gives the coefficients of the image of variable
+    ``j``. Invertibility is recognized once by operations that consume this
+    structurally canonical source; it is not replayed while decoding results.
+    """
+
+    variable_axis: Axis
+    generator_matrices: tuple[PrimeFieldMatrix, ...] = Field(
+        min_length=1, max_length=_MAX_ACTION_GENERATORS
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_action_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        axis = data.get("variable_axis")
+        labels = _raw_field(axis, "labels")
+        matrices = data.get("generator_matrices")
+        if not isinstance(labels, (list, tuple)) or not isinstance(
+            matrices, (list, tuple)
+        ):
+            return data
+        variable_count = len(labels)
+        if not 1 <= variable_count <= _MAX_ACTION_VARIABLES:
+            raise _validation_error(
+                "finite_field.linear_action_variable_bound",
+                "linear action exceeds the variable-count bound",
+            )
+        if not 1 <= len(matrices) <= _MAX_ACTION_GENERATORS:
+            raise _validation_error(
+                "finite_field.linear_action_generator_bound",
+                "linear action exceeds the generator-count bound",
+            )
+        for matrix in matrices:
+            prime = _raw_field(matrix, "prime")
+            columns = _raw_field(matrix, "columns")
+            entries = _raw_field(matrix, "entries")
+            if type(prime) is int and not 2 <= prime <= MAX_PRIME_FIELD_FLINT_PRIME:
+                raise _validation_error(
+                    "finite_field.linear_action_prime_bound",
+                    "linear action prime exceeds the word-safe backend bound",
+                )
+            if type(columns) is int and columns != variable_count:
+                raise _validation_error(
+                    "finite_field.linear_action_matrix_shape",
+                    "every action matrix must be square on the variable axis",
+                )
+            if isinstance(entries, (list, tuple)) and (
+                len(entries) != variable_count
+                or any(
+                    isinstance(row, (list, tuple)) and len(row) != variable_count
+                    for row in entries
+                )
+            ):
+                raise _validation_error(
+                    "finite_field.linear_action_matrix_shape",
+                    "every action matrix must be square on the variable axis",
+                )
+        return data
+
+    @model_validator(mode="after")
+    def require_common_prime_and_axes(self) -> Self:
+        variable_count = len(self.variable_axis.labels)
+        prime = self.generator_matrices[0].prime
+        if any(
+            matrix.prime != prime
+            or matrix.columns != variable_count
+            or len(matrix.entries) != variable_count
+            for matrix in self.generator_matrices
+        ):
+            raise _validation_error(
+                "finite_field.linear_action_common_parent",
+                "action matrices must be square on one variable axis over one prime",
+            )
+        signatures = tuple(matrix.entries for matrix in self.generator_matrices)
+        if len(set(signatures)) != len(signatures):
+            raise _validation_error(
+                "finite_field.linear_action_distinct_generators",
+                "action generator matrices must be distinct",
+            )
+        return self
+
+    @property
+    def prime(self) -> int:
+        return int(self.generator_matrices[0].prime)
+
+
+class HomogeneousFixedSubspace(StrictModel):
+    """One homogeneous simultaneous fixed space in canonical coefficient form."""
+
+    action: PrimeFieldLinearAction
+    degree: StrictInt = Field(ge=0, le=_MAX_HOMOGENEOUS_DEGREE)
+    monomial_basis: tuple[tuple[StrictInt, ...], ...] = Field(
+        min_length=1, max_length=_MAX_HOMOGENEOUS_MONOMIALS
+    )
+    basis_matrix: PrimeFieldMatrix
+    fixed_dimension: StrictInt = Field(ge=0, le=_MAX_HOMOGENEOUS_MONOMIALS)
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_result_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        action = data.get("action")
+        degree = data.get("degree")
+        axis = _raw_field(action, "variable_axis")
+        labels = _raw_field(axis, "labels")
+        if type(degree) is not int or not isinstance(labels, (list, tuple)):
+            return data
+        if not 0 <= degree <= _MAX_HOMOGENEOUS_DEGREE:
+            return data
+        variable_count = len(labels)
+        if not 1 <= variable_count <= _MAX_ACTION_VARIABLES:
+            return data
+        monomial_count = comb(variable_count + degree - 1, degree)
+        if monomial_count > _MAX_HOMOGENEOUS_MONOMIALS:
+            raise _validation_error(
+                "finite_field.fixed_subspace_monomial_bound",
+                "homogeneous monomial basis exceeds the operation bound",
+            )
+        raw_basis = data.get("monomial_basis")
+        if isinstance(raw_basis, (list, tuple)) and len(raw_basis) != monomial_count:
+            raise _validation_error(
+                "finite_field.fixed_subspace_monomial_shape",
+                "monomial basis length must match the source degree and variable axis",
+            )
+        matrix = data.get("basis_matrix")
+        action_matrices = _raw_field(action, "generator_matrices")
+        action_prime = None
+        if isinstance(action_matrices, (list, tuple)) and action_matrices:
+            action_prime = _raw_field(action_matrices[0], "prime")
+        matrix_prime = _raw_field(matrix, "prime")
+        columns = _raw_field(matrix, "columns")
+        entries = _raw_field(matrix, "entries")
+        if (
+            type(matrix_prime) is int
+            and type(action_prime) is int
+            and matrix_prime != action_prime
+        ):
+            raise _validation_error(
+                "finite_field.fixed_subspace_basis_parent",
+                "fixed-subspace basis must use the action prime",
+            )
+        if type(matrix_prime) is int and not (
+            2 <= matrix_prime <= MAX_PRIME_FIELD_FLINT_PRIME
+        ):
+            raise _validation_error(
+                "finite_field.fixed_subspace_prime_bound",
+                "fixed-subspace basis prime exceeds the word-safe backend bound",
+            )
+        if type(columns) is int and columns != monomial_count:
+            raise _validation_error(
+                "finite_field.fixed_subspace_matrix_shape",
+                "fixed-subspace basis columns must match the monomial basis",
+            )
+        if isinstance(entries, (list, tuple)) and len(entries) > monomial_count:
+            raise _validation_error(
+                "finite_field.fixed_subspace_matrix_shape",
+                "fixed-subspace basis rows exceed the ambient dimension",
+            )
+        return data
+
+    @model_validator(mode="after")
+    def require_canonical_shape(self) -> Self:
+        variable_count = len(self.action.variable_axis.labels)
+        monomial_count = comb(variable_count + self.degree - 1, self.degree)
+        if len(self.monomial_basis) != monomial_count:
+            raise _validation_error(
+                "finite_field.fixed_subspace_monomial_shape",
+                "monomial basis length must match the source degree and variable axis",
+            )
+        if any(
+            len(exponents) != variable_count
+            or any(exponent < 0 for exponent in exponents)
+            or sum(exponents) != self.degree
+            for exponents in self.monomial_basis
+        ):
+            raise _validation_error(
+                "finite_field.fixed_subspace_monomial_degree",
+                "every monomial exponent vector must have the declared homogeneous degree",
+            )
+        if self.monomial_basis != tuple(sorted(set(self.monomial_basis), reverse=True)):
+            raise _validation_error(
+                "finite_field.fixed_subspace_monomial_order",
+                "monomial basis must use unique descending lexicographic order",
+            )
+        if (
+            self.basis_matrix.prime != self.action.prime
+            or self.basis_matrix.columns != monomial_count
+            or len(self.basis_matrix.entries) != self.fixed_dimension
+        ):
+            raise _validation_error(
+                "finite_field.fixed_subspace_basis_shape",
+                "basis matrix must use the action field and declared dimensions",
+            )
+        pivots: list[int] = []
+        for row in self.basis_matrix.entries:
+            pivot = next((index for index, value in enumerate(row) if value), None)
+            if pivot is None or row[pivot] != 1:
+                raise _validation_error(
+                    "finite_field.fixed_subspace_rref_shape",
+                    "fixed-subspace basis rows must have normalized pivots",
+                )
+            pivots.append(pivot)
+        if pivots != sorted(set(pivots)) or any(
+            row[pivot] != int(row_index == pivot_index)
+            for row_index, row in enumerate(self.basis_matrix.entries)
+            for pivot_index, pivot in enumerate(pivots)
+        ):
+            raise _validation_error(
+                "finite_field.fixed_subspace_rref_shape",
+                "fixed-subspace basis must have canonical reduced pivot columns",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        action: PrimeFieldLinearAction,
+        degree: int,
+        monomial_basis: tuple[tuple[int, ...], ...],
+        basis_matrix: PrimeFieldMatrix,
+    ) -> Self:
+        return cls.model_construct(
+            action=action,
+            degree=degree,
+            monomial_basis=monomial_basis,
+            basis_matrix=basis_matrix,
+            fixed_dimension=len(basis_matrix.entries),
         )
 
 

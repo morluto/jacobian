@@ -8,6 +8,7 @@ from jacobian.math.finite_fields import (
     FiberPartition,
     FiniteLinearMap,
     FiniteMapTable,
+    HomogeneousFixedSubspace,
     OrbitDistribution,
     PaleyTournamentResult,
     PermutationResult,
@@ -18,6 +19,7 @@ from jacobian.math.finite_fields import (
     direction_rank_ledger,
     fiber_partition,
     finite_map_table,
+    homogeneous_fixed_subspace,
     linear_map_rank,
     orbit_distribution,
     paley_tournament,
@@ -29,6 +31,7 @@ from jacobian.math.finite_fields._models import (
     DirectionRankLedgerRequest,
     FiberPartitionRequest,
     FiniteMapTableRequest,
+    HomogeneousFixedSubspaceRequest,
     LinearMapRankRequest,
     OrbitDistributionRequest,
     PaleyTournamentRequest,
@@ -168,6 +171,12 @@ def _analyze_permutation(request: PermutationRequest) -> PermutationResult:
 
 def _paley_tournament(request: PaleyTournamentRequest) -> PaleyTournamentResult:
     return paley_tournament(request.presentation)
+
+
+def _fixed_subspace(
+    request: HomogeneousFixedSubspaceRequest,
+) -> HomogeneousFixedSubspace:
+    return homogeneous_fixed_subspace(request.action, request.degree)
 
 
 def _build_tools() -> MathTools:
@@ -340,6 +349,41 @@ def _build_tools() -> MathTools:
             ),
         ),
     )
+    fixed_subspace_operation = MathTool(
+        operation_id="finite_field.prime_linear_action.homogeneous_fixed_subspace.compute",
+        request_type=HomogeneousFixedSubspaceRequest,
+        result_type=HomogeneousFixedSubspace,
+        run=_fixed_subspace,
+        title="Compute a homogeneous fixed subspace over a prime field",
+        description=(
+            "Induce explicit invertible GF(p) substitutions on one bounded "
+            "homogeneous monomial space and return the simultaneous fixed "
+            "subspace in a canonical reduced coefficient basis."
+        ),
+        tags=("finite-field", "linear-action", "invariant-theory", "exact"),
+        examples=(
+            example(
+                "quadratic_swap_invariants",
+                "Compute the quadratic polynomials fixed by swapping x and y over GF(3).",
+                {
+                    "action": {
+                        "variable_axis": {
+                            "name": "polynomial_variables",
+                            "labels": ["x", "y"],
+                        },
+                        "generator_matrices": [
+                            {
+                                "prime": 3,
+                                "entries": [[0, 1], [1, 0]],
+                                "columns": 2,
+                            }
+                        ],
+                    },
+                    "degree": 2,
+                },
+            ),
+        ),
+    )
     return (
         projective_line_operation,
         restrict_operation,
@@ -351,6 +395,7 @@ def _build_tools() -> MathTools:
         collision_operation,
         permutation_operation,
         paley_tournament_operation,
+        fixed_subspace_operation,
     )
 
 

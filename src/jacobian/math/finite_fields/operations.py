@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import comb
 from typing import Literal
 
 from jacobian.canonical import (
@@ -15,6 +16,8 @@ from jacobian.math.finite_fields._models import (
     _MAX_PROJECTIVE_POINTS,
 )
 from jacobian.math.finite_fields.values import (
+    _MAX_HOMOGENEOUS_DEGREE,
+    _MAX_HOMOGENEOUS_MONOMIALS,
     Axis,
     CollisionResult,
     DirectionRankLedger,
@@ -26,9 +29,11 @@ from jacobian.math.finite_fields.values import (
     FiniteMapTable,
     FinitePolynomial,
     FinitePolynomialMap,
+    HomogeneousFixedSubspace,
     OrbitDistribution,
     PaleyTournamentResult,
     PermutationResult,
+    PrimeFieldLinearAction,
     ProjectiveLine,
     ProjectivePoint,
     RankResult,
@@ -38,13 +43,68 @@ from jacobian.math.graphs.directed._models import (
     MAX_DIRECTED_GRAPH_PARSE_EDGES,
     DirectedGraph,
 )
-from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields._bounds import (
+    MAX_PRIME_FIELD_ELIMINATION_WORK,
+    MAX_PRIME_FIELD_MATRIX_CELLS,
+)
+from jacobian.math.matrices.finite_fields.linear_algebra import (
+    PrimeFieldMatrix,
+    nullspace,
+    rank,
+    rref,
+)
 
 _MAX_FINITE_MAP_WORK = 1_000_000
 _MAX_PALEY_TOURNAMENT_WORK = 4_000_000
 _PALEY_ORIENTATION: Literal["ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"] = (
     "ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"
 )
+
+
+def _homogeneous_fixed_subspace_envelope(
+    action: PrimeFieldLinearAction, degree: int
+) -> int:
+    if type(degree) is not int or not 0 <= degree <= _MAX_HOMOGENEOUS_DEGREE:
+        raise OperationDomainValidationError(
+            location=("degree",),
+            code="finite_field.fixed_subspace_degree_bound",
+            message=(
+                f"degree must be an integer from 0 through {_MAX_HOMOGENEOUS_DEGREE}"
+            ),
+        )
+    variable_count = len(action.variable_axis.labels)
+    generator_count = len(action.generator_matrices)
+    monomial_count = comb(variable_count + degree - 1, degree)
+    equation_entries = generator_count * monomial_count**2
+    output_entries = monomial_count**2
+    expansion_work = (
+        generator_count * max(1, degree) * variable_count * monomial_count**2
+    )
+    elimination_work = generator_count * monomial_count**3
+    action_rank_work = generator_count * variable_count**3
+    if monomial_count > _MAX_HOMOGENEOUS_MONOMIALS:
+        raise OperationDomainValidationError(
+            location=("degree",),
+            code="finite_field.fixed_subspace_monomial_bound",
+            message="homogeneous monomial basis exceeds the operation bound",
+        )
+    if (
+        equation_entries > MAX_PRIME_FIELD_MATRIX_CELLS
+        or output_entries > MAX_PRIME_FIELD_MATRIX_CELLS
+    ):
+        raise OperationDomainValidationError(
+            location=("action",),
+            code="finite_field.fixed_subspace_matrix_bound",
+            message="fixed-subspace equation or result matrix exceeds its cell bound",
+        )
+    work = expansion_work + elimination_work + action_rank_work
+    if work > MAX_PRIME_FIELD_ELIMINATION_WORK:
+        raise OperationDomainValidationError(
+            location=("action",),
+            code="finite_field.fixed_subspace_work_bound",
+            message="homogeneous fixed-subspace computation exceeds its work bound",
+        )
+    return monomial_count
 
 
 def finite_field(
@@ -350,6 +410,130 @@ def linear_map_rank(
         direction=direction,
         linear_map=linear_map,
         rank=_flint.matrix_rank(linear_map.matrix),
+    )
+
+
+def _homogeneous_monomial_basis(
+    variable_count: int, degree: int
+) -> tuple[tuple[int, ...], ...]:
+    """Return degree-d exponent vectors in descending lexicographic order."""
+
+    def compositions(remaining: int, positions: int) -> tuple[tuple[int, ...], ...]:
+        if positions == 1:
+            return ((remaining,),)
+        return tuple(
+            (first, *tail)
+            for first in range(remaining, -1, -1)
+            for tail in compositions(remaining - first, positions - 1)
+        )
+
+    return compositions(degree, variable_count)
+
+
+def _multiply_by_linear_form(
+    polynomial: dict[tuple[int, ...], int],
+    coefficients: tuple[int, ...],
+    *,
+    prime: int,
+) -> dict[tuple[int, ...], int]:
+    """Multiply one sparse homogeneous polynomial by a GF(p) linear form."""
+
+    product: dict[tuple[int, ...], int] = {}
+    for exponents, coefficient in polynomial.items():
+        for index, linear_coefficient in enumerate(coefficients):
+            if linear_coefficient == 0:
+                continue
+            target = list(exponents)
+            target[index] += 1
+            target_tuple = tuple(target)
+            product[target_tuple] = (
+                product.get(target_tuple, 0) + coefficient * linear_coefficient
+            ) % prime
+    return {
+        exponents: coefficient
+        for exponents, coefficient in product.items()
+        if coefficient
+    }
+
+
+def _induced_action_matrix(
+    action: PrimeFieldLinearAction,
+    monomial_basis: tuple[tuple[int, ...], ...],
+    generator: PrimeFieldMatrix,
+) -> tuple[tuple[int, ...], ...]:
+    """Substitute one generator into every ordered homogeneous monomial."""
+
+    monomial_index = {
+        exponents: index for index, exponents in enumerate(monomial_basis)
+    }
+    matrix = [[0] * len(monomial_basis) for _ in monomial_basis]
+    variable_count = len(action.variable_axis.labels)
+    zero_exponents = (0,) * variable_count
+    for column, source_exponents in enumerate(monomial_basis):
+        polynomial: dict[tuple[int, ...], int] = {zero_exponents: 1}
+        for source_variable, exponent in enumerate(source_exponents):
+            coefficients = tuple(
+                generator.entries[target_variable][source_variable]
+                for target_variable in range(variable_count)
+            )
+            for _ in range(exponent):
+                polynomial = _multiply_by_linear_form(
+                    polynomial, coefficients, prime=action.prime
+                )
+        for target_exponents, coefficient in polynomial.items():
+            matrix[monomial_index[target_exponents]][column] = coefficient
+    return tuple(tuple(row) for row in matrix)
+
+
+def homogeneous_fixed_subspace(
+    action: PrimeFieldLinearAction, degree: int
+) -> HomogeneousFixedSubspace:
+    """Compute one exact homogeneous simultaneous fixed subspace over GF(p)."""
+
+    monomial_count = _homogeneous_fixed_subspace_envelope(action, degree)
+    variable_count = len(action.variable_axis.labels)
+    if any(rank(matrix) != variable_count for matrix in action.generator_matrices):
+        raise OperationDomainValidationError(
+            location=("action", "generator_matrices"),
+            code="finite_field.linear_action_generator_invertible",
+            message="every linear-action generator matrix must be invertible",
+        )
+    monomial_basis = _homogeneous_monomial_basis(variable_count, degree)
+    assert len(monomial_basis) == monomial_count
+    equations: list[tuple[int, ...]] = []
+    for generator in action.generator_matrices:
+        induced = _induced_action_matrix(action, monomial_basis, generator)
+        for row_index, row in enumerate(induced):
+            equation = list(row)
+            equation[row_index] = (equation[row_index] - 1) % action.prime
+            equations.append(tuple(equation))
+    equation_matrix = PrimeFieldMatrix(
+        prime=action.prime,
+        entries=tuple(equations),
+        columns=len(monomial_basis),
+    )
+    nullspace_rows = nullspace(equation_matrix)
+    if nullspace_rows:
+        reduced, pivots = rref(
+            PrimeFieldMatrix(
+                prime=action.prime,
+                entries=nullspace_rows,
+                columns=len(monomial_basis),
+            )
+        )
+        basis_rows = reduced[: len(pivots)]
+    else:
+        basis_rows = ()
+    basis_matrix = PrimeFieldMatrix(
+        prime=action.prime,
+        entries=basis_rows,
+        columns=len(monomial_basis),
+    )
+    return HomogeneousFixedSubspace._from_kernel(
+        action=action,
+        degree=degree,
+        monomial_basis=monomial_basis,
+        basis_matrix=basis_matrix,
     )
 
 

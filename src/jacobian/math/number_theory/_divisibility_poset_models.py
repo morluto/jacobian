@@ -9,7 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
-from jacobian.math.combinatorics.posets.core._models import ElementLabel
+from jacobian.math.combinatorics.posets.core._models import (
+    MAX_POSET_ELEMENTS,
+    ElementLabel,
+)
 
 MAX_DIVISIBILITY_SET_SIZE = 500
 
@@ -19,7 +22,7 @@ class DivisibilityPosetRequest(StrictModel):
 
     values: tuple[ElementLabel, ...] = Field(
         min_length=1,
-        max_length=MAX_DIVISIBILITY_SET_SIZE,
+        max_length=min(MAX_DIVISIBILITY_SET_SIZE, MAX_POSET_ELEMENTS),
         description=(
             "Finite set of positive canonical decimal integers. The poset "
             "has a < b exactly when a divides b and a != b."

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jacobian.canonical import CanonicalLimits
+from jacobian.canonical import CanonicalizationError, CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.cycle_length_profile._models import (
     MAX_VERTICES,
@@ -88,10 +88,17 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
             "complete cycle-profile search exceeds the admitted work bound",
         )
 
-    label_bytes = sum(len(label.encode("utf-8")) + 2 for label in graph.vertices)
-    result_bytes = simple_undirected_graph_wire_bytes(graph) + 256
-    for length in range(3, vertex_count + 1):
-        result_bytes += 32 + length * (label_bytes + 2)
+    try:
+        result_bytes = simple_undirected_graph_wire_bytes(graph) + 256
+    except CanonicalizationError:
+        _reject(
+            "cycle_profile.result_bound",
+            "the complete cycle profile exceeds the canonical output bound",
+        )
+    if graph.edges:
+        label_bytes = sum(len(label.encode("utf-8")) + 2 for label in graph.vertices)
+        for length in range(3, vertex_count + 1):
+            result_bytes += 32 + length * (label_bytes + 2)
     if result_bytes > MAX_RESULT_BYTES:
         _reject(
             "cycle_profile.result_bound",

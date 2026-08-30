@@ -22,7 +22,9 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 
 MAX_VERTEX_COUNT = MAX_VERTICES
 MAX_EDGE_COUNT = MAX_EDGES
-MAX_PALETTE_SIZE = MAX_VERTEX_COUNT
+# Palette sizes are emitted as JSON integers, so use the interoperable integer
+# range rather than tying a cheap injective presolve to the vertex count.
+MAX_PALETTE_SIZE = (1 << 53) - 1
 MAX_COLORING_WORK = 2_000_000
 
 ColoringResult = Literal["COLORABLE", "NOT_COLORABLE"]

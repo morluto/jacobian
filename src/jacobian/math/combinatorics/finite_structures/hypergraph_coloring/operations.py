@@ -75,19 +75,23 @@ def decide_nonmonochromatic_coloring(
 
     n = len(vertices)
     execution = current_request_execution()
-    if execution is not None and execution.deadline is None:
-        bind_request_deadline(
-            execution.started_at
-            + max(60.0, (palette_size**n * len(edges)) / 100_000)
-        )
+    work_budget = palette_size**n * len(edges)
+    if execution is not None:
+        if execution.deadline is None:
+            bind_request_deadline(
+                execution.started_at + max(60.0, work_budget / 100_000)
+            )
+        deadline = execution.deadline
+    else:
+        # Native callers have no dispatch context; give the same admitted
+        # search envelope an operation-owned deadline.
+        deadline = time.monotonic() + max(60.0, work_budget / 100_000)
     for index, coloring in enumerate(product(range(palette_size), repeat=n)):
-        if index % 1024 == 0:
-            execution = current_request_execution()
-            if execution is not None and execution.deadline is not None and time.monotonic() >= execution.deadline:
-                raise OperationExecutionTimeoutError(
-                    "hypergraph coloring search exceeded its request deadline"
-                )
-        if _is_valid_coloring(coloring, edges, vertices):
+        if index % 1024 == 0 and deadline is not None and time.monotonic() >= deadline:
+            raise OperationExecutionTimeoutError(
+                "hypergraph coloring search exceeded its request deadline"
+            )
+        if _is_valid_coloring(coloring, edges, vertices, deadline):
             assignments = tuple((vertices[i], coloring[i]) for i in range(n))
             witness = ColoringWitness(assignments=assignments)
             return NonmonochromaticColoringResult(
@@ -108,19 +112,14 @@ def _is_valid_coloring(
     coloring: tuple[int, ...],
     edges: list[tuple[str, tuple[str, ...]]],
     vertices: list[str],
+    deadline: float | None = None,
 ) -> bool:
     vertex_to_color = {vertices[i]: coloring[i] for i in range(len(coloring))}
     for edge_index, (_, members) in enumerate(edges):
-        if edge_index % 256 == 0:
-            execution = current_request_execution()
-            if (
-                execution is not None
-                and execution.deadline is not None
-                and time.monotonic() >= execution.deadline
-            ):
-                raise OperationExecutionTimeoutError(
-                    "hypergraph coloring edge checks exceeded its request deadline"
-                )
+        if edge_index % 256 == 0 and deadline is not None and time.monotonic() >= deadline:
+            raise OperationExecutionTimeoutError(
+                "hypergraph coloring edge checks exceeded its request deadline"
+            )
         colors = {vertex_to_color[m] for m in members}
         if len(colors) < 2:
             return False

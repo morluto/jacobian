@@ -21,7 +21,11 @@ def context(presentation: FiniteFieldPresentation) -> Any:
     recovered = tuple(int(value) for value in result.modulus().coeffs())
     if recovered != presentation.modulus_coefficients:
         raise ValueError("python-flint did not preserve the exact field modulus")
-    expected_generator = (0, 1) + (0,) * (presentation.degree - 2)
+    expected_generator = (
+        ((-presentation.modulus_coefficients[0]) % presentation.characteristic,)
+        if presentation.degree == 1
+        else (0, 1) + (0,) * (presentation.degree - 2)
+    )
     if tuple(int(value) for value in result.gen().to_list()) != expected_generator:
         raise ValueError("python-flint did not preserve the power-basis generator")
     return result

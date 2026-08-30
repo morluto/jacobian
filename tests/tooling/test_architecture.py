@@ -231,6 +231,26 @@ def test_result_validators_cannot_replay_known_owner_kernels(tmp_path: Path) -> 
     ]
 
 
+def test_profiles_and_certificates_cannot_hide_kernel_replay(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/_models.py",
+        "class ExampleProfile:\n"
+        "    @model_validator(mode='after')\n"
+        "    def replay(self):\n"
+        "        return factor_list(self.polynomial)\n"
+        "class ExampleCertificate:\n"
+        "    @model_validator(mode='after')\n"
+        "    def replay(self):\n"
+        "        return minimal_polynomial(self.value)\n",
+    )
+
+    assert _violations(tmp_path, "result-validator-replay") == [
+        "src/jacobian/math/example/_models.py",
+        "src/jacobian/math/example/_models.py",
+    ]
+
+
 def test_exported_native_functions_do_not_construct_wire_models(
     tmp_path: Path,
 ) -> None:

@@ -248,7 +248,8 @@ def test_merge_group_always_owns_full_math_and_public_contracts() -> None:
 
 def test_merge_group_selects_scale_evidence_for_its_owning_math_domain() -> None:
     plan = _plan(
-        ["src/jacobian/math/lattice_polytopes/_operations.py"], event="merge_group"
+        ["src/jacobian/math/geometry/polytopes/lattice/operations.py"],
+        event="merge_group",
     )
 
     assert plan.run_math is True

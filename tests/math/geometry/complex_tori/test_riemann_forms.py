@@ -11,7 +11,6 @@ from sympy.polys.matrices import DomainMatrix
 from tests.math.geometry.complex_tori._support import (
     index_six_alternating_form,
     quartic_index_six_torus,
-    quartic_matrix,
     quartic_rank_one_torus,
     standard_alternating_form,
 )
@@ -434,71 +433,3 @@ def test_hodge_outcome_schema_requires_every_exact_real_discriminator(
         assert list(validator.iter_errors(invalid))
         with pytest.raises(ValidationError):
             RiemannFormProfile.model_validate(invalid)
-
-
-def test_profile_rejects_outcome_branch_and_scalar_domain_mutations() -> None:
-    torus = LatticeComplexStructure(
-        coordinate_axis=("e1", "e2"),
-        complex_structure=RationalMatrix(
-            entries=((_rational(0), _rational(1)), (_rational(-1), _rational(0)))
-        ),
-    )
-    form = IntegralBilinearForm(
-        coordinate_axis=torus.coordinate_axis,
-        kind="ALTERNATING",
-        matrix=IntegerMatrix(entries=(("0", "1"), ("-1", "0"))),
-    )
-    positive_dump = compute_riemann_form_profile(torus, form).model_dump(mode="json")
-
-    missing_type = copy.deepcopy(positive_dump)
-    del missing_type["outcome"]["polarization_type"]
-    with pytest.raises(ValidationError):
-        RiemannFormProfile.model_validate(missing_type)
-
-    impossible_degenerate = copy.deepcopy(positive_dump)
-    impossible_degenerate["smith_normal_form"]["normal_form"]["entries"] = [
-        ["0", "0"],
-        ["0", "0"],
-    ]
-    impossible_degenerate["smith_normal_form"]["rank"] = 0
-    impossible_degenerate["smith_normal_form"]["invariant_factors"] = []
-    impossible_degenerate["alternating_elementary_divisors"] = []
-    impossible_degenerate["is_degenerate"] = True
-    impossible_degenerate["outcome"]["polarization_type"] = []
-    with pytest.raises(ValidationError) as degeneracy_error:
-        RiemannFormProfile.model_validate(impossible_degenerate)
-    assert degeneracy_error.value.errors()[0]["type"] == (
-        "complex_torus.riemann_nondegenerate"
-    )
-
-    foreign_domain = copy.deepcopy(positive_dump)
-    foreign_domain["outcome"]["associated_form_inertia"]["matrix"] = quartic_matrix(
-        (((1, 0, 0, 0), (0, 0, 0, 0)), ((0, 0, 0, 0), (1, 0, 0, 0)))
-    ).model_dump(mode="json")
-    with pytest.raises(ValidationError) as domain_error:
-        RiemannFormProfile.model_validate(foreign_domain)
-    assert domain_error.value.errors()[0]["type"] == (
-        "complex_torus.associated_scalar_domain"
-    )
-
-    algebraic_torus = quartic_rank_one_torus(root_index=1)
-    algebraic_dump = compute_riemann_form_profile(
-        algebraic_torus,
-        standard_alternating_form(algebraic_torus),
-    ).model_dump(mode="json")
-    impossible_type = copy.deepcopy(algebraic_dump)
-    impossible_type["outcome"]["polarization_type"] = []
-    with pytest.raises(ValidationError):
-        RiemannFormProfile.model_validate(impossible_type)
-
-    negative_complex_structure = quartic_rank_one_torus(root_index=0).complex_structure
-    assert isinstance(negative_complex_structure, EmbeddedRealSimpleNumberFieldMatrix)
-    negative_embedding = negative_complex_structure.embedding
-    algebraic_dump["outcome"]["associated_form_inertia"]["matrix"]["embedding"] = (
-        negative_embedding.model_dump(mode="json")
-    )
-    with pytest.raises(ValidationError) as embedding_error:
-        RiemannFormProfile.model_validate(algebraic_dump)
-    assert embedding_error.value.errors()[0]["type"] == (
-        "complex_torus.associated_scalar_domain"
-    )

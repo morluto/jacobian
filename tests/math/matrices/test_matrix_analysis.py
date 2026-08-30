@@ -58,9 +58,9 @@ class TestInertia:
             strict=True,
         )
 
-        recomputed = compute_inertia(request)
+        round_tripped = compute_inertia(request)
 
-        assert recomputed == produced
+        assert round_tripped == produced
 
     def test_identity(self) -> None:
         req = _inertia_request(3, {(0, 0): "1", (1, 1): "1", (2, 2): "1"})

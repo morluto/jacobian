@@ -18,6 +18,7 @@ from jacobian.math.number_theory._interval_profiles import (
 from jacobian.math.number_theory._modular import MODULAR_OPERATIONS
 from jacobian.math.number_theory._modular_identity import MODULAR_IDENTITY_OPERATIONS
 from jacobian.math.number_theory._periodic import PERIODIC_CONGRUENCE_OPERATIONS
+from jacobian.math.number_theory._divisibility_poset import DIVISIBILITY_POSET_OPERATION
 from jacobian.math.number_theory._powerful import POWERFUL_NUMBER_OPERATION
 from jacobian.math.number_theory._preimage_ops import PREIMAGE_OPERATIONS
 from jacobian.math.number_theory._prime_shifts import PRIME_SHIFT_OPERATION
@@ -30,6 +31,7 @@ TOOLS: MathTools = (
     *DIVISIBILITY_OPERATIONS,
     *PRIME_OPERATIONS,
     POWERFUL_NUMBER_OPERATION,
+    DIVISIBILITY_POSET_OPERATION,
     *MODULAR_OPERATIONS,
     *PERIODIC_CONGRUENCE_OPERATIONS,
     *MODULAR_IDENTITY_OPERATIONS,

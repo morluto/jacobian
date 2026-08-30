@@ -162,6 +162,12 @@ def plan_friable_family(x: int, y: int) -> tuple[_FriableFamilyRegime, tuple[int
             "generated_friable_family_exceeds_the_row_budget",
             "generated friable family exceeds the row budget",
         )
+    estimated_bytes = 128 + candidate_count * (len(str(x)) + 3)
+    if estimated_bytes > _MAX_FRIABLE_FAMILY_SERIALIZED_BYTES:
+        raise _validation_error(
+            "generated_friable_family_exceeds_the_serialized_budget",
+            "generated friable family exceeds the serialized result budget",
+        )
 
     return "GENERATED", primes
 

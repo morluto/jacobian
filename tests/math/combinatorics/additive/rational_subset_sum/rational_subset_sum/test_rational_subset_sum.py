@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_subset_sum.operations import (
     compute_rational_subset_sum_profile,
 )
@@ -47,3 +50,10 @@ def test_result_preserves_source() -> None:
     values = (_cr(1), _cr(2))
     result = compute_rational_subset_sum_profile(values)
     assert result.values == values
+
+
+def test_subset_enumeration_work_is_bounded() -> None:
+    values = tuple(_cr(0) for _ in range(17))
+
+    with pytest.raises(OperationDomainValidationError, match="subset work bound"):
+        compute_rational_subset_sum_profile(values)

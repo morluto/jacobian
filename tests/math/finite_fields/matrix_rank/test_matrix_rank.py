@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.math.finite_fields._matrix_rank import compute_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankRequest
 from jacobian.math.finite_fields.operations import matrix_rank
@@ -123,6 +126,18 @@ def test_pivot_labels_follow_row_swaps() -> None:
     result = matrix_rank(m)
     assert result.rank == 1
     assert result.pivot_rows == ("r1",)
+
+
+def test_pivot_columns_follow_source_axis_order() -> None:
+    fp = _f2()
+    m = _matrix(fp, [[[1], [0]], [[0], [1]]], ["r0", "r1"], ["c0", "c1"])
+    with pytest.raises(ValidationError, match="pivot columns must follow"):
+        type(matrix_rank(m))(
+            matrix=m,
+            rank=2,
+            pivot_rows=("r0", "r1"),
+            pivot_columns=("c1", "c0"),
+        )
 
 
 def test_rank_invariance_under_row_ops() -> None:

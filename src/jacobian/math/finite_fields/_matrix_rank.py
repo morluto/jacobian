@@ -42,18 +42,28 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
     matrix = request.matrix
     try:
-        rank_bound = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
+        active_rows = tuple(
+            label
+            for index, label in enumerate(matrix.row_axis.labels)
+            if any(not element.is_zero for element in matrix.entries[index])
+        )
+        active_columns = tuple(
+            label
+            for index, label in enumerate(matrix.column_axis.labels)
+            if any(not row[index].is_zero for row in matrix.entries)
+        )
+        rank_bound = min(len(active_rows), len(active_columns))
         result_probe = encode_strict_json(
             {
                 "matrix": matrix.model_dump(mode="json"),
                 "rank": rank_bound,
                 "pivot_rows": sorted(
-                    matrix.row_axis.labels,
+                    active_rows,
                     key=lambda label: len(encode_strict_json(label)),
                     reverse=True,
                 )[:rank_bound],
                 "pivot_columns": sorted(
-                    matrix.column_axis.labels,
+                    active_columns,
                     key=lambda label: len(encode_strict_json(label)),
                     reverse=True,
                 )[:rank_bound],

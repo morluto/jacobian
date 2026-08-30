@@ -64,6 +64,19 @@ class MatrixRankResult(StrictModel):
                 "finite_field.matrix_rank.pivot_column_labels",
                 "pivot columns must be declared column labels",
             )
+        column_positions = {
+            label: position for position, label in enumerate(self.matrix.column_axis.labels)
+        }
+        if any(
+            column_positions[later] <= column_positions[earlier]
+            for earlier, later in zip(
+                self.pivot_columns, self.pivot_columns[1:], strict=False
+            )
+        ):
+            raise PydanticCustomError(
+                "finite_field.matrix_rank.pivot_columns_order",
+                "pivot columns must follow the declared column-axis order",
+            )
         return self
 
 

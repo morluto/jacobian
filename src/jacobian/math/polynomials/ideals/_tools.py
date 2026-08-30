@@ -23,6 +23,8 @@ from jacobian.math.polynomials.ideals._models import (
     IdealRadicalResult,
     IdealSaturationRequest,
     IdealSaturationResult,
+    MonomialIdealBettiRequest,
+    MonomialIdealBettiResult,
 )
 from jacobian.math.polynomials.ideals.operations import (
     elimination_ideal,
@@ -33,7 +35,14 @@ from jacobian.math.polynomials.ideals.operations import (
     ideal_radical,
     ideal_radical_membership,
     ideal_saturation,
+    monomial_ideal_graded_betti_table,
 )
+
+
+def _run_monomial_betti(
+    request: MonomialIdealBettiRequest,
+) -> MonomialIdealBettiResult:
+    return monomial_ideal_graded_betti_table(request.ideal)
 
 
 def _run_minimal_primes(
@@ -138,6 +147,35 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "polynomial.monomial_ideal.graded_betti_table.compute",
+        "Compute a monomial ideal's graded Betti table",
+        "Compute every nonzero multigraded and standard-graded Betti number "
+        "of a bounded minimally generated monomial ideal over QQ. The exact "
+        "result includes the complete lcm-lattice crosscut homology profile, "
+        "Castelnuovo--Mumford regularity, and whether the ideal has a linear "
+        "resolution.",
+        MonomialIdealBettiRequest,
+        MonomialIdealBettiResult,
+        _run_monomial_betti,
+        "commutative-algebra",
+        "monomial-ideal",
+        "graded-betti-numbers",
+        "free-resolution",
+        "exact",
+        examples=(
+            example(
+                "two_quadrics",
+                "Compute the Betti table of <x^2,y^2> in QQ[x,y].",
+                {
+                    "ideal": {
+                        "variables": ["x", "y"],
+                        "generators": [[2, 0], [0, 2]],
+                    }
+                },
+            ),
+        ),
+    ),
     _op(
         "polynomial.ideal.minimal_primes.compute",
         "Compute minimal primes of a rational polynomial ideal",

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import itertools
 from fractions import Fraction
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
+    PolynomialVariable,
     RationalPolynomial,
     RationalPolynomialIdeal,
     require_polynomial_budget,
@@ -29,6 +30,216 @@ MAX_COEFFICIENT_DIGITS = 128
 MAX_OUTPUT_GENERATORS = 64
 MAX_OUTPUT_TERMS = 1024
 _RATIONAL_ROOT_PROBES = (0, 1, -1)
+
+MAX_MONOMIAL_IDEAL_VARIABLES = 8
+MAX_MONOMIAL_IDEAL_GENERATORS = 8
+MAX_MONOMIAL_IDEAL_EXPONENT = 64
+MAX_MONOMIAL_LCM_ELEMENTS = (1 << MAX_MONOMIAL_IDEAL_GENERATORS) - 1
+MAX_MONOMIAL_BETTI_ENTRIES = MAX_MONOMIAL_IDEAL_GENERATORS * MAX_MONOMIAL_LCM_ELEMENTS
+MAX_MONOMIAL_BETTI_VALUE = 1 << MAX_MONOMIAL_IDEAL_GENERATORS
+MonomialExponent = Annotated[StrictInt, Field(ge=0, le=MAX_MONOMIAL_IDEAL_EXPONENT)]
+CrosscutCardinality = Annotated[
+    StrictInt, Field(ge=0, le=1 << MAX_MONOMIAL_IDEAL_GENERATORS)
+]
+
+
+class MonomialIdeal(StrictModel):
+    """A canonical monomial ideal in a standard-graded polynomial ring over QQ.
+
+    Generators are exponent vectors in the declared variable order.  They are
+    sorted in descending lexicographic order and form the unique minimal
+    monomial generating family.
+    """
+
+    monomial_ideal_schema_version: Literal["1"] = "1"
+    domain: Literal["QQ"] = "QQ"
+    grading: Literal["STANDARD_TOTAL"] = "STANDARD_TOTAL"
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=1, max_length=MAX_MONOMIAL_IDEAL_VARIABLES
+    )
+    generators: tuple[tuple[MonomialExponent, ...], ...] = Field(
+        min_length=1, max_length=MAX_MONOMIAL_IDEAL_GENERATORS
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_minimal_generators(self) -> Self:
+        if len(set(self.variables)) != len(self.variables):
+            raise _validation_error("monomial-ideal variables must be unique")
+        if any(len(generator) != len(self.variables) for generator in self.generators):
+            raise _validation_error(
+                "every monomial generator must match the declared variable order"
+            )
+        if any(
+            exponent < 0 or exponent > MAX_MONOMIAL_IDEAL_EXPONENT
+            for generator in self.generators
+            for exponent in generator
+        ):
+            raise _validation_error(
+                "monomial generator exponents exceed the representation limit"
+            )
+        if any(not any(generator) for generator in self.generators):
+            raise _validation_error(
+                "the unit ideal is outside this nontrivial-resolution scope"
+            )
+        if self.generators != tuple(sorted(self.generators, reverse=True)):
+            raise _validation_error(
+                "monomial generators must use descending lexicographic order"
+            )
+        for index, generator in enumerate(self.generators):
+            for other in self.generators[index + 1 :]:
+                if all(
+                    left <= right for left, right in zip(generator, other, strict=True)
+                ) or all(
+                    right <= left for left, right in zip(generator, other, strict=True)
+                ):
+                    raise _validation_error(
+                        "monomial generators must be pairwise nondividing"
+                    )
+        return self
+
+
+class MonomialIdealBettiRequest(StrictModel):
+    """Compute the complete graded Betti profile of one monomial ideal."""
+
+    ideal: MonomialIdeal
+
+
+class LcmLatticeHomologyEntry(StrictModel):
+    """Crosscut-chain ranks and reduced homology at one lcm-lattice element."""
+
+    multidegree: tuple[MonomialExponent, ...] = Field(
+        min_length=1, max_length=MAX_MONOMIAL_IDEAL_VARIABLES
+    )
+    face_counts: tuple[CrosscutCardinality, ...] = Field(
+        min_length=2, max_length=MAX_MONOMIAL_IDEAL_GENERATORS + 1
+    )
+    boundary_ranks: tuple[CrosscutCardinality, ...] = Field(
+        min_length=1, max_length=MAX_MONOMIAL_IDEAL_GENERATORS
+    )
+    reduced_homology_dimensions: tuple[CrosscutCardinality, ...] = Field(
+        min_length=1, max_length=MAX_MONOMIAL_IDEAL_GENERATORS
+    )
+
+
+class MultigradedBettiNumber(StrictModel):
+    """One nonzero multigraded Betti number beta_(i,m) of the ideal."""
+
+    homological_degree: StrictInt = Field(ge=0, le=MAX_MONOMIAL_IDEAL_GENERATORS - 1)
+    multidegree: tuple[MonomialExponent, ...] = Field(
+        min_length=1, max_length=MAX_MONOMIAL_IDEAL_VARIABLES
+    )
+    value: StrictInt = Field(ge=1, le=MAX_MONOMIAL_BETTI_VALUE)
+
+
+class GradedBettiNumber(StrictModel):
+    """One nonzero standard-graded Betti number beta_(i,j) of the ideal."""
+
+    homological_degree: StrictInt = Field(ge=0, le=MAX_MONOMIAL_IDEAL_GENERATORS - 1)
+    internal_degree: StrictInt = Field(
+        ge=1,
+        le=MAX_MONOMIAL_IDEAL_VARIABLES * MAX_MONOMIAL_IDEAL_EXPONENT,
+    )
+    value: StrictInt = Field(ge=1, le=MAX_MONOMIAL_BETTI_VALUE)
+
+
+class MonomialIdealBettiResult(StrictModel):
+    """Complete source-bound Betti data and its lcm-lattice homology profile."""
+
+    ideal: MonomialIdeal
+    lcm_lattice_homology: tuple[LcmLatticeHomologyEntry, ...] = Field(
+        min_length=1, max_length=MAX_MONOMIAL_LCM_ELEMENTS
+    )
+    multigraded_betti_numbers: tuple[MultigradedBettiNumber, ...] = Field(
+        min_length=1, max_length=MAX_MONOMIAL_BETTI_ENTRIES
+    )
+    graded_betti_numbers: tuple[GradedBettiNumber, ...] = Field(
+        min_length=1, max_length=MAX_MONOMIAL_BETTI_ENTRIES
+    )
+    regularity: StrictInt = Field(
+        ge=1,
+        le=MAX_MONOMIAL_IDEAL_VARIABLES * MAX_MONOMIAL_IDEAL_EXPONENT,
+    )
+    has_linear_resolution: bool
+    method: Literal["LCM_LATTICE_CROSSCUT_HOMOLOGY"] = "LCM_LATTICE_CROSSCUT_HOMOLOGY"
+    backend: Literal["PYTHON_FLINT"] = "PYTHON_FLINT"
+
+    @model_validator(mode="after")
+    def require_canonical_shape(self) -> Self:
+        variable_count = len(self.ideal.variables)
+        generator_count = len(self.ideal.generators)
+        lattice_degrees = tuple(
+            entry.multidegree for entry in self.lcm_lattice_homology
+        )
+        if lattice_degrees != tuple(sorted(set(lattice_degrees))):
+            raise _validation_error(
+                "lcm-lattice homology entries must have unique canonical order"
+            )
+        if any(
+            len(entry.multidegree) != variable_count
+            or len(entry.face_counts) != generator_count + 1
+            or len(entry.boundary_ranks) != generator_count
+            or len(entry.reduced_homology_dimensions) != generator_count
+            for entry in self.lcm_lattice_homology
+        ):
+            raise _validation_error(
+                "lcm-lattice homology data must match the retained ideal dimensions"
+            )
+        multigraded = tuple(
+            (entry.homological_degree, entry.multidegree)
+            for entry in self.multigraded_betti_numbers
+        )
+        graded = tuple(
+            (entry.homological_degree, entry.internal_degree)
+            for entry in self.graded_betti_numbers
+        )
+        if multigraded != tuple(sorted(set(multigraded))):
+            raise _validation_error(
+                "multigraded Betti entries must have unique canonical order"
+            )
+        if graded != tuple(sorted(set(graded))):
+            raise _validation_error(
+                "graded Betti entries must have unique canonical order"
+            )
+        if any(
+            len(entry.multidegree) != variable_count
+            for entry in self.multigraded_betti_numbers
+        ):
+            raise _validation_error(
+                "Betti multidegrees must match the retained ideal's ordered ring"
+            )
+        lattice_degree_set = set(lattice_degrees)
+        if any(
+            entry.multidegree not in lattice_degree_set
+            for entry in self.multigraded_betti_numbers
+        ):
+            raise _validation_error(
+                "every multigraded Betti entry must reference a returned lcm-lattice element"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        ideal: MonomialIdeal,
+        *,
+        lcm_lattice_homology: tuple[LcmLatticeHomologyEntry, ...],
+        multigraded_betti_numbers: tuple[MultigradedBettiNumber, ...],
+        graded_betti_numbers: tuple[GradedBettiNumber, ...],
+        regularity: int,
+        has_linear_resolution: bool,
+    ) -> Self:
+        """Build the exact result from one trusted owner-local kernel pass."""
+
+        return cls.model_construct(
+            ideal=ideal,
+            lcm_lattice_homology=lcm_lattice_homology,
+            multigraded_betti_numbers=multigraded_betti_numbers,
+            graded_betti_numbers=graded_betti_numbers,
+            regularity=regularity,
+            has_linear_resolution=has_linear_resolution,
+            method="LCM_LATTICE_CROSSCUT_HOMOLOGY",
+            backend="PYTHON_FLINT",
+        )
 
 
 class IdealComputationBudget(StrictModel):

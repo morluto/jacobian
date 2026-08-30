@@ -19,11 +19,19 @@ from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
 
-MAX_AFFINE_TORUS_DIMENSION = 16
-MAX_AFFINE_TORUS_INPUT_DIGITS = 32
+# Conservative preflight fallback: the derived admission in
+# build_affine_torus_plan is the actual gate, checking result bytes against
+# the transport limit and point-height against its carrier envelope.  These
+# caps only reject absurdly large raw input before the plan runs.
+MAX_AFFINE_TORUS_DIMENSION = 64
+MAX_AFFINE_TORUS_INPUT_DIGITS = 500
 MAX_AFFINE_TORUS_POINT_DIGITS = 1_050
-_AFFINE_SIGNED_INTEGER_PATTERN = r"^(?:0|-?[1-9][0-9]{0,31})$"
-_AFFINE_POSITIVE_INTEGER_PATTERN = r"^[1-9][0-9]{0,31}$"
+_AFFINE_SIGNED_INTEGER_PATTERN = (
+    rf"^(?:0|-?[1-9][0-9]{{0,{MAX_AFFINE_TORUS_INPUT_DIGITS - 1}}})$"
+)
+_AFFINE_POSITIVE_INTEGER_PATTERN = (
+    rf"^[1-9][0-9]{{0,{MAX_AFFINE_TORUS_INPUT_DIGITS - 1}}}$"
+)
 _POINT_SIGNED_INTEGER_PATTERN = (
     rf"^(?:0|-?[1-9][0-9]{{0,{MAX_AFFINE_TORUS_POINT_DIGITS - 1}}})$"
 )
@@ -140,7 +148,7 @@ def _preflight_affine_linear_part(value: object) -> None:
             if _integer_digits(entry) > MAX_AFFINE_TORUS_INPUT_DIGITS:
                 raise _validation_error(
                     "raw_digits",
-                    "integer matrix entries may contain at most 32 digits",
+                    f"integer matrix entries may contain at most {MAX_AFFINE_TORUS_INPUT_DIGITS} digits",
                 )
 
 
@@ -294,13 +302,13 @@ def _affine_linear_part_schema() -> JsonSchemaValue:
         pattern=_AFFINE_SIGNED_INTEGER_PATTERN,
     )
     entries["description"] = (
-        "Exactly n rows of n canonical integers, each with at most 32 decimal digits."
+        f"Exactly n rows of n canonical integers, each with at most {MAX_AFFINE_TORUS_INPUT_DIGITS} decimal digits."
     )
     return schema
 
 
 def _affine_translation_schema() -> JsonSchemaValue:
-    """Expose the source-only 32-digit rational grammar without forking its type."""
+    """Expose the source-only rational grammar without forking its type."""
 
     return {
         "type": "object",
@@ -308,7 +316,7 @@ def _affine_translation_schema() -> JsonSchemaValue:
         "description": (
             "A point of the same torus in [0,1)^n. Rational components are "
             "reduced, denominators are positive, and each component has at most "
-            "32 decimal digits."
+            f"{MAX_AFFINE_TORUS_INPUT_DIGITS} decimal digits."
         ),
         "additionalProperties": False,
         "properties": {
@@ -352,7 +360,7 @@ class RationalAffineTorusMap(StrictModel):
     ] = Field(
         description=(
             "A point of the same torus in [0,1)^n; numerator and denominator "
-            "components have at most 32 decimal digits for affine-map sources."
+            f"components have at most {MAX_AFFINE_TORUS_INPUT_DIGITS} decimal digits for affine-map sources."
         )
     )
 
@@ -415,7 +423,7 @@ class RationalAffineTorusMap(StrictModel):
         ):
             raise _validation_error(
                 "map_digits",
-                "affine linear-part entries may contain at most 32 digits",
+                f"affine linear-part entries may contain at most {MAX_AFFINE_TORUS_INPUT_DIGITS} digits",
             )
         for coordinate in self.translation.coordinates:
             try:

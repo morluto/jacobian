@@ -610,13 +610,13 @@ def test_contradictory_discriminator_and_component_metadata_fail_closed() -> Non
 def test_raw_shape_and_digit_preflight_precedes_nested_parsing(mutation: str) -> None:
     payload = _payload(((1,),), (Fraction(0),))
     if mutation == "rows":
-        payload["linear_part"]["entries"] = [[object()] for _ in range(17)]
+        payload["linear_part"]["entries"] = [[object()] for _ in range(65)]
     elif mutation == "columns":
-        payload["linear_part"]["entries"] = [[object() for _ in range(17)]]
+        payload["linear_part"]["entries"] = [[object() for _ in range(65)]]
     elif mutation == "digits":
-        payload["linear_part"]["entries"] = [["1" * 33]]
+        payload["linear_part"]["entries"] = [["1" * 501]]
     elif mutation == "coordinates":
-        payload["translation"]["coordinates"] = [object() for _ in range(17)]
+        payload["translation"]["coordinates"] = [object() for _ in range(65)]
     else:
         payload["translation"]["coordinates"] = [{"num": [[[[object()]]]], "den": "1"}]
 
@@ -643,26 +643,26 @@ def test_request_schema_matches_sign_aware_affine_scalar_digit_bounds() -> None:
         "coordinates"
     ]["items"]["properties"]
 
-    assert linear_scalar["pattern"] == r"^(?:0|-?[1-9][0-9]{0,31})$"
-    assert linear_scalar["maxLength"] == 33
+    assert linear_scalar["pattern"] == r"^(?:0|-?[1-9][0-9]{0,499})$"
+    assert linear_scalar["maxLength"] == 501
     assert rational_scalar["num"]["pattern"] == linear_scalar["pattern"]
-    assert rational_scalar["num"]["maxLength"] == 33
-    assert rational_scalar["den"]["pattern"] == r"^[1-9][0-9]{0,31}$"
-    assert rational_scalar["den"]["maxLength"] == 32
+    assert rational_scalar["num"]["maxLength"] == 501
+    assert rational_scalar["den"]["pattern"] == r"^[1-9][0-9]{0,499}$"
+    assert rational_scalar["den"]["maxLength"] == 500
 
     valid_payload = {
         "affine_map": _payload(
-            ((-(10**32 - 1),),),
-            (Fraction(10**32 - 2, 10**32 - 1),),
+            ((-(10**500 - 1),),),
+            (Fraction(10**500 - 2, 10**500 - 1),),
         )
     }
     assert not list(validator.iter_errors(valid_payload))
     AffineTorusFixedLocusRequest.model_validate(valid_payload)
 
     for field, invalid in (
-        ("linear", "-" + "1" * 33),
-        ("numerator", "1" * 33),
-        ("denominator", "1" * 33),
+        ("linear", "-" + "1" * 501),
+        ("numerator", "1" * 501),
+        ("denominator", "1" * 501),
         ("denominator", "-1"),
     ):
         invalid_payload = {"affine_map": _payload(((1,),), (Fraction(1, 2),))}

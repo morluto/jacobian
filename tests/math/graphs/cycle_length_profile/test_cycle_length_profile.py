@@ -141,6 +141,12 @@ def test_native_admission_accepts_large_sparse_graph() -> None:
     assert compute_cycle_length_profile(graph).rows == ()
 
 
+def test_edgeless_graph_uses_triangular_root_scan_bound() -> None:
+    """Root scans for an edgeless graph are charged once per unordered pair."""
+    graph = _graph([str(i) for i in range(256)], [])
+    assert compute_cycle_length_profile(graph).rows == ()
+
+
 def test_near_complete_graph_uses_exhaustive_work_bound() -> None:
     """Missing a few edges must not trigger an unproved complete-graph shortcut."""
     vertices = [f"v{index:02d}" for index in range(20)]

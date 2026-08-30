@@ -48,9 +48,8 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
 
     # The kernel repeats root and one-edge scans for every target length, even
     # when no path reaches depth three (for example, a perfect matching).
-    work = (
-        vertex_count * (vertex_count + 2 * len(graph.edges)) * max(1, vertex_count - 2)
-    )
+    root_scan_candidates = vertex_count * (vertex_count - 1) // 2 + 2 * len(graph.edges)
+    work = root_scan_candidates * max(1, vertex_count - 2)
     for start in range(vertex_count):
         visited = {start}
 

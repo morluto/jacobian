@@ -67,6 +67,9 @@ def constraint_coefficient_count(
 
 def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
     normalized = dict(data)
+    normalized_axis = normalized.get("coordinate_axis")
+    if isinstance(normalized_axis, list):
+        normalized["coordinate_axis"] = tuple(normalized_axis)
     normalized_generators = normalized.get("generators")
     if not isinstance(normalized_generators, (list, tuple)):
         return normalized

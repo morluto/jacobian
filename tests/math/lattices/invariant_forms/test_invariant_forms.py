@@ -456,7 +456,9 @@ def test_catalog_publishes_typed_operation_and_valid_example() -> None:
         "generator_count * axis_dimension^2"
         in schema["properties"]["action"]["description"]
     )
-    request = operation.request_type.model_validate(operation.examples[0].input)
+    request = operation.request_type.model_validate_json(
+        encode_strict_json(operation.examples[0].input), strict=True
+    )
     result = operation.run(request)
     assert (
         operation.result_type.model_validate(result.model_dump(mode="json")) == result

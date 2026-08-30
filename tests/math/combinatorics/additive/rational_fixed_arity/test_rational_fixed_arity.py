@@ -121,3 +121,18 @@ def test_large_source_and_empty_out_of_range_arity_use_result_sensitive_admissio
 
     empty = compute_rational_fixed_arity_sum_profile((_cr(1),), 1_001)
     assert empty.rows == ()
+
+
+def test_arithmetic_progression_uses_lattice_support_bound() -> None:
+    """Distinct values can still have a compact, collision-sensitive support."""
+    values = tuple(_cr(index) for index in range(1_000))
+    result = compute_rational_fixed_arity_sum_profile(values, 2)
+    assert len(result.rows) == 1_997
+
+
+def test_shared_denominator_does_not_grow_with_arity() -> None:
+    denominator = 10**100 + 1
+    values = tuple(_cr(1, denominator) for _ in range(1_000))
+    result = compute_rational_fixed_arity_sum_profile(values, 1_000)
+    assert len(result.rows) == 1
+    assert result.rows[0].sum_value.as_fraction() == Fraction(1_000, denominator)

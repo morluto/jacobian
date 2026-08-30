@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import combinations
+from math import gcd
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import (
@@ -58,7 +59,18 @@ def _support_bound(
             for take in range(min(multiplicity, arity - used) + 1):
                 next_counts[used + take] += count
         count_vectors = next_counts
-    return count_vectors[arity]
+    count_vector_bound = count_vectors[arity]
+    denominators = {value.denominator for value in fractions}
+    if len(denominators) == 1:
+        numerators = tuple(value.numerator for value in fractions)
+        differences = (abs(value - numerators[0]) for value in numerators[1:])
+        lattice_step = 0
+        for difference in differences:
+            lattice_step = gcd(lattice_step, difference)
+        if lattice_step:
+            span_bound = (arity * (max(numerators) - min(numerators))) // lattice_step + 1
+            return min(count_vector_bound, span_bound, candidate_count)
+    return count_vector_bound
 
 
 def _capped_combination(n: int, k: int, cap: int) -> int:
@@ -129,18 +141,23 @@ def _admit(
         (len(value.den) for value in values if value.den != "1"),
         default=0,
     )
+    shared_denominator = len({value.den for value in values}) == 1 if values else True
     if candidate_count:
         # The sole empty sum is exactly 0/1, independent of source widths.
-        sum_numerator_digits = (
-            1
-            if arity == 0
-            else maximum_numerator_digits
-            + max(arity - 1, 0) * maximum_denominator_digits
-            + (len(str(arity)) if arity > 1 else 0)
-        )
-        sum_denominator_digits = (
-            1 if arity == 0 else max(1, arity * maximum_denominator_digits)
-        )
+        if arity == 0:
+            sum_numerator_digits = sum_denominator_digits = 1
+        elif shared_denominator:
+            # With one common denominator, only numerators add; the reduced
+            # result cannot retain a denominator wider than that source.
+            sum_numerator_digits = maximum_numerator_digits + len(str(arity))
+            sum_denominator_digits = max(1, maximum_denominator_digits)
+        else:
+            sum_numerator_digits = (
+                maximum_numerator_digits
+                + max(arity - 1, 0) * maximum_denominator_digits
+                + (len(str(arity)) if arity > 1 else 0)
+            )
+            sum_denominator_digits = max(1, arity * maximum_denominator_digits)
     else:
         sum_numerator_digits = sum_denominator_digits = 0
     if (

@@ -440,7 +440,16 @@ class ComputeHomologyRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def preflight_raw_complex(cls, data: object) -> object:
-        return _preflight_raw_homology_complex(canonicalize_json_containers(data))
+        try:
+            canonical = canonicalize_json_containers(data)
+        except RecursionError as exc:
+            # Inspect the raw outer axes before reporting a nesting failure so
+            # malformed coefficients retain the owner-specific diagnostic.
+            _preflight_raw_homology_complex(data)
+            raise ValueError(
+                "homology input nesting exceeds the supported depth"
+            ) from exc
+        return _preflight_raw_homology_complex(canonical)
 
     @model_validator(mode="after")
     def require_homology_budget(self) -> Self:

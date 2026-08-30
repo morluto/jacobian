@@ -18,6 +18,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_cancelled,
 )
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.matrices.certified_snf.operations import Matrix, SmithReduction
 
 _SMITH_WORKER = Path(__file__).resolve().with_name("_smith_worker.py")
@@ -89,9 +90,16 @@ def _stdout_limit(
 
 
 def _strict_int(value: Any) -> int:
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise ValueError("Smith worker scalar is not an integer")
-    return value
+    # Accept legacy safe JSON numbers in decoded fixtures, while requiring
+    # worker-produced values to use the unbounded canonical string form.
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if not isinstance(value, str):
+        raise ValueError("Smith worker scalar is not an integer string")
+    try:
+        return parse_canonical_integer(value)
+    except ValueError as exc:
+        raise ValueError("Smith worker scalar is not a canonical integer") from exc
 
 
 def _strict_matrix(
@@ -236,7 +244,13 @@ def smith_reduce_in_worker(
     )
 
     input_bytes = json.dumps(
-        {"matrix": source, "row_count": rows, "column_count": columns},
+        {
+            "matrix": [
+                [format_canonical_integer(value) for value in row] for row in source
+            ],
+            "row_count": rows,
+            "column_count": columns,
+        },
         separators=(",", ":"),
     ).encode("utf-8")
     request_digest = hashlib.sha256(input_bytes).hexdigest()

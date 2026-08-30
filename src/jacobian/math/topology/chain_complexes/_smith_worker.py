@@ -8,11 +8,39 @@ import sys
 from itertools import pairwise
 from typing import Any
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+
 
 def _matrix_entries(matrix: Any, *, rows: int, columns: int) -> list[list[int]]:
     return [
-        [int(matrix[row, column]) for column in range(columns)] for row in range(rows)
+        [_decode_integer(matrix[row, column]) for column in range(columns)]
+        for row in range(rows)
     ]
+
+
+def _decode_integer(value: Any) -> int:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return parse_canonical_integer(value)
+    try:
+        # SymPy Integer exposes an exact Python-int conversion without first
+        # formatting through Python's bounded decimal codec.
+        return int(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("worker matrix entry is not an integer") from exc
+
+
+def _encode_integers(value: Any) -> Any:
+    """Encode every worker integer as an unbounded canonical decimal string."""
+
+    if isinstance(value, int) and not isinstance(value, bool):
+        return format_canonical_integer(value)
+    if isinstance(value, list):
+        return [_encode_integers(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _encode_integers(item) for key, item in value.items()}
+    return value
 
 
 def _inverse_unimodular(matrix: list[list[int]]) -> list[list[int]]:
@@ -47,7 +75,7 @@ def _smith_projection(
     from sympy.matrices.normalforms import smith_normal_decomp
 
     source_matrix = (
-        sympy.Matrix([[int(value) for value in row] for row in source])
+        sympy.Matrix([[_decode_integer(value) for value in row] for row in source])
         if rows and columns
         else sympy.Matrix(rows, columns, [])
     )
@@ -96,10 +124,12 @@ def main() -> int:
     columns = payload["column_count"]
 
     projection = _smith_projection(source, rows=rows, columns=columns)
-    response = {
-        "request_digest": hashlib.sha256(input_bytes).hexdigest(),
-        **projection,
-    }
+    response = _encode_integers(
+        {
+            "request_digest": hashlib.sha256(input_bytes).hexdigest(),
+            **projection,
+        }
+    )
     json.dump(response, sys.stdout, separators=(",", ":"))
     return 0
 

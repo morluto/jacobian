@@ -10,7 +10,7 @@ from types import CodeType
 
 import pytest
 from pydantic import ValidationError
-from tests.math.number_theory.number_fields._embedding_replay import (
+from tests.math.number_theory.number_fields._embedding_invariants import (
     require_real_interval_selects_root,
     require_rectangle_selects_root,
 )
@@ -360,7 +360,7 @@ def test_profile_and_canonical_values_round_trip_without_backend_objects() -> No
     assert "sympy" not in profile.model_dump_json().lower()
 
 
-def test_structural_complex_root_parsing_does_not_replay_sympy() -> None:
+def test_structural_complex_root_parsing_does_not_run_sympy() -> None:
     profiler = cProfile.Profile()
     value = profiler.runcall(
         lambda: ComplexAlgebraicValue(polynomial=("1", "0", "-1"), root_index=0)
@@ -438,7 +438,7 @@ def test_degree_coefficient_isolation_work_and_result_bounds_are_preflighted() -
         ("1", "1", "-7", "-5", "15", "6", "-10", "-1", "1"),
     ],
 )
-def test_every_kernel_isolator_replays_and_result_stays_below_preflight_bound(
+def test_kernel_isolators_and_result_satisfy_the_exact_contract(
     coefficients: tuple[str, ...],
 ) -> None:
     field = _field(*coefficients)

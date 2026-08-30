@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import networkx as nx
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.cycle_length_profile._models import (
+    MAX_CYCLE_LENGTH_SEARCH_WORK,
     CycleLengthEntry,
     CycleLengthProfileResult,
+    _cycle_search_work,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -21,6 +24,14 @@ def compute_cycle_length_profile(
     For every k from 3 to |V|, if the graph contains a simple k-cycle,
     include one canonical witness.
     """
+    if _cycle_search_work(graph) > MAX_CYCLE_LENGTH_SEARCH_WORK:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="cycle_length.search_work_exceeded",
+            message=(
+                "cycle-length enumeration exceeds the admitted simple-path work bound"
+            ),
+        )
     nx_graph: nx.Graph[str] = nx.Graph()
     for v in graph.vertices:
         nx_graph.add_node(v)

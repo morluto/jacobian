@@ -81,8 +81,12 @@ def _admit_rainbow_embedding_profile(
         and not _degree_obstruction(pattern, host)
     ):
         candidate_count = perm(host_order, pattern_order)
-    edge_work = max(1, len(pattern.edges) + len(host.graph.edges))
-    if candidate_count * edge_work > MAX_RAINBOW_EMBEDDING_WORK:
+    # The kernel builds the host edge set and color map once, then each
+    # candidate only checks pattern-edge mappings.  Charge host setup
+    # additively, not per candidate.
+    host_setup = len(host.graph.edges)
+    per_candidate = max(1, len(pattern.edges))
+    if host_setup + candidate_count * per_candidate > MAX_RAINBOW_EMBEDDING_WORK:
         raise OperationDomainValidationError(
             location=("pattern",),
             code="graph.rainbow_embedding.work_exceeds_bound",

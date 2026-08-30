@@ -215,10 +215,12 @@ def test_number_theory_native_api_is_explicit() -> None:
     assert tuple(number_theory.__all__) == (
         "FriableCountResult",
         "PrimeShiftProfileResult",
+        "RFullEnumerateResult",
         "binomial_prime_valuation",
         "chinese_remainder",
         "contiguous_sum_profile",
         "count_friable",
+        "enumerate_r_full",
         "euler_totient",
         "factorial_valuation",
         "floor_square_root",

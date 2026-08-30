@@ -257,6 +257,9 @@ class _BoundedWorkerDialogueState:
         with self._condition:
             self._require_active_locked()
             self._raise_recorded_failure_locked()
+            deadline_expired = time.monotonic() >= self._execution_deadline
+        if deadline_expired:
+            self._fail(BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED)
         if not payload:
             return
 
@@ -289,7 +292,10 @@ class _BoundedWorkerDialogueState:
             with self._condition:
                 self._require_active_locked()
                 self._raise_recorded_failure_locked()
-                if write.done:
+                deadline_expired = time.monotonic() >= self._execution_deadline
+                if deadline_expired:
+                    pass
+                elif write.done:
                     if write.error is not None:
                         reason = self._closed_reason()
                         self._record_failure_locked(reason)
@@ -313,8 +319,13 @@ class _BoundedWorkerDialogueState:
             with self._condition:
                 self._require_active_locked()
                 self._raise_recorded_failure_locked()
+                deadline_expired = time.monotonic() >= self._execution_deadline
                 marker_start = self._stdout_buffer.find(marker)
-                if marker_start >= 0:
+                if deadline_expired:
+                    self._record_failure_locked(
+                        BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED
+                    )
+                elif marker_start >= 0:
                     frame_end = marker_start + len(marker)
                     if frame_end <= frame_limit:
                         frame = bytes(self._stdout_buffer[:frame_end])

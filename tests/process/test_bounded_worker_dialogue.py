@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import time
 from collections.abc import Callable
 from typing import Any, Never
@@ -198,6 +199,57 @@ def test_blocked_pipe_operation_uses_the_shared_absolute_deadline(
 
     assert raised.value.reason is BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED
     assert time.monotonic() - started < 2
+
+
+def test_prebuffered_frame_cannot_be_consumed_after_the_deadline() -> None:
+    consumed: list[bytes] = []
+
+    def exchange(dialogue: BoundedWorkerDialogue) -> None:
+        assert dialogue.read_until(b"?", frame_limit=32) == b"ready?"
+        time.sleep(0.3)
+        consumed.append(dialogue.read_until(b"!", frame_limit=32))
+
+    with pytest.raises(BoundedWorkerDialogueError) as raised:
+        _run_dialogue(
+            "import os, time\nos.write(1, b'ready?late!')\ntime.sleep(30)\n",
+            exchange,
+            timeout_seconds=0.2,
+        )
+
+    assert raised.value.reason is BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED
+    assert consumed == []
+
+
+@pytest.mark.parametrize("payload", (b"", b"x"), ids=("empty", "completed"))
+def test_send_cannot_complete_after_the_deadline(
+    payload: bytes,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sent: list[bytes] = []
+    original_start = threading.Thread.start
+
+    def start_and_complete_writer(thread: threading.Thread) -> None:
+        original_start(thread)
+        if thread.name == "bounded-worker-dialogue-stdin":
+            thread.join(timeout=1)
+
+    monkeypatch.setattr(threading.Thread, "start", start_and_complete_writer)
+
+    def exchange(dialogue: BoundedWorkerDialogue) -> None:
+        assert dialogue.read_until(b"?", frame_limit=32) == b"ready?"
+        time.sleep(0.3)
+        dialogue.send(payload)
+        sent.append(payload)
+
+    with pytest.raises(BoundedWorkerDialogueError) as raised:
+        _run_dialogue(
+            "import os, time\nos.write(1, b'ready?')\ntime.sleep(30)\n",
+            exchange,
+            timeout_seconds=0.2,
+        )
+
+    assert raised.value.reason is BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED
+    assert sent == []
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX process groups are required")

@@ -87,8 +87,8 @@ def _admit(
         default=1,
     )
     maximum_denominator_digits = max(
-        (len(value.den) for value in values),
-        default=1,
+        (len(value.den) for value in values if value.den != "1"),
+        default=0,
     )
     if candidate_count:
         sum_numerator_digits = (
@@ -96,7 +96,7 @@ def _admit(
             + max(arity - 1, 0) * maximum_denominator_digits
             + (len(str(arity)) if arity > 1 else 0)
         )
-        sum_denominator_digits = arity * maximum_denominator_digits
+        sum_denominator_digits = max(1, arity * maximum_denominator_digits)
     else:
         sum_numerator_digits = sum_denominator_digits = 0
     if (

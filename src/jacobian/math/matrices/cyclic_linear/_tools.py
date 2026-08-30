@@ -37,8 +37,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "component matrices, ranks, nullities, nonzero-minor witnesses, "
             "kernel bases, CRT idempotents, and reconstructed global rational "
             "kernel. The period is at most 128, both expanded axes are at most "
-            "128, coefficients have at most 64 decimal digits, and exact "
-            "elimination/result-height/output admission is source-sensitive."
+            "128, and coefficient numerators and denominators have at most 64 "
+            "decimal digits each (excluding an optional numerator sign). Exact "
+            "elimination height, scalar-bit work, reconstruction height, and "
+            "result output are admitted from the source before execution."
         ),
         request_type=CyclicRationalRankKernelProfileRequest,
         result_type=CyclicRationalRankKernelProfile,

@@ -15,24 +15,20 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import CanonicalLimits
 from jacobian.math.matrices.cyclic_linear._models import (
+    MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
     MAX_CYCLIC_FIELD_WORK,
     CyclicRationalBlockSymbol,
     CyclicRationalRankKernelProfile,
     CyclotomicNonzeroMinor,
     CyclotomicRankKernelComponent,
+    RationalCyclotomicElement,
+    RationalCyclotomicField,
+    RationalCyclotomicMatrix,
+    RationalCyclotomicVectorSpaceBasis,
 )
-from jacobian.math.matrices.values import (
-    RationalVectorSpaceBasis,
-    SimpleNumberFieldMatrix,
-    SimpleNumberFieldVectorSpaceBasis,
-)
-from jacobian.math.number_theory.number_fields.values import (
-    MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
-    SimpleNumberFieldElement,
-    SimpleNumberFieldPresentation,
-)
+from jacobian.math.matrices.values import RationalVectorSpaceBasis
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -41,6 +37,8 @@ from jacobian.math.polynomials.values import (
 
 type FieldCoordinates = tuple[Fraction, ...]
 type ComponentCoordinates = tuple[tuple[FieldCoordinates, ...], ...]
+
+_MAX_CYCLOTOMIC_SCALAR_MAGNITUDE = 10**MAX_CYCLIC_FIELD_ELEMENT_DIGITS - 1
 
 
 class CyclicRankKernelAdmissionError(ValueError):
@@ -55,9 +53,9 @@ class CyclicRankKernelAdmissionError(ValueError):
 class _ComponentAdmission:
     order: int
     degree: int
-    field: SimpleNumberFieldPresentation
+    field: RationalCyclotomicField
     matrix_coordinates: ComponentCoordinates
-    component_matrix: SimpleNumberFieldMatrix
+    component_matrix: RationalCyclotomicMatrix
     common_denominator: int
     idempotent_coefficients: tuple[Fraction, ...]
     crt_idempotent: RationalPolynomial
@@ -88,8 +86,89 @@ def _divisors(value: int) -> tuple[int, ...]:
     return tuple(divisor for divisor in range(1, value + 1) if value % divisor == 0)
 
 
-def _lcm(left: int, right: int) -> int:
-    return left // gcd(left, right) * right
+def _bounded_product(*factors: int, limit: int) -> int | None:
+    """Multiply nonnegative integers without constructing a value past ``limit``."""
+
+    result = 1
+    for factor in factors:
+        if factor < 0:  # pragma: no cover - every caller supplies magnitudes
+            raise ValueError("bounded product factors must be nonnegative")
+        if factor == 0:
+            return 0
+        if result > limit // factor:
+            return None
+        result *= factor
+    return result
+
+
+def _bounded_power(base: int, exponent: int, *, limit: int) -> int | None:
+    """Raise a nonnegative integer without materializing an over-limit power."""
+
+    result = 1
+    for _ in range(exponent):
+        product = _bounded_product(result, base, limit=limit)
+        if product is None:
+            return None
+        result = product
+    return result
+
+
+def _bounded_lcm(
+    left: int,
+    right: int,
+    *,
+    maximum_power: int,
+    limit: int,
+) -> int | None:
+    """Extend an LCM only when its priced determinant power remains bounded."""
+
+    reduced = right // gcd(left, right)
+    candidate = _bounded_product(left, reduced, limit=limit)
+    if candidate is None:
+        return None
+    if _bounded_power(candidate, maximum_power, limit=limit) is None:
+        return None
+    return candidate
+
+
+def _determinant_magnitude_bound(
+    *,
+    rank: int,
+    multiplication_norm: int,
+    scaled_height: int,
+) -> int | None:
+    if rank == 0 or scaled_height == 0:
+        return 1
+    norm_power = _bounded_power(
+        multiplication_norm,
+        rank - 1,
+        limit=_MAX_CYCLOTOMIC_SCALAR_MAGNITUDE,
+    )
+    height_power = _bounded_power(
+        scaled_height,
+        rank,
+        limit=_MAX_CYCLOTOMIC_SCALAR_MAGNITUDE,
+    )
+    if norm_power is None or height_power is None:
+        return None
+    return _bounded_product(
+        factorial(rank),
+        norm_power,
+        height_power,
+        limit=_MAX_CYCLOTOMIC_SCALAR_MAGNITUDE,
+    )
+
+
+def _charge_field_work(current: int, *factors: int) -> int:
+    remaining = MAX_CYCLIC_FIELD_WORK - current
+    charge = _bounded_product(*factors, limit=max(remaining, 0))
+    if charge is None or charge > remaining:
+        raise CyclicRankKernelAdmissionError(
+            "field_work_bound",
+            "exact cyclotomic arithmetic exceeds the 100,000,000-unit "
+            "scalar-bit work envelope",
+        )
+    return current + charge
 
 
 def _decimal_digits(value: int) -> int:
@@ -130,11 +209,11 @@ def _public_polynomial(coefficients: tuple[Fraction, ...]) -> RationalPolynomial
 
 
 def _public_element(
-    field: SimpleNumberFieldPresentation,
+    field: RationalCyclotomicField,
     coordinates: FieldCoordinates,
-) -> SimpleNumberFieldElement:
-    return SimpleNumberFieldElement(
-        presentation=field,
+) -> RationalCyclotomicElement:
+    return RationalCyclotomicElement(
+        field=field,
         coefficients_ascending=tuple(
             CanonicalRational.from_fraction(coefficient) for coefficient in coordinates
         ),
@@ -142,11 +221,11 @@ def _public_element(
 
 
 def _public_component_matrix(
-    field: SimpleNumberFieldPresentation,
+    field: RationalCyclotomicField,
     coordinates: ComponentCoordinates,
-) -> SimpleNumberFieldMatrix:
-    return SimpleNumberFieldMatrix(
-        presentation=field,
+) -> RationalCyclotomicMatrix:
+    return RationalCyclotomicMatrix(
+        field=field,
         entries=tuple(
             tuple(_public_element(field, value) for value in row) for row in coordinates
         ),
@@ -229,17 +308,50 @@ def _crt_idempotent(
 
 def _matrix_coordinate_height(
     coordinates: ComponentCoordinates,
-) -> tuple[int, int, int]:
+    *,
+    maximum_rank: int,
+) -> tuple[int, int, int, int]:
     values = tuple(
         coordinate for row in coordinates for entry in row for coordinate in entry
     )
     denominator = 1
     for value in values:
-        denominator = _lcm(denominator, value.denominator)
-    scaled_height = max(
-        (abs(value.numerator) * (denominator // value.denominator) for value in values),
-        default=0,
-    )
+        if (
+            abs(value.numerator) > _MAX_CYCLOTOMIC_SCALAR_MAGNITUDE
+            or value.denominator > _MAX_CYCLOTOMIC_SCALAR_MAGNITUDE
+        ):
+            raise CyclicRankKernelAdmissionError(
+                "component_coordinate_bound",
+                "a specialized cyclotomic matrix coefficient exceeds the "
+                f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit field-element bound",
+            )
+        extended = _bounded_lcm(
+            denominator,
+            value.denominator,
+            maximum_power=max(maximum_rank, 1),
+            limit=_MAX_CYCLOTOMIC_SCALAR_MAGNITUDE,
+        )
+        if extended is None:
+            raise CyclicRankKernelAdmissionError(
+                "elimination_height_bound",
+                "the common denominator or its rank power exceeds the "
+                f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit exact-result envelope",
+            )
+        denominator = extended
+    scaled_height = 0
+    for value in values:
+        scaled = _bounded_product(
+            abs(value.numerator),
+            denominator // value.denominator,
+            limit=_MAX_CYCLOTOMIC_SCALAR_MAGNITUDE,
+        )
+        if scaled is None:
+            raise CyclicRankKernelAdmissionError(
+                "elimination_height_bound",
+                "clearing component denominators exceeds the "
+                f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit exact-result envelope",
+            )
+        scaled_height = max(scaled_height, scaled)
     coordinate_digits = max(
         (
             max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
@@ -247,21 +359,51 @@ def _matrix_coordinate_height(
         ),
         default=1,
     )
-    return denominator, scaled_height, coordinate_digits
+    scalar_bits = max(
+        denominator.bit_length(),
+        scaled_height.bit_length(),
+        *(
+            max(abs(value.numerator).bit_length(), value.denominator.bit_length())
+            for value in values
+        ),
+    )
+    return denominator, scaled_height, coordinate_digits, scalar_bits
 
 
-def _idempotent_height(coefficients: tuple[Fraction, ...]) -> tuple[int, int]:
+def _idempotent_height(
+    coefficients: tuple[Fraction, ...],
+) -> tuple[int, int, int]:
     denominator = 1
     for value in coefficients:
-        denominator = _lcm(denominator, value.denominator)
-    scaled_height = max(
-        (
-            abs(value.numerator) * (denominator // value.denominator)
-            for value in coefficients
-        ),
-        default=0,
-    )
-    return denominator, scaled_height
+        extended = _bounded_lcm(
+            denominator,
+            value.denominator,
+            maximum_power=1,
+            limit=_MAX_CYCLOTOMIC_SCALAR_MAGNITUDE,
+        )
+        if extended is None:
+            raise CyclicRankKernelAdmissionError(
+                "reconstruction_height_bound",
+                "a CRT idempotent denominator exceeds the "
+                f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit rational basis envelope",
+            )
+        denominator = extended
+    scaled_height = 0
+    for value in coefficients:
+        scaled = _bounded_product(
+            abs(value.numerator),
+            denominator // value.denominator,
+            limit=_MAX_CYCLOTOMIC_SCALAR_MAGNITUDE,
+        )
+        if scaled is None:
+            raise CyclicRankKernelAdmissionError(
+                "reconstruction_height_bound",
+                "clearing CRT idempotent denominators exceeds the "
+                f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit rational basis envelope",
+            )
+        scaled_height = max(scaled_height, scaled)
+    scalar_bits = max(denominator.bit_length(), scaled_height.bit_length())
+    return denominator, scaled_height, scalar_bits
 
 
 def _structural_rank_bound(coordinates: ComponentCoordinates) -> int:
@@ -301,61 +443,69 @@ def _admit_cyclic_symbol(
     predicted_global_basis_bytes = 0
     field_work = 0
     global_dimension = symbol.period * symbol.source_block_dimension
+    source_scalar_bits = max(
+        (
+            max(
+                abs(entry.coefficient.as_integer_ratio()[0]).bit_length(),
+                entry.coefficient.as_integer_ratio()[1].bit_length(),
+            )
+            for entry in symbol.entries
+        ),
+        default=1,
+    )
 
     for order in _divisors(symbol.period):
         _require_execution_active(f"before order-{order} admission")
         polynomial = sympy.Poly(
             sympy.cyclotomic_poly(order, variable), variable, domain=sympy.QQ
         )
-        coefficients_descending = tuple(
-            format_canonical_integer(int(coefficient))
-            for coefficient in polynomial.all_coeffs()
-        )
-        field = SimpleNumberFieldPresentation(
-            coefficients_descending=coefficients_descending
-        )
+        field = RationalCyclotomicField(order=order)
         degree = field.degree
         matrix_coordinates = _component_coordinates(
             symbol, polynomial, degree, variable
         )
-        common_denominator, scaled_height, matrix_digits = _matrix_coordinate_height(
-            matrix_coordinates
+        maximum_rank = _structural_rank_bound(matrix_coordinates)
+        (
+            common_denominator,
+            scaled_height,
+            matrix_digits,
+            matrix_scalar_bits,
+        ) = _matrix_coordinate_height(
+            matrix_coordinates,
+            maximum_rank=maximum_rank,
         )
-        if matrix_digits > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS:
+        if matrix_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS:
             raise CyclicRankKernelAdmissionError(
                 "component_coordinate_bound",
                 "a specialized cyclotomic matrix coefficient exceeds the "
-                f"{MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS}-digit field-element bound",
+                f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit field-element bound",
             )
 
         multiplication_norm = _multiplication_norm(polynomial, degree, variable)
-        maximum_rank = _structural_rank_bound(matrix_coordinates)
-        if scaled_height == 0:
-            determinant_bound = 1
-        else:
-            determinant_bound = (
-                factorial(maximum_rank)
-                * multiplication_norm ** max(maximum_rank - 1, 0)
-                * scaled_height**maximum_rank
-            )
-        determinant_denominator_bound = common_denominator**maximum_rank
-        determinant_digits = max(
-            _decimal_digits(determinant_bound),
-            _decimal_digits(determinant_denominator_bound),
+        determinant_bound = _determinant_magnitude_bound(
+            rank=maximum_rank,
+            multiplication_norm=multiplication_norm,
+            scaled_height=scaled_height,
         )
-        if determinant_digits > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS:
+        determinant_denominator_bound = _bounded_power(
+            common_denominator,
+            maximum_rank,
+            limit=_MAX_CYCLOTOMIC_SCALAR_MAGNITUDE,
+        )
+        if determinant_bound is None or determinant_denominator_bound is None:
             raise CyclicRankKernelAdmissionError(
                 "elimination_height_bound",
                 "fraction-free component elimination can exceed the "
-                f"{MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS}-digit exact-result envelope",
+                f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit exact-result envelope",
             )
-
         idempotent_coefficients, crt_idempotent = _crt_idempotent(
             total_polynomial, polynomial, symbol.period
         )
-        idempotent_denominator, idempotent_height = _idempotent_height(
-            idempotent_coefficients
-        )
+        (
+            idempotent_denominator,
+            idempotent_height,
+            idempotent_scalar_bits,
+        ) = _idempotent_height(idempotent_coefficients)
 
         component_matrix = _public_component_matrix(field, matrix_coordinates)
         field_bytes = len(field.model_dump_json().encode("utf-8"))
@@ -366,37 +516,59 @@ def _admit_cyclic_symbol(
         )
         maximum_component_bytes = 0
         maximum_global_component_bytes = 0
+        maximum_scalar_bits = max(
+            source_scalar_bits,
+            matrix_scalar_bits,
+            multiplication_norm.bit_length(),
+            idempotent_scalar_bits,
+            determinant_bound.bit_length(),
+            determinant_denominator_bound.bit_length(),
+            *(abs(int(value)).bit_length() for value in polynomial.all_coeffs()),
+        )
         for possible_rank in range(maximum_rank + 1):
-            possible_determinant_bound = (
-                1
-                if possible_rank == 0
-                else factorial(possible_rank)
-                * multiplication_norm ** (possible_rank - 1)
-                * scaled_height**possible_rank
+            possible_determinant_bound = _determinant_magnitude_bound(
+                rank=possible_rank,
+                multiplication_norm=multiplication_norm,
+                scaled_height=scaled_height,
             )
+            possible_denominator_bound = _bounded_power(
+                common_denominator,
+                possible_rank,
+                limit=_MAX_CYCLOTOMIC_SCALAR_MAGNITUDE,
+            )
+            if (
+                possible_determinant_bound is None or possible_denominator_bound is None
+            ):  # pragma: no cover - the maximum-rank guard dominates
+                raise RuntimeError("admitted rank height was not monotone")
             possible_determinant_digits = max(
                 _decimal_digits(possible_determinant_bound),
-                _decimal_digits(common_denominator**possible_rank),
+                _decimal_digits(possible_denominator_bound),
             )
             nullity = symbol.source_block_dimension - possible_rank
             reconstruction_digits = 1
             if nullity:
-                reconstruction_numerator_bound = max(
-                    1,
-                    degree
-                    * multiplication_norm
-                    * possible_determinant_bound
-                    * max(idempotent_height, 1),
+                reconstruction_numerator_bound = _bounded_product(
+                    degree,
+                    multiplication_norm,
+                    possible_determinant_bound,
+                    max(idempotent_height, 1),
+                    limit=_MAX_CYCLOTOMIC_SCALAR_MAGNITUDE,
                 )
-                reconstruction_digits = max(
-                    _decimal_digits(reconstruction_numerator_bound),
-                    _decimal_digits(idempotent_denominator),
-                )
-                if reconstruction_digits > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS:
+                if reconstruction_numerator_bound is None:
                     raise CyclicRankKernelAdmissionError(
                         "reconstruction_height_bound",
-                        "CRT kernel reconstruction can exceed the 256-digit rational basis envelope",
+                        "CRT kernel reconstruction can exceed the "
+                        f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit rational basis envelope",
                     )
+                reconstruction_digits = max(
+                    _decimal_digits(max(reconstruction_numerator_bound, 1)),
+                    _decimal_digits(idempotent_denominator),
+                )
+                maximum_scalar_bits = max(
+                    maximum_scalar_bits,
+                    reconstruction_numerator_bound.bit_length(),
+                    idempotent_denominator.bit_length(),
+                )
             scalar_bytes = (
                 field_bytes + degree * (2 * possible_determinant_digits + 80) + 256
             )
@@ -412,20 +584,27 @@ def _admit_cyclic_symbol(
             )
         predicted_result_bytes += maximum_component_bytes
         predicted_global_basis_bytes += maximum_global_component_bytes
-        field_work += degree * max(len(symbol.entries), 1)
-        field_work += degree**3 + symbol.period * degree**2
-        field_work += symbol.source_block_dimension**2 * degree**2 * symbol.period
-        field_work += degree**2 * (
-            symbol.target_block_dimension
-            * symbol.source_block_dimension
-            * max(maximum_rank, 1)
-            + maximum_rank**3
-        )
-        if field_work > MAX_CYCLIC_FIELD_WORK:
-            raise CyclicRankKernelAdmissionError(
-                "field_work_bound",
-                "exact cyclotomic elimination exceeds the 100,000,000-unit field-work envelope",
+        component_arithmetic_units = (
+            degree * max(len(symbol.entries), 1)
+            + degree**3
+            + symbol.period * degree**2
+            + symbol.source_block_dimension**2 * degree**2 * symbol.period
+            + degree**2
+            * (
+                symbol.target_block_dimension
+                * symbol.source_block_dimension
+                * max(maximum_rank, 1)
+                + maximum_rank**3
             )
+            + degree
+            * symbol.source_block_dimension**2
+            * (degree**2 + degree * symbol.period)
+        )
+        field_work = _charge_field_work(
+            field_work,
+            component_arithmetic_units,
+            max(maximum_scalar_bits, 1),
+        )
 
         components.append(
             _ComponentAdmission(
@@ -593,8 +772,8 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
                 vector[pivot] = -solution_rows[index][free_index]
             kernel_vectors.append(tuple(vector))
 
-    public_kernel = SimpleNumberFieldVectorSpaceBasis(
-        presentation=admission.field,
+    public_kernel = RationalCyclotomicVectorSpaceBasis(
+        field=admission.field,
         ambient_dimension=source_dimension,
         vectors=tuple(
             tuple(
@@ -681,6 +860,10 @@ def _reconstruct_global_kernel(
                     for block_coordinate in range(block_dimension)
                 )
                 global_vectors.append(flattened)
+                _require_execution_active(
+                    "during order-"
+                    f"{component.admission.order} CRT kernel reconstruction"
+                )
         _require_execution_active(
             f"after order-{component.admission.order} CRT reconstruction"
         )

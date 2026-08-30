@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from math import gcd
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -14,12 +14,6 @@ from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
     RationalVectorSpaceBasis,
-    SimpleNumberFieldMatrix,
-    SimpleNumberFieldVectorSpaceBasis,
-)
-from jacobian.math.number_theory.number_fields.values import (
-    SimpleNumberFieldElement,
-    SimpleNumberFieldPresentation,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -29,6 +23,61 @@ MAX_CYCLIC_SYMBOL_ENTRIES = MAX_CYCLIC_GLOBAL_AXIS**2
 MAX_CYCLIC_INPUT_DIGITS = 64
 MAX_CYCLIC_COMPONENTS = MAX_CYCLIC_PERIOD
 MAX_CYCLIC_FIELD_WORK = 100_000_000
+MAX_CYCLIC_FIELD_ELEMENT_DIGITS = 256
+MAX_CYCLIC_FIELD_COORDINATES = 32_768
+
+
+def _bounded_rational_schema(*, max_digits: int, description: str) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "description": description,
+        "properties": {
+            "num": {
+                "type": "string",
+                "pattern": (f"^(?:0|-?[1-9][0-9]{{0,{max_digits - 1}}})$"),
+                "maxLength": max_digits + 1,
+            },
+            "den": {
+                "type": "string",
+                "pattern": f"^[1-9][0-9]{{0,{max_digits - 1}}}$",
+                "maxLength": max_digits,
+            },
+        },
+        "required": ["num", "den"],
+    }
+
+
+CyclicRationalCoefficient = Annotated[
+    CanonicalRational,
+    WithJsonSchema(
+        _bounded_rational_schema(
+            max_digits=MAX_CYCLIC_INPUT_DIGITS,
+            description=(
+                "A reduced exact rational. Numerator and denominator each contain "
+                f"at most {MAX_CYCLIC_INPUT_DIGITS} decimal digits; an optional "
+                "numerator minus sign does not count toward that limit. The "
+                "denominator is positive."
+            ),
+        ),
+        mode="validation",
+    ),
+]
+
+CyclotomicCoordinate = Annotated[
+    CanonicalRational,
+    WithJsonSchema(
+        _bounded_rational_schema(
+            max_digits=MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
+            description=(
+                "One reduced power-basis coordinate with at most "
+                f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS} decimal digits in each "
+                "numerator and denominator."
+            ),
+        ),
+        mode="validation",
+    ),
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -50,7 +99,7 @@ class CyclicRationalBlockSymbolEntry(StrictModel):
     target_coordinate: int = Field(ge=0, lt=MAX_CYCLIC_GLOBAL_AXIS)
     source_coordinate: int = Field(ge=0, lt=MAX_CYCLIC_GLOBAL_AXIS)
     shift: int = Field(ge=0, lt=MAX_CYCLIC_PERIOD)
-    coefficient: CanonicalRational
+    coefficient: CyclicRationalCoefficient
 
 
 class CyclicRationalBlockSymbol(StrictModel):
@@ -94,8 +143,8 @@ class CyclicRationalBlockSymbol(StrictModel):
                 for part in ("num", "den"):
                     raw = coefficient.get(part)
                     if (
-                        isinstance(raw, (str, int))
-                        and len(str(raw).lstrip("-")) > MAX_CYCLIC_INPUT_DIGITS
+                        isinstance(raw, str)
+                        and len(raw.lstrip("-")) > MAX_CYCLIC_INPUT_DIGITS
                     ):
                         raise _validation_error(
                             "coefficient_bound",
@@ -166,6 +215,238 @@ class CyclicRationalRankKernelProfileRequest(StrictModel):
     symbol: CyclicRationalBlockSymbol
 
 
+class RationalCyclotomicField(StrictModel):
+    """The canonical field ``QQ[zeta_order] = QQ[x]/(Phi_order(x))``.
+
+    The order determines the defining cyclotomic polynomial; callers cannot
+    supply a merely degree-compatible polynomial.  ``zeta_order`` is the class
+    of ``x`` and coordinates use its ascending power basis.
+    """
+
+    domain: Literal["QQ_CYCLOTOMIC"] = "QQ_CYCLOTOMIC"
+    order: int = Field(
+        ge=1,
+        le=MAX_CYCLIC_PERIOD,
+        description=(
+            "The defining polynomial is exactly Phi_order(x); the fixed generator "
+            "is the class of x."
+        ),
+    )
+    generator: Literal["CLASS_OF_X"] = "CLASS_OF_X"
+
+    @property
+    def degree(self) -> int:
+        return _euler_phi(self.order)
+
+
+def _require_raw_coordinate_bound(
+    coordinates: object,
+    *,
+    label: str,
+) -> None:
+    if not isinstance(coordinates, (list, tuple)):
+        return
+    if len(coordinates) > MAX_CYCLIC_PERIOD:
+        raise _validation_error(
+            "cyclotomic_coordinate_count",
+            f"{label} exceeds the cyclotomic power-basis coordinate bound",
+        )
+    for coordinate in coordinates:
+        if not isinstance(coordinate, Mapping):
+            continue
+        for part in ("num", "den"):
+            raw = coordinate.get(part)
+            if (
+                isinstance(raw, str)
+                and len(raw.lstrip("-")) > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+            ):
+                raise _validation_error(
+                    "cyclotomic_coordinate_digits",
+                    f"{label} coordinates may contain at most "
+                    f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS} decimal digits",
+                )
+
+
+class RationalCyclotomicElement(StrictModel):
+    """One exact element in a canonical rational cyclotomic field."""
+
+    field: RationalCyclotomicField
+    coefficients_ascending: tuple[CyclotomicCoordinate, ...] = Field(
+        min_length=1,
+        max_length=MAX_CYCLIC_PERIOD,
+        description=(
+            "Exactly phi(order) coefficients of 1, zeta_order, ..., "
+            "zeta_order^(phi(order)-1)."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_coordinate_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        _require_raw_coordinate_bound(
+            data.get("coefficients_ascending"),
+            label="cyclotomic field element",
+        )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_reduced_power_basis_coordinates(self) -> Self:
+        if len(self.coefficients_ascending) != self.field.degree:
+            raise _validation_error(
+                "cyclotomic_coordinate_count",
+                "a cyclotomic element needs exactly phi(order) power-basis coordinates",
+            )
+        if any(
+            max(len(value.num.lstrip("-")), len(value.den))
+            > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+            for value in self.coefficients_ascending
+        ):
+            raise _validation_error(
+                "cyclotomic_coordinate_digits",
+                "cyclotomic element coordinates exceed the "
+                f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit bound",
+            )
+        return self
+
+
+class RationalCyclotomicMatrix(StrictModel):
+    """A nonempty rectangular matrix over one rational cyclotomic field."""
+
+    field: RationalCyclotomicField
+    entries: tuple[tuple[RationalCyclotomicElement, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_CYCLIC_GLOBAL_AXIS,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_matrix_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        entries = data.get("entries")
+        if isinstance(entries, (list, tuple)):
+            if len(entries) > MAX_CYCLIC_GLOBAL_AXIS or any(
+                isinstance(row, (list, tuple)) and len(row) > MAX_CYCLIC_GLOBAL_AXIS
+                for row in entries
+            ):
+                raise _validation_error(
+                    "cyclotomic_matrix_axis",
+                    "cyclotomic matrix axes exceed the structural bound",
+                )
+            coordinate_count = sum(
+                len(coordinates)
+                for row in entries
+                if isinstance(row, (list, tuple))
+                for element in row
+                if isinstance(element, Mapping)
+                for coordinates in (element.get("coefficients_ascending"),)
+                if isinstance(coordinates, (list, tuple))
+            )
+            if coordinate_count > MAX_CYCLIC_FIELD_COORDINATES:
+                raise _validation_error(
+                    "cyclotomic_matrix_coordinates",
+                    "cyclotomic matrix exceeds the structural power-basis "
+                    "coordinate bound",
+                )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_rectangular_shared_field(self) -> Self:
+        column_count = len(self.entries[0])
+        if column_count == 0 or column_count > MAX_CYCLIC_GLOBAL_AXIS:
+            raise _validation_error(
+                "cyclotomic_matrix_axis",
+                "cyclotomic matrix rows must be nonempty and bounded",
+            )
+        if any(len(row) != column_count for row in self.entries):
+            raise _validation_error(
+                "cyclotomic_matrix_shape", "cyclotomic matrix must be rectangular"
+            )
+        if any(value.field != self.field for row in self.entries for value in row):
+            raise _validation_error(
+                "cyclotomic_matrix_field",
+                "every cyclotomic matrix entry must use the declared field",
+            )
+        if (
+            len(self.entries) * column_count * self.field.degree
+            > MAX_CYCLIC_FIELD_COORDINATES
+        ):
+            raise _validation_error(
+                "cyclotomic_matrix_coordinates",
+                "cyclotomic matrix exceeds the structural power-basis coordinate bound",
+            )
+        return self
+
+
+class RationalCyclotomicVectorSpaceBasis(StrictModel):
+    """A basis over one rational cyclotomic field with its ambient dimension."""
+
+    field: RationalCyclotomicField
+    ambient_dimension: int = Field(ge=1, le=MAX_CYCLIC_GLOBAL_AXIS)
+    vectors: tuple[tuple[RationalCyclotomicElement, ...], ...] = Field(
+        default=(), max_length=MAX_CYCLIC_GLOBAL_AXIS
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_basis_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        vectors = data.get("vectors")
+        if isinstance(vectors, (list, tuple)):
+            if len(vectors) > MAX_CYCLIC_GLOBAL_AXIS or any(
+                isinstance(vector, (list, tuple))
+                and len(vector) > MAX_CYCLIC_GLOBAL_AXIS
+                for vector in vectors
+            ):
+                raise _validation_error(
+                    "cyclotomic_basis_axis",
+                    "cyclotomic basis exceeds its structural axis bound",
+                )
+            coordinate_count = sum(
+                len(coordinates)
+                for vector in vectors
+                if isinstance(vector, (list, tuple))
+                for element in vector
+                if isinstance(element, Mapping)
+                for coordinates in (element.get("coefficients_ascending"),)
+                if isinstance(coordinates, (list, tuple))
+            )
+            if coordinate_count > MAX_CYCLIC_FIELD_COORDINATES:
+                raise _validation_error(
+                    "cyclotomic_basis_coordinates",
+                    "cyclotomic basis exceeds the structural power-basis "
+                    "coordinate bound",
+                )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_shared_field_and_shape(self) -> Self:
+        if any(len(vector) != self.ambient_dimension for vector in self.vectors):
+            raise _validation_error(
+                "cyclotomic_basis_shape",
+                "each cyclotomic basis vector must have the ambient dimension",
+            )
+        if any(
+            value.field != self.field for vector in self.vectors for value in vector
+        ):
+            raise _validation_error(
+                "cyclotomic_basis_field",
+                "every cyclotomic basis entry must use the declared field",
+            )
+        if (
+            len(self.vectors) * self.ambient_dimension * self.field.degree
+            > MAX_CYCLIC_FIELD_COORDINATES
+        ):
+            raise _validation_error(
+                "cyclotomic_basis_coordinates",
+                "cyclotomic basis exceeds the structural power-basis coordinate bound",
+            )
+        return self
+
+
 class CyclotomicNonzeroMinor(StrictModel):
     """One source-bound nonzero square minor establishing a rank lower bound."""
 
@@ -175,7 +456,7 @@ class CyclotomicNonzeroMinor(StrictModel):
     column_indices: tuple[int, ...] = Field(
         min_length=1, max_length=MAX_CYCLIC_GLOBAL_AXIS
     )
-    determinant: SimpleNumberFieldElement
+    determinant: RationalCyclotomicElement
 
     @model_validator(mode="after")
     def require_square_canonical_minor(self) -> Self:
@@ -208,27 +489,26 @@ class CyclotomicRankKernelComponent(StrictModel):
     """
 
     order: int = Field(ge=1, le=MAX_CYCLIC_PERIOD)
-    field: SimpleNumberFieldPresentation
-    component_matrix: SimpleNumberFieldMatrix
+    field: RationalCyclotomicField
+    component_matrix: RationalCyclotomicMatrix
     rank: int = Field(ge=0, le=MAX_CYCLIC_GLOBAL_AXIS)
     nullity: int = Field(ge=0, le=MAX_CYCLIC_GLOBAL_AXIS)
-    kernel_basis: SimpleNumberFieldVectorSpaceBasis
+    kernel_basis: RationalCyclotomicVectorSpaceBasis
     nonzero_minor: CyclotomicNonzeroMinor | None = None
     crt_idempotent: RationalPolynomial
-    generator: Literal["CLASS_OF_X"] = "CLASS_OF_X"
 
     @model_validator(mode="after")
     def require_component_invariants(self) -> Self:
-        if self.field.degree != _euler_phi(self.order):
+        if self.field.order != self.order:
             raise _validation_error(
-                "cyclotomic_degree",
-                "component field degree must equal Euler phi(order)",
+                "cyclotomic_field",
+                "component field must be exactly QQ[x]/(Phi_order(x))",
             )
-        if self.component_matrix.presentation != self.field:
+        if self.component_matrix.field != self.field:
             raise _validation_error(
                 "component_field", "component matrix must use its declared field"
             )
-        if self.kernel_basis.presentation != self.field:
+        if self.kernel_basis.field != self.field:
             raise _validation_error(
                 "kernel_field", "component kernel must use its declared field"
             )
@@ -268,7 +548,7 @@ class CyclotomicRankKernelComponent(StrictModel):
                 raise _validation_error(
                     "minor_axis", "rank-minor indices exceed component dimensions"
                 )
-            if minor.determinant.presentation != self.field:
+            if minor.determinant.field != self.field:
                 raise _validation_error(
                     "minor_field", "rank-minor determinant must use the component field"
                 )
@@ -398,6 +678,8 @@ class CyclicRationalRankKernelProfile(StrictModel):
 
 __all__ = [
     "MAX_CYCLIC_COMPONENTS",
+    "MAX_CYCLIC_FIELD_COORDINATES",
+    "MAX_CYCLIC_FIELD_ELEMENT_DIGITS",
     "MAX_CYCLIC_FIELD_WORK",
     "MAX_CYCLIC_GLOBAL_AXIS",
     "MAX_CYCLIC_INPUT_DIGITS",
@@ -405,8 +687,13 @@ __all__ = [
     "MAX_CYCLIC_SYMBOL_ENTRIES",
     "CyclicRationalBlockSymbol",
     "CyclicRationalBlockSymbolEntry",
+    "CyclicRationalCoefficient",
     "CyclicRationalRankKernelProfile",
     "CyclicRationalRankKernelProfileRequest",
     "CyclotomicNonzeroMinor",
     "CyclotomicRankKernelComponent",
+    "RationalCyclotomicElement",
+    "RationalCyclotomicField",
+    "RationalCyclotomicMatrix",
+    "RationalCyclotomicVectorSpaceBasis",
 ]

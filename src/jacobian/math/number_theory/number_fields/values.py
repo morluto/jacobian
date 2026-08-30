@@ -22,11 +22,7 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
     _UnrecognizedRealAlgebraicValue,
 )
 
-# This is a structural carrier bound, not the execution envelope of every
-# number-field operation.  Cyclic decomposition through the shared 128-axis
-# exact-linear envelope needs ``QQ[x]/(Phi_127)`` of degree 126; embedding
-# enumeration retains its separate degree-eight admission below.
-MAX_SIMPLE_NUMBER_FIELD_DEGREE = 128
+MAX_SIMPLE_NUMBER_FIELD_DEGREE = 31
 MAX_NUMBER_FIELD_EMBEDDING_DEGREE = 8
 MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS = 256
 MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS = 256

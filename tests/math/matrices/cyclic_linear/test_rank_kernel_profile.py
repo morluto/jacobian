@@ -8,6 +8,7 @@ from threading import Event
 from typing import Any
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
@@ -19,23 +20,17 @@ from jacobian._execution import (
 from jacobian.math.matrices.cyclic_linear import (
     CyclicRationalBlockSymbol,
     CyclicRationalBlockSymbolEntry,
+    CyclicRationalRankKernelProfile,
     CyclicRationalRankKernelProfileRequest,
+    RationalCyclotomicElement,
+    RationalCyclotomicField,
+    RationalCyclotomicMatrix,
+    RationalCyclotomicVectorSpaceBasis,
     cyclic_rational_rank_kernel_profile,
 )
 from jacobian.math.matrices.cyclic_linear._tools import TOOLS
 from jacobian.math.matrices.cyclic_linear.operations import (
     CyclicRankKernelAdmissionError,
-)
-from jacobian.math.matrices.values import (
-    SimpleNumberFieldMatrix,
-    SimpleNumberFieldVectorSpaceBasis,
-)
-from jacobian.math.number_theory.number_fields import (
-    SimpleNumberFieldPresentation,
-    embeddings,
-)
-from jacobian.math.number_theory.number_fields.operations import (
-    NumberFieldEmbeddingAdmissionError,
 )
 from jacobian.process import bounded_process_cancellation
 
@@ -237,54 +232,93 @@ def test_zero_and_identity_operators_have_complete_exact_profiles(kind: str) -> 
     )
 
 
-def test_period_59_block_fixture_is_representable_and_reconstructs() -> None:
-    # A nontrivial unimodular Laurent symbol keeps the required degree-58 field
-    # component exact without expanding a 118 by 118 source matrix.
+def test_period_59_phi_59_flips_rank_and_reconstructs_nontrivial_kernel() -> None:
+    # Phi_59 = 1 + x + ... + x^58 is 59 on the trivial component and zero on
+    # the degree-58 primitive component. This is the source-scale rank flip
+    # that a transcendental-symbol rank cannot see.
     result = cyclic_rational_rank_kernel_profile(
         _symbol(
             period=59,
-            source_dimension=2,
-            target_dimension=2,
-            entries=(
-                (0, 0, 0, 1),
-                (0, 1, 1, 1),
-                (1, 1, 0, 1),
-            ),
+            entries=tuple((0, 0, shift, 1) for shift in range(59)),
         )
     )
 
     assert tuple(
-        (component.order, component.field.degree) for component in result.components
+        (
+            component.order,
+            component.field.degree,
+            component.rank,
+            component.nullity,
+        )
+        for component in result.components
     ) == (
-        (1, 1),
-        (59, 58),
+        (1, 1, 1, 0),
+        (59, 58, 0, 1),
     )
-    assert (result.global_rank, result.global_nullity) == (118, 0)
-    assert result.global_kernel_basis.ambient_dimension == 118
-    assert result.global_kernel_basis.vectors == ()
+    assert result.exceptional_component_orders == (59,)
+    assert (result.global_rank, result.global_nullity) == (1, 58)
+    assert result.global_kernel_basis.ambient_dimension == 59
+    assert len(result.global_kernel_basis.vectors) == 58
+
+    global_vectors = tuple(
+        tuple(coordinate.as_fraction() for coordinate in vector)
+        for vector in result.global_kernel_basis.vectors
+    )
+    # This source expands to the all-ones matrix, so its kernel equation is
+    # exactly zero coordinate sum. FLINT independently checks basis rank.
+    assert all(sum(vector) == 0 for vector in global_vectors)
+    from jacobian.math.matrices._flint import rational_rref
+
+    assert rational_rref(global_vectors)[1] == 58
+
     assert (
-        SimpleNumberFieldPresentation.model_validate(
+        RationalCyclotomicField.model_validate(
             result.components[1].field.model_dump(mode="json"), strict=True
         )
         == result.components[1].field
     )
     assert (
-        SimpleNumberFieldMatrix.model_validate(
+        RationalCyclotomicMatrix.model_validate(
             result.components[1].component_matrix.model_dump(mode="json"), strict=True
         )
         == result.components[1].component_matrix
     )
     assert (
-        SimpleNumberFieldVectorSpaceBasis.model_validate(
+        RationalCyclotomicVectorSpaceBasis.model_validate(
             result.components[1].kernel_basis.model_dump(mode="json"), strict=True
         )
         == result.components[1].kernel_basis
     )
+    assert (
+        RationalCyclotomicElement.model_validate(
+            result.components[1].kernel_basis.vectors[0][0].model_dump(mode="json"),
+            strict=True,
+        )
+        == result.components[1].kernel_basis.vectors[0][0]
+    )
 
-    # Widening the shared carrier to degree 58 does not widen the distinct
-    # exact-embedding operation's proved degree-eight execution envelope.
-    with pytest.raises(NumberFieldEmbeddingAdmissionError, match="degree 8"):
-        embeddings(result.components[1].field)
+
+def test_cyclotomic_parent_is_bound_to_exact_component_order() -> None:
+    result = cyclic_rational_rank_kernel_profile(
+        _symbol(period=3, entries=((0, 0, 0, 1),))
+    )
+    payload = result.model_dump(mode="json")
+    components = payload["components"]
+    assert isinstance(components, list)
+    component = components[1]
+    assert isinstance(component, dict)
+    component["order"] = 2
+
+    with pytest.raises(ValueError, match=r"Phi_order|declared field"):
+        CyclicRationalRankKernelProfile.model_validate(payload, strict=True)
+
+    legacy_polynomial_payload = result.components[1].field.model_dump(mode="json")
+    legacy_polynomial_payload["coefficients_descending"] = ["1", "0", "1"]
+    with pytest.raises(ValueError, match="Extra inputs"):
+        RationalCyclotomicField.model_validate(
+            legacy_polynomial_payload,
+            strict=True,
+        )
 
 
 def test_crt_idempotents_select_exactly_their_components() -> None:
@@ -401,6 +435,48 @@ def test_symbol_requires_canonical_support_and_bounded_rationals() -> None:
         _symbol(period=3, entries=((0, 0, 0, 10**64),))
 
 
+def test_symbol_schema_projects_the_sign_aware_64_digit_rational_bound() -> None:
+    schema = CyclicRationalRankKernelProfileRequest.model_json_schema()
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    coefficient_schema = schema["$defs"]["CyclicRationalBlockSymbolEntry"][
+        "properties"
+    ]["coefficient"]
+    assert coefficient_schema["properties"]["num"]["maxLength"] == 65
+    assert coefficient_schema["properties"]["den"]["maxLength"] == 64
+
+    def payload(num: str, den: str = "1") -> dict[str, object]:
+        return {
+            "symbol": {
+                "period": 1,
+                "target_block_dimension": 1,
+                "source_block_dimension": 1,
+                "entries": [
+                    {
+                        "target_coordinate": 0,
+                        "source_coordinate": 0,
+                        "shift": 0,
+                        "coefficient": {"num": num, "den": den},
+                    }
+                ],
+            }
+        }
+
+    accepted = payload("-" + "9" * 64)
+    assert validator.is_valid(accepted)
+    CyclicRationalRankKernelProfileRequest.model_validate(accepted, strict=True)
+
+    for rejected in (
+        payload("9" * 65),
+        payload("-" + "9" * 65),
+        payload("1", "9" * 65),
+        payload("1", "-1"),
+    ):
+        assert not validator.is_valid(rejected)
+        with pytest.raises(ValueError):
+            CyclicRationalRankKernelProfileRequest.model_validate(rejected, strict=True)
+
+
 def test_fraction_free_height_bound_rejects_before_elimination() -> None:
     source = _symbol(
         period=1,
@@ -409,6 +485,37 @@ def test_fraction_free_height_bound_rejects_before_elimination() -> None:
         entries=tuple((index, index, 0, 10**63) for index in range(128)),
     )
     with pytest.raises(CyclicRankKernelAdmissionError, match="fraction-free"):
+        cyclic_rational_rank_kernel_profile(source)
+
+
+def test_distinct_denominator_growth_rejects_before_large_lcm_power() -> None:
+    from sympy import nextprime
+
+    denominators = tuple(int(nextprime(10**63 + 1_000 * index)) for index in range(128))
+    source = _symbol(
+        period=1,
+        source_dimension=128,
+        target_dimension=128,
+        entries=tuple(
+            (index, index, 0, Fraction(1, denominator))
+            for index, denominator in enumerate(denominators)
+        ),
+    )
+
+    with pytest.raises(
+        CyclicRankKernelAdmissionError,
+        match=r"common denominator|rank power",
+    ):
+        cyclic_rational_rank_kernel_profile(source)
+
+
+def test_scalar_height_is_charged_to_cyclotomic_work() -> None:
+    source = _symbol(
+        period=59,
+        entries=((0, 0, 0, 10**40),),
+    )
+
+    with pytest.raises(CyclicRankKernelAdmissionError, match="scalar-bit work"):
         cyclic_rational_rank_kernel_profile(source)
 
 

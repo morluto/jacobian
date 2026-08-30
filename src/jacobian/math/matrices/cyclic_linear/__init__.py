@@ -7,6 +7,10 @@ from jacobian.math.matrices.cyclic_linear._models import (
     CyclicRationalRankKernelProfileRequest,
     CyclotomicNonzeroMinor,
     CyclotomicRankKernelComponent,
+    RationalCyclotomicElement,
+    RationalCyclotomicField,
+    RationalCyclotomicMatrix,
+    RationalCyclotomicVectorSpaceBasis,
 )
 from jacobian.math.matrices.cyclic_linear.operations import (
     cyclic_rational_rank_kernel_profile,
@@ -19,5 +23,9 @@ __all__ = [
     "CyclicRationalRankKernelProfileRequest",
     "CyclotomicNonzeroMinor",
     "CyclotomicRankKernelComponent",
+    "RationalCyclotomicElement",
+    "RationalCyclotomicField",
+    "RationalCyclotomicMatrix",
+    "RationalCyclotomicVectorSpaceBasis",
     "cyclic_rational_rank_kernel_profile",
 ]

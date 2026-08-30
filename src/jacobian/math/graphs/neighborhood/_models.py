@@ -27,9 +27,10 @@ class NeighborhoodRequest(StrictModel):
     def bound_raw_selected_vertices(cls, value: object) -> object:
         if isinstance(value, dict):
             selected = value.get("selected_vertices")
-            if isinstance(selected, (list, tuple)) and len(
-                selected
-            ) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+            if (
+                isinstance(selected, (list, tuple))
+                and len(selected) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES
+            ):
                 raise PydanticCustomError(
                     "graph.selected_vertices_bound",
                     "selected vertices exceed the raw tuple-length bound",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -27,9 +28,16 @@ MAX_COLORING_WORK = 2_000_000
 ColoringResult = Literal["COLORABLE", "NOT_COLORABLE"]
 
 
+@dataclass(frozen=True)
+class _ColoringAdmission:
+    """Request-scoped facts established while admitting a coloring request."""
+
+    has_forced_failure: bool
+
+
 def _validate_coloring_envelope(
     hypergraph: FiniteHypergraph, palette_size: int
-) -> None:
+) -> _ColoringAdmission:
     """Validate the complete request and retained-result envelope."""
     vertex_count = len(hypergraph.vertices)
     edge_count = len(hypergraph.edges)
@@ -80,6 +88,7 @@ def _validate_coloring_envelope(
             "hypergraph_coloring.result_too_large",
             "the retained coloring result exceeds the canonical output limit",
         )
+    return _ColoringAdmission(has_forced_failure=has_forced_failure)
 
 
 class NonmonochromaticColoringRequest(StrictModel):

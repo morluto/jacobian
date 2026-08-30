@@ -29,7 +29,7 @@ def decide_nonmonochromatic_coloring(
     Returns COLORABLE with one witness colouring, or NOT_COLORABLE.
     """
     try:
-        _validate_coloring_envelope(hypergraph, palette_size)
+        admission = _validate_coloring_envelope(hypergraph, palette_size)
     except PydanticCustomError as error:
         raise OperationDomainValidationError(
             location=(), code=error.type, message=str(error)
@@ -40,7 +40,7 @@ def decide_nonmonochromatic_coloring(
 
     # An empty or singleton edge is monochromatic under every positive palette;
     # return the exact decision without charging or enumerating all colorings.
-    if any(len(members) <= 1 for _, members in edges):
+    if admission.has_forced_failure:
         return NonmonochromaticColoringResult(
             hypergraph=hypergraph,
             palette_size=palette_size,

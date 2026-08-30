@@ -86,3 +86,10 @@ def test_distinct_color_fast_path_handles_large_palette() -> None:
     hypergraph = _hypergraph(["a", "b"], [("e0", ["a", "b"])])
     result = decide_hypergraph_coloring(hypergraph, 2)
     assert result.coloring == (0, 1)
+
+
+def test_singleton_edge_is_uncolorable_with_any_palette() -> None:
+    hypergraph = _hypergraph(["a", "b"], [("e0", ["a"])])
+    result = decide_hypergraph_coloring(hypergraph, 2)
+    assert not result.colorable
+    assert result.coloring is None

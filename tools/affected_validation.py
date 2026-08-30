@@ -147,6 +147,7 @@ def commands_for_plan(
     commands.extend(("make", f"test-{lane}") for lane in plan.boundary_lanes)
     if plan.run_singular:
         commands.append(("make", "test-singular"))
+        commands.append(("make", "test-qepcad"))
     return tuple(commands)
 
 

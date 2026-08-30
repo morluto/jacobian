@@ -14,17 +14,22 @@ from typing import Never
 import pytest
 
 from jacobian._execution import OperationExecutionCancelledError
-from jacobian.math.polynomials.real_algebra import _qepcad_plane_worker
+from jacobian.math.polynomials.real_algebra import (
+    _qepcad_plane_process,
+    _qepcad_plane_worker,
+)
 from jacobian.math.polynomials.real_algebra._plane_component_models import (
     PlaneComponentProfileRequest,
 )
 from jacobian.math.polynomials.real_algebra._qepcad_plane_process import (
     QepcadPlaneProcessOutcome,
+    _run_worker,
     _worker_outcome,
     run_plane_sample_recognition,
     run_qepcad_plane_components,
 )
 from jacobian.math.polynomials.real_algebra._qepcad_plane_protocol import (
+    PlaneSampleWorkerRequest,
     QepcadPlaneWorkerRejected,
     QepcadPlaneWorkerRequest,
 )
@@ -119,6 +124,27 @@ def _whole_plane_with_origin() -> PlaneComponentProfileRequest:
                 }
             ],
         }
+    )
+
+
+def test_worker_is_not_launched_when_serialization_exhausts_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    times = iter((10.0, 12.0))
+    monkeypatch.setattr(_qepcad_plane_process, "monotonic", lambda: next(times))
+
+    def unexpected_launch(*args: object, **kwargs: object) -> Never:
+        raise AssertionError("expired worker request was launched")
+
+    monkeypatch.setattr("jacobian.process.run_bounded_process", unexpected_launch)
+
+    assert (
+        _run_worker(
+            PlaneSampleWorkerRequest(samples=()),
+            deadline=11.0,
+            stdout_limit=1_024,
+        )
+        is None
     )
 
 

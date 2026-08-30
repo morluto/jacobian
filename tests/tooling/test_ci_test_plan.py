@@ -215,6 +215,20 @@ def test_process_polynomial_test_selects_process_and_singular() -> None:
     assert plan.run_singular is True
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/jacobian/math/polynomials/real_algebra/_plane_components.py",
+        "src/jacobian/math/polynomials/real_algebra/_qepcad_plane_worker.py",
+        "tests/math/polynomials/test_plane_component_profile.py",
+    ],
+)
+def test_qepcad_owner_change_selects_exact_algebra_runtime(path: str) -> None:
+    plan = _plan([path])
+
+    assert plan.run_singular is True
+
+
 def test_shared_test_support_fails_closed_to_every_ordinary_boundary() -> None:
     plan = _plan(["tests/support/math_values.py"])
 

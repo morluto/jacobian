@@ -159,6 +159,12 @@ def _is_public_math_path(path: str) -> bool:
     return filename in _PUBLIC_MATH_FILES or filename.endswith("_operations.py")
 
 
+def _requires_exact_algebra_runtime(path: str) -> bool:
+    return "/polynomials/real_algebra/" in path or path.endswith(
+        "/test_plane_component_profile.py"
+    )
+
+
 def _complete_decision(reason: str) -> PathDecision:
     return PathDecision(
         run_catalog=True,
@@ -190,6 +196,7 @@ def _classify_math_path(path: str, repository: Path) -> PathDecision:
             run_catalog=public_contract,
             run_catalog_examples=public_contract,
             run_scale=_includes_scale_tests(selected),
+            run_singular=_requires_exact_algebra_runtime(path),
         )
     return PathDecision()
 
@@ -204,6 +211,7 @@ def _classify_test_path(path: str) -> PathDecision | None:
         return PathDecision(
             math_tests=selected,
             run_scale=_includes_scale_tests((path,)),
+            run_singular=_requires_exact_algebra_runtime(path),
         )
     if path.startswith("tests/catalog/"):
         return PathDecision(run_catalog=True)

@@ -136,11 +136,13 @@ def _run_worker(
         worker_environment,
     )
 
-    remaining = deadline - monotonic()
-    if remaining <= 0:
+    if deadline - monotonic() <= 0:
         return None
     payload = request.model_dump_json().encode("utf-8")
     with TemporaryDirectory(prefix="jacobian-qepcad-plane-") as worker_directory:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return None
         return run_bounded_process(
             [sys.executable, str(_WORKER)],
             input_bytes=payload,

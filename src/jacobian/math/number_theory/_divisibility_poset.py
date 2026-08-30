@@ -7,11 +7,12 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import (
     FinitePoset,
-    PresentationPair,
-    ReflexivePairPolicy,
-    RelationInterpretation,
+    IncomparablePair,
+    OrderedPair,
+    _transitive_reduction,
+    canonical_poset_ranks,
+    finite_poset_digest,
 )
-from jacobian.math.combinatorics.posets.core.operations import materialize_finite_poset
 from jacobian.math.number_theory._divisibility_poset_kernels import (
     construct_divisibility_poset,
 )
@@ -64,14 +65,52 @@ def divisibility_poset(values: tuple[str, ...]) -> FinitePoset:
     """Return the canonical proper-divisibility poset of positive integers."""
     _admit_values(values)
     data = construct_divisibility_poset(values)
-    return materialize_finite_poset(
-        tuple(sorted(values)),
-        tuple(
-            PresentationPair(lower=lower, upper=upper)
-            for lower, upper in data.strict_order_pairs
-        ),
-        RelationInterpretation.COMPARABLE_PAIRS,
-        ReflexivePairPolicy.FORBIDDEN,
+    elements = tuple(sorted(values))
+    strict = set(data.strict_order_pairs)
+    covers = _transitive_reduction(elements, strict)
+    strict_pairs = tuple(
+        OrderedPair(lower=lower, upper=upper) for lower, upper in sorted(strict)
+    )
+    cover_pairs = tuple(
+        OrderedPair(lower=lower, upper=upper) for lower, upper in sorted(covers)
+    )
+    incomparable = tuple(
+        IncomparablePair(left=left, right=right)
+        for index, left in enumerate(elements)
+        for right in elements[index + 1 :]
+        if (left, right) not in strict and (right, left) not in strict
+    )
+    minimal = tuple(
+        element
+        for element in elements
+        if not any(upper == element for _, upper in strict)
+    )
+    maximal = tuple(
+        element
+        for element in elements
+        if not any(lower == element for lower, _ in strict)
+    )
+    ranks = canonical_poset_ranks(elements, covers)
+    digest = finite_poset_digest(
+        elements=elements,
+        strict_order_pairs=strict_pairs,
+        cover_relations=cover_pairs,
+        incomparable_pairs=incomparable,
+        minimal_elements=minimal,
+        maximal_elements=maximal,
+        graded=ranks is not None,
+        ranks=ranks,
+    )
+    return FinitePoset.model_construct(
+        elements=elements,
+        strict_order_pairs=strict_pairs,
+        cover_relations=cover_pairs,
+        incomparable_pairs=incomparable,
+        minimal_elements=minimal,
+        maximal_elements=maximal,
+        graded=ranks is not None,
+        ranks=ranks,
+        poset_digest=digest,
     )
 
 

@@ -7,6 +7,7 @@ from pydantic import model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_CYCLE_LENGTH_SEARCH_WORK = 5_000_000
@@ -46,6 +47,24 @@ def _cycle_search_work(graph: SimpleUndirectedGraph) -> int:
     return vertex_count * vertex_count * paths_per_source
 
 
+def _cycle_profile_result_wire_bytes(graph: SimpleUndirectedGraph) -> int:
+    """Conservatively reserve the echoed graph and every possible witness."""
+    entries = [
+        {"length": length, "witness": list(graph.vertices)}
+        for length in range(3, len(graph.vertices) + 1)
+    ]
+    return len(
+        encode_strict_json(
+            {
+                "graph": graph.model_dump(mode="json"),
+                "entries": entries,
+                "cycle_lengths": list(range(3, len(graph.vertices) + 1)),
+            },
+            limits=CanonicalLimits(max_output_bytes=1 << 60),
+        )
+    )
+
+
 class CycleLengthProfileRequest(StrictModel):
     """Request the complete simple-cycle length profile of a graph."""
 
@@ -53,6 +72,14 @@ class CycleLengthProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_search(self) -> Self:
+        if (
+            _cycle_profile_result_wire_bytes(self.graph)
+            > CanonicalLimits().max_output_bytes
+        ):
+            raise PydanticCustomError(
+                "cycle_length.result_bytes_exceeded",
+                "cycle-length profile exceeds the canonical output-byte limit",
+            )
         if _cycle_search_work(self.graph) > MAX_CYCLE_LENGTH_SEARCH_WORK:
             raise PydanticCustomError(
                 "cycle_length.search_work_exceeded",
@@ -81,5 +108,6 @@ __all__ = [
     "CycleLengthEntry",
     "CycleLengthProfileRequest",
     "CycleLengthProfileResult",
+    "_cycle_profile_result_wire_bytes",
     "_cycle_search_work",
 ]

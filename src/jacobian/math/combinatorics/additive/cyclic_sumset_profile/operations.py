@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.cyclic_sumset_profile._models import (
     MAX_CYCLIC_SUMSET_PAIRS,
     CyclicSumsetEntry,
     CyclicSumsetResult,
+    _result_wire_bytes,
 )
 
 __all__ = ["compute_cyclic_sumset_profile"]
@@ -41,6 +43,12 @@ def compute_cyclic_sumset_profile(
             location=("left", "right"),
             code="cyclic_sumset.duplicate_operand",
             message="cyclic sumset operands must contain distinct residues",
+        )
+    if _result_wire_bytes(modulus, left, right) > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="cyclic_sumset.result_bytes_exceeded",
+            message="cyclic sumset profile exceeds the canonical output-byte limit",
         )
     counts: dict[int, int] = {}
     for a in left:

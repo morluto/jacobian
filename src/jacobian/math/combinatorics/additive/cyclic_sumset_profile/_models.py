@@ -6,8 +6,34 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 
 MAX_CYCLIC_SUMSET_PAIRS = 100_000
+
+
+def _result_wire_bytes(
+    modulus: int,
+    left: tuple[int, ...],
+    right: tuple[int, ...],
+) -> int:
+    pair_count = len(left) * len(right)
+    support_upper = min(modulus, pair_count)
+    entries = [
+        {"residue": str(modulus - 1), "count": str(pair_count)}
+        for _ in range(support_upper)
+    ]
+    return len(
+        encode_strict_json(
+            {
+                "modulus": str(modulus),
+                "left": [str(value) for value in left],
+                "right": [str(value) for value in right],
+                "entries": entries,
+                "support_cardinality": str(support_upper),
+            },
+            limits=CanonicalLimits(max_output_bytes=1 << 60),
+        )
+    )
 
 
 class CyclicSumsetRequest(StrictModel):
@@ -36,6 +62,14 @@ class CyclicSumsetRequest(StrictModel):
                 "cyclic_sumset.duplicate_operand",
                 "cyclic sumset operands must contain distinct residues",
             )
+        if (
+            _result_wire_bytes(self.modulus, self.left, self.right)
+            > CanonicalLimits().max_output_bytes
+        ):
+            raise PydanticCustomError(
+                "cyclic_sumset.result_bytes_exceeded",
+                "cyclic sumset profile exceeds the canonical output-byte limit",
+            )
         return self
 
 
@@ -61,4 +95,5 @@ __all__ = [
     "CyclicSumsetEntry",
     "CyclicSumsetRequest",
     "CyclicSumsetResult",
+    "_result_wire_bytes",
 ]

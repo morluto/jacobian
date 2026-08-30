@@ -70,3 +70,13 @@ def test_duplicate_subset_elements_are_rejected(
 def test_request_rejects_duplicate_subset_elements() -> None:
     with pytest.raises(ValidationError, match="distinct residues"):
         CyclicSumsetRequest(modulus=2, left=(0, 0), right=(0,))
+
+
+def test_wide_complete_profile_is_rejected_before_pair_arithmetic() -> None:
+    left = tuple(10**99 + index for index in range(50_000))
+    right = (0,)
+
+    with pytest.raises(OperationDomainValidationError, match="output-byte limit"):
+        compute_cyclic_sumset_profile(10**101, left, right)
+    with pytest.raises(ValidationError, match="output-byte limit"):
+        CyclicSumsetRequest(modulus=10**101, left=left, right=right)

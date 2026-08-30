@@ -76,3 +76,13 @@ def test_large_single_cycle_remains_admitted() -> None:
     result = compute_cycle_length_profile(_graph(vertices, edges))
 
     assert result.cycle_lengths == (20,)
+
+
+def test_wide_cycle_labels_are_rejected_before_search() -> None:
+    labels = tuple(f"{prefix}{'x' * 1_000_000}" for prefix in ("a", "b", "c"))
+    graph = _graph(labels, [[labels[0], labels[1]], [labels[1], labels[2]], [labels[0], labels[2]]])
+
+    with pytest.raises(OperationDomainValidationError, match="output-byte limit"):
+        compute_cycle_length_profile(graph)
+    with pytest.raises(ValidationError, match="output-byte limit"):
+        CycleLengthProfileRequest(graph=graph)

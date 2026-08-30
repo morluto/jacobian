@@ -6,11 +6,13 @@ from collections import deque
 
 import networkx as nx
 
+from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.cycle_length_profile._models import (
     MAX_CYCLE_LENGTH_SEARCH_WORK,
     CycleLengthEntry,
     CycleLengthProfileResult,
+    _cycle_profile_result_wire_bytes,
     _cycle_search_work,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -26,6 +28,12 @@ def compute_cycle_length_profile(
     For every k from 3 to |V|, if the graph contains a simple k-cycle,
     include one canonical witness.
     """
+    if _cycle_profile_result_wire_bytes(graph) > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="cycle_length.result_bytes_exceeded",
+            message="cycle-length profile exceeds the canonical output-byte limit",
+        )
     if _cycle_search_work(graph) > MAX_CYCLE_LENGTH_SEARCH_WORK:
         raise OperationDomainValidationError(
             location=("graph",),

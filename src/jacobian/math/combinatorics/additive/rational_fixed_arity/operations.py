@@ -68,7 +68,9 @@ def _support_bound(
         for difference in differences:
             lattice_step = gcd(lattice_step, difference)
         if lattice_step:
-            span_bound = (arity * (max(numerators) - min(numerators))) // lattice_step + 1
+            span_bound = (
+                arity * (max(numerators) - min(numerators))
+            ) // lattice_step + 1
             return min(count_vector_bound, span_bound, candidate_count)
     return count_vector_bound
 

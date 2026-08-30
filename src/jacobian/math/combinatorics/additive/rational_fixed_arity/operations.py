@@ -31,6 +31,7 @@ MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
 class _AdmissionPlan:
     fractions: tuple[Fraction, ...]
     candidate_count: int
+    single_sum: Fraction | None = None
 
 
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
@@ -51,9 +52,56 @@ def _common_denominator_digits(fractions: tuple[Fraction, ...]) -> int:
     return len(format_canonical_integer(common_denominator))
 
 
-def _single_sum_digit_bounds(fractions: tuple[Fraction, ...]) -> tuple[int, int]:
-    total = sum(fractions, Fraction(0))
+def _single_sum_digit_bounds(
+    fractions: tuple[Fraction, ...],
+) -> tuple[Fraction, int, int]:
+    numerators_by_denominator: dict[int, int] = {}
+    for fraction in fractions:
+        denominator = fraction.denominator
+        numerators_by_denominator[denominator] = (
+            numerators_by_denominator.get(denominator, 0) + fraction.numerator
+        )
+    numerators_by_denominator = {
+        denominator: numerator
+        for denominator, numerator in numerators_by_denominator.items()
+        if numerator
+    }
+    if not numerators_by_denominator:
+        total = Fraction(0)
+    else:
+        common_denominator = 1
+        projection_work = 0
+        for denominator in numerators_by_denominator:
+            common_denominator = common_denominator // gcd(
+                common_denominator, denominator
+            ) * denominator
+            denominator_digits = len(format_canonical_integer(common_denominator))
+            projection_work += denominator_digits
+            if denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+                _reject(
+                    ("values",),
+                    "rational_fixed_arity.rational_growth",
+                    "fixed-arity sums may exceed the canonical rational digit bound",
+                )
+            if projection_work > MAX_ENUMERATION_WORK:
+                _reject(
+                    ("values",),
+                    "rational_fixed_arity.work_bound",
+                    "fixed-arity exact sum exceeds the admitted work bound",
+                )
+        common_numerator = 0
+        for denominator, numerator in numerators_by_denominator.items():
+            projection_work += len(format_canonical_integer(abs(numerator))) + denominator_digits
+            if projection_work > MAX_ENUMERATION_WORK:
+                _reject(
+                    ("values",),
+                    "rational_fixed_arity.work_bound",
+                    "fixed-arity exact sum exceeds the admitted work bound",
+                )
+            common_numerator += numerator * (common_denominator // denominator)
+        total = Fraction(common_numerator, common_denominator)
     return (
+        total,
         len(format_canonical_integer(total.numerator)),
         len(format_canonical_integer(total.denominator)),
     )
@@ -204,9 +252,12 @@ def _admit(  # noqa: C901
     )
     shared_denominator = len({value.den for value in values}) == 1 if values else True
     common_denominator_digits = _common_denominator_digits(fractions)
-    if candidate_count == 1:
-        sum_numerator_digits, sum_denominator_digits = _single_sum_digit_bounds(
-            fractions
+    single_sum: Fraction | None = None
+    if candidate_count == 1 and arity == 0:
+        sum_numerator_digits = sum_denominator_digits = 1
+    elif candidate_count == 1:
+        single_sum, sum_numerator_digits, sum_denominator_digits = (
+            _single_sum_digit_bounds(fractions)
         )
     elif candidate_count:
         # The sole empty sum is exactly 0/1, independent of source widths.
@@ -283,6 +334,7 @@ def _admit(  # noqa: C901
     return _AdmissionPlan(
         fractions=fractions,
         candidate_count=candidate_count,
+        single_sum=single_sum,
     )
 
 
@@ -300,9 +352,12 @@ def compute_rational_fixed_arity_sum_profile(
     fractions = plan.fractions
     sum_to_count: dict[Fraction, int] = {}
 
-    for indices in combinations(range(len(values)), arity):
-        total = sum((fractions[i] for i in indices), Fraction(0))
-        sum_to_count[total] = sum_to_count.get(total, 0) + 1
+    if plan.candidate_count == 1:
+        sum_to_count[plan.single_sum or Fraction(0)] = 1
+    else:
+        for indices in combinations(range(len(values)), arity):
+            total = sum((fractions[i] for i in indices), Fraction(0))
+            sum_to_count[total] = sum_to_count.get(total, 0) + 1
 
     rows = [
         SumProfileRow(

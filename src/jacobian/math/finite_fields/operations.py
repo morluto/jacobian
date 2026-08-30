@@ -80,7 +80,9 @@ def _homogeneous_fixed_subspace_envelope(
     expansion_work = (
         generator_count * max(1, degree) * variable_count * monomial_count**2
     )
-    elimination_work = generator_count * monomial_count**3
+    # One elimination solves the stacked fixed equations; the second puts the
+    # returned nullspace rows into backend-independent canonical RREF form.
+    elimination_work = (generator_count + 1) * monomial_count**3
     action_rank_work = generator_count * variable_count**3
     if monomial_count > _MAX_HOMOGENEOUS_MONOMIALS:
         raise OperationDomainValidationError(

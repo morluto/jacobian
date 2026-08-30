@@ -14,7 +14,6 @@ from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.matrices.values import rational_matrix_from_fractions
 from jacobian.math.polynomials.intervals._kernel import natural_interval_extension
 from jacobian.math.polynomials.intervals._models import (
-    _estimate_growth,
     _require_enclosure_preflight,
 )
 from jacobian.math.polynomials.maps._models import VariablePoint
@@ -43,7 +42,6 @@ from ._models import (
     MAX_ROOT_BOX_RESULT_COMPONENT_DIGITS,
     MAX_ROOT_BOX_SOURCE_BYTES,
     MAX_ROOT_BOX_TOTAL_DEGREE,
-    PolynomialSystemRootBoxRequest,
     PolynomialSystemRootBoxResult,
     RootBoxCertifiedUniqueNonsingular,
     RootBoxComponentExclusion,
@@ -172,8 +170,7 @@ def _admitted_enclosure(
     label: str,
     result_digits: int,
 ) -> tuple[Fraction, Fraction]:
-    _require_enclosure_preflight(polynomial, box)
-    growth = _estimate_growth(polynomial, box)
+    growth = _require_enclosure_preflight(polynomial, box)
     if max(growth.result_numerator_digits, growth.result_denominator_digits) > (
         result_digits
     ):

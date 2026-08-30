@@ -135,6 +135,8 @@ def test_result_rejects_invalid_source_set(values: tuple[str, ...]) -> None:
     """Deserialized results retain positive, distinct source semantics."""
     with pytest.raises(ValueError):
         DivisibilityEdgeProfileResult(values=values, edges=())
+
+
 def test_heterogeneous_pair_widths_admitted_per_pair() -> None:
     """Per-pair digit widths admit heterogeneous source sets that the
     global-max-width estimate would reject.

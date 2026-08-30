@@ -84,7 +84,9 @@ def _validate_divisibility_edge_resources(
     parsed = tuple(parse_canonical_integer(value) for value in values)
     digits = [len(v) for v in values]
     pair_scan_work = sum(
-        digits[i] * digits[j] for i in range(len(values)) for j in range(i + 1, len(values))
+        digits[i] * digits[j]
+        for i in range(len(values))
+        for j in range(i + 1, len(values))
     )
     if pair_scan_work > MAX_DIVISIBILITY_EDGE_PAIR_SCAN_WORK:
         raise PydanticCustomError(

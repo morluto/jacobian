@@ -464,7 +464,6 @@ def _bounded_least_prime_factor(
         return None
 
 
-
 def enumerate_divisors(request: FactorizationRequest) -> DivisorListResult:
     _admit_nonzero(request)
     value = int(request.value)

@@ -9,6 +9,7 @@ from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.spanned_line_profile._models import (
     SpannedLineEntry,
     SpannedLineProfileResult,
+    _require_coordinate_distinctness,
 )
 
 __all__ = ["compute_spanned_line_profile"]
@@ -18,6 +19,7 @@ def compute_spanned_line_profile(
     configuration: PointConfiguration,
 ) -> SpannedLineProfileResult:
     """Return every distinct affine line spanned by unordered source pairs."""
+    _require_coordinate_distinctness(configuration)
     points = configuration.points
     n = len(points)
 

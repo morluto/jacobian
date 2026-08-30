@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from fractions import Fraction
 
+import pytest
+from pydantic_core import PydanticCustomError
+
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.exact._models import (
     LabelledRationalPoint,
@@ -61,3 +64,10 @@ def test_result_preserves_source() -> None:
     config = _config([("a", [0, 0]), ("b", [1, 0])])
     result = compute_spanned_line_profile(config)
     assert result.configuration == config
+
+
+def test_coincident_points_are_rejected() -> None:
+    config = _config([("a", [0, 0]), ("b", [0, 0])])
+
+    with pytest.raises(PydanticCustomError):
+        compute_spanned_line_profile(config)

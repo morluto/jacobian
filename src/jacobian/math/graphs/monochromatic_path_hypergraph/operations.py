@@ -59,19 +59,24 @@ def construct_monochromatic_path_hypergraphs(
             nx_graph.add_edge(u, v)
 
         vertex_list = list(vertices)
-        n = len(vertex_list)
 
         supports: list[tuple[str, ...]] = [(v,) for v in vertex_list]
 
         from itertools import combinations
 
-        for size in range(2, n + 1):
-            for subset in combinations(vertex_list, size):
-                sub_nx = nx_graph.subgraph(subset)
-                if not nx.is_connected(sub_nx):
-                    continue
-                if _has_hamiltonian_path(sub_nx):
-                    supports.append(tuple(sorted(subset)))
+        vertex_order = {vertex: index for index, vertex in enumerate(vertex_list)}
+        components = sorted(
+            (
+                tuple(sorted(component, key=vertex_order.__getitem__))
+                for component in nx.connected_components(nx_graph)
+            ),
+            key=lambda component: tuple(vertex_order[vertex] for vertex in component),
+        )
+        for component in components:
+            for size in range(2, len(component) + 1):
+                for subset in combinations(component, size):
+                    if _has_hamiltonian_path(nx_graph.subgraph(subset)):
+                        supports.append(subset)
 
         edges_hg = tuple((f"e_{i}", tuple(s)) for i, s in enumerate(supports))
         hypergraph = FiniteHypergraph(

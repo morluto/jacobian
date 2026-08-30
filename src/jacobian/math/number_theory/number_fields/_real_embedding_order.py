@@ -126,8 +126,7 @@ def _require_element_coordinates_fit(
     reason: str,
 ) -> None:
     if any(
-        _rational_component_digits(coordinate)
-        > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
+        _rational_component_digits(coordinate) > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
         for coordinate in coordinates
     ):
         raise NumberFieldRealEmbeddingOrderError(
@@ -170,8 +169,7 @@ def _minimal_polynomial_height_bound(
     element_degree = len(integer_coordinates) - 1
     field_degree = presentation.degree
     coefficients = tuple(
-        parse_canonical_integer(value)
-        for value in presentation.coefficients_descending
+        parse_canonical_integer(value) for value in presentation.coefficients_descending
     )
     entry_height = max(
         denominator,
@@ -181,9 +179,7 @@ def _minimal_polynomial_height_bound(
     )
     sylvester_size = field_degree + element_degree
     resultant_height = (
-        factorial(sylvester_size)
-        * 2**sylvester_size
-        * entry_height**sylvester_size
+        factorial(sylvester_size) * 2**sylvester_size * entry_height**sylvester_size
     )
     return int((field_degree + 1) * 2**field_degree * resultant_height)
 
@@ -197,8 +193,7 @@ def _minimal_polynomial_height_bound_from_cleared_envelope(
 ) -> int:
     field_degree = presentation.degree
     coefficients = tuple(
-        parse_canonical_integer(value)
-        for value in presentation.coefficients_descending
+        parse_canonical_integer(value) for value in presentation.coefficients_descending
     )
     entry_height = max(
         cleared_denominator_bound,
@@ -208,9 +203,7 @@ def _minimal_polynomial_height_bound_from_cleared_envelope(
     )
     sylvester_size = field_degree + element_degree
     resultant_height = (
-        factorial(sylvester_size)
-        * 2**sylvester_size
-        * entry_height**sylvester_size
+        factorial(sylvester_size) * 2**sylvester_size * entry_height**sylvester_size
     )
     return int((field_degree + 1) * 2**field_degree * resultant_height)
 
@@ -239,9 +232,7 @@ def _admit_image_polynomial_bound(
     )
     refinement_bits = separation_denominator.bit_length() + 8
     isolator_digits = complex_isolator_component_digit_bound(worst_coefficients)
-    resultant_storage_bits = (
-        presentation.degree + 1
-    ) * coefficient_bound.bit_length()
+    resultant_storage_bits = (presentation.degree + 1) * coefficient_bound.bit_length()
     if resultant_storage_bits > MAX_REAL_EMBEDDING_ORDER_RESULTANT_STORAGE_BITS:
         raise NumberFieldRealEmbeddingOrderError(
             "image_resultant_storage_bound",
@@ -303,9 +294,7 @@ def admit_real_embedding_difference(
     return _admit_image_polynomial_bound(
         presentation,
         coordinates=coordinates,
-        coefficient_bound=_minimal_polynomial_height_bound(
-            presentation, coordinates
-        ),
+        coefficient_bound=_minimal_polynomial_height_bound(presentation, coordinates),
     )
 
 
@@ -482,7 +471,9 @@ def isolate_backend_real_value(
         abs(int(coefficient)) for coefficient in minimal_polynomial.all_coeffs()
     )
     if actual_height > admission.minimal_polynomial_coefficient_bound:
-        raise RuntimeError("selected-image polynomial exceeded its admitted height bound")
+        raise RuntimeError(
+            "selected-image polynomial exceeded its admitted height bound"
+        )
 
     real_roots = minimal_polynomial.real_roots(radicals=False)
     matches = tuple(
@@ -491,12 +482,18 @@ def isolate_backend_real_value(
         if minimal_polynomial.same_root(root, image)
     )
     if len(matches) != 1:
-        raise RuntimeError("exact selected-image isolation did not identify one real root")
+        raise RuntimeError(
+            "exact selected-image isolation did not identify one real root"
+        )
 
     constant = abs(int(minimal_polynomial.TC()))
     if constant == 0:
-        raise RuntimeError("a nonzero field element received a zero-root minimal polynomial")
-    height = max(abs(int(coefficient)) for coefficient in minimal_polynomial.all_coeffs())
+        raise RuntimeError(
+            "a nonzero field element received a zero-root minimal polynomial"
+        )
+    height = max(
+        abs(int(coefficient)) for coefficient in minimal_polynomial.all_coeffs()
+    )
     epsilon = sympy.Rational(constant, 2 * (constant + height))
     intervals = minimal_polynomial.intervals(eps=epsilon)
     (lower, upper), _multiplicity = intervals[matches[0]]
@@ -513,7 +510,9 @@ def isolate_backend_real_value(
         > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
         for endpoint in (lower_fraction, upper_fraction)
     ):
-        raise RuntimeError("selected-image isolator exceeded its admitted component bound")
+        raise RuntimeError(
+            "selected-image isolator exceeded its admitted component bound"
+        )
     return (
         order,
         RationalIsolatingInterval(

@@ -536,8 +536,7 @@ class NumberFieldRealValueEnclosure(StrictModel):
     @model_validator(mode="after")
     def require_closed_interval(self) -> Self:
         if any(
-            len(endpoint.num.lstrip("-"))
-            > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            len(endpoint.num.lstrip("-")) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
             or len(endpoint.den) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
             for endpoint in (self.lower, self.upper)
         ):
@@ -638,8 +637,7 @@ class SimpleNumberFieldRealEmbeddingOrder(StrictModel):
         interval = self.difference_enclosure
         endpoints = (interval.lower, interval.upper)
         if any(
-            len(endpoint.num.lstrip("-"))
-            > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            len(endpoint.num.lstrip("-")) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
             or len(endpoint.den) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
             for endpoint in endpoints
         ):

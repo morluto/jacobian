@@ -131,9 +131,7 @@ def _sqrt_two_compare(left: QuadraticPair, right: QuadraticPair) -> int:
 
 def _sqrt_two_oracle(
     exponent_count: int,
-) -> tuple[
-    tuple[QuadraticPair, tuple[tuple[int, ...], ...]], ...
-]:
+) -> tuple[tuple[QuadraticPair, tuple[tuple[int, ...], ...]], ...]:
     powers: list[QuadraticPair] = []
     power: QuadraticPair = (Fraction(1), Fraction(0))
     for _ in range(exponent_count):
@@ -168,10 +166,13 @@ def test_sqrt_two_profile_matches_an_independent_exact_quadratic_oracle(
     )
     oracle = _sqrt_two_oracle(3)
 
-    assert tuple(
-        (_pair(bucket.value), bucket.representations)
-        for bucket in result.value_buckets
-    ) == oracle
+    assert (
+        tuple(
+            (_pair(bucket.value), bucket.representations)
+            for bucket in result.value_buckets
+        )
+        == oracle
+    )
     assert result.source_representation_count == 8
     assert result.distinct_value_count == 8
     assert result.largest_multiplicity == 1
@@ -185,12 +186,8 @@ def test_sqrt_two_profile_matches_an_independent_exact_quadratic_oracle(
         enclosure_lower = gap.positive_enclosure.lower.as_fraction()
         enclosure_upper = gap.positive_enclosure.upper.as_fraction()
         assert enclosure_lower > 0
-        assert _sqrt_two_sign(
-            (expected[0] - enclosure_lower, expected[1])
-        ) >= 0
-        assert _sqrt_two_sign(
-            (enclosure_upper - expected[0], -expected[1])
-        ) >= 0
+        assert _sqrt_two_sign((expected[0] - enclosure_lower, expected[1])) >= 0
+        assert _sqrt_two_sign((enclosure_upper - expected[0], -expected[1])) >= 0
 
     oracle_gaps = tuple(_pair(gap.difference) for gap in result.gaps)
     expected_least = min(oracle_gaps, key=cmp_to_key(_sqrt_two_compare))
@@ -245,9 +242,7 @@ def test_rational_base_agrees_with_an_independent_fraction_profile() -> None:
             bucket.representations,
         )
         for bucket in result.value_buckets
-    ) == tuple(
-        (value, tuple(sorted(expected[value]))) for value in sorted(expected)
-    )
+    ) == tuple((value, tuple(sorted(expected[value]))) for value in sorted(expected))
 
 
 @pytest.mark.parametrize("exponent_count", [0, 1])
@@ -288,8 +283,12 @@ def test_one_abstract_base_is_sorted_by_each_selected_real_embedding(
     negative_profile = binary_power_sum_gap_profile(_binding(base, negative), 3)
     positive_profile = binary_power_sum_gap_profile(_binding(base, positive), 3)
 
-    negative_values = tuple(_pair(bucket.value) for bucket in negative_profile.value_buckets)
-    positive_values = tuple(_pair(bucket.value) for bucket in positive_profile.value_buckets)
+    negative_values = tuple(
+        _pair(bucket.value) for bucket in negative_profile.value_buckets
+    )
+    positive_values = tuple(
+        _pair(bucket.value) for bucket in positive_profile.value_buckets
+    )
     assert set(negative_values) == set(positive_values)
     assert negative_values != positive_values
     assert negative_values[3] == (Fraction(227, 100), Fraction(3, 10))
@@ -330,7 +329,9 @@ def test_consumer_rejects_a_forged_real_embedding_record(
 
     with pytest.raises(BinaryPowerSumAdmissionError) as caught:
         binary_power_sum_gap_profile(
-            _binding(_element(record.embedding.presentation, Fraction(3, 2), 0), forged),
+            _binding(
+                _element(record.embedding.presentation, Fraction(3, 2), 0), forged
+            ),
             2,
         )
 
@@ -487,8 +488,7 @@ def test_result_validation_requires_first_exactly_matching_gap_summary() -> None
         BinaryPowerSumGapProfile.model_validate(noncanonical)
 
     assert (
-        caught.value.errors()[0]["type"]
-        == "binary_power_sum.gap_summary_first_match"
+        caught.value.errors()[0]["type"] == "binary_power_sum.gap_summary_first_match"
     )
 
 

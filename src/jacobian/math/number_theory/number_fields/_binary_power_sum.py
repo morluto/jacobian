@@ -175,9 +175,7 @@ class BinaryPowerSumGapProfile(StrictModel):
     """
 
     base: SimpleNumberFieldRealEmbeddingBinding
-    exponent_count: StrictInt = Field(
-        ge=0, le=MAX_BINARY_POWER_SUM_EXPONENT_COUNT
-    )
+    exponent_count: StrictInt = Field(ge=0, le=MAX_BINARY_POWER_SUM_EXPONENT_COUNT)
     value_buckets: tuple[BinaryPowerSumValueBucket, ...] = Field(
         min_length=1,
         max_length=MAX_BINARY_POWER_SUM_SOURCE_REPRESENTATIONS,
@@ -213,9 +211,10 @@ class BinaryPowerSumGapProfile(StrictModel):
             return data
         buckets = data.get("value_buckets")
         gaps = data.get("gaps")
-        if isinstance(buckets, (list, tuple)) and len(
-            buckets
-        ) > MAX_BINARY_POWER_SUM_SOURCE_REPRESENTATIONS:
+        if (
+            isinstance(buckets, (list, tuple))
+            and len(buckets) > MAX_BINARY_POWER_SUM_SOURCE_REPRESENTATIONS
+        ):
             raise _validation_error(
                 "value_bucket_bound",
                 "binary power-sum result exceeds the value-bucket bound",
@@ -236,8 +235,7 @@ class BinaryPowerSumGapProfile(StrictModel):
                     if isinstance(bits, (list, tuple))
                 )
             if (
-                raw_representation_count
-                > MAX_BINARY_POWER_SUM_SOURCE_REPRESENTATIONS
+                raw_representation_count > MAX_BINARY_POWER_SUM_SOURCE_REPRESENTATIONS
                 or raw_bit_slots > MAX_BINARY_POWER_SUM_REPRESENTATION_BIT_SLOTS
             ):
                 raise _validation_error(
@@ -285,7 +283,10 @@ class BinaryPowerSumGapProfile(StrictModel):
             )
 
         value_keys = tuple(
-            tuple(coordinate.as_fraction() for coordinate in bucket.value.coefficients_ascending)
+            tuple(
+                coordinate.as_fraction()
+                for coordinate in bucket.value.coefficients_ascending
+            )
             for bucket in self.value_buckets
         )
         if len(set(value_keys)) != len(value_keys):
@@ -305,9 +306,10 @@ class BinaryPowerSumGapProfile(StrictModel):
                     "every source bit vector must have exponent_count entries",
                 )
             representations.extend(bucket.representations)
-        if len(representations) != expected_source_count or len(
-            set(representations)
-        ) != expected_source_count:
+        if (
+            len(representations) != expected_source_count
+            or len(set(representations)) != expected_source_count
+        ):
             raise _validation_error(
                 "representation_partition",
                 "value buckets must partition every binary source bit vector exactly once",
@@ -378,19 +380,16 @@ class BinaryPowerSumGapProfile(StrictModel):
                     "nonempty_gap_summary",
                     "a nonempty gap family requires least and largest gap summaries",
                 )
-            if (
-                self.least_gap_index >= len(self.gaps)
-                or self.largest_gap_index >= len(self.gaps)
+            if self.least_gap_index >= len(self.gaps) or self.largest_gap_index >= len(
+                self.gaps
             ):
                 raise _validation_error(
                     "gap_summary_index",
                     "least and largest gap indices must reference the gap family",
                 )
             if (
-                self.least_gap
-                != self.gaps[self.least_gap_index].difference
-                or self.largest_gap
-                != self.gaps[self.largest_gap_index].difference
+                self.least_gap != self.gaps[self.least_gap_index].difference
+                or self.largest_gap != self.gaps[self.largest_gap_index].difference
             ):
                 raise _validation_error(
                     "gap_summary_source",
@@ -429,9 +428,7 @@ class BinaryPowerSumGapProfile(StrictModel):
             gaps=gaps,
             source_representation_count=1 << exponent_count,
             distinct_value_count=len(value_buckets),
-            largest_multiplicity=max(
-                bucket.multiplicity for bucket in value_buckets
-            ),
+            largest_multiplicity=max(bucket.multiplicity for bucket in value_buckets),
             least_gap=(
                 None if least_gap_index is None else gaps[least_gap_index].difference
             ),
@@ -503,9 +500,7 @@ class _BinaryPowerSumWorkLedger:
     @property
     def field_operation_count(self) -> int:
         return (
-            self.frontier_additions
-            + self.power_multiplications
-            + self.gap_subtractions
+            self.frontier_additions + self.power_multiplications + self.gap_subtractions
         )
 
     @property
@@ -557,7 +552,9 @@ def _require_work_within_admission(
     if work.field_operation_count > admission.field_operation_count:
         raise RuntimeError("binary power-sum field work exceeded its admitted bound")
     if work.comparison_count > admission.comparison_count:
-        raise RuntimeError("binary power-sum comparison work exceeded its admitted bound")
+        raise RuntimeError(
+            "binary power-sum comparison work exceeded its admitted bound"
+        )
 
 
 def _decimal_digits_from_bits(bits: int) -> int:
@@ -624,11 +621,7 @@ def _power_sum_coordinate_bounds(
     )
     degree = field.degree
     base_polynomial_degree = max(
-        (
-            index
-            for index, coefficient in enumerate(integer_coordinates)
-            if coefficient
-        ),
+        (index for index, coefficient in enumerate(integer_coordinates) if coefficient),
         default=0,
     )
     leading = defining[0]
@@ -725,15 +718,11 @@ def admit_binary_power_sum_gap_profile(
     # CPython's stable comparison sort is charged conservatively above the
     # binary information bound. Every actual comparator call is counted below.
     sort_comparison_bound = (
-        0
-        if representation_count == 1
-        else representation_count * (exponent_count + 2)
+        0 if representation_count == 1 else representation_count * (exponent_count + 2)
     )
     summary_comparison_bound = 2 * max(representation_count - 2, 0)
     field_operation_count = (
-        frontier_addition_bound
-        + power_multiplication_bound
-        + gap_subtraction_bound
+        frontier_addition_bound + power_multiplication_bound + gap_subtraction_bound
     )
     if field_operation_count > MAX_BINARY_POWER_SUM_FIELD_OPERATIONS:
         raise BinaryPowerSumAdmissionError(
@@ -809,9 +798,7 @@ def admit_binary_power_sum_gap_profile(
         _decimal_digits_from_bits(denominator_bound.bit_length()),
     )
     isolator_digits = comparison_admission.predicted_isolator_component_digits
-    if all(
-        coordinate == 0 for coordinate in _element_coordinates(base.element)[1:]
-    ):
+    if all(coordinate == 0 for coordinate in _element_coordinates(base.element)[1:]):
         isolator_digits = max(isolator_digits, coordinate_digits)
     predicted_result_bytes = _predicted_result_bytes(
         base,
@@ -1118,9 +1105,7 @@ def _recognize_profile_base(
         raise BinaryPowerSumAdmissionError(exc.reason, str(exc)) from exc
     recognition_execution = current_request_execution()
     recognition_deadline = (
-        recognition_execution.deadline
-        if recognition_execution is not None
-        else None
+        recognition_execution.deadline if recognition_execution is not None else None
     )
     if recognition_deadline is not None and recognition_deadline > profile_deadline:
         raise RuntimeError("embedding recognition extended the profile deadline")
@@ -1209,12 +1194,8 @@ def _execute_binary_power_sum_gap_profile(
             unshifted = next_buckets.setdefault(value, [])
             work.frontier_additions += 1
             shifted = next_buckets.setdefault(value + power, [])
-            unshifted.extend(
-                (*representation, 0) for representation in representations
-            )
-            shifted.extend(
-                (*representation, 1) for representation in representations
-            )
+            unshifted.extend((*representation, 0) for representation in representations)
+            shifted.extend((*representation, 1) for representation in representations)
         backend_buckets = next_buckets
         if exponent + 1 < exponent_count:
             work.power_multiplications += 1
@@ -1253,9 +1234,7 @@ def _execute_binary_power_sum_gap_profile(
 
     gaps: list[BinaryPowerSumGap] = []
     backend_gaps: list[Any] = []
-    for index, (lower_bucket, upper_bucket) in enumerate(
-        pairwise(buckets)
-    ):
+    for index, (lower_bucket, upper_bucket) in enumerate(pairwise(buckets)):
         work.gap_subtractions += 1
         backend_difference = upper_bucket.backend_value - lower_bucket.backend_value
         public_difference = context.from_backend(backend_difference)
@@ -1265,7 +1244,9 @@ def _execute_binary_power_sum_gap_profile(
             public_difference,
         )
         if order != "GT":
-            raise RuntimeError("exact embedded sort produced a nonpositive adjacent gap")
+            raise RuntimeError(
+                "exact embedded sort produced a nonpositive adjacent gap"
+            )
         gaps.append(
             BinaryPowerSumGap(
                 lower_value_index=index,

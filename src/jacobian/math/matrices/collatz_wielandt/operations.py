@@ -37,9 +37,7 @@ def _admit_result_size(
                 + max(len(vector[column].num.lstrip("-")), len(vector[column].den))
                 for column, entry in enumerate(row)
             )
-            + max(
-                len(vector[row_index].num.lstrip("-")), len(vector[row_index].den)
-            )
+            + max(len(vector[row_index].num.lstrip("-")), len(vector[row_index].den))
             + 2
         )
         if derived_digits > MAX_CANONICAL_RATIONAL_DIGITS:

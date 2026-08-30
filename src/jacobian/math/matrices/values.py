@@ -159,11 +159,13 @@ class RationalMatrix(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
-        return _prepare_raw_matrix_envelope(
-            data,
-            maximum_axis=MAX_RATIONAL_MATRIX_ORDER,
-            label="matrix",
-            scalar_domain="QQ",
+        return canonicalize_json_containers(
+            _prepare_raw_matrix_envelope(
+                data,
+                maximum_axis=MAX_RATIONAL_MATRIX_ORDER,
+                label="matrix",
+                scalar_domain="QQ",
+            )
         )
 
     @model_validator(mode="after")
@@ -255,7 +257,7 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                             "embedded number-field matrix entries must be field elements",
                         )
             normalized["entries"] = tuple(tuple(row) for row in entries)
-        return normalized
+        return canonicalize_json_containers(normalized)
 
     @model_validator(mode="after")
     def require_common_embedding_and_rectangular_shape(self) -> Self:
@@ -526,11 +528,13 @@ class IntegerMatrix(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
-        return _prepare_raw_matrix_envelope(
-            data,
-            maximum_axis=MAX_INTEGER_MATRIX_ORDER,
-            label="matrix",
-            scalar_domain="ZZ",
+        return canonicalize_json_containers(
+            _prepare_raw_matrix_envelope(
+                data,
+                maximum_axis=MAX_INTEGER_MATRIX_ORDER,
+                label="matrix",
+                scalar_domain="ZZ",
+            )
         )
 
     @model_validator(mode="after")

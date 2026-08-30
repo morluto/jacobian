@@ -8,7 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.lattices.invariant_forms._models import (
     MAX_ACTION_DIMENSION,
@@ -63,7 +63,7 @@ class LatticeComplexStructure(StrictModel):
         normalized = dict(data)
         if isinstance(axis, list):
             normalized["coordinate_axis"] = tuple(axis)
-        return normalized
+        return canonicalize_json_containers(normalized)
 
     @model_validator(mode="after")
     def require_even_common_axis(self) -> Self:

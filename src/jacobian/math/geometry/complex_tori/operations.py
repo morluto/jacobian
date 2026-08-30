@@ -20,7 +20,11 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    parse_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.complex_tori._models import (
     HermitianDefiniteness,
@@ -375,7 +379,7 @@ def _admit_riemann_form_execution(
 
 def _rational_domain_matrix(matrix: RationalMatrix) -> DomainMatrix:
     rows = [
-        [QQ(int(value.num), int(value.den)) for value in row] for row in matrix.entries
+        [QQ(parse_canonical_integer(value.num), parse_canonical_integer(value.den)) for value in row] for row in matrix.entries
     ]
     return DomainMatrix(rows, (len(rows), len(rows[0])), QQ)
 

@@ -257,7 +257,7 @@ class EmbeddedRealNumberFieldMatrixAction(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_envelope(cls, data: Any) -> Any:
-        return _require_raw_action_envelope(data)
+        return canonicalize_json_containers(_require_raw_action_envelope(data))
 
     @model_validator(mode="after")
     def require_common_axis_and_embedding(self) -> Self:
@@ -318,7 +318,7 @@ class IntegralBilinearForm(StrictModel):
         normalized = dict(data)
         if isinstance(axis, list):
             normalized["coordinate_axis"] = tuple(axis)
-        return normalized
+        return canonicalize_json_containers(normalized)
 
     @model_validator(mode="after")
     def require_form_shape(self) -> Self:

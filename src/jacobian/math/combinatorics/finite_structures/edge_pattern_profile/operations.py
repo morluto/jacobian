@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import unicodedata
 
+import rfc8785
+
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
+    canonicalize_json,
     encode_strict_json,
     strict_json_object_size,
 )
@@ -31,7 +34,7 @@ def _strict_json_array_size(item_sizes: tuple[int, ...]) -> int:
 def _encoded_size(value: str, encoded: dict[str, int]) -> int:
     size = encoded.get(value)
     if size is None:
-        size = len(encode_strict_json(value))
+        size = len(rfc8785.dumps(unicodedata.normalize("NFC", value)))
         encoded[value] = size
     return size
 
@@ -110,19 +113,13 @@ def _admit_edge_pattern_profile(
             message="vertex_colors keys collide after Unicode normalization",
         )
     normalized_colors = {
-        unicodedata.normalize("NFC", key): unicodedata.normalize("NFC", value)
+        key: unicodedata.normalize("NFC", value)
         for key, value in vertex_colors.items()
     }
-    if set(normalized_colors) != set(hypergraph.vertices):
-        raise OperationDomainValidationError(
-            location=("vertex_colors",),
-            code="edge_pattern.color_map_must_cover_all_vertices",
-            message="vertex_colors must cover exactly all declared vertices after normalization",
-        )
     try:
         encoded: dict[str, int] = {}
-        source_size = len(encode_strict_json(hypergraph.model_dump(mode="json")))
-        colors_size = len(encode_strict_json(normalized_colors))
+        source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
+        colors_size = len(canonicalize_json(normalized_colors))
         entry_sizes: list[int] = []
         monochromatic_sizes: list[int] = []
         rainbow_sizes: list[int] = []
@@ -189,7 +186,7 @@ def compute_edge_pattern_profile(
     """
     _admit_edge_pattern_profile(hypergraph, vertex_colors)
     vertex_colors = {
-        unicodedata.normalize("NFC", key): unicodedata.normalize("NFC", value)
+        key: unicodedata.normalize("NFC", value)
         for key, value in vertex_colors.items()
     }
     entries: list[EdgePatternEntry] = []

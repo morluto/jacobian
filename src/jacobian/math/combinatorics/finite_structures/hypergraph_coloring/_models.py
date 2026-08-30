@@ -8,15 +8,20 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGES,
     MAX_VERTICES,
     FiniteHypergraph,
 )
 
 MAX_PALETTE_SIZE = 16
 MAX_VERTEX_COUNT = MAX_VERTICES
-MAX_EDGE_COUNT = 200
+MAX_EDGE_COUNT = MAX_EDGES
 MAX_COLORING_WORK = 2_000_000
 
 ColoringResult = Literal["COLORABLE", "NOT_COLORABLE"]
@@ -47,7 +52,8 @@ def _validate_coloring_envelope(
             "hypergraph_coloring.too_many_edges",
             f"at most {MAX_EDGE_COUNT} edges are supported",
         )
-    work = palette_size**vertex_count * edge_count
+    has_forced_failure = any(len(members) <= 1 for _, members in hypergraph.edges)
+    work = 0 if has_forced_failure else palette_size**vertex_count * edge_count
     if work > MAX_COLORING_WORK:
         raise PydanticCustomError(
             "hypergraph_coloring.work_too_large",
@@ -62,7 +68,14 @@ def _validate_coloring_envelope(
         "outcome": "COLORABLE",
         "witness": {"assignments": [[vertex, 0] for vertex in hypergraph.vertices]},
     }
-    if len(encode_strict_json(payload)) > CanonicalLimits().max_output_bytes:
+    try:
+        result_bytes = len(encode_strict_json(payload))
+    except CanonicalizationError as exc:
+        raise PydanticCustomError(
+            "hypergraph_coloring.result_too_large",
+            "the retained coloring result exceeds the canonical output limit",
+        ) from exc
+    if result_bytes > CanonicalLimits().max_output_bytes:
         raise PydanticCustomError(
             "hypergraph_coloring.result_too_large",
             "the retained coloring result exceeds the canonical output limit",

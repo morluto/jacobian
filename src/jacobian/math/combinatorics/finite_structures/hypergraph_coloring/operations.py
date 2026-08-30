@@ -38,6 +38,15 @@ def decide_nonmonochromatic_coloring(
     vertices = list(hypergraph.vertices)
     edges = list(hypergraph.edges)
 
+    # An empty or singleton edge is monochromatic under every positive palette;
+    # return the exact decision without charging or enumerating all colorings.
+    if any(len(members) <= 1 for _, members in edges):
+        return NonmonochromaticColoringResult(
+            hypergraph=hypergraph,
+            palette_size=palette_size,
+            outcome="NOT_COLORABLE",
+        )
+
     if not edges:
         witness = ColoringWitness(assignments=tuple((v, 0) for v in vertices))
         return NonmonochromaticColoringResult(

@@ -48,7 +48,11 @@ class _FrameworkAdmission:
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=location,
-        code=(code if code.startswith("geometry.framework.") else f"geometry.framework.{code}"),
+        code=(
+            code
+            if code.startswith("geometry.framework.")
+            else f"geometry.framework.{code}"
+        ),
         message=message,
     )
 

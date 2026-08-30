@@ -191,9 +191,7 @@ def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
     return n
 
 
-def _is_bipartite_edges(
-    vertices: list[str], edges: list[tuple[str, str]]
-) -> bool:
+def _is_bipartite_edges(vertices: list[str], edges: list[tuple[str, str]]) -> bool:
     adjacency: dict[str, set[str]] = {vertex: set() for vertex in vertices}
     for left, right in edges:
         adjacency[left].add(right)

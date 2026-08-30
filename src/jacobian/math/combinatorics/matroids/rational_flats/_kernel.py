@@ -25,6 +25,7 @@ from jacobian.math.combinatorics.matroids.rational_flats._models import (
     MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS,
     MAX_RATIONAL_FLAT_GROUP_ORDER,
     MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS,
+    MAX_RATIONAL_FLAT_RESULT_BYTES,
     MAX_RATIONAL_FLAT_RESULT_ORBITS,
     ClauseConstrainedRationalFlatClassification,
     ClauseConstrainedRationalFlatProblem,
@@ -62,6 +63,7 @@ class _RationalFlatPlan:
     symmetry_group_order: int
     state_orbit_limit: int
     result_orbit_limit: int
+    result_output_byte_limit: int
     search_work_limit: int
     linear_algebra_chunk_cost: int
     clause_membership_count: int
@@ -526,9 +528,7 @@ def _admit_problem(problem: ClauseConstrainedRationalFlatProblem) -> _RationalFl
             "result_size_bound",
             "the retained rational-flat problem exceeds the canonical output envelope",
         ) from None
-    if source_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > (
-        CanonicalLimits().max_output_bytes
-    ):
+    if source_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > (MAX_RATIONAL_FLAT_RESULT_BYTES):
         raise _validation_error(
             "result_size_bound",
             "the retained rational-flat problem leaves no room for a result",
@@ -546,6 +546,7 @@ def _admit_problem(problem: ClauseConstrainedRationalFlatProblem) -> _RationalFl
         # before it executes, so it does not rely on a coarse per-state proxy.
         state_orbit_limit=MAX_RATIONAL_FLAT_SEARCH_STATE_ORBITS,
         result_orbit_limit=MAX_RATIONAL_FLAT_RESULT_ORBITS,
+        result_output_byte_limit=MAX_RATIONAL_FLAT_RESULT_BYTES,
         search_work_limit=MAX_RATIONAL_FLAT_SEARCH_WORK,
         linear_algebra_chunk_cost=linear_algebra_chunk_cost,
         clause_membership_count=clause_membership_count,
@@ -1039,7 +1040,7 @@ def _representatives_from_states(
             )
         except CanonicalizationError:
             raise _SearchStoppedError(
-                "RESULT_ORBIT_LIMIT",
+                "RESULT_OUTPUT_LIMIT",
                 visited_count=ledger.state_orbit_count,
                 consumed_work=ledger.consumed,
             ) from None
@@ -1056,10 +1057,10 @@ def _representatives_from_states(
                 representative_bytes=projected_representative_bytes,
                 solution_flat_count=projected_solution_count,
             )
-            > CanonicalLimits().max_output_bytes
+            > plan.result_output_byte_limit
         ):
             raise _SearchStoppedError(
-                "RESULT_ORBIT_LIMIT",
+                "RESULT_OUTPUT_LIMIT",
                 visited_count=ledger.state_orbit_count,
                 consumed_work=ledger.consumed,
             )
@@ -1084,6 +1085,7 @@ def _incomplete_result(
         explored_state_orbit_count=visited_count,
         state_orbit_limit=plan.state_orbit_limit,
         result_orbit_limit=plan.result_orbit_limit,
+        result_output_byte_limit=plan.result_output_byte_limit,
         consumed_search_work=consumed_search_work,
         search_work_limit=plan.search_work_limit,
     )

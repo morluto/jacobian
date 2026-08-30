@@ -8,7 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import CanonicalizationError
+from jacobian.canonical import CanonicalizationError, CanonicalLimits
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import (
     RationalVectorSpaceBasis,
@@ -23,6 +23,7 @@ MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS = 4_096
 MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS = 16
 MAX_RATIONAL_FLAT_GROUP_ORDER = 10_000
 MAX_RATIONAL_FLAT_RESULT_ORBITS = 4_096
+MAX_RATIONAL_FLAT_RESULT_BYTES = CanonicalLimits().max_output_bytes
 MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS = 256
 MAX_RATIONAL_FLAT_MATRIX_NONZEROS = (
     MAX_RATIONAL_FLAT_CANDIDATES * MAX_RATIONAL_FLAT_AMBIENT_DIMENSION
@@ -50,6 +51,21 @@ def _raw_component_exceeds_input_digits(value: object) -> bool:
     return False
 
 
+def _require_raw_mapping_keys(
+    data: dict[object, object],
+    *,
+    allowed: frozenset[str],
+    reason: str,
+    label: str,
+) -> None:
+    """Reject unknown raw fields before inspecting their nested values."""
+
+    if len(data) > len(allowed) or any(
+        not isinstance(key, str) or key not in allowed for key in data
+    ):
+        raise _validation_error(reason, f"{label} contains unknown fields")
+
+
 def _require_raw_sparse_input_envelope(
     data: object,
     *,
@@ -60,6 +76,12 @@ def _require_raw_sparse_input_envelope(
 
     if not isinstance(data, dict):
         return
+    _require_raw_mapping_keys(
+        data,
+        allowed=frozenset({"domain", "row_count", "column_count", "entries"}),
+        reason=f"{label}_matrix_shape",
+        label=f"{label} matrix",
+    )
     row_count = data.get("row_count")
     column_count = data.get("column_count")
     if (
@@ -93,9 +115,21 @@ def _require_raw_sparse_input_envelope(
     for entry in entries:
         if not isinstance(entry, dict):
             continue
+        _require_raw_mapping_keys(
+            entry,
+            allowed=frozenset({"row", "column", "value"}),
+            reason=f"{label}_entry_shape",
+            label=f"{label} matrix entry",
+        )
         value = entry.get("value")
         if not isinstance(value, dict):
             continue
+        _require_raw_mapping_keys(
+            value,
+            allowed=frozenset({"num", "den"}),
+            reason=f"{label}_value_shape",
+            label=f"{label} rational value",
+        )
         if any(
             _raw_component_exceeds_input_digits(value.get(component))
             for component in ("num", "den")
@@ -105,6 +139,36 @@ def _require_raw_sparse_input_envelope(
                 f"{label} rational components may contain at most "
                 f"{MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS} decimal digits",
             )
+
+
+def _require_raw_generator_envelope(data: object) -> object:
+    if not isinstance(data, dict):
+        return data
+    _require_raw_mapping_keys(
+        data,
+        allowed=frozenset({"coordinate_permutation", "candidate_permutation"}),
+        reason="symmetry_generator_shape",
+        label="rational-flat symmetry generator",
+    )
+    for field_name, maximum, reason in (
+        (
+            "coordinate_permutation",
+            MAX_RATIONAL_FLAT_AMBIENT_DIMENSION,
+            "coordinate_permutation_bound",
+        ),
+        (
+            "candidate_permutation",
+            MAX_RATIONAL_FLAT_CANDIDATES,
+            "candidate_permutation_bound",
+        ),
+    ):
+        permutation = data.get(field_name)
+        if isinstance(permutation, (list, tuple)) and len(permutation) > maximum:
+            raise _validation_error(
+                reason,
+                f"{field_name} admits at most {maximum} entries",
+            )
+    return data
 
 
 class RationalVectorConfiguration(StrictModel):
@@ -143,6 +207,12 @@ class RationalVectorConfiguration(StrictModel):
     @classmethod
     def require_raw_configuration_envelope(cls, data: Any) -> Any:
         if isinstance(data, dict):
+            _require_raw_mapping_keys(
+                data,
+                allowed=frozenset({"coordinate_axis", "vector_labels", "vectors"}),
+                reason="configuration_shape",
+                label="rational vector configuration",
+            )
             axis = data.get("coordinate_axis")
             labels = data.get("vector_labels")
             if isinstance(axis, (list, tuple)) and len(axis) > (
@@ -166,14 +236,7 @@ class RationalVectorConfiguration(StrictModel):
                 label="candidate",
                 maximum_rows=MAX_RATIONAL_FLAT_CANDIDATES,
             )
-        try:
-            return canonicalize_json_containers(data)
-        except CanonicalizationError as exc:
-            raise _validation_error(
-                "raw_container_structure",
-                "raw rational-flat containers must be acyclic and stay within "
-                "the canonical JSON depth limit",
-            ) from exc
+        return data
 
     @model_validator(mode="after")
     def bind_labels_and_axes(self) -> Self:
@@ -256,6 +319,11 @@ class RationalFlatSymmetryGenerator(StrictModel):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_generator_envelope(cls, data: Any) -> Any:
+        return _require_raw_generator_envelope(data)
+
 
 class ClauseConstrainedRationalFlatProblem(StrictModel):
     """One finite exact rational-flat classification problem.
@@ -305,6 +373,20 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
     @classmethod
     def require_raw_problem_envelope(cls, data: Any) -> Any:
         if isinstance(data, dict):
+            _require_raw_mapping_keys(
+                data,
+                allowed=frozenset(
+                    {
+                        "candidates",
+                        "clauses",
+                        "forbidden_vectors",
+                        "rank_interval",
+                        "symmetry_generators",
+                    }
+                ),
+                reason="problem_shape",
+                label="rational-flat problem",
+            )
             candidates = data.get("candidates")
             if isinstance(candidates, dict):
                 _require_raw_sparse_input_envelope(
@@ -336,23 +418,35 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                         f"{MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS}",
                     )
             generators = data.get("symmetry_generators")
-            if isinstance(generators, (list, tuple)) and len(generators) > (
-                MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS
-            ):
-                raise _validation_error(
-                    "symmetry_generator_bound",
-                    "at most "
-                    f"{MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS} symmetry generators "
-                    "are admitted",
+            if isinstance(generators, (list, tuple)):
+                if len(generators) > MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS:
+                    raise _validation_error(
+                        "symmetry_generator_bound",
+                        "at most "
+                        f"{MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS} symmetry generators "
+                        "are admitted",
+                    )
+                for generator in generators:
+                    _require_raw_generator_envelope(generator)
+            rank_interval = data.get("rank_interval")
+            if isinstance(rank_interval, dict):
+                _require_raw_mapping_keys(
+                    rank_interval,
+                    allowed=frozenset({"minimum", "maximum"}),
+                    reason="rank_interval_shape",
+                    label="rational-flat rank interval",
                 )
-        try:
-            return canonicalize_json_containers(data)
-        except CanonicalizationError as exc:
-            raise _validation_error(
-                "raw_container_structure",
-                "raw rational-flat containers must be acyclic and stay within "
-                "the canonical JSON depth limit",
-            ) from exc
+            if clauses is not None:
+                try:
+                    canonical_clauses = canonicalize_json_containers(clauses)
+                except CanonicalizationError as exc:
+                    raise _validation_error(
+                        "raw_container_structure",
+                        "raw rational-flat containers must be acyclic and stay within "
+                        "the canonical JSON depth limit",
+                    ) from exc
+                data = {**data, "clauses": canonical_clauses}
+        return data
 
     @model_validator(mode="after")
     def require_source_bound_problem(self) -> Self:
@@ -573,6 +667,7 @@ RationalFlatIncompleteReason = Literal[
     "STATE_ORBIT_LIMIT",
     "SEARCH_WORK_LIMIT",
     "RESULT_ORBIT_LIMIT",
+    "RESULT_OUTPUT_LIMIT",
 ]
 
 
@@ -586,10 +681,11 @@ class RationalFlatClassificationIncomplete(StrictModel):
     result_orbit_limit: StrictInt = Field(
         ge=0,
         le=MAX_RATIONAL_FLAT_RESULT_ORBITS,
-        description=(
-            "Structural maximum number of retained orbit representatives; the "
-            "exact accumulated canonical-output byte limit may stop earlier."
-        ),
+        description="Structural maximum number of retained orbit representatives.",
+    )
+    result_output_byte_limit: StrictInt = Field(
+        ge=1,
+        description="Maximum canonical byte size of a complete exact result.",
     )
     consumed_search_work: StrictInt = Field(
         ge=0,
@@ -706,6 +802,7 @@ class ClauseConstrainedRationalFlatClassification(StrictModel):
         explored_state_orbit_count: int,
         state_orbit_limit: int,
         result_orbit_limit: int,
+        result_output_byte_limit: int,
         consumed_search_work: int,
         search_work_limit: int,
     ) -> Self:
@@ -718,6 +815,7 @@ class ClauseConstrainedRationalFlatClassification(StrictModel):
                 explored_state_orbit_count=explored_state_orbit_count,
                 state_orbit_limit=state_orbit_limit,
                 result_orbit_limit=result_orbit_limit,
+                result_output_byte_limit=result_output_byte_limit,
                 consumed_search_work=consumed_search_work,
                 search_work_limit=search_work_limit,
             ),
@@ -739,6 +837,7 @@ __all__ = [
     "MAX_RATIONAL_FLAT_GROUP_ORDER",
     "MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS",
     "MAX_RATIONAL_FLAT_MATRIX_NONZEROS",
+    "MAX_RATIONAL_FLAT_RESULT_BYTES",
     "MAX_RATIONAL_FLAT_RESULT_ORBITS",
     "MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS",
     "ClauseConstrainedRationalFlatClassification",

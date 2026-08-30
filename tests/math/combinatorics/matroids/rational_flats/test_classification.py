@@ -444,7 +444,7 @@ def test_tiny_search_matches_independent_symbolic_flat_oracle() -> None:
     assert result.outcome.solution_flat_count == len(expected)
 
 
-def test_result_orbit_envelope_returns_no_partial_mathematical_family() -> None:
+def test_result_output_envelope_returns_no_partial_mathematical_family() -> None:
     dimension = 12
     rows = tuple(
         tuple(int(row == column) for column in range(dimension))
@@ -457,9 +457,12 @@ def test_result_orbit_envelope_returns_no_partial_mathematical_family() -> None:
 
     assert first == second
     assert first.outcome.status == "INCOMPLETE"
-    assert first.outcome.reason == "RESULT_ORBIT_LIMIT"
+    assert first.outcome.reason == "RESULT_OUTPUT_LIMIT"
     assert first.outcome.explored_state_orbit_count == 2**dimension
     assert first.outcome.result_orbit_limit == 4_096
+    assert first.outcome.result_output_byte_limit == (
+        CanonicalLimits().max_output_bytes
+    )
     assert first.outcome.consumed_search_work > 0
     assert (
         ClauseConstrainedRationalFlatClassification.model_validate_json(
@@ -591,6 +594,35 @@ def test_raw_sparse_axes_and_nonzeros_are_rejected_before_nested_copying() -> No
     )
 
 
+def test_raw_symmetry_payload_is_bounded_before_nested_copying() -> None:
+    oversized_permutation = _minimal_raw_request()
+    oversized_permutation["problem"]["symmetry_generators"] = [
+        {
+            "coordinate_permutation": [0],
+            "candidate_permutation": list(range(100_000)),
+        }
+    ]
+    with pytest.raises(ValidationError) as caught_permutation:
+        ClauseConstrainedRationalFlatRequest.model_validate(oversized_permutation)
+    assert caught_permutation.value.errors()[0]["type"] == (
+        "rational_flat.candidate_permutation_bound"
+    )
+
+    unknown_nested_field = _minimal_raw_request()
+    unknown_nested_field["problem"]["symmetry_generators"] = [
+        {
+            "coordinate_permutation": [0],
+            "candidate_permutation": [0],
+            "unknown": [0] * 100_000,
+        }
+    ]
+    with pytest.raises(ValidationError) as caught_unknown:
+        ClauseConstrainedRationalFlatRequest.model_validate(unknown_nested_field)
+    assert caught_unknown.value.errors()[0]["type"] == (
+        "rational_flat.symmetry_generator_shape"
+    )
+
+
 @pytest.mark.parametrize("container_kind", ["recursive", "too_deep"])
 def test_raw_recursive_or_excessively_nested_containers_are_typed_rejections(
     container_kind: str,
@@ -682,6 +714,38 @@ def test_state_orbit_limit_stops_before_retaining_the_next_frontier() -> None:
     assert result.outcome.reason == "STATE_ORBIT_LIMIT"
     assert result.outcome.explored_state_orbit_count == 1
     assert result.outcome.state_orbit_limit == 1
+
+
+def test_result_orbit_limit_is_distinct_from_the_output_byte_limit() -> None:
+    problem = _problem(((1,),), columns=1)
+    plan = replace(
+        flat_kernel._admit_problem(problem),
+        result_orbit_limit=1,
+    )
+
+    result = flat_kernel._classify(problem, plan)
+
+    assert result.outcome.status == "INCOMPLETE"
+    assert result.outcome.reason == "RESULT_ORBIT_LIMIT"
+    assert result.outcome.result_orbit_limit == 1
+    assert result.outcome.result_output_byte_limit == (
+        CanonicalLimits().max_output_bytes
+    )
+
+
+def test_result_output_limit_is_distinct_from_the_orbit_count_limit() -> None:
+    problem = _problem(((1,),), columns=1)
+    plan = replace(
+        flat_kernel._admit_problem(problem),
+        result_output_byte_limit=1,
+    )
+
+    result = flat_kernel._classify(problem, plan)
+
+    assert result.outcome.status == "INCOMPLETE"
+    assert result.outcome.reason == "RESULT_OUTPUT_LIMIT"
+    assert result.outcome.result_output_byte_limit == 1
+    assert result.outcome.result_orbit_limit == 4_096
 
 
 def test_one_request_ledger_charges_every_observed_work_primitive() -> None:

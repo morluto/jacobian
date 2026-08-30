@@ -82,10 +82,10 @@ def _total_degree(polynomial: RationalPolynomial) -> int:
     )
 
 
-def _source_payload(request: PolynomialSystemRootBoxRequest) -> dict[str, object]:
+def _source_payload(polynomial_map: RationalPolynomialMap, box: RationalBox) -> dict[str, object]:
     return {
-        "polynomial_map": request.polynomial_map.model_dump(mode="json"),
-        "box": request.box.model_dump(mode="json"),
+        "polynomial_map": polynomial_map.model_dump(mode="json"),
+        "box": box.model_dump(mode="json"),
     }
 
 
@@ -110,9 +110,7 @@ def _point_box(box: RationalBox, point: tuple[Fraction, ...]) -> RationalBox:
     )
 
 
-def _admit_source_shape(request: PolynomialSystemRootBoxRequest) -> None:
-    polynomial_map = request.polynomial_map
-    box = request.box
+def _admit_source_shape(polynomial_map: RationalPolynomialMap, box: RationalBox) -> None:
     order = len(polynomial_map.input_variables)
     if order > MAX_ROOT_BOX_DIMENSION:
         raise _domain_error(
@@ -150,7 +148,7 @@ def _admit_source_shape(request: PolynomialSystemRootBoxRequest) -> None:
                 max_digits=MAX_ROOT_BOX_ENDPOINT_DIGITS,
                 label=f"root-box {variable} endpoint",
             )
-    source_bytes = len(encode_strict_json(_source_payload(request)))
+    source_bytes = len(encode_strict_json(_source_payload(polynomial_map, box)))
     if source_bytes > MAX_ROOT_BOX_SOURCE_BYTES:
         raise _domain_error(
             "root-box retained source exceeds the "
@@ -193,17 +191,18 @@ def _admitted_enclosure(
 
 
 def _bounded_component_exclusion(
-    request: PolynomialSystemRootBoxRequest,
+    polynomial_map: RationalPolynomialMap,
+    box: RationalBox,
 ) -> ComponentExclusionKernelResult | None:
     """Return any cheap exact component exclusion without making it mandatory."""
 
     for component_index, polynomial in enumerate(
-        request.polynomial_map.output_polynomials
+        polynomial_map.output_polynomials
     ):
         try:
             enclosure = _admitted_enclosure(
                 polynomial,
-                request.box,
+                box,
                 label="system component",
                 result_digits=MAX_ROOT_BOX_ENCLOSURE_DIGITS,
             )
@@ -345,16 +344,16 @@ def _require_krawczyk_height_envelope(
         )
 
 
-def _prepare_root_box(request: PolynomialSystemRootBoxRequest) -> _PreparedRootBox:
+def _prepare_root_box(polynomial_map: RationalPolynomialMap, box: RationalBox) -> _PreparedRootBox:
     try:
-        _admit_source_shape(request)
-        component_exclusion = _bounded_component_exclusion(request)
+        _admit_source_shape(polynomial_map, box)
+        component_exclusion = _bounded_component_exclusion(polynomial_map, box)
         if component_exclusion is not None:
             return component_exclusion
 
-        jacobian = jacobian_matrix(request.polynomial_map)
-        center = _center_values(request.box)
-        center_box = _point_box(request.box, center)
+        jacobian = jacobian_matrix(polynomial_map)
+        center = _center_values(box)
+        center_box = _point_box(box, center)
         value_at_center = tuple(
             _admitted_enclosure(
                 polynomial,
@@ -362,7 +361,7 @@ def _prepare_root_box(request: PolynomialSystemRootBoxRequest) -> _PreparedRootB
                 label="system component midpoint value",
                 result_digits=MAX_ROOT_BOX_POINT_VALUE_DIGITS,
             )[0]
-            for polynomial in request.polynomial_map.output_polynomials
+            for polynomial in polynomial_map.output_polynomials
         )
         jacobian_at_center_flat = tuple(
             _admitted_enclosure(
@@ -376,13 +375,13 @@ def _prepare_root_box(request: PolynomialSystemRootBoxRequest) -> _PreparedRootB
         jacobian_enclosure_flat = tuple(
             _admitted_enclosure(
                 polynomial,
-                request.box,
+                box,
                 label="Jacobian entry",
                 result_digits=MAX_ROOT_BOX_ENCLOSURE_DIGITS,
             )
             for polynomial in jacobian.entries
         )
-        order = len(request.polynomial_map.input_variables)
+        order = len(polynomial_map.input_variables)
         jacobian_at_center = tuple(
             jacobian_at_center_flat[row * order : (row + 1) * order]
             for row in range(order)
@@ -396,7 +395,7 @@ def _prepare_root_box(request: PolynomialSystemRootBoxRequest) -> _PreparedRootB
                 for row in range(order)
             ),
         )
-        _require_krawczyk_height_envelope(prepared, request.box)
+        _require_krawczyk_height_envelope(prepared, box)
         return prepared
     except OperationDomainValidationError:
         raise
@@ -458,12 +457,13 @@ def _wire_krawczyk_evidence(
 
 
 def _run_request(
-    request: PolynomialSystemRootBoxRequest,
+    polynomial_map: RationalPolynomialMap,
+    box: RationalBox,
 ) -> PolynomialSystemRootBoxResult:
-    prepared = _prepare_root_box(request)
+    prepared = _prepare_root_box(polynomial_map, box)
     try:
         kernel_result = certify_root_box_kernel(
-            request.box,
+            box,
             prepared,
         )
     except RootBoxKernelBudgetError as exc:
@@ -473,7 +473,7 @@ def _run_request(
             message=str(exc),
         ) from exc
 
-    variables = request.polynomial_map.input_variables
+    variables = polynomial_map.input_variables
     conclusion: RootBoxConclusion
     if isinstance(kernel_result, ComponentExclusionKernelResult):
         conclusion = RootBoxNoRoot(
@@ -503,7 +503,8 @@ def _run_request(
     else:
         raise AssertionError("unknown root-box kernel outcome")
     return PolynomialSystemRootBoxResult._from_kernel(
-        request,
+        polynomial_map=polynomial_map,
+        box=box,
         conclusion=conclusion,
     )
 
@@ -515,7 +516,8 @@ def certify_real_root_box(
     """Certify a unique nonsingular real zero, exclusion, or non-conclusion."""
 
     return _run_request(
-        PolynomialSystemRootBoxRequest(polynomial_map=polynomial_map, box=box)
+        polynomial_map,
+        box,
     )
 
 

@@ -329,16 +329,17 @@ class PolynomialSystemRootBoxResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: PolynomialSystemRootBoxRequest,
         *,
+        polynomial_map: RationalPolynomialMap,
+        box: RationalBox,
         conclusion: RootBoxConclusion,
     ) -> Self:
         """Build a result after the admitted kernel established its outcome."""
 
-        source_digest = root_box_source_digest(request.polynomial_map, request.box)
+        source_digest = root_box_source_digest(polynomial_map, box)
         return cls(
-            polynomial_map=request.polynomial_map,
-            box=request.box,
+            polynomial_map=polynomial_map,
+            box=box,
             source_digest=source_digest,
             conclusion=conclusion,
             record_digest=root_box_record_digest(source_digest, conclusion),

@@ -11,7 +11,7 @@ from jacobian._execution import (
 )
 from jacobian.math.number_theory._factorization_kernels import (
     BoundedFactorizationFailure,
-    _bounded_direct_factorization,
+    _bounded_least_prime_factor,
 )
 
 
@@ -46,12 +46,12 @@ def _least_prime_factor(n: int) -> int:
             raise OperationExecutionTimeoutError(
                 "divisibility edge factorization request deadline expired"
             )
-    factors = _bounded_direct_factorization(
+    lpf = _bounded_least_prime_factor(
         n, timeout_seconds=timeout_seconds, failure=failures
     )
-    if factors is None:
+    if lpf is None:
         raise FactorizationIncompleteError(failures[0] if failures else None)
-    return min(int(factor.prime) for factor in factors)
+    return lpf
 
 
 def construct_divisibility_edge_profile(

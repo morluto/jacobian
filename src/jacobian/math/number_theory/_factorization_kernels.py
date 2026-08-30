@@ -368,6 +368,103 @@ def _divisors_from_factors(
     return ordered[:-1] if proper else ordered
 
 
+def _bounded_least_prime_factor(
+    value: int,
+    *,
+    timeout_seconds: float = _FACTORIZATION_WORKER_TIMEOUT_SECONDS,
+    failure: list[BoundedFactorizationFailure] | None = None,
+) -> int | None:
+    """Return the least prime factor of ``value`` via a killable worker.
+
+    Unlike :func:`_bounded_direct_factorization`, this decodes only the
+    minimum prime from the worker projection without replaying ``isprime``
+    or product reconstruction.  The worker factors are sorted by prime, so
+    the first pair carries the least prime factor.  ``None`` is an
+    operational non-conclusion, never a factor claim.
+    """
+    from jacobian.process import (
+        ProcessResourceLimits,
+        run_bounded_process,
+        worker_environment,
+    )
+
+    started = monotonic()
+
+    def failed(
+        kind: BoundedFactorizationFailureKind,
+        timeout_layer: BoundedFactorizationTimeoutLayer,
+        returncode: int | None = None,
+    ) -> None:
+        if failure is not None:
+            failure.append(
+                BoundedFactorizationFailure(
+                    kind=kind,
+                    timeout_layer=timeout_layer,
+                    elapsed_seconds=max(0.0, monotonic() - started),
+                    timeout_seconds=timeout_seconds,
+                    returncode=returncode,
+                )
+            )
+
+    try:
+        with TemporaryDirectory(prefix="jacobian-direct-factor-") as worker_directory:
+            completed = run_bounded_process(
+                [sys.executable, str(_DIRECT_FACTORIZATION_WORKER)],
+                input_bytes=json.dumps(
+                    {"value": str(value)}, separators=(",", ":")
+                ).encode(),
+                timeout_seconds=timeout_seconds,
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=64 * 1024,
+                stderr_limit=64 * 1024,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=math.ceil(timeout_seconds),
+                    address_space_bytes=_FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES,
+                    file_size_bytes=_FACTORIZATION_WORKER_FILE_SIZE_BYTES,
+                ),
+                cwd=worker_directory,
+            )
+    except OSError:
+        failed("WORKER_START_FAILED", "WORKER_START")
+        return None
+    if completed.cancelled:
+        failed("WORKER_CANCELLED", "REQUEST_CANCELLATION", completed.returncode)
+        return None
+    if completed.timed_out:
+        failed("WORKER_TIMEOUT", "WORKER_WALL", completed.returncode)
+        return None
+    if completed.stdout_exceeded:
+        failed("STDOUT_LIMIT_EXCEEDED", "OUTPUT_LIMIT", completed.returncode)
+        return None
+    if completed.stderr_exceeded:
+        failed("STDERR_LIMIT_EXCEEDED", "OUTPUT_LIMIT", completed.returncode)
+        return None
+    if completed.returncode != 0:
+        if completed.returncode is not None and completed.returncode < 0:
+            failed("WORKER_RESOURCE_LIMIT", "PROCESS_RESOURCE", completed.returncode)
+        else:
+            failed("WORKER_EXITED", "WORKER_EXIT", completed.returncode)
+        return None
+    try:
+        response = json.loads(completed.stdout.decode("utf-8"))
+        raw_factors = response["factors"]
+        if not isinstance(raw_factors, list) or not raw_factors:
+            raise ValueError("factors must be a non-empty list")
+        least_prime, _power = raw_factors[0]
+        return int(least_prime)
+    except (
+        IndexError,
+        KeyError,
+        TypeError,
+        ValueError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+    ):
+        failed("MALFORMED_OUTPUT", "RESULT_VALIDATION", completed.returncode)
+        return None
+
+
+
 def enumerate_divisors(request: FactorizationRequest) -> DivisorListResult:
     _admit_nonzero(request)
     value = int(request.value)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import combinations
+from math import gcd
 from typing import NoReturn
 
 from jacobian._exact import (
@@ -33,6 +34,18 @@ def _reject(code: str, message: str) -> NoReturn:
     )
 
 
+def _decimal_digits(value: int) -> int:
+    magnitude = abs(value)
+    if magnitude == 0:
+        return 1
+    estimate = magnitude.bit_length() * 30_103 // 100_000 + 1
+    while estimate > 1 and magnitude < 10 ** (estimate - 1):
+        estimate -= 1
+    while magnitude >= 10**estimate:
+        estimate += 1
+    return estimate
+
+
 def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
     if not isinstance(values, tuple) or any(
         not isinstance(value, CanonicalRational) for value in values
@@ -49,15 +62,26 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
 
     nonzero = [value for value in values if value.as_fraction()]
     if nonzero:
-        denominator_digits = sum(len(value.den) for value in nonzero)
-        numerator_digits = max(
-            len(value.num.lstrip("-"))
-            + denominator_digits
-            - len(value.den)
-            for value in nonzero
-        )
-        if len(nonzero) > 1:
-            numerator_digits += len(str(len(nonzero)))
+        fractions = [value.as_fraction() for value in nonzero]
+        common_denominator = 1
+        for value in fractions:
+            common_denominator = common_denominator // gcd(
+                common_denominator, value.denominator
+            ) * value.denominator
+            if _decimal_digits(common_denominator) > MAX_CANONICAL_RATIONAL_DIGITS:
+                _reject(
+                    "rational_growth_bound",
+                    "subset-sum intermediates exceed the canonical rational digit bound",
+                )
+        scaled = [
+            value.numerator * (common_denominator // value.denominator)
+            for value in fractions
+        ]
+        positive_span = sum(value for value in scaled if value > 0)
+        negative_span = sum(value for value in scaled if value < 0)
+        numerator_bound = max(abs(positive_span), abs(negative_span))
+        denominator_digits = _decimal_digits(common_denominator)
+        numerator_digits = _decimal_digits(numerator_bound)
         growth_digits = max(denominator_digits, numerator_digits)
     else:
         growth_digits = 1
@@ -80,6 +104,9 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
     support_upper_bound = 1
     for multiplicity in multiplicities.values():
         support_upper_bound *= multiplicity + 1
+    if nonzero:
+        support_span = positive_span - negative_span
+        support_upper_bound = min(support_upper_bound, support_span + 1)
     rational_bytes = strict_json_object_size(
         (("num", growth_digits), ("den", growth_digits))
     )

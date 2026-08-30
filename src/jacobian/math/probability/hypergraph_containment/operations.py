@@ -65,7 +65,9 @@ def _admit_hypergraph_vertex_containment(
     n = len(hypergraph.vertices)
     state_count = 1 << n
     if not trivial_event:
-        vertex_index = {vertex: index for index, vertex in enumerate(hypergraph.vertices)}
+        vertex_index = {
+            vertex: index for index, vertex in enumerate(hypergraph.vertices)
+        }
         unique_masks = tuple(
             dict.fromkeys(
                 sum(1 << vertex_index[member] for member in members)
@@ -82,9 +84,13 @@ def _admit_hypergraph_vertex_containment(
         active_vertices = tuple(
             index for index in range(n) if support_mask & (1 << index)
         )
-        active_position = {index: position for position, index in enumerate(active_vertices)}
+        active_position = {
+            index: position for position, index in enumerate(active_vertices)
+        }
         edge_masks = tuple(
-            sum(1 << active_position[index] for index in range(n) if mask & (1 << index))
+            sum(
+                1 << active_position[index] for index in range(n) if mask & (1 << index)
+            )
             for mask in minimal_masks
         )
         active_state_count = 1 << len(active_vertices)

@@ -118,12 +118,32 @@ def _single_sum_digit_bounds(
     if not numerators_by_denominator:
         total = Fraction(0)
     else:
-        total = Fraction(0)
+        terms = [
+            Fraction(numerator, denominator)
+            for denominator, numerator in numerators_by_denominator.items()
+        ]
         projection_work = 0
-        for denominator, numerator in numerators_by_denominator.items():
-            total, projection_work = _add_bounded_fraction(
-                total, Fraction(numerator, denominator), projection_work
+        while len(terms) > 1:
+            if len(terms) <= 256:
+                pair = max(
+                    (
+                        (len(format_canonical_integer(gcd(left.denominator, right.denominator))), -i, -j),
+                        i,
+                        j,
+                    )
+                    for i, left in enumerate(terms)
+                    for j, right in enumerate(terms[i + 1 :], i + 1)
+                )
+                _, left_index, right_index = pair
+            else:
+                left_index, right_index = 0, 1
+            left, right = terms[left_index], terms[right_index]
+            combined, projection_work = _add_bounded_fraction(
+                left, right, projection_work
             )
+            terms[right_index] = combined
+            del terms[left_index]
+        total = terms[0] if terms else Fraction(0)
     return (
         total,
         len(format_canonical_integer(total.numerator)),

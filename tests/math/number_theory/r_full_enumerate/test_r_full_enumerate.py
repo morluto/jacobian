@@ -50,16 +50,16 @@ def test_sorted_and_unique() -> None:
 
 def test_operation_round_trip() -> None:
     """The operation model round-trips through the kernel."""
-    request = RFullEnumerateRequest(minimum_exponent=3, cutoff=100)
+    request = RFullEnumerateRequest(minimum_exponent=3, cutoff="100")
     result = enumerate_r_full_numbers(request)
     assert result.minimum_exponent == 3
-    assert result.cutoff == 100
+    assert result.cutoff == "100"
     assert result.count == len(result.family)
 
 
 def test_r2_compatibility() -> None:
     """r=2 result matches the powerful family from #2767."""
-    request = RFullEnumerateRequest(minimum_exponent=2, cutoff=100)
+    request = RFullEnumerateRequest(minimum_exponent=2, cutoff="100")
     result = enumerate_r_full_numbers(request)
     assert "1" in result.family
     assert "4" in result.family

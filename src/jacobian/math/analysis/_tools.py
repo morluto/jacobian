@@ -13,6 +13,7 @@ from jacobian.math.analysis._expression_enclosure import (
     IntervalExpressionEnclosureRequest,
     IntervalExpressionEnclosureResult,
 )
+from jacobian.math.analysis._models import MAX_RATIONAL_BOX_ENDPOINT_DIGITS
 from jacobian.math.analysis._point_enclosure import (
     ArbPointEnclosureRequest,
     ArbPointEnclosureResult,
@@ -161,8 +162,10 @@ SECOND_JET_ENCLOSURE_OPERATIONS = (
             "named-variable elementary expression, every first partial, and its "
             "symmetric Hessian over a complete ordered rational box. The fixed "
             "envelope admits at most 8 variables, 64 nodes, depth 16, 128-digit "
-            "rationals, absolute power exponents up to 64, 4,096-bit Arb precision, "
-            "and 16,384 forward-jet scalar arithmetic units charged by dimension."
+            "expression constants, "
+            f"{MAX_RATIONAL_BOX_ENDPOINT_DIGITS}-digit rational-box endpoints, "
+            "absolute power exponents up to 64, 4,096-bit Arb precision, and 16,384 "
+            "forward-jet scalar arithmetic units charged by dimension."
         ),
         request_type=IntervalExpressionSecondJetEnclosureRequest,
         result_type=IntervalExpressionSecondJetEnclosureResult,

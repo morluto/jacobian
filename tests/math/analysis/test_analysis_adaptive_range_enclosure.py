@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 from flint import ctx
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 from tests.fixtures.accounting import assert_charged_work_parity
 from tests.math.analysis._analysis_support import analysis_validation_error
@@ -39,7 +40,10 @@ from jacobian.math.analysis._box_enclosure import (
     IntervalExpressionBoxEnclosureRequest,
     _box_expression_enclosure,
 )
-from jacobian.math.analysis._models import DyadicClosedInterval
+from jacobian.math.analysis._models import (
+    MAX_RATIONAL_BOX_ENDPOINT_DIGITS,
+    DyadicClosedInterval,
+)
 
 
 def _q(numerator: int, denominator: int = 1) -> dict[str, str]:
@@ -109,6 +113,19 @@ def _quadratic() -> dict[str, Any]:
             {"op": "sub", "children": [_const(1), _var("x")]},
         ],
     }
+
+
+def _balanced_sum(variables: tuple[str, ...]) -> dict[str, Any]:
+    level = [_var(variable) for variable in variables]
+    while len(level) > 1:
+        next_level = [
+            {"op": "add", "children": level[index : index + 2]}
+            for index in range(0, len(level) - 1, 2)
+        ]
+        if len(level) % 2:
+            next_level.append(level[-1])
+        level = next_level
+    return level[0]
 
 
 def _result_enclosure(
@@ -610,16 +627,14 @@ def test_nonpositive_target_is_semantic_request_rejection(target: Fraction) -> N
 
 def test_result_sensitive_output_bound_rejects_only_the_large_envelope() -> None:
     variables = tuple(f"x{index}" for index in range(8))
-    expression: dict[str, Any] = _var(variables[0])
-    for variable in variables[1:]:
-        expression = {"op": "add", "children": [expression, _var(variable)]}
+    expression = _balanced_sum(variables)
     large = _request(
         expression,
         tuple((variable, Fraction(0), Fraction(10**127)) for variable in variables),
         target_width=Fraction(1),
         max_leaves=1024,
         max_depth=32,
-        max_evaluations=1,
+        max_evaluations=2047,
     )
     assert (
         _estimated_result_bytes(_problem_from_request(large))
@@ -647,6 +662,33 @@ def test_result_sensitive_output_bound_rejects_only_the_large_envelope() -> None
     )
 
 
+def test_depth_zero_eight_variable_request_reserves_one_result_leaf() -> None:
+    variables = tuple(f"x{index}" for index in range(8))
+    request = _request(
+        _balanced_sum(variables),
+        tuple((variable, Fraction(0), Fraction(10**127)) for variable in variables),
+        target_width=Fraction(1),
+        precision_bits=4096,
+        maximum_precision_bits=4096,
+        max_leaves=1024,
+        max_depth=0,
+        max_evaluations=4096,
+    )
+    problem = _problem_from_request(request)
+
+    admission = _admit_adaptive_range(problem, started_at=monotonic())
+    result = _compute_adaptive_range_enclosure(request)
+
+    assert admission.planned_evaluations == 1
+    assert admission.plan.planned_leaf_count == 1
+    assert admission.planned_node_evaluations == 15
+    assert _estimated_result_bytes(problem) < MAX_ADAPTIVE_RANGE_RESULT_BYTES
+    assert isinstance(result.disposition, AdaptiveRangeBudgetExhausted)
+    assert result.disposition.reason == "MAX_DEPTH"
+    assert result.evaluations_used == 1
+    assert len(result.leaves) == 1
+
+
 def test_precision_weighted_work_is_rejected_before_arb() -> None:
     level = [_var("x") for _ in range(32)]
     while len(level) > 1:
@@ -669,6 +711,72 @@ def test_precision_weighted_work_is_rejected_before_arb() -> None:
     with pytest.raises(OperationDomainValidationError) as caught:
         _compute_adaptive_range_enclosure(request)
     assert caught.value.errors()[0]["type"] == "analysis.adaptive_range.precision_work"
+
+
+def test_depth_zero_33_node_request_charges_only_the_reachable_root() -> None:
+    expression = _balanced_sum(("x",) * 17)
+    request = _request(
+        expression,
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(20),
+        precision_bits=4096,
+        maximum_precision_bits=4096,
+        max_leaves=1024,
+        max_depth=0,
+        max_evaluations=4096,
+    )
+
+    admission = _admit_adaptive_range(
+        _problem_from_request(request), started_at=monotonic()
+    )
+    result = _compute_adaptive_range_enclosure(request)
+
+    assert admission.planned_evaluations == 1
+    assert admission.plan.planned_leaf_count == 1
+    assert admission.planned_node_evaluations == 33
+    assert isinstance(result.disposition, AdaptiveRangeTargetMet)
+    assert result.evaluations_used == 1
+    assert len(result.leaves) == 1
+
+
+@pytest.mark.parametrize(
+    ("interval", "maximum_precision", "max_evaluations", "expected"),
+    [
+        ((Fraction(0), Fraction(1)), 512, 3, (3, 0, 1, 0, 224)),
+        ((Fraction(0), Fraction(1)), 32, 5, (5, 2, 3, 2, 160)),
+        ((Fraction(0), Fraction(0)), 32, 4096, (1, 0, 1, 0, 32)),
+    ],
+)
+def test_admission_plan_intersects_schedule_evaluation_and_split_caps(
+    interval: tuple[Fraction, Fraction],
+    maximum_precision: int,
+    max_evaluations: int,
+    expected: tuple[int, int, int, int, int],
+) -> None:
+    request = _request(
+        _var("x"),
+        (("x", interval[0], interval[1]),),
+        target_width=Fraction(2),
+        precision_bits=32,
+        maximum_precision_bits=maximum_precision,
+        max_leaves=1024,
+        max_depth=32,
+        max_evaluations=max_evaluations,
+    )
+
+    admission = _admit_adaptive_range(
+        _problem_from_request(request), started_at=monotonic()
+    )
+    plan = admission.plan
+
+    assert (
+        plan.planned_evaluations,
+        plan.planned_splits,
+        plan.planned_leaf_count,
+        plan.planned_maximum_leaf_depth,
+        plan.precision_bits_per_expression_node,
+    ) == expected
+    assert admission.planned_node_evaluations == plan.planned_evaluations
 
 
 @pytest.mark.parametrize(
@@ -742,6 +850,44 @@ def test_native_and_request_paths_return_the_same_exact_result() -> None:
         wall_seconds=request.wall_seconds,
     )
     assert native == dispatched
+
+
+def test_derived_midpoint_box_round_trips_into_fixed_box_consumer() -> None:
+    q = 6 * 10**127 + 1
+    result = _run(
+        _var("x"),
+        (("x", Fraction(0), Fraction(1, q)),),
+        target_width=Fraction(1, 9 * 10**127),
+        precision_bits=128,
+        maximum_precision_bits=128,
+        max_leaves=2,
+        max_depth=1,
+        max_evaluations=3,
+    )
+
+    assert len(result.leaves) == 2
+    first_leaf = result.leaves[0]
+    assert isinstance(first_leaf, AdaptiveRangeLeaf)
+    midpoint = first_leaf.box.intervals[0].upper
+    assert midpoint.as_fraction() == Fraction(1, 2 * q)
+    assert len(midpoint.den) == 129
+
+    parsed = AdaptiveRangeEnclosureResult.model_validate_json(
+        result.model_dump_json(), strict=True
+    )
+    parsed_first_leaf = parsed.leaves[0]
+    assert isinstance(parsed_first_leaf, AdaptiveRangeLeaf)
+    consumer_request = IntervalExpressionBoxEnclosureRequest(
+        expression=parsed.expression,
+        box=parsed_first_leaf.box,
+        precision_bits=128,
+    )
+    consumed = _box_expression_enclosure(consumer_request)
+
+    assert consumed.status == "ENCLOSED"
+    assert consumed.lower is not None and consumed.upper is not None
+    assert consumed.lower.as_fraction() <= 0
+    assert consumed.upper.as_fraction() >= Fraction(1, 2 * q)
 
 
 def test_concurrent_adaptive_operations_isolate_32_and_512_bit_precision() -> None:
@@ -828,8 +974,7 @@ def test_admission_charge_covers_every_real_leaf_evaluation(
     assert calls == result.evaluations_used == 7
 
 
-@pytest.mark.parametrize("mutation", ["path", "box"])
-def test_round_trip_rejects_forged_partition_structure(mutation: str) -> None:
+def test_round_trip_rejects_forged_partition_path_structure() -> None:
     result = _run(
         _quadratic(),
         (("x", Fraction(0), Fraction(1)),),
@@ -845,13 +990,27 @@ def test_round_trip_rejects_forged_partition_structure(mutation: str) -> None:
         == result
     )
     payload = deepcopy(result.model_dump(mode="json"))
-    if mutation == "path":
-        payload["leaves"][0]["path"] = [0, 1]
-    else:
-        payload["leaves"][0]["box"]["intervals"][0]["upper"] = _q(1, 3)
+    payload["leaves"][0]["path"] = [0, 1]
 
     with pytest.raises(ValidationError):
         AdaptiveRangeEnclosureResult.model_validate(payload)
+
+
+def test_result_deserialization_does_not_reconstruct_partition_boxes() -> None:
+    result = _run(
+        _quadratic(),
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(7, 16),
+        max_leaves=4,
+        max_depth=2,
+        max_evaluations=7,
+    )
+    payload = deepcopy(result.model_dump(mode="json"))
+    payload["leaves"][0]["box"]["intervals"][0]["upper"] = _q(1, 3)
+
+    parsed = AdaptiveRangeEnclosureResult.model_validate(payload)
+
+    assert parsed.leaves[0].box.intervals[0].upper.as_fraction() == Fraction(1, 3)
 
 
 @pytest.mark.parametrize(
@@ -890,11 +1049,13 @@ def test_result_preflights_authored_leaf_endpoints_before_fraction_work() -> Non
     )
     payload = result.model_dump(mode="json")
     payload["leaves"][0]["box"]["intervals"][0]["upper"] = {
-        "num": "9" * 129,
+        "num": "9" * (MAX_RATIONAL_BOX_ENDPOINT_DIGITS + 1),
         "den": "1",
     }
 
-    with pytest.raises(ValidationError, match="128-digit bound"):
+    with pytest.raises(
+        ValidationError, match=rf"{MAX_RATIONAL_BOX_ENDPOINT_DIGITS}-digit bound"
+    ):
         AdaptiveRangeEnclosureResult.model_validate(payload)
 
 
@@ -1017,17 +1178,25 @@ def test_result_reservation_dominates_actual_canonical_output() -> None:
     )
 
 
-def test_disposition_schema_is_a_status_discriminated_union() -> None:
+def test_result_schema_has_status_discriminated_conclusion_branches() -> None:
     schema = AdaptiveRangeEnclosureResult.model_json_schema()
-    reference = schema["properties"]["disposition"]["$ref"]
+    branch_references = {
+        branch["$ref"].removeprefix("#/$defs/") for branch in schema["oneOf"]
+    }
+    assert branch_references == {
+        "AdaptiveRangeConcludedResult",
+        "AdaptiveRangeDomainUnprovenResult",
+    }
+    concluded = schema["$defs"]["AdaptiveRangeConcludedResult"]
+    domain_unproven = schema["$defs"]["AdaptiveRangeDomainUnprovenResult"]
+    reference = concluded["properties"]["disposition"]["$ref"]
     disposition = schema["$defs"][reference.removeprefix("#/$defs/")]
-    leaf_reference = schema["properties"]["leaves"]["items"]["$ref"]
+    leaf_reference = domain_unproven["properties"]["leaves"]["items"]["$ref"]
     leaf = schema["$defs"][leaf_reference.removeprefix("#/$defs/")]
 
     assert disposition["discriminator"]["propertyName"] == "status"
     assert set(disposition["discriminator"]["mapping"]) == {
         "BUDGET_EXHAUSTED",
-        "DOMAIN_UNPROVEN",
         "TARGET_MET",
     }
     assert leaf["discriminator"]["propertyName"] == "status"
@@ -1035,9 +1204,84 @@ def test_disposition_schema_is_a_status_discriminated_union() -> None:
         "DOMAIN_UNPROVEN",
         "ENCLOSED",
     }
-    assert {
-        variant.get("type") for variant in schema["properties"]["enclosure"]["anyOf"]
-    } == {
-        "null",
-        None,
+    assert concluded["properties"]["enclosure"] == {
+        "$ref": "#/$defs/DyadicClosedInterval"
     }
+    assert domain_unproven["properties"]["enclosure"]["type"] == "null"
+    assert domain_unproven["properties"]["leaves"]["minContains"] == 1
+
+
+def test_derived_box_endpoint_envelope_is_schema_visible_to_producer_and_consumer() -> (
+    None
+):
+    adaptive_schema = AdaptiveRangeEnclosureRequest.model_json_schema()
+    consumer_schema = IntervalExpressionBoxEnclosureRequest.model_json_schema()
+    endpoint_bound = str(MAX_RATIONAL_BOX_ENDPOINT_DIGITS)
+
+    assert endpoint_bound in adaptive_schema["properties"]["box"]["description"]
+    for schema in (adaptive_schema, consumer_schema):
+        intervals = schema["$defs"]["RationalIntervalBox"]["properties"]["intervals"]
+        assert endpoint_bound in intervals["description"]
+
+
+def test_result_schema_and_parser_reject_contradictory_outcome_shapes() -> None:
+    concluded = _run(
+        _quadratic(),
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(7, 16),
+        max_leaves=4,
+        max_depth=2,
+        max_evaluations=7,
+    )
+    uncertain = _run(
+        {
+            "op": "log",
+            "children": [
+                {
+                    "op": "add",
+                    "children": [_var("x"), _const(1, 10**127)],
+                }
+            ],
+        },
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(100),
+        precision_bits=32,
+        maximum_precision_bits=32,
+        max_leaves=1,
+        max_depth=8,
+        max_evaluations=1,
+    )
+    concluded_payload = concluded.model_dump(mode="json")
+    uncertain_payload = uncertain.model_dump(mode="json")
+    schema = AdaptiveRangeEnclosureResult.model_json_schema()
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    assert not list(validator.iter_errors(concluded_payload))
+    assert not list(validator.iter_errors(uncertain_payload))
+
+    concluded_without_enclosure = deepcopy(concluded_payload)
+    concluded_without_enclosure["enclosure"] = None
+    domain_missing_enclosure = deepcopy(uncertain_payload)
+    domain_missing_enclosure.pop("enclosure")
+    domain_with_enclosure = deepcopy(uncertain_payload)
+    domain_with_enclosure["enclosure"] = concluded_payload["enclosure"]
+    domain_without_uncertain_leaf = deepcopy(concluded_payload)
+    domain_without_uncertain_leaf["enclosure"] = None
+    domain_without_uncertain_leaf["disposition"] = {
+        "status": "DOMAIN_UNPROVEN",
+        "reason": "MAX_LEAVES",
+    }
+    concluded_with_uncertain_leaf = deepcopy(uncertain_payload)
+    concluded_with_uncertain_leaf["enclosure"] = concluded_payload["enclosure"]
+    concluded_with_uncertain_leaf["disposition"] = {"status": "TARGET_MET"}
+
+    for forged in (
+        concluded_without_enclosure,
+        domain_missing_enclosure,
+        domain_with_enclosure,
+        domain_without_uncertain_leaf,
+        concluded_with_uncertain_leaf,
+    ):
+        assert list(validator.iter_errors(forged))
+        with pytest.raises(ValidationError):
+            AdaptiveRangeEnclosureResult.model_validate(forged)

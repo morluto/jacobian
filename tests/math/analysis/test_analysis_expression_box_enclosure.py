@@ -20,6 +20,7 @@ from jacobian.math.analysis._expression_enclosure import (
     IntervalExpressionEnclosureRequest,
 )
 from jacobian.math.analysis._models import (
+    MAX_RATIONAL_BOX_ENDPOINT_DIGITS,
     RationalIntervalBox,
 )
 from jacobian.math.analysis.operations import expression_enclosure
@@ -85,16 +86,20 @@ def test_analysis_and_geometry_boxes_compose_through_the_same_interval_value() -
     assert geometry_box.intervals[0] is interval
 
 
-def test_analysis_request_keeps_its_endpoint_digit_admission() -> None:
+def test_analysis_request_accepts_the_shared_derived_endpoint_envelope() -> None:
     interval = ClosedRationalInterval.model_validate(
-        {"lower": _q(0), "upper": {"num": "1" * 129, "den": "1"}}
+        {
+            "lower": _q(0),
+            "upper": {"num": "1" * MAX_RATIONAL_BOX_ENDPOINT_DIGITS, "den": "1"},
+        }
     )
     box = RationalIntervalBox(variables=("x",), intervals=(interval,))
 
-    with analysis_validation_error():
-        IntervalExpressionBoxEnclosureRequest.model_validate(
-            {"expression": {"op": "var", "variable": "x"}, "box": box}
-        )
+    request = IntervalExpressionBoxEnclosureRequest.model_validate(
+        {"expression": {"op": "var", "variable": "x"}, "box": box}
+    )
+
+    assert request.box == box
 
 
 @pytest.mark.parametrize("op", ["exp", "log"])
@@ -590,7 +595,7 @@ def test_box_interval_endpoints_are_ordered_and_bounded() -> None:
             (("x", Fraction(1), Fraction(0)),),
         )
 
-    too_many_digits = "1" * 129
+    too_many_digits = "1" * (MAX_RATIONAL_BOX_ENDPOINT_DIGITS + 1)
     with analysis_validation_error():
         IntervalExpressionBoxEnclosureRequest.model_validate(
             {

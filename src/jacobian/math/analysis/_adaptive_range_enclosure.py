@@ -6,9 +6,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 from time import monotonic
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, field_validator, model_validator
+from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian._execution import (
@@ -30,6 +31,8 @@ from jacobian.math.analysis._box_enclosure import (
 from jacobian.math.analysis._models import (
     MAX_BOX_PREFLIGHT_TEMPORARY_BITS,
     MAX_DYADIC_MANTISSA_DIGITS,
+    MAX_RATIONAL_BOX_ENDPOINT_DIGITS,
+    MAX_RATIONAL_BOX_PARTITION_DEPTH,
     MAX_RATIONAL_DIGITS,
     DyadicClosedInterval,
     ExactDyadic,
@@ -46,7 +49,7 @@ from jacobian.math.analysis._models import (
 from jacobian.math.analysis.intervals import ClosedRationalInterval
 
 MAX_ADAPTIVE_RANGE_LEAVES = 1_024
-MAX_ADAPTIVE_RANGE_DEPTH = 32
+MAX_ADAPTIVE_RANGE_DEPTH = MAX_RATIONAL_BOX_PARTITION_DEPTH
 MAX_ADAPTIVE_RANGE_EVALUATIONS = 4_096
 MAX_ADAPTIVE_RANGE_NODE_EVALUATIONS = 131_072
 MAX_ADAPTIVE_RANGE_PRECISION_WORK = 268_435_456
@@ -63,6 +66,12 @@ MAX_ADAPTIVE_RANGE_DYADIC_EXPONENT = MAX_BOX_PREFLIGHT_TEMPORARY_BITS
 type AdaptiveRangeBudgetReason = Literal[
     "MAX_LEAVES", "MAX_DEPTH", "MAX_EVALUATIONS", "MAX_PRECISION"
 ]
+
+
+def _adaptive_source_endpoint_digit_cap(max_depth: int) -> int:
+    if max_depth == 0:
+        return MAX_RATIONAL_BOX_ENDPOINT_DIGITS
+    return (MAX_RATIONAL_BOX_ENDPOINT_DIGITS - max_depth - 2) // 2
 
 
 class AdaptiveRangeTargetMet(StrictModel):
@@ -95,10 +104,25 @@ type AdaptiveRangeDisposition = Annotated[
     Field(discriminator="status"),
 ]
 
+type _AdaptiveRangeConcludedDisposition = Annotated[
+    AdaptiveRangeTargetMet | AdaptiveRangeBudgetExhausted,
+    Field(discriminator="status"),
+]
+
 
 class AdaptiveRangeEnclosureRequest(_IntervalExpressionBoxRequest):
     """Bound one complete elementary-expression range by adaptive bisection."""
 
+    box: RationalIntervalBox = Field(
+        description=(
+            "Complete source box. With max_depth=0, endpoint components admit at "
+            f"most {MAX_RATIONAL_BOX_ENDPOINT_DIGITS} decimal digits. For positive "
+            "greatest reachable leaf depth d after all refinement caps, the source "
+            "cap is "
+            f"floor(({MAX_RATIONAL_BOX_ENDPOINT_DIGITS} - d - 2) / 2), so every "
+            "derived midpoint remains inside the shared rational-box envelope."
+        )
+    )
     target_width: CanonicalRational = Field(
         description=(
             "A positive exact rational target for upper-lower. Components admit "
@@ -151,6 +175,13 @@ class AdaptiveRangeEnclosureRequest(_IntervalExpressionBoxRequest):
         value = canonicalize_json_containers(value)
         if isinstance(value, Mapping):
             _bound_raw_rational(value.get("target_width"), "adaptive target width")
+            if cls is AdaptiveRangeEnclosureRequest:
+                _bound_raw_box(
+                    value.get("box"),
+                    max_digits=_adaptive_source_endpoint_digit_cap(
+                        _raw_maximum_leaf_depth(value)
+                    ),
+                )
         return value
 
     @model_validator(mode="after")
@@ -204,7 +235,13 @@ class _AdaptiveRangeLeafPath(StrictModel):
             "coordinate, with source-axis ties."
         ),
     )
-    box: RationalIntervalBox
+    box: RationalIntervalBox = Field(
+        description=(
+            "The exact source-bound midpoint subbox. Every serialized endpoint "
+            "numerator and denominator has at most "
+            f"{MAX_RATIONAL_BOX_ENDPOINT_DIGITS} decimal digits."
+        )
+    )
 
     @field_validator("path", mode="before")
     @classmethod
@@ -247,6 +284,79 @@ def _precision_schedule(initial: int, maximum: int) -> tuple[int, ...]:
     while schedule[-1] < maximum:
         schedule.append(min(2 * schedule[-1], maximum))
     return tuple(schedule)
+
+
+def _planned_schedule_and_splits(
+    *,
+    precision_bits: int,
+    maximum_precision_bits: int,
+    max_leaves: int,
+    max_depth: int,
+    max_evaluations: int,
+    splittable: bool,
+) -> tuple[tuple[int, ...], int, int]:
+    schedule = _precision_schedule(precision_bits, maximum_precision_bits)
+    root_evaluations = min(max_evaluations, len(schedule))
+    planned_splits = 0
+    if root_evaluations == len(schedule) and splittable:
+        planned_splits = min(
+            max_leaves - 1,
+            (1 << max_depth) - 1,
+            (max_evaluations - root_evaluations) // 2,
+        )
+    return schedule, root_evaluations, planned_splits
+
+
+def _raw_maximum_leaf_depth(value: Mapping[object, object]) -> int:
+    precision_bits = value.get("precision_bits", 128)
+    maximum_precision_bits = value.get("maximum_precision_bits", 512)
+    max_leaves = value.get("max_leaves", 32)
+    max_depth = value.get("max_depth", 8)
+    max_evaluations = value.get("max_evaluations", 128)
+    if not (
+        type(precision_bits) is int
+        and 32 <= precision_bits <= 4_096
+        and type(maximum_precision_bits) is int
+        and precision_bits <= maximum_precision_bits <= 4_096
+        and type(max_leaves) is int
+        and 1 <= max_leaves <= MAX_ADAPTIVE_RANGE_LEAVES
+        and type(max_depth) is int
+        and 0 <= max_depth <= MAX_ADAPTIVE_RANGE_DEPTH
+        and type(max_evaluations) is int
+        and 1 <= max_evaluations <= MAX_ADAPTIVE_RANGE_EVALUATIONS
+    ):
+        return MAX_ADAPTIVE_RANGE_DEPTH
+    _, _, split_count = _planned_schedule_and_splits(
+        precision_bits=precision_bits,
+        maximum_precision_bits=maximum_precision_bits,
+        max_leaves=max_leaves,
+        max_depth=max_depth,
+        max_evaluations=max_evaluations,
+        splittable=_raw_box_might_split(value.get("box")),
+    )
+    return min(max_depth, split_count)
+
+
+def _raw_box_might_split(box: object) -> bool:
+    if isinstance(box, RationalIntervalBox):
+        return _widest_coordinate(box) is not None
+    if not isinstance(box, Mapping):
+        return True
+    intervals = box.get("intervals")
+    if not isinstance(intervals, (list, tuple)):
+        return True
+    for interval in intervals:
+        if isinstance(interval, ClosedRationalInterval):
+            if interval.lower != interval.upper:
+                return True
+            continue
+        if not isinstance(interval, Mapping):
+            return True
+        lower = interval.get("lower")
+        upper = interval.get("upper")
+        if lower != upper:
+            return True
+    return False
 
 
 def _dyadic_fraction(value: ExactDyadic) -> Fraction:
@@ -316,21 +426,6 @@ def _split_box(
     )
 
 
-def _box_at_path(
-    source: RationalIntervalBox, path: tuple[int, ...]
-) -> RationalIntervalBox:
-    box = source
-    for bit in path:
-        coordinate = _widest_coordinate(box)
-        if coordinate is None:
-            raise _validation_error(
-                "a positive-depth leaf cannot descend from a degenerate box"
-            )
-        children = _split_box(box, coordinate)
-        box = children[bit]
-    return box
-
-
 def _paths_are_complete(paths: tuple[tuple[int, ...], ...]) -> bool:
     for index, path in enumerate(paths):
         if any(other[: len(path)] == path for other in paths[index + 1 :]):
@@ -379,21 +474,52 @@ def _bind_leaf_partition(result: AdaptiveRangeEnclosureResult) -> None:
             "adaptive leaf paths must be a complete prefix-free binary cover"
         )
     for leaf in result.leaves:
-        if leaf.box != _box_at_path(result.box, leaf.path):
-            raise _validation_error(
-                "adaptive leaf box does not match its source-bound midpoint path"
-            )
         if isinstance(leaf, AdaptiveRangeDomainUnprovenLeaf):
             _bind_domain_failure_to_expression(result.expression, leaf.domain_failure)
         else:
             _require_adaptive_dyadic_interval(leaf.enclosure)
 
 
+class _AdaptiveRangeResultSchemaBase(AdaptiveRangeEnclosureRequest):
+    """Fields shared by the two schema-visible result branches."""
+
+    evaluations_used: StrictInt = Field(ge=1, le=MAX_ADAPTIVE_RANGE_EVALUATIONS)
+    maximum_precision_bits_used: StrictInt = Field(ge=32, le=4096)
+
+
+class AdaptiveRangeConcludedResult(_AdaptiveRangeResultSchemaBase):
+    """Schema branch for a global enclosure conclusion."""
+
+    enclosure: DyadicClosedInterval
+    disposition: _AdaptiveRangeConcludedDisposition
+    leaves: tuple[AdaptiveRangeLeaf, ...] = Field(
+        min_length=1,
+        max_length=MAX_ADAPTIVE_RANGE_LEAVES,
+    )
+
+
+class AdaptiveRangeDomainUnprovenResult(_AdaptiveRangeResultSchemaBase):
+    """Schema branch for a complete cover with a local domain uncertainty."""
+
+    enclosure: None
+    disposition: AdaptiveRangeDomainUnproven
+    leaves: tuple[AdaptiveRangeFinalLeaf, ...] = Field(
+        min_length=1,
+        max_length=MAX_ADAPTIVE_RANGE_LEAVES,
+        json_schema_extra={
+            "contains": {
+                "properties": {"status": {"const": "DOMAIN_UNPROVEN"}},
+                "required": ["status"],
+            },
+            "minContains": 1,
+        },
+    )
+
+
 class AdaptiveRangeEnclosureResult(AdaptiveRangeEnclosureRequest):
     """A complete source-bound range enclosure or typed finite nonconclusion."""
 
     enclosure: DyadicClosedInterval | None = Field(
-        default=None,
         description=(
             "The hull of every retained leaf enclosure; absent exactly when the "
             "disposition is DOMAIN_UNPROVEN."
@@ -410,6 +536,23 @@ class AdaptiveRangeEnclosureResult(AdaptiveRangeEnclosureRequest):
     )
     evaluations_used: StrictInt = Field(ge=1, le=MAX_ADAPTIVE_RANGE_EVALUATIONS)
     maximum_precision_bits_used: StrictInt = Field(ge=32, le=4096)
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls,
+        core_schema: Any,
+        handler: Any,
+    ) -> JsonSchemaValue:
+        """Publish mutually exclusive concluded and domain-uncertain shapes."""
+
+        return {
+            "oneOf": [
+                handler(AdaptiveRangeConcludedResult.__pydantic_core_schema__),
+                handler(AdaptiveRangeDomainUnprovenResult.__pydantic_core_schema__),
+            ],
+            "title": cls.__name__,
+            "description": cls.__doc__,
+        }
 
     @field_validator("leaves", mode="before")
     @classmethod
@@ -505,11 +648,29 @@ class AdaptiveRangeEnclosureResult(AdaptiveRangeEnclosureRequest):
 
 
 @dataclass(frozen=True, slots=True)
-class _AdaptiveRangeAdmission:
+class _AdaptiveRangeExecutionPlan:
     precision_schedule: tuple[int, ...]
+    planned_splits: int
     planned_evaluations: int
+    planned_leaf_count: int
+    planned_maximum_leaf_depth: int
+    precision_bits_per_expression_node: int
+
+
+@dataclass(frozen=True, slots=True)
+class _AdaptiveRangeAdmission:
+    plan: _AdaptiveRangeExecutionPlan
+    planned_node_evaluations: int
     target_width: Fraction
     deadline: float
+
+    @property
+    def precision_schedule(self) -> tuple[int, ...]:
+        return self.plan.precision_schedule
+
+    @property
+    def planned_evaluations(self) -> int:
+        return self.plan.planned_evaluations
 
 
 @dataclass(frozen=True, slots=True)
@@ -524,6 +685,29 @@ class _EvaluatedAdaptiveRangeLeaf:
             raise AssertionError("one adaptive leaf must carry exactly one outcome")
 
 
+def _plan_adaptive_range(problem: _AdaptiveRangeProblem) -> _AdaptiveRangeExecutionPlan:
+    schedule, root_evaluations, planned_splits = _planned_schedule_and_splits(
+        precision_bits=problem.precision_bits,
+        maximum_precision_bits=problem.maximum_precision_bits,
+        max_leaves=problem.max_leaves,
+        max_depth=problem.max_depth,
+        max_evaluations=problem.max_evaluations,
+        splittable=_widest_coordinate(problem.box) is not None,
+    )
+    planned_evaluations = root_evaluations + 2 * planned_splits
+    return _AdaptiveRangeExecutionPlan(
+        precision_schedule=schedule,
+        planned_splits=planned_splits,
+        planned_evaluations=planned_evaluations,
+        planned_leaf_count=planned_splits + 1,
+        planned_maximum_leaf_depth=min(problem.max_depth, planned_splits),
+        precision_bits_per_expression_node=(
+            sum(schedule[:root_evaluations])
+            + 2 * planned_splits * problem.maximum_precision_bits
+        ),
+    )
+
+
 def _midpoint_component_digits(box: RationalIntervalBox, depth: int) -> int:
     source_digits = max(
         (
@@ -533,13 +717,20 @@ def _midpoint_component_digits(box: RationalIntervalBox, depth: int) -> int:
         ),
         default=1,
     )
+    if depth == 0:
+        return source_digits
     # A depth-d bisection endpoint is ((2**d-j)l + j*u)/2**d. Before
     # reduction, each component therefore uses at most two source components,
     # a d-bit coefficient, and one carry digit.
     return 2 * source_digits + depth + 2
 
 
-def _estimated_result_bytes(problem: _AdaptiveRangeProblem) -> int:
+def _estimated_result_bytes(
+    problem: _AdaptiveRangeProblem,
+    *,
+    plan: _AdaptiveRangeExecutionPlan | None = None,
+) -> int:
+    active_plan = plan if plan is not None else _plan_adaptive_range(problem)
     source_bytes = len(
         canonicalize_json(
             {
@@ -555,7 +746,9 @@ def _estimated_result_bytes(problem: _AdaptiveRangeProblem) -> int:
             }
         )
     )
-    endpoint_digits = _midpoint_component_digits(problem.box, problem.max_depth)
+    endpoint_digits = _midpoint_component_digits(
+        problem.box, active_plan.planned_maximum_leaf_depth
+    )
     axis_bytes = sum(
         len(variable.encode("utf-8")) + 3 for variable in problem.box.variables
     )
@@ -563,9 +756,9 @@ def _estimated_result_bytes(problem: _AdaptiveRangeProblem) -> int:
         128 + axis_bytes + len(problem.box.variables) * (4 * endpoint_digits + 128)
     )
     dyadic_interval_bytes = 2 * (MAX_DYADIC_MANTISSA_DIGITS + 64) + 64
-    path_bytes = 2 * problem.max_depth + 32
+    path_bytes = 2 * active_plan.planned_maximum_leaf_depth + 32
     leaf_bytes = box_bytes + dyadic_interval_bytes + path_bytes + 128
-    return source_bytes + problem.max_leaves * leaf_bytes + 4_096
+    return source_bytes + active_plan.planned_leaf_count * leaf_bytes + 4_096
 
 
 def _require_deadline(deadline: float, stage: str) -> None:
@@ -652,6 +845,26 @@ def _require_complete_source_axis(
         )
 
 
+def _require_source_endpoint_envelope(
+    problem: _AdaptiveRangeProblem, *, maximum_leaf_depth: int
+) -> None:
+    digit_cap = _adaptive_source_endpoint_digit_cap(maximum_leaf_depth)
+    if any(
+        canonical_rational_component_digits(endpoint) > digit_cap
+        for interval in problem.box.intervals
+        for endpoint in (interval.lower, interval.upper)
+    ):
+        raise OperationDomainValidationError(
+            location=("box", "intervals"),
+            code="analysis.adaptive_range.source_endpoint_digits",
+            message=(
+                "adaptive source-box endpoints exceed the "
+                f"{digit_cap}-digit bound for the reachable split depth "
+                f"{maximum_leaf_depth}"
+            ),
+        )
+
+
 def _admit_adaptive_range(
     problem: _AdaptiveRangeProblem, *, started_at: float
 ) -> _AdaptiveRangeAdmission:
@@ -680,14 +893,11 @@ def _admit_adaptive_range(
 
     nodes = _bounded_expression_nodes(problem.expression)
     _require_complete_source_axis(problem, nodes)
-    schedule = _precision_schedule(
-        problem.precision_bits, problem.maximum_precision_bits
+    plan = _plan_adaptive_range(problem)
+    _require_source_endpoint_envelope(
+        problem, maximum_leaf_depth=plan.planned_maximum_leaf_depth
     )
-    planned_evaluations = min(
-        problem.max_evaluations,
-        len(schedule) + 2 * (problem.max_leaves - 1),
-    )
-    node_evaluations = len(nodes) * planned_evaluations
+    node_evaluations = len(nodes) * plan.planned_evaluations
     if node_evaluations > MAX_ADAPTIVE_RANGE_NODE_EVALUATIONS:
         raise OperationDomainValidationError(
             location=("max_evaluations",),
@@ -697,7 +907,7 @@ def _admit_adaptive_range(
                 f"evaluations exceeds the {MAX_ADAPTIVE_RANGE_NODE_EVALUATIONS}-unit bound"
             ),
         )
-    precision_work = node_evaluations * problem.maximum_precision_bits
+    precision_work = len(nodes) * plan.precision_bits_per_expression_node
     if precision_work > MAX_ADAPTIVE_RANGE_PRECISION_WORK:
         raise OperationDomainValidationError(
             location=("maximum_precision_bits", "max_evaluations"),
@@ -707,7 +917,7 @@ def _admit_adaptive_range(
                 f"exceeds the {MAX_ADAPTIVE_RANGE_PRECISION_WORK}-unit bound"
             ),
         )
-    estimated_result_bytes = _estimated_result_bytes(problem)
+    estimated_result_bytes = _estimated_result_bytes(problem, plan=plan)
     if estimated_result_bytes > MAX_ADAPTIVE_RANGE_RESULT_BYTES:
         raise OperationDomainValidationError(
             location=("max_leaves", "max_depth", "box"),
@@ -739,8 +949,8 @@ def _admit_adaptive_range(
         )
     _require_deadline(deadline, "after semantic preflight")
     return _AdaptiveRangeAdmission(
-        precision_schedule=schedule,
-        planned_evaluations=planned_evaluations,
+        plan=plan,
+        planned_node_evaluations=node_evaluations,
         target_width=target_width,
         deadline=deadline,
     )

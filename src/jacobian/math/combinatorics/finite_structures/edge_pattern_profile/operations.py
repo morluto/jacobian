@@ -22,7 +22,11 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-__all__ = ["compute_edge_pattern_profile"]
+__all__ = [
+    "EdgePatternEntry",
+    "EdgePatternProfileResult",
+    "compute_edge_pattern_profile",
+]
 
 MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES = CanonicalLimits().max_output_bytes
 

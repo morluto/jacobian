@@ -86,12 +86,6 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
         growth_digits = max(denominator_digits, numerator_digits)
     else:
         growth_digits = 1
-    if growth_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        _reject(
-            "rational_growth_bound",
-            "subset-sum intermediates exceed the canonical rational digit bound",
-        )
-
     source_bytes = len(
         encode_strict_json({"values": [v.model_dump(mode="json") for v in values]})
     )
@@ -135,6 +129,11 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
                 )
                 for value in exact_sums
             )
+    if growth_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        _reject(
+            "rational_growth_bound",
+            "subset-sum intermediates exceed the canonical rational digit bound",
+        )
     # Values are canonical JSON strings: include both quotes and a possible
     # minus sign in the numerator component before sizing the object.
     rational_bytes = strict_json_object_size(

@@ -96,9 +96,11 @@ def _admit(  # noqa: C901
         sum_denominator_digits = arity * maximum_denominator_digits
     else:
         sum_numerator_digits = sum_denominator_digits = 0
-    if candidate_count and max(
-        sum_numerator_digits, sum_denominator_digits
-    ) > MAX_CANONICAL_RATIONAL_DIGITS:
+    if (
+        candidate_count
+        and max(sum_numerator_digits, sum_denominator_digits)
+        > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
         _reject(
             ("values",),
             "rational_fixed_arity.rational_growth",

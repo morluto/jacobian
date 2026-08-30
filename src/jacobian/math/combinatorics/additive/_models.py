@@ -18,6 +18,7 @@ from jacobian.canonical import (
     parse_canonical_integer,
     strict_json_object_size,
 )
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive._multiset_sum import (
     MAX_ARITY,
     MAX_ARITY_DIGITS,
@@ -36,7 +37,10 @@ from jacobian.math.combinatorics.additive.values import (
     IndexedIntegerSequence,
     indexed_sequence_item_ceiling,
 )
-from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
+from jacobian.math.combinatorics.finite_structures.sets._models import (
+    _MAX_FINITE_SET_WIRE_BYTES,
+    FiniteIntegerSet,
+)
 
 # This conservative materialized-axis cap bounds source parsing and binomial
 # preflight. Operation-specific work and result bounds impose the sharper

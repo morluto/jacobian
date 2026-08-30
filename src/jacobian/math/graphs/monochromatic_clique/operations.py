@@ -102,9 +102,7 @@ def _admit_monochromatic_clique_hypergraph(
             code="monochromatic_clique.work_bound_exceeded",
             message="monochromatic clique enumeration exceeds the work bound",
         )
-    edge_to_color = dict(
-        zip(graph.edges, colored_graph.edge_colors, strict=True)
-    )
+    edge_to_color = dict(zip(graph.edges, colored_graph.edge_colors, strict=True))
     cliques = tuple(
         tuple(sorted(subset))
         for subset in combinations(vertices, clique_order)

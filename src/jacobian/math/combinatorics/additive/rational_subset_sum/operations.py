@@ -61,6 +61,7 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
         return
 
     nonzero = [value for value in values if value.as_fraction()]
+    common_denominator_overflow = False
     if nonzero:
         fractions = [value.as_fraction() for value in nonzero]
         common_denominator = 1
@@ -68,11 +69,10 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
             common_denominator = common_denominator // gcd(
                 common_denominator, value.denominator
             ) * value.denominator
-            if _decimal_digits(common_denominator) > MAX_CANONICAL_RATIONAL_DIGITS:
-                _reject(
-                    "rational_growth_bound",
-                    "subset-sum intermediates exceed the canonical rational digit bound",
-                )
+            common_denominator_overflow |= (
+                _decimal_digits(common_denominator)
+                > MAX_CANONICAL_RATIONAL_DIGITS
+            )
         scaled = [
             value.numerator * (common_denominator // value.denominator)
             for value in fractions
@@ -105,8 +105,31 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
     for multiplicity in multiplicities.values():
         support_upper_bound *= multiplicity + 1
     if nonzero:
-        support_span = positive_span - negative_span
+        lattice_step = 0
+        for value in scaled:
+            lattice_step = gcd(lattice_step, abs(value))
+        support_span = (positive_span - negative_span) // max(lattice_step, 1)
         support_upper_bound = min(support_upper_bound, support_span + 1)
+        if common_denominator_overflow:
+            if len(nonzero) > 2:
+                _reject(
+                    "rational_growth_bound",
+                    "subset-sum intermediates exceed the canonical rational digit bound",
+                )
+            exact_sums = {Fraction(0), *fractions, sum(fractions, Fraction(0))}
+            if any(
+                max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
+                > MAX_CANONICAL_RATIONAL_DIGITS
+                for value in exact_sums
+            ):
+                _reject(
+                    "rational_growth_bound",
+                    "subset-sum intermediates exceed the canonical rational digit bound",
+                )
+            growth_digits = max(
+                max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
+                for value in exact_sums
+            )
     rational_bytes = strict_json_object_size(
         (("num", growth_digits), ("den", growth_digits))
     )

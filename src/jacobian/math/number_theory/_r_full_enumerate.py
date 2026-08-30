@@ -22,7 +22,7 @@ from jacobian.math.number_theory._support import number_theory_operation
 
 
 def _enumerate_r_full_admitted(
-    minimum_exponent: int, cutoff: int
+    minimum_exponent: int, cutoff: int, *, enforce_transport: bool
 ) -> RFullEnumerateResult:
     canonical_cutoff = format_canonical_integer(cutoff)
     plan = plan_r_full_family(minimum_exponent, cutoff)
@@ -32,7 +32,7 @@ def _enumerate_r_full_admitted(
             code="r_full_enumerate_family_exceeds_result_budget",
             message="r-full family exceeds the result-size budget",
         )
-    if (
+    if enforce_transport and (
         estimate_r_full_result_bytes(minimum_exponent, cutoff, plan.family)
         > MAX_R_FULL_RESULT_BYTES
     ):
@@ -52,7 +52,9 @@ def enumerate_r_full_numbers(
 ) -> RFullEnumerateResult:
     """Return the complete ordered family of r-full integers up to the cutoff."""
     return _enumerate_r_full_admitted(
-        request.minimum_exponent, parse_canonical_integer(request.cutoff)
+        request.minimum_exponent,
+        parse_canonical_integer(request.cutoff),
+        enforce_transport=True,
     )
 
 
@@ -75,7 +77,9 @@ def enumerate_r_full(minimum_exponent: int, cutoff: int) -> RFullEnumerateResult
             code="r_full_enumerate.cutoff_bound",
             message="cutoff must be a positive integer within the admitted bound",
         )
-    return _enumerate_r_full_admitted(minimum_exponent, cutoff)
+    return _enumerate_r_full_admitted(
+        minimum_exponent, cutoff, enforce_transport=False
+    )
 
 
 R_FULL_ENUMERATE_OPERATION = number_theory_operation(

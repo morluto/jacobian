@@ -19,10 +19,10 @@ from jacobian.math.number_theory._periodic_kernel import (
     require_admitted_periodic_source,
 )
 from jacobian.math.number_theory._periodic_models import (
-    MAX_PERIODIC_INTEGER_DIGITS,
     PeriodicCongruenceUnionSource,
 )
 from jacobian.math.number_theory.periodic_prefix_count._models import (
+    MAX_PREFIX_CUTOFF_DIGITS,
     PeriodicUnionPrefixCountResult,
 )
 
@@ -104,10 +104,10 @@ def _admit_source(source: PeriodicCongruenceUnionSource, cutoff: int) -> _Execut
         _reject("invalid_cutoff", "cutoff must be a strict integer")
     if cutoff < 0:
         _reject("negative_cutoff", "cutoff must be nonnegative")
-    if cutoff > 10**MAX_PERIODIC_INTEGER_DIGITS - 1:
+    if cutoff > 10**MAX_PREFIX_CUTOFF_DIGITS - 1:
         _reject(
             "cutoff_digit_bound",
-            f"cutoff must have at most {MAX_PERIODIC_INTEGER_DIGITS} digits",
+            f"cutoff must have at most {MAX_PREFIX_CUTOFF_DIGITS} digits",
         )
     try:
         plan = require_admitted_periodic_source(source)

@@ -6,12 +6,15 @@ from pydantic import Field, StringConstraints
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits
 from jacobian.math.number_theory._periodic_models import (
-    MAX_PERIODIC_INTEGER_DIGITS,
     PeriodicCongruenceUnionSource,
 )
 
-MAX_PREFIX_CUTOFF_DIGITS = MAX_PERIODIC_INTEGER_DIGITS
+# Prefix arithmetic is scalar and does not inherit the 256-digit period bound;
+# keep it within the canonical integer representation budget while rejecting
+# impractically large conversions before they reach the kernel.
+MAX_PREFIX_CUTOFF_DIGITS = CanonicalLimits().max_integer_digits
 PeriodicPrefixCutoff = Annotated[
     str,
     StringConstraints(

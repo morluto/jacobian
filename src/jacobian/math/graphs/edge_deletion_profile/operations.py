@@ -94,9 +94,11 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
     # per-component filtering, so charge the one-time scan separately
     # and multiply only by the active component count.
     total += len(graph.vertices) + len(graph.edges)
-    active_components = [c for c in components if any(
-        left in c and right in c for left, right in graph.edges
-    )]
+    active_components = [
+        c
+        for c in components
+        if any(left in c and right in c for left, right in graph.edges)
+    ]
     total += len(active_components) * (len(graph.vertices) + len(graph.edges))
     for component in components:
         n = len(component)

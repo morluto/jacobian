@@ -78,3 +78,13 @@ def test_aggregate_result_bound_is_checked_before_arithmetic() -> None:
     vector = tuple(value for _ in range(17))
     with pytest.raises(OperationDomainValidationError, match="profile exceeds"):
         compute_collatz_wielandt_profile(matrix, vector)
+
+
+def test_derived_denominator_growth_is_checked_before_arithmetic() -> None:
+    denominator = "1" + "0" * 5_000
+    value = CanonicalRational(num="1", den=denominator)
+    matrix = tuple(tuple(value for _ in range(4)) for _ in range(4))
+    vector = tuple(value for _ in range(4))
+
+    with pytest.raises(OperationDomainValidationError, match="rational arithmetic"):
+        compute_collatz_wielandt_profile(matrix, vector)

@@ -21,18 +21,18 @@ def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
     """Reject configurations whose complete profile cannot fit the wire limit."""
     points = configuration.points
     triangle_count = len(points) * (len(points) - 1) * (len(points) - 2) // 6
-    coordinate_digits = max(
+    coordinate_widths = sorted(
         (
             max(len(coord.num.lstrip("-")), len(coord.den))
             for point in points
             for coord in point.coordinates
         ),
-        default=0,
+        reverse=True,
     )
-    # Differences, products, subtraction, and the factor 1/2 can each add a
-    # carry digit to a coordinate component.  This is intentionally a safe
-    # bound used before any triple enumeration; exact checks remain below.
-    derived_digits = 2 * coordinate_digits + 2
+    # A cross-product term can retain denominator factors from all six
+    # coordinates in a triple; subtraction and the factor 1/2 add carry
+    # digits. Reserve that complete factor product before enumeration.
+    derived_digits = sum(coordinate_widths[:6], 0) + 2
     if derived_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationDomainValidationError(
             location=("configuration",),

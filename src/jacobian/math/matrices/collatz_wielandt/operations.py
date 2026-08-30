@@ -30,6 +30,27 @@ def _admit_result_size(
             code="collatz_wielandt.result_bound",
             message="the complete Collatz-Wielandt profile exceeds the canonical output bound",
         )
+    for row_index, row in enumerate(matrix):
+        derived_digits = (
+            sum(
+                max(len(entry.num.lstrip("-")), len(entry.den))
+                + max(len(vector[column].num.lstrip("-")), len(vector[column].den))
+                for column, entry in enumerate(row)
+            )
+            + max(
+                len(vector[row_index].num.lstrip("-")), len(vector[row_index].den)
+            )
+            + 2
+        )
+        if derived_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise OperationDomainValidationError(
+                location=("matrix", "vector"),
+                code="collatz_wielandt.quotient_growth",
+                message=(
+                    "derived Collatz-Wielandt quotient rational arithmetic exceeds "
+                    f"the {MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
+                ),
+            )
 
 
 def compute_collatz_wielandt_profile(

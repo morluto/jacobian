@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import sys
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -29,7 +30,7 @@ _EMBEDDINGS_WORKER_STDERR_BYTES = 64 * 1024
 def run_embeddings_worker(
     request: NumberFieldEmbeddingWorkerRequest,
     *,
-    timeout_seconds: float,
+    deadline: float,
     stdout_limit: int,
 ) -> NumberFieldEmbeddingWorkerResponse:
     """Run one isolated recognition, ordering, and isolation computation."""
@@ -39,6 +40,12 @@ def run_embeddings_worker(
         run_bounded_process,
         worker_environment,
     )
+
+    timeout_seconds = deadline - time.monotonic()
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise OperationExecutionTimeoutError(
+            "request deadline expired before number-field embedding worker launch"
+        )
 
     try:
         with TemporaryDirectory(

@@ -237,14 +237,13 @@ def embeddings(
     _require_embedding_execution_active(deadline, "before embedding admission")
     admission = _admit_number_field_embeddings(field)
     _require_embedding_execution_active(deadline, "after embedding admission")
-    remaining = deadline - time.monotonic()
     worker_response = run_embeddings_worker(
         NumberFieldEmbeddingWorkerRequest(
             field=field,
             root_isolation_bits=admission.root_isolation_bits,
             evidence_grid_bits=admission.evidence_grid_bits,
         ),
-        timeout_seconds=remaining,
+        deadline=deadline,
         stdout_limit=admission.predicted_worker_output_bytes,
     )
     _require_embedding_execution_active(deadline, "after embedding worker execution")

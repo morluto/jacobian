@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 import jacobian.process as process
-from jacobian._execution import OperationExecutionTimeoutError
+from jacobian._execution import OperationExecutionTimeoutError, request_execution
 from jacobian.math.number_theory.number_fields import (
     SimpleNumberFieldPresentation,
     embeddings,
@@ -34,6 +36,19 @@ def test_embedding_worker_timeout_is_an_operational_failure(
     )
 
     with pytest.raises(OperationExecutionTimeoutError, match="during"):
+        embeddings(_gaussian_field())
+
+
+def test_deadline_expiry_immediately_before_worker_launch_is_typed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = iter((119.0, 119.5, 120.5))
+    monkeypatch.setattr(time, "monotonic", lambda: next(clock))
+
+    with (
+        request_execution(started_at=0.0),
+        pytest.raises(OperationExecutionTimeoutError, match=r"before.*launch"),
+    ):
         embeddings(_gaussian_field())
 
 

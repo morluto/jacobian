@@ -64,7 +64,9 @@ def _admit_maximum_weight_antichain(
         (canonical_rational_component_digits(weight) for weight in weights),
         default=1,
     )
-    max_sum_digits = n * max_digits + len(str(max(1, n)))
+    # A singleton antichain returns the input weight unchanged; do not charge
+    # an extra addition digit at that exact canonical boundary.
+    max_sum_digits = max_digits if n <= 1 else n * max_digits + len(str(n))
     if max_sum_digits > 32_768:
         raise OperationDomainValidationError(
             location=("weights",),

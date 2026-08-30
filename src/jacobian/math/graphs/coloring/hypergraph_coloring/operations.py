@@ -37,6 +37,12 @@ def decide_hypergraph_coloring(
 
     edges = [tuple(vertex_index[m] for m in members) for _, members in hypergraph.edges]
 
+    if any(len(edge) == 1 for edge in edges):
+        return HypergraphColoringResult(
+            hypergraph=hypergraph,
+            palette_size=palette_size,
+            colorable=False,
+        )
     if not edges or palette_size < 1:
         if palette_size < 1:
             return HypergraphColoringResult(

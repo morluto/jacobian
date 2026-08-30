@@ -122,8 +122,10 @@ A child-process adapter has the same obligations plus:
 The parent owns admission, the retained canonical source, and final result
 construction. A worker returns a compact derived projection only; it must not
 echo or replace source values. Bind its projection to the admitted parent source
-before validating the result. Size stdin and stdout limits for the actual UTF-8
-worker payload, not for a different public representation.
+before trusted result construction. Structurally decode the projection, but do
+not pass worker output through the complete public result model or any nested
+validator that replays mathematical work. Size stdin and stdout limits for the
+actual UTF-8 worker payload, not for a different public representation.
 
 Child processes use the shared bounded-process supervisor. Backend adapters test
 their codec, source binding, and outcome projection; the supervisor's owning

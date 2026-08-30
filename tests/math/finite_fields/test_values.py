@@ -44,6 +44,17 @@ def test_presentation_identity_binds_modulus_generator_basis_and_encoding() -> N
     )
 
 
+def test_prime_field_presentation_has_one_dimensional_ordered_basis() -> None:
+    presentation = FiniteFieldPresentation(
+        characteristic=3,
+        modulus_coefficients=(0, 1),
+        generator="a",
+    )
+
+    assert presentation.degree == 1
+    assert presentation.ordered_basis == ("1",)
+
+
 def test_presentation_rejects_reducible_or_noncanonical_moduli() -> None:
     with pytest.raises(ValueError, match="irreducible"):
         FiniteFieldPresentation(characteristic=2, modulus_coefficients=(0, 0, 1))

@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 from itertools import combinations
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes.nonlinear._models import ExplicitBinaryCode
 from jacobian.math.combinatorics.codes.nonlinear.operations import to_set_system
+from jacobian.math.combinatorics.extremal_sets._models import (
+    BinaryUnionRelationRequest,
+)
 from jacobian.math.combinatorics.extremal_sets.operations import (
+    MAX_BINARY_UNION_MEMBERSHIP_WORK,
     construct_binary_union_relation,
 )
 from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
@@ -141,6 +147,53 @@ def test_code_support_producer_composes_without_reconstruction() -> None:
         "operand_j": 2,
         "result_k": 3,
     }
+
+    serialized_request = BinaryUnionRelationRequest.model_validate(
+        {"source": to_set_system(code).model_dump(mode="json")}
+    )
+    assert (
+        construct_binary_union_relation(serialized_request.source).rows == result.rows
+    )
+
+
+def test_oversized_code_support_family_is_a_domain_rejection() -> None:
+    length = 512
+    code = ExplicitBinaryCode(
+        length=length,
+        codewords=tuple(
+            tuple(1 if coordinate == word else 0 for coordinate in range(length))
+            for word in range(length)
+        ),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="relation carrier"):
+        construct_binary_union_relation(to_set_system(code))
+
+
+def test_total_membership_work_is_bounded_before_pair_scanning() -> None:
+    common_size = MAX_BINARY_UNION_MEMBERSHIP_WORK // (255 * 256) + 1
+    common = tuple(range(common_size))
+    source = IndexedFiniteSetFamily(
+        ground_set_size=common_size + 256,
+        members=tuple((*common, common_size + index) for index in range(256)),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="membership work"):
+        construct_binary_union_relation(source)
+
+
+def test_output_admission_includes_the_retained_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _source(((0,), (1,), (0, 1)), ground_set_size=2)
+    source_bytes = len(canonicalize_json(source.model_dump(mode="json")))
+    monkeypatch.setattr(
+        "jacobian.math.combinatorics.extremal_sets.operations.CanonicalLimits",
+        lambda: SimpleNamespace(max_output_bytes=source_bytes + 16),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="retained-source"):
+        construct_binary_union_relation(source)
 
 
 def test_ground_axis_is_independent_of_relation_vertex_count() -> None:

@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes.nonlinear._models import ToSetSystemResult
 from jacobian.math.combinatorics.extremal_sets._models import (
     BinaryUnionRelationResult,
     UnionRelationRow,
 )
-from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
+from jacobian.math.combinatorics.extremal_sets.values import (
+    MAX_FAMILY_SIZE,
+    IndexedFiniteSetFamily,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
     MAX_TOTAL_INCIDENCES,
@@ -18,6 +22,8 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 
 __all__ = ["construct_binary_union_relation"]
+
+MAX_BINARY_UNION_MEMBERSHIP_WORK = 20_000_000
 
 
 @dataclass(frozen=True)
@@ -61,6 +67,15 @@ def _canonical_source(
 ) -> IndexedFiniteSetFamily:
     """Convert the code-support producer's value to the shared family type."""
     if isinstance(source, ToSetSystemResult):
+        if len(source.supports) > MAX_FAMILY_SIZE:
+            raise OperationDomainValidationError(
+                location=("source",),
+                code="set_system.binary_union_relation.family_exceeds_carrier",
+                message=(
+                    f"the source family exceeds the {MAX_FAMILY_SIZE}-vertex "
+                    "relation carrier"
+                ),
+            )
         return IndexedFiniteSetFamily(
             ground_set_size=source.length,
             members=source.supports,
@@ -69,6 +84,18 @@ def _canonical_source(
 
 
 def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:
+    membership_work = max(0, len(source.members) - 1) * sum(
+        len(member) for member in source.members
+    )
+    if membership_work > MAX_BINARY_UNION_MEMBERSHIP_WORK:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="set_system.binary_union_relation.work_exceeded",
+            message=(
+                f"binary-union membership work of {membership_work} exceeds the "
+                f"{MAX_BINARY_UNION_MEMBERSHIP_WORK}-unit bound"
+            ),
+        )
     sets = tuple(frozenset(member) for member in source.members)
     source_index = {member: index for index, member in enumerate(sets)}
     rows: list[tuple[int, int, int]] = []
@@ -87,6 +114,40 @@ def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:
                 f"the exact relation has {row_count} rows, exceeding the "
                 f"{MAX_EDGES}-edge or {MAX_TOTAL_INCIDENCES}-incidence carrier limit"
             ),
+        )
+    vertices = tuple(str(index) for index in range(len(source.members)))
+    raw_rows = [
+        {
+            "edge_id": _edge_id(i, j, k),
+            "operand_i": i,
+            "operand_j": j,
+            "result_k": k,
+        }
+        for i, j, k in rows
+    ]
+    raw_edges = [
+        [
+            row["edge_id"],
+            sorted(
+                (str(row["operand_i"]), str(row["operand_j"]), str(row["result_k"]))
+            ),
+        ]
+        for row in raw_rows
+    ]
+    result_bytes = len(
+        canonicalize_json(
+            {
+                "source": source.model_dump(mode="json"),
+                "rows": raw_rows,
+                "hypergraph": {"vertices": list(vertices), "edges": raw_edges},
+            }
+        )
+    )
+    if result_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="set_system.binary_union_relation.output_exceeded",
+            message="the complete retained-source relation exceeds the output budget",
         )
     return _UnionRelationPlan(rows=tuple(rows))
 

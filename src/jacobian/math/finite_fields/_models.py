@@ -1,6 +1,8 @@
 """Typed requests for atomic finite-field operations."""
 
-from pydantic import Field, StrictInt
+from typing import Any
+
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.finite_fields.values import (
@@ -25,6 +27,34 @@ class HomogeneousFixedSubspaceRequest(StrictModel):
 
     action: PrimeFieldLinearAction
     degree: StrictInt = Field(ge=0, le=_MAX_HOMOGENEOUS_DEGREE)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_json_array_fields(cls, data: Any) -> Any:
+        """Convert transport arrays to the immutable tuple fields before strict parsing."""
+
+        if not isinstance(data, dict) or not isinstance(data.get("action"), dict):
+            return data
+        action = data["action"]
+        normalized_action = dict(action)
+        axis = action.get("variable_axis")
+        if isinstance(axis, dict) and isinstance(axis.get("labels"), list):
+            normalized_action["variable_axis"] = {
+                **axis,
+                "labels": tuple(axis["labels"]),
+            }
+        matrices = action.get("generator_matrices")
+        if isinstance(matrices, list):
+            normalized_action["generator_matrices"] = tuple(
+                {
+                    **matrix,
+                    "entries": tuple(tuple(row) for row in matrix["entries"]),
+                }
+                if isinstance(matrix, dict) and isinstance(matrix.get("entries"), list)
+                else matrix
+                for matrix in matrices
+            )
+        return {**data, "action": normalized_action}
 
 
 class RestrictScalarsRequest(StrictModel):

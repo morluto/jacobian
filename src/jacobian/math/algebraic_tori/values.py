@@ -11,8 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import parse_canonical_integer, CanonicalizationError
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import CanonicalizationError, parse_canonical_integer
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
     MAX_CERTIFIED_SNF_INPUT_DIMENSION,
@@ -121,11 +120,11 @@ class HomogeneousMonomialSystem(StrictModel):
                 )
         try:
             return canonicalize_json_containers(data)
-        except CanonicalizationError:
+        except CanonicalizationError as exc:
             raise _validation_error(
                 "algebraic_torus.monomial_system_container_structure",
                 "raw monomial-system containers must be acyclic",
-            )
+            ) from exc
 
     @model_validator(mode="after")
     def require_axes_and_envelope(self) -> Self:
@@ -269,11 +268,11 @@ class AlgebraicTorusSolutionSubgroup(StrictModel):
                 )
         try:
             return canonicalize_json_containers(data)
-        except CanonicalizationError:
+        except CanonicalizationError as exc:
             raise _validation_error(
                 "algebraic_torus.solution_container_structure",
                 "raw solution containers must be acyclic",
-            )
+            ) from exc
 
     @model_validator(mode="after")
     def require_source_bound_shapes(self) -> Self:

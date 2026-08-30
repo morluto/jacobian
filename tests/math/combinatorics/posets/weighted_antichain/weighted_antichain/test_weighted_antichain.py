@@ -3,6 +3,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -14,6 +15,9 @@ from jacobian.math.combinatorics.posets.core._models import (
 )
 from jacobian.math.combinatorics.posets.core.operations import (
     materialize_finite_poset,
+)
+from jacobian.math.combinatorics.posets.weighted_antichain._models import (
+    WeightedAntichainRequest,
 )
 from jacobian.math.combinatorics.posets.weighted_antichain.operations import (
     compute_maximum_weight_antichain,
@@ -98,6 +102,12 @@ def test_method() -> None:
     assert result.method == "EXACT_BOUNDED_SUBSET_SEARCH"
 
 
+def test_equal_maxima_choose_lexicographically_least_antichain() -> None:
+    poset = _make_chain(2)
+    result = compute_maximum_weight_antichain(poset, (_cr(1), _cr(1)))
+    assert result.maximum_antichain == ("0",)
+
+
 def test_weight_axis_must_match_the_poset() -> None:
     with pytest.raises(OperationDomainValidationError, match="one-for-one"):
         compute_maximum_weight_antichain(_make_chain(2), (_cr(1),))
@@ -108,3 +118,13 @@ def test_exponential_search_envelope_is_enforced() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="at most 16"):
         compute_maximum_weight_antichain(poset, tuple(_cr(1) for _ in range(17)))
+
+
+def test_derived_rational_growth_is_rejected_before_subset_search() -> None:
+    poset = _make_antichain(2)
+    weights = (_cr(1, 10**20_000 - 1), _cr(1, 10**20_000))
+
+    with pytest.raises(OperationDomainValidationError, match="rational digit bound"):
+        compute_maximum_weight_antichain(poset, weights)
+    with pytest.raises(ValidationError, match="rational digit bound"):
+        WeightedAntichainRequest(poset=poset, weights=weights)

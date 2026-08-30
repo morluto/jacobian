@@ -68,6 +68,15 @@ def test_empty_host_does_not_arrow() -> None:
     assert result.outcome == "DOES_NOT_ARROW"
 
 
+def test_sparse_large_host_uses_derived_work_bound() -> None:
+    host = _graph([f"v{i}" for i in range(100)], [("v0", "v1")])
+    target = _k3()
+
+    result = decide_edge_coloring_arrowing(host, (target, target))
+
+    assert result.outcome == "DOES_NOT_ARROW"
+
+
 def test_avoiding_coloring_replay() -> None:
     """Replay the avoiding colouring to verify it avoids all targets."""
     result = decide_edge_coloring_arrowing(_k5(), (_k3(), _k3()))

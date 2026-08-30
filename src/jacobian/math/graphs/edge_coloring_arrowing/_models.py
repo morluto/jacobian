@@ -9,9 +9,14 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.coloring._models import EdgeColoringAssignment
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
-MAX_HOST_VERTICES = 10
+# The graph value already bounds the carrier at 256 vertices.  Arrowing
+# admission is otherwise controlled by the derived coloring/embedding work.
+MAX_HOST_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
 MAX_HOST_EDGES = 45
 MAX_TARGET_VERTICES = 8
 MAX_TARGET_COUNT = 8
@@ -114,6 +119,11 @@ class EdgeColoringArrowingResult(StrictModel):
                 raise PydanticCustomError(
                     "graph.arrowing.incomplete_avoiding_coloring",
                     "avoiding colouring must cover every host edge",
+                )
+            if self.avoiding_coloring.colors != len(self.targets):
+                raise PydanticCustomError(
+                    "graph.arrowing.mismatched_avoiding_palette",
+                    "avoiding colouring palette must match the target count",
                 )
             if any(
                 not 0 <= color < len(self.targets)

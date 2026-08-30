@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections import Counter
 
 from jacobian._exact import CanonicalInteger
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    format_canonical_integer,
+    parse_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     MAX_FINITE_INTEGER_SET_ELEMENTS,
@@ -16,6 +20,15 @@ from jacobian.math.combinatorics.finite_structures.sets._models import (
 
 
 def _integers(value: FiniteIntegerSet) -> set[int]:
+    if any(
+        len(element.lstrip("-")) > CanonicalLimits().max_integer_digits
+        for element in value.elements
+    ):
+        raise OperationDomainValidationError(
+            location=("value",),
+            code="finite_set.integer_digit_bound",
+            message="finite-set elements exceed the canonical integer digit bound",
+        )
     return {parse_canonical_integer(element) for element in value.elements}
 
 

@@ -67,6 +67,15 @@ def subset_sum_profile(source: IndexedIntegerSequence) -> SubsetSumProfile:
 
 
 def _parse_set(spec: FiniteIntegerSet) -> frozenset[int]:
+    if any(
+        len(element.lstrip("-")) > CanonicalLimits().max_integer_digits
+        for element in spec.elements
+    ):
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="additive_combinatorics.integer_digit_bound",
+            message="finite-set operands exceed the canonical integer digit bound",
+        )
     return frozenset(parse_canonical_integer(element) for element in spec.elements)
 
 

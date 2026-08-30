@@ -173,3 +173,18 @@ def test_arity_zero_does_not_sum_wide_source_values() -> None:
     )
     result = compute_rational_fixed_arity_sum_profile(values, 0)
     assert result.rows[0].sum_value == _cr(0)
+
+
+def test_cross_denominator_cancellation_is_preserved() -> None:
+    q = 10**11
+    r = q + 1
+    p = q + r
+    values = (
+        _cr(1, p * q),
+        _cr(1, p * r),
+        _cr(-1, q * r),
+    )
+
+    result = compute_rational_fixed_arity_sum_profile(values, len(values))
+
+    assert result.rows[0].sum_value == _cr(0)

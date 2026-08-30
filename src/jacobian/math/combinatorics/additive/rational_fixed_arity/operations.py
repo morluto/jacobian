@@ -52,6 +52,52 @@ def _common_denominator_digits(fractions: tuple[Fraction, ...]) -> int:
     return len(format_canonical_integer(common_denominator))
 
 
+def _add_bounded_fraction(
+    left: Fraction,
+    right: Fraction,
+    work: int,
+) -> tuple[Fraction, int]:
+    left_factor = left.denominator // gcd(left.denominator, right.denominator)
+    right_factor = right.denominator // gcd(left.denominator, right.denominator)
+    shared_factor = gcd(left.denominator, right.denominator)
+    estimated_digits = max(
+        len(format_canonical_integer(abs(left.numerator)))
+        + len(format_canonical_integer(right_factor)),
+        len(format_canonical_integer(abs(right.numerator)))
+        + len(format_canonical_integer(left_factor)),
+    ) + 1
+    work += estimated_digits
+    if work > MAX_ENUMERATION_WORK:
+        _reject(
+            ("values",),
+            "rational_fixed_arity.work_bound",
+            "fixed-arity exact sum exceeds the admitted work bound",
+        )
+    numerator = left.numerator * right_factor + right.numerator * left_factor
+    common = gcd(abs(numerator), left_factor)
+    numerator //= common
+    left_factor //= common
+    common = gcd(abs(numerator), right_factor)
+    numerator //= common
+    right_factor //= common
+    common = gcd(abs(numerator), shared_factor)
+    numerator //= common
+    shared_factor //= common
+    denominator = left_factor * right_factor * shared_factor
+    result = Fraction(numerator, denominator)
+    result_digits = max(
+        len(format_canonical_integer(result.numerator)),
+        len(format_canonical_integer(result.denominator)),
+    )
+    if result_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        _reject(
+            ("values",),
+            "rational_fixed_arity.rational_growth",
+            "fixed-arity sums may exceed the canonical rational digit bound",
+        )
+    return result, work + result_digits
+
+
 def _single_sum_digit_bounds(
     fractions: tuple[Fraction, ...],
 ) -> tuple[Fraction, int, int]:
@@ -69,39 +115,12 @@ def _single_sum_digit_bounds(
     if not numerators_by_denominator:
         total = Fraction(0)
     else:
-        common_denominator = 1
+        total = Fraction(0)
         projection_work = 0
-        for denominator in numerators_by_denominator:
-            common_denominator = (
-                common_denominator // gcd(common_denominator, denominator) * denominator
-            )
-            denominator_digits = len(format_canonical_integer(common_denominator))
-            projection_work += denominator_digits
-            if denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-                _reject(
-                    ("values",),
-                    "rational_fixed_arity.rational_growth",
-                    "fixed-arity sums may exceed the canonical rational digit bound",
-                )
-            if projection_work > MAX_ENUMERATION_WORK:
-                _reject(
-                    ("values",),
-                    "rational_fixed_arity.work_bound",
-                    "fixed-arity exact sum exceeds the admitted work bound",
-                )
-        common_numerator = 0
         for denominator, numerator in numerators_by_denominator.items():
-            projection_work += (
-                len(format_canonical_integer(abs(numerator))) + denominator_digits
+            total, projection_work = _add_bounded_fraction(
+                total, Fraction(numerator, denominator), projection_work
             )
-            if projection_work > MAX_ENUMERATION_WORK:
-                _reject(
-                    ("values",),
-                    "rational_fixed_arity.work_bound",
-                    "fixed-arity exact sum exceeds the admitted work bound",
-                )
-            common_numerator += numerator * (common_denominator // denominator)
-        total = Fraction(common_numerator, common_denominator)
     return (
         total,
         len(format_canonical_integer(total.numerator)),

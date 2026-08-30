@@ -181,7 +181,7 @@ def test_coprime_coordinate_denominators_are_bounded_before_summing() -> None:
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="summation"):
+    with pytest.raises(OperationDomainValidationError, match="squared-distance"):
         compute_pinned_distance_support_profile(config)
 
 

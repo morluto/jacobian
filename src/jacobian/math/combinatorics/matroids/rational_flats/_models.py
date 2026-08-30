@@ -8,6 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import CanonicalizationError
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import (
     RationalVectorSpaceBasis,
@@ -165,7 +166,14 @@ class RationalVectorConfiguration(StrictModel):
                 label="candidate",
                 maximum_rows=MAX_RATIONAL_FLAT_CANDIDATES,
             )
-        return canonicalize_json_containers(data)
+        try:
+            return canonicalize_json_containers(data)
+        except CanonicalizationError as exc:
+            raise _validation_error(
+                "raw_container_structure",
+                "raw rational-flat containers must be acyclic and stay within "
+                "the canonical JSON depth limit",
+            ) from exc
 
     @model_validator(mode="after")
     def bind_labels_and_axes(self) -> Self:
@@ -337,7 +345,14 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                     f"{MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS} symmetry generators "
                     "are admitted",
                 )
-        return canonicalize_json_containers(data)
+        try:
+            return canonicalize_json_containers(data)
+        except CanonicalizationError as exc:
+            raise _validation_error(
+                "raw_container_structure",
+                "raw rational-flat containers must be acyclic and stay within "
+                "the canonical JSON depth limit",
+            ) from exc
 
     @model_validator(mode="after")
     def require_source_bound_problem(self) -> Self:
@@ -575,12 +590,24 @@ class RationalFlatClassificationIncomplete(StrictModel):
         ge=0,
         le=MAX_RATIONAL_FLAT_RESULT_ORBITS,
         description=(
-            "Maximum number of complete orbit representatives admitted by the "
-            "source-sensitive canonical output envelope."
+            "Structural maximum number of retained orbit representatives; the "
+            "exact accumulated canonical-output byte limit may stop earlier."
         ),
     )
-    consumed_search_work: StrictInt = Field(ge=0)
-    search_work_limit: StrictInt = Field(ge=1)
+    consumed_search_work: StrictInt = Field(
+        ge=0,
+        description=(
+            "Charged work in the single request ledger across admission, search, "
+            "and canonical result projection."
+        ),
+    )
+    search_work_limit: StrictInt = Field(
+        ge=1,
+        description=(
+            "Maximum work admitted for the single preparation, search, and "
+            "projection ledger."
+        ),
+    )
 
     @model_validator(mode="after")
     def bind_diagnostics_to_limits(self) -> Self:
@@ -592,7 +619,7 @@ class RationalFlatClassificationIncomplete(StrictModel):
         if self.consumed_search_work > self.search_work_limit:
             raise _validation_error(
                 "consumed_search_work",
-                "consumed search work cannot exceed its work limit",
+                "consumed request work cannot exceed its work limit",
             )
         return self
 
@@ -659,6 +686,7 @@ class ClauseConstrainedRationalFlatClassification(StrictModel):
         problem: ClauseConstrainedRationalFlatProblem,
         symmetry_group_order: int,
         representatives: tuple[RationalFlatOrbitRepresentative, ...],
+        solution_flat_count: int,
     ) -> Self:
         return cls.model_construct(
             problem=problem,
@@ -667,9 +695,7 @@ class ClauseConstrainedRationalFlatClassification(StrictModel):
                 status="COMPLETE_EXACT",
                 representatives=representatives,
                 orbit_count=len(representatives),
-                solution_flat_count=sum(
-                    representative.orbit_size for representative in representatives
-                ),
+                solution_flat_count=solution_flat_count,
             ),
         )
 

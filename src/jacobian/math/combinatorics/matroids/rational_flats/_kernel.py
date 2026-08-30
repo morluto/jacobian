@@ -19,8 +19,10 @@ from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
+    strict_json_object_size,
 )
 from jacobian.math.combinatorics.matroids.rational_flats._models import (
+    MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS,
     MAX_RATIONAL_FLAT_GROUP_ORDER,
     MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS,
     MAX_RATIONAL_FLAT_RESULT_ORBITS,
@@ -42,6 +44,7 @@ MAX_RATIONAL_FLAT_SEARCH_WORK = 5_000_000_000
 MAX_RATIONAL_FLAT_ORBIT_CACHE_ENTRIES = 500_000
 _RATIONAL_FLAT_WALL_SECONDS = 300.0
 _RESULT_ENVELOPE_RESERVE_BYTES = 16_384
+_CANONICAL_PROJECTION_PASSES = 3
 
 type RationalRow = tuple[Fraction, ...]
 type IntegerRow = tuple[int, ...]
@@ -50,6 +53,8 @@ type ClosedCandidateSet = tuple[int, ...]
 
 @dataclass(frozen=True, slots=True)
 class _RationalFlatPlan:
+    """Single-invocation plan owning the request's mutable execution ledger."""
+
     deadline: float | None
     candidate_rows: tuple[IntegerRow, ...]
     forbidden_rows: tuple[IntegerRow, ...]
@@ -59,6 +64,10 @@ class _RationalFlatPlan:
     result_orbit_limit: int
     search_work_limit: int
     linear_algebra_chunk_cost: int
+    clause_membership_count: int
+    source_bytes: int
+    representative_encoding_work: int
+    ledger: _WorkLedger
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,12 +162,15 @@ def _subset_container_work(element_count: int, *, sorting: bool = False) -> int:
 def _clause_scan_work(
     problem: ClauseConstrainedRationalFlatProblem,
     closed_count: int,
+    *,
+    clause_membership_count: int,
 ) -> int:
     """Bound closed-set construction plus every clause/candidate membership test."""
 
     return (
         max(closed_count, 1)
-        + sum(len(clause) + 1 for clause in problem.clauses)
+        + clause_membership_count
+        + len(problem.clauses)
         + problem.candidates.vector_count
         + 1
     )
@@ -351,30 +363,111 @@ def _paired_group_order(
     return len(seen)
 
 
-def _result_orbit_limit(
+def _admission_work_charges(
+    problem: ClauseConstrainedRationalFlatProblem,
+) -> tuple[tuple[str, int], ...]:
+    """Precharge every bounded admission phase without first scanning source data."""
+
+    ambient_dimension = len(problem.candidates.coordinate_axis)
+    candidate_count = problem.candidates.vector_count
+    forbidden_count = problem.forbidden_vectors.row_count
+    generator_count = len(problem.symmetry_generators)
+    source_cells = (candidate_count + forbidden_count) * ambient_dimension
+    source_nonzeros = len(problem.candidates.vectors.entries) + len(
+        problem.forbidden_vectors.entries
+    )
+    # Primitive-row normalization can multiply up to one admitted denominator
+    # per coordinate.  Charge the resulting multi-precision chunk width before
+    # reading components, materializing dense rows, or computing gcds/minors.
+    normalization_chunks = (
+        ambient_dimension * MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS + 31
+    ) // 32
+    normalization_work = (
+        8
+        * (source_cells + source_nonzeros + candidate_count + forbidden_count + 1)
+        * max(normalization_chunks * normalization_chunks, 1)
+    )
+    compatibility_elements = (
+        candidate_count * ambient_dimension
+        + MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS
+        + forbidden_count * ambient_dimension
+        + candidate_count
+        + forbidden_count
+        + 1
+    )
+    compatibility_work = generator_count * _subset_container_work(
+        compatibility_elements,
+        sorting=True,
+    )
+    paired_degree = ambient_dimension + candidate_count
+    group_recognition_work = (
+        (generator_count + 3)
+        * (MAX_RATIONAL_FLAT_GROUP_ORDER + 1)
+        * _subset_container_work(paired_degree)
+    )
+    # Reserve model projection, canonical validation, and RFC encoding both for
+    # the admission size check and for final delivery of the retained source.
+    source_projection_work = (
+        2 * _CANONICAL_PROJECTION_PASSES * CanonicalLimits().max_output_bytes
+    )
+    return (
+        ("admission_normalization", normalization_work + 1),
+        (
+            "admission_symmetry",
+            compatibility_work + group_recognition_work,
+        ),
+        ("source_encoding", source_projection_work),
+    )
+
+
+def _representative_encoding_work(
     problem: ClauseConstrainedRationalFlatProblem,
     *,
-    source_bytes: int,
     minor_digits: int,
 ) -> int:
-    output_limit = CanonicalLimits().max_output_bytes
-    available = output_limit - source_bytes - _RESULT_ENVELOPE_RESERVE_BYTES
-    if available < 0:
-        raise _validation_error(
-            "result_size_bound",
-            "the retained rational-flat problem leaves no room for a result",
-        )
+    """Bound one representative projection for the execution work ledger."""
+
     ambient_dimension = len(problem.candidates.coordinate_axis)
     candidate_count = problem.candidates.vector_count
     scalar_bytes = 2 * minor_digits + 96
-    per_representative = (
+    return (
         4_096
         + candidate_count * (len(str(max(candidate_count, 1))) + 3)
         + 2 * ambient_dimension * ambient_dimension * scalar_bytes
     )
-    return min(
-        MAX_RATIONAL_FLAT_RESULT_ORBITS,
-        available // max(per_representative, 1),
+
+
+def _complete_result_size(
+    *,
+    source_bytes: int,
+    symmetry_group_order: int,
+    representative_count: int,
+    representative_bytes: int,
+    solution_flat_count: int,
+) -> int:
+    """Return the exact canonical byte size from accumulated field-value sizes."""
+
+    representatives_size = 2 + max(representative_count - 1, 0) + representative_bytes
+    outcome_size = strict_json_object_size(
+        (
+            ("status", len(encode_strict_json("COMPLETE_EXACT"))),
+            ("representatives", representatives_size),
+            ("orbit_count", len(encode_strict_json(representative_count))),
+            (
+                "solution_flat_count",
+                len(encode_strict_json(solution_flat_count)),
+            ),
+        )
+    )
+    return strict_json_object_size(
+        (
+            ("problem", source_bytes),
+            (
+                "symmetry_group_order",
+                len(encode_strict_json(symmetry_group_order)),
+            ),
+            ("outcome", outcome_size),
+        )
     )
 
 
@@ -383,6 +476,13 @@ def _admit_problem(problem: ClauseConstrainedRationalFlatProblem) -> _RationalFl
 
     deadline = _bind_owner_deadline()
     _require_execution_active(deadline, "before rational-flat admission")
+    ledger = _WorkLedger(
+        limit=MAX_RATIONAL_FLAT_SEARCH_WORK,
+        linear_algebra_chunk_cost=1,
+        deadline=deadline,
+    )
+    for primitive, units in _admission_work_charges(problem):
+        ledger.charge(primitive, units)
     _require_component_digits(problem)
     candidate_rows = tuple(
         _primitive_integer_row(row)
@@ -410,6 +510,7 @@ def _admit_problem(problem: ClauseConstrainedRationalFlatProblem) -> _RationalFl
     linear_algebra_digits = minor_digits + source_row_digits + 1
     linear_algebra_chunks = (linear_algebra_digits + 31) // 32
     linear_algebra_chunk_cost = linear_algebra_chunks * linear_algebra_chunks
+    ledger.linear_algebra_chunk_cost = linear_algebra_chunk_cost
     candidate_permutations = _require_symmetry_compatibility(
         problem,
         candidate_rows=candidate_rows,
@@ -425,11 +526,14 @@ def _admit_problem(problem: ClauseConstrainedRationalFlatProblem) -> _RationalFl
             "result_size_bound",
             "the retained rational-flat problem exceeds the canonical output envelope",
         ) from None
-    result_orbit_limit = _result_orbit_limit(
-        problem,
-        source_bytes=source_bytes,
-        minor_digits=minor_digits,
-    )
+    if source_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > (
+        CanonicalLimits().max_output_bytes
+    ):
+        raise _validation_error(
+            "result_size_bound",
+            "the retained rational-flat problem leaves no room for a result",
+        )
+    clause_membership_count = sum(len(clause) for clause in problem.clauses)
     return _RationalFlatPlan(
         deadline=deadline,
         candidate_rows=candidate_rows,
@@ -441,9 +545,16 @@ def _admit_problem(problem: ClauseConstrainedRationalFlatProblem) -> _RationalFl
         # clause scan, subset action, frontier mutation, and result conversion
         # before it executes, so it does not rely on a coarse per-state proxy.
         state_orbit_limit=MAX_RATIONAL_FLAT_SEARCH_STATE_ORBITS,
-        result_orbit_limit=result_orbit_limit,
+        result_orbit_limit=MAX_RATIONAL_FLAT_RESULT_ORBITS,
         search_work_limit=MAX_RATIONAL_FLAT_SEARCH_WORK,
         linear_algebra_chunk_cost=linear_algebra_chunk_cost,
+        clause_membership_count=clause_membership_count,
+        source_bytes=source_bytes,
+        representative_encoding_work=_representative_encoding_work(
+            problem,
+            minor_digits=minor_digits,
+        ),
+        ledger=ledger,
     )
 
 
@@ -552,7 +663,8 @@ class _SubsetOrbitCanonicalizer:
                 ledger.deadline,
                 "during rational-flat orbit canonicalization",
             )
-            ledger.charge("subset_storage", _subset_container_work(len(pending)))
+            current = pending[0]
+            ledger.charge("subset_storage", _subset_container_work(len(current)))
             current = pending.popleft()
             for generator in self._generators:
                 ledger.charge(
@@ -561,9 +673,15 @@ class _SubsetOrbitCanonicalizer:
                 )
                 image = tuple(sorted(generator[index] for index in current))
                 if image not in seen:
+                    ledger.charge(
+                        "subset_storage",
+                        2 * _subset_container_work(len(image)),
+                    )
                     seen.add(image)
                     pending.append(image)
-        retained_elements = sum(max(len(image), 1) for image in seen)
+        # Every group image has the source subset's cardinality, so this is the
+        # exact retained element count without an uncharged traversal of seen.
+        retained_elements = len(seen) * max(len(subset), 1)
         ledger.charge(
             "subset_cache",
             _subset_container_work(retained_elements, sorting=True),
@@ -618,6 +736,11 @@ def _state_from_closed(
     cached = state_cache.get(closed)
     if cached is not None:
         return cached
+    ledger.charge(
+        "state_construction",
+        _subset_container_work(len(closed))
+        + max(len(closed), 1) * max(ambient_dimension, 1),
+    )
     basis = _rref_basis(
         tuple(plan.candidate_rows[index] for index in closed),
         ambient_dimension=ambient_dimension,
@@ -675,8 +798,17 @@ def _branch_candidates(
     problem: ClauseConstrainedRationalFlatProblem,
     closed: ClosedCandidateSet,
     ledger: _WorkLedger,
+    *,
+    clause_membership_count: int,
 ) -> tuple[int, ...]:
-    ledger.charge("clause_scan", _clause_scan_work(problem, len(closed)))
+    ledger.charge(
+        "clause_scan",
+        _clause_scan_work(
+            problem,
+            len(closed),
+            clause_membership_count=clause_membership_count,
+        ),
+    )
     closed_set = set(closed)
     unmet_clause = next(
         (clause for clause in problem.clauses if closed_set.isdisjoint(clause)),
@@ -695,8 +827,17 @@ def _clauses_are_satisfied(
     problem: ClauseConstrainedRationalFlatProblem,
     closed: ClosedCandidateSet,
     ledger: _WorkLedger,
+    *,
+    clause_membership_count: int,
 ) -> bool:
-    ledger.charge("clause_scan", _clause_scan_work(problem, len(closed)))
+    ledger.charge(
+        "clause_scan",
+        _clause_scan_work(
+            problem,
+            len(closed),
+            clause_membership_count=clause_membership_count,
+        ),
+    )
     closed_set = set(closed)
     return all(not closed_set.isdisjoint(clause) for clause in problem.clauses)
 
@@ -709,17 +850,15 @@ def _search_satisfying_states(
     set[ClosedCandidateSet],
     _WorkLedger,
     _SubsetOrbitCanonicalizer,
+    int,
 ]:
     ambient_dimension = len(problem.candidates.coordinate_axis)
-    ledger = _WorkLedger(
-        limit=plan.search_work_limit,
-        linear_algebra_chunk_cost=plan.linear_algebra_chunk_cost,
-        deadline=plan.deadline,
-    )
+    ledger = plan.ledger
     canonicalizer = _SubsetOrbitCanonicalizer(plan.candidate_permutations)
     state_cache: dict[ClosedCandidateSet, _FlatState] = {}
     visited: set[ClosedCandidateSet] = set()
     satisfying: dict[ClosedCandidateSet, _FlatState] = {}
+    satisfying_elements = 0
     initial = _canonical_closure(
         (),
         plan=plan,
@@ -732,7 +871,11 @@ def _search_satisfying_states(
     queued = {initial}
     while pending:
         _require_execution_active(plan.deadline, "during rational-flat search")
-        ledger.charge("search_frontier", 3 * _subset_container_work(len(pending[-1])))
+        closed = pending[-1]
+        ledger.charge(
+            "search_frontier",
+            3 * _subset_container_work(len(closed)),
+        )
         closed = pending.pop()
         queued.discard(closed)
         if closed in visited:
@@ -760,20 +903,35 @@ def _search_satisfying_states(
             ledger=ledger,
         ):
             continue
-        clauses_satisfied = _clauses_are_satisfied(problem, closed, ledger)
+        clauses_satisfied = _clauses_are_satisfied(
+            problem,
+            closed,
+            ledger,
+            clause_membership_count=plan.clause_membership_count,
+        )
         if clauses_satisfied and state.rank >= problem.minimum_rank:
-            ledger.charge("search_frontier", 2 * _subset_container_work(len(closed)))
-            if closed not in satisfying and len(satisfying) >= plan.result_orbit_limit:
-                raise _SearchStoppedError(
-                    "RESULT_ORBIT_LIMIT",
-                    visited_count=len(visited),
-                    consumed_work=ledger.consumed,
-                )
-            satisfying[closed] = state
+            retained_work = _subset_container_work(len(closed))
+            ledger.charge("search_frontier", retained_work)
+            if closed not in satisfying:
+                if len(satisfying) >= plan.result_orbit_limit:
+                    raise _SearchStoppedError(
+                        "RESULT_ORBIT_LIMIT",
+                        visited_count=len(visited),
+                        consumed_work=ledger.consumed,
+                    )
+                ledger.charge("search_frontier", retained_work)
+                satisfying[closed] = state
+                satisfying_elements += max(len(closed), 1)
         if state.rank == problem.maximum_rank:
             continue
         child_keys: set[ClosedCandidateSet] = set()
-        for index in _branch_candidates(problem, closed, ledger):
+        child_key_elements = 0
+        for index in _branch_candidates(
+            problem,
+            closed,
+            ledger,
+            clause_membership_count=plan.clause_membership_count,
+        ):
             ledger.charge("search_frontier", ambient_dimension + state.rank + 1)
             child = _canonical_closure(
                 (*state.row_space_basis, plan.candidate_rows[index]),
@@ -782,18 +940,27 @@ def _search_satisfying_states(
                 ledger=ledger,
                 canonicalizer=canonicalizer,
             )
-            ledger.charge("search_frontier", _subset_container_work(len(child)))
-            child_keys.add(child)
-        retained_elements = sum(
-            max(len(item), 1)
-            for family in (child_keys, visited, queued)
-            for item in family
-        )
+            child_work = _subset_container_work(len(child))
+            ledger.charge("search_frontier", child_work)
+            if child not in child_keys:
+                ledger.charge("search_frontier", child_work)
+                child_keys.add(child)
+                child_key_elements += max(len(child), 1)
+        # Iterate only child_keys for the two membership filters and sort.  The
+        # retained visited/queued sets are hash lookup targets, not rescanned.
+        # This charge also covers the subsequent exact new-child element sum.
         ledger.charge(
             "search_frontier",
-            _subset_container_work(retained_elements, sorting=True),
+            3 * _subset_container_work(child_key_elements, sorting=True),
         )
-        new_children = tuple(sorted(child_keys.difference(visited, queued)))
+        new_children = tuple(
+            sorted(
+                child
+                for child in child_keys
+                if child not in visited and child not in queued
+            )
+        )
+        new_child_elements = sum(max(len(child), 1) for child in new_children)
         if len(visited) + len(queued) + len(new_children) > plan.state_orbit_limit:
             raise _SearchStoppedError(
                 "STATE_ORBIT_LIMIT",
@@ -802,27 +969,28 @@ def _search_satisfying_states(
             )
         ledger.charge(
             "search_frontier",
-            2
-            * _subset_container_work(sum(max(len(child), 1) for child in new_children)),
+            2 * _subset_container_work(new_child_elements),
         )
         queued.update(new_children)
         pending.extend(reversed(new_children))
-    return satisfying, visited, ledger, canonicalizer
+    return satisfying, visited, ledger, canonicalizer, satisfying_elements
 
 
 def _representatives_from_states(
     satisfying: dict[ClosedCandidateSet, _FlatState],
     *,
+    satisfying_elements: int,
     plan: _RationalFlatPlan,
     ambient_dimension: int,
     ledger: _WorkLedger,
     canonicalizer: _SubsetOrbitCanonicalizer,
-) -> tuple[RationalFlatOrbitRepresentative, ...]:
+) -> tuple[tuple[RationalFlatOrbitRepresentative, ...], int]:
     representatives: list[RationalFlatOrbitRepresentative] = []
-    retained_elements = sum(max(len(closed), 1) for closed in satisfying)
+    representative_bytes = 0
+    solution_flat_count = 0
     ledger.charge(
         "result_construction",
-        _subset_container_work(retained_elements, sorting=True),
+        _subset_container_work(satisfying_elements, sorting=True),
     )
     for closed, state in sorted(satisfying.items()):
         _require_execution_active(
@@ -842,26 +1010,63 @@ def _representatives_from_states(
                 + 16
             ),
         )
-        representatives.append(
-            RationalFlatOrbitRepresentative._from_kernel(
-                closed_candidate_indices=closed,
-                rank=state.rank,
-                row_space_basis=_basis_value(
+        representative = RationalFlatOrbitRepresentative._from_kernel(
+            closed_candidate_indices=closed,
+            rank=state.rank,
+            row_space_basis=_basis_value(
+                state.row_space_basis,
+                ambient_dimension=ambient_dimension,
+            ),
+            annihilator_basis=_basis_value(
+                _annihilator_basis(
                     state.row_space_basis,
                     ambient_dimension=ambient_dimension,
                 ),
-                annihilator_basis=_basis_value(
-                    _annihilator_basis(
-                        state.row_space_basis,
-                        ambient_dimension=ambient_dimension,
-                    ),
-                    ambient_dimension=ambient_dimension,
-                ),
-                orbit_size=orbit_size,
-                stabilizer_order=plan.symmetry_group_order // orbit_size,
-            )
+                ambient_dimension=ambient_dimension,
+            ),
+            orbit_size=orbit_size,
+            stabilizer_order=plan.symmetry_group_order // orbit_size,
         )
-    return tuple(representatives)
+        # Reserve model projection, canonical validation, and RFC encoding both
+        # for this exact-size measurement and for final dispatch delivery.
+        ledger.charge(
+            "result_encoding",
+            2 * _CANONICAL_PROJECTION_PASSES * plan.representative_encoding_work,
+        )
+        try:
+            encoded_representative_size = len(
+                encode_strict_json(representative.model_dump(mode="json"))
+            )
+        except CanonicalizationError:
+            raise _SearchStoppedError(
+                "RESULT_ORBIT_LIMIT",
+                visited_count=ledger.state_orbit_count,
+                consumed_work=ledger.consumed,
+            ) from None
+        projected_count = len(representatives) + 1
+        projected_representative_bytes = (
+            representative_bytes + encoded_representative_size
+        )
+        projected_solution_count = solution_flat_count + orbit_size
+        if (
+            _complete_result_size(
+                source_bytes=plan.source_bytes,
+                symmetry_group_order=plan.symmetry_group_order,
+                representative_count=projected_count,
+                representative_bytes=projected_representative_bytes,
+                solution_flat_count=projected_solution_count,
+            )
+            > CanonicalLimits().max_output_bytes
+        ):
+            raise _SearchStoppedError(
+                "RESULT_ORBIT_LIMIT",
+                visited_count=ledger.state_orbit_count,
+                consumed_work=ledger.consumed,
+            )
+        representatives.append(representative)
+        representative_bytes = projected_representative_bytes
+        solution_flat_count = projected_solution_count
+    return tuple(representatives), solution_flat_count
 
 
 def _incomplete_result(
@@ -889,12 +1094,17 @@ def _classify(
     plan: _RationalFlatPlan,
 ) -> ClauseConstrainedRationalFlatClassification:
     try:
-        satisfying, _visited, ledger, canonicalizer = _search_satisfying_states(
-            problem, plan
-        )
-        ambient_dimension = len(problem.candidates.coordinate_axis)
-        representatives = _representatives_from_states(
+        (
             satisfying,
+            _visited,
+            ledger,
+            canonicalizer,
+            satisfying_elements,
+        ) = _search_satisfying_states(problem, plan)
+        ambient_dimension = len(problem.candidates.coordinate_axis)
+        representatives, solution_flat_count = _representatives_from_states(
+            satisfying,
+            satisfying_elements=satisfying_elements,
             plan=plan,
             ambient_dimension=ambient_dimension,
             ledger=ledger,
@@ -914,6 +1124,7 @@ def _classify(
         problem=problem,
         symmetry_group_order=plan.symmetry_group_order,
         representatives=representatives,
+        solution_flat_count=solution_flat_count,
     )
     _require_execution_active(plan.deadline, "before rational-flat result delivery")
     return result

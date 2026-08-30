@@ -1,9 +1,8 @@
 """Complete clause-constrained rational-flat orbit classification."""
 
 import time
-from contextlib import ExitStack
+from dataclasses import replace
 from fractions import Fraction
-from itertools import combinations
 from threading import Event
 from typing import Any
 from unittest.mock import patch
@@ -11,7 +10,9 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 from sympy import Matrix
-from tests.fixtures.accounting import assert_charged_work_parity
+from tests.math.combinatorics.matroids.rational_flats._support import (
+    seven_coordinate_source_problem,
+)
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
@@ -174,90 +175,6 @@ def _brute_force_closed_sets(
             continue
         satisfying.append(closed)
     return tuple(sorted(satisfying))
-
-
-def _primitive_line(row: tuple[int, ...]) -> tuple[int, ...]:
-    first_nonzero = next((value for value in row if value), 0)
-    return tuple(-value for value in row) if first_nonzero < 0 else row
-
-
-def _permuted_row(
-    row: tuple[int, ...], permutation: tuple[int, ...]
-) -> tuple[int, ...]:
-    image = [0] * len(row)
-    for source, target in enumerate(permutation):
-        image[target] = row[source]
-    return _primitive_line(tuple(image))
-
-
-def _source_problem() -> ClauseConstrainedRationalFlatProblem:
-    ambient_dimension = 7
-    candidate_rows: list[tuple[int, ...]] = []
-    candidate_supports: list[frozenset[int]] = []
-    for support in combinations(range(ambient_dimension), 4):
-        first, second, third, fourth = support
-        for positive, negative in (
-            ((first, second), (third, fourth)),
-            ((first, third), (second, fourth)),
-            ((first, fourth), (second, third)),
-        ):
-            row = [0] * ambient_dimension
-            for coordinate in positive:
-                row[coordinate] = 1
-            for coordinate in negative:
-                row[coordinate] = -1
-            candidate_rows.append(_primitive_line(tuple(row)))
-            candidate_supports.append(frozenset(support))
-
-    candidates = tuple(candidate_rows)
-    candidate_index = {row: index for index, row in enumerate(candidates)}
-    assert len(candidates) == len(candidate_index) == 105
-    clauses = tuple(
-        tuple(
-            index
-            for index, support in enumerate(candidate_supports)
-            if support <= frozenset(five_set)
-        )
-        for five_set in combinations(range(ambient_dimension), 5)
-    )
-    assert len(clauses) == 21
-    assert {len(clause) for clause in clauses} == {15}
-
-    forbidden_rows = tuple(
-        tuple(
-            1 if coordinate == first else -1 if coordinate == second else 0
-            for coordinate in range(ambient_dimension)
-        )
-        for first, second in combinations(range(ambient_dimension), 2)
-    )
-    coordinate_generators = (
-        (1, 0, 2, 3, 4, 5, 6),
-        (1, 2, 3, 4, 5, 6, 0),
-    )
-    symmetry_generators = tuple(
-        RationalFlatSymmetryGenerator(
-            coordinate_permutation=permutation,
-            candidate_permutation=tuple(
-                candidate_index[_permuted_row(row, permutation)] for row in candidates
-            ),
-        )
-        for permutation in coordinate_generators
-    )
-    return ClauseConstrainedRationalFlatProblem(
-        candidates=RationalVectorConfiguration(
-            coordinate_axis=tuple(
-                f"a{index + 1}" for index in range(ambient_dimension)
-            ),
-            vector_labels=tuple(
-                f"equation_{index}" for index in range(len(candidates))
-            ),
-            vectors=_sparse(candidates, columns=ambient_dimension),
-        ),
-        clauses=clauses,
-        forbidden_vectors=_sparse(forbidden_rows, columns=ambient_dimension),
-        rank_interval=RationalFlatRankInterval(minimum=4, maximum=5),
-        symmetry_generators=symmetry_generators,
-    )
 
 
 def test_satisfied_clause_does_not_stop_satisfying_superflat_enumeration() -> None:
@@ -526,7 +443,7 @@ def test_tiny_search_matches_independent_symbolic_flat_oracle() -> None:
 
 
 def test_result_orbit_envelope_returns_no_partial_mathematical_family() -> None:
-    dimension = 16
+    dimension = 12
     rows = tuple(
         tuple(int(row == column) for column in range(dimension))
         for row in range(dimension)
@@ -539,8 +456,8 @@ def test_result_orbit_envelope_returns_no_partial_mathematical_family() -> None:
     assert first == second
     assert first.outcome.status == "INCOMPLETE"
     assert first.outcome.reason == "RESULT_ORBIT_LIMIT"
-    assert first.outcome.explored_state_orbit_count > 0
-    assert first.outcome.result_orbit_limit > 0
+    assert first.outcome.explored_state_orbit_count == 2**dimension
+    assert first.outcome.result_orbit_limit == 4_096
     assert first.outcome.consumed_search_work > 0
     assert (
         ClauseConstrainedRationalFlatClassification.model_validate_json(
@@ -551,7 +468,7 @@ def test_result_orbit_envelope_returns_no_partial_mathematical_family() -> None:
 
 
 def test_large_complete_family_fits_the_canonical_transport_envelope() -> None:
-    dimension = 8
+    dimension = 9
     rows = tuple(
         tuple(int(row == column) for column in range(dimension))
         for row in range(dimension)
@@ -563,9 +480,8 @@ def test_large_complete_family_fits_the_canonical_transport_envelope() -> None:
 
     assert result.outcome.status == "COMPLETE_EXACT"
     assert result.outcome.orbit_count == 2**dimension
-    assert len(encode_strict_json(result.model_dump(mode="json"))) <= (
-        CanonicalLimits().max_output_bytes
-    )
+    assert len(encode_strict_json(result.model_dump(mode="json"))) == 1_036_729
+    assert CanonicalLimits().max_output_bytes > 1_036_729
 
 
 def test_request_and_complete_result_round_trip_through_strict_json() -> None:
@@ -657,97 +573,153 @@ def test_raw_sparse_axes_and_nonzeros_are_rejected_before_nested_copying() -> No
     )
 
 
-def test_named_search_ledger_charges_every_observed_primitive() -> None:
-    swap = RationalFlatSymmetryGenerator(
-        coordinate_permutation=(1, 0),
-        candidate_permutation=(1, 0, 2),
+@pytest.mark.parametrize("container_kind", ["recursive", "too_deep"])
+def test_raw_recursive_or_excessively_nested_containers_are_typed_rejections(
+    container_kind: str,
+) -> None:
+    raw = _minimal_raw_request()
+    clauses: list[Any] = []
+    if container_kind == "recursive":
+        clauses.append(clauses)
+    else:
+        nested: list[Any] = []
+        for _ in range(CanonicalLimits().max_depth + 1):
+            nested = [nested]
+        clauses.append(nested)
+    raw["problem"]["clauses"] = clauses
+
+    with pytest.raises(ValidationError) as caught:
+        ClauseConstrainedRationalFlatRequest.model_validate(raw)
+
+    assert caught.value.errors()[0]["type"] == ("rational_flat.raw_container_structure")
+
+
+def test_orbit_traversal_charges_exact_units_before_cache_mutation() -> None:
+    unit = flat_kernel._subset_container_work(1)
+    stopped_ledger = flat_kernel._WorkLedger(
+        limit=unit,
+        linear_algebra_chunk_cost=1,
+        deadline=None,
     )
-    problem = _problem(
-        ((1, 0), (0, 1), (1, 1)),
-        columns=2,
-        symmetry_generators=(swap,),
+    stopped_canonicalizer = flat_kernel._SubsetOrbitCanonicalizer(())
+
+    with pytest.raises(flat_kernel._SearchStoppedError) as stopped:
+        stopped_canonicalizer.canonicalize((0,), stopped_ledger)
+
+    assert stopped.value.reason == "SEARCH_WORK_LIMIT"
+    assert stopped_ledger.consumed == unit
+    assert stopped_ledger.charged_by_primitive == {"subset_lookup": unit}
+    assert stopped_canonicalizer._cache == {}
+
+    ledger = flat_kernel._WorkLedger(
+        limit=10_000,
+        linear_algebra_chunk_cost=1,
+        deadline=None,
     )
-    executed = dict.fromkeys(
-        (
-            "row_reduction",
-            "candidate_span_scan",
-            "forbidden_span_scan",
-            "subset_lookup",
-            "subset_cache",
-            "subset_storage",
-            "subset_action",
-            "state_cache",
-            "clause_scan",
-            "search_frontier",
-            "result_construction",
-        ),
-        0,
-    )
+    canonicalizer = flat_kernel._SubsetOrbitCanonicalizer(((1, 0),))
 
-    original_canonicalize = flat_kernel._SubsetOrbitCanonicalizer.canonicalize
-
-    def counted(name: str, function: Any) -> Any:
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            executed[name] += 1
-            return function(*args, **kwargs)
-
-        return wrapper
-
-    def counted_canonicalize(
-        owner: Any,
-        subset: tuple[int, ...],
-        ledger: Any,
-    ) -> tuple[tuple[int, ...], int]:
-        executed["subset_lookup"] += 1
-        if subset not in owner._cache:
-            executed["subset_cache"] += 1
-            if owner._generators:
-                executed["subset_storage"] += 1
-                executed["subset_action"] += 1
-        return original_canonicalize(owner, subset, ledger)
-
-    observed_functions = {
-        "_rref_basis": "row_reduction",
-        "_closed_candidates": "candidate_span_scan",
-        "_contains_forbidden_row": "forbidden_span_scan",
-        "_branch_candidates": "clause_scan",
-        "_clauses_are_satisfied": "clause_scan",
+    assert canonicalizer.canonicalize((0,), ledger) == ((0,), 2)
+    assert ledger.charged_by_primitive == {
+        "subset_lookup": unit,
+        "subset_storage": 6 * unit,
+        "subset_action": 2 * unit,
+        "subset_cache": flat_kernel._subset_container_work(2, sorting=True),
     }
-    with ExitStack() as stack:
-        for function_name, primitive in observed_functions.items():
-            original = getattr(flat_kernel, function_name)
-            stack.enter_context(
-                patch.object(flat_kernel, function_name, counted(primitive, original))
-            )
-        stack.enter_context(
-            patch.object(
-                flat_kernel._SubsetOrbitCanonicalizer,
-                "canonicalize",
-                autospec=True,
-                side_effect=counted_canonicalize,
-            )
+    assert set(canonicalizer._cache) == {(0,), (1,)}
+
+
+def test_search_work_limit_is_a_typed_stop_at_the_next_exact_charge() -> None:
+    problem = _problem((), columns=1)
+    plan = flat_kernel._admit_problem(problem)
+    admission_work = plan.ledger.consumed
+    initial_span_work = (
+        flat_kernel._span_membership_scalar_work(
+            query_count=0,
+            rank=0,
+            ambient_dimension=1,
         )
-        plan = flat_kernel._admit_problem(problem)
-        satisfying, visited, ledger, canonicalizer = (
-            flat_kernel._search_satisfying_states(problem, plan)
-        )
-        representatives = flat_kernel._representatives_from_states(
-            satisfying,
-            plan=plan,
-            ambient_dimension=2,
-            ledger=ledger,
-            canonicalizer=canonicalizer,
-        )
+        * plan.linear_algebra_chunk_cost
+    )
+    subset_unit = flat_kernel._subset_container_work(0)
+    exact_cutoff = admission_work + initial_span_work + 2 * subset_unit
+    plan.ledger.limit = exact_cutoff
+    plan = replace(plan, search_work_limit=exact_cutoff)
+
+    result = flat_kernel._classify(problem, plan)
+
+    assert result.outcome.status == "INCOMPLETE"
+    assert result.outcome.reason == "SEARCH_WORK_LIMIT"
+    assert result.outcome.explored_state_orbit_count == 0
+    assert result.outcome.consumed_search_work == exact_cutoff
+    assert result.outcome.search_work_limit == exact_cutoff
+
+
+def test_state_orbit_limit_stops_before_retaining_the_next_frontier() -> None:
+    problem = _problem(((1,),), columns=1)
+    plan = replace(flat_kernel._admit_problem(problem), state_orbit_limit=1)
+
+    result = flat_kernel._classify(problem, plan)
+
+    assert result.outcome.status == "INCOMPLETE"
+    assert result.outcome.reason == "STATE_ORBIT_LIMIT"
+    assert result.outcome.explored_state_orbit_count == 1
+    assert result.outcome.state_orbit_limit == 1
+
+
+def test_one_request_ledger_covers_admission_search_and_result_encoding() -> None:
+    problem = _problem(((1, 0), (0, 1)), columns=2)
+    plan = flat_kernel._admit_problem(problem)
+    admission_work = plan.ledger.consumed
+    ledger_identity = id(plan.ledger)
+
+    satisfying, _visited, ledger, canonicalizer, satisfying_elements = (
+        flat_kernel._search_satisfying_states(problem, plan)
+    )
+    representatives, solution_count = flat_kernel._representatives_from_states(
+        satisfying,
+        satisfying_elements=satisfying_elements,
+        plan=plan,
+        ambient_dimension=2,
+        ledger=ledger,
+        canonicalizer=canonicalizer,
+    )
 
     assert representatives
-    executed["state_cache"] = len(visited)
-    executed["search_frontier"] = len(visited)
-    executed["result_construction"] = len(representatives)
-    assert set(ledger.charged_by_primitive) == set(executed)
-    assert_charged_work_parity(
-        charged=ledger.charged_by_primitive,
-        executed=executed,
+    assert id(ledger) == ledger_identity
+    assert (
+        ledger.charged_by_primitive["admission_normalization"]
+        + ledger.charged_by_primitive["admission_symmetry"]
+        + ledger.charged_by_primitive["source_encoding"]
+        == admission_work
     )
+    assert ledger.consumed == sum(ledger.charged_by_primitive.values())
+    assert ledger.charged_by_primitive["result_encoding"] == (
+        2
+        * flat_kernel._CANONICAL_PROJECTION_PASSES
+        * len(representatives)
+        * plan.representative_encoding_work
+    )
+    assert ledger.charged_by_primitive["result_encoding"] >= sum(
+        len(encode_strict_json(item.model_dump(mode="json")))
+        for item in representatives
+    )
+    representative_sizes = tuple(
+        len(encode_strict_json(item.model_dump(mode="json")))
+        for item in representatives
+    )
+    result = ClauseConstrainedRationalFlatClassification._complete_from_kernel(
+        problem=problem,
+        symmetry_group_order=plan.symmetry_group_order,
+        representatives=representatives,
+        solution_flat_count=solution_count,
+    )
+    assert flat_kernel._complete_result_size(
+        source_bytes=plan.source_bytes,
+        symmetry_group_order=plan.symmetry_group_order,
+        representative_count=len(representatives),
+        representative_bytes=sum(representative_sizes),
+        solution_flat_count=solution_count,
+    ) == len(encode_strict_json(result.model_dump(mode="json")))
 
 
 def test_span_work_combines_rref_and_forbidden_row_heights() -> None:
@@ -829,8 +801,8 @@ def test_timeout_and_cancellation_are_observed_after_admission() -> None:
         classify_clause_constrained_rational_flats(problem)
 
 
-def test_seven_coordinate_regression_has_two_complete_orbits() -> None:
-    problem = _source_problem()
+def test_seven_coordinate_regression_has_348_rooted_flats() -> None:
+    problem = seven_coordinate_source_problem()
 
     result = classify_clause_constrained_rational_flats(problem)
 
@@ -866,6 +838,7 @@ def test_seven_coordinate_regression_has_two_complete_orbits() -> None:
         )
     )
     assert rooted_incidence == (36, 312)
+    assert sum(rooted_incidence) == 348
 
     candidate_rows = _dense_rows(problem.candidates.vectors)
     forbidden_rows = _dense_rows(problem.forbidden_vectors)

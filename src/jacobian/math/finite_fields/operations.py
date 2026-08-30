@@ -57,7 +57,9 @@ def matrix_rank(matrix: AxisBoundMatrix):
         result_probe = encode_strict_json(
             {
                 "matrix": matrix.model_dump(mode="json"),
-                "rank": min(len(matrix.row_axis.labels), len(matrix.column_axis.labels)),
+                "rank": min(
+                    len(matrix.row_axis.labels), len(matrix.column_axis.labels)
+                ),
                 "pivot_rows": list(matrix.row_axis.labels),
                 "pivot_columns": list(matrix.column_axis.labels),
             }

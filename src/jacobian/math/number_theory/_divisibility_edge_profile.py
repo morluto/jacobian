@@ -39,10 +39,10 @@ def compute_divisibility_edge_profile(
             location=("values",), code=exc.type, message=exc.message()
         ) from exc
     except FactorizationIncompleteError as exc:
-        raise OperationDomainValidationError(
-            location=("values",),
-            code="divisibility_edge.factorization_incomplete",
-            message="bounded factorization did not establish every quotient",
+        failure = exc.failure
+        failure_kind = failure.kind if failure is not None else "UNKNOWN"
+        raise RuntimeError(
+            "divisibility edge factorization worker failed: " + failure_kind
         ) from exc
 
 

@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+_MAX_CONTAINER_DEPTH = 256
+
 
 def canonicalize_json_containers(value: Any) -> Any:
     """Materialize JSON arrays as immutable canonical containers.
@@ -15,15 +17,31 @@ def canonicalize_json_containers(value: Any) -> Any:
     values use tuples for every sequence, so owner-local preflight validators
     must return this projection rather than raw JSON arrays.  Mappings are
     copied recursively: callers retain ownership of their transport payload.
+
+    A bounded depth guard converts deeply nested or cyclic raw data into a
+    ``CanonicalizationError`` before recursion can exhaust the interpreter
+    stack.
     """
 
-    if isinstance(value, list):
-        return tuple(canonicalize_json_containers(item) for item in value)
-    if isinstance(value, tuple):
-        return tuple(canonicalize_json_containers(item) for item in value)
-    if isinstance(value, dict):
-        return {key: canonicalize_json_containers(item) for key, item in value.items()}
-    return value
+    from jacobian.canonical import CanonicalizationError
+
+    def _canonicalize(inner: Any, depth: int) -> Any:
+        if depth > _MAX_CONTAINER_DEPTH:
+            raise CanonicalizationError(
+                f"container nesting exceeds {_MAX_CONTAINER_DEPTH} levels"
+            )
+        if isinstance(inner, list):
+            return tuple(_canonicalize(item, depth + 1) for item in inner)
+        if isinstance(inner, tuple):
+            return tuple(_canonicalize(item, depth + 1) for item in inner)
+        if isinstance(inner, dict):
+            return {
+                key: _canonicalize(item, depth + 1)
+                for key, item in inner.items()
+            }
+        return inner
+
+    return _canonicalize(value, 0)
 
 
 class StrictModel(BaseModel):

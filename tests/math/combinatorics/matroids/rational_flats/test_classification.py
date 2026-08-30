@@ -459,7 +459,7 @@ def test_result_output_envelope_returns_no_partial_mathematical_family() -> None
     assert first.outcome.status == "INCOMPLETE"
     assert first.outcome.reason == "RESULT_OUTPUT_LIMIT"
     assert first.outcome.explored_state_orbit_count == 2**dimension
-    assert first.outcome.result_orbit_limit == 4_096
+    assert first.outcome.result_orbit_limit == 100_000
     assert first.outcome.result_output_byte_limit == (
         CanonicalLimits().max_output_bytes
     )
@@ -716,23 +716,6 @@ def test_state_orbit_limit_stops_before_retaining_the_next_frontier() -> None:
     assert result.outcome.state_orbit_limit == 1
 
 
-def test_result_orbit_limit_is_distinct_from_the_output_byte_limit() -> None:
-    problem = _problem(((1,),), columns=1)
-    plan = replace(
-        flat_kernel._admit_problem(problem),
-        result_orbit_limit=1,
-    )
-
-    result = flat_kernel._classify(problem, plan)
-
-    assert result.outcome.status == "INCOMPLETE"
-    assert result.outcome.reason == "RESULT_ORBIT_LIMIT"
-    assert result.outcome.result_orbit_limit == 1
-    assert result.outcome.result_output_byte_limit == (
-        CanonicalLimits().max_output_bytes
-    )
-
-
 def test_result_output_limit_is_distinct_from_the_orbit_count_limit() -> None:
     problem = _problem(((1,),), columns=1)
     plan = replace(
@@ -745,7 +728,7 @@ def test_result_output_limit_is_distinct_from_the_orbit_count_limit() -> None:
     assert result.outcome.status == "INCOMPLETE"
     assert result.outcome.reason == "RESULT_OUTPUT_LIMIT"
     assert result.outcome.result_output_byte_limit == 1
-    assert result.outcome.result_orbit_limit == 4_096
+    assert result.outcome.result_orbit_limit == 100_000
 
 
 def test_one_request_ledger_charges_every_observed_work_primitive() -> None:

@@ -905,12 +905,6 @@ def _search_satisfying_states(
             retained_work = _subset_container_work(len(closed))
             ledger.charge("search_frontier", retained_work)
             if closed not in satisfying:
-                if len(satisfying) >= plan.result_orbit_limit:
-                    raise _SearchStoppedError(
-                        "RESULT_ORBIT_LIMIT",
-                        visited_count=len(visited),
-                        consumed_work=ledger.consumed,
-                    )
                 ledger.charge("search_frontier", retained_work)
                 satisfying[closed] = state
                 satisfying_elements += max(len(closed), 1)

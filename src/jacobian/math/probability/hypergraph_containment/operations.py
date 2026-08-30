@@ -110,9 +110,7 @@ def _admit_hypergraph_vertex_containment(
     else:
         edge_masks = ()
         active_vertices = ()
-    support_size = len(
-        {member for _, members in hypergraph.edges for member in members}
-    )
+    support_size = len(active_vertices)
     probability_digits = (
         1
         if trivial_event
@@ -190,11 +188,13 @@ def compute_hypergraph_vertex_containment(
 
     active_n = len(plan.active_vertices)
     isolated_n = n - active_n
+    active_counts: list[int] = [0] * (active_n + 1)
     counts: list[int] = [0] * (n + 1)
     for mask in range(1 << active_n):
         k = mask.bit_count()
         contains_edge = any(edge_mask & ~mask == 0 for edge_mask in edge_masks)
         if contains_edge:
+            active_counts[k] += 1
             for isolated_k in range(isolated_n + 1):
                 counts[k + isolated_k] += comb(isolated_n, isolated_k)
 
@@ -203,8 +203,8 @@ def compute_hypergraph_vertex_containment(
     p = retention_probability.as_fraction()
     q = 1 - p
     prob = Fraction(0)
-    for k in range(n + 1):
-        prob += counts[k] * (p**k) * (q ** (n - k))
+    for k in range(active_n + 1):
+        prob += active_counts[k] * (p**k) * (q ** (active_n - k))
 
     return HypergraphVertexContainmentResult(
         hypergraph=hypergraph,

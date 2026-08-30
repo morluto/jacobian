@@ -8,6 +8,11 @@ from jacobian._exact import (
     CanonicalRational,
     canonical_rational_component_digits,
 )
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -19,6 +24,8 @@ from jacobian.math.probability.hypergraph_containment._models import (
 )
 
 __all__ = ["compute_hypergraph_vertex_containment"]
+
+MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 def _admit_hypergraph_vertex_containment(
@@ -59,11 +66,37 @@ def _admit_hypergraph_vertex_containment(
             code="hypergraph_containment.work_bound_exceeded",
             message="the complete subset containment work envelope is exceeded",
         )
-    if n * canonical_rational_component_digits(retention_probability) > 32_768:
+    probability_digits = n * canonical_rational_component_digits(retention_probability)
+    if probability_digits > 32_768:
         raise OperationDomainValidationError(
             location=("retention_probability",),
             code="hypergraph_containment.result_growth_exceeded",
             message="probability rational growth exceeds the canonical digit envelope",
+        )
+    try:
+        result_probe = {
+            "hypergraph": hypergraph.model_dump(mode="json"),
+            "retention_probability": retention_probability.model_dump(mode="json"),
+            "containing_subset_counts": [0] * (n + 1),
+            "total_state_count": state_count,
+            "success_count": state_count,
+            "probability": {
+                "num": "9" * max(1, probability_digits),
+                "den": "9" * max(1, probability_digits),
+            },
+        }
+        result_bytes = len(encode_strict_json(result_probe))
+    except CanonicalizationError as exc:
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="hypergraph_containment.result_size_bound",
+            message="the complete containment profile exceeds the canonical output bound",
+        ) from exc
+    if result_bytes > MAX_RESULT_BYTES:
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="hypergraph_containment.result_size_bound",
+            message="the complete containment profile exceeds the canonical output bound",
         )
     vertex_index = {vertex: index for index, vertex in enumerate(hypergraph.vertices)}
     return tuple(

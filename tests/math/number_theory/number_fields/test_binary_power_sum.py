@@ -9,9 +9,15 @@ from functools import cmp_to_key
 
 import pytest
 from pydantic import ValidationError
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import OperationExecutionTimeoutError, request_execution
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_execution,
+)
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.number_fields import (
@@ -29,7 +35,11 @@ from jacobian.math.number_theory.number_fields._binary_power_sum import (
     MAX_BINARY_POWER_SUM_RESULT_BYTES,
     BinaryPowerSumAdmissionError,
     NumberFieldBinaryPowerSumGapProfileRequest,
+    _execute_binary_power_sum_gap_profile,
     admit_binary_power_sum_gap_profile,
+)
+from jacobian.math.number_theory.number_fields._embeddings_process import (
+    EMBEDDINGS_WORKER_WALL_SECONDS,
 )
 from jacobian.math.number_theory.number_fields._tools import TOOLS
 from jacobian.math.number_theory.number_fields.values import (
@@ -480,6 +490,63 @@ def test_result_validation_requires_first_exactly_matching_gap_summary() -> None
         caught.value.errors()[0]["type"]
         == "binary_power_sum.gap_summary_first_match"
     )
+
+
+def test_representative_profile_charges_every_executed_math_phase() -> None:
+    field = _field("1", "0")
+    (record,) = _real_records(field)
+    execution = _execute_binary_power_sum_gap_profile(
+        _binding(_element(field, Fraction(3, 2)), record), 3
+    )
+
+    assert execution.work.phase_counts() == {
+        "base_slice_comparison": 2,
+        "frontier_addition": 7,
+        "power_multiplication": 2,
+        "gap_subtraction": 7,
+        "gap_certification": 7,
+        "sort_comparison": 18,
+        "summary_comparison": 12,
+    }
+    assert_charged_work_parity(
+        charged=execution.admission.work_bounds(),
+        executed=execution.work.phase_counts(),
+    )
+    assert execution.work.field_operation_count == (
+        execution.admission.field_operation_count
+    )
+    assert execution.work.comparison_count <= execution.admission.comparison_count
+
+
+@pytest.mark.parametrize(
+    ("caller_seconds", "recognition_seconds"),
+    [
+        (60.0, 60.0),
+        (300.0, EMBEDDINGS_WORKER_WALL_SECONDS),
+    ],
+)
+def test_embedding_recognition_subdeadline_preserves_the_caller_envelope(
+    caller_seconds: float,
+    recognition_seconds: float,
+) -> None:
+    field = _field("1", "0")
+    (record,) = _real_records(field)
+    base = _binding(_element(field, Fraction(3, 2)), record)
+    started = time.monotonic()
+    caller_deadline = started + caller_seconds
+
+    with request_execution(started):
+        bind_request_deadline(caller_deadline)
+        execution = _execute_binary_power_sum_gap_profile(base, 0)
+        active = current_request_execution()
+
+    assert execution.deadlines.profile_deadline == caller_deadline
+    assert execution.deadlines.embedding_recognition_deadline == (
+        started + recognition_seconds
+    )
+    assert execution.deadlines.resumed_profile_deadline == caller_deadline
+    assert active is not None
+    assert active.deadline == caller_deadline
 
 
 def test_catalog_operation_runs_example_and_projects_domain_errors() -> None:

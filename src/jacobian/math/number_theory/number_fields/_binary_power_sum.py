@@ -458,6 +458,13 @@ class BinaryPowerSumAdmissionError(ValueError):
 class BinaryPowerSumAdmission:
     source_representation_count: int
     representation_bit_slots: int
+    base_slice_comparison_bound: int
+    frontier_addition_bound: int
+    power_multiplication_bound: int
+    gap_subtraction_bound: int
+    gap_certification_bound: int
+    sort_comparison_bound: int
+    summary_comparison_bound: int
     field_operation_count: int
     comparison_count: int
     coordinate_numerator_bound: int
@@ -466,6 +473,91 @@ class BinaryPowerSumAdmission:
     base_lower_admission: RealEmbeddingDifferenceAdmission
     base_upper_admission: RealEmbeddingDifferenceAdmission
     predicted_result_bytes: int
+
+    def work_bounds(self) -> dict[str, int]:
+        """Return the preflight charge for every executed mathematical phase."""
+
+        return {
+            "base_slice_comparison": self.base_slice_comparison_bound,
+            "frontier_addition": self.frontier_addition_bound,
+            "power_multiplication": self.power_multiplication_bound,
+            "gap_subtraction": self.gap_subtraction_bound,
+            "gap_certification": self.gap_certification_bound,
+            "sort_comparison": self.sort_comparison_bound,
+            "summary_comparison": self.summary_comparison_bound,
+        }
+
+
+@dataclass(slots=True)
+class _BinaryPowerSumWorkLedger:
+    """Actual mathematical primitives executed by one admitted profile."""
+
+    base_slice_comparisons: int = 0
+    frontier_additions: int = 0
+    power_multiplications: int = 0
+    gap_subtractions: int = 0
+    gap_certifications: int = 0
+    sort_comparisons: int = 0
+    summary_comparisons: int = 0
+
+    @property
+    def field_operation_count(self) -> int:
+        return (
+            self.frontier_additions
+            + self.power_multiplications
+            + self.gap_subtractions
+        )
+
+    @property
+    def comparison_count(self) -> int:
+        return (
+            self.base_slice_comparisons
+            + self.gap_certifications
+            + self.sort_comparisons
+            + self.summary_comparisons
+        )
+
+    def phase_counts(self) -> dict[str, int]:
+        return {
+            "base_slice_comparison": self.base_slice_comparisons,
+            "frontier_addition": self.frontier_additions,
+            "power_multiplication": self.power_multiplications,
+            "gap_subtraction": self.gap_subtractions,
+            "gap_certification": self.gap_certifications,
+            "sort_comparison": self.sort_comparisons,
+            "summary_comparison": self.summary_comparisons,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class _BinaryPowerSumDeadlineTrace:
+    profile_deadline: float
+    embedding_recognition_deadline: float | None
+    resumed_profile_deadline: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class _BinaryPowerSumExecution:
+    result: BinaryPowerSumGapProfile
+    admission: BinaryPowerSumAdmission
+    work: _BinaryPowerSumWorkLedger
+    deadlines: _BinaryPowerSumDeadlineTrace
+
+
+def _require_work_within_admission(
+    admission: BinaryPowerSumAdmission,
+    work: _BinaryPowerSumWorkLedger,
+) -> None:
+    bounds = admission.work_bounds()
+    for phase, actual in work.phase_counts().items():
+        if actual > bounds[phase]:
+            raise RuntimeError(
+                f"binary power-sum {phase} work exceeded its admitted bound"
+            )
+    if work.field_operation_count > admission.field_operation_count:
+        raise RuntimeError("binary power-sum field work exceeded its admitted bound")
+    if work.comparison_count > admission.comparison_count:
+        raise RuntimeError("binary power-sum comparison work exceeded its admitted bound")
 
 
 def _decimal_digits_from_bits(bits: int) -> int:
@@ -625,15 +717,35 @@ def admit_binary_power_sum_gap_profile(
             f"{MAX_BINARY_POWER_SUM_REPRESENTATION_BIT_SLOTS:,}-bit-slot bound",
         )
 
-    field_operation_count = 2 * (representation_count - 1) + max(
-        exponent_count - 1, 0
+    base_slice_comparison_bound = 2
+    frontier_addition_bound = representation_count - 1
+    power_multiplication_bound = max(exponent_count - 1, 0)
+    gap_subtraction_bound = representation_count - 1
+    gap_certification_bound = representation_count - 1
+    # CPython's stable comparison sort is charged conservatively above the
+    # binary information bound. Every actual comparator call is counted below.
+    sort_comparison_bound = (
+        0
+        if representation_count == 1
+        else representation_count * (exponent_count + 2)
+    )
+    summary_comparison_bound = 2 * max(representation_count - 2, 0)
+    field_operation_count = (
+        frontier_addition_bound
+        + power_multiplication_bound
+        + gap_subtraction_bound
     )
     if field_operation_count > MAX_BINARY_POWER_SUM_FIELD_OPERATIONS:
         raise BinaryPowerSumAdmissionError(
             "field_operation_bound",
             "binary power-sum recurrence exceeds the exact field-operation bound",
         )
-    comparison_count = representation_count * (exponent_count + 5)
+    comparison_count = (
+        base_slice_comparison_bound
+        + gap_certification_bound
+        + sort_comparison_bound
+        + summary_comparison_bound
+    )
     if comparison_count > MAX_BINARY_POWER_SUM_COMPARISONS:
         raise BinaryPowerSumAdmissionError(
             "comparison_bound",
@@ -717,6 +829,13 @@ def admit_binary_power_sum_gap_profile(
     return BinaryPowerSumAdmission(
         source_representation_count=representation_count,
         representation_bit_slots=representation_bit_slots,
+        base_slice_comparison_bound=base_slice_comparison_bound,
+        frontier_addition_bound=frontier_addition_bound,
+        power_multiplication_bound=power_multiplication_bound,
+        gap_subtraction_bound=gap_subtraction_bound,
+        gap_certification_bound=gap_certification_bound,
+        sort_comparison_bound=sort_comparison_bound,
+        summary_comparison_bound=summary_comparison_bound,
         field_operation_count=field_operation_count,
         comparison_count=comparison_count,
         coordinate_numerator_bound=numerator_bound,
@@ -986,11 +1105,47 @@ def _constant_element(
     )
 
 
-def binary_power_sum_gap_profile(
+def _recognize_profile_base(
+    base: SimpleNumberFieldRealEmbeddingBinding,
+    *,
+    profile_deadline: float,
+) -> tuple[RecognizedRealEmbeddingContext, _BinaryPowerSumDeadlineTrace]:
+    """Recognize the selected root without widening the caller's envelope."""
+
+    try:
+        context = recognize_real_embedding_binding(base)
+    except NumberFieldRealEmbeddingOrderError as exc:
+        raise BinaryPowerSumAdmissionError(exc.reason, str(exc)) from exc
+    recognition_execution = current_request_execution()
+    recognition_deadline = (
+        recognition_execution.deadline
+        if recognition_execution is not None
+        else None
+    )
+    if recognition_deadline is not None and recognition_deadline > profile_deadline:
+        raise RuntimeError("embedding recognition extended the profile deadline")
+
+    # The embedding producer applies its stricter one-worker subdeadline. The
+    # remaining admitted profile work resumes under this operation's envelope.
+    bind_request_deadline(profile_deadline)
+    resumed_execution = current_request_execution()
+    resumed_deadline = (
+        resumed_execution.deadline if resumed_execution is not None else None
+    )
+    if resumed_deadline is not None and resumed_deadline != profile_deadline:
+        raise RuntimeError("binary power-sum profile deadline was not restored")
+    return context, _BinaryPowerSumDeadlineTrace(
+        profile_deadline=profile_deadline,
+        embedding_recognition_deadline=recognition_deadline,
+        resumed_profile_deadline=resumed_deadline,
+    )
+
+
+def _execute_binary_power_sum_gap_profile(
     base: SimpleNumberFieldRealEmbeddingBinding,
     exponent_count: int,
-) -> BinaryPowerSumGapProfile:
-    """Return every exact binary power sum, collision, and consecutive gap."""
+) -> _BinaryPowerSumExecution:
+    """Execute one profile and retain its owner-local accounting evidence."""
 
     execution = current_request_execution()
     started = execution.started_at if execution is not None else time.monotonic()
@@ -1004,14 +1159,12 @@ def binary_power_sum_gap_profile(
     _require_execution_active(deadline, "before binary power-sum admission")
     admission = admit_binary_power_sum_gap_profile(base, exponent_count)
     _require_execution_active(deadline, "after binary power-sum admission")
+    work = _BinaryPowerSumWorkLedger()
 
-    try:
-        context = recognize_real_embedding_binding(base)
-    except NumberFieldRealEmbeddingOrderError as exc:
-        raise BinaryPowerSumAdmissionError(exc.reason, str(exc)) from exc
-    # The embedding producer applies its stricter one-worker subdeadline. The
-    # remaining admitted profile work resumes under this operation's envelope.
-    bind_request_deadline(deadline)
+    context, deadlines = _recognize_profile_base(
+        base,
+        profile_deadline=deadline,
+    )
     _require_execution_active(deadline, "after selected-embedding recognition")
     evaluator = _SelectedRealEmbeddingEvaluator(
         context,
@@ -1025,14 +1178,18 @@ def binary_power_sum_gap_profile(
     backend_base = context.to_backend(base.element)
     one = _constant_element(context, 1)
     two = _constant_element(context, 2)
+    lower_difference = backend_base - context.to_backend(one)
+    work.base_slice_comparisons += 1
     lower_order, _lower_enclosure = evaluator.sign(
-        backend_base - context.to_backend(one),
-        context.from_backend(backend_base - context.to_backend(one)),
+        lower_difference,
+        context.from_backend(lower_difference),
         admission.base_lower_admission,
     )
+    upper_difference = backend_base - context.to_backend(two)
+    work.base_slice_comparisons += 1
     upper_order, _upper_enclosure = evaluator.sign(
-        backend_base - context.to_backend(two),
-        context.from_backend(backend_base - context.to_backend(two)),
+        upper_difference,
+        context.from_backend(upper_difference),
         admission.base_upper_admission,
     )
     if lower_order != "GT" or upper_order != "LT":
@@ -1050,6 +1207,7 @@ def binary_power_sum_gap_profile(
         next_buckets: dict[Any, list[BinaryPowerSumBitVector]] = {}
         for value, representations in backend_buckets.items():
             unshifted = next_buckets.setdefault(value, [])
+            work.frontier_additions += 1
             shifted = next_buckets.setdefault(value + power, [])
             unshifted.extend(
                 (*representation, 0) for representation in representations
@@ -1059,6 +1217,7 @@ def binary_power_sum_gap_profile(
             )
         backend_buckets = next_buckets
         if exponent + 1 < exponent_count:
+            work.power_multiplications += 1
             power *= backend_base
         _require_execution_active(deadline, f"after power-sum frontier {exponent}")
 
@@ -1072,6 +1231,11 @@ def binary_power_sum_gap_profile(
     ]
 
     def compare_buckets(left: _PowerSumBucket, right: _PowerSumBucket) -> int:
+        work.sort_comparisons += 1
+        if work.sort_comparisons > admission.sort_comparison_bound:
+            raise RuntimeError(
+                "binary power-sum sort exceeded its admitted comparison bound"
+            )
         return evaluator.compare(
             left.backend_value,
             right.backend_value,
@@ -1092,8 +1256,10 @@ def binary_power_sum_gap_profile(
     for index, (lower_bucket, upper_bucket) in enumerate(
         pairwise(buckets)
     ):
+        work.gap_subtractions += 1
         backend_difference = upper_bucket.backend_value - lower_bucket.backend_value
         public_difference = context.from_backend(backend_difference)
+        work.gap_certifications += 1
         order, positive_enclosure = evaluator.certify(
             backend_difference,
             public_difference,
@@ -1115,6 +1281,7 @@ def binary_power_sum_gap_profile(
     if gaps:
         least_gap_index = largest_gap_index = 0
         for index in range(1, len(gaps)):
+            work.summary_comparisons += 1
             if (
                 evaluator.compare(
                     backend_gaps[index],
@@ -1123,6 +1290,7 @@ def binary_power_sum_gap_profile(
                 < 0
             ):
                 least_gap_index = index
+            work.summary_comparisons += 1
             if (
                 evaluator.compare(
                     backend_gaps[index],
@@ -1140,12 +1308,27 @@ def binary_power_sum_gap_profile(
         least_gap_index=least_gap_index,
         largest_gap_index=largest_gap_index,
     )
+    _require_work_within_admission(admission, work)
     _require_execution_active(deadline, "after binary power-sum result construction")
     actual_result_bytes = len(encode_strict_json(result.model_dump(mode="json")))
     if actual_result_bytes > admission.predicted_result_bytes:
         raise RuntimeError("binary power-sum result exceeded its admitted byte bound")
     _require_execution_active(deadline, "after binary power-sum serialization check")
-    return result
+    return _BinaryPowerSumExecution(
+        result=result,
+        admission=admission,
+        work=work,
+        deadlines=deadlines,
+    )
+
+
+def binary_power_sum_gap_profile(
+    base: SimpleNumberFieldRealEmbeddingBinding,
+    exponent_count: int,
+) -> BinaryPowerSumGapProfile:
+    """Return every exact binary power sum, collision, and consecutive gap."""
+
+    return _execute_binary_power_sum_gap_profile(base, exponent_count).result
 
 
 __all__ = [

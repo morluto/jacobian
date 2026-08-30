@@ -77,7 +77,8 @@ Admission occurs before embedding recognition or enumeration. It separately
 bounds:
 
 - at most 4,096 retained source representations and 49,152 bit-vector slots;
-- at most 16,384 exact field additions/multiplications;
+- at most 16,384 exact frontier additions, power multiplications, and adjacent
+  gap subtractions;
 - at most 100,000 exact selected-embedding comparisons;
 - every power, sum, and difference coordinate within the canonical 256-digit
   numerator/denominator carrier;
@@ -99,6 +100,10 @@ The recurrence, comparisons, result construction, and final serialization check
 share a ten-minute owner envelope. The embedding producer retains its stricter
 two-minute disposable-worker subdeadline, bounded by any earlier caller
 deadline; after recognition, the outer operation resumes its original envelope.
+The request-local work ledger charges base-slice checks, every frontier addition
+and power multiplication, adjacent-gap subtraction and certification, sort
+comparison, and least/largest-summary comparison against their separate
+preflight bounds.
 Cancellation and expiry remain execution failures, never mathematical
 conclusions or partial profiles.
 

@@ -87,7 +87,9 @@ def _admit_maximum_weight_antichain(
         # denominator at every summand; only the numerator can gain carry digits.
         max_sum_digits = max_digits + (len(str(width)) if width > 1 else 0)
     else:
-        max_sum_digits = max_digits if width <= 1 else width * max_digits + len(str(width))
+        max_sum_digits = (
+            max_digits if width <= 1 else width * max_digits + len(str(width))
+        )
     if max_sum_digits > 32_768:
         raise OperationDomainValidationError(
             location=("weights",),

@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
+)
+from jacobian.math.graphs.coloring.hypergraph_coloring._models import (
+    HypergraphColoringRequest,
 )
 from jacobian.math.graphs.coloring.hypergraph_coloring.operations import (
     decide_hypergraph_coloring,
@@ -49,3 +56,25 @@ def test_result_preserves_source() -> None:
     result = decide_hypergraph_coloring(hg, 2)
     assert result.hypergraph == hg
     assert result.palette_size == 2
+
+
+def test_dense_graph_coloring_search_is_rejected_before_backtracking() -> None:
+    vertices = [f"v{i:02d}" for i in range(20)]
+    edges = [
+        (f"e{edge_index:03d}", [left, right])
+        for edge_index, (left, right) in enumerate(
+            (pair for i, left in enumerate(vertices) for pair in [(left, right) for right in vertices[i + 1 :]])
+        )
+    ]
+    hypergraph = _hypergraph(vertices, edges)
+
+    with pytest.raises(OperationDomainValidationError, match="backtracking-state"):
+        decide_hypergraph_coloring(hypergraph, 19)
+    with pytest.raises(ValidationError, match="backtracking-state"):
+        HypergraphColoringRequest(hypergraph=hypergraph, palette_size=19)
+
+
+def test_distinct_color_fast_path_handles_large_palette() -> None:
+    hypergraph = _hypergraph(["a", "b"], [("e0", ["a", "b"])])
+    result = decide_hypergraph_coloring(hypergraph, 2)
+    assert result.coloring == (0, 1)

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 from jacobian.math.graphs.coloring.hypergraph_coloring._models import (
     HypergraphColoringResult,
+    _hypergraph_coloring_admission_error,
 )
 
 __all__ = ["decide_hypergraph_coloring"]
@@ -21,6 +23,14 @@ def decide_hypergraph_coloring(
     A proper q-colouring assigns one of q colours to each vertex such that
     no hyperedge is monochromatic.
     """
+    failure = _hypergraph_coloring_admission_error(hypergraph, palette_size)
+    if failure is not None:
+        code, message = failure
+        raise OperationDomainValidationError(
+            location=("hypergraph", "palette_size"),
+            code=f"hypergraph_coloring.{code}",
+            message=message,
+        )
     vertices = hypergraph.vertices
     n = len(vertices)
     vertex_index = {v: i for i, v in enumerate(vertices)}
@@ -39,6 +49,17 @@ def decide_hypergraph_coloring(
             palette_size=palette_size,
             colorable=True,
             coloring=tuple(0 for _ in range(n)),
+        )
+    if palette_size == 1:
+        return HypergraphColoringResult(
+            hypergraph=hypergraph, palette_size=palette_size, colorable=False
+        )
+    if palette_size >= n:
+        return HypergraphColoringResult(
+            hypergraph=hypergraph,
+            palette_size=palette_size,
+            colorable=True,
+            coloring=tuple(range(n)),
         )
 
     result_colors = _find_coloring(n, edges, palette_size)

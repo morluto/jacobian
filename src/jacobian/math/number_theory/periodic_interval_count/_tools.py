@@ -2,7 +2,7 @@
 
 from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationDomainValidationError
 from jacobian.math.number_theory.periodic_interval_count._models import (
     PeriodicIntervalCountRequest,
     PeriodicIntervalCountResult,
@@ -13,6 +13,12 @@ from jacobian.math.number_theory.periodic_interval_count.operations import (
 
 
 def _compute(request: PeriodicIntervalCountRequest) -> PeriodicIntervalCountResult:
+    if max(len(request.lower.lstrip("-")), len(request.upper.lstrip("-"))) > 2_000_000:
+        raise OperationDomainValidationError(
+            location=("lower", "upper"),
+            code="number_theory.periodic.endpoint_work_bound",
+            message="periodic interval endpoints exceed the digit-sensitive parsing work bound",
+        )
     return compute_periodic_interval_count(
         request.source,
         parse_canonical_integer(request.lower),

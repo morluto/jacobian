@@ -32,7 +32,11 @@ class GowersCubeRequest(StrictModel):
                 "gowers_cube.canonical_subset",
                 "subset must contain distinct canonical residues modulo modulus",
             )
-        if gowers_cube_work(self.modulus, self.order) > MAX_GOWERS_CUBE_VERTEX_CHECKS:
+        if (
+            self.subset
+            and gowers_cube_work(self.modulus, self.order)
+            > MAX_GOWERS_CUBE_VERTEX_CHECKS
+        ):
             raise PydanticCustomError(
                 "gowers_cube.work_exceeded",
                 "Gowers cube enumeration exceeds the 2000000-vertex-check bound",

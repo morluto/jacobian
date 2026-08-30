@@ -47,7 +47,7 @@ def compute_gowers_cube_profile(
             code="gowers_cube.canonical_subset",
             message="subset must contain distinct canonical residues modulo modulus",
         )
-    if gowers_cube_work(modulus, order) > MAX_GOWERS_CUBE_VERTEX_CHECKS:
+    if subset and gowers_cube_work(modulus, order) > MAX_GOWERS_CUBE_VERTEX_CHECKS:
         raise OperationDomainValidationError(
             location=("modulus", "order"),
             code="gowers_cube.work_exceeded",
@@ -55,6 +55,15 @@ def compute_gowers_cube_profile(
         )
     subset_values = set(subset)
     n = modulus
+
+    if not subset_values:
+        return GowersCubeResult(
+            modulus=modulus,
+            subset=subset,
+            order=order,
+            cube_count=0,
+            normalized_count=CanonicalRational.from_fraction(Fraction(0)),
+        )
 
     cube_count = 0
 

@@ -23,6 +23,11 @@ def test_empty_set() -> None:
     assert result.cube_count == 0
 
 
+def test_empty_set_short_circuits_large_generic_work_bound() -> None:
+    result = compute_gowers_cube_profile(1001, (), 1)
+    assert result.cube_count == 0
+
+
 def test_single_element() -> None:
     result = compute_gowers_cube_profile(7, (3,), 1)
     # Only cube with both vertices at 3: base=3, e=0 -> (3,3)

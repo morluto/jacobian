@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.graphs.coloring._models import EdgeColoringAssignment
 from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_EDGES,
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
@@ -17,8 +18,8 @@ from jacobian.math.graphs.values import (
 # The graph value already bounds the carrier at 256 vertices.  Arrowing
 # admission is otherwise controlled by the derived coloring/embedding work.
 MAX_HOST_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
-MAX_HOST_EDGES = 45
-MAX_TARGET_VERTICES = 8
+MAX_HOST_EDGES = MAX_INDEXED_SIMPLE_GRAPH_EDGES
+MAX_TARGET_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
 MAX_TARGET_COUNT = 8
 MAX_ARROWING_WORK = 20_000_000
 
@@ -76,6 +77,8 @@ def _validate_arrowing_envelope(
 
 
 def _permutation_upper_bound(n: int, k: int) -> int:
+    if k > n:
+        return 0
     result = 1
     for value in range(n - k + 1, n + 1):
         result *= value

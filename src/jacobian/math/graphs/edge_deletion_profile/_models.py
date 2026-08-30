@@ -47,10 +47,14 @@ def _edge_deletion_admission_error(
     deleted_incidences = sum(
         size * math.comb(edge_count, size) for size in range(maximum_order + 1)
     )
-    max_edge_bytes = max(
-        (len(left.encode("utf-8")) + len(right.encode("utf-8")) + 8)
-        for left, right in graph.edges
-    ) if graph.edges else 0
+    max_edge_bytes = (
+        max(
+            (len(left.encode("utf-8")) + len(right.encode("utf-8")) + 8)
+            for left, right in graph.edges
+        )
+        if graph.edges
+        else 0
+    )
     estimated_bytes = (
         len(encode_strict_json(graph.model_dump(mode="json")))
         + rows * 72

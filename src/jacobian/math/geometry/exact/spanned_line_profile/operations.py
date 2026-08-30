@@ -88,11 +88,11 @@ def _canonical_line(
     if all(d == 0 for d in direction):
         return None
 
-    # Normalize direction: make first nonzero component positive
+    # Normalize by the first nonzero component, so reversing the source pair
+    # produces exactly the same direction key with leading component one.
     first_nonzero_idx = next(i for i, d in enumerate(direction) if d != 0)
     first_nonzero = direction[first_nonzero_idx]
-    sign = 1 if first_nonzero > 0 else -1
-    norm_direction = tuple(d * sign / direction[first_nonzero_idx] for d in direction)
+    norm_direction = tuple(d / first_nonzero for d in direction)
 
     # Anchor: the line is { ci + t * direction }. We need a canonical point.
     # Use the projection of the origin onto the line:

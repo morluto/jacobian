@@ -6,6 +6,7 @@ from fractions import Fraction
 from itertools import combinations
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.triangle_area_profile._models import (
     TriangleAreaEntry,
@@ -23,6 +24,12 @@ def compute_triangle_area_profile(
     For every triple of points, compute the exact unsigned triangle area
     using the cross-product formula. Points must be 2-dimensional.
     """
+    if len(configuration.points[0].coordinates) != 2:
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="geometry.triangle_area_planar_configuration",
+            message="triangle area profiles require exactly two coordinates per point",
+        )
     points = configuration.points
     n = len(points)
 

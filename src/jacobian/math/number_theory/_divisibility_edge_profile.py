@@ -11,6 +11,7 @@ from jacobian.math.number_theory._divisibility_edge_profile_kernels import (
     construct_divisibility_edge_profile,
 )
 from jacobian.math.number_theory._divisibility_edge_profile_models import (
+    MAX_DIVISIBILITY_EDGE_VALUE_DIGITS,
     DivisibilityEdge,
     DivisibilityEdgeProfileRequest,
     DivisibilityEdgeProfileResult,
@@ -69,6 +70,11 @@ def _canonical_native_value(value: str | int | IntegerValue) -> str:
     if type(value) is str:
         return value
     if type(value) is int:
+        if abs(value) >= 10**MAX_DIVISIBILITY_EDGE_VALUE_DIGITS:
+            raise PydanticCustomError(
+                "divisibility_edge.value_digits",
+                "values exceed the admitted integer digit bound",
+            )
         return format_canonical_integer(value)
     raise TypeError("native divisibility values must be strings or integers")
 

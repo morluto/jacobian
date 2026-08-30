@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import CanonicalizationError, format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._divisibility_edge_profile_kernels import (
@@ -47,21 +47,30 @@ def divisibility_edge_profile(
     values: tuple[str | int | IntegerValue, ...],
 ) -> DivisibilityEdgeProfileResult:
     """Return a divisibility edge profile from native canonical values."""
-    canonical_values = tuple(
-        value.value
-        if isinstance(value, IntegerValue)
-        else value
-        if isinstance(value, str)
-        else format_canonical_integer(value)
-        for value in values
-    )
     try:
+        canonical_values = tuple(_canonical_native_value(value) for value in values)
         _validate_divisibility_edge_values(canonical_values)
-    except PydanticCustomError as exc:
+    except (CanonicalizationError, PydanticCustomError, TypeError, ValueError) as exc:
+        if isinstance(exc, PydanticCustomError):
+            code = exc.type
+            message = exc.message()
+        else:
+            code = "divisibility_edge.invalid_native_value"
+            message = "values must be canonical integers or IntegerValue instances"
         raise OperationDomainValidationError(
-            location=("values",), code=exc.type, message=exc.message()
+            location=("values",), code=code, message=message
         ) from exc
     return _build_divisibility_edge_profile(canonical_values)
+
+
+def _canonical_native_value(value: str | int | IntegerValue) -> str:
+    if isinstance(value, IntegerValue):
+        return value.value
+    if type(value) is str:
+        return value
+    if type(value) is int:
+        return format_canonical_integer(value)
+    raise TypeError("native divisibility values must be strings or integers")
 
 
 DIVISIBILITY_EDGE_PROFILE_OPERATION = number_theory_operation(

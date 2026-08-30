@@ -54,6 +54,11 @@ def _validate_divisibility_edge_shape(values: tuple[str, ...]) -> None:
             "divisibility_edge.values_size",
             f"values must contain at most {MAX_DIVISIBILITY_EDGE_SET_SIZE} integers",
         )
+    if any(len(value) > MAX_DIVISIBILITY_EDGE_VALUE_DIGITS for value in values):
+        raise PydanticCustomError(
+            "divisibility_edge.value_digits",
+            "values exceed the admitted integer digit bound",
+        )
     parsed = tuple(parse_canonical_integer(value) for value in values)
     if any(value <= 0 for value in parsed):
         raise PydanticCustomError(
@@ -64,14 +69,6 @@ def _validate_divisibility_edge_shape(values: tuple[str, ...]) -> None:
         raise PydanticCustomError(
             "divisibility_edge.values_unique", "values must be distinct"
         )
-    max_digits = max(len(value) for value in values)
-    if max_digits > MAX_DIVISIBILITY_EDGE_VALUE_DIGITS:
-        raise PydanticCustomError(
-            "divisibility_edge.value_digits",
-            "values exceed the admitted integer digit bound",
-        )
-
-
 def _validate_divisibility_edge_resources(values: tuple[str, ...]) -> None:
     parsed = tuple(parse_canonical_integer(value) for value in values)
     max_digits = max(len(value) for value in values)

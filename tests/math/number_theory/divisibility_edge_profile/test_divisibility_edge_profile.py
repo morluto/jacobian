@@ -83,6 +83,19 @@ def test_native_rejects_empty_source_set() -> None:
         divisibility_edge_profile(())
 
 
+@pytest.mark.parametrize("values", [(True, "2"), ("02",)])
+def test_native_rejects_noncanonical_values(values: tuple[object, ...]) -> None:
+    """Native inputs use the same strict canonical domain as wire requests."""
+    with pytest.raises(ValueError):
+        divisibility_edge_profile(values)  # type: ignore[arg-type]
+
+
+def test_native_rejects_oversized_value_before_parsing() -> None:
+    """The representation bound rejects huge strings during preflight."""
+    with pytest.raises(ValueError, match="digit bound"):
+        divisibility_edge_profile(("1" * (256 + 1),))
+
+
 @pytest.mark.parametrize(
     "values",
     [("0",), ("-1",), ("2", "2")],

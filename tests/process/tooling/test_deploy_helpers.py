@@ -56,21 +56,26 @@ def test_remote_smoke_accepts_the_current_typed_discovery_response() -> None:
     assert failures == []
 
 
-def test_remote_smoke_derives_tool_surface_from_deployed_catalog() -> None:
-    remote_operation = "test.remote.previous_release"
+def test_remote_smoke_rejects_eager_catalog_tool_exposure() -> None:
     listed = SimpleNamespace(
         tools=[
             SimpleNamespace(name="math.find"),
             SimpleNamespace(name="math.run"),
-            SimpleNamespace(name=remote_operation),
+            SimpleNamespace(name="matrix.determinant.compute"),
         ]
     )
     failures: list[str] = []
 
-    tool_names = _validate_tool_surface(listed, {remote_operation}, failures)
+    tool_names = _validate_tool_surface(listed, failures)
 
-    assert tool_names == {"math.find", "math.run", remote_operation}
-    assert failures == []
+    assert tool_names == {
+        "math.find",
+        "math.run",
+        "matrix.determinant.compute",
+    }
+    assert failures == [
+        "deployed MCP tool surface has unexpected tools: ['matrix.determinant.compute']"
+    ]
 
 
 def test_remote_smoke_rejects_divergent_model_visible_discovery() -> None:

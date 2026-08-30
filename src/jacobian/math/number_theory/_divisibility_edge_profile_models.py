@@ -99,12 +99,26 @@ class DivisibilityEdgeProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_edges(self) -> Self:
+        values = set(self.values)
+        seen: set[tuple[str, str]] = set()
         for edge in self.edges:
             if edge.source == edge.target:
                 raise PydanticCustomError(
                     "divisibility_edge.no_reflexive",
                     "divisibility edges must not be reflexive",
                 )
+            if edge.source not in values or edge.target not in values:
+                raise PydanticCustomError(
+                    "divisibility_edge.endpoints_declared",
+                    "divisibility edge endpoints must occur in values",
+                )
+            key = (edge.source, edge.target)
+            if key in seen:
+                raise PydanticCustomError(
+                    "divisibility_edge.edges_unique",
+                    "divisibility edges must be unique",
+                )
+            seen.add(key)
         return self
 
 

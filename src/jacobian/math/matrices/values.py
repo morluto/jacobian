@@ -336,8 +336,8 @@ class SparseRationalMatrix(StrictModel):
     """A dimension-retaining coordinate-sparse matrix over QQ."""
 
     domain: Literal["QQ"] = "QQ"
-    row_count: int = Field(ge=1, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
-    column_count: int = Field(ge=1, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
+    row_count: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
+    column_count: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
     entries: tuple[SparseRationalMatrixEntry, ...] = Field(
         default=(), max_length=MAX_SPARSE_RATIONAL_MATRIX_NONZEROS
     )
@@ -409,11 +409,14 @@ def dense_rational_matrix_from_sparse(matrix: SparseRationalMatrix) -> RationalM
     """Convert bounded sparse coordinates to the canonical dense QQ matrix."""
 
     if (
-        matrix.row_count > MAX_RATIONAL_MATRIX_ORDER
+        matrix.row_count == 0
+        or matrix.column_count == 0
+        or matrix.row_count > MAX_RATIONAL_MATRIX_ORDER
         or matrix.column_count > MAX_RATIONAL_MATRIX_ORDER
     ):
         raise ValueError(
-            "sparse matrix axes exceed the canonical dense matrix representation"
+            "sparse matrix axes cannot be represented by the nonempty canonical "
+            "dense matrix"
         )
     zero = CanonicalRational(num="0", den="1")
     coordinates = {(entry.row, entry.column): entry.value for entry in matrix.entries}

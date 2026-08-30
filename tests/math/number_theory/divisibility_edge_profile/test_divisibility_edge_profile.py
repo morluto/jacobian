@@ -96,6 +96,12 @@ def test_native_rejects_oversized_value_before_parsing() -> None:
         divisibility_edge_profile(("1" * (256 + 1),))
 
 
+def test_native_rejects_values_beyond_worker_factorization_envelope() -> None:
+    """The edge profile shares the direct factorization worker's 20-digit bound."""
+    with pytest.raises(ValueError, match="digit bound"):
+        divisibility_edge_profile(("1" * 21,))
+
+
 def test_native_rejects_oversized_integer_before_formatting() -> None:
     """Huge Python integers are bounded before decimal conversion."""
     with pytest.raises(ValueError, match="digit bound"):

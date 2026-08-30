@@ -12,7 +12,9 @@ from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
 
 MAX_DIVISIBILITY_EDGE_SET_SIZE = 500
-MAX_DIVISIBILITY_EDGE_VALUE_DIGITS = 256
+# LPF extraction uses the isolated direct-factorization worker, whose exact
+# admitted input envelope is twenty decimal digits.
+MAX_DIVISIBILITY_EDGE_VALUE_DIGITS = 20
 MAX_DIVISIBILITY_EDGE_WORK = 1_000_000
 MAX_DIVISIBILITY_EDGE_RESULT_BYTES = 10 * 1024 * 1024
 

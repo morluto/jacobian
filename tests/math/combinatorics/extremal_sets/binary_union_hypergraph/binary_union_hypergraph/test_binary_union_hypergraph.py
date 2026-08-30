@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.extremal_sets.binary_union_hypergraph._models import (
+    BinaryUnionHypergraphRequest,
+)
 from jacobian.math.combinatorics.extremal_sets.binary_union_hypergraph.operations import (
     compute_binary_union_hypergraph,
 )
@@ -28,3 +35,19 @@ def test_multiple_relations() -> None:
 def test_result_preserves_source() -> None:
     result = compute_binary_union_hypergraph(((1,), (2,), (1, 2)))
     assert result.sets == ((1,), (2,), (1, 2))
+
+
+def test_oversized_family_is_rejected_before_relation_scan() -> None:
+    family = tuple((value,) for value in range(257))
+
+    with pytest.raises(OperationDomainValidationError, match="256-vertex"):
+        compute_binary_union_hypergraph(family)
+    with pytest.raises(ValidationError, match="256-vertex"):
+        BinaryUnionHypergraphRequest(sets=family)
+
+
+def test_finite_set_inputs_must_be_canonical_and_distinct() -> None:
+    with pytest.raises(OperationDomainValidationError, match="strictly increasing"):
+        compute_binary_union_hypergraph(((2, 1), (3,)))
+    with pytest.raises(OperationDomainValidationError, match="distinct sets"):
+        compute_binary_union_hypergraph(((1,), (1,)))

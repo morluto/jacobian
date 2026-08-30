@@ -235,6 +235,7 @@ ignore_imports = [
     "jacobian.math.number_theory.number_fields._embeddings_process -> jacobian.process",
     "jacobian.math.geometry.algebraic_curves._singularity_point_process -> jacobian.process",
     "jacobian.math.polynomials.real_algebra._qepcad_plane_process -> jacobian.process",
+    "jacobian.math.polynomials.real_algebra._qepcad_plane_worker -> jacobian.process",
     "jacobian.math.number_theory._factorization_kernels -> jacobian.process",
     # Private exact-algebra adapters share one bounded Singular process owner.
     "jacobian.math._singular -> jacobian.process",

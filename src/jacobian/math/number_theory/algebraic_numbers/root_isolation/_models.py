@@ -48,6 +48,8 @@ def _require_raw_comparison_degree(value: Any) -> Any:
             "exact algebraic comparison admits degree at most "
             f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE}",
         )
+    if isinstance(value, Mapping):
+        return canonicalize_json_containers(value)
     return value
 
 

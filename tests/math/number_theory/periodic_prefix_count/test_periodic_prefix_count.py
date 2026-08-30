@@ -208,3 +208,13 @@ def test_result_common_period():
 def test_negative_cutoff_is_rejected() -> None:
     with pytest.raises(OperationDomainValidationError, match="nonnegative"):
         compute_periodic_union_prefix_count(_source([("2", ["0"])]), -1)
+
+
+def test_large_period_complement_uses_scalar_rank() -> None:
+    source = _source([("1000000", ["0"])], complement=True)
+
+    result = compute_periodic_union_prefix_count(source, 10)
+
+    assert result.common_period == "1000000"
+    assert result.occupied_count == 999_999
+    assert result.count == "10"

@@ -39,6 +39,4 @@ def test_result_preserves_params() -> None:
 
 def test_boolean_lattice_must_fit_the_graph_carrier() -> None:
     with pytest.raises(OperationDomainValidationError, match="0 through 8"):
-        construct_boolean_lattice_intersection_graph(
-            9, 10, "INTERSECTION_EQ_THRESHOLD"
-        )
+        construct_boolean_lattice_intersection_graph(9, 10, "INTERSECTION_EQ_THRESHOLD")

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.gowers_cube_profile.operations import (
     compute_gowers_cube_profile,
 )
@@ -28,3 +31,13 @@ def test_result_preserves_source() -> None:
     assert result.modulus == 5
     assert result.subset == (0, 1, 2)
     assert result.order == 2
+
+
+def test_noncanonical_subset_representative_is_rejected() -> None:
+    with pytest.raises(OperationDomainValidationError, match="canonical residues"):
+        compute_gowers_cube_profile(5, (5,), 1)
+
+
+def test_coupled_cube_work_is_rejected_before_enumeration() -> None:
+    with pytest.raises(OperationDomainValidationError, match="vertex-check bound"):
+        compute_gowers_cube_profile(3, (0, 1, 2), 12)

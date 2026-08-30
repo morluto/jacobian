@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.edge_deletion_profile._models import (
+    EdgeDeletionProfileRequest,
+)
 from jacobian.math.graphs.edge_deletion_profile.operations import (
     compute_edge_deletion_profile,
 )
@@ -55,3 +62,29 @@ def test_result_preserves_source() -> None:
     graph = _graph(["a", "b"], [["a", "b"]])
     result = compute_edge_deletion_profile(graph, 0)
     assert result.graph == graph
+
+
+def test_deleting_every_bipartite_edge_uses_exact_fast_path() -> None:
+    graph = _graph(["a", "b", "c"], [["a", "b"], ["b", "c"]])
+
+    result = compute_edge_deletion_profile(graph, 2)
+
+    assert result.entries[-1].deleted_edges == (("a", "b"), ("b", "c"))
+    assert result.entries[-1].chromatic_number == 1
+
+
+def test_large_subset_family_is_rejected_before_expansion() -> None:
+    vertices = [f"v{i:02d}" for i in range(80)]
+    edges = [[vertices[2 * index], vertices[2 * index + 1]] for index in range(40)]
+    graph = _graph(vertices, edges)
+
+    with pytest.raises(OperationDomainValidationError, match="output budget"):
+        compute_edge_deletion_profile(graph, 20)
+    with pytest.raises(ValidationError, match="output budget"):
+        EdgeDeletionProfileRequest(graph=graph, deletion_order=20)
+
+
+def test_negative_deletion_order_is_rejected() -> None:
+    graph = _graph(["a", "b"], [["a", "b"]])
+    with pytest.raises(OperationDomainValidationError, match="nonnegative"):
+        compute_edge_deletion_profile(graph, -1)

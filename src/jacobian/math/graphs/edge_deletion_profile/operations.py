@@ -6,9 +6,12 @@ from itertools import combinations
 
 import networkx as nx
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.edge_deletion_profile._models import (
     DeletionEntry,
     EdgeDeletionProfileResult,
+    _edge_deletion_admission_error,
+    _is_bipartite,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -64,6 +67,14 @@ def compute_edge_deletion_profile(
     deletion_order: int,
 ) -> EdgeDeletionProfileResult:
     """Return the chromatic number of G-F for every edge subset F with |F| <= deletion_order."""
+    failure = _edge_deletion_admission_error(graph, deletion_order)
+    if failure is not None:
+        code, message = failure
+        raise OperationDomainValidationError(
+            location=("graph", "deletion_order"),
+            code=f"edge_deletion.{code}",
+            message=message,
+        )
     nx_graph: nx.Graph[str] = nx.Graph()
     for v in graph.vertices:
         nx_graph.add_node(v)
@@ -71,7 +82,10 @@ def compute_edge_deletion_profile(
         nx_graph.add_edge(u, v)
 
     edges_list = list(graph.edges)
-    source_chi = _exact_chromatic_number(nx_graph)
+    source_is_bipartite = _is_bipartite(graph)
+    source_chi = (
+        1 if not graph.edges else 2
+    ) if source_is_bipartite else _exact_chromatic_number(nx_graph)
 
     entries: list[DeletionEntry] = []
 
@@ -82,13 +96,16 @@ def compute_edge_deletion_profile(
                 left, right = edges_list[i]
                 deleted_edges.append((left, right))
             deleted = tuple(sorted(deleted_edges))
-            sub_graph: nx.Graph[str] = nx.Graph()
-            for v in graph.vertices:
-                sub_graph.add_node(v)
-            for idx, (u, v) in enumerate(graph.edges):
-                if idx not in subset:
-                    sub_graph.add_edge(u, v)
-            chi = _exact_chromatic_number(sub_graph)
+            if source_is_bipartite:
+                chi = 1 if len(subset) == len(edges_list) else 2
+            else:
+                sub_graph: nx.Graph[str] = nx.Graph()
+                for v in graph.vertices:
+                    sub_graph.add_node(v)
+                for idx, (u, v) in enumerate(graph.edges):
+                    if idx not in subset:
+                        sub_graph.add_edge(u, v)
+                chi = _exact_chromatic_number(sub_graph)
             entries.append(
                 DeletionEntry(
                     deleted_edges=deleted,

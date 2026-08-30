@@ -103,7 +103,7 @@ def _require_raw_action_envelope(data: object) -> object:
         )
     generators = data.get("generators")
     if not isinstance(generators, (list, tuple)):
-        return data
+        return _canonicalize_generator_order(data)
     if len(generators) > MAX_ACTION_GENERATORS:
         raise _validation_error(
             "budget_exceeded",

@@ -172,6 +172,21 @@ def test_empty_generator_family_returns_full_coefficient_lattice(
     _assert_every_basis_form_is_invariant(result)
 
 
+def test_strict_json_action_can_omit_the_defaulted_generator_family() -> None:
+    request = InvariantBilinearFormLatticeRequest.model_validate_json(
+        encode_strict_json(
+            {
+                "action": {"coordinate_axis": ["e1"]},
+                "kind": "ALTERNATING",
+            }
+        ),
+        strict=True,
+    )
+
+    assert request.action.coordinate_axis == ("e1",)
+    assert request.action.generators == ()
+
+
 def test_rank_zero_lattice_retains_its_ambient_coefficient_dimension() -> None:
     action = _action([("twice", [[2, 0], [0, 2]])])
 

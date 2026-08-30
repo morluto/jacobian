@@ -130,9 +130,7 @@ def _admit_eventual_hitting(
     # growth before solving rather than only one component width per state.
     row_growth = max_row_terms * transient_matrix_digits + _decimal_digits(max_row_terms)
     result_height = (
-        transient_count * row_growth
-        + _decimal_digits(factorial(transient_count))
-        + 1
+        transient_count * row_growth + _decimal_digits(factorial(transient_count)) + 1
     )
     if result_height > MAX_CANONICAL_RATIONAL_DIGITS:
         _reject(

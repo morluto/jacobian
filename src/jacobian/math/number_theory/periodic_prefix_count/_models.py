@@ -56,9 +56,7 @@ class PeriodicUnionPrefixCountResult(StrictModel):
         period = int(self.common_period)
         occupied = int(self.occupied_count)
         count = int(self.count)
-        source_period = lcm(
-            *(int(subset.modulus) for subset in self.source.subsets)
-        )
+        source_period = lcm(*(int(subset.modulus) for subset in self.source.subsets))
         if period != source_period:
             raise PydanticCustomError(
                 "number_theory.periodic_prefix.period_mismatch",

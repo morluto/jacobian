@@ -19,12 +19,15 @@ from jacobian.math.finite_fields import (
     fiber_partition,
     finite_map_table,
     linear_map_rank,
+    matrix_rank,
     orbit_distribution,
     paley_tournament,
     projective_line,
     restrict_scalars,
 )
 from jacobian.math.finite_fields._matrix_rank import MATRIX_RANK_OPERATION
+from jacobian.math.finite_fields._matrix_rank_models import MatrixRankRequest
+from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
 from jacobian.math.finite_fields._models import (
     CollisionRequest,
     DirectionRankLedgerRequest,
@@ -169,6 +172,10 @@ def _analyze_permutation(request: PermutationRequest) -> PermutationResult:
 
 def _paley_tournament(request: PaleyTournamentRequest) -> PaleyTournamentResult:
     return paley_tournament(request.presentation)
+
+
+def _compute_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
+    return matrix_rank(request.matrix)
 
 
 def _build_tools() -> MathTools:
@@ -343,6 +350,7 @@ def _build_tools() -> MathTools:
     )
     matrix_rank_operation = MATRIX_RANK_OPERATION
     return (
+        projective_line_operation,
         matrix_rank_operation,
         restrict_operation,
         rank_operation,

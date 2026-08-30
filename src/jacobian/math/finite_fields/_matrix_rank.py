@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
-from jacobian.math.finite_fields._matrix_rank_kernels import compute_matrix_rank
+from jacobian.math.finite_fields.operations import matrix_rank
 from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
@@ -35,13 +35,7 @@ _MATRIX: dict[str, object] = {
 
 def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
-    data = compute_matrix_rank(request.matrix)
-    return MatrixRankResult(
-        matrix=request.matrix,
-        rank=data.rank,
-        pivot_rows=data.pivot_rows,
-        pivot_columns=data.pivot_columns,
-    )
+    return matrix_rank(request.matrix)
 
 
 MATRIX_RANK_OPERATION = MathTool(

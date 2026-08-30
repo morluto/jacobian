@@ -34,6 +34,8 @@ from jacobian.math.finite_fields.values import (
     RankResult,
     _direction_rank_work,
 )
+from jacobian.math.finite_fields._matrix_rank_kernels import compute_matrix_rank
+from jacobian.math.finite_fields.values import AxisBoundMatrix
 from jacobian.math.graphs.directed._models import (
     MAX_DIRECTED_GRAPH_PARSE_EDGES,
     DirectedGraph,
@@ -45,6 +47,19 @@ _MAX_PALEY_TOURNAMENT_WORK = 4_000_000
 _PALEY_ORIENTATION: Literal["ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"] = (
     "ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"
 )
+
+
+def matrix_rank(matrix: AxisBoundMatrix):
+    """Return the exact rank certificate for an axis-bound finite-field matrix."""
+    from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
+
+    data = compute_matrix_rank(matrix)
+    return MatrixRankResult(
+        matrix=matrix,
+        rank=data.rank,
+        pivot_rows=data.pivot_rows,
+        pivot_columns=data.pivot_columns,
+    )
 
 
 def finite_field(

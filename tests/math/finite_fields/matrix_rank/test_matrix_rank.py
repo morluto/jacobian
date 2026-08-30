@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from jacobian.math.finite_fields._matrix_rank import compute_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankRequest
+from jacobian.math.finite_fields.operations import matrix_rank
 from jacobian.math.finite_fields.values import (
     Axis,
     AxisBoundMatrix,
@@ -114,6 +115,14 @@ def test_pivot_labels_preserved() -> None:
     result = compute_rank(MatrixRankRequest(matrix=m))
     assert result.pivot_rows == ("r0",)
     assert result.pivot_columns == ("c0",)
+
+
+def test_pivot_labels_follow_row_swaps() -> None:
+    fp = _f2()
+    m = _matrix(fp, [[[0]], [[1]]], ["r0", "r1"], ["c0"])
+    result = matrix_rank(m)
+    assert result.rank == 1
+    assert result.pivot_rows == ("r1",)
 
 
 def test_rank_invariance_under_row_ops() -> None:

@@ -85,6 +85,7 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
     pivot_col_indices: list[int] = []
     col = 0
     work_matrix = [list(row) for row in poly_matrix]  # mutable copy
+    row_orig_indices = list(range(rows))
 
     while rank < rows and col < cols:
         # Find pivot in column col at or below row rank.
@@ -104,6 +105,10 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
                 work_matrix[pivot_row],
                 work_matrix[rank],
             )
+            row_orig_indices[rank], row_orig_indices[pivot_row] = (
+                row_orig_indices[pivot_row],
+                row_orig_indices[rank],
+            )
 
         # Eliminate below.
         pivot_val = work_matrix[rank][col]
@@ -118,7 +123,7 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
                         work_matrix[r][c2] - factor * work_matrix[rank][c2]
                     ).rem(modulus)
 
-        pivot_row_indices.append(rank)
+        pivot_row_indices.append(row_orig_indices[rank])
         pivot_col_indices.append(col)
         rank += 1
         col += 1

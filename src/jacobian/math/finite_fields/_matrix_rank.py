@@ -9,11 +9,11 @@ from jacobian.canonical import (
 )
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.math.finite_fields._matrix_rank_kernels import compute_matrix_rank
 from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
 )
-from jacobian.math.finite_fields.operations import matrix_rank
 
 _FIELD: dict[str, object] = {
     "characteristic": 2,
@@ -41,32 +41,14 @@ _MATRIX: dict[str, object] = {
 def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
     matrix = request.matrix
+    data = compute_matrix_rank(matrix)
     try:
-        active_rows = tuple(
-            label
-            for index, label in enumerate(matrix.row_axis.labels)
-            if any(not element.is_zero for element in matrix.entries[index])
-        )
-        active_columns = tuple(
-            label
-            for index, label in enumerate(matrix.column_axis.labels)
-            if any(not row[index].is_zero for row in matrix.entries)
-        )
-        rank_bound = min(len(active_rows), len(active_columns))
         result_probe = encode_strict_json(
             {
                 "matrix": matrix.model_dump(mode="json"),
-                "rank": rank_bound,
-                "pivot_rows": sorted(
-                    active_rows,
-                    key=lambda label: len(encode_strict_json(label)),
-                    reverse=True,
-                )[:rank_bound],
-                "pivot_columns": sorted(
-                    active_columns,
-                    key=lambda label: len(encode_strict_json(label)),
-                    reverse=True,
-                )[:rank_bound],
+                "rank": data.rank,
+                "pivot_rows": list(data.pivot_rows),
+                "pivot_columns": list(data.pivot_columns),
             }
         )
     except CanonicalizationError as exc:
@@ -81,7 +63,12 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
             code="finite_field.matrix_rank.result_bound",
             message="matrix-rank result exceeds the canonical output bound",
         )
-    return matrix_rank(matrix)
+    return MatrixRankResult(
+        matrix=matrix,
+        rank=data.rank,
+        pivot_rows=data.pivot_rows,
+        pivot_columns=data.pivot_columns,
+    )
 
 
 MATRIX_RANK_OPERATION = MathTool(

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import pytest
+
 from jacobian.math.number_theory._divisibility_edge_profile import (
     compute_divisibility_edge_profile,
+    divisibility_edge_profile,
 )
 from jacobian.math.number_theory._divisibility_edge_profile_models import (
     DivisibilityEdgeProfileRequest,
+    DivisibilityEdgeProfileResult,
 )
 
 
@@ -71,3 +75,19 @@ def test_quotient_reconstructs() -> None:
     edges = _edges(["2", "4", "6", "12"])
     for (a, b), edge in edges.items():
         assert int(a) * int(edge.quotient) == int(b)
+
+
+def test_native_rejects_empty_source_set() -> None:
+    """Native and wire callers share the non-empty source-set admission."""
+    with pytest.raises(ValueError, match="at least one"):
+        divisibility_edge_profile(())
+
+
+@pytest.mark.parametrize(
+    "values",
+    [("0",), ("-1",), ("2", "2")],
+)
+def test_result_rejects_invalid_source_set(values: tuple[str, ...]) -> None:
+    """Deserialized results retain positive, distinct source semantics."""
+    with pytest.raises(ValueError):
+        DivisibilityEdgeProfileResult(values=values, edges=())

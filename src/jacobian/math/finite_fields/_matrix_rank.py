@@ -41,8 +41,30 @@ _MATRIX: dict[str, object] = {
 def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
     matrix = request.matrix
-    data = compute_matrix_rank(matrix)
     try:
+        matrix_bytes = len(
+            encode_strict_json({"matrix": matrix.model_dump(mode="json")})
+        )
+        rank_bound = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
+        max_row_label_bytes = max(
+            (len(encode_strict_json(label)) for label in matrix.row_axis.labels),
+            default=0,
+        )
+        max_column_label_bytes = max(
+            (len(encode_strict_json(label)) for label in matrix.column_axis.labels),
+            default=0,
+        )
+        if (
+            matrix_bytes
+            + rank_bound * (max_row_label_bytes + max_column_label_bytes)
+            > CanonicalLimits().max_output_bytes
+        ):
+            raise OperationDomainValidationError(
+                location=("matrix",),
+                code="finite_field.matrix_rank.result_bound",
+                message="matrix-rank result exceeds the canonical output bound",
+            )
+        data = compute_matrix_rank(matrix)
         result_probe = encode_strict_json(
             {
                 "matrix": matrix.model_dump(mode="json"),

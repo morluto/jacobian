@@ -45,7 +45,7 @@ def _int_size(value: int) -> int:
     return len(encode_strict_json(value))
 
 
-def _admit_monochromatic_clique_hypergraph(
+def _admit_monochromatic_clique_hypergraph(  # noqa: C901
     colored_graph: ColoredUndirectedGraph, clique_order: int
 ) -> MonochromaticCliqueAdmission:
     """Admit the complete finite construction before enumerating subsets."""
@@ -103,17 +103,32 @@ def _admit_monochromatic_clique_hypergraph(
             message="monochromatic clique enumeration exceeds the work bound",
         )
     edge_to_color = dict(zip(graph.edges, colored_graph.edge_colors, strict=True))
-    cliques = tuple(
-        tuple(sorted(subset))
-        for subset in combinations(vertices, clique_order)
+    cliques_list: list[tuple[str, ...]] = []
+    for subset in combinations(vertices, clique_order):
         if len(
             {
                 edge_to_color.get((left, right), edge_to_color.get((right, left)))
                 for left, right in combinations(subset, 2)
             }
-        )
-        == 1
-    )
+        ) != 1:
+            continue
+        cliques_list.append(tuple(sorted(subset)))
+        if len(cliques_list) > MAX_EDGES:
+            raise OperationDomainValidationError(
+                location=("clique_order",),
+                code="monochromatic_clique.edge_bound_exceeded",
+                message=f"the construction exceeds the {MAX_EDGES}-edge hypergraph bound",
+            )
+        if len(cliques_list) * clique_order > MAX_TOTAL_INCIDENCES:
+            raise OperationDomainValidationError(
+                location=("clique_order",),
+                code="monochromatic_clique.incidence_bound_exceeded",
+                message=(
+                    "the construction exceeds the "
+                    f"{MAX_TOTAL_INCIDENCES}-incidence hypergraph bound"
+                ),
+            )
+    cliques = tuple(cliques_list)
     clique_count = len(cliques)
     incidence_count = clique_count * clique_order
     if clique_count > MAX_EDGES:
@@ -137,15 +152,21 @@ def _admit_monochromatic_clique_hypergraph(
         )
         label_sizes = tuple(len(encode_strict_json(label)) for label in vertices)
         vertex_bytes = _array_size(label_sizes)
-        member_bytes = _array_size(
-            tuple(sorted(label_sizes, reverse=True)[:clique_order])
+        edge_bytes = tuple(
+            _array_size(
+                (
+                    len(encode_strict_json(f"clique_{index}")),
+                    _array_size(
+                        tuple(len(encode_strict_json(vertex)) for vertex in clique)
+                    ),
+                )
+            )
+            for index, clique in enumerate(cliques)
         )
-        edge_id_bytes = len(encode_strict_json(f"clique_{clique_count - 1}"))
-        edge_bytes = _array_size((edge_id_bytes, member_bytes))
         hypergraph_bytes = strict_json_object_size(
             (
                 ("vertices", vertex_bytes),
-                ("edges", _array_size((edge_bytes,) * clique_count)),
+                ("edges", _array_size(edge_bytes)),
             )
         )
         result_bytes = strict_json_object_size(

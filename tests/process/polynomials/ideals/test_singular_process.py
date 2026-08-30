@@ -111,6 +111,19 @@ def test_timeout_is_not_reported_as_a_mathematical_result(
     assert result.ideal is None
 
 
+def test_exhausted_shared_deadline_does_not_launch_singular() -> None:
+    result = run_singular_ideal_operation(
+        "radical",
+        _ideal(),
+        None,
+        IdealComputationBudget(wall_seconds=60),
+        wall_seconds=0.0,
+    )
+
+    assert result.outcome == "TIMEOUT"
+    assert result.ideal is None
+
+
 def test_cancellation_is_preserved_as_its_own_outcome(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

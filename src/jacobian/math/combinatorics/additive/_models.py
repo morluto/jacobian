@@ -278,6 +278,14 @@ def _require_bounded_cartesian_product(
     left: FiniteIntegerSet,
     right: FiniteIntegerSet,
 ) -> None:
+    source_digits = sum(
+        len(element.lstrip("-")) for element in (*left.elements, *right.elements)
+    )
+    if source_digits > CanonicalLimits().max_input_bytes:
+        raise _validation_error(
+            "_require_bounded_cartesian_product",
+            "finite-set operands exceed the admitted aggregate integer parsing budget",
+        )
     pair_count = len(left.elements) * len(right.elements)
     if pair_count > _MAX_CARTESIAN_PAIR_COUNT:
         raise _validation_error(

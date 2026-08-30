@@ -22,7 +22,6 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     RationalComplexIsolatingRectangle,
@@ -49,6 +48,7 @@ from jacobian.math.number_theory.number_fields._embeddings_worker import (
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldEmbeddingsRequest,
 )
+from jacobian.math.number_theory.number_fields._tools import TOOLS
 from jacobian.math.number_theory.number_fields.operations import (
     MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES,
     NumberFieldEmbeddingAdmissionError,
@@ -581,8 +581,9 @@ def test_every_kernel_isolator_replays_and_result_stays_below_preflight_bound(
 
 
 def test_catalog_operation_exposes_and_runs_the_advertised_gaussian_example() -> None:
-    operation = Catalog.open().operation("number_field.embeddings.compute")
-    assert operation is not None
+    operation = next(
+        tool for tool in TOOLS if tool.operation_id == "number_field.embeddings.compute"
+    )
     example = operation.examples[0]
     request = NumberFieldEmbeddingsRequest.model_validate(example.input)
 
@@ -594,8 +595,9 @@ def test_catalog_operation_exposes_and_runs_the_advertised_gaussian_example() ->
 
 
 def test_reducible_presentation_is_recognized_inside_the_operation() -> None:
-    operation = Catalog.open().operation("number_field.embeddings.compute")
-    assert operation is not None
+    operation = next(
+        tool for tool in TOOLS if tool.operation_id == "number_field.embeddings.compute"
+    )
     request = NumberFieldEmbeddingsRequest.model_validate(
         {
             "field": {
@@ -656,8 +658,9 @@ def test_embedding_discriminator_is_required_at_runtime() -> None:
 
 
 def test_catalog_operation_projects_owner_local_admission_rejection() -> None:
-    operation = Catalog.open().operation("number_field.embeddings.compute")
-    assert operation is not None
+    operation = next(
+        tool for tool in TOOLS if tool.operation_id == "number_field.embeddings.compute"
+    )
     field = _field("1", *("0",) * 7, str(10**255 + 2))
     request = NumberFieldEmbeddingsRequest(field=field)
 

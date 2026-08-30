@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from sympy import nextprime
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._divisibility_edge_profile import (
@@ -134,3 +135,19 @@ def test_result_rejects_invalid_source_set(values: tuple[str, ...]) -> None:
     """Deserialized results retain positive, distinct source semantics."""
     with pytest.raises(ValueError):
         DivisibilityEdgeProfileResult(values=values, edges=())
+def test_heterogeneous_pair_widths_admitted_per_pair() -> None:
+    """Per-pair digit widths admit heterogeneous source sets that the
+    global-max-width estimate would reject.
+
+    Three-digit primes plus one large prime have no divisibility edges among
+    them, so the actual pair-scan work is small even though the global maximum
+    width is large.
+    """
+    from sympy import isprime
+
+    small_primes = [str(n) for n in range(101, 1000) if isprime(n)]
+    large_prime = str(nextprime(10**200))
+    values = (*small_primes, large_prime)
+    result = divisibility_edge_profile(values)
+    # No divisibility edges among distinct primes
+    assert len(result.edges) == 0

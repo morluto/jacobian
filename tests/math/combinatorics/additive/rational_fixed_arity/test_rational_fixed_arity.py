@@ -108,5 +108,14 @@ def test_native_admission_rejects_negative_arity() -> None:
     """Negative arity is a typed domain rejection rather than a host error."""
     import pytest
 
-    with pytest.raises(ValueError, match="arity must be between"):
+    with pytest.raises(ValueError, match="arity must be nonnegative"):
         compute_rational_fixed_arity_sum_profile((_cr(1),), -1)
+
+
+def test_large_source_and_empty_out_of_range_arity_use_result_sensitive_admission() -> None:
+    repeated = tuple(_cr(0) for _ in range(1_001))
+    result = compute_rational_fixed_arity_sum_profile(repeated, 1)
+    assert result.rows[0].multiplicity == 1_001
+
+    empty = compute_rational_fixed_arity_sum_profile((_cr(1),), 1_001)
+    assert empty.rows == ()

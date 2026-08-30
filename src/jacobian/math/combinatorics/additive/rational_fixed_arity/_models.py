@@ -10,16 +10,14 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
-MAX_SEQUENCE_LENGTH = 1_000
-MAX_ARITY = MAX_SEQUENCE_LENGTH
 MAX_RESULT_ROWS = 1_000_000
 
 
 class RationalFixedAritySumRequest(StrictModel):
     """Request for the rational fixed-arity sum profile."""
 
-    values: tuple[CanonicalRational, ...] = Field(max_length=MAX_SEQUENCE_LENGTH)
-    arity: StrictInt = Field(ge=0, le=MAX_ARITY)
+    values: tuple[CanonicalRational, ...]
+    arity: StrictInt = Field(ge=0)
 
 
 class SumProfileRow(StrictModel):
@@ -32,8 +30,8 @@ class SumProfileRow(StrictModel):
 class RationalFixedAritySumResult(StrictModel):
     """The complete rational fixed-arity sum profile."""
 
-    values: tuple[CanonicalRational, ...] = Field(max_length=MAX_SEQUENCE_LENGTH)
-    arity: StrictInt = Field(ge=0, le=MAX_ARITY)
+    values: tuple[CanonicalRational, ...]
+    arity: StrictInt = Field(ge=0)
     rows: tuple[SumProfileRow, ...] = Field(max_length=MAX_RESULT_ROWS)
 
     @classmethod
@@ -60,9 +58,7 @@ class RationalFixedAritySumResult(StrictModel):
 
 
 __all__ = [
-    "MAX_ARITY",
     "MAX_RESULT_ROWS",
-    "MAX_SEQUENCE_LENGTH",
     "RationalFixedAritySumRequest",
     "RationalFixedAritySumResult",
     "SumProfileRow",

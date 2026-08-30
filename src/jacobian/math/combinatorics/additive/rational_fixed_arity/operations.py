@@ -15,8 +15,6 @@ from jacobian.canonical import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_fixed_arity._models import (
-    MAX_ARITY,
-    MAX_SEQUENCE_LENGTH,
     RationalFixedAritySumResult,
     SumProfileRow,
 )
@@ -56,19 +54,13 @@ def _admit(
             "rational_fixed_arity.arity_type",
             "arity must be an integer",
         )
-    if not 0 <= arity <= MAX_ARITY:
+    if arity < 0:
         _reject(
             ("arity",),
             "rational_fixed_arity.arity_domain",
-            f"arity must be between 0 and {MAX_ARITY}",
+            "arity must be nonnegative",
         )
     source_size = len(values)
-    if source_size > MAX_SEQUENCE_LENGTH:
-        _reject(
-            ("values",),
-            "rational_fixed_arity.sequence_length",
-            f"values may contain at most {MAX_SEQUENCE_LENGTH} items",
-        )
     candidate_count = comb(source_size, arity) if arity <= source_size else 0
     arithmetic_digits = max(
         (max(len(value.num.lstrip("-")), len(value.den)) for value in values),

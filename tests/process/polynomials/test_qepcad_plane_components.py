@@ -259,7 +259,7 @@ def test_live_nested_dialogue_child_is_killed_when_the_request_is_cancelled(
             raise AssertionError("nested dialogue child did not publish readiness")
 
         cancellation.set()
-        outer_worker.join(timeout=15)
+        outer_worker.join(timeout=30)
 
         assert not outer_worker.is_alive()
         assert failures == []
@@ -267,19 +267,20 @@ def test_live_nested_dialogue_child_is_killed_when_the_request_is_cancelled(
         assert completed[0].cancelled
         assert not completed[0].timed_out
 
+        # In resource-constrained CI, the process-group kill may take longer
+        # to propagate. Poll for up to 30 seconds before declaring failure.
         exit_deadline = time.monotonic() + 30
         while time.monotonic() < exit_deadline:
             try:
                 os.kill(nested_pid, 0)
             except ProcessLookupError:
                 break
-            time.sleep(0.01)
-        # The outer run_bounded_process kills the worker's process group
-        # via _kill_process_tree.  In CI the child may survive longer
-        # than expected; the finally block below reaps it unconditionally.
+            time.sleep(0.05)
+        else:
+            raise AssertionError("nested dialogue child survived request cancellation")
     finally:
         cancellation.set()
-        outer_worker.join(timeout=15)
+        outer_worker.join(timeout=30)
         if nested_pid is not None:
             with contextlib.suppress(ProcessLookupError):
                 os.kill(nested_pid, 9)

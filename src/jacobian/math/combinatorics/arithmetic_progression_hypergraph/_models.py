@@ -74,7 +74,11 @@ def _admission_error(lower: int, upper: int, k: int) -> tuple[str, str, str] | N
         )
     vertex_label_bytes = max(len(str(lower)), len(str(upper)))
     edge_label_bytes = max(
-        (len(f"({lower},{d})") for d in range(1, n)),
+        (
+            len(f"({a},{d})")
+            for d in range(1, n)
+            for a in range(lower, upper - (k - 1) * d + 1)
+        ),
         default=0,
     )
     if max(vertex_label_bytes, edge_label_bytes) > 64:

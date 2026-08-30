@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 
+import rfc8785
 from jacobian.canonical import CanonicalizationError, CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.cycle_length_profile._models import (
@@ -96,8 +98,17 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
             "the complete cycle profile exceeds the canonical output bound",
         )
     if graph.edges:
-        label_bytes = sum(len(label.encode("utf-8")) + 2 for label in graph.vertices)
-        for length in range(3, vertex_count + 1):
+        # The transport path NFC-normalizes strings and RFC-8785 escapes control
+        # characters, so raw UTF-8 lengths undercount the actual result.
+        label_bytes = sum(
+            len(rfc8785.dumps(unicodedata.normalize("NFC", label)))
+            for label in graph.vertices
+        )
+        # A simple cycle of length k consumes k distinct edges.  Charging only
+        # lengths that can occur avoids rejecting sparse graphs whose exact
+        # profile is empty (for example, a one-edge graph).
+        max_cycle_length = min(vertex_count, len(graph.edges))
+        for length in range(3, max_cycle_length + 1):
             result_bytes += 32 + length * (label_bytes + 2)
     if result_bytes > MAX_RESULT_BYTES:
         _reject(

@@ -80,7 +80,9 @@ def _total_degree(polynomial: RationalPolynomial) -> int:
     )
 
 
-def _source_payload(polynomial_map: RationalPolynomialMap, box: RationalBox) -> dict[str, object]:
+def _source_payload(
+    polynomial_map: RationalPolynomialMap, box: RationalBox
+) -> dict[str, object]:
     return {
         "polynomial_map": polynomial_map.model_dump(mode="json"),
         "box": box.model_dump(mode="json"),
@@ -108,7 +110,9 @@ def _point_box(box: RationalBox, point: tuple[Fraction, ...]) -> RationalBox:
     )
 
 
-def _admit_source_shape(polynomial_map: RationalPolynomialMap, box: RationalBox) -> None:
+def _admit_source_shape(
+    polynomial_map: RationalPolynomialMap, box: RationalBox
+) -> None:
     order = len(polynomial_map.input_variables)
     if order > MAX_ROOT_BOX_DIMENSION:
         raise _domain_error(
@@ -193,9 +197,7 @@ def _bounded_component_exclusion(
 ) -> ComponentExclusionKernelResult | None:
     """Return any cheap exact component exclusion without making it mandatory."""
 
-    for component_index, polynomial in enumerate(
-        polynomial_map.output_polynomials
-    ):
+    for component_index, polynomial in enumerate(polynomial_map.output_polynomials):
         try:
             enclosure = _admitted_enclosure(
                 polynomial,
@@ -341,7 +343,9 @@ def _require_krawczyk_height_envelope(
         )
 
 
-def _prepare_root_box(polynomial_map: RationalPolynomialMap, box: RationalBox) -> _PreparedRootBox:
+def _prepare_root_box(
+    polynomial_map: RationalPolynomialMap, box: RationalBox
+) -> _PreparedRootBox:
     try:
         _admit_source_shape(polynomial_map, box)
         component_exclusion = _bounded_component_exclusion(polynomial_map, box)

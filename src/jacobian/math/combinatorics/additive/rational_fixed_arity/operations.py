@@ -35,6 +35,27 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
     raise OperationDomainValidationError(location=location, code=code, message=message)
 
 
+def _support_bound(
+    fractions: tuple[Fraction, ...], arity: int, candidate_count: int
+) -> int:
+    multiplicities: dict[Fraction, int] = {}
+    for fraction in fractions:
+        multiplicities[fraction] = multiplicities.get(fraction, 0) + 1
+    if len(multiplicities) * (arity + 1) > MAX_ENUMERATION_WORK:
+        return candidate_count
+    count_vectors = [0] * (arity + 1)
+    count_vectors[0] = 1
+    for multiplicity in multiplicities.values():
+        next_counts = [0] * (arity + 1)
+        for used, count in enumerate(count_vectors):
+            if not count:
+                continue
+            for take in range(min(multiplicity, arity - used) + 1):
+                next_counts[used + take] += count
+        count_vectors = next_counts
+    return count_vectors[arity]
+
+
 def _admit(
     values: tuple[CanonicalRational, ...],
     arity: int,
@@ -62,6 +83,9 @@ def _admit(
         )
     source_size = len(values)
     candidate_count = comb(source_size, arity) if arity <= source_size else 0
+    fractions = tuple(value.as_fraction() for value in values)
+    if arity > source_size:
+        return _AdmissionPlan(fractions=fractions, candidate_count=0)
     arithmetic_digits = max(
         (max(len(value.num.lstrip("-")), len(value.den)) for value in values),
         default=1,
@@ -109,21 +133,7 @@ def _admit(
     # Equal source values can collapse many index tuples to the same sum.  The
     # number of attainable value-count vectors is a safe support bound and is
     # much tighter for repeated inputs than the raw combination count.
-    multiplicities: dict[Fraction, int] = {}
-    for value in values:
-        fraction = value.as_fraction()
-        multiplicities[fraction] = multiplicities.get(fraction, 0) + 1
-    count_vectors = [0] * (arity + 1)
-    count_vectors[0] = 1
-    for multiplicity in multiplicities.values():
-        next_counts = [0] * (arity + 1)
-        for used, count in enumerate(count_vectors):
-            if not count:
-                continue
-            for take in range(min(multiplicity, arity - used) + 1):
-                next_counts[used + take] += count
-        count_vectors = next_counts
-    support_bound = count_vectors[arity] if arity <= source_size else 0
+    support_bound = _support_bound(fractions, arity, candidate_count)
     try:
         source_bytes = len(
             encode_strict_json(
@@ -147,7 +157,7 @@ def _admit(
             "the exact sum profile exceeds the canonical output bound",
         )
     return _AdmissionPlan(
-        fractions=tuple(value.as_fraction() for value in values),
+        fractions=fractions,
         candidate_count=candidate_count,
     )
 

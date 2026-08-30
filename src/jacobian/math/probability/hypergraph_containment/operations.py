@@ -35,6 +35,7 @@ MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 class _ContainmentAdmissionPlan:
     edge_masks: tuple[int, ...]
     active_vertices: tuple[int, ...]
+    use_inclusion_exclusion: bool
 
 
 def _admit_hypergraph_vertex_containment(
@@ -65,6 +66,7 @@ def _admit_hypergraph_vertex_containment(
     )
     n = len(hypergraph.vertices)
     state_count = 1 << n
+    use_inclusion_exclusion = False
     if not trivial_event:
         vertex_index = {
             vertex: index for index, vertex in enumerate(hypergraph.vertices)
@@ -92,15 +94,16 @@ def _admit_hypergraph_vertex_containment(
             for mask in minimal_masks
         )
         active_state_count = 1 << len(active_vertices)
-        small_edge_family = len(edge_masks) <= 2
-        if active_state_count > MAX_SUBSET_STATES and not small_edge_family:
+        ie_terms = _inclusion_exclusion_terms(len(edge_masks), n)
+        use_inclusion_exclusion = ie_terms is not None
+        if active_state_count > MAX_SUBSET_STATES and not use_inclusion_exclusion:
             raise OperationDomainValidationError(
                 location=("hypergraph", "vertices"),
                 code="hypergraph_containment.state_bound_exceeded",
                 message="the active subset-state envelope is exceeded",
             )
         lift_work = active_state_count * (n - len(active_vertices) + 1)
-        if not small_edge_family and (
+        if not use_inclusion_exclusion and (
             len(edge_masks) * active_state_count + lift_work > MAX_CONTAINMENT_WORK
         ):
             raise OperationDomainValidationError(
@@ -151,7 +154,23 @@ def _admit_hypergraph_vertex_containment(
             code="hypergraph_containment.result_size_bound",
             message="the complete containment profile exceeds the canonical output bound",
         )
-    return _ContainmentAdmissionPlan(edge_masks, active_vertices)
+    return _ContainmentAdmissionPlan(
+        edge_masks, active_vertices, use_inclusion_exclusion
+    )
+
+
+def _inclusion_exclusion_terms(edge_count: int, vertex_count: int) -> int | None:
+    """Return the charged term count when edge-subset inclusion-exclusion fits."""
+
+    if edge_count >= 63:
+        return None
+    terms = (1 << edge_count) - 1
+    # Each term contributes one union mask, one probability power, and all
+    # n+1 profile entries.  Keep this complete regime under the same work
+    # envelope as subset enumeration.
+    if terms * (vertex_count + 2) > MAX_CONTAINMENT_WORK:
+        return None
+    return terms
 
 
 def _minimal_edge_masks(unique_masks: tuple[int, ...]) -> list[int]:
@@ -215,43 +234,31 @@ def compute_hypergraph_vertex_containment(
 
     active_n = len(plan.active_vertices)
     isolated_n = n - active_n
-    if len(plan.edge_masks) <= 2:
-        edge_sizes = tuple(mask.bit_count() for mask in plan.edge_masks)
-        union_size = (
-            (plan.edge_masks[0] | plan.edge_masks[1]).bit_count()
-            if len(plan.edge_masks) == 2
-            else edge_sizes[0]
-        )
-        single_edge_counts = tuple(
-            format_canonical_integer(
-                sum(
-                    comb(n - edge_size, k - edge_size)
-                    for edge_size in edge_sizes
-                    if k >= edge_size
-                )
-                - (
-                    comb(n - union_size, k - union_size)
-                    if len(edge_sizes) == 2 and k >= union_size
-                    else 0
-                )
-            )
-            for k in range(n + 1)
-        )
+    if plan.use_inclusion_exclusion:
+        edge_count = len(plan.edge_masks)
+        ie_counts = [0] * (n + 1)
+        success_count = 0
         p = retention_probability.as_fraction()
-        success_count = sum(
-            1 << (n - edge_size) for edge_size in edge_sizes
-        ) - (
-            (1 << (n - union_size)) if len(edge_sizes) == 2 else 0
-        )
-        probability = sum(
-            (p**edge_size for edge_size in edge_sizes), Fraction(0)
-        ) - (
-            p**union_size if len(edge_sizes) == 2 else 0
-        )
+        probability = Fraction(0)
+        for subset in range(1, 1 << edge_count):
+            union_mask = 0
+            selected = 0
+            for edge_index, edge_mask in enumerate(plan.edge_masks):
+                if subset & (1 << edge_index):
+                    union_mask |= edge_mask
+                    selected += 1
+            union_size = union_mask.bit_count()
+            sign = 1 if selected % 2 else -1
+            success_count += sign * (1 << (n - union_size))
+            probability += sign * p**union_size
+            for k in range(union_size, n + 1):
+                ie_counts[k] += sign * comb(n - union_size, k - union_size)
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
-            containing_subset_counts=single_edge_counts,
+            containing_subset_counts=tuple(
+                format_canonical_integer(value) for value in ie_counts
+            ),
             total_state_count=format_canonical_integer(1 << n),
             success_count=format_canonical_integer(success_count),
             probability=CanonicalRational.from_fraction(probability),

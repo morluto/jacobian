@@ -12,6 +12,7 @@ from jacobian.math.number_theory._divisibility_profiles import (
     DIVISIBILITY_PROFILE_OPERATIONS,
 )
 from jacobian.math.number_theory._friable import FRIABLE_COUNT_OPERATION
+from jacobian.math.number_theory._friable_enumerate import FRIABLE_ENUMERATE_OPERATION
 from jacobian.math.number_theory._interval_profiles import (
     INTERVAL_PROFILE_OPERATIONS,
 )
@@ -36,6 +37,7 @@ TOOLS: MathTools = (
     *DERIVED_NUMBER_THEORY_OPERATIONS,
     RAMANUJAN_SUM_OPERATION,
     FRIABLE_COUNT_OPERATION,
+    FRIABLE_ENUMERATE_OPERATION,
     CONTIGUOUS_SUM_OPERATION,
     PRIME_SHIFT_OPERATION,
     *INTERVAL_PROFILE_OPERATIONS,

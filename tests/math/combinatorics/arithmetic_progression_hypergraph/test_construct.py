@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.arithmetic_progression_hypergraph._models import (
+    MAX_INTERVAL_SIZE,
     _edge_count,
 )
 from jacobian.math.combinatorics.arithmetic_progression_hypergraph.operations import (
@@ -470,3 +474,10 @@ def test_result_preserves_request_fields() -> None:
 def test_result_k_field() -> None:
     result = construct_arithmetic_progression_hypergraph(1, 5, 4)
     assert result.k == 4
+
+
+def test_native_constructor_rejects_oversized_vertex_carrier() -> None:
+    with pytest.raises(OperationDomainValidationError, match="interval size"):
+        construct_arithmetic_progression_hypergraph(
+            0, MAX_INTERVAL_SIZE, MAX_INTERVAL_SIZE + 2
+        )

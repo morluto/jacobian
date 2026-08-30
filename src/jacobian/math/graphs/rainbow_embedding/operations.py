@@ -6,6 +6,7 @@ from itertools import permutations
 from math import perm
 
 from jacobian.canonical import (
+    CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
     strict_json_object_size,
@@ -63,7 +64,9 @@ def _admit_rainbow_embedding_profile(
         )
 
     candidate_count = (
-        perm(host_order, pattern_order) if pattern_order <= host_order else 0
+        perm(host_order, pattern_order)
+        if pattern_order <= host_order and len(pattern.edges) <= len(host.graph.edges)
+        else 0
     )
     edge_work = max(1, len(pattern.edges) + len(host.graph.edges))
     if candidate_count * edge_work > MAX_RAINBOW_EMBEDDING_WORK:
@@ -73,8 +76,15 @@ def _admit_rainbow_embedding_profile(
             message="rainbow embedding enumeration exceeds its exact work bound",
         )
 
-    pattern_bytes = len(encode_strict_json(pattern.model_dump(mode="json")))
-    host_bytes = len(encode_strict_json(host.model_dump(mode="json")))
+    try:
+        pattern_bytes = len(encode_strict_json(pattern.model_dump(mode="json")))
+        host_bytes = len(encode_strict_json(host.model_dump(mode="json")))
+    except CanonicalizationError as exc:
+        raise OperationDomainValidationError(
+            location=("pattern", "host"),
+            code="graph.rainbow_embedding.result_exceeds_output_bound",
+            message="rainbow embedding profile exceeds the canonical output bound",
+        ) from exc
     map_item_sizes = [
         _json_array_size(
             [
@@ -159,6 +169,14 @@ def compute_rainbow_embedding_profile(
         )
 
     if len(pattern_vertices) > len(host_vertices):
+        return RainbowEmbeddingResult(
+            pattern=pattern,
+            host=host,
+            embeddings=(),
+            total_embeddings=0,
+            rainbow_count=0,
+        )
+    if len(pattern.edges) > len(host.graph.edges):
         return RainbowEmbeddingResult(
             pattern=pattern,
             host=host,

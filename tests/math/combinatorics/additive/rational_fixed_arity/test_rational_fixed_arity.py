@@ -150,3 +150,41 @@ def test_reduced_denominators_use_lcm_growth_bound() -> None:
     assert result.rows[0].sum_value.as_fraction() == sum(
         (value.as_fraction() for value in values), Fraction(0)
     )
+
+
+def test_exact_cancellation_is_presolved_without_lcm_expansion() -> None:
+    digits = 17_001
+    first = "1" + "0" * digits
+    second = first + "1"
+    values = (
+        CanonicalRational(num="1", den=first),
+        CanonicalRational(num="-1", den=first),
+        CanonicalRational(num="1", den=second),
+        CanonicalRational(num="-1", den=second),
+    )
+    result = compute_rational_fixed_arity_sum_profile(values, len(values))
+    assert result.rows[0].sum_value == _cr(0)
+
+
+def test_arity_zero_does_not_sum_wide_source_values() -> None:
+    values = (
+        CanonicalRational(num="1", den="1" + "0" * 17_001),
+        CanonicalRational(num="1", den="1" + "0" * 17_001 + "1"),
+    )
+    result = compute_rational_fixed_arity_sum_profile(values, 0)
+    assert result.rows[0].sum_value == _cr(0)
+
+
+def test_cross_denominator_cancellation_is_preserved() -> None:
+    q = 10**11
+    r = q + 1
+    p = q + r
+    values = (
+        _cr(1, p * q),
+        _cr(1, p * r),
+        _cr(-1, q * r),
+    )
+
+    result = compute_rational_fixed_arity_sum_profile(values, len(values))
+
+    assert result.rows[0].sum_value == _cr(0)

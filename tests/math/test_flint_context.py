@@ -142,6 +142,30 @@ def test_flint_workprec_lock_wait_uses_the_request_deadline() -> None:
     assert ctx.prec == original_precision
 
 
+def test_flint_workprec_without_deadline_waits_for_the_context() -> None:
+    holder_entered = Event()
+    release_holder = Event()
+
+    def hold_context() -> None:
+        with flint_workprec(96):
+            holder_entered.set()
+            assert release_holder.wait(timeout=1)
+
+    def wait_for_context() -> int:
+        assert holder_entered.wait(timeout=1)
+        with flint_workprec(128):
+            return ctx.prec
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        holder = workers.submit(hold_context)
+        waiter = workers.submit(wait_for_context)
+        assert holder_entered.wait(timeout=1)
+        assert not waiter.done()
+        release_holder.set()
+        holder.result(timeout=1)
+        assert waiter.result(timeout=1) == 128
+
+
 def test_flint_workprec_queued_wait_observes_request_cancellation() -> None:
     original_precision = ctx.prec
     holder_entered = Event()

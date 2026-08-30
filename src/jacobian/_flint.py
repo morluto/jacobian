@@ -14,7 +14,6 @@ from jacobian._execution import (
     request_cancelled,
 )
 
-_DEFAULT_CONTEXT_WAIT_SECONDS = 120.0
 _CONTEXT_LOCK_POLL_SECONDS = 0.1
 _CONTEXT_LOCK = RLock()
 
@@ -26,9 +25,9 @@ def flint_workprec(
     """Own python-flint's global precision context for one bounded scope.
 
     ``deadline`` is an absolute ``time.monotonic`` instant. The earliest caller
-    or request deadline bounds lock acquisition. Callers without either get a
-    120-second lock-wait ceiling, matching existing bounded backend adapters.
-    A bound request cancellation interrupts a queued acquisition.
+    or request deadline bounds lock acquisition. A bound request cancellation
+    interrupts a queued acquisition; callers without a deadline wait until the
+    context is available while continuing to poll cancellation.
     """
 
     execution = current_request_execution()
@@ -40,19 +39,24 @@ def flint_workprec(
     elif request_deadline is not None:
         wait_deadline = request_deadline
     else:
-        wait_deadline = monotonic() + _DEFAULT_CONTEXT_WAIT_SECONDS
+        wait_deadline = None
 
     while True:
         if request_cancelled():
             raise OperationExecutionCancelledError(
                 "operation cancelled waiting for the python-flint precision context"
             )
-        remaining = wait_deadline - monotonic()
-        if remaining <= 0.0:
+        remaining = wait_deadline - monotonic() if wait_deadline is not None else None
+        if remaining is not None and remaining <= 0.0:
             raise OperationExecutionTimeoutError(
                 "execution deadline expired waiting for the python-flint precision context"
             )
-        if _CONTEXT_LOCK.acquire(timeout=min(_CONTEXT_LOCK_POLL_SECONDS, remaining)):
+        poll_seconds = (
+            min(_CONTEXT_LOCK_POLL_SECONDS, remaining)
+            if remaining is not None
+            else _CONTEXT_LOCK_POLL_SECONDS
+        )
+        if _CONTEXT_LOCK.acquire(timeout=poll_seconds):
             break
     try:
         if request_cancelled():
@@ -61,7 +65,7 @@ def flint_workprec(
             )
         from flint import ctx
 
-        if monotonic() >= wait_deadline:
+        if wait_deadline is not None and monotonic() >= wait_deadline:
             raise OperationExecutionTimeoutError(
                 "execution deadline expired waiting for the python-flint precision context"
             )

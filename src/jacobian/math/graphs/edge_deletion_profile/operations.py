@@ -84,7 +84,7 @@ def compute_edge_deletion_profile(
     edges_list = list(graph.edges)
     source_is_bipartite = _is_bipartite(graph)
     source_chi = (
-        (1 if not graph.edges else 2)
+        (0 if not graph.vertices else 1 if not graph.edges else 2)
         if source_is_bipartite
         else _exact_chromatic_number(nx_graph)
     )
@@ -99,7 +99,13 @@ def compute_edge_deletion_profile(
                 deleted_edges.append((left, right))
             deleted = tuple(sorted(deleted_edges))
             if source_is_bipartite:
-                chi = 1 if len(subset) == len(edges_list) else 2
+                chi = (
+                    0
+                    if not graph.vertices
+                    else 1
+                    if len(subset) == len(edges_list)
+                    else 2
+                )
             else:
                 sub_graph: nx.Graph[str] = nx.Graph()
                 for v in graph.vertices:

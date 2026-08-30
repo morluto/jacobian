@@ -108,8 +108,23 @@ def plan_friable_family(x: int, y: int) -> tuple[_FriableFamilyRegime, tuple[int
             f"friable-family sources must have at most {_MAX_FRIABLE_FAMILY_SOURCE_DIGITS} decimal digits",
         )
 
-    # Direct regimes handle boundary cases where the family is trivial.
-    if x == 0 or y <= 1 or y >= x:
+    # Constant-size direct regimes are independent of the source magnitude.
+    if x == 0 or y <= 1:
+        return "DIRECT", ()
+    # When y >= x every positive integer through x is friable.  This shortcut
+    # still materializes the complete family, so admit its rows and wire size.
+    if y >= x:
+        estimated_bytes = 128 + x * (len(str(x)) + 3)
+        if x > MAX_FRIABLE_FAMILY_ROWS:
+            raise _validation_error(
+                "friable_family_exceeds_the_row_budget",
+                "friable family exceeds the row budget",
+            )
+        if estimated_bytes > _MAX_FRIABLE_FAMILY_SERIALIZED_BYTES:
+            raise _validation_error(
+                "friable_family_exceeds_the_serialized_budget",
+                "friable family exceeds the serialized result budget",
+            )
         return "DIRECT", ()
 
     # Materialized regime: sieve 1..x and collect friable entries.
@@ -176,7 +191,7 @@ class FriableFamilyResult(StrictModel):
 
     x: BoundedInteger
     y: BoundedInteger
-    family: tuple[BoundedInteger, ...]
+    family: tuple[BoundedInteger, ...] = Field(max_length=MAX_FRIABLE_FAMILY_ROWS)
 
     @model_validator(mode="after")
     def require_nonempty_or_consistent(self) -> Self:

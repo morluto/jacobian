@@ -145,8 +145,9 @@ def compute_periodic_union_prefix_count(
     """Return the exact count of integers in [1, cutoff] belonging to the periodic set.
 
     Uses the periodicity: if the common period is L and c residues are
-    occupied in one period, then the count through X is q*c + r,
-    where q = X // L, r = X % L, and c is the one-period count.
+    occupied in one period, then the count through X is q*c + p,
+    where q = X // L and p is the number of occupied representatives in
+    the partial prefix [1, X % L].
     """
     plan = _admit_source(source, cutoff)
     period = plan.common_period

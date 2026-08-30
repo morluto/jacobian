@@ -110,11 +110,11 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
 
         # Eliminate below.
         pivot_val = work_matrix[rank][col]
+        inv_pivot = invert(pivot_val, modulus)
         for r in range(rank + 1, rows):
             if not _is_zero_poly(work_matrix[r][col]):
                 # Compute factor = work_matrix[r][col] / pivot_val
                 # = work_matrix[r][col] * inverse(pivot_val) mod modulus
-                inv_pivot = invert(pivot_val, modulus)
                 factor = (work_matrix[r][col] * inv_pivot).rem(modulus)
                 for c2 in range(col, cols):
                     work_matrix[r][c2] = (

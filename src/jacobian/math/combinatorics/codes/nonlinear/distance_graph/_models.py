@@ -41,7 +41,14 @@ class BinaryCodeDistanceGraphRequest(StrictModel):
     """Request for the Hamming distance graph of a binary code."""
 
     source: DistanceGraphCode
-    target_distance: int = Field(strict=True, ge=0)
+    target_distance: int = Field(
+        strict=True,
+        ge=0,
+        description=(
+            "Nonnegative Hamming distance at most the source code length; "
+            "the exact upper bound is validated against `source.length`."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_request(self) -> Self:

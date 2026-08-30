@@ -16,7 +16,6 @@ from jacobian.canonical import (
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_fixed_arity._models import (
     MAX_ARITY,
-    MAX_RESULT_ROWS,
     MAX_SEQUENCE_LENGTH,
     RationalFixedAritySumResult,
     SumProfileRow,
@@ -38,7 +37,7 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
     raise OperationDomainValidationError(location=location, code=code, message=message)
 
 
-def _admit(  # noqa: C901
+def _admit(
     values: tuple[CanonicalRational, ...],
     arity: int,
 ) -> _AdmissionPlan:
@@ -71,7 +70,11 @@ def _admit(  # noqa: C901
             f"values may contain at most {MAX_SEQUENCE_LENGTH} items",
         )
     candidate_count = comb(source_size, arity) if arity <= source_size else 0
-    work = candidate_count * max(arity, 1)
+    arithmetic_digits = max(
+        (max(len(value.num.lstrip("-")), len(value.den)) for value in values),
+        default=1,
+    )
+    work = candidate_count * max(arity, 1) * arithmetic_digits
     if work > MAX_ENUMERATION_WORK:
         _reject(
             ("values",),
@@ -124,13 +127,6 @@ def _admit(  # noqa: C901
                 next_counts[used + take] += count
         count_vectors = next_counts
     support_bound = count_vectors[arity] if arity <= source_size else 0
-    if support_bound > MAX_RESULT_ROWS:
-        _reject(
-            ("values",),
-            "rational_fixed_arity.support_bound",
-            "the exact sum profile may contain too many distinct rows",
-        )
-
     try:
         source_bytes = len(
             encode_strict_json(

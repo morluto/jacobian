@@ -10,9 +10,9 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
-MAX_SEQUENCE_LENGTH = 200
-MAX_ARITY = 10
-MAX_RESULT_ROWS = 50_000
+MAX_SEQUENCE_LENGTH = 1_000
+MAX_ARITY = MAX_SEQUENCE_LENGTH
+MAX_RESULT_ROWS = 1_000_000
 
 
 class RationalFixedAritySumRequest(StrictModel):

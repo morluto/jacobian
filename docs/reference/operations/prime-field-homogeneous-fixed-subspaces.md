@@ -26,8 +26,10 @@ space is zero-dimensional, so it can be serialized and passed back to the same
 or later degree computations without reconstructing field or axis context.
 
 Admission is derived before polynomial expansion. Requests are limited to 8
-variables, 16 distinct generators, degree at most 64, and 512 homogeneous
-monomials. The operation also applies the shared prime-field matrix-cell and
+variables, 16 distinct generators, and 512 homogeneous monomials. Degree is
+bounded by the derived expansion, matrix-cell, and elimination-work envelope;
+one-variable actions can therefore admit degrees above 64 when their actual
+work remains within budget. The operation also applies the shared prime-field matrix-cell and
 elimination-work bounds to the induced matrices, stacked fixed equations, exact
 row reduction, and dense canonical result. These are execution and codomain
 bounds, not restrictions on the mathematical definition.

@@ -17,7 +17,12 @@ from jacobian.math.number_theory.algebraic_numbers.root_isolation._sympy import 
     compute_algebraic_compare,
     compute_root_isolation,
 )
-from jacobian.math.number_theory.number_fields import ring_of_integers
+from jacobian.math.number_theory.number_fields import (
+    SimpleNumberFieldPresentation,
+    discriminant,
+    embeddings,
+    ring_of_integers,
+)
 from jacobian.math.number_theory.number_fields._discriminant_process import (
     compute_nf_discriminant,
 )
@@ -247,38 +252,72 @@ def test_algebraic_comparison_contract_rejects_a_missing_real_root() -> None:
 
 
 def test_number_field_discriminant_is_not_power_basis_discriminant() -> None:
-    result = compute_nf_discriminant(
-        NumberFieldRequest(coefficients_descending=("1", "0", "-5"), variable="x")
-    )
+    field = SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "-5"))
+    result = compute_nf_discriminant(NumberFieldRequest(field=field))
 
     assert result.discriminant == "5"
 
 
-@pytest.mark.parametrize(
-    "variable",
-    ["", " ", "x y", "x; y", "x\n", "x\x00", "1x", "x" * 33],
-)
-def test_number_field_variable_uses_polynomial_identifier_grammar(
-    variable: str,
-) -> None:
-    with pytest.raises(ValidationError):
-        NumberFieldRequest(
-            coefficients_descending=("1", "0", "-2"),
-            variable=variable,
-        )
+def test_embedding_field_composes_unchanged_with_field_invariant_consumers() -> None:
+    produced = embeddings(
+        SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "1"))
+    ).field
+    request = NumberFieldRequest.model_validate(
+        {"field": produced.model_dump(mode="json")}
+    )
+
+    assert request.field == produced
+    assert compute_nf_discriminant(request).discriminant == "-4"
+    assert discriminant(request.field) == "-4"
+    assert ring_of_integers(request.field) == ["1", "alpha"]
+
+
+def test_field_discriminant_request_schema_uses_the_canonical_presentation() -> None:
+    request_schema = NumberFieldRequest.model_json_schema()
+    field_reference = request_schema["properties"]["field"]["$ref"]
+    field_schema = request_schema["$defs"][field_reference.rsplit("/", 1)[-1]]
+
+    assert field_schema["title"] == "SimpleNumberFieldPresentation"
+    assert set(field_schema["properties"]) == {
+        "domain",
+        "coefficients_descending",
+    }
+    assert field_schema["properties"]["coefficients_descending"]["maxItems"] == 32
+
+
+def test_field_carrier_preserves_the_prior_discriminant_degree_envelope() -> None:
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", *("0",) * 30, "1")
+    )
+
+    assert field.degree == 31
+    assert NumberFieldRequest(field=field).field is field
 
 
 def test_integral_basis_is_computed_in_the_defining_power_basis() -> None:
-    assert ring_of_integers(["1", "0", "-5"], "x") == ["1", "x/2 + 1/2"]
+    field = SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "-5"))
+
+    assert ring_of_integers(field) == ["1", "alpha/2 + 1/2"]
+    assert discriminant(field) == "5"
 
 
-def test_number_field_requires_a_monic_irreducible_integer_polynomial() -> None:
-    with algebra_validation_error():
-        NumberFieldRequest(coefficients_descending=("2", "0", "-10"), variable="x")
+def test_number_field_consumers_accept_a_nonmonic_canonical_presentation() -> None:
+    field = SimpleNumberFieldPresentation(coefficients_descending=("2", "0", "1"))
+
+    assert compute_nf_discriminant(NumberFieldRequest(field=field)).discriminant == "-8"
+    assert discriminant(field) == "-8"
+    assert ring_of_integers(field) == ["1", "2*alpha"]
 
 
 def test_number_field_reducibility_is_an_owner_declared_invalid_request() -> None:
-    request = NumberFieldRequest(coefficients_descending=("1", "0", "-1"), variable="x")
+    request = NumberFieldRequest.model_validate(
+        {
+            "field": {
+                "domain": "QQ",
+                "coefficients_descending": ["1", "0", "-1"],
+            }
+        }
+    )
 
     with pytest.raises(OperationDomainValidationError) as caught:
         compute_nf_discriminant(request)
@@ -288,12 +327,16 @@ def test_number_field_reducibility_is_an_owner_declared_invalid_request() -> Non
 
 def test_number_field_rejects_oversized_coefficients_before_sympy() -> None:
     with pytest.raises(ValidationError) as caught:
-        NumberFieldRequest(
-            coefficients_descending=("1" + "0" * 256, "0", "-2"),
-            variable="x",
+        NumberFieldRequest.model_validate(
+            {
+                "field": {
+                    "domain": "QQ",
+                    "coefficients_descending": ["1" + "0" * 256, "0", "-2"],
+                }
+            }
         )
 
-    assert caught.value.errors()[0]["type"] == "number_field.coefficient_digits"
+    assert caught.value.errors()[0]["type"] == "simple_number_field.coefficient_bound"
 
 
 def test_recurrence_finder_solves_for_coefficients() -> None:

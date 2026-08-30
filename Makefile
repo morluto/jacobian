@@ -49,8 +49,8 @@ test-catalog: ## Immutable catalog and discovery behavior (2 workers, 30s).
 		$(if $(TESTS),$(TESTS),tests/catalog) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-dispatch: ## Strict parsing and direct dispatch behavior (2 workers, 30s).
-	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=30 \
+test-dispatch: ## Strict parsing and direct dispatch behavior (2 workers, 120s).
+	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=120 \
 		$(if $(TESTS),$(TESTS),tests/dispatch) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 

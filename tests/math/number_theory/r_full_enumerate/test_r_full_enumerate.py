@@ -1,0 +1,68 @@
+"""Tests for bounded r-full integer enumeration."""
+
+from __future__ import annotations
+
+from sympy.ntheory.factor_ import factorint
+
+from jacobian.math.number_theory._r_full_enumerate import enumerate_r_full_numbers
+from jacobian.math.number_theory._r_full_enumerate_kernels import enumerate_r_full
+from jacobian.math.number_theory._r_full_enumerate_models import RFullEnumerateRequest
+
+
+def test_r2_equals_powerful() -> None:
+    """r=2 gives the powerful family."""
+    result = enumerate_r_full(10, 2)
+    assert result == [1, 4, 8, 9]
+
+
+def test_r3_cubefull_to_20() -> None:
+    """3-full integers in [1,20] are 1, 8, 16."""
+    result = enumerate_r_full(20, 3)
+    assert result == [1, 8, 16]
+
+
+def test_all_results_are_r_full() -> None:
+    """Every returned integer has all prime exponents >= r."""
+    for r in [2, 3, 4]:
+        result = enumerate_r_full(200, r)
+        for n in result:
+            for _, exp in factorint(n).items():
+                assert exp >= r, f"{n} is not {r}-full"
+
+
+def test_cross_check_brute_force() -> None:
+    """Cross-check against brute-force factorization."""
+    for r in [2, 3, 4, 5]:
+        result = enumerate_r_full(300, r)
+        brute = [
+            n for n in range(1, 301)
+            if all(e >= r for _, e in factorint(n).items())
+        ]
+        assert result == brute
+
+
+def test_sorted_and_unique() -> None:
+    """The family is sorted with no duplicates."""
+    result = enumerate_r_full(500, 3)
+    assert result == sorted(result)
+    assert len(result) == len(set(result))
+
+
+def test_operation_round_trip() -> None:
+    """The operation model round-trips through the kernel."""
+    request = RFullEnumerateRequest(minimum_exponent=3, cutoff=100)
+    result = enumerate_r_full_numbers(request)
+    assert result.minimum_exponent == 3
+    assert result.cutoff == 100
+    assert result.count == len(result.family)
+
+
+def test_r2_compatibility() -> None:
+    """r=2 result matches the powerful family from #2767."""
+    request = RFullEnumerateRequest(minimum_exponent=2, cutoff=100)
+    result = enumerate_r_full_numbers(request)
+    assert "1" in result.family
+    assert "4" in result.family
+    assert "8" in result.family
+    assert "9" in result.family
+    assert "12" not in result.family

@@ -26,7 +26,7 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials.values import (
-    RationalPolynomial,
+    PolynomialVariable,
     RationalPolynomialIdeal,
 )
 
@@ -78,8 +78,7 @@ class ProjectiveSingularityPointSeed(StrictModel):
 class ProjectiveSingularityPointWorkerRequest(StrictModel):
     """Canonical exact input for one complete point-construction transaction."""
 
-    source: RationalPolynomial
-    partials: tuple[RationalPolynomial, RationalPolynomial, RationalPolynomial]
+    variables: tuple[PolynomialVariable, PolynomialVariable, PolynomialVariable]
     chart_zero_components: tuple[RationalPolynomialIdeal, ...] = Field(
         max_length=MAX_PROJECTIVE_SINGULAR_POINTS
     )
@@ -90,17 +89,14 @@ class ProjectiveSingularityPointWorkerRequest(StrictModel):
 
     @model_validator(mode="after")
     def bind_component_axes(self) -> Self:
-        axis = self.source.variables
-        if len(axis) != 3 or any(
-            partial.variables != axis for partial in self.partials
-        ):
-            raise ValueError("point worker source and partial axes do not agree")
         if any(
-            component.variables != axis[1:] for component in self.chart_zero_components
+            component.variables != self.variables[1:]
+            for component in self.chart_zero_components
         ):
             raise ValueError("first-chart component has the wrong axis")
         if any(
-            component.variables != axis[2:] for component in self.chart_one_components
+            component.variables != self.variables[2:]
+            for component in self.chart_one_components
         ):
             raise ValueError("second-chart component has the wrong axis")
         if (
@@ -278,8 +274,6 @@ def _seed_for_factor(
     parameter: sympy.Symbol,
     coordinate_polynomials: tuple[sympy.Poly, sympy.Poly, sympy.Poly],
     chart_index: int,
-    source: sympy.Poly,
-    partials: tuple[sympy.Poly, sympy.Poly, sympy.Poly],
 ) -> ProjectiveSingularityPointSeed:
     if int(factor.degree()) == 1:
         presentation = SimpleNumberFieldPresentation(coefficients_descending=("1", "0"))
@@ -306,33 +300,6 @@ def _seed_for_factor(
         coordinate_values[1],
         coordinate_values[2],
     )
-
-    modulus = sympy.Poly(
-        sum(
-            int(coefficient) * parameter ** (presentation.degree - index)
-            for index, coefficient in enumerate(presentation.coefficients_descending)
-        ),
-        parameter,
-        domain=sympy.QQ,
-    )
-    coordinate_expressions = tuple(
-        sum(
-            sympy.Rational(*coefficient.as_integer_ratio()) * parameter**index
-            for index, coefficient in enumerate(coordinate.coefficients_ascending)
-        )
-        for coordinate in coordinates
-    )
-    substitutions = dict(zip(source.gens, coordinate_expressions, strict=True))
-    evaluated = tuple(
-        sympy.Poly(
-            sympy.expand(polynomial.as_expr().subs(substitutions)),
-            parameter,
-            domain=sympy.QQ,
-        ).rem(modulus)
-        for polynomial in (source, *partials)
-    )
-    if any(not value.is_zero for value in evaluated):
-        raise ValueError("exact point replay did not annihilate the first jet")
     return ProjectiveSingularityPointSeed(
         presentation=presentation,
         coordinates=coordinates,
@@ -346,8 +313,6 @@ def _factor_seeds(
     parameter: sympy.Symbol,
     coordinate_polynomials: tuple[sympy.Poly, sympy.Poly, sympy.Poly],
     chart_index: int,
-    source: sympy.Poly,
-    partials: tuple[sympy.Poly, sympy.Poly, sympy.Poly],
 ) -> tuple[ProjectiveSingularityPointSeed, ...]:
     _coefficient, factors = eliminant.factor_list()
     if any(multiplicity != 1 for _factor, multiplicity in factors):
@@ -358,8 +323,6 @@ def _factor_seeds(
             parameter=parameter,
             coordinate_polynomials=coordinate_polynomials,
             chart_index=chart_index,
-            source=source,
-            partials=partials,
         )
         for factor, _multiplicity in factors
     )
@@ -367,9 +330,6 @@ def _factor_seeds(
 
 def _two_axis_seeds(
     component: RationalPolynomialIdeal,
-    *,
-    source: sympy.Poly,
-    partials: tuple[sympy.Poly, sympy.Poly, sympy.Poly],
 ) -> tuple[ProjectiveSingularityPointSeed, ...]:
     parameter, eliminant, (first, second) = _shape_data(component)
     one = sympy.Poly(1, parameter, domain=sympy.QQ)
@@ -378,16 +338,11 @@ def _two_axis_seeds(
         parameter=parameter,
         coordinate_polynomials=(one, first, second),
         chart_index=0,
-        source=source,
-        partials=partials,
     )
 
 
 def _one_axis_seeds(
     component: RationalPolynomialIdeal,
-    *,
-    source: sympy.Poly,
-    partials: tuple[sympy.Poly, sympy.Poly, sympy.Poly],
 ) -> tuple[ProjectiveSingularityPointSeed, ...]:
     parameter, eliminant = _univariate_component_polynomial(component)
     zero = sympy.Poly(0, parameter, domain=sympy.QQ)
@@ -398,16 +353,10 @@ def _one_axis_seeds(
         parameter=parameter,
         coordinate_polynomials=(zero, one, coordinate),
         chart_index=1,
-        source=source,
-        partials=partials,
     )
 
 
-def _chart_two_seed(
-    *,
-    source: sympy.Poly,
-    partials: tuple[sympy.Poly, sympy.Poly, sympy.Poly],
-) -> ProjectiveSingularityPointSeed:
+def _chart_two_seed() -> ProjectiveSingularityPointSeed:
     parameter = sympy.Symbol("__jacobian_rational_parameter")
     factor = sympy.Poly(parameter, parameter, domain=sympy.QQ)
     zero = sympy.Poly(0, parameter, domain=sympy.QQ)
@@ -417,8 +366,6 @@ def _chart_two_seed(
         parameter=parameter,
         coordinate_polynomials=(zero, zero, one),
         chart_index=2,
-        source=source,
-        partials=partials,
     )
 
 
@@ -427,19 +374,13 @@ def compute_point_worker_response(
 ) -> ProjectiveSingularityPointWorkerComplete:
     """Construct every residue-field seed in one isolated exact transaction."""
 
-    source = rational_polynomial_to_sympy(request.source)
-    partials = (
-        rational_polynomial_to_sympy(request.partials[0]),
-        rational_polynomial_to_sympy(request.partials[1]),
-        rational_polynomial_to_sympy(request.partials[2]),
-    )
     seeds: list[ProjectiveSingularityPointSeed] = []
     for component in request.chart_zero_components:
-        seeds.extend(_two_axis_seeds(component, source=source, partials=partials))
+        seeds.extend(_two_axis_seeds(component))
     for component in request.chart_one_components:
-        seeds.extend(_one_axis_seeds(component, source=source, partials=partials))
+        seeds.extend(_one_axis_seeds(component))
     if request.chart_two_present:
-        seeds.append(_chart_two_seed(source=source, partials=partials))
+        seeds.append(_chart_two_seed())
     ordered = tuple(sorted(seeds, key=lambda seed: seed.model_dump_json()))
     return ProjectiveSingularityPointWorkerComplete(kind="complete", seeds=ordered)
 

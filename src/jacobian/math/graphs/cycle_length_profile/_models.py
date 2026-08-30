@@ -18,7 +18,13 @@ MAX_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
 class CycleLengthProfileRequest(StrictModel):
     """Request for the simple-cycle length profile of a graph."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraph = Field(
+        description=(
+            "Canonical simple graph. Admission also requires the complete first-"
+            "witness search to fit the 10,000,000-unit work bound and the complete "
+            "profile to fit the canonical output envelope."
+        )
+    )
 
 
 class CycleLengthRow(StrictModel):
@@ -33,6 +39,17 @@ class CycleLengthRow(StrictModel):
             raise ValueError("cycle witness length must match cycle_length")
         if len(set(self.witness)) != len(self.witness):
             raise ValueError("cycle witnesses must have distinct vertices")
+        rotations = [
+            self.witness[index:] + self.witness[:index]
+            for index in range(len(self.witness))
+        ]
+        reversed_witness = (self.witness[0], *reversed(self.witness[1:]))
+        rotations.extend(
+            reversed_witness[index:] + reversed_witness[:index]
+            for index in range(len(self.witness))
+        )
+        if self.witness != min(rotations):
+            raise ValueError("cycle witnesses must use canonical rotation and orientation")
         return self
 
 

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability.markov_chains.eventual_hitting.operations import (
     compute_eventual_hitting_profile,
 )
@@ -112,9 +115,18 @@ def test_reducible_chain_uses_minimal_nonnegative_solution() -> None:
 
 
 def test_rejects_non_stochastic_native_matrix() -> None:
-    import pytest
-
-    from jacobian.catalog.models import OperationDomainValidationError
-
     with pytest.raises(OperationDomainValidationError):
         compute_eventual_hitting_profile(((Fraction(1),), (Fraction(1),)), (0,))
+
+
+def test_denominator_height_is_bounded_before_solving() -> None:
+    q = 10**20_000 + 1
+    matrix = (
+        (Fraction(0), Fraction(1, q), Fraction(0), Fraction(q - 1, q)),
+        (Fraction(0), Fraction(0), Fraction(1, q), Fraction(q - 1, q)),
+        (Fraction(0), Fraction(0), Fraction(1), Fraction(0)),
+        (Fraction(0), Fraction(0), Fraction(0), Fraction(1)),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="rational result bound"):
+        compute_eventual_hitting_profile(matrix, (2,))

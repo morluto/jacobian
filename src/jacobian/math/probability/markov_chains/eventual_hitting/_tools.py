@@ -19,7 +19,9 @@ def compute_ehp_op(
     request: EventualHittingProfileRequest,
 ) -> EventualHittingProfileResult:
     return compute_eventual_hitting_profile(
-        as_transition_matrix(request.matrix), request.target_states
+        as_transition_matrix(request.matrix),
+        request.target_states,
+        enforce_transport_limit=True,
     )
 
 

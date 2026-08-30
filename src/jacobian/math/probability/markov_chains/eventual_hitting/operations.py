@@ -36,6 +36,8 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> NoRetur
 def _admit_eventual_hitting(
     matrix: TransitionMatrix,
     target_states: tuple[int, ...],
+    *,
+    enforce_transport_limit: bool,
 ) -> tuple[set[int], set[int], tuple[int, ...]]:
     try:
         require_transition_matrix(matrix)
@@ -89,13 +91,17 @@ def _admit_eventual_hitting(
         if state in can_reach_target and state not in target_set
     )
     matrix_digits = max(
-        (_decimal_digits(value.numerator) for row in matrix for value in row),
+        (
+            max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
+            for row in matrix
+            for value in row
+        ),
         default=1,
     )
     transient_count = len(transient)
     result_height = (
-        2 * transient_count * matrix_digits
-        + 2 * _decimal_digits(factorial(transient_count))
+        transient_count * matrix_digits
+        + _decimal_digits(factorial(transient_count))
         + 1
     )
     if result_height > MAX_CANONICAL_RATIONAL_DIGITS:
@@ -131,7 +137,7 @@ def _admit_eventual_hitting(
             ("almost_sure_states", classification_bytes),
         )
     )
-    if result_bytes > CanonicalLimits().max_output_bytes:
+    if enforce_transport_limit and result_bytes > CanonicalLimits().max_output_bytes:
         _reject(
             ("matrix",),
             "result_exceeds_output_bound",
@@ -143,13 +149,15 @@ def _admit_eventual_hitting(
 def compute_eventual_hitting_profile(
     matrix: TransitionMatrix,
     target_states: tuple[int, ...],
+    *,
+    enforce_transport_limit: bool = False,
 ) -> EventualHittingProfileResult:
     """Return the eventual hitting probability profile for a Markov chain.
 
     For each state i, compute h(i) = P_i(ever hit the target set A).
     """
     target_set, can_reach_target, transient = _admit_eventual_hitting(
-        matrix, target_states
+        matrix, target_states, enforce_transport_limit=enforce_transport_limit
     )
     n = len(matrix)
     h = [Fraction(0)] * n

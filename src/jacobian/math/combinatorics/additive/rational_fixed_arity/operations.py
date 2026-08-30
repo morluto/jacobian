@@ -60,12 +60,15 @@ def _add_bounded_fraction(
     left_factor = left.denominator // gcd(left.denominator, right.denominator)
     right_factor = right.denominator // gcd(left.denominator, right.denominator)
     shared_factor = gcd(left.denominator, right.denominator)
-    estimated_digits = max(
-        len(format_canonical_integer(abs(left.numerator)))
-        + len(format_canonical_integer(right_factor)),
-        len(format_canonical_integer(abs(right.numerator)))
-        + len(format_canonical_integer(left_factor)),
-    ) + 1
+    estimated_digits = (
+        max(
+            len(format_canonical_integer(abs(left.numerator)))
+            + len(format_canonical_integer(right_factor)),
+            len(format_canonical_integer(abs(right.numerator)))
+            + len(format_canonical_integer(left_factor)),
+        )
+        + 1
+    )
     work += estimated_digits
     if work > MAX_ENUMERATION_WORK:
         _reject(

@@ -37,11 +37,23 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
     raise OperationDomainValidationError(location=location, code=code, message=message)
 
 
+def _common_denominator_digits(fractions: tuple[Fraction, ...]) -> int:
+    common_denominator = 1
+    for fraction in fractions:
+        common_denominator = common_denominator // gcd(
+            common_denominator, fraction.denominator
+        ) * fraction.denominator
+        digits = len(format_canonical_integer(common_denominator))
+        if digits > MAX_CANONICAL_RATIONAL_DIGITS:
+            return digits
+    return len(format_canonical_integer(common_denominator))
+
+
 def _support_bound(
     fractions: tuple[Fraction, ...], arity: int, candidate_count: int
-) -> tuple[int, int]:
+) -> tuple[int, int, int]:
     if candidate_count <= 1:
-        return candidate_count, 0
+        return candidate_count, 0, 0
     multiplicities: dict[Fraction, int] = {}
     for fraction in fractions:
         multiplicities[fraction] = multiplicities.get(fraction, 0) + 1
@@ -49,7 +61,7 @@ def _support_bound(
         len(multiplicities) * (arity + 1) * (max(multiplicities.values()) + 1)
     )
     if transition_bound > MAX_ENUMERATION_WORK:
-        return candidate_count, 0
+        return candidate_count, 0, 0
     count_vectors = [0] * (arity + 1)
     count_vectors[0] = 1
     transition_work = 0
@@ -76,20 +88,31 @@ def _support_bound(
         ):
             break
     else:
-        numerators = tuple(
-            value.numerator * (common_denominator // value.denominator)
-            for value in fractions
+        projection_work = len(fractions) * len(
+            format_canonical_integer(common_denominator)
         )
-        differences = (abs(value - numerators[0]) for value in numerators[1:])
+        if projection_work > MAX_ENUMERATION_WORK:
+            return count_vector_bound, transition_work, projection_work
+        minimum = maximum = None
         lattice_step = 0
-        for difference in differences:
-            lattice_step = gcd(lattice_step, difference)
+        for value in fractions:
+            scaled = value.numerator * (common_denominator // value.denominator)
+            if minimum is None:
+                minimum = maximum = scaled
+            else:
+                assert maximum is not None
+                lattice_step = gcd(lattice_step, abs(scaled - minimum))
+                minimum = min(minimum, scaled)
+                maximum = max(maximum, scaled)
+        assert minimum is not None and maximum is not None
         if lattice_step:
-            span_bound = (
-                arity * (max(numerators) - min(numerators))
-            ) // lattice_step + 1
-            return min(count_vector_bound, span_bound, candidate_count), transition_work
-    return count_vector_bound, transition_work
+            span_bound = (arity * (maximum - minimum)) // lattice_step + 1
+            return (
+                min(count_vector_bound, span_bound, candidate_count),
+                transition_work,
+                projection_work,
+            )
+    return count_vector_bound, transition_work, 0
 
 
 def _capped_combination(n: int, k: int, cap: int) -> int:
@@ -170,6 +193,7 @@ def _admit(
         default=0,
     )
     shared_denominator = len({value.den for value in values}) == 1 if values else True
+    common_denominator_digits = _common_denominator_digits(fractions)
     if candidate_count:
         # The sole empty sum is exactly 0/1, independent of source widths.
         if arity == 0:
@@ -181,13 +205,19 @@ def _admit(
                 len(str(arity)) if arity > 1 else 0
             )
             sum_denominator_digits = max(1, maximum_denominator_digits)
-        else:
-            sum_numerator_digits = (
-                maximum_numerator_digits
-                + max(arity - 1, 0) * maximum_denominator_digits
-                + (len(str(arity)) if arity > 1 else 0)
+        elif common_denominator_digits <= MAX_CANONICAL_RATIONAL_DIGITS:
+            # Clearing all reduced denominators once is a tighter bound than
+            # multiplying the widest denominator by the arity.  The scaled
+            # numerator bound is intentionally conservative; the exact sum is
+            # still checked by the canonical result envelope below.
+            sum_numerator_digits = maximum_numerator_digits + common_denominator_digits + (
+                len(str(arity)) if arity > 1 else 0
             )
-            sum_denominator_digits = max(1, arity * maximum_denominator_digits)
+            sum_denominator_digits = max(1, common_denominator_digits)
+        else:
+            sum_numerator_digits = sum_denominator_digits = (
+                MAX_CANONICAL_RATIONAL_DIGITS + 1
+            )
     else:
         sum_numerator_digits = sum_denominator_digits = 0
     if (
@@ -203,10 +233,10 @@ def _admit(
     # Equal source values can collapse many index tuples to the same sum.  The
     # number of attainable value-count vectors is a safe support bound and is
     # much tighter for repeated inputs than the raw combination count.
-    support_bound, support_presolve_work = _support_bound(
+    support_bound, support_presolve_work, projection_work = _support_bound(
         fractions, arity, candidate_count
     )
-    if work + support_presolve_work > MAX_ENUMERATION_WORK:
+    if work + support_presolve_work + projection_work > MAX_ENUMERATION_WORK:
         _reject(
             ("values",),
             "rational_fixed_arity.work_bound",

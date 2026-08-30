@@ -142,3 +142,11 @@ def test_shared_denominator_does_not_grow_with_arity() -> None:
     result = compute_rational_fixed_arity_sum_profile(values, 1_000)
     assert len(result.rows) == 1
     assert result.rows[0].sum_value.as_fraction() == Fraction(1_000, denominator)
+
+
+def test_reduced_denominators_use_lcm_growth_bound() -> None:
+    values = tuple(_cr(index, 10_000) for index in range(8_192))
+    result = compute_rational_fixed_arity_sum_profile(values, len(values))
+    assert result.rows[0].sum_value.as_fraction() == sum(
+        (value.as_fraction() for value in values), Fraction(0)
+    )

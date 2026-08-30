@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     FiniteIntegerSet,
 )
@@ -17,6 +18,7 @@ from jacobian.math.combinatorics.posets.core.operations import (
 from jacobian.math.number_theory.divisibility_poset._models import (
     ElementSource,
     IntegerDivisibilityPosetResult,
+    _divisibility_poset_admission_error,
 )
 
 
@@ -32,6 +34,14 @@ def compute_divisibility_poset(
     length.
     """
     values: list[int] = [parse_canonical_integer(v) for v in source_set.elements]
+    failure = _divisibility_poset_admission_error(source_set)
+    if failure is not None:
+        code, message = failure
+        raise OperationDomainValidationError(
+            location=("source_set",),
+            code=f"number_theory.divisibility_poset.{code}",
+            message=message,
+        )
 
     # Sort by integer value for deterministic label assignment.  The source set
     # is already distinct (validated by FiniteIntegerSet), but it is not

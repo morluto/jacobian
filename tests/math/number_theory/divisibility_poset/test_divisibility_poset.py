@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.math.number_theory.divisibility_poset import compute_divisibility_poset
 from jacobian.math.number_theory.divisibility_poset._models import (
     MAX_DIVISIBILITY_POSET_ELEMENTS,
@@ -135,6 +137,12 @@ def test_non_positive_rejected() -> None:
         DivisibilityPosetRequest.model_validate(
             {"source_set": {"elements": ["-1", "1", "2"]}}
         )
+
+
+def test_native_path_rejects_nonpositive_source_values() -> None:
+    source = FiniteIntegerSet(elements=("-1", "1"))
+    with pytest.raises(OperationDomainValidationError, match="positive integers"):
+        compute_divisibility_poset(source)
 
 
 def test_duplicate_rejected() -> None:

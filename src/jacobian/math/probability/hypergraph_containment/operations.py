@@ -189,7 +189,9 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
-            containing_subset_counts=tuple(format_canonical_integer(value) for value in all_counts),
+            containing_subset_counts=tuple(
+                format_canonical_integer(value) for value in all_counts
+            ),
             total_state_count=format_canonical_integer(1 << n),
             success_count=format_canonical_integer(1 << n),
             probability=CanonicalRational.from_fraction(Fraction(1)),
@@ -218,7 +220,9 @@ def compute_hypergraph_vertex_containment(
     return HypergraphVertexContainmentResult(
         hypergraph=hypergraph,
         retention_probability=retention_probability,
-        containing_subset_counts=tuple(format_canonical_integer(value) for value in counts),
+        containing_subset_counts=tuple(
+            format_canonical_integer(value) for value in counts
+        ),
         total_state_count=format_canonical_integer(total),
         success_count=format_canonical_integer(success),
         probability=CanonicalRational.from_fraction(prob),

@@ -83,6 +83,16 @@ class CycleLengthProfileResult(StrictModel):
                 raise ValueError("cycle witnesses must use graph edges")
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        graph: SimpleUndirectedGraph,
+        rows: tuple[CycleLengthRow, ...],
+    ) -> Self:
+        """Construct a result after the owner admission and kernel checks."""
+
+        return cls.model_construct(graph=graph, rows=rows)
+
 
 __all__ = [
     "MAX_VERTICES",

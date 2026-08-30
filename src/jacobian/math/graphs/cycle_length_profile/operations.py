@@ -226,7 +226,7 @@ def compute_cycle_length_profile(
             found[length] = witness
 
     rows = [CycleLengthRow(cycle_length=k, witness=w) for k, w in sorted(found.items())]
-    return CycleLengthProfileResult(graph=graph, rows=tuple(rows))
+    return CycleLengthProfileResult._from_kernel(graph, tuple(rows))
 
 
 def _find_cycle_of_length(

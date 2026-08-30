@@ -8,6 +8,7 @@ from jacobian.math.number_theory.number_fields.operations import (
 )
 from jacobian.math.number_theory.number_fields.values import (
     NumberFieldEmbeddingProfile,
+    NumberFieldRealValueEnclosure,
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
     SimpleNumberFieldRealEmbeddingBinding,
@@ -16,6 +17,7 @@ from jacobian.math.number_theory.number_fields.values import (
 
 __all__ = [
     "NumberFieldEmbeddingProfile",
+    "NumberFieldRealValueEnclosure",
     "SimpleNumberFieldElement",
     "SimpleNumberFieldPresentation",
     "SimpleNumberFieldRealEmbeddingBinding",

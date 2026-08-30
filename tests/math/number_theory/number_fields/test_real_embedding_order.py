@@ -84,9 +84,9 @@ def test_same_abstract_element_has_opposite_sign_at_two_real_embeddings(
     )
 
     assert negative_order.order == "LT"
-    assert negative_order.difference_isolating_interval.upper.as_fraction() < 0
+    assert negative_order.difference_enclosure.upper.as_fraction() < 0
     assert positive_order.order == "GT"
-    assert positive_order.difference_isolating_interval.lower.as_fraction() > 0
+    assert positive_order.difference_enclosure.lower.as_fraction() > 0
     assert negative_order.difference.element == positive_order.difference.element
 
 
@@ -107,8 +107,8 @@ def test_exact_quotient_equality_does_not_depend_on_the_selected_embedding(
             coordinate.as_fraction() == 0
             for coordinate in result.difference.element.coefficients_ascending
         )
-        assert result.difference_isolating_interval.lower.as_fraction() == 0
-        assert result.difference_isolating_interval.interval_type == "SINGLETON"
+        assert result.difference_enclosure.lower.as_fraction() == 0
+        assert result.difference_enclosure.interval_type == "SINGLETON"
 
 
 def test_rational_difference_uses_exact_singleton_evidence(
@@ -123,8 +123,8 @@ def test_rational_difference_uses_exact_singleton_evidence(
     )
 
     assert result.order == "GT"
-    assert result.difference_isolating_interval.lower.as_fraction() == Fraction(1, 2)
-    assert result.difference_isolating_interval.interval_type == "SINGLETON"
+    assert result.difference_enclosure.lower.as_fraction() == Fraction(1, 2)
+    assert result.difference_enclosure.interval_type == "SINGLETON"
 
 
 def test_binding_is_structural_but_consumer_rejects_a_forged_record(
@@ -238,7 +238,7 @@ def test_catalog_operation_runs_its_declared_example() -> None:
     result = operation.run(request)
 
     assert result.order == "GT"
-    assert result.difference_isolating_interval.lower.as_fraction() == Fraction(1, 2)
+    assert result.difference_enclosure.lower.as_fraction() == Fraction(1, 2)
 
 
 def test_catalog_operation_projects_unrecognized_record_as_a_typed_error(

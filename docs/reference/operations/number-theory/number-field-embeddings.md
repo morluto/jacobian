@@ -64,8 +64,8 @@ inside the same request and requires the selected record to equal one exact
 record from that complete profile. Only then does it construct SymPy's exact
 `QQ(alpha)` value from canonical integer and rational objects. It subtracts in
 the quotient field, derives the selected image's primitive minimal polynomial,
-identifies its exact real root, and returns `LT`, `EQ`, or `GT` with a rational
-isolating interval for `left - right`. A zero reduced quotient-field difference
+identifies its exact real root, and returns `LT`, `EQ`, or `GT` with a closed
+rational enclosure of `left - right`. A zero reduced quotient-field difference
 establishes `EQ` independently of the selected real embedding.
 
 The same serialized `SimpleNumberFieldPresentation` is the `field` input to

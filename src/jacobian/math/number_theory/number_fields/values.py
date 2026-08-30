@@ -509,23 +509,77 @@ class SimpleNumberFieldRealEmbeddingBinding(StrictModel):
         return self
 
 
+class NumberFieldRealValueEnclosure(StrictModel):
+    """A closed rational enclosure of one selected real image.
+
+    The producing operation proves containment. Public parsing establishes the
+    canonical bounded interval shape but does not replay field arithmetic or
+    selected-root recognition.
+    """
+
+    lower: CanonicalRational
+    upper: CanonicalRational
+    interval_type: Literal["CLOSED", "SINGLETON"]
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_component_bound(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        _raw_rational_component_bound(
+            tuple(data.get(name) for name in ("lower", "upper")),
+            max_digits=MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS,
+            label="real embedded value enclosure",
+        )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_closed_interval(self) -> Self:
+        if any(
+            len(endpoint.num.lstrip("-"))
+            > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            or len(endpoint.den) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            for endpoint in (self.lower, self.upper)
+        ):
+            raise _validation_error(
+                "real_value_enclosure_component_bound",
+                "real embedded value enclosure exceeds the "
+                f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit rational "
+                "component bound",
+            )
+        lower = self.lower.as_fraction()
+        upper = self.upper.as_fraction()
+        if lower > upper:
+            raise _validation_error(
+                "real_value_enclosure_order",
+                "real embedded value enclosure lower endpoint exceeds upper",
+            )
+        expected = "SINGLETON" if lower == upper else "CLOSED"
+        if self.interval_type != expected:
+            raise _validation_error(
+                "real_value_enclosure_type",
+                "equal endpoints require SINGLETON; distinct endpoints require CLOSED",
+            )
+        return self
+
+
 SimpleNumberFieldRealOrder = Literal["LT", "EQ", "GT"]
 
 
 class SimpleNumberFieldRealEmbeddingOrder(StrictModel):
     """Source-bound exact order under one recognized real embedding.
 
-    ``difference_isolating_interval`` is exact rational evidence produced for
-    ``left - right`` at the retained selected root.  Public parsing checks the
-    source relation, parent binding, interval sign, and bounded shape; it does
-    not re-run root recognition or algebraic isolation.
+    ``difference_enclosure`` is exact rational evidence produced for
+    ``left - right`` at the retained selected root. Public parsing checks the
+    source relation, parent binding, enclosure sign, and bounded shape; it does
+    not re-run root recognition or field arithmetic.
     """
 
     left: SimpleNumberFieldRealEmbeddingBinding
     right: SimpleNumberFieldRealEmbeddingBinding
     difference: SimpleNumberFieldRealEmbeddingBinding
     order: SimpleNumberFieldRealOrder
-    difference_isolating_interval: RationalIsolatingInterval
+    difference_enclosure: NumberFieldRealValueEnclosure
     comparison_basis: Literal["MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION"] = (
         "MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION"
     )
@@ -535,7 +589,7 @@ class SimpleNumberFieldRealEmbeddingOrder(StrictModel):
     def require_raw_difference_interval_bound(cls, data: Any) -> Any:
         if not isinstance(data, Mapping):
             return data
-        interval = data.get("difference_isolating_interval")
+        interval = data.get("difference_enclosure")
         if isinstance(interval, Mapping):
             for endpoint_name in ("lower", "upper"):
                 endpoint = interval.get(endpoint_name)
@@ -584,7 +638,7 @@ class SimpleNumberFieldRealEmbeddingOrder(StrictModel):
                 "difference must be the exact reduced-coordinate value left minus right",
             )
 
-        interval = self.difference_isolating_interval
+        interval = self.difference_enclosure
         endpoints = (interval.lower, interval.upper)
         if any(
             len(endpoint.num.lstrip("-"))
@@ -632,14 +686,14 @@ class SimpleNumberFieldRealEmbeddingOrder(StrictModel):
         right: SimpleNumberFieldRealEmbeddingBinding,
         difference: SimpleNumberFieldRealEmbeddingBinding,
         order: SimpleNumberFieldRealOrder,
-        difference_isolating_interval: RationalIsolatingInterval,
+        difference_enclosure: NumberFieldRealValueEnclosure,
     ) -> Self:
         return cls.model_construct(
             left=left,
             right=right,
             difference=difference,
             order=order,
-            difference_isolating_interval=difference_isolating_interval,
+            difference_enclosure=difference_enclosure,
             comparison_basis="MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION",
         )
 
@@ -655,6 +709,7 @@ __all__ = [
     "NumberFieldEmbedding",
     "NumberFieldEmbeddingProfile",
     "NumberFieldEmbeddingRecord",
+    "NumberFieldRealValueEnclosure",
     "NumberFieldSignature",
     "RealNumberFieldEmbeddingRecord",
     "SimpleNumberFieldElement",

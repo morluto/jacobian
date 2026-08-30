@@ -20,6 +20,7 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS,
     MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
+    NumberFieldRealValueEnclosure,
     RealNumberFieldEmbeddingRecord,
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
@@ -49,6 +50,7 @@ class RealEmbeddingDifferenceAdmission:
     minimal_polynomial_coefficient_bound: int
     root_refinement_bits: int
     predicted_resultant_storage_bits: int
+    predicted_isolator_component_digits: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,24 +188,39 @@ def _minimal_polynomial_height_bound(
     return int((field_degree + 1) * 2**field_degree * resultant_height)
 
 
-def admit_real_embedding_difference(
+def _minimal_polynomial_height_bound_from_cleared_envelope(
     presentation: SimpleNumberFieldPresentation,
+    *,
+    cleared_denominator_bound: int,
+    cleared_coordinate_bound: int,
+    element_degree: int,
+) -> int:
+    field_degree = presentation.degree
+    coefficients = tuple(
+        parse_canonical_integer(value)
+        for value in presentation.coefficients_descending
+    )
+    entry_height = max(
+        cleared_denominator_bound,
+        cleared_coordinate_bound,
+        *(abs(value) for value in coefficients),
+        1,
+    )
+    sylvester_size = field_degree + element_degree
+    resultant_height = (
+        factorial(sylvester_size)
+        * 2**sylvester_size
+        * entry_height**sylvester_size
+    )
+    return int((field_degree + 1) * 2**field_degree * resultant_height)
+
+
+def _admit_image_polynomial_bound(
+    presentation: SimpleNumberFieldPresentation,
+    *,
     coordinates: tuple[Fraction, ...],
+    coefficient_bound: int,
 ) -> RealEmbeddingDifferenceAdmission:
-    """Preflight exact coordinates, elimination, isolation, and result shape."""
-
-    _require_element_coordinates_fit(coordinates, reason="difference_coordinate_bound")
-    if all(coordinate == 0 for coordinate in coordinates) or all(
-        coordinate == 0 for coordinate in coordinates[1:]
-    ):
-        return RealEmbeddingDifferenceAdmission(
-            coordinates=coordinates,
-            minimal_polynomial_coefficient_bound=1,
-            root_refinement_bits=1,
-            predicted_resultant_storage_bits=1,
-        )
-
-    coefficient_bound = _minimal_polynomial_height_bound(presentation, coordinates)
     coefficient_digits = _decimal_digits_from_bits(coefficient_bound.bit_length())
     if coefficient_digits > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS:
         raise NumberFieldRealEmbeddingOrderError(
@@ -249,6 +266,85 @@ def admit_real_embedding_difference(
         minimal_polynomial_coefficient_bound=coefficient_bound,
         root_refinement_bits=refinement_bits,
         predicted_resultant_storage_bits=resultant_storage_bits,
+        predicted_isolator_component_digits=isolator_digits,
+    )
+
+
+def admit_real_embedding_difference(
+    presentation: SimpleNumberFieldPresentation,
+    coordinates: tuple[Fraction, ...],
+) -> RealEmbeddingDifferenceAdmission:
+    """Preflight exact coordinates, elimination, isolation, and result shape."""
+
+    _require_element_coordinates_fit(coordinates, reason="difference_coordinate_bound")
+    if all(coordinate == 0 for coordinate in coordinates):
+        return RealEmbeddingDifferenceAdmission(
+            coordinates=coordinates,
+            minimal_polynomial_coefficient_bound=1,
+            root_refinement_bits=1,
+            predicted_resultant_storage_bits=1,
+            predicted_isolator_component_digits=1,
+        )
+    if all(coordinate == 0 for coordinate in coordinates[1:]):
+        component_digits = _rational_component_digits(coordinates[0])
+        return RealEmbeddingDifferenceAdmission(
+            coordinates=coordinates,
+            minimal_polynomial_coefficient_bound=max(
+                abs(coordinates[0].numerator), coordinates[0].denominator
+            ),
+            root_refinement_bits=1,
+            predicted_resultant_storage_bits=max(
+                abs(coordinates[0].numerator).bit_length(),
+                coordinates[0].denominator.bit_length(),
+            ),
+            predicted_isolator_component_digits=component_digits,
+        )
+
+    return _admit_image_polynomial_bound(
+        presentation,
+        coordinates=coordinates,
+        coefficient_bound=_minimal_polynomial_height_bound(
+            presentation, coordinates
+        ),
+    )
+
+
+def admit_real_embedding_difference_envelope(
+    presentation: SimpleNumberFieldPresentation,
+    *,
+    coordinate_numerator_bound: int,
+    coordinate_denominator_bound: int,
+) -> RealEmbeddingDifferenceAdmission:
+    """Admit every reduced difference within rational component bounds."""
+
+    if coordinate_numerator_bound < 1 or coordinate_denominator_bound < 1:
+        raise ValueError("coordinate component bounds must be positive")
+    if (
+        len(format_canonical_integer(coordinate_numerator_bound))
+        > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
+        or len(format_canonical_integer(coordinate_denominator_bound))
+        > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
+    ):
+        raise NumberFieldRealEmbeddingOrderError(
+            "difference_coordinate_bound",
+            "exact reduced field-element coordinates exceed the "
+            f"{MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS}-digit bound",
+        )
+    degree = presentation.degree
+    cleared_denominator_bound = coordinate_denominator_bound**degree
+    cleared_coordinate_bound = (
+        coordinate_numerator_bound * coordinate_denominator_bound ** (degree - 1)
+    )
+    coefficient_bound = _minimal_polynomial_height_bound_from_cleared_envelope(
+        presentation,
+        cleared_denominator_bound=cleared_denominator_bound,
+        cleared_coordinate_bound=cleared_coordinate_bound,
+        element_degree=degree - 1,
+    )
+    return _admit_image_polynomial_bound(
+        presentation,
+        coordinates=(),
+        coefficient_bound=coefficient_bound,
     )
 
 
@@ -455,7 +551,13 @@ def compare_real_embedding_elements(
         right=right,
         difference=difference,
         order=order,
-        difference_isolating_interval=interval,
+        difference_enclosure=NumberFieldRealValueEnclosure(
+            lower=interval.lower,
+            upper=interval.upper,
+            interval_type=(
+                "SINGLETON" if interval.lower == interval.upper else "CLOSED"
+            ),
+        ),
     )
 
 
@@ -466,6 +568,7 @@ __all__ = [
     "RealEmbeddingDifferenceAdmission",
     "RecognizedRealEmbeddingContext",
     "admit_real_embedding_difference",
+    "admit_real_embedding_difference_envelope",
     "compare_real_embedding_elements",
     "isolate_backend_real_value",
     "recognize_real_embedding_binding",

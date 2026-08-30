@@ -66,7 +66,8 @@ def _admit_monochromatic_path_graph(graph: ColoredUndirectedGraph) -> tuple[str,
             code="graph.monochromatic_path.edge_count_exceeds_bound",
             message="complete monochromatic path hypergraphs exceed the edge bound",
         )
-    if edge_upper_bound * vertex_count > MAX_TOTAL_INCIDENCES:
+    incidence_upper_bound = len(colours) * vertex_count * (1 << (vertex_count - 1))
+    if incidence_upper_bound > MAX_TOTAL_INCIDENCES:
         raise OperationDomainValidationError(
             location=("graph",),
             code="graph.monochromatic_path.incidence_count_exceeds_bound",

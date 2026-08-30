@@ -242,7 +242,10 @@ def compute_cycle_length_profile(
         if witness is not None:
             found[length] = witness
 
-    rows = [CycleLengthRow(cycle_length=k, witness=w) for k, w in sorted(found.items())]
+    rows = [
+        CycleLengthRow._from_kernel(cycle_length=k, witness=w)
+        for k, w in sorted(found.items())
+    ]
     return CycleLengthProfileResult._from_kernel(graph, tuple(rows))
 
 

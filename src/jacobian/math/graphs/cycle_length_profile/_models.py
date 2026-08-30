@@ -33,6 +33,12 @@ class CycleLengthRow(StrictModel):
     cycle_length: StrictInt = Field(ge=3, le=MAX_VERTICES)
     witness: tuple[str, ...] = Field(min_length=3, max_length=MAX_VERTICES)
 
+    @classmethod
+    def _from_kernel(cls, cycle_length: int, witness: tuple[str, ...]) -> Self:
+        """Construct a row after the owner kernel established its invariants."""
+
+        return cls.model_construct(cycle_length=cycle_length, witness=witness)
+
     @model_validator(mode="after")
     def require_matching_witness_length(self) -> Self:
         if self.cycle_length != len(self.witness):

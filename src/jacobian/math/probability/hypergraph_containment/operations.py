@@ -75,17 +75,7 @@ def _admit_hypergraph_vertex_containment(
                 for _, members in hypergraph.edges
             )
         )
-        antichain_work = len(unique_masks) * len(unique_masks)
-        if antichain_work > MAX_CONTAINMENT_WORK:
-            raise OperationDomainValidationError(
-                location=("hypergraph", "edges"),
-                code="hypergraph_containment.work_bound_exceeded",
-                message="the antichain reduction work envelope is exceeded",
-            )
-        minimal_masks: list[int] = []
-        for mask in sorted(unique_masks, key=int.bit_count):
-            if not any(existing & mask == existing for existing in minimal_masks):
-                minimal_masks.append(mask)
+        minimal_masks = _minimal_edge_masks(unique_masks)
         support_mask = 0
         for mask in minimal_masks:
             support_mask |= mask
@@ -102,15 +92,15 @@ def _admit_hypergraph_vertex_containment(
             for mask in minimal_masks
         )
         active_state_count = 1 << len(active_vertices)
-        single_edge = len(edge_masks) == 1
-        if active_state_count > MAX_SUBSET_STATES and not single_edge:
+        small_edge_family = len(edge_masks) <= 2
+        if active_state_count > MAX_SUBSET_STATES and not small_edge_family:
             raise OperationDomainValidationError(
                 location=("hypergraph", "vertices"),
                 code="hypergraph_containment.state_bound_exceeded",
                 message="the active subset-state envelope is exceeded",
             )
         lift_work = active_state_count * (n - len(active_vertices) + 1)
-        if not single_edge and (
+        if not small_edge_family and (
             len(edge_masks) * active_state_count + lift_work > MAX_CONTAINMENT_WORK
         ):
             raise OperationDomainValidationError(
@@ -164,6 +154,29 @@ def _admit_hypergraph_vertex_containment(
     return _ContainmentAdmissionPlan(edge_masks, active_vertices)
 
 
+def _minimal_edge_masks(unique_masks: tuple[int, ...]) -> list[int]:
+    """Reduce edge masks to an inclusion antichain with charged comparisons."""
+
+    minimal_masks: list[int] = []
+    comparisons = 0
+    for mask in sorted(unique_masks, key=int.bit_count):
+        dominated = False
+        for existing in minimal_masks:
+            comparisons += 1
+            if comparisons > MAX_CONTAINMENT_WORK:
+                raise OperationDomainValidationError(
+                    location=("hypergraph", "edges"),
+                    code="hypergraph_containment.work_bound_exceeded",
+                    message="the antichain reduction work envelope is exceeded",
+                )
+            if existing & mask == existing:
+                dominated = True
+                break
+        if not dominated:
+            minimal_masks.append(mask)
+    return minimal_masks
+
+
 def compute_hypergraph_vertex_containment(
     hypergraph: FiniteHypergraph,
     retention_probability: CanonicalRational,
@@ -202,22 +215,46 @@ def compute_hypergraph_vertex_containment(
 
     active_n = len(plan.active_vertices)
     isolated_n = n - active_n
-    if len(plan.edge_masks) == 1:
-        edge_size = active_n
+    if len(plan.edge_masks) <= 2:
+        edge_sizes = tuple(mask.bit_count() for mask in plan.edge_masks)
+        union_size = (
+            (plan.edge_masks[0] | plan.edge_masks[1]).bit_count()
+            if len(plan.edge_masks) == 2
+            else edge_sizes[0]
+        )
         single_edge_counts = tuple(
-            format_canonical_integer(comb(isolated_n, k - edge_size))
-            if k >= edge_size
-            else "0"
+            format_canonical_integer(
+                sum(
+                    comb(n - edge_size, k - edge_size)
+                    for edge_size in edge_sizes
+                    if k >= edge_size
+                )
+                - (
+                    comb(n - union_size, k - union_size)
+                    if len(edge_sizes) == 2 and k >= union_size
+                    else 0
+                )
+            )
             for k in range(n + 1)
         )
         p = retention_probability.as_fraction()
+        success_count = sum(
+            1 << (n - edge_size) for edge_size in edge_sizes
+        ) - (
+            (1 << (n - union_size)) if len(edge_sizes) == 2 else 0
+        )
+        probability = sum(
+            (p**edge_size for edge_size in edge_sizes), Fraction(0)
+        ) - (
+            p**union_size if len(edge_sizes) == 2 else 0
+        )
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
             containing_subset_counts=single_edge_counts,
             total_state_count=format_canonical_integer(1 << n),
-            success_count=format_canonical_integer(1 << isolated_n),
-            probability=CanonicalRational.from_fraction(p**edge_size),
+            success_count=format_canonical_integer(success_count),
+            probability=CanonicalRational.from_fraction(probability),
         )
 
     active_counts: list[int] = [0] * (active_n + 1)

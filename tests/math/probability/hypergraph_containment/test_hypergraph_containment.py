@@ -133,6 +133,26 @@ def test_single_large_edge_uses_closed_form_before_state_cap() -> None:
     assert result.probability.as_fraction() == Fraction(1, 2**23)
 
 
+def test_two_large_minimal_edges_use_inclusion_exclusion() -> None:
+    vertices = [f"v{i}" for i in range(23)]
+    hg = _hg(
+        vertices,
+        [
+            ("left", tuple(vertices[:22])),
+            ("right", tuple(vertices[1:])),
+        ],
+    )
+
+    result = compute_hypergraph_vertex_containment(
+        hg, CanonicalRational.from_fraction(Fraction(1, 2))
+    )
+
+    assert parse_canonical_integer(result.success_count) == 3
+    assert parse_canonical_integer(result.containing_subset_counts[22]) == 2
+    assert parse_canonical_integer(result.containing_subset_counts[23]) == 1
+    assert result.probability.as_fraction() == Fraction(3, 2**23)
+
+
 def test_duplicate_edge_members_are_scanned_once() -> None:
     hg = _hg(
         ["a", "b", "c"],

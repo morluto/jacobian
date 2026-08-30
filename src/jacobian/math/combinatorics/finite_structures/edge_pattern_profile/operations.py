@@ -113,8 +113,7 @@ def _admit_edge_pattern_profile(
             message="vertex_colors keys collide after Unicode normalization",
         )
     normalized_colors = {
-        key: unicodedata.normalize("NFC", value)
-        for key, value in vertex_colors.items()
+        key: unicodedata.normalize("NFC", value) for key, value in vertex_colors.items()
     }
     try:
         encoded: dict[str, int] = {}
@@ -190,8 +189,7 @@ def compute_edge_pattern_profile(
     """
     _admit_edge_pattern_profile(hypergraph, vertex_colors)
     vertex_colors = {
-        key: unicodedata.normalize("NFC", value)
-        for key, value in vertex_colors.items()
+        key: unicodedata.normalize("NFC", value) for key, value in vertex_colors.items()
     }
     entries: list[EdgePatternEntry] = []
     monochromatic: list[str] = []

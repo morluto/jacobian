@@ -80,6 +80,20 @@ def test_result_preserves_source() -> None:
     assert result.configuration == config
 
 
+def test_derived_area_must_fit_the_canonical_rational_carrier() -> None:
+    denominator = 10**20_000
+    config = PointConfiguration(
+        points=(
+            LabelledRationalPoint(label="a", coordinates=(_cr(0), _cr(0))),
+            LabelledRationalPoint(label="b", coordinates=(_cr(1, denominator), _cr(0))),
+            LabelledRationalPoint(label="c", coordinates=(_cr(0), _cr(1, denominator))),
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="derived triangle area"):
+        compute_triangle_area_profile(config)
+
+
 @pytest.mark.parametrize("dimension", [1, 3])
 def test_nonplanar_configuration_is_rejected(dimension: int) -> None:
     config = _config(

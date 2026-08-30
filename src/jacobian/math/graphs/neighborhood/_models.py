@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.graphs.values import (
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
@@ -33,7 +33,7 @@ class NeighborhoodRequest(StrictModel):
                     "graph.selected_vertices_bound",
                     "selected vertices exceed the raw tuple-length bound",
                 )
-        return value
+        return canonicalize_json_containers(value)
 
 
 class NeighborhoodResult(StrictModel):

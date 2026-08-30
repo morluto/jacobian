@@ -208,7 +208,7 @@ def _squared_distance(
             _integer_digits(total.denominator)
             + _integer_digits(new_denominator_factor)
             - 1
-            > MAX_CANONICAL_RATIONAL_DIGITS
+            > MAX_DISTANCE_INTERMEDIATE_DIGITS
         ):
             _reject(
                 "distance_intermediate_height_bound",

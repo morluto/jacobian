@@ -5,14 +5,20 @@ from __future__ import annotations
 import json
 from fractions import Fraction
 from itertools import islice
+from math import isqrt
+from typing import Any
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
 from sympy import primerange
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices import operations
 from jacobian.math.matrices._operation_models import (
+    MAX_EXACT_LINEAR_MATRIX_WORK,
     MAX_INPUT_SCALAR_DIGITS,
     MAX_SPARSE_RANK_INTERMEDIATE_CELLS,
     MatrixRankRequest,
@@ -40,6 +46,21 @@ def _entry(
         column=column,
         value=CanonicalRational.from_fraction(value),
     )
+
+
+def _connected_fill_matrix(order: int) -> SparseRationalMatrix:
+    entries = [_entry(0, column) for column in range(order)]
+    for row in range(1, order):
+        entries.extend((_entry(row, 0), _entry(row, row, Fraction(2))))
+    return SparseRationalMatrix(
+        row_count=order,
+        column_count=order,
+        entries=tuple(entries),
+    )
+
+
+def _connected_fill_work(order: int) -> int:
+    return 2 * order + (3 * order - 2) + order**3
 
 
 @pytest.mark.parametrize(
@@ -173,28 +194,89 @@ def test_sparse_rank_request_preflights_its_scalar_budget() -> None:
         )
 
 
-def test_sparse_rank_rejects_above_the_active_support_bound() -> None:
-    order = int(MAX_SPARSE_RANK_INTERMEDIATE_CELLS**0.5) + 1
+def test_sparse_rank_accepts_a_max_axis_diagonal() -> None:
+    order = MAX_SPARSE_RATIONAL_MATRIX_AXIS
+    value = Fraction(1, int("9" * MAX_INPUT_SCALAR_DIGITS))
     matrix = SparseRationalMatrix(
         row_count=order,
         column_count=order,
-        entries=tuple(_entry(index, index) for index in range(order)),
+        entries=tuple(_entry(index, index, value) for index in range(order)),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="active-support bound"):
+    result = rank_result(matrix)
+
+    assert result.rank == order
+    assert result.pivot_columns == tuple(range(order))
+    assert result.matrix is matrix
+
+
+def test_sparse_rank_accepts_a_max_axis_partial_permutation() -> None:
+    axis = MAX_SPARSE_RATIONAL_MATRIX_AXIS
+    entry_count = axis // 2
+    matrix = SparseRationalMatrix(
+        row_count=axis,
+        column_count=axis,
+        entries=tuple(_entry(row, axis - 1 - row) for row in range(entry_count)),
+    )
+
+    result = rank_result(matrix)
+
+    assert result.rank == entry_count
+    assert result.pivot_columns == tuple(range(entry_count, axis))
+    assert result.matrix is matrix
+
+
+def test_sparse_rank_rejects_a_connected_component_above_the_support_bound() -> None:
+    order = isqrt(MAX_SPARSE_RANK_INTERMEDIATE_CELLS) + 1
+    matrix = _connected_fill_matrix(order)
+
+    with pytest.raises(OperationDomainValidationError, match="component-support bound"):
         rank_result(matrix)
 
 
-def test_sparse_rank_rejects_above_the_scalar_work_bound() -> None:
-    order = 500
-    matrix = SparseRationalMatrix(
-        row_count=order,
-        column_count=order,
-        entries=tuple(_entry(index, index) for index in range(order)),
-    )
+def test_sparse_rank_charges_every_near_envelope_kernel_primitive() -> None:
+    order = 464
+    matrix = _connected_fill_matrix(order)
+    executed = {"coordinate_load": 0, "gauss_jordan": 0}
+    original_kernel = operations._sympy_sparse_rank_pivots
+
+    def counted_kernel(plan: Any) -> tuple[int, ...]:
+        for component in plan.components:
+            executed["coordinate_load"] += (
+                len(component.entries) * component.scalar_digits
+            )
+            executed["gauss_jordan"] += (
+                len(component.rows)
+                * len(component.columns)
+                * min(len(component.rows), len(component.columns))
+                * component.scalar_digits
+            )
+        return original_kernel(plan)
+
+    with patch.object(
+        operations, "_sympy_sparse_rank_pivots", side_effect=counted_kernel
+    ):
+        result = rank_result(matrix)
+
+    charged = {
+        "coordinate_load": len(matrix.entries),
+        "gauss_jordan": order**3,
+    }
+    assert _connected_fill_work(order) == 99_899_662
+    assert _connected_fill_work(order) <= MAX_EXACT_LINEAR_MATRIX_WORK
+    assert result.rank == order
+    assert result.pivot_columns == tuple(range(order))
+    assert_charged_work_parity(charged=charged, executed=executed)
+
+
+def test_sparse_rank_rejects_the_first_connected_order_above_the_work_bound() -> None:
+    order = 465
+    matrix = _connected_fill_matrix(order)
 
     with pytest.raises(OperationDomainValidationError, match="scalar-work budget"):
         rank_result(matrix)
+    assert _connected_fill_work(order) == 100_546_948
+    assert _connected_fill_work(order) > MAX_EXACT_LINEAR_MATRIX_WORK
 
 
 def test_sparse_rank_rejects_above_the_intermediate_height_bound() -> None:

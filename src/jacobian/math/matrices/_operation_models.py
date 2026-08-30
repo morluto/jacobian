@@ -40,9 +40,10 @@ MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
 # through order 50. Pin each admitted output axis to that envelope.
 MAX_KRONECKER_PRODUCT_AXIS = 50
 MAX_EXACT_LINEAR_MATRIX_WORK = 100_000_000
-# Sparse Gauss-Jordan elimination can fill the Cartesian closure of the
-# nonzero rows and columns. Bound that predicted intermediate directly rather
-# than imposing a smaller limit on either declared matrix axis.
+# Sparse Gauss-Jordan elimination can fill the Cartesian closure within each
+# connected bipartite support component. Bound the sum of those component
+# closures directly rather than coupling disjoint blocks or imposing a smaller
+# limit on either declared matrix axis.
 MAX_SPARSE_RANK_INTERMEDIATE_CELLS = 1_000_000
 
 

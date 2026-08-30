@@ -65,6 +65,7 @@ from jacobian.math.matrices.values import (
     RationalMatrix,
     SmithNormalForm,
     SparseRationalMatrix,
+    SparseRationalMatrixEntry,
     rational_matrix_from_fractions,
 )
 
@@ -464,26 +465,98 @@ def _admit_exact_linear_matrix(
 
 
 @dataclass(frozen=True, slots=True)
-class _SparseRankPlan:
+class _SparseRankComponent:
+    rows: tuple[int, ...]
+    columns: tuple[int, ...]
     entries: tuple[tuple[int, int, Fraction], ...]
+    scalar_digits: int
+
+
+@dataclass(frozen=True, slots=True)
+class _SparseRankPlan:
+    components: tuple[_SparseRankComponent, ...]
     row_count: int
     column_count: int
+
+
+def _sparse_rank_components(
+    entries: tuple[SparseRationalMatrixEntry, ...],
+) -> tuple[_SparseRankComponent, ...]:
+    """Partition nonzero coordinates by bipartite support connectivity."""
+
+    row_columns: dict[int, list[int]] = {}
+    column_rows: dict[int, list[int]] = {}
+    row_entries: dict[int, list[SparseRationalMatrixEntry]] = {}
+    for entry in entries:
+        row_columns.setdefault(entry.row, []).append(entry.column)
+        column_rows.setdefault(entry.column, []).append(entry.row)
+        row_entries.setdefault(entry.row, []).append(entry)
+
+    components: list[_SparseRankComponent] = []
+    visited_rows: set[int] = set()
+    visited_columns: set[int] = set()
+    for starting_row in row_columns:
+        if starting_row in visited_rows:
+            continue
+        pending_rows = [starting_row]
+        component_rows: list[int] = []
+        component_columns: list[int] = []
+        while pending_rows:
+            row = pending_rows.pop()
+            if row in visited_rows:
+                continue
+            visited_rows.add(row)
+            component_rows.append(row)
+            for column in row_columns[row]:
+                if column in visited_columns:
+                    continue
+                visited_columns.add(column)
+                component_columns.append(column)
+                pending_rows.extend(
+                    adjacent_row
+                    for adjacent_row in column_rows[column]
+                    if adjacent_row not in visited_rows
+                )
+        rows = tuple(sorted(component_rows))
+        columns = tuple(sorted(component_columns))
+        source_entries = tuple(entry for row in rows for entry in row_entries[row])
+        components.append(
+            _SparseRankComponent(
+                rows=rows,
+                columns=columns,
+                entries=tuple(
+                    (entry.row, entry.column, entry.value.as_fraction())
+                    for entry in source_entries
+                ),
+                scalar_digits=max(
+                    len(component.lstrip("-"))
+                    for entry in source_entries
+                    for component in (entry.value.num, entry.value.den)
+                ),
+            )
+        )
+    return tuple(components)
 
 
 def _sparse_rank_work(
     *,
     row_count: int,
     column_count: int,
-    entry_count: int,
-    support_cells: int,
-    rank_bound: int,
-    scalar_digits: int,
+    components: tuple[_SparseRankComponent, ...],
 ) -> int:
     return (
         row_count
         + column_count
-        + entry_count * scalar_digits
-        + support_cells * rank_bound * scalar_digits
+        + sum(
+            component.scalar_digits
+            * (
+                len(component.entries)
+                + len(component.rows)
+                * len(component.columns)
+                * min(len(component.rows), len(component.columns))
+            )
+            for component in components
+        )
     )
 
 
@@ -514,7 +587,7 @@ def _require_sparse_rank_transport_envelope(
 
 
 def _admit_sparse_rank(matrix: SparseRationalMatrix) -> _SparseRankPlan:
-    """Derive one bounded sparse QQ elimination plan from active support."""
+    """Derive one bounded sparse QQ elimination plan from support components."""
 
     from jacobian.math.matrices.values import require_matrix_scalar_digits
 
@@ -523,34 +596,30 @@ def _admit_sparse_rank(matrix: SparseRationalMatrix) -> _SparseRankPlan:
         maximum=MAX_INPUT_SCALAR_DIGITS,
         label="matrix input",
     )
-    entries = tuple(
-        (entry.row, entry.column, entry.value.as_fraction()) for entry in matrix.entries
+    components = _sparse_rank_components(matrix.entries)
+    rank_bound = sum(
+        min(len(component.rows), len(component.columns)) for component in components
     )
-    scalar_digits = max(
-        (
-            len(component.lstrip("-"))
-            for entry in matrix.entries
-            for component in (entry.value.num, entry.value.den)
-        ),
-        default=1,
+    active_columns = tuple(
+        sorted(column for component in components for column in component.columns)
     )
-    active_rows = tuple(sorted({row for row, _column, _value in entries}))
-    active_columns = tuple(sorted({column for _row, column, _value in entries}))
-    rank_bound = min(len(active_rows), len(active_columns))
-    support_cells = len(active_rows) * len(active_columns)
+    # Independent support components become diagonal blocks after row and
+    # column permutations. Exact row operations cannot create a nonzero
+    # between blocks, so intermediate cells, arithmetic work, and minor-height
+    # bounds compose by component rather than by one global active rectangle.
+    support_cells = sum(
+        len(component.rows) * len(component.columns) for component in components
+    )
     if support_cells > MAX_SPARSE_RANK_INTERMEDIATE_CELLS:
         raise _validation_error(
             "budget_exceeded",
             "sparse rank elimination exceeds the "
-            f"{MAX_SPARSE_RANK_INTERMEDIATE_CELLS:,}-cell active-support bound",
+            f"{MAX_SPARSE_RANK_INTERMEDIATE_CELLS:,}-cell component-support bound",
         )
     work = _sparse_rank_work(
         row_count=matrix.row_count,
         column_count=matrix.column_count,
-        entry_count=len(entries),
-        support_cells=support_cells,
-        rank_bound=rank_bound,
-        scalar_digits=scalar_digits,
+        components=components,
     )
     if work > MAX_EXACT_LINEAR_MATRIX_WORK:
         raise _validation_error(
@@ -559,63 +628,65 @@ def _admit_sparse_rank(matrix: SparseRationalMatrix) -> _SparseRankPlan:
             f"{MAX_EXACT_LINEAR_MATRIX_WORK:,}-unit scalar-work budget",
         )
 
-    grouped: dict[int, list[Fraction]] = {row: [] for row in active_rows}
-    for row, _column, value in entries:
-        grouped[row].append(value)
-    row_numerator_bits: list[int] = []
-    row_denominator_bits: list[int] = []
-    for row in active_rows:
-        values = grouped[row]
-        denominator = 1
-        for value in values:
-            denominator = lcm(denominator, value.denominator)
-            if (
-                _bit_bound_decimal_digits(denominator.bit_length())
-                > MAX_MATRIX_SCALAR_DIGITS
-            ):
-                raise _validation_error(
-                    "budget_exceeded",
-                    "sparse rank elimination exceeds the exact "
-                    "intermediate-height bound",
-                )
-        squared_norm = sum(
-            (value.numerator * (denominator // value.denominator)) ** 2
-            for value in values
-        )
-        row_numerator_bits.append((squared_norm.bit_length() + 1) // 2)
-        row_denominator_bits.append(denominator.bit_length())
-    component_bits = sum(sorted(row_numerator_bits, reverse=True)[:rank_bound]) + sum(
-        sorted(row_denominator_bits, reverse=True)[:rank_bound]
-    )
-    intermediate_digits = _bit_bound_decimal_digits(component_bits)
-    if intermediate_digits > MAX_MATRIX_SCALAR_DIGITS:
-        raise _validation_error(
-            "budget_exceeded",
-            "sparse rank elimination exceeds the exact intermediate-height bound",
-        )
+    for component in components:
+        grouped: dict[int, list[Fraction]] = {row: [] for row in component.rows}
+        for row, _column, value in component.entries:
+            grouped[row].append(value)
+        row_numerator_bits: list[int] = []
+        row_denominator_bits: list[int] = []
+        for row in component.rows:
+            values = grouped[row]
+            denominator = 1
+            for value in values:
+                denominator = lcm(denominator, value.denominator)
+                if (
+                    _bit_bound_decimal_digits(denominator.bit_length())
+                    > MAX_MATRIX_SCALAR_DIGITS
+                ):
+                    raise _validation_error(
+                        "budget_exceeded",
+                        "sparse rank elimination exceeds the exact "
+                        "intermediate-height bound",
+                    )
+            squared_norm = sum(
+                (value.numerator * (denominator // value.denominator)) ** 2
+                for value in values
+            )
+            row_numerator_bits.append((squared_norm.bit_length() + 1) // 2)
+            row_denominator_bits.append(denominator.bit_length())
+        component_rank_bound = min(len(component.rows), len(component.columns))
+        component_bits = sum(
+            sorted(row_numerator_bits, reverse=True)[:component_rank_bound]
+        ) + sum(sorted(row_denominator_bits, reverse=True)[:component_rank_bound])
+        if _bit_bound_decimal_digits(component_bits) > MAX_MATRIX_SCALAR_DIGITS:
+            raise _validation_error(
+                "budget_exceeded",
+                "sparse rank elimination exceeds the exact intermediate-height bound",
+            )
     _require_sparse_rank_transport_envelope(
         matrix,
         rank_bound=rank_bound,
         active_columns=active_columns,
     )
     return _SparseRankPlan(
-        entries=entries,
+        components=components,
         row_count=matrix.row_count,
         column_count=matrix.column_count,
     )
 
 
 def _sympy_sparse_rank_pivots(plan: _SparseRankPlan) -> tuple[int, ...]:
-    """Compute exact pivots with SymPy's maintained sparse QQ kernel."""
+    """Compute exact pivots with SymPy's nonzero-driven sparse QQ kernel."""
 
-    if not plan.entries:
+    if not plan.components:
         return ()
     from sympy import QQ
     from sympy.polys.matrices import DomainMatrix
 
     rows: dict[int, dict[int, Any]] = {}
-    for row, column, value in plan.entries:
-        rows.setdefault(row, {})[column] = QQ(value.numerator, value.denominator)
+    for component in plan.components:
+        for row, column, value in component.entries:
+            rows.setdefault(row, {})[column] = QQ(value.numerator, value.denominator)
     source = DomainMatrix(rows, (plan.row_count, plan.column_count), QQ)
     _reduced, pivots = source.rref(method="GJ")
     return tuple(int(column) for column in pivots)

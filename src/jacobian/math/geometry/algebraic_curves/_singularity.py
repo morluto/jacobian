@@ -502,8 +502,6 @@ def _complete_zero_dimensional_points(
     saturation: RationalPolynomialIdeal,
     *,
     admission: _SingularityAdmission,
-    source: RationalPolynomial,
-    partials: tuple[RationalPolynomial, RationalPolynomial, RationalPolynomial],
     axis: tuple[str, str, str],
     budget: IdealComputationBudget,
     deadline: float,
@@ -557,8 +555,7 @@ def _complete_zero_dimensional_points(
         return projection_failure
 
     worker_request = ProjectiveSingularityPointWorkerRequest(
-        source=source,
-        partials=partials,
+        variables=axis,
         chart_zero_components=chart_zero_components,
         chart_one_components=chart_one_components,
         chart_two_present=_chart_two_is_present(saturation),
@@ -748,8 +745,6 @@ def _singularity_profile_request(
             points = _complete_zero_dimensional_points(
                 saturation,
                 admission=admission,
-                source=source,
-                partials=partials,
                 axis=axis,
                 budget=budget,
                 deadline=deadline,

@@ -102,14 +102,17 @@ def _admit_hypergraph_vertex_containment(
             for mask in minimal_masks
         )
         active_state_count = 1 << len(active_vertices)
-        if active_state_count > MAX_SUBSET_STATES:
+        single_edge = len(edge_masks) == 1
+        if active_state_count > MAX_SUBSET_STATES and not single_edge:
             raise OperationDomainValidationError(
                 location=("hypergraph", "vertices"),
                 code="hypergraph_containment.state_bound_exceeded",
                 message="the active subset-state envelope is exceeded",
             )
         lift_work = active_state_count * (n - len(active_vertices) + 1)
-        if len(edge_masks) * active_state_count + lift_work > MAX_CONTAINMENT_WORK:
+        if not single_edge and (
+            len(edge_masks) * active_state_count + lift_work > MAX_CONTAINMENT_WORK
+        ):
             raise OperationDomainValidationError(
                 location=("hypergraph", "edges"),
                 code="hypergraph_containment.work_bound_exceeded",
@@ -199,6 +202,24 @@ def compute_hypergraph_vertex_containment(
 
     active_n = len(plan.active_vertices)
     isolated_n = n - active_n
+    if len(plan.edge_masks) == 1:
+        edge_size = active_n
+        counts = tuple(
+            format_canonical_integer(comb(isolated_n, k - edge_size))
+            if k >= edge_size
+            else "0"
+            for k in range(n + 1)
+        )
+        p = retention_probability.as_fraction()
+        return HypergraphVertexContainmentResult(
+            hypergraph=hypergraph,
+            retention_probability=retention_probability,
+            containing_subset_counts=counts,
+            total_state_count=format_canonical_integer(1 << n),
+            success_count=format_canonical_integer(1 << isolated_n),
+            probability=CanonicalRational.from_fraction(p**edge_size),
+        )
+
     active_counts: list[int] = [0] * (active_n + 1)
     counts: list[int] = [0] * (n + 1)
     for mask in range(1 << active_n):

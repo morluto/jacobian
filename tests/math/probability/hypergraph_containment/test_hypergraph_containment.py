@@ -119,6 +119,20 @@ def test_empty_edge_large_hypergraph_uses_closed_form() -> None:
     assert parse_canonical_integer(result.containing_subset_counts[11]) == comb(23, 11)
 
 
+def test_single_large_edge_uses_closed_form_before_state_cap() -> None:
+    vertices = [f"v{i}" for i in range(23)]
+    hg = _hg(vertices, [("all", tuple(vertices))])
+
+    result = compute_hypergraph_vertex_containment(
+        hg, CanonicalRational.from_fraction(Fraction(1, 2))
+    )
+
+    assert parse_canonical_integer(result.success_count) == 1
+    assert parse_canonical_integer(result.containing_subset_counts[22]) == 0
+    assert parse_canonical_integer(result.containing_subset_counts[23]) == 1
+    assert result.probability.as_fraction() == Fraction(1, 2**23)
+
+
 def test_duplicate_edge_members_are_scanned_once() -> None:
     hg = _hg(
         ["a", "b", "c"],

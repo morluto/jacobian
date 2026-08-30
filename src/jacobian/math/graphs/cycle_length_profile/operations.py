@@ -28,7 +28,7 @@ class _AdmissionPlan:
 
 
 def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
-    """Bound DFS paths with adjacency-sensitive walks."""
+    """Count simple-path prefixes with an early work cutoff."""
     vertex_count = len(graph.vertices)
     vertex_to_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
     adjacency = [[False] * vertex_count for _ in range(vertex_count)]
@@ -40,28 +40,26 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
 
     work = 0
     for start in range(vertex_count):
-        # The DFS only visits vertices after ``start``.  Walks in that
-        # induced graph are a safe upper bound for its simple paths.
-        walks = [
-            int(current > start and adjacency[start][current])
-            for current in range(vertex_count)
-        ]
-        for _length in range(3, vertex_count + 1):
-            next_walks = [
-                sum(
-                    walks[previous]
-                    for previous in range(start + 1, vertex_count)
-                    if adjacency[previous][current]
-                )
-                if current > start
-                else 0
-                for current in range(vertex_count)
-            ]
-            paths = sum(next_walks)
-            # Each explored path can scan every candidate vertex, and each
-            # prefix can be revisited for every requested cycle length.
-            work += paths * vertex_count * vertex_count
-            walks = next_walks
+        visited = {start}
+
+        def visit(current: int, visited: set[int] = visited) -> None:
+            nonlocal work
+            for nxt in range(vertex_count):
+                if nxt in visited or not adjacency[current][nxt]:
+                    continue
+                visited.add(nxt)
+                if len(visited) >= 3:
+                    work += vertex_count * vertex_count
+                    if work > MAX_SEARCH_WORK:
+                        return
+                visit(nxt)
+                visited.remove(nxt)
+                if work > MAX_SEARCH_WORK:
+                    return
+
+        visit(start)
+        if work > MAX_SEARCH_WORK:
+            return work
     return work
 
 

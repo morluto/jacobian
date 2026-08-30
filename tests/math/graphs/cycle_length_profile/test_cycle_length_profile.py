@@ -118,10 +118,7 @@ def test_sparse_star_is_admitted_without_global_degree_restriction() -> None:
     assert compute_cycle_length_profile(g).rows == ()
 
 
-def test_native_admission_rejects_large_graph() -> None:
-    """Native execution applies the owner vertex bound before search."""
-    import pytest
-
+def test_native_admission_accepts_large_sparse_graph() -> None:
+    """Sparse graphs beyond the old cap remain within the derived envelope."""
     graph = _graph([str(i) for i in range(17)], [])
-    with pytest.raises(ValueError, match="at most 16 vertices"):
-        compute_cycle_length_profile(graph)
+    assert compute_cycle_length_profile(graph).rows == ()

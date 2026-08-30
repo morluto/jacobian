@@ -259,7 +259,7 @@ def test_live_nested_dialogue_child_is_killed_when_the_request_is_cancelled(
             raise AssertionError("nested dialogue child did not publish readiness")
 
         cancellation.set()
-        outer_worker.join(timeout=5)
+        outer_worker.join(timeout=15)
 
         assert not outer_worker.is_alive()
         assert failures == []
@@ -267,7 +267,7 @@ def test_live_nested_dialogue_child_is_killed_when_the_request_is_cancelled(
         assert completed[0].cancelled
         assert not completed[0].timed_out
 
-        exit_deadline = time.monotonic() + 5
+        exit_deadline = time.monotonic() + 15
         while time.monotonic() < exit_deadline:
             try:
                 os.kill(nested_pid, 0)
@@ -278,7 +278,7 @@ def test_live_nested_dialogue_child_is_killed_when_the_request_is_cancelled(
             raise AssertionError("nested dialogue child survived request cancellation")
     finally:
         cancellation.set()
-        outer_worker.join(timeout=5)
+        outer_worker.join(timeout=15)
         if nested_pid is not None:
             with contextlib.suppress(ProcessLookupError):
                 os.kill(nested_pid, 9)

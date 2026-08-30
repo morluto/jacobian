@@ -64,7 +64,12 @@ def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
         for power in powers:
             limit = cutoff // power
             for member in sorted_family[: bisect_right(sorted_family, limit)]:
-                new_values.add(member * power)
+                value = member * power
+                if value in family_set or value in new_values:
+                    continue
+                if len(family_set) + len(new_values) >= MAX_R_FULL_FAMILY_SIZE:
+                    return RFullFamilyPlan((), True)
+                new_values.add(value)
         fresh_values = sorted(value for value in new_values if value not in family_set)
         if fresh_values:
             family_set.update(fresh_values)

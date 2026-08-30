@@ -6,6 +6,7 @@ import unicodedata
 from dataclasses import dataclass
 
 import rfc8785
+
 from jacobian.canonical import CanonicalizationError, CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.cycle_length_profile._models import (

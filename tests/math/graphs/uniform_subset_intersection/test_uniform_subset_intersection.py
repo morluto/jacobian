@@ -84,6 +84,17 @@ def test_empty_k_zero() -> None:
     assert graph.edges == ()
 
 
+def test_empty_subset_does_not_materialize_the_ground_axis() -> None:
+    result = construct_uniform_subset_intersection_graph(
+        (1 << 53) - 1,
+        0,
+        0,
+        "INTERSECTION_EQ_THRESHOLD",
+    )
+    assert result.graph.vertices == ("{}",)
+    assert result.graph.edges == ()
+
+
 def test_single_subset() -> None:
     """k=n yields one subset, no edges."""
     req = UniformSubsetIntersectionRequest(

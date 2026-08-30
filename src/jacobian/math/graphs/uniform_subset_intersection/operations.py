@@ -52,7 +52,11 @@ def _construct_uniform_subset_intersection_graph_from_plan(
 ) -> UniformSubsetIntersectionResult:
     """Construct a graph from one already-computed request admission."""
 
-    subsets = tuple(combinations(range(ground_set_size), subset_cardinality))
+    subsets = (
+        ((),)
+        if subset_cardinality == 0
+        else tuple(combinations(range(ground_set_size), subset_cardinality))
+    )
     assert len(subsets) == plan.vertex_count
 
     if len(subsets) == 1:

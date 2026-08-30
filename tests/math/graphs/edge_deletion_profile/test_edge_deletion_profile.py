@@ -93,6 +93,12 @@ def test_native_non_utf8_label_is_typed() -> None:
         compute_edge_deletion_profile(graph, 0)
 
 
+def test_native_oversized_label_is_rejected_before_encoding() -> None:
+    graph = _graph(["x" * 11_000_000], [])
+    with pytest.raises(OperationDomainValidationError, match="input/output bound"):
+        compute_edge_deletion_profile(graph, 0)
+
+
 def test_result_preserves_source() -> None:
     g = _graph(["a", "b", "c"], [("a", "b"), ("b", "c")])
     result = compute_edge_deletion_profile(g, 1)

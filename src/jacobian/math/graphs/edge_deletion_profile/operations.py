@@ -66,6 +66,34 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
     return n * colorings
 
 
+def _preflight_graph_wire_size(graph: SimpleUndirectedGraph) -> None:
+    """Reject oversized native labels before materializing canonical JSON."""
+
+    try:
+        label_bytes = sum(len(vertex.encode("utf-8")) for vertex in graph.vertices)
+        edge_reference_bytes = sum(
+            len(left.encode("utf-8")) + len(right.encode("utf-8"))
+            for left, right in graph.edges
+        )
+    except UnicodeEncodeError as exc:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.edge_deletion.result_exceeds_output_bound",
+            message="edge-deletion graph labels must be valid UTF-8",
+        ) from exc
+    estimated = (
+        label_bytes
+        + edge_reference_bytes
+        + 32 * (len(graph.vertices) + len(graph.edges) + 1)
+    )
+    if estimated > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.edge_deletion.result_exceeds_output_bound",
+            message="edge-deletion graph exceeds the canonical input/output bound",
+        )
+
+
 def _admit_edge_deletion_profile(
     graph: SimpleUndirectedGraph,
     deletion_order: int,
@@ -101,6 +129,7 @@ def _admit_edge_deletion_profile(
                 message="edge-deletion profile search exceeds its exact work bound",
             )
 
+    _preflight_graph_wire_size(graph)
     try:
         graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
     except (CanonicalizationError, UnicodeEncodeError) as exc:

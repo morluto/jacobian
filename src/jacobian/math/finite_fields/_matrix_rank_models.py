@@ -39,6 +39,21 @@ class MatrixRankResult(StrictModel):
             )
         row_labels = set(self.matrix.row_axis.labels)
         col_labels = set(self.matrix.column_axis.labels)
+        if len(set(self.pivot_rows)) != len(self.pivot_rows):
+            raise PydanticCustomError(
+                "finite_field.matrix_rank.pivot_rows_unique",
+                "pivot rows must be distinct",
+            )
+        if len(set(self.pivot_columns)) != len(self.pivot_columns):
+            raise PydanticCustomError(
+                "finite_field.matrix_rank.pivot_columns_unique",
+                "pivot columns must be distinct",
+            )
+        if self.rank > min(len(row_labels), len(col_labels)):
+            raise PydanticCustomError(
+                "finite_field.matrix_rank.rank_within_dimensions",
+                "rank must not exceed either matrix dimension",
+            )
         if any(label not in row_labels for label in self.pivot_rows):
             raise PydanticCustomError(
                 "finite_field.matrix_rank.pivot_row_labels",

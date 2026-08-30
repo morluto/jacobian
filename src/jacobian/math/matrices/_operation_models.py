@@ -15,8 +15,11 @@ from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     MAX_RATIONAL_MATRIX_ORDER,
+    MAX_SPARSE_RATIONAL_MATRIX_AXIS,
+    MAX_SPARSE_RATIONAL_MATRIX_NONZEROS,
     IntegerMatrix,
     RationalMatrix,
+    SparseRationalMatrix,
     integer_matrix_axis_schema,
     require_matrix_scalar_digits,
 )
@@ -37,6 +40,11 @@ MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
 # through order 50. Pin each admitted output axis to that envelope.
 MAX_KRONECKER_PRODUCT_AXIS = 50
 MAX_EXACT_LINEAR_MATRIX_WORK = 100_000_000
+# Sparse Gauss-Jordan elimination can fill the Cartesian closure within each
+# connected bipartite support component. Bound the sum of those component
+# closures directly rather than coupling disjoint blocks or imposing a smaller
+# limit on either declared matrix axis.
+MAX_SPARSE_RANK_INTERMEDIATE_CELLS = 1_000_000
 
 
 def _require_raw_scalar_digits(value: object, *, label: str) -> None:
@@ -94,10 +102,51 @@ def _require_raw_matrix(value: object, *, label: str, maximum_axis: int) -> None
             _require_raw_scalar_digits(scalar, label=label)
 
 
+def _require_raw_sparse_matrix(value: object, *, label: str) -> None:
+    """Bound sparse rank coordinates and scalars before nested parsing."""
+
+    if isinstance(value, dict):
+        unexpected = set(value).difference(
+            {"domain", "row_count", "column_count", "entries"}
+        )
+        if unexpected:
+            raise _validation_error(
+                "shape_mismatch", f"{label} contains unknown fields"
+            )
+        entries = value.get("entries")
+    else:
+        entries = getattr(value, "entries", None)
+    if not isinstance(entries, (list, tuple)):
+        return
+    if len(entries) > MAX_SPARSE_RATIONAL_MATRIX_NONZEROS:
+        raise _validation_error(
+            "budget_exceeded",
+            f"{label} stores at most {MAX_SPARSE_RATIONAL_MATRIX_NONZEROS} nonzeros",
+        )
+    for entry in entries:
+        if isinstance(entry, dict):
+            if set(entry).difference({"row", "column", "value"}):
+                raise _validation_error(
+                    "shape_mismatch", f"{label} entries contain unknown fields"
+                )
+            value = entry.get("value")
+        else:
+            value = getattr(entry, "value", None)
+        _require_raw_scalar_digits(value, label=label)
+
+
 class _MatrixRequest(StrictModel):
     """Raw transport preflight shared by bounded base-matrix requests."""
 
     _raw_matrix_axis_limit: ClassVar[int] = MAX_MATRIX_DIMENSION
+
+    @classmethod
+    def _require_raw_matrix_input(cls, value: object) -> None:
+        _require_raw_matrix(
+            value,
+            label="matrix input",
+            maximum_axis=cls._raw_matrix_axis_limit,
+        )
 
     @model_validator(mode="before")
     @classmethod
@@ -110,11 +159,7 @@ class _MatrixRequest(StrictModel):
             )
         for name in ("matrix", "left", "right"):
             if name in data:
-                _require_raw_matrix(
-                    data[name],
-                    label="matrix input",
-                    maximum_axis=cls._raw_matrix_axis_limit,
-                )
+                cls._require_raw_matrix_input(data[name])
         rhs = data.get("rhs")
         if isinstance(rhs, (list, tuple)):
             if len(rhs) > MAX_MATRIX_DIMENSION:
@@ -223,8 +268,31 @@ class MatrixDeterminantRequest(_MatrixRequest):
 class MatrixRankRequest(_MatrixRequest):
     """One bounded rectangular matrix whose exact rank is requested."""
 
-    matrix: RationalMatrix
+    matrix: RationalMatrix | SparseRationalMatrix
     _raw_matrix_axis_limit: ClassVar[int] = MAX_RATIONAL_MATRIX_ORDER
+
+    @classmethod
+    def _require_raw_matrix_input(cls, value: object) -> None:
+        entries = (
+            value.get("entries")
+            if isinstance(value, dict)
+            else getattr(value, "entries", None)
+        )
+        has_coordinate_entries = isinstance(entries, (list, tuple)) and any(
+            isinstance(entry, dict) and {"row", "column", "value"}.issubset(entry)
+            for entry in entries
+        )
+        if isinstance(value, SparseRationalMatrix) or (
+            isinstance(value, dict)
+            and (
+                "row_count" in value
+                or "column_count" in value
+                or has_coordinate_entries
+            )
+        ):
+            _require_raw_sparse_matrix(value, label="matrix input")
+            return
+        super()._require_raw_matrix_input(value)
 
 
 _ComputationIntegerMatrix = Annotated[
@@ -324,9 +392,9 @@ class MatrixDeterminantResult(StrictModel):
 class MatrixRankResult(StrictModel):
     """One structurally bounded rank outcome bound to its source matrix."""
 
-    matrix: RationalMatrix
-    rank: int = Field(ge=0, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
-    pivot_columns: tuple[int, ...] = Field(max_length=MAX_EXACT_LINEAR_MATRIX_AXIS)
+    matrix: RationalMatrix | SparseRationalMatrix
+    rank: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
+    pivot_columns: tuple[int, ...] = Field(max_length=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
 
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
@@ -338,7 +406,16 @@ class MatrixRankResult(StrictModel):
             raise _validation_error(
                 "budget_exceeded", "rank must equal the pivot column count"
             )
-        column_count = len(self.matrix.entries[0])
+        if isinstance(self.matrix, RationalMatrix):
+            row_count = len(self.matrix.entries)
+            column_count = len(self.matrix.entries[0])
+        else:
+            row_count = self.matrix.row_count
+            column_count = self.matrix.column_count
+        if self.rank > min(row_count, column_count):
+            raise _validation_error(
+                "shape_mismatch", "rank cannot exceed either source matrix axis"
+            )
         if self.pivot_columns != tuple(sorted(set(self.pivot_columns))) or any(
             not 0 <= column < column_count for column in self.pivot_columns
         ):

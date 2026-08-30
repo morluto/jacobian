@@ -6,7 +6,11 @@ from fractions import Fraction
 from itertools import groupby
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.geometry.exact._models import PointConfiguration
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry.exact._models import (
+    PointConfiguration,
+    _require_bounded_point_configuration,
+)
 from jacobian.math.geometry.exact.pinned_distance_profile._models import (
     PinnedDistanceEntry,
     PinnedDistancePointProfile,
@@ -24,6 +28,14 @@ def compute_pinned_distance_profile(
     For each point i, partition all other points j by the exact squared
     Euclidean distance d(i,j), with labels sorted within each distance class.
     """
+    try:
+        _require_bounded_point_configuration(configuration)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="geometry.pinned_distance.coordinate_bound",
+            message=str(exc),
+        ) from exc
     points = configuration.points
     n = len(points)
 

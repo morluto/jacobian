@@ -137,7 +137,10 @@ def compute_induced_edge_count_profile(
     vertices = list(graph.vertices)
     edges = list(graph.edges)
 
-    count_to_subsets: dict[int, list[tuple[str, ...]]] = {}
+    # Keep one witness and a multiplicity per attained edge count rather than
+    # retaining every subset (large edgeless graphs can have nearly a million
+    # subsets but only one histogram row).
+    count_to_stats: dict[int, tuple[int, tuple[str, ...]]] = {}
 
     for subset in combinations(vertices, cardinality):
         subset_set = set(subset)
@@ -145,18 +148,21 @@ def compute_induced_edge_count_profile(
         for a, b in edges:
             if a in subset_set and b in subset_set:
                 edge_count += 1
-        if edge_count not in count_to_subsets:
-            count_to_subsets[edge_count] = []
-        count_to_subsets[edge_count].append(tuple(sorted(subset)))
+        witness = tuple(sorted(subset))
+        previous = count_to_stats.get(edge_count)
+        if previous is None:
+            count_to_stats[edge_count] = (1, witness)
+        else:
+            count, prior_witness = previous
+            count_to_stats[edge_count] = (count + 1, min(prior_witness, witness))
 
     rows: list[InducedEdgeCountRow] = []
-    for edge_count in sorted(count_to_subsets):
-        subsets = count_to_subsets[edge_count]
-        witness = min(subsets)
+    for edge_count in sorted(count_to_stats):
+        subset_count, witness = count_to_stats[edge_count]
         rows.append(
             InducedEdgeCountRow(
                 edge_count=edge_count,
-                subset_count=len(subsets),
+                subset_count=subset_count,
                 witness=witness,
             )
         )

@@ -5,11 +5,13 @@ from __future__ import annotations
 from collections.abc import Iterator
 from itertools import product
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 from jacobian.math.combinatorics.word_cube_hypergraph._models import (
     WordCubeResult,
+    require_word_cube_envelope,
 )
 
 __all__ = ["compute_word_cube_hypergraph"]
@@ -26,12 +28,20 @@ def compute_word_cube_hypergraph(
     exactly q vertices, one for each possible substitution of the wild
     positions.
     """
+    try:
+        require_word_cube_envelope(alphabet_size, dimension)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("alphabet_size", "dimension"),
+            code="word_cube.envelope_exceeded",
+            message=str(exc),
+        ) from exc
     q = alphabet_size
     d = dimension
 
     # All words of length d over [q]
     all_words = list(product(range(q), repeat=d))
-    word_to_str = {w: "".join(str(x) for x in w) for w in all_words}
+    word_to_str = {w: "w:" + ",".join(str(x) for x in w) for w in all_words}
     all_word_strs = [word_to_str[w] for w in all_words]
     vertex_labels = tuple(all_word_strs)
 

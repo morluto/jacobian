@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.word_cube_hypergraph.operations import (
     compute_word_cube_hypergraph,
 )
@@ -27,3 +30,17 @@ def test_result_preserves_source() -> None:
     result = compute_word_cube_hypergraph(2, 2)
     assert result.alphabet_size == 2
     assert result.dimension == 2
+
+
+def test_multidigit_symbols_have_injective_word_labels() -> None:
+    result = compute_word_cube_hypergraph(12, 2)
+
+    assert len(result.hypergraph.vertices) == 144
+    assert len(set(result.hypergraph.vertices)) == 144
+    assert "w:1,10" in result.hypergraph.vertices
+    assert "w:11,0" in result.hypergraph.vertices
+
+
+def test_word_cube_expansion_is_admitted_before_construction() -> None:
+    with pytest.raises(OperationDomainValidationError, match="256-vertex"):
+        compute_word_cube_hypergraph(17, 2)

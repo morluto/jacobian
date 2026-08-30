@@ -1,14 +1,26 @@
 """Typed contracts for the pinned distance profile operation."""
 
+from typing import Self
+
+from pydantic import model_validator
+
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math.geometry.exact._models import PointConfiguration
+from jacobian.math.geometry.exact._models import (
+    PointConfiguration,
+    _require_bounded_point_configuration,
+)
 
 
 class PinnedDistanceProfileRequest(StrictModel):
     """Request the pinned distance support profile."""
 
     configuration: PointConfiguration
+
+    @model_validator(mode="after")
+    def require_derived_distances_to_fit(self) -> Self:
+        _require_bounded_point_configuration(self.configuration)
+        return self
 
 
 class PinnedDistanceEntry(StrictModel):

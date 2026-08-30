@@ -2,10 +2,17 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import (
     LabelledRationalPoint,
     PointConfiguration,
+)
+from jacobian.math.geometry.exact.pinned_distance_profile._models import (
+    PinnedDistanceProfileRequest,
 )
 from jacobian.math.geometry.exact.pinned_distance_profile.operations import (
     compute_pinned_distance_profile,
@@ -63,3 +70,17 @@ def test_result_preserves_source() -> None:
     config = _config([("a", [0, 0]), ("b", [1, 0])])
     result = compute_pinned_distance_profile(config)
     assert result.configuration == config
+
+
+def test_derived_squared_distance_digit_growth_is_rejected() -> None:
+    config = _config([("a", [0]), ("b", [10**256])])
+
+    with pytest.raises(OperationDomainValidationError, match="256"):
+        compute_pinned_distance_profile(config)
+
+
+def test_request_rejects_coordinate_height_before_execution() -> None:
+    config = _config([("a", [0]), ("b", [10**256])])
+
+    with pytest.raises(ValidationError, match="256"):
+        PinnedDistanceProfileRequest(configuration=config)

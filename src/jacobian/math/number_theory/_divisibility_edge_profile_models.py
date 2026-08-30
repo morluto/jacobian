@@ -70,7 +70,6 @@ def _validate_divisibility_edge_shape(values: tuple[str, ...]) -> None:
             "divisibility_edge.value_digits",
             "values exceed the admitted integer digit bound",
         )
-    max_digits = max(len(value) for value in values)
 
 
 def _validate_divisibility_edge_resources(values: tuple[str, ...]) -> None:

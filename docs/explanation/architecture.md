@@ -166,8 +166,11 @@ need. The mathematical owner remains responsible for the complete request
 envelope: it admits the request, retains its canonical source, starts the
 worker, and constructs the final result. The worker receives one strict payload
 and returns only a bounded derived projection. The parent binds that projection
-to its admitted source before result validation; a worker does not echo or
-replace retained canonical values.
+to its admitted source before trusted result construction; a worker does not
+echo or replace retained canonical values. The parent never passes worker output
+through the complete public result model's validation path: it decodes only the
+projection's bounded structure, constructs trusted nested values, and calls the
+owner's private factory without replaying the worker's mathematics.
 
 The owner charges parsing, launch, backend work, projection, validation, and
 cleanup against one local execution plan and deadline. Worker capture limits

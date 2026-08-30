@@ -562,7 +562,7 @@ def _root_profile(source_index: int, plan: _SourcePlan) -> SourceRootProfile:
             )
         real_root_index = factor_root_indices[factor_index]
         factor_root_indices[factor_index] += 1
-        value = RealAlgebraicValue._from_kernel(
+        value = RealAlgebraicValue._from_admitted_polynomial(
             polynomial=factor.canonical_coefficients,
             real_root_index=real_root_index,
         )

@@ -54,7 +54,7 @@ def _root_profile_from_worker(value: object) -> SourceRootProfile:
         root_index = raw_value.get("real_root_index")
         if type(root_index) is not int or root_index < 0:
             raise ValueError("malformed algebraic root index")
-        algebraic_value = RealAlgebraicValue._from_kernel(
+        algebraic_value = RealAlgebraicValue._from_admitted_polynomial(
             polynomial=polynomial,
             real_root_index=root_index,
         )

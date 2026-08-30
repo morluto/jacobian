@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 from itertools import product
+from math import gcd, lcm
 from typing import Literal, NoReturn
 
 from jacobian._models import StrictModel
@@ -36,11 +38,20 @@ MAX_LIE_DERIVATIVE_RAW_COEFFICIENT_DIGITS = 4_096
 
 @dataclass(frozen=True)
 class PolynomialBound:
+    """Bound ``rational_content * integral_polynomial`` exactly.
+
+    Input bounds start with a primitive integral polynomial. Arithmetic may
+    leave its integral factor nonprimitive, while ``coefficient_digits`` still
+    bounds every coefficient and ``rational_content`` remains an exact common
+    scale. Keeping that scale separate prevents unrelated coefficient
+    denominators from multiplying during height admission.
+    """
+
     terms: int
     degrees: tuple[int, ...]
     minimum_exponents: tuple[int, ...]
     coefficient_digits: int
-    integral_coefficients: bool
+    rational_content: Fraction
 
     @property
     def is_zero(self) -> bool:
@@ -129,9 +140,23 @@ def _polynomial_bound(polynomial: SparseRationalPolynomial) -> PolynomialBound:
             degrees=(),
             minimum_exponents=(),
             coefficient_digits=1,
-            integral_coefficients=True,
+            rational_content=Fraction(0),
         )
     variable_count = len(polynomial.terms[0].exponents)
+    coefficients = tuple(
+        Fraction(*term.coefficient.as_integer_ratio()) for term in polynomial.terms
+    )
+    common_denominator = lcm(*(coefficient.denominator for coefficient in coefficients))
+    integral_coefficients = tuple(
+        coefficient.numerator * (common_denominator // coefficient.denominator)
+        for coefficient in coefficients
+    )
+    content_numerator = gcd(
+        *(abs(coefficient) for coefficient in integral_coefficients)
+    )
+    primitive_coefficients = tuple(
+        coefficient // content_numerator for coefficient in integral_coefficients
+    )
     return PolynomialBound(
         terms=len(polynomial.terms),
         degrees=tuple(
@@ -143,13 +168,9 @@ def _polynomial_bound(polynomial: SparseRationalPolynomial) -> PolynomialBound:
             for axis in range(variable_count)
         ),
         coefficient_digits=max(
-            len(component.lstrip("-"))
-            for term in polynomial.terms
-            for component in (term.coefficient.num, term.coefficient.den)
+            len(str(abs(coefficient))) for coefficient in primitive_coefficients
         ),
-        integral_coefficients=all(
-            term.coefficient.den == "1" for term in polynomial.terms
-        ),
+        rational_content=Fraction(content_numerator, common_denominator),
     )
 
 
@@ -159,7 +180,7 @@ def _zero_polynomial(variable_count: int) -> PolynomialBound:
         degrees=(0,) * variable_count,
         minimum_exponents=(0,) * variable_count,
         coefficient_digits=1,
-        integral_coefficients=True,
+        rational_content=Fraction(0),
     )
 
 
@@ -169,7 +190,7 @@ def _one_polynomial(variable_count: int) -> PolynomialBound:
         degrees=(0,) * variable_count,
         minimum_exponents=(0,) * variable_count,
         coefficient_digits=1,
-        integral_coefficients=True,
+        rational_content=Fraction(1),
     )
 
 
@@ -200,7 +221,11 @@ def _check_raw_polynomial(bound: PolynomialBound) -> None:
             "Lie-derivative polynomial expansion exceeds the "
             f"{MAX_LIE_DERIVATIVE_RAW_POLYNOMIAL_TERMS}-term intermediate budget",
         )
-    if bound.coefficient_digits > MAX_LIE_DERIVATIVE_RAW_COEFFICIENT_DIGITS:
+    scaled_coefficient_digits = max(
+        len(str(abs(bound.rational_content.numerator))) + bound.coefficient_digits,
+        len(str(bound.rational_content.denominator)),
+    )
+    if scaled_coefficient_digits > MAX_LIE_DERIVATIVE_RAW_COEFFICIENT_DIGITS:
         _reject(
             "intermediate_height",
             "Lie-derivative coefficient growth exceeds the "
@@ -229,7 +254,7 @@ def _differentiate_polynomial(
         coefficient_digits=(
             source.coefficient_digits + len(str(maximum_axis_exponent))
         ),
-        integral_coefficients=source.integral_coefficients,
+        rational_content=source.rational_content,
     )
     _check_raw_polynomial(result)
     return result
@@ -250,15 +275,10 @@ def _multiply_polynomials(
     )
     collision_count = min(left.terms, right.terms)
     product_digits = left.coefficient_digits + right.coefficient_digits
-    integral_coefficients = left.integral_coefficients and right.integral_coefficients
     if collision_count == 1:
         coefficient_digits = product_digits
-    elif integral_coefficients:
-        coefficient_digits = product_digits + len(str(collision_count))
     else:
-        coefficient_digits = collision_count * product_digits + len(
-            str(collision_count)
-        )
+        coefficient_digits = product_digits + len(str(collision_count))
     result = PolynomialBound(
         terms=min(pair_count, _dense_term_bound(degrees)),
         degrees=degrees,
@@ -271,7 +291,7 @@ def _multiply_polynomials(
             )
         ),
         coefficient_digits=coefficient_digits,
-        integral_coefficients=integral_coefficients,
+        rational_content=left.rational_content * right.rational_content,
     )
     _check_raw_polynomial(result)
     return result
@@ -291,6 +311,28 @@ def _add_polynomials(
         max(left_degree, right_degree)
         for left_degree, right_degree in zip(left.degrees, right.degrees, strict=True)
     )
+    common_content = Fraction(
+        gcd(
+            abs(left.rational_content.numerator),
+            abs(right.rational_content.numerator),
+        ),
+        lcm(
+            left.rational_content.denominator,
+            right.rational_content.denominator,
+        ),
+    )
+    left_multiplier = left.rational_content / common_content
+    right_multiplier = right.rational_content / common_content
+    if left_multiplier.denominator != 1 or right_multiplier.denominator != 1:
+        raise AssertionError(
+            "rational polynomial content gcd did not divide both inputs"
+        )
+
+    def scaled_digits(coefficient_digits: int, multiplier: int) -> int:
+        if abs(multiplier) <= 1:
+            return coefficient_digits
+        return coefficient_digits + len(str(abs(multiplier)))
+
     result = PolynomialBound(
         terms=min(left.terms + right.terms, _dense_term_bound(degrees)),
         degrees=degrees,
@@ -302,14 +344,12 @@ def _add_polynomials(
                 strict=True,
             )
         ),
-        coefficient_digits=(
-            max(left.coefficient_digits, right.coefficient_digits) + 1
-            if left.integral_coefficients and right.integral_coefficients
-            else left.coefficient_digits + right.coefficient_digits + 1
-        ),
-        integral_coefficients=(
-            left.integral_coefficients and right.integral_coefficients
-        ),
+        coefficient_digits=max(
+            scaled_digits(left.coefficient_digits, left_multiplier.numerator),
+            scaled_digits(right.coefficient_digits, right_multiplier.numerator),
+        )
+        + 1,
+        rational_content=common_content,
     )
     _check_raw_polynomial(result)
     return result
@@ -428,15 +468,10 @@ def _factor_coefficient_digits(bound: PolynomialBound) -> int:
 
     if bound.is_zero:
         return 1
-    cleared_coefficient_digits = (
-        bound.coefficient_digits
-        if bound.integral_coefficients
-        else bound.terms * bound.coefficient_digits
-    )
     kronecker_degree = _dense_term_bound(bound.degrees) - 1
     binary_factor_digits = (302 * kronecker_degree + 999) // 1000
     norm_digits = len(str(bound.terms)) + 1
-    return cleared_coefficient_digits + binary_factor_digits + norm_digits + 2
+    return bound.coefficient_digits + binary_factor_digits + norm_digits + 2
 
 
 def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
@@ -474,7 +509,7 @@ def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
                 )
             ),
             coefficient_digits=polynomial.coefficient_digits,
-            integral_coefficients=polynomial.integral_coefficients,
+            rational_content=polynomial.rational_content,
         )
 
     return FractionBound(
@@ -485,22 +520,19 @@ def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
 def _canonical_coefficient_digits(bound: FractionBound) -> int:
     if bound.is_zero:
         return 1
-    numerator_clear = (
-        0
-        if bound.numerator.integral_coefficients
-        else bound.numerator.terms * bound.numerator.coefficient_digits
+    content_ratio = (
+        bound.numerator.rational_content / bound.denominator.rational_content
     )
-    denominator_clear = (
-        0
-        if bound.denominator.integral_coefficients
-        else bound.denominator.terms * bound.denominator.coefficient_digits
-    )
-    return (
-        numerator_clear
-        + denominator_clear
-        + _factor_coefficient_digits(bound.numerator)
-        + _factor_coefficient_digits(bound.denominator)
-        + 4
+    numerator_factor_digits = _factor_coefficient_digits(bound.numerator)
+    denominator_factor_digits = _factor_coefficient_digits(bound.denominator)
+    return max(
+        len(str(abs(content_ratio.numerator)))
+        + bound.numerator.coefficient_digits
+        + numerator_factor_digits,
+        len(str(content_ratio.denominator))
+        + bound.denominator.coefficient_digits
+        + denominator_factor_digits,
+        denominator_factor_digits,
     )
 
 
@@ -606,14 +638,14 @@ def _rational_function_result_size(
             degrees=bound.numerator.degrees,
             minimum_exponents=(0,) * len(bound.numerator.degrees),
             coefficient_digits=coefficient_digits,
-            integral_coefficients=False,
+            rational_content=Fraction(1),
         )
         denominator = PolynomialBound(
             terms=_dense_term_bound(bound.denominator.degrees),
             degrees=bound.denominator.degrees,
             minimum_exponents=(0,) * len(bound.denominator.degrees),
             coefficient_digits=coefficient_digits,
-            integral_coefficients=False,
+            rational_content=Fraction(1),
         )
     return strict_json_object_size(
         (
@@ -660,7 +692,7 @@ def _result_bytes_upper_bound(
                 degrees=component.raw_result.denominator.degrees,
                 minimum_exponents=(0,) * len(component.raw_result.denominator.degrees),
                 coefficient_digits=component.canonical_coefficient_digits,
-                integral_coefficients=False,
+                rational_content=Fraction(1),
             )
         )
         for component in components

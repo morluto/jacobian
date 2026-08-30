@@ -30,12 +30,20 @@ from jacobian.math.geometry.differential.values import (
 from jacobian.math.polynomials._conversions import rational_function_to_sympy
 from jacobian.math.polynomials.values import RationalFunction
 
+type Coefficient = int | tuple[int, int]
+type PolynomialTerm = tuple[Coefficient, tuple[int, ...]]
 
-def _sparse(*terms: tuple[int, tuple[int, ...]]) -> dict[str, Any]:
+
+def _sparse(*terms: PolynomialTerm) -> dict[str, Any]:
     return {
         "terms": [
             {
-                "coefficient": {"num": str(coefficient), "den": "1"},
+                "coefficient": {
+                    "num": str(
+                        coefficient if isinstance(coefficient, int) else coefficient[0]
+                    ),
+                    "den": str(1 if isinstance(coefficient, int) else coefficient[1]),
+                },
                 "exponents": list(exponents),
             }
             for coefficient, exponents in terms
@@ -45,8 +53,8 @@ def _sparse(*terms: tuple[int, tuple[int, ...]]) -> dict[str, Any]:
 
 def _function(
     variables: tuple[str, ...],
-    *numerator: tuple[int, tuple[int, ...]],
-    denominator: tuple[tuple[int, tuple[int, ...]], ...] | None = None,
+    *numerator: PolynomialTerm,
+    denominator: tuple[PolynomialTerm, ...] | None = None,
 ) -> RationalFunction:
     return RationalFunction.model_validate(
         {
@@ -63,7 +71,7 @@ def _zero(variables: tuple[str, ...]) -> RationalFunction:
     return _function(variables)
 
 
-def _guard(*terms: tuple[int, tuple[int, ...]]) -> dict[str, Any]:
+def _guard(*terms: PolynomialTerm) -> dict[str, Any]:
     return _sparse(*terms)
 
 
@@ -117,6 +125,80 @@ def test_rank_zero_scalar_replays_directional_derivative() -> None:
         (),
         (_function(variables, (1, (3, 0)), (2, (1, 2))),),
     )
+
+
+def test_fractional_degree_two_inputs_use_content_aware_height_admission() -> None:
+    variables = ("x",)
+    vector = _tensor(
+        variables,
+        ("CONTRAVARIANT",),
+        (
+            _function(
+                variables,
+                ((1, 3), (2,)),
+                ((1, 2), (1,)),
+                (1, (0,)),
+                denominator=((1, (1,)), (1, (0,))),
+            ),
+        ),
+        guards=(_guard((1, (1,)), (1, (0,))),),
+    )
+    scalar = _tensor(
+        variables,
+        (),
+        (
+            _function(
+                variables,
+                ((1, 4), (2,)),
+                ((1, 3), (1,)),
+                ((1, 2), (0,)),
+                denominator=((1, (1,)), (2, (0,))),
+            ),
+        ),
+        guards=(_guard((1, (1,)), (2, (0,))),),
+    )
+
+    result = lie_derivative(vector, scalar).lie_derivative.components[0]
+    x = sympy.Symbol("x")
+    expected = (6 * x**4 + 33 * x**3 + 58 * x**2 + 78 * x + 12) / (
+        72 * x**3 + 360 * x**2 + 576 * x + 288
+    )
+
+    _assert_expression(result, expected)
+    assert (
+        max(
+            len(component.lstrip("-"))
+            for polynomial in (result.numerator, result.denominator)
+            for term in polynomial.terms
+            for component in (term.coefficient.num, term.coefficient.den)
+        )
+        == 2
+    )
+
+
+def test_content_aware_height_admission_rejects_real_output_growth() -> None:
+    variables = ("x",)
+    # Each input coefficient has 65 digits; their exact product has 129, one
+    # beyond the canonical rational-function carrier.
+    large_coefficient = 10**64
+    vector = _tensor(
+        variables,
+        ("CONTRAVARIANT",),
+        (_function(variables, (large_coefficient, (0,))),),
+    )
+    scalar = _tensor(
+        variables,
+        (),
+        (_function(variables, (large_coefficient, (1,))),),
+    )
+
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="coefficient bound",
+    ) as error:
+        build_lie_derivative_plan(vector, scalar)
+
+    assert error.value.errors()[0]["type"].endswith("result_height")
 
 
 def test_vector_lie_derivative_is_the_antisymmetric_lie_bracket() -> None:

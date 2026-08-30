@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from sympy.ntheory.factor_ import factorint
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._r_full_enumerate import (
     enumerate_r_full,
     enumerate_r_full_numbers,
@@ -97,6 +98,15 @@ def test_high_exponent_admits_cutoff_above_old_ceiling() -> None:
     """A sparse high-exponent family is admitted from its actual prime bound."""
     result = enumerate_r_full(64, 2**64)
     assert result.family == ("1", "18446744073709551616")
+
+
+def test_high_exponent_family_is_rejected_before_materialization() -> None:
+    """Exponent-sensitive admission rejects a wide family before serialization."""
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="serialized-byte budget",
+    ):
+        enumerate_r_full(64, int("1" + "0" * 128))
 
 
 def test_result_rejects_oversized_family_member_before_parsing() -> None:

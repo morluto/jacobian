@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from bisect import bisect_right
+from heapq import merge
 from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 from sympy import integer_nthroot
+from sympy.ntheory.generate import primerange
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -18,12 +21,44 @@ MIN_R_FULL_EXPONENT = 2
 MAX_R_FULL_EXPONENT = 64
 MAX_R_FULL_FAMILY_SIZE = 200_000
 MAX_R_FULL_RESULT_BYTES = 3_000_000
+_MAX_PRIME_SEARCH_BOUND = 3_000_000
 
 
 def estimate_r_full_family_size(minimum_exponent: int, cutoff: int) -> int:
-    """Return a conservative estimate from the prime-power bound."""
+    """Return a conservative, exponent-sensitive family-size estimate.
+
+    The admission pass counts the multiplicative family itself, stopping as
+    soon as the result budget is exceeded.  This avoids the unsound fixed
+    multiplier previously used for large exponents: prime-power products can
+    be much more numerous than ``10 * cutoff**(1 / r)``.  A cutoff above the
+    bounded prime-search range is rejected before asking SymPy to sieve a
+    huge interval; the first 200,001 prime powers already exceed the result
+    budget at that boundary.
+    """
     prime_bound, _ = integer_nthroot(cutoff, minimum_exponent)
-    return max(1, 10 * int(prime_bound))
+    if prime_bound > _MAX_PRIME_SEARCH_BOUND:
+        return MAX_R_FULL_FAMILY_SIZE + 1
+
+    family_set: set[int] = {1}
+    sorted_family = [1]
+    for prime in primerange(2, int(prime_bound) + 1):
+        powers: list[int] = []
+        current = int(prime) ** minimum_exponent
+        while current <= cutoff:
+            powers.append(current)
+            current *= int(prime)
+        new_values: set[int] = set()
+        for power in powers:
+            limit = cutoff // power
+            for member in sorted_family[: bisect_right(sorted_family, limit)]:
+                new_values.add(member * power)
+        fresh_values = sorted(value for value in new_values if value not in family_set)
+        if fresh_values:
+            family_set.update(fresh_values)
+            sorted_family = list(merge(sorted_family, fresh_values))
+            if len(sorted_family) > MAX_R_FULL_FAMILY_SIZE:
+                return len(sorted_family)
+    return len(sorted_family)
 
 
 class RFullEnumerateRequest(StrictModel):

@@ -69,6 +69,8 @@ def _validate_divisibility_edge_shape(values: tuple[str, ...]) -> None:
         raise PydanticCustomError(
             "divisibility_edge.values_unique", "values must be distinct"
         )
+
+
 def _validate_divisibility_edge_resources(values: tuple[str, ...]) -> None:
     parsed = tuple(parse_canonical_integer(value) for value in values)
     max_digits = max(len(value) for value in values)

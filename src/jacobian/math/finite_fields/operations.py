@@ -54,12 +54,17 @@ def matrix_rank(matrix: AxisBoundMatrix):
     from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
 
     try:
+        rank_bound = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
         result_probe = encode_strict_json(
             {
                 "matrix": matrix.model_dump(mode="json"),
-                "rank": min(len(matrix.row_axis.labels), len(matrix.column_axis.labels)),
-                "pivot_rows": list(matrix.row_axis.labels),
-                "pivot_columns": list(matrix.column_axis.labels),
+                "rank": rank_bound,
+                "pivot_rows": sorted(matrix.row_axis.labels, key=len, reverse=True)[
+                    :rank_bound
+                ],
+                "pivot_columns": sorted(
+                    matrix.column_axis.labels, key=len, reverse=True
+                )[:rank_bound],
             }
         )
     except CanonicalizationError as exc:

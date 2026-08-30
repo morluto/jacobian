@@ -90,6 +90,15 @@ def test_native_admission_allows_palette_above_legacy_cap_for_injective_case() -
     assert result.outcome == "COLORABLE"
 
 
+def test_large_injective_palette_does_not_overflow_deadline_budget() -> None:
+    h = _hg(
+        [str(index) for index in range(20)],
+        [("e0", tuple(str(index) for index in range(20)))],
+    )
+    result = decide_nonmonochromatic_coloring(h, (1 << 53) - 1)
+    assert result.outcome == "COLORABLE"
+
+
 def test_empty_hyperedge_is_not_colorable() -> None:
     h = _hg(["0"], [("e0", ())])
     result = decide_nonmonochromatic_coloring(h, 2)

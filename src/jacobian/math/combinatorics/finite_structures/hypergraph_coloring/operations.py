@@ -44,7 +44,7 @@ def decide_nonmonochromatic_coloring(
     # Establish the operation-owned deadline before any presolve return so
     # native and dispatched calls cover result construction on every path.
     execution = current_request_execution()
-    work_budget = palette_size ** len(hypergraph.vertices) * len(hypergraph.edges)
+    work_budget = admission.work_budget
     if execution is not None:
         if execution.deadline is None:
             deadline = execution.started_at + max(60.0, work_budget / 100_000)

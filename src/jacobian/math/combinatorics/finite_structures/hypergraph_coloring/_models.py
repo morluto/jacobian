@@ -36,6 +36,7 @@ class _ColoringAdmission:
 
     has_forced_failure: bool
     has_injective_witness: bool
+    work_budget: int
 
 
 def _validate_coloring_envelope(
@@ -106,6 +107,7 @@ def _validate_coloring_envelope(
     return _ColoringAdmission(
         has_forced_failure=has_forced_failure,
         has_injective_witness=has_injective_witness,
+        work_budget=work,
     )
 
 

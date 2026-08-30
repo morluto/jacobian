@@ -130,3 +130,14 @@ def test_native_admission_rejects_rational_growth_before_enumeration() -> None:
     huge = 10**32_767
     with pytest.raises(OperationDomainValidationError, match="rational digit limit"):
         compute_word_collision_profile(((Fraction(huge), Fraction(0)),), 2)
+
+
+def test_zero_slope_at_canonical_intercept_boundary_is_admitted() -> None:
+    intercept = Fraction(10**32767)
+    result = compute_word_collision_profile(((Fraction(0), intercept),), 1)
+    assert result.rows[0].intercept.as_fraction() == intercept
+
+
+def test_single_generator_depth_above_legacy_cap_is_admitted() -> None:
+    result = compute_word_collision_profile(((Fraction(1), Fraction(0)),), 11)
+    assert result.depth == 11

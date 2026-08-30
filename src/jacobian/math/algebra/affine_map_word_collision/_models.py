@@ -8,8 +8,8 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 MAX_GENERATORS = 20
-MAX_DEPTH = 10
 MAX_WORDS = 10_000
+MAX_DEPTH = MAX_WORDS
 
 
 class AffineMapSpec(StrictModel):

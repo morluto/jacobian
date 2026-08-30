@@ -134,13 +134,19 @@ def _admit_word_collision_profile(
         max(height.numerator_digits for height in intercept_heights),
         max(height.denominator_digits for height in intercept_heights),
     )
-    coefficient_height = RationalHeight(1, 1)
-    intercept_height = RationalHeight(1, 1)
-    for _ in range(depth):
-        coefficient_height = coefficient_height.product(max_slope)
-        intercept_height = sum_heights(
-            (max_slope.product(intercept_height), max_intercept)
-        )
+    if all(slope == 0 for slope, _ in canonical_generators):
+        # A zero slope erases the prior coefficient and leaves only the final
+        # intercept; the generic product bound would invent repeated growth.
+        coefficient_height = RationalHeight(1, 1)
+        intercept_height = max_intercept
+    else:
+        coefficient_height = RationalHeight(1, 1)
+        intercept_height = RationalHeight(1, 1)
+        for _ in range(depth):
+            coefficient_height = coefficient_height.product(max_slope)
+            intercept_height = sum_heights(
+                (max_slope.product(intercept_height), max_intercept)
+            )
     coefficient_height = RationalHeight(
         max(coefficient_height.numerator_digits, intercept_height.numerator_digits),
         max(coefficient_height.denominator_digits, intercept_height.denominator_digits),

@@ -49,50 +49,80 @@ def _is_bipartite(graph: SimpleUndirectedGraph) -> bool:
 
 
 def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> int:
-    active_vertices = {vertex for edge in graph.edges for vertex in edge}
-    n = len(active_vertices)
-    edge_count = len(graph.edges)
-    if not edge_count or not n:
-        return 1
-    complete = edge_count == n * (n - 1) // 2
-    if complete and deletion_order == 0:
-        return n
-    if _is_bipartite(graph):
-        return edge_count * n * 2
-    # The kernel tries each k-colouring in turn. Charge the complete finite
-    # search tree rather than the graph's edge count alone.
-    colorings = 0
-    for k in range(1, n + 1):
-        colorings += k**n
-    return n * colorings
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    components: list[set[str]] = []
+    unseen = set(adjacency)
+    while unseen:
+        start = unseen.pop()
+        component = {start}
+        stack = [start]
+        while stack:
+            vertex = stack.pop()
+            for neighbor in adjacency[vertex] & unseen:
+                unseen.remove(neighbor)
+                component.add(neighbor)
+                stack.append(neighbor)
+        components.append(component)
+    total = 0
+    for component in components:
+        n = len(component)
+        edge_count = sum(
+            left in component and right in component for left, right in graph.edges
+        )
+        if not edge_count or not n:
+            total += 1
+            continue
+        complete = edge_count == n * (n - 1) // 2
+        if complete and deletion_order == 0:
+            total += n
+            continue
+        component_graph = SimpleUndirectedGraph(
+            vertices=tuple(component),
+            edges=tuple(
+                (left, right)
+                for left, right in graph.edges
+                if left in component and right in component
+            ),
+        )
+        if _is_bipartite(component_graph):
+            total += edge_count * n * 2
+            continue
+        total += n * sum(k**n for k in range(1, n + 1))
+    return total
 
 
 def _preflight_graph_wire_size(graph: SimpleUndirectedGraph) -> None:
     """Reject oversized native labels before materializing canonical JSON."""
 
+    limit = CanonicalLimits().max_output_bytes
     try:
-        label_bytes = sum(len(vertex.encode("utf-8")) for vertex in graph.vertices)
-        edge_reference_bytes = sum(
-            len(left.encode("utf-8")) + len(right.encode("utf-8"))
-            for left, right in graph.edges
-        )
+        label_sizes = {vertex: len(vertex.encode("utf-8")) for vertex in graph.vertices}
+        estimated = 32 * (len(graph.vertices) + 1)
+        for size in label_sizes.values():
+            estimated += size
+            if estimated > limit:
+                raise OperationDomainValidationError(
+                    location=("graph",),
+                    code="graph.edge_deletion.result_exceeds_output_bound",
+                    message="edge-deletion graph exceeds the canonical input/output bound",
+                )
+        for left, right in graph.edges:
+            estimated += label_sizes[left] + label_sizes[right] + 32
+            if estimated > limit:
+                raise OperationDomainValidationError(
+                    location=("graph",),
+                    code="graph.edge_deletion.result_exceeds_output_bound",
+                    message="edge-deletion graph exceeds the canonical input/output bound",
+                )
     except UnicodeEncodeError as exc:
         raise OperationDomainValidationError(
             location=("graph",),
             code="graph.edge_deletion.result_exceeds_output_bound",
             message="edge-deletion graph labels must be valid UTF-8",
         ) from exc
-    estimated = (
-        label_bytes
-        + edge_reference_bytes
-        + 32 * (len(graph.vertices) + len(graph.edges) + 1)
-    )
-    if estimated > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph.edge_deletion.result_exceeds_output_bound",
-            message="edge-deletion graph exceeds the canonical input/output bound",
-        )
 
 
 def _admit_edge_deletion_profile(
@@ -205,26 +235,42 @@ def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
     """Compute the exact chromatic number by brute-force search."""
     if not edges:
         return 0 if not vertices else 1
-    # Isolated vertices do not affect chromatic number. Removing them before
-    # the finite coloring search makes sparse non-bipartite components scale
-    # with their actual support rather than the ambient vertex axis.
-    active = {vertex for edge in edges for vertex in edge}
-    vertices = [vertex for vertex in vertices if vertex in active]
-    n = len(vertices)
-    if len(edges) == n * (n - 1) // 2:
-        return n
-    if _is_bipartite_edges(vertices, edges):
-        return 2
-
     adjacency: dict[str, set[str]] = {v: set() for v in vertices}
     for a, b in edges:
         adjacency[a].add(b)
         adjacency[b].add(a)
 
-    for k in range(1, n + 1):
-        if _try_k_color(vertices, adjacency, k):
-            return k
-    return n
+    active = {vertex for edge in edges for vertex in edge}
+    unseen = set(active)
+    component_numbers: list[int] = []
+    while unseen:
+        start = unseen.pop()
+        component = {start}
+        stack = [start]
+        while stack:
+            vertex = stack.pop()
+            for neighbor in adjacency[vertex] & unseen:
+                unseen.remove(neighbor)
+                component.add(neighbor)
+                stack.append(neighbor)
+        component_vertices = [vertex for vertex in vertices if vertex in component]
+        component_edges = [
+            edge for edge in edges if edge[0] in component and edge[1] in component
+        ]
+        component_adjacency = {
+            vertex: adjacency[vertex] & component for vertex in component_vertices
+        }
+        n = len(component_vertices)
+        if len(component_edges) == n * (n - 1) // 2:
+            component_numbers.append(n)
+        elif _is_bipartite_edges(component_vertices, component_edges):
+            component_numbers.append(2)
+        else:
+            for k in range(1, n + 1):
+                if _try_k_color(component_vertices, component_adjacency, k):
+                    component_numbers.append(k)
+                    break
+    return max(component_numbers, default=1)
 
 
 def _is_bipartite_edges(vertices: list[str], edges: list[tuple[str, str]]) -> bool:

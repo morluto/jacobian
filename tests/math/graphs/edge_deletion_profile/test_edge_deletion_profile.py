@@ -90,6 +90,16 @@ def test_admits_sparse_non_bipartite_component_with_isolates() -> None:
     assert result.rows[0].chromatic_number == 3
 
 
+def test_admits_disconnected_triangle_and_path() -> None:
+    graph = _graph(
+        [f"v{index:03d}" for index in range(256)],
+        [("v000", "v001"), ("v000", "v002"), ("v001", "v002")]
+        + [(f"v{index:03d}", f"v{index + 1:03d}") for index in range(3, 255)],
+    )
+    result = compute_edge_deletion_profile(graph, 0)
+    assert result.rows[0].chromatic_number == 3
+
+
 def test_native_negative_order_is_typed() -> None:
     graph = _graph(["a"], [])
     with pytest.raises(OperationDomainValidationError):

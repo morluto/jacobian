@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 from fractions import Fraction
 from itertools import combinations
 
@@ -25,9 +26,14 @@ from jacobian.math.combinatorics.posets.weighted_antichain._models import (
 __all__ = ["compute_maximum_weight_antichain"]
 
 
+@dataclass(frozen=True, slots=True)
+class _MaximumWeightAntichainAdmission:
+    weights: tuple[Fraction, ...]
+
+
 def _admit_maximum_weight_antichain(
     poset: FinitePoset, weights: tuple[CanonicalRational, ...]
-) -> None:
+) -> _MaximumWeightAntichainAdmission:
     if not isinstance(poset, FinitePoset):
         raise OperationDomainValidationError(
             location=("poset",),
@@ -46,7 +52,8 @@ def _admit_maximum_weight_antichain(
             code="weighted_antichain.invalid_weight",
             message="weights must be CanonicalRational values",
         )
-    if any(weight.as_fraction() < 0 for weight in weights):
+    weight_fracs = tuple(weight.as_fraction() for weight in weights)
+    if any(weight < 0 for weight in weight_fracs):
         raise OperationDomainValidationError(
             location=("weights",),
             code="weighted_antichain.negative_weight",
@@ -113,6 +120,7 @@ def _admit_maximum_weight_antichain(
             code="weighted_antichain.result_too_large",
             message="maximum-weight antichain result exceeds the canonical output envelope",
         )
+    return _MaximumWeightAntichainAdmission(weights=weight_fracs)
 
 
 def compute_maximum_weight_antichain(
@@ -123,10 +131,10 @@ def compute_maximum_weight_antichain(
 
     Uses exhaustive search over all subsets within the admitted work envelope.
     """
-    _admit_maximum_weight_antichain(poset, weights)
+    admission = _admit_maximum_weight_antichain(poset, weights)
     elements = list(poset.elements)
     n = len(elements)
-    weight_fracs = [w.as_fraction() for w in weights]
+    weight_fracs = admission.weights
 
     comparable = _build_comparable(poset, elements)
 

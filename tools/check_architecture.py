@@ -162,6 +162,16 @@ def _is_external_operation_owner(relative: PurePosixPath) -> bool:
     ) and relative.name.endswith(_EXTERNAL_OPERATION_OWNER_SUFFIXES)
 
 
+def _is_nested_worker_dialogue_owner(relative: PurePosixPath) -> bool:
+    """Recognize a worker that already runs inside the process supervisor."""
+
+    if relative == _PROCESS_OWNER:
+        return True
+    return relative.is_relative_to(
+        PurePosixPath("src/jacobian/math")
+    ) and relative.name.endswith("_worker.py")
+
+
 def _process_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
@@ -215,35 +225,45 @@ def _process_violations(
 def _bounded_process_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
-    if _is_external_operation_owner(relative):
-        return ()
     violations: list[Violation] = []
+    gateways = (
+        (
+            "run_bounded_process",
+            _is_external_operation_owner,
+            "run_bounded_process requires a concrete external-tool owner",
+        ),
+        (
+            "run_bounded_worker_dialogue",
+            _is_nested_worker_dialogue_owner,
+            ("run_bounded_worker_dialogue requires an already supervised worker owner"),
+        ),
+    )
     for node in _walk(tree):
-        if (
-            isinstance(node, ast.ImportFrom)
-            and node.module == "jacobian.process"
-            and any(alias.name == "run_bounded_process" for alias in node.names)
-        ) or (
-            isinstance(node, ast.Call)
-            and (
-                (
-                    isinstance(node.func, ast.Name)
-                    and node.func.id == "run_bounded_process"
+        for gateway, owner_predicate, message in gateways:
+            if owner_predicate(relative):
+                continue
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "jacobian.process"
+                and any(alias.name == gateway for alias in node.names)
+            ) or (
+                isinstance(node, ast.Call)
+                and (
+                    (isinstance(node.func, ast.Name) and node.func.id == gateway)
+                    or (
+                        isinstance(node.func, ast.Attribute)
+                        and node.func.attr == gateway
+                    )
                 )
-                or (
-                    isinstance(node.func, ast.Attribute)
-                    and node.func.attr == "run_bounded_process"
+            ):
+                violations.append(
+                    _violation(
+                        relative,
+                        node,
+                        "bounded-process-gateway",
+                        message,
+                    )
                 )
-            )
-        ):
-            violations.append(
-                _violation(
-                    relative,
-                    node,
-                    "bounded-process-gateway",
-                    "run_bounded_process requires a concrete external-tool owner",
-                )
-            )
     return tuple(violations)
 
 

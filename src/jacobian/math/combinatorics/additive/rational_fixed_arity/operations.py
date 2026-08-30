@@ -103,6 +103,7 @@ def _add_bounded_fraction(
 
 def _single_sum_digit_bounds(
     fractions: tuple[Fraction, ...],
+    initial_work: int = 0,
 ) -> tuple[Fraction, int, int]:
     numerators_by_denominator: dict[int, int] = {}
     for fraction in fractions:
@@ -122,9 +123,20 @@ def _single_sum_digit_bounds(
             Fraction(numerator, denominator)
             for denominator, numerator in numerators_by_denominator.items()
         ]
-        projection_work = 0
+        projection_work = initial_work
         while len(terms) > 1:
             if len(terms) <= 256:
+                pair_count = len(terms) * (len(terms) - 1) // 2
+                max_denominator_digits = max(
+                    len(format_canonical_integer(term.denominator)) for term in terms
+                )
+                projection_work += pair_count * max_denominator_digits
+                if projection_work > MAX_ENUMERATION_WORK:
+                    _reject(
+                        ("values",),
+                        "rational_fixed_arity.work_bound",
+                        "fixed-arity exact sum exceeds the admitted work bound",
+                    )
                 pair = max(
                     (
                         (
@@ -309,7 +321,7 @@ def _admit(  # noqa: C901
         sum_numerator_digits = sum_denominator_digits = 1
     elif candidate_count == 1:
         single_sum, sum_numerator_digits, sum_denominator_digits = (
-            _single_sum_digit_bounds(fractions)
+            _single_sum_digit_bounds(fractions, work)
         )
     elif candidate_count:
         # The sole empty sum is exactly 0/1, independent of source widths.

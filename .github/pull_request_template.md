@@ -46,6 +46,8 @@ not touch an operation boundary. -->
 result, producer, or consumer. -->
 - [ ] Existing canonical values searched
 - [ ] Owner or intentional distinction documented
+- [ ] Advertised codomain is closed under the result types, including required
+      parent, embedding, branch, orientation, basis, or coordinate data
 - [ ] Producer→consumer serialization tested
 - Theorem-dependent preconditions and validated input subtype: <!-- or not applicable with a reason -->
 - Structurally valid but mathematically invalid fixture and outcome: <!-- rejection or typed non-applicability -->

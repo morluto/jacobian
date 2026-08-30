@@ -193,6 +193,16 @@ def test_math_timing_history_uses_four_shards_and_math_node_ids() -> None:
     ) == {"tests/math/logic/test_cnf.py::test_case": 1.25}
 
 
+def test_math_timing_history_admits_more_than_ten_thousand_cases() -> None:
+    module = _script()
+    durations = {
+        f"tests/math/generated/test_{index}.py::test_case": 0.01
+        for index in range(10_100)
+    }
+
+    assert len(module.validate_durations(durations, "timings.json", "math")) == 10_100
+
+
 def test_math_timing_history_merges_four_shards(tmp_path: Path) -> None:
     module = _script()
     first = tmp_path / "first.json"

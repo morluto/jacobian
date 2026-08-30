@@ -90,7 +90,11 @@ def _is_wheel_graph(graph: SimpleUndirectedGraph) -> bool:
     for left, right in graph.edges:
         adjacency[left].add(right)
         adjacency[right].add(left)
-    hubs = [vertex for vertex, neighbors in adjacency.items() if len(neighbors) == vertex_count - 1]
+    hubs = [
+        vertex
+        for vertex, neighbors in adjacency.items()
+        if len(neighbors) == vertex_count - 1
+    ]
     if len(hubs) != 1:
         return False
     rim = [vertex for vertex in graph.vertices if vertex != hubs[0]]

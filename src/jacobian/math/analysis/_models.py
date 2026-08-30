@@ -28,6 +28,14 @@ def _validation_error(message: str) -> PydanticCustomError:
 
 
 MAX_RATIONAL_DIGITS = 128
+# Every midpoint after at most this many binary splits has component width at most
+# ``2 * source_digits + split_depth + 2``. This owner-wide box envelope admits
+# every box produced from the 128-digit adaptive source boundary unchanged in
+# the fixed-box consumers.
+MAX_RATIONAL_BOX_PARTITION_DEPTH = 32
+MAX_RATIONAL_BOX_ENDPOINT_DIGITS = (
+    2 * MAX_RATIONAL_DIGITS + MAX_RATIONAL_BOX_PARTITION_DEPTH + 2
+)
 MAX_EXPRESSION_DEPTH = 16
 MAX_EXPRESSION_NODES = 64
 MAX_INTEGER_EXPONENT = 64
@@ -63,7 +71,9 @@ type IntervalExpressionOp = Literal[
 ]
 
 
-def _bound_raw_rational(value: object, label: str) -> None:
+def _bound_raw_rational(
+    value: object, label: str, *, max_digits: int = MAX_RATIONAL_DIGITS
+) -> None:
     """Reject oversized components before canonical-rational construction."""
 
     if isinstance(value, CanonicalRational):
@@ -74,12 +84,10 @@ def _bound_raw_rational(value: object, label: str) -> None:
         return
     if any(
         isinstance(component, str)
-        and len(component) - component.startswith("-") > MAX_RATIONAL_DIGITS
+        and len(component) - component.startswith("-") > max_digits
         for component in components
     ):
-        raise _validation_error(
-            f"{label} exceeds the {MAX_RATIONAL_DIGITS}-digit bound"
-        )
+        raise _validation_error(f"{label} exceeds the {max_digits}-digit bound")
 
 
 class IntervalExpressionNode(StrictModel):
@@ -207,7 +215,12 @@ class RationalIntervalBox(StrictModel):
     )
     intervals: tuple[ClosedRationalInterval, ...] = Field(
         max_length=MAX_BOX_VARIABLES,
-        description="Closed rational coordinate intervals aligned to variables.",
+        description=(
+            "Closed rational coordinate intervals aligned to variables. Every "
+            "serialized endpoint numerator and denominator admits at most "
+            f"{MAX_RATIONAL_BOX_ENDPOINT_DIGITS} decimal digits, including boxes "
+            "produced by bounded adaptive midpoint partitioning."
+        ),
     )
 
     @field_validator("variables", "intervals", mode="before")
@@ -230,7 +243,9 @@ class RationalIntervalBox(StrictModel):
         return self
 
 
-def _bound_raw_box(box: object) -> None:
+def _bound_raw_box(
+    box: object, *, max_digits: int = MAX_RATIONAL_BOX_ENDPOINT_DIGITS
+) -> None:
     """Bound coordinate containers and endpoints before nested construction."""
 
     if isinstance(box, RationalIntervalBox):
@@ -257,8 +272,8 @@ def _bound_raw_box(box: object) -> None:
             upper = interval.get("upper")
         else:
             continue
-        _bound_raw_rational(lower, "expression-box endpoint")
-        _bound_raw_rational(upper, "expression-box endpoint")
+        _bound_raw_rational(lower, "expression-box endpoint", max_digits=max_digits)
+        _bound_raw_rational(upper, "expression-box endpoint", max_digits=max_digits)
 
 
 class IntervalExpressionDomainFailure(StrictModel):

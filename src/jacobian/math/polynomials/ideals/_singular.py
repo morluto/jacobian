@@ -482,12 +482,28 @@ def run_singular_ideal_operation(
     left: RationalPolynomialIdeal,
     right: RationalPolynomialIdeal | None,
     budget: IdealComputationBudget,
+    *,
+    wall_seconds: float | None = None,
 ) -> SingularIdealResult:
-    """Run one exact ideal operation in a bounded, request-scoped process."""
+    """Run one exact ideal operation in a bounded, request-scoped process.
+
+    ``wall_seconds`` lets an owner charge this call to a shared absolute
+    deadline without widening the declared ideal-computation budget.
+    """
+
+    allowance = min(
+        float(budget.wall_seconds),
+        float(budget.wall_seconds if wall_seconds is None else wall_seconds),
+    )
+    if not math.isfinite(allowance) or allowance <= 0:
+        return SingularIdealResult(
+            outcome="TIMEOUT",
+            detail="Singular exceeded the declared wall-time limit.",
+        )
 
     completed = run_bounded_singular(
         _script(operation, left, right),
-        wall_seconds=budget.wall_seconds,
+        wall_seconds=allowance,
     )
     if completed is None:
         return SingularIdealResult(

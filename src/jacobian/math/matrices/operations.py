@@ -9,6 +9,7 @@ lazily so importing ``jacobian.math`` does not eagerly load packaged backends.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from fractions import Fraction
 from math import lcm
 from typing import TYPE_CHECKING, Any, cast
@@ -16,7 +17,13 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+    parse_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices import _conversions as conversions
 from jacobian.math.matrices._operation_models import (
@@ -32,6 +39,7 @@ from jacobian.math.matrices._operation_models import (
     MAX_MATRIX_PRODUCT_MULTIPLY_ADDS,
     MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK,
     MAX_PERMANENT_RYSER_SUBSETS,
+    MAX_SPARSE_RANK_INTERMEDIATE_CELLS,
     CharacteristicPolynomialResult,
     MatrixAdjugateResult,
     MatrixDeterminantResult,
@@ -56,6 +64,8 @@ from jacobian.math.matrices.values import (
     IntegerMatrix,
     RationalMatrix,
     SmithNormalForm,
+    SparseRationalMatrix,
+    SparseRationalMatrixEntry,
     rational_matrix_from_fractions,
 )
 
@@ -229,12 +239,17 @@ def determinant(matrix: MatrixBase) -> Any:
     return sympy.Rational(value.numerator, value.denominator)
 
 
-def rank(matrix: MatrixBase) -> tuple[int, tuple[int, ...]]:
-    result = rank_result(
-        conversions.rational_matrix_from_sympy(
-            _exact_matrix(matrix, maximum_dimension=MAX_EXACT_LINEAR_MATRIX_AXIS)
+def rank(
+    matrix: MatrixBase | SparseRationalMatrix,
+) -> tuple[int, tuple[int, ...]]:
+    if isinstance(matrix, SparseRationalMatrix):
+        result = rank_result(matrix)
+    else:
+        result = rank_result(
+            conversions.rational_matrix_from_sympy(
+                _exact_matrix(matrix, maximum_dimension=MAX_EXACT_LINEAR_MATRIX_AXIS)
+            )
         )
-    )
     return result.rank, result.pivot_columns
 
 
@@ -452,6 +467,223 @@ def _admit_exact_linear_matrix(
             "budget_exceeded",
             "exact linear algebra exceeds the canonical result-height bound",
         )
+
+
+@dataclass(frozen=True, slots=True)
+class _SparseRankComponent:
+    rows: tuple[int, ...]
+    columns: tuple[int, ...]
+    entries: tuple[tuple[int, int, Fraction], ...]
+    scalar_digits: int
+
+
+@dataclass(frozen=True, slots=True)
+class _SparseRankPlan:
+    components: tuple[_SparseRankComponent, ...]
+    row_count: int
+    column_count: int
+
+
+def _sparse_rank_components(
+    entries: tuple[SparseRationalMatrixEntry, ...],
+) -> tuple[_SparseRankComponent, ...]:
+    """Partition nonzero coordinates by bipartite support connectivity."""
+
+    row_columns: dict[int, list[int]] = {}
+    column_rows: dict[int, list[int]] = {}
+    row_entries: dict[int, list[SparseRationalMatrixEntry]] = {}
+    for entry in entries:
+        row_columns.setdefault(entry.row, []).append(entry.column)
+        column_rows.setdefault(entry.column, []).append(entry.row)
+        row_entries.setdefault(entry.row, []).append(entry)
+
+    components: list[_SparseRankComponent] = []
+    visited_rows: set[int] = set()
+    visited_columns: set[int] = set()
+    for starting_row in row_columns:
+        if starting_row in visited_rows:
+            continue
+        pending_rows = [starting_row]
+        component_rows: list[int] = []
+        component_columns: list[int] = []
+        while pending_rows:
+            row = pending_rows.pop()
+            if row in visited_rows:
+                continue
+            visited_rows.add(row)
+            component_rows.append(row)
+            for column in row_columns[row]:
+                if column in visited_columns:
+                    continue
+                visited_columns.add(column)
+                component_columns.append(column)
+                pending_rows.extend(
+                    adjacent_row
+                    for adjacent_row in column_rows[column]
+                    if adjacent_row not in visited_rows
+                )
+        rows = tuple(sorted(component_rows))
+        columns = tuple(sorted(component_columns))
+        source_entries = tuple(entry for row in rows for entry in row_entries[row])
+        components.append(
+            _SparseRankComponent(
+                rows=rows,
+                columns=columns,
+                entries=tuple(
+                    (entry.row, entry.column, entry.value.as_fraction())
+                    for entry in source_entries
+                ),
+                scalar_digits=max(
+                    len(component.lstrip("-"))
+                    for entry in source_entries
+                    for component in (entry.value.num, entry.value.den)
+                ),
+            )
+        )
+    return tuple(components)
+
+
+def _sparse_rank_work(
+    *,
+    row_count: int,
+    column_count: int,
+    components: tuple[_SparseRankComponent, ...],
+) -> int:
+    return (
+        row_count
+        + column_count
+        + sum(
+            component.scalar_digits
+            * (
+                len(component.entries)
+                + len(component.rows)
+                * len(component.columns)
+                * min(len(component.rows), len(component.columns))
+            )
+            for component in components
+        )
+    )
+
+
+def _require_sparse_rank_transport_envelope(
+    matrix: SparseRationalMatrix,
+    *,
+    rank_bound: int,
+    active_columns: tuple[int, ...],
+) -> None:
+    """Prove that any exact pivot result fits the canonical output boundary."""
+
+    largest_possible_pivots = list(active_columns[-rank_bound:]) if rank_bound else []
+    output_limit = CanonicalLimits().max_output_bytes
+    try:
+        encode_strict_json(
+            {
+                "matrix": matrix.model_dump(mode="json"),
+                "rank": rank_bound,
+                "pivot_columns": largest_possible_pivots,
+            }
+        )
+    except CanonicalizationError as exc:
+        raise _validation_error(
+            "budget_exceeded",
+            "the sparse rank result retains its source matrix and would exceed "
+            f"the {output_limit:,}-byte canonical output limit",
+        ) from exc
+
+
+def _admit_sparse_rank(matrix: SparseRationalMatrix) -> _SparseRankPlan:
+    """Derive one bounded sparse QQ elimination plan from support components."""
+
+    from jacobian.math.matrices.values import require_matrix_scalar_digits
+
+    require_matrix_scalar_digits(
+        tuple((entry.value,) for entry in matrix.entries),
+        maximum=MAX_INPUT_SCALAR_DIGITS,
+        label="matrix input",
+    )
+    components = _sparse_rank_components(matrix.entries)
+    # Independent support components become diagonal blocks after row and
+    # column permutations. Exact row operations cannot create a nonzero
+    # between blocks, so intermediate cells, arithmetic work, and minor-height
+    # bounds compose by component rather than by one global active rectangle.
+    support_cells = sum(
+        len(component.rows) * len(component.columns) for component in components
+    )
+    if support_cells > MAX_SPARSE_RANK_INTERMEDIATE_CELLS:
+        raise _validation_error(
+            "budget_exceeded",
+            "sparse rank elimination exceeds the "
+            f"{MAX_SPARSE_RANK_INTERMEDIATE_CELLS:,}-cell component-support bound",
+        )
+    work = _sparse_rank_work(
+        row_count=matrix.row_count,
+        column_count=matrix.column_count,
+        components=components,
+    )
+    if work > MAX_EXACT_LINEAR_MATRIX_WORK:
+        raise _validation_error(
+            "budget_exceeded",
+            "sparse rank elimination exceeds the "
+            f"{MAX_EXACT_LINEAR_MATRIX_WORK:,}-unit scalar-work budget",
+        )
+
+    for component in components:
+        grouped: dict[int, list[Fraction]] = {row: [] for row in component.rows}
+        for row, _column, value in component.entries:
+            grouped[row].append(value)
+        row_numerator_bits: list[int] = []
+        row_denominator_bits: list[int] = []
+        for row in component.rows:
+            values = grouped[row]
+            denominator = 1
+            for value in values:
+                denominator = lcm(denominator, value.denominator)
+                if (
+                    _bit_bound_decimal_digits(denominator.bit_length())
+                    > MAX_MATRIX_SCALAR_DIGITS
+                ):
+                    raise _validation_error(
+                        "budget_exceeded",
+                        "sparse rank elimination exceeds the exact "
+                        "intermediate-height bound",
+                    )
+            squared_norm = sum(
+                (value.numerator * (denominator // value.denominator)) ** 2
+                for value in values
+            )
+            row_numerator_bits.append((squared_norm.bit_length() + 1) // 2)
+            row_denominator_bits.append(denominator.bit_length())
+        component_rank_bound = min(len(component.rows), len(component.columns))
+        component_bits = sum(
+            sorted(row_numerator_bits, reverse=True)[:component_rank_bound]
+        ) + sum(sorted(row_denominator_bits, reverse=True)[:component_rank_bound])
+        if _bit_bound_decimal_digits(component_bits) > MAX_MATRIX_SCALAR_DIGITS:
+            raise _validation_error(
+                "budget_exceeded",
+                "sparse rank elimination exceeds the exact intermediate-height bound",
+            )
+    return _SparseRankPlan(
+        components=components,
+        row_count=matrix.row_count,
+        column_count=matrix.column_count,
+    )
+
+
+def _sympy_sparse_rank_pivots(plan: _SparseRankPlan) -> tuple[int, ...]:
+    """Compute exact pivots with SymPy's nonzero-driven sparse QQ kernel."""
+
+    if not plan.components:
+        return ()
+    from sympy import QQ
+    from sympy.polys.matrices import DomainMatrix
+
+    rows: dict[int, dict[int, Any]] = {}
+    for component in plan.components:
+        for row, column, value in component.entries:
+            rows.setdefault(row, {})[column] = QQ(value.numerator, value.denominator)
+    source = DomainMatrix(rows, (plan.row_count, plan.column_count), QQ)
+    _reduced, pivots = source.rref(method="GJ")
+    return tuple(int(column) for column in pivots)
 
 
 def _flint_rref(
@@ -955,9 +1187,37 @@ def determinant_result(matrix: RationalMatrix) -> MatrixDeterminantResult:
     return MatrixDeterminantResult(determinant=CanonicalRational.from_fraction(value))
 
 
-def rank_result(matrix: RationalMatrix) -> MatrixRankResult:
-    _admit(_admit_exact_linear_matrix, matrix.entries)
-    _, pivot_columns = _flint_rref(matrix)
+def rank_result(
+    matrix: RationalMatrix | SparseRationalMatrix,
+    *,
+    enforce_transport_limit: bool = False,
+) -> MatrixRankResult:
+    if isinstance(matrix, SparseRationalMatrix):
+        plan = _admit(_admit_sparse_rank, matrix)
+        if enforce_transport_limit:
+            try:
+                _require_sparse_rank_transport_envelope(
+                    matrix,
+                    rank_bound=sum(
+                        min(len(component.rows), len(component.columns))
+                        for component in plan.components
+                    ),
+                    active_columns=tuple(
+                        sorted(
+                            column
+                            for component in plan.components
+                            for column in component.columns
+                        )
+                    ),
+                )
+            except PydanticCustomError as exc:
+                raise OperationDomainValidationError(
+                    location=("matrix",), code=exc.type, message=exc.message()
+                ) from exc
+        pivot_columns = _sympy_sparse_rank_pivots(plan)
+    else:
+        _admit(_admit_exact_linear_matrix, matrix.entries)
+        _, pivot_columns = _flint_rref(matrix)
     return MatrixRankResult._from_kernel(
         matrix=matrix,
         rank=len(pivot_columns),

@@ -6,6 +6,13 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, replace
+from typing import Protocol
+
+
+class RequestCancellationSignal(Protocol):
+    """Minimal cooperative cancellation signal bound to one request."""
+
+    def is_set(self) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +25,9 @@ class RequestExecution:
 
 _REQUEST_EXECUTION: ContextVar[RequestExecution | None] = ContextVar(
     "jacobian_request_execution", default=None
+)
+_REQUEST_CANCELLATION: ContextVar[RequestCancellationSignal | None] = ContextVar(
+    "jacobian_request_cancellation", default=None
 )
 
 
@@ -39,6 +49,30 @@ def current_request_execution() -> RequestExecution | None:
     return _REQUEST_EXECUTION.get()
 
 
+@contextmanager
+def request_cancellation(event: RequestCancellationSignal) -> Iterator[None]:
+    """Bind cooperative cancellation to the current request context."""
+
+    token = _REQUEST_CANCELLATION.set(event)
+    try:
+        yield
+    finally:
+        _REQUEST_CANCELLATION.reset(token)
+
+
+def current_request_cancellation() -> RequestCancellationSignal | None:
+    """Return the current request cancellation signal, if one is bound."""
+
+    return _REQUEST_CANCELLATION.get()
+
+
+def request_cancelled() -> bool:
+    """Report whether the current request has been cancelled."""
+
+    event = current_request_cancellation()
+    return event is not None and event.is_set()
+
+
 class OperationExecutionTimeoutError(TimeoutError):
     """The request-scoped owner envelope expired."""
 
@@ -58,8 +92,12 @@ def bind_request_deadline(deadline: float) -> None:
 __all__ = [
     "OperationExecutionCancelledError",
     "OperationExecutionTimeoutError",
+    "RequestCancellationSignal",
     "RequestExecution",
     "bind_request_deadline",
+    "current_request_cancellation",
     "current_request_execution",
+    "request_cancellation",
+    "request_cancelled",
     "request_execution",
 ]

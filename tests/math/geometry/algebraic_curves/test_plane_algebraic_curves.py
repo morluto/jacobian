@@ -118,6 +118,7 @@ def test_catalog_contains_only_audited_operations() -> None:
         "algebraic_geometry.affine_plane_curve.check",
         "algebraic_geometry.conic.rational_parametrization.compute",
         "algebraic_geometry.plane_curve.projective_closure.compute",
+        "algebraic_geometry.projective_plane_curve.singularity_profile.compute",
         "algebraic_geometry.projective_curve.affine_chart.compute",
     }
 
@@ -184,7 +185,7 @@ def test_rational_conic_parametrization_has_canonical_known_answer() -> None:
         ),
     ],
 )
-def test_parametrization_replays_substitution_and_inverse_identities(
+def test_parametrization_satisfies_substitution_and_inverse_identities(
     source: RationalPolynomial,
     point: tuple[CanonicalRational, CanonicalRational],
 ) -> None:

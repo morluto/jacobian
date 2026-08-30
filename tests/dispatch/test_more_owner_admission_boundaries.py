@@ -36,7 +36,7 @@ def test_factor_length_admission_is_typed_after_wire_parsing() -> None:
 
 def test_chain_complex_count_admission_is_typed_after_wire_parsing() -> None:
     payload = {
-        "coefficient_field": "QQ",
+        "coefficient_ring": "QQ",
         "basis_sizes": [1, 1, 1],
         "differential_matrices": [[["0"]]],
     }
@@ -52,7 +52,7 @@ def test_chain_complex_count_admission_is_typed_after_wire_parsing() -> None:
 
 def test_chain_complex_differential_admission_is_typed_after_wire_parsing() -> None:
     payload = {
-        "coefficient_field": "QQ",
+        "coefficient_ring": "QQ",
         "basis_sizes": [1, 1, 1],
         "differential_matrices": [[["1"]], [["1"]]],
     }
@@ -67,6 +67,29 @@ def test_chain_complex_differential_admission_is_typed_after_wire_parsing() -> N
             "msg": "constructed complex violates d^2=0 at chain degree 1",
         },
     )
+
+
+def test_integral_chain_homology_parses_and_serializes_typed_output() -> None:
+    result = invoke_operation(
+        "chain_complex.homology.compute",
+        {
+            "complex": {
+                "coefficient_ring": "ZZ",
+                "degree_min": 0,
+                "degree_max": 1,
+                "basis_sizes": [1, 1],
+                "differential_matrices": [[["6"]]],
+            }
+        },
+        Catalog.open(),
+    )
+
+    assert result.output["coefficient_ring"] == "ZZ"
+    assert [group["kind"] for group in result.output["homology_groups"]] == [
+        "FINITELY_GENERATED_ABELIAN_GROUP",
+        "FINITELY_GENERATED_ABELIAN_GROUP",
+    ]
+    assert result.output["homology_groups"][0]["torsion_invariant_factors"] == ["6"]
 
 
 def test_comultiplication_index_admission_is_typed_after_wire_parsing() -> None:

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+)
 from jacobian.canonical import CanonicalizationError, format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
@@ -48,6 +52,18 @@ def _build_divisibility_edge_profile(
     try:
         data = construct_divisibility_edge_profile(values)
     except FactorizationIncompleteError as exc:
+        failure = exc.failure
+        if failure is not None and failure.kind == "WORKER_CANCELLED":
+            raise OperationExecutionCancelledError(
+                "divisibility edge factorization was cancelled"
+            ) from exc
+        if failure is not None and failure.kind in {
+            "WORKER_TIMEOUT",
+            "REQUEST_DEADLINE_EXPIRED",
+        }:
+            raise OperationExecutionTimeoutError(
+                "divisibility edge factorization exceeded its deadline"
+            ) from exc
         raise OperationDomainValidationError(
             location=("values",),
             code="divisibility_edge.factorization_incomplete",

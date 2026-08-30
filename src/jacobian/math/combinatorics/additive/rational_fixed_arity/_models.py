@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from math import comb
 from typing import Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -43,18 +42,6 @@ class RationalFixedAritySumResult(StrictModel):
     ) -> Self:
         """Construct a result after the owner has established its profile."""
         return cls.model_construct(values=values, arity=arity, rows=rows)
-
-    @model_validator(mode="after")
-    def require_profile_invariants(self) -> Self:
-        sums = tuple(row.sum_value.as_fraction() for row in self.rows)
-        if sums != tuple(sorted(sums)) or len(set(sums)) != len(sums):
-            raise ValueError("sum profile rows must be sorted and unique")
-        expected = (
-            comb(len(self.values), self.arity) if self.arity <= len(self.values) else 0
-        )
-        if sum(row.multiplicity for row in self.rows) != expected:
-            raise ValueError("sum profile multiplicities must cover every index tuple")
-        return self
 
 
 __all__ = [

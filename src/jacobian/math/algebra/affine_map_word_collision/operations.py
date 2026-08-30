@@ -54,7 +54,9 @@ def _string_size(digits: int) -> int:
     return digits + 3
 
 
-def _max_height(values: Sequence[RationalHeight], default: RationalHeight) -> RationalHeight:
+def _max_height(
+    values: Sequence[RationalHeight], default: RationalHeight
+) -> RationalHeight:
     if not values:
         return default
     return RationalHeight(
@@ -281,8 +283,7 @@ def compute_word_collision_profile(
     from jacobian.math.algebra.affine_map_word_collision._models import AffineMapSpec
 
     gen_specs = [
-        AffineMapSpec._from_kernel(slope, intercept)
-        for slope, intercept in generators
+        AffineMapSpec._from_kernel(slope, intercept) for slope, intercept in generators
     ]
 
     class_to_words: dict[tuple[Fraction, Fraction], list[tuple[int, ...]]] = {}

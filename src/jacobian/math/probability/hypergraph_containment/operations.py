@@ -64,7 +64,9 @@ def _admit_hypergraph_vertex_containment(
                 code="hypergraph_containment.state_bound_exceeded",
                 message="the complete subset-state envelope is exceeded",
             )
-        vertex_index = {vertex: index for index, vertex in enumerate(hypergraph.vertices)}
+        vertex_index = {
+            vertex: index for index, vertex in enumerate(hypergraph.vertices)
+        }
         edge_masks = tuple(
             dict.fromkeys(
                 sum(1 << vertex_index[member] for member in members)

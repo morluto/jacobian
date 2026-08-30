@@ -4,8 +4,8 @@
 
 This document uses **catalog admission** narrowly. It decides whether a
 candidate operation belongs in the immutable public catalog. It does not define
-the **request admission** or execution plan for an individual direct operation
-call; those are owned by the mathematical domain and must account for work,
+the **request admission** or execution plan for an individual `math.run` call;
+those are owned by the mathematical domain and must account for work,
 intermediates, exact output, and transport representation.
 The [runtime ownership rule](../explanation/architecture.md#runtime-ownership-rule)
 defines how that per-call plan is computed and reused.
@@ -13,13 +13,12 @@ defines how that per-call plan is computed and reused.
 - Status: Current catalog-maintenance contract
 - Owner-local manifests: `src/jacobian/math/**/_tools.py`
 
-The public direct MCP catalog is a curated basis of mathematical operations,
-not an inventory of every callable helper in `jacobian.math` or in an installed
-backend. `math.find` is a semantic search view of that same membership. A
-declaration in an owner's immutable `TOOLS` tuple is the publication decision.
-Useful native-only functions remain package exports without a `MathTool`
-declaration. Catalog construction discovers manifests directly and fails closed
-on malformed declarations or duplicate operation IDs.
+The public `math.find` / `math.run` catalog is a curated basis of mathematical
+operations, not an inventory of every callable helper in `jacobian.math` or in
+an installed backend. A declaration in an owner's immutable `TOOLS` tuple is
+the publication decision. Useful native-only functions remain package exports
+without a `MathTool` declaration. Catalog construction discovers manifests
+directly and fails closed on malformed declarations or duplicate operation IDs.
 
 Before applying these gates, identify the reusable gap. Show why the current
 public operations and shared mathematical values do not cleanly provide the
@@ -123,19 +122,23 @@ A public operation must satisfy every gate:
    strategy, and stopping decisions.
 3. It returns a reusable typed value, witness, or certificate rather than a
    report or suggested next action.
-4. It is exact and bounded, or its result has explicit typed
+4. Its canonical public types represent every value in the advertised codomain,
+   preserve mathematically relevant distinctions through serialization, and
+   carry any parent or interpretation required for downstream composition. See
+   [codomain closure](domain-operation-library.md#codomain-closure).
+5. It is exact and bounded, or its result has explicit typed
    `INCOMPLETE`, `UNKNOWN`, or `TRUNCATED` semantics.
-5. Its mathematical identity is durable and independent of a benchmark,
+6. Its mathematical identity is durable and independent of a benchmark,
    conjecture, theorem instance, or current model behavior.
-6. It supplies material computation or reliability leverage over ordinary
+7. It supplies material computation or reliability leverage over ordinary
    model-authored Python.
-7. It is not merely a cheap deterministic projection of another public result.
+8. It is not merely a cheap deterministic projection of another public result.
    Useful projections normally belong only in the native API.
-8. Its schema contains no benchmark constants, theorem-specific answer shape,
+9. Its schema contains no benchmark constants, theorem-specific answer shape,
    or frozen research workflow.
-9. It has a distinct discovery intent and does not create a near-duplicate
+10. It has a distinct discovery intent and does not create a near-duplicate
    result that degrades retrieval.
-10. Its admitted representation does not hide an unbounded expansion or a
+11. Its admitted representation does not hide an unbounded expansion or a
     materially different computational problem. The request bounds name
     and bound any expansion before execution.
 

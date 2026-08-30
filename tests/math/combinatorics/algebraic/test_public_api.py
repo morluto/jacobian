@@ -8,7 +8,11 @@ from jacobian.math.combinatorics import algebraic as algebraic_combinatorics
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the algebraic_combinatorics public API."""
     expected = (
+        "EndpointProfileEntry",
+        "EndpointProfileResult",
         "RSKTableauPair",
+        "WeightedOrderedWord",
+        "compute_endpoint_profile",
         "conjugate_partition",
         "hook_lengths",
         "inverse_row_insertion_rsk",

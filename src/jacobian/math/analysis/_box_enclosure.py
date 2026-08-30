@@ -7,11 +7,13 @@ from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._flint import flint_workprec
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.analysis._arb import arb_source_interval, dyadic_endpoints
 from jacobian.math.analysis._models import (
     MAX_BOX_PREFLIGHT_TEMPORARY_BITS,
+    MAX_RATIONAL_BOX_ENDPOINT_DIGITS,
     ExactDyadic,
     IntervalExpressionDomainFailure,
     IntervalExpressionNode,
@@ -264,10 +266,8 @@ def _box_expression_enclosure(
             ),
         )
 
-    from flint import ctx
-
     try:
-        with ctx.workprec(request.precision_bits):
+        with flint_workprec(request.precision_bits):
             variables = {
                 variable: arb_source_interval(interval)
                 for variable, interval in zip(
@@ -339,8 +339,10 @@ BOX_EXPRESSION_ENCLOSURE_OPERATIONS = (
             "named-variable elementary expression over a complete ordered rational "
             "box, or report the first source node whose real domain is unproved. "
             "The fixed envelope admits at most 8 variables, 64 nodes, depth 16, "
-            "128-digit rationals, absolute power exponents up to 64, 4,096-bit "
-            "Arb precision, 8,192-bit retained exact admission bounds, and "
+            "128-digit expression constants, "
+            f"{MAX_RATIONAL_BOX_ENDPOINT_DIGITS}-digit rational-box endpoints, "
+            "absolute power exponents up to 64, 4,096-bit Arb precision, 8,192-bit "
+            "retained exact admission bounds, and "
             f"{MAX_BOX_PREFLIGHT_TEMPORARY_BITS:,}-bit Fraction temporaries."
         ),
         request_type=IntervalExpressionBoxEnclosureRequest,

@@ -26,6 +26,7 @@ from jacobian.math.algebra.affine_map_word_collision._models import (
 
 __all__ = ["compute_word_collision_profile"]
 
+
 @dataclass(frozen=True, slots=True)
 class WordCollisionAdmission:
     """Derived work, coefficient, and output bounds for one invocation."""

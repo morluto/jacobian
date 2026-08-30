@@ -19,18 +19,9 @@ from jacobian.math.number_theory.arithmetic.values import IntegerValue
 def compute_friable_enumerate(
     request: FriableEnumerateRequest,
 ) -> FriableEnumerateResult:
-    try:
-        family = _enumerate_friable_kernel(
-            parse_canonical_integer(request.x),
-            parse_canonical_integer(request.y),
-        )
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=("x", "y"),
-            code=exc.type,
-            message=exc.message(),
-        ) from exc
-    return FriableEnumerateResult._from_kernel(request, family=family)
+    return enumerate_friable(
+        parse_canonical_integer(request.x), parse_canonical_integer(request.y)
+    )
 
 
 def enumerate_friable(
@@ -40,10 +31,17 @@ def enumerate_friable(
 
     x_value = parse_canonical_integer(x.value) if isinstance(x, IntegerValue) else x
     y_value = parse_canonical_integer(y.value) if isinstance(y, IntegerValue) else y
-    request = FriableEnumerateRequest(
-        x=format_canonical_integer(x_value), y=format_canonical_integer(y_value)
+    try:
+        family = _enumerate_friable_kernel(x_value, y_value)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("x", "y"), code=exc.type, message=exc.message()
+        ) from exc
+    return FriableEnumerateResult.model_construct(
+        x=format_canonical_integer(x_value),
+        y=format_canonical_integer(y_value),
+        family=tuple(format_canonical_integer(value) for value in family),
     )
-    return compute_friable_enumerate(request)
 
 
 FRIABLE_ENUMERATE_OPERATION = number_theory_operation(

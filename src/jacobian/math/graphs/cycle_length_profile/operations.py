@@ -125,13 +125,15 @@ def _wheel_search_order(graph: SimpleUndirectedGraph) -> tuple[str, ...] | None:
         adjacency[left].add(right)
         adjacency[right].add(left)
     hub = next(vertex for vertex, neighbors in adjacency.items() if len(neighbors) == len(graph.vertices) - 1)
-    rim = [vertex for vertex in graph.vertices if vertex != hub]
+    rim = sorted(vertex for vertex in graph.vertices if vertex != hub)
     rim_adjacency = {vertex: adjacency[vertex] - {hub} for vertex in rim}
     order = [rim[0]]
     previous: str | None = None
     current = rim[0]
     while len(order) < len(rim):
-        candidates = [neighbor for neighbor in rim_adjacency[current] if neighbor != previous]
+        candidates = sorted(
+            neighbor for neighbor in rim_adjacency[current] if neighbor != previous
+        )
         next_vertex = candidates[0] if candidates[0] not in order else candidates[1]
         order.append(next_vertex)
         previous, current = current, next_vertex

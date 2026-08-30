@@ -27,6 +27,7 @@ from jacobian.math.geometry.algebraic_curves._tools import (
 from jacobian.math.geometry.algebraic_curves.operations import singularity_profile
 from jacobian.math.number_theory.number_fields.values import (
     ComplexNumberFieldEmbedding,
+    RealNumberFieldEmbedding,
 )
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
 from jacobian.math.polynomials.values import (
@@ -123,6 +124,47 @@ def test_conjugate_nonrational_singularities_keep_distinct_embedding_identity() 
 
     payload = result.model_dump(mode="json")
     assert ProjectivePlaneCurveSingularityProfile.model_validate(payload) == result
+
+
+def test_geometrically_split_cubic_keeps_its_complete_galois_orbit() -> None:
+    # This is Norm_{QQ(cuberoot(2))/QQ}(X + alpha*Y + alpha^2*Z).
+    # Its three conjugate lines meet in one degree-three closed-point orbit.
+    result = _compute(
+        _polynomial(
+            (1, (3, 0, 0)),
+            (-6, (1, 1, 1)),
+            (2, (0, 3, 0)),
+            (4, (0, 0, 3)),
+        )
+    )
+
+    assert result.outcome.status == "SINGULAR_ZERO_DIMENSIONAL"
+    assert len(result.outcome.points) == 3
+    presentations = {
+        record.point.embedding.presentation for record in result.outcome.points
+    }
+    assert len(presentations) == 1
+    (presentation,) = presentations
+    assert presentation.degree == 3
+    assert presentation.coefficients_descending[0] != "1"
+
+    real_embeddings = [
+        record.point.embedding
+        for record in result.outcome.points
+        if isinstance(record.point.embedding, RealNumberFieldEmbedding)
+    ]
+    complex_embeddings = [
+        record.point.embedding
+        for record in result.outcome.points
+        if isinstance(record.point.embedding, ComplexNumberFieldEmbedding)
+    ]
+    assert len(real_embeddings) == 1
+    assert len(complex_embeddings) == 2
+    assert real_embeddings[0].root.real_root_index == 0
+    assert sorted(embedding.root.root_index for embedding in complex_embeddings) == [
+        1,
+        2,
+    ]
 
 
 @pytest.mark.parametrize(

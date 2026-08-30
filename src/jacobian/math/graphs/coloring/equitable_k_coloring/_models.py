@@ -6,9 +6,24 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_EQUITABLE_COLORING_SEARCH_NODES = 1_000_000
+
+
+def _result_wire_bytes(graph: SimpleUndirectedGraph, k: int) -> int:
+    return len(
+        encode_strict_json(
+            {
+                "graph": graph.model_dump(mode="json"),
+                "k": k,
+                "colorable": True,
+                "coloring": list(range(len(graph.vertices))),
+            },
+            limits=CanonicalLimits(max_output_bytes=1 << 60),
+        )
+    )
 
 
 class EquitableColoringRequest(StrictModel):
@@ -19,6 +34,11 @@ class EquitableColoringRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_search(self) -> Self:
+        if _result_wire_bytes(self.graph, self.k) > CanonicalLimits().max_output_bytes:
+            raise PydanticCustomError(
+                "graph.equitable_coloring_result_bytes_exceeded",
+                "equitable coloring result exceeds the canonical output-byte limit",
+            )
         n = len(self.graph.vertices)
         if (
             self.graph.edges
@@ -45,4 +65,5 @@ __all__ = [
     "MAX_EQUITABLE_COLORING_SEARCH_NODES",
     "EquitableColoringRequest",
     "EquitableColoringResult",
+    "_result_wire_bytes",
 ]

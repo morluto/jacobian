@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import networkx as nx
 
+from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring.equitable_k_coloring._models import (
     MAX_EQUITABLE_COLORING_SEARCH_NODES,
     EquitableColoringResult,
+    _result_wire_bytes,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -28,6 +30,7 @@ def decide_equitable_k_coloring(
             code="graph.equitable_coloring_positive_palette",
             message="equitable coloring requires a positive palette size",
         )
+    _require_result_size(graph, k)
     direct_result = _direct_result(graph, k)
     if direct_result is not None:
         return direct_result
@@ -91,6 +94,15 @@ def decide_equitable_k_coloring(
             coloring=tuple(result_colors),
         )
     return EquitableColoringResult(graph=graph, k=k, colorable=False)
+
+
+def _require_result_size(graph: SimpleUndirectedGraph, k: int) -> None:
+    if _result_wire_bytes(graph, k) > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.equitable_coloring_result_bytes_exceeded",
+            message="equitable coloring result exceeds the canonical output-byte limit",
+        )
 
 
 def _direct_result(

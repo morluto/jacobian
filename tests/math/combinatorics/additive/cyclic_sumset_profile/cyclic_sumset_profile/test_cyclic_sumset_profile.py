@@ -72,6 +72,14 @@ def test_request_rejects_duplicate_subset_elements() -> None:
         CyclicSumsetRequest(modulus=2, left=(0, 0), right=(0,))
 
 
+def test_native_operation_is_exported_by_owner_package() -> None:
+    from jacobian.math.combinatorics.additive.cyclic_sumset_profile import (
+        compute_cyclic_sumset_profile as exported,
+    )
+
+    assert exported is compute_cyclic_sumset_profile
+
+
 def test_wide_complete_profile_is_rejected_before_pair_arithmetic() -> None:
     left = tuple(10**99 + index for index in range(50_000))
     right = (0,)

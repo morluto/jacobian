@@ -58,6 +58,6 @@ DIVISIBILITY_EDGE_PROFILE_OPERATION = number_theory_operation(
 
 
 __all__ = [
-    "compute_divisibility_edge_profile",
     "DIVISIBILITY_EDGE_PROFILE_OPERATION",
+    "compute_divisibility_edge_profile",
 ]

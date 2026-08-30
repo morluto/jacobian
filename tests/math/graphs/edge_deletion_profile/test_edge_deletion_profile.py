@@ -81,6 +81,15 @@ def test_admits_cheap_edgeless_graph_above_old_vertex_cap() -> None:
     assert result.rows[0].chromatic_number == 1
 
 
+def test_admits_sparse_non_bipartite_component_with_isolates() -> None:
+    graph = _graph(
+        [f"v{index}" for index in range(256)],
+        [("v0", "v1"), ("v0", "v2"), ("v1", "v2")],
+    )
+    result = compute_edge_deletion_profile(graph, 0)
+    assert result.rows[0].chromatic_number == 3
+
+
 def test_native_negative_order_is_typed() -> None:
     graph = _graph(["a"], [])
     with pytest.raises(OperationDomainValidationError):

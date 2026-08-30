@@ -49,7 +49,8 @@ def _is_bipartite(graph: SimpleUndirectedGraph) -> bool:
 
 
 def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> int:
-    n = len(graph.vertices)
+    active_vertices = {vertex for edge in graph.edges for vertex in edge}
+    n = len(active_vertices)
     edge_count = len(graph.edges)
     if not edge_count or not n:
         return 1
@@ -202,11 +203,14 @@ def compute_edge_deletion_profile(
 
 def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
     """Compute the exact chromatic number by brute-force search."""
-    n = len(vertices)
-    if n == 0:
-        return 0
     if not edges:
-        return 1
+        return 0 if not vertices else 1
+    # Isolated vertices do not affect chromatic number. Removing them before
+    # the finite coloring search makes sparse non-bipartite components scale
+    # with their actual support rather than the ambient vertex axis.
+    active = {vertex for edge in edges for vertex in edge}
+    vertices = [vertex for vertex in vertices if vertex in active]
+    n = len(vertices)
     if len(edges) == n * (n - 1) // 2:
         return n
     if _is_bipartite_edges(vertices, edges):

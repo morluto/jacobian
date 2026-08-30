@@ -39,10 +39,20 @@ class DivisibilityEdgeProfileRequest(StrictModel):
 
 
 def _validate_divisibility_edge_values(values: tuple[str, ...]) -> None:
+    _validate_divisibility_edge_shape(values)
+    _validate_divisibility_edge_resources(values)
+
+
+def _validate_divisibility_edge_shape(values: tuple[str, ...]) -> None:
     if not values:
         raise PydanticCustomError(
             "divisibility_edge.values_nonempty",
             "values must contain at least one integer",
+        )
+    if len(values) > MAX_DIVISIBILITY_EDGE_SET_SIZE:
+        raise PydanticCustomError(
+            "divisibility_edge.values_size",
+            f"values must contain at most {MAX_DIVISIBILITY_EDGE_SET_SIZE} integers",
         )
     parsed = tuple(parse_canonical_integer(value) for value in values)
     if any(value <= 0 for value in parsed):
@@ -60,6 +70,12 @@ def _validate_divisibility_edge_values(values: tuple[str, ...]) -> None:
             "divisibility_edge.value_digits",
             "values exceed the admitted integer digit bound",
         )
+    max_digits = max(len(value) for value in values)
+
+
+def _validate_divisibility_edge_resources(values: tuple[str, ...]) -> None:
+    parsed = tuple(parse_canonical_integer(value) for value in values)
+    max_digits = max(len(value) for value in values)
     pair_count = len(parsed) * (len(parsed) - 1) // 2
     if pair_count * max_digits * max_digits > MAX_DIVISIBILITY_EDGE_WORK:
         raise PydanticCustomError(
@@ -104,7 +120,7 @@ class DivisibilityEdgeProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_edges(self) -> Self:
-        _validate_divisibility_edge_values(self.values)
+        _validate_divisibility_edge_shape(self.values)
         values = set(self.values)
         seen: set[tuple[str, str]] = set()
         for edge in self.edges:

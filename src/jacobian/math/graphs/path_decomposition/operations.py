@@ -52,13 +52,20 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
         adjacency[left].add(right)
         adjacency[right].add(left)
 
+    if edge_count >= MAX_SEARCH_STATES.bit_length():
+        _reject(
+            "search_work_bound",
+            "the exact memoized residual-edge search exceeds its bounded work envelope",
+        )
+    residual_state_bound = 1 << edge_count
+    candidate_limit = MAX_SEARCH_STATES // residual_state_bound
     candidates = tuple(
         sorted(
-            _find_all_simple_paths(adjacency),
+            _find_all_simple_paths(adjacency, candidate_limit=candidate_limit),
             key=lambda path: (-len(path), tuple(sorted(path))),
         )
     )
-    candidate_checks_bound = (1 << edge_count) * max(len(candidates), 1)
+    candidate_checks_bound = residual_state_bound * max(len(candidates), 1)
     if candidate_checks_bound > MAX_SEARCH_STATES:
         _reject(
             "search_work_bound",
@@ -129,11 +136,22 @@ def compute_minimum_path_decomposition(
 
 def _find_all_simple_paths(
     adjacency: dict[str, set[str]],
+    *,
+    candidate_limit: int,
 ) -> set[frozenset[tuple[str, str]]]:
     """Find all simple paths as sets of edges."""
     paths: set[frozenset[tuple[str, str]]] = set()
+    enumeration_steps = [0]
     for start in adjacency:
-        _dfs_paths(start, frozenset(), frozenset({start}), adjacency, paths)
+        _dfs_paths(
+            start,
+            frozenset(),
+            frozenset({start}),
+            adjacency,
+            paths,
+            candidate_limit=candidate_limit,
+            enumeration_steps=enumeration_steps,
+        )
     return paths
 
 
@@ -143,9 +161,23 @@ def _dfs_paths(
     vertices_visited: frozenset[str],
     adjacency: dict[str, set[str]],
     paths: set[frozenset[tuple[str, str]]],
+    *,
+    candidate_limit: int,
+    enumeration_steps: list[int],
 ) -> None:
+    enumeration_steps[0] += 1
+    if enumeration_steps[0] > MAX_SEARCH_STATES:
+        _reject(
+            "path_enumeration_bound",
+            "simple-path enumeration exceeds its bounded work envelope",
+        )
     if edges_used:
         paths.add(edges_used)
+        if len(paths) > candidate_limit:
+            _reject(
+                "search_work_bound",
+                "the exact memoized residual-edge search exceeds its bounded work envelope",
+            )
     for neighbor in sorted(adjacency[current]):
         if neighbor in vertices_visited:
             continue
@@ -158,6 +190,8 @@ def _dfs_paths(
             vertices_visited | {neighbor},
             adjacency,
             paths,
+            candidate_limit=candidate_limit,
+            enumeration_steps=enumeration_steps,
         )
 
 
@@ -204,21 +238,15 @@ def _path_to_vertices(path_edges: frozenset[tuple[str, str]]) -> list[str]:
     if not path_edges:
         return []
     adj: dict[str, list[str]] = {}
-    for a, b in path_edges:
+    for a, b in sorted(path_edges):
         adj.setdefault(a, []).append(b)
         adj.setdefault(b, []).append(a)
-    start = None
-    for v, neighbors in adj.items():
-        if len(neighbors) == 1:
-            start = v
-            break
-    if start is None:
-        start = next(iter(adj))
+    start = min(vertex for vertex, neighbors in adj.items() if len(neighbors) == 1)
     vertices = [start]
     current = start
     used_edges: set[tuple[str, str]] = set()
     while len(vertices) < len(path_edges) + 1:
-        for neighbor in adj[current]:
+        for neighbor in sorted(adj[current]):
             edge = (min(current, neighbor), max(current, neighbor))
             if edge not in used_edges:
                 used_edges.add(edge)

@@ -5,6 +5,7 @@ from itertools import pairwise
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.path_decomposition._models import PathDecompositionResult
 from jacobian.math.graphs.path_decomposition.operations import (
     compute_minimum_path_decomposition,
@@ -90,6 +91,37 @@ def test_sparse_graph_uses_actual_path_candidates() -> None:
     g = _graph(vertices, [(vertices[0], vertices[1])])
     result = compute_minimum_path_decomposition(g)
     assert result.path_count == 1
+
+
+def test_isolated_vertices_do_not_trigger_a_coarse_carrier_rejection() -> None:
+    vertices = [f"v{i}" for i in range(13)]
+    result = compute_minimum_path_decomposition(
+        _graph(vertices, [(vertices[0], vertices[1])])
+    )
+    assert result.path_count == 1
+
+
+def test_dense_graph_is_rejected_before_path_enumeration() -> None:
+    vertices = [f"v{i:02d}" for i in range(12)]
+    edges = [
+        (vertices[left], vertices[right])
+        for left in range(12)
+        for right in range(left + 1, 12)
+    ]
+
+    with pytest.raises(OperationDomainValidationError, match="residual-edge search"):
+        compute_minimum_path_decomposition(_graph(vertices, edges))
+
+
+def test_path_orientation_is_canonical() -> None:
+    graph = _graph(
+        ["a", "b", "c", "d"],
+        [("c", "d"), ("a", "b"), ("b", "c")],
+    )
+
+    result = compute_minimum_path_decomposition(graph)
+
+    assert result.paths == (("a", "b", "c", "d"),)
 
 
 @pytest.mark.parametrize(

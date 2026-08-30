@@ -11,7 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-MAX_VERTICES = 12
+MAX_VERTICES = 256
 
 
 class PathDecompositionRequest(StrictModel):
@@ -20,7 +20,7 @@ class PathDecompositionRequest(StrictModel):
     graph: SimpleUndirectedGraph = Field(
         description=(
             "Simple undirected graph with at most "
-            f"{MAX_VERTICES} vertices; this operation's exhaustive path search "
+            f"{MAX_VERTICES} vertices; this operation's graph-sensitive path search "
             "also applies a graph-sensitive work bound."
         )
     )

@@ -208,3 +208,14 @@ def test_bipartite_block_reserves_only_part_size_feasible_lengths() -> None:
     result = compute_cycle_length_profile(_graph(vertices, edges))
 
     assert [row.cycle_length for row in result.rows] == [4]
+
+
+def test_perfect_matching_depth_two_scans_are_charged() -> None:
+    vertices = tuple(f"v{index:03d}" for index in range(256))
+    graph = _graph(
+        vertices,
+        [(f"v{index:03d}", f"v{index + 128:03d}") for index in range(128)],
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="work bound"):
+        compute_cycle_length_profile(graph)

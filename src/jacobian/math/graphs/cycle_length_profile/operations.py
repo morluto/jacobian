@@ -58,6 +58,16 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
     # when no path reaches depth three (for example, a perfect matching).
     root_scan_candidates = vertex_count * (vertex_count - 1) // 2 + 2 * len(graph.edges)
     work = root_scan_candidates * max(1, vertex_count - 2)
+    # Each root edge accepted by ``nxt >= start + 1`` causes the kernel to
+    # scan the complete remaining suffix once for every target length, even
+    # when that edge has no continuation. Charge this depth-two work instead
+    # of treating every edge as a constant-cost branch.
+    depth_two_candidates = 0
+    for left, right in graph.edges:
+        left_index = vertex_to_index[left]
+        right_index = vertex_to_index[right]
+        depth_two_candidates += vertex_count - min(left_index, right_index) - 1
+    work += depth_two_candidates * max(1, vertex_count - 2)
     for start in range(vertex_count):
         visited = {start}
 

@@ -65,15 +65,15 @@ class RFullEnumerateResult(StrictModel):
             )
         cutoff = parse_canonical_integer(self.cutoff)
         values = [parse_canonical_integer(v) for v in self.family]
-        if cutoff >= 1 and (not values or values[0] != 1):
-            raise PydanticCustomError(
-                "r_full_enumerate.missing_one",
-                "a complete r-full family must begin with 1",
-            )
         if any(v < 1 for v in values):
             raise PydanticCustomError(
                 "r_full_enumerate.positive_only",
                 "every r-full integer must be positive",
+            )
+        if cutoff >= 1 and (not values or values[0] != 1):
+            raise PydanticCustomError(
+                "r_full_enumerate.missing_one",
+                "a complete r-full family must begin with 1",
             )
         if any(v > cutoff for v in values):
             raise PydanticCustomError(

@@ -3,8 +3,18 @@
 from collections.abc import Callable
 
 from jacobian._models import StrictModel
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+)
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    MathTools,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.graphs.maximal_clique_hypergraph._models import (
     MaximalCliqueHypergraphRequest,
     MaximalCliqueHypergraphResult,
@@ -17,7 +27,19 @@ from jacobian.math.graphs.maximal_clique_hypergraph.operations import (
 def compute_maximal_clique_hypergraph(
     request: MaximalCliqueHypergraphRequest,
 ) -> MaximalCliqueHypergraphResult:
-    return construct_maximal_clique_hypergraph(request.graph)
+    result = construct_maximal_clique_hypergraph(request.graph)
+    try:
+        encode_strict_json(result.model_dump(mode="json"))
+    except CanonicalizationError as error:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.maximal_clique_hypergraph.output_bound",
+            message=(
+                "the source-bound maximal-clique hypergraph result exceeds the "
+                f"{CanonicalLimits().max_output_bytes}-byte canonical output bound"
+            ),
+        ) from error
+    return result
 
 
 def mch_operation[

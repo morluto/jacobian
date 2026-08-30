@@ -7,11 +7,6 @@ from dataclasses import dataclass
 import networkx as nx
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
@@ -31,7 +26,6 @@ __all__ = ["construct_maximal_clique_hypergraph"]
 class _CliqueEnumerationPlan:
     edges: tuple[tuple[str, tuple[str, ...]], ...]
     incidence_count: int
-    result_wire_bytes: int
 
 
 def _reject(code: str, message: str) -> OperationDomainValidationError:
@@ -83,33 +77,9 @@ def _enumeration_plan(graph: SimpleUndirectedGraph) -> _CliqueEnumerationPlan:
     edges = tuple(
         (f"clique_{index}", members) for index, members in enumerate(clique_members)
     )
-    result_payload = {
-        "graph": graph.model_dump(mode="json"),
-        "hypergraph": {
-            "vertices": list(graph.vertices),
-            "edges": [[edge_id, list(members)] for edge_id, members in edges],
-        },
-        "clique_count": len(edges),
-    }
-    try:
-        result_wire_bytes = len(encode_strict_json(result_payload))
-    except CanonicalizationError as error:
-        raise _reject(
-            "graph.maximal_clique_hypergraph.output_bound",
-            "the source-bound maximal-clique hypergraph result exceeds the "
-            f"{CanonicalLimits().max_output_bytes}-byte canonical output bound",
-        ) from error
-    output_limit = CanonicalLimits().max_output_bytes
-    if result_wire_bytes > output_limit:
-        raise _reject(
-            "graph.maximal_clique_hypergraph.output_bound",
-            "the source-bound maximal-clique hypergraph result exceeds the "
-            f"{output_limit}-byte canonical output bound",
-        )
     return _CliqueEnumerationPlan(
         edges=edges,
         incidence_count=incidence_count,
-        result_wire_bytes=result_wire_bytes,
     )
 
 

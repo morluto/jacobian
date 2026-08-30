@@ -213,6 +213,18 @@ def test_total_membership_work_is_bounded_before_pair_scanning() -> None:
         construct_binary_union_relation(source)
 
 
+def test_generated_union_hashing_is_charged_to_membership_work() -> None:
+    source = _source(
+        tuple(
+            tuple(index * 200 + offset for offset in range(200)) for index in range(256)
+        ),
+        ground_set_size=51_200,
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="membership work"):
+        construct_binary_union_relation(source)
+
+
 def test_single_member_normalization_is_charged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

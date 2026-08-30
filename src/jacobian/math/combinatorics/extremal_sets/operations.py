@@ -170,9 +170,14 @@ def _canonical_source(
 
 
 def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:
-    membership_work = (len(source.members) + 1) * sum(
-        len(member) for member in source.members
+    member_sizes = tuple(len(member) for member in source.members)
+    membership_work = (len(source.members) + 1) * sum(member_sizes)
+    generated_union_work = sum(
+        member_sizes[i] + member_sizes[j]
+        for i in range(len(member_sizes))
+        for j in range(i + 1, len(member_sizes))
     )
+    membership_work += generated_union_work
     if membership_work > MAX_BINARY_UNION_MEMBERSHIP_WORK:
         raise OperationDomainValidationError(
             location=("source",),

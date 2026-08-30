@@ -2,34 +2,46 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import time
 from dataclasses import dataclass
-from fractions import Fraction
 from math import factorial
-from typing import Any, cast
+from typing import Any
 
-from jacobian._exact import CanonicalRational
-from jacobian.canonical import (
-    CanonicalLimits,
-    format_canonical_integer,
-    parse_canonical_integer,
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
 )
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
-    RationalComplexIsolatingRectangle,
-    _isolate_complex_algebraic,
-    _public_to_backend_root_indices_from_count,
-    _root_evidence_parameters,
-    algebraic_real_part_separation_denominator_bound,
     algebraic_root_separation_denominator_bound,
     complex_isolator_component_digit_bound,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import (
-    RationalIsolatingInterval,
     RealAlgebraicValue,
-    _sympy_polynomial_from_coefficients,
+)
+from jacobian.math.number_theory.number_fields._embedding_limits import (
+    MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES,
+    MAX_NUMBER_FIELD_REAL_PART_RESULTANT_STORAGE_BITS,
+    MAX_NUMBER_FIELD_ROOT_REFINEMENT_BITS,
+)
+from jacobian.math.number_theory.number_fields._embedding_protocol import (
+    NumberFieldEmbeddingWorkerInvalid,
+    NumberFieldEmbeddingWorkerRejected,
+    NumberFieldEmbeddingWorkerRequest,
+)
+from jacobian.math.number_theory.number_fields._embeddings_process import (
+    EMBEDDINGS_WORKER_WALL_SECONDS,
+    embeddings_worker_cancelled,
+    run_embeddings_worker,
+)
+from jacobian.math.number_theory.number_fields._integral_basis import (
+    recognized_integral_basis,
 )
 from jacobian.math.number_theory.number_fields.values import (
+    MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
     ComplexNumberFieldEmbedding,
     ComplexNumberFieldEmbeddingRecord,
     NumberFieldConjugatePair,
@@ -40,10 +52,6 @@ from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldPresentation,
 )
 
-MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES = CanonicalLimits().max_output_bytes
-MAX_NUMBER_FIELD_REAL_PART_RESULTANT_STORAGE_BITS = 2_097_152
-MAX_NUMBER_FIELD_ROOT_REFINEMENT_BITS = 32_768
-
 
 class NumberFieldEmbeddingAdmissionError(ValueError):
     """A proved owner-local resource rejection for embedding enumeration."""
@@ -53,101 +61,23 @@ class NumberFieldEmbeddingAdmissionError(ValueError):
         super().__init__(message)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class NumberFieldEmbeddingAdmission:
-    degree: int
-    real_embedding_count: int
-    complex_conjugate_pair_count: int
-    coefficient_height_bits: int
-    root_separation_denominator_bits: int
-    real_part_separation_denominator_bits: int
     root_isolation_bits: int
-    real_part_resultant_coefficient_bits: int
-    real_part_resultant_storage_bits: int
-    isolator_component_digits: int
-    polynomial_discriminant_digits: int
+    evidence_grid_bits: int
+    predicted_worker_output_bytes: int
     predicted_result_bytes: int
-    root_refinement_calls: int
-    root_refinement_precision_bits: int
-    root_refinement_bit_work: int
-    real_isolating_intervals: tuple[RationalIsolatingInterval, ...]
-    complex_isolating_rectangles: tuple[RationalComplexIsolatingRectangle, ...]
 
 
 def _decimal_digits_from_bits(bits: int) -> int:
     return (max(bits, 1) * 30_103) // 100_000 + 1
 
 
-def _backend_fraction(value: Any) -> Fraction:
-    return Fraction(int(value.p), int(value.q))
-
-
-def _dyadic_floor(value: Fraction, denominator: int) -> int:
-    return (value.numerator * denominator) // value.denominator
-
-
-def _dyadic_ceiling(value: Fraction, denominator: int) -> int:
-    return -((-value.numerator * denominator) // value.denominator)
-
-
-def _normalize_real_isolator(
-    lower: Any,
-    upper: Any,
-    *,
-    grid_denominator: int,
-) -> RationalIsolatingInterval:
-    lower_fraction = _backend_fraction(lower)
-    upper_fraction = _backend_fraction(upper)
-    if lower_fraction == upper_fraction:
-        endpoint = CanonicalRational.from_fraction(lower_fraction)
-        return RationalIsolatingInterval(
-            lower=endpoint,
-            upper=endpoint,
-            interval_type="SINGLETON",
-        )
-    lower_cell = _dyadic_floor(lower_fraction, grid_denominator)
-    upper_cell = _dyadic_ceiling(upper_fraction, grid_denominator)
-    return RationalIsolatingInterval(
-        lower=CanonicalRational.from_fraction(
-            Fraction(lower_cell - 1, grid_denominator)
-        ),
-        upper=CanonicalRational.from_fraction(
-            Fraction(upper_cell + 1, grid_denominator)
-        ),
-        interval_type="OPEN",
-    )
-
-
-def _normalize_complex_isolator(
-    lower: Any,
-    upper: Any,
-    *,
-    grid_denominator: int,
-) -> RationalComplexIsolatingRectangle:
-    lower_real, lower_imaginary = lower.as_real_imag()
-    upper_real, upper_imaginary = upper.as_real_imag()
-    real_lower_cell = _dyadic_floor(_backend_fraction(lower_real), grid_denominator)
-    real_upper_cell = _dyadic_ceiling(_backend_fraction(upper_real), grid_denominator)
-    imaginary_lower_cell = _dyadic_floor(
-        _backend_fraction(lower_imaginary), grid_denominator
-    )
-    imaginary_upper_cell = _dyadic_ceiling(
-        _backend_fraction(upper_imaginary), grid_denominator
-    )
-    return RationalComplexIsolatingRectangle(
-        real_lower=CanonicalRational.from_fraction(
-            Fraction(real_lower_cell - 1, grid_denominator)
-        ),
-        real_upper=CanonicalRational.from_fraction(
-            Fraction(real_upper_cell + 1, grid_denominator)
-        ),
-        imaginary_lower=CanonicalRational.from_fraction(
-            Fraction(imaginary_lower_cell - 1, grid_denominator)
-        ),
-        imaginary_upper=CanonicalRational.from_fraction(
-            Fraction(imaginary_upper_cell + 1, grid_denominator)
-        ),
-    )
+def _require_embedding_execution_active(deadline: float, phase: str) -> None:
+    if embeddings_worker_cancelled():
+        raise OperationExecutionCancelledError(f"request cancelled {phase}")
+    if deadline <= time.monotonic():
+        raise OperationExecutionTimeoutError(f"request deadline expired {phase}")
 
 
 def _admit_number_field_embeddings(
@@ -160,16 +90,21 @@ def _admit_number_field_embeddings(
         for coefficient in field.coefficients_descending
     )
     degree = field.degree
+    if degree > MAX_NUMBER_FIELD_EMBEDDING_DEGREE:
+        raise NumberFieldEmbeddingAdmissionError(
+            "degree_bound",
+            "number-field embeddings are limited to degree "
+            f"{MAX_NUMBER_FIELD_EMBEDDING_DEGREE}",
+        )
     height = max(abs(coefficient) for coefficient in coefficients)
-    height_bits = max(height.bit_length(), 1)
     separation_denominator = algebraic_root_separation_denominator_bound(
         field.coefficients_descending
     )
     separation_bits = separation_denominator.bit_length()
-    # Evidence uses a dyadic grid more than 2^4 finer than Mignotte separation
-    # and indexed-root matching another 2^4 finer than that grid.  A backend
-    # isolator is first refined to one grid cell; outward normalization spans
-    # at most four cells, whose diagonal remains below the separation bound.
+    # Public evidence uses a dyadic grid more than 2^4 finer than Mignotte
+    # separation.  The worker isolates on a grid another 2^4 finer before
+    # outward normalization; the public rectangle spans at most four evidence
+    # cells, whose diagonal remains below the separation bound.
     isolation_bits = separation_bits + 8
     isolator_digits = complex_isolator_component_digit_bound(
         field.coefficients_descending
@@ -251,6 +186,13 @@ def _admit_number_field_embeddings(
         + 64
     )
     rational_bytes = 2 * isolator_digits + 32
+    # The worker projection carries either one two-rational interval per real
+    # root or one four-rational rectangle per conjugate pair.  Both cases use
+    # at most two bounded rationals per degree unit.  It does not echo the
+    # retained presentation or construct public embedding records.
+    predicted_worker_output_bytes = (
+        degree * (2 * rational_bytes + 256) + discriminant_digits + 1_024
+    )
     embedding_bytes = source_bytes + polynomial_bytes + 256
     record_bytes = embedding_bytes + 4 * rational_bytes + 512
     predicted_result_bytes = (
@@ -263,79 +205,11 @@ def _admit_number_field_embeddings(
             f"{MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES:,}-byte result bound",
         )
 
-    # The raw carrier has already bounded degree and coefficient digits, and
-    # the formulas above have now admitted exact real-root isolation plus the
-    # largest possible elimination resultant.  It is therefore safe to ask
-    # the maintained backend for the exact signature before deciding whether
-    # pair ordering needs that resultant at all.
-    import sympy
-
-    polynomial = _sympy_polynomial_from_coefficients(field.coefficients_descending)
-    real_count = int(polynomial.count_roots(-sympy.oo, sympy.oo))
-    pair_count = (degree - real_count) // 2
-    real_part_separation_denominator = (
-        algebraic_real_part_separation_denominator_bound(field.coefficients_descending)
-        if pair_count > 1
-        else 1
-    )
-    real_part_separation_bits = real_part_separation_denominator.bit_length()
-    refinement_precision_bits = max(isolation_bits, real_part_separation_bits + 4)
-    if refinement_precision_bits > MAX_NUMBER_FIELD_ROOT_REFINEMENT_BITS:
-        raise NumberFieldEmbeddingAdmissionError(
-            "pair_ordering_precision_bound",
-            "exact conjugate-pair ordering exceeds the "
-            f"{MAX_NUMBER_FIELD_ROOT_REFINEMENT_BITS:,}-bit refinement bound",
-        )
-
-    grid_denominator, _matching_error = _root_evidence_parameters(
-        field.coefficients_descending
-    )
-    backend_real_intervals, backend_complex_rectangles = polynomial.intervals(
-        all=True,
-        eps=sympy.Rational(1, grid_denominator),
-    )
-    real_isolating_intervals = tuple(
-        _normalize_real_isolator(
-            lower,
-            upper,
-            grid_denominator=grid_denominator,
-        )
-        for (lower, upper), _multiplicity in backend_real_intervals
-    )
-    complex_isolating_rectangles = tuple(
-        _normalize_complex_isolator(
-            lower,
-            upper,
-            grid_denominator=grid_denominator,
-        )
-        for (lower, upper), _multiplicity in backend_complex_rectangles
-    )
-
-    # The kernel makes two exact rational approximations per conjugate pair to
-    # establish sign/order and one more to select its deterministic admitted
-    # rectangle.  Real evidence is reused directly from the signature/root-
-    # isolation pass.  This is a precision-and-call bound on the actual root
-    # refinement plan, rather than an unrelated combinatorial proxy.
-    root_refinement_calls = 3 * pair_count
-    root_refinement_bit_work = root_refinement_calls * refinement_precision_bits
     return NumberFieldEmbeddingAdmission(
-        degree=degree,
-        real_embedding_count=real_count,
-        complex_conjugate_pair_count=pair_count,
-        coefficient_height_bits=height_bits,
-        root_separation_denominator_bits=separation_bits,
-        real_part_separation_denominator_bits=real_part_separation_bits,
         root_isolation_bits=isolation_bits,
-        real_part_resultant_coefficient_bits=resultant_coefficient_bits,
-        real_part_resultant_storage_bits=resultant_storage_bits,
-        isolator_component_digits=isolator_digits,
-        polynomial_discriminant_digits=discriminant_digits,
+        evidence_grid_bits=separation_bits + 4,
+        predicted_worker_output_bytes=predicted_worker_output_bytes,
         predicted_result_bytes=predicted_result_bytes,
-        root_refinement_calls=root_refinement_calls,
-        root_refinement_precision_bits=refinement_precision_bits,
-        root_refinement_bit_work=root_refinement_bit_work,
-        real_isolating_intervals=real_isolating_intervals,
-        complex_isolating_rectangles=complex_isolating_rectangles,
     )
 
 
@@ -346,21 +220,51 @@ def embeddings(
 
     Root identity uses increasing real roots followed by conjugate pairs sorted
     by the positive representative's exact ``(Re, Im)`` coordinates, with the
-    negative root first in each pair.  An exact real-coordinate elimination and
-    Mignotte separation map this public order to SymPy's private root indexes.
-    Only indexed canonical roots and rational isolation evidence cross the
-    boundary.
+    negative root first in each pair.  Exact real-coordinate elimination and
+    Mignotte separation establish this order inside one killable worker.  Only
+    indexed canonical roots and rational isolation evidence cross the boundary.
     """
 
-    admission = _admit_number_field_embeddings(field)
-
-    polynomial = _sympy_polynomial_from_coefficients(field.coefficients_descending)
-    real_count = admission.real_embedding_count
-    pair_count = admission.complex_conjugate_pair_count
-    backend_root_indices = _public_to_backend_root_indices_from_count(
-        field.coefficients_descending,
-        real_count,
+    execution = current_request_execution()
+    started = execution.started_at if execution is not None else time.monotonic()
+    owner_deadline = started + EMBEDDINGS_WORKER_WALL_SECONDS
+    deadline = (
+        min(execution.deadline, owner_deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
     )
+    bind_request_deadline(deadline)
+    _require_embedding_execution_active(deadline, "before embedding admission")
+    admission = _admit_number_field_embeddings(field)
+    _require_embedding_execution_active(deadline, "after embedding admission")
+    remaining = deadline - time.monotonic()
+    worker_response = run_embeddings_worker(
+        NumberFieldEmbeddingWorkerRequest(
+            field=field,
+            root_isolation_bits=admission.root_isolation_bits,
+            evidence_grid_bits=admission.evidence_grid_bits,
+        ),
+        timeout_seconds=remaining,
+        stdout_limit=admission.predicted_worker_output_bytes,
+    )
+    _require_embedding_execution_active(deadline, "after embedding worker execution")
+    if isinstance(worker_response, NumberFieldEmbeddingWorkerInvalid):
+        raise NumberFieldEmbeddingAdmissionError(
+            "not_irreducible",
+            "simple number-field polynomial must be irreducible over QQ",
+        )
+    if isinstance(worker_response, NumberFieldEmbeddingWorkerRejected):
+        raise NumberFieldEmbeddingAdmissionError(
+            worker_response.reason,
+            "exact conjugate-pair ordering exceeds the "
+            f"{MAX_NUMBER_FIELD_ROOT_REFINEMENT_BITS:,}-bit refinement bound",
+        )
+    real_count = len(worker_response.real_intervals)
+    pair_count = len(worker_response.negative_complex_rectangles)
+    if real_count + 2 * pair_count != field.degree:
+        raise RuntimeError(
+            "number-field embedding worker returned an inconsistent root count"
+        )
 
     records: list[
         RealNumberFieldEmbeddingRecord | ComplexNumberFieldEmbeddingRecord
@@ -370,11 +274,15 @@ def embeddings(
             polynomial=field.coefficients_descending,
             real_root_index=root_index,
         )
-        real_embedding = RealNumberFieldEmbedding(presentation=field, root=real_root)
+        real_embedding = RealNumberFieldEmbedding(
+            kind="REAL",
+            presentation=field,
+            root=real_root,
+        )
         records.append(
             RealNumberFieldEmbeddingRecord._from_kernel(
                 embedding=real_embedding,
-                isolating_interval=admission.real_isolating_intervals[root_index],
+                isolating_interval=worker_response.real_intervals[root_index],
             )
         )
 
@@ -391,16 +299,16 @@ def embeddings(
             root_index=positive_index,
         )
         negative_embedding = ComplexNumberFieldEmbedding(
-            presentation=field, root=negative_root
+            kind="COMPLEX",
+            presentation=field,
+            root=negative_root,
         )
         positive_embedding = ComplexNumberFieldEmbedding(
-            presentation=field, root=positive_root
+            kind="COMPLEX",
+            presentation=field,
+            root=positive_root,
         )
-        negative_rectangle = _isolate_complex_algebraic(
-            negative_root,
-            backend_root_index=backend_root_indices[negative_index],
-            candidates=admission.complex_isolating_rectangles,
-        )
+        negative_rectangle = worker_response.negative_complex_rectangles[pair_offset]
         positive_rectangle = negative_rectangle.conjugate()
         records.extend(
             (
@@ -431,11 +339,35 @@ def embeddings(
             complex_conjugate_pair_count=pair_count,
         ),
         complex_conjugate_pairs=tuple(conjugate_pairs),
-        defining_polynomial_discriminant=format_canonical_integer(
-            int(polynomial.discriminant())
+        defining_polynomial_discriminant=(
+            worker_response.defining_polynomial_discriminant
         ),
     )
+    _require_embedding_execution_active(deadline, "after embedding result construction")
     return result
+
+
+def _integral_basis(
+    field: SimpleNumberFieldPresentation,
+) -> tuple[Any, Any, Any, int]:
+    integral_basis = recognized_integral_basis(field)
+    if integral_basis is None:
+        raise ValueError("simple number-field polynomial must be irreducible over QQ")
+    return integral_basis
+
+
+def discriminant(field: SimpleNumberFieldPresentation) -> str:
+    _ring_of_integers, field_discriminant, _alpha, _leading = _integral_basis(field)
+    return str(field_discriminant)
+
+
+def ring_of_integers(field: SimpleNumberFieldPresentation) -> list[str]:
+    """Return the exact integral basis expressed in the defining power basis."""
+    ring, _field_discriminant, alpha, leading = _integral_basis(field)
+    return [
+        str(element.as_expr().subs(alpha, leading * alpha).expand())
+        for element in ring.basis_element_pullbacks()
+    ]
 
 
 __all__ = [
@@ -443,33 +375,3 @@ __all__ = [
     "embeddings",
     "ring_of_integers",
 ]
-
-
-def _integral_basis(
-    coefficients_descending: Sequence[str], variable: str
-) -> tuple[Any, Any]:
-    import sympy
-    from sympy.polys.numberfields import round_two
-
-    x = sympy.Symbol(variable)
-    polynomial = sum(
-        sympy.Rational(parse_canonical_integer(coefficient))
-        * x ** (len(coefficients_descending) - 1 - index)
-        for index, coefficient in enumerate(coefficients_descending)
-    )
-    return cast(tuple[Any, Any], round_two(sympy.Poly(polynomial, x)))
-
-
-def discriminant(coefficients_descending: Sequence[str], variable: str) -> str:
-    _ring_of_integers, field_discriminant = _integral_basis(
-        coefficients_descending, variable
-    )
-    return str(field_discriminant)
-
-
-def ring_of_integers(
-    coefficients_descending: Sequence[str], variable: str
-) -> list[str]:
-    """Return the exact integral basis expressed in the defining power basis."""
-    ring, _field_discriminant = _integral_basis(coefficients_descending, variable)
-    return [str(element.as_expr()) for element in ring.basis_element_pullbacks()]

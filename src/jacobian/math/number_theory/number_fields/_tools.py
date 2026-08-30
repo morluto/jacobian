@@ -66,7 +66,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     nf_operation(
         "number_field.discriminant.compute",
         "Compute the discriminant of a number field",
-        "Compute the discriminant of a number field defined by one irreducible polynomial in an isolated SymPy worker, or return UNKNOWN if its bounded execution cannot establish a result.",
+        "Compute the field discriminant of one canonical SimpleNumberFieldPresentation in an isolated SymPy worker, or return UNKNOWN if its bounded execution cannot establish a result.",
         NumberFieldRequest,
         NumberFieldDiscriminantResult,
         compute_nf_discriminant,
@@ -77,14 +77,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "quadratic_disc",
                 "Discriminant of x^2-2.",
-                {"coefficients_descending": ["1", "0", "-2"], "variable": "x"},
+                {
+                    "field": {
+                        "domain": "QQ",
+                        "coefficients_descending": ["1", "0", "-2"],
+                    }
+                },
             ),
         ),
     ),
     nf_operation(
         "number_field.embeddings.compute",
         "Compute every exact embedding of a simple number field",
-        "Return all real and complex embeddings of one bounded primitive irreducible ZZ presentation of QQ(alpha), ordered by exact roots, with certified rational isolation, signature, conjugate-pair grouping, and defining-polynomial discriminant. Degree is at most 8, coefficients have at most 256 digits, and staged preflight bounds root separation, an exact signature count, one all-root isolation pass, at most 32,768 refinement bits, the elimination resultant, and the complete result against the 10,485,760-byte canonical transport envelope before embedding construction.",
+        "Return all real and complex embeddings of one bounded primitive irreducible ZZ presentation of QQ(alpha), ordered by exact roots, with certified rational isolation, signature, conjugate-pair grouping, and defining-polynomial discriminant. Degree is at most 8, coefficients have at most 256 digits, and a request-deadline-bound one-shot worker performs recognition, exact signature, conditional elimination, and one all-root isolation pass within the admitted 32,768-bit refinement, 2,097,152-bit resultant-storage, and 10,485,760-byte result envelopes.",
         NumberFieldEmbeddingsRequest,
         NumberFieldEmbeddingProfile,
         _compute_embeddings,

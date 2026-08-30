@@ -12,19 +12,17 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
-from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
     RationalComplexIsolatingRectangle,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
-    RealAlgebraicValue,
-    _polynomial_is_irreducible,
-    _sympy_polynomial_from_coefficients,
+    _UnrecognizedRealAlgebraicValue,
 )
 
-MAX_SIMPLE_NUMBER_FIELD_DEGREE = 8
+MAX_SIMPLE_NUMBER_FIELD_DEGREE = 31
+MAX_NUMBER_FIELD_EMBEDDING_DEGREE = 8
 MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS = 256
 MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS = 256
 MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS = 4_096
@@ -54,18 +52,15 @@ def _raw_rational_component_bound(
                 )
 
 
-def _presentation_polynomial(presentation: SimpleNumberFieldPresentation) -> Any:
-    return _sympy_polynomial_from_coefficients(presentation.coefficients_descending)
-
-
 class SimpleNumberFieldPresentation(StrictModel):
-    """The bounded presented field ``QQ(alpha) = QQ[x]/(f)``.
+    """The canonical bounded presentation ``QQ(alpha) = QQ[x]/(f)``.
 
     The defining polynomial is the unique primitive positive-leading integer
-    representative of its rational scalar class.  It is irreducible, so the
-    presentation is a field.  ``alpha`` always denotes the residue class of
-    the fixed indeterminate; a caller-chosen symbol is not part of field
-    identity.  Degree one is the presentation of ``QQ``.
+    representative of its rational scalar class. Mathematical consumers
+    recognize irreducibility before treating the presented quotient as a
+    field; ordinary construction and deserialization establish only this
+    bounded canonical representation. ``alpha`` is the fixed indeterminate,
+    not caller-selected syntax. Degree one presents ``QQ``.
     """
 
     domain: Literal["QQ"] = "QQ"
@@ -105,7 +100,7 @@ class SimpleNumberFieldPresentation(StrictModel):
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
-    def require_canonical_irreducible_polynomial(self) -> Self:
+    def require_canonical_polynomial(self) -> Self:
         coefficients = tuple(
             parse_canonical_integer(coefficient)
             for coefficient in self.coefficients_descending
@@ -122,11 +117,6 @@ class SimpleNumberFieldPresentation(StrictModel):
             raise _validation_error(
                 "not_primitive",
                 "simple number-field polynomial must be primitive over ZZ",
-            )
-        if not _polynomial_is_irreducible(self.coefficients_descending):
-            raise _validation_error(
-                "not_irreducible",
-                "simple number-field polynomial must be irreducible over QQ",
             )
         return self
 
@@ -181,9 +171,9 @@ class SimpleNumberFieldElement(StrictModel):
 class RealNumberFieldEmbedding(StrictModel):
     """A field homomorphism selected by one exact real root of its presentation."""
 
-    kind: Literal["REAL"] = "REAL"
+    kind: Literal["REAL"]
     presentation: SimpleNumberFieldPresentation
-    root: RealAlgebraicValue
+    root: _UnrecognizedRealAlgebraicValue
 
     @model_validator(mode="after")
     def bind_root_to_presentation(self) -> Self:
@@ -198,7 +188,7 @@ class RealNumberFieldEmbedding(StrictModel):
 class ComplexNumberFieldEmbedding(StrictModel):
     """A field homomorphism selected by one exact nonreal indexed root."""
 
-    kind: Literal["COMPLEX"] = "COMPLEX"
+    kind: Literal["COMPLEX"]
     presentation: SimpleNumberFieldPresentation
     root: ComplexAlgebraicValue
 
@@ -218,34 +208,10 @@ NumberFieldEmbedding = Annotated[
 ]
 
 
-def _require_real_interval_selects_root(
-    embedding: RealNumberFieldEmbedding,
-    interval: RationalIsolatingInterval,
-) -> None:
-    import sympy
-
-    polynomial = _presentation_polynomial(embedding.presentation)
-    lower = sympy.Rational(*interval.lower.as_integer_ratio())
-    upper = sympy.Rational(*interval.upper.as_integer_ratio())
-    if strict_root_count(polynomial, lower, upper) != 1:
-        raise _validation_error(
-            "real_root_count",
-            "a real embedding interval must isolate exactly one root",
-        )
-    roots_below = int(polynomial.count_roots(-sympy.oo, lower))
-    if polynomial.eval(lower) == 0:
-        roots_below -= 1
-    if roots_below != embedding.root.real_root_index:
-        raise _validation_error(
-            "real_root_identity",
-            "real isolating interval does not select the embedding's indexed root",
-        )
-
-
 class RealNumberFieldEmbeddingRecord(StrictModel):
     """A real embedding together with exact rational isolation evidence."""
 
-    kind: Literal["REAL"] = "REAL"
+    kind: Literal["REAL"]
     embedding: RealNumberFieldEmbedding
     isolating_interval: RationalIsolatingInterval
 
@@ -306,7 +272,7 @@ class RealNumberFieldEmbeddingRecord(StrictModel):
 class ComplexNumberFieldEmbeddingRecord(StrictModel):
     """A nonreal embedding together with exact rational isolation evidence."""
 
-    kind: Literal["COMPLEX"] = "COMPLEX"
+    kind: Literal["COMPLEX"]
     embedding: ComplexNumberFieldEmbedding
     isolating_rectangle: RationalComplexIsolatingRectangle
     half_plane: Literal["NEGATIVE_IMAGINARY", "POSITIVE_IMAGINARY"]
@@ -355,18 +321,18 @@ NumberFieldEmbeddingRecord = Annotated[
 
 
 class NumberFieldSignature(StrictModel):
-    real_embedding_count: StrictInt = Field(ge=0, le=MAX_SIMPLE_NUMBER_FIELD_DEGREE)
+    real_embedding_count: StrictInt = Field(ge=0, le=MAX_NUMBER_FIELD_EMBEDDING_DEGREE)
     complex_conjugate_pair_count: StrictInt = Field(
-        ge=0, le=MAX_SIMPLE_NUMBER_FIELD_DEGREE // 2
+        ge=0, le=MAX_NUMBER_FIELD_EMBEDDING_DEGREE // 2
     )
 
 
 class NumberFieldConjugatePair(StrictModel):
     negative_embedding_index: StrictInt = Field(
-        ge=0, le=MAX_SIMPLE_NUMBER_FIELD_DEGREE - 1
+        ge=0, le=MAX_NUMBER_FIELD_EMBEDDING_DEGREE - 1
     )
     positive_embedding_index: StrictInt = Field(
-        ge=0, le=MAX_SIMPLE_NUMBER_FIELD_DEGREE - 1
+        ge=0, le=MAX_NUMBER_FIELD_EMBEDDING_DEGREE - 1
     )
 
 
@@ -380,11 +346,11 @@ class NumberFieldEmbeddingProfile(StrictModel):
 
     field: SimpleNumberFieldPresentation
     records: tuple[NumberFieldEmbeddingRecord, ...] = Field(
-        min_length=1, max_length=MAX_SIMPLE_NUMBER_FIELD_DEGREE
+        min_length=1, max_length=MAX_NUMBER_FIELD_EMBEDDING_DEGREE
     )
     signature: NumberFieldSignature
     complex_conjugate_pairs: tuple[NumberFieldConjugatePair, ...] = Field(
-        max_length=MAX_SIMPLE_NUMBER_FIELD_DEGREE // 2
+        max_length=MAX_NUMBER_FIELD_EMBEDDING_DEGREE // 2
     )
     defining_polynomial_discriminant: CanonicalInteger
     ordering: Literal["REAL_INCREASING_THEN_POSITIVE_REPRESENTATIVE_PAIRS_V1"] = (
@@ -512,6 +478,7 @@ class EmbeddedSimpleNumberFieldElement(StrictModel):
 
 
 __all__ = [
+    "MAX_NUMBER_FIELD_EMBEDDING_DEGREE",
     "MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS",
     "MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS",
     "MAX_SIMPLE_NUMBER_FIELD_DEGREE",

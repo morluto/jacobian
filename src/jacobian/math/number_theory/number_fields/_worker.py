@@ -5,28 +5,25 @@ from __future__ import annotations
 import json
 import sys
 
-from jacobian.math.number_theory.number_fields import discriminant
+from jacobian.math.number_theory.number_fields._integral_basis import (
+    recognized_integral_basis,
+)
 from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
 
 
 def main() -> int:
-    request = NumberFieldRequest.model_validate(json.load(sys.stdin))
-    import sympy
-
-    variable = sympy.Symbol(request.variable)
-    polynomial = sympy.Poly.from_list(
-        [int(value) for value in request.coefficients_descending],
-        gens=variable,
-        domain=sympy.ZZ,
+    request = NumberFieldRequest.model_validate_json(
+        sys.stdin.buffer.read(),
+        strict=True,
     )
-    if not polynomial.is_irreducible:
+    integral_basis = recognized_integral_basis(request.field)
+    if integral_basis is None:
         response: dict[str, object] = {"kind": "invalid"}
     else:
+        _ring, field_discriminant, _alpha, _leading = integral_basis
         response = {
             "kind": "complete",
-            "discriminant": discriminant(
-                request.coefficients_descending, request.variable
-            ),
+            "discriminant": str(field_discriminant),
         }
     json.dump(response, sys.stdout, separators=(",", ":"))
     return 0

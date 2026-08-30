@@ -2,18 +2,30 @@
 
 from __future__ import annotations
 
+import cProfile
+import time
 from fractions import Fraction
+from threading import Event
+from types import CodeType
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
+from tests.math.number_theory.number_fields._embedding_replay import (
+    require_real_interval_selects_root,
+    require_rectangle_selects_root,
+)
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_execution,
+)
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     RationalComplexIsolatingRectangle,
-    _require_rectangle_selects_root,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
@@ -22,25 +34,31 @@ from jacobian.math.number_theory.number_fields import (
     ComplexNumberFieldEmbedding,
     EmbeddedSimpleNumberFieldElement,
     NumberFieldEmbeddingProfile,
+    RealNumberFieldEmbedding,
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
     embeddings,
+)
+from jacobian.math.number_theory.number_fields._embedding_protocol import (
+    NumberFieldEmbeddingWorkerComplete,
+    NumberFieldEmbeddingWorkerRequest,
+)
+from jacobian.math.number_theory.number_fields._embeddings_worker import (
+    compute_embeddings_worker_response,
 )
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldEmbeddingsRequest,
 )
 from jacobian.math.number_theory.number_fields.operations import (
     MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES,
-    MAX_NUMBER_FIELD_REAL_PART_RESULTANT_STORAGE_BITS,
-    MAX_NUMBER_FIELD_ROOT_REFINEMENT_BITS,
     NumberFieldEmbeddingAdmissionError,
     _admit_number_field_embeddings,
 )
 from jacobian.math.number_theory.number_fields.values import (
     ComplexNumberFieldEmbeddingRecord,
     RealNumberFieldEmbeddingRecord,
-    _require_real_interval_selects_root,
 )
+from jacobian.process import bounded_process_cancellation
 
 
 def _field(*coefficients: str) -> SimpleNumberFieldPresentation:
@@ -51,6 +69,17 @@ def _field(*coefficients: str) -> SimpleNumberFieldPresentation:
 
 def _rational(value: int | Fraction) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
+
+
+def _worker_request(
+    field: SimpleNumberFieldPresentation,
+) -> NumberFieldEmbeddingWorkerRequest:
+    admission = _admit_number_field_embeddings(field)
+    return NumberFieldEmbeddingWorkerRequest(
+        field=field,
+        root_isolation_bits=admission.root_isolation_bits,
+        evidence_grid_bits=admission.evidence_grid_bits,
+    )
 
 
 def test_rational_field_degree_one_is_the_cheapest_complete_profile() -> None:
@@ -152,11 +181,12 @@ def test_embedding_identity_is_independent_of_valid_isolation_evidence() -> None
         imaginary_upper=_rational(Fraction(-1, 2)),
     )
     assert (
-        _require_rectangle_selects_root(original.embedding.root, wider_evidence)
+        require_rectangle_selects_root(original.embedding.root, wider_evidence)
         == "NEGATIVE_IMAGINARY"
     )
 
     alternate_record = ComplexNumberFieldEmbeddingRecord(
+        kind="COMPLEX",
         embedding=original.embedding,
         isolating_rectangle=wider_evidence,
         half_plane="NEGATIVE_IMAGINARY",
@@ -185,6 +215,7 @@ def test_reduced_elements_compose_with_selected_embedding_without_backend_values
     )
 
     assert image.evaluation == "POWER_BASIS_AT_SELECTED_ROOT"
+    assert isinstance(image.embedding, ComplexNumberFieldEmbedding)
     assert image.embedding.root.root_index == 1
     assert (
         EmbeddedSimpleNumberFieldElement.model_validate_json(image.model_dump_json())
@@ -228,13 +259,14 @@ def test_projective_curve_2870_prerequisite_preserves_gaussian_coordinate_triple
         EmbeddedSimpleNumberFieldElement,
         EmbeddedSimpleNumberFieldElement,
     ]:
-        return tuple(
+        embedded = tuple(
             EmbeddedSimpleNumberFieldElement(
                 element=coordinate,
                 embedding=record.embedding,
             )
             for coordinate in (one, alpha, zero)
         )
+        return embedded[0], embedded[1], embedded[2]
 
     negative_coordinates = embedded_coordinates(negative_record)
     positive_coordinates = embedded_coordinates(positive_record)
@@ -253,6 +285,8 @@ def test_projective_curve_2870_prerequisite_preserves_gaussian_coordinate_triple
 
     assert restored_negative == negative_coordinates
     assert restored_positive == positive_coordinates
+    assert isinstance(restored_negative[1].embedding, ComplexNumberFieldEmbedding)
+    assert isinstance(restored_positive[1].embedding, ComplexNumberFieldEmbedding)
     assert restored_negative[1].embedding.root.root_index == 0
     assert restored_positive[1].embedding.root.root_index == 1
     assert restored_negative[1].embedding != restored_positive[1].embedding
@@ -277,9 +311,7 @@ def test_embedded_element_rejects_a_different_field_presentation() -> None:
         )
 
 
-def test_reducible_nonprimitive_and_malformed_elements_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="irreducible"):
-        _field("1", "0", "-1")
+def test_nonprimitive_presentations_and_malformed_elements_are_rejected() -> None:
     with pytest.raises(ValidationError, match="primitive"):
         _field("2", "0", "2")
     with pytest.raises(ValidationError, match="positive leading"):
@@ -300,7 +332,7 @@ def test_malformed_overlapping_wrong_root_and_wrong_sign_evidence_are_rejected()
     assert isinstance(positive, ComplexNumberFieldEmbeddingRecord)
 
     with pytest.raises(ValueError, match="selected indexed root"):
-        _require_rectangle_selects_root(
+        require_rectangle_selects_root(
             negative.embedding.root,
             positive.isolating_rectangle,
         )
@@ -312,7 +344,7 @@ def test_malformed_overlapping_wrong_root_and_wrong_sign_evidence_are_rejected()
         imaginary_upper=_rational(2),
     )
     with pytest.raises(ValueError, match="exactly one root"):
-        _require_rectangle_selects_root(negative.embedding.root, overlapping)
+        require_rectangle_selects_root(negative.embedding.root, overlapping)
 
     wrong_sign = negative.model_dump(mode="json")
     wrong_sign["half_plane"] = "POSITIVE_IMAGINARY"
@@ -326,7 +358,7 @@ def test_malformed_overlapping_wrong_root_and_wrong_sign_evidence_are_rejected()
         imaginary_upper=_rational(Fraction(-1, 2)),
     )
     with pytest.raises(ValueError, match="selected indexed root"):
-        _require_rectangle_selects_root(negative.embedding.root, boundary_root)
+        require_rectangle_selects_root(negative.embedding.root, boundary_root)
 
     oversized = negative.model_dump(mode="json")
     oversized["isolating_rectangle"]["real_lower"]["num"] = "1" * 4_097
@@ -349,7 +381,7 @@ def test_real_interval_is_bound_to_the_selected_real_root() -> None:
     assert isinstance(negative, RealNumberFieldEmbeddingRecord)
     assert isinstance(positive, RealNumberFieldEmbeddingRecord)
     with pytest.raises(ValueError, match="indexed root"):
-        _require_real_interval_selects_root(
+        require_real_interval_selects_root(
             negative.embedding,
             positive.isolating_interval,
         )
@@ -362,6 +394,7 @@ def test_real_interval_is_bound_to_the_selected_real_root() -> None:
     oversized_component = CanonicalRational(num="-1", den="9" * 4_097)
     with pytest.raises(ValidationError, match="4,096-digit bound"):
         RealNumberFieldEmbeddingRecord(
+            kind="REAL",
             embedding=negative.embedding,
             isolating_interval=RationalIsolatingInterval(
                 lower=oversized_component,
@@ -397,16 +430,47 @@ def test_profiles_are_deterministic_across_backend_cache_refinement(
     assert embeddings(field).model_dump_json() == first
 
 
+def test_worker_executes_one_all_root_isolation_pass() -> None:
+    profiler = cProfile.Profile()
+    field = _field("1", "0", "5", "0", "5")
+
+    profiler.runcall(compute_embeddings_worker_response, _worker_request(field))
+    poly_intervals_calls = sum(
+        entry.callcount
+        for entry in profiler.getstats()
+        if isinstance(entry.code, CodeType)
+        and entry.code.co_filename.endswith("sympy/polys/polytools.py")
+        and entry.code.co_name == "intervals"
+    )
+    complex_isolation_calls = sum(
+        entry.callcount
+        for entry in profiler.getstats()
+        if isinstance(entry.code, CodeType)
+        and entry.code.co_name == "dup_isolate_complex_roots_sqf"
+    )
+
+    assert poly_intervals_calls == 1
+    assert complex_isolation_calls == 1
+
+
 def test_profile_and_canonical_values_round_trip_without_backend_objects() -> None:
     profile = embeddings(_field("1", "0", "-1", "1"))
     encoded = encode_strict_json(profile.model_dump(mode="json"))
+    profiler = cProfile.Profile()
 
-    restored = NumberFieldEmbeddingProfile.model_validate_json(
-        encoded,
-        strict=True,
+    restored = profiler.runcall(
+        lambda: NumberFieldEmbeddingProfile.model_validate_json(
+            encoded,
+            strict=True,
+        )
     )
 
     assert restored == profile
+    assert not any(
+        isinstance(entry.code, CodeType)
+        and "/sympy/" in entry.code.co_filename.replace("\\", "/")
+        for entry in profiler.getstats()
+    )
     assert "CRootOf" not in profile.model_dump_json()
     assert "sympy" not in profile.model_dump_json().lower()
 
@@ -426,17 +490,6 @@ def test_degree_coefficient_isolation_work_and_result_bounds_are_preflighted() -
     degree_eight = _field("1", "1", "-7", "-5", "15", "6", "-10", "-1", "1")
     admission = _admit_number_field_embeddings(degree_eight)
 
-    assert admission.degree == 8
-    assert admission.isolator_component_digits <= 4_096
-    assert admission.real_part_resultant_storage_bits <= (
-        MAX_NUMBER_FIELD_REAL_PART_RESULTANT_STORAGE_BITS
-    )
-    assert admission.root_refinement_precision_bits <= (
-        MAX_NUMBER_FIELD_ROOT_REFINEMENT_BITS
-    )
-    assert admission.root_refinement_bit_work == (
-        admission.root_refinement_calls * admission.root_refinement_precision_bits
-    )
     assert admission.predicted_result_bytes <= MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES
     degree_eight_result = embeddings(degree_eight)
     assert (
@@ -444,8 +497,10 @@ def test_degree_coefficient_isolation_work_and_result_bounds_are_preflighted() -
         <= admission.predicted_result_bytes
     )
 
-    with pytest.raises(ValidationError):
-        _field("1", *("0",) * 8, "2")
+    degree_nine = _field("1", *("0",) * 8, "2")
+    with pytest.raises(NumberFieldEmbeddingAdmissionError) as caught:
+        embeddings(degree_nine)
+    assert caught.value.reason == "degree_bound"
     with pytest.raises(ValidationError, match="256 digits"):
         _field("1", "0", "1" + "0" * 256)
     with pytest.raises(ValidationError, match="256 digits"):
@@ -457,11 +512,11 @@ def test_degree_coefficient_isolation_work_and_result_bounds_are_preflighted() -
         )
 
     # Eisenstein at 2: this is a valid 256-digit defining polynomial, but its
-    # exact all-root ordering plan is immediately rejected before expansion by
-    # the separately derived work/intermediate envelope.
+    # exact pair-ordering precision is rejected inside the bounded worker after
+    # the static resultant-storage envelope has admitted the presolve.
     large_eisenstein = _field("1", *("0",) * 7, str(10**255 + 2))
     with pytest.raises(NumberFieldEmbeddingAdmissionError) as caught:
-        _admit_number_field_embeddings(large_eisenstein)
+        embeddings(large_eisenstein)
     assert caught.value.reason == "pair_ordering_precision_bound"
 
 
@@ -471,6 +526,7 @@ def test_degree_coefficient_isolation_work_and_result_bounds_are_preflighted() -
         ("1", "0"),
         ("9" * 256, "1"),
         ("1", "0", "-2"),
+        ("2", "0", "1"),
         ("1", "0", "1"),
         ("1", "0", "-1", "1"),
         ("1", "0", "5", "0", "5"),
@@ -484,20 +540,39 @@ def test_every_kernel_isolator_replays_and_result_stays_below_preflight_bound(
     admission = _admit_number_field_embeddings(field)
     result = embeddings(field)
     encoded = encode_strict_json(result.model_dump(mode="json"))
+    worker_projection = NumberFieldEmbeddingWorkerComplete(
+        kind="complete",
+        real_intervals=tuple(
+            record.isolating_interval
+            for record in result.records
+            if isinstance(record, RealNumberFieldEmbeddingRecord)
+        ),
+        negative_complex_rectangles=tuple(
+            record.isolating_rectangle
+            for record in result.records
+            if isinstance(record, ComplexNumberFieldEmbeddingRecord)
+            and record.half_plane == "NEGATIVE_IMAGINARY"
+        ),
+        defining_polynomial_discriminant=result.defining_polynomial_discriminant,
+    )
 
     assert len(encoded) <= admission.predicted_result_bytes
+    assert (
+        len(worker_projection.model_dump_json().encode("utf-8"))
+        <= admission.predicted_worker_output_bytes
+    )
     assert (
         NumberFieldEmbeddingProfile.model_validate_json(encoded, strict=True) == result
     )
     for record in result.records:
         if isinstance(record, RealNumberFieldEmbeddingRecord):
-            _require_real_interval_selects_root(
+            require_real_interval_selects_root(
                 record.embedding,
                 record.isolating_interval,
             )
         else:
             assert (
-                _require_rectangle_selects_root(
+                require_rectangle_selects_root(
                     record.embedding.root,
                     record.isolating_rectangle,
                 )
@@ -516,6 +591,68 @@ def test_catalog_operation_exposes_and_runs_the_advertised_gaussian_example() ->
     assert isinstance(result, NumberFieldEmbeddingProfile)
     assert result.signature.complex_conjugate_pair_count == 1
     assert result.defining_polynomial_discriminant == "-4"
+
+
+def test_reducible_presentation_is_recognized_inside_the_operation() -> None:
+    operation = Catalog.open().operation("number_field.embeddings.compute")
+    assert operation is not None
+    request = NumberFieldEmbeddingsRequest.model_validate(
+        {
+            "field": {
+                "domain": "QQ",
+                "coefficients_descending": ["1", "0", "-1"],
+            }
+        }
+    )
+
+    with pytest.raises(OperationDomainValidationError) as caught:
+        operation.run(request)
+
+    assert caught.value.errors()[0]["type"] == "number_field.embeddings.not_irreducible"
+
+
+def test_embedding_worker_honors_an_already_expired_request_deadline() -> None:
+    field = _field("1", "0", "1")
+
+    with (
+        request_execution(started_at=time.monotonic() - 121),
+        pytest.raises(OperationExecutionTimeoutError, match="before"),
+    ):
+        embeddings(field)
+
+
+def test_embedding_worker_honors_request_cancellation_before_launch() -> None:
+    field = _field("1", "0", "1")
+    cancellation = Event()
+    cancellation.set()
+
+    with (
+        bounded_process_cancellation(cancellation),
+        pytest.raises(OperationExecutionCancelledError, match="cancelled"),
+    ):
+        embeddings(field)
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        RealNumberFieldEmbedding,
+        ComplexNumberFieldEmbedding,
+        RealNumberFieldEmbeddingRecord,
+        ComplexNumberFieldEmbeddingRecord,
+    ],
+)
+def test_embedding_discriminator_is_required_in_schema(model: type[object]) -> None:
+    assert "kind" in model.model_json_schema()["required"]  # type: ignore[attr-defined]
+
+
+def test_embedding_discriminator_is_required_at_runtime() -> None:
+    profile = embeddings(_field("1", "0", "1"))
+    embedding = profile.records[0].embedding.model_dump(mode="json")
+    embedding.pop("kind")
+
+    with pytest.raises(ValidationError, match="Field required"):
+        ComplexNumberFieldEmbedding.model_validate(embedding)
 
 
 def test_catalog_operation_projects_owner_local_admission_rejection() -> None:

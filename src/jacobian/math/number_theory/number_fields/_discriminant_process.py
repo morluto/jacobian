@@ -80,7 +80,7 @@ def compute_nf_discriminant(
         response = None
     if isinstance(response, dict) and response.get("kind") == "invalid":
         raise OperationDomainValidationError(
-            location=("coefficients_descending",),
+            location=("field",),
             code="number_field.not_irreducible",
             message="number-field polynomial must be irreducible over QQ",
         )

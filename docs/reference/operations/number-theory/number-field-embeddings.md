@@ -16,6 +16,11 @@ the complex-conjugate grouping, and the discriminant of `f`. This last value is
 the defining-polynomial discriminant; it is not a claim about the maximal order
 or the field discriminant.
 
+Parsing the carrier establishes only its bounded primitive, positive-leading
+canonical shape. The operation recognizes irreducibility inside its isolated
+worker; ordinary request or result deserialization never factors the polynomial
+or isolates its roots.
+
 **Scope:** Part of #1689; unblocks #2870. This operation and its field/element
 carriers provide separate serializable embedding identities for `i` and `-i`.
 They deliberately do not add the umbrella issue's element-conjugate profile,
@@ -47,36 +52,51 @@ coordinates in the ascending basis `1, alpha, ..., alpha^(n-1)`.
 the complete field presentation and one selected exact embedding. It does not
 use an isolating rectangle as embedding identity.
 
+The same serialized `SimpleNumberFieldPresentation` is the `field` input to
+`number_field.discriminant.compute`; no caller-selected polynomial variable or
+shape conversion is needed. The native `discriminant(field)` and
+`ring_of_integers(field)` functions accept that value directly. Their private
+symbol is always `alpha`. For a nonmonic defining polynomial with leading
+coefficient `a`, maximal-order computation uses the integral generator
+`beta = a*alpha` and substitutes the resulting basis back into the defining
+`alpha` power basis.
+
 ## Execution envelope
 
-The canonical field carrier admits degree at most 8 and at most 256 decimal
-digits per defining coefficient. Before enumerating roots, admission derives:
+The canonical field carrier admits degree at most 31, preserving the existing
+field-discriminant envelope, and at most 256 decimal digits per defining
+coefficient. This complete-profile operation separately admits degree at most
+8. Before enumerating roots, admission derives:
 
-- Mignotte separation bounds for distinct roots and for distinct real
-  coordinates of nonreal roots;
+- a Mignotte separation bound for distinct roots;
 - the size and coefficient-height envelope of the exact real-coordinate
   elimination resultant;
 - rational isolation precision and intermediate component digits;
 - a Hadamard bound for the defining-polynomial discriminant;
-- exact root-ordering and isolation work; and
 - the retained-source JSON result against the 10,485,760-byte canonical
-  transport envelope.
+  transport envelope; and
+- a separate byte bound for the worker's compact root-evidence projection.
 
 The elimination resultant is admitted from a `2n`-square Sylvester determinant
 and at most `2n^2 + 1` integer coefficients before it is expanded; its storage
 envelope is 2,097,152 bits. Exact root refinement is limited to 32,768 bits per
 call. An exact Sturm count supplies the signature after the Sylvester
-intermediate is admitted; inputs whose pair-order precision is too large are
-rejected at that point. Accepted inputs then receive one exact all-root
-isolation pass for deterministic rational evidence candidates. The kernel makes
-`3r2` rational refinements: two per conjugate pair for sign and pair order, and
-one to bind the pair to its admitted evidence rectangle. The complete JSON byte
-estimate counts every repeated presentation, indexed polynomial, and four
-rational components per record (the larger record shape) before embedding
-construction.
+intermediate is admitted. One request-scoped, disposable worker then recognizes
+irreducibility, obtains the exact signature by a Sturm count, and expands the
+real-coordinate resultant only when more than one conjugate pair needs ordering.
+That resultant gives the additional separation bound for distinct real
+coordinates. Inputs whose resulting pair-order precision is too large are
+rejected before root isolation. Accepted inputs receive exactly one exact
+all-root isolation pass at a precision that simultaneously separates roots and
+orders positive representatives. The worker coarsens those fine boxes onto the
+admitted public evidence grid, so high internal pair-order precision cannot
+enlarge a result beyond the component estimate. The complete-result estimate
+counts every repeated presentation, indexed polynomial, and four rational
+components per record (the larger record shape) before embedding construction;
+the worker stdout limit uses the smaller projection estimate instead.
 
-The public pair order is mapped to private backend indexes by exact rational
-refinement at the admitted separation precision. SymPy 1.14 supplies maintained
-exact polynomial irreducibility, resultants, root isolation, `CRootOf`
-refinement, and discriminants. No SymPy expression or floating approximation
-appears in a public value.
+The worker shares the operation's request deadline, is killed on deadline or
+client cancellation, and exits after its one response; SymPy root caches cannot
+survive into a later request. SymPy 1.14 supplies maintained exact polynomial
+irreducibility, resultants, Sturm counts, root isolation, and discriminants. No
+SymPy expression or floating approximation appears in a public value.

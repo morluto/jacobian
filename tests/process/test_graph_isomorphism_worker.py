@@ -21,6 +21,9 @@ from jacobian.math.number_theory._factorization_kernels import (
     factorize_primes,
 )
 from jacobian.math.number_theory.number_fields import (
+    SimpleNumberFieldPresentation,
+)
+from jacobian.math.number_theory.number_fields import (
     _discriminant_process as number_field_operations,
 )
 from jacobian.math.number_theory.number_fields._discriminant_process import (
@@ -28,6 +31,10 @@ from jacobian.math.number_theory.number_fields._discriminant_process import (
 )
 from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
 from jacobian.process import BoundedProcessResult, ProcessResourceLimits
+
+
+def _number_field(*coefficients: str) -> SimpleNumberFieldPresentation:
+    return SimpleNumberFieldPresentation(coefficients_descending=coefficients)
 
 
 def test_vf2_worker_obtains_a_positive_witness_in_one_search_traversal() -> None:
@@ -212,7 +219,7 @@ def test_timed_out_number_field_worker_is_an_unknown_non_conclusion(
     )
 
     result = compute_nf_discriminant(
-        NumberFieldRequest(coefficients_descending=("1", "0", "-2"), variable="x")
+        NumberFieldRequest(field=_number_field("1", "0", "-2"))
     )
 
     assert result.status == "UNKNOWN"
@@ -238,7 +245,7 @@ def test_number_field_worker_has_private_cwd_and_os_resource_limits(
     monkeypatch.setattr(process, "run_bounded_process", complete_worker)
 
     result = compute_nf_discriminant(
-        NumberFieldRequest(coefficients_descending=("1", "0", "-2"), variable="x")
+        NumberFieldRequest(field=_number_field("1", "0", "-2"))
     )
 
     assert result.discriminant == "8"
@@ -259,7 +266,7 @@ def test_number_field_worker_start_failure_is_an_unknown_non_conclusion(
     monkeypatch.setattr(process, "run_bounded_process", unavailable)
 
     result = compute_nf_discriminant(
-        NumberFieldRequest(coefficients_descending=("1", "0", "-2"), variable="x")
+        NumberFieldRequest(field=_number_field("1", "0", "-2"))
     )
 
     assert result.status == "UNKNOWN"

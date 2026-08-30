@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
 from math import gcd
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, ValidateAs, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
@@ -36,42 +35,15 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 RealAlgebraicOrder = Literal["LT", "EQ", "GT"]
 
 
-@lru_cache(maxsize=128)
-def _sympy_polynomial_from_coefficients(
-    coefficients: tuple[CanonicalInteger, ...],
-) -> Poly:
+def _sympy_polynomial(value: RealAlgebraicValue) -> Poly:
     import sympy
 
     x = sympy.Symbol("x")
     return sympy.Poly.from_list(
-        [parse_canonical_integer(coefficient) for coefficient in coefficients],
+        [parse_canonical_integer(coefficient) for coefficient in value.polynomial],
         gens=x,
         domain=sympy.ZZ,
     )
-
-
-def _sympy_polynomial(value: RealAlgebraicValue) -> Poly:
-    return _sympy_polynomial_from_coefficients(value.polynomial)
-
-
-@lru_cache(maxsize=128)
-def _polynomial_is_irreducible(
-    coefficients: tuple[CanonicalInteger, ...],
-) -> bool:
-    return _sympy_polynomial_from_coefficients(coefficients).is_irreducible is True
-
-
-@lru_cache(maxsize=128)
-def _real_root_count(
-    coefficients: tuple[CanonicalInteger, ...],
-) -> int:
-    return len(_sympy_polynomial_from_coefficients(coefficients).intervals())
-
-
-def _real_polynomial_validation(
-    coefficients: tuple[CanonicalInteger, ...],
-) -> tuple[bool, int]:
-    return _polynomial_is_irreducible(coefficients), _real_root_count(coefficients)
 
 
 def _rational(value: SympyRational) -> CanonicalRational:
@@ -84,8 +56,8 @@ def _rational(value: SympyRational) -> CanonicalRational:
     )
 
 
-class RealAlgebraicValue(StrictModel):
-    """One real algebraic number in canonical minimal-polynomial form.
+class _RealAlgebraicValueShape(StrictModel):
+    """Canonical structural representation of an indexed real root.
 
     ``polynomial`` is the primitive irreducible polynomial in ``ZZ[x]`` with
     positive leading coefficient, listed in descending degree.  The
@@ -112,7 +84,7 @@ class RealAlgebraicValue(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_canonical_real_root(self) -> Self:
+    def require_canonical_polynomial_shape(self) -> Self:
         if any(
             len(coefficient.lstrip("-")) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
             for coefficient in self.polynomial
@@ -139,12 +111,31 @@ class RealAlgebraicValue(StrictModel):
                 "real algebraic minimal polynomial must be primitive over ZZ",
             )
 
-        is_irreducible, real_root_count = _real_polynomial_validation(self.polynomial)
-        if not is_irreducible:
+        if self.real_root_index >= len(self.polynomial) - 1:
+            raise _validation_error(
+                "root_index",
+                "real_root_index must be smaller than the polynomial degree",
+            )
+        return self
+
+
+class RealAlgebraicValue(_RealAlgebraicValueShape):
+    """One real algebraic number in canonical minimal-polynomial form.
+
+    Direct construction recognizes irreducibility and the selected real root.
+    Result owners may instead use the structural request view after their
+    admitted kernel has established those mathematical invariants.
+    """
+
+    @model_validator(mode="after")
+    def require_canonical_real_root(self) -> Self:
+        polynomial = _sympy_polynomial(self)
+        if polynomial.is_irreducible is not True:
             raise _validation_error(
                 "not_irreducible",
                 "real algebraic minimal polynomial must be irreducible over QQ",
             )
+        real_root_count = len(polynomial.intervals())
         if self.real_root_index >= real_root_count:
             raise _validation_error(
                 "root_index",
@@ -165,6 +156,24 @@ class RealAlgebraicValue(StrictModel):
             polynomial=polynomial,
             real_root_index=real_root_index,
         )
+
+
+def _unrecognized_real_value_from_shape(
+    shape: _RealAlgebraicValueShape,
+) -> RealAlgebraicValue:
+    if isinstance(shape, RealAlgebraicValue):
+        return shape
+    return RealAlgebraicValue.model_construct(
+        polynomial=shape.polynomial,
+        real_root_index=shape.real_root_index,
+    )
+
+
+_UnrecognizedRealAlgebraicValue = Annotated[
+    RealAlgebraicValue,
+    ValidateAs(_RealAlgebraicValueShape, _unrecognized_real_value_from_shape),
+    WithJsonSchema(RealAlgebraicValue.model_json_schema()),
+]
 
 
 class RationalIsolatingInterval(StrictModel):

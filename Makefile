@@ -124,6 +124,15 @@ test-singular: ## Pinned Singular exact-algebra backend (serial, 120s, kill-safe
 		tests/process/polynomial_maps \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
+test-qepcad: ## Pinned QEPCAD plane-topology backend (serial, kill-safe).
+	@command -v qepcad >/dev/null || { echo "QEPCAD 1.74 is required" >&2; exit 1; }
+	@qepcad -v | grep -F "Version B 1.74," >/dev/null || { echo "QEPCAD 1.74 is required" >&2; exit 1; }
+	$(PYTEST_RUNNER) --name qepcad --timeout-seconds 1800 -- \
+		-n 0 --timeout=600 --timeout-method=signal \
+		tests/math/polynomials/test_plane_component_profile.py \
+		tests/process/polynomials/test_qepcad_plane_components.py \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
 test: test-ordinary ## All ordinary Python tests.
 
 test-ordinary: ## Ordinary suite in the fixed CI group order.
@@ -152,6 +161,7 @@ _test-full:
 	$(MAKE) test-process
 	$(MAKE) test-mcp
 	$(MAKE) test-singular
+	$(MAKE) test-qepcad
 
 test-property: ## Run explicitly marked invariant checks once.
 	$(UV_RUN) pytest -n 0 --timeout=120 --timeout-method=thread -m property \

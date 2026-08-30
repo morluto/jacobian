@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import cProfile
+from types import CodeType
+
 import pytest
 from pydantic import ValidationError
 from tests.math.number_theory.algebraic_numbers._real_algebraic_support import (
@@ -12,6 +15,10 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
     RealAlgebraicValue,
     compare_real_algebraic,
     isolate_real_algebraic,
+)
+from jacobian.math.number_theory.algebraic_numbers.root_isolation._models import (
+    AlgebraicCompareRequest,
+    UnivariatePolynomialRequest,
 )
 
 
@@ -73,13 +80,13 @@ def test_value_rejects_a_nonreal_or_missing_root() -> None:
 
 
 def test_degree_and_coefficient_boundaries_are_closed() -> None:
-    degree_eight = _value(("1", "0", "0", "0", "0", "0", "0", "0", "-2"), 1)
+    degree_sixteen = _value(("1",) + ("0",) * 15 + ("-2",), 1)
     thousand_digit_leading = _value(("1" + "0" * 999, "1"), 0)
 
-    assert len(degree_eight.polynomial) == 9
+    assert len(degree_sixteen.polynomial) == 17
     assert len(thousand_digit_leading.polynomial[0]) == 1_000
     with pytest.raises(ValidationError):
-        _value(("1",) + ("0",) * 8 + ("-2",), 1)
+        _value(("1",) + ("0",) * 16 + ("-2",), 1)
     with real_algebraic_validation_error():
         _value(("1" + "0" * 1_000, "1"), 0)
 
@@ -88,3 +95,50 @@ def test_value_round_trips_without_backend_expressions() -> None:
     value = _value(("1", "0", "-2"), 1)
 
     assert RealAlgebraicValue.model_validate_json(value.model_dump_json()) == value
+
+
+def test_pairwise_comparison_retains_its_degree_eight_work_envelope() -> None:
+    degree_sixteen = _value(("1",) + ("0",) * 15 + ("-2",), 1)
+
+    with pytest.raises(ValueError, match="degree at most 8"):
+        compare_real_algebraic(degree_sixteen, _value(("1", "-1"), 0))
+    with pytest.raises(ValidationError, match="degree at most 8"):
+        AlgebraicCompareRequest(
+            left=degree_sixteen,
+            right=_value(("1", "-1"), 0),
+        )
+
+
+def test_comparison_preflights_raw_degree_before_algebraic_recognition() -> None:
+    degree_sixteen = {
+        "polynomial": ["1", *("0" for _ in range(15)), "-2"],
+        "real_root_index": 1,
+    }
+    payload = {"left": degree_sixteen, "right": degree_sixteen}
+    profiler = cProfile.Profile()
+
+    with pytest.raises(ValidationError, match="degree at most 8"):
+        profiler.runcall(AlgebraicCompareRequest.model_validate, payload)
+
+    assert (
+        AlgebraicCompareRequest.model_json_schema()["properties"]["left"]["properties"][
+            "polynomial"
+        ]["maxItems"]
+        == 9
+    )
+    assert not any(
+        isinstance(entry.code, CodeType)
+        and "/sympy/" in entry.code.co_filename.replace("\\", "/")
+        for entry in profiler.getstats()
+    )
+
+
+def test_root_isolation_retains_its_degree_eight_work_envelope() -> None:
+    coefficients = [
+        {"num": "1" if index in {0, 9} else "0", "den": "1"} for index in range(10)
+    ]
+
+    with pytest.raises(ValidationError, match="degree at most 8"):
+        UnivariatePolynomialRequest.model_validate(
+            {"coefficients_descending": coefficients}
+        )

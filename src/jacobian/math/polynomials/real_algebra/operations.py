@@ -19,6 +19,9 @@ from jacobian.math.polynomials.real_algebra._models import (
 from jacobian.math.polynomials.real_algebra._models import (
     _validation_error as _real_algebra_validation_error,
 )
+from jacobian.math.polynomials.real_algebra._plane_components import (
+    compute_plane_component_profile,
+)
 from jacobian.math.polynomials.real_algebra._strict_sublevel import (
     compute_strict_sublevel_payload,
 )
@@ -39,6 +42,7 @@ from jacobian.math.polynomials.values import (
 )
 
 __all__ = [
+    "compute_plane_component_profile",
     "compute_root_count",
     "compute_strict_sublevel_measure",
     "compute_sturm_chain",

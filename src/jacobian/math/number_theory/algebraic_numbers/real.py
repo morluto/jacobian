@@ -17,14 +17,15 @@ if TYPE_CHECKING:
     from sympy import Poly
     from sympy.core.numbers import Rational as SympyRational
 
-# A degree-eight value covers every singular value of a 2 by 2 matrix over a
-# real quadratic field.  The coefficient budget also bounds exact comparison:
-# the product of two defining polynomials has degree at most sixteen and
-# coefficient height below 2,002 decimal digits.  Mignotte's root-separation
-# bound then needs fewer than 32,768 decimal digits for rational isolating
-# endpoints, so every accepted comparison remains representable by the shared
-# canonical scalar envelope.
-MAX_REAL_ALGEBRAIC_DEGREE = 8
+# A degree-sixteen carrier includes coordinate projections of isolated
+# intersections of plane quartics. Pairwise comparison retains its proven
+# degree-eight envelope: the product of two such defining polynomials has
+# degree at most sixteen and coefficient height below 2,002 decimal digits.
+# Mignotte's root-separation bound then needs fewer than 32,768 decimal digits
+# for rational isolating endpoints, so every accepted comparison remains
+# representable by the shared canonical scalar envelope.
+MAX_REAL_ALGEBRAIC_DEGREE = 16
+MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE = 8
 MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS = 1_000
 
 
@@ -225,6 +226,14 @@ def _order_data(
     RationalIsolatingInterval,
     RationalIsolatingInterval,
 ]:
+    if any(
+        len(value.polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+        for value in (left, right)
+    ):
+        raise ValueError(
+            "exact algebraic comparison admits degree at most "
+            f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE}"
+        )
     left_poly = _sympy_polynomial(left)
     right_poly = _sympy_polynomial(right)
     if left.polynomial == right.polynomial:
@@ -315,6 +324,7 @@ def compare_real_algebraic(
 
 __all__ = [
     "MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS",
+    "MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE",
     "MAX_REAL_ALGEBRAIC_DEGREE",
     "RationalIsolatingInterval",
     "RealAlgebraicOrderValue",

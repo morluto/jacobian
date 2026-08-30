@@ -168,3 +168,63 @@ SageMath is the current development-time differential oracle for selected
 Singular-backed algorithms. It is not a Jacobian runtime dependency or a
 required CI environment; the Singular adapter and bounded repository-owned
 property tests carry the required evidence.
+
+## QEPCAD
+
+The plane real-algebraic owner uses
+[QEPCAD B 1.74](https://www.usna.edu/Users/cs/wcbrown/qepcad/B/QEPCAD.html)
+as a private child-process backend for exact connected components of bounded-size
+sign tables in two variables. The required CI lane installs Debian's pinned
+`qepcad=1.74+ds-5` package and checks the backend version before running the
+owner and process tests.
+
+The adapter first requests a full sign-invariant CAD of `R^2` for the declared
+set alone. It then invokes QEPCAD's two-dimensional closure operation once for
+each true cell, with every other truth value reset to undetermined. This
+satisfies `closure2d`'s full-CAD precondition and yields the exact true-cell
+adjacency relation used to choose the canonical component representatives.
+
+When samples are present, a second bounded CAD adds their coordinate minimal
+polynomials and the source representatives as tautologies. These polynomials do
+not change the declared set, but force every named point onto a zero-dimensional
+cell. The adapter maps the refined component relation back to the source-only
+representatives, so adding samples cannot change the component profile or its
+IDs. The extra projection family is checked against the same degree,
+Sylvester-determinant coefficient-height, and cell envelopes before the second
+CAD begins. Plane points reuse the canonical
+real-algebraic scalar for each coordinate and retain one rational isolating box.
+
+Degree sixteen is the exact coordinate-carrier bound for this source domain.
+A maximal-dimensional two-cell has a rational sector sample. For a
+one-dimensional component, the selected cell is either a section of a quartic
+over a rational base sector or a sector over a root of a source coefficient,
+discriminant, or pairwise resultant, whose degree is at most sixteen. An
+isolated zero-dimensional intersection of quartics has local Bezout degree at
+most sixteen; an isolated point on a shared reduced curve is singular and has
+the sharper degree-twelve derivative bound. The system
+`y^4 - x = x^4 - 2 = 0` attains degree sixteen in the `y` coordinate, so the
+carrier cannot remain at degree eight.
+
+One bounded Python worker owns sample recognition, QEPCAD interaction, cell
+closure, and canonical representative conversion. QEPCAD's prompt exchange is
+adaptive but request-scoped: its child joins that worker's process group, and a
+callback-scoped byte channel carries each command and response under the same
+absolute deadline. No reusable process session survives the request. Each
+response frame is limited to 8 MiB, and one 64 MiB stdout ledger is shared by
+the source CAD and optional sample-classification CAD rather than renewed for
+each cell closure. Degenerate empty and whole-plane requests use the same
+killable worker for sample recognition but do not require QEPCAD.
+
+Representative coefficient height, isolating-rational height, one-cell sample
+text, refinement-formula size, and aggregate canonical result size are
+declared operational completion envelopes rather than restrictions on the
+accepted semialgebraic set. A large sector rational or algebraic expression can
+therefore exhaust one of those envelopes after request admission. Such a call
+returns `RESOURCE_LIMIT` with no component count, representative, or other
+topological conclusion; it never truncates an exact profile.
+
+The parent retains the canonical request, strictly decodes only a compact
+representative/component-ID projection, binds its axes and sample count back to
+that request, and constructs the public result. Worker timeout, output or cell
+exhaustion, unsupported version, malformed output, and execution failure remain
+distinct operational non-completions and never imply a topological conclusion.

@@ -12,9 +12,16 @@ from jacobian.math.polynomials.real_algebra._models import (
     SturmChainRequest,
     SturmChainResult,
 )
+from jacobian.math.polynomials.real_algebra._plane_component_models import (
+    PlaneComponentProfileRequest,
+    PlaneComponentProfileResult,
+)
 from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
     StrictSublevelMeasureRequest,
     StrictSublevelMeasureResult,
+)
+from jacobian.math.polynomials.real_algebra.operations import (
+    compute_plane_component_profile as _compute_plane_component_profile_native,
 )
 from jacobian.math.polynomials.real_algebra.operations import (
     compute_root_count as _compute_root_count_native,
@@ -44,6 +51,12 @@ def compute_strict_sublevel_measure(
         request.lower,
         request.upper,
     )
+
+
+def compute_plane_component_profile(
+    request: PlaneComponentProfileRequest,
+) -> PlaneComponentProfileResult:
+    return _compute_plane_component_profile_native(request)
 
 
 def ra_operation[RequestT: StrictModel, ResultT: StrictModel](
@@ -165,6 +178,84 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "threshold": {"num": "2", "den": "1"},
                     "lower": {"num": "-2", "den": "1"},
                     "upper": {"num": "2", "den": "1"},
+                },
+            ),
+        ),
+    ),
+    ra_operation(
+        "real_algebraic.plane_semialgebraic.component_profile.compute",
+        "Compute exact components of a plane semialgebraic set",
+        "Return the complete connected-component partition of a bounded-size "
+        "normalized sign table in R^2, one exact algebraic representative per "
+        "component, and component IDs for supplied exact points. The maintained "
+        "QEPCAD 1.74 backend computes sign-invariant CAD cell closures. Inputs "
+        "have at most four degree-four QQ[x,y] polynomials, 48 total terms, "
+        "32-digit rational coefficients, 81 sign rows, and eight degree-sixteen "
+        "algebraic samples; projection work is preflighted. Timeout, cell, and "
+        "output limits return an explicit operational non-completion rather than "
+        "a topological conclusion.",
+        PlaneComponentProfileRequest,
+        PlaneComponentProfileResult,
+        compute_plane_component_profile,
+        "real-algebraic-geometry",
+        "semialgebraic-set",
+        "connected-components",
+        "exact",
+        examples=(
+            example(
+                "annulus_complement",
+                "Compute the open unit disk and radius-two exterior components; "
+                "each canonical sign row assigns one sign to both QQ[x,y] "
+                "polynomials.",
+                {
+                    "semialgebraic_set": {
+                        "axis": ["x", "y"],
+                        "polynomials": [
+                            {
+                                "variables": ["x", "y"],
+                                "polynomial": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [2, 0],
+                                        },
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [0, 2],
+                                        },
+                                        {
+                                            "coefficient": {"num": "-1", "den": "1"},
+                                            "exponents": [0, 0],
+                                        },
+                                    ]
+                                },
+                            },
+                            {
+                                "variables": ["x", "y"],
+                                "polynomial": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [2, 0],
+                                        },
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [0, 2],
+                                        },
+                                        {
+                                            "coefficient": {"num": "-4", "den": "1"},
+                                            "exponents": [0, 0],
+                                        },
+                                    ]
+                                },
+                            },
+                        ],
+                        "sign_conditions": [
+                            {"signs": ["NEGATIVE", "NEGATIVE"]},
+                            {"signs": ["POSITIVE", "POSITIVE"]},
+                        ],
+                    },
+                    "samples": [],
                 },
             ),
         ),

@@ -48,9 +48,6 @@ a raw backend isolator happens to place a root on its boundary.
 
 `SimpleNumberFieldElement` stores exactly degree-many reduced rational
 coordinates in the ascending basis `1, alpha, ..., alpha^(n-1)`.
-`EmbeddedSimpleNumberFieldElement` retains that abstract element together with
-the complete field presentation and one selected exact embedding. It does not
-use an isolating rectangle as embedding identity.
 
 The same serialized `SimpleNumberFieldPresentation` is the `field` input to
 `number_field.discriminant.compute`; no caller-selected polynomial variable or

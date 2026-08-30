@@ -170,12 +170,35 @@ def test_oversized_code_support_family_is_a_domain_rejection() -> None:
         construct_binary_union_relation(to_set_system(code))
 
 
+def test_noncanonical_code_support_is_a_domain_rejection() -> None:
+    code = ExplicitBinaryCode(length=2, codewords=((1, 1),))
+    payload = to_set_system(code).model_dump(mode="json")
+    payload["supports"] = [[1, 0]]
+    malformed = type(to_set_system(code)).model_validate(payload)
+
+    with pytest.raises(OperationDomainValidationError, match="strictly increasing"):
+        construct_binary_union_relation(malformed)
+
+
 def test_total_membership_work_is_bounded_before_pair_scanning() -> None:
     common_size = MAX_BINARY_UNION_MEMBERSHIP_WORK // (255 * 256) + 1
     common = tuple(range(common_size))
     source = IndexedFiniteSetFamily(
         ground_set_size=common_size + 256,
         members=tuple((*common, common_size + index) for index in range(256)),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="membership work"):
+        construct_binary_union_relation(source)
+
+
+def test_single_member_normalization_is_charged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _source((tuple(range(32)),), ground_set_size=32)
+    monkeypatch.setattr(
+        "jacobian.math.combinatorics.extremal_sets.operations.MAX_BINARY_UNION_MEMBERSHIP_WORK",
+        31,
     )
 
     with pytest.raises(OperationDomainValidationError, match="membership work"):

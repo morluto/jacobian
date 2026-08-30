@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jacobian.canonical import CanonicalLimits, canonicalize_json
+from jacobian.canonical import CanonicalizationError, CanonicalLimits, canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes.nonlinear._models import ToSetSystemResult
 from jacobian.math.combinatorics.extremal_sets._models import (
@@ -76,6 +76,19 @@ def _canonical_source(
                     "relation carrier"
                 ),
             )
+        if any(
+            support != tuple(sorted(set(support)))
+            or any(not 0 <= element < source.length for element in support)
+            for support in source.supports
+        ):
+            raise OperationDomainValidationError(
+                location=("source", "supports"),
+                code="set_system.binary_union_relation.noncanonical_supports",
+                message=(
+                    "code supports must be strictly increasing distinct coordinates "
+                    "within the declared axis"
+                ),
+            )
         return IndexedFiniteSetFamily(
             ground_set_size=source.length,
             members=source.supports,
@@ -84,7 +97,7 @@ def _canonical_source(
 
 
 def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:
-    membership_work = max(0, len(source.members) - 1) * sum(
+    membership_work = max(1, len(source.members) - 1) * sum(
         len(member) for member in source.members
     )
     if membership_work > MAX_BINARY_UNION_MEMBERSHIP_WORK:
@@ -134,15 +147,22 @@ def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:
         ]
         for row in raw_rows
     ]
-    result_bytes = len(
-        canonicalize_json(
-            {
-                "source": source.model_dump(mode="json"),
-                "rows": raw_rows,
-                "hypergraph": {"vertices": list(vertices), "edges": raw_edges},
-            }
+    try:
+        result_bytes = len(
+            canonicalize_json(
+                {
+                    "source": source.model_dump(mode="json"),
+                    "rows": raw_rows,
+                    "hypergraph": {"vertices": list(vertices), "edges": raw_edges},
+                }
+            )
         )
-    )
+    except CanonicalizationError as exc:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="set_system.binary_union_relation.output_exceeded",
+            message="the complete retained-source relation exceeds the output budget",
+        ) from exc
     if result_bytes > CanonicalLimits().max_output_bytes:
         raise OperationDomainValidationError(
             location=("source",),

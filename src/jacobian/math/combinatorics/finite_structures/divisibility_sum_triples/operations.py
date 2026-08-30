@@ -100,6 +100,12 @@ def _admit_divisibility_sum_triples(
         a, b, c = triple
         if a != 0 and (b + c) % a == 0:
             edges.append((f"edge_{edge_index}", tuple(str(value) for value in triple)))
+            if len(edges) > 12_000:
+                raise OperationDomainValidationError(
+                    location=(),
+                    code="divisibility_sum.output_too_large",
+                    message="the exact triple family exceeds the hypergraph envelope",
+                )
     if len(edges) > 12_000 or 3 * len(edges) > 36_000:
         raise OperationDomainValidationError(
             location=(),

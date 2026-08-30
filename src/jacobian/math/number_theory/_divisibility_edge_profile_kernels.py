@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from sympy.ntheory.factor_ import factorint
 
-from jacobian.math.number_theory._divisibility_edge_profile_models import (
-    DivisibilityEdge,
-)
+from sympy.ntheory.factor_ import factorint
 
 
 @dataclass(frozen=True, slots=True)

@@ -46,13 +46,14 @@ def test_non_edge_absent() -> None:
 def test_no_reflexive_edges() -> None:
     """No edge connects a value to itself."""
     edges = _edges(["2", "4", "8"])
-    for (a, b) in edges:
+    for a, b in edges:
         assert a != b
 
 
 def test_lpf_is_prime() -> None:
     """Every least_prime_factor is prime."""
     from sympy import isprime
+
     edges = _edges(["1", "2", "3", "6", "12", "24"])
     for edge in edges.values():
         assert isprime(int(edge.least_prime_factor))

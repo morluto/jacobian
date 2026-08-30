@@ -5,6 +5,9 @@ from jacobian.math.number_theory._additional_ops import ADDITIONAL_NT_OPERATIONS
 from jacobian.math.number_theory._contiguous_sum import CONTIGUOUS_SUM_OPERATION
 from jacobian.math.number_theory._derived import DERIVED_NUMBER_THEORY_OPERATIONS
 from jacobian.math.number_theory._divisibility import DIVISIBILITY_OPERATIONS
+from jacobian.math.number_theory._divisibility_edge_profile import (
+    DIVISIBILITY_EDGE_PROFILE_OPERATION,
+)
 from jacobian.math.number_theory._divisibility_graph import (
     DIVISIBILITY_GRAPH_OPERATION,
 )
@@ -18,7 +21,6 @@ from jacobian.math.number_theory._interval_profiles import (
 from jacobian.math.number_theory._modular import MODULAR_OPERATIONS
 from jacobian.math.number_theory._modular_identity import MODULAR_IDENTITY_OPERATIONS
 from jacobian.math.number_theory._periodic import PERIODIC_CONGRUENCE_OPERATIONS
-from jacobian.math.number_theory._divisibility_edge_profile import DIVISIBILITY_EDGE_PROFILE_OPERATION
 from jacobian.math.number_theory._powerful import POWERFUL_NUMBER_OPERATION
 from jacobian.math.number_theory._preimage_ops import PREIMAGE_OPERATIONS
 from jacobian.math.number_theory._prime_shifts import PRIME_SHIFT_OPERATION

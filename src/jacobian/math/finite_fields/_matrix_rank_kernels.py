@@ -9,9 +9,10 @@ arithmetic over the field presentation's irreducible modulus.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from sympy import Poly, invert, symbols
+if TYPE_CHECKING:
+    from sympy import Poly
 
 from jacobian.math.finite_fields.values import (
     AxisBoundMatrix,
@@ -30,6 +31,8 @@ class MatrixRankData:
 
 
 def _build_modulus(presentation: FiniteFieldPresentation) -> Poly:
+    from sympy import Poly, symbols
+
     z = symbols("z")
     return Poly(
         sum(c * z**i for i, c in enumerate(presentation.modulus_coefficients)),
@@ -39,6 +42,8 @@ def _build_modulus(presentation: FiniteFieldPresentation) -> Poly:
 
 
 def _to_poly(element: FiniteFieldElement, z: Any, modulus: Poly) -> Poly:
+    from sympy import Poly
+
     return Poly(
         sum(c * z**i for i, c in enumerate(element.coordinates)),
         z,
@@ -62,6 +67,8 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
     For extension fields, each entry is a polynomial modulo the irreducible
     modulus.
     """
+    from sympy import invert, symbols
+
     presentation = matrix.presentation
     z = symbols("z")
     modulus = _build_modulus(presentation)

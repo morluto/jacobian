@@ -1,7 +1,6 @@
 """Algebraic number arithmetic operations."""
 
 from jacobian.math.number_theory.algebraic_numbers.complex import (
-    ComplexAlgebraicValue,
     RationalComplexIsolatingRectangle,
 )
 from jacobian.math.number_theory.algebraic_numbers.operations import (
@@ -10,7 +9,6 @@ from jacobian.math.number_theory.algebraic_numbers.operations import (
 )
 
 __all__ = [
-    "ComplexAlgebraicValue",
     "RationalComplexIsolatingRectangle",
     "add_quadratic",
     "multiply_quadratic",

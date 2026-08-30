@@ -483,43 +483,18 @@ class NumberFieldEmbeddingProfile(StrictModel):
         )
 
 
-class EmbeddedSimpleNumberFieldElement(StrictModel):
-    """An exact power-basis element evaluated at one selected embedding.
-
-    The value denotes ``sum(c_j * sigma(alpha)^j)``.  Both the reduced abstract
-    element and the exact embedding identity are retained; an incidental
-    isolating rectangle is neither required nor part of this canonical value.
-    """
-
-    element: SimpleNumberFieldElement
-    embedding: NumberFieldEmbedding
-    evaluation: Literal["POWER_BASIS_AT_SELECTED_ROOT"] = "POWER_BASIS_AT_SELECTED_ROOT"
-
-    @model_validator(mode="after")
-    def bind_element_and_embedding(self) -> Self:
-        if self.element.presentation != self.embedding.presentation:
-            raise _validation_error(
-                "embedded_element_field",
-                "embedded element and selected embedding must share one presentation",
-            )
-        return self
-
-
 __all__ = [
     "MAX_NUMBER_FIELD_EMBEDDING_DEGREE",
     "MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS",
     "MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS",
     "MAX_SIMPLE_NUMBER_FIELD_DEGREE",
     "MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS",
-    "ComplexNumberFieldEmbedding",
     "ComplexNumberFieldEmbeddingRecord",
-    "EmbeddedSimpleNumberFieldElement",
     "NumberFieldConjugatePair",
     "NumberFieldEmbedding",
     "NumberFieldEmbeddingProfile",
     "NumberFieldEmbeddingRecord",
     "NumberFieldSignature",
-    "RealNumberFieldEmbedding",
     "RealNumberFieldEmbeddingRecord",
     "SimpleNumberFieldElement",
     "SimpleNumberFieldPresentation",

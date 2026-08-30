@@ -288,28 +288,12 @@ class _ComplexAlgebraicValueShape(StrictModel):
 
 
 class ComplexAlgebraicValue(_ComplexAlgebraicValueShape):
-    """One recognized nonreal algebraic number in canonical indexed-root form."""
+    """Structural indexed-root value established by an admitted result owner.
 
-    @model_validator(mode="after")
-    def require_canonical_nonreal_root(self) -> Self:
-        import sympy
-
-        variable = sympy.Symbol("x")
-        polynomial = sympy.Poly.from_list(
-            _integer_coefficients(self.polynomial), gens=variable, domain=sympy.ZZ
-        )
-        if polynomial.is_irreducible is not True:
-            raise _validation_error(
-                "not_irreducible",
-                "complex algebraic minimal polynomial must be irreducible over QQ",
-            )
-        real_root_count = int(polynomial.count_roots(-sympy.oo, sympy.oo))
-        if self.root_index < real_root_count:
-            raise _validation_error(
-                "root_index",
-                "root_index must select a nonreal root of the minimal polynomial",
-            )
-        return self
+    Parsing checks only its bounded canonical shape. Mathematical consumers
+    must recognize irreducibility and the selected nonreal root within their
+    own admitted execution path; model validation never replays that work.
+    """
 
     @classmethod
     def _from_admitted_polynomial(

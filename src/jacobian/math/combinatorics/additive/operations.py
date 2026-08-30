@@ -32,6 +32,7 @@ from jacobian.math.combinatorics.additive._models import (
     _multiset_sum_source_values,
     _require_bounded_cartesian_product,
     _require_direct_sum_result_transport_bound,
+    _require_sumset_result_transport_bound,
     _vector_from_ints,
 )
 from jacobian.math.combinatorics.additive._multiset_sum import (
@@ -195,6 +196,7 @@ def sumset_cardinality(
 ) -> SumsetCardinalityResult:
     """Compute ``|A + B|`` (the support cardinality of ``r_{A+B}``)."""
     _require_bounded_cartesian_product(left, right)
+    _require_sumset_result_transport_bound(left, right)
     counts = _representation_function(_parse_set(left), _parse_set(right))
     support = tuple(format_canonical_integer(value) for value in _sorted_sums(counts))
     return SumsetCardinalityResult._from_kernel(support)

@@ -174,6 +174,26 @@ class TestSumsetCardinality:
             "12",
         )
 
+    def test_large_labels_are_rejected_before_support_materialization(self) -> None:
+        # Each operand remains within the shared finite-set input envelope, but
+        # the 256x256 pair envelope could not fit a canonical support carrying
+        # ten-thousand-digit sums.  Admission must reject before bigint sums or
+        # the result carrier are materialized.
+        width = 10_000
+        left = FiniteIntegerSet(
+            elements=tuple("1" + str(index).zfill(width - 1) for index in range(256))
+        )
+        right = FiniteIntegerSet(
+            elements=tuple("2" + str(index).zfill(width - 1) for index in range(256))
+        )
+
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            sumset_cardinality(left, right)
+
+        assert exc_info.value.errors()[0]["type"] == (
+            "additive_combinatorics.sumset_result_transport_exceeded"
+        )
+
 
 class TestDirectSumPredicate:
     def test_tiling_z4(self) -> None:

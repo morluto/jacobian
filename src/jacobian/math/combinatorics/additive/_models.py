@@ -18,6 +18,7 @@ from jacobian.canonical import (
     parse_canonical_integer,
     strict_json_object_size,
 )
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive._multiset_sum import (
     MAX_ARITY,
     MAX_ARITY_DIGITS,
@@ -36,7 +37,10 @@ from jacobian.math.combinatorics.additive.values import (
     IndexedIntegerSequence,
     indexed_sequence_item_ceiling,
 )
-from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
+from jacobian.math.combinatorics.finite_structures.sets._models import (
+    _MAX_FINITE_SET_WIRE_BYTES,
+    FiniteIntegerSet,
+)
 
 # This conservative materialized-axis cap bounds source parsing and binomial
 # preflight. Operation-specific work and result bounds impose the sharper
@@ -284,6 +288,40 @@ def _require_bounded_cartesian_product(
             "_require_bounded_cartesian_product",
             f"Cartesian product has {pair_count} pairs, exceeding the "
             f"{_MAX_CARTESIAN_PAIR_COUNT}-pair bound",
+        )
+
+
+def _require_sumset_result_transport_bound(
+    left: FiniteIntegerSet,
+    right: FiniteIntegerSet,
+) -> None:
+    """Admit the canonical support envelope before sumset enumeration.
+
+    A sumset has at most one support value per Cartesian pair.  Charging the
+    maximum possible decimal width of each pair's sum is conservative, but it
+    prevents a large-label request from doing the pairwise work only to fail
+    when the shared ``FiniteIntegerSet`` carrier validates its 5 MiB envelope.
+    """
+
+    pair_count = len(left.elements) * len(right.elements)
+    if pair_count == 0:
+        return
+    left_width = max(len(value.lstrip("-")) for value in left.elements)
+    right_width = max(len(value.lstrip("-")) for value in right.elements)
+    # Adding two integers can carry one additional decimal digit; reserve a
+    # sign and the carrier's per-element JSON overhead as well.
+    max_sum_width = left_width + right_width + 1
+    predicted = 64 + pair_count * (max_sum_width + 3)
+    if predicted > _MAX_FINITE_SET_WIRE_BYTES:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="additive_combinatorics.sumset_result_transport_exceeded",
+            message=(
+                "sumset support may exceed the canonical finite-integer-set "
+                f"transport envelope ({predicted:,} > "
+                f"{_MAX_FINITE_SET_WIRE_BYTES:,} bytes); reduce operand "
+                "cardinality or integer width"
+            ),
         )
 
 

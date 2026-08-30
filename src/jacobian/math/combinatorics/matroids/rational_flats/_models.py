@@ -556,18 +556,15 @@ class RationalFlatClassificationComplete(StrictModel):
                 "solution_flat_count",
                 "solution_flat_count must equal the sum of representative orbit sizes",
             )
-        if tuple(
+        representative_keys = tuple(
             representative.closed_candidate_indices
             for representative in self.representatives
-        ) != tuple(
-            sorted(
-                representative.closed_candidate_indices
-                for representative in self.representatives
-            )
-        ):
+        )
+        if representative_keys != tuple(sorted(set(representative_keys))):
             raise _validation_error(
                 "representative_order",
-                "orbit representatives must use increasing canonical candidate-set order",
+                "orbit representatives must use distinct keys in increasing "
+                "canonical candidate-set order",
             )
         return self
 

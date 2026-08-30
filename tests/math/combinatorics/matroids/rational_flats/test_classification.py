@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 from sympy import Matrix
+from tests.fixtures.accounting import assert_charged_work_parity
 from tests.math.combinatorics.matroids.rational_flats._support import (
     seven_coordinate_source_problem,
 )
@@ -35,6 +36,7 @@ from jacobian.math.combinatorics.matroids.rational_flats import (
 from jacobian.math.combinatorics.matroids.rational_flats import _kernel as flat_kernel
 from jacobian.math.combinatorics.matroids.rational_flats._models import (
     ClauseConstrainedRationalFlatRequest,
+    RationalFlatClassificationComplete,
 )
 from jacobian.math.matrices.values import (
     SparseRationalMatrix,
@@ -519,6 +521,22 @@ def test_request_and_complete_result_round_trip_through_strict_json() -> None:
     )
 
 
+def test_complete_family_requires_distinct_canonical_representative_keys() -> None:
+    result = classify_clause_constrained_rational_flats(
+        _problem(((1,),), columns=1, rank_interval=(1, 1))
+    )
+
+    assert result.outcome.status == "COMPLETE_EXACT"
+    representative = result.outcome.representatives[0]
+    with pytest.raises(ValidationError, match="distinct keys"):
+        RationalFlatClassificationComplete(
+            status="COMPLETE_EXACT",
+            representatives=(representative, representative),
+            orbit_count=2,
+            solution_flat_count=2 * representative.orbit_size,
+        )
+
+
 @pytest.mark.parametrize("matrix_owner", ["candidate", "forbidden"])
 def test_raw_257_digit_components_are_rejected_by_the_outer_input_envelope(
     matrix_owner: str,
@@ -666,23 +684,168 @@ def test_state_orbit_limit_stops_before_retaining_the_next_frontier() -> None:
     assert result.outcome.state_orbit_limit == 1
 
 
-def test_one_request_ledger_covers_admission_search_and_result_encoding() -> None:
-    problem = _problem(((1, 0), (0, 1)), columns=2)
-    plan = flat_kernel._admit_problem(problem)
-    admission_work = plan.ledger.consumed
-    ledger_identity = id(plan.ledger)
+def test_one_request_ledger_charges_every_observed_work_primitive() -> None:
+    problem = _problem(
+        ((1, 0), (0, 1), (1, 1)),
+        columns=2,
+        clauses=((2,),),
+        forbidden_rows=((1, -1),),
+        rank_interval=(0, 2),
+        symmetry_generators=(
+            RationalFlatSymmetryGenerator(
+                coordinate_permutation=(1, 0),
+                candidate_permutation=(1, 0, 2),
+            ),
+        ),
+    )
+    executed: dict[str, int] = {}
 
-    satisfying, _visited, ledger, canonicalizer, satisfying_elements = (
-        flat_kernel._search_satisfying_states(problem, plan)
+    def add_work(primitive: str, units: int = 1) -> None:
+        executed[primitive] = executed.get(primitive, 0) + units
+
+    original_canonicalize = flat_kernel._SubsetOrbitCanonicalizer.canonicalize
+    original_state_from_closed = flat_kernel._state_from_closed
+
+    def counted_canonicalize(
+        canonicalizer: flat_kernel._SubsetOrbitCanonicalizer,
+        subset: tuple[int, ...],
+        ledger: flat_kernel._WorkLedger,
+    ) -> tuple[tuple[int, ...], int]:
+        was_cached = subset in canonicalizer._cache
+        canonical, orbit_size = original_canonicalize(
+            canonicalizer,
+            subset,
+            ledger,
+        )
+        add_work("subset_lookup")
+        if not was_cached:
+            add_work("subset_cache")
+            if canonicalizer._generators:
+                add_work("subset_storage", 3 * orbit_size)
+                add_work(
+                    "subset_action",
+                    orbit_size * len(canonicalizer._generators),
+                )
+        return canonical, orbit_size
+
+    def counted_state_from_closed(
+        closed: tuple[int, ...],
+        *,
+        plan: flat_kernel._RationalFlatPlan,
+        ambient_dimension: int,
+        ledger: flat_kernel._WorkLedger,
+        state_cache: dict[tuple[int, ...], flat_kernel._FlatState],
+    ) -> flat_kernel._FlatState:
+        cache_miss = int(closed not in state_cache)
+        add_work("state_cache", 1 + cache_miss)
+        add_work("state_construction", cache_miss)
+        return original_state_from_closed(
+            closed,
+            plan=plan,
+            ambient_dimension=ambient_dimension,
+            ledger=ledger,
+            state_cache=state_cache,
+        )
+
+    with (
+        patch.object(
+            flat_kernel,
+            "_primitive_integer_row",
+            wraps=flat_kernel._primitive_integer_row,
+        ) as normalizations,
+        patch.object(
+            flat_kernel,
+            "_require_symmetry_compatibility",
+            wraps=flat_kernel._require_symmetry_compatibility,
+        ) as compatibility_checks,
+        patch.object(
+            flat_kernel,
+            "_paired_group_order",
+            wraps=flat_kernel._paired_group_order,
+        ) as group_recognitions,
+        patch.object(
+            flat_kernel,
+            "_rref_basis",
+            wraps=flat_kernel._rref_basis,
+        ) as row_reductions,
+        patch.object(
+            flat_kernel,
+            "_closed_candidates",
+            wraps=flat_kernel._closed_candidates,
+        ) as candidate_scans,
+        patch.object(
+            flat_kernel._SubsetOrbitCanonicalizer,
+            "canonicalize",
+            new=counted_canonicalize,
+        ),
+        patch.object(
+            flat_kernel,
+            "_state_from_closed",
+            new=counted_state_from_closed,
+        ),
+        patch.object(
+            flat_kernel,
+            "_contains_forbidden_row",
+            wraps=flat_kernel._contains_forbidden_row,
+        ) as forbidden_scans,
+        patch.object(
+            flat_kernel,
+            "_branch_candidates",
+            wraps=flat_kernel._branch_candidates,
+        ) as branch_scans,
+        patch.object(
+            flat_kernel,
+            "_clauses_are_satisfied",
+            wraps=flat_kernel._clauses_are_satisfied,
+        ) as satisfaction_scans,
+        patch.object(
+            flat_kernel,
+            "_canonical_closure",
+            wraps=flat_kernel._canonical_closure,
+        ) as closures,
+    ):
+        plan = flat_kernel._admit_problem(problem)
+        admission_work = plan.ledger.consumed
+        ledger_identity = id(plan.ledger)
+        satisfying, visited, ledger, canonicalizer, satisfying_elements = (
+            flat_kernel._search_satisfying_states(problem, plan)
+        )
+        representatives, solution_count = flat_kernel._representatives_from_states(
+            satisfying,
+            satisfying_elements=satisfying_elements,
+            plan=plan,
+            ambient_dimension=2,
+            ledger=ledger,
+            canonicalizer=canonicalizer,
+        )
+
+    executed.update(
+        {
+            "admission_normalization": normalizations.call_count,
+            "admission_symmetry": (
+                compatibility_checks.call_count + group_recognitions.call_count
+            ),
+            "candidate_span_scan": candidate_scans.call_count,
+            "clause_scan": branch_scans.call_count + satisfaction_scans.call_count,
+            "forbidden_span_scan": forbidden_scans.call_count,
+            "result_construction": 1 + len(representatives),
+            "row_reduction": sum(
+                bool(call.args[0]) for call in row_reductions.call_args_list
+            ),
+            "search_frontier": (
+                len(visited)
+                + closures.call_count
+                + branch_scans.call_count
+                + len(satisfying)
+            ),
+            "source_encoding": plan.source_bytes,
+        }
     )
-    representatives, solution_count = flat_kernel._representatives_from_states(
-        satisfying,
-        satisfying_elements=satisfying_elements,
-        plan=plan,
-        ambient_dimension=2,
-        ledger=ledger,
-        canonicalizer=canonicalizer,
+    representative_sizes = tuple(
+        len(encode_strict_json(item.model_dump(mode="json")))
+        for item in representatives
     )
+    executed["result_encoding"] = sum(representative_sizes)
 
     assert representatives
     assert id(ledger) == ledger_identity
@@ -693,20 +856,39 @@ def test_one_request_ledger_covers_admission_search_and_result_encoding() -> Non
         == admission_work
     )
     assert ledger.consumed == sum(ledger.charged_by_primitive.values())
+    assert (
+        set(executed)
+        == set(ledger.charged_by_primitive)
+        == {
+            "admission_normalization",
+            "admission_symmetry",
+            "candidate_span_scan",
+            "clause_scan",
+            "forbidden_span_scan",
+            "result_construction",
+            "result_encoding",
+            "row_reduction",
+            "search_frontier",
+            "source_encoding",
+            "state_cache",
+            "state_construction",
+            "subset_action",
+            "subset_cache",
+            "subset_lookup",
+            "subset_storage",
+        }
+    )
+    assert_charged_work_parity(
+        charged=ledger.charged_by_primitive,
+        executed=executed,
+    )
     assert ledger.charged_by_primitive["result_encoding"] == (
         2
         * flat_kernel._CANONICAL_PROJECTION_PASSES
         * len(representatives)
         * plan.representative_encoding_work
     )
-    assert ledger.charged_by_primitive["result_encoding"] >= sum(
-        len(encode_strict_json(item.model_dump(mode="json")))
-        for item in representatives
-    )
-    representative_sizes = tuple(
-        len(encode_strict_json(item.model_dump(mode="json")))
-        for item in representatives
-    )
+    assert ledger.charged_by_primitive["result_encoding"] >= sum(representative_sizes)
     result = ClauseConstrainedRationalFlatClassification._complete_from_kernel(
         problem=problem,
         symmetry_group_order=plan.symmetry_group_order,

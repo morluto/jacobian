@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -27,8 +27,8 @@ class IndexedFiniteSetFamily(StrictModel):
     of indices in ``0,...,ground_set_size-1``. The family may be empty.
     """
 
-    ground_set_size: int = Field(ge=0, le=MAX_GROUND_SET_SIZE)
-    members: tuple[tuple[int, ...], ...] = Field(max_length=MAX_FAMILY_SIZE)
+    ground_set_size: StrictInt = Field(ge=0, le=MAX_GROUND_SET_SIZE)
+    members: tuple[tuple[StrictInt, ...], ...] = Field(max_length=MAX_FAMILY_SIZE)
 
     @model_validator(mode="after")
     def require_canonical_family(self) -> Self:

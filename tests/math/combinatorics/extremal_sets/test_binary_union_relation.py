@@ -247,3 +247,15 @@ def test_ground_axis_is_independent_of_relation_vertex_count() -> None:
     result = construct_binary_union_relation(_source(((256,),), ground_set_size=257))
     assert result.source.ground_set_size == 257
     assert result.rows == ()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"ground_set_size": True, "members": [[0]]},
+        {"ground_set_size": 1, "members": [[False]]},
+    ],
+)
+def test_canonical_family_rejects_boolean_coordinates(payload: dict) -> None:
+    with pytest.raises(ValidationError):
+        IndexedFiniteSetFamily.model_validate(payload)

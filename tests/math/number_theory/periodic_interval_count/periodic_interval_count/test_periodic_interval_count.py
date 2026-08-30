@@ -60,3 +60,11 @@ def test_negative_interval_uses_floor_period_blocks() -> None:
     result = compute_periodic_interval_count(source, -7, 2)
 
     assert result.count == "3"
+
+
+def test_large_period_complement_uses_scalar_rank() -> None:
+    source = _source(1_000_000, [0], complement=True)
+
+    result = compute_periodic_interval_count(source, -2, 2)
+
+    assert result.count == "4"

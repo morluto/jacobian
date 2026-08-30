@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory._periodic_kernel import (
+    rank_periodic_union,
+    require_admitted_periodic_source,
+)
 from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceUnionSource,
 )
-from jacobian.math.number_theory.operations import periodic_congruence_union_profile
 from jacobian.math.number_theory.periodic_interval_count._models import (
     PeriodicIntervalCountResult,
 )
@@ -31,19 +35,17 @@ def compute_periodic_interval_count(
             count="0",
         )
 
-    profile = periodic_congruence_union_profile(source)
-    period = parse_canonical_integer(profile.common_period)
-    occupied = tuple(
-        parse_canonical_integer(value) for value in profile.occupied_residues
+    try:
+        plan = require_admitted_periodic_source(source)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="number_theory.periodic.execution_bound",
+            message=str(exc),
+        ) from exc
+    count = rank_periodic_union(source, plan, upper) - rank_periodic_union(
+        source, plan, lower - 1
     )
-
-    def rank(value: int) -> int:
-        quotient, remainder = divmod(value, period)
-        return quotient * len(occupied) + sum(
-            residue <= remainder for residue in occupied
-        )
-
-    count = rank(upper) - rank(lower - 1)
 
     return PeriodicIntervalCountResult(
         source=source,

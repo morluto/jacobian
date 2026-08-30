@@ -253,6 +253,8 @@ def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the matrices public API."""
     expected = (
         "SmithNormalForm",
+        "SparseRationalMatrix",
+        "SparseRationalMatrixEntry",
         "adjugate",
         "characteristic_polynomial",
         "determinant",

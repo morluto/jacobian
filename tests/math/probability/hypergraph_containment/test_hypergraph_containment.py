@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import comb
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -90,3 +91,48 @@ def test_result_preserves_source() -> None:
     result = compute_hypergraph_vertex_containment(hg, p)
     assert result.hypergraph == hg
     assert result.retention_probability == p
+
+
+def test_edgeless_large_hypergraph_uses_closed_form() -> None:
+    hg = _hg([f"v{i}" for i in range(23)], [])
+
+    result = compute_hypergraph_vertex_containment(
+        hg, CanonicalRational.from_fraction(Fraction(1, 2))
+    )
+
+    assert result.total_state_count == 1 << 23
+    assert result.success_count == 0
+    assert result.probability.as_fraction() == 0
+
+
+def test_empty_edge_large_hypergraph_uses_closed_form() -> None:
+    hg = _hg([f"v{i}" for i in range(23)], [("empty", ())])
+
+    result = compute_hypergraph_vertex_containment(
+        hg, CanonicalRational.from_fraction(Fraction(1, 2))
+    )
+
+    assert result.success_count == 1 << 23
+    assert result.containing_subset_counts[11] == comb(23, 11)
+
+
+def test_duplicate_edge_members_are_scanned_once() -> None:
+    hg = _hg(
+        ["a", "b", "c"],
+        [("e0", ("a", "b")), ("e1", ("a", "b"))],
+    )
+
+    result = compute_hypergraph_vertex_containment(
+        hg, CanonicalRational.from_fraction(Fraction(1))
+    )
+
+    assert result.success_count == 2
+
+
+def test_probability_growth_uses_event_support() -> None:
+    hg = _hg([f"v{i}" for i in range(22)], [("e0", ("v0",))])
+    p = CanonicalRational.from_fraction(Fraction(1, 10**2000))
+
+    result = compute_hypergraph_vertex_containment(hg, p)
+
+    assert result.probability == p

@@ -52,28 +52,40 @@ def _admit_hypergraph_vertex_containment(
             code="hypergraph_containment.probability_out_of_range",
             message="retention_probability must be between 0 and 1",
         )
-    n = len(hypergraph.vertices)
-    state_count = 1 << n
-    if state_count > MAX_SUBSET_STATES:
-        raise OperationDomainValidationError(
-            location=("hypergraph", "vertices"),
-            code="hypergraph_containment.state_bound_exceeded",
-            message="the complete subset-state envelope is exceeded",
-        )
-    edge_count = len(hypergraph.edges)
-    if edge_count and state_count * edge_count > MAX_CONTAINMENT_WORK:
-        raise OperationDomainValidationError(
-            location=("hypergraph", "edges"),
-            code="hypergraph_containment.work_bound_exceeded",
-            message="the complete subset containment work envelope is exceeded",
-        )
     trivial_event = not hypergraph.edges or any(
         not members for _, members in hypergraph.edges
+    )
+    n = len(hypergraph.vertices)
+    state_count = 1 << n
+    if not trivial_event:
+        if state_count > MAX_SUBSET_STATES:
+            raise OperationDomainValidationError(
+                location=("hypergraph", "vertices"),
+                code="hypergraph_containment.state_bound_exceeded",
+                message="the complete subset-state envelope is exceeded",
+            )
+        vertex_index = {vertex: index for index, vertex in enumerate(hypergraph.vertices)}
+        edge_masks = tuple(
+            dict.fromkeys(
+                sum(1 << vertex_index[member] for member in members)
+                for _, members in hypergraph.edges
+            )
+        )
+        if len(edge_masks) * state_count > MAX_CONTAINMENT_WORK:
+            raise OperationDomainValidationError(
+                location=("hypergraph", "edges"),
+                code="hypergraph_containment.work_bound_exceeded",
+                message="the complete subset containment work envelope is exceeded",
+            )
+    else:
+        edge_masks = ()
+    support_size = len(
+        {member for _, members in hypergraph.edges for member in members}
     )
     probability_digits = (
         1
         if trivial_event
-        else n * canonical_rational_component_digits(retention_probability)
+        else support_size * canonical_rational_component_digits(retention_probability)
     )
     if probability_digits > 32_768:
         raise OperationDomainValidationError(
@@ -85,7 +97,9 @@ def _admit_hypergraph_vertex_containment(
         result_probe = {
             "hypergraph": hypergraph.model_dump(mode="json"),
             "retention_probability": retention_probability.model_dump(mode="json"),
-            "containing_subset_counts": [0] * (n + 1),
+            "containing_subset_counts": [
+                10 ** len(str(comb(n, k))) - 1 for k in range(n + 1)
+            ],
             "total_state_count": state_count,
             "success_count": state_count,
             "probability": {
@@ -106,11 +120,7 @@ def _admit_hypergraph_vertex_containment(
             code="hypergraph_containment.result_size_bound",
             message="the complete containment profile exceeds the canonical output bound",
         )
-    vertex_index = {vertex: index for index, vertex in enumerate(hypergraph.vertices)}
-    return tuple(
-        sum(1 << vertex_index[member] for member in members)
-        for _, members in hypergraph.edges
-    )
+    return edge_masks
 
 
 def compute_hypergraph_vertex_containment(

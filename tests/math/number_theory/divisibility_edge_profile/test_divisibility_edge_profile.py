@@ -1,0 +1,72 @@
+"""Tests for divisibility edge profiles."""
+
+from __future__ import annotations
+
+from jacobian.math.number_theory._divisibility_edge_profile import (
+    compute_divisibility_edge_profile,
+)
+from jacobian.math.number_theory._divisibility_edge_profile_models import (
+    DivisibilityEdgeProfileRequest,
+)
+
+
+def _edges(values: list[str]) -> dict:
+    request = DivisibilityEdgeProfileRequest(values=tuple(values))
+    result = compute_divisibility_edge_profile(request)
+    return {(e.source, e.target): e for e in result.edges}
+
+
+def test_fixture_24612() -> None:
+    """For (2,4,6,12), the complete proper-divisibility rows are correct."""
+    edges = _edges(["2", "4", "6", "12"])
+    # 2 -> 4: quotient 2, LPF 2
+    assert edges[("2", "4")].quotient == 2
+    assert edges[("2", "4")].least_prime_factor == 2
+    # 2 -> 6: quotient 3, LPF 3
+    assert edges[("2", "6")].quotient == 3
+    assert edges[("2", "6")].least_prime_factor == 3
+    # 2 -> 12: quotient 6, LPF 2
+    assert edges[("2", "12")].quotient == 6
+    assert edges[("2", "12")].least_prime_factor == 2
+    # 4 -> 12: quotient 3, LPF 3
+    assert edges[("4", "12")].quotient == 3
+    assert edges[("4", "12")].least_prime_factor == 3
+    # 6 -> 12: quotient 2, LPF 2
+    assert edges[("6", "12")].quotient == 2
+    assert edges[("6", "12")].least_prime_factor == 2
+
+
+def test_non_edge_absent() -> None:
+    """4 does not divide 6, so edge 4->6 is absent."""
+    edges = _edges(["2", "4", "6"])
+    assert ("4", "6") not in edges
+    assert ("6", "4") not in edges
+
+
+def test_no_reflexive_edges() -> None:
+    """No edge connects a value to itself."""
+    edges = _edges(["2", "4", "8"])
+    for (a, b) in edges:
+        assert a != b
+
+
+def test_lpf_is_prime() -> None:
+    """Every least_prime_factor is prime."""
+    from sympy import isprime
+    edges = _edges(["1", "2", "3", "6", "12", "24"])
+    for edge in edges.values():
+        assert isprime(edge.least_prime_factor)
+
+
+def test_lpf_divides_quotient() -> None:
+    """The LPF divides the quotient."""
+    edges = _edges(["1", "2", "4", "6", "12", "24"])
+    for edge in edges.values():
+        assert edge.quotient % edge.least_prime_factor == 0
+
+
+def test_quotient_reconstructs() -> None:
+    """Every quotient reconstructs b = a * quotient."""
+    edges = _edges(["2", "4", "6", "12"])
+    for (a, b), edge in edges.items():
+        assert int(a) * edge.quotient == int(b)

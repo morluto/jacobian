@@ -84,3 +84,20 @@ def test_result_preserves_source() -> None:
     g = _k3_red()
     result = construct_monochromatic_path_hypergraphs(g)
     assert result.graph == g
+
+
+def test_twelve_vertex_complete_graph_fits_tight_incidence_bound() -> None:
+    vertices = tuple(str(index) for index in range(12))
+    edges = tuple(
+        (vertices[left], vertices[right])
+        for left in range(12)
+        for right in range(left + 1, 12)
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        edge_colors=("red",) * len(edges),
+    )
+
+    result = construct_monochromatic_path_hypergraphs(graph)
+
+    assert len(result.colour_to_hypergraph["red"].edges) == 2**12 - 1

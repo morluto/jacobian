@@ -9,7 +9,7 @@ from pydantic import Field, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.topology.chain_complexes.values import (
     MAX_BASIS_SIZE,
     MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS,
@@ -440,7 +440,7 @@ class ComputeHomologyRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def preflight_raw_complex(cls, data: object) -> object:
-        return _preflight_raw_homology_complex(data)
+        return _preflight_raw_homology_complex(canonicalize_json_containers(data))
 
     @model_validator(mode="after")
     def require_homology_budget(self) -> Self:

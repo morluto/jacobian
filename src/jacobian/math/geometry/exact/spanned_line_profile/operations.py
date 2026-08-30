@@ -5,6 +5,9 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import combinations
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+from jacobian.canonical import CanonicalLimits
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.spanned_line_profile._models import (
     SpannedLineEntry,
@@ -15,11 +18,39 @@ from jacobian.math.geometry.exact.spanned_line_profile._models import (
 __all__ = ["compute_spanned_line_profile"]
 
 
+def _admit_line_key_growth(configuration: PointConfiguration) -> None:
+    points = configuration.points
+    dimension = len(points[0].coordinates) if points else 0
+    maximum_coordinate_digits = max(
+        (
+            max(len(coordinate.num.lstrip("-")), len(coordinate.den))
+            for point in points
+            for coordinate in point.coordinates
+        ),
+        default=1,
+    )
+    derived_digits = dimension * (2 * maximum_coordinate_digits + 2)
+    pair_count = len(points) * (len(points) - 1) // 2
+    estimated_key_bytes = pair_count * max(1, dimension) * (
+        2 * derived_digits + 64
+    )
+    if (
+        derived_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or estimated_key_bytes > CanonicalLimits().max_output_bytes
+    ):
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="geometry.spanned_line_profile.result_bound",
+            message="spanned-line keys exceed the canonical rational or output bound",
+        )
+
+
 def compute_spanned_line_profile(
     configuration: PointConfiguration,
 ) -> SpannedLineProfileResult:
     """Return every distinct affine line spanned by unordered source pairs."""
     _require_coordinate_distinctness(configuration)
+    _admit_line_key_growth(configuration)
     points = configuration.points
     n = len(points)
 

@@ -71,3 +71,16 @@ def test_coincident_points_are_rejected() -> None:
 
     with pytest.raises(PydanticCustomError):
         compute_spanned_line_profile(config)
+
+
+def test_derived_line_key_growth_is_rejected_before_pair_enumeration() -> None:
+    denominator = "9" * 3_000
+    wide = CanonicalRational(num="1", den=denominator)
+    points = (
+        LabelledRationalPoint(label="a", coordinates=(wide,) * 20),
+        LabelledRationalPoint(
+            label="b", coordinates=(CanonicalRational(num="0", den="1"),) * 20
+        ),
+    )
+    with pytest.raises(ValueError, match="line keys exceed"):
+        compute_spanned_line_profile(PointConfiguration(points=points))

@@ -5,13 +5,33 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import CanonicalLimits, format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.collatz_wielandt._models import (
     CollatzWielandtResult,
 )
 
 __all__ = ["compute_collatz_wielandt_profile"]
+
+
+def _admit_result_size(
+    matrix: tuple[tuple[CanonicalRational, ...], ...],
+    vector: tuple[CanonicalRational, ...],
+) -> None:
+    source_bytes = 128 + sum(
+        len(value.num) + len(value.den) + 16
+        for row in matrix
+        for value in row
+    ) + sum(len(value.num) + len(value.den) + 16 for value in vector)
+    quotient_bytes = (len(vector) + 1) * (
+        2 * MAX_CANONICAL_RATIONAL_DIGITS + 64
+    )
+    if source_bytes + quotient_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("matrix", "vector"),
+            code="collatz_wielandt.result_bound",
+            message="the complete Collatz-Wielandt profile exceeds the canonical output bound",
+        )
 
 
 def compute_collatz_wielandt_profile(
@@ -38,6 +58,7 @@ def compute_collatz_wielandt_profile(
             code="collatz_wielandt.positive_vector",
             message="Collatz-Wielandt requires a strictly positive vector",
         )
+    _admit_result_size(matrix, vector)
     mat = [[matrix[i][j].as_fraction() for j in range(n)] for i in range(n)]
     vec = [v.as_fraction() for v in vector]
 

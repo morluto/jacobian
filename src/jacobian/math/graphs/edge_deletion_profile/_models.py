@@ -15,7 +15,7 @@ MAX_EDGE_DELETION_COLORING_WORK = 10_000_000
 
 
 def _is_bipartite(graph: SimpleUndirectedGraph) -> bool:
-    adjacency = {vertex: [] for vertex in graph.vertices}
+    adjacency: dict[str, list[str]] = {vertex: [] for vertex in graph.vertices}
     for left, right in graph.edges:
         adjacency[left].append(right)
         adjacency[right].append(left)

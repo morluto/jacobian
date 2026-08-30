@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from itertools import product
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.gowers_cube_profile._models import (
     MAX_GOWERS_CUBE_ORDER,
@@ -77,7 +79,9 @@ def compute_gowers_cube_profile(
             if all_in:
                 cube_count += 1
 
-    normalized = cube_count  # ||1_A||_{U^s}^{2^s} = cube_count / n^(s+1)
+    normalized = CanonicalRational.from_fraction(
+        Fraction(cube_count, modulus ** (order + 1))
+    )
 
     return GowersCubeResult(
         modulus=modulus,

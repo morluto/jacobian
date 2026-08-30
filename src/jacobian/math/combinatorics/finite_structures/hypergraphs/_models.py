@@ -686,6 +686,37 @@ class EdgeIntersectionsResult(StrictModel):
             )
         return self
 
+class EdgeIntersectionGraphRequest(StrictModel):
+    """Request the edge-intersection graph of a finite hypergraph.
+
+    The graph's vertices are the hypergraph's edge IDs and two vertices
+    are adjacent if and only if the corresponding hyperedges have nonempty
+    intersection.  Because the result is a canonical
+    :class:`SimpleUndirectedGraph`, whose value requires NFC-normalized
+    vertex labels, edge IDs must be NFC-normalized.
+    """
+
+    hypergraph: FiniteHypergraph
+
+
+class EdgeIntersectionGraphResult(StrictModel):
+    """The canonical edge-intersection graph of a finite hypergraph.
+
+    ``graph`` is the canonical :class:`SimpleUndirectedGraph` whose
+    vertices are exactly the hypergraph's edge IDs, in declared edge
+    order, and in which two distinct vertices are adjacent if and only if
+    the corresponding hyperedges share at least one vertex.  Each edge's
+    endpoints appear in lexical order per the canonical graph value's
+    own convention, independent of the source hypergraph's declared edge
+    ordering, so the value composes directly with downstream graph
+    operations without translation.  The producing kernel establishes
+    this defining property.
+    """
+
+    hypergraph: FiniteHypergraph
+    graph: SimpleUndirectedGraph
+
+
 
 class ParametersRequest(StrictModel):
     """Request the basic parameters of a finite hypergraph."""

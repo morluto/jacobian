@@ -16,6 +16,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     DualResult,
     EdgeIntersectionEntry,
     EdgeIntersectionsResult,
+    EdgeIntersectionGraphResult,
     FiniteHypergraph,
     HypergraphIndependenceBudget,
     HypergraphIndependenceResult,
@@ -40,6 +41,7 @@ __all__ = [
     "clique_expansion",
     "dual",
     "edge_intersections",
+    "edge_intersection_graph",
     "incidence_graph",
     "independence_number",
     "induced_type_profile",
@@ -98,6 +100,20 @@ def _admit_clique_expansion(hypergraph: FiniteHypergraph) -> None:
             location=("hypergraph",),
             code="hypergraph.clique_expansion.nfc_vertices",
             message="clique expansion requires NFC-normalized vertex labels",
+        )
+
+
+def _admit_edge_intersection_graph(hypergraph: FiniteHypergraph) -> None:
+    if any(
+        not unicodedata.is_normalized("NFC", edge_id)
+        for edge_id, _ in hypergraph.edges
+    ):
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="hypergraph.edge_intersection_graph.nfc_edge_ids",
+            message=(
+                "edge-intersection graph requires NFC-normalized edge IDs"
+            ),
         )
 
 
@@ -409,6 +425,48 @@ def clique_expansion(hypergraph: FiniteHypergraph) -> CliqueExpansionResult:
     return CliqueExpansionResult(
         hypergraph=hypergraph,
         graph=_clique_expansion_graph(hypergraph),
+    )
+
+
+def _edge_intersection_graph_data(
+    hypergraph: FiniteHypergraph,
+) -> SimpleUndirectedGraph:
+    """Compute the canonical edge-intersection graph.
+
+    The graph's vertices are the hypergraph's edge IDs in declared order.
+    Two vertices are adjacent if and only if the corresponding hyperedges
+    have nonempty intersection.  Each undirected adjacency pair is emitted
+    in lexical order, following the ``SimpleUndirectedGraph`` convention
+    independently of the source hypergraph's declared edge ordering.
+    """
+
+    edges = _canonical_edges(hypergraph)
+    edge_ids = tuple(edge_id for edge_id, _ in edges)
+    member_sets = tuple(frozenset(members) for _, members in edges)
+    adjacent: dict[str, set[str]] = {edge_id: set() for edge_id in edge_ids}
+    for left in range(len(edges)):
+        for right in range(left + 1, len(edges)):
+            if member_sets[left] & member_sets[right]:
+                u, v = edge_ids[left], edge_ids[right]
+                adjacent[u].add(v)
+                adjacent[v].add(u)
+    graph_edges = tuple(
+        sorted(
+            (u, v) for u, neighbours in adjacent.items() for v in neighbours if u < v
+        )
+    )
+    return SimpleUndirectedGraph(vertices=edge_ids, edges=graph_edges)
+
+
+def edge_intersection_graph(
+    hypergraph: FiniteHypergraph,
+) -> EdgeIntersectionGraphResult:
+    """Compute the edge-intersection graph of a finite hypergraph."""
+
+    _admit_edge_intersection_graph(hypergraph)
+    return EdgeIntersectionGraphResult(
+        hypergraph=hypergraph,
+        graph=_edge_intersection_graph_data(hypergraph),
     )
 
 

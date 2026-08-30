@@ -11,6 +11,7 @@ def test_hypergraph_public_api_is_explicit() -> None:
         "clique_expansion",
         "dual",
         "edge_intersections",
+        "edge_intersection_graph",
         "incidence_graph",
         "independence_number",
         "induced_type_profile",

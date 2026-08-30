@@ -13,6 +13,8 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     DualResult,
     EdgeIntersectionsRequest,
     EdgeIntersectionsResult,
+    EdgeIntersectionGraphRequest,
+    EdgeIntersectionGraphResult,
     HypergraphIndependenceRequest,
     HypergraphIndependenceResult,
     IncidenceGraphRequest,
@@ -32,6 +34,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import
     clique_expansion,
     dual,
     edge_intersections,
+    edge_intersection_graph,
     incidence_graph,
     independence_number,
     induced_type_profile,
@@ -60,6 +63,12 @@ def _compute_edge_intersections(
     request: EdgeIntersectionsRequest,
 ) -> EdgeIntersectionsResult:
     return edge_intersections(request.hypergraph)
+
+
+def _compute_edge_intersection_graph(
+    request: EdgeIntersectionGraphRequest,
+) -> EdgeIntersectionGraphResult:
+    return edge_intersection_graph(request.hypergraph)
 
 
 def _compute_dual(request: DualRequest) -> DualResult:
@@ -224,6 +233,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "Compute every indexed edge-pair intersection and the linearity "
                 "profile of a 4-vertex, 3-edge hypergraph; the complete "
                 "worst-case intersection ledger must fit the advertised bounds.",
+                {"hypergraph": _HYPERGRAPH},
+            ),
+        ),
+    ),
+    _op(
+        "hypergraph.edge_intersection_graph.compute",
+        "Compute the edge-intersection graph of a finite hypergraph",
+        "Compute the canonical simple undirected graph whose vertices are "
+        "the hypergraph's edge IDs and in which two vertices are adjacent "
+        "if and only if the corresponding hyperedges have nonempty "
+        "intersection.  Edge IDs must be NFC-normalized so the result "
+        "composes directly with downstream graph operations.",
+        EdgeIntersectionGraphRequest,
+        EdgeIntersectionGraphResult,
+        _compute_edge_intersection_graph,
+        "combinatorics",
+        "hypergraph",
+        "exact",
+        examples=(
+            example(
+                "edge_intersection_graph_of_4_vertex_hypergraph",
+                "Compute the edge-intersection graph of a 4-vertex, 3-edge "
+                "hypergraph; every hyperedge must be nonempty.",
                 {"hypergraph": _HYPERGRAPH},
             ),
         ),

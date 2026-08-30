@@ -10,6 +10,9 @@ This avoids scanning every integer in the interval.
 
 from __future__ import annotations
 
+from bisect import bisect_right
+from heapq import merge
+
 from sympy import integer_nthroot
 from sympy.ntheory.generate import primerange
 
@@ -36,7 +39,8 @@ def enumerate_r_full(cutoff: int, r: int) -> list[int]:
     for p in primerange(2, int(prime_bound) + 1):
         primes.append(int(p))
 
-    family: set[int] = {1}
+    family_set: set[int] = {1}
+    sorted_family = [1]
 
     # For each prime, multiply into existing family members
     for prime in primes:
@@ -50,14 +54,14 @@ def enumerate_r_full(cutoff: int, r: int) -> list[int]:
             continue
 
         # Multiply every existing family member by each power
-        existing = sorted(family)
+        new_values: set[int] = set()
         for pw in powers:
             max_member = cutoff // pw
-            for member in existing:
-                if member > max_member:
-                    break
-                product = member * pw
-                if product <= cutoff:
-                    family.add(product)
+            for member in sorted_family[: bisect_right(sorted_family, max_member)]:
+                new_values.add(member * pw)
+        fresh_values = sorted(value for value in new_values if value not in family_set)
+        if fresh_values:
+            family_set.update(fresh_values)
+            sorted_family = list(merge(sorted_family, fresh_values))
 
-    return sorted(family)
+    return sorted_family

@@ -52,17 +52,6 @@ class RFullEnumerateRequest(StrictModel):
                 "r_full_enumerate.cutoff_bound",
                 "cutoff must be a positive canonical integer within the admitted bound",
             )
-        estimate = estimate_r_full_family_size(self.minimum_exponent, cutoff)
-        if estimate > MAX_R_FULL_FAMILY_SIZE:
-            raise PydanticCustomError(
-                "r_full_enumerate.family_budget",
-                "r-full family exceeds the result-size budget",
-            )
-        if estimate * (len(self.cutoff) + 3) > MAX_R_FULL_RESULT_BYTES:
-            raise PydanticCustomError(
-                "r_full_enumerate.transport_budget",
-                "r-full family exceeds the serialized-byte budget",
-            )
         return self
 
 
@@ -88,17 +77,6 @@ class RFullEnumerateResult(StrictModel):
             raise PydanticCustomError(
                 "r_full_enumerate.cutoff_bound",
                 "cutoff must be a positive canonical integer within the admitted bound",
-            )
-        estimate = estimate_r_full_family_size(self.minimum_exponent, cutoff)
-        if estimate > MAX_R_FULL_FAMILY_SIZE:
-            raise PydanticCustomError(
-                "r_full_enumerate.family_budget",
-                "r-full family exceeds the result-size budget",
-            )
-        if estimate * (len(self.cutoff) + 3) > MAX_R_FULL_RESULT_BYTES:
-            raise PydanticCustomError(
-                "r_full_enumerate.transport_budget",
-                "r-full family exceeds the serialized-byte budget",
             )
         if any(len(value) > MAX_R_FULL_CUTOFF_DIGITS + 1 for value in self.family):
             raise PydanticCustomError(

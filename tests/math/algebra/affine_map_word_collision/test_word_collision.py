@@ -139,6 +139,20 @@ def test_mixed_constant_family_preserves_reset_bound() -> None:
     assert len(result.rows) == 2
 
 
+def test_canonical_map_rows_compose_as_native_input() -> None:
+    result = compute_word_collision_profile(((Fraction(1), Fraction(2)),), 1)
+    replayed = compute_word_collision_profile((result.rows[0].map,), 1)
+    assert replayed.rows[0].map == result.rows[0].map
+
+
+def test_identity_after_constant_reset_preserves_bound() -> None:
+    huge = Fraction(10**32767)
+    result = compute_word_collision_profile(
+        ((Fraction(0), huge), (Fraction(1), Fraction(0))), 2
+    )
+    assert len(result.rows) == 2
+
+
 def test_native_admission_rejects_rational_growth_before_enumeration() -> None:
     huge = 10**32_767
     with pytest.raises(OperationDomainValidationError, match="rational digit limit"):

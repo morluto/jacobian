@@ -16,16 +16,15 @@ from jacobian.canonical import (
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.algebra.affine_map_word_collision._models import (
+    MAX_COMPOSITION_WORK,
     MAX_DEPTH,
     MAX_GENERATORS,
+    AffineMapSpec,
     CollisionRow,
     WordCollisionProfileResult,
 )
 
 __all__ = ["compute_word_collision_profile"]
-
-MAX_COMPOSITION_WORK = 5_000_000
-
 
 @dataclass(frozen=True, slots=True)
 class WordCollisionAdmission:
@@ -69,6 +68,9 @@ def _coefficient_height(
     """Bound coefficients while preserving zero-slope reset points."""
     nonzero = [(slope, intercept) for slope, intercept in generators if slope]
     zero = [intercept for slope, intercept in generators if not slope]
+    identity_only_nonzero = bool(nonzero) and all(
+        slope == 1 and intercept == 0 for slope, intercept in nonzero
+    )
     nonzero_slope = RationalHeight(1, 1)
     nonzero_intercept = RationalHeight(1, 1)
     constant_intercept: RationalHeight | None = None
@@ -85,7 +87,10 @@ def _coefficient_height(
     for _ in range(depth):
         next_nonzero_slope: RationalHeight | None = None
         next_nonzero_intercept: RationalHeight | None = None
-        if nonzero:
+        if nonzero and identity_only_nonzero:
+            next_nonzero_slope = nonzero_slope
+            next_nonzero_intercept = nonzero_intercept
+        elif nonzero:
             next_nonzero_slope = nonzero_slope.product(max_nonzero_slope)
             next_nonzero_intercept = sum_heights(
                 (
@@ -94,7 +99,14 @@ def _coefficient_height(
                 )
             )
         next_constant = max_zero_intercept if zero else None
-        if constant_intercept is not None and nonzero:
+        if constant_intercept is not None and nonzero and identity_only_nonzero:
+            grown_constant = constant_intercept
+            next_constant = (
+                grown_constant
+                if next_constant is None
+                else _max_height((next_constant, grown_constant), next_constant)
+            )
+        elif constant_intercept is not None and nonzero:
             grown_constant = sum_heights(
                 (
                     max_nonzero_slope.product(constant_intercept),
@@ -162,13 +174,17 @@ def _admit_word_collision_profile(
         )
     normalized: list[tuple[Fraction, Fraction]] = []
     for index, generator in enumerate(generators):
-        if not isinstance(generator, (tuple, list)) or len(generator) != 2:
+        if isinstance(generator, AffineMapSpec):
+            slope = generator.slope.as_fraction()
+            intercept = generator.intercept.as_fraction()
+        elif isinstance(generator, (tuple, list)) and len(generator) == 2:
+            slope, intercept = generator
+        else:
             raise OperationDomainValidationError(
                 location=("generators", index),
                 code="affine_map.invalid_generator",
                 message="each generator must contain a slope and intercept",
             )
-        slope, intercept = generator
         if not isinstance(slope, Fraction) or not isinstance(intercept, Fraction):
             raise OperationDomainValidationError(
                 location=("generators", index),

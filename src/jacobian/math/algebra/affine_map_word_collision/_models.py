@@ -10,9 +10,11 @@ from pydantic import Field, StrictInt
 from jacobian._exact import CanonicalRational, format_canonical_rational
 from jacobian._models import StrictModel
 
-MAX_WORDS = 10_000
-MAX_GENERATORS = MAX_WORDS
-MAX_DEPTH = MAX_WORDS
+MAX_COMPOSITION_WORK = 5_000_000
+# Kept as a compatibility name for callers that imported the former bound.
+MAX_WORDS = MAX_COMPOSITION_WORK
+MAX_GENERATORS = MAX_COMPOSITION_WORK
+MAX_DEPTH = MAX_COMPOSITION_WORK
 
 
 class AffineMapSpec(StrictModel):
@@ -96,6 +98,7 @@ class WordCollisionProfileResult(StrictModel):
 
 
 __all__ = [
+    "MAX_COMPOSITION_WORK",
     "MAX_DEPTH",
     "MAX_GENERATORS",
     "MAX_WORDS",

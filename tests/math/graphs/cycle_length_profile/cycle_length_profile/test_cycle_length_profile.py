@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.cycle_length_profile._models import (
+    CycleLengthProfileRequest,
+)
 from jacobian.math.graphs.cycle_length_profile.operations import (
     compute_cycle_length_profile,
 )
@@ -44,3 +51,24 @@ def test_result_preserves_source() -> None:
     graph = _graph(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
     result = compute_cycle_length_profile(graph)
     assert result.graph == graph
+
+
+def test_dense_bipartite_search_is_rejected_before_traversal() -> None:
+    left = [f"l{i}" for i in range(20)]
+    right = [f"r{i}" for i in range(20)]
+    graph = _graph([*left, *right], [[u, v] for u in left for v in right])
+
+    with pytest.raises(OperationDomainValidationError, match="simple-path work"):
+        compute_cycle_length_profile(graph)
+    with pytest.raises(ValidationError, match="simple-path work"):
+        CycleLengthProfileRequest(graph=graph)
+
+
+def test_large_single_cycle_remains_admitted() -> None:
+    vertices = [f"v{i:02d}" for i in range(20)]
+    edges = [[vertices[i], vertices[i + 1]] for i in range(19)]
+    edges.append([vertices[0], vertices[-1]])
+
+    result = compute_cycle_length_profile(_graph(vertices, edges))
+
+    assert result.cycle_lengths == (20,)

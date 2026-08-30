@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import time
 from itertools import combinations
 from math import comb
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_cancelled,
+)
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
@@ -20,6 +28,19 @@ from jacobian.math.graphs.edge_deletion_profile._models import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_EDGE_DELETION_PROFILE_WORK = 50_000_000
+_OWNER_DEADLINE_SECONDS = 3600.0
+
+
+def _require_execution_active(stage: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(f"request cancelled {stage}")
+    execution = current_request_execution()
+    if (
+        execution is not None
+        and execution.deadline is not None
+        and time.monotonic() >= execution.deadline
+    ):
+        raise OperationExecutionTimeoutError(f"request deadline expired {stage}")
 
 
 def _json_array_size(item_size: int, count: int) -> int:
@@ -218,13 +239,19 @@ def compute_edge_deletion_profile(
     For each subset F of edges with |F| <= deletion_order, compute the
     chromatic number of the graph after deleting those edges.
     """
+    execution = current_request_execution()
+    if execution is not None and execution.deadline is None:
+        bind_request_deadline(time.monotonic() + _OWNER_DEADLINE_SECONDS)
+    _require_execution_active("before admission")
     _admit_edge_deletion_profile(graph, deletion_order)
     edges = list(graph.edges)
     vertices = list(graph.vertices)
 
     rows: list[DeletionRow] = []
     for order in range(deletion_order + 1):
+        _require_execution_active("during profile enumeration")
         for edge_indices in combinations(range(len(edges)), order):
+            _require_execution_active("during profile enumeration")
             deleted = set(edge_indices)
             remaining_edges = [edges[i] for i in range(len(edges)) if i not in deleted]
             chromatic = _chromatic_number(vertices, remaining_edges)
@@ -244,6 +271,7 @@ def compute_edge_deletion_profile(
 
 def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
     """Compute the exact chromatic number by brute-force search."""
+    _require_execution_active("during chromatic search")
     if not edges:
         return 0 if not vertices else 1
     adjacency: dict[str, set[str]] = {v: set() for v in vertices}
@@ -255,6 +283,7 @@ def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
     unseen = set(active)
     component_numbers: list[int] = []
     while unseen:
+        _require_execution_active("during chromatic search")
         start = unseen.pop()
         component = {start}
         stack = [start]
@@ -281,6 +310,7 @@ def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
             component_numbers.append(2)
         else:
             for k in range(1, n + 1):
+                _require_execution_active("during chromatic search")
                 if _try_k_color(component_vertices, component_adjacency, k):
                     component_numbers.append(k)
                     break
@@ -314,6 +344,7 @@ def _try_k_color(vertices: list[str], adjacency: dict[str, set[str]], k: int) ->
     colors: dict[str, int] = {}
 
     def backtrack(idx: int) -> bool:
+        _require_execution_active("during coloring search")
         if idx == len(vertices):
             return True
         v = vertices[idx]

@@ -17,8 +17,11 @@ from jacobian.math.polynomials.ideals._models import (
     EliminationIdealResult,
     IdealComputationBudget,
     IdealQuotientRequest,
+    IdealQuotientResult,
     IdealRadicalMembershipRequest,
+    IdealRadicalMembershipResult,
     IdealRadicalRequest,
+    IdealRadicalResult,
 )
 from jacobian.math.polynomials.ideals._tools import TOOLS
 from jacobian.math.polynomials.ideals.operations import (
@@ -34,15 +37,17 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def _run_radical(request: IdealRadicalRequest):
+def _run_radical(request: IdealRadicalRequest) -> IdealRadicalResult:
     return ideal_radical(request.ideal, resource_budget=request.resource_budget)
 
 
-def _run_radical_membership(request: IdealRadicalMembershipRequest):
+def _run_radical_membership(
+    request: IdealRadicalMembershipRequest,
+) -> IdealRadicalMembershipResult:
     return ideal_radical_membership(request.ideal, request.polynomial)
 
 
-def _run_quotient(request: IdealQuotientRequest):
+def _run_quotient(request: IdealQuotientRequest) -> IdealQuotientResult:
     return ideal_quotient(
         request.dividend, request.divisor, resource_budget=request.resource_budget
     )

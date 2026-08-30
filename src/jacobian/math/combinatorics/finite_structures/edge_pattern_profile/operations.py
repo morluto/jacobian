@@ -136,9 +136,7 @@ def _admit_edge_pattern_profile(
             )
         )
         for edge_id, members in hypergraph.edges:
-            colors = tuple(
-                normalized_colors[member] for member in members
-            )
+            colors = tuple(normalized_colors[member] for member in members)
             entry_sizes.append(_entry_size(edge_id, members, colors, encoded))
             edge_id_size = _encoded_size(edge_id, encoded)
             blocks = len(set(colors))
@@ -151,7 +149,10 @@ def _admit_edge_pattern_profile(
                     ("hypergraph", source_size),
                     ("vertex_colors", colors_size),
                     ("entries", _strict_json_array_size(tuple(entry_sizes))),
-                    ("monochromatic_edge_ids", _strict_json_array_size(tuple(monochromatic_sizes))),
+                    (
+                        "monochromatic_edge_ids",
+                        _strict_json_array_size(tuple(monochromatic_sizes)),
+                    ),
                     ("rainbow_edge_ids", _strict_json_array_size(tuple(rainbow_sizes))),
                 )
             )

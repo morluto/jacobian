@@ -241,7 +241,7 @@ def compute_edge_deletion_profile(
     """
     execution = current_request_execution()
     if execution is not None and execution.deadline is None:
-        bind_request_deadline(time.monotonic() + _OWNER_DEADLINE_SECONDS)
+        bind_request_deadline(execution.started_at + _OWNER_DEADLINE_SECONDS)
     _require_execution_active("before admission")
     _admit_edge_deletion_profile(graph, deletion_order)
     edges = list(graph.edges)
@@ -311,7 +311,7 @@ def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
             missing_endpoints = [
                 endpoint
                 for left, right in combinations(component_vertices, 2)
-                if (left, right) not in component_edge_set
+                if tuple(sorted((left, right))) not in component_edge_set
                 for endpoint in (left, right)
             ]
             component_numbers.append(

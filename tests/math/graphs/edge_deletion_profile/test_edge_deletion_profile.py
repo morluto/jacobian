@@ -62,6 +62,18 @@ def test_k8_order2_uses_complete_graph_shortcuts() -> None:
     } == {6, 7}
 
 
+def test_order2_shortcut_canonicalizes_unsorted_vertex_axis() -> None:
+    vertices = ["d", "c", "b", "a"]
+    edges = [tuple(sorted(edge)) for edge in combinations(vertices, 2)]
+    graph = _graph(vertices, edges)
+    deleted = tuple(sorted((edges.index(("a", "b")), edges.index(("a", "c")))))
+
+    result = compute_edge_deletion_profile(graph, 2)
+
+    row = next(row for row in result.rows if row.deleted_edge_indices == deleted)
+    assert row.chromatic_number == 3
+
+
 def test_near_complete_graph_order0_uses_matching_shortcut() -> None:
     vertices = [f"v{index}" for index in range(8)]
     edges = list(combinations(vertices, 2))

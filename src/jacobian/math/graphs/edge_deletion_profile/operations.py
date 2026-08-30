@@ -75,9 +75,13 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
         if not edge_count or not n:
             total += 1
             continue
-        complete = edge_count == n * (n - 1) // 2
+        complete_edge_count = n * (n - 1) // 2
+        complete = edge_count == complete_edge_count
         if complete and deletion_order <= 1:
             total += n
+            continue
+        if edge_count == complete_edge_count - 1 and deletion_order == 0:
+            total += n - 1
             continue
         component_graph = SimpleUndirectedGraph(
             vertices=tuple(component),
@@ -151,9 +155,12 @@ def _admit_edge_deletion_profile(
 
     row_count = 0
     coloring_work = _coloring_work_bound(graph, deletion_order)
+    per_row_reconstruction_work = 2 * edge_count
     for order in range(deletion_order + 1):
         row_count += comb(edge_count, order)
-        if row_count > MAX_EDGE_DELETION_PROFILE_WORK // max(coloring_work, 1):
+        if row_count > MAX_EDGE_DELETION_PROFILE_WORK // max(
+            coloring_work + per_row_reconstruction_work, 1
+        ):
             raise OperationDomainValidationError(
                 location=("graph",),
                 code="graph.edge_deletion.work_exceeds_bound",

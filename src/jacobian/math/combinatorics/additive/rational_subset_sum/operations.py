@@ -66,12 +66,13 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
         fractions = [value.as_fraction() for value in nonzero]
         common_denominator = 1
         for value in fractions:
-            common_denominator = common_denominator // gcd(
-                common_denominator, value.denominator
-            ) * value.denominator
+            common_denominator = (
+                common_denominator
+                // gcd(common_denominator, value.denominator)
+                * value.denominator
+            )
             common_denominator_overflow |= (
-                _decimal_digits(common_denominator)
-                > MAX_CANONICAL_RATIONAL_DIGITS
+                _decimal_digits(common_denominator) > MAX_CANONICAL_RATIONAL_DIGITS
             )
         scaled = [
             value.numerator * (common_denominator // value.denominator)
@@ -118,7 +119,9 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
                 )
             exact_sums = {Fraction(0), *fractions, sum(fractions, Fraction(0))}
             if any(
-                max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
+                max(
+                    _decimal_digits(value.numerator), _decimal_digits(value.denominator)
+                )
                 > MAX_CANONICAL_RATIONAL_DIGITS
                 for value in exact_sums
             ):
@@ -127,7 +130,9 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
                     "subset-sum intermediates exceed the canonical rational digit bound",
                 )
             growth_digits = max(
-                max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
+                max(
+                    _decimal_digits(value.numerator), _decimal_digits(value.denominator)
+                )
                 for value in exact_sums
             )
     rational_bytes = strict_json_object_size(

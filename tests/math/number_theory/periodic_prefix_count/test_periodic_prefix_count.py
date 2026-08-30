@@ -50,7 +50,7 @@ def test_fixture_mod2_or_mod3() -> None:
     source = _source([("2", ["0"]), ("3", ["1"])])
     result = compute_periodic_union_prefix_count(source, 6)
     assert result.count == "4"
-    assert result.occupied_count == 4
+    assert result.occupied_count == "4"
 
 
 def test_empty_union() -> None:
@@ -111,7 +111,7 @@ def test_exact_period_endpoint() -> None:
     """Cutoff equal to one full period gives exactly occupied_count."""
     source = _source([("2", ["0"]), ("3", ["1"])])
     result = compute_periodic_union_prefix_count(source, 6)
-    assert int(result.count) == result.occupied_count
+    assert result.count == result.occupied_count
 
 
 def test_multiple_periods_and_remainder() -> None:
@@ -221,5 +221,13 @@ def test_large_period_complement_uses_scalar_rank() -> None:
     result = compute_periodic_union_prefix_count(source, 10)
 
     assert result.common_period == "1000000"
-    assert result.occupied_count == 999_999
+    assert result.occupied_count == "999999"
     assert result.count == "10"
+
+
+def test_large_occupied_count_is_a_canonical_integer() -> None:
+    power = 10**20
+    source = _source([(str(power - 1), ["0"]), (str(power), ["0"])])
+    result = compute_periodic_union_prefix_count(source, 1)
+    assert result.occupied_count == str(2 * power - 2)
+    assert result.count == "0"

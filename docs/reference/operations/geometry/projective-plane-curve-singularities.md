@@ -75,9 +75,14 @@ terms, a fifteen-monomial homogeneous Macaulay layer, coefficient growth from a
 Hadamard minor bound followed by Landau–Mignotte factor growth, quotient degree
 four, at most seven separating-form attempts, and the retained exact result.
 The derived coordinate components remain below the number-field carrier's
-256-digit limit. Two retained 512-KiB Singular protocol projections plus JSON
-expansion and four embedded-point records remain below the canonical 10-MiB
-transport boundary.
+256-digit limit. Every decoded ideal is checked against the same plan before it
+can enter point construction or a result: at most 64 generators and 1,024
+aggregate terms, generator degree at most four, and rational coefficient
+components no wider than the derived Macaulay-minor bound. Admission prices the
+largest retained saturation and component family from those limits, plus four
+embedded-point records and fixed JSON framing. A maximal-shape canonical
+serialization remains below the 10-MiB transport boundary; an output that
+contradicts the plan becomes a stage-specific `LIMIT_EXCEEDED` outcome.
 
 All Singular calls and exact point construction share one request-scoped
 deadline. Singular and the one-shot SymPy point worker are killable and have

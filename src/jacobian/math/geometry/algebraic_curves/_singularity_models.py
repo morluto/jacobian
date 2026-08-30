@@ -23,6 +23,7 @@ MAX_PROJECTIVE_PLANE_CURVE_TERMS = 10
 MAX_PROJECTIVE_PLANE_CURVE_COEFFICIENT_DIGITS = 16
 MAX_PROJECTIVE_SINGULAR_POINTS = 4
 MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE = 4
+MAX_PROJECTIVE_SINGULAR_COMPONENTS = 16
 MAX_PROJECTIVE_SINGULARITY_WALL_SECONDS = 60
 
 
@@ -223,7 +224,7 @@ class PositiveDimensionalProjectivePlaneCurveSingularLocus(StrictModel):
     affine_cone_dimension: Literal[2] = 2
     projective_dimension: Literal[1] = 1
     rational_minimal_components: tuple[RationalPolynomialIdeal, ...] = Field(
-        min_length=1, max_length=16
+        min_length=1, max_length=MAX_PROJECTIVE_SINGULAR_COMPONENTS
     )
 
     @model_validator(mode="after")
@@ -383,6 +384,7 @@ __all__ = [
     "MAX_PROJECTIVE_PLANE_CURVE_COEFFICIENT_DIGITS",
     "MAX_PROJECTIVE_PLANE_CURVE_DEGREE",
     "MAX_PROJECTIVE_PLANE_CURVE_TERMS",
+    "MAX_PROJECTIVE_SINGULAR_COMPONENTS",
     "MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE",
     "MAX_PROJECTIVE_SINGULAR_POINTS",
     "IncompleteProjectivePlaneCurveSingularityComputation",

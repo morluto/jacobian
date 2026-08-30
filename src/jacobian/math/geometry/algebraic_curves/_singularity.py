@@ -18,7 +18,9 @@ from jacobian._execution import (
     current_request_execution,
     request_execution,
 )
+from jacobian.canonical import CanonicalizationError, encode_strict_json
 from jacobian.math.geometry.algebraic_curves._singularity_models import (
+    MAX_PROJECTIVE_SINGULAR_COMPONENTS,
     MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE,
     MAX_PROJECTIVE_SINGULAR_POINTS,
     IncompleteProjectivePlaneCurveSingularityComputation,
@@ -67,13 +69,15 @@ from jacobian.math.polynomials.values import (
 _MAX_NORMALIZED_SOURCE_COEFFICIENT_DIGITS = 8
 _MAX_BACKEND_GENERATORS = 64
 _MAX_BACKEND_TERMS = 1_024
+_MAX_IDEAL_GENERATOR_DEGREE = 4
 _MAX_POINT_COORDINATE_DIGITS = 256
 _MAX_SHAPE_ATTEMPTS = comb(MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE, 2) + 1
-# Two retained Singular projections can each reach the adapter's concrete
-# 512-KiB capture boundary.  Even after conservative JSON expansion, four
-# degree-four embedded points with 256-digit coordinates, and fixed framing,
-# the profile remains below the canonical 10-MiB transport envelope.
-_PREDICTED_RESULT_BYTES = 3 * 512 * 1_024 + 4 * 128 * 1_024
+_PROFILE_FIXED_BYTES = 64 * 1_024
+_IDEAL_TERM_FRAMING_BYTES = 192
+_IDEAL_GENERATOR_FRAMING_BYTES = 512
+_IDEAL_COMPONENT_FRAMING_BYTES = 256
+_IDEAL_FAMILY_FIXED_BYTES = 4_096
+_CANONICAL_RESULT_BYTES = 10 * 1_024 * 1_024
 
 FailureStage = Literal[
     "SATURATION",
@@ -107,6 +111,7 @@ class _SingularityAdmission:
     jacobian_term_bound: int
     macaulay_matrix_dimension_bound: int
     macaulay_minor_component_digits: int
+    ideal_generator_degree_bound: int
     quotient_degree_bound: int
     geometric_point_bound: int
     shape_attempt_bound: int
@@ -138,6 +143,38 @@ def _normalized_source(polynomial: RationalPolynomial) -> sympy.Poly:
     if primitive.LC() < 0:
         primitive = -primitive
     return sympy.Poly(primitive, *source.gens, domain=sympy.QQ)
+
+
+def _predicted_point_record_bytes() -> int:
+    degree = MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE
+    integer_bytes = _MAX_POINT_COORDINATE_DIGITS + 3
+    rational_bytes = 2 * _MAX_POINT_COORDINATE_DIGITS + 32
+    presentation_bytes = (degree + 1) * integer_bytes + 256
+    element_bytes = presentation_bytes + degree * rational_bytes + 256
+    # The point has three coordinates and its first jet has four values.  An
+    # embedding repeats the presentation once in its indexed root identity.
+    embedding_bytes = 2 * presentation_bytes + 512
+    return embedding_bytes + 7 * element_bytes + 2_048
+
+
+def _predicted_profile_bytes(component_digits: int) -> int:
+    """Bound the largest retained positive- or zero-dimensional profile."""
+
+    term_bytes = 2 * component_digits + _IDEAL_TERM_FRAMING_BYTES
+    ideal_family_bytes = (
+        _IDEAL_FAMILY_FIXED_BYTES
+        + MAX_PROJECTIVE_SINGULAR_COMPONENTS * _IDEAL_COMPONENT_FRAMING_BYTES
+        + _MAX_BACKEND_GENERATORS * _IDEAL_GENERATOR_FRAMING_BYTES
+        + _MAX_BACKEND_TERMS * term_bytes
+    )
+    # The positive branch is the larger ideal shape: one saturation plus one
+    # complete minimal-prime family.  The alternate finite branch replaces the
+    # latter with at most four embedded point records.
+    return (
+        2 * ideal_family_bytes
+        + MAX_PROJECTIVE_SINGULAR_POINTS * _predicted_point_record_bytes()
+        + _PROFILE_FIXED_BYTES
+    )
 
 
 def _admit_singularity(source: sympy.Poly) -> _SingularityAdmission:
@@ -172,6 +209,8 @@ def _admit_singularity(source: sympy.Poly) -> _SingularityAdmission:
             "the derived elimination minors exceed the 256-digit point-carrier bound"
         )
 
+    predicted_result_bytes = _predicted_profile_bytes(minor_digits)
+
     quotient_degree = (degree - 1) ** 2
     admission = _SingularityAdmission(
         degree=degree,
@@ -181,17 +220,18 @@ def _admit_singularity(source: sympy.Poly) -> _SingularityAdmission:
         jacobian_term_bound=4 * source_terms,
         macaulay_matrix_dimension_bound=macaulay_dimension,
         macaulay_minor_component_digits=minor_digits,
+        ideal_generator_degree_bound=_MAX_IDEAL_GENERATOR_DEGREE,
         quotient_degree_bound=quotient_degree,
         geometric_point_bound=quotient_degree,
         shape_attempt_bound=comb(quotient_degree, 2) + 1,
-        predicted_result_bytes=_PREDICTED_RESULT_BYTES,
+        predicted_result_bytes=predicted_result_bytes,
         has_repeated_component=not source.is_sqf,
     )
     if (
         admission.quotient_degree_bound > MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE
         or admission.geometric_point_bound > MAX_PROJECTIVE_SINGULAR_POINTS
         or admission.shape_attempt_bound > _MAX_SHAPE_ATTEMPTS
-        or admission.predicted_result_bytes >= 10 * 1_024 * 1_024
+        or admission.predicted_result_bytes >= _CANONICAL_RESULT_BYTES
     ):
         raise _SingularityAdmissionError(
             "the derived quotient, point, shape, or exact-result envelope is exceeded"
@@ -247,6 +287,57 @@ def _is_unit_ideal(ideal: RationalPolynomialIdeal) -> bool:
     )
 
 
+def _ideal_projection_limit_failure(
+    stage: FailureStage,
+    ideals: tuple[RationalPolynomialIdeal, ...],
+    admission: _SingularityAdmission,
+    *,
+    maximum_ideals: int,
+) -> IncompleteProjectivePlaneCurveSingularityComputation | None:
+    """Reject a decoded ideal family that contradicts the admitted plan."""
+
+    if len(ideals) > maximum_ideals:
+        return _limit_failure(
+            stage,
+            "the exact ideal family exceeds the admitted component bound",
+        )
+    generator_count = sum(len(ideal.generators) for ideal in ideals)
+    term_count = sum(
+        len(generator.polynomial.terms)
+        for ideal in ideals
+        for generator in ideal.generators
+    )
+    if generator_count > _MAX_BACKEND_GENERATORS:
+        return _limit_failure(
+            stage,
+            "the exact ideal family exceeds the admitted generator bound",
+        )
+    if term_count > _MAX_BACKEND_TERMS:
+        return _limit_failure(
+            stage,
+            "the exact ideal family exceeds the admitted term bound",
+        )
+    for ideal in ideals:
+        for generator in ideal.generators:
+            for term in generator.polynomial.terms:
+                if sum(term.exponents) > admission.ideal_generator_degree_bound:
+                    return _limit_failure(
+                        stage,
+                        "an exact ideal generator exceeds the admitted degree bound",
+                    )
+                if (
+                    len(term.coefficient.num.lstrip("-"))
+                    > admission.macaulay_minor_component_digits
+                    or len(term.coefficient.den)
+                    > admission.macaulay_minor_component_digits
+                ):
+                    return _limit_failure(
+                        stage,
+                        "an exact ideal coefficient exceeds the admitted Macaulay bound",
+                    )
+    return None
+
+
 def _failure(
     stage: FailureStage,
     backend: SingularIdealResult | SingularMinimalPrimesResult,
@@ -279,12 +370,13 @@ def _local_failure(
     )
 
 
-def _local_limit_failure(
+def _limit_failure(
+    stage: FailureStage,
     detail: str,
 ) -> IncompleteProjectivePlaneCurveSingularityComputation:
     return IncompleteProjectivePlaneCurveSingularityComputation(
         status="LIMIT_EXCEEDED",
-        stage="POINT_CONSTRUCTION",
+        stage=stage,
         detail=detail[:256],
     )
 
@@ -409,6 +501,7 @@ def _records_from_worker_seeds(
 def _complete_zero_dimensional_points(
     saturation: RationalPolynomialIdeal,
     *,
+    admission: _SingularityAdmission,
     source: RationalPolynomial,
     partials: tuple[RationalPolynomial, RationalPolynomial, RationalPolynomial],
     axis: tuple[str, str, str],
@@ -431,6 +524,15 @@ def _complete_zero_dimensional_points(
     )
     if chart_zero_primes.outcome != "COMPUTED":
         return _failure("CHART_ZERO_COMPONENTS", chart_zero_primes)
+    chart_zero_components = chart_zero_primes.components or ()
+    projection_failure = _ideal_projection_limit_failure(
+        "CHART_ZERO_COMPONENTS",
+        chart_zero_components,
+        admission,
+        maximum_ideals=MAX_PROJECTIVE_SINGULAR_POINTS,
+    )
+    if projection_failure is not None:
+        return projection_failure
 
     chart_one = _specialize_ideal(
         saturation,
@@ -444,12 +546,21 @@ def _complete_zero_dimensional_points(
     )
     if chart_one_primes.outcome != "COMPUTED":
         return _failure("CHART_ONE_COMPONENTS", chart_one_primes)
+    chart_one_components = chart_one_primes.components or ()
+    projection_failure = _ideal_projection_limit_failure(
+        "CHART_ONE_COMPONENTS",
+        chart_one_components,
+        admission,
+        maximum_ideals=MAX_PROJECTIVE_SINGULAR_POINTS,
+    )
+    if projection_failure is not None:
+        return projection_failure
 
     worker_request = ProjectiveSingularityPointWorkerRequest(
         source=source,
         partials=partials,
-        chart_zero_components=chart_zero_primes.components or (),
-        chart_one_components=chart_one_primes.components or (),
+        chart_zero_components=chart_zero_components,
+        chart_one_components=chart_one_components,
         chart_two_present=_chart_two_is_present(saturation),
     )
     worker_response = run_point_construction_worker(
@@ -475,6 +586,76 @@ def _profile(
         partials=partials,
         outcome=outcome,
     )
+
+
+def _positive_dimensional_outcome(
+    saturation: RationalPolynomialIdeal,
+    *,
+    admission: _SingularityAdmission,
+    budget: IdealComputationBudget,
+    deadline: float,
+) -> ProjectivePlaneCurveSingularityOutcome:
+    components_backend = run_singular_minimal_primes(
+        saturation,
+        budget,
+        wall_seconds=_remaining(deadline),
+    )
+    if components_backend.outcome != "COMPUTED":
+        return _failure("PROJECTIVE_COMPONENTS", components_backend)
+    components = components_backend.components or ()
+    projection_failure = _ideal_projection_limit_failure(
+        "PROJECTIVE_COMPONENTS",
+        components,
+        admission,
+        maximum_ideals=MAX_PROJECTIVE_SINGULAR_COMPONENTS,
+    )
+    if projection_failure is not None:
+        return projection_failure
+    if not components:
+        return _local_failure(
+            "a repeated component produced no rational minimal component"
+        )
+    return PositiveDimensionalProjectivePlaneCurveSingularLocus._from_kernel(
+        ideal=saturation,
+        components=components,
+    )
+
+
+def _bounded_result_profile(
+    *,
+    source: RationalPolynomial,
+    partials: tuple[RationalPolynomial, RationalPolynomial, RationalPolynomial],
+    outcome: ProjectivePlaneCurveSingularityOutcome,
+    admission: _SingularityAdmission,
+    deadline: float,
+) -> ProjectivePlaneCurveSingularityProfile:
+    if _remaining(deadline) <= 0:
+        return _profile(
+            source=source,
+            partials=partials,
+            outcome=_timeout_failure("RESULT_CONSTRUCTION"),
+        )
+    profile = _profile(source=source, partials=partials, outcome=outcome)
+    try:
+        encoded_bytes = len(encode_strict_json(profile.model_dump(mode="json")))
+    except CanonicalizationError:
+        encoded_bytes = _CANONICAL_RESULT_BYTES + 1
+    if encoded_bytes > admission.predicted_result_bytes:
+        return _profile(
+            source=source,
+            partials=partials,
+            outcome=_limit_failure(
+                "RESULT_CONSTRUCTION",
+                "the exact singularity profile exceeds its admitted byte bound",
+            ),
+        )
+    if _remaining(deadline) <= 0:
+        return _profile(
+            source=source,
+            partials=partials,
+            outcome=_timeout_failure("RESULT_CONSTRUCTION"),
+        )
+    return profile
 
 
 def _singularity_profile_request(
@@ -540,33 +721,25 @@ def _singularity_profile_request(
             outcome=_failure("SATURATION", saturation_backend),
         )
     saturation = saturation_backend.ideal
+    projection_failure = _ideal_projection_limit_failure(
+        "SATURATION",
+        (saturation,),
+        admission,
+        maximum_ideals=1,
+    )
+    if projection_failure is not None:
+        return _profile(
+            source=source,
+            partials=partials,
+            outcome=projection_failure,
+        )
 
     if admission.has_repeated_component:
-        components_backend = run_singular_minimal_primes(
+        outcome: ProjectivePlaneCurveSingularityOutcome = _positive_dimensional_outcome(
             saturation,
-            budget,
-            wall_seconds=_remaining(deadline),
-        )
-        if components_backend.outcome != "COMPUTED":
-            return _profile(
-                source=source,
-                partials=partials,
-                outcome=_failure("PROJECTIVE_COMPONENTS", components_backend),
-            )
-        components = components_backend.components or ()
-        if not components:
-            return _profile(
-                source=source,
-                partials=partials,
-                outcome=_local_failure(
-                    "a repeated component produced no rational minimal component"
-                ),
-            )
-        outcome: ProjectivePlaneCurveSingularityOutcome = (
-            PositiveDimensionalProjectivePlaneCurveSingularLocus._from_kernel(
-                ideal=saturation,
-                components=components,
-            )
+            admission=admission,
+            budget=budget,
+            deadline=deadline,
         )
     elif _is_unit_ideal(saturation):
         outcome = SmoothProjectivePlaneCurve._from_kernel(saturation)
@@ -574,6 +747,7 @@ def _singularity_profile_request(
         try:
             points = _complete_zero_dimensional_points(
                 saturation,
+                admission=admission,
                 source=source,
                 partials=partials,
                 axis=axis,
@@ -586,7 +760,7 @@ def _singularity_profile_request(
         except OperationExecutionCancelledError:
             outcome = _cancelled_failure("POINT_CONSTRUCTION")
         except PointConstructionLimitError as exc:
-            outcome = _local_limit_failure(str(exc))
+            outcome = _limit_failure("POINT_CONSTRUCTION", str(exc))
         except (ValueError, TypeError, ArithmeticError, RuntimeError):
             outcome = _local_failure(
                 "exact point construction rejected malformed backend algebra"
@@ -600,13 +774,13 @@ def _singularity_profile_request(
                     points=points,
                 )
 
-    if _remaining(deadline) <= 0:
-        return _profile(
-            source=source,
-            partials=partials,
-            outcome=_timeout_failure("RESULT_CONSTRUCTION"),
-        )
-    return _profile(source=source, partials=partials, outcome=outcome)
+    return _bounded_result_profile(
+        source=source,
+        partials=partials,
+        outcome=outcome,
+        admission=admission,
+        deadline=deadline,
+    )
 
 
 def singularity_profile(

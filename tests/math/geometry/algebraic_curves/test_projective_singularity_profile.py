@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import threading
 from fractions import Fraction
+from itertools import product
 from typing import cast
 
 import pytest
@@ -12,8 +13,18 @@ import sympy
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry.algebraic_curves._singularity import (
+    _admit_singularity,
+    _ideal_projection_limit_failure,
+    _normalized_source,
+    _profile,
+    _to_public_polynomial,
+)
 from jacobian.math.geometry.algebraic_curves._singularity_models import (
+    MAX_PROJECTIVE_SINGULAR_COMPONENTS,
+    PositiveDimensionalProjectivePlaneCurveSingularLocus,
     ProjectivePlaneCurveSingularityProfile,
     ProjectivePlaneCurveSingularityRequest,
 )
@@ -88,6 +99,41 @@ def _chart_polynomial(
 def _compute(source: RationalPolynomial) -> ProjectivePlaneCurveSingularityProfile:
     return compute_projective_plane_curve_singularity_profile(
         ProjectivePlaneCurveSingularityRequest(polynomial=source)
+    )
+
+
+def _ideal_with_shape(
+    *,
+    coefficient: CanonicalRational,
+    generator_count: int,
+    terms_per_generator: int,
+    axis: tuple[str, str, str] = _AXIS,
+) -> RationalPolynomialIdeal:
+    exponents = tuple(
+        sorted(
+            (
+                exponent
+                for exponent in product(range(5), repeat=3)
+                if sum(exponent) <= 4
+            ),
+            reverse=True,
+        )[:terms_per_generator]
+    )
+    generator = RationalPolynomial(
+        variables=axis,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=coefficient,
+                    exponents=exponent,
+                )
+                for exponent in exponents
+            )
+        ),
+    )
+    return RationalPolynomialIdeal(
+        variables=axis,
+        generators=(generator,) * generator_count,
     )
 
 
@@ -393,6 +439,130 @@ def test_normalized_height_is_rejected_before_singular_launch() -> None:
     assert caught.value.errors()[0]["type"] == (
         "projective_plane_curve.normalized_height_bound"
     )
+
+
+def test_decoded_ideal_cannot_exceed_the_admitted_coefficient_bound() -> None:
+    source = _normalized_source(
+        _polynomial(
+            (99_999_999, (3, 0, 0)),
+            (1, (2, 1, 0)),
+        )
+    )
+    admission = _admit_singularity(source)
+    over_bound = CanonicalRational(
+        num="1" + "0" * admission.macaulay_minor_component_digits,
+        den="1",
+    )
+    ideal = _ideal_with_shape(
+        coefficient=over_bound,
+        generator_count=1,
+        terms_per_generator=1,
+    )
+
+    failure = _ideal_projection_limit_failure(
+        "SATURATION",
+        (ideal,),
+        admission,
+        maximum_ideals=1,
+    )
+
+    assert failure is not None
+    assert failure.status == "LIMIT_EXCEEDED"
+    assert failure.stage == "SATURATION"
+
+
+def test_derived_result_bound_covers_the_maximal_admitted_ideal_shape() -> None:
+    maximal_axis = ("X" * 32, "Y" * 32, "Z" * 32)
+    cubic_exponents = tuple(
+        sorted(
+            exponent for exponent in product(range(4), repeat=3) if sum(exponent) == 3
+        )
+    )
+    source_backend = _normalized_source(
+        RationalPolynomial(
+            variables=maximal_axis,
+            polynomial=SparseRationalPolynomial(
+                terms=tuple(
+                    RationalPolynomialTerm(
+                        coefficient=_rational(99_999_999 if index == 0 else index),
+                        exponents=exponents,
+                    )
+                    for index, exponents in enumerate(
+                        reversed(cubic_exponents), start=1
+                    )
+                )
+            ),
+        )
+    )
+    admission = _admit_singularity(source_backend)
+    numerator = 10 ** (admission.macaulay_minor_component_digits - 1)
+    denominator_base = 10**admission.macaulay_minor_component_digits
+
+    saturation = _ideal_with_shape(
+        coefficient=CanonicalRational(
+            num=str(numerator),
+            den=str(denominator_base - 1),
+        ),
+        generator_count=64,
+        terms_per_generator=16,
+        axis=maximal_axis,
+    )
+    components = tuple(
+        _ideal_with_shape(
+            coefficient=CanonicalRational(
+                num=str(numerator),
+                den=str(denominator_base - (10 * index + 1)),
+            ),
+            generator_count=4,
+            terms_per_generator=16,
+            axis=maximal_axis,
+        )
+        for index in range(MAX_PROJECTIVE_SINGULAR_COMPONENTS)
+    )
+    components = tuple(sorted(components, key=lambda ideal: ideal.model_dump_json()))
+
+    assert (
+        _ideal_projection_limit_failure(
+            "SATURATION",
+            (saturation,),
+            admission,
+            maximum_ideals=1,
+        )
+        is None
+    )
+    assert (
+        _ideal_projection_limit_failure(
+            "PROJECTIVE_COMPONENTS",
+            components,
+            admission,
+            maximum_ideals=MAX_PROJECTIVE_SINGULAR_COMPONENTS,
+        )
+        is None
+    )
+
+    axis = cast(
+        tuple[str, str, str], tuple(str(symbol) for symbol in source_backend.gens)
+    )
+    source = _to_public_polynomial(source_backend, axis)
+    partials = cast(
+        tuple[RationalPolynomial, RationalPolynomial, RationalPolynomial],
+        tuple(
+            _to_public_polynomial(source_backend.diff(symbol), axis)
+            for symbol in source_backend.gens
+        ),
+    )
+    profile = _profile(
+        source=source,
+        partials=partials,
+        outcome=PositiveDimensionalProjectivePlaneCurveSingularLocus._from_kernel(
+            ideal=saturation,
+            components=components,
+        ),
+    )
+
+    encoded_size = len(encode_strict_json(profile.model_dump(mode="json")))
+    assert encoded_size <= admission.predicted_result_bytes
+    assert admission.predicted_result_bytes < 10 * 1_024 * 1_024
 
 
 def test_every_outcome_discriminator_is_required_by_schema_and_runtime() -> None:

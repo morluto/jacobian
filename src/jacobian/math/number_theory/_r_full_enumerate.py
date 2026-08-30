@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._r_full_enumerate_kernels import enumerate_r_full
@@ -18,20 +19,21 @@ def enumerate_r_full_numbers(
     request: RFullEnumerateRequest,
 ) -> RFullEnumerateResult:
     """Return the complete ordered family of r-full integers up to the cutoff."""
-    estimate = 10 * (request.cutoff ** (1 / request.minimum_exponent))
+    cutoff = parse_canonical_integer(request.cutoff)
+    estimate = 10 * (cutoff ** (1 / request.minimum_exponent))
     if estimate > MAX_R_FULL_FAMILY_SIZE:
         raise OperationDomainValidationError(
             location=("cutoff",),
             code="r_full_enumerate_family_exceeds_result_budget",
             message="r-full family exceeds the result-size budget",
         )
-    if estimate * (len(str(request.cutoff)) + 3) > MAX_R_FULL_RESULT_BYTES:
+    if estimate * (len(request.cutoff) + 3) > MAX_R_FULL_RESULT_BYTES:
         raise OperationDomainValidationError(
             location=("cutoff",),
             code="r_full_enumerate_family_exceeds_transport_budget",
             message="r-full family exceeds the serialized-byte budget",
         )
-    raw_family = enumerate_r_full(request.cutoff, request.minimum_exponent)
+    raw_family = enumerate_r_full(cutoff, request.minimum_exponent)
     return RFullEnumerateResult._from_kernel(
         request.minimum_exponent, request.cutoff, raw_family
     )

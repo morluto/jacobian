@@ -59,14 +59,16 @@ def _admit_monochromatic_path_graph(graph: ColoredUndirectedGraph) -> tuple[str,
             code="graph.monochromatic_path.work_exceeds_bound",
             message="monochromatic path search exceeds its exact work bound",
         )
-    edge_upper_bound = len(colours) * subset_count
+    # Each colour produces its own hypergraph.  The finite-hypergraph edge
+    # bound applies per result, while the aggregate output is bounded below.
+    edge_upper_bound = subset_count
     if edge_upper_bound > MAX_EDGES:
         raise OperationDomainValidationError(
             location=("graph",),
             code="graph.monochromatic_path.edge_count_exceeds_bound",
             message="complete monochromatic path hypergraphs exceed the edge bound",
         )
-    incidence_upper_bound = len(colours) * vertex_count * (1 << (vertex_count - 1))
+    incidence_upper_bound = vertex_count * (1 << (vertex_count - 1))
     if incidence_upper_bound > MAX_TOTAL_INCIDENCES:
         raise OperationDomainValidationError(
             location=("graph",),

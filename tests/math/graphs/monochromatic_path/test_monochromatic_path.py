@@ -87,7 +87,7 @@ def test_result_preserves_source() -> None:
 
 
 def test_twelve_vertex_complete_graph_fits_tight_incidence_bound() -> None:
-    vertices = tuple(str(index) for index in range(12))
+    vertices = tuple(sorted(str(index) for index in range(12)))
     edges = tuple(
         (vertices[left], vertices[right])
         for left in range(12)

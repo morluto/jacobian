@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from fractions import Fraction
 from itertools import pairwise
+from threading import Event
 from time import monotonic
 from typing import Any
 
@@ -14,6 +16,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_execution,
 )
+from jacobian._flint import flint_workprec
 from jacobian.canonical import canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import analysis
@@ -261,7 +264,7 @@ def test_sendov_shaped_polynomial_contains_its_exact_integral() -> None:
 
 
 def test_sine_integral_matches_an_independent_endpoint_antiderivative() -> None:
-    from flint import arb, ctx
+    from flint import arb
 
     expression = {"op": "sin", "children": [_var()]}
     coarse = _run(expression, target_mantissa="0", target_exponent=0, max_leaves=1)
@@ -269,7 +272,7 @@ def test_sine_integral_matches_an_independent_endpoint_antiderivative() -> None:
 
     assert isinstance(coarse.outcome, DefiniteIntegralBudgetExhausted)
     assert isinstance(refined.outcome, DefiniteIntegralTargetMet)
-    with ctx.workprec(512):
+    with flint_workprec(512):
         antiderivative = arb(1) - arb(1).cos()
         exact_lower = antiderivative.lower().man_exp()
         exact_upper = antiderivative.upper().man_exp()
@@ -509,14 +512,93 @@ def test_constant_expression_retains_an_otherwise_unused_integration_axis() -> N
 
 
 def test_request_precision_overrides_the_ambient_arb_context() -> None:
-    from flint import ctx
-
     request = _request(_var(), max_leaves=4)
-    with ctx.workprec(64):
+    with flint_workprec(64):
         low_ambient = _compute_definite_integral_enclosure(request)
-    with ctx.workprec(512):
+    with flint_workprec(512):
         high_ambient = _compute_definite_integral_enclosure(request)
     assert low_ambient == high_ambient
+
+
+def test_concurrent_precision_requests_do_not_overlap_the_arb_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from flint import ctx
+
+    import jacobian.math.analysis._definite_integral_enclosure as integral
+
+    ambient_precision = ctx.prec
+    expression = {"op": "exp", "children": [_var()]}
+    low_request = _request(
+        expression,
+        precision_bits=32,
+        target_mantissa="0",
+        target_exponent=0,
+        max_leaves=1,
+    )
+    high_request = _request(
+        expression,
+        precision_bits=512,
+        target_mantissa="0",
+        target_exponent=0,
+        max_leaves=1,
+    )
+    expected_low = _compute_definite_integral_enclosure(low_request)
+    expected_high = _compute_definite_integral_enclosure(high_request)
+    assert expected_low != expected_high
+
+    low_evaluating = Event()
+    high_attempting = Event()
+    high_evaluating = Event()
+    low_checked_context = Event()
+    high_finished = Event()
+    observations: dict[str, int | bool] = {}
+    original_evaluate = _evaluate_box_expression
+
+    def observe_real_evaluation(*args: Any, **kwargs: Any) -> Any:
+        if not low_evaluating.is_set():
+            observations["low_entered_precision"] = ctx.prec
+            low_evaluating.set()
+            assert high_attempting.wait(timeout=1)
+            observations["contexts_overlapped"] = high_evaluating.wait(timeout=0.25)
+            observations["low_precision_during_high_attempt"] = ctx.prec
+            low_checked_context.set()
+            if observations["contexts_overlapped"]:
+                assert high_finished.wait(timeout=1)
+        else:
+            observations["high_entered_precision"] = ctx.prec
+            high_evaluating.set()
+            assert low_checked_context.wait(timeout=1)
+        return original_evaluate(*args, **kwargs)
+
+    monkeypatch.setattr(integral, "_evaluate_box_expression", observe_real_evaluation)
+
+    def run_high_precision() -> DefiniteIntegralEnclosureResult:
+        assert low_evaluating.wait(timeout=1)
+        high_attempting.set()
+        try:
+            return _compute_definite_integral_enclosure(high_request)
+        finally:
+            high_finished.set()
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        low_future = workers.submit(
+            _compute_definite_integral_enclosure,
+            low_request,
+        )
+        high_future = workers.submit(run_high_precision)
+        low_result = low_future.result(timeout=3)
+        high_result = high_future.result(timeout=3)
+
+    assert low_result == expected_low
+    assert high_result == expected_high
+    assert ctx.prec == ambient_precision
+    assert observations == {
+        "low_entered_precision": 32,
+        "contexts_overlapped": False,
+        "low_precision_during_high_attempt": 32,
+        "high_entered_precision": 512,
+    }
 
 
 def test_result_round_trips_through_public_json() -> None:

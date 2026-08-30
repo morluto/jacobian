@@ -20,6 +20,7 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
 )
+from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import (
     CanonicalLimits,
@@ -777,9 +778,7 @@ def _evaluate_integral_leaf(
 
     _require_deadline(deadline, "before an Arb leaf evaluation")
     try:
-        from flint import ctx
-
-        with ctx.workprec(request.precision_bits):
+        with flint_workprec(request.precision_bits, deadline=deadline):
             variables = {
                 request.box.variables[0]: arb_source_interval(interval),
             }

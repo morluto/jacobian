@@ -62,54 +62,89 @@ def require_matrix_scalar_digits(
                 )
 
 
-def _require_raw_matrix_envelope(
-    data: object, *, maximum_axis: int, label: str
+def _prepare_raw_matrix_scalar(
+    scalar: object, *, label: str, scalar_domain: Literal["QQ", "ZZ"]
 ) -> object:
-    """Bound raw matrix depth, axes, and scalar strings before tuple copying."""
+    """Reject nested scalar containers and copy one valid-shaped QQ mapping."""
+
+    if isinstance(scalar, (list, tuple)) or (
+        scalar_domain == "ZZ" and isinstance(scalar, dict)
+    ):
+        raise _validation_error(
+            "shape_mismatch", f"{label} entries must be scalar values"
+        )
+    components: tuple[object, ...]
+    if isinstance(scalar, dict):
+        if set(scalar).difference({"num", "den"}):
+            raise _validation_error(
+                "shape_mismatch",
+                f"{label} rational scalar contains unknown fields",
+            )
+        components = (scalar.get("num"), scalar.get("den"))
+        if any(isinstance(component, (dict, list, tuple)) for component in components):
+            raise _validation_error(
+                "shape_mismatch",
+                f"{label} rational scalar components must be scalar values",
+            )
+        normalized: object = dict(scalar)
+    else:
+        components = (scalar,)
+        normalized = scalar
+    if any(
+        isinstance(component, str)
+        and len(component.lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
+        for component in components
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            f"{label} scalars are limited to {MAX_MATRIX_SCALAR_DIGITS} decimal digits",
+        )
+    return normalized
+
+
+def _prepare_raw_matrix_envelope(
+    data: object,
+    *,
+    maximum_axis: int,
+    label: str,
+    scalar_domain: Literal["QQ", "ZZ"],
+) -> object:
+    """Bound raw matrix depth and shallowly normalize its two array axes."""
 
     if not isinstance(data, dict):
         return data
     if set(data).difference({"domain", "entries"}):
         raise _validation_error("shape_mismatch", f"{label} contains unknown fields")
+    normalized = dict(data)
+    if "entries" not in data:
+        return normalized
     entries = data.get("entries")
     if not isinstance(entries, (list, tuple)):
-        return data
+        raise _validation_error(
+            "shape_mismatch", f"{label} entries must be an array of rows"
+        )
     if len(entries) > maximum_axis:
         raise _validation_error(
             "budget_exceeded", f"{label} has at most {maximum_axis} rows"
         )
+    normalized_rows: list[tuple[object, ...]] = []
     for row in entries:
         if not isinstance(row, (list, tuple)):
-            continue
+            raise _validation_error("shape_mismatch", f"{label} rows must be arrays")
         if len(row) > maximum_axis:
             raise _validation_error(
                 "budget_exceeded", f"{label} has at most {maximum_axis} columns"
             )
-        for scalar in row:
-            if isinstance(scalar, (list, tuple)):
-                raise _validation_error(
-                    "shape_mismatch", f"{label} entries must be scalar values"
+        normalized_rows.append(
+            tuple(
+                _prepare_raw_matrix_scalar(
+                    scalar, label=label, scalar_domain=scalar_domain
                 )
-            if isinstance(scalar, dict) and set(scalar).difference({"num", "den"}):
-                raise _validation_error(
-                    "shape_mismatch", f"{label} rational scalar contains unknown fields"
-                )
-            components = (
-                (scalar.get("num"), scalar.get("den"))
-                if isinstance(scalar, dict)
-                else (scalar,)
+                for scalar in row
             )
-            for component in components:
-                if (
-                    isinstance(component, (str, int))
-                    and len(str(component).lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
-                ):
-                    raise _validation_error(
-                        "budget_exceeded",
-                        f"{label} scalars are limited to "
-                        f"{MAX_MATRIX_SCALAR_DIGITS} decimal digits",
-                    )
-    return data
+        )
+    normalized["entries"] = tuple(normalized_rows)
+    return normalized
 
 
 class RationalMatrix(StrictModel):
@@ -124,10 +159,12 @@ class RationalMatrix(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
-        data = _require_raw_matrix_envelope(
-            data, maximum_axis=MAX_RATIONAL_MATRIX_ORDER, label="matrix"
+        return _prepare_raw_matrix_envelope(
+            data,
+            maximum_axis=MAX_RATIONAL_MATRIX_ORDER,
+            label="matrix",
+            scalar_domain="QQ",
         )
-        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:
@@ -486,10 +523,12 @@ class IntegerMatrix(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
-        data = _require_raw_matrix_envelope(
-            data, maximum_axis=MAX_INTEGER_MATRIX_ORDER, label="matrix"
+        return _prepare_raw_matrix_envelope(
+            data,
+            maximum_axis=MAX_INTEGER_MATRIX_ORDER,
+            label="matrix",
+            scalar_domain="ZZ",
         )
-        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:

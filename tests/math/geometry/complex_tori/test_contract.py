@@ -47,6 +47,13 @@ def _elliptic_torus() -> LatticeComplexStructure:
     )
 
 
+def _deep_rational_mapping() -> object:
+    nested: object = "0"
+    for _ in range(1_500):
+        nested = {"num": nested, "den": "1"}
+    return nested
+
+
 def test_exact_complex_structure_identity_is_required() -> None:
     torus = LatticeComplexStructure(
         coordinate_axis=("e1", "e2"),
@@ -234,6 +241,47 @@ def test_raw_torus_validation_does_not_recurse_through_a_malformed_matrix() -> N
                 },
             }
         )
+
+
+@pytest.mark.parametrize("component", ("num", "den"))
+def test_raw_neron_severi_request_rejects_deep_rational_components(
+    component: str,
+) -> None:
+    payload = {"torus": _elliptic_torus().model_dump(mode="json")}
+    payload["torus"]["complex_structure"]["entries"][0][0][component] = (
+        _deep_rational_mapping()
+    )
+
+    with pytest.raises(ValidationError) as exc_info:
+        NeronSeveriLatticeRequest.model_validate(payload)
+
+    assert exc_info.value.errors(include_input=False)[0]["type"] == (
+        "matrix.shape_mismatch"
+    )
+
+
+def test_raw_riemann_request_rejects_deep_rational_shaped_integer() -> None:
+    torus = _elliptic_torus()
+    form = IntegralBilinearForm(
+        coordinate_axis=torus.coordinate_axis,
+        kind="ALTERNATING",
+        matrix=IntegerMatrix(entries=(("0", "1"), ("-1", "0"))),
+    )
+    payload = {
+        "torus": torus.model_dump(mode="json"),
+        "form": form.model_dump(mode="json"),
+    }
+    payload["form"]["matrix"]["entries"][0][0] = {
+        "num": _deep_rational_mapping(),
+        "den": "1",
+    }
+
+    with pytest.raises(ValidationError) as exc_info:
+        RiemannFormProfileRequest.model_validate(payload)
+
+    assert exc_info.value.errors(include_input=False)[0]["type"] == (
+        "matrix.shape_mismatch"
+    )
 
 
 @pytest.mark.parametrize("malformed_part", ("row_axis", "coefficient_num"))

@@ -70,7 +70,7 @@ def _admit_word_collision_profile(
 ) -> WordCollisionAdmission:
     """Admit native and catalog calls before product or exact composition."""
 
-    if not isinstance(generators, (tuple, list)) or not generators:
+    if not isinstance(generators, Sequence) or not generators:
         raise OperationDomainValidationError(
             location=("generators",),
             code="affine_map.invalid_generators",
@@ -174,7 +174,9 @@ def _admit_word_collision_profile(
             ("words", 0),
         )
     )
-    rows_bytes = _array_size((row_fixed_bytes,) * word_count) + total_words_bytes
+    distinct_generator_count = len(set(canonical_generators))
+    possible_rows = min(word_count, distinct_generator_count**depth)
+    rows_bytes = _array_size((row_fixed_bytes,) * possible_rows) + total_words_bytes
     result_bytes = strict_json_object_size(
         (
             ("generators", generators_bytes),

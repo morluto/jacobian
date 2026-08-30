@@ -10,10 +10,11 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import sha256_digest
+from jacobian.math.graphs.directed._models import DirectedGraph
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix, rank
 
 _MAX_FIELD_ORDER = 65536
-_MIN_MODULUS_COEFFICIENTS = 3
+_MIN_MODULUS_COEFFICIENTS = 2
 _MAX_MODULUS_COEFFICIENTS = 17
 _MAX_AXIS_LABELS = 256
 _MAX_DERIVATION_WORK = 1_000_000
@@ -55,8 +56,8 @@ def _validate_presentation_shape(
         <= _MAX_MODULUS_COEFFICIENTS
     ):
         raise _validation_error(
-            "finite_field.finite_extension_modulus_length_bound",
-            "finite extension modulus length is outside its bound",
+            "finite_field.presentation_modulus_length_bound",
+            "finite-field presentation modulus length is outside its bound",
         )
     if modulus_coefficients[-1] != 1:
         raise _validation_error("finite_field.modulus_monic", "modulus must be monic")
@@ -152,8 +153,10 @@ class FiniteFieldPresentation(StrictModel):
     def ordered_basis(self) -> tuple[str, ...]:
         return (
             "1",
-            self.generator,
-            *(f"{self.generator}^{power}" for power in range(2, self.degree)),
+            *(
+                self.generator if power == 1 else f"{self.generator}^{power}"
+                for power in range(1, self.degree)
+            ),
         )
 
     @property
@@ -209,6 +212,50 @@ class FiniteFieldElement(StrictModel):
                 "value_type": "finite-field-element",
             }
         )
+
+
+PaleyTournamentOrientation = Literal["ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"]
+
+
+class PaleyTournamentResult(StrictModel):
+    """The directed Paley tournament bound to its exact field presentation."""
+
+    presentation: FiniteFieldPresentation
+    graph: DirectedGraph
+    orientation: PaleyTournamentOrientation = (
+        "ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"
+    )
+
+    @model_validator(mode="after")
+    def bind_graph_to_presentation(self) -> Self:
+        if self.presentation.order % 4 != 3:
+            raise _validation_error(
+                "finite_field.paley_tournament_order_congruent_to_three_mod_four",
+                "Paley tournament requires field order congruent to 3 modulo 4",
+            )
+        if self.graph.vertex_count != self.presentation.order:
+            raise _validation_error(
+                "finite_field.paley_tournament_vertex_count_matches_field_order",
+                "Paley tournament vertex count must equal the field order",
+            )
+        expected_edges = self.presentation.order * (self.presentation.order - 1) // 2
+        if len(self.graph.edges) != expected_edges:
+            raise _validation_error(
+                "finite_field.paley_tournament_complete_arc_count",
+                "Paley tournament must contain one arc per unordered vertex pair",
+            )
+        if self.graph.edges != tuple(sorted(self.graph.edges)):
+            raise _validation_error(
+                "finite_field.paley_tournament_lexicographic_arcs",
+                "Paley tournament arcs must be lexicographically ordered",
+            )
+        unordered_pairs = {tuple(sorted(edge)) for edge in self.graph.edges}
+        if len(unordered_pairs) != expected_edges:
+            raise _validation_error(
+                "finite_field.paley_tournament_one_orientation_per_vertex_pair",
+                "Paley tournament must orient every unordered vertex pair exactly once",
+            )
+        return self
 
 
 class Axis(StrictModel):

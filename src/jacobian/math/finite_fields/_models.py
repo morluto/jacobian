@@ -56,6 +56,10 @@ class PermutationRequest(StrictModel):
     table: FiniteMapTable
 
 
+class PaleyTournamentRequest(StrictModel):
+    presentation: FiniteFieldPresentation
+
+
 __all__ = [
     "CollisionRequest",
     "DirectionRankLedgerRequest",
@@ -63,6 +67,7 @@ __all__ = [
     "FiniteMapTableRequest",
     "LinearMapRankRequest",
     "OrbitDistributionRequest",
+    "PaleyTournamentRequest",
     "PermutationRequest",
     "ProjectiveLineRequest",
     "RestrictScalarsRequest",

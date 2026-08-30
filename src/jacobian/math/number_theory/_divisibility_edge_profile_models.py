@@ -76,7 +76,9 @@ def _validate_divisibility_edge_shape(values: tuple[str, ...]) -> None:
         )
 
 
-def _validate_divisibility_edge_resources(values: tuple[str, ...]) -> None:
+def _validate_divisibility_edge_resources(
+    values: tuple[str, ...],
+) -> tuple[tuple[int, int, int], ...]:
     parsed = tuple(parse_canonical_integer(value) for value in values)
     max_digits = max(len(value) for value in values)
     pair_count = len(parsed) * (len(parsed) - 1) // 2
@@ -85,20 +87,31 @@ def _validate_divisibility_edge_resources(values: tuple[str, ...]) -> None:
             "divisibility_edge.factorization_work",
             "divisibility factorization exceeds the admitted work budget",
         )
-    if pair_count * (2 * max_digits + 96) > MAX_DIVISIBILITY_EDGE_RESULT_BYTES:
+    if len(values) * (max_digits + 32) > MAX_DIVISIBILITY_EDGE_RESULT_BYTES:
         raise PydanticCustomError(
             "divisibility_edge.result_bytes",
             "divisibility edge profile exceeds the serialized-byte budget",
         )
-    for left in parsed:
-        for right in parsed:
-            if left != right and right % left == 0:
-                quotient = right // left
-                if quotient > 1 and len(str(quotient)) > MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS:
-                    raise PydanticCustomError(
-                        "divisibility_edge.quotient_digits",
-                        "derived divisibility quotients exceed the factorization worker limit",
-                    )
+    edge_plan: list[tuple[int, int, int]] = []
+    for left_index, left in enumerate(parsed):
+        for right_index, right in enumerate(parsed):
+            if left_index == right_index or right % left:
+                continue
+            quotient = right // left
+            if quotient <= 1:
+                continue
+            if len(str(quotient)) > MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS:
+                raise PydanticCustomError(
+                    "divisibility_edge.quotient_digits",
+                    "derived divisibility quotients exceed the factorization worker limit",
+                )
+            edge_plan.append((left_index, right_index, quotient))
+    if len(edge_plan) * (2 * max_digits + 96) > MAX_DIVISIBILITY_EDGE_RESULT_BYTES:
+        raise PydanticCustomError(
+            "divisibility_edge.result_bytes",
+            "divisibility edge profile exceeds the serialized-byte budget",
+        )
+    return tuple(edge_plan)
 
 
 class DivisibilityEdge(StrictModel):

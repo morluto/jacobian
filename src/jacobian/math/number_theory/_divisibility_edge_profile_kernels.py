@@ -56,6 +56,7 @@ def _least_prime_factor(n: int) -> int:
 
 def construct_divisibility_edge_profile(
     values: tuple[str, ...],
+    edge_plan: tuple[tuple[int, int, int], ...],
 ) -> list[DivisibilityEdgeData]:
     """Return the complete directed divisibility edge table.
 
@@ -64,30 +65,21 @@ def construct_divisibility_edge_profile(
     - quotient = b / a
     - least_prime_factor = least prime factor of the quotient
     """
-    int_values = [int(v) for v in values]
-    n = len(int_values)
     edges: list[DivisibilityEdgeData] = []
     lpf_cache: dict[int, int] = {}
 
-    for i in range(n):
-        for j in range(n):
-            if i == j:
-                continue
-            if int_values[j] % int_values[i] == 0:
-                quotient = int_values[j] // int_values[i]
-                if quotient <= 1:
-                    continue
-                lpf = lpf_cache.get(quotient)
-                if lpf is None:
-                    lpf = _least_prime_factor(quotient)
-                    lpf_cache[quotient] = lpf
-                edges.append(
-                    DivisibilityEdgeData(
-                        source=values[i],
-                        target=values[j],
-                        quotient=quotient,
-                        least_prime_factor=lpf,
-                    )
-                )
+    for i, j, quotient in edge_plan:
+        lpf = lpf_cache.get(quotient)
+        if lpf is None:
+            lpf = _least_prime_factor(quotient)
+            lpf_cache[quotient] = lpf
+        edges.append(
+            DivisibilityEdgeData(
+                source=values[i],
+                target=values[j],
+                quotient=quotient,
+                least_prime_factor=lpf,
+            )
+        )
 
     return edges

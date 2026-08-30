@@ -65,8 +65,8 @@ def compute_divisibility_edge_profile(
     with _owner_execution():
         try:
             _bind_execution_deadline()
-            _validate_divisibility_edge_resources(request.values)
-            return _build_divisibility_edge_profile(request.values)
+            edge_plan = _validate_divisibility_edge_resources(request.values)
+            return _build_divisibility_edge_profile(request.values, edge_plan)
         except PydanticCustomError as exc:
             raise OperationDomainValidationError(
                 location=("values",), code=exc.type, message=exc.message()
@@ -81,9 +81,10 @@ def compute_divisibility_edge_profile(
 
 def _build_divisibility_edge_profile(
     values: tuple[str, ...],
+    edge_plan: tuple[tuple[int, int, int], ...],
 ) -> DivisibilityEdgeProfileResult:
     try:
-        data = construct_divisibility_edge_profile(values)
+        data = construct_divisibility_edge_profile(values, edge_plan)
     except FactorizationIncompleteError as exc:
         failure = exc.failure
         if failure is not None and failure.kind == "WORKER_CANCELLED":
@@ -121,7 +122,7 @@ def divisibility_edge_profile(
                 _canonical_native_value(value) for value in values
             )
             _validate_divisibility_edge_shape(canonical_values)
-            _validate_divisibility_edge_resources(canonical_values)
+            edge_plan = _validate_divisibility_edge_resources(canonical_values)
         except (CanonicalizationError, PydanticCustomError, TypeError, ValueError) as exc:
             if isinstance(exc, PydanticCustomError):
                 code = exc.type
@@ -133,7 +134,7 @@ def divisibility_edge_profile(
                 location=("values",), code=code, message=message
             ) from exc
         try:
-            return _build_divisibility_edge_profile(canonical_values)
+            return _build_divisibility_edge_profile(canonical_values, edge_plan)
         except FactorizationIncompleteError as exc:
             failure = exc.failure
             failure_kind = failure.kind if failure is not None else "UNKNOWN"

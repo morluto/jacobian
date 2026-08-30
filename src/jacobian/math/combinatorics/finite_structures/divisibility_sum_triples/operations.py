@@ -80,7 +80,11 @@ def _admit_divisibility_sum_triples(
             ),
         )
 
-    if max(_decimal_digits(lower_bound), _decimal_digits(upper_bound)) > MAX_LABEL_LENGTH:
+    label_width = max(
+        _decimal_digits(lower_bound) + (1 if lower_bound < 0 else 0),
+        _decimal_digits(upper_bound) + (1 if upper_bound < 0 else 0),
+    )
+    if label_width > MAX_LABEL_LENGTH:
         raise OperationDomainValidationError(
             location=(),
             code="divisibility_sum.vertex_label_too_long",

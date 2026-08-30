@@ -193,10 +193,7 @@ class _BoundedWorkerDialogueState:
     def _kill_immediate_child(self) -> None:
         if self._process.poll() is None:
             with suppress(OSError):
-                if os.name == "posix":
-                    os.killpg(self._process.pid, signal.SIGKILL)
-                else:
-                    self._process.kill()
+                self._process.kill()
 
     def _fail(self, reason: BoundedWorkerDialogueErrorReason) -> Never:
         with self._condition:
@@ -928,7 +925,7 @@ def run_bounded_worker_dialogue[ValueT](
             bufsize=0,
             env=environment,
             cwd=cwd,
-            start_new_session=os.name == "posix",
+            start_new_session=False,
             creationflags=0,
         )
     except OSError as exc:

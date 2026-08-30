@@ -36,8 +36,7 @@ def _admit_edge_deletion_profile(
             location=("deletion_order",),
             code="graph.edge_deletion.order_out_of_range",
             message=(
-                "deletion_order must be an integer between 0 and "
-                f"{MAX_DELETION_ORDER}"
+                f"deletion_order must be an integer between 0 and {MAX_DELETION_ORDER}"
             ),
         )
 
@@ -89,6 +88,7 @@ def _admit_edge_deletion_profile(
             message="edge-deletion profile result exceeds the canonical output bound",
         )
 
+
 __all__ = ["compute_edge_deletion_profile"]
 
 
@@ -109,9 +109,7 @@ def compute_edge_deletion_profile(
     for order in range(deletion_order + 1):
         for edge_indices in combinations(range(len(edges)), order):
             deleted = set(edge_indices)
-            remaining_edges = [
-                edges[i] for i in range(len(edges)) if i not in deleted
-            ]
+            remaining_edges = [edges[i] for i in range(len(edges)) if i not in deleted]
             chromatic = _chromatic_number(vertices, remaining_edges)
             rows.append(
                 DeletionRow(

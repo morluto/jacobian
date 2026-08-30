@@ -41,11 +41,11 @@ from jacobian.math.geometry.affine_tori._bounds import (
     build_affine_torus_plan,
 )
 from jacobian.math.geometry.affine_tori._flint import (
+    compute_fixed_locus_kernel as _compute_fixed_locus_kernel,
+)
+from jacobian.math.geometry.affine_tori._kernel_types import (
     AffineTorusKernelSource,
     NonemptyFixedLocusKernel,
-)
-from jacobian.math.geometry.affine_tori._flint import (
-    compute_fixed_locus_kernel as _compute_fixed_locus_kernel,
 )
 from jacobian.math.geometry.affine_tori._models import AffineTorusFixedLocusRequest
 from jacobian.math.geometry.affine_tori.values import MAX_AFFINE_TORUS_POINT_DIGITS
@@ -937,6 +937,8 @@ def test_public_tool_validates_and_executes_its_example() -> None:
 
     result = tool.run(request)
 
+    assert "linear part is square" in tool.examples[0].description
+    assert "same standard torus" in tool.examples[0].description
     assert linear_schema["properties"]["row_count"]["maximum"] == 16
     assert linear_schema["properties"]["column_count"]["maximum"] == 16
     assert linear_schema["properties"]["entries"]["maxItems"] == 16

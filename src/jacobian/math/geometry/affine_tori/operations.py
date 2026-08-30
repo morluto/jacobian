@@ -11,11 +11,11 @@ from jacobian.math.geometry.affine_tori._bounds import (
     build_affine_torus_plan,
     require_affine_torus_deadline,
 )
-from jacobian.math.geometry.affine_tori._flint import (
+from jacobian.math.geometry.affine_tori._flint_process import compute_fixed_locus_kernel
+from jacobian.math.geometry.affine_tori._kernel_types import (
     EmptyFixedLocusKernel,
     NonemptyFixedLocusKernel,
 )
-from jacobian.math.geometry.affine_tori._flint_process import compute_fixed_locus_kernel
 from jacobian.math.geometry.affine_tori._models import (
     AffineTorusFixedLocusResult,
     EmptyAffineTorusFixedLocus,

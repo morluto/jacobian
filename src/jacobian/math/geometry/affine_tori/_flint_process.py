@@ -25,7 +25,7 @@ from jacobian.math.geometry.affine_tori._bounds import (
     AffineTorusFixedLocusPlan,
     require_affine_torus_deadline,
 )
-from jacobian.math.geometry.affine_tori._flint import (
+from jacobian.math.geometry.affine_tori._kernel_types import (
     EmptyFixedLocusKernel,
     FixedLocusKernel,
     NonemptyFixedLocusKernel,

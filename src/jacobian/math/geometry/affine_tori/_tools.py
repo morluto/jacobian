@@ -41,7 +41,9 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "two_components_on_a_circle",
-                "Compute the two fixed points of multiplication by three on T^1.",
+                "Compute the two fixed points of multiplication by three on T^1; "
+                "the linear part is square and the translation is represented on "
+                "that same standard torus.",
                 {
                     "affine_map": {
                         "torus": {"dimension": 1},

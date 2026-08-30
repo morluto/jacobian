@@ -9,11 +9,11 @@ from fractions import Fraction
 from typing import Any
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.math.geometry.affine_tori._flint import (
+from jacobian.math.geometry.affine_tori._flint import compute_fixed_locus_kernel
+from jacobian.math.geometry.affine_tori._kernel_types import (
     AffineTorusKernelSource,
     EmptyFixedLocusKernel,
     NonemptyFixedLocusKernel,
-    compute_fixed_locus_kernel,
 )
 from jacobian.math.geometry.affine_tori.values import (
     MAX_AFFINE_TORUS_DIMENSION,

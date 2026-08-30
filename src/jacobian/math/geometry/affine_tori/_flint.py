@@ -8,34 +8,12 @@ from math import lcm, prod
 
 from flint import fmpq, fmpq_mat, fmpz_mat
 
-
-@dataclass(frozen=True, slots=True)
-class AffineTorusKernelSource:
-    """Owner-private exact source decoded inside the bounded worker."""
-
-    dimension: int
-    linear_part: tuple[tuple[int, ...], ...]
-    translation: tuple[Fraction, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class EmptyFixedLocusKernel:
-    character: tuple[int, ...]
-    pairing: Fraction
-
-
-@dataclass(frozen=True, slots=True)
-class NonemptyFixedLocusKernel:
-    base_point: tuple[Fraction, ...]
-    identity_embedding: tuple[tuple[int, ...], ...]
-    component_generators: tuple[tuple[Fraction, ...], ...]
-    relation_matrix: tuple[tuple[int, ...], ...]
-    generator_orders: tuple[int, ...]
-    invariant_factors: tuple[int, ...]
-    component_count: int
-
-
-type FixedLocusKernel = EmptyFixedLocusKernel | NonemptyFixedLocusKernel
+from jacobian.math.geometry.affine_tori._kernel_types import (
+    AffineTorusKernelSource,
+    EmptyFixedLocusKernel,
+    FixedLocusKernel,
+    NonemptyFixedLocusKernel,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -407,9 +385,5 @@ def compute_fixed_locus_kernel(
 
 
 __all__ = [
-    "AffineTorusKernelSource",
-    "EmptyFixedLocusKernel",
-    "FixedLocusKernel",
-    "NonemptyFixedLocusKernel",
     "compute_fixed_locus_kernel",
 ]

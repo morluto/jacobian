@@ -127,7 +127,15 @@ def _single_sum_digit_bounds(
             if len(terms) <= 256:
                 pair = max(
                     (
-                        (len(format_canonical_integer(gcd(left.denominator, right.denominator))), -i, -j),
+                        (
+                            len(
+                                format_canonical_integer(
+                                    gcd(left.denominator, right.denominator)
+                                )
+                            ),
+                            -i,
+                            -j,
+                        ),
                         i,
                         j,
                     )

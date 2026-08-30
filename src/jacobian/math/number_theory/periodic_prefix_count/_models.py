@@ -35,7 +35,7 @@ class PeriodicUnionPrefixCountResult(StrictModel):
     source: PeriodicCongruenceUnionSource
     cutoff: CanonicalInteger
     common_period: CanonicalInteger
-    occupied_count: int
+    occupied_count: CanonicalInteger
     count: CanonicalInteger
 
 

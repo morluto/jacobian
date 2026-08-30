@@ -6,6 +6,7 @@ from fractions import Fraction
 from itertools import combinations
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.optimization.signed_induced_weight._models import (
     SignedInducedWeightResult,
 )
@@ -22,11 +23,51 @@ def compute_signed_induced_weight_extrema(
     vertices = graph.vertices
     n = len(vertices)
 
+    supplied_edges = tuple(
+        (min(left, right), max(left, right)) for left, right, _ in edge_weights
+    )
+    if len(supplied_edges) != len(set(supplied_edges)) or set(supplied_edges) != set(
+        graph.edges
+    ):
+        raise OperationDomainValidationError(
+            location=("edge_weights",),
+            code="signed_induced_weight.edge_axis",
+            message="edge_weights must align one-for-one with the graph edge axis",
+        )
+
     # Build weight lookup
     weight_map: dict[tuple[str, str], Fraction] = {}
     for u, v, w in edge_weights:
         key = (min(u, v), max(u, v))
         weight_map[key] = w.as_fraction()
+
+    weight_values = tuple(weight_map.values())
+    if weight_values and min(weight_values) < 0 < max(weight_values) and n > 19:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="signed_induced_weight.search_exceeded",
+            message="mixed-sign induced-weight search supports at most 19 vertices",
+        )
+
+    total_edge_weight = sum(weight_values, Fraction())
+    if not weight_values or min(weight_values) >= 0:
+        return SignedInducedWeightResult(
+            graph=graph,
+            edge_weights=edge_weights,
+            minimum_weight=CanonicalRational.from_fraction(Fraction()),
+            minimum_witness=(),
+            maximum_weight=CanonicalRational.from_fraction(total_edge_weight),
+            maximum_witness=vertices if weight_values else (),
+        )
+    if max(weight_values) <= 0:
+        return SignedInducedWeightResult(
+            graph=graph,
+            edge_weights=edge_weights,
+            minimum_weight=CanonicalRational.from_fraction(total_edge_weight),
+            minimum_witness=vertices,
+            maximum_weight=CanonicalRational.from_fraction(Fraction()),
+            maximum_witness=(),
+        )
 
     def subset_weight(subset: tuple[int, ...]) -> Fraction:
         total = Fraction(0)
@@ -57,6 +98,7 @@ def compute_signed_induced_weight_extrema(
 
     return SignedInducedWeightResult(
         graph=graph,
+        edge_weights=edge_weights,
         minimum_weight=CanonicalRational.from_fraction(best_min),
         minimum_witness=best_min_witness,
         maximum_weight=CanonicalRational.from_fraction(best_max),

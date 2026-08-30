@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.optimization.signed_induced_weight.operations import (
     compute_signed_induced_weight_extrema,
 )
@@ -57,3 +60,22 @@ def test_result_preserves_source() -> None:
     graph = _graph(["a", "b"], [["a", "b"]])
     result = compute_signed_induced_weight_extrema(graph, (("a", "b", _cr(1)),))
     assert result.graph == graph
+    assert result.edge_weights == (("a", "b", _cr(1)),)
+
+
+def test_nonedge_weight_is_rejected() -> None:
+    graph = _graph(["a", "b"], [])
+
+    with pytest.raises(OperationDomainValidationError, match="one-for-one"):
+        compute_signed_induced_weight_extrema(graph, (("a", "b", _cr(10)),))
+
+
+def test_uniform_sign_large_graph_uses_direct_extrema() -> None:
+    vertices = tuple(f"{index:02d}" for index in range(64))
+    edges = tuple((vertices[index], vertices[index + 1]) for index in range(63))
+    graph = _graph(vertices, edges)
+    weights = tuple((left, right, _cr(1)) for left, right in graph.edges)
+
+    result = compute_signed_induced_weight_extrema(graph, weights)
+
+    assert result.maximum_weight.as_fraction() == 63

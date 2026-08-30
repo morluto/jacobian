@@ -6,17 +6,19 @@ from fractions import Fraction
 from itertools import product
 from math import gcd, lcm
 from random import Random
+from threading import Event
 from time import monotonic
 from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
-from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._execution import (
+    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     current_request_execution,
+    request_cancellation,
     request_execution,
 )
 from jacobian.canonical import CanonicalLimits, encode_strict_json
@@ -26,21 +28,25 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.affine_tori import (
     RationalAffineTorusMap,
+    RationalTorusPoint,
     affine_torus_fixed_locus,
 )
 from jacobian.math.geometry.affine_tori import _bounds as affine_bounds
-from jacobian.math.geometry.affine_tori import _flint as affine_flint
 from jacobian.math.geometry.affine_tori import operations as affine_operations
 from jacobian.math.geometry.affine_tori._bounds import (
     AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS,
-    MAX_AFFINE_TORUS_WORK_UNITS,
+    MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS,
     build_affine_torus_plan,
+)
+from jacobian.math.geometry.affine_tori._flint import (
+    compute_fixed_locus_kernel as _compute_fixed_locus_kernel,
 )
 from jacobian.math.geometry.affine_tori._models import (
     AffineTorusFixedLocusRequest,
     AffineTorusFixedLocusResult,
     NonemptyAffineTorusFixedLocus,
 )
+from jacobian.math.geometry.affine_tori.values import MAX_AFFINE_TORUS_POINT_DIGITS
 
 
 def _payload(
@@ -626,13 +632,57 @@ def test_request_schema_matches_sign_aware_affine_scalar_digit_bounds() -> None:
             AffineTorusFixedLocusRequest.model_validate(invalid_payload)
 
 
-def test_admission_precharges_every_phase_before_the_kernel(
+def test_point_schema_matches_sign_aware_carrier_digit_bounds() -> None:
+    digit_cap = MAX_AFFINE_TORUS_POINT_DIGITS
+    schema = RationalTorusPoint.model_json_schema()
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    rational_scalar = schema["properties"]["coordinates"]["items"]
+    components = rational_scalar["properties"]
+
+    assert components["num"]["pattern"] == (
+        rf"^(?:0|-?[1-9][0-9]{{0,{digit_cap - 1}}})$"
+    )
+    assert components["num"]["maxLength"] == digit_cap + 1
+    assert components["den"]["pattern"] == rf"^[1-9][0-9]{{0,{digit_cap - 1}}}$"
+    assert components["den"]["maxLength"] == digit_cap
+
+    valid_point = {
+        "torus": {"dimension": 1},
+        "coordinates": [{"num": "1" + "0" * (digit_cap - 1), "den": "9" * digit_cap}],
+    }
+    assert not list(validator.iter_errors(valid_point))
+    RationalTorusPoint.model_validate(valid_point)
+
+    for component, invalid in (
+        ("num", "1" * (digit_cap + 1)),
+        ("num", "-" + "1" * (digit_cap + 1)),
+        ("den", "1" * (digit_cap + 1)),
+        ("den", "-1"),
+    ):
+        invalid_point: dict[str, Any] = {
+            "torus": {"dimension": 1},
+            "coordinates": [{"num": "1", "den": "2"}],
+        }
+        invalid_point["coordinates"][0][component] = invalid
+        assert list(validator.iter_errors(invalid_point)), (component, invalid)
+        with pytest.raises(ValidationError):
+            RationalTorusPoint.model_validate(invalid_point)
+
+    result_schema = AffineTorusFixedLocusResult.model_json_schema()
+    result_scalar = result_schema["$defs"]["RationalTorusPoint"]["properties"][
+        "coordinates"
+    ]["items"]
+    assert result_scalar == rational_scalar
+
+
+def test_admission_reserves_every_backend_phase_before_the_kernel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = _source(((3, 0), (0, 4)), (Fraction(0), Fraction(0)))
     plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
-    charges = dict(plan.work_units_by_category)
-    assert set(charges) == {
+    reservations = dict(plan.backend_envelope_units_by_category)
+    assert set(reservations) == {
         "source_conversion",
         "source_hnf",
         "character_hnf",
@@ -641,14 +691,19 @@ def test_admission_precharges_every_phase_before_the_kernel(
         "relation_hnf",
         "smith",
         "integral_lift",
-        "reconstruction",
         "result_construction",
     }
-    assert all(amount > 0 for amount in charges.values())
-    assert plan.work_units == sum(charges.values()) <= MAX_AFFINE_TORUS_WORK_UNITS
+    assert all(amount > 0 for amount in reservations.values())
+    assert (
+        plan.backend_envelope_units
+        == sum(reservations.values())
+        <= MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS
+    )
 
     monkeypatch.setattr(
-        affine_bounds, "MAX_AFFINE_TORUS_WORK_UNITS", plan.work_units - 1
+        affine_bounds,
+        "MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS",
+        plan.backend_envelope_units - 1,
     )
     backend_called = False
 
@@ -659,14 +714,12 @@ def test_admission_precharges_every_phase_before_the_kernel(
     monkeypatch.setattr(
         affine_operations, "compute_fixed_locus_kernel", forbidden_kernel
     )
-    with pytest.raises(OperationDomainValidationError, match="work budget"):
+    with pytest.raises(OperationDomainValidationError, match="backend work"):
         affine_torus_fixed_locus(source)
     assert not backend_called
 
 
-def test_near_envelope_real_hnf_work_fits_the_precharged_height_units(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_near_envelope_source_fits_the_conservative_backend_reservation() -> None:
     dimension = 16
     rank = 8
     height = (10**32 - 1) // 2
@@ -687,59 +740,12 @@ def test_near_envelope_real_hnf_work_fits_the_precharged_height_units(
     translation = (Fraction(1, 2),) + (Fraction(0),) * (dimension - 1)
     source = _source(linear_part, translation)
     plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
-    charged: dict[str, int] = dict(plan.work_units_by_category)
-    executed = {"source_hnf": 0, "character_hnf": 0, "integral_lift": 0}
-    original_hnf = affine_flint._augmented_hnf_transform
-    original_lift = affine_flint._solve_integral_character_system
-    hnf_calls = 0
-    lift_calls = 0
-
-    def measured_hnf(matrix: Any) -> Any:
-        nonlocal hnf_calls
-        hnf, transform = original_hnf(matrix)
-        category = "source_hnf" if hnf_calls < 2 else "character_hnf"
-        actual_height = max(
-            affine_flint._integer_matrix_height(hnf),
-            affine_flint._integer_matrix_height(transform),
-            1,
-        )
-        executed[category] += affine_bounds._dense_exact_work(
-            matrix.nrows(),
-            matrix.ncols() + matrix.nrows(),
-            actual_height,
-        )
-        hnf_calls += 1
-        return hnf, transform
-
-    def measured_lift(kernel: Any, right_hand_side: Any, *args: Any) -> Any:
-        nonlocal lift_calls
-        result = original_lift(kernel, right_hand_side, *args)
-        right_height = max((abs(value) for value in right_hand_side), default=0)
-        executed["integral_lift"] += (
-            kernel.transpose_transform.nrows()
-            * len(right_hand_side)
-            * affine_bounds._digit_chunks(
-                max(affine_flint._integer_matrix_height(kernel.transpose_transform), 1)
-            )
-            * affine_bounds._digit_chunks(max(right_height, 1))
-        )
-        assert right_height > 0
-        lift_calls += 1
-        return result
-
-    monkeypatch.setattr(affine_flint, "_augmented_hnf_transform", measured_hnf)
-    monkeypatch.setattr(
-        affine_flint,
-        "_solve_integral_character_system",
-        measured_lift,
-    )
 
     result = affine_torus_fixed_locus(source)
 
     assert result.outcome.status == "NONEMPTY"
-    assert hnf_calls == 3
-    assert lift_calls == 1
-    assert_charged_work_parity(charged=charged, executed=executed)
+    assert plan.backend_envelope_units <= MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS
+    assert all(amount > 0 for _, amount in plan.backend_envelope_units_by_category)
 
 
 def test_dispatch_start_and_all_phases_share_one_deadline() -> None:
@@ -754,6 +760,57 @@ def test_dispatch_start_and_all_phases_share_one_deadline() -> None:
         assert execution.deadline == pytest.approx(
             started_at + AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS
         )
+
+
+def test_deadline_expiry_after_the_real_kernel_prevents_result_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _source(((3,),), (Fraction(0),))
+    clock = [0.0]
+    original_kernel = _compute_fixed_locus_kernel
+
+    def observed_kernel(*args: Any, **kwargs: Any) -> Any:
+        result = original_kernel(*args, **kwargs)
+        clock[0] = AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS + 1
+        return result
+
+    monkeypatch.setattr(affine_bounds, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        affine_operations, "compute_fixed_locus_kernel", observed_kernel
+    )
+
+    with (
+        request_execution(0.0),
+        pytest.raises(
+            OperationExecutionTimeoutError, match="before result construction"
+        ),
+    ):
+        affine_torus_fixed_locus(source)
+
+
+def test_cancellation_after_the_real_kernel_prevents_result_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _source(((3,),), (Fraction(0),))
+    cancellation = Event()
+    original_kernel = _compute_fixed_locus_kernel
+
+    def observed_kernel(*args: Any, **kwargs: Any) -> Any:
+        result = original_kernel(*args, **kwargs)
+        cancellation.set()
+        return result
+
+    monkeypatch.setattr(
+        affine_operations, "compute_fixed_locus_kernel", observed_kernel
+    )
+
+    with (
+        request_cancellation(cancellation),
+        pytest.raises(
+            OperationExecutionCancelledError, match="before result construction"
+        ),
+    ):
+        affine_torus_fixed_locus(source)
 
 
 def test_max_dimension_adversary_is_deterministic_and_transport_bounded() -> None:

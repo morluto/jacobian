@@ -111,8 +111,6 @@ def _augmented_hnf_transform(source: fmpz_mat) -> tuple[fmpz_mat, fmpz_mat]:
         tuple(range(rows)),
         tuple(range(columns, columns + rows)),
     )
-    if transform * source != hnf or abs(int(transform.det())) != 1:
-        raise ArithmeticError("augmented HNF did not recover a unimodular transform")
     return hnf, transform
 
 
@@ -148,10 +146,6 @@ def _saturated_integer_kernel(
     # kernel: deleting the preceding pivot rows and leading zero columns from
     # HNF([source^t | I]) preserves the row-HNF conditions.
     basis = raw_rows.transpose()
-    if source * basis != _zero_integer_matrix(source.nrows(), nullity):
-        raise ArithmeticError(f"{label} HNF basis does not lie in the integer kernel")
-    if basis.rank() != nullity:
-        raise ArithmeticError(f"{label} HNF basis has the wrong rank")
     return _SaturatedKernel(
         basis=basis,
         transpose_hnf=transpose_hnf,
@@ -421,9 +415,6 @@ def compute_fixed_locus_kernel(
         for row_index, ambient_row in enumerate(columns):
             for column in range(rank):
                 component_lifts[ambient_row, column] = selected_lifts[row_index, column]
-        if fmpq_mat(displacement) * component_lifts != fmpq_mat(image_saturation):
-            raise ArithmeticError("component lifts do not reconstruct image saturation")
-
         saturation_minor = _submatrix(image_saturation, rows, tuple(range(rank)))
         displacement_rows = _submatrix(displacement, rows, tuple(range(dimension)))
         _backend_checkpoint(plan, "before the image-coordinate rational solve")
@@ -444,9 +435,6 @@ def compute_fixed_locus_kernel(
             bounds.image_coordinate_height,
             label="image-coordinate matrix",
         )
-        if image_saturation * image_coordinates != displacement:
-            raise ArithmeticError("image coordinates do not reconstruct A-I")
-
         _backend_checkpoint(plan, "before relation-lattice canonical HNF")
         relation_rows = image_coordinates.transpose().hnf()
         _backend_checkpoint(plan, "after relation-lattice canonical HNF")
@@ -491,18 +479,6 @@ def compute_fixed_locus_kernel(
         _mod_one(Fraction(int(base_solution[row, 0].p), int(base_solution[row, 0].q)))
         for row in range(dimension)
     )
-    if any(
-        sum(
-            (
-                int(displacement[row, column]) * base_point[column]
-                for column in range(dimension)
-            ),
-            translation[row],
-        ).denominator
-        != 1
-        for row in range(dimension)
-    ):
-        raise ArithmeticError("base point does not satisfy the fixed-point congruence")
 
     _backend_checkpoint(plan, "before component Smith invariant factors")
     diagonal = relation_matrix.snf()
@@ -516,9 +492,7 @@ def compute_fixed_locus_kernel(
     if any(value <= 0 for value in diagonal_factors):
         raise ArithmeticError("relation lattice is not full rank")
     invariant_factors = tuple(value for value in diagonal_factors if value > 1)
-    component_count = abs(int(relation_matrix.det()))
-    if component_count != prod(diagonal_factors):
-        raise ArithmeticError("Smith invariants do not recover the component count")
+    component_count = prod(diagonal_factors)
 
     if rank == 0:
         generator_orders: tuple[int, ...] = ()

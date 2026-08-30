@@ -24,6 +24,12 @@ MAX_AFFINE_TORUS_INPUT_DIGITS = 32
 MAX_AFFINE_TORUS_POINT_DIGITS = 1_050
 _AFFINE_SIGNED_INTEGER_PATTERN = r"^(?:0|-?[1-9][0-9]{0,31})$"
 _AFFINE_POSITIVE_INTEGER_PATTERN = r"^[1-9][0-9]{0,31}$"
+_POINT_SIGNED_INTEGER_PATTERN = (
+    rf"^(?:0|-?[1-9][0-9]{{0,{MAX_AFFINE_TORUS_POINT_DIGITS - 1}}})$"
+)
+_POINT_POSITIVE_INTEGER_PATTERN = (
+    rf"^[1-9][0-9]{{0,{MAX_AFFINE_TORUS_POINT_DIGITS - 1}}}$"
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -167,6 +173,52 @@ def _preflight_rational_coordinates(
                 )
 
 
+def _bounded_rational_schema(
+    *,
+    maximum_digits: int,
+    signed_pattern: str,
+    positive_pattern: str,
+) -> JsonSchemaValue:
+    """Expose one canonical rational's sign-aware component bounds."""
+
+    return {
+        "type": "object",
+        "title": "CanonicalRational",
+        "description": (
+            "A reduced rational with a positive denominator and canonical zero. "
+            f"Each component has at most {maximum_digits} decimal digits."
+        ),
+        "additionalProperties": False,
+        "properties": {
+            "num": {
+                "type": "string",
+                "maxLength": maximum_digits + 1,
+                "pattern": signed_pattern,
+                "description": "Canonical reduced numerator.",
+            },
+            "den": {
+                "type": "string",
+                "maxLength": maximum_digits,
+                "pattern": positive_pattern,
+                "description": "Positive canonical reduced denominator.",
+            },
+        },
+        "required": ["num", "den"],
+    }
+
+
+_AffineTorusPointCoordinate = Annotated[
+    CanonicalRational,
+    WithJsonSchema(
+        _bounded_rational_schema(
+            maximum_digits=MAX_AFFINE_TORUS_POINT_DIGITS,
+            signed_pattern=_POINT_SIGNED_INTEGER_PATTERN,
+            positive_pattern=_POINT_POSITIVE_INTEGER_PATTERN,
+        )
+    ),
+]
+
+
 class StandardRealTorus(StrictModel):
     """The standard real torus ``T^n = R^n / Z^n`` with its ordered axis."""
 
@@ -177,7 +229,7 @@ class RationalTorusPoint(StrictModel):
     """One rational point in the canonical half-open cube ``[0,1)^n``."""
 
     torus: StandardRealTorus
-    coordinates: tuple[CanonicalRational, ...] = Field(
+    coordinates: tuple[_AffineTorusPointCoordinate, ...] = Field(
         max_length=MAX_AFFINE_TORUS_DIMENSION
     )
 
@@ -275,25 +327,11 @@ def _affine_translation_schema() -> JsonSchemaValue:
             "coordinates": {
                 "type": "array",
                 "maxItems": MAX_AFFINE_TORUS_DIMENSION,
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "num": {
-                            "type": "string",
-                            "maxLength": MAX_AFFINE_TORUS_INPUT_DIGITS + 1,
-                            "pattern": _AFFINE_SIGNED_INTEGER_PATTERN,
-                            "description": "Canonical reduced numerator.",
-                        },
-                        "den": {
-                            "type": "string",
-                            "maxLength": MAX_AFFINE_TORUS_INPUT_DIGITS,
-                            "pattern": _AFFINE_POSITIVE_INTEGER_PATTERN,
-                            "description": "Positive canonical reduced denominator.",
-                        },
-                    },
-                    "required": ["num", "den"],
-                },
+                "items": _bounded_rational_schema(
+                    maximum_digits=MAX_AFFINE_TORUS_INPUT_DIGITS,
+                    signed_pattern=_AFFINE_SIGNED_INTEGER_PATTERN,
+                    positive_pattern=_AFFINE_POSITIVE_INTEGER_PATTERN,
+                ),
             },
         },
         "required": ["torus", "coordinates"],

@@ -39,6 +39,9 @@ from jacobian.math.number_theory.number_fields._embeddings_process import (
 from jacobian.math.number_theory.number_fields._integral_basis import (
     recognized_integral_basis,
 )
+from jacobian.math.number_theory.number_fields._real_embedding_order import (
+    compare_real_embedding_elements,
+)
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
     ComplexNumberFieldEmbedding,
@@ -367,6 +370,7 @@ def ring_of_integers(field: SimpleNumberFieldPresentation) -> list[str]:
 
 
 __all__ = [
+    "compare_real_embedding_elements",
     "discriminant",
     "embeddings",
     "ring_of_integers",

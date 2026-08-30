@@ -16,14 +16,20 @@ from jacobian.math.number_theory.number_fields._discriminant_process import (
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldDiscriminantResult,
     NumberFieldEmbeddingsRequest,
+    NumberFieldRealEmbeddingOrderRequest,
     NumberFieldRequest,
+)
+from jacobian.math.number_theory.number_fields._real_embedding_order import (
+    NumberFieldRealEmbeddingOrderError,
 )
 from jacobian.math.number_theory.number_fields.operations import (
     NumberFieldEmbeddingAdmissionError,
+    compare_real_embedding_elements,
     embeddings,
 )
 from jacobian.math.number_theory.number_fields.values import (
     NumberFieldEmbeddingProfile,
+    SimpleNumberFieldRealEmbeddingOrder,
 )
 
 
@@ -58,6 +64,19 @@ def _compute_embeddings(
         raise OperationDomainValidationError(
             location=("field",),
             code=f"number_field.embeddings.{exc.reason}",
+            message=str(exc),
+        ) from exc
+
+
+def _compare_real_embedding_elements(
+    request: NumberFieldRealEmbeddingOrderRequest,
+) -> SimpleNumberFieldRealEmbeddingOrder:
+    try:
+        return compare_real_embedding_elements(request.left, request.right)
+    except NumberFieldRealEmbeddingOrderError as exc:
+        raise OperationDomainValidationError(
+            location=("left", "embedding_record"),
+            code=f"number_field.real_embedding_order.{exc.reason}",
             message=str(exc),
         ) from exc
 
@@ -106,6 +125,87 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "domain": "QQ",
                         "coefficients_descending": ["1", "0", "1"],
                     }
+                },
+            ),
+        ),
+    ),
+    nf_operation(
+        "number_field.real_embedding.element_order.compare",
+        "Compare field elements under one selected real embedding",
+        "Return the exact LT, EQ, or GT order of two reduced elements of one "
+        "simple number field at one exact real embedding record. The consumer "
+        "recomputes the complete bounded embedding profile and requires an "
+        "exact producer-record match before canonical SymPy quotient-field "
+        "arithmetic and selected-image real-root isolation. Equality is exact "
+        "in QQ[x]/(f), independently of the selected real order.",
+        NumberFieldRealEmbeddingOrderRequest,
+        SimpleNumberFieldRealEmbeddingOrder,
+        _compare_real_embedding_elements,
+        "number-field",
+        "embedding",
+        "order",
+        "exact",
+        examples=(
+            example(
+                "rational_field",
+                "Compare 3/2 and 1 at the unique embedding of QQ.",
+                {
+                    "left": {
+                        "element": {
+                            "presentation": {
+                                "domain": "QQ",
+                                "coefficients_descending": ["1", "-1"],
+                            },
+                            "coefficients_ascending": [{"num": "3", "den": "2"}],
+                        },
+                        "embedding_record": {
+                            "kind": "REAL",
+                            "embedding": {
+                                "kind": "REAL",
+                                "presentation": {
+                                    "domain": "QQ",
+                                    "coefficients_descending": ["1", "-1"],
+                                },
+                                "root": {
+                                    "polynomial": ["1", "-1"],
+                                    "real_root_index": 0,
+                                },
+                            },
+                            "isolating_interval": {
+                                "lower": {"num": "1", "den": "1"},
+                                "upper": {"num": "1", "den": "1"},
+                                "interval_type": "SINGLETON",
+                            },
+                        },
+                    },
+                    "right": {
+                        "element": {
+                            "presentation": {
+                                "domain": "QQ",
+                                "coefficients_descending": ["1", "-1"],
+                            },
+                            "coefficients_ascending": [{"num": "1", "den": "1"}],
+                        },
+                        "embedding_record": {
+                            "kind": "REAL",
+                            "embedding": {
+                                "kind": "REAL",
+                                "presentation": {
+                                    "domain": "QQ",
+                                    "coefficients_descending": ["1", "-1"],
+                                },
+                                "root": {
+                                    "polynomial": ["1", "-1"],
+                                    "real_root_index": 0,
+                                },
+                            },
+                            "isolating_interval": {
+                                "lower": {"num": "1", "den": "1"},
+                                "upper": {"num": "1", "den": "1"},
+                                "interval_type": "SINGLETON",
+                            },
+                        },
+                    },
                 },
             ),
         ),

@@ -23,9 +23,11 @@ or isolates its roots.
 
 **Scope:** Part of #1689; unblocks #2870. This operation and its field/element
 carriers provide separate serializable embedding identities for `i` and `-i`.
-They deliberately do not add the umbrella issue's element-conjugate profile,
-Minkowski embedding, order recognition, order-ideal construction or arithmetic,
-maximal-order computation, or rational-prime splitting operations.
+The adjacent `number_field.real_embedding.element_order.compare` operation adds
+exact comparison of two elements at one selected real record. They deliberately
+do not add the umbrella issue's element-conjugate profile, Minkowski embedding,
+order-ideal construction, general field arithmetic, maximal-order computation,
+or rational-prime splitting operations.
 
 ## Exact identity and order
 
@@ -48,6 +50,23 @@ a raw backend isolator happens to place a root on its boundary.
 
 `SimpleNumberFieldElement` stores exactly degree-many reduced rational
 coordinates in the ascending basis `1, alpha, ..., alpha^(n-1)`.
+
+`SimpleNumberFieldRealEmbeddingBinding` structurally binds that element to a
+complete `RealNumberFieldEmbeddingRecord`. Construction or deserialization
+checks only that both values use the same presentation; it does **not** claim
+that the defining polynomial is irreducible, that the indexed root is real, or
+that the isolation interval is genuine. This distinction keeps semantic root
+recognition out of Pydantic validation.
+
+`number_field.real_embedding.element_order.compare` is a theorem-bearing
+consumer of that binding. It recomputes `number_field.embeddings.compute`
+inside the same request and requires the selected record to equal one exact
+record from that complete profile. Only then does it construct SymPy's exact
+`QQ(alpha)` value from canonical integer and rational objects. It subtracts in
+the quotient field, derives the selected image's primitive minimal polynomial,
+identifies its exact real root, and returns `LT`, `EQ`, or `GT` with a rational
+isolating interval for `left - right`. A zero reduced quotient-field difference
+establishes `EQ` independently of the selected real embedding.
 
 The same serialized `SimpleNumberFieldPresentation` is the `field` input to
 `number_field.discriminant.compute`; no caller-selected polynomial variable or
@@ -97,3 +116,12 @@ client cancellation, and exits after its one response; SymPy root caches cannot
 survive into a later request. SymPy 1.14 supplies maintained exact polynomial
 irreducibility, resultants, Sturm counts, root isolation, and discriminants. No
 SymPy expression or floating approximation appears in a public value.
+
+Selected-element comparison preflights the reduced difference before it repeats
+embedding recognition. For `H(alpha)/D`, it bounds the coefficients of
+`Res_x(f(x), D*y-H(x))` by a Sylvester-determinant estimate and applies a
+Landau--Mignotte factor bound to the selected image's minimal polynomial. The
+operation rejects requests whose predicted polynomial exceeds the shared
+1,000-digit real-algebraic envelope, whose resultant needs more than 262,144
+bits, whose exact root refinement needs more than 32,768 bits, or whose
+rational evidence components can exceed 4,096 digits.

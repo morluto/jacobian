@@ -48,7 +48,9 @@ def _fraction_height(value: Fraction) -> RationalHeight:
 
 
 def _string_size(digits: int) -> int:
-    return digits + 2
+    # Reserve one byte for a possible leading minus sign in addition to the
+    # JSON string quotes.  Heights intentionally track magnitude only.
+    return digits + 3
 
 
 def _rational_size(height: RationalHeight) -> int:

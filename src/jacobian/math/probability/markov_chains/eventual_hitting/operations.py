@@ -141,11 +141,24 @@ def _admit_eventual_hitting(
     matrix_bytes = _json_array_sizes(matrix_row_bytes)
     index_bytes = max(1, len(str(max(n - 1, 0))))
     target_bytes = _json_array_size(index_bytes, len(target_states))
-    probability_bytes = _json_array_size(
-        strict_json_object_size(
-            (("num", result_height + 2), ("den", result_height + 2))
-        ),
-        n,
+    transient_probability_bytes = strict_json_object_size(
+        (("num", result_height + 2), ("den", result_height + 2))
+    )
+    zero_probability_bytes = len(
+        encode_strict_json(CanonicalRational.from_fraction(Fraction(0)).model_dump(mode="json"))
+    )
+    one_probability_bytes = len(
+        encode_strict_json(CanonicalRational.from_fraction(Fraction(1)).model_dump(mode="json"))
+    )
+    probability_bytes = _json_array_sizes(
+        [
+            transient_probability_bytes
+            if state in transient
+            else one_probability_bytes
+            if state in target_set
+            else zero_probability_bytes
+            for state in range(n)
+        ]
     )
     classification_bytes = _json_array_size(index_bytes, n)
     result_bytes = strict_json_object_size(

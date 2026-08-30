@@ -9,7 +9,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     FiniteIntegerSet,
 )
@@ -20,6 +19,7 @@ from jacobian.math.combinatorics.posets.core._models import (
 )
 
 MAX_DIVISIBILITY_POSET_ELEMENTS = MAX_POSET_ELEMENTS  # 64
+MAX_DIVISIBILITY_POSET_DIGIT_WORK = 10_000_000_000
 
 
 def _divisibility_poset_admission_error(
@@ -30,8 +30,15 @@ def _divisibility_poset_admission_error(
             "carrier_too_large",
             f"source set must have at most {MAX_DIVISIBILITY_POSET_ELEMENTS} elements",
         )
-    if any(parse_canonical_integer(value) <= 0 for value in source_set.elements):
+    if any(value == "0" or value.startswith("-") for value in source_set.elements):
         return ("non_positive", "all source set elements must be positive integers")
+    max_digits = max((len(value) for value in source_set.elements), default=1)
+    pair_count = len(source_set.elements) ** 2
+    if pair_count * max_digits**2 > MAX_DIVISIBILITY_POSET_DIGIT_WORK:
+        return (
+            "digit_work_exceeded",
+            "divisibility arithmetic exceeds the admitted digit work budget",
+        )
     return None
 
 

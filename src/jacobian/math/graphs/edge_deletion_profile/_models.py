@@ -49,7 +49,7 @@ def _edge_deletion_admission_error(
     )
     max_edge_bytes = (
         max(
-            (len(left.encode("utf-8")) + len(right.encode("utf-8")) + 8)
+            (len(encode_strict_json([left, right])) + 8)
             for left, right in graph.edges
         )
         if graph.edges

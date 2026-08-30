@@ -33,7 +33,6 @@ def compute_divisibility_poset(
     the ``ElementLabel`` character cap never constrains source-integer digit
     length.
     """
-    values: list[int] = [parse_canonical_integer(v) for v in source_set.elements]
     failure = _divisibility_poset_admission_error(source_set)
     if failure is not None:
         code, message = failure
@@ -42,6 +41,7 @@ def compute_divisibility_poset(
             code=f"number_theory.divisibility_poset.{code}",
             message=message,
         )
+    values: list[int] = [parse_canonical_integer(v) for v in source_set.elements]
 
     # Sort by integer value for deterministic label assignment.  The source set
     # is already distinct (validated by FiniteIntegerSet), but it is not

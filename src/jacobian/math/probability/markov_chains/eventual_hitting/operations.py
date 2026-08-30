@@ -126,7 +126,9 @@ def _admit_eventual_hitting(  # noqa: C901
         row_terms = len(row_values)
         row_digits = max(
             (
-                max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
+                max(
+                    _decimal_digits(value.numerator), _decimal_digits(value.denominator)
+                )
                 for value in row_values
             ),
             default=1,

@@ -8,7 +8,11 @@ from math import comb
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples._models import (
     MAX_INTERVAL_SIZE,
@@ -23,6 +27,21 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 __all__ = ["construct_divisibility_sum_triples_hypergraph"]
 
 MAX_TRIPLE_ENUMERATION = 1_000_000
+
+
+def _decimal_digits(value: int) -> int:
+    """Count decimal digits without converting an unbounded integer to text."""
+    magnitude = abs(value)
+    if magnitude == 0:
+        return 1
+    if magnitude.bit_length() > (MAX_LABEL_LENGTH + 1) * 4:
+        return MAX_LABEL_LENGTH + 1
+    estimate = magnitude.bit_length() * 30_103 // 100_000 + 1
+    while estimate > 1 and magnitude < 10 ** (estimate - 1):
+        estimate -= 1
+    while magnitude >= 10**estimate:
+        estimate += 1
+    return estimate
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,13 +80,14 @@ def _admit_divisibility_sum_triples(
             ),
         )
 
-    vertices = tuple(str(value) for value in range(lower_bound, upper_bound + 1))
-    if any(len(vertex) > MAX_LABEL_LENGTH for vertex in vertices):
+    if max(_decimal_digits(lower_bound), _decimal_digits(upper_bound)) > MAX_LABEL_LENGTH:
         raise OperationDomainValidationError(
             location=(),
             code="divisibility_sum.vertex_label_too_long",
             message=f"interval vertices must be at most {MAX_LABEL_LENGTH} characters",
         )
+
+    vertices = tuple(str(value) for value in range(lower_bound, upper_bound + 1))
 
     edges: list[tuple[str, tuple[str, ...]]] = []
     for edge_index, triple in enumerate(
@@ -85,8 +105,8 @@ def _admit_divisibility_sum_triples(
 
     try:
         payload = {
-            "lower_bound": lower_bound,
-            "upper_bound": upper_bound,
+            "lower_bound": format_canonical_integer(lower_bound),
+            "upper_bound": format_canonical_integer(upper_bound),
             "hypergraph": {
                 "vertices": list(vertices),
                 "edges": [[edge_id, list(members)] for edge_id, members in edges],
@@ -122,7 +142,7 @@ def construct_divisibility_sum_triples_hypergraph(
         edges=admission.edges,
     )
     return DivisibilitySumTriplesResult.model_construct(
-        lower_bound=lower_bound,
-        upper_bound=upper_bound,
+        lower_bound=format_canonical_integer(lower_bound),
+        upper_bound=format_canonical_integer(upper_bound),
         hypergraph=hypergraph,
     )

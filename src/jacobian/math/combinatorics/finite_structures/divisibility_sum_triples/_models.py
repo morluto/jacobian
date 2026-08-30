@@ -7,7 +7,9 @@ from typing import Self
 from pydantic import model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
@@ -34,20 +36,23 @@ def _validate_interval_shape(lower_bound: int, upper_bound: int) -> None:
 class DivisibilitySumTriplesRequest(StrictModel):
     """Request to construct the divisibility-sum triple hypergraph."""
 
-    lower_bound: int
-    upper_bound: int
+    lower_bound: CanonicalInteger
+    upper_bound: CanonicalInteger
 
     @model_validator(mode="after")
     def validate_bounds(self) -> Self:
-        _validate_interval_shape(self.lower_bound, self.upper_bound)
+        _validate_interval_shape(
+            parse_canonical_integer(self.lower_bound),
+            parse_canonical_integer(self.upper_bound),
+        )
         return self
 
 
 class DivisibilitySumTriplesResult(StrictModel):
     """The divisibility-sum triple hypergraph."""
 
-    lower_bound: int
-    upper_bound: int
+    lower_bound: CanonicalInteger
+    upper_bound: CanonicalInteger
     hypergraph: FiniteHypergraph
 
 

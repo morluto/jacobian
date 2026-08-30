@@ -3,6 +3,7 @@
 from collections.abc import Callable
 
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples._models import (
@@ -18,7 +19,8 @@ def compute_divisibility_sum_triples(
     request: DivisibilitySumTriplesRequest,
 ) -> DivisibilitySumTriplesResult:
     return construct_divisibility_sum_triples_hypergraph(
-        request.lower_bound, request.upper_bound
+        parse_canonical_integer(request.lower_bound),
+        parse_canonical_integer(request.upper_bound),
     )
 
 
@@ -66,7 +68,7 @@ TOOLS: MathTools = (
             example(
                 "interval_1_to_4",
                 "Divisibility-sum triples on [1, 4].",
-                {"lower_bound": 1, "upper_bound": 4},
+                {"lower_bound": "1", "upper_bound": "4"},
             ),
         ),
     ),

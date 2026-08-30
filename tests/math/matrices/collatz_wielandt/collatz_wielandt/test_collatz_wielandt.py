@@ -57,3 +57,15 @@ def test_negative_matrix_entry_is_rejected_before_quotients() -> None:
 def test_nonpositive_vector_is_rejected_through_the_domain_boundary() -> None:
     with pytest.raises(OperationDomainValidationError, match="positive vector"):
         compute_collatz_wielandt_profile(((_cr(1),),), (_cr(0),))
+
+
+def test_derived_quotient_must_fit_the_rational_carrier() -> None:
+    denominator = 10**20_000
+    matrix = (
+        (_cr(1, denominator), _cr(1, denominator - 1)),
+        (_cr(0), _cr(0)),
+    )
+    vector = (_cr(1), _cr(1))
+
+    with pytest.raises(OperationDomainValidationError, match=r"derived.*quotient"):
+        compute_collatz_wielandt_profile(matrix, vector)

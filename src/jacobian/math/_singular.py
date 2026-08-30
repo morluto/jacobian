@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import shutil
 import tempfile
 from dataclasses import dataclass
@@ -106,7 +107,7 @@ def format_singular_version(version: int) -> str:
 def run_bounded_singular(
     source: bytes,
     *,
-    wall_seconds: int,
+    wall_seconds: float,
 ) -> BoundedProcessResult | None:
     """Run one request-scoped Singular program, or return ``None`` if unavailable."""
 
@@ -127,7 +128,7 @@ def run_bounded_singular(
                 stdout_limit=_STDOUT_LIMIT,
                 stderr_limit=_STDERR_LIMIT,
                 resource_limits=ProcessResourceLimits(
-                    cpu_seconds=wall_seconds,
+                    cpu_seconds=max(1, math.ceil(wall_seconds)),
                     address_space_bytes=_ADDRESS_SPACE_LIMIT,
                     file_size_bytes=_FILE_SIZE_LIMIT,
                 ),

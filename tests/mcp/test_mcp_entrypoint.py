@@ -9,11 +9,7 @@ import sys
 from importlib.metadata import version
 from pathlib import Path
 
-from jacobian.catalog.catalog import Catalog
-
 MCP_TOOL_NAMES = {
-    descriptor.operation_id for descriptor in Catalog.open().snapshot().operations
-} | {
     "math.find",
     "math.run",
 }

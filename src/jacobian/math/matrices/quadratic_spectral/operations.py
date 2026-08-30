@@ -7,6 +7,7 @@ from fractions import Fraction
 from math import gcd
 from typing import TYPE_CHECKING, Literal
 
+from jacobian._flint import flint_workprec
 from jacobian.canonical import format_canonical_integer
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.matrices.quadratic_spectral._bounds import (
@@ -290,37 +291,33 @@ def _branch_balls(
     determinant: Quadratic,
     spectrum_kind: SpectrumKind,
     radicand: int,
-    precision: int,
     repeated: bool,
 ) -> dict[Branch, arb] | None:
-    from flint import ctx
-
-    with ctx.workprec(precision):
-        trace_ball = _arb_quadratic(trace, radicand)
-        if repeated:
-            repeated_ball = trace_ball / 2
-            if spectrum_kind == "SINGULAR_VALUES":
-                if not repeated_ball > 0:
-                    return None
-                repeated_ball = repeated_ball.sqrt()
-            return {"REPEATED": repeated_ball}
-        determinant_ball = _arb_quadratic(determinant, radicand)
-        discriminant_ball = trace_ball * trace_ball - 4 * determinant_ball
-        if not discriminant_ball > 0:
-            return None
-        root = discriminant_ball.sqrt()
-        upper = (trace_ball + root) / 2
-        lower_candidate = (trace_ball - root) / 2
-        lower_ball: arb | None = lower_candidate
+    trace_ball = _arb_quadratic(trace, radicand)
+    if repeated:
+        repeated_ball = trace_ball / 2
         if spectrum_kind == "SINGULAR_VALUES":
-            if not upper > 0:
+            if not repeated_ball > 0:
                 return None
-            upper = upper.sqrt()
-            lower_ball = lower_candidate.sqrt() if lower_candidate > 0 else None
-        result: dict[Branch, arb] = {"UPPER": upper}
-        if lower_ball is not None:
-            result["LOWER"] = lower_ball
-        return result
+            repeated_ball = repeated_ball.sqrt()
+        return {"REPEATED": repeated_ball}
+    determinant_ball = _arb_quadratic(determinant, radicand)
+    discriminant_ball = trace_ball * trace_ball - 4 * determinant_ball
+    if not discriminant_ball > 0:
+        return None
+    root = discriminant_ball.sqrt()
+    upper = (trace_ball + root) / 2
+    lower_candidate = (trace_ball - root) / 2
+    lower_ball: arb | None = lower_candidate
+    if spectrum_kind == "SINGULAR_VALUES":
+        if not upper > 0:
+            return None
+        upper = upper.sqrt()
+        lower_ball = lower_candidate.sqrt() if lower_candidate > 0 else None
+    result: dict[Branch, arb] = {"UPPER": upper}
+    if lower_ball is not None:
+        result["LOWER"] = lower_ball
+    return result
 
 
 def _select_nonrational_branches(
@@ -333,27 +330,27 @@ def _select_nonrational_branches(
 ) -> dict[Branch, _RootData]:
     precision = 128
     while precision <= _MAX_ARB_PRECISION_BITS:
-        balls = _branch_balls(
-            trace,
-            determinant,
-            spectrum_kind,
-            radicand,
-            precision,
-            repeated=missing == ("REPEATED",),
-        )
-        if balls is not None:
-            selected: dict[Branch, _RootData] = {}
-            for branch in missing:
-                ball = balls.get(branch)
-                if ball is None:
-                    break
-                matches = [root for root in roots if _strictly_inside(ball, root)]
-                if len(matches) != 1:
-                    break
-                selected[branch] = matches[0]
-            else:
-                if len({row.value for row in selected.values()}) == len(selected):
-                    return selected
+        with flint_workprec(precision):
+            balls = _branch_balls(
+                trace,
+                determinant,
+                spectrum_kind,
+                radicand,
+                repeated=missing == ("REPEATED",),
+            )
+            if balls is not None:
+                selected: dict[Branch, _RootData] = {}
+                for branch in missing:
+                    ball = balls.get(branch)
+                    if ball is None:
+                        break
+                    matches = [root for root in roots if _strictly_inside(ball, root)]
+                    if len(matches) != 1:
+                        break
+                    selected[branch] = matches[0]
+                else:
+                    if len({row.value for row in selected.values()}) == len(selected):
+                        return selected
         precision *= 2
     raise RuntimeError("rigorous algebraic-root selection exceeded its precision proof")
 

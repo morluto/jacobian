@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields._models import (
     _MAX_DIRECTION_RANK_WORK,
@@ -20,15 +27,24 @@ from jacobian.math.finite_fields.values import (
     FinitePolynomial,
     FinitePolynomialMap,
     OrbitDistribution,
+    PaleyTournamentResult,
     PermutationResult,
     ProjectiveLine,
     ProjectivePoint,
     RankResult,
     _direction_rank_work,
 )
+from jacobian.math.graphs.directed._models import (
+    MAX_DIRECTED_GRAPH_PARSE_EDGES,
+    DirectedGraph,
+)
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 _MAX_FINITE_MAP_WORK = 1_000_000
+_MAX_PALEY_TOURNAMENT_WORK = 4_000_000
+_PALEY_ORIENTATION: Literal["ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"] = (
+    "ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"
+)
 
 
 def finite_field(
@@ -129,6 +145,110 @@ def _field_elements(
             ),
         )
         for encoded in range(presentation.order)
+    )
+
+
+def _paley_result_wire_bytes(
+    presentation: FiniteFieldPresentation,
+    order: int,
+) -> int:
+    """Return the exact canonical result size before allocating its arc tuple."""
+
+    try:
+        empty_size = len(
+            encode_strict_json(
+                {
+                    "presentation": presentation.model_dump(mode="json"),
+                    "graph": {"vertex_count": order, "edges": []},
+                    "orientation": _PALEY_ORIENTATION,
+                },
+                # The request envelope is at most one canonical input document;
+                # the fixed graph and orientation fields add only a small amount
+                # before the result-size check below.  A relaxed measurement
+                # limit keeps an oversized result on the typed domain path.
+                limits=CanonicalLimits(
+                    max_output_bytes=2 * CanonicalLimits().max_output_bytes
+                ),
+            )
+        )
+    except CanonicalizationError as exc:
+        raise OperationDomainValidationError(
+            location=("presentation",),
+            code="finite_field.paley_tournament_exceeds_output_budget",
+            message="complete Paley tournament exceeds the canonical output budget",
+        ) from exc
+    edge_count = order * (order - 1) // 2
+    digit_lengths = tuple(len(str(vertex)) for vertex in range(order))
+    edge_bytes = 3 * edge_count + sum(
+        digits * ((order - 1 - vertex) + vertex)
+        for vertex, digits in enumerate(digit_lengths)
+    )
+    return empty_size + edge_bytes + max(0, edge_count - 1)
+
+
+def paley_tournament(
+    presentation: FiniteFieldPresentation,
+) -> PaleyTournamentResult:
+    """Construct the directed Paley tournament of an exact finite field."""
+
+    order = presentation.order
+    if order % 4 != 3:
+        raise OperationDomainValidationError(
+            location=("presentation",),
+            code="finite_field.paley_tournament_order_congruent_to_three_mod_four",
+            message="Paley tournament construction requires field order congruent to 3 modulo 4",
+        )
+
+    edge_count = order * (order - 1) // 2
+    output_bytes = _paley_result_wire_bytes(presentation, order)
+    if output_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("presentation",),
+            code="finite_field.paley_tournament_exceeds_output_budget",
+            message="complete Paley tournament exceeds the canonical output budget",
+        )
+    if edge_count > MAX_DIRECTED_GRAPH_PARSE_EDGES:
+        raise OperationDomainValidationError(
+            location=("presentation",),
+            code="finite_field.paley_tournament_exceeds_graph_edge_envelope",
+            message="Paley tournament exceeds the directed graph edge envelope",
+        )
+    work = order * presentation.degree + order + 2 * edge_count
+    if work > _MAX_PALEY_TOURNAMENT_WORK:
+        raise OperationDomainValidationError(
+            location=("presentation",),
+            code="finite_field.paley_tournament_exceeds_work_budget",
+            message="Paley tournament construction exceeds the finite-field work budget",
+        )
+
+    from jacobian.math.finite_fields import _flint
+
+    elements = _field_elements(presentation)
+    active_context = _flint.context(presentation)
+    backend_elements = tuple(
+        _flint.to_backend(value, active_context=active_context) for value in elements
+    )
+    square_encodings = {
+        _flint.coordinates(value.square(), degree=presentation.degree)
+        for value in backend_elements[1:]
+    }
+    edges = tuple(
+        sorted(
+            (left, right)
+            if _flint.coordinates(
+                backend_elements[right] - backend_elements[left],
+                degree=presentation.degree,
+            )
+            in square_encodings
+            else (right, left)
+            for left in range(order)
+            for right in range(left + 1, order)
+        )
+    )
+    return PaleyTournamentResult(
+        presentation=presentation,
+        graph=DirectedGraph(vertex_count=order, edges=edges),
+        orientation=_PALEY_ORIENTATION,
     )
 
 

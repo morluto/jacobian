@@ -1,6 +1,6 @@
 """Typed contracts for the eventual hitting profile operation."""
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -14,10 +14,19 @@ MAX_STATES = 32
 class EventualHittingProfileRequest(StrictModel):
     """Request for the eventual hitting probability profile."""
 
-    matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(
+    matrix: tuple[
+        Annotated[tuple[CanonicalRational, ...], Field(max_length=MAX_STATES)], ...
+    ] = Field(
         min_length=1, max_length=MAX_STATES
     )
-    target_states: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_STATES)
+    target_states: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=MAX_STATES,
+        description=(
+            "Strictly increasing target-state indices in the matrix range "
+            "0..dimension-1."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_structural_request(self) -> Self:

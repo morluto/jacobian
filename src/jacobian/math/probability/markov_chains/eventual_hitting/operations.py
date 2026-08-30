@@ -113,6 +113,14 @@ def _admit_eventual_hitting(
             "transition probabilities exceed the exact rational source bound",
         )
     transient_count = len(transient)
+    transient_matrix_digits = max(
+        (
+            max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
+            for state in transient
+            for value in matrix[state]
+        ),
+        default=1,
+    )
     max_row_terms = max(
         (sum(value != 0 for value in matrix[state]) for state in transient),
         default=1,
@@ -120,7 +128,7 @@ def _admit_eventual_hitting(
     # Gaussian elimination and the right-hand-side row sums can combine every
     # nonzero transition denominator in a row.  Charge that common-denominator
     # growth before solving rather than only one component width per state.
-    row_growth = max_row_terms * matrix_digits + _decimal_digits(max_row_terms)
+    row_growth = max_row_terms * transient_matrix_digits + _decimal_digits(max_row_terms)
     result_height = (
         transient_count * row_growth
         + _decimal_digits(factorial(transient_count))

@@ -1,82 +1,123 @@
-"""Boolean-lattice intersection graph kernel."""
+"""Boolean-lattice intersection graph constructor."""
 
 from __future__ import annotations
 
-from itertools import combinations
+from dataclasses import dataclass
 
+from pydantic_core import PydanticCustomError
+
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.boolean_lattice_intersection._models import (
     BooleanLatticeIntersectionResult,
+    IntersectionRelation,
+    _validate_intersection_request,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 __all__ = ["construct_boolean_lattice_intersection_graph"]
 
 
-def construct_boolean_lattice_intersection_graph(
-    n: int,
-    intersection_cardinality: int,
-    relation: str,
-) -> BooleanLatticeIntersectionResult:
-    """Construct a graph whose vertices are all subsets of [n].
+@dataclass(frozen=True, slots=True)
+class BooleanLatticeIntersectionAdmission:
+    """The exact bounded graph construction shared by admission and execution."""
 
-    An edge joins two distinct subsets when their intersection satisfies
-    the declared relation with the given cardinality.
-    """
-    if relation not in {
-        "INTERSECTION_EQ_THRESHOLD",
-        "INTERSECTION_LT_THRESHOLD",
-        "INTERSECTION_GT_THRESHOLD",
-    }:
+    vertices: tuple[str, ...]
+    edges: tuple[tuple[str, str], ...]
+
+
+def _admit_boolean_lattice_intersection(
+    ground_set_size: int,
+    threshold: int,
+    relation: IntersectionRelation,
+) -> BooleanLatticeIntersectionAdmission:
+    try:
+        _validate_intersection_request(ground_set_size, threshold, relation)
+    except PydanticCustomError as error:
         raise OperationDomainValidationError(
-            location=("relation",),
-            code="boolean_lattice.invalid_relation",
-            message="relation must be one of the declared intersection relations",
-        )
-    if not 0 <= n <= 8:
-        raise OperationDomainValidationError(
-            location=("n",),
-            code="boolean_lattice.graph_carrier_exceeded",
-            message="Boolean-lattice graphs support dimensions from 0 through 8",
-        )
-    subsets = []
-    for size in range(n + 1):
-        for combo in combinations(range(n), size):
-            subsets.append(combo)
+            location=(), code=error.type, message=str(error)
+        ) from error
 
-    labels = [_label(s) for s in subsets]
-
+    subsets = _all_subsets(ground_set_size)
+    vertices = tuple(_subset_label(subset) for subset in subsets)
     edges: list[tuple[str, str]] = []
-    for i in range(len(subsets)):
-        for j in range(i + 1, len(subsets)):
-            intersection_size = len(set(subsets[i]) & set(subsets[j]))
-            if _check_relation(intersection_size, intersection_cardinality, relation):
-                edges.append((labels[i], labels[j]))
+    for left_index, left in enumerate(subsets):
+        left_label = vertices[left_index]
+        for right in subsets[left_index + 1 :]:
+            right_label = _subset_label(right)
+            intersection_size = len(left & right)
+            if relation == "INTERSECTION_EQ":
+                adjacent = intersection_size == threshold
+            elif relation == "INTERSECTION_LT":
+                adjacent = intersection_size < threshold
+            else:
+                adjacent = intersection_size > threshold
+            if adjacent:
+                edges.append(
+                    (min(left_label, right_label), max(left_label, right_label))
+                )
+    canonical_edges = tuple(edges)
+    payload = {
+        "ground_set_size": ground_set_size,
+        "threshold": threshold,
+        "relation": relation,
+        "graph": {
+            "vertices": list(vertices),
+            "edges": [list(edge) for edge in canonical_edges],
+        },
+    }
+    try:
+        if len(encode_strict_json(payload)) > CanonicalLimits().max_output_bytes:
+            raise OperationDomainValidationError(
+                location=(),
+                code="boolean_lattice.result_bytes_exceeded",
+                message="the Boolean-lattice graph exceeds the canonical output-byte limit",
+            )
+    except ValueError as error:
+        raise OperationDomainValidationError(
+            location=(),
+            code="boolean_lattice.result_not_canonical",
+            message="the Boolean-lattice graph cannot be represented in canonical JSON",
+        ) from error
+    return BooleanLatticeIntersectionAdmission(vertices, canonical_edges)
 
-    edges.sort()
-    graph = SimpleUndirectedGraph(
-        vertices=tuple(labels),
-        edges=tuple(edges),
+
+def construct_boolean_lattice_intersection_graph(
+    ground_set_size: int,
+    threshold: int,
+    relation: IntersectionRelation,
+) -> BooleanLatticeIntersectionResult:
+    """Construct a graph on the Boolean lattice 2^[n].
+
+    Vertices are all subsets of [n], labelled by canonical subset strings.
+    An edge joins two distinct subsets when their intersection size
+    satisfies the declared relation with the threshold.
+    """
+    admission = _admit_boolean_lattice_intersection(
+        ground_set_size, threshold, relation
     )
-
-    return BooleanLatticeIntersectionResult(
-        n=n,
-        intersection_cardinality=intersection_cardinality,
+    graph = SimpleUndirectedGraph(
+        vertices=admission.vertices,
+        edges=admission.edges,
+    )
+    return BooleanLatticeIntersectionResult.model_construct(
+        ground_set_size=ground_set_size,
+        threshold=threshold,
         relation=relation,
         graph=graph,
     )
 
 
-def _label(subset: tuple[int, ...]) -> str:
+def _all_subsets(n: int) -> list[frozenset[int]]:
+    if n == 0:
+        return [frozenset()]
+    result = []
+    for mask in range(1 << n):
+        result.append(frozenset(i for i in range(n) if mask & (1 << i)))
+    return result
+
+
+def _subset_label(subset: frozenset[int]) -> str:
     if not subset:
-        return "L0_"
-    return f"L{len(subset)}_" + "_".join(str(x) for x in subset)
-
-
-def _check_relation(intersection_size: int, threshold: int, relation: str) -> bool:
-    checks = {
-        "INTERSECTION_EQ_THRESHOLD": intersection_size == threshold,
-        "INTERSECTION_LT_THRESHOLD": intersection_size < threshold,
-        "INTERSECTION_GT_THRESHOLD": intersection_size > threshold,
-    }
-    return checks.get(relation, False)
+        return "{}"
+    return "{" + ",".join(str(i) for i in sorted(subset)) + "}"

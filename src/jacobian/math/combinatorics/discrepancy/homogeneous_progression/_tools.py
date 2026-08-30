@@ -1,39 +1,42 @@
-"""Typed declarations for the homogeneous progression set system constructor."""
+"""Homogeneous progression set system operation declarations."""
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.combinatorics.discrepancy._models import FiniteSetSystem
 from jacobian.math.combinatorics.discrepancy.homogeneous_progression._models import (
     HomogeneousProgressionRequest,
-    HomogeneousProgressionResult,
 )
 from jacobian.math.combinatorics.discrepancy.homogeneous_progression.operations import (
     construct_homogeneous_progression_set_system,
 )
 
 
-def _construct(request: HomogeneousProgressionRequest) -> HomogeneousProgressionResult:
+def compute_homogeneous_progression(
+    request: HomogeneousProgressionRequest,
+) -> FiniteSetSystem:
     return construct_homogeneous_progression_set_system(request.n)
 
 
 TOOLS: MathTools = (
     MathTool(
-        operation_id="discrepancy.homogeneous_progression_set_system.construct",
-        title="Construct the finite homogeneous-progression set system",
-        description=(
-            "For a nonnegative integer n, return the canonical FiniteSetSystem "
-            "whose ground set is 0..n-1 (representing 1..n) and whose sets are "
-            "exactly the homogeneous arithmetic progressions (d, 2d, ..., kd) "
-            "with dk <= n."
+        "discrepancy.homogeneous_progression_set_system.construct",
+        "Construct the homogeneous progression set system on [n]",
+        (
+            "Construct the canonical finite set system whose ground set is [n] "
+            "and whose sets are the homogeneous arithmetic progressions "
+            "{d, 2d, ..., kd} for every d, k >= 1 with dk <= n, with zero-based "
+            "indexing. This is the standard carrier for Erdős discrepancy "
+            "experiments."
         ),
-        request_type=HomogeneousProgressionRequest,
-        result_type=HomogeneousProgressionResult,
-        run=_construct,
-        tags=("discrepancy", "combinatorics", "exact"),
+        HomogeneousProgressionRequest,
+        FiniteSetSystem,
+        compute_homogeneous_progression,
+        tags=("combinatorics", "discrepancy", "exact"),
         examples=(
             example(
-                "n_6",
-                "Homogeneous progression set system for n=6.",
-                {"n": 6},
+                "n4",
+                "The homogeneous progression set system on [4].",
+                {"n": 4},
             ),
         ),
     ),

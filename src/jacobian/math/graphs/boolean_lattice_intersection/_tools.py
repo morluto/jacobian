@@ -1,7 +1,10 @@
-"""Typed declarations for the Boolean-lattice intersection graph operation."""
+"""Boolean-lattice intersection graph operation declarations."""
 
+from collections.abc import Callable
+
+from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.boolean_lattice_intersection._models import (
     BooleanLatticeIntersectionRequest,
     BooleanLatticeIntersectionResult,
@@ -11,36 +14,63 @@ from jacobian.math.graphs.boolean_lattice_intersection.operations import (
 )
 
 
-def _construct(
+def compute_boolean_lattice_intersection(
     request: BooleanLatticeIntersectionRequest,
 ) -> BooleanLatticeIntersectionResult:
     return construct_boolean_lattice_intersection_graph(
-        request.n, request.intersection_cardinality, request.relation
+        request.ground_set_size, request.threshold, request.relation
+    )
+
+
+def bli_operation[
+    RequestT: StrictModel,
+    ResultT: StrictModel,
+](
+    operation_id: str,
+    title: str,
+    description: str,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
+    *tags: str,
+    examples: tuple[OperationExample, ...] = (),
+) -> MathTool[RequestT, ResultT]:
+    return MathTool(
+        operation_id=operation_id,
+        title=title,
+        description=description,
+        request_type=request_model,
+        result_type=result_model,
+        run=operation,
+        tags=tags,
+        examples=examples,
     )
 
 
 TOOLS: MathTools = (
-    MathTool(
-        operation_id="graph.boolean_lattice_intersection.construct",
-        title="Construct a Boolean-lattice intersection graph",
-        description=(
-            "Given a nonnegative n and an intersection cardinality r, construct "
-            "a simple graph with one vertex for each subset of [n] and an edge "
-            "exactly when the two source subsets satisfy the declared intersection "
-            "relation."
+    bli_operation(
+        "graph.boolean_lattice_intersection.construct",
+        "Construct a Boolean-lattice intersection graph",
+        (
+            "Construct a labelled simple graph whose vertices are all subsets "
+            "of [n], with an edge between two subsets when their intersection "
+            "size satisfies the declared relation (equal, less-than, or "
+            "greater-than) with a given threshold."
         ),
-        request_type=BooleanLatticeIntersectionRequest,
-        result_type=BooleanLatticeIntersectionResult,
-        run=_construct,
-        tags=("graph", "combinatorics", "boolean", "lattice", "exact"),
+        BooleanLatticeIntersectionRequest,
+        BooleanLatticeIntersectionResult,
+        compute_boolean_lattice_intersection,
+        "graph",
+        "combinatorics",
+        "exact",
         examples=(
             example(
-                "n2_r1",
-                "Boolean lattice intersection graph for n=2, r=1.",
+                "eq_r0_n2",
+                "Boolean lattice 2^[2] with intersection == 0.",
                 {
-                    "n": 2,
-                    "intersection_cardinality": 1,
-                    "relation": "INTERSECTION_EQ_THRESHOLD",
+                    "ground_set_size": 2,
+                    "threshold": 0,
+                    "relation": "INTERSECTION_EQ",
                 },
             ),
         ),

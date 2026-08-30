@@ -1,4 +1,4 @@
-"""Uniform-subset intersection graph kernel."""
+"""Canonical uniform-subset intersection graph constructor."""
 
 from __future__ import annotations
 
@@ -6,9 +6,10 @@ from itertools import combinations
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.uniform_subset_intersection._models import (
-    UniformSubsetIntersectionRelation,
+    IntersectionRelation,
     UniformSubsetIntersectionResult,
-    _uniform_subset_admission_error,
+    _admit_uniform_subset_intersection,
+    _UniformSubsetIntersectionPlan,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -16,65 +17,93 @@ __all__ = ["construct_uniform_subset_intersection_graph"]
 
 
 def construct_uniform_subset_intersection_graph(
-    n: int,
-    k: int,
+    ground_set_size: int,
+    subset_cardinality: int,
     threshold: int,
-    relation: UniformSubsetIntersectionRelation,
+    relation: IntersectionRelation,
 ) -> UniformSubsetIntersectionResult:
-    """Construct a graph whose vertices are k-subsets of [n].
+    """Construct a graph on k-subsets of [n] with a threshold relation.
 
-    An edge joins two k-subsets when their intersection satisfies the
-    declared relation with the threshold.
+    Vertices are all k-subsets of {0,...,n-1}, labelled by the sorted
+    comma-separated subset. An edge joins two subsets when their
+    intersection size satisfies the declared relation with the threshold.
     """
-    if relation not in {
-        "INTERSECTION_LT_THRESHOLD",
-        "INTERSECTION_EQ_THRESHOLD",
-        "INTERSECTION_GT_THRESHOLD",
-    }:
-        raise OperationDomainValidationError(
-            location=("relation",),
-            code="uniform_subset.invalid_relation",
-            message="relation must be one of the declared intersection relations",
+    try:
+        plan = _admit_uniform_subset_intersection(
+            ground_set_size, subset_cardinality, threshold, relation
         )
-    failure = _uniform_subset_admission_error(n, k)
-    if failure is not None:
-        code, message = failure
+    except (TypeError, ValueError) as error:
         raise OperationDomainValidationError(
-            location=("n", "k"),
-            code=f"uniform_subset.{code}",
-            message=message,
-        )
-    subsets = list(combinations(range(n), k))
-    # Use sorted tuple string as vertex label
-    labels = [f"L{len(s)}_" + "_".join(str(x) for x in s) for s in subsets]
-
-    edges: list[tuple[str, str]] = []
-    for i in range(len(subsets)):
-        for j in range(i + 1, len(subsets)):
-            intersection_size = len(set(subsets[i]) & set(subsets[j]))
-            if _check_relation(intersection_size, threshold, relation):
-                left, right = sorted((labels[i], labels[j]))
-                edges.append((left, right))
-
-    edges.sort()
-    graph = SimpleUndirectedGraph(
-        vertices=tuple(labels),
-        edges=tuple(edges),
+            location=(),
+            code="graph.uniform_subset_intersection.request_not_admitted",
+            message=str(error),
+        ) from error
+    return _construct_uniform_subset_intersection_graph_from_plan(
+        ground_set_size, subset_cardinality, threshold, relation, plan
     )
 
+
+def _construct_uniform_subset_intersection_graph_from_plan(
+    ground_set_size: int,
+    subset_cardinality: int,
+    threshold: int,
+    relation: IntersectionRelation,
+    plan: _UniformSubsetIntersectionPlan,
+) -> UniformSubsetIntersectionResult:
+    """Construct a graph from one already-computed request admission."""
+
+    subsets = (
+        ((),)
+        if subset_cardinality == 0
+        else tuple(combinations(range(ground_set_size), subset_cardinality))
+    )
+    assert len(subsets) == plan.vertex_count
+
+    if len(subsets) == 1:
+        graph = SimpleUndirectedGraph(
+            vertices=(_subset_label(subsets[0]),),
+            edges=(),
+        )
+        return UniformSubsetIntersectionResult(
+            ground_set_size=ground_set_size,
+            subset_cardinality=subset_cardinality,
+            threshold=threshold,
+            relation=relation,
+            graph=graph,
+        )
+
+    vertices_labels = [_subset_label(s) for s in subsets]
+    edges: list[tuple[str, str]] = []
+
+    for i in range(len(subsets)):
+        si = set(subsets[i])
+        for j in range(i + 1, len(subsets)):
+            intersection_size = len(si.intersection(subsets[j]))
+            if relation == "INTERSECTION_LT_THRESHOLD":
+                adjacent = intersection_size < threshold
+            else:
+                adjacent = intersection_size == threshold
+            if adjacent:
+                a, b = vertices_labels[i], vertices_labels[j]
+                if a < b:
+                    edges.append((a, b))
+                else:
+                    edges.append((b, a))
+
+    graph = SimpleUndirectedGraph(
+        vertices=tuple(vertices_labels),
+        edges=tuple(edges),
+    )
+    assert len(graph.edges) == plan.edge_count
     return UniformSubsetIntersectionResult(
-        n=n,
-        k=k,
+        ground_set_size=ground_set_size,
+        subset_cardinality=subset_cardinality,
         threshold=threshold,
         relation=relation,
         graph=graph,
     )
 
 
-def _check_relation(intersection_size: int, threshold: int, relation: str) -> bool:
-    checks = {
-        "INTERSECTION_LT_THRESHOLD": intersection_size < threshold,
-        "INTERSECTION_EQ_THRESHOLD": intersection_size == threshold,
-        "INTERSECTION_GT_THRESHOLD": intersection_size > threshold,
-    }
-    return checks.get(relation, False)
+def _subset_label(subset: tuple[int, ...]) -> str:
+    """Canonical label for a k-subset."""
+    return "{" + ",".join(str(x) for x in subset) + "}"

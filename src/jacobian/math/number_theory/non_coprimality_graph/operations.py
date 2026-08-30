@@ -1,126 +1,139 @@
-"""Exact non-coprimality conflict-graph construction."""
+"""Non-coprimality graph constructor."""
 
 from __future__ import annotations
 
-from itertools import combinations
-from math import gcd as exact_gcd
+from dataclasses import dataclass
+from math import gcd
 
 from jacobian.canonical import (
     CanonicalLimits,
     encode_strict_json,
-    parse_canonical_integer,
-    strict_json_object_size,
+    format_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.number_theory.non_coprimality_graph._models import (
-    MAX_NON_COPRIMALITY_GRAPH_VERTICES,
+    MAX_INTEGER_DIGITS,
+    MAX_INTEGERS,
     NonCoprimalityGraphResult,
 )
 
-MAX_GCD_DIGIT_WORK = 10_000_000
+__all__ = ["construct_non_coprimality_graph"]
 
 
-def _array_size(item_sizes: list[int]) -> int:
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
+@dataclass(frozen=True, slots=True)
+class NonCoprimalityGraphAdmission:
+    """Canonical source and exact conflict edges computed during admission."""
+
+    source: tuple[str, ...]
+    vertices: tuple[str, ...]
+    edges: tuple[tuple[str, str], ...]
 
 
-def _base_result_bytes(label_sizes: list[int]) -> int:
-    graph_size = strict_json_object_size(
-        (
-            ("vertices", _array_size(label_sizes)),
-            ("edges", _array_size([])),
-        )
-    )
-    return strict_json_object_size((("graph", graph_size),))
-
-
-def non_coprimality_graph(
-    vertices: tuple[str, ...],
-) -> NonCoprimalityGraphResult:
-    """Build the canonical simple non-coprimality conflict graph.
-
-    The supplied ``vertices`` are canonical decimal integer strings. The
-    returned :class:`SimpleUndirectedGraph` has one vertex per supplied integer
-    — sorted by numeric value — and one edge per distinct pair with gcd
-    greater than one.
-    """
-
-    n = len(vertices)
-
-    if n > MAX_NON_COPRIMALITY_GRAPH_VERTICES:
+def _admit_non_coprimality_graph(
+    integers: tuple[int, ...],
+) -> NonCoprimalityGraphAdmission:
+    if not isinstance(integers, tuple):
         raise OperationDomainValidationError(
-            location=("elements",),
-            code="number_theory.non_coprimality_graph.too_many_elements",
-            message=(
-                "the non-coprimality graph admits at most "
-                f"{MAX_NON_COPRIMALITY_GRAPH_VERTICES} integers"
-            ),
+            location=("integers",),
+            code="non_coprimality.integer_type",
+            message="integers must be a tuple of integers",
+        )
+    if not 1 <= len(integers) <= MAX_INTEGERS:
+        raise OperationDomainValidationError(
+            location=("integers",),
+            code="non_coprimality.size",
+            message=f"integers must contain between 1 and {MAX_INTEGERS} values",
         )
 
-    if n == 0:
-        return NonCoprimalityGraphResult(
-            graph=SimpleUndirectedGraph(vertices=(), edges=())
-        )
-
+    source: list[str] = []
     values: list[int] = []
-    for index, label in enumerate(vertices):
-        value = parse_canonical_integer(label)
+    for index, value in enumerate(integers):
+        if type(value) is not int:
+            raise OperationDomainValidationError(
+                location=("integers", index),
+                code="non_coprimality.integer_type",
+                message="integers must contain only integers",
+            )
         if value <= 0:
             raise OperationDomainValidationError(
-                location=("elements", index),
-                code="number_theory.non_coprimality_graph.non_positive",
+                location=("integers", index),
+                code="non_coprimality.must_be_positive",
                 message="all integers must be positive",
             )
+        # Avoid decimal conversion of huge native integers.  The generous
+        # bit-length threshold cannot exclude any value within the exact
+        # decimal label bound; the precise check below remains authoritative.
+        if value.bit_length() > (MAX_INTEGER_DIGITS + 1) * 4:
+            raise OperationDomainValidationError(
+                location=("integers", index),
+                code="non_coprimality.digits",
+                message=(
+                    f"integer {index} exceeds the {MAX_INTEGER_DIGITS}-digit bound"
+                ),
+            )
+        label = format_canonical_integer(value)
+        if len(label) > MAX_INTEGER_DIGITS:
+            raise OperationDomainValidationError(
+                location=("integers", index),
+                code="non_coprimality.digits",
+                message=(
+                    f"integer {index} exceeds the {MAX_INTEGER_DIGITS}-digit bound"
+                ),
+            )
+        source.append(label)
         values.append(value)
-
-    # Sort vertices by numeric value so the graph is canonical.
-    order = sorted(range(n), key=lambda i: values[i])
-    sorted_labels = tuple(vertices[i] for i in order)
-    sorted_values = [values[i] for i in order]
-
-    gcd_digit_work = sum(
-        min(len(sorted_labels[i]), len(sorted_labels[j]))
-        for i, j in combinations(range(n), 2)
-    )
-    if gcd_digit_work > MAX_GCD_DIGIT_WORK:
+    if len(set(values)) != len(values):
         raise OperationDomainValidationError(
-            location=("elements",),
-            code="number_theory.non_coprimality_graph.work_bound_exceeded",
-            message="the pairwise GCD work exceeds the operation bound",
-        )
-    label_sizes = [len(encode_strict_json(label)) for label in sorted_labels]
-    result_bytes = _base_result_bytes(label_sizes)
-    if result_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("elements",),
-            code="number_theory.non_coprimality_graph.result_size_bound",
-            message="the complete graph exceeds the canonical output bound",
+            location=("integers",),
+            code="non_coprimality.must_be_distinct",
+            message="integers must be distinct",
         )
 
+    sorted_pairs = sorted(zip(source, values, strict=True), key=lambda pair: pair[1])
+    vertices = tuple(label for label, _ in sorted_pairs)
     edges: list[tuple[str, str]] = []
-    for i, j in combinations(range(n), 2):
-        if exact_gcd(sorted_values[i], sorted_values[j]) > 1:
-            result_bytes += _array_size([label_sizes[i], label_sizes[j]])
-            if edges:
-                result_bytes += 1
-            if result_bytes > CanonicalLimits().max_output_bytes:
-                raise OperationDomainValidationError(
-                    location=("elements",),
-                    code="number_theory.non_coprimality_graph.result_size_bound",
-                    message="the complete graph exceeds the canonical output bound",
+    for left_index, (left_label, left_value) in enumerate(sorted_pairs):
+        for right_label, right_value in sorted_pairs[left_index + 1 :]:
+            if gcd(left_value, right_value) > 1:
+                edges.append(
+                    (min(left_label, right_label), max(left_label, right_label))
                 )
-            left, right = sorted_labels[i], sorted_labels[j]
-            if left > right:
-                left, right = right, left
-            edges.append((left, right))
+    canonical_edges = tuple(edges)
+    payload = {
+        "integers": list(source),
+        "graph": {"vertices": list(vertices), "edges": [list(edge) for edge in edges]},
+    }
+    try:
+        if len(encode_strict_json(payload)) > CanonicalLimits().max_output_bytes:
+            raise OperationDomainValidationError(
+                location=("integers",),
+                code="non_coprimality.result_too_large",
+                message="the graph result exceeds the canonical output limit",
+            )
+    except ValueError as error:
+        raise OperationDomainValidationError(
+            location=("integers",),
+            code="non_coprimality.result_not_canonical",
+            message="the graph result cannot be represented in canonical JSON",
+        ) from error
+    return NonCoprimalityGraphAdmission(tuple(source), vertices, canonical_edges)
 
-    return NonCoprimalityGraphResult(
-        graph=SimpleUndirectedGraph(
-            vertices=sorted_labels,
-            edges=tuple(edges),
-        )
+
+def construct_non_coprimality_graph(
+    integers: tuple[int, ...],
+) -> NonCoprimalityGraphResult:
+    """Construct the non-coprimality graph of a set of positive integers.
+
+    The graph has one vertex per integer (labelled by the integer's
+    canonical string) and an edge between two vertices iff their gcd > 1.
+    """
+    admission = _admit_non_coprimality_graph(integers)
+    graph = SimpleUndirectedGraph(
+        vertices=admission.vertices,
+        edges=admission.edges,
     )
-
-
-__all__ = ["non_coprimality_graph"]
+    return NonCoprimalityGraphResult.model_construct(
+        integers=admission.source,
+        graph=graph,
+    )

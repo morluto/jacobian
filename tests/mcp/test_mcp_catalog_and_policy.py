@@ -136,8 +136,8 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
                 {
                     "request": {
                         "op": "search",
-                        "query": "definitely-no-matching-operation",
-                        "cursor": first["next_cursor"],
+                        "query": "exact",
+                        "cursor": "integer.compute.unknown",
                         "limit": 20,
                     }
                 },

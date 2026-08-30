@@ -466,7 +466,10 @@ class BinaryPowerSumAdmission:
     comparison_count: int
     coordinate_numerator_bound: int
     coordinate_denominator_bound: int
-    comparison_admission: RealEmbeddingDifferenceAdmission
+    value_difference_numerator_bound: int
+    gap_difference_numerator_bound: int
+    value_difference_admission: RealEmbeddingDifferenceAdmission
+    gap_difference_admission: RealEmbeddingDifferenceAdmission
     base_lower_admission: RealEmbeddingDifferenceAdmission
     base_upper_admission: RealEmbeddingDifferenceAdmission
     predicted_result_bytes: int
@@ -594,19 +597,6 @@ def _power_sum_coordinate_bounds(
         return 1, 1
 
     coordinates = _element_coordinates(base)
-    if exponent_count == 2:
-        numerator_bound = 1
-        denominator_bound = 1
-        for index, coordinate in enumerate(coordinates):
-            numerator_bound = max(numerator_bound, abs(coordinate.numerator))
-            denominator_bound = max(denominator_bound, coordinate.denominator)
-            if index == 0:
-                numerator_bound = max(
-                    numerator_bound,
-                    abs(coordinate.numerator + coordinate.denominator),
-                )
-        return numerator_bound, denominator_bound
-
     denominator = 1
     for coordinate in coordinates:
         denominator = lcm(denominator, coordinate.denominator)
@@ -647,6 +637,39 @@ def _power_sum_coordinate_bounds(
             * leading ** (largest_reduction_depth - reduction_depth)
         )
     return max(numerator_bound, 1), max(common_denominator, 1)
+
+
+def _admit_power_sum_difference_envelope(
+    base: SimpleNumberFieldElement,
+    *,
+    coordinate_numerator_bound: int,
+    coordinate_denominator_bound: int,
+) -> RealEmbeddingDifferenceAdmission:
+    """Admit one coordinate envelope, retaining the exact rational fast path."""
+
+    presentation = base.presentation
+    if all(coordinate == 0 for coordinate in _element_coordinates(base)[1:]):
+        # A rational a/b has primitive minimal polynomial b*x-a.  The integer
+        # max below therefore bounds every rational whose reduced numerator
+        # and denominator satisfy the two supplied component bounds.  Using
+        # Fraction(numerator_bound, denominator_bound) would be unsound when
+        # those bounds have a common factor and reduce before admission.
+        component_bound = max(
+            coordinate_numerator_bound,
+            coordinate_denominator_bound,
+        )
+        return admit_real_embedding_difference(
+            presentation,
+            (
+                Fraction(component_bound),
+                *(Fraction(0) for _ in range(presentation.degree - 1)),
+            ),
+        )
+    return admit_real_embedding_difference_envelope(
+        presentation,
+        coordinate_numerator_bound=coordinate_numerator_bound,
+        coordinate_denominator_bound=coordinate_denominator_bound,
+    )
 
 
 def _predicted_result_bytes(
@@ -745,10 +768,18 @@ def admit_binary_power_sum_gap_profile(
         base.element, exponent_count
     )
     component_limit = 10**MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS - 1
-    difference_numerator_bound = 2 * numerator_bound
+    # Every retained value is one subset sum, so a sort operand and an
+    # adjacent gap are differences of two such values.  A summary comparison
+    # subtracts two adjacent gaps and can therefore involve four values.  The
+    # common denominator returned above is shared by every power and subset
+    # sum, so neither subtraction introduces another denominator factor.
+    value_difference_numerator_bound = 1 if exponent_count <= 1 else 2 * numerator_bound
+    gap_difference_numerator_bound = (
+        1 if exponent_count <= 1 else 2 * value_difference_numerator_bound
+    )
     if (
         numerator_bound > component_limit
-        or difference_numerator_bound > component_limit
+        or value_difference_numerator_bound > component_limit
         or denominator_bound > component_limit
     ):
         raise BinaryPowerSumAdmissionError(
@@ -759,27 +790,23 @@ def admit_binary_power_sum_gap_profile(
 
     try:
         if exponent_count <= 1:
-            comparison_admission = admit_real_embedding_difference(
+            value_difference_admission = admit_real_embedding_difference(
                 base.element.presentation,
                 (
                     Fraction(1),
                     *(Fraction(0) for _ in range(base.element.presentation.degree - 1)),
                 ),
             )
-        elif all(
-            coordinate == 0 for coordinate in _element_coordinates(base.element)[1:]
-        ):
-            comparison_admission = admit_real_embedding_difference(
-                base.element.presentation,
-                (
-                    Fraction(difference_numerator_bound, denominator_bound),
-                    *(Fraction(0) for _ in range(base.element.presentation.degree - 1)),
-                ),
-            )
+            gap_difference_admission = value_difference_admission
         else:
-            comparison_admission = admit_real_embedding_difference_envelope(
-                base.element.presentation,
-                coordinate_numerator_bound=difference_numerator_bound,
+            value_difference_admission = _admit_power_sum_difference_envelope(
+                base.element,
+                coordinate_numerator_bound=value_difference_numerator_bound,
+                coordinate_denominator_bound=denominator_bound,
+            )
+            gap_difference_admission = _admit_power_sum_difference_envelope(
+                base.element,
+                coordinate_numerator_bound=gap_difference_numerator_bound,
                 coordinate_denominator_bound=denominator_bound,
             )
         base_lower_admission = admit_real_embedding_difference(
@@ -794,10 +821,10 @@ def admit_binary_power_sum_gap_profile(
         raise BinaryPowerSumAdmissionError(exc.reason, str(exc)) from exc
 
     coordinate_digits = max(
-        _decimal_digits_from_bits(difference_numerator_bound.bit_length()),
+        _decimal_digits_from_bits(value_difference_numerator_bound.bit_length()),
         _decimal_digits_from_bits(denominator_bound.bit_length()),
     )
-    isolator_digits = comparison_admission.predicted_isolator_component_digits
+    isolator_digits = value_difference_admission.predicted_isolator_component_digits
     if all(coordinate == 0 for coordinate in _element_coordinates(base.element)[1:]):
         isolator_digits = max(isolator_digits, coordinate_digits)
     predicted_result_bytes = _predicted_result_bytes(
@@ -827,7 +854,10 @@ def admit_binary_power_sum_gap_profile(
         comparison_count=comparison_count,
         coordinate_numerator_bound=numerator_bound,
         coordinate_denominator_bound=denominator_bound,
-        comparison_admission=comparison_admission,
+        value_difference_numerator_bound=value_difference_numerator_bound,
+        gap_difference_numerator_bound=gap_difference_numerator_bound,
+        value_difference_admission=value_difference_admission,
+        gap_difference_admission=gap_difference_admission,
         base_lower_admission=base_lower_admission,
         base_upper_admission=base_upper_admission,
         predicted_result_bytes=predicted_result_bytes,
@@ -870,11 +900,9 @@ class _SelectedRealEmbeddingEvaluator:
         self,
         context: RecognizedRealEmbeddingContext,
         *,
-        comparison_admission: RealEmbeddingDifferenceAdmission,
         deadline: float,
     ) -> None:
         self.context = context
-        self.comparison_admission = comparison_admission
         self.deadline = deadline
         interval = context.record.isolating_interval
         self.lower = interval.lower.as_fraction()
@@ -1019,13 +1047,14 @@ class _SelectedRealEmbeddingEvaluator:
         self,
         left_backend: Any,
         right_backend: Any,
+        admission: RealEmbeddingDifferenceAdmission,
     ) -> int:
         difference_backend = left_backend - right_backend
         difference_public = self.context.from_backend(difference_backend)
         order, _enclosure_value = self.sign(
             difference_backend,
             difference_public,
-            self.comparison_admission,
+            admission,
         )
         if order == "EQ":
             return 0
@@ -1035,6 +1064,7 @@ class _SelectedRealEmbeddingEvaluator:
         self,
         backend_value: Any,
         public_value: SimpleNumberFieldElement,
+        admission: RealEmbeddingDifferenceAdmission,
     ) -> tuple[
         SimpleNumberFieldRealOrder,
         NumberFieldRealValueEnclosure,
@@ -1051,7 +1081,7 @@ class _SelectedRealEmbeddingEvaluator:
         order, isolating_interval = isolate_backend_real_value(
             self.context,
             backend_value,
-            self.comparison_admission,
+            admission,
         )
         _require_execution_active(
             self.deadline, "after selected-image evidence isolation"
@@ -1153,7 +1183,6 @@ def _execute_binary_power_sum_gap_profile(
     _require_execution_active(deadline, "after selected-embedding recognition")
     evaluator = _SelectedRealEmbeddingEvaluator(
         context,
-        comparison_admission=admission.comparison_admission,
         deadline=deadline,
     )
     recognized_base = SimpleNumberFieldRealEmbeddingBinding(
@@ -1220,6 +1249,7 @@ def _execute_binary_power_sum_gap_profile(
         return evaluator.compare(
             left.backend_value,
             right.backend_value,
+            admission.value_difference_admission,
         )
 
     buckets.sort(key=cmp_to_key(compare_buckets))
@@ -1242,6 +1272,7 @@ def _execute_binary_power_sum_gap_profile(
         order, positive_enclosure = evaluator.certify(
             backend_difference,
             public_difference,
+            admission.value_difference_admission,
         )
         if order != "GT":
             raise RuntimeError(
@@ -1267,6 +1298,7 @@ def _execute_binary_power_sum_gap_profile(
                 evaluator.compare(
                     backend_gaps[index],
                     backend_gaps[least_gap_index],
+                    admission.gap_difference_admission,
                 )
                 < 0
             ):
@@ -1276,6 +1308,7 @@ def _execute_binary_power_sum_gap_profile(
                 evaluator.compare(
                     backend_gaps[index],
                     backend_gaps[largest_gap_index],
+                    admission.gap_difference_admission,
                 )
                 > 0
             ):

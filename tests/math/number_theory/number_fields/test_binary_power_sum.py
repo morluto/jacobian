@@ -198,6 +198,72 @@ def test_sqrt_two_profile_matches_an_independent_exact_quadratic_oracle(
     assert _pair(result.largest_gap) == expected_largest
 
 
+def test_mixed_denominator_base_admits_every_comparison_operand(
+    sqrt_two_records: tuple[
+        RealNumberFieldEmbeddingRecord, RealNumberFieldEmbeddingRecord
+    ],
+) -> None:
+    record = sqrt_two_records[1]
+    base = _binding(
+        _element(
+            record.embedding.presentation,
+            Fraction(-50, 101),
+            Fraction(3, 2),
+        ),
+        record,
+    )
+
+    execution = _execute_binary_power_sum_gap_profile(base, 2)
+    admission = execution.admission
+    value_coordinates = tuple(
+        _pair(bucket.value) for bucket in execution.result.value_buckets
+    )
+    gap_coordinates = tuple(_pair(gap.difference) for gap in execution.result.gaps)
+
+    assert gap_coordinates == (
+        (Fraction(1), Fraction(0)),
+        (Fraction(-151, 101), Fraction(3, 2)),
+        (Fraction(1), Fraction(0)),
+    )
+
+    def difference(left: QuadraticPair, right: QuadraticPair) -> QuadraticPair:
+        return left[0] - right[0], left[1] - right[1]
+
+    def fits(coordinates: QuadraticPair, numerator_bound: int) -> bool:
+        return all(
+            abs(coordinate.numerator) <= numerator_bound
+            and coordinate.denominator <= admission.coordinate_denominator_bound
+            for coordinate in coordinates
+        )
+
+    assert difference(gap_coordinates[1], gap_coordinates[0]) == (
+        Fraction(-252, 101),
+        Fraction(3, 2),
+    )
+    # Sorting may compare any two retained values; gap certification receives
+    # an adjacent value difference.  Summary selection may compare any two
+    # gaps, so its downstream admission must cover a difference of differences.
+    assert all(
+        fits(
+            difference(left, right),
+            admission.value_difference_numerator_bound,
+        )
+        for left in value_coordinates
+        for right in value_coordinates
+    )
+    assert all(
+        fits(gap, admission.value_difference_numerator_bound) for gap in gap_coordinates
+    )
+    assert all(
+        fits(
+            difference(left, right),
+            admission.gap_difference_numerator_bound,
+        )
+        for left in gap_coordinates
+        for right in gap_coordinates
+    )
+
+
 def test_golden_ratio_collision_retains_both_indexed_sources(
     golden_ratio_record: RealNumberFieldEmbeddingRecord,
 ) -> None:

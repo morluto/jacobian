@@ -95,7 +95,9 @@ def _admit_hypergraph_vertex_containment(
         )
         active_state_count = 1 << len(active_vertices)
         ie_terms = _inclusion_exclusion_terms(len(edge_masks), n)
-        use_inclusion_exclusion = ie_terms is not None
+        direct_work = len(edge_masks) * active_state_count + active_state_count * (n - len(active_vertices) + 1)
+        ie_work = ie_terms * (n + len(edge_masks) + 2) if ie_terms is not None else None
+        use_inclusion_exclusion = ie_terms is not None and ie_work < direct_work
         if active_state_count > MAX_SUBSET_STATES and not use_inclusion_exclusion:
             raise OperationDomainValidationError(
                 location=("hypergraph", "vertices"),
@@ -168,7 +170,9 @@ def _inclusion_exclusion_terms(edge_count: int, vertex_count: int) -> int | None
     # Each term contributes one union mask, one probability power, and all
     # n+1 profile entries.  Keep this complete regime under the same work
     # envelope as subset enumeration.
-    if terms * (vertex_count + 2) > MAX_CONTAINMENT_WORK:
+    # Each term scans every edge mask to build the union mask, plus one
+    # union/probability computation and all n+1 profile entries.
+    if terms * (vertex_count + edge_count + 2) > MAX_CONTAINMENT_WORK:
         return None
     return terms
 

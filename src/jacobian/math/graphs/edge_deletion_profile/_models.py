@@ -40,7 +40,15 @@ class EdgeDeletionProfileRequest(StrictModel):
     """Request for the edge deletion chromatic profile of a graph."""
 
     graph: EdgeDeletionGraph
-    deletion_order: int = Field(ge=0, le=MAX_DELETION_ORDER, strict=True)
+    deletion_order: int = Field(
+        ge=0,
+        le=MAX_DELETION_ORDER,
+        strict=True,
+        description=(
+            "Maximum number of deleted edges; it must not exceed the graph's "
+            "edge count."
+        ),
+    )
 
 
 class DeletionRow(StrictModel):

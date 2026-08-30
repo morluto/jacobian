@@ -36,6 +36,11 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
     if len(graph.edges) == vertex_count * (vertex_count - 1) // 2:
         # In a complete graph the first DFS branch witnesses every length.
         return vertex_count**3
+    complete_edges = vertex_count * (vertex_count - 1) // 2
+    if len(graph.edges) >= complete_edges - vertex_count:
+        # A graph missing only a handful of edges still yields a first witness
+        # for each requested length after a bounded prefix search.
+        return vertex_count**3
     vertex_to_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
     adjacency = [[False] * vertex_count for _ in range(vertex_count)]
     for left, right in graph.edges:
@@ -44,7 +49,11 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
         adjacency[left_index][right_index] = True
         adjacency[right_index][left_index] = True
 
-    work = 0
+    # The kernel repeats root and one-edge scans for every target length, even
+    # when no path reaches depth three (for example, a perfect matching).
+    work = vertex_count * (vertex_count + 2 * len(graph.edges)) * max(
+        1, vertex_count - 2
+    )
     for start in range(vertex_count):
         visited = {start}
 
@@ -69,8 +78,8 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
     return work
 
 
-def _cycle_core_size(graph: SimpleUndirectedGraph) -> int:
-    """Return the largest connected component of the graph's 2-core."""
+def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:
+    """Return vertices in the graph's cycle-bearing 2-core."""
     adjacency = {vertex: set() for vertex in graph.vertices}
     for left, right in graph.edges:
         adjacency[left].add(right)
@@ -87,7 +96,7 @@ def _cycle_core_size(graph: SimpleUndirectedGraph) -> int:
                 removed.add(neighbor)
                 pending.append(neighbor)
     remaining = set(adjacency) - removed
-    largest = 0
+    core_vertices: set[str] = set()
     while remaining:
         start = remaining.pop()
         component = {start}
@@ -99,8 +108,8 @@ def _cycle_core_size(graph: SimpleUndirectedGraph) -> int:
                     remaining.remove(neighbor)
                     component.add(neighbor)
                     stack.append(neighbor)
-        largest = max(largest, len(component))
-    return largest
+        core_vertices.update(component)
+    return core_vertices
 
 
 def _reject(code: str, message: str) -> None:
@@ -141,14 +150,14 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
         label_sizes = sorted(
             (
                 len(rfc8785.dumps(unicodedata.normalize("NFC", label)))
-                for label in graph.vertices
+                for label in _cycle_core_vertices(graph)
             ),
             reverse=True,
         )
         # A simple cycle of length k consumes k distinct edges.  Charging only
         # lengths that can occur avoids rejecting sparse graphs whose exact
         # profile is empty (for example, a one-edge graph).
-        max_cycle_length = min(_cycle_core_size(graph), len(graph.edges))
+        max_cycle_length = min(len(_cycle_core_vertices(graph)), len(graph.edges))
         for length in range(3, max_cycle_length + 1):
             result_bytes += 32 + sum(label_sizes[:length]) + 2 * length
     if result_bytes > MAX_RESULT_BYTES:
